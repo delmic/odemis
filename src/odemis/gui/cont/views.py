@@ -125,68 +125,41 @@ class ViewPortController(object):
 
         # If AnalysisTab for Sparc: SEM/Spec/AR/SEM
         if isinstance(self._data_model, model.AnalysisGUIData):
-            assert len(self._viewports) >= 4
-            # TODO: should be dependent on the type of acquisition, and so updated every time the
-            # .file changes
-            if self._main_data_model.role == "sparc":
-                logging.info("Creating (static) SPARC viewport layout")
-                vpv = collections.OrderedDict([
-                    (self._viewports[0],  # focused view
-                     {"name": "SEM",
-                      "stream_classes": EMStream,
-                      }),
-                    (self._viewports[1],
-                     {"name": "Spectrum",
-                      "stream_classes": (OpticalStream, SpectrumStream),
-                      }),
-                    (self._viewports[2],
-                     {"name": "Dummy",  # will be immediately swapped for AR
-                      "stream_classes": (),  # Nothing
-                      }),
-                    (self._viewports[3],
-                     {"name": "SEM CL",
-                      "stream_classes": (EMStream, OpticalStream, SpectrumStream),
-                      }),
-                    # Spectrum viewport is *also* needed for Analysis tab in the
-                    # Sparc configuration
-                    (self._viewports[4],
-                     {"name": "Spectrum plot",
-                      "stream_classes": SpectrumStream,
-                      }),
-                    (self._viewports[5],
-                     {"name": "Angle resolved",
-                      "stream_classes": ARStream,
-                      }),
-                ])
-            else:
-                logging.info("Creating generic static viewport layout")
-                vpv = collections.OrderedDict([
-                    (self._viewports[0],  # focused view
-                     {"name": "SEM",
-                      "stream_classes": EMStream,
-                      }),
-                    (self._viewports[1],
-                     {"name": "Optical",
-                      "stream_classes": (OpticalStream, SpectrumStream),
-                      }),
-                    (self._viewports[2],
-                     {"name": "Combined 1",
-                      "stream_classes": (EMStream, OpticalStream, SpectrumStream),
-                      }),
-                    (self._viewports[3],
-                     {"name": "Combined 2",
-                      "stream_classes": (EMStream, OpticalStream, SpectrumStream),
-                      }),
-                    (self._viewports[4],
-                     {"name": "Spectrum plot",
-                      "stream_classes": SpectrumStream
-                      }),
-                    # TODO: this one doesn't make sense
-                    # (self._viewports[5],
-                    #  {"name": "Overview",
-                    #   "stream_classes": SpectrumStream
-                    #  }),
-                ])
+
+            # FIXME: Since displaying viewports should be completely dynamic, the button labels
+            # should also be made to be dynamic in some way
+
+            logging.info("Creating static viewport layout")
+            vpv = collections.OrderedDict([
+                (self._viewports[0],  # focused view
+                 {"name": "Optical",
+                  "stream_classes": (OpticalStream, SpectrumStream),
+                  }),
+                (self._viewports[1],
+                 {"name": "SEM",
+                  "stream_classes": EMStream,
+                  }),
+                (self._viewports[2],
+                 {"name": "Combined 1",
+                  "stream_classes": (EMStream, OpticalStream, SpectrumStream),
+                  }),
+                (self._viewports[3],
+                 {"name": "Combined 2",  # Was SEM CL for Sparc
+                  "stream_classes": (EMStream, OpticalStream, SpectrumStream),
+                  }),
+                (self._viewports[4],
+                 {"name": "Spectrum plot",
+                  "stream_classes": SpectrumStream,
+                  }),
+                (self._viewports[5],
+                 {"name": "Angle resolved",
+                  "stream_classes": ARStream,
+                  }),
+                (self._viewports[6],
+                 {"name": "Spatial spectrum",
+                  "stream_classes": SpectrumStream,
+                  }),
+            ])
             self._create_views_fixed(vpv)
             return
 
@@ -318,7 +291,7 @@ class ViewPortController(object):
         """
 
         msg = "Resetting views to %s"
-        msgdata = [str(v) for v in visible_views] if not visible_views is None else "default"
+        msgdata = [str(v) for v in visible_views] if visible_views is not None else "default"
         logging.debug(msg, msgdata)
 
         parent = self._viewports[0].Parent
@@ -359,28 +332,23 @@ class ViewPortController(object):
         logging.debug("Changing focus to view %s", view.name.value)
 
         grid_panel = self._viewports[0].Parent
-        grid_panel.Freeze()
 
         try:
-            try:
-                viewport = [vp for vp in self._viewports if vp.microscope_view == view][0]
-            except IndexError:
-                logging.exception("No associated ViewPort found for view %s", view)
-                raise
+            viewport = [vp for vp in self._viewports if vp.microscope_view == view][0]
+        except IndexError:
+            logging.exception("No associated ViewPort found for view %s", view)
+            raise
 
-            if self._data_model.viewLayout.value == model.VIEW_LAYOUT_ONE:
-                grid_panel.set_shown_viewports(viewport)
-                # Enable/disable ZOOM_FIT tool according to view ability
-                if self._toolbar:
-                    can_fit = hasattr(viewport.canvas, "fit_view_to_content")
-                    self._toolbar.enable_button(tools.TOOL_ZOOM_FIT, can_fit)
-            else:
-                for vp in self._viewports:
-                    vp.SetFocus(False)
-                viewport.SetFocus(True)
+        if self._data_model.viewLayout.value == model.VIEW_LAYOUT_ONE:
+            grid_panel.set_shown_viewports(viewport)
+            # Enable/disable ZOOM_FIT tool according to view ability
+            if self._toolbar:
+                can_fit = hasattr(viewport.canvas, "fit_view_to_content")
+                self._toolbar.enable_button(tools.TOOL_ZOOM_FIT, can_fit)
 
-        finally:
-            grid_panel.Thaw()
+        for vp in self._viewports:
+            vp.SetFocus(False)
+        viewport.SetFocus(True)
 
     def _on_view_layout(self, layout):
         """ Called when the view layout of the GUI must be changed
@@ -391,30 +359,25 @@ class ViewPortController(object):
         """
 
         grid_panel = self._viewports[0].Parent
-        grid_panel.Freeze()
 
-        try:
-            if layout == model.VIEW_LAYOUT_ONE:
-                logging.debug("Displaying single viewport")
-                for viewport in self._viewports:
-                    if viewport.microscope_view == self._data_model.focussedView.value:
-                        grid_panel.set_shown_viewports(viewport)
-                        break
-                else:
-                    raise ValueError("No foccused view found!")
-
-            elif layout == model.VIEW_LAYOUT_22:
-                logging.debug("Displaying 2x2 viewport grid")
-                if isinstance(grid_panel, ViewportGrid):
-                    grid_panel.show_grid_viewports()
-
-            elif layout == model.VIEW_LAYOUT_FULLSCREEN:
-                raise NotImplementedError()
+        if layout == model.VIEW_LAYOUT_ONE:
+            logging.debug("Displaying single viewport")
+            for viewport in self._viewports:
+                if viewport.microscope_view == self._data_model.focussedView.value:
+                    grid_panel.set_shown_viewports(viewport)
+                    break
             else:
-                raise NotImplementedError()
+                raise ValueError("No foccused view found!")
 
-        finally:
-            grid_panel.Thaw()
+        elif layout == model.VIEW_LAYOUT_22:
+            logging.debug("Displaying 2x2 viewport grid")
+            if isinstance(grid_panel, ViewportGrid):
+                grid_panel.show_grid_viewports()
+
+        elif layout == model.VIEW_LAYOUT_FULLSCREEN:
+            raise NotImplementedError()
+        else:
+            raise NotImplementedError()
 
     def fitViewToContent(self, unused=None):
         """

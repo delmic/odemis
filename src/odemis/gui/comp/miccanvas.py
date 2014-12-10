@@ -1201,7 +1201,6 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
 
         self.drag_init_pos = None
 
-        ## Overlays
         self.SetBackgroundColour(self.Parent.BackgroundColour)
         self.SetForegroundColour(self.Parent.ForegroundColour)
 
@@ -1214,8 +1213,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         self.add_view_overlay(self.markline_overlay)
         self.markline_overlay.activate()
 
-    def set_data(self, data,
-                 unit_x=None, unit_y=None, range_x=None, range_y=None):
+    def set_data(self, data, unit_x=None, unit_y=None, range_x=None, range_y=None):
         """ Subscribe to the x position of the overlay when data is loaded """
         super(ZeroDimensionalPlotCanvas, self).set_data(data, unit_x, unit_y, range_x, range_y)
 
@@ -1307,10 +1305,23 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
 
 class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
 
+    def __init__(self, *args, **kwargs):
+
+        super(OneDimensionalSpatialSpectrumCanvas, self).__init__(*args, **kwargs)
+        self.microscope_view = None
+        self._tab_data_model = None
+
+        self.markline_overlay = view_overlay.MarkingLineOverlay(
+            self,
+            orientation=MarkingLineOverlay.HORIZONTAL | MarkingLineOverlay.VERTICAL)
+        self.add_view_overlay(self.markline_overlay)
+        self.markline_overlay.activate()
+
     def draw(self):
         """ Map the image data to the canvas and draw it """
 
         im_data = self.images[0]
+
         if im_data is not None:
             im_format = cairo.FORMAT_RGB24
             height, width, _ = im_data.shape
@@ -1327,9 +1338,37 @@ class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
             # Set the filter, so we get low quality but fast scaling
             surfpat.set_filter(cairo.FILTER_FAST)
 
+            # Scale the width and height separately in such a way that the image data fill the
+            # entire canvas
             self.ctx.scale(self.ClientSize.x / width, self.ClientSize.y / height)
             self.ctx.set_source(surfpat)
             self.ctx.paint()
+        else:
+            self._draw_background(self.ctx)
+
+    def setView(self, microscope_view, tab_data):
+        """ Set the microscope_view that this canvas is displaying/representing
+        Can be called only once, at initialisation.
+
+        :param microscope_view:(model.MicroscopeView)
+        :param tab_data: (model.MicroscopyGUIData)
+        """
+        # This is a kind of kludge, see mscviewport.MicroscopeViewport for
+        # details
+        assert(self.microscope_view is None)
+
+        self.microscope_view = microscope_view
+        self._tab_data_model = tab_data
+
+    def set_2d_data(self, domain, im_data, unit_x, unit_y=None):
+        """ Set the data to be displayed
+
+        TODO: Process the units for both the horizontal and vertical legends/axis
+        TODO: Allow for both a horizontal and vertical domain
+
+        """
+
+        self.set_images([(im_data, (0.0, 0.0), 1.0, True, None, None, "Spatial Spectrum")])
 
 
 class AngularResolvedCanvas(canvas.DraggableCanvas):
@@ -1351,7 +1390,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
 
         self.background_brush = wx.SOLID  # background is always black
 
-        ## Overlays
+        # Overlays
 
         self.polar_overlay = view_overlay.PolarOverlay(self)
         self.polar_overlay.canvas_padding = 10
@@ -1411,7 +1450,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         if self.microscope_view:
             self._updateThumbnail()
 
-    @wxlimit_invocation(2) # max 1/2 Hz
+    @wxlimit_invocation(2)  # max 1/2 Hz
     @call_after  # needed as it accesses the DC
     def _updateThumbnail(self):
         csize = self.ClientSize

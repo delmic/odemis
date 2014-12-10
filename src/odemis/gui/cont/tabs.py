@@ -1013,6 +1013,33 @@ class SparcAcquisitionTab(Tab):
 
 
 class AnalysisTab(Tab):
+    """ Handle the loading and displaying of acquisistion files
+
+    Creation
+    ~~~~~~~~
+
+    During creation, the following controllers are created:
+
+    ViewPortController
+      Processes the given viewports by creating views for them, determining which stream classes
+      those views can handle and finally assigning them to their viewport.
+
+    StreamController
+      Keeps track of the available streams, which are all static
+
+    ViewButtonController
+        blah blah
+
+    Loading Data
+    ~~~~~~~~~~~~
+
+    In the `load_data` method the file data is loaded using the appropriate converter. It's then
+    passed on to the `display_new_data` method, which analyzes which static streams need to be
+    created. The StreamController is then asked to create the actual stream object and it also adds
+    them to every view which supports that (sub)type of stream.
+
+    """
+
     def __init__(self, name, button, panel, main_frame, main_data):
         """
         microscope will be used only to select the type of views
@@ -1020,8 +1047,7 @@ class AnalysisTab(Tab):
         # TODO: automatically change the display type based on the acquisition
         # displayed
         tab_data = guimod.AnalysisGUIData(main_data)
-        super(AnalysisTab, self).__init__(name, button, panel,
-                                          main_frame, tab_data)
+        super(AnalysisTab, self).__init__(name, button, panel, main_frame, tab_data)
 
         viewports = [
             self.main_frame.vp_inspection_tl,
@@ -1029,7 +1055,8 @@ class AnalysisTab(Tab):
             self.main_frame.vp_inspection_bl,
             self.main_frame.vp_inspection_br,
             self.main_frame.vp_inspection_plot,
-            self.main_frame.vp_angular
+            self.main_frame.vp_angular,
+            self.main_frame.vp_spatialspec,
         ]
 
         # The view controller also has special code for the sparc to create the
@@ -1055,12 +1082,12 @@ class AnalysisTab(Tab):
         # view controller be more clever and able to create viewports and
         # position them in the sizer.
         # Also see the button definition below.
-        if main_data.role == "sparc":
-            vp_bottom_left = self.main_frame.vp_angular
-            ar_view = vp_bottom_left.microscope_view
-            tab_data.visible_views.value[2] = ar_view  # switch views
-        else:
-            vp_bottom_left = self.main_frame.vp_inspection_bl
+        # if main_data.role == "sparc":
+        #     vp_bottom_left = self.main_frame.vp_angular
+        #     ar_view = vp_bottom_left.microscope_view
+        #     tab_data.visible_views.value[2] = ar_view  # switch views
+        # else:
+        #     vp_bottom_left = self.main_frame.vp_inspection_bl
 
         # save the views to be able to reset them later
         self._def_views = list(tab_data.visible_views.value)
@@ -1095,7 +1122,7 @@ class AnalysisTab(Tab):
             ),
             (
                 self.main_frame.btn_sparc_view_bl,
-                (vp_bottom_left, self.main_frame.lbl_sparc_view_bl)
+                (self.main_frame.vp_inspection_bl, self.main_frame.lbl_sparc_view_bl)
             ),
             (
                 self.main_frame.btn_sparc_view_br,
@@ -1150,7 +1177,6 @@ class AnalysisTab(Tab):
         if dialog.ShowModal() != wx.ID_OK:
             return False
 
-
         # Detect the format to use
         fn = dialog.GetPath()
         logging.debug("Current file set to %s", fn)
@@ -1165,13 +1191,11 @@ class AnalysisTab(Tab):
             else:
                 # pick a random format hoping it's the right one
                 fmt = formats[1]
-                logging.warning("Couldn't guess format from filename '%s',"
-                                " will use %s.", fn, fmt)
+                logging.warning("Couldn't guess format from filename '%s', will use %s.", fn, fmt)
 
         Message.show_message(self.main_frame, "Opening file")
-        self.main_frame.Refresh()
-        self.main_frame.Update()
-
+        # Since the loading of data can take relatively long, we use CallAfter so we are sure the
+        # message is displayed *before* the GUI blocks.
         wx.CallAfter(self.load_data, fmt, fn)
         return True
 
@@ -1179,10 +1203,10 @@ class AnalysisTab(Tab):
         self.select_acq_file()
 
     def load_data(self, fmt, fn):
-        converter = dataio.get_exporter(fmt)
+        converter = dataio.get_converter(fmt)
         try:
             data = converter.read_data(fn)
-        except Exception:  #pylint: disable=W0703
+        except Exception:
             logging.exception("Failed to open file '%s' with format %s", fn, fmt)
 
         self.display_new_data(fn, data)
@@ -1218,6 +1242,7 @@ class AnalysisTab(Tab):
         ar_data = []
 
         acq_date = fi.metadata.get(model.MD_ACQ_DATE, None)
+
         # Add each data as a stream of the correct type
         for d in data:
             try:
@@ -1227,15 +1252,17 @@ class AnalysisTab(Tab):
                 pass  # => don't update the acq_date
 
             # Streams only support 2D data (e.g., no multiple channels like RGB)
-            # excepted for spectrums which have a 3rd dimensions on dim 5.
+            # excepted for spectra which have a 3rd dimensions on dim 5.
             # So if it's the case => separate into one stream per channel
             cdata = self._split_channels(d)
 
             for cd in cdata:
                 # TODO: be more clever to detect the type of stream
-                if (model.MD_WL_LIST in cd.metadata or
-                            model.MD_WL_POLYNOMIAL in cd.metadata or
-                        (len(cd.shape) >= 5 and cd.shape[-5] > 1)):
+                if (
+                        model.MD_WL_LIST in cd.metadata
+                        or model.MD_WL_POLYNOMIAL in cd.metadata
+                        or (len(cd.shape) >= 5 and cd.shape[-5] > 1)
+                ):
                     desc = cd.metadata.get(model.MD_DESCRIPTION, "Spectrum")
                     cls = streammod.StaticSpectrumStream
                 elif model.MD_AR_POLE in cd.metadata:
@@ -1277,6 +1304,8 @@ class AnalysisTab(Tab):
                 cls=streammod.StaticARStream,
                 add_to_all_views=True)
 
+            self.tab_data_model.visible_views.value[2] = self.main_frame.vp_angular.microscope_view
+
         if acq_date:
             fi.metadata[model.MD_ACQ_DATE] = acq_date
         self.tab_data_model.acq_fileinfo.value = fi
@@ -1309,9 +1338,17 @@ class AnalysisTab(Tab):
                             (width, height),
                             strm.selected_pixel
                         )
+
+                    if hasattr(viewport.canvas, "line_overlay"):
+                        ol = viewport.canvas.line_overlay
+                        ol.set_line_va(strm.selected_line)
+
                 strm.selected_pixel.subscribe(self._on_pixel_select, init=True)
+                strm.selected_line.subscribe(self._on_line_select, init=True)
+
                 self.tb.enable_button(tools.TOOL_POINT, True)
                 self.tb.enable_button(tools.TOOL_LINE, True)
+
                 self.main_frame.vp_inspection_plot.clear()
                 break
             # If an angle resolve stream is found...
@@ -1497,13 +1534,16 @@ class AnalysisTab(Tab):
             plot_view = self.main_frame.vp_inspection_plot.microscope_view
 
             # ...and the plot view is not visible yet
-            if not plot_view in self.tab_data_model.visible_views.value:
-                # Try and display the plot in the 2nd (= top right) spot...
-                pos = 1
-                # .., but go for the bottom right one when the spec pixel was
-                # selected in the top right viewport
-                if (self.tab_data_model.focussedView.value ==
-                        self.main_frame.vp_inspection_tr.microscope_view):
+            if plot_view not in self.tab_data_model.visible_views.value:
+                # Display the plot in one of the bottom positions
+
+                pos = 2
+                bottom_left_vp = self.tab_data_model.visible_views.value[pos]
+
+                # Go for the bottom right one when the spec pixel was selected using the
+                # bottom left viewport
+
+                if self.tab_data_model.focussedView.value == bottom_left_vp:
                     pos = 3
 
                 self.tab_data_model.visible_views.value[pos] = plot_view
@@ -1512,29 +1552,31 @@ class AnalysisTab(Tab):
             if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
                 self.tab_data_model.focussedView.value = plot_view
 
-    def _on_line_select(self, start_end):
-        """ Event handler for when a line is selected """
+    def _on_line_select(self, _):
+        """ Event handler for when a spectrum line is selected """
 
         # If the right tool is active...
         if self.tab_data_model.tool.value == guimod.TOOL_LINE:
-            pass
-            # plot_view = self.main_frame.vp_inspection_plot.microscope_view
-            #
-            # # ...and the plot view is not visible yet
-            # if not plot_view in self.tab_data_model.visible_views.value:
-            #     # Try and display the plot in the 2nd (= top right) spot...
-            #     pos = 1
-            #     # .., but go for the bottom right one when the spec pixel was
-            #     # selected in the top right viewport
-            #     if (self.tab_data_model.focussedView.value ==
-            #             self.main_frame.vp_inspection_tr.microscope_view):
-            #         pos = 3
-            #
-            #     self.tab_data_model.visible_views.value[pos] = plot_view
-            #
-            # # If we're in 1x1 view, we're bringing the plot to the front
-            # if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
-            #     self.tab_data_model.focussedView.value = plot_view
+            spatial_view = self.main_frame.vp_spatialspec.microscope_view
+
+            # ...and the plot view is not visible yet
+            if spatial_view not in self.tab_data_model.visible_views.value:
+                # Display the plot in one of the bottom positions
+
+                pos = 2
+                bottom_left_vp = self.tab_data_model.visible_views.value[pos]
+
+                # Go for the bottom right one when the spec pixel was selected using the
+                # bottom left viewport
+
+                if self.tab_data_model.focussedView.value == bottom_left_vp:
+                    pos = 3
+
+                self.tab_data_model.visible_views.value[pos] = spatial_view
+
+            # If we're in 1x1 view, we're bringing the plot to the front
+            if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
+                self.tab_data_model.focussedView.value = spatial_view
 
     def _split_channels(self, data):
         """
@@ -2188,7 +2230,7 @@ class TabBarController(object):
         self.main_data = main_data
 
         # create all the tabs that fit the microscope role
-        tab_list = self._filter_tabs(tab_rules, main_frame, main_data)
+        tab_list = self._create_needed_tabs(tab_rules, main_frame, main_data)
         if not tab_list:
             msg = "No interface known for microscope %s" % main_data.role
             raise LookupError(msg)
@@ -2222,10 +2264,8 @@ class TabBarController(object):
         for tab in self._tab.choices:
             tab.button.Enable(not is_acquiring)
 
-    def _filter_tabs(self, tab_defs, main_frame, main_data):
-        """
-        Filter the tabs according to the role of the microscope, and creates
-        the ones needed.
+    def _create_needed_tabs(self, tab_defs, main_frame, main_data):
+        """ Create the tabs needed by the current microscope
 
         Tabs that are not wanted or needed will be removed from the list and
         the associated buttons will be hidden in the user interface.

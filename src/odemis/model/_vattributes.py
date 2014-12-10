@@ -28,6 +28,7 @@ import logging
 import numbers
 import numpy
 import threading
+from types import NoneType
 import zmq
 
 from . import _core
@@ -708,8 +709,8 @@ class TupleVA(VigilantAttribute):
         VigilantAttribute.__init__(self, value, *args, **kwargs)
 
     def _check(self, value):
-        # we really only accept tuple, to avoid hidden data changes
-        if not isinstance(value, tuple):
+        # only accept tuple and None, to avoid hidden data changes, as can occur in lists
+        if not isinstance(value, (tuple, NoneType)):
             raise TypeError("Value '%r' is not a tuple." % value)
 
 # TODO maybe should provide a factory that can take a VigilantAttributeBase class and return it

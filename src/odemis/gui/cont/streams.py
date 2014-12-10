@@ -70,11 +70,11 @@ class StreamController(object):
         pub.subscribe(self.removeStream, 'stream.remove')
 
         # TODO: uncomment if needed
-#         if hasattr(tab_data, 'opticalState'):
-#             tab_data.opticalState.subscribe(self.onOpticalState, init=True)
-#
-#         if hasattr(tab_data, 'emState'):
-#             tab_data.emState.subscribe(self.onEMState, init=True)
+        # if hasattr(tab_data, 'opticalState'):
+        #     tab_data.opticalState.subscribe(self.onOpticalState, init=True)
+        #
+        # if hasattr(tab_data, 'emState'):
+        #     tab_data.emState.subscribe(self.onEMState, init=True)
 
         # This attribute indicates whether live data is processed by the streams
         # in the controller, or that they just display static data.
@@ -241,8 +241,7 @@ class StreamController(object):
                       self._main_data_model.ebeam)
         return self._addStream(s, **kwargs)
 
-    def addStatic(self, name, image,
-                  cls=StaticStream, **kwargs):
+    def addStatic(self, name, image, cls=StaticStream, **kwargs):
         """
         Creates a new static stream and panel in the stream bar
 
@@ -250,7 +249,9 @@ class StreamController(object):
         :param image: (DataArray)
         :param cls: (class of Stream)
         :param returns: (StreamPanel): the panel created
+
         """
+
         s = cls(name, image)
         return self.addStream(s, **kwargs)
 
@@ -289,8 +290,8 @@ class StreamController(object):
             v = self._tab_data_model.focussedView.value
             if (hasattr(v, "stream_classes") and
                     not isinstance(stream, v.stream_classes)):
-                warn = "Adding stream incompatible with the current view"
-                logging.warning(warn)
+                warn = "Adding %s stream incompatible with the current view"
+                logging.warning(warn, stream.__class__.__name__)
             v.addStream(stream)
 
         # TODO: create a StreamScheduler call it like self._scheduler.addStream(stream)
