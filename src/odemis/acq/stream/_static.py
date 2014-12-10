@@ -28,8 +28,10 @@ from odemis import model
 from odemis.acq import calibration
 from odemis.model import MD_POS, VigilantAttribute
 from odemis.util import img, conversion, polar, limit_invocation, spectrum
+from scipy import ndimage
 
 from ._base import Stream
+from odemis.model._metadata import MD_PIXEL_SIZE
 
 
 class StaticStream(Stream):
@@ -418,11 +420,17 @@ class StaticSpectrumStream(StaticStream):
         # data for the display of a spectrum
         self.selected_pixel = model.TupleVA((None, None)) # int, int
 
-        # TODO: also need the size of a point (and density?)
-        # TODO: selected_line = first point, second point in pixels?
-        # Should be independent from selected_pixel as it should be possible
-        # to get simulatenously a spectrum along a line, and a spectrum of a
-        # point (on this line)
+        # first point, second point in pixels. It must be 2 elements long.
+        self.selected_line = model.ListVA([(None, None), (None, None)],
+                                          setter=self._setLine)
+
+        # The thickness of a point of a line (shared).
+        # A point of width W leads to the average value between all the pixels
+        # which are within W/2 from the center of the point.
+        # A line of width W leads to a 1D spectrum taking into account all the
+        # pixels which fit on an orthogonal line to the selected line at a
+        # distance <= W/2.
+        self.width = model.FloatContinuous(1, [1, 32], unit="px")
 
         self.fitToRGB.subscribe(self.onFitToRGB)
         self.spectrumBandwidth.subscribe(self.onSpectrumBandwidth)
@@ -448,6 +456,23 @@ class StaticSpectrumStream(StaticStream):
         if data is None:
             data = self._calibrated
         super(StaticSpectrumStream, self)._updateHistogram(data)
+
+    def _setLine(self, line):
+        """
+        Checks that the value set could be correct
+        """
+        if len(line) != 2:
+            raise ValueError("selected_line must be of length 2")
+
+        shape = self.raw[0].shape[-1:-3:-1]
+        for p in line:
+            if len(p) != 2:
+                raise ValueError("selected_line must contain only tuples of 2 ints")
+            if not 0 <= p[0] < shape[0] or not 0 <= p[1] < shape[1]:
+                raise ValueError("selected_line must only contain coordinates "
+                                 "within %s", shape)
+
+        return line
 
     def _get_bandwidth_in_pixel(self):
         """
@@ -551,13 +576,62 @@ class StaticSpectrumStream(StaticStream):
             return range(min_bw, max_bw + 1)
 
     def get_pixel_spectrum(self):
-        """ Return the spectrum belonging to the selected pixel or None if no
+        """ Return the (0D) spectrum belonging to the selected pixel or None if no
         spectrum is selected.
+        See get_spectrum_range() to know the wavelength values for each index of
+          the spectrum dimension
+        return (None or DataArray with 1 dimension): the spectrum of the given
+         pixel
         """
-        if self.selected_pixel.value != (None, None):
-            x, y = self.selected_pixel.value
-            return self._calibrated[:, 0, 0, y, x]
-        return None
+        if self.selected_pixel.value == (None, None):
+            return None
+        x, y = self.selected_pixel.value
+        return self._calibrated[:, 0, 0, y, x]
+
+    def get_line_spectrum(self):
+        """
+        Return the 1D spectrum representing the (average) spectrum
+        See get_spectrum_range() to know the wavelength values for each index of
+          the spectrum dimension
+        return (None or DataArray with 3 dimensions): first axis (Y) is spatial
+          (along the line), second axis (X) is spectrum, third axis (RGB) is
+          colour (always greyscale).
+          MD_PIXEL_SIZE[1] contains the spatial distance between each spectrum
+        """
+        if (None, None) in self.selected_line.value:
+            return None
+
+        spec2d = self._calibrated[:, 0, 0, :, :] # same data but remove useless dims
+
+        # Number of points to return: the length of the line
+        start, end = self.selected_line.value
+        v = (end[0] - start[0], end[1] - start[1])
+        n = 1 + int(math.hypot(*v))
+
+        # Coordinates of each point: ndim of data (5-2), pos on line (Y), spectrum (X)
+        # The line is scanned from the end till the start so that the spectra
+        # closest to the origin of the line are at the bottom.
+        coord = numpy.empty((3, n, spec2d.shape[0]))
+        coord[0] = numpy.arange(spec2d.shape[0]) # spectra = all
+        coord_spc = coord.swapaxes(1, 2) # just a view to have space as last dim
+        coord_spc[-1] = numpy.linspace(end[0], start[0], n) # X axis
+        coord_spc[-2] = numpy.linspace(end[1], start[1], n) # Y axis
+
+        # Interpolate the values based on the data
+        spec1d = ndimage.map_coordinates(spec2d, coord, order=2)
+        assert spec1d.shape == (n, spec2d.shape[0])
+
+        # Scale and convert to RGB image
+        hist, edges = img.histogram(spec1d)
+        irange = img.findOptimalRange(hist, edges, 1 / 256)
+        rgb8 = img.DataArray2RGB(spec1d, irange)
+
+        # TODO: use metadata to indicate wavelength, unit and position?
+        # spatial distance between pixel
+        pxs_data = self._calibrated.metadata[MD_PIXEL_SIZE]
+        pxs = math.hypot(v[0] * pxs_data[0], v[1] * pxs_data[1]) / (n - 1)
+        md = {MD_PIXEL_SIZE: (None, pxs)} # for the spectrum, use get_spectrum_range()
+        return model.DataArray(rgb8, md)
 
     # TODO: have an "area=None" argument which allows to specify the 2D region
     # within which the spectrum should be computed
@@ -649,11 +723,14 @@ class StaticSpectrumStream(StaticStream):
         self._updateHistogram()
 
         self._updateImage()
-        # TODO: if the 0D spectrum is used, it should be updated too, but
+        # TODO: if the 0D or 1D spectra are used, they should be updated too, but
         # there is no explicit way to do it, so instead, pretend the pixel has
         # moved. It could be solved by using dataflows.
         if self.selected_pixel.value != (None, None):
             self.selected_pixel.notify(self.selected_pixel.value)
+
+        if not (None, None) in self.selected_line.value:
+            self.selected_line.notify(self.selected_line.value)
 
     def onFitToRGB(self, value):
         """
