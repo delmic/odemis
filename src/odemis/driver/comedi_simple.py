@@ -27,51 +27,60 @@ The main adjustments are:
 """
 
 # first, add everything from comedi as is
-from comedi import *
+import comedi as _comedi
 
 import inspect
 import logging
-from functools import partial
 
 class ComediError(Exception):
-    def __init__(self, rc, errno, strerror):
-        self.args = (rc, errno, strerror)
-        
+    def __init__(self, msg, errno, strerror):
+        self.args = (msg, errno, strerror)
+        self.errno = errno
+        self.strerror = strerror
+
     def __str__(self):
-        return "returned %r -> (%d) %s" % self.args
+        return "%s -> (%d) %s" % self.args
 
-def _raise_comedi_error(rc):
-    errno = comedi_errno()
-    raise ComediError(rc, errno, comedi_strerror(errno))
+def _raise_comedi_error(fname, rc):
+    errno = _comedi.comedi_errno()
+    raise ComediError("%s() returned %r" % (fname, rc),
+                      errno, _comedi.comedi_strerror(errno))
 
-def _default_function_wrapper(comedi_f, *args):
+def _default_function_wrapper(comedi_f):
     """
     calls a comedi function and check the return value for error
     error is considered when:
         * return code is int and < 0
         * return code is None (for pointers)
     """
-    rc = comedi_f(*args)
-    if rc is None or (isinstance(rc, int) and rc < 0):
-        _raise_comedi_error(rc)
-    return rc
+    def f(*args):
+        rc = comedi_f(*args)
+        if rc is None or (isinstance(rc, int) and rc < 0):
+            _raise_comedi_error(comedi_f.__name__, rc)
+        return rc
 
-def _data_read_wrapper(comedi_f, *args):
+    return f
+
+def _data_read_wrapper(comedi_f):
     """
     calls a comedi function which return 2 values and check the return value for error
     """
-    rc, data = comedi_f(*args)
-    if rc < 0:
-        _raise_comedi_error(rc)
-    return data
+    def f(*args):
+        rc, data = comedi_f(*args)
+        if rc < 0:
+            _raise_comedi_error(rc)
+        return data
 
-def _void_wrapper(comedi_f, *args):
+    return f
+
+def _void_wrapper(comedi_f):
     """
-    calls a comedi function which returns nothing
+    calls a comedi function which returns nothing (=> not possible to check error)
     """
-    # in Python, returning nothing is like return None, so we need a special 
+    # in Python, returning nothing is like return None, so we need a special
     # wrapper to differentiate the cases
-    comedi_f(*args)
+    return comedi_f
+
     
 # str -> callable: function name -> wrapper (function, *args)
 # callable == None will result in no wrapper
@@ -82,21 +91,33 @@ _function_wrappers = {
                      "perror": _void_wrapper,
                      }
 def _wrap():
-    import comedi as _comedi
+    # With comedi >= 0.10.2, the functions already have comedi_ removed and are
+    # wrapped, so need to handle it differently
+    if hasattr(_comedi, "wrapped"):
+        mwrapped = _comedi.wrapped
+    else:
+        mwrapped = _comedi
+
     global_dict = globals()
     
-    for name in dir(_comedi):
+    for name in dir(mwrapped):
         if name.startswith("_"):
             continue
-        
-        value = getattr(_comedi, name)
+
+        value = getattr(mwrapped, name)
+
+        # Whatever happens, first duplicate this here
+        if name not in global_dict:
+            global_dict[name] = value
+        else:
+            logging.warning("comedi has already %s", name)
         
         # wrap every function starting with "comedi_"
         if name.startswith('comedi_'):
             shortname = name[7:]
-            if shortname in global_dict:
-                logging.warning("comedi has already both %s and %s", name, shortname)
-                continue
+#             if shortname in global_dict:
+#                 logging.warning("comedi has already both %s and %s", name, shortname)
+#                 continue
             
             if inspect.isclass(value):
                 # if it's a struct, no wrapper
@@ -104,7 +125,7 @@ def _wrap():
             elif callable(value): # function
                 wrapper = _function_wrappers.get(shortname, _default_function_wrapper)
                 if wrapper:
-                    fwrapped = partial(wrapper, value)
+                    fwrapped = wrapper(value)
                 else:
                     fwrapped = value
                 global_dict[shortname] = fwrapped
@@ -118,6 +139,16 @@ def _wrap():
                 logging.warning("comedi has already both %s and %s", name, shortname)
                 continue
             global_dict[shortname] = value
-            
+
+        # For the new comedi, which already has the comedi_* dropped
+        # => we just need to wrap the functions for error handling
+        elif callable(value):
+            wrapper = _function_wrappers.get(name, _default_function_wrapper)
+            if wrapper:
+                fwrapped = wrapper(value)
+            else:
+                fwrapped = value
+            global_dict[name] = fwrapped
+
 # wrap all comedi functions/constants that can be wrapped
 _wrap()
