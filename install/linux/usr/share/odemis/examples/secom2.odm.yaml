@@ -105,14 +105,13 @@ Zyla: {
     },
 }
 
-# FIXME: these axes need to be renamed to x, y (but the GUI is sad without A/B for now)
 "Optical stage": {
     class: actuator.MultiplexActuator,
     role: align,
     affects: [Zyla],
-    children: {"a": PIGCS, "b": PIGCS},
+    children: {"x": PIGCS, "y": PIGCS},
     init: {
-        axes_map: {"a": "ox", "b": "oy"},
+        axes_map: {"x": "ox", "y": "oy"},
     },
 }
 
@@ -128,7 +127,7 @@ Zyla: {
     },
 }
 
-# Network should be set up and the C-885 should be configured for DHCP.
+# Network should be set up and the C-863 should be configured for DHCP.
 # Each E-861 should be configured for the right stage.
 # PI E-861 addresses and stage configuration:
 # optical X = 1 (open loop)
@@ -146,7 +145,7 @@ PIGCS: {
         axes: {"ox": [1, 1, False], "oy": [2, 1, False],
                "oz": [3, 1, True],
                "sx": [4, 1, True], "sy": [5, 1, True]},
-        inverted: ["ox", "oy", "oz"], # TODO: check stage X/Y
-        #dist_to_steps: {"sx": 100000, "sy": 100000}, # step/m
+        inverted: ["ox", "oy", "oz"], # sx is good, TODO: check stage Y
+        #dist_to_steps: {"ox": 100000, "oy": 100000}, # step/m
     },
 }
