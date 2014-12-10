@@ -626,8 +626,7 @@ class StaticSpectrumStream(StaticStream):
         irange = img.findOptimalRange(hist, edges, 1 / 256)
         rgb8 = img.DataArray2RGB(spec1d, irange)
 
-        # TODO: use metadata to indicate wavelength, unit and position?
-        # spatial distance between pixel
+        # Use metadata to indicate spatial distance between pixel
         pxs_data = self._calibrated.metadata[MD_PIXEL_SIZE]
         pxs = math.hypot(v[0] * pxs_data[0], v[1] * pxs_data[1]) / (n - 1)
         md = {MD_PIXEL_SIZE: (None, pxs)} # for the spectrum, use get_spectrum_range()
