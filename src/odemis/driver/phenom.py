@@ -1479,6 +1479,11 @@ class ChamberPressure(model.Actuator):
                 name="Phenom chamber pressure state change")
         self._chamber_thread.start()
 
+        self._reconnection_must_stop = threading.Event()
+        target = self._reconnection_thread
+        self._reconnect_thread = threading.Thread(target=target,
+                name="Phenom reconnection attempt")
+
     def _updatePosition(self):
         """
         update the position VA and .pressure VA
@@ -1560,6 +1565,7 @@ class ChamberPressure(model.Actuator):
     def terminate(self):
         if self._executor:
             self._chamber_must_stop.set()
+            self._reconnection_must_stop.set()
             self.stop()
             self._executor.shutdown()
             self._executor = None
@@ -1771,9 +1777,34 @@ class ChamberPressure(model.Actuator):
                             self._updateSampleHolder()  # in case new sample holder was loaded
                     else:
                         logging.warning("Unexpected event received")
-        except Exception:
-            logging.exception("Unexpected failure during chamber pressure event listening")
+        except Exception as e:
+            logging.exception("Unexpected failure during chamber pressure event listening. Lost connection to Phenom.")
+            # Update the state of SEM component so the backend is aware of the error occured
+            self.parent.state = e
+            # Keep on trying to reconnect
+            self._reconnect_thread.start()
         finally:
             self._chamber_device.CloseEventChannel(ch_id)
             logging.debug("Chamber pressure thread closed")
             self._chamber_must_stop.clear()
+
+    def _reconnection_thread(self):
+        """
+        Keeps on trying to reconnect after connection failure.
+        """
+        try:
+            while not self._reconnection_must_stop.is_set():
+                # Wait before retrying
+                time.sleep(5)
+                try:
+                    mode = self.parent._device.GetInstrumentMode()
+                    if mode != 'INSTRUMENT-MODE-ERROR':
+                        # We can now open the event channel again
+                        self.parent.state = model.ST_RUNNING
+                        self._chamber_thread.start()
+                        break
+                except Exception:
+                    logging.warning("Retrying to connect to Phenom...")
+        finally:
+            logging.debug("Phenom reconnection attempt thread closed")
+            self._reconnection_must_stop.clear()              
