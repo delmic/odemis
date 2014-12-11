@@ -34,6 +34,7 @@ import weakref
 
 import pkg_resources
 import wx
+
 # IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
 # file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
 # This is not related to any particular wxPython version and is most likely permanent.
@@ -50,6 +51,7 @@ from odemis.gui.conf import get_acqui_conf
 from odemis.gui.cont import settings, tools
 from odemis.gui.cont.actuators import ActuatorController
 from odemis.gui.cont.microscope import SecomStateController, DelphiStateController
+from odemis.gui.cont.streams import StreamController
 from odemis.gui.util import call_after
 from odemis.gui.util.img import scale_to_alpha
 from odemis.util import units
@@ -215,23 +217,39 @@ class SecomStreamsTab(Tab):
         :return:
 
         """
+
         tab_data = guimod.LiveViewGUIData(main_data)
-        super(SecomStreamsTab, self).__init__(name, button, panel,
-                                              main_frame, tab_data)
+        super(SecomStreamsTab, self).__init__(name, button, panel, main_frame, tab_data)
+
         self.main_data = main_data
+
+        buttons = collections.OrderedDict([
+            (
+                self.main_frame.btn_secom_view_all,
+                (None, self.main_frame.lbl_secom_view_all)),
+            (
+                self.main_frame.btn_secom_view_tl,
+                (self.main_frame.vp_secom_tl, self.main_frame.lbl_secom_view_tl)),
+            (
+                self.main_frame.btn_secom_view_tr,
+                (self.main_frame.vp_secom_tr, self.main_frame.lbl_secom_view_tr)),
+            (
+                self.main_frame.btn_secom_view_bl,
+                (self.main_frame.vp_secom_bl, self.main_frame.lbl_secom_view_bl)),
+            (
+                self.main_frame.btn_secom_view_br,
+                (self.main_frame.vp_secom_br, self.main_frame.lbl_secom_view_br)),
+            (
+                self.main_frame.btn_secom_overview,
+                (self.main_frame.vp_overview_sem, self.main_frame.lbl_secom_overview)),
+        ])
 
         # Order matters!
         # First we create the views, then the streams
         self.view_controller = viewcont.ViewPortController(
             self.tab_data_model,
             self.main_frame,
-            [
-                self.main_frame.vp_secom_tl,
-                self.main_frame.vp_secom_tr,
-                self.main_frame.vp_secom_bl,
-                self.main_frame.vp_secom_br,
-                self.main_frame.vp_overview_sem
-            ]
+            self.main_frame.pnl_secom_grid.viewports
         )
 
         self.overview_controller = viewcont.OverviewController(
@@ -276,36 +294,11 @@ class SecomStreamsTab(Tab):
         self.tab_data_model.autofocus_active.subscribe(self._onAutofocus)
         tab_data.streams.subscribe(self._on_current_stream)
 
-        buttons = collections.OrderedDict([
-            (
-                self.main_frame.btn_secom_view_all,
-                (None, self.main_frame.lbl_secom_view_all)
-            ),
-            (
-                self.main_frame.btn_secom_view_tl,
-                (self.main_frame.vp_secom_tl, self.main_frame.lbl_secom_view_tl)
-            ),
-            (
-                self.main_frame.btn_secom_view_tr,
-                (self.main_frame.vp_secom_tr, self.main_frame.lbl_secom_view_tr)),
-            (
-                self.main_frame.btn_secom_view_bl,
-                (self.main_frame.vp_secom_bl, self.main_frame.lbl_secom_view_bl)
-            ),
-            (
-                self.main_frame.btn_secom_view_br,
-                (self.main_frame.vp_secom_br, self.main_frame.lbl_secom_view_br)
-            ),
-            (
-                self.main_frame.btn_secom_overview,
-                (self.main_frame.vp_overview_sem, self.main_frame.lbl_secom_overview)
-            ),
-        ])
-
         self._view_selector = viewcont.ViewButtonController(
             self.tab_data_model,
             self.main_frame,
-            buttons
+            buttons,
+            self.main_frame.pnl_secom_grid.viewports
         )
 
         self._acquisition_controller = acqcont.SecomAcquiController(
@@ -326,7 +319,7 @@ class SecomStreamsTab(Tab):
         )
 
         # For remembering which streams are paused when hiding the tab
-        self._streams_to_restart = set() # set of weakref to the streams
+        self._streams_to_restart = set()  # set of weakref to the streams
 
         # To automatically play/pause a stream when turning on/off a microscope,
         # and add the stream on the first time.
@@ -1049,22 +1042,35 @@ class AnalysisTab(Tab):
         tab_data = guimod.AnalysisGUIData(main_data)
         super(AnalysisTab, self).__init__(name, button, panel, main_frame, tab_data)
 
-        viewports = [
-            self.main_frame.vp_inspection_tl,
-            self.main_frame.vp_inspection_tr,
-            self.main_frame.vp_inspection_bl,
-            self.main_frame.vp_inspection_br,
-            self.main_frame.vp_inspection_plot,
-            self.main_frame.vp_angular,
-            self.main_frame.vp_spatialspec,
-        ]
+        buttons = collections.OrderedDict([
+            (
+                self.main_frame.btn_inspection_view_all,
+                (None, self.main_frame.lbl_inspection_view_all)
+            ),
+            (
+                self.main_frame.btn_inspection_view_tl,
+                (self.main_frame.vp_inspection_tl, self.main_frame.lbl_inspection_view_tl)
+            ),
+            (
+                self.main_frame.btn_inspection_view_tr,
+                (self.main_frame.vp_inspection_tr, self.main_frame.lbl_inspection_view_tr)
+            ),
+            (
+                self.main_frame.btn_inspection_view_bl,
+                (self.main_frame.vp_inspection_bl, self.main_frame.lbl_inspection_view_bl)
+            ),
+            (
+                self.main_frame.btn_inspection_view_br,
+                (self.main_frame.vp_inspection_br, self.main_frame.lbl_inspection_view_br)
+            )
+        ])
 
         # The view controller also has special code for the sparc to create the
         # right type of view.
         self.view_controller = viewcont.ViewPortController(
             self.tab_data_model,
             self.main_frame,
-            viewports
+            self.main_frame.pnl_inspection_grid.viewports
         )
 
         # Toolbar
@@ -1106,35 +1112,11 @@ class AnalysisTab(Tab):
         self._settings_controller.setter_spec_bck_file = self.set_spec_background
         self._settings_controller.setter_spec_file = self.set_spec_comp
 
-        # TODO: rename buttons
-        buttons = collections.OrderedDict([
-            (
-                self.main_frame.btn_sparc_view_all,
-                (None, self.main_frame.lbl_sparc_view_all)
-            ),
-            (
-                self.main_frame.btn_sparc_view_tl,
-                (self.main_frame.vp_inspection_tl, self.main_frame.lbl_sparc_view_tl)
-            ),
-            (
-                self.main_frame.btn_sparc_view_tr,
-                (self.main_frame.vp_inspection_tr, self.main_frame.lbl_sparc_view_tr)
-            ),
-            (
-                self.main_frame.btn_sparc_view_bl,
-                (self.main_frame.vp_inspection_bl, self.main_frame.lbl_sparc_view_bl)
-            ),
-            (
-                self.main_frame.btn_sparc_view_br,
-                (self.main_frame.vp_inspection_br, self.main_frame.lbl_sparc_view_br)
-            )
-        ])
-
         self._view_selector = viewcont.ViewButtonController(
             self.tab_data_model,
             self.main_frame,
             buttons,
-            viewports
+            self.main_frame.pnl_inspection_grid.viewports
         )
 
         self.main_frame.btn_open_image.Bind(
@@ -1223,13 +1205,18 @@ class AnalysisTab(Tab):
         # Reset tool, layout and visible views
         self.tab_data_model.tool.value = guimod.TOOL_NONE
         self.tab_data_model.viewLayout.value = guimod.VIEW_LAYOUT_22
-        self.tab_data_model.visible_views.value = self._def_views
+
+        new_visible_views = list(self._def_views)  # Use a copy
 
         # Create a new file info model object
         fi = guimod.FileInfo(filename)
 
-        # remove all the previous streams
+        # Remove all the previous streams
         self._stream_controller.clear()
+        # Clear any old plots
+        self.main_frame.vp_inspection_plot.clear()
+        self.main_frame.vp_spatialspec.clear()
+        self.main_frame.vp_angular.clear()
 
         # Force the canvases to fit to the content
         for vp in [self.main_frame.vp_inspection_tl,
@@ -1238,90 +1225,38 @@ class AnalysisTab(Tab):
                    self.main_frame.vp_inspection_br]:
             vp.canvas.fit_view_to_next_image = True
 
-        # AR data is special => all merged in one big stream
-        ar_data = []
-
+        # Fetch the acquisition date
         acq_date = fi.metadata.get(model.MD_ACQ_DATE, None)
 
         # Add each data as a stream of the correct type
         for d in data:
+            # Get the earliest acquisition date
             try:
                 im_acq_date = d.metadata[model.MD_ACQ_DATE]
                 acq_date = min(acq_date or im_acq_date, im_acq_date)
             except KeyError:  # no MD_ACQ_DATE
                 pass  # => don't update the acq_date
 
-            # Streams only support 2D data (e.g., no multiple channels like RGB)
-            # excepted for spectra which have a 3rd dimensions on dim 5.
-            # So if it's the case => separate into one stream per channel
-            cdata = self._split_channels(d)
-
-            for cd in cdata:
-                # TODO: be more clever to detect the type of stream
-                if (
-                        model.MD_WL_LIST in cd.metadata
-                        or model.MD_WL_POLYNOMIAL in cd.metadata
-                        or (len(cd.shape) >= 5 and cd.shape[-5] > 1)
-                ):
-                    desc = cd.metadata.get(model.MD_DESCRIPTION, "Spectrum")
-                    cls = streammod.StaticSpectrumStream
-                elif model.MD_AR_POLE in cd.metadata:
-                    # AR data
-                    ar_data.append(cd)
-                    continue
-                elif ((model.MD_IN_WL in cd.metadata and
-                               model.MD_OUT_WL in cd.metadata) or
-                              model.MD_USER_TINT in cd.metadata):
-                    # No explicit way to distinguish between Brightfield and Fluo,
-                    # so guess it's Brightfield iif:
-                    # * No tint
-                    # * (and) Large band for excitation wl (> 100 nm)
-                    in_wl = d.metadata[model.MD_IN_WL]
-                    if (model.MD_USER_TINT in cd.metadata or
-                                    in_wl[1] - in_wl[0] < 100e-9):
-                        # Fluo
-                        desc = cd.metadata.get(model.MD_DESCRIPTION, "Filtered colour")
-                        cls = streammod.StaticFluoStream
-                    else:
-                        # Brigthfield
-                        desc = cd.metadata.get(model.MD_DESCRIPTION, "Brightfield")
-                        cls = streammod.StaticBrightfieldStream
-                elif model.MD_IN_WL in cd.metadata:  # no MD_OUT_WL
-                    desc = cd.metadata.get(model.MD_DESCRIPTION, "Brightfield")
-                    cls = streammod.StaticBrightfieldStream
-                else:
-                    desc = cd.metadata.get(model.MD_DESCRIPTION, "Secondary electrons")
-                    cls = streammod.StaticSEMStream
-
-                self._stream_controller.addStatic(desc, cd, cls=cls,
-                                                  add_to_all_views=True)
-
-        # Add one global AR stream
-        if ar_data:
-            stream_panel = self._stream_controller.addStatic(
-                "Angular",
-                ar_data,
-                cls=streammod.StaticARStream,
-                add_to_all_views=True)
-
-            self.tab_data_model.visible_views.value[2] = self.main_frame.vp_angular.microscope_view
-
         if acq_date:
             fi.metadata[model.MD_ACQ_DATE] = acq_date
         self.tab_data_model.acq_fileinfo.value = fi
 
-        # TODO: change the control flow? Seems messy like this.
-        ar_found = False
-        spec_found = False
+        # Create streams from data
+        streams = self._stream_controller.data_to_static_streams(data)
 
-        # Share spectrum pixel positions with other viewports
-        # TODO: a better place for this code?
-        for strm in self.tab_data_model.streams.value:
-            # If a spectrum stream is found...
-            if isinstance(strm, streammod.SpectrumStream):
-                spec_found = True
-                iimg = strm.image.value
-                # ... set the PointOverlay values for each viewport
+        # Spectrum and AR streams are, for now, considered mutually exclusive
+        spec_streams = [s for s in streams if isinstance(s, streammod.SpectrumStream)]
+        ar_streams = [s for s in streams if isinstance(s, streammod.ARStream)]
+
+        # TODO: Move viewport related code to ViewPortController
+        if spec_streams:
+
+            # ########### Track pixel and line selection
+
+            for spec_stream in spec_streams:
+                iimg = spec_stream.image.value
+
+                # Set the PointOverlay values for each viewport
                 for viewport in self.view_controller.viewports:
                     if hasattr(viewport.canvas, "pixel_overlay"):
                         ol = viewport.canvas.pixel_overlay
@@ -1336,48 +1271,18 @@ class AnalysisTab(Tab):
                             iimg.metadata[model.MD_PIXEL_SIZE][0],
                             iimg.metadata[model.MD_POS],
                             (width, height),
-                            strm.selected_pixel
+                            spec_stream.selected_pixel
                         )
 
                     if hasattr(viewport.canvas, "line_overlay"):
                         ol = viewport.canvas.line_overlay
-                        ol.set_line_va(strm.selected_line)
+                        ol.set_line_va(spec_stream.selected_line)
 
-                strm.selected_pixel.subscribe(self._on_pixel_select, init=True)
-                strm.selected_line.subscribe(self._on_line_select, init=True)
+                spec_stream.selected_pixel.subscribe(self._on_pixel_select, init=True)
+                spec_stream.selected_line.subscribe(self._on_line_select, init=True)
 
-                self.tb.enable_button(tools.TOOL_POINT, True)
-                self.tb.enable_button(tools.TOOL_LINE, True)
+            # ########### Reload current calibration on the new streams
 
-                self.main_frame.vp_inspection_plot.clear()
-                break
-            # If an angle resolve stream is found...
-            elif isinstance(strm, streammod.ARStream):
-                ar_found = True
-                # ... set the PointOverlay values for each viewport
-                for viewport in self.view_controller.viewports:
-                    if hasattr(viewport.canvas, "points_overlay"):
-                        ol = viewport.canvas.points_overlay
-                        ol.set_point(strm.point)
-                        strm.point.subscribe(self._on_point_select, init=True)
-
-                self.tb.enable_button(tools.TOOL_POINT, True)
-                self.tb.enable_button(tools.TOOL_LINE, True)
-                break
-        else:
-            self.tb.enable_button(tools.TOOL_POINT, False)
-            self.tb.enable_button(tools.TOOL_LINE, False)
-
-        # Reload current calibration on the new streams
-        if ar_found:
-            try:
-                self.set_ar_background(self.tab_data_model.ar_cal.value)
-            except ValueError:
-                logging.warning(u"Calibration file not accepted any more '%s'",
-                                self.tab_data_model.ar_cal.value)
-                self.tab_data_model.ar_cal.value = u""  # remove the calibration
-
-        if spec_found:
             try:
                 self.set_spec_background(self.tab_data_model.spec_bck_cal.value)
             except ValueError:
@@ -1392,8 +1297,62 @@ class AnalysisTab(Tab):
                                 self.tab_data_model.spec_cal.value)
                 self.tab_data_model.spec_cal.value = u""  # remove the calibration
 
+            # ########### Make the spectrum viewport visible
+
+            new_visible_views[2] = self.main_frame.vp_spatialspec.microscope_view
+            new_visible_views[3] = self.main_frame.vp_inspection_plot.microscope_view
+
+            # ########### Update tool menu
+
+            self.tb.enable_button(tools.TOOL_POINT, True)
+            self.tb.enable_button(tools.TOOL_LINE, True)
+
+        elif ar_streams:
+
+            # ########### Track point selection
+
+            for ar_stream in ar_streams:
+                for viewport in self.view_controller.viewports:
+                    if hasattr(viewport.canvas, "points_overlay"):
+                        ol = viewport.canvas.points_overlay
+                        ol.set_point(ar_stream.point)
+
+                ar_stream.point.subscribe(self._on_point_select, init=True)
+
+            # ########### Reload current calibration on the new streams
+
+            try:
+                self.set_ar_background(self.tab_data_model.ar_cal.value)
+            except ValueError:
+                logging.warning(u"Calibration file not accepted any more '%s'",
+                                self.tab_data_model.ar_cal.value)
+                self.tab_data_model.ar_cal.value = u""  # remove the calibration
+
+            # ########### Make the Angular Viewport visible
+
+            new_visible_views[2] = self.main_frame.vp_angular.microscope_view
+
+            # ########### Update tool menu
+
+            self.tb.enable_button(tools.TOOL_POINT, True)
+            self.tb.enable_button(tools.TOOL_LINE, False)
+        else:
+            # ########### Update tool menu
+            self.tb.enable_button(tools.TOOL_POINT, False)
+            self.tb.enable_button(tools.TOOL_LINE, False)
+
         # Only show the panels that fit the current streams
-        self._settings_controller.ShowCalibrationPanel(ar_found, spec_found)
+        self._settings_controller.show_calibration_panel(len(ar_streams) > 0, len(spec_streams) > 0)
+
+        # Update the visible views if they've changed
+        for vold, vnew in zip(self.tab_data_model.visible_views.value, new_visible_views):
+            if vold != vnew:
+                self.tab_data_model.visible_views.value = new_visible_views
+                break
+
+        # Load the Streams and their data into the model and views
+        for s in streams:
+            self._stream_controller.addStream(s, add_to_all_views=True)
 
     def set_ar_background(self, fn):
         """
@@ -1515,9 +1474,9 @@ class AnalysisTab(Tab):
         # Doing it this way, causes some unnecessary calls to the reset method
         # but it cannot be avoided. Subscribing to the tool VA will only
         # tell us what the new tool is and not what the previous, if any, was.
-        if tool != guimod.TOOL_POINT:
-            self.tab_data_model.visible_views.value = self._def_views
-            # self.tab_data_model.viewLayout.value = guimod.VIEW_LAYOUT_22
+        # if tool != guimod.TOOL_POINT:
+        #     self.tab_data_model.visible_views.value = self._def_views
+        pass
 
     def _on_point_select(self, selected_point):
         """ Event handler for when a point is selected """
@@ -1529,74 +1488,18 @@ class AnalysisTab(Tab):
     def _on_pixel_select(self, selected_pixel):
         """ Event handler for when a spectrum pixel is selected """
 
-        # If the right tool is active...
-        if self.tab_data_model.tool.value == guimod.TOOL_POINT:
+        # If we're in 1x1 view, we're bringing the plot to the front
+        if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
             plot_view = self.main_frame.vp_inspection_plot.microscope_view
-
-            # ...and the plot view is not visible yet
-            if plot_view not in self.tab_data_model.visible_views.value:
-                # Display the plot in one of the bottom positions
-
-                pos = 2
-                bottom_left_vp = self.tab_data_model.visible_views.value[pos]
-
-                # Go for the bottom right one when the spec pixel was selected using the
-                # bottom left viewport
-
-                if self.tab_data_model.focussedView.value == bottom_left_vp:
-                    pos = 3
-
-                self.tab_data_model.visible_views.value[pos] = plot_view
-
-            # If we're in 1x1 view, we're bringing the plot to the front
-            if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
-                self.tab_data_model.focussedView.value = plot_view
+            self.tab_data_model.focussedView.value = plot_view
 
     def _on_line_select(self, _):
         """ Event handler for when a spectrum line is selected """
 
-        # If the right tool is active...
-        if self.tab_data_model.tool.value == guimod.TOOL_LINE:
+        # If we're in 1x1 view, we're bringing the plot to the front
+        if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
             spatial_view = self.main_frame.vp_spatialspec.microscope_view
-
-            # ...and the plot view is not visible yet
-            if spatial_view not in self.tab_data_model.visible_views.value:
-                # Display the plot in one of the bottom positions
-
-                pos = 2
-                bottom_left_vp = self.tab_data_model.visible_views.value[pos]
-
-                # Go for the bottom right one when the spec pixel was selected using the
-                # bottom left viewport
-
-                if self.tab_data_model.focussedView.value == bottom_left_vp:
-                    pos = 3
-
-                self.tab_data_model.visible_views.value[pos] = spatial_view
-
-            # If we're in 1x1 view, we're bringing the plot to the front
-            if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
-                self.tab_data_model.focussedView.value = spatial_view
-
-    def _split_channels(self, data):
-        """
-        Separate a DataArray into multiple DataArrays along the 3rd dimension
-        (channel).
-        data (DataArray): can be any shape
-        Returns (list of DataArrays): a list of one DataArray (if no splitting
-        is needed) or more (if splitting happened). The metadata is the same
-        (object) for all the DataArrays.
-        """
-        # Anything to split?
-        if len(data.shape) >= 3 and data.shape[-3] > 1:
-            # multiple channels => split
-            das = []
-            for c in range(data.shape[-3]):
-                das.append(data[..., c, :, :])  # metadata ref is copied
-            return das
-        else:
-            # return just one DA
-            return [data]
+            self.tab_data_model.focussedView.value = spatial_view
 
 
 class LensAlignTab(Tab):

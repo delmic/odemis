@@ -1316,6 +1316,8 @@ class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
         self.add_view_overlay(self.markline_overlay)
         self.markline_overlay.activate()
 
+        self.background_brush = wx.SOLID
+
     def draw(self):
         """ Map the image data to the canvas and draw it """
 

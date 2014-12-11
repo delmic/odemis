@@ -732,6 +732,10 @@ class BufferedCanvas(wx.Panel):
         return (max(1, min(pos[0], self._bmp_buffer_size[0] - 1)),
                 max(1, min(pos[1], self._bmp_buffer_size[1] - 1)))
 
+    def clear(self):
+        """ Clear the canvas by redrawing the background """
+        self._draw_background(self.ctx)
+
 
 class BitmapCanvas(BufferedCanvas):
 
@@ -1659,11 +1663,9 @@ PLOT_MODE_BAR = 3
 
 
 class PlotCanvas(BufferedCanvas):
-    """ This is a general canvas for plotting numerical data in various ways
-    """
+    """ This is a general canvas for plotting numerical data in various ways """
 
     def __init__(self, *args, **kwargs):
-
         super(PlotCanvas, self).__init__(*args, **kwargs)
 
         # The data to be plotted, a list of numerical value pairs
@@ -1686,7 +1688,8 @@ class PlotCanvas(BufferedCanvas):
         self.unit_x = None
         self.unit_y = None
 
-        ## Rendering settings
+        # Rendering settings
+
         self.line_width = 2.0  # px
         self.line_colour = wxcol_to_frgb(self.ForegroundColour)
         self.fill_colour = self.line_colour
@@ -1710,6 +1713,7 @@ class PlotCanvas(BufferedCanvas):
         """ Set the data to be plotted
 
         The data should be an iterable of numerical 2-tuples.
+
         """
 
         if data:
@@ -1746,6 +1750,7 @@ class PlotCanvas(BufferedCanvas):
         self.data_width = None
         self.data_height = None
         self.outline = None
+        super(PlotCanvas, self).clear()
 
     def has_data(self):
         return self._data is not None and len(self._data) > 2

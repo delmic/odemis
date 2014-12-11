@@ -29,7 +29,7 @@ import logging
 from odemis import gui, model
 from odemis.acq import stream
 from odemis.acq.stream import OpticalStream, EMStream
-from odemis.gui import BG_COLOUR_LEGEND, FG_COLOUR_LEGEND
+from odemis.gui import BG_COLOUR_LEGEND, FG_COLOUR_LEGEND, BG_COLOUR_MAIN
 from odemis.gui.comp import miccanvas
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
 from odemis.gui.comp.legend import InfoLegend, AxisLegend
@@ -135,11 +135,15 @@ class ViewPort(wx.Panel):
     def microscope_view(self):
         return self._microscope_view
 
+    def clear(self):
+        self.canvas.clear()
+        self.Refresh()
+
     def setView(self, microscope_view, tab_data):
         raise NotImplementedError
 
     ################################################
-    ## Panel control
+    # Panel control
     ################################################
 
     def ShowLegend(self, show):
@@ -165,7 +169,7 @@ class ViewPort(wx.Panel):
             self.SetBackgroundColour(gui.BORDER_COLOUR_UNFOCUS)
 
     ################################################
-    ## GUI Event handling
+    # GUI Event handling
     ################################################
 
     def OnChildFocus(self, evt):
@@ -566,8 +570,9 @@ class PlotViewport(ViewPort):
 
     def __init__(self, *args, **kwargs):
         ViewPort.__init__(self, *args, **kwargs)
+        self.canvas.SetBackgroundColour("#111111")
         # We need a local reference to the spectrum stream, because if we rely
-        # on the reference within the MicorscopeView, it might be replaced
+        # on the reference within the MicroscopeView, it might be replaced
         # before we get an explicit chance to unsubscribe event handlers
         self.spectrum_stream = None
 
@@ -582,7 +587,7 @@ class PlotViewport(ViewPort):
     def microscope_view(self):
         return self._microscope_view
 
-    def connect_stream(self, unused=None):
+    def connect_stream(self, _=None):
         """ This method will connect this ViewPort to the Spectrum Stream so it
         it can react to spectrum pixel selection.
         """
@@ -695,7 +700,7 @@ class SpatialSpectrumViewport(ViewPort):
         """
         # Call parent constructor at the end, because it needs the legend panel
         super(SpatialSpectrumViewport, self).__init__(*args, **kwargs)
-
+        self.canvas.SetBackgroundColour("#111111")
         self.spectrum_stream = None
 
     def setView(self, microscope_view, tab_data):
