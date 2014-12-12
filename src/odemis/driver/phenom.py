@@ -1779,7 +1779,9 @@ class ChamberPressure(model.Actuator):
         except Exception as e:
             logging.exception("Unexpected failure during chamber pressure event listening. Lost connection to Phenom.")
             # Update the state of SEM component so the backend is aware of the error occured
-            self.parent.state = e
+            hw_error = HwError("Unexpected failure during chamber pressure event listening. Lost connection to Phenom.")
+            self.parent.state._value = hw_error
+            self.parent.state.notify(hw_error)
             # Keep on trying to reconnect
             target = self._reconnection_thread
             self._reconnect_thread = threading.Thread(target=target,
@@ -1803,7 +1805,9 @@ class ChamberPressure(model.Actuator):
                     logging.debug("Current Phenom mode: %s", mode)
                     if mode != 'INSTRUMENT-MODE-ERROR':
                         # Phenom up and running
-                        self.parent.state.value = model.ST_RUNNING
+                        st_running = model.ST_RUNNING
+                        self.parent.state._value = st_running
+                        self.parent.state.notify(st_running)
                         # Update with the current pressure state
                         self._updatePosition()
                         # We can now open the event channel again
