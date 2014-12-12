@@ -1473,16 +1473,15 @@ class ChamberPressure(model.Actuator):
         self._position_event = threading.Event()
         self._position_event.set()
 
+        # Thread that listens to pressure state changes
         self._chamber_must_stop = threading.Event()
         target = self._chamber_move_thread
         self._chamber_thread = threading.Thread(target=target,
                 name="Phenom chamber pressure state change")
         self._chamber_thread.start()
 
+        # Event for reconnection thread
         self._reconnection_must_stop = threading.Event()
-        target = self._reconnection_thread
-        self._reconnect_thread = threading.Thread(target=target,
-                name="Phenom reconnection attempt")
 
     def _updatePosition(self):
         """
@@ -1780,8 +1779,11 @@ class ChamberPressure(model.Actuator):
         except Exception as e:
             logging.exception("Unexpected failure during chamber pressure event listening. Lost connection to Phenom.")
             # Update the state of SEM component so the backend is aware of the error occured
-            self.parent.state.value = e
+            self.parent.state = e
             # Keep on trying to reconnect
+            target = self._reconnection_thread
+            self._reconnect_thread = threading.Thread(target=target,
+                    name="Phenom reconnection attempt")
             self._reconnect_thread.start()
         finally:
             self._chamber_device.CloseEventChannel(ch_id)
@@ -1797,10 +1799,17 @@ class ChamberPressure(model.Actuator):
                 # Wait before retrying
                 time.sleep(5)
                 try:
-                    mode = self.parent._device.GetInstrumentMode()
+                    mode = self._pressure_device.GetInstrumentMode()
+                    logging.debug("Current Phenom mode: %s", mode)
                     if mode != 'INSTRUMENT-MODE-ERROR':
-                        # We can now open the event channel again
+                        # Phenom up and running
                         self.parent.state.value = model.ST_RUNNING
+                        # Update with the current pressure state
+                        self._updatePosition()
+                        # We can now open the event channel again
+                        target = self._chamber_move_thread
+                        self._chamber_thread = threading.Thread(target=target,
+                                name="Phenom chamber pressure state change")
                         self._chamber_thread.start()
                         break
                 except Exception:
