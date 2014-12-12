@@ -515,15 +515,14 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
     def horizontal_field_width(self, hfw):
         """ Set the mpp of the microscope view according to the given HFW """
 
-        width = self.ClientSize.x
-        height = self.ClientSize.y
-        # trick we use the smallest of the canvas dimensions to be sure the image
+        # Trick: we use the smallest of the canvas dimensions to be sure the image
         # will fit.
+        size = min(self.ClientSize)
         # TODO: return both FoV dimensions, and move this cleverness to the
         # controller, so that it can do the right thing even if the image is not
         # square.
-        if self.microscope_view and width:
-            mpp = self.microscope_view.mpp.clip(hfw / min(width, height))
+        if self.microscope_view and size > 0:
+            mpp = self.microscope_view.mpp.clip(hfw / size)
             self.microscope_view.mpp.value = mpp
 
     def on_size(self, event):
