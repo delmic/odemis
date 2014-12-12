@@ -27,7 +27,7 @@ from odemis import model
 import odemis
 from odemis.acq import stream, calibration
 from odemis.driver import simcam
-from odemis.util import driver, conversion, timeout
+from odemis.util import driver, conversion, timeout, img
 import os
 import subprocess
 import time
@@ -836,6 +836,7 @@ class TestStaticStreams(unittest.TestCase):
         """Test StaticSpectrumStream"""
         # Spectrum
         data = numpy.ones((251, 1, 1, 200, 300), dtype="uint16")
+        data[:, 0, 0, :, 3] = numpy.random.randint(0, 2 ** 12 - 1, (200,))
         data[2, :, :, :, :] = range(300)
         data[200, 0, 0, 2] = range(300)
         wld = 433e-9 + numpy.array(range(data.shape[0])) * 0.1e-9
@@ -893,6 +894,18 @@ class TestStaticStreams(unittest.TestCase):
         self.assertEqual(wl1d.shape, (data.shape[0],))
         self.assertEqual(sp1d.metadata[model.MD_PIXEL_SIZE][1],
                          md[model.MD_PIXEL_SIZE][0])
+
+        # compare to doing it manually, by cutting the band at 3
+        sp1d_raw_ex = data[:, 0, 0, 65:6:-1, 3]
+        # make it contiguous to be sure to get the fast conversion, because
+        # there are (still) some minor differences with the slow conversion
+        sp1d_raw_ex = numpy.ascontiguousarray(sp1d_raw_ex.swapaxes(0, 1))
+
+        # Need to convert to RGB to compare
+        hist, edges = img.histogram(sp1d_raw_ex)
+        irange = img.findOptimalRange(hist, edges, 1 / 256)
+        sp1d_rgb_ex = img.DataArray2RGB(sp1d_raw_ex, irange)
+        numpy.testing.assert_equal(sp1d, sp1d_rgb_ex)
 
         # Check 1d spectrum
         specs.selected_line.value = [(30, 65), (1, 1)]

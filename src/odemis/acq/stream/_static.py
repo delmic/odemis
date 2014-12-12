@@ -523,8 +523,8 @@ class StaticSpectrumStream(StaticStream):
             av_data = img.ensure2DImage(av_data)
             rgbim = img.DataArray2RGB(av_data, irange)
         else:
-            # Note: For now this method uses three independant bands. To give
-            # a better sense of continum, and be closer to reality when using
+            # Note: For now this method uses three independent bands. To give
+            # a better sense of continuum, and be closer to reality when using
             # the visible light's band, we should take a weighted average of the
             # whole spectrum for each band.
 

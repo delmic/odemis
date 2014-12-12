@@ -199,7 +199,7 @@ def histogram(data, irange=None):
         hist = numpy.bincount(data.flat, minlength=length)
         edges = (0, hist.size - 1)
         if edges[1] > irange[1]:
-            logging.warning("Unexpected value %d outside of range", edges[1])
+            logging.warning("Unexpected value %d outside of range %s", edges[1], irange)
     else:
         if data.dtype.kind in "biu":
             length = irange[1] - irange[0] + 1
