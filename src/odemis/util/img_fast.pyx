@@ -30,14 +30,14 @@ ctypedef numpy.uint16_t uint16_t
 @cython.cdivision(True)
 cdef void cDataArray2RGB(uint16_t* data, int datalen, uint16_t irange0, uint16_t irange1,
                     int* tint, numpy.uint8_t* ret) nogil:
-    cdef double b = 256. / <double>(irange1 - irange0 + 1)
+    cdef double b = 255. / <double>(irange1 - irange0)
     cdef double br = (b * <double>tint[0]) / 255.
     cdef double bg = (b * <double>tint[1]) / 255.
     cdef double bb = (b * <double>tint[2]) / 255.
 
     cdef numpy.uint8_t di
     cdef double df
-    cdef int retpos=0
+    cdef int retpos = 0
 
     if tint[0] == tint[1] == tint[2] == 255:
         # optimised version, without tinting (about 2x faster)
@@ -48,7 +48,7 @@ cdef void cDataArray2RGB(uint16_t* data, int datalen, uint16_t irange0, uint16_t
             elif data[i] >= irange1:
                 di = 255
             else:
-                di = <numpy.uint8_t> ((data[i] - irange0) * b)
+                di = <numpy.uint8_t> ((data[i] - irange0) * b + 0.5)
             ret[retpos] = di
             retpos += 1
             ret[retpos] = di
@@ -74,11 +74,11 @@ cdef void cDataArray2RGB(uint16_t* data, int datalen, uint16_t irange0, uint16_t
                 retpos += 1
             else:
                 df = (data[i] - irange0) 
-                ret[retpos] = <numpy.uint8_t> (df * br)
+                ret[retpos] = <numpy.uint8_t> (df * br + 0.5)
                 retpos += 1
-                ret[retpos] = <numpy.uint8_t> (df * bg)
+                ret[retpos] = <numpy.uint8_t> (df * bg + 0.5)
                 retpos += 1
-                ret[retpos] = <numpy.uint8_t> (df * bb)
+                ret[retpos] = <numpy.uint8_t> (df * bb + 0.5)
                 retpos += 1
 
 # This function is probably not needed, but I have no idea how to instantiate 

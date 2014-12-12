@@ -27,11 +27,13 @@ from odemis import model
 from odemis.util import img
 import time
 import unittest
+from unittest.case import skip
 
 
 logging.getLogger().setLevel(logging.DEBUG)
 
 
+# @skip("faster")
 class TestFindOptimalRange(unittest.TestCase):
     """
     Test findOptimalRange
@@ -336,6 +338,27 @@ class TestDataArray2RGB(unittest.TestCase):
         self.assertEqual(hist[1], 0)
         self.assertGreater(hist[-1], 0)
         self.assertEqual(hist[-2], 0)
+
+    def test_fast(self):
+        """Test the fast conversion"""
+        data = numpy.ones((251, 200), dtype="uint16")
+        data[:, :] = range(200)
+        data[2, :] = 56
+        data[200, 2] = 3
+
+        data_nc = data.swapaxes(0, 1) # non-contiguous cannot be treated by fast conversion
+
+        # convert to RGB
+        hist, edges = img.histogram(data)
+        irange = img.findOptimalRange(hist, edges, 1 / 256)
+        rgb = img.DataArray2RGB(data, irange)
+
+        hist_nc, edges_nc = img.histogram(data_nc)
+        irange_nc = img.findOptimalRange(hist_nc, edges_nc, 1 / 256)
+        rgb_nc = img.DataArray2RGB(data_nc, irange_nc)
+        rgb_nc_back = rgb_nc.swapaxes(0, 1)
+
+        numpy.testing.assert_equal(rgb, rgb_nc_back)
 
     def test_tint(self):
         """test with tint"""

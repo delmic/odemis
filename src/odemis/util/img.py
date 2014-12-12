@@ -257,8 +257,8 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
                 try:
                     # only (currently) supports uint16
                     return img_fast.DataArray2RGB(data, irange, tint)
-                except ValueError:
-                    logging.debug("Fast conversion doesn't support the type")
+                except ValueError as exp:
+                    logging.debug("Fast conversion cannot run: %s", exp)
                 except Exception:
                     logging.exception("Failed to use the fast conversion")
 
