@@ -25,6 +25,7 @@ import collections
 from concurrent import futures
 import glob
 import logging
+import math
 from odemis import model
 from odemis.model import isasync
 from odemis.util import driver
@@ -478,7 +479,7 @@ class Controller(object):
 
         # We timed out again, try harder: reboot
         self.Reboot()
-        self.busacc.sendOrderCommand("ERR?\n")
+        self.busacc.sendOrderCommand(self.address, "ERR?\n")
         try:
             resp = self.busacc.sendQueryCommand(self.address, "ERR?\n")
             if re.match(self.err_ans_re, resp): # looks like an answer to err?
@@ -1130,6 +1131,9 @@ class Controller(object):
         assert (axis in self._channels)
         self._accel[axis] = accel
 
+    def getAccel(self, axis):
+        return self._accel[axis]
+
     def moveRel(self, axis, distance):
         """
         Move on a given axis for a given distance.
@@ -1304,7 +1308,7 @@ class CLController(Controller):
             unit = self.GetParameter(a, 0x7000601)
             if unit != "MM":
                 raise IOError("Controller %d configured with unit %s, but only "
-                              "millimeters (MM) is supported.", address, unit)
+                              "millimeters (MM) is supported." % (address, unit))
 
             # TODO:
             # * if not referenced => disable reference mode to be able to
@@ -1322,6 +1326,12 @@ class CLController(Controller):
             # Movement range before referencing is max range in both directions
             pos = self.GetPosition(a) * 1e-3
             width = self.GetMaxPosition(a) * 1e-3 - self.GetMinPosition(a) * 1e-3
+            # TODO: check that if the stage starts at a limit, it's still possible
+            # to reach the other side (with relative moves) even if the travel
+            # range limits it.
+            # If not => need to read the range from non-volative memory, and
+            # then double the range (not just in Python but also) in volatile
+            # memory.
             self.pos_rng[a] = (pos - width, pos + width)
 
             # Read speed/accel ranges
@@ -1336,7 +1346,7 @@ class CLController(Controller):
                 self.max_speed = self._speed[a]
                 self.max_accel = self._accel[a]
 
-            # self._stopEncoder(a)
+            self._stopEncoder(a)
 
         self.min_speed = 10e-6 # m/s (default low value)
         self._prev_speed_accel = ({}, {})
@@ -1365,6 +1375,8 @@ class CLController(Controller):
         Turn on the suplly power of the encoder.
         axis (1<=int<=16): the axis
         """
+        # TODO: this works fine as long as the axis has not been referenced
+        # If it already was referenced, we need to re-write POS
         if 0x56 in self._avail_params:
             self.SetParameter(axis, 0x56, 1) # 1 = on
         self.SetServo(axis, True)
@@ -1423,6 +1435,7 @@ class CLController(Controller):
         else:
             self.MoveAbs(axis, position * 1e3)
 
+        # TODO: compute the time using accel/speed/decel => less optimistic == less timeouts
         return distance
 
     def getPosition(self, axis):
@@ -1431,12 +1444,13 @@ class CLController(Controller):
         return (float): the current position of the given axis
         """
         # TODO: find out if we need sensor to be turned on to read the position
-        self._startEncoder(axis)
+        # (according to the doc, it seems not, and the E861 doesn't need the servo to be turned on)
+#        self._startEncoder(axis)
         return self.GetPosition(axis) * 1e-3
 
-        # This is called by the Bus in various situation while not moving,
-        # so we need a way to turn off the encoder afterwards => double-hack
-        self.isMoving(axes={axis})
+#         # This is called by the Bus in various situation while not moving,
+#         # so we need a way to turn off the encoder afterwards => double-hack
+#         self.isMoving(axes={axis})
 
 
     # Warning: if the settling window is too small or settling time too big,
@@ -1459,13 +1473,20 @@ class CLController(Controller):
             if not self.IsOnTarget(a):
                 return True
 
+        # TODO: if return false => turn off encoder (in a few seconds)
+        # Then, need to "ensure the encoder is ON" before any other meaningful command
         # Encoder not needed anymore (until next move)
         for a in axes:
             self._stopEncoder(a)
         return False
 
-        # TODO: if return false => turn off encoder (in a few seconds)
-        # Then, need to "ensure the encoder is ON" before any other meaningful command
+
+        # TODO: handle the fact that if the stage reaches the physical limit without knowing,
+        # the move will fail with:
+        # PIGCSError: PIGCS error -1024: Motion error: position error too large, servo is switched off automatically
+        # => put back the servo if necessary
+        # => keep checking for errors at the same time as ONT?
+
 
         # FIXME: it seems that on the C867 if the axis is stopped while moving, isontarget()
         # will sometimes keep saying it's not reached forever. However, the documentation
@@ -2293,7 +2314,7 @@ class Bus(model.Actuator):
             raise model.HwError("Failed to connect to '%s:%d', check the master "
                                 "controller is connected to the network, turned "
                                 " on, and correctly configured." % (host, port))
-        sock.settimeout(0.5) # s
+        sock.settimeout(1.0) # s
         return sock
 
 class SerialBusAccesser(object):
@@ -2569,14 +2590,19 @@ class ActionManager(threading.Thread):
                 return
 
             try:
-                self.current_action._start_action()
-            except futures.CancelledError:
-                # cancelled in the mean time: skip the action
-                continue
+                try:
+                    self.current_action._start_action()
+                except futures.CancelledError:
+                    # cancelled in the mean time: skip the action
+                    continue
 
-            while not self.current_action._wait_action(0.2):
-                # regularly update position (5 Hz)
-                self._bus._updatePosition()
+                while not self.current_action._wait_action(0.2):
+                    # regularly update position (5 Hz)
+                    self._bus._updatePosition()
+            except Exception as exp:
+                logging.exception("Failed to run action %s", self.current_action)
+                # TODO: need to be able to set an excption to the ActionFuture
+                # => just use CancellableFutures?
 
             # Update position one last time
             # FIXME: should update position just _before_ calling the callbacks
@@ -2856,11 +2882,13 @@ class ActionFuture(object):
             controller to list of channel/distance to move (m)
         returns (float): approximate time in s it will take (optimistic)
         """
-        max_duration = 0 #s
+        max_duration = 0  # s
         for controller, channels in axes.items():
             for channel, distance in channels:
                 actual_dist = controller.moveRel(channel, distance)
-                duration = abs(actual_dist) / controller.getSpeed(channel)
+                duration = self._estimateDuration(abs(actual_dist),
+                                                  controller.getSpeed(channel),
+                                                  controller.getAccel(channel))
                 max_duration = max(max_duration, duration)
 
         return max_duration
@@ -2871,15 +2899,43 @@ class ActionFuture(object):
             controller to list of channel/position to move (m)
         returns (float): approximate time in s it will take (optimistic)
         """
-        max_duration = 0 #s
+        max_duration = 0  # s
         for controller, channels in axes.items():
             for channel, pos in channels:
                 actual_dist = controller.moveAbs(channel, pos)
-                duration = abs(actual_dist) / controller.getSpeed(channel)
+                duration = self._estimateDuration(abs(actual_dist),
+                                                  controller.getSpeed(channel),
+                                                  controller.getAccel(channel))
                 max_duration = max(max_duration, duration)
 
         return max_duration
-
+    
+    @staticmethod
+    def _estimateDuration(distance, speed, accel):
+        """
+        Compute the theoritical duration of a move given the maximum speed and
+        accelleration. It considers that the speed curve of the move will follow
+        a trapezoidal shape: first acceleration, then maximum speed, and then
+        deceleration.
+        distance (0 <= float): distance that will be travelled (in m)
+        speed (0 < float): maximum speed allowed (in m/s)
+        accel (0 < float): acceleration and deceleration (in m²/s)
+        return (0 <= float): time in s
+        """
+        # Given the distance to be traveled, determine whether we have a triangular or
+        # a trapezoidal motion profile.
+        A = (2 * accel) / (accel ** 2)
+        s = 0.5 * A * speed ** 2
+        if distance > s:
+            t1 = speed / accel
+            t2 = (distance - s) / speed
+            t3 = speed / accel
+            return t1 + t2 + t3
+        else:
+            vp = math.sqrt(2.0 * distance / A)
+            t1 = vp / accel
+            t2 = vp / accel
+            return t1 + t2
 
 # All the classes below are for the simulation of the hardware
 
@@ -2941,8 +2997,8 @@ class E861Simulator(object):
         self._parameters = {0x14: 1 if self._has_encoder else 0, # 0 = no ref switch, 1 = ref switch
                             0x32: 0 if self._has_encoder else 1, # 0 = limit switches, 1 = no limit switches
                             0x3c: "DEFAULT-FAKE", # stage name
-                            0x15: 0.025, # TMX (in m)
-                            0x30: 0.0, # TMN (in m)
+                            0x15: 25.0, # TMX (in mm)
+                            0x30: 0.0, # TMN (in mm)
                             0x16: 0.012, # value at ref pos
                             0x49: 10.0, # VEL
                             0x0B: 3.2, # ACC
@@ -2958,6 +3014,7 @@ class E861Simulator(object):
                             0x7000204: 15.3, # max step/s
                             0x7000205: 1.2, # max step/s²
                             0x7000206: 0.9, # ODC
+                            0x7000601: "MM", # unit
                             }
         self._servo = 0 # servo state
         self._ready = True # is ready?
@@ -3004,8 +3061,6 @@ class E861Simulator(object):
         """
         Computes the current position, in closed loop mode
         """
-        if self._servo != 1:
-            raise SimulatedError(2)
         now = time.time()
         if now > self._end_move:
             self._position = self._target
@@ -3238,6 +3293,7 @@ class E861Simulator(object):
                        "0x32=\t0\t1\tINT\tmotorcontroller\thas limit\t(0=limitswitchs 1=no limitswitchs) \n" +
                        "0x3C=\t0\t1\tCHAR\tmotorcontroller\tStagename \n" +
                        "0x7000000=\t0\t1\tFLOAT\tmotorcontroller\ttravel range minimum \n" +
+                       "0x7000601=\t0\t1\tCHAR\tunit\tuser unit \n" +
                        "end of help"
                        )
             else:

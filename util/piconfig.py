@@ -149,7 +149,7 @@ def openIPSocket(host, port=50000):
         raise IOError("Failed to connect to '%s:%d', check the master "
                             "controller is connected to the network, turned "
                             " on, and correctly configured." % (host, port))
-    sock.settimeout(0.5) # s
+    sock.settimeout(1.0) # s
     return sock
 
 class SerialBusAccesser(object):
