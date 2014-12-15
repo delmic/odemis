@@ -909,7 +909,7 @@ class VAEnumerated(VigilantAttribute, Enumerated):
 
 class FloatContinuous(FloatVA, Continuous):
     """
-    A simple class which is both floating and continuous
+    A simple class which is both float and continuous
     """
     def __init__(self, value, range, **kwargs):
         Continuous.__init__(self, range)
@@ -918,6 +918,18 @@ class FloatContinuous(FloatVA, Continuous):
     def _check(self, value):
         Continuous._check(self, value)
         FloatVA._check(self, value)
+
+class IntContinuous(IntVA, Continuous):
+    """
+    A simple class which is both int and continuous
+    """
+    def __init__(self, value, range, **kwargs):
+        Continuous.__init__(self, range)
+        IntVA.__init__(self, value, **kwargs)
+
+    def _check(self, value):
+        Continuous._check(self, value)
+        IntVA._check(self, value)
 
 class StringEnumerated(StringVA, Enumerated):
     """

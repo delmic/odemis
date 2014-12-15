@@ -256,6 +256,15 @@ class VigilantAttributeTest(unittest.TestCase):
 
         self.assertTrue(self.called == 2)
 
+        # Test a bit the IntContinuous
+        prop2 = model.IntContinuous(2, [1, 34], unit="px")
+        self.assertEqual(prop2.value, 2)
+        self.assertEqual(prop2.range, (1, 34))
+
+        prop2.value = 30
+        self.assertEqual(prop2.value, 30)
+        self.assertIsInstance(prop2.value, int)
+
     def test_enumerated(self):
         prop = model.StringEnumerated("a", set(["a", "c", "bfds"]))
         self.assertEqual(prop.value, "a")
