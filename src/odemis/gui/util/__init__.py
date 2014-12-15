@@ -90,8 +90,13 @@ def wxlimit_invocation(delay_s):
         last_call_name = '%s_lim_inv_last_call' % f.__name__
         timer_name = '%s_lim_inv_timer' % f.__name__
 
+        force = kwargs.get('force', False)
+
         # If the function was called later than 'delay_s' seconds ago...
-        if hasattr(self, last_call_name) and now - getattr(self, last_call_name) < delay_s:
+        if (
+                hasattr(self, last_call_name) and now - getattr(self, last_call_name) < delay_s
+                and not force
+        ):
             # logging.warn('Delaying method call')
             if now < getattr(self, last_call_name):
                 # this means a timer is already set, nothing else to do
@@ -103,11 +108,12 @@ def wxlimit_invocation(delay_s):
                 args=[self] + list(args),
                 kwargs=kwargs
             )
+
             setattr(self, timer_name, timer)
             setattr(self, last_call_name, now + delay_s)
             timer.start()
         else:
-            #execute method call now
+            # execute method call now
             setattr(self, last_call_name, now)
             return f(self, *args, **kwargs)
 

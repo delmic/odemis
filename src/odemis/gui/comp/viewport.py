@@ -361,7 +361,7 @@ class MicroscopeViewport(ViewPort):
         self.UpdateMagnification()
 
     ################################################
-    ## GUI Event handling
+    # GUI Event handling
     ################################################
 
     def OnSlider(self, evt):
@@ -394,7 +394,7 @@ class MicroscopeViewport(ViewPort):
         self._microscope_view.merge_ratio.value = val
         evt.Skip()
 
-    ## END Event handling
+    # END Event handling
 
     def track_view_hfw(self, fov_va):
         """ Link the field of view (width) of the view with the field of view of the hardware
@@ -700,7 +700,7 @@ class SpatialSpectrumViewport(ViewPort):
         """
         # Call parent constructor at the end, because it needs the legend panel
         super(SpatialSpectrumViewport, self).__init__(*args, **kwargs)
-        self.canvas.SetBackgroundColour("#111111")
+        self.canvas.SetBackgroundColour(wx.RED)
         self.spectrum_stream = None
 
     def setView(self, microscope_view, tab_data):

@@ -537,6 +537,7 @@ class ViewButtonController(object):
             if btn in self._subscriptions:
                 vp.microscope_view.thumbnail.unsubscribe(self._subscriptions[btn]["thumb"])
                 vp.microscope_view.name.unsubscribe(self._subscriptions[btn]["label"])
+
         # Clear the subscriptions
         self._subscriptions = {}
 
