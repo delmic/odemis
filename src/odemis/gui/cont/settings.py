@@ -1370,12 +1370,14 @@ class AnalysisSettingsController(SettingsBarController):
     def _on_spec_cal(self, val):
         self._specfile_ctrl.SetValue(val)
 
-    def ShowCalibrationPanel(self, ar=None, spec=None):
-        """
-        show/hide the the ar/spec panels
+    def show_calibration_panel(self, ar=None, spec=None):
+        """ Show/hide the the ar/spec panels
+
         ar (boolean or None): show, hide or don't change AR calib panel
         spec (boolean or None): show, hide or don't change spec calib panel
+
         """
+
         if ar is not None:
             self._pnl_arfile.show_panel(ar)
         if spec is not None:

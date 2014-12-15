@@ -113,6 +113,13 @@ Graphical data is drawn using the following sequence of method calls:
 
 * request_drawing_update()
 
+    This method is typically called from the `_onViewImageUpdate` method, a listener that tracks
+    updates to view images. It is also called from a variety of other methods, that require the
+    image to be redrawn.
+
+    , _on_view_mpp, show_repetition
+     recenter_buffer, fit_to_content, _calc_data_characteristics, set_plot_mode
+
     This method triggers the on_draw_timer handler, but only if time delay
     criteria are met, so drawing doesn't happen too often. This can of course be
     by-passed by calling `update_drawing` directly.
@@ -158,7 +165,6 @@ import odemis.gui.img.data as imgdata
 import wx.lib.wxcairo as wxcairo
 
 
-#pylint: disable=E1002
 # Special abilities that a canvas might possess
 CAN_DRAG = 1    # Content can be dragged
 CAN_FOCUS = 2   # Can adjust focus
@@ -318,7 +324,7 @@ class BufferedCanvas(wx.Panel):
             self.SetCursor(self.default_cursor)
             # logging.debug("Dynamic cursor reset")
 
-    ############ Overlay Management ###########
+    # ########### Overlay Management ###########
 
     # View overlays
 
@@ -371,7 +377,7 @@ class BufferedCanvas(wx.Panel):
     def clear_active_overlays(self):
         self.active_overlays = []
 
-    ############ Event Handlers ############
+    # ########### Event Handlers ############
 
     def on_mouse_down(self):
         """ Perform actions common to both left and right mouse button down
@@ -492,7 +498,7 @@ class BufferedCanvas(wx.Panel):
         # logging.debug("Drawing timer in thread %s", thread_name)
         self.update_drawing()
 
-    ############ END Event Handlers ############
+    # ########### END Event Handlers ############
 
     # Buffer and drawing methods
 
@@ -601,7 +607,7 @@ class BufferedCanvas(wx.Panel):
         for wo in self.world_overlays:
             wo.Draw(ctx, self.w_buffer_center, self.scale)
 
-    ############ Position conversion ############
+    # ########### Position conversion ############
 
     @classmethod
     def world_to_buffer_pos(cls, w_pos, w_buff_center, scale, offset=(0, 0)):
@@ -662,7 +668,9 @@ class BufferedCanvas(wx.Panel):
         :param v_pos: (int, int) the coordinates in the view
         :param margins: (int, int) the horizontal and vertical buffer margins
         :return: (wx.Point) or (int, int) the calculated buffer position
+
         """
+
         b_pos = (v_pos[0] + margins[0], v_pos[1] + margins[1])
 
         if isinstance(v_pos, wx.Point):
@@ -683,7 +691,9 @@ class BufferedCanvas(wx.Panel):
         :param margins: (int, int) the horizontal and vertical buffer margins
         :return: (wx.Point) or (int or float, int or float) the calculated view
             position
+
         """
+
         v_pos = (b_pos[0] - margins[0], b_pos[1] - margins[1])
 
         if isinstance(b_pos, wx.Point):
@@ -699,6 +709,7 @@ class BufferedCanvas(wx.Panel):
         See `view_to_buffer_pos` and `buffer_to_world_pos` for more details
 
         """
+
         return cls.buffer_to_world_pos(
                     cls.view_to_buffer_pos(v_pos, margins),
                     w_buff_cent,
@@ -713,12 +724,13 @@ class BufferedCanvas(wx.Panel):
         See `buffer_to_view_pos` and `world_to_buffer_pos` for more details
 
         """
+
         return cls.buffer_to_view_pos(
             cls.world_to_buffer_pos(w_pos, w_buff_cent, scale, offset),
             margins
         )
 
-    ############ END Position conversion ############
+    # ########### END Position conversion ############
 
     # Utility methods
 
@@ -731,6 +743,10 @@ class BufferedCanvas(wx.Panel):
         """ Clip the given tuple of 2 floats to the current buffer size """
         return (max(1, min(pos[0], self._bmp_buffer_size[0] - 1)),
                 max(1, min(pos[1], self._bmp_buffer_size[1] - 1)))
+
+    def clear(self):
+        """ Clear the canvas by redrawing the background """
+        self._draw_background(self.ctx)
 
 
 class BitmapCanvas(BufferedCanvas):
@@ -1620,7 +1636,7 @@ class DraggableCanvas(BitmapCanvas):
                         max(bbox[2], bbox_im[2]), max(bbox[3], bbox_im[3]))
 
         if bbox[0] is None:
-            return # no image => nothing to do
+            return  # no image => nothing to do
 
         # if no recenter, increase bbox so that its center is the current center
         if not recenter:
@@ -1633,7 +1649,7 @@ class DraggableCanvas(BitmapCanvas):
         w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]  # wu
         if w == 0 or h == 0:
             logging.warning("Weird image size of %fx%f wu", w, h)
-            return # no image
+            return  # no image
         cw = max(1, self.ClientSize[0])  # px
         ch = max(1, self.ClientSize[1])  # px
         self.scale = min(ch / h, cw / w)  # pick the dimension which is shortest
@@ -1659,11 +1675,9 @@ PLOT_MODE_BAR = 3
 
 
 class PlotCanvas(BufferedCanvas):
-    """ This is a general canvas for plotting numerical data in various ways
-    """
+    """ This is a general canvas for plotting numerical data in various ways """
 
     def __init__(self, *args, **kwargs):
-
         super(PlotCanvas, self).__init__(*args, **kwargs)
 
         # The data to be plotted, a list of numerical value pairs
@@ -1686,7 +1700,8 @@ class PlotCanvas(BufferedCanvas):
         self.unit_x = None
         self.unit_y = None
 
-        ## Rendering settings
+        # Rendering settings
+
         self.line_width = 2.0  # px
         self.line_colour = wxcol_to_frgb(self.ForegroundColour)
         self.fill_colour = self.line_colour
@@ -1710,6 +1725,7 @@ class PlotCanvas(BufferedCanvas):
         """ Set the data to be plotted
 
         The data should be an iterable of numerical 2-tuples.
+
         """
 
         if data:
@@ -1746,6 +1762,7 @@ class PlotCanvas(BufferedCanvas):
         self.data_width = None
         self.data_height = None
         self.outline = None
+        super(PlotCanvas, self).clear()
 
     def has_data(self):
         return self._data is not None and len(self._data) > 2

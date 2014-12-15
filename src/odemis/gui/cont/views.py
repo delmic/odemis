@@ -29,6 +29,8 @@ import wx
 from odemis.acq.stream import RGBCameraStream, BrightfieldStream
 from odemis.gui import model
 from odemis.gui.comp.grid import ViewportGrid
+from odemis.gui.comp.viewport import MicroscopeViewport, AngularResolvedViewport, PlotViewport, \
+    SpatialSpectrumViewport
 from odemis.gui.cont import tools
 from odemis.acq.stream import OpticalStream, EMStream, SpectrumStream, ARStream
 from odemis.gui.util import call_after
@@ -129,6 +131,13 @@ class ViewPortController(object):
             # FIXME: Since displaying viewports should be completely dynamic, the button labels
             # should also be made to be dynamic in some way
 
+            # Viewport type checking to avoid mismatches
+            for vp in self._viewports[:4]:
+                assert(isinstance(vp, MicroscopeViewport))
+            assert(isinstance(self._viewports[4], AngularResolvedViewport))
+            assert(isinstance(self._viewports[5], PlotViewport))
+            assert(isinstance(self._viewports[6], SpatialSpectrumViewport))
+
             logging.info("Creating static viewport layout")
             vpv = collections.OrderedDict([
                 (self._viewports[0],  # focused view
@@ -148,12 +157,12 @@ class ViewPortController(object):
                   "stream_classes": (EMStream, OpticalStream, SpectrumStream),
                   }),
                 (self._viewports[4],
-                 {"name": "Spectrum plot",
-                  "stream_classes": SpectrumStream,
-                  }),
-                (self._viewports[5],
                  {"name": "Angle resolved",
                   "stream_classes": ARStream,
+                  }),
+                (self._viewports[5],
+                 {"name": "Spectrum plot",
+                  "stream_classes": SpectrumStream,
                   }),
                 (self._viewports[6],
                  {"name": "Spatial spectrum",
@@ -171,6 +180,10 @@ class ViewPortController(object):
                 self._main_data_model.light and
                 len(self._viewports) > 4
         ):
+            # Viewport type checking to avoid mismatches
+            for vp in self._viewports[:4]:
+                assert(isinstance(vp, MicroscopeViewport))
+
             logging.info("Creating combined SEM/Optical viewport layout")
             vpv = collections.OrderedDict([
                 (self._viewports[0],
@@ -489,20 +502,21 @@ class OverviewController(object):
 class ViewButtonController(object):
     """ This class controls the view selector buttons and labels associated with them. """
 
-    def __init__(self, tab_data, main_frame, buttons, viewports=None):
+    def __init__(self, tab_data, main_frame, buttons, viewports):
         """
-        tab_data (MicroscopyGUIData): the representation of the microscope
-            GUI
+
+        tab_data (MicroscopyGUIData): the representation of the microscope GUI
         main_frame: (wx.Frame): the frame which contains the 4 viewports
-        buttons (OrderedDict : btn -> (viewport, label)): 5 buttons and the
-            viewport (for the image) and label (for changing the name)
-            associated.
-            The first button has no viewport, for the 2x2 view.
+        buttons (OrderedDict : btn -> label): View buttons and their associated labels
+
+        *important*: The first button has no viewport, for the 2x2 view.
+
         """
+
         self._data_model = tab_data
         self.main_frame = main_frame
 
-        self.buttons = buttons
+        self.buttons = buttons  # Remember, this is an ordered dictionary!
         self.viewports = viewports
 
         for btn in self.buttons:
@@ -523,6 +537,7 @@ class ViewButtonController(object):
             if btn in self._subscriptions:
                 vp.microscope_view.thumbnail.unsubscribe(self._subscriptions[btn]["thumb"])
                 vp.microscope_view.name.unsubscribe(self._subscriptions[btn]["label"])
+
         # Clear the subscriptions
         self._subscriptions = {}
 
@@ -545,8 +560,8 @@ class ViewButtonController(object):
             # also subscribe for updating the 2x2 button
             vp.microscope_view.thumbnail.subscribe(self._update_22_thumbnail)
 
-            def on_name(name, label=lbl):  # save lbl in scope
-                label.SetLabel(name)
+            def on_name(name, label_ctrl=lbl):  # save lbl in scope
+                label_ctrl.SetLabel(name)
 
             btn.Freeze()
             vp.microscope_view.name.subscribe(on_name, init=True)
@@ -555,7 +570,7 @@ class ViewButtonController(object):
 
             self._subscriptions[btn]["label"] = on_name
 
-    def toggleButtonForView(self, microscope_view):
+    def toggle_btn_for_view(self, microscope_view):
         """
         Toggle the button which represents the view and untoggle the other ones
         microscope_view (MicroscopeView or None): the view, or None if the first
@@ -637,36 +652,26 @@ class ViewButtonController(object):
         btn_all.set_overlay_image(im_22)
 
     def _on_visible_views_change(self, visible_views):
-        """ When the visible views change, this method makes sure that each
-        button is associated with the correct viewport
-        """
+        """ Associate each button with the correct visible viewport """
+
         if self.viewports:
-            new_viewports = set([vp for vp in self.viewports
-                                 if vp.microscope_view in visible_views])
-            btn_viewports = set([vp for _, (vp, _) in self.buttons.items()
-                                 if vp is not None])
+            vis_viewports = []
 
-            # Get the new viewport from new_viewports
-            new_viewport = new_viewports - btn_viewports
-            # Get the missing viewport from btn_viewports
-            old_viewport = btn_viewports - new_viewports
+            for view in visible_views:
+                for vp in self.viewports:
+                    if vp.microscope_view == view:
+                        vis_viewports.append(vp)
 
-            if len(new_viewport) == 1 and len(old_viewport) == 1:
-                new_viewport = new_viewport.pop()
-                old_viewport = old_viewport.pop()
+            vp_buttons = [(b, (vp, l)) for b, (vp, l) in self.buttons.items() if vp is not None]
 
-                for b, (vp, lbl) in self.buttons.items():
-                    if vp == old_viewport:
-                        # Remove the subscription of the old viewport
-                        old_viewport.microscope_view.thumbnail.unsubscribe(
-                            self._subscriptions[b]["thumb"])
-                        old_viewport.microscope_view.name.unsubscribe(
-                            self._subscriptions[b]["label"])
-                        self.buttons[b] = (new_viewport, lbl)
-                        self._subscribe()
-                        break
-            else:
-                raise ValueError("Wrong number of ViewPorts found!")
+            for (btn, (btn_vp, btn_lbl)), vis_vp in zip(vp_buttons, vis_viewports):
+                if btn_vp != vis_vp:
+                    # We must unsubscribe here, instead of letting _subscribe handle it
+                    btn_vp.microscope_view.thumbnail.unsubscribe(self._subscriptions[b]["thumb"])
+                    btn_vp.microscope_view.name.unsubscribe(self._subscriptions[b]["label"])
+                    self.buttons[btn] = (vis_vp, btn_lbl)
+
+            self._subscribe()
         else:
             logging.warn("Could not handle view change, viewports unknown!")
 
@@ -679,10 +684,10 @@ class ViewButtonController(object):
 
         if self._data_model.viewLayout.value == model.VIEW_LAYOUT_22:
             # (layout is 2x2) => select the first button
-            self.toggleButtonForView(None)
+            self.toggle_btn_for_view(None)
         else:
             # otherwise (layout is 1) => select the right button
-            self.toggleButtonForView(self._data_model.focussedView.value)
+            self.toggle_btn_for_view(self._data_model.focussedView.value)
 
     _on_focus_change = _on_layout_change
 
