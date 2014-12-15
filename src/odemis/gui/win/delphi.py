@@ -113,8 +113,8 @@ class CalibrationProgressDialog(xrcprogress_dialog):
         self.cancel_btn.Bind(wx.EVT_BUTTON, self.on_cancel)
         self.Bind(wx.EVT_CLOSE, self.on_close)
         self.info_txt.SetLabel("Calibration of the sample holder in progress")
-        self.gauge.Show()
-        self.Layout()  # to put the gauge at the right place
+        self.Fit()
+        # self.Layout()  # to put the gauge at the right place
         self.calib_future = DelphiCalibration(main_data, overview_pressure, vacuum_pressure,
                                               vented_pressure)
         self._calib_future_connector = ProgessiveFutureConnector(self.calib_future,
@@ -190,9 +190,9 @@ class CalibrationProgressDialog(xrcprogress_dialog):
 
 def DelphiCalibration(main_data, overview_pressure, vacuum_pressure, vented_pressure):
     """
-    Wrapper for DoDelphiCalibration. It provides the ability to check the 
+    Wrapper for DoDelphiCalibration. It provides the ability to check the
     progress of the procedure.
-    main_data (odemis.gui.model.MainGUIData) 
+    main_data (odemis.gui.model.MainGUIData)
     overview_pressure (float): NavCam pressure value
     vacuum_pressure (float): Pressure under vacuum
     vented_pressure (float): Pressure when vented
@@ -223,7 +223,7 @@ def _DoDelphiCalibration(future, main_data, overview_pressure, vacuum_pressure,
     It performs all the calibration steps for Delphi including the lens alignment,
     the conversion metadata update and the fine alignment.
     future (model.ProgressiveFuture): Progressive future provided by the wrapper
-    main_data (odemis.gui.model.MainGUIData) 
+    main_data (odemis.gui.model.MainGUIData)
     overview_pressure (float): NavCam pressure value
     vacuum_pressure (float): Pressure under vacuum
     vented_pressure (float): Pressure when vented
@@ -238,7 +238,7 @@ def _DoDelphiCalibration(future, main_data, overview_pressure, vacuum_pressure,
             (tuple of floats): Resolution-related shift intercept
             (tuple of floats): HFW-related shift slope
             (tuple of floats): Spot shift percentage
-    raises:    
+    raises:
         CancelledError() if cancelled
     """
     logging.debug("Delphi calibration...")

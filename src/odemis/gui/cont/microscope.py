@@ -783,8 +783,6 @@ class DelphiStateController(SecomStateController):
         calib_dialog = CalibrationProgressDialog(self._main_frame, self._main_data,
                                                self._overview_pressure, self._vacuum_pressure,
                                                self._vented_pressure, self._calibconf, shid)
-        parent_size = [v * 0.25 for v in self._main_frame.GetSize()]
-        calib_dialog.SetSize(parent_size)
         calib_dialog.Center()
         calib_dialog.ShowModal()
 

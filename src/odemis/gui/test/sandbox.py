@@ -11,6 +11,7 @@ from wx.lib.delayedresult import startWorker
 #=============================================================================
 
 # THREAD RENDER TEST
+from odemis.gui.win.delphi import CalibrationProgressDialog
 from odemis.model._dataflow import DataArray
 
 
@@ -190,6 +191,9 @@ class MainWindow(wx.Frame):
         self.panel.SetSizerAndFit(self.sizerMain)
         self.SetSizerAndFit(self.sizerPanel)
         self.Show()
+
+        cpd = CalibrationProgressDialog(self, 1, 1, 1, 1, 1, 1)
+        cpd.ShowModal()
 
 app = wx.App(False)
 win = MainWindow(None)
