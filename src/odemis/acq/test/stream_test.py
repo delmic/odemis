@@ -832,8 +832,7 @@ class TestStaticStreams(unittest.TestCase):
 
         self.assertFalse(im2d1 is im2dc)
 
-    def test_spec(self):
-        """Test StaticSpectrumStream"""
+    def _create_spec_data(self):
         # Spectrum
         data = numpy.ones((251, 1, 1, 200, 300), dtype="uint16")
         data[:, 0, 0, :, 3] = numpy.random.randint(0, 2 ** 12 - 1, (200,))
@@ -851,52 +850,65 @@ class TestStaticStreams(unittest.TestCase):
              model.MD_LENS_MAG: 60, # ratio
              model.MD_WL_LIST: wld,
             }
-        spec = model.DataArray(data, md)
+        return model.DataArray(data, md)
 
+    def test_spec_2d(self):
+        """Test StaticSpectrumStream 2D"""
+        spec = self._create_spec_data()
         specs = stream.StaticSpectrumStream("test", spec)
 
         # Control spatial spectrum
         im2d = specs.image.value
         # Check it's a RGB DataArray
-        self.assertEqual(im2d.shape, data.shape[-2:] + (3,))
+        self.assertEqual(im2d.shape, spec.shape[-2:] + (3,))
         # Check it's at the right position
         md2d = im2d.metadata
-        self.assertEqual(md2d[model.MD_POS], md[model.MD_POS])
+        self.assertEqual(md2d[model.MD_POS], spec.metadata[model.MD_POS])
 
         # change bandwidth to max
         specs.spectrumBandwidth.value = (specs.spectrumBandwidth.range[0][0],
                                          specs.spectrumBandwidth.range[1][1])
         im2d = specs.image.value
-        self.assertEqual(im2d.shape, data.shape[-2:] + (3,))
+        self.assertEqual(im2d.shape, spec.shape[-2:] + (3,))
 
         # Check RGB spatial projection
         time.sleep(0.2)
         specs.fitToRGB.value = True
         im2d = specs.image.value
-        self.assertEqual(im2d.shape, data.shape[-2:] + (3,))
+        self.assertEqual(im2d.shape, spec.shape[-2:] + (3,))
+
+    def test_spec_0d(self):
+        """Test StaticSpectrumStream 0D"""
+        spec = self._create_spec_data()
+        specs = stream.StaticSpectrumStream("test", spec)
 
         # Check 0D spectrum
         specs.selected_pixel.value = (1, 1)
         sp0d = specs.get_pixel_spectrum()
         wl0d = specs.get_spectrum_range()
-        self.assertEqual(sp0d.shape, (data.shape[0],))
-        self.assertEqual(wl0d.shape, (data.shape[0],))
-        self.assertEqual(sp0d.dtype, data.dtype)
-        self.assertTrue(numpy.all(sp0d <= data.max()))
+        self.assertEqual(sp0d.shape, (spec.shape[0],))
+        self.assertEqual(wl0d.shape, (spec.shape[0],))
+        self.assertEqual(sp0d.dtype, spec.dtype)
+        self.assertTrue(numpy.all(sp0d <= spec.max()))
+
+    def test_spec_1d(self):
+        """Test StaticSpectrumStream 1D"""
+        spec = self._create_spec_data()
+        specs = stream.StaticSpectrumStream("test", spec)
 
         # Check 1d spectrum on corner-case: parallel to the X axis
         specs.selected_line.value = [(3, 7), (3, 65)]
         sp1d = specs.get_line_spectrum()
         wl1d = specs.get_spectrum_range()
         self.assertEqual(sp1d.ndim, 3)
-        self.assertEqual(sp1d.shape, (65 - 7 + 1, data.shape[0], 3))
+        self.assertEqual(sp1d.shape, (65 - 7 + 1, spec.shape[0], 3))
         self.assertEqual(sp1d.dtype, numpy.uint8)
-        self.assertEqual(wl1d.shape, (data.shape[0],))
+        self.assertEqual(wl1d.shape, (spec.shape[0],))
         self.assertEqual(sp1d.metadata[model.MD_PIXEL_SIZE][1],
-                         md[model.MD_PIXEL_SIZE][0])
+                         spec.metadata[model.MD_PIXEL_SIZE][0])
 
         # compare to doing it manually, by cutting the band at 3
-        sp1d_raw_ex = data[:, 0, 0, 65:6:-1, 3]
+        sp1d_raw_ex = spec[:, 0, 0, 65:6:-1, 3]
         # make it contiguous to be sure to get the fast conversion, because
         # there are (still) some minor differences with the slow conversion
         sp1d_raw_ex = numpy.ascontiguousarray(sp1d_raw_ex.swapaxes(0, 1))
@@ -907,19 +919,51 @@ class TestStaticStreams(unittest.TestCase):
         sp1d_rgb_ex = img.DataArray2RGB(sp1d_raw_ex, irange)
         numpy.testing.assert_equal(sp1d, sp1d_rgb_ex)
 
-        # Check 1d spectrum
+        # Check 1d spectrum in diagonal
         specs.selected_line.value = [(30, 65), (1, 1)]
         sp1d = specs.get_line_spectrum()
         wl1d = specs.get_spectrum_range()
         self.assertEqual(sp1d.ndim, 3)
         # There is not too much expectations on the size of the spatial axis
         self.assertTrue(29 <= sp1d.shape[0] <= (64 * 1.41))
-        self.assertEqual(sp1d.shape[1], data.shape[0])
+        self.assertEqual(sp1d.shape[1], spec.shape[0])
         self.assertEqual(sp1d.shape[2], 3)
         self.assertEqual(sp1d.dtype, numpy.uint8)
-        self.assertEqual(wl1d.shape, (data.shape[0],))
+        self.assertEqual(wl1d.shape, (spec.shape[0],))
         self.assertGreaterEqual(sp1d.metadata[model.MD_PIXEL_SIZE][1],
-                                md[model.MD_PIXEL_SIZE][0])
+                                spec.metadata[model.MD_PIXEL_SIZE][0])
+
+
+        # Check 1d with larger width
+        specs.selected_line.value = [(30, 65), (5, 1)]
+        specs.width.value = 12
+        sp1d = specs.get_line_spectrum()
+        wl1d = specs.get_spectrum_range()
+        self.assertEqual(sp1d.ndim, 3)
+        # There is not too much expectations on the size of the spatial axis
+        self.assertTrue(29 <= sp1d.shape[0] <= (64 * 1.41))
+        self.assertEqual(sp1d.shape[1], spec.shape[0])
+        self.assertEqual(sp1d.shape[2], 3)
+        self.assertEqual(sp1d.dtype, numpy.uint8)
+        self.assertEqual(wl1d.shape, (spec.shape[0],))
+
+        specs.selected_line.value = [(30, 65), (5, 12)]
+        specs.width.value = 13 # brings bad luck?
+        sp1d = specs.get_line_spectrum()
+        wl1d = specs.get_spectrum_range()
+        self.assertEqual(sp1d.ndim, 3)
+        # There is not too much expectations on the size of the spatial axis
+        self.assertTrue(29 <= sp1d.shape[0] <= (53 * 1.41))
+        self.assertEqual(sp1d.shape[1], spec.shape[0])
+        self.assertEqual(sp1d.shape[2], 3)
+        self.assertEqual(sp1d.dtype, numpy.uint8)
+        self.assertEqual(wl1d.shape, (spec.shape[0],))
+
+
+    def test_spec_calib(self):
+        """Test StaticSpectrumStream calibration"""
+        spec = self._create_spec_data()
+        specs = stream.StaticSpectrumStream("test", spec)
 
         # Check efficiency compensation
         prev_im2d = specs.image.value
@@ -941,7 +985,7 @@ class TestStaticStreams(unittest.TestCase):
         # Control spatial spectrum
         im2d = specs.image.value
         # Check it's a RGB DataArray
-        self.assertEqual(im2d.shape, data.shape[-2:] + (3,))
+        self.assertEqual(im2d.shape, spec.shape[-2:] + (3,))
         self.assertTrue(numpy.any(im2d != prev_im2d))
 
 
