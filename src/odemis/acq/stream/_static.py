@@ -596,6 +596,7 @@ class StaticSpectrumStream(StaticStream):
           (along the line), second axis (X) is spectrum, third axis (RGB) is
           colour (always greyscale).
           MD_PIXEL_SIZE[1] contains the spatial distance between each spectrum
+          If the selected_line is not valid, it will return None
         """
         if (None, None) in self.selected_line.value:
             return None
@@ -608,6 +609,8 @@ class StaticSpectrumStream(StaticStream):
         v = (end[0] - start[0], end[1] - start[1])
         l = math.hypot(*v)
         n = 1 + int(l)
+        if l < 1: # a line of just one pixel is considered not valid
+            return None
 
         # Coordinates of each point: ndim of data (5-2), pos on line (Y), spectrum (X)
         # The line is scanned from the end till the start so that the spectra
