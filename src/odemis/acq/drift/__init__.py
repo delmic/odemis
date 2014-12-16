@@ -59,7 +59,7 @@ class AnchoredEstimator(object):
         self.max_drift = (0, 0)
         self.raw = [] # all the anchor areas acquired (in order)
         self._acq_sem_complete = threading.Event()
-        
+
         # Calculate initial translation for anchor region acquisition
         self._roi = region
         center = ((self._roi[0] + self._roi[2]) / 2,
@@ -72,8 +72,9 @@ class AnchoredEstimator(object):
                        shape[1] * (center[1] - 0.5) - self.orig_drift[0])
 
         # resolution is the maximum resolution at the scale in proportion of the width
-        self._res = (max(1, int(round(shape[0] * width[0]))),
-                     max(1, int(round(shape[1] * width[1]))))
+        # First, try the finest scale (=1)
+        self._res = (max(1, int(round(shape[0] * width[0] / 1))),
+                     max(1, int(round(shape[1] * width[1] / 1))))
 
         # Demand large enough anchor region for drift calculation
         if self._res[0] < MIN_RESOLUTION[0] or self._res[1] < MIN_RESOLUTION[1]:
@@ -82,16 +83,20 @@ class AnchoredEstimator(object):
             logging.warning("Anchor region too small %s, will be set to %s",
                             old_res, self._res)
 
-        # Adjust the scale to the anchor region so the resolution has at the
+        # Adjust the scale to the anchor region so the image has at the
         # maximum MAX_PIXELS. This way we guarantee that the pixels density of
         # the anchor region is enough to calculate the drift and at the same
         # time to avoid prolonged exposure times that extremely increase the
         # acquisition time.
         ratio = math.sqrt(numpy.prod(self._res) / MAX_PIXELS)
-        mns, mxs = scanner.scale.range
-        scale = tuple(numpy.clip((ratio, ratio), mns, mxs))
-        self._scale = scale
-        logging.info("Anchor region scale set to %s", self._scale)
+        self._scale = scanner.scale.clip((ratio, ratio))
+
+        # adjust resolution based on the new scale
+        self._res = (max(MIN_RESOLUTION[0], int(round(shape[0] * width[0] / self._scale[0]))),
+                     max(MIN_RESOLUTION[1], int(round(shape[1] * width[1] / self._scale[1]))))
+
+        logging.info("Anchor region defined with scale=%s, res=%s, trans=%s",
+                      self._scale, self._res, self._trans)
 
         self._safety_bounds = (-0.99 * (shape[0] / 2), 0.99 * (shape[1] / 2))
         self._min_bound = self._safety_bounds[0] + (max(self._res[0],
@@ -116,9 +121,9 @@ class AnchoredEstimator(object):
                       self._emitter.resolution.value,
                       self._emitter.dwellTime.value,
                       self._emitter.scale.value)
-        data = self._semd.data.get()
-        if data.shape == (1, 1):
-            data = self._semd.data.get()
+        data = self._semd.data.get(asap=False)
+        if data.shape != self._res:
+            logging.warning("Shape of data is %s instead of %s", data.shape, self._res)
         self.raw.append(data)
 
         # Restore SEM settings
@@ -145,7 +150,6 @@ class AnchoredEstimator(object):
                 logging.warning("Drift cannot be measured precisely, "
                                 "hesitating between %s and %s px",
                                  self.orig_drift, prev_drift)
-
             # Update max_drift
             if abs(numpy.prod(self.orig_drift)) > abs(numpy.prod(self.max_drift)):
                 self.max_drift = self.orig_drift
