@@ -813,7 +813,7 @@ class ViewButton(ImageTextToggleButton):
 
             # Rescale to have the smallest axis as big as the thumbnail
             rsize = wx.Size(*self.thumbnail_size)
-            if (self.thumbnail_size.x / image.Width) > (self.thumbnail_size.y / image.Height):
+            if (self.thumbnail_size.x / image.Width) < (self.thumbnail_size.y / image.Height):
                 rsize[1] = int(image.Height * (self.thumbnail_size.x / image.Width))
             else:
                 rsize[0] = int(image.Width * (self.thumbnail_size.y / image.Height))
@@ -824,7 +824,7 @@ class ViewButton(ImageTextToggleButton):
             lt = ((self.thumbnail_size.x - scaled_img.Width) // 2,
                   (self.thumbnail_size.y - scaled_img.Height) // 2)
 
-            scaled_img.Resize(self.thumbnail_size, lt)
+            scaled_img.Resize(self.thumbnail_size, lt, 0, 0, 0)
         else:
             # black image
             scaled_img = wx.EmptyImage(*self.thumbnail_size)
