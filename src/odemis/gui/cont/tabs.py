@@ -1343,15 +1343,15 @@ class AnalysisTab(Tab):
         # Only show the panels that fit the current streams
         self._settings_controller.show_calibration_panel(len(ar_streams) > 0, len(spec_streams) > 0)
 
+        # Load the Streams and their data into the model and views
+        for s in streams:
+            self._stream_controller.addStream(s, add_to_all_views=True)
+
         # Update the visible views if they've changed
         for vold, vnew in zip(self.tab_data_model.visible_views.value, new_visible_views):
             if vold != vnew:
                 self.tab_data_model.visible_views.value = new_visible_views
                 break
-
-        # Load the Streams and their data into the model and views
-        for s in streams:
-            self._stream_controller.addStream(s, add_to_all_views=True)
 
     def set_ar_background(self, fn):
         """
