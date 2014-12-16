@@ -1276,7 +1276,7 @@ class AnalysisTab(Tab):
 
                     if hasattr(viewport.canvas, "line_overlay"):
                         ol = viewport.canvas.line_overlay
-                        ol.set_line_va(spec_stream.selected_line)
+                        # ol.set_line_va(spec_stream.selected_line)
 
                 spec_stream.selected_pixel.subscribe(self._on_pixel_select, init=True)
                 spec_stream.selected_line.subscribe(self._on_line_select, init=True)

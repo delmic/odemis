@@ -768,7 +768,8 @@ class SpatialSpectrumViewport(ViewPort):
 
         # length = self.canvas._line
         data = self.spectrum_stream.get_line_spectrum()
-        if data:
+
+        if data is not None:
             domain = self.spectrum_stream.get_spectrum_range()
             unit_x = self.spectrum_stream.spectrumBandwidth.unit
             self.bottom_legend.unit = unit_x
