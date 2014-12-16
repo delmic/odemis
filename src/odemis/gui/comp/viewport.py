@@ -570,7 +570,6 @@ class PlotViewport(ViewPort):
 
     def __init__(self, *args, **kwargs):
         ViewPort.__init__(self, *args, **kwargs)
-        self.canvas.SetBackgroundColour("#111111")
         # We need a local reference to the spectrum stream, because if we rely
         # on the reference within the MicroscopeView, it might be replaced
         # before we get an explicit chance to unsubscribe event handlers
@@ -700,7 +699,6 @@ class SpatialSpectrumViewport(ViewPort):
         """
         # Call parent constructor at the end, because it needs the legend panel
         super(SpatialSpectrumViewport, self).__init__(*args, **kwargs)
-        self.canvas.SetBackgroundColour(wx.RED)
         self.spectrum_stream = None
 
     def setView(self, microscope_view, tab_data):
