@@ -55,8 +55,8 @@ class AnchoredEstimator(object):
         self._emitter = scanner
         self._semd = detector
         self._dwell_time = dwell_time
-        self.orig_drift = (0, 0)
-        self.max_drift = (0, 0)
+        self.orig_drift = (0, 0) # in sem px
+        self.max_drift = (0, 0) # in sem px
         self.raw = [] # all the anchor areas acquired (in order)
         self._acq_sem_complete = threading.Event()
 
@@ -68,8 +68,8 @@ class AnchoredEstimator(object):
         shape = self._emitter.shape
 
         # translation is distance from center (situated at 0.5, 0.5), can be floats
-        self._trans = (shape[0] * (center[0] - 0.5) - self.orig_drift[1],
-                       shape[1] * (center[1] - 0.5) - self.orig_drift[0])
+        self._trans = (shape[0] * (center[0] - 0.5),
+                       shape[1] * (center[1] - 0.5))
 
         # resolution is the maximum resolution at the scale in proportion of the width
         # First, try the finest scale (=1)
@@ -98,8 +98,8 @@ class AnchoredEstimator(object):
         logging.info("Anchor region defined with scale=%s, res=%s, trans=%s",
                       self._scale, self._res, self._trans)
 
-        self._safety_bounds = (-0.99 * (shape[0] / 2), 0.99 * (shape[1] / 2))
-        self._min_bound = self._safety_bounds[0] + (max(self._res[0],
+        self._safety_bounds = (0.99 * (shape[0] / 2), 0.99 * (shape[1] / 2))
+        self._min_bound = -self._safety_bounds[0] + (max(self._res[0],
                                                         self._res[1]) / 2)
         self._max_bound = self._safety_bounds[1] - (max(self._res[0],
                                                         self._res[1]) / 2)
@@ -122,8 +122,8 @@ class AnchoredEstimator(object):
                       self._emitter.dwellTime.value,
                       self._emitter.scale.value)
         data = self._semd.data.get(asap=False)
-        if data.shape != self._res:
-            logging.warning("Shape of data is %s instead of %s", data.shape, self._res)
+        if data.shape[::-1] != self._res:
+            logging.warning("Shape of data is %s instead of %s", data.shape[::-1], self._res)
         self.raw.append(data)
 
         # Restore SEM settings
@@ -138,15 +138,19 @@ class AnchoredEstimator(object):
         # Calculate the drift between the last two frames and
         # between the last and first frame
         if len(self.raw) > 1:
-            prev_drift = CalculateDrift(self.raw[-2],
-                                        self.raw[-1], 10)
             # Note: prev_drift and orig_drift, don't represent exactly the same
             # value as the previous image also had drifted. So we need to
             # include also the drift of the previous image.
-            prev_drift = (prev_drift[0] + self.orig_drift[0],
-                          prev_drift[1] + self.orig_drift[1])
-            self.orig_drift = CalculateDrift(self.raw[0],
-                                             self.raw[-1], 10)
+            # Also, CalculateDrift return the shift in image pixels, which is
+            # different (usually bigger) from the SEM px.
+            prev_drift = CalculateDrift(self.raw[-2], self.raw[-1], 10)
+            prev_drift = (prev_drift[0] * self._scale[0] + self.orig_drift[0],
+                          prev_drift[1] * self._scale[1] + self.orig_drift[1])
+
+            orig_drift = CalculateDrift(self.raw[0], self.raw[-1], 10)
+            self.orig_drift = (orig_drift[0] * self._scale[0],
+                               orig_drift[1] * self._scale[1])
+
             logging.debug("Current drift: %s", self.orig_drift)
             logging.debug("Previous frame diff: %s", prev_drift)
             if (abs(self.orig_drift[0] - prev_drift[0]) > 5 or
@@ -157,6 +161,7 @@ class AnchoredEstimator(object):
             # Update max_drift
             if math.hypot(*self.orig_drift) > math.hypot(*self.max_drift):
                 self.max_drift = self.orig_drift
+
         return self.orig_drift
     
     def estimateAcquisitionTime(self):
@@ -218,8 +223,8 @@ class AnchoredEstimator(object):
         new_translation = (self._trans[0] - self.orig_drift[0],
                            self._trans[1] - self.orig_drift[1])
 
-        if (abs(new_translation[0]) > abs(self._safety_bounds[0])
-            or abs(new_translation[1]) > abs(self._safety_bounds[1])):
+        if (abs(new_translation[0]) > self._safety_bounds[0]
+            or abs(new_translation[1]) > self._safety_bounds[1]):
             logging.warning("Generated image may be incorrect due to extensive "
                             "drift of %s", new_translation)
 
