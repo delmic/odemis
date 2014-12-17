@@ -140,9 +140,13 @@ class AnchoredEstimator(object):
         if len(self.raw) > 1:
             prev_drift = CalculateDrift(self.raw[-2],
                                         self.raw[-1], 10)
+            # Note: prev_drift and orig_drift, don't represent exactly the same
+            # value as the previous image also had drifted. So we need to
+            # include also the drift of the previous image.
+            prev_drift = (prev_drift[0] + self.orig_drift[0],
+                          prev_drift[1] + self.orig_drift[1])
             self.orig_drift = CalculateDrift(self.raw[0],
                                              self.raw[-1], 10)
-
             logging.debug("Current drift: %s", self.orig_drift)
             logging.debug("Previous frame diff: %s", prev_drift)
             if (abs(self.orig_drift[0] - prev_drift[0]) > 5 or
@@ -151,7 +155,7 @@ class AnchoredEstimator(object):
                                 "hesitating between %s and %s px",
                                  self.orig_drift, prev_drift)
             # Update max_drift
-            if abs(numpy.prod(self.orig_drift)) > abs(numpy.prod(self.max_drift)):
+            if math.hypot(*self.orig_drift) > math.hypot(*self.max_drift):
                 self.max_drift = self.orig_drift
         return self.orig_drift
     
@@ -200,7 +204,7 @@ class AnchoredEstimator(object):
                 pxs_dc_period.append(half_rep)
                 pxs_dc_period.append(pxs_per_line - half_rep)
 
-        logging.debug("Drift correction will be being performed every %s pixels",
+        logging.debug("Drift correction will be performed every %s pixels",
                         pxs_dc_period)
         return itertools.cycle(pxs_dc_period)
 
