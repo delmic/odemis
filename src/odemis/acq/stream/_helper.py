@@ -294,7 +294,7 @@ class RepetitionStream(Stream):
     def estimateAcquisitionTime(self):
         try:
             # Each pixel x the exposure time (of the detector) + readout time +
-            # 10ms overhead + 20% overhead
+            # 30ms overhead + 20% overhead
             try:
                 ro_rate = self._detector.readoutRate.value
             except Exception:
@@ -303,7 +303,7 @@ class RepetitionStream(Stream):
             readout = numpy.prod(res) / ro_rate
 
             exp = self._detector.exposureTime.value
-            dur_image = (exp + readout + 0.01) * 1.20
+            dur_image = (exp + readout + 0.03) * 1.20
             duration = numpy.prod(self.repetition.value) * dur_image
             # Add the setup time
             duration += self.SETUP_OVERHEAD
