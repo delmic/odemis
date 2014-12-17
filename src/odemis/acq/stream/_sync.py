@@ -28,7 +28,7 @@ import numpy
 from odemis import model
 from odemis.acq import _futures
 from odemis.acq import drift
-from odemis.model import MD_POS, MD_DESCRIPTION, MD_PIXEL_SIZE
+from odemis.model import MD_POS, MD_DESCRIPTION, MD_PIXEL_SIZE, MD_ACQ_DATE, MD_AD_LIST
 import threading
 import time
 
@@ -80,6 +80,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
         self._sem_stream = sem_stream
         self._ccd_stream = ccd_stream
+        self._anchor_raw = None  # data of the anchor region
 
         assert sem_stream._emitter == ccd_stream._emitter
         self._emitter = sem_stream._emitter
@@ -107,6 +108,16 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
         self.should_update = model.BooleanVA(False)
         self.is_active = model.BooleanVA(False)
+
+    @property
+    def raw(self):
+        # build the .raw from all the substreams
+        r = []
+        for s in self._streams:
+            r.extend(s.raw)
+        if self._anchor_raw is not None:
+            r.extend(self._anchor_raw)
+        return r
 
     def estimateAcquisitionTime(self):
         # Time required without drift correction
@@ -311,6 +322,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
             ccd_buf = []
             self._ccd_stream.raw = []
             self._sem_stream.raw = []
+            self._anchor_raw = None
             logging.debug("Starting CCD acquisition with components %s and %s",
                           self._semd.name, self._ccd.name)
 
@@ -425,6 +437,9 @@ class SEMCCDMDStream(MultipleDetectorStream):
             # explicitly add names to make sure they are different
             sem_one.metadata[MD_DESCRIPTION] = self._sem_stream.name.value
             self._onSEMCCDData(sem_one, ccd_buf)
+
+            if self._dc_estimator is not None:
+                self._anchor_raw = self._assembleAnchorData(self._dc_estimator.raw)
         except Exception as exp:
             if not isinstance(exp, CancelledError):
                 logging.exception("Software sync acquisition of SEM/CCD failed")
@@ -496,6 +511,30 @@ class SEMCCDMDStream(MultipleDetectorStream):
         sem_data.shape = rep[::-1]
         sem_data = model.DataArray(sem_data, metadata=md)
         return sem_data
+
+    def _assembleAnchorData(self, data_list):
+        """
+        Take all the data acquired for the anchor region
+
+        data_list (list of N DataArray of shape 2D (Y, X)): all the anchor data
+        return (DataArray of shape (1, N, 1, Y, X))
+        """
+        assert len(data_list) > 0
+        assert data_list[0].ndim == 2
+
+        # extend the shape to TZ dimensions to allow the concatenation on T
+        for d in data_list:
+            d.shape = (1, 1) + d.shape
+
+        anchor_data = numpy.concatenate(data_list)
+        anchor_data.shape = (1,) + anchor_data.shape
+
+        # copy the metadata from the first image (which contains the original
+        # position of the anchor region, without drift correction)
+        md = data_list[0].metadata.copy()
+        md[MD_DESCRIPTION] = "Anchor region"
+        md[MD_AD_LIST] = tuple(d.metadata[MD_ACQ_DATE] for d in data_list)
+        return model.DataArray(anchor_data, metadata=md)
 
     def _dsCancelAcquisition(self, future):
         with self._acq_lock:

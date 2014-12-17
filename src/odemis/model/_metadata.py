@@ -25,6 +25,7 @@ These are the conventional metadata available in a DataArray.
 # This list of constants are used as key for the metadata
 MD_EXP_TIME = "Exposure time" # s
 MD_ACQ_DATE = "Acquisition date" # s since epoch
+MD_AD_LIST = "Acquisition dates" # s since epoch for each element in dimension T
 # distance between two points on the sample that are seen at the centre of two
 # adjacent pixels considering that these two points are in focus
 MD_PIXEL_SIZE = "Pixel size" # (m, m)
@@ -61,6 +62,9 @@ MD_EBEAM_SPOT_DIAM = "Electron beam spot diameter" # m (float), approximate diam
 # not be used simultaneously.
 MD_WL_POLYNOMIAL = "Wavelength polynomial" # m, m/px, m/px²... (list of float), polynomial to convert from a pixel number of a spectrum to the wavelength
 MD_WL_LIST = "Wavelength list" # m... (list of float), wavelength for each pixel. The list is the same length as the C dimension
+
+# TODO: MD_ACQ_TYPE: the type of acquisition contained in the DataArray, such as
+# EM_SPACIAL, FLUO_SPACIAL, ANCHOR_REGION, SPECTRUM, ANGULAR_RESOLVED...
 
 MD_AR_POLE = "Angular resolved pole position" # px, px (tuple of float), position of pole (aka hole center) in raw acquisition of SPARC AR
 

@@ -98,6 +98,11 @@ class StreamController(object):
 
         # Add each data as a stream of the correct type
         for d in data:
+            # Hack for not displaying Anchor region data
+            # TODO: store and use acquisition type with MD_ACQ_TYPE?
+            if d.metadata[model.MD_DESCRIPTION] == "Anchor region":
+                continue
+
             # Streams only support 2D data (e.g., no multiple channels like RGB)
             # except for spectra which have a 3rd dimensions on dim 5.
             # So if that's the case => separate into one stream per channel
