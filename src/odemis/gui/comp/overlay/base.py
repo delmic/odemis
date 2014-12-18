@@ -343,6 +343,13 @@ class DragMixin(object):
 
     Note: Overlay should never capture a mouse, that's the canvas' job
 
+    The following methods *must* be called from their public counter part method in the super class:
+
+    _on_left_down
+    _on_left_up
+    _on_right_down
+    _on_righgt_up
+
     """
 
     def __init__(self):
@@ -382,18 +389,22 @@ class DragMixin(object):
 
     @property
     def left_dragging(self):
+        """ Boolean value indicating whether left dragging has started """
         return self._ldragging
 
     @property
     def right_dragging(self):
+        """ Boolean value indicating whether right dragging has started """
         return self._rdragging
 
     @property
     def dragging(self):
+        """ Boolean value indicating whether left or right dragging has started """
         return self._ldragging or self._rdragging
 
     @property
     def was_dragged(self):
+        """ Boolean value indicating whether actual movement has occured during dragging """
         return ((None, None) != (self.drag_v_start_pos, self.drag_v_end_pos) and
                 self.drag_v_start_pos != self.drag_v_end_pos)
 
@@ -423,7 +434,7 @@ class SelectionMixin(object):
         self.edit_v_start_pos = None  # The view port coordinates where a drag/edit originated
         self.edit_edge = None  # What edge is being edited (gui.HOVER_*)
 
-        # Selection modes
+        # Selection modes (none, create, edit and drag)
         self.selection_mode = SEL_MODE_NONE
 
         # This attribute can be used to see if the canvas has shifted or scaled
@@ -446,23 +457,27 @@ class SelectionMixin(object):
 
         return util.normalize_rect(rect)
 
-    ##### selection methods  #####
+    # #### selection methods  #####
 
     def start_selection(self, start_pos):
-        """ Start a new selection.
+        """ Start a new selection
 
-        :param start_pos: (list of 2 floats) Pixel coordinates where the
-            selection starts
+        :param start_pos: (list of 2 floats) Pixel coordinates where the selection starts
+
         """
+
+        logging.debug("Starting selection")
+
         self.selection_mode = SEL_MODE_CREATE
         self.v_start_pos = self.v_end_pos = list(start_pos)
 
     def update_selection(self, current_pos):
         """ Update the selection to reflect the given mouse position.
 
-        :param current_pos: (list of 2 floats) Pixel coordinates of the current
-            end point
+        :param current_pos: (list of 2 floats) Pixel coordinates of the current end point
+
         """
+
         current_pos = self.cnvs.clip_to_viewport(current_pos)
         self.v_end_pos = list(current_pos)
 
@@ -495,14 +510,17 @@ class SelectionMixin(object):
 
         self.edges = {}
 
-    ##### END selection methods  #####
+    # #### END selection methods  #####
 
-    ##### edit methods  #####
+    # #### edit methods  #####
 
     def start_edit(self, start_pos, edge):
         """ Start an edit to the current selection
-        edge (gui.HOVER_*)
+
+        :param edge: (gui.HOVER_*)
+
         """
+
         self.edit_v_start_pos = start_pos
         self.edit_edge = edge
         self.selection_mode = SEL_MODE_EDIT
@@ -526,9 +544,9 @@ class SelectionMixin(object):
         """ End the selection edit """
         self.stop_selection()
 
-    ##### END edit methods  #####
+    # #### END edit methods  #####
 
-    ##### drag methods  #####
+    # #### drag methods  #####
 
     def start_drag(self, start_pos):
         self.edit_v_start_pos = start_pos
@@ -553,11 +571,12 @@ class SelectionMixin(object):
     def stop_drag(self):
         self.stop_selection()
 
-    ##### END drag methods  #####
+    # #### END drag methods  #####
 
     def update_from_buffer(self, b_start_pos, b_end_pos, shiftscale):
-        """ Update the view positions of the selection if the cnvs view has
-        shifted or scaled compared to the last time this method was called.
+        """ Update the view positions of the selection if the cnvs view has shifted or scaled
+        compared to the last time this method was called
+
         """
 
         if self._last_shiftscale != shiftscale:
@@ -589,36 +608,41 @@ class SelectionMixin(object):
             self.edges = {}
 
     def is_hovering(self, vpos):
-        """ Check if the given position is on/near a selection edge or inside
-        the selection.
+        """ Check if the given position is on/near a selection edge or inside the selection
 
         :return: (bool) Return False if not hovering, or the type of hover
+
         """
 
         if self.edges:
             # If position outside outer box
             if (not self.edges["o_l"] < vpos[0] < self.edges["o_r"] or
                     not self.edges["o_t"] < vpos[1] < self.edges["o_b"]):
-                return False
+                return gui.HOVER_NONE
             # If position inside inner box
             elif (self.edges["i_l"] < vpos[0] < self.edges["i_r"] and
                   self.edges["i_t"] < vpos[1] < self.edges["i_b"]):
                 # logging.debug("Selection hover")
                 return gui.HOVER_SELECTION
-            elif vpos[0] < self.edges["i_l"]:
-                # logging.debug("Left edge hover")
-                return gui.HOVER_LEFT_EDGE
-            elif vpos[0] > self.edges["i_r"]:
-                # logging.debug("Right edge hover")
-                return gui.HOVER_RIGHT_EDGE
-            elif vpos[1] < self.edges["i_t"]:
-                # logging.debug("Top edge hover")
-                return gui.HOVER_TOP_EDGE
-            elif vpos[1] > self.edges["i_b"]:
-                # logging.debug("Bottom edge hover")
-                return gui.HOVER_BOTTOM_EDGE
+            else:
+                hover = gui.HOVER_NONE
+                if vpos[0] < self.edges["i_l"]:
+                    # logging.debug("Left edge hover")
+                    hover &= gui.HOVER_LEFT_EDGE
+                elif vpos[0] > self.edges["i_r"]:
+                    # logging.debug("Right edge hover")
+                    hover &= gui.HOVER_RIGHT_EDGE
 
-        return False
+                if vpos[1] < self.edges["i_t"]:
+                    # logging.debug("Top edge hover")
+                    hover &= gui.HOVER_TOP_EDGE
+                elif vpos[1] > self.edges["i_b"]:
+                    # logging.debug("Bottom edge hover")
+                    hover &= gui.HOVER_BOTTOM_EDGE
+
+                return hover
+
+        return None
 
     def get_width(self):
         """ Return the width of the selection in view pixels or None if there is no selection """
@@ -642,6 +666,8 @@ class SelectionMixin(object):
     def _on_left_down(self, evt):
         """ Call this method from the 'on_left_down' method of super classes """
 
+        # TODO: Check if this call is necessary. This method, and it's counter part in _on_left_up
+        # should be called from the on_left_down method from the canvas, right?
         self.cnvs.on_mouse_down()
 
         v_pos = evt.GetPositionTuple()
@@ -696,7 +722,7 @@ class ViewOverlay(Overlay):
     dragging doesn't affects that). """
 
     @abstractmethod
-    def Draw(self, ctx):
+    def draw(self, ctx):
         pass
 
 
@@ -705,5 +731,5 @@ class WorldOverlay(Overlay):
     It's updated only every time the entire buffer is redrawn."""
 
     @abstractmethod
-    def Draw(self, ctx, shift=(0, 0), scale=1.0):
+    def draw(self, ctx, shift=(0, 0), scale=1.0):
         pass

@@ -828,7 +828,7 @@ class OverviewCanvas(DblMicroscopeCanvas):
         dc.SelectObject(bitmap)
 
         ctx = wxcairo.ContextFromDC(dc)
-        self.history_overlay.Draw(ctx, gui.VIEW_BTN_SIZE)
+        self.history_overlay.draw(ctx, gui.VIEW_BTN_SIZE)
 
         # close the DC, to be sure the bitmap can be used safely
         image = wx.ImageFromBitmap(bitmap)

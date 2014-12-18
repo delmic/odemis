@@ -165,7 +165,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
             self.w_end_pos = w_pos[2:4]
             self._calc_view_pos()
 
-    def Draw(self, ctx, shift=(0, 0), scale=1.0):
+    def draw(self, ctx, shift=(0, 0), scale=1.0):
 
         if self.w_start_pos and self.w_end_pos:
             ctx.save()
@@ -178,7 +178,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
             b_pos = self._normalize(b_pos)
             self.update_from_buffer(b_pos[:2], b_pos[2:4], shift + (scale,))
 
-            #logging.warn("%s %s", shift, world_to_buffer_pos(shift))
+            # logging.warn("%s %s", shift, world_to_buffer_pos(shift))
             rect = (b_pos[0] + 0.5, b_pos[1] + 0.5,
                     b_pos[2] - b_pos[0], b_pos[3] - b_pos[1])
 
@@ -410,7 +410,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
                 self._bmp.SetMaskColour(wx.BLACK)
                 self._bmp_bpos = cl_pos
 
-            self.cnvs._dc_buffer.DrawBitmapPoint(
+            self.cnvs.dc_buffer.DrawBitmapPoint(
                 self._bmp,
                 wx.Point(int(start_x), int(start_y)),
                 useMask=True
@@ -439,8 +439,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
         start_x, start_y = self.cnvs.clip_to_buffer(b_pos[:2])
         end_x, end_y = self.cnvs.clip_to_buffer(b_pos[2:4])
 
-        # logging.debug(
-            # "clipped start and end: %s", (start_x, start_y, end_x, end_y))
+        # logging.debug("clipped start and end: %s", (start_x, start_y, end_x, end_y))
 
         rep_x, rep_y = self.repetition
 
@@ -480,11 +479,11 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
 
             ctx.stroke()
 
-    def Draw(self, ctx, shift=(0, 0), scale=1.0):
+    def draw(self, ctx, shift=(0, 0), scale=1.0):
 
         mode_cache = self.selection_mode
 
-        if self.w_start_pos and self.w_end_pos and not 0 in self.repetition:
+        if self.w_start_pos and self.w_end_pos and 0 not in self.repetition:
             ctx.save()
             if self.fill == self.FILL_POINT:
                 self._draw_points(ctx)
@@ -494,7 +493,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
                 self.selection_mode = base.SEL_MODE_EDIT
             ctx.restore()
 
-        super(RepetitionSelectOverlay, self).Draw(ctx, shift, scale)
+        super(RepetitionSelectOverlay, self).draw(ctx, shift, scale)
         self.selection_mode = mode_cache
 
 
@@ -531,7 +530,7 @@ class LineSelectOverlay(WorldSelectOverlay):
         """ Lines don't need to be normalized """
         return rect
 
-    def Draw(self, ctx, shift=(0, 0), scale=1.0):
+    def draw(self, ctx, shift=(0, 0), scale=1.0):
 
         if None not in (self.w_start_pos, self.w_end_pos) and self.w_start_pos != self.w_end_pos:
 
@@ -657,7 +656,7 @@ class LineSelectOverlay(WorldSelectOverlay):
                 if self.edges["e_t"] < vpos[1] < self.edges["e_b"]:
                     return gui.HOVER_END
 
-        return False
+        return None
 
     def _on_motion(self, evt):
         v_pos = evt.GetPositionTuple()
@@ -1100,7 +1099,7 @@ class PixelSelectOverlay(WorldOverlay, SpectrumMixin, DragMixin):
     #
     #     return b_top_left + b_width
 
-    def Draw(self, ctx, shift=(0, 0), scale=1.0):
+    def draw(self, ctx, shift=(0, 0), scale=1.0):
         if self._selection:
             if (self._pixel_pos and self._selection.value != self._pixel_pos and
                     self.is_over_pixel_data()):
@@ -1257,7 +1256,7 @@ class PointsOverlay(WorldOverlay):
 
         self.min_dist = min_dist / 2.0  # get radius
 
-    def Draw(self, ctx, shift=(0, 0), scale=1.0):
+    def draw(self, ctx, shift=(0, 0), scale=1.0):
 
         if not self.choices or not self.active:
             return
