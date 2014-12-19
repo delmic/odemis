@@ -602,9 +602,9 @@ class StaticSpectrumStream(StaticStream):
         datasum = numpy.zeros(spec2d.shape[0], dtype=numpy.float64)
         # Scan the square around the point, and only pick the points in the circle
         for px in range(max(0, x - int(radius)),
-                        min(x + int(radius), spec2d.shape[-1]) + 1):
+                        min(x + int(radius) + 1, spec2d.shape[-1])):
             for py in range(max(0, y - int(radius)),
-                            min(y + int(radius), spec2d.shape[-2]) + 1):
+                            min(y + int(radius) + 1, spec2d.shape[-2])):
                 if math.hypot(x - px, y - py) <= radius:
                     n += 1
                     datasum += spec2d[:, py, px]
