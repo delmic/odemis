@@ -332,6 +332,15 @@ class SettingsController(object):
         except (AttributeError, NotApplicableError):
             pass
 
+        # Ensure the choices contain the current value
+        if choices is not None and va.value not in choices:
+            if isinstance(choices, set):
+                choices.add(va.value)
+            elif isinstance(choices, dict):
+                choices[va.value] = unicode(va.value)
+            else:
+                logging.warning("Don't know how to handle choices")
+
         # Get unit from config, vigilant attribute or use an empty one
         unit = conf.get('unit', va.unit or "")
 
