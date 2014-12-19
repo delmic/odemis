@@ -422,18 +422,19 @@ class StaticSpectrumStream(StaticStream):
         # first point, second point in pixels. It must be 2 elements long.
         self.selected_line = model.ListVA([(None, None), (None, None)], setter=self._setLine)
 
-        # The thickness of a point of a line (shared).
+        # The thickness of a point or a line (shared).
         # A point of width W leads to the average value between all the pixels
         # which are within W/2 from the center of the point.
         # A line of width W leads to a 1D spectrum taking into account all the
         # pixels which fit on an orthogonal line to the selected line at a
         # distance <= W/2.
-        self.width = model.IntContinuous(1, [1, 50], unit="px")
+        self.selectionWidth = model.IntContinuous(1, [1, 50], unit="px")
 
         self.fitToRGB.subscribe(self.onFitToRGB)
         self.spectrumBandwidth.subscribe(self.onSpectrumBandwidth)
         self.efficiencyCompensation.subscribe(self._onCalib)
         self.background.subscribe(self._onCalib)
+        self.selectionWidth.subscribe(self._onSelectionWidth)
 
         self.raw = [image] # for compatibility with other streams (like saving...)
         self._calibrated = image # the raw data after calibration
@@ -588,7 +589,7 @@ class StaticSpectrumStream(StaticStream):
 
         # We treat width as the diameter of the circle which contains the center
         # of the pixels to be taken into account
-        width = self.width.value
+        width = self.selectionWidth.value
         if width == 1: # short-cut for simple case
             return spec2d[:, y, x]
 
@@ -627,7 +628,7 @@ class StaticSpectrumStream(StaticStream):
             return None
 
         spec2d = self._calibrated[:, 0, 0, :, :] # same data but remove useless dims
-        width = self.width.value
+        width = self.selectionWidth.value
 
         # Number of points to return: the length of the line
         start, end = self.selected_line.value
@@ -758,24 +759,34 @@ class StaticSpectrumStream(StaticStream):
         self._updateCalibratedData(bckg=self.background.value, coef=coef)
         return coef
 
-    def _onCalib(self, unused):
-        """
-        called when the background or efficiency compensation is changed
-        """
-
-        # histogram will change as the pixel intensity is different
-        self._updateDRange()
-        self._updateHistogram()
-
-        self._updateImage()
-        # TODO: if the 0D or 1D spectra are used, they should be updated too, but
-        # there is no explicit way to do it, so instead, pretend the pixel has
-        # moved. It could be solved by using dataflows.
+    def _force_selected_spectrum_update(self):
+        # There is no explicit way to do it, so instead, pretend the pixel and
+        # line have changed (to the same value).
+        # TODO: It could be solved by using dataflows (in which case a new data
+        # would come whenever settings change).
         if self.selected_pixel.value != (None, None):
             self.selected_pixel.notify(self.selected_pixel.value)
 
         if not (None, None) in self.selected_line.value:
             self.selected_line.notify(self.selected_line.value)
+
+    def _onCalib(self, unused):
+        """
+        called when the background or efficiency compensation is changed
+        """
+        # histogram will change as the pixel intensity is different
+        self._updateDRange()
+        self._updateHistogram()
+        self._updateImage()
+
+        self._force_selected_spectrum_update()
+
+    def _onSelectionWidth(self, width):
+        """
+        Called when the selection width is updated
+        """
+        # 0D and/or 1D spectrum will need updates
+        self._force_selected_spectrum_update()
 
     def onFitToRGB(self, value):
         """
