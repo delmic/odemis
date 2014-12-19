@@ -649,6 +649,9 @@ class UnitIntegerSlider(NumberSlider):
         value = int(value)
         NumberSlider._update_linked_field(self, value)
 
+    def _pixel_to_val(self):
+        val = super(UnitIntegerSlider, self)._pixel_to_val()
+        return int(round(val))
 
 class UnitFloatSlider(NumberSlider):
 

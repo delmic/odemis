@@ -40,7 +40,8 @@ from odemis.gui import FG_COLOUR_EDIT, FG_COLOUR_MAIN, \
     FG_COLOUR_WARNING, FG_COLOUR_ERROR
 from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
-from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider
+from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider,\
+    UnitIntegerSlider
 from odemis.gui.comp.text import SuggestTextCtrl, \
     UnitFloatCtrl, FloatTextCtrl
 from odemis.gui.util import call_after, wxlimit_invocation, dead_object_wrapper, \
@@ -1443,6 +1444,35 @@ class StreamPanel(wx.Panel):
         # TODO: should the stream have a way to know when the raw data has changed? => just a
         # spectrum VA, like histogram VA
         self.stream.image.subscribe(self.on_new_spec_data, init=True)
+
+        # Add the selectionWidth VA
+        if hasattr(self.stream, "selectionWidth"):
+            lbl_selection_width = wx.StaticText(self._panel, -1, "Width")
+            self._sld_selection_width = UnitIntegerSlider(
+                self._panel,
+                value=self.stream.selectionWidth.value,
+                min_val=self.stream.selectionWidth.range[0],
+                max_val=self.stream.selectionWidth.range[1],
+                t_size=(50, -1),
+                unit="px",
+            )
+            tooltip_txt = "Width of the point or line selected"
+            lbl_selection_width.SetToolTipString(tooltip_txt)
+            self._sld_selection_width.SetToolTipString(tooltip_txt)
+            self._vac_selection_width = VigilantAttributeConnector(self.stream.selectionWidth,
+                                                                   self._sld_selection_width,
+                                                                   events=wx.EVT_SLIDER)
+
+            self.control_gbsizer.Add(lbl_selection_width,
+                                     (self.row_count, 0),
+                                     flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL,
+                                     border=5)
+            self.control_gbsizer.Add(self._sld_selection_width,
+                                     (self.row_count, 1), span=(1, 2),
+                                     flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL,
+                                     border=5)
+            self.row_count += 1
+
 
     @wxlimit_invocation(0.2)
     def on_new_spec_data(self, _):

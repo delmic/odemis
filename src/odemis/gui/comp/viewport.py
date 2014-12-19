@@ -185,16 +185,6 @@ class ViewPort(wx.Panel):
     def OnSize(self, evt):
         evt.Skip()  # processed also by the parent
 
-    def Refresh(self, *args, **kwargs):
-        """ Refresh the ViewPort while making sure the legends get redrawn as well """
-        if self.left_legend:
-            self.left_legend.clear()
-        if self.bottom_legend:
-            self.bottom_legend.clear()
-
-        super(ViewPort, self).Refresh(*args, **kwargs)
-
-
 class MicroscopeViewport(ViewPort):
     """ A panel that shows a microscope view and its legend below it.
 
@@ -580,6 +570,12 @@ class PlotViewport(ViewPort):
         self.canvas.clear()
         self.Refresh()
 
+    def Refresh(self, *args, **kwargs):
+        """ Refresh the ViewPort while making sure the legends get redrawn as well """
+        self.left_legend.redraw()
+        self.bottom_legend.redraw()
+        super(PlotViewport, self).Refresh(*args, **kwargs)
+
     def OnSize(self, evt):
         evt.Skip()  # processed also by the parent
 
@@ -702,6 +698,12 @@ class SpatialSpectrumViewport(ViewPort):
         super(SpatialSpectrumViewport, self).__init__(*args, **kwargs)
         self.canvas.SetBackgroundColour(wx.RED)
         self.spectrum_stream = None
+
+    def Refresh(self, *args, **kwargs):
+        """ Refresh the ViewPort while making sure the legends get redrawn as well """
+        self.left_legend.redraw()
+        self.bottom_legend.redraw()
+        super(SpatialSpectrumViewport, self).Refresh(*args, **kwargs)
 
     def setView(self, microscope_view, tab_data):
         """
