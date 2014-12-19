@@ -155,6 +155,7 @@ import logging
 import math
 from odemis.gui import BLEND_DEFAULT, BLEND_SCREEN
 from odemis.gui.comp.overlay.base import WorldOverlay, ViewOverlay
+from odemis.gui.util import call_after
 from odemis.util import intersect
 from odemis.util.conversion import wxcol_to_frgb
 import os
@@ -744,6 +745,7 @@ class BufferedCanvas(wx.Panel):
         return (max(1, min(pos[0], self._bmp_buffer_size[0] - 1)),
                 max(1, min(pos[1], self._bmp_buffer_size[1] - 1)))
 
+    @call_after
     def clear(self):
         """ Clear the canvas by redrawing the background """
         self._draw_background(self.ctx)
@@ -1724,24 +1726,21 @@ class PlotCanvas(BufferedCanvas):
     def set_data(self, data, unit_x=None, unit_y=None, range_x=None, range_y=None):
         """ Set the data to be plotted
 
-        The data should be an iterable of numerical 2-tuples.
+        data (list of 2 tuples): the X, Y coordinates of each point. The X values
+          must be ordered and not duplicated. 
 
         """
-
+        # FIXME: why not doing anything when data is empty?
+        # => shall we clear() instead, or display a warning?
+        logging.debug("updating data to %d values", len(data))
         if data:
             # Check if sorted
             s = all(data[i][0] < data[i + 1][0] for i in xrange(len(data) - 1))
             if not s:
-                m = []
-                x, _ = zip(*data)
-                for v in x:
-                    if x.count(v) > 1:
-                        m.append(v)
-                if m:
-                    raise ValueError("The horizontal data points should be "
-                                     "unique! The values %s have duplicates" % m)
+                if any(data[i][0] == data[i + 1][0] for i in xrange(len(data) - 1)):
+                    raise ValueError("The horizontal data points should be unique.")
                 else:
-                    raise ValueError("The horizontal data should be sorted!")
+                    raise ValueError("The horizontal data should be sorted.")
             if len(data[0]) != 2:
                 raise ValueError("The data should be 2D!")
 
@@ -1777,10 +1776,6 @@ class PlotCanvas(BufferedCanvas):
         of the canvas.
         """
         horz, vert = zip(*self._data)
-
-        if not all(horz[i] <= horz[i+1] for i in xrange(len(horz)-1)):
-            self.clear()
-            raise ValueError("X values need to be sorted!")
 
         self.min_x = min(horz)
         self.max_x = max(horz)
@@ -1954,7 +1949,6 @@ class PlotCanvas(BufferedCanvas):
         if not self._data or len(self._data) < 2:
             return
 
-        value_to_position = self.value_to_position
         vx_to_px = self._val_x_to_pos_x
         vy_to_py = self._val_y_to_pos_y
 
