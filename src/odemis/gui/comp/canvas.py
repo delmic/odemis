@@ -1811,7 +1811,7 @@ class PlotCanvas(BufferedCanvas):
                 msg = "Y values out of range! min: %s, max: %s, range: %s"
                 raise ValueError(msg % (self.min_y, self.max_y, self.range_y))
 
-        self.request_drawing_update()
+        wx.CallAfter(self.request_drawing_update)
 
     # Value calculation methods
 
@@ -1899,7 +1899,7 @@ class PlotCanvas(BufferedCanvas):
 
     def set_plot_mode(self, mode):
         self.plot_mode = mode
-        self.request_drawing_update()
+        wx.CallAfter(self.request_drawing_update)
 
     # Image generation
 
