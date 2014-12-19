@@ -722,7 +722,7 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
         escan.scale.value = (1, 1)
         escan.resolution.value = escan.resolution.range[1]
         escan.translation.value = (0, 0)
-        escan.dwellTime.value = 6e-06  # good enough for clear SEM image
+        escan.dwellTime.value = 5.2e-06  # good enough for clear SEM image
         holes_found = []
         et = escan.dwellTime.value * numpy.prod(escan.resolution.value)
         hole_focus = known_focus
@@ -743,9 +743,9 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
                 f.result()
             # For the first hole apply autofocus anyway
             if (pos == EXPECTED_HOLES[0]):
-                escan.horizontalFoV.value = 300e-06  # m
+                escan.horizontalFoV.value = 160e-06  # m
                 escan.scale.value = (2, 2)
-                escan.accelVoltage.value += 50
+                # escan.accelVoltage.value += 50
                 f = autofocus.AutoFocus(detector, escan, ebeam_focus, autofocus.ROUGH_SPOTMODE_ACCURACY)
                 hole_focus, fm_level = f.result()
                 escan.horizontalFoV.value = escan.horizontalFoV.range[1]
@@ -758,7 +758,7 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
                 hole_coordinates = FindCircleCenter(image, HOLE_RADIUS, 6)
             except IOError:
                 # If hole was not found, apply autofocus and retry detection
-                escan.horizontalFoV.value = 350e-06  # m
+                escan.horizontalFoV.value = 250e-06  # m
                 f = autofocus.AutoFocus(detector, escan, ebeam_focus, autofocus.ROUGH_SPOTMODE_ACCURACY)
                 hole_focus, fm_level = f.result()
                 escan.horizontalFoV.value = escan.horizontalFoV.range[1]
