@@ -697,7 +697,7 @@ class LineSelectOverlay(WorldSelectOverlay):
         """ Event handler that requests a redraw when the selected pixel changes """
         if selected_line is not None:
             self.w_start_pos, self.w_end_pos = selected_line
-            self.cnvs.update_drawing()
+            wx.CallAfter(self.cnvs.update_drawing)
 
 
 class PixelSelectOverlay(WorldOverlay, DragMixin):
@@ -817,7 +817,7 @@ class PixelSelectOverlay(WorldOverlay, DragMixin):
 
     def _selection_made(self, _):
         """ Event handler that requests a redraw when the selected pixel changes """
-        self.cnvs.update_drawing()
+        wx.CallAfter(self.cnvs.update_drawing)
 
     def values_are_set(self):
         """ Returns True if all needed values are set """
