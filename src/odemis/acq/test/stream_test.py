@@ -891,6 +891,25 @@ class TestStaticStreams(unittest.TestCase):
         self.assertEqual(sp0d.dtype, spec.dtype)
         self.assertTrue(numpy.all(sp0d <= spec.max()))
 
+        # Check width > 1 (on the border)
+        specs.width.value = 12
+        sp0d = specs.get_pixel_spectrum()
+        wl0d = specs.get_spectrum_range()
+        self.assertEqual(sp0d.shape, (spec.shape[0],))
+        self.assertEqual(wl0d.shape, (spec.shape[0],))
+        self.assertEqual(sp0d.dtype, spec.dtype)
+        self.assertTrue(numpy.all(sp0d <= spec.max()))
+
+        # Check with very large width
+        specs.width.value = specs.width.range[1]
+        specs.selected_pixel.value = (55, 106)
+        sp0d = specs.get_pixel_spectrum()
+        wl0d = specs.get_spectrum_range()
+        self.assertEqual(sp0d.shape, (spec.shape[0],))
+        self.assertEqual(wl0d.shape, (spec.shape[0],))
+        self.assertEqual(sp0d.dtype, spec.dtype)
+        self.assertTrue(numpy.all(sp0d <= spec.max()))
+
     def test_spec_1d(self):
         """Test StaticSpectrumStream 1D"""
         spec = self._create_spec_data()

@@ -581,11 +581,36 @@ class StaticSpectrumStream(StaticStream):
         return (None or DataArray with 1 dimension): the spectrum of the given
          pixel or None if no spectrum is selected.
         """
-
         if self.selected_pixel.value == (None, None):
             return None
         x, y = self.selected_pixel.value
-        return self._calibrated[:, 0, 0, y, x]
+        spec2d = self._calibrated[:, 0, 0, :, :] # same data but remove useless dims
+
+        # We treat width as the diameter of the circle which contains the center
+        # of the pixels to be taken into account
+        width = self.width.value
+        if width == 1: # short-cut for simple case
+            return spec2d[:, y, x]
+
+        # There are various ways to do it with numpy. As typically the spectrum
+        # dimension is big, and the number of pixels to sum is small, it seems
+        # the easiest way is to just do some kind of "clever" mean. Using a
+        # masked array would also work, but that'd imply having a huge mask.
+        radius = width / 2
+        n = 0
+        # TODO: use same cleverness as mean() for dtype?
+        datasum = numpy.zeros(spec2d.shape[0], dtype=numpy.float64)
+        # Scan the square around the point, and only pick the points in the circle
+        for px in range(max(0, x - int(radius)),
+                        min(x + int(radius), spec2d.shape[-1]) + 1):
+            for py in range(max(0, y - int(radius)),
+                            min(y + int(radius), spec2d.shape[-2]) + 1):
+                if math.hypot(x - px, y - py) <= radius:
+                    n += 1
+                    datasum += spec2d[:, py, px]
+
+        mean = datasum / n
+        return mean.astype(spec2d.dtype)
 
     def get_line_spectrum(self):
         """
