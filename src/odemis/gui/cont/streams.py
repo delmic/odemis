@@ -22,24 +22,25 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 import logging
-from odemis.acq.stream import FluoStream, BrightfieldStream, SEMStream, \
-    StaticStream, Stream, OpticalStream, EMStream, AlignedSEMStream
-from odemis.gui import comp
-from odemis.gui.model import STATE_OFF, STATE_ON, CHAMBER_VACUUM, \
-    CHAMBER_UNKNOWN
 from wx.lib.pubsub import pub
+
+import odemis.acq.stream as acqstream
+import odemis.gui.model as guimodel
+from odemis import model
+from odemis.gui import comp
 
 
 # Stream scheduling policies: decides which streams which are with .should_update
 # get .is_active
-SCHED_LAST_ONE = 1 # Last stream which got added to the should_update set
-SCHED_ALL = 2 # All the streams which are in the should_update stream
+SCHED_LAST_ONE = 1  # Last stream which got added to the should_update set
+SCHED_ALL = 2  # All the streams which are in the should_update stream
 # Note: it seems users don't like ideas like round-robin, where the hardware
 # keeps turn on and off, (and with fluorescence fine control must be done, to
 # avoid bleaching).
 # TODO: SCHED_ALL_INDIE -> Schedule at the same time all the streams which
 # are independent (no emitter from a stream will affect any detector of another
 # stream).
+
 
 class StreamController(object):
     """
@@ -82,6 +83,101 @@ class StreamController(object):
         # Disable all controls
         self.locked_mode = locked
 
+    @classmethod
+    def data_to_static_streams(cls, data):
+        """ Split the given data into static streams
+        :param data: (list of DataArrays) Data to be split
+        :return: (list) A list of Stream instances
+
+        """
+
+        result_streams = []
+
+        # AR data is special => all merged in one big stream
+        ar_data = []
+
+        # Add each data as a stream of the correct type
+        for d in data:
+            # Hack for not displaying Anchor region data
+            # TODO: store and use acquisition type with MD_ACQ_TYPE?
+            if d.metadata[model.MD_DESCRIPTION] == "Anchor region":
+                continue
+
+            # Streams only support 2D data (e.g., no multiple channels like RGB)
+            # except for spectra which have a 3rd dimensions on dim 5.
+            # So if that's the case => separate into one stream per channel
+            channels_data = cls._split_channels(d)
+
+            for channel_data in channels_data:
+                # TODO: be more clever to detect the type of stream
+                if (
+                        model.MD_WL_LIST in channel_data.metadata or
+                        model.MD_WL_POLYNOMIAL in channel_data.metadata or
+                        (len(channel_data.shape) >= 5 and channel_data.shape[-5] > 1)
+                ):
+                    name = channel_data.metadata.get(model.MD_DESCRIPTION, "Spectrum")
+                    klass = acqstream.StaticSpectrumStream
+                elif model.MD_AR_POLE in channel_data.metadata:
+                    # AR data
+                    ar_data.append(channel_data)
+                    continue
+                elif (
+                        (model.MD_IN_WL in channel_data.metadata and
+                         model.MD_OUT_WL in channel_data.metadata) or
+                        model.MD_USER_TINT in channel_data.metadata
+                ):
+                    # No explicit way to distinguish between Brightfield and Fluo,
+                    # so guess it's Brightfield iif:
+                    # * No tint
+                    # * (and) Large band for excitation wl (> 100 nm)
+                    in_wl = d.metadata[model.MD_IN_WL]
+                    if (
+                            model.MD_USER_TINT in channel_data.metadata or
+                            in_wl[1] - in_wl[0] < 100e-9
+                    ):
+                        # Fluo
+                        name = channel_data.metadata.get(model.MD_DESCRIPTION, "Filtered colour")
+                        klass = acqstream.StaticFluoStream
+                    else:
+                        # Brightfield
+                        name = channel_data.metadata.get(model.MD_DESCRIPTION, "Brightfield")
+                        klass = acqstream.StaticBrightfieldStream
+                elif model.MD_IN_WL in channel_data.metadata:  # no MD_OUT_WL
+                    name = channel_data.metadata.get(model.MD_DESCRIPTION, "Brightfield")
+                    klass = acqstream.StaticBrightfieldStream
+                else:
+                    name = channel_data.metadata.get(model.MD_DESCRIPTION, "Secondary electrons")
+                    klass = acqstream.StaticSEMStream
+
+                result_streams.append(klass(name, channel_data))
+
+        # Add one global AR stream
+        if ar_data:
+            result_streams.append(acqstream.StaticARStream("Angular", ar_data))
+
+        return result_streams
+
+    @classmethod
+    def _split_channels(cls, data):
+        """ Separate a DataArray into multiple DataArrays along the 3rd dimension (channel)
+
+        :param data: (DataArray) can be any shape
+        :return: (list of DataArrays) a list of one DataArray (if no splitting is needed) or more
+            (if splitting happened). The metadata is the same (object) for all the DataArrays.
+
+        """
+
+        # Anything to split?
+        if len(data.shape) >= 3 and data.shape[-3] > 1:
+            # multiple channels => split
+            das = []
+            for c in range(data.shape[-3]):
+                das.append(data[..., c, :, :])  # metadata ref is copied
+            return das
+        else:
+            # return just one DA
+            return [data]
+
     def to_static_mode(self):
         self.static_mode = True
 
@@ -108,51 +204,48 @@ class StreamController(object):
         # or optical button is enabled)
 
         # First: Fluorescent stream (for dyes)
-        if (self._main_data_model.light and self._main_data_model.light_filter
-            and self._main_data_model.ccd):
-
+        if (
+                self._main_data_model.light and
+                self._main_data_model.light_filter and
+                self._main_data_model.ccd
+        ):
             def fluor_capable():
                 # TODO: need better way to check, maybe opticalState == STATE_DISABLED?
-                enabled = self._main_data_model.chamberState.value in {CHAMBER_VACUUM, CHAMBER_UNKNOWN}
+                enabled = self._main_data_model.chamberState.value in {guimodel.CHAMBER_VACUUM,
+                                                                       guimodel.CHAMBER_UNKNOWN}
                 view = self._tab_data_model.focussedView.value
-                compatible = view.is_compatible(FluoStream)
+                compatible = view.is_compatible(acqstream.FluoStream)
                 return enabled and compatible
 
             # TODO: how to know it's _fluorescent_ microscope?
             #  => multiple source? filter?
-            self._stream_bar.add_action("Filtered colour",
-                                    self._userAddFluo,
-                                    fluor_capable)
+            self._stream_bar.add_action("Filtered colour", self._userAddFluo, fluor_capable)
 
         # Bright-field
         if self._main_data_model.light and self._main_data_model.ccd:
 
             def brightfield_capable():
-                enabled = self._main_data_model.chamberState.value in {CHAMBER_VACUUM, CHAMBER_UNKNOWN}
+                enabled = self._main_data_model.chamberState.value in {guimodel.CHAMBER_VACUUM,
+                                                                       guimodel.CHAMBER_UNKNOWN}
                 view = self._tab_data_model.focussedView.value
-                compatible = view.is_compatible(BrightfieldStream)
+                compatible = view.is_compatible(acqstream.BrightfieldStream)
                 return enabled and compatible
 
-            self._stream_bar.add_action("Bright-field",
-                                    self.addBrightfield,
-                                    brightfield_capable)
+            self._stream_bar.add_action("Bright-field", self.addBrightfield, brightfield_capable)
 
         def sem_capable():
-            enabled = self._main_data_model.chamberState.value in {CHAMBER_VACUUM, CHAMBER_UNKNOWN}
+            enabled = self._main_data_model.chamberState.value in {guimodel.CHAMBER_VACUUM,
+                                                                   guimodel.CHAMBER_UNKNOWN}
             view = self._tab_data_model.focussedView.value
-            compatible = view.is_compatible(SEMStream)
+            compatible = view.is_compatible(acqstream.SEMStream)
             return enabled and compatible
 
         # SED
         if self._main_data_model.ebeam and self._main_data_model.sed:
-            self._stream_bar.add_action("Secondary electrons",
-                                    self.addSEMSED,
-                                    sem_capable)
+            self._stream_bar.add_action("Secondary electrons", self.addSEMSED, sem_capable)
         # BSED
         if self._main_data_model.ebeam and self._main_data_model.bsd:
-            self._stream_bar.add_action("Backscattered electrons",
-                                    self.addSEMBSD,
-                                    sem_capable)
+            self._stream_bar.add_action("Backscattered electrons", self.addSEMBSD, sem_capable)
 
     def _userAddFluo(self, **kwargs):
         """
@@ -177,10 +270,13 @@ class StreamController(object):
             logging.error("Failed to find a new unique name for stream")
             name = "Filtered colour"
 
-        s = FluoStream(
-                name,
-                self._main_data_model.ccd, self._main_data_model.ccd.data,
-                self._main_data_model.light, self._main_data_model.light_filter)
+        s = acqstream.FluoStream(
+            name,
+            self._main_data_model.ccd,
+            self._main_data_model.ccd.data,
+            self._main_data_model.light,
+            self._main_data_model.light_filter
+        )
 
         # TODO: automatically pick a good set of excitation/emission which is
         # not yet used by any FluoStream (or the values from the last stream
@@ -194,9 +290,12 @@ class StreamController(object):
         Creates a new brightfield stream and panel in the stream bar
         returns (StreamPanel): the stream panel created
         """
-        s = BrightfieldStream("Bright-field",
-                  self._main_data_model.ccd, self._main_data_model.ccd.data,
-                  self._main_data_model.light)
+        s = acqstream.BrightfieldStream(
+            "Bright-field",
+            self._main_data_model.ccd,
+            self._main_data_model.ccd.data,
+            self._main_data_model.light
+        )
         return self._addStream(s, **kwargs)
 
     def addSEMSED(self, **kwargs):
@@ -208,16 +307,24 @@ class StreamController(object):
             # For the Delphi, the SEM stream needs to be more "clever" because
             # it needs to run a simple spot alignment every time the stage has
             # moved before starting to acquire.
-            s = AlignedSEMStream("Secondary electrons",
-                      self._main_data_model.sed, self._main_data_model.sed.data,
-                      self._main_data_model.ebeam, self._main_data_model.ccd,
-                      self._main_data_model.stage, shiftebeam="Ebeam shift")
-                # Select between "Metadata update" and "Stage move"
+            s = acqstream.AlignedSEMStream(
+                "Secondary electrons",
+                self._main_data_model.sed,
+                self._main_data_model.sed.data,
+                self._main_data_model.ebeam,
+                self._main_data_model.ccd,
+                self._main_data_model.stage,
+                shiftebeam="Ebeam shift"
+            )
+            # Select between "Metadata update" and "Stage move"
             # TODO: use shiftebeam once the phenom driver supports it
         else:
-            s = SEMStream("Secondary electrons",
-                      self._main_data_model.sed, self._main_data_model.sed.data,
-                      self._main_data_model.ebeam)
+            s = acqstream.SEMStream(
+                "Secondary electrons",
+                self._main_data_model.sed,
+                self._main_data_model.sed.data,
+                self._main_data_model.ebeam
+            )
         return self._addStream(s, **kwargs)
 
     def addSEMBSD(self, **kwargs):
@@ -229,19 +336,27 @@ class StreamController(object):
             # For the Delphi, the SEM stream needs to be more "clever" because
             # it needs to run a simple spot alignment every time the stage has
             # moved before starting to acquire.
-            s = AlignedSEMStream("Backscattered electrons",
-                      self._main_data_model.bsd, self._main_data_model.bsd.data,
-                      self._main_data_model.ebeam, self._main_data_model.ccd,
-                      self._main_data_model.stage, shiftebeam="Ebeam shift")
-                # Select between "Metadata update" and "Stage move"
+            s = acqstream.AlignedSEMStream(
+                "Backscattered electrons",
+                self._main_data_model.bsd,
+                self._main_data_model.bsd.data,
+                self._main_data_model.ebeam,
+                self._main_data_model.ccd,
+                self._main_data_model.stage,
+                shiftebeam="Ebeam shift"
+            )
+            # Select between "Metadata update" and "Stage move"
             # TODO: use shiftebeam once the phenom driver supports it
         else:
-            s = SEMStream("Backscattered electrons",
-                      self._main_data_model.bsd, self._main_data_model.bsd.data,
-                      self._main_data_model.ebeam)
+            s = acqstream.SEMStream(
+                "Backscattered electrons",
+                self._main_data_model.bsd,
+                self._main_data_model.bsd.data,
+                self._main_data_model.ebeam
+            )
         return self._addStream(s, **kwargs)
 
-    def addStatic(self, name, image, cls=StaticStream, **kwargs):
+    def addStatic(self, name, image, cls=acqstream.StaticStream, **kwargs):
         """
         Creates a new static stream and panel in the stream bar
 
@@ -263,18 +378,18 @@ class StreamController(object):
         return self._addStream(stream, **kwargs)
 
     def _addStream(self, stream, add_to_all_views=False, visible=True, play=None):
-        """
-        Adds a stream.
+        """ Add the given stream to the tab data model and appropriate views
 
         stream (stream.Stream): the new stream to add
         add_to_all_views (boolean): if True, add the stream to all the
             compatible views, otherwise add only to the current view.
         visible (boolean): If True, create a stream entry, otherwise adds the
-          stream but do not create any entry.
+            stream but do not create any entry.
         play (None or boolean): If True, immediately start it, if False, let it
-          stopped, and if None, only play if already a stream is playing
+            stopped, and if None, only play if already a stream is playing
         returns (StreamPanel or Stream): stream entry or stream (if visible
-         is False) that was created
+            is False) that was created
+
         """
 
         if stream not in self._tab_data_model.streams.value:
@@ -283,13 +398,11 @@ class StreamController(object):
 
         if add_to_all_views:
             for v in self._tab_data_model.views.value:
-                if (hasattr(v, "stream_classes") and
-                        isinstance(stream, v.stream_classes)):
+                if hasattr(v, "stream_classes") and isinstance(stream, v.stream_classes):
                     v.addStream(stream)
         else:
             v = self._tab_data_model.focussedView.value
-            if (hasattr(v, "stream_classes") and
-                    not isinstance(stream, v.stream_classes)):
+            if hasattr(v, "stream_classes") and not isinstance(stream, v.stream_classes):
                 warn = "Adding %s stream incompatible with the current view"
                 logging.warning(warn, stream.__class__.__name__)
             v.addStream(stream)
@@ -307,13 +420,8 @@ class StreamController(object):
         stream.should_update.value = play
 
         if visible:
-            spanel = comp.stream.StreamPanel(
-                                    self._stream_bar,
-                                    stream,
-                                    self._tab_data_model)
-            show = isinstance(
-                        spanel.stream,
-                        self._tab_data_model.focussedView.value.stream_classes)
+            spanel = comp.stream.StreamPanel(self._stream_bar, stream, self._tab_data_model)
+            show = isinstance(spanel.stream, self._tab_data_model.focussedView.value.stream_classes)
             self._stream_bar.add_stream(spanel, show)
 
             if self.locked_mode:
@@ -376,7 +484,6 @@ class StreamController(object):
                         streams_present=True,
                         streams_visible=self._has_visible_streams(),
                         tab=self._tab_data_model)
-
 
     def _onStreamUpdate(self, stream, updated):
         """
@@ -470,46 +577,45 @@ class StreamController(object):
 
     def onOpticalState(self, state):
         # TODO: disable/enable add stream actions
-        if state == STATE_OFF:
+        if state == guimodel.STATE_OFF:
             pass
-        elif state == STATE_ON:
+        elif state == guimodel.STATE_ON:
             pass
 
     def onEMState(self, state):
         # TODO: disable/enable add stream actions
-        if state == STATE_OFF:
+        if state == guimodel.STATE_OFF:
             pass
-        elif state == STATE_ON:
+        elif state == guimodel.STATE_ON:
             pass
 
     def _updateMicroscopeStates(self):
         """
         Update the SEM/optical states based on the stream currently playing
         """
-        streams = set() # streams currently playing
+        streams = set()  # streams currently playing
         for s in self._tab_data_model.streams.value:
             if s.should_update.value:
                 streams.add(s)
 
         # optical state = at least one stream playing is optical
         if hasattr(self._tab_data_model, 'opticalState'):
-            if any(isinstance(s, OpticalStream) for s in streams):
-                self._tab_data_model.opticalState.value = STATE_ON
+            if any(isinstance(s, acqstream.OpticalStream) for s in streams):
+                self._tab_data_model.opticalState.value = guimodel.STATE_ON
             else:
-                self._tab_data_model.opticalState.value = STATE_OFF
+                self._tab_data_model.opticalState.value = guimodel.STATE_OFF
 
         # sem state = at least one stream playing is sem
         if hasattr(self._tab_data_model, 'emState'):
-            if any(isinstance(s, EMStream) for s in streams):
-                self._tab_data_model.emState.value = STATE_ON
+            if any(isinstance(s, acqstream.EMStream) for s in streams):
+                self._tab_data_model.emState.value = guimodel.STATE_ON
             else:
-                self._tab_data_model.emState.value = STATE_OFF
-
+                self._tab_data_model.emState.value = guimodel.STATE_OFF
 
     # TODO: shall we also have a suspend/resume streams that directly changes
     # is_active, and used when the tab/window is hidden?
 
-    def enableStreams(self, enabled, classes=Stream):
+    def enableStreams(self, enabled, classes=acqstream.Stream):
         """
         Enable/disable the play/pause button of all the streams of the given class
 
@@ -529,7 +635,7 @@ class StreamController(object):
 
         return streams
 
-    def pauseStreams(self, classes=Stream):
+    def pauseStreams(self, classes=acqstream.Stream):
         """
         Pause (deactivate and stop updating) all the streams of the given class
         classes (class or list of class): classes of streams that should be
@@ -556,7 +662,6 @@ class StreamController(object):
         for s in streams:
             s.should_update.value = True
             # it will be activated by the stream scheduler
-
 
     def removeStream(self, stream):
         """

@@ -74,6 +74,7 @@ class xrcfr_main(wx.Frame):
         self.btn_secom_view_bl = xrc.XRCCTRL(self, "btn_secom_view_bl")
         self.lbl_secom_view_br = xrc.XRCCTRL(self, "lbl_secom_view_br")
         self.btn_secom_view_br = xrc.XRCCTRL(self, "btn_secom_view_br")
+        self.pnl_secom_grid = xrc.XRCCTRL(self, "pnl_secom_grid")
         self.vp_secom_tl = xrc.XRCCTRL(self, "vp_secom_tl")
         self.vp_secom_tr = xrc.XRCCTRL(self, "vp_secom_tr")
         self.vp_secom_bl = xrc.XRCCTRL(self, "vp_secom_bl")
@@ -160,16 +161,17 @@ class xrcfr_main(wx.Frame):
         self.pnl_tab_inspection = xrc.XRCCTRL(self, "pnl_tab_inspection")
         self.btn_open_image = xrc.XRCCTRL(self, "btn_open_image")
         self.ana_toolbar = xrc.XRCCTRL(self, "ana_toolbar")
-        self.lbl_sparc_view_all = xrc.XRCCTRL(self, "lbl_sparc_view_all")
-        self.btn_sparc_view_all = xrc.XRCCTRL(self, "btn_sparc_view_all")
-        self.lbl_sparc_view_tl = xrc.XRCCTRL(self, "lbl_sparc_view_tl")
-        self.btn_sparc_view_tl = xrc.XRCCTRL(self, "btn_sparc_view_tl")
-        self.lbl_sparc_view_tr = xrc.XRCCTRL(self, "lbl_sparc_view_tr")
-        self.btn_sparc_view_tr = xrc.XRCCTRL(self, "btn_sparc_view_tr")
-        self.lbl_sparc_view_bl = xrc.XRCCTRL(self, "lbl_sparc_view_bl")
-        self.btn_sparc_view_bl = xrc.XRCCTRL(self, "btn_sparc_view_bl")
-        self.lbl_sparc_view_br = xrc.XRCCTRL(self, "lbl_sparc_view_br")
-        self.btn_sparc_view_br = xrc.XRCCTRL(self, "btn_sparc_view_br")
+        self.lbl_inspection_view_all = xrc.XRCCTRL(self, "lbl_inspection_view_all")
+        self.btn_inspection_view_all = xrc.XRCCTRL(self, "btn_inspection_view_all")
+        self.lbl_inspection_view_tl = xrc.XRCCTRL(self, "lbl_inspection_view_tl")
+        self.btn_inspection_view_tl = xrc.XRCCTRL(self, "btn_inspection_view_tl")
+        self.lbl_inspection_view_tr = xrc.XRCCTRL(self, "lbl_inspection_view_tr")
+        self.btn_inspection_view_tr = xrc.XRCCTRL(self, "btn_inspection_view_tr")
+        self.lbl_inspection_view_bl = xrc.XRCCTRL(self, "lbl_inspection_view_bl")
+        self.btn_inspection_view_bl = xrc.XRCCTRL(self, "btn_inspection_view_bl")
+        self.lbl_inspection_view_br = xrc.XRCCTRL(self, "lbl_inspection_view_br")
+        self.btn_inspection_view_br = xrc.XRCCTRL(self, "btn_inspection_view_br")
+        self.pnl_inspection_grid = xrc.XRCCTRL(self, "pnl_inspection_grid")
         self.vp_inspection_tl = xrc.XRCCTRL(self, "vp_inspection_tl")
         self.vp_inspection_tr = xrc.XRCCTRL(self, "vp_inspection_tr")
         self.vp_inspection_bl = xrc.XRCCTRL(self, "vp_inspection_bl")
@@ -761,7 +763,7 @@ def __init_resources():
               <flag>wxEXPAND</flag>
             </object>
             <object class="sizeritem">
-              <object class="ViewportGrid">
+              <object class="ViewportGrid" name="pnl_secom_grid">
                 <object class="SecomViewport" name="vp_secom_tl">
                   <fg>#BFBFBF</fg>
                   <bg>#000000</bg>
@@ -796,6 +798,9 @@ def __init_resources():
                     <assign_var>1</assign_var>
                   </XRCED>
                 </object>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
               </object>
               <option>1</option>
               <flag>wxEXPAND</flag>
@@ -2769,7 +2774,7 @@ def __init_resources():
                       <object class="sizeritem">
                         <object class="wxBoxSizer">
                           <object class="sizeritem">
-                            <object class="wxStaticText" name="lbl_sparc_view_all">
+                            <object class="wxStaticText" name="lbl_inspection_view_all">
                               <label>view</label>
                               <fg>#BFBFBF</fg>
                               <XRCED>
@@ -2785,7 +2790,7 @@ def __init_resources():
                         <border>18</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="ViewButton" name="btn_sparc_view_all">
+                        <object class="ViewButton" name="btn_inspection_view_all">
                           <bitmap>img_preview_block_png</bitmap>
                           <hover>img_preview_block_a_png</hover>
                           <selected>img_preview_block_a_png</selected>
@@ -2799,7 +2804,7 @@ def __init_resources():
                       <object class="sizeritem">
                         <object class="wxBoxSizer">
                           <object class="sizeritem">
-                            <object class="wxStaticText" name="lbl_sparc_view_tl">
+                            <object class="wxStaticText" name="lbl_inspection_view_tl">
                               <label>view</label>
                               <fg>#BFBFBF</fg>
                               <XRCED>
@@ -2815,7 +2820,7 @@ def __init_resources():
                         <border>18</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="ViewButton" name="btn_sparc_view_tl">
+                        <object class="ViewButton" name="btn_inspection_view_tl">
                           <bitmap>img_preview_block_png</bitmap>
                           <hover>img_preview_block_a_png</hover>
                           <selected>img_preview_block_a_png</selected>
@@ -2829,7 +2834,7 @@ def __init_resources():
                       <object class="sizeritem">
                         <object class="wxBoxSizer">
                           <object class="sizeritem">
-                            <object class="wxStaticText" name="lbl_sparc_view_tr">
+                            <object class="wxStaticText" name="lbl_inspection_view_tr">
                               <label>view</label>
                               <fg>#BFBFBF</fg>
                               <XRCED>
@@ -2845,7 +2850,7 @@ def __init_resources():
                         <border>18</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="ViewButton" name="btn_sparc_view_tr">
+                        <object class="ViewButton" name="btn_inspection_view_tr">
                           <bitmap>img_preview_block_png</bitmap>
                           <hover>img_preview_block_a_png</hover>
                           <selected>img_preview_block_a_png</selected>
@@ -2859,7 +2864,7 @@ def __init_resources():
                       <object class="sizeritem">
                         <object class="wxBoxSizer">
                           <object class="sizeritem">
-                            <object class="wxStaticText" name="lbl_sparc_view_bl">
+                            <object class="wxStaticText" name="lbl_inspection_view_bl">
                               <label>view</label>
                               <fg>#BFBFBF</fg>
                               <XRCED>
@@ -2875,7 +2880,7 @@ def __init_resources():
                         <border>18</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="ViewButton" name="btn_sparc_view_bl">
+                        <object class="ViewButton" name="btn_inspection_view_bl">
                           <bitmap>img_preview_block_png</bitmap>
                           <hover>img_preview_block_a_png</hover>
                           <selected>img_preview_block_a_png</selected>
@@ -2889,7 +2894,7 @@ def __init_resources():
                       <object class="sizeritem">
                         <object class="wxBoxSizer">
                           <object class="sizeritem">
-                            <object class="wxStaticText" name="lbl_sparc_view_br">
+                            <object class="wxStaticText" name="lbl_inspection_view_br">
                               <label>view</label>
                               <fg>#BFBFBF</fg>
                               <XRCED>
@@ -2905,7 +2910,7 @@ def __init_resources():
                         <border>18</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="ViewButton" name="btn_sparc_view_br">
+                        <object class="ViewButton" name="btn_inspection_view_br">
                           <bitmap>img_preview_block_png</bitmap>
                           <hover>img_preview_block_a_png</hover>
                           <selected>img_preview_block_a_png</selected>
@@ -2929,7 +2934,7 @@ def __init_resources():
               <flag>wxEXPAND</flag>
             </object>
             <object class="sizeritem">
-              <object class="ViewportGrid" name="">
+              <object class="ViewportGrid" name="pnl_inspection_grid">
                 <object class="MicroscopeViewport" name="vp_inspection_tl">
                   <fg>#BFBFBF</fg>
                   <bg>#000000</bg>
@@ -2976,6 +2981,9 @@ def __init_resources():
                     <assign_var>1</assign_var>
                   </XRCED>
                 </object>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
               </object>
               <option>1</option>
               <flag>wxEXPAND</flag>

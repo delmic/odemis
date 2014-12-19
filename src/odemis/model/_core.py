@@ -21,7 +21,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import Pyro4
 from Pyro4.core import oneway
-import collections
 import logging
 import multiprocessing
 import os

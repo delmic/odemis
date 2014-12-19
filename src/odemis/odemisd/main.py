@@ -37,6 +37,7 @@ import signal
 import stat
 import sys
 import threading
+import time
 
 
 status_to_xtcode = {BACKEND_RUNNING: 0,
@@ -93,15 +94,15 @@ class BackendContainer(model.Container):
         ghosts_names = set(self._instantiator.ast.keys()) - {mic.name}
         mic.ghosts.value = dict((n, ST_UNLOADED) for n in ghosts_names)
 
-        # Keep instantiating the other components in a separate thread
-        self._inst_thread = threading.Thread(target=self._instantiate_forever,
-                                             name="Component instantiator")
-        self._inst_thread.start()
-
         # Start the metadata update
         # TODO: upgrade metadata updater to support online changes
         self._mdupdater = self.instantiate(MetadataUpdater,
                                {"name": "Metadata Updater", "microscope": mic})
+
+        # Keep instantiating the other components in a separate thread
+        self._inst_thread = threading.Thread(target=self._instantiate_forever,
+                                             name="Component instantiator")
+        self._inst_thread.start()
 
         if self._dry_run:
             # TODO: wait until all the components have been instantiated or one
@@ -120,6 +121,14 @@ class BackendContainer(model.Container):
         Thread continuously monitoring the components that need to be instantiated
         """
         try:
+            # Hack warning: there is a bug in python when using lock (eg, logging)
+            # and simultaneously using theads and process: is a thread acquires
+            # a lock while a process is created, it will never be released.
+            # See http://bugs.python.org/issue6721
+            # To ensure this is not happening, we wait long enough that all (2)
+            # threads have started (and logging nothing) before creating new processes.
+            time.sleep(1)
+
             mic = self._instantiator.microscope
             failed = set() # set of str: name of components that failed recently
             while not self._must_stop.is_set():

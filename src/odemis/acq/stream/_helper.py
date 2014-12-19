@@ -293,23 +293,18 @@ class RepetitionStream(Stream):
 
     def estimateAcquisitionTime(self):
         try:
-            rep = list(self.repetition.value)
-            # Typically there is few more pixels inserted at the beginning of
-            # each line for the settle time of the beam. We guesstimate by just
-            # adding 1 pixel to each line
-            if len(rep) >= 2 and numpy.prod(rep[1:]) > 1:
-                rep[1] += 1
-
             # Each pixel x the exposure time (of the detector) + readout time +
-            # 20% overhead
+            # 30ms overhead + 20% overhead
             try:
                 ro_rate = self._detector.readoutRate.value
-                res = self._detector.resolution.value
-                readout = numpy.prod(res) / ro_rate + 0.06
             except Exception:
-                readout = 0.06
+                ro_rate = 100e6 # Hz
+            res = self._detector.resolution.value
+            readout = numpy.prod(res) / ro_rate
+
             exp = self._detector.exposureTime.value
-            duration = numpy.prod(rep) * (exp + readout) * 1.20
+            dur_image = (exp + readout + 0.03) * 1.20
+            duration = numpy.prod(self.repetition.value) * dur_image
             # Add the setup time
             duration += self.SETUP_OVERHEAD
 

@@ -424,7 +424,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         csize = self.ClientSize
         if (csize[0] * csize[1]) <= 0:
-            return # nothing to update
+            return  # nothing to update
 
         # new bitmap to copy the DC
         bitmap = wx.EmptyBitmap(*self.ClientSize)
@@ -1275,7 +1275,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
     def _updateThumbnail(self):
         csize = self.ClientSize
         if (csize[0] * csize[1]) <= 0:
-            return # nothing to update
+            return  # nothing to update
 
         # new bitmap to copy the DC
         bitmap = wx.EmptyBitmap(*self.ClientSize)
@@ -1316,6 +1316,8 @@ class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
         self.add_view_overlay(self.markline_overlay)
         self.markline_overlay.activate()
 
+        self.background_brush = wx.SOLID
+
     def draw(self):
         """ Map the image data to the canvas and draw it """
 
@@ -1343,7 +1345,19 @@ class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
             self.ctx.set_source(surfpat)
             self.ctx.paint()
         else:
+            # The background only needs to be drawn when there is no image data, since the image
+            # data will always fill the entire view.
             self._draw_background(self.ctx)
+
+    def update_drawing(self):
+        """ Update the drawing and thumbnail """
+        super(OneDimensionalSpatialSpectrumCanvas, self).update_drawing()
+        if self.microscope_view:
+            self._updateThumbnail()
+
+    def clear(self):
+        super(OneDimensionalSpatialSpectrumCanvas, self).clear()
+        self._updateThumbnail()
 
     def setView(self, microscope_view, tab_data):
         """ Set the microscope_view that this canvas is displaying/representing
@@ -1368,6 +1382,24 @@ class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
         """
 
         self.set_images([(im_data, (0.0, 0.0), 1.0, True, None, None, "Spatial Spectrum")])
+
+    @wxlimit_invocation(2)  # max 1/2 Hz
+    @call_after  # needed as it accesses the DC
+    def _updateThumbnail(self):
+        # new bitmap to copy the DC
+        bitmap = wx.EmptyBitmap(*self.ClientSize)
+        # print [self.Shown, self.Size]
+        context = wx.ClientDC(self)
+
+        dc = wx.MemoryDC()
+        dc.SelectObject(bitmap)
+
+        dc.BlitPointSize((0, 0), self.ClientSize, context, (0, 0))
+
+        # close the DC, to be sure the bitmap can be used safely
+        del dc
+
+        self.microscope_view.thumbnail.value = wx.ImageFromBitmap(bitmap)
 
 
 class AngularResolvedCanvas(canvas.DraggableCanvas):

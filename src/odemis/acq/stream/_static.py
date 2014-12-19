@@ -24,12 +24,12 @@ import collections
 import logging
 import math
 import numpy
-from scipy import ndimage
-
 from odemis import model
 from odemis.acq import calibration
 from odemis.model import MD_POS, MD_PIXEL_SIZE, VigilantAttribute
 from odemis.util import img, conversion, polar, limit_invocation, spectrum
+from scipy import ndimage
+
 from ._base import Stream
 
 
@@ -428,7 +428,7 @@ class StaticSpectrumStream(StaticStream):
         # A line of width W leads to a 1D spectrum taking into account all the
         # pixels which fit on an orthogonal line to the selected line at a
         # distance <= W/2.
-        self.width = model.FloatContinuous(1, [1, 32], unit="px")
+        self.width = model.IntContinuous(1, [1, 50], unit="px")
 
         self.fitToRGB.subscribe(self.onFitToRGB)
         self.spectrumBandwidth.subscribe(self.onSpectrumBandwidth)
@@ -468,7 +468,7 @@ class StaticSpectrumStream(StaticStream):
                 raise ValueError("selected_line must contain only tuples of 2 ints")
             if not 0 <= p[0] < shape[0] or not 0 <= p[1] < shape[1]:
                 raise ValueError("selected_line must only contain coordinates "
-                                 "within %s", shape)
+                                 "within %s" % (shape,))
 
         return line
 
@@ -581,11 +581,36 @@ class StaticSpectrumStream(StaticStream):
         return (None or DataArray with 1 dimension): the spectrum of the given
          pixel or None if no spectrum is selected.
         """
-
         if self.selected_pixel.value == (None, None):
             return None
         x, y = self.selected_pixel.value
-        return self._calibrated[:, 0, 0, y, x]
+        spec2d = self._calibrated[:, 0, 0, :, :] # same data but remove useless dims
+
+        # We treat width as the diameter of the circle which contains the center
+        # of the pixels to be taken into account
+        width = self.width.value
+        if width == 1: # short-cut for simple case
+            return spec2d[:, y, x]
+
+        # There are various ways to do it with numpy. As typically the spectrum
+        # dimension is big, and the number of pixels to sum is small, it seems
+        # the easiest way is to just do some kind of "clever" mean. Using a
+        # masked array would also work, but that'd imply having a huge mask.
+        radius = width / 2
+        n = 0
+        # TODO: use same cleverness as mean() for dtype?
+        datasum = numpy.zeros(spec2d.shape[0], dtype=numpy.float64)
+        # Scan the square around the point, and only pick the points in the circle
+        for px in range(max(0, x - int(radius)),
+                        min(x + int(radius), spec2d.shape[-1]) + 1):
+            for py in range(max(0, y - int(radius)),
+                            min(y + int(radius), spec2d.shape[-2]) + 1):
+                if math.hypot(x - px, y - py) <= radius:
+                    n += 1
+                    datasum += spec2d[:, py, px]
+
+        mean = datasum / n
+        return mean.astype(spec2d.dtype)
 
     def get_line_spectrum(self):
         """
@@ -596,28 +621,50 @@ class StaticSpectrumStream(StaticStream):
           (along the line), second axis (X) is spectrum, third axis (RGB) is
           colour (always greyscale).
           MD_PIXEL_SIZE[1] contains the spatial distance between each spectrum
+          If the selected_line is not valid, it will return None
         """
         if (None, None) in self.selected_line.value:
             return None
 
         spec2d = self._calibrated[:, 0, 0, :, :] # same data but remove useless dims
+        width = self.width.value
 
         # Number of points to return: the length of the line
         start, end = self.selected_line.value
         v = (end[0] - start[0], end[1] - start[1])
-        n = 1 + int(math.hypot(*v))
+        l = math.hypot(*v)
+        n = 1 + int(l)
+        if l < 1: # a line of just one pixel is considered not valid
+            return None
 
         # Coordinates of each point: ndim of data (5-2), pos on line (Y), spectrum (X)
         # The line is scanned from the end till the start so that the spectra
         # closest to the origin of the line are at the bottom.
-        coord = numpy.empty((3, n, spec2d.shape[0]))
+        coord = numpy.empty((3, width, n, spec2d.shape[0]))
         coord[0] = numpy.arange(spec2d.shape[0]) # spectra = all
-        coord_spc = coord.swapaxes(1, 2) # just a view to have space as last dim
+        coord_spc = coord.swapaxes(2, 3) # just a view to have (line) space as last dim
         coord_spc[-1] = numpy.linspace(end[0], start[0], n) # X axis
         coord_spc[-2] = numpy.linspace(end[1], start[1], n) # Y axis
 
+        # Spread over the width
+        # perpendicular unit vector
+        pv = (-v[1] / l, v[0] / l)
+        width_coord = numpy.empty((2, width))
+        spread = (width - 1) / 2
+        width_coord[-1] = numpy.linspace(pv[0] * -spread, pv[0] * spread, width) # X axis
+        width_coord[-2] = numpy.linspace(pv[1] * -spread, pv[1] * spread, width) # Y axis
+
+        coord_cw = coord[1:].swapaxes(0, 2).swapaxes(1, 3) # view with coordinates and width as last dims
+        coord_cw += width_coord
+
         # Interpolate the values based on the data
-        spec1d = ndimage.map_coordinates(spec2d, coord, order=2)
+        if width == 1:
+            # simple version for the most usual case
+            spec1d = ndimage.map_coordinates(spec2d, coord[:, 0, :, :], order=2)
+        else:
+            # force the intermediate values to float, as mean() still needs to run
+            spec1d_w = ndimage.map_coordinates(spec2d, coord, output=numpy.float, order=2)
+            spec1d = spec1d_w.mean(axis=0).astype(spec2d.dtype)
         assert spec1d.shape == (n, spec2d.shape[0])
 
         # Scale and convert to RGB image

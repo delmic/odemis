@@ -28,7 +28,7 @@ import numpy
 from odemis import model
 from odemis.acq import _futures
 from odemis.acq import drift
-from odemis.model import MD_POS, MD_DESCRIPTION, MD_PIXEL_SIZE
+from odemis.model import MD_POS, MD_DESCRIPTION, MD_PIXEL_SIZE, MD_ACQ_DATE, MD_AD_LIST
 import threading
 import time
 
@@ -80,6 +80,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
         self._sem_stream = sem_stream
         self._ccd_stream = ccd_stream
+        self._anchor_raw = None  # data of the anchor region
 
         assert sem_stream._emitter == ccd_stream._emitter
         self._emitter = sem_stream._emitter
@@ -108,6 +109,16 @@ class SEMCCDMDStream(MultipleDetectorStream):
         self.should_update = model.BooleanVA(False)
         self.is_active = model.BooleanVA(False)
 
+    @property
+    def raw(self):
+        # build the .raw from all the substreams
+        r = []
+        for s in self._streams:
+            r.extend(s.raw)
+        if self._anchor_raw is not None:
+            r.extend(self._anchor_raw)
+        return r
+
     def estimateAcquisitionTime(self):
         # Time required without drift correction
         acq_time = self._ccd_stream.estimateAcquisitionTime()
@@ -116,10 +127,8 @@ class SEMCCDMDStream(MultipleDetectorStream):
             return acq_time
 
         # Estimate time spent in scanning the anchor region
-        exp = self._ccd.exposureTime.value # s
-        ccd_size = self._ccd.resolution.value
-        readout = numpy.prod(ccd_size) / self._ccd.readoutRate.value
-        dt = exp + readout
+        npixels = numpy.prod(self._ccd_stream.repetition.value)
+        dt = acq_time / npixels
 
         dc_estimator = drift.AnchoredEstimator(self._emitter,
                              self._semd,
@@ -130,7 +139,6 @@ class SEMCCDMDStream(MultipleDetectorStream):
                                            dt,
                                            self._ccd_stream.repetition.value)
         # number of times the anchor will be acquired
-        npixels = numpy.prod(self._ccd_stream.repetition.value)
         n_anchor = 1 + npixels // period.next()
         anchor_time = n_anchor * dc_estimator.estimateAcquisitionTime()
 
@@ -307,11 +315,14 @@ class SEMCCDMDStream(MultipleDetectorStream):
             logging.debug("Generating %s spots for %g (=%g) s", spot_pos.shape[:2], ccd_time, dwell_time)
             rep = self._ccd_stream.repetition.value
             roi = self._ccd_stream.roi.value
+            drift_shift = (0, 0)  # total drift shift (in sem px)
+            sem_pxs = self._emitter.pixelSize.value
             self._sem_data = []
             self._ccd_data = None
             ccd_buf = []
             self._ccd_stream.raw = []
             self._sem_stream.raw = []
+            self._anchor_raw = None
             logging.debug("Starting CCD acquisition with components %s and %s",
                           self._semd.name, self._ccd.name)
 
@@ -327,9 +338,10 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
             # Translate dc_period to a number of pixels
             if self._dc_estimator is not None:
+                ccd_time_psmt = self._ccd_stream.estimateAcquisitionTime() / numpy.prod(rep)
                 pxs_dc_period = self._dc_estimator.estimateCorrectionPeriod(
                                         self._sem_stream.dcPeriod.value,
-                                        ccd_time,
+                                        ccd_time_psmt,
                                         rep)
                 cur_dc_period = pxs_dc_period.next()
                 dc_acq_time = self._dc_estimator.estimateAcquisitionTime()
@@ -379,9 +391,11 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     raise CancelledError()
 
                 # MD_POS default to the center of the stage, but it needs to be
-                # the position of the e-beam
+                # the position of the e-beam (corrected for drift)
                 ccd_data = self._ccd_data
-                ccd_data.metadata[MD_POS] = self._sem_data[-1].metadata[MD_POS]
+                raw_pos = self._sem_data[-1].metadata[MD_POS]
+                ccd_data.metadata[MD_POS] = (raw_pos[0] + drift_shift[0] * sem_pxs[0],
+                                             raw_pos[1] - drift_shift[1] * sem_pxs[1]) # Y is upside down
                 ccd_data.metadata[MD_DESCRIPTION] = self._ccd_stream.name.value
                 ccd_buf.append(ccd_data)
 
@@ -406,6 +420,8 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     shift = self._dc_estimator.estimate()
                     spot_pos[:, :, 0] -= shift[0]
                     spot_pos[:, :, 1] -= shift[1]
+                    drift_shift = (drift_shift[0] + shift[0],
+                                   drift_shift[1] + shift[1])
 
                     n = 0
 
@@ -421,6 +437,9 @@ class SEMCCDMDStream(MultipleDetectorStream):
             # explicitly add names to make sure they are different
             sem_one.metadata[MD_DESCRIPTION] = self._sem_stream.name.value
             self._onSEMCCDData(sem_one, ccd_buf)
+
+            if self._dc_estimator is not None:
+                self._anchor_raw = self._assembleAnchorData(self._dc_estimator.raw)
         except Exception as exp:
             if not isinstance(exp, CancelledError):
                 logging.exception("Software sync acquisition of SEM/CCD failed")
@@ -467,21 +486,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
         assert len(data_list) > 0
 
         # start with the metadata from the first point
-        md = dict(data_list[0].metadata)
-
-        # Compute center of area, from average of centered acquisitions
-        idx_center = rep[0] // 2
-        if idx_center * 2 == rep[0]: # even number => average
-            posx = (data_list[idx_center - 1].metadata[MD_POS][0] +
-                    data_list[idx_center].metadata[MD_POS][0]) / 2
-        else: # odd number => center
-            posx = data_list[idx_center].metadata[MD_POS][0]
-        idx_center = rep[1] // 2
-        if idx_center * 2 == rep[1]: # even number => average
-            posy = (data_list[rep[0] * (idx_center - 1)].metadata[MD_POS][1] +
-                    data_list[rep[0] * idx_center].metadata[MD_POS][1]) / 2
-        else: # odd number => center
-            posy = data_list[rep[0] * idx_center].metadata[MD_POS][1]
+        md = data_list[0].metadata.copy()
 
         # Pixel size is the size of field of view divided by the repetition
         sem_pxs = self._emitter.pixelSize.value
@@ -491,7 +496,13 @@ class SEMCCDMDStream(MultipleDetectorStream):
                width[1] * sem_shape[1] * sem_pxs[1])
         pxs = (fov[0] / rep[0], fov[1] / rep[1])
 
-        md.update({MD_POS: (posx, posy),
+        # Compute center of area, based on the position of the first point (the
+        # position of the other points can be wrong due to drift correction)
+        tl = md[MD_POS] # center of the first point (top-left)
+        center = (tl[0] + (pxs[0] * (rep[0] - 1)) / 2,
+                  tl[1] - (pxs[1] * (rep[1] - 1)) / 2)
+
+        md.update({MD_POS: center,
                    MD_PIXEL_SIZE: pxs})
 
         # concatenate data into one big array of (number of pixels,1)
@@ -500,6 +511,30 @@ class SEMCCDMDStream(MultipleDetectorStream):
         sem_data.shape = rep[::-1]
         sem_data = model.DataArray(sem_data, metadata=md)
         return sem_data
+
+    def _assembleAnchorData(self, data_list):
+        """
+        Take all the data acquired for the anchor region
+
+        data_list (list of N DataArray of shape 2D (Y, X)): all the anchor data
+        return (DataArray of shape (1, N, 1, Y, X))
+        """
+        assert len(data_list) > 0
+        assert data_list[0].ndim == 2
+
+        # extend the shape to TZ dimensions to allow the concatenation on T
+        for d in data_list:
+            d.shape = (1, 1) + d.shape
+
+        anchor_data = numpy.concatenate(data_list)
+        anchor_data.shape = (1,) + anchor_data.shape
+
+        # copy the metadata from the first image (which contains the original
+        # position of the anchor region, without drift correction)
+        md = data_list[0].metadata.copy()
+        md[MD_DESCRIPTION] = "Anchor region"
+        md[MD_AD_LIST] = tuple(d.metadata[MD_ACQ_DATE] for d in data_list)
+        return model.DataArray(anchor_data, metadata=md)
 
     def _dsCancelAcquisition(self, future):
         with self._acq_lock:

@@ -1041,18 +1041,20 @@ class PointsOverlay(WorldOverlay):
         self.choices = {}
         min_dist = 0
 
-        def distance(p1, p2):
-            return math.sqrt((p2[0] - p1[0])**2 + (p2[1] - p1[1])**2)
-
         # Translate physical to buffer coordinates
-
         physical_points = [c for c in self.point.choices if None not in c]
 
         if len(physical_points) > 1:
             for p_point in physical_points:
                 w_x, w_y = self.cnvs.physical_to_world_pos(p_point)
                 self.choices[(w_x, w_y)] = p_point
-                min_dist = min(distance(p_point, d) for d in physical_points if d != p_point)
+
+            # normally all the points are uniformly distributed, so just need to
+            # look at the distance from the first point
+            p0 = physical_points[0]
+            def distance(p):
+                return math.hypot(p[0] - p0[0], p[1] - p0[1])
+            min_dist = min(distance(p) for p in physical_points[1:])
         else:
             # can't compute the distance => pick something typical
             min_dist = 100e-9  # m

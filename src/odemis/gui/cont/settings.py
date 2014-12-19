@@ -332,6 +332,15 @@ class SettingsController(object):
         except (AttributeError, NotApplicableError):
             pass
 
+        # Ensure the choices contain the current value
+        if choices is not None and va.value not in choices:
+            if isinstance(choices, set):
+                choices.add(va.value)
+            elif isinstance(choices, dict):
+                choices[va.value] = unicode(va.value)
+            else:
+                logging.warning("Don't know how to handle choices")
+
         # Get unit from config, vigilant attribute or use an empty one
         unit = conf.get('unit', va.unit or "")
 
@@ -1370,12 +1379,14 @@ class AnalysisSettingsController(SettingsBarController):
     def _on_spec_cal(self, val):
         self._specfile_ctrl.SetValue(val)
 
-    def ShowCalibrationPanel(self, ar=None, spec=None):
-        """
-        show/hide the the ar/spec panels
+    def show_calibration_panel(self, ar=None, spec=None):
+        """ Show/hide the the ar/spec panels
+
         ar (boolean or None): show, hide or don't change AR calib panel
         spec (boolean or None): show, hide or don't change spec calib panel
+
         """
+
         if ar is not None:
             self._pnl_arfile.show_panel(ar)
         if spec is not None:
