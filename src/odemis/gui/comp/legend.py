@@ -218,6 +218,11 @@ class AxisLegend(wx.Panel):
 
     def __init__(self, parent, wid=wx.ID_ANY, pos=(0, 0), size=wx.DefaultSize,
                  style=wx.NO_BORDER, orientation=wx.HORIZONTAL):
+        """
+        parent: must have an attribute .canvas, which is a PlotCanvas
+        """
+        # TODO: this is really a weird API => just let the parent give all the
+        # info needed to draw the ticks (eg, by reading the PlotCanvas attributes)
 
         style = style | wx.NO_BORDER
         super(AxisLegend, self).__init__(parent, wid, pos, size, style)
@@ -254,12 +259,11 @@ class AxisLegend(wx.Panel):
     @unit.setter
     def unit(self, val):
         self._unit = val
-        self.clear()
+        self.redraw()
 
     def on_paint(self, evt=None):
 
         if not hasattr(self.Parent.canvas, 'has_data') or not self.Parent.canvas.has_data():
-            self.clear()
             return
 
         ctx = wx.lib.wxcairo.ContextFromDC(wx.PaintDC(self))
@@ -326,8 +330,8 @@ class AxisLegend(wx.Panel):
             val_to_pos = pcanv._val_y_to_pos_y
 
         num_ticks = size / self.tick_pixel_gap
-        logging.debug("Aiming for %s ticks with a client of width %s",
-                      num_ticks, self.ClientSize.x)
+        logging.debug("Aiming for %s ticks with a client of size %s",
+                      num_ticks, size)
         # Calculate the best step size in powers of 10, so it will cover at
         # least the distance `val_dist`
         val_step = 1e-12
@@ -358,11 +362,13 @@ class AxisLegend(wx.Panel):
                     if 10 <= pos <= size:
                         self.ticks.append((pos, tick))
 
-    # TODO: rename the function, because it's badly named => it forces to
-    # recompute the tick positions on next draw
-    def clear(self):
+    def redraw(self):
+        """
+        Force to redraw the axis on the next refresh
+        """
         self.ticks = None
+        # TODO: Call self.Refresh() ?
 
     def on_size(self, event):
-        self.clear()
+        self.redraw()
         self.Refresh(eraseBackground=False)
