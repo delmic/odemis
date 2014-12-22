@@ -762,10 +762,20 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
                 f = autofocus.AutoFocus(detector, escan, ebeam_focus, autofocus.ROUGH_SPOTMODE_ACCURACY)
                 hole_focus, fm_level = f.result()
                 escan.horizontalFoV.value = escan.horizontalFoV.range[1]
+                image = detector.data.get(asap=False)
                 try:
                     hole_coordinates = FindCircleCenter(image, HOLE_RADIUS, 6)
                 except IOError:
-                    raise IOError("Holes not found.")
+                    # Fallback to known focus
+                    if known_focus is not None:
+                        hole_focus = known_focus
+                        f = ebeam_focus.moveAbs({"z":hole_focus})
+                        f.result()
+                    image = detector.data.get(asap=False)
+                    try:
+                        hole_coordinates = FindCircleCenter(image, HOLE_RADIUS, 6)
+                    except IOError:
+                        raise IOError("Holes not found.")
             pixelSize = image.metadata[model.MD_PIXEL_SIZE]
             center_pxs = (image.shape[1] / 2, image.shape[0] / 2)
             vector_pxs = [a - b for a, b in zip(hole_coordinates, center_pxs)]
