@@ -189,7 +189,10 @@ class CalibrationProgressDialog(xrcprogress_dialog):
         """ Callback called when the calibration time is updated (either successfully or cancelled) """
         self.update_calibration_time(left)
 
-def DelphiCalibration(main_data, overview_pressure, vacuum_pressure, vented_pressure):
+def DelphiCalibration(main_data, overview_pressure, vacuum_pressure, vented_pressure,
+                      first_insertion=True, known_first_hole_f=None, known_second_hole_f=None,
+                      known_focus_f=None, known_offset_f=None, known_rotation_f=None,
+                      known_scaling_f=None):
     """
     Wrapper for DoDelphiCalibration. It provides the ability to check the
     progress of the procedure.
@@ -197,6 +200,14 @@ def DelphiCalibration(main_data, overview_pressure, vacuum_pressure, vented_pres
     overview_pressure (float): NavCam pressure value
     vacuum_pressure (float): Pressure under vacuum
     vented_pressure (float): Pressure when vented
+    first_insertion (Boolean): If True it is the first insertion of this sample
+                                holder
+    known_first_hole (tuple of floats): Hole coordinates found in the calibration file
+    known_second_hole (tuple of floats): Hole coordinates found in the calibration file
+    known_focus (float): Focus used for hole detection #m
+    known_offset (tuple of floats): Offset of sample holder found in the calibration file #m,m 
+    known_rotation (float): Rotation of sample holder found in the calibration file #radians
+    known_scaling (tuple of floats): Scaling of sample holder found in the calibration file 
     returns (ProgressiveFuture): Progress DoDelphiCalibration
     """
     # Create ProgressiveFuture and update its state to RUNNING
@@ -213,13 +224,17 @@ def DelphiCalibration(main_data, overview_pressure, vacuum_pressure, vented_pres
     delphi_calib_thread = threading.Thread(target=executeTask,
                   name="Delphi Calibration",
                   args=(f, _DoDelphiCalibration, f, main_data, overview_pressure,
-                        vacuum_pressure, vented_pressure))
+                        vacuum_pressure, vented_pressure, first_insertion,
+                        known_first_hole_f, known_second_hole_f, known_focus_f,
+                        known_offset_f, known_rotation_f, known_scaling_f))
 
     delphi_calib_thread.start()
     return f
 
 def _DoDelphiCalibration(future, main_data, overview_pressure, vacuum_pressure,
-                         vented_pressure):
+                         vented_pressure, first_insertion=True, known_first_hole_f=None,
+                         known_second_hole_f=None, known_focus_f=None, known_offset_f=None,
+                         known_rotation_f=None, known_scaling_f=None):
     """
     It performs all the calibration steps for Delphi including the lens alignment,
     the conversion metadata update and the fine alignment.
@@ -228,6 +243,14 @@ def _DoDelphiCalibration(future, main_data, overview_pressure, vacuum_pressure,
     overview_pressure (float): NavCam pressure value
     vacuum_pressure (float): Pressure under vacuum
     vented_pressure (float): Pressure when vented
+    first_insertion (Boolean): If True it is the first insertion of this sample
+                                holder
+    known_first_hole (tuple of floats): Hole coordinates found in the calibration file
+    known_second_hole (tuple of floats): Hole coordinates found in the calibration file
+    known_focus (float): Focus used for hole detection #m
+    known_offset (tuple of floats): Offset of sample holder found in the calibration file #m,m 
+    known_rotation (float): Rotation of sample holder found in the calibration file #radians
+    known_scaling (tuple of floats): Scaling of sample holder found in the calibration file 
     returns (tuple of floats): Hole top
             (tuple of floats): Hole bottom
             (float): Focus used for hole detection
@@ -250,18 +273,6 @@ def _DoDelphiCalibration(future, main_data, overview_pressure, vacuum_pressure,
             raise CancelledError()
 
         try:
-            # Move to the overview position first
-            f = main_data.chamber.moveAbs({"pressure": overview_pressure})
-            f.result()
-
-            # Clear all the previous calibration
-            logging.debug("Clear all the previous calibration...")
-            main_data.stage.updateMetadata({
-                      model.MD_POS_COR: (0, 0),
-                      model.MD_PIXEL_SIZE_COR: (1, 1),
-                      model.MD_ROTATION_COR: 0
-                      })
-
             # We need access to the separate sem and optical stages, which form
             # the "stage". They are not found in the model, but we can find them
             # as children of stage (on the DELPHI), and distinguish them by
@@ -278,80 +289,124 @@ def _DoDelphiCalibration(future, main_data, overview_pressure, vacuum_pressure,
             if not sem_stage or not opt_stage:
                 raise KeyError("Failed to find SEM and optical stages")
 
-            # Reference the (optical) stage
-            logging.debug("Reference the (optical) stage...")
-            f = opt_stage.reference({"x", "y"})
-            f.result()
+            # Initial calibration
+            if first_insertion == True:
+                # Move to the overview position first
+                f = main_data.chamber.moveAbs({"pressure": overview_pressure})
+                f.result()
 
-            logging.debug("Reference the focus...")
-            f = main_data.focus.reference({"z"})
-            f.result()
+                # Clear all the previous calibration
+                logging.debug("Clear all the previous calibration...")
+                main_data.stage.updateMetadata({
+                          model.MD_POS_COR: (0, 0),
+                          model.MD_PIXEL_SIZE_COR: (1, 1),
+                          model.MD_ROTATION_COR: 0
+                          })
 
-            # SEM stage to (0,0)
-            logging.debug("Move to the center of SEM stage...")
-            f = sem_stage.moveAbs({"x":0, "y":0})
-            f.result()
+                # Reference the (optical) stage
+                logging.debug("Reference the (optical) stage...")
+                f = opt_stage.reference({"x", "y"})
+                f.result()
 
-            # Calculate offset approximation
-            try:
-                logging.debug("Starting lens alignment...")
-                f = aligndelphi.LensAlignment(main_data.overview_ccd, sem_stage)
-                position = f.result()
-                logging.debug("SEM position after lens alignment: %s", position)
-            except Exception:
-                raise IOError("Lens alignment failed.")
+                logging.debug("Reference the focus...")
+                f = main_data.focus.reference({"z"})
+                f.result()
 
-            # Update progress of the future
-            future.set_end_time(time.time() + 14 * 60)
+                # SEM stage to (0,0)
+                logging.debug("Move to the center of SEM stage...")
+                f = sem_stage.moveAbs({"x":0, "y":0})
+                f.result()
 
-            # Just to check if move makes sense
-            f = sem_stage.moveAbs({"x": position[0], "y": position[1]})
-            f.result()
+                # Calculate offset approximation
+                try:
+                    logging.debug("Starting lens alignment...")
+                    f = aligndelphi.LensAlignment(main_data.overview_ccd, sem_stage)
+                    position = f.result()
+                    logging.debug("SEM position after lens alignment: %s", position)
+                except Exception:
+                    raise IOError("Lens alignment failed.")
 
-            # Move to SEM
-            f = main_data.chamber.moveAbs({"pressure": vacuum_pressure})
-            f.result()
+                # Update progress of the future
+                future.set_end_time(time.time() + 14 * 60)
 
-            # Lens to a good optical focus position
-            logging.debug("Move focus to a good initial level...")
-            f = main_data.focus.moveAbs({"z": DELPHI_OPT_GOOD_FOCUS})
-            f.result()
+                # Just to check if move makes sense
+                f = sem_stage.moveAbs({"x": position[0], "y": position[1]})
+                f.result()
 
-            # Update progress of the future
-            logging.debug("Try to update the remaining time...")
-            future.set_end_time(time.time() + 12.5 * 60)
+                # Move to SEM
+                f = main_data.chamber.moveAbs({"pressure": vacuum_pressure})
+                f.result()
 
-            # Compute stage calibration values
-            try:
-                logging.debug("Starting conversion update...")
-                f = aligndelphi.UpdateConversion(main_data.ccd,
-                                                 main_data.bsd,
-                                                 main_data.ebeam,
-                                                 sem_stage, opt_stage,
-                                                 main_data.ebeam_focus,
-                                                 main_data.focus,
-                                                 main_data.stage,
-                                                 first_insertion=True,
-                                                 sem_position=position)
-                htop, hbot, hfoc, strans, srot, sscale, resa, resb, hfwa, spotshift = f.result()
-            except Exception:
-                raise IOError("Conversion update failed.")
-            # Update progress of the future
-            logging.debug("Try to update the remaining time...")
-            future.set_end_time(time.time() + 60)
+                # Lens to a good optical focus position
+                logging.debug("Move focus to a good initial level...")
+                f = main_data.focus.moveAbs({"z": DELPHI_OPT_GOOD_FOCUS})
+                f.result()
 
-            # Run the optical fine alignment
-            # TODO: reuse the exposure time
-            f = align.FindOverlay((4, 4),
-                                  0.5,  # s, dwell time
-                                  10e-06,  # m, maximum difference allowed
-                                  main_data.ebeam,
-                                  main_data.ccd,
-                                  main_data.bsd)
-            trans_val, cor_md = f.result()
-            iscale = cor_md[model.MD_PIXEL_SIZE_COR]
-            irot = cor_md[model.MD_ROTATION_COR]
-            return htop, hbot, hfoc, strans, sscale, srot, iscale, irot, resa, resb, hfwa, spotshift
+                # Update progress of the future
+                logging.debug("Try to update the remaining time...")
+                future.set_end_time(time.time() + 12.5 * 60)
+
+                # Compute stage calibration values
+                try:
+                    logging.debug("Starting conversion update...")
+                    f = aligndelphi.UpdateConversion(main_data.ccd,
+                                                     main_data.bsd,
+                                                     main_data.ebeam,
+                                                     sem_stage, opt_stage,
+                                                     main_data.ebeam_focus,
+                                                     main_data.focus,
+                                                     main_data.stage,
+                                                     first_insertion=True,
+                                                     sem_position=position)
+                    htop, hbot, hfoc, strans, srot, sscale, resa, resb, hfwa, spotshift = f.result()
+                except Exception:
+                    raise IOError("Conversion update failed.")
+                # Update progress of the future
+                logging.debug("Try to update the remaining time...")
+                future.set_end_time(time.time() + 60)
+
+                # Run the optical fine alignment
+                # TODO: reuse the exposure time
+                f = align.FindOverlay((4, 4),
+                                      0.5,  # s, dwell time
+                                      10e-06,  # m, maximum difference allowed
+                                      main_data.ebeam,
+                                      main_data.ccd,
+                                      main_data.bsd)
+                trans_val, cor_md = f.result()
+                iscale = cor_md[model.MD_PIXEL_SIZE_COR]
+                irot = cor_md[model.MD_ROTATION_COR]
+                return htop, hbot, hfoc, strans, sscale, srot, iscale, irot, resa, resb, hfwa, spotshift
+            # Secondary calibration
+            else:
+                # Move to SEM
+                f = main_data.chamber.moveAbs({"pressure": vacuum_pressure})
+                f.result()
+
+                # Compute stage calibration values
+                try:
+                    logging.debug("Starting conversion update...")
+                    f = aligndelphi.UpdateConversion(main_data.ccd,
+                                                     main_data.bsd,
+                                                     main_data.ebeam,
+                                                     sem_stage, opt_stage,
+                                                     main_data.ebeam_focus,
+                                                     main_data.focus,
+                                                     main_data.stage,
+                                                     first_insertion=False,
+                                                     known_first_hole=known_first_hole_f,
+                                                     known_second_hole=known_second_hole_f,
+                                                     known_focus=known_focus_f,
+                                                     known_offset=known_offset_f,
+                                                     known_rotation=known_rotation_f,
+                                                     known_scaling=known_scaling_f)
+                    f.result()
+                except Exception:
+                    raise IOError("Conversion update failed.")
+
+                # We don't really care about the values returned since the
+                # update of the metadata has already been taken care of
+                return None
         except Exception:
             raise IOError("Delphi calibration failed.")
     finally:
