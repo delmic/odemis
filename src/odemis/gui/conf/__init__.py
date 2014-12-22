@@ -268,13 +268,14 @@ class CalibrationConfig(Config):
     def _get_section_name(self, shid):
         return "delphi-%x" % shid
 
-    def set_sh_calib(self, shid, htop, hbot, strans, sscale, srot, iscale, irot,
-                     resa, resb, hfwa, spotshift):
+    def set_sh_calib(self, shid, htop, hbot, hfoc, strans, sscale, srot,
+                     iscale, irot, resa, resb, hfwa, spotshift):
         """
         Store the calibration data for a given sample holder
         shid (int): the sample holder ID
         htop (2 floats): position of the top hole
         hbot (2 floats): position of the bottom hole
+        hfoc (float): focus used for hole detection
         strans (2 floats): stage translation
         sscale (2 floats > 0): stage scaling
         srot (float): stage rotation (rad)
@@ -296,6 +297,7 @@ class CalibrationConfig(Config):
         self.config.set(sec, "top_hole_y", "%.15f" % htop[1])
         self.config.set(sec, "bottom_hole_x", "%.15f" % hbot[0])
         self.config.set(sec, "bottom_hole_y", "%.15f" % hbot[1])
+        self.config.set(sec, "hole_focus", "%.15f" % hfoc)
         self.config.set(sec, "stage_trans_x", "%.15f" % strans[0])
         self.config.set(sec, "stage_trans_y", "%.15f" % strans[1])
         self.config.set(sec, "stage_scaling_x", "%.15f" % sscale[0])
@@ -333,6 +335,7 @@ class CalibrationConfig(Config):
         returns None (if no calibration data available), or :
             htop (2 floats): position of the top hole
             hbot (2 floats): position of the bottom hole
+            hfoc (float): focus used for hole detection
             strans (2 floats): stage translation
             sscale (2 floats > 0): stage scaling
             srot (float): stage rotation
@@ -348,6 +351,7 @@ class CalibrationConfig(Config):
             try:
                 htop = self._get_tuple(sec, "top_hole")
                 hbot = self._get_tuple(sec, "bottom_hole")
+                hfoc = self.config.getfloat(sec, "hole_focus")
                 strans = self._get_tuple(sec, "stage_trans")
 
                 sscale = self._get_tuple(sec, "stage_scaling")
@@ -370,7 +374,7 @@ class CalibrationConfig(Config):
                 resb = self._get_tuple(sec, "resolution_b")
                 hfwa = self._get_tuple(sec, "hfw_a")
                 spotshift = self._get_tuple(sec, "spot_shift")
-                return htop, hbot, strans, sscale, srot, iscale, irot, resa, resb, hfwa, spotshift
+                return htop, hbot, hfoc, strans, sscale, srot, iscale, irot, resa, resb, hfwa, spotshift
             except (ValueError, NoOptionError):
                 logging.info("Not all calibration data readable, new calibration is required",
                              exc_info=True)

@@ -155,7 +155,7 @@ class CalibrationProgressDialog(xrcprogress_dialog):
         # bind button back to direct closure
         self.cancel_btn.Bind(wx.EVT_BUTTON, self.on_close)
         try:
-            htop, hbot, strans, sscale, srot, iscale, irot, resa, resb, hfwa, spotshift = future.result(1)  # timeout is just for safety
+            htop, hbot, hfoc, strans, sscale, srot, iscale, irot, resa, resb, hfwa, spotshift = future.result(1)  # timeout is just for safety
         except CancelledError:
             # hide progress bar (+ put pack estimated time)
             self.update_calibration_time(0)
@@ -174,8 +174,9 @@ class CalibrationProgressDialog(xrcprogress_dialog):
             return
 
         # Update the calibration file
-        self._calibconf.set_sh_calib(self._shid, htop, hbot, strans, sscale, srot, iscale, irot,
-                                     resa, resb, hfwa, spotshift)
+        self._calibconf.set_sh_calib(self._shid, htop, hbot, hfoc, strans,
+                                     sscale, srot, iscale, irot, resa, resb, hfwa,
+                                     spotshift)
 
         self.update_calibration_time(0)
         self.time_txt.SetLabel("Calibration completed.")
@@ -229,11 +230,12 @@ def _DoDelphiCalibration(future, main_data, overview_pressure, vacuum_pressure,
     vented_pressure (float): Pressure when vented
     returns (tuple of floats): Hole top
             (tuple of floats): Hole bottom
+            (float): Focus used for hole detection
             (tuple of floats): Stage translation
             (tuple of floats): Stage scale
-            (tuple of floats): Stage rotation
+            (float): Stage rotation
             (tuple of floats): Image scale
-            (tuple of floats): Image rotation
+            (float): Image rotation
             (tuple of floats): Resolution-related shift slope
             (tuple of floats): Resolution-related shift intercept
             (tuple of floats): HFW-related shift slope
@@ -331,7 +333,7 @@ def _DoDelphiCalibration(future, main_data, overview_pressure, vacuum_pressure,
                                                  main_data.stage,
                                                  first_insertion=True,
                                                  sem_position=position)
-                htop, hbot, hole_focus, strans, srot, sscale, resa, resb, hfwa, spotshift = f.result()
+                htop, hbot, hfoc, strans, srot, sscale, resa, resb, hfwa, spotshift = f.result()
             except Exception:
                 raise IOError("Conversion update failed.")
             # Update progress of the future
@@ -349,7 +351,7 @@ def _DoDelphiCalibration(future, main_data, overview_pressure, vacuum_pressure,
             trans_val, cor_md = f.result()
             iscale = cor_md[model.MD_PIXEL_SIZE_COR]
             irot = cor_md[model.MD_ROTATION_COR]
-            return htop, hbot, strans, sscale, srot, iscale, irot, resa, resb, hfwa, spotshift
+            return htop, hbot, hfoc, strans, sscale, srot, iscale, irot, resa, resb, hfwa, spotshift
         except Exception:
             raise IOError("Delphi calibration failed.")
     finally:
