@@ -605,134 +605,11 @@ class LineSelectOverlay(WorldSelectOverlay):
             super(WorldSelectOverlay, self).on_motion(evt)
 
 
-class PixelDataMixin(object):
-    """ This mixin class offers functionality that allows Overlays to snap view and buffer positions
-    to data pixels in the canvas. These pixels obviously do not have to match screen or buffer
-    pixels, hence the requirement for pixel coordinate transformation.
-
-    """
-
-    def __init__(self):
-        # The current position of the mouse cursor in view coordinates
-        self._mouse_vpos = None
-
-        # External values
-        self._data_resolution = None  # Resolution of the pixel data (int, int)
-        self._selected_pixel_va = None  # TupleVA (int, int)
-
-        # Calculated values
-        self._pixel_data_w_rect = None  # (float left, float
-        self._data_mpp = None  # cnvs size of the pixel block float
-        self._pixel_pos = None  # position of the current pixel (int, int)
-
-    def set_values(self, mpp, physical_center, resolution, selection_va):
-        """ Set the values needed for mapping mouse positions to data pixel coordinates
-
-        :param mpp: (float) Size of the data pixels in meters
-        :param physical_center: (float, float) The center of the pixel data in physical coordinates
-        :param resolution: (int, int) The width and height of the pixel data
-
-        """
-
-        self._data_resolution = resolution
-
-        # We calculate the world size of the data. Even though world and physical data are in a
-        # 1 to 1 relation, we still do it the 'correct' way by calling 'physical_to_world_pos'.
-        w_size = (self._data_resolution[0] * mpp, self._data_resolution[1] * mpp)
-
-        # Get the top left corner of the pixel data
-        # Remember that in physical coordinates, up is positive!
-        w_center = self.cnvs.physical_to_world_pos(physical_center)
-
-        self._pixel_data_w_rect = (
-            w_center[0] - w_size[0] / 2.0,
-            w_center[1] - w_size[1] / 2.0,
-            w_center[0] + w_size[0] / 2.0,
-            w_center[1] + w_size[1] / 2.0,
-        )
-
-        logging.debug("Physical top left of Spectrum data: %s", physical_center)
-
-        self._data_mpp = mpp
-
-        # TODO: Move the VA tracking to the canvas?
-        self._selected_pixel_va = selection_va
-        self._selected_pixel_va.subscribe(self._selection_made, init=True)
-
-    @property
-    def values_are_set(self):
-        return None not in (self._pixel_data_w_rect, self._data_mpp)
-
-    def _selection_made(self, _):
-        """ Event handler that requests a redraw when the selected line changes """
-        self.cnvs.update_drawing()
-
-    def _on_motion(self, evt):
-        self._mouse_vpos = evt.GetPositionTuple()
-
-    def is_over_pixel_data(self):
-        """ Check if the mouse cursor is over an area containing pixel data """
-
-        if self._mouse_vpos:
-            offset = self.cnvs.get_half_buffer_size()
-            w_pos = self.cnvs.view_to_world(self._mouse_vpos, offset)
-            return (self._pixel_data_w_rect[0] < w_pos[0] < self._pixel_data_w_rect[2] and
-                    self._pixel_data_w_rect[1] < w_pos[1] < self._pixel_data_w_rect[3])
-
-        return False
-
-    def view_to_data_pixel(self, v_pos):
-        """ Translate a view coordinate into a data pixel coordinate
-
-        The data pixel coordinates have their 0,0 origin at the top left.
-
-        """
-
-        # The offset, in pixels, to the center of the world coordinates
-        offset = self.cnvs.get_half_buffer_size()
-        w_pos = self.cnvs.view_to_world(v_pos, offset)
-
-        # Calculate the distance to the top left in world units
-        dist = (w_pos[0] - self._pixel_data_w_rect[0], w_pos[1] - self._pixel_data_w_rect[1])
-
-        # Calculate and return the data pixel, (0,0) is top left.
-        return int(dist[0] / self._data_mpp), int(dist[1] / self._data_mpp)
-
-    def pixel_to_rect(self, pixel, scale):
-        """ Return a rectangle, in buffer coordinates, describing the given data pixel
-
-        :param pixel: (int, int) The pixel position
-        :param scale: (float) The scale to draw the pixel at.
-        :return: (top, left, width, height)
-
-        *NOTE*
-
-        The return type is structured like it is, because Cairo's rectangle drawing routine likes
-        them in this form (top, left, widht, height).
-
-        """
-
-        # First we calculate the position of the top left in buffer pixels
-        # Note the Y flip again, since were going from pixel to physical
-        # coordinates
-        offset_x = pixel[0] * self._data_mpp
-        offset_y = pixel[1] * self._data_mpp
-
-        w_top_left = (self._pixel_data_w_rect[0] + offset_x, self._pixel_data_w_rect[1] + offset_y)
-
-        # No need for an explicit Y flip here, since `physical_to_world_pos` takes care of that
-        offset = self.cnvs.get_half_buffer_size()
-        b_top_left = self.cnvs.world_to_buffer(w_top_left, offset)
-        b_pixel_size = (self._data_mpp * scale + 0.5, self._data_mpp * scale + 0.5)
-
-        return b_top_left + b_pixel_size
-
-
-class SpectrumLineSelectOverlay(LineSelectOverlay, PixelDataMixin):
+class SpectrumLineSelectOverlay(LineSelectOverlay, base.PixelDataMixin):
 
     def __init__(self, cnvs):
         super(SpectrumLineSelectOverlay, self).__init__(cnvs)
-        PixelDataMixin.__init__()
+        base.PixelDataMixin.__init__()
 
     def on_motion(self, evt):
         super(SpectrumLineSelectOverlay, self).on_motion(evt)
@@ -775,12 +652,12 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, PixelDataMixin):
         #     self._selected_line.value = None
 
 
-class PixelSelectOverlay(base.WorldOverlay, PixelDataMixin, base.DragMixin):
+class PixelSelectOverlay(base.WorldOverlay, base.PixelDataMixin, base.DragMixin):
     """ Selection overlay that allows the selection of a pixel in a data set """
 
     def __init__(self, cnvs):
         super(PixelSelectOverlay, self).__init__(cnvs)
-        PixelDataMixin.__init__(self)
+        base.PixelDataMixin.__init__(self)
         base.DragMixin.__init__(self)
 
         self.colour = conversion.hex_to_frgba(gui.SELECTION_COLOUR, 0.5)
@@ -798,7 +675,7 @@ class PixelSelectOverlay(base.WorldOverlay, PixelDataMixin, base.DragMixin):
         """ Update the current mouse position """
 
         if self.active:
-            PixelDataMixin._on_motion(self, evt)
+            base.PixelDataMixin._on_motion(self, evt)
             base.DragMixin._on_motion(self, evt)
 
             if self.values_are_set:
