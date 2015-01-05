@@ -720,10 +720,10 @@ class BufferedCanvas(wx.Panel):
         """
 
         return cls.buffer_to_world_pos(
-                    cls.view_to_buffer_pos(v_pos, margins),
-                    w_buff_cent,
-                    scale,
-                    offset
+            cls.view_to_buffer_pos(v_pos, margins),
+            w_buff_cent,
+            scale,
+            offset
         )
 
     @classmethod

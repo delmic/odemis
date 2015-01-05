@@ -498,7 +498,6 @@ class OverlayTestCase(test.GuiTestCase):
 
         cnvs.add_world_overlay(psol)
 
-        # psol.set_values(33, (0.0, 0.0), (30, 30))
         psol.set_values(1e-05, (0.0, 0.0), (17, 19), omodel.TupleVA())
         view.mpp.value = 1e-06
         test.gui_loop()

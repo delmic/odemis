@@ -452,7 +452,7 @@ class SelectionMixin(DragMixin):
 
     hover_margin = 10  # px
 
-    def __init__(self, colour=gui.SELECTION_COLOUR, center=(0, 0), edit_mode=EDIT_MODE_POINT):
+    def __init__(self, colour=gui.SELECTION_COLOUR, center=(0, 0), edit_mode=EDIT_MODE_BOX):
 
         super(SelectionMixin, self).__init__()
 
@@ -538,6 +538,9 @@ class SelectionMixin(DragMixin):
     def clear_selection(self):
         """ Clear the selection """
         logging.debug("Clearing selections")
+
+        super(SelectionMixin, self).clear_drag()
+
         self.selection_mode = SEL_MODE_NONE
 
         self.select_v_start_pos = None
