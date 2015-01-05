@@ -832,12 +832,12 @@ class PixelDataMixin(object):
     def _on_motion(self, evt):
         self._mouse_vpos = evt.GetPositionTuple()
 
-    def is_over_pixel_data(self):
+    def is_over_pixel_data(self, v_pos=None):
         """ Check if the mouse cursor is over an area containing pixel data """
 
-        if self._mouse_vpos:
+        if self._mouse_vpos or v_pos:
             offset = self.cnvs.get_half_buffer_size()
-            w_pos = self.cnvs.view_to_world(self._mouse_vpos, offset)
+            w_pos = self.cnvs.view_to_world(self._mouse_vpos or v_pos, offset)
             return (self._pixel_data_w_rect[0] < w_pos[0] < self._pixel_data_w_rect[2] and
                     self._pixel_data_w_rect[1] < w_pos[1] < self._pixel_data_w_rect[3])
 
@@ -859,6 +859,15 @@ class PixelDataMixin(object):
 
         # Calculate and return the data pixel, (0,0) is top left.
         return int(dist[0] / self._data_mpp), int(dist[1] / self._data_mpp)
+
+    def data_pixel_to_view(self, data_pixel):
+        """ Return the view coordinates of the center of the given pixel """
+
+        w_x = self._pixel_data_w_rect[0] + (data_pixel[0] + 0.5) * self._data_mpp
+        w_y = self._pixel_data_w_rect[1] + (data_pixel[1] + 0.5) * self._data_mpp
+        offset = self.cnvs.get_half_buffer_size()
+
+        return self.cnvs.world_to_view((w_x, w_y), offset)
 
     def pixel_to_rect(self, pixel, scale):
         """ Return a rectangle, in buffer coordinates, describing the given data pixel

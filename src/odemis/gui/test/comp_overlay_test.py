@@ -517,6 +517,40 @@ class OverlayTestCase(test.GuiTestCase):
 
         cnvs.Bind(wx.EVT_RIGHT_UP, toggle)
 
+    def test_spectrum_line_select_overlay(self):
+        cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
+
+        tab_mod = self.create_simple_tab_model()
+        view = tab_mod.focussedView.value
+
+        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
+        cnvs.setView(view, tab_mod)
+        cnvs.current_mode = TOOL_POINT
+
+        slol = wol.SpectrumLineSelectOverlay(cnvs)
+        slol.activate()
+
+        cnvs.add_world_overlay(slol)
+
+        slol.set_values(1e-05, (0.0, 0.0), (17, 19), omodel.TupleVA())
+        view.mpp.value = 1e-06
+        test.gui_loop()
+
+        # Tool toggle for debugging
+
+        tol = vol.TextViewOverlay(cnvs)
+        tol.add_label("Right click to toggle tool", (10, 30))
+        cnvs.add_view_overlay(tol)
+
+        def toggle(evt):
+            if slol.active:
+                slol.deactivate()
+            else:
+                slol.activate()
+            evt.Skip()
+
+        cnvs.Bind(wx.EVT_RIGHT_UP, toggle)
+
     def test_line_select_overlay(self):
         logging.getLogger().setLevel(logging.DEBUG)
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)

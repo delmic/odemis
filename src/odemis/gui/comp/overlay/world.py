@@ -609,47 +609,45 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, base.PixelDataMixin):
 
     def __init__(self, cnvs):
         super(SpectrumLineSelectOverlay, self).__init__(cnvs)
-        base.PixelDataMixin.__init__()
+        base.PixelDataMixin.__init__(self)
 
-    def on_motion(self, evt):
-        super(SpectrumLineSelectOverlay, self).on_motion(evt)
-        self._mouse_vpos = evt.GetPositionTuple()
+        self.start_pixel = None
+        self.end_pixel = None
 
-    def _on_motion(self, evt):
-        v_pos = evt.GetPositionTuple()
-        hover = self.get_hover(v_pos)
-        over_data = self.is_over_pixel_data()
-
-        if not evt.Dragging():
-            if hover in (gui.HOVER_START, gui.HOVER_END):
-                self.cnvs.set_dynamic_cursor(wx.CURSOR_HAND)
-            elif over_data:
-                self.cnvs.set_dynamic_cursor(wx.CURSOR_PENCIL)
-            else:
-                self.cnvs.reset_dynamic_cursor()
-        else:
-            super(LineSelectOverlay, self)._on_motion(evt)
+    # The following code is for debugging purposes. It draws a grid for the data pixel
+    
+    # def draw(self, ctx, shift=(0, 0), scale=1.0):
+    #     super(SpectrumLineSelectOverlay, self).draw(ctx, shift, scale)
+    #
+    #     ctx.set_source_rgba(*self.colour)
+    #     ctx.set_line_width(0.5)
+    #
+    #     for i in range(self._data_resolution[0]):
+    #         for j in range(self._data_resolution[1]):
+    #             rect = self.pixel_to_rect((i, j), scale)
+    #             ctx.rectangle(*rect)
+    #             ctx.stroke()
 
     def on_left_down(self, evt):
-        """ Start drag action if enabled, otherwise call super method so event will propagate """
-        over_data = self.is_over_pixel_data()
+        """ Determine the data pixel that the line is starting from and snap to its center """
 
-        if self.active and over_data:
-            super(SpectrumLineSelectOverlay, self)._on_left_down(evt)
-            self.cnvs.update_drawing()
+        v_pos = evt.GetPositionTuple()
+        if self.is_over_pixel_data(v_pos) and self.active:
+            super(SpectrumLineSelectOverlay, self).on_left_down(evt)
 
-    def _calc_world_pos(self):
-        """ Update the world position to reflect the view position """
+            self.start_pixel = self.view_to_data_pixel(v_pos)
+            v_pos = self.data_pixel_to_view(self.start_pixel)
+            self.drag_v_start_pos = self.select_v_start_pos = v_pos
 
-        if None not in (self.select_v_start_pos, self.select_v_end_pos):
-            offset = self.cnvs.get_half_buffer_size()
-            self.w_start_pos = self.cnvs.view_to_world(self.select_v_start_pos, offset)
-            self.w_end_pos = self.cnvs.view_to_world(self.select_v_end_pos, offset)
+    def on_left_up(self, evt):
+        """ Determine the data pixel at which the line is starting from and snap to its center """
 
-            # FIXME: Translate to integer values
-        #     self._selected_line.value = (self.w_start_pos, self.w_end_pos)
-        # else:
-        #     self._selected_line.value = None
+        v_pos = evt.GetPositionTuple()
+        if self.is_over_pixel_data(v_pos) and self.active:
+            self.start_pixel = self.view_to_data_pixel(v_pos)
+            v_pos = self.data_pixel_to_view(self.start_pixel)
+            self.drag_v_end_pos = self.select_v_end_pos = v_pos
+        super(SpectrumLineSelectOverlay, self).on_left_up(evt)
 
 
 class PixelSelectOverlay(base.WorldOverlay, base.PixelDataMixin, base.DragMixin):
