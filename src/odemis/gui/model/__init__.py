@@ -480,6 +480,7 @@ class ActuatorGUIData(MicroscopyGUIData):
     """
     Represent an interface used to move the actuators of a microscope. It might
     also display one or more views, but it's not required.
+    => Used for the lens (SECOM) and mirror (SPARC) alignment tabs
     """
     def __init__(self, main):
         assert main.microscope is not None
