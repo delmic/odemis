@@ -22,8 +22,10 @@ This file is part of Odemis.
 Overlay Module
 ==============
 
-This module contains the base classes used for the construction of Overlay subclasses
+This module contains the base classes used for the construction of Overlay subclasses.
+
 Overlays will *always* have their Draw method called! Whether they are active or not.
+
 They will *only* receive mouse events if they are active!
 
 """
@@ -301,6 +303,7 @@ class Overlay(object):
         return self.cnvs.view_height
 
     # Default Event handlers
+    # They *MUST* be called if a subclass overrides any of these, but is not active
 
     def on_left_down(self, evt):
         evt.Skip()
@@ -348,63 +351,76 @@ class DragMixin(object):
     _on_left_down
     _on_left_up
     _on_right_down
-    _on_righgt_up
+    _on_right_up
+    _on_motion
+
+    These method do not have any side effects outside this mixin.
 
     """
 
     def __init__(self):
-        self._ldragging = False
-        self._rdragging = False
+        # Indicate whether a mouse drag is in progress
+        self._left_dragging = False
+        self._right_dragging = False
 
+        # Tuples containing the start and end positions of the drag movement
         self.drag_v_start_pos = None
         self.drag_v_end_pos = None
 
     def _on_left_down(self, evt):
+        """ Start a left drag if no right drag is in progress """
         if not self.right_dragging:
-            self._ldragging = True
+            self._left_dragging = True
             self.drag_v_start_pos = evt.GetPositionTuple()
-        self.cnvs.on_mouse_down()
 
     def _on_left_up(self, evt):
+        """ End a left drag if no right drag is in progress """
         if not self.right_dragging:
-            self._ldragging = False
+            self._left_dragging = False
             self.drag_v_end_pos = evt.GetPositionTuple()
-        self.cnvs.on_mouse_up()
 
     def _on_right_down(self, evt):
+        """ Start a right drag if no left drag is in progress """
         if not self.left_dragging:
-            self._rdragging = True
+            self._right_dragging = True
             self.drag_v_start_pos = evt.GetPositionTuple()
-        self.cnvs.on_mouse_down()
 
-    def _on_righgt_up(self, evt):
+    def _on_right_up(self, evt):
+        """ End a right drag if no left drag is in progress """
         if not self.left_dragging:
-            self._rdragging = False
+            self._right_dragging = False
             self.drag_v_end_pos = evt.GetPositionTuple()
-        self.cnvs.on_mouse_up()
 
-    def reset_drag(self):
+    def _on_motion(self, evt):
+        """ Update the drag end position if a drag movement is in progress """
+        if self.dragging:
+            self.drag_v_end_pos = evt.GetPositionTuple()
+
+    def clear_drag(self):
+        """ Set the dragging attributes to their initial values """
+        self._left_dragging = False
+        self._right_dragging = False
         self.drag_v_start_pos = None
         self.drag_v_end_pos = None
 
     @property
     def left_dragging(self):
         """ Boolean value indicating whether left dragging has started """
-        return self._ldragging
+        return self._left_dragging
 
     @property
     def right_dragging(self):
         """ Boolean value indicating whether right dragging has started """
-        return self._rdragging
+        return self._right_dragging
 
     @property
     def dragging(self):
         """ Boolean value indicating whether left or right dragging has started """
-        return self._ldragging or self._rdragging
+        return self._left_dragging or self._right_dragging
 
     @property
     def was_dragged(self):
-        """ Boolean value indicating whether actual movement has occured during dragging """
+        """ Boolean value indicating whether actual movement has occurred during dragging """
         return ((None, None) != (self.drag_v_start_pos, self.drag_v_end_pos) and
                 self.drag_v_start_pos != self.drag_v_end_pos)
 
@@ -413,26 +429,43 @@ SEL_MODE_NONE = 0
 SEL_MODE_CREATE = 1
 SEL_MODE_EDIT = 2
 SEL_MODE_DRAG = 3
+EDIT_MODE_POINT = 4
+EDIT_MODE_BOX = 5
 
 
-class SelectionMixin(object):
-    """ This mix-in class can be used on an Overlay to draw rectangular selection areas.
+class SelectionMixin(DragMixin):
+    """ This mixin class can be used to store a selection defined by a start and end point
+
+    This class will store the last selection created by dragging and allows for manipulation of
+    that selection.
 
     These areas are always expressed in view port coordinates. Conversions to buffer and world
     coordinates should be done using subclasses.
+
+    Remember that the following methods *MUST* be called from the super class:
+
+    _on_left_down
+    _on_left_up
+    _on_motion
 
     """
 
     hover_margin = 10  # px
 
-    def __init__(self, colour=gui.SELECTION_COLOUR, center=(0, 0)):
+    def __init__(self, colour=gui.SELECTION_COLOUR, center=(0, 0), edit_mode=EDIT_MODE_POINT):
+
+        super(SelectionMixin, self).__init__()
+
         # The start and end points of the selection rectangle in view port
         # coordinates
-        self.v_start_pos = None
-        self.v_end_pos = None
+        self.select_v_start_pos = None
+        self.select_v_end_pos = None
 
         self.edit_v_start_pos = None  # The view port coordinates where a drag/edit originated
-        self.edit_edge = None  # What edge is being edited (gui.HOVER_*)
+        self.edit_hover = None  # What edge is being edited (gui.HOVER_*)
+        self.edit_mode = edit_mode
+
+        self.hover = gui.HOVER_NONE
 
         # Selection modes (none, create, edit and drag)
         self.selection_mode = SEL_MODE_NONE
@@ -442,44 +475,37 @@ class SelectionMixin(object):
 
         self.edges = {}
 
+        # TODO: Move these to the super classes
         self.colour = conversion.hex_to_frgba(colour)
         self.center = center
 
-        self.hover = gui.HOVER_NONE
-
-    @staticmethod
-    def _normalize(rect):
-        """ Normalize the given recatangle by making sure top/left etc. is actually top left
+    def _normalize(self, rect):
+        """ Normalize the given rectangle by making sure top/left etc. is actually top left
 
         This method might be overridden.
 
         """
 
-        return util.normalize_rect(rect)
+        if self.edit_mode == EDIT_MODE_BOX:
+            return util.normalize_rect(rect)
+
+        return rect
 
     # #### selection methods  #####
 
-    def start_selection(self, start_pos):
-        """ Start a new selection
-
-        :param start_pos: (list of 2 floats) Pixel coordinates where the selection starts
-
-        """
+    def start_selection(self):
+        """ Start a new selection """
 
         logging.debug("Starting selection")
 
         self.selection_mode = SEL_MODE_CREATE
-        self.v_start_pos = self.v_end_pos = list(start_pos)
+        self.select_v_start_pos = self.select_v_end_pos = self.drag_v_start_pos
 
-    def update_selection(self, current_pos):
-        """ Update the selection to reflect the given mouse position.
+    def update_selection(self):
+        """ Update the selection to reflect the given mouse position """
 
-        :param current_pos: (list of 2 floats) Pixel coordinates of the current end point
-
-        """
-
-        current_pos = self.cnvs.clip_to_viewport(current_pos)
-        self.v_end_pos = list(current_pos)
+        # Cast to list, because we need to be able to alter the x and y separately
+        self.select_v_end_pos = self.cnvs.clip_to_viewport(self.drag_v_end_pos)
 
     def stop_selection(self):
         """ End the creation of the current selection """
@@ -490,23 +516,32 @@ class SelectionMixin(object):
             logging.debug("Selection too small")
             self.clear_selection()
         else:
-            # Make sure that the start and end positions are the top left and
-            # bottom right respectively.
-            v_pos = self._normalize(tuple(self.v_start_pos) + tuple(self.v_end_pos))
-            self.v_start_pos = v_pos[:2]
-            self.v_end_pos = v_pos[2:4]
+            # Make sure that the start and end positions are the top left and bottom right
+            # respectively.
+
+            if isinstance(self.select_v_start_pos, list):
+                self.select_v_start_pos = tuple(self.select_v_start_pos)
+                logging.warn("'select_v_start_pos' is still set as a list somewhere!")
+            if isinstance(self.select_v_end_pos, list):
+                self.select_v_end_pos = tuple(self.select_v_end_pos)
+                logging.warn("'select_v_end_pos' is still set as a list somewhere!")
+
+            v_sel = self._normalize(self.select_v_start_pos + self.select_v_end_pos)
+
+            self.select_v_start_pos = v_sel[:2]
+            self.select_v_end_pos = v_sel[2:4]
 
             self._calc_edges()
             self.selection_mode = SEL_MODE_NONE
-            self.edit_edge = None
+            self.edit_hover = None
 
     def clear_selection(self):
         """ Clear the selection """
         logging.debug("Clearing selections")
         self.selection_mode = SEL_MODE_NONE
 
-        self.v_start_pos = None
-        self.v_end_pos = None
+        self.select_v_start_pos = None
+        self.select_v_end_pos = None
 
         self.edges = {}
 
@@ -514,31 +549,35 @@ class SelectionMixin(object):
 
     # #### edit methods  #####
 
-    def start_edit(self, start_pos, edge):
+    def start_edit(self, hover):
         """ Start an edit to the current selection
 
-        :param edge: (gui.HOVER_*)
+        :param hover: (int) Compound value of gui.HOVER_* representing the hovered edges
 
         """
 
-        self.edit_v_start_pos = start_pos
-        self.edit_edge = edge
+        self.edit_v_start_pos = self.drag_v_start_pos
+        self.edit_hover = hover
         self.selection_mode = SEL_MODE_EDIT
 
-    def update_edit(self, current_pos):
+    def update_edit(self):
         """ Adjust the selection according to the given position and the current edit action """
-        current_pos = self.cnvs.clip_to_viewport(current_pos)
+        current_pos = self.cnvs.clip_to_viewport(self.drag_v_end_pos)
 
-        if self.edit_edge in (gui.HOVER_TOP_EDGE, gui.HOVER_BOTTOM_EDGE):
-            if self.edit_edge == gui.HOVER_TOP_EDGE:
-                self.v_start_pos = (self.v_start_pos[0], current_pos[1])
-            else:
-                self.v_end_pos = (self.v_end_pos[0], current_pos[1])
-        else:
-            if self.edit_edge == gui.HOVER_LEFT_EDGE:
-                self.v_start_pos = (current_pos[0], self.v_start_pos[1])
-            else:
-                self.v_end_pos = (current_pos[0], self.v_end_pos[1])
+        if self.edit_mode == EDIT_MODE_BOX:
+            if gui.HOVER_TOP_EDGE == self.edit_hover & gui.HOVER_TOP_EDGE:
+                self.select_v_start_pos = (self.select_v_start_pos[0], current_pos[1])
+            if gui.HOVER_BOTTOM_EDGE == self.edit_hover & gui.HOVER_BOTTOM_EDGE:
+                self.select_v_end_pos = (self.select_v_end_pos[0], current_pos[1])
+            if gui.HOVER_LEFT_EDGE == self.edit_hover & gui.HOVER_LEFT_EDGE:
+                self.select_v_start_pos = (current_pos[0], self.select_v_start_pos[1])
+            if gui.HOVER_RIGHT_EDGE == self.edit_hover & gui.HOVER_RIGHT_EDGE:
+                self.select_v_end_pos = (current_pos[0], self.select_v_end_pos[1])
+        elif self.edit_mode == EDIT_MODE_POINT:
+            if self.edit_hover == gui.HOVER_START:
+                self.select_v_start_pos = current_pos
+            elif self.edit_hover == gui.HOVER_END:
+                self.select_v_end_pos = current_pos
 
     def stop_edit(self):
         """ End the selection edit """
@@ -548,24 +587,24 @@ class SelectionMixin(object):
 
     # #### drag methods  #####
 
-    def start_drag(self, start_pos):
-        self.edit_v_start_pos = start_pos
+    def start_drag(self):
+        self.edit_v_start_pos = self.drag_v_start_pos
         self.selection_mode = SEL_MODE_DRAG
 
-    def update_drag(self, current_pos):
+    def update_drag(self):
         # TODO: The drag range is currently limited by the location of the
         # mouse pointer, meaning that you cannot drag the cursor beyond the
         # edge of the canvas.
         # It might be better to limit the movement in such a way that no part
         # of the selection can be dragged off canvas. The commented part was a
         # first attempt at that, but it didn't work.
-        current_pos = self.cnvs.clip_to_viewport(current_pos)
+        current_pos = self.cnvs.clip_to_viewport(self.drag_v_end_pos)
         diff = (current_pos[0] - self.edit_v_start_pos[0],
                 current_pos[1] - self.edit_v_start_pos[1])
-        self.v_start_pos = [self.v_start_pos[0] + diff[0],
-                            self.v_start_pos[1] + diff[1]]
-        self.v_end_pos = [self.v_end_pos[0] + diff[0],
-                          self.v_end_pos[1] + diff[1]]
+        self.select_v_start_pos = (self.select_v_start_pos[0] + diff[0],
+                                   self.select_v_start_pos[1] + diff[1])
+        self.select_v_end_pos = (self.select_v_end_pos[0] + diff[0],
+                                 self.select_v_end_pos[1] + diff[1])
         self.edit_v_start_pos = current_pos
 
     def stop_drag(self):
@@ -583,14 +622,14 @@ class SelectionMixin(object):
             logging.debug("Updating view position of selection")
             self._last_shiftscale = shiftscale
 
-            self.v_start_pos = list(self.cnvs.buffer_to_view(b_start_pos))
-            self.v_end_pos = list(self.cnvs.buffer_to_view(b_end_pos))
+            self.select_v_start_pos = list(self.cnvs.buffer_to_view(b_start_pos))
+            self.select_v_end_pos = list(self.cnvs.buffer_to_view(b_end_pos))
             self._calc_edges()
 
     def _calc_edges(self):
         """ Calculate the inner and outer edges of the selection according to the hover margin """
-        if self.v_start_pos and self.v_end_pos:
-            rect = self._normalize(self.v_start_pos + self.v_end_pos)
+        if self.select_v_start_pos and self.select_v_end_pos:
+            rect = self._normalize(self.select_v_start_pos + self.select_v_end_pos)
             i_l, i_t, o_r, o_b = [v + self.hover_margin for v in rect]
             o_l, o_t, i_r, i_b = [v - self.hover_margin for v in rect]
 
@@ -607,7 +646,7 @@ class SelectionMixin(object):
         else:
             self.edges = {}
 
-    def is_hovering(self, vpos):
+    def get_hover(self, vpos):
         """ Check if the given position is on/near a selection edge or inside the selection
 
         :return: (bool) Return False if not hovering, or the type of hover
@@ -615,75 +654,92 @@ class SelectionMixin(object):
         """
 
         if self.edges:
-            # If position outside outer box
-            if (not self.edges["o_l"] < vpos[0] < self.edges["o_r"] or
-                    not self.edges["o_t"] < vpos[1] < self.edges["o_b"]):
-                return gui.HOVER_NONE
-            # If position inside inner box
-            elif (self.edges["i_l"] < vpos[0] < self.edges["i_r"] and
-                  self.edges["i_t"] < vpos[1] < self.edges["i_b"]):
-                # logging.debug("Selection hover")
-                return gui.HOVER_SELECTION
-            else:
-                hover = gui.HOVER_NONE
-                if vpos[0] < self.edges["i_l"]:
-                    # logging.debug("Left edge hover")
-                    hover &= gui.HOVER_LEFT_EDGE
-                elif vpos[0] > self.edges["i_r"]:
-                    # logging.debug("Right edge hover")
-                    hover &= gui.HOVER_RIGHT_EDGE
+            if self.edit_mode == EDIT_MODE_BOX:
+                # If position outside outer box
+                if (
+                        not self.edges["o_l"] < vpos[0] < self.edges["o_r"] or
+                        not self.edges["o_t"] < vpos[1] < self.edges["o_b"]
+                ):
+                    return gui.HOVER_NONE
+                # If position inside inner box
+                elif (self.edges["i_l"] < vpos[0] < self.edges["i_r"] and
+                      self.edges["i_t"] < vpos[1] < self.edges["i_b"]):
+                    # logging.debug("Selection hover")
+                    return gui.HOVER_SELECTION
+                else:
+                    hover = gui.HOVER_NONE
 
-                if vpos[1] < self.edges["i_t"]:
-                    # logging.debug("Top edge hover")
-                    hover &= gui.HOVER_TOP_EDGE
-                elif vpos[1] > self.edges["i_b"]:
-                    # logging.debug("Bottom edge hover")
-                    hover &= gui.HOVER_BOTTOM_EDGE
+                    if vpos[0] < self.edges["i_l"]:
+                        # logging.debug("Left edge hover")
+                        hover |= gui.HOVER_LEFT_EDGE
+                    elif vpos[0] > self.edges["i_r"]:
+                        # logging.debug("Right edge hover")
+                        hover |= gui.HOVER_RIGHT_EDGE
 
-                return hover
+                    if vpos[1] < self.edges["i_t"]:
+                        # logging.debug("Top edge hover")
+                        hover |= gui.HOVER_TOP_EDGE
+                    elif vpos[1] > self.edges["i_b"]:
+                        # logging.debug("Bottom edge hover")
+                        hover |= gui.HOVER_BOTTOM_EDGE
 
-        return None
+                    return hover
+
+            elif self.edit_mode == EDIT_MODE_POINT:
+                # In point edit mode, the 'rectangle' does not get normalized, so 'top/left' is
+                # always the start of the selection and 'bottom/right' the end of it.
+
+                if (
+                        self.edges["o_l"] < vpos[0] < self.edges["i_l"] and
+                        self.edges["o_t"] < vpos[1] < self.edges["i_t"]
+                ):
+                    return gui.HOVER_START
+                elif (
+                        self.edges["o_r"] > vpos[0] > self.edges["i_r"] and
+                        self.edges["o_b"] > vpos[1] > self.edges["i_b"]
+                ):
+                    return gui.HOVER_END
+
+        return gui.HOVER_NONE
 
     def get_width(self):
         """ Return the width of the selection in view pixels or None if there is no selection """
-        if None in (self.v_start_pos, self.v_end_pos):
+        if None in (self.select_v_start_pos, self.select_v_end_pos):
             return None
-        return abs(self.v_start_pos[0] - self.v_end_pos[0])
+        return abs(self.select_v_start_pos[0] - self.select_v_end_pos[0])
 
     def get_height(self):
         """ Return the height of the selection in view pixels """
-        if None in (self.v_start_pos, self.v_end_pos):
+        if None in (self.select_v_start_pos, self.select_v_end_pos):
             return None
-        return abs(self.v_start_pos[1] - self.v_end_pos[1])
+        return abs(self.select_v_start_pos[1] - self.select_v_end_pos[1])
 
     def get_size(self):
         """ Return the size of the selection in view pixels """
         return self.get_width(), self.get_height()
 
     def contains_selection(self):
-        return None not in (self.v_start_pos, self.v_end_pos)
+        return None not in (self.select_v_start_pos, self.select_v_end_pos)
 
     def _on_left_down(self, evt):
         """ Call this method from the 'on_left_down' method of super classes """
 
-        # TODO: Check if this call is necessary. This method, and it's counter part in _on_left_up
-        # should be called from the on_left_down method from the canvas, right?
-        self.cnvs.on_mouse_down()
+        super(SelectionMixin, self)._on_left_down(evt)
 
-        v_pos = evt.GetPositionTuple()
-        hover = self.is_hovering(v_pos)
+        if self.left_dragging:
+            hover = self.get_hover(self.drag_v_start_pos)
 
-        if not hover:  # Clicked outside selection
-            self.start_selection(v_pos)  # Start dragging
-        elif hover != gui.HOVER_SELECTION:  # Clicked on edge
-            self.start_edit(v_pos, hover)   # Start edit
-        elif hover == gui.HOVER_SELECTION:  # Clicked inside selection
-            self.start_drag(v_pos)  # Start edit
+            if not hover:  # Clicked outside selection
+                self.start_selection()  # Start dragging
+            elif hover != gui.HOVER_SELECTION:  # Clicked on edge
+                self.start_edit(hover)   # Start edit
+            elif hover == gui.HOVER_SELECTION:  # Clicked inside selection
+                self.start_drag()  # Start edit
 
-    def _on_left_up(self, _):
+    def _on_left_up(self, evt):
         """ Call this method from the 'on_left_up' method of super classes"""
 
-        self.cnvs.on_mouse_up()
+        super(SelectionMixin, self)._on_left_up(evt)
 
         if self.selection_mode == SEL_MODE_NONE:
             self.clear_selection()
@@ -691,28 +747,21 @@ class SelectionMixin(object):
             self.stop_selection()
 
     def _on_motion(self, evt):
-        v_pos = evt.GetPositionTuple()
 
-        if self.selection_mode == SEL_MODE_CREATE:
-            self.update_selection(v_pos)
+        super(SelectionMixin, self)._on_motion(evt)
+
+        self.hover = self.get_hover(evt.GetPositionTuple())
+
+        if self.selection_mode:
+            if self.selection_mode == SEL_MODE_CREATE:
+                self.update_selection()
+            elif self.selection_mode == SEL_MODE_EDIT:
+                self.update_edit()
+            elif self.selection_mode == SEL_MODE_DRAG:
+                self.update_drag()
             self.cnvs.Refresh()
-        elif self.selection_mode == SEL_MODE_EDIT:
-            self.update_edit(v_pos)
-            self.cnvs.Refresh()
-        elif self.selection_mode == SEL_MODE_DRAG:
-            self.update_drag(v_pos)
-            self.cnvs.Refresh()
-        else:
-            hover = self.is_hovering(v_pos)
-            self.hover = hover
-            if hover == gui.HOVER_SELECTION:
-                self.cnvs.set_dynamic_cursor(wx.CURSOR_SIZENESW)  # = closed hand
-            elif hover in (gui.HOVER_LEFT_EDGE, gui.HOVER_RIGHT_EDGE):
-                self.cnvs.set_dynamic_cursor(wx.CURSOR_SIZEWE)
-            elif hover in (gui.HOVER_TOP_EDGE, gui.HOVER_BOTTOM_EDGE):
-                self.cnvs.set_dynamic_cursor(wx.CURSOR_SIZENS)
-            else:
-                self.cnvs.reset_dynamic_cursor()
+
+        # Cursor manipulation should be done in superclasses
 
 
 class ViewOverlay(Overlay):

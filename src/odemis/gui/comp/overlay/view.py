@@ -29,15 +29,15 @@ import math
 import cairo
 import wx
 
-from .base import ViewOverlay, DragMixin, SelectionMixin
 import odemis.gui as gui
 import odemis.gui.img.data as img
 import odemis.model as model
+import odemis.gui.comp.overlay.base as base
 import odemis.util.conversion as conversion
 import odemis.util.units as units
 
 
-class TextViewOverlay(ViewOverlay):
+class TextViewOverlay(base.ViewOverlay):
     """ Render the present labels to the screen """
 
     def __init__(self, cnvs):
@@ -48,7 +48,7 @@ class TextViewOverlay(ViewOverlay):
             self._write_labels(ctx)
 
 
-class CrossHairOverlay(ViewOverlay):
+class CrossHairOverlay(base.ViewOverlay):
     """ Render a static cross hair to the center of the view """
 
     def __init__(self, cnvs, colour=gui.CROSSHAIR_COLOR, size=gui.CROSSHAIR_SIZE):
@@ -91,7 +91,7 @@ class CrossHairOverlay(ViewOverlay):
         ctx.restore()
 
 
-class SpotModeOverlay(ViewOverlay):
+class SpotModeOverlay(base.ViewOverlay):
     """ Render the spot mode indicator in the center of the view """
 
     def __init__(self, cnvs):
@@ -126,7 +126,7 @@ class SpotModeOverlay(ViewOverlay):
             useMask=False)
 
 
-class StreamIconOverlay(ViewOverlay):
+class StreamIconOverlay(base.ViewOverlay):
     """ Render Stream (play/pause) icons to the view """
 
     opacity = 0.8
@@ -224,7 +224,7 @@ class StreamIconOverlay(ViewOverlay):
         ctx.stroke()
 
 
-class FocusOverlay(ViewOverlay):
+class FocusOverlay(base.ViewOverlay):
     """ Display the focus modification indicator """
 
     def __init__(self, cnvs):
@@ -298,19 +298,19 @@ class FocusOverlay(ViewOverlay):
         self.cnvs.Refresh()
 
 
-class ViewSelectOverlay(ViewOverlay, SelectionMixin):
+class ViewSelectOverlay(base.ViewOverlay, base.SelectionMixin):
 
     def __init__(self, cnvs, colour=gui.SELECTION_COLOUR, center=(0, 0)):
         super(ViewSelectOverlay, self).__init__(cnvs)
-        SelectionMixin.__init__(self, colour, center)
+        base.SelectionMixin.__init__(self, colour, center, base.EDIT_MODE_BOX)
 
         self.position_label = self.add_label("")
 
     def draw(self, ctx, shift=(0, 0), scale=1.0):
 
-        if self.v_start_pos and self.v_end_pos:
-            start_pos = self.v_start_pos
-            end_pos = self.v_end_pos
+        if self.select_v_start_pos and self.select_v_end_pos:
+            start_pos = self.select_v_start_pos
+            end_pos = self.select_v_end_pos
 
             # logging.debug("Drawing from %s, %s to %s. %s", start_pos[0],
             #                                                start_pos[1],
@@ -360,7 +360,7 @@ class ViewSelectOverlay(ViewOverlay, SelectionMixin):
             super(ViewSelectOverlay, self).on_motion(evt)
 
 
-class MarkingLineOverlay(ViewOverlay, DragMixin):
+class MarkingLineOverlay(base.ViewOverlay, base.DragMixin):
     """ Draw a vertical line at the given view position
 
     This class can easily be extended to include a horizontal or horz/vert
@@ -374,7 +374,7 @@ class MarkingLineOverlay(ViewOverlay, DragMixin):
     def __init__(self, cnvs, colour=gui.SELECTION_COLOUR, orientation=None):
 
         super(MarkingLineOverlay, self).__init__(cnvs)
-        DragMixin.__init__(self)
+        base.DragMixin.__init__(self)
 
         self.label = None
         self.colour = conversion.hex_to_frgba(colour)
@@ -481,7 +481,7 @@ class MarkingLineOverlay(ViewOverlay, DragMixin):
             ctx.fill()
 
 
-class DichotomyOverlay(ViewOverlay):
+class DichotomyOverlay(base.ViewOverlay):
     """ This overlay allows the user to select a sequence of nested quadrants
     within the canvas. The quadrants are numbered 0 to 3, from the top left to
     the bottom right. The first quadrant is the biggest, with each subsequent
@@ -719,7 +719,7 @@ class DichotomyOverlay(ViewOverlay):
             ctx.fill()
 
 
-class PolarOverlay(ViewOverlay):
+class PolarOverlay(base.ViewOverlay):
 
     def __init__(self, cnvs):
         super(PolarOverlay, self).__init__(cnvs)
@@ -1086,7 +1086,7 @@ class PolarOverlay(ViewOverlay):
             self._write_label(ctx, self.intensity_label)
 
 
-class PointSelectOverlay(ViewOverlay):
+class PointSelectOverlay(base.ViewOverlay):
     """ Overlay for the selection of canvas points in view, world and physical coordinates """
 
     def __init__(self, cnvs):
@@ -1135,7 +1135,7 @@ class PointSelectOverlay(ViewOverlay):
         pass
 
 
-class HistoryOverlay(ViewOverlay):
+class HistoryOverlay(base.ViewOverlay):
     """ Display rectangles on locations that the microscope was previously positioned at """
 
     def __init__(self, cnvs, history_list_va):

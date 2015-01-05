@@ -29,7 +29,6 @@ import math
 import cairo
 import wx
 
-from .base import WorldOverlay, SelectionMixin, DragMixin
 from odemis.acq.stream import UNDEFINED_ROI
 import odemis.gui as gui
 import odemis.gui.comp.overlay.base as base
@@ -38,11 +37,11 @@ import odemis.util.conversion as conversion
 import odemis.util.units as units
 
 
-class WorldSelectOverlay(WorldOverlay, SelectionMixin):
+class WorldSelectOverlay(base.WorldOverlay, base.SelectionMixin):
 
     def __init__(self, cnvs, colour=gui.SELECTION_COLOUR, center=(0, 0)):
         super(WorldSelectOverlay, self).__init__(cnvs)
-        SelectionMixin.__init__(self, colour, center)
+        base.SelectionMixin.__init__(self, colour, center, base.EDIT_MODE_BOX)
 
         self.w_start_pos = None
         self.w_end_pos = None
@@ -57,53 +56,10 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         self.w_end_pos = w_end_pos
         self._calc_view_pos()
 
-    # Selection creation
-
-    def start_selection(self, start_pos):
-        SelectionMixin.start_selection(self, start_pos)
-        self._calc_world_pos()
-
-    def update_selection(self, current_pos):
-        SelectionMixin.update_selection(self, current_pos)
-        self._calc_world_pos()
-
-    def stop_selection(self):
-        """ End the creation of the current selection """
-        SelectionMixin.stop_selection(self)
-        self._calc_world_pos()
-
-    # Selection modification
-
-    def start_edit(self, start_pos, edge):
-        SelectionMixin.start_edit(self, start_pos, edge)
-        self._calc_world_pos()
-
-    def update_edit(self, current_pos):
-        SelectionMixin.update_edit(self, current_pos)
-        self._calc_world_pos()
-
-    def stop_edit(self):
-        SelectionMixin.stop_edit(self)
-        self._calc_world_pos()
-
-    # Selection dragging
-
-    def start_drag(self, start_pos):
-        SelectionMixin.start_drag(self, start_pos)
-        self._calc_world_pos()
-
-    def update_drag(self, current_pos):
-        SelectionMixin.update_drag(self, current_pos)
-        self._calc_world_pos()
-
-    def stop_drag(self):
-        SelectionMixin.stop_drag(self)
-        self._calc_world_pos()
-
     # Selection clearing
 
     def clear_selection(self):
-        SelectionMixin.clear_selection(self)
+        base.SelectionMixin.clear_selection(self)
         self.w_start_pos = None
         self.w_end_pos = None
 
@@ -113,10 +69,10 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
     def _calc_world_pos(self):
         """ Update the world position to reflect the view position """
-        if self.v_start_pos and self.v_end_pos:
+        if self.select_v_start_pos and self.select_v_end_pos:
             offset = [v // 2 for v in self.cnvs.buffer_size]
-            w_pos = (self.cnvs.view_to_world(self.v_start_pos, offset) +
-                     self.cnvs.view_to_world(self.v_end_pos, offset))
+            w_pos = (self.cnvs.view_to_world(self.select_v_start_pos, offset) +
+                     self.cnvs.view_to_world(self.select_v_end_pos, offset))
             w_pos = list(self._normalize(w_pos))
             self.w_start_pos = w_pos[:2]
             self.w_end_pos = w_pos[2:4]
@@ -130,8 +86,8 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         v_pos = (self.cnvs.world_to_view(self.w_start_pos, offset) +
                  self.cnvs.world_to_view(self.w_end_pos, offset))
         v_pos = list(self._normalize(v_pos))
-        self.v_start_pos = v_pos[:2]
-        self.v_end_pos = v_pos[2:4]
+        self.select_v_start_pos = v_pos[:2]
+        self.select_v_end_pos = v_pos[2:4]
         self._calc_edges()
 
     def get_physical_sel(self):
@@ -216,7 +172,8 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
     def on_left_down(self, evt):
         """ Start drag action if enabled, otherwise call super method so event will propagate """
         if self.active:
-            super(WorldSelectOverlay, self)._on_left_down(evt)
+            super(WorldSelectOverlay, self)._on_left_down(evt)  # Call the SelectionMixin handler
+            self._calc_world_pos()
             self.cnvs.update_drawing()
         else:
             super(WorldSelectOverlay, self).on_left_down(evt)
@@ -224,7 +181,8 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
     def on_left_up(self, evt):
         """ End drag action if enabled, otherwise call super method so event will propagate """
         if self.active:
-            super(WorldSelectOverlay, self)._on_left_up(evt)
+            super(WorldSelectOverlay, self)._on_left_up(evt)  # Call the SelectionMixin handler
+            self._calc_world_pos()
             self.cnvs.update_drawing()
         else:
             super(WorldSelectOverlay, self).on_left_up(evt)
@@ -232,7 +190,8 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
     def on_motion(self, evt):
         """ Process drag motion if enabled, otherwise call super method so event will propagate """
         if self.active:
-            self._on_motion(evt)
+            self._on_motion(evt)  # Call the SelectionMixin motion handler
+            self._calc_world_pos()
             # Fixme: Find a way to render the selection at the full frame rate. Right now it's not
             # possible, because we are drawing directly into the buffer, which might render slowly
             # anyway. What we would want, is that a world overlay that can visually change when the
@@ -515,10 +474,10 @@ class LineSelectOverlay(WorldSelectOverlay):
     def _calc_world_pos(self):
         """ Update the world position to reflect the view position """
 
-        if None not in (self.v_start_pos, self.v_end_pos):
+        if None not in (self.select_v_start_pos, self.select_v_end_pos):
             offset = self.cnvs.get_half_buffer_size()
-            self.w_start_pos = self.cnvs.view_to_world(self.v_start_pos, offset)
-            self.w_end_pos = self.cnvs.view_to_world(self.v_end_pos, offset)
+            self.w_start_pos = self.cnvs.view_to_world(self.select_v_start_pos, offset)
+            self.w_end_pos = self.cnvs.view_to_world(self.select_v_end_pos, offset)
 
             # FIXME: Translate to integer values
         #     self._selected_line.value = (self.w_start_pos, self.w_end_pos)
@@ -623,8 +582,8 @@ class LineSelectOverlay(WorldSelectOverlay):
 
     def _calc_edges(self):
         """ Calculate the hit boxes for the start and end point """
-        if None not in (self.v_start_pos, self.v_end_pos):
-            rect = self.v_start_pos + self.v_end_pos
+        if None not in (self.select_v_start_pos, self.select_v_end_pos):
+            rect = self.select_v_start_pos + self.select_v_end_pos
             s_l, s_t, e_l, e_t = [v - self.hover_margin for v in rect]
             s_r, s_b, e_r, e_b = [v + self.hover_margin for v in rect]
 
@@ -641,7 +600,7 @@ class LineSelectOverlay(WorldSelectOverlay):
         else:
             self.edges = {}
 
-    def is_hovering(self, vpos):
+    def get_hover(self, vpos):
         """ Check if the given position is on/near the start or end of the line
 
         :return: (bool) Return False if not hovering, or the type of hover
@@ -660,7 +619,7 @@ class LineSelectOverlay(WorldSelectOverlay):
 
     def _on_motion(self, evt):
         v_pos = evt.GetPositionTuple()
-        hover = self.is_hovering(v_pos)
+        hover = self.get_hover(v_pos)
 
         if not evt.Dragging():
             if hover in (gui.HOVER_START, gui.HOVER_END):
@@ -674,11 +633,11 @@ class LineSelectOverlay(WorldSelectOverlay):
         """ Adjust the selection according to the given position and the current edit action """
         current_pos = self.cnvs.clip_to_viewport(current_pos)
 
-        if self.edit_edge == gui.HOVER_START:
-            self.v_start_pos = current_pos
+        if self.edit_hover == gui.HOVER_START:
+            self.select_v_start_pos = current_pos
             self._calc_world_pos()
-        elif self.edit_edge == gui.HOVER_END:
-            self.v_end_pos = current_pos
+        elif self.edit_hover == gui.HOVER_END:
+            self.select_v_end_pos = current_pos
             self._calc_world_pos()
 
         self.cnvs.set_dynamic_cursor(wx.CURSOR_SIZENWSE)
@@ -859,7 +818,7 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, SpectrumMixin):
 
     def _on_motion(self, evt):
         v_pos = evt.GetPositionTuple()
-        hover = self.is_hovering(v_pos)
+        hover = self.get_hover(v_pos)
         over_data = self.is_over_pixel_data()
 
         if not evt.Dragging():
@@ -883,11 +842,11 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, SpectrumMixin):
     def _calc_world_pos(self):
         """ Update the world position to reflect the view position """
 
-        if None not in (self.v_start_pos, self.v_end_pos):
+        if None not in (self.select_v_start_pos, self.select_v_end_pos):
             offset = self.cnvs.get_half_buffer_size()
             print self.view_to_pixel()
-            self.w_start_pos = self.cnvs.view_to_world(self.v_start_pos, offset)
-            self.w_end_pos = self.cnvs.view_to_world(self.v_end_pos, offset)
+            self.w_start_pos = self.cnvs.view_to_world(self.select_v_start_pos, offset)
+            self.w_end_pos = self.cnvs.view_to_world(self.select_v_end_pos, offset)
 
             # FIXME: Translate to integer values
         #     self._selected_line.value = (self.w_start_pos, self.w_end_pos)
@@ -895,13 +854,13 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, SpectrumMixin):
         #     self._selected_line.value = None
 
 
-class PixelSelectOverlay(WorldOverlay, SpectrumMixin, DragMixin):
+class PixelSelectOverlay(base.WorldOverlay, SpectrumMixin, base.DragMixin):
     """ Selection overlay that allows the selection of a pixel in a data set """
 
     def __init__(self, cnvs):
         super(PixelSelectOverlay, self).__init__(cnvs)
         SpectrumMixin.__init__(self)
-        DragMixin.__init__(self)
+        base.DragMixin.__init__(self)
 
         # # External values
         # self._mpp = None  # Meter per pixel
@@ -1119,7 +1078,7 @@ class PixelSelectOverlay(WorldOverlay, SpectrumMixin, DragMixin):
                     ctx.fill()
 
 
-class PointsOverlay(WorldOverlay):
+class PointsOverlay(base.WorldOverlay):
     """ Overlay showing the available points and allowing the selection of one of them """
 
     MAX_DOT_RADIUS = 25.5
