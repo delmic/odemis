@@ -35,7 +35,7 @@ import math
 from odemis.dataio import tiff
 from odemis.gui.util import get_picture_folder, get_home_folder
 import os.path
-
+from odemis.acq.align import delphi
 
 CONF_PATH = os.path.join(get_home_folder(), u".config/odemis")
 ACQUI_PATH = get_picture_folder()
@@ -351,7 +351,10 @@ class CalibrationConfig(Config):
             try:
                 htop = self._get_tuple(sec, "top_hole")
                 hbot = self._get_tuple(sec, "bottom_hole")
-                hfoc = self.config.getfloat(sec, "hole_focus")
+                try:
+                    hfoc = self.config.getfloat(sec, "hole_focus")
+                except Exception:
+                    hfoc = delphi.SEM_KNOWN_FOCUS
                 strans = self._get_tuple(sec, "stage_trans")
 
                 sscale = self._get_tuple(sec, "stage_scaling")
@@ -370,10 +373,18 @@ class CalibrationConfig(Config):
                 if not 0 <= irot <= (2 * math.pi):
                     raise ValueError("image_rotation %f out of range", irot)
 
-                resa = self._get_tuple(sec, "resolution_a")
-                resb = self._get_tuple(sec, "resolution_b")
-                hfwa = self._get_tuple(sec, "hfw_a")
-                spotshift = self._get_tuple(sec, "spot_shift")
+                #Take care of old calibration files
+                try:
+                    resa = self._get_tuple(sec, "resolution_a")
+                    resb = self._get_tuple(sec, "resolution_b")
+                    hfwa = self._get_tuple(sec, "hfw_a")
+                    spotshift = self._get_tuple(sec, "spot_shift")
+                except Exception:
+                    resa = (0, 0)
+                    resb = (0, 0)
+                    hfwa = (0, 0)
+                    spotshift = (0, 0)
+
                 return htop, hbot, hfoc, strans, sscale, srot, iscale, irot, resa, resb, hfwa, spotshift
             except (ValueError, NoOptionError):
                 logging.info("Not all calibration data readable, new calibration is required",

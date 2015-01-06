@@ -647,7 +647,7 @@ class DelphiStateController(SecomStateController):
         # locate the top and bottom holes of the sample holder, using
         # the SEM. So once the sample is fully loaded, new and more
         # precise calibration will be set.
-        htop, hbot, strans, sscale, srot, iscale, irot, resa, resb, hfwa, spotshift = calib
+        htop, hbot, hfoc, strans, sscale, srot, iscale, irot, resa, resb, hfwa, spotshift = calib
 
         # update metadata to stage
         self._main_data.stage.updateMetadata({
