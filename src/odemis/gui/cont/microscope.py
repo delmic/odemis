@@ -695,6 +695,10 @@ class DelphiStateController(SecomStateController):
             # TODO: just subscribe to the change of sample holder?
             if (isinstance(self._main_data.chamber.registeredSampleHolder, VigilantAttributeBase)
                 and not self._main_data.chamber.registeredSampleHolder.value):
+                # TODO: if ID number 0, just tell the user to try to insert the
+                # sample holder again.
+
+
                 self._request_holder_calib() # async
                 return False
 
