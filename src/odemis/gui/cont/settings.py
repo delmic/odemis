@@ -989,7 +989,8 @@ class SecomSettingsController(SettingsBarController):
                                     "No optical microscope found",
                                     highlight_change)
 
-        # Query Odemis daemon (Should move this to separate thread)
+        # Add the components based on what is available
+        # TODO: move it to a separate thread to save time at init?
         if main_data.ccd:
             self.add_component("Camera",
                                 main_data.ccd,
