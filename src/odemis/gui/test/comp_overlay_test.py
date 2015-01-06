@@ -424,6 +424,9 @@ class OverlayTestCase(test.GuiTestCase):
         tol.add_label("Right click to toggle tool")
         cnvs.add_view_overlay(tol)
 
+        wsol.w_start_pos = (-2e-05, -2e-05)
+        wsol.w_end_pos = (2e-05, 2e-05)
+
         test.gui_loop()
 
         def toggle(evt):
@@ -498,8 +501,11 @@ class OverlayTestCase(test.GuiTestCase):
 
         cnvs.add_world_overlay(psol)
 
-        psol.set_values(1e-05, (0.0, 0.0), (17, 19), omodel.TupleVA())
+        psol.set_data_properties(1e-05, (0.0, 0.0), (17, 19))
+        psol.connect_selection(omodel.TupleVA())
         view.mpp.value = 1e-06
+
+        psol._selected_pixel_va.value = (8, 8)
         test.gui_loop()
 
         # Tool toggle for debugging
@@ -532,7 +538,8 @@ class OverlayTestCase(test.GuiTestCase):
 
         cnvs.add_world_overlay(slol)
 
-        slol.set_values(1e-05, (0.0, 0.0), (17, 19), omodel.TupleVA())
+        slol.set_data_properties(1e-05, (0.0, 0.0), (17, 19))
+        slol.connect_selection(omodel.TupleVA())
         view.mpp.value = 1e-06
         test.gui_loop()
 
@@ -541,6 +548,10 @@ class OverlayTestCase(test.GuiTestCase):
         tol = vol.TextViewOverlay(cnvs)
         tol.add_label("Right click to toggle tool", (10, 30))
         cnvs.add_view_overlay(tol)
+
+        test.gui_loop()
+        slol._selected_line_va.value = ((0, 0), (8, 8))
+        test.gui_loop()
 
         def toggle(evt):
             if slol.active:
@@ -566,8 +577,8 @@ class OverlayTestCase(test.GuiTestCase):
         lsol.activate()
         lsol.enabled = True
 
-        lsol.set_world_start((1e-4, 1e-4))
-        lsol.set_world_end((-1e-4, -1e-4))
+        lsol.w_start_pos = (1e-4, 1e-4)
+        lsol.w_end_pos = (-1e-4, -1e-4)
         cnvs.add_world_overlay(lsol)
 
         # Tool toggle for debugging

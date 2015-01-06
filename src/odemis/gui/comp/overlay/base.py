@@ -479,6 +479,16 @@ class SelectionMixin(DragMixin):
         self.colour = conversion.hex_to_frgba(colour)
         self.center = center
 
+    # @property
+    # def select_v_start_pos(self):
+    #     return self._select_v_start_pos
+    #
+    # @select_v_start_pos.setter
+    # def select_v_start_pos(self, pos):
+    #     # import traceback
+    #     # traceback.print_stack()
+    #     self._select_v_start_pos = pos
+
     def _normalize(self, rect):
         """ Normalize the given rectangle by making sure top/left etc. is actually top left
 
@@ -595,12 +605,6 @@ class SelectionMixin(DragMixin):
         self.selection_mode = SEL_MODE_DRAG
 
     def update_drag(self):
-        # TODO: The drag range is currently limited by the location of the
-        # mouse pointer, meaning that you cannot drag the cursor beyond the
-        # edge of the canvas.
-        # It might be better to limit the movement in such a way that no part
-        # of the selection can be dragged off canvas. The commented part was a
-        # first attempt at that, but it didn't work.
         current_pos = self.cnvs.clip_to_viewport(self.drag_v_end_pos)
         diff = (current_pos[0] - self.edit_v_start_pos[0],
                 current_pos[1] - self.edit_v_start_pos[1])
@@ -622,7 +626,7 @@ class SelectionMixin(DragMixin):
         """
 
         if self._last_shiftscale != shiftscale:
-            logging.debug("Updating view position of selection")
+            logging.warn("Updating view position of selection %s", shiftscale)
             self._last_shiftscale = shiftscale
 
             self.select_v_start_pos = list(self.cnvs.buffer_to_view(b_start_pos))
@@ -744,7 +748,12 @@ class SelectionMixin(DragMixin):
 
         super(SelectionMixin, self)._on_left_up(evt)
 
-        if self.selection_mode == SEL_MODE_NONE:
+        # IMPORTANT: The check for selection clearing includes the left drag attribute for the
+        # following reason: When the (test) window was maximized by double clicking on the title bar
+        # of the window, the second 'mouse up' event would be processed by the overlay, causing it
+        # to clear any selection. Check for `left_dragging` makes sure that the mouse up is always
+        # paired with on of our own mouse downs.
+        if self.selection_mode == SEL_MODE_NONE and self.left_dragging:
             self.clear_selection()
         else:  # Editing an existing selection
             self.stop_selection()
@@ -780,14 +789,14 @@ class PixelDataMixin(object):
 
         # External values
         self._data_resolution = None  # Resolution of the pixel data (int, int)
-        self._selected_pixel_va = None  # TupleVA (int, int)
+        self._selected_line_va = None  # TupleVA (int, int)
 
         # Calculated values
         self._pixel_data_w_rect = None  # (float left, float
         self._data_mpp = None  # cnvs size of the pixel block float
         self._pixel_pos = None  # position of the current pixel (int, int)
 
-    def set_values(self, mpp, physical_center, resolution, selection_va):
+    def set_data_properties(self, mpp, physical_center, resolution):
         """ Set the values needed for mapping mouse positions to data pixel coordinates
 
         :param mpp: (float) Size of the data pixels in meters
@@ -817,17 +826,9 @@ class PixelDataMixin(object):
 
         self._data_mpp = mpp
 
-        # TODO: Move the VA tracking to the canvas?
-        self._selected_pixel_va = selection_va
-        self._selected_pixel_va.subscribe(self._selection_made, init=True)
-
     @property
-    def values_are_set(self):
-        return None not in (self._pixel_data_w_rect, self._data_mpp)
-
-    def _selection_made(self, _):
-        """ Event handler that requests a redraw when the selected line changes """
-        self.cnvs.update_drawing()
+    def data_properties_are_set(self):
+        return None not in (self._data_resolution, self._pixel_data_w_rect, self._data_mpp)
 
     def _on_motion(self, evt):
         self._mouse_vpos = evt.GetPositionTuple()

@@ -43,20 +43,28 @@ class WorldSelectOverlay(base.WorldOverlay, base.SelectionMixin):
         super(WorldSelectOverlay, self).__init__(cnvs)
         base.SelectionMixin.__init__(self, colour, center, base.EDIT_MODE_BOX)
 
-        self.w_start_pos = None
-        self.w_end_pos = None
+        self._w_start_pos = None
+        self._w_end_pos = None
 
         self.position_label = self.add_label("", colour=(0.8, 0.8, 0.8))
 
-    def set_world_start(self, w_start_pos):
-        """ Set the start position in world coordinates """
-        self.w_start_pos = w_start_pos
-        self._calc_view_pos()
+    @property
+    def w_start_pos(self):
+        return self._w_start_pos
 
-    def set_world_end(self, w_end_pos):
-        """ Set the end position in world coordinates """
-        self.w_end_pos = w_end_pos
-        self._calc_view_pos()
+    @w_start_pos.setter
+    def w_start_pos(self, w_pos):
+        self._w_start_pos = w_pos
+        self._world_to_view()
+
+    @property
+    def w_end_pos(self):
+        return self._w_end_pos
+
+    @w_end_pos.setter
+    def w_end_pos(self, w_pos):
+        self._w_end_pos = w_pos
+        self._world_to_view()
 
     # Selection clearing
 
@@ -66,14 +74,9 @@ class WorldSelectOverlay(base.WorldOverlay, base.SelectionMixin):
         self.w_start_pos = None
         self.w_end_pos = None
 
-    # TODO: Redundant?
-    # def _center_view_origin(self, vpos):
-    #
-    #     w, h = self.cnvs.GetSize()
-    #     return vpos[0] - (w // 2), vpos[1] - (h // 2)
-
-    def _calc_world_pos(self):
+    def _view_to_world(self):
         """ Update the world position to reflect the view position """
+
         if self.select_v_start_pos and self.select_v_end_pos:
             offset = [v // 2 for v in self.cnvs.buffer_size]
             w_pos = (self.cnvs.view_to_world(self.select_v_start_pos, offset) +
@@ -81,19 +84,17 @@ class WorldSelectOverlay(base.WorldOverlay, base.SelectionMixin):
             self.w_start_pos = w_pos[:2]
             self.w_end_pos = w_pos[2:4]
 
-    def _calc_view_pos(self):
+    def _world_to_view(self):
         """ Update the view position to reflect the world position """
-        if None in (self.w_start_pos, self.w_end_pos):
-            logging.warning("Asking to convert non-existing world positions")
-            return
 
-        offset = [v // 2 for v in self.cnvs.buffer_size]
-        v_pos = (self.cnvs.world_to_view(self.w_start_pos, offset) +
-                 self.cnvs.world_to_view(self.w_end_pos, offset))
-        v_pos = list(self._normalize(v_pos))
-        self.select_v_start_pos = v_pos[:2]
-        self.select_v_end_pos = v_pos[2:4]
-        self._calc_edges()
+        if self.w_start_pos and self.w_end_pos:
+            offset = [v // 2 for v in self.cnvs.buffer_size]
+            v_pos = (self.cnvs.world_to_view(self.w_start_pos, offset) +
+                     self.cnvs.world_to_view(self.w_end_pos, offset))
+            v_pos = list(self._normalize(v_pos))
+            self.select_v_start_pos = v_pos[:2]
+            self.select_v_end_pos = v_pos[2:4]
+            self._calc_edges()
 
     def get_physical_sel(self):
         """ Return the selected rectangle in physical coordinates
@@ -124,7 +125,7 @@ class WorldSelectOverlay(base.WorldOverlay, base.SelectionMixin):
             w_pos = self._normalize(w_pos)
             self.w_start_pos = w_pos[:2]
             self.w_end_pos = w_pos[2:4]
-            self._calc_view_pos()
+            self._world_to_view()
 
     def draw(self, ctx, shift=(0, 0), scale=1.0):
         """ Draw the selection as a rectangle """
@@ -179,7 +180,7 @@ class WorldSelectOverlay(base.WorldOverlay, base.SelectionMixin):
         """ Start drag action if enabled, otherwise call super method so event will propagate """
         if self.active:
             super(WorldSelectOverlay, self)._on_left_down(evt)  # Call the SelectionMixin handler
-            self._calc_world_pos()
+            self._view_to_world()
             self.cnvs.update_drawing()
         else:
             super(WorldSelectOverlay, self).on_left_down(evt)
@@ -188,7 +189,7 @@ class WorldSelectOverlay(base.WorldOverlay, base.SelectionMixin):
         """ End drag action if enabled, otherwise call super method so event will propagate """
         if self.active:
             super(WorldSelectOverlay, self)._on_left_up(evt)  # Call the SelectionMixin handler
-            self._calc_world_pos()
+            self._view_to_world()
             self.cnvs.update_drawing()
         else:
             super(WorldSelectOverlay, self).on_left_up(evt)
@@ -197,7 +198,6 @@ class WorldSelectOverlay(base.WorldOverlay, base.SelectionMixin):
         """ Process drag motion if enabled, otherwise call super method so event will propagate """
         if self.active:
             self._on_motion(evt)  # Call the SelectionMixin motion handler
-            self._calc_world_pos()
 
             if not self.dragging:
                 if self.hover == gui.HOVER_SELECTION:
@@ -210,6 +210,8 @@ class WorldSelectOverlay(base.WorldOverlay, base.SelectionMixin):
                     self.cnvs.set_dynamic_cursor(wx.CURSOR_SIZING)
                 else:
                     self.cnvs.reset_dynamic_cursor()
+            else:
+                self._view_to_world()
 
             # Fixme: Find a way to render the selection at the full frame rate. Right now it's not
             # possible, because we are drawing directly into the buffer, which might render slowly
@@ -495,7 +497,6 @@ class LineSelectOverlay(WorldSelectOverlay):
     def draw(self, ctx, shift=(0, 0), scale=1.0):
 
         if None not in (self.w_start_pos, self.w_end_pos) and self.w_start_pos != self.w_end_pos:
-
             ctx.save()
 
             # Pixel radius of the start marker
@@ -510,10 +511,12 @@ class LineSelectOverlay(WorldSelectOverlay):
             b_start = (b_pos[0] - 0.5, b_pos[1] - 0.5)
             b_pos = self.cnvs.world_to_buffer(self.w_end_pos, offset)
             b_end = (b_pos[0] + 0.5, b_pos[1] + 0.5)
+            self.update_from_buffer(b_start, b_end, shift + (scale,))
 
             # Calculate unit vector
             dx, dy = (self.w_start_pos[0] - self.w_end_pos[0],
                       self.w_start_pos[1] - self.w_end_pos[1])
+
             length = math.sqrt(dx*dx + dy*dy) or 0.000001
             udx, udy = dx / length, dy / length  # Normalized vector
 
@@ -587,13 +590,14 @@ class LineSelectOverlay(WorldSelectOverlay):
         """ Process drag motion if enabled, otherwise call super method so event will propagate """
         if self.active:
             self._on_motion(evt)  # Call the SelectionMixin motion handler
-            self._calc_world_pos()
 
             if not self.dragging:
                 if self.hover in (gui.HOVER_START, gui.HOVER_END):
                     self.cnvs.set_dynamic_cursor(wx.CURSOR_HAND)
                 else:
                     self.cnvs.set_dynamic_cursor(wx.CURSOR_PENCIL)
+            else:
+                self._view_to_world()
 
             # Fixme: Find a way to render the selection at the full frame rate. Right now it's not
             # possible, because we are drawing directly into the buffer, which might render slowly
@@ -614,40 +618,91 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, base.PixelDataMixin):
         self.start_pixel = None
         self.end_pixel = None
 
-    # The following code is for debugging purposes. It draws a grid for the data pixel
-    
-    # def draw(self, ctx, shift=(0, 0), scale=1.0):
-    #     super(SpectrumLineSelectOverlay, self).draw(ctx, shift, scale)
-    #
-    #     ctx.set_source_rgba(*self.colour)
-    #     ctx.set_line_width(0.5)
-    #
-    #     for i in range(self._data_resolution[0]):
-    #         for j in range(self._data_resolution[1]):
-    #             rect = self.pixel_to_rect((i, j), scale)
-    #             ctx.rectangle(*rect)
-    #             ctx.stroke()
+        self._selected_line_va = None
 
-    def on_left_down(self, evt):
-        """ Determine the data pixel that the line is starting from and snap to its center """
+    def connect_selection(self, selection_va):
+        """ Connect the overlay to an external selection VA so it can update itself on value changes
+        """
+        self._selected_line_va = selection_va
+        self._selected_line_va.subscribe(self._on_selection, init=True)
 
-        v_pos = evt.GetPositionTuple()
-        if self.is_over_pixel_data(v_pos) and self.active:
-            super(SpectrumLineSelectOverlay, self).on_left_down(evt)
+    def _on_selection(self, selected_line):
+        """ Event handler that requests a redraw when the selected line changes """
 
-            self.start_pixel = self.view_to_data_pixel(v_pos)
+        if selected_line:
+            self.start_pixel, self.end_pixel = selected_line
+
             v_pos = self.data_pixel_to_view(self.start_pixel)
             self.drag_v_start_pos = self.select_v_start_pos = v_pos
 
-    def on_left_up(self, evt):
-        """ Determine the data pixel at which the line is starting from and snap to its center """
-
-        v_pos = evt.GetPositionTuple()
-        if self.is_over_pixel_data(v_pos) and self.active:
-            self.start_pixel = self.view_to_data_pixel(v_pos)
-            v_pos = self.data_pixel_to_view(self.start_pixel)
+            v_pos = self.data_pixel_to_view(self.end_pixel)
             self.drag_v_end_pos = self.select_v_end_pos = v_pos
-        super(SpectrumLineSelectOverlay, self).on_left_up(evt)
+
+            self._view_to_world()
+            self.cnvs.update_drawing()
+
+    # The following code is for debugging purposes. It draws a grid visualise the data pixel
+
+    def draw(self, ctx, shift=(0, 0), scale=1.0):
+        super(SpectrumLineSelectOverlay, self).draw(ctx, shift, scale)
+
+        ctx.set_source_rgba(*self.colour)
+        ctx.set_line_width(0.5)
+
+        for i in range(self._data_resolution[0]):
+            for j in range(self._data_resolution[1]):
+                rect = self.pixel_to_rect((i, j), scale)
+                ctx.rectangle(*rect)
+                ctx.stroke()
+
+    def on_left_down(self, evt):
+        """ Start drawing a selection line if the overlay is active """
+
+        if self.active:
+            v_pos = evt.GetPositionTuple()
+            if self.is_over_pixel_data(v_pos):
+                LineSelectOverlay.on_left_down(self, evt)
+                self._snap_to_pixel()
+        else:
+            super(SpectrumLineSelectOverlay, self).on_left_down(evt)
+
+    def on_left_up(self, evt):
+        """ Stop drawing a selection line if the overlay is active """
+
+        if self.active:
+            self._snap_to_pixel()
+            LineSelectOverlay.on_left_up(self, evt)
+        else:
+            super(SpectrumLineSelectOverlay, self).on_left_up(evt)
+
+    def _snap_to_pixel(self):
+        """ Snap the current start and end view positions to the center of the closest data pixels
+        """
+        if self.select_v_start_pos:
+            self.start_pixel = self.view_to_data_pixel(self.select_v_start_pos)
+            v_pos = self.data_pixel_to_view(self.start_pixel)
+            self.drag_v_start_pos = self.select_v_start_pos = v_pos
+        else:
+            self.start_pixel = None
+
+        if self.select_v_end_pos:
+            self.end_pixel = self.view_to_data_pixel(self.select_v_end_pos)
+            v_pos = self.data_pixel_to_view(self.end_pixel)
+            self.drag_v_end_pos = self.select_v_end_pos = v_pos
+        else:
+            self.end_pixel = None
+
+    def on_motion(self, evt):
+        """ Process drag motion if enabled, otherwise call super method so event will propagate """
+
+        if self.active:
+            v_pos = evt.GetPositionTuple()
+            if self.is_over_pixel_data(v_pos):
+                LineSelectOverlay.on_motion(self, evt)
+            else:
+                self.cnvs.reset_dynamic_cursor()
+        else:
+            super(SpectrumLineSelectOverlay, self).on_motion(evt)
 
 
 class PixelSelectOverlay(base.WorldOverlay, base.PixelDataMixin, base.DragMixin):
@@ -658,8 +713,18 @@ class PixelSelectOverlay(base.WorldOverlay, base.PixelDataMixin, base.DragMixin)
         base.PixelDataMixin.__init__(self)
         base.DragMixin.__init__(self)
 
+        self._selected_pixel_va = None
+
         self.colour = conversion.hex_to_frgba(gui.SELECTION_COLOUR, 0.5)
         self.select_color = conversion.hex_to_frgba(gui.FG_COLOUR_HIGHLIGHT, 0.5)
+
+    def connect_selection(self, selection_va):
+        self._selected_pixel_va = selection_va
+        self._selected_pixel_va.subscribe(self._selection_made, init=True)
+
+    def _selection_made(self, _):
+        """ Event handler that requests a redraw when the selected line changes """
+        self.cnvs.update_drawing()
 
     def deactivate(self):
         """ Clear the hover pixel when the overlay is deactivated """
@@ -676,7 +741,7 @@ class PixelSelectOverlay(base.WorldOverlay, base.PixelDataMixin, base.DragMixin)
             base.PixelDataMixin._on_motion(self, evt)
             base.DragMixin._on_motion(self, evt)
 
-            if self.values_are_set:
+            if self.data_properties_are_set:
                 self.cnvs.set_dynamic_cursor(wx.CROSS_CURSOR)
 
                 # Cache the current data pixel position
@@ -696,7 +761,7 @@ class PixelSelectOverlay(base.WorldOverlay, base.PixelDataMixin, base.DragMixin)
     def on_left_down(self, evt):
 
         if self.active:
-            if self.values_are_set:
+            if self.data_properties_are_set:
                 super(PixelSelectOverlay, self)._on_left_down(evt)
         else:
             super(PixelSelectOverlay, self).on_left_down(evt)

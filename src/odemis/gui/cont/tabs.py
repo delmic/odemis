@@ -1266,21 +1266,21 @@ class AnalysisTab(Tab):
                 for viewport in self.view_controller.viewports:
                     if hasattr(viewport.canvas, "pixel_overlay"):
                         ol = viewport.canvas.pixel_overlay
-                        ol.set_values(
+                        ol.set_data_properties(
                             iimg.metadata[model.MD_PIXEL_SIZE][0],
                             iimg.metadata[model.MD_POS],
-                            (width, height),
-                            spec_stream.selected_pixel
+                            (width, height)
                         )
+                        ol.connect_selection(spec_stream.selected_pixel)
 
                     if hasattr(viewport.canvas, "line_overlay"):
                         ol = viewport.canvas.line_overlay
-                        ol.set_values(
+                        ol.set_data_properties(
                             iimg.metadata[model.MD_PIXEL_SIZE][0],
                             iimg.metadata[model.MD_POS],
-                            (width, height),
-                            spec_stream.selected_pixel
+                            (width, height)
                         )
+                        ol.connect_selection(spec_stream.selected_pixel)
 
                 spec_stream.selected_pixel.subscribe(self._on_pixel_select, init=True)
                 spec_stream.selected_line.subscribe(self._on_line_select, init=True)
