@@ -232,6 +232,7 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
                 offset = future._align_offsetf.result()
             except Exception:
                 raise IOError("Conversion update failed to align and calculate offset.")
+            center_focus = focus.position.value.get('z')
 
             if future._conversion_update_state == CANCELLED:
                 raise CancelledError()
@@ -270,6 +271,14 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
             # Offset is divided by scaling, since Convert Stage applies scaling
             # also in the given offset
             offset = ((offset[0] / scaling[0]), (offset[1] / scaling[1]))
+
+            # Return to the center so fine alignment can be executed just after calibration
+            f = sem_stage.moveAbs({"x":sem_position[0], "y":sem_position[1]})
+            f.result()
+            f = opt_stage.moveAbs({"x":0, "y":0})
+            f.result()
+            f = focus.moveAbs({"z": center_focus})
+            f.result()
             # TODO also calculate and return Phenom shift parameters
             # Data returned needs to be filled in the calibration file
             return first_hole, second_hole, hole_focus, offset, rotation, scaling, resa, resb, hfwa, spotshift
@@ -741,15 +750,15 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
             if hole_focus is not None:
                 f = ebeam_focus.moveAbs({"z":hole_focus})
                 f.result()
-            # For the first hole apply autofocus anyway
-            if (pos == EXPECTED_HOLES[0]):
-                escan.horizontalFoV.value = 160e-06  # m
-                escan.scale.value = (2, 2)
-                # escan.accelVoltage.value += 50
-                f = autofocus.AutoFocus(detector, escan, ebeam_focus, autofocus.ROUGH_SPOTMODE_ACCURACY)
-                hole_focus, fm_level = f.result()
-                escan.horizontalFoV.value = escan.horizontalFoV.range[1]
-                escan.scale.value = (1, 1)
+                # For the first hole apply autofocus anyway
+                if (pos == EXPECTED_HOLES[0]):
+                    escan.horizontalFoV.value = 160e-06  # m
+                    escan.scale.value = (2, 2)
+                    # escan.accelVoltage.value += 50
+                    f = autofocus.AutoFocus(detector, escan, ebeam_focus, autofocus.ROUGH_SPOTMODE_ACCURACY)
+                    hole_focus, fm_level = f.result()
+                    escan.horizontalFoV.value = escan.horizontalFoV.range[1]
+                    escan.scale.value = (1, 1)
 
             # From SEM image determine hole position relative to the center of
             # the SEM

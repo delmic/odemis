@@ -383,7 +383,7 @@ class CalibrationConfig(Config):
                     resa = (0, 0)
                     resb = (0, 0)
                     hfwa = (0, 0)
-                    spotshift = (0, 0)
+                    spotshift = (0.035, 0)  # Rough approximation used until the calibration
 
                 return htop, hbot, hfoc, strans, sscale, srot, iscale, irot, resa, resb, hfwa, spotshift
             except (ValueError, NoOptionError):
