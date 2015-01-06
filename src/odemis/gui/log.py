@@ -58,14 +58,7 @@ def init_logger(level=logging.DEBUG):
     frm = "%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s"
     l.handlers[0].setFormatter(logging.Formatter(frm))
 
-
-def create_gui_logger(log_field, error_va=None):
-    """
-    log_field (wx text field)
-    error_va (Boolean VigilantAttribute)
-    """
     # Create file handler
-
     # Path to the log file
     logfile_path = os.path.join(os.path.expanduser("~"), LOG_FILE)
     # Formatting string for logging messages to file
@@ -78,7 +71,15 @@ def create_gui_logger(log_field, error_va=None):
                                        backupCount=5)
 
     file_handler.setFormatter(file_format)
+    log.addHandler(file_handler)
 
+
+def create_gui_logger(log_field, error_va=None):
+    """
+    Connect the log output to the text field instead of the standard output
+    log_field (wx text field)
+    error_va (Boolean VigilantAttribute)
+    """
     # Create gui handler
     frm = "%(asctime)s %(levelname)-7s %(module)-15s: %(message)s"
     gui_format = logging.Formatter(frm, '%H:%M:%S')
@@ -89,13 +90,13 @@ def create_gui_logger(log_field, error_va=None):
     text_field_handler.setFormatter(gui_format)
     logging.debug("Switching to GUI logger")
 
-    # remove whatever handler was already there
+    # remove standard output handler if still there
     for handler in log.handlers:
-        log.removeHandler(handler)
+        if isinstance(handler, logging.StreamHandler):
+            log.removeHandler(handler)
 
     try:
         log.addHandler(text_field_handler)
-        log.addHandler(file_handler)
     except:
         # Use print here because log probably doesn't work
         print("Failed to set-up logging handlers")
