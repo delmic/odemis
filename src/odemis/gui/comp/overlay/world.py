@@ -738,10 +738,11 @@ class PixelSelectOverlay(base.WorldOverlay, base.PixelDataMixin, base.DragMixin)
         """ Update the current mouse position """
 
         if self.active:
+            v_pos = evt.GetPositionTuple()
             base.PixelDataMixin._on_motion(self, evt)
             base.DragMixin._on_motion(self, evt)
 
-            if self.data_properties_are_set:
+            if self.data_properties_are_set and self.is_over_pixel_data(v_pos):
                 self.cnvs.set_dynamic_cursor(wx.CROSS_CURSOR)
 
                 # Cache the current data pixel position
