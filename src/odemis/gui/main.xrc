@@ -665,16 +665,16 @@
                         <orient>wxVERTICAL</orient>
                         <object class="sizeritem">
                           <object class="FoldPanelBar">
-                            <object class="FoldPanelItem" name="fp_settings_secom_sem">
-                              <label>SEM SETTINGS</label>
+                            <object class="FoldPanelItem" name="fp_settings_secom_optical">
+                              <label>OPTICAL SETTINGS</label>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
                               <XRCED>
                                 <assign_var>1</assign_var>
                               </XRCED>
                             </object>
-                            <object class="FoldPanelItem" name="fp_settings_secom_optical">
-                              <label>OPTICAL SETTINGS</label>
+                            <object class="FoldPanelItem" name="fp_settings_secom_sem">
+                              <label>SEM SETTINGS</label>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
                               <XRCED>
@@ -986,8 +986,8 @@
                     <object class="wxPanel" name="pnl_xy_align">
                       <object class="wxGridBagSizer">
                         <object class="sizeritem">
-                          <object class="wxStaticText" name="lbl_my">
-                            <label>-Y</label>
+                          <object class="wxStaticText" name="lbl_py">
+                            <label>+Y</label>
                             <fg>#E5E5E5</fg>
                             <font>
                               <size>16</size>
@@ -1003,8 +1003,8 @@
                           <cellpos>0,2</cellpos>
                         </object>
                         <object class="sizeritem">
-                          <object class="wxStaticText" name="lbl_py">
-                            <label>+Y</label>
+                          <object class="wxStaticText" name="lbl_my">
+                            <label>-Y</label>
                             <fg>#E5E5E5</fg>
                             <font>
                               <size>16</size>
@@ -1103,7 +1103,7 @@
                           <cellpos>3,2</cellpos>
                         </object>
                         <object class="sizeritem">
-                          <object class="ImageTextButton" name="lens_align_btn_p_aligner_x">
+                          <object class="ImageTextButton" name="lens_align_btn_m_aligner_x">
                             <label>←</label>
                             <delta>1</delta>
                             <bitmap>img/button/btn_64x48.png</bitmap>
@@ -1125,7 +1125,7 @@
                           <cellpos>2,1</cellpos>
                         </object>
                         <object class="sizeritem">
-                          <object class="ImageTextButton" name="lens_align_btn_m_aligner_x">
+                          <object class="ImageTextButton" name="lens_align_btn_p_aligner_x">
                             <label>→</label>
                             <delta>1</delta>
                             <bitmap>img/button/btn_64x48.png</bitmap>

@@ -1731,7 +1731,7 @@ class MMapReader(Reader):
     MMap based reader. It might introduce a very little bit of latency to detect
     the end of a complete acquisition read, but has the advantage of being much
     simpler to cancel. However, there seems to be a bug with detecting the end
-    of a read, and it tends to read too much data.
+    of a read (with the NI 6521?), and it tends to read too much data.
     """
     def __init__(self, parent):
         Reader.__init__(self, parent)
@@ -1902,8 +1902,11 @@ class Writer(Accesser):
             if self.cancelled:
                 return
             self.file.flush()
-        except (IOError, comedi.ComediError):
-            # might be due to a cancel
+        except (IOError, comedi.ComediError, ValueError):
+            # old versions of numpy raised ValueError instead of IOError
+            # see https://github.com/numpy/numpy/issues/2312
+            # TODO: remove it when numpy v1.9+ is used
+            # probably due to a cancel
             logging.debug("Write ended before the end")
         except:
             logging.exception("Unhandled error in writing thread")

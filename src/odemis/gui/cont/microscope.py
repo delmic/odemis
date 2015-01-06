@@ -692,14 +692,31 @@ class DelphiStateController(SecomStateController):
         return (bool): Whether the loading should continue
         """
         try:
+            shid, sht = self._main_data.chamber.sampleHolder.value
+            logging.debug("Detected sample holder type %d, id %d", sht, shid)
+
+            # ID number 0 typically indicates something went wrong and it
+            # couldn't be read. So instead of asking the user to calibrate it,
+            # just tell the user to try to insert the sample holder again.
+            if shid == 0:
+                dlg = wx.MessageDialog(self._main_frame,
+                                       "The connection with the sample holder failed.\n\n"
+                                       "Make sure the pins are clean and try re-inserting it.\n"
+                                       "If the problem persists, contact the support service.",
+                                       "Sample holder connection failed",
+                                       wx.OK | wx.ICON_WARNING)
+                dlg.ShowModal()
+                dlg.Destroy()
+                # Eject the sample holder
+                self._main_data.chamberState.value = CHAMBER_VENTING
+                return False
+
             # TODO: just subscribe to the change of sample holder?
             if (isinstance(self._main_data.chamber.registeredSampleHolder, VigilantAttributeBase)
                 and not self._main_data.chamber.registeredSampleHolder.value):
+
                 self._request_holder_calib() # async
                 return False
-
-            shid, sht = self._main_data.chamber.sampleHolder.value
-            logging.debug("Detected sample holder type %d, id %d", sht, shid)
 
             if sht != PHENOM_SH_TYPE_OPTICAL:
                 logging.info("Sample holder doesn't seem to be an optical one "

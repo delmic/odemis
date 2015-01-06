@@ -602,6 +602,7 @@ class ConvertStage(model.Actuator):
 
         shift_child = {self._axes_child["x"]: vshift_child[0],
                        self._axes_child["y"]: vshift_child[1]}
+        logging.debug("converted relative move from %s to %s", shift, shift_child)
         f = self._child.moveRel(shift_child)
         return f
 
@@ -613,6 +614,7 @@ class ConvertStage(model.Actuator):
 
         pos_child = {self._axes_child["x"]: vpos_child[0],
                      self._axes_child["y"]: vpos_child[1]}
+        logging.debug("converted absolute move from %s to %s", pos, pos_child)
         f = self._child.moveAbs(pos_child)
         return f
 

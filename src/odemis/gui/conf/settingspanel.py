@@ -411,7 +411,22 @@ CONFIG_PER_ROLE = {
             "choices": {2.1, 2.4, 2.7, 3, 3.3},  # some weird unit
         },
     },
-
+    # what we don't want to display:
+    "ccd":
+    {
+        "temperature": # On the Delphi it's pretty always at the target temp
+        {
+            "control_type": odemis.gui.CONTROL_NONE,
+        },
+        "bpp": # TODO: re-enable if 16-bits ever works correctly
+        {
+            "control_type": odemis.gui.CONTROL_NONE,
+        },
+        "readoutRate": # Default value is good for all the standard cases
+        {
+            "control_type": odemis.gui.CONTROL_NONE,
+        },
+    },
 },
 }
 
