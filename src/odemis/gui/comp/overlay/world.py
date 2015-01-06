@@ -91,7 +91,7 @@ class WorldSelectOverlay(base.WorldOverlay, base.SelectionMixin):
             offset = [v // 2 for v in self.cnvs.buffer_size]
             v_pos = (self.cnvs.world_to_view(self.w_start_pos, offset) +
                      self.cnvs.world_to_view(self.w_end_pos, offset))
-            v_pos = list(self._normalize(v_pos))
+            # v_pos = list(self._normalize(v_pos))
             self.select_v_start_pos = v_pos[:2]
             self.select_v_end_pos = v_pos[2:4]
             self._calc_edges()
@@ -629,7 +629,7 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, base.PixelDataMixin):
     def _on_selection(self, selected_line):
         """ Event handler that requests a redraw when the selected line changes """
 
-        if selected_line:
+        if (None, None) not in selected_line:
             self.start_pixel, self.end_pixel = selected_line
 
             v_pos = self.data_pixel_to_view(self.start_pixel)
@@ -643,17 +643,17 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, base.PixelDataMixin):
 
     # The following code is for debugging purposes. It draws a grid visualise the data pixel
 
-    def draw(self, ctx, shift=(0, 0), scale=1.0):
-        super(SpectrumLineSelectOverlay, self).draw(ctx, shift, scale)
-
-        ctx.set_source_rgba(*self.colour)
-        ctx.set_line_width(0.5)
-
-        for i in range(self._data_resolution[0]):
-            for j in range(self._data_resolution[1]):
-                rect = self.pixel_to_rect((i, j), scale)
-                ctx.rectangle(*rect)
-                ctx.stroke()
+    # def draw(self, ctx, shift=(0, 0), scale=1.0):
+    #     super(SpectrumLineSelectOverlay, self).draw(ctx, shift, scale)
+    #
+    #     ctx.set_source_rgba(*self.colour)
+    #     ctx.set_line_width(0.5)
+    #
+    #     for i in range(self._data_resolution[0]):
+    #         for j in range(self._data_resolution[1]):
+    #             rect = self.pixel_to_rect((i, j), scale)
+    #             ctx.rectangle(*rect)
+    #             ctx.stroke()
 
     def on_left_down(self, evt):
         """ Start drawing a selection line if the overlay is active """
@@ -720,9 +720,9 @@ class PixelSelectOverlay(base.WorldOverlay, base.PixelDataMixin, base.DragMixin)
 
     def connect_selection(self, selection_va):
         self._selected_pixel_va = selection_va
-        self._selected_pixel_va.subscribe(self._selection_made, init=True)
+        self._selected_pixel_va.subscribe(self._on_selection, init=True)
 
-    def _selection_made(self, _):
+    def _on_selection(self, _):
         """ Event handler that requests a redraw when the selected line changes """
         self.cnvs.update_drawing()
 

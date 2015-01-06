@@ -485,8 +485,8 @@ class SelectionMixin(DragMixin):
     #
     # @select_v_start_pos.setter
     # def select_v_start_pos(self, pos):
-    #     # import traceback
-    #     # traceback.print_stack()
+    #     import traceback
+    #     traceback.print_stack()
     #     self._select_v_start_pos = pos
 
     def _normalize(self, rect):
