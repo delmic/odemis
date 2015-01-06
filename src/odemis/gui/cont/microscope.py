@@ -698,7 +698,7 @@ class DelphiStateController(SecomStateController):
             # ID number 0 typically indicates something went wrong and it
             # couldn't be read. So instead of asking the user to calibrate it,
             # just tell the user to try to insert the sample holder again.
-            if shid != 0:
+            if shid == 0:
                 dlg = wx.MessageDialog(self._main_frame,
                                        "The connection with the sample holder failed.\n\n"
                                        "Make sure the pins are clean and try re-inserting it.\n"
