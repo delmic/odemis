@@ -150,6 +150,7 @@ from __future__ import division
 
 from abc import ABCMeta, abstractmethod
 import cairo
+from wx._core import PyDeadObjectError
 from decorator import decorator
 import logging
 import math
@@ -276,6 +277,10 @@ class BufferedCanvas(wx.Panel):
     @property
     def view_height(self):
         return self.ClientSize.y
+
+    @property
+    def dc_buffer(self):
+        return self._dc_buffer
 
     def set_default_cursor(self, cursor):
         """ Set the default cursor
@@ -544,8 +549,12 @@ class BufferedCanvas(wx.Panel):
             `wx.CallAfter(canvas.request_drawing_update)`
         """
 
-        if not self.draw_timer.IsRunning():
-            self.draw_timer.Start(delay * 1000.0, oneShot=True)
+        try:
+            if not self.draw_timer.IsRunning():
+                self.draw_timer.Start(delay * 1000.0, oneShot=True)
+        except PyDeadObjectError:
+            # This only should happen when running test cases
+            logging.warn("Drawing requested on dead canvas")
 
     def update_drawing(self):
         """ Redraw the buffer and display it """
@@ -596,7 +605,7 @@ class BufferedCanvas(wx.Panel):
         """
 
         for vo in self.view_overlays:
-            vo.Draw(ctx)
+            vo.draw(ctx)
 
     def _draw_world_overlays(self, ctx):
         """ Draw all the world overlays
@@ -606,7 +615,7 @@ class BufferedCanvas(wx.Panel):
         """
 
         for wo in self.world_overlays:
-            wo.Draw(ctx, self.w_buffer_center, self.scale)
+            wo.draw(ctx, self.w_buffer_center, self.scale)
 
     # ########### Position conversion ############
 
@@ -712,10 +721,10 @@ class BufferedCanvas(wx.Panel):
         """
 
         return cls.buffer_to_world_pos(
-                    cls.view_to_buffer_pos(v_pos, margins),
-                    w_buff_cent,
-                    scale,
-                    offset
+            cls.view_to_buffer_pos(v_pos, margins),
+            w_buff_cent,
+            scale,
+            offset
         )
 
     @classmethod
@@ -847,7 +856,7 @@ class BitmapCanvas(BufferedCanvas):
         # Each overlay draws itself
         # Remember that the device context being passed belongs to the *buffer*
         for o in self.world_overlays:
-            o.Draw(self.ctx, self.w_buffer_center, self.scale)
+            o.draw(self.ctx, self.w_buffer_center, self.scale)
             self.ctx.identity_matrix()
 
     def _draw_merged_images(self, ctx):
@@ -1931,7 +1940,7 @@ class PlotCanvas(BufferedCanvas):
         """ Draws all the view overlays on the ctx Cairo context"""
         # coordinates are at the center
         for o in self.view_overlays:
-            o.Draw(ctx)
+            o.draw(ctx)
 
     def _plot_data(self, ctx):
         """ Plot the current `_data` to the given context """

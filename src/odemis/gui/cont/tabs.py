@@ -1255,27 +1255,31 @@ class AnalysisTab(Tab):
             for spec_stream in spec_streams:
                 iimg = spec_stream.image.value
 
+                # We need to get the dimensions so we can determine the
+                # resolution. Remember that in Matrix notation, the
+                # number of rows (is vertical size), comes first. So we
+                # need to 'swap' the values to get the (x,y) resolution.
+                height, width = iimg.shape[0:2]
+
                 # Set the PointOverlay values for each viewport
                 for viewport in self.view_controller.viewports:
                     if hasattr(viewport.canvas, "pixel_overlay"):
                         ol = viewport.canvas.pixel_overlay
-
-                        # We need to get the dimensions so we can determine the
-                        # resolution. Remember that in Matrix notation, the
-                        # number of rows (is vertical size), comes first. So we
-                        # need to 'swap' the values to get the (x,y) resolution.
-                        height, width = iimg.shape[0:2]
-
-                        ol.set_values(
+                        ol.set_data_properties(
                             iimg.metadata[model.MD_PIXEL_SIZE][0],
                             iimg.metadata[model.MD_POS],
-                            (width, height),
-                            spec_stream.selected_pixel
+                            (width, height)
                         )
+                        ol.connect_selection(spec_stream.selected_pixel)
 
                     if hasattr(viewport.canvas, "line_overlay"):
                         ol = viewport.canvas.line_overlay
-                        ol.set_line_va(spec_stream.selected_line)
+                        ol.set_data_properties(
+                            iimg.metadata[model.MD_PIXEL_SIZE][0],
+                            iimg.metadata[model.MD_POS],
+                            (width, height)
+                        )
+                        ol.connect_selection(spec_stream.selected_line)
 
                 spec_stream.selected_pixel.subscribe(self._on_pixel_select, init=True)
                 spec_stream.selected_line.subscribe(self._on_line_select, init=True)

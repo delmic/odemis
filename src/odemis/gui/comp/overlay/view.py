@@ -29,26 +29,26 @@ import math
 import cairo
 import wx
 
-from .base import ViewOverlay, DragMixin, SelectionMixin
 import odemis.gui as gui
 import odemis.gui.img.data as img
 import odemis.model as model
+import odemis.gui.comp.overlay.base as base
 import odemis.util.conversion as conversion
 import odemis.util.units as units
 
 
-class TextViewOverlay(ViewOverlay):
+class TextViewOverlay(base.ViewOverlay):
     """ Render the present labels to the screen """
 
     def __init__(self, cnvs):
         super(TextViewOverlay, self).__init__(cnvs)
 
-    def Draw(self, ctx):
+    def draw(self, ctx):
         if self.labels:
             self._write_labels(ctx)
 
 
-class CrossHairOverlay(ViewOverlay):
+class CrossHairOverlay(base.ViewOverlay):
     """ Render a static cross hair to the center of the view """
 
     def __init__(self, cnvs, colour=gui.CROSSHAIR_COLOR, size=gui.CROSSHAIR_SIZE):
@@ -62,7 +62,7 @@ class CrossHairOverlay(ViewOverlay):
         self.center = self.cnvs.get_half_view_size()
         super(CrossHairOverlay, self).on_size(evt)
 
-    def Draw(self, ctx):
+    def draw(self, ctx):
         """ Draw a cross hair to the Cairo context """
 
         ctx.save()
@@ -91,7 +91,7 @@ class CrossHairOverlay(ViewOverlay):
         ctx.restore()
 
 
-class SpotModeOverlay(ViewOverlay):
+class SpotModeOverlay(base.ViewOverlay):
     """ Render the spot mode indicator in the center of the view """
 
     def __init__(self, cnvs):
@@ -102,7 +102,7 @@ class SpotModeOverlay(ViewOverlay):
         self._marker_offset = (marker_size.GetWidth() // 2 - 1, marker_size.GetHeight() // 2 - 1)
         self.center = self.cnvs.get_half_view_size()
 
-    def Draw(self, ctx):
+    def draw(self, ctx):
         # TODO: Replace the wxPython code with the following Cairo code
         # The problem with the code is that the fully transparent background of the image used
         # is *not* fully transparent.
@@ -126,7 +126,7 @@ class SpotModeOverlay(ViewOverlay):
             useMask=False)
 
 
-class StreamIconOverlay(ViewOverlay):
+class StreamIconOverlay(base.ViewOverlay):
     """ Render Stream (play/pause) icons to the view """
 
     opacity = 0.8
@@ -145,7 +145,7 @@ class StreamIconOverlay(ViewOverlay):
             self.play = 1.0
         wx.CallAfter(self.cnvs.Refresh)
 
-    def Draw(self, ctx):
+    def draw(self, ctx):
         if self.pause:
             self._draw_pause(ctx)
         elif self.play:
@@ -224,7 +224,7 @@ class StreamIconOverlay(ViewOverlay):
         ctx.stroke()
 
 
-class FocusOverlay(ViewOverlay):
+class FocusOverlay(base.ViewOverlay):
     """ Display the focus modification indicator """
 
     def __init__(self, cnvs):
@@ -236,7 +236,7 @@ class FocusOverlay(ViewOverlay):
 
         self.focus_label = self.add_label("", align=wx.ALIGN_RIGHT | wx.ALIGN_CENTER_VERTICAL)
 
-    def Draw(self, ctx):
+    def draw(self, ctx):
         # TODO: Both focuses at the same time, or 'snap' to horizontal/vertical on first motion?
 
         ctx.set_line_width(10)
@@ -298,19 +298,19 @@ class FocusOverlay(ViewOverlay):
         self.cnvs.Refresh()
 
 
-class ViewSelectOverlay(ViewOverlay, SelectionMixin):
+class ViewSelectOverlay(base.ViewOverlay, base.SelectionMixin):
 
     def __init__(self, cnvs, colour=gui.SELECTION_COLOUR, center=(0, 0)):
         super(ViewSelectOverlay, self).__init__(cnvs)
-        SelectionMixin.__init__(self, colour, center)
+        base.SelectionMixin.__init__(self, colour, center, base.EDIT_MODE_BOX)
 
         self.position_label = self.add_label("")
 
-    def Draw(self, ctx, shift=(0, 0), scale=1.0):
+    def draw(self, ctx, shift=(0, 0), scale=1.0):
 
-        if self.v_start_pos and self.v_end_pos:
-            start_pos = self.v_start_pos
-            end_pos = self.v_end_pos
+        if self.select_v_start_pos and self.select_v_end_pos:
+            start_pos = self.select_v_start_pos
+            end_pos = self.select_v_end_pos
 
             # logging.debug("Drawing from %s, %s to %s. %s", start_pos[0],
             #                                                start_pos[1],
@@ -360,8 +360,9 @@ class ViewSelectOverlay(ViewOverlay, SelectionMixin):
             super(ViewSelectOverlay, self).on_motion(evt)
 
 
-class MarkingLineOverlay(ViewOverlay, DragMixin):
-    """ Draw a vertical line at the given view position.
+class MarkingLineOverlay(base.ViewOverlay, base.DragMixin):
+    """ Draw a vertical line at the given view position
+
     This class can easily be extended to include a horizontal or horz/vert
     display mode.
 
@@ -373,7 +374,7 @@ class MarkingLineOverlay(ViewOverlay, DragMixin):
     def __init__(self, cnvs, colour=gui.SELECTION_COLOUR, orientation=None):
 
         super(MarkingLineOverlay, self).__init__(cnvs)
-        DragMixin.__init__(self)
+        base.DragMixin.__init__(self)
 
         self.label = None
         self.colour = conversion.hex_to_frgba(colour)
@@ -442,7 +443,7 @@ class MarkingLineOverlay(ViewOverlay, DragMixin):
         x, y = pos
         self.v_pos.value = (max(min(self.view_width, x), 1), max(min(self.view_height - 1, y), 1))
 
-    def Draw(self, ctx):
+    def draw(self, ctx):
         ctx.set_line_width(self.line_width)
         ctx.set_dash([3])
         ctx.set_line_join(cairo.LINE_JOIN_MITER)
@@ -480,7 +481,7 @@ class MarkingLineOverlay(ViewOverlay, DragMixin):
             ctx.fill()
 
 
-class DichotomyOverlay(ViewOverlay):
+class DichotomyOverlay(base.ViewOverlay):
     """ This overlay allows the user to select a sequence of nested quadrants
     within the canvas. The quadrants are numbered 0 to 3, from the top left to
     the bottom right. The first quadrant is the biggest, with each subsequent
@@ -674,7 +675,7 @@ class DichotomyOverlay(ViewOverlay):
 
         return x, y, w, h
 
-    def Draw(self, ctx):
+    def draw(self, ctx):
 
         ctx.set_source_rgba(*self.colour)
         ctx.set_line_width(2)
@@ -718,7 +719,7 @@ class DichotomyOverlay(ViewOverlay):
             ctx.fill()
 
 
-class PolarOverlay(ViewOverlay):
+class PolarOverlay(base.ViewOverlay):
 
     def __init__(self, cnvs):
         super(PolarOverlay, self).__init__(cnvs)
@@ -995,8 +996,8 @@ class PolarOverlay(ViewOverlay):
 
     # END Event Handlers
 
-    def Draw(self, ctx):
-        ### Draw angle lines ###
+    def draw(self, ctx):
+        # Draw angle lines
         ctx.set_line_width(2.5)
         ctx.set_source_rgba(0, 0, 0, 0.2 if self.dragging else 0.5)
 
@@ -1039,7 +1040,7 @@ class PolarOverlay(ViewOverlay):
 
         ctx.set_dash([])
 
-        ### Draw angle markings ###
+        # ## Draw angle markings ###
 
         # Draw frame that covers everything outside the center circle
         ctx.set_fill_rule(cairo.FILL_RULE_EVEN_ODD)
@@ -1085,7 +1086,7 @@ class PolarOverlay(ViewOverlay):
             self._write_label(ctx, self.intensity_label)
 
 
-class PointSelectOverlay(ViewOverlay):
+class PointSelectOverlay(base.ViewOverlay):
     """ Overlay for the selection of canvas points in view, world and physical coordinates """
 
     def __init__(self, cnvs):
@@ -1130,11 +1131,11 @@ class PointSelectOverlay(ViewOverlay):
 
     # END Event Handlers
 
-    def Draw(self, ctx):
+    def draw(self, ctx):
         pass
 
 
-class HistoryOverlay(ViewOverlay):
+class HistoryOverlay(base.ViewOverlay):
     """ Display rectangles on locations that the microscope was previously positioned at """
 
     def __init__(self, cnvs, history_list_va):
@@ -1149,26 +1150,28 @@ class HistoryOverlay(ViewOverlay):
     def __str__(self):
         return "History (%d): \n" % len(self) + "\n".join([str(h) for h in self.history.value[-5:]])
 
-#     # Event Handlers
-#
-#     def on_enter(self, evt):
-#         super(HistoryOverlay, self).on_enter(evt)
-#         self.cnvs.Refresh()
-#
-#     def on_leave(self, evt):
-#         super(HistoryOverlay, self).on_leave(evt)
-#         self.cnvs.Refresh()
-#
-#     # END Event Handlers
+    # # Event Handlers
+    #
+    # def on_enter(self, evt):
+    #     super(HistoryOverlay, self).on_enter(evt)
+    #     self.cnvs.Refresh()
+    #
+    # def on_leave(self, evt):
+    #     super(HistoryOverlay, self).on_leave(evt)
+    #     self.cnvs.Refresh()
+    #
+    # # END Event Handlers
 
     # TODO: might need rate limiter (but normally stage position is changed rarely)
-    def _on_history_update(self, history):
+    # TODO: Make the update of the canvas image the responsibility of the viewport
+    def _on_history_update(self, _):
         self.cnvs.update_drawing()
 
-    def Draw(self, ctx, scaled_size=None):
+    def draw(self, ctx, scaled_size=None):
         """
         scaled_size (int, int): size in pixel of the drawing area. That's a trick
           to allow drawing both on the standard view and directly onto the thumbnail
+
         """
 
         ctx.set_line_width(1)

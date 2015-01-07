@@ -625,7 +625,7 @@ class ViewButtonController(object):
                 # => rescale and crop on the center
                 # Rescale to have the smallest axis as big as the thumbnail
                 rsize = list(size_sub)
-                if (size_sub[0] / im.Width) > (size_sub[1] / im.Height):
+                if (size_sub[0] / im.Width) < (size_sub[1] / im.Height):
                     rsize[1] = int(im.Height * (size_sub[0] / im.Width))
                 else:
                     rsize[0] = int(im.Width * (size_sub[1] / im.Height))
@@ -634,7 +634,7 @@ class ViewButtonController(object):
                 # crop to the right shape
                 lt = ((size_sub[0] - sim.Width) // 2,
                       (size_sub[1] - sim.Height) // 2)
-                sim.Resize(size_sub, lt)
+                sim.Resize(size_sub, lt, 0, 0, 0)
 
                 # compute placement
                 y, x = divmod(i, 2)

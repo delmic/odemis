@@ -179,7 +179,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
                 self.points_overlay = world_overlay.PointsOverlay(self)
                 self.pixel_overlay = world_overlay.PixelSelectOverlay(self)
             if guimodel.TOOL_LINE in tab_data.tool.choices:
-                self.line_overlay = world_overlay.LineSelectOverlay(self)
+                self.line_overlay = world_overlay.SpectrumLineSelectOverlay(self)
             tab_data.tool.subscribe(self._on_tool, init=True)
 
     def _on_tool(self, tool_mode):
@@ -828,7 +828,7 @@ class OverviewCanvas(DblMicroscopeCanvas):
         dc.SelectObject(bitmap)
 
         ctx = wxcairo.ContextFromDC(dc)
-        self.history_overlay.Draw(ctx, gui.VIEW_BTN_SIZE)
+        self.history_overlay.draw(ctx, gui.VIEW_BTN_SIZE)
 
         # close the DC, to be sure the bitmap can be used safely
         image = wx.ImageFromBitmap(bitmap)
