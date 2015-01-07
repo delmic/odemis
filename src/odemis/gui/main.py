@@ -324,7 +324,7 @@ def main(args):
     """
 
     # arguments handling
-    parser = argparse.ArgumentParser(prog="odemis-cli",
+    parser = argparse.ArgumentParser(prog="odemis-gui",
                                      description=odemis.__fullname__)
 
     parser.add_argument('--version', dest="version", action='store_true',
