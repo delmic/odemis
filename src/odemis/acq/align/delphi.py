@@ -1371,7 +1371,7 @@ def _DoSpotShiftFactor(future, ccd, detector, escan, focus):
         pixelSize = image.metadata[model.MD_PIXEL_SIZE]
         vector_pxs = [a - b for a, b in zip(spot_no_rot, spot_rot_pi)]
         vector = (vector_pxs[0] * pixelSize[0], vector_pxs[1] * pixelSize[1])
-        percentage = ((vector[0] / 2) / escan.horizontalFoV.value, (vector[1] / 2) / escan.horizontalFoV.value)
+        percentage = (-(vector[0] / 2) / escan.horizontalFoV.value, -(vector[1] / 2) / escan.horizontalFoV.value)
         return percentage
     finally:
         escan.rotation.value = cur_rot
