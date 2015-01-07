@@ -736,12 +736,13 @@ class Detector(model.Detector):
             self._scanParams.nrOfFrames = self.parent._scanner._nr_frames
             self._scanParams.HDR = bpp == 16
 
+            md_bsd = self.getMetadata()
             # SEM image shift correction parameters
-            AX, AY = self._metadata.get(model.MD_RESOLUTION_SLOPE, (0, 0))
-            BX, BY = self._metadata.get(model.MD_RESOLUTION_INTERCEPT, (0, 0))
-            CX, CY = self._metadata.get(model.MD_HFW_SLOPE, (0, 0))
+            AX, AY = md_bsd.get(model.MD_RESOLUTION_SLOPE, (0, 0))
+            BX, BY = md_bsd.get(model.MD_RESOLUTION_INTERCEPT, (0, 0))
+            CX, CY = md_bsd.get(model.MD_HFW_SLOPE, (0, 0))
             # SEM spot shift correction parameters
-            spot_shift = self._metadata.get(model.MD_RESOLUTION_SLOPE, (0, 0))
+            spot_shift = md_bsd.get(model.MD_SPOT_SHIFT, (0, 0))
             resolution = self.parent._scanner.resolution.value
             self._scanParams.center.x = -(1 / (2 * math.pi) * numpy.arctan(-AX / (resolution[0] + BX)) + CX / 100)
             self._scanParams.center.y = -(1 / (2 * math.pi) * numpy.arctan(-AY / (resolution[1] + BY)) + CY / 100)
