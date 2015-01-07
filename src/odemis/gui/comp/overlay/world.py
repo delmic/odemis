@@ -672,6 +672,7 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, base.PixelDataMixin):
         if self.active:
             self._snap_to_pixel()
             LineSelectOverlay.on_left_up(self, evt)
+            self._selected_line_va.value = (self.start_pixel, self.end_pixel)
         else:
             super(SpectrumLineSelectOverlay, self).on_left_up(evt)
 

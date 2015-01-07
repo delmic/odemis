@@ -1736,7 +1736,7 @@ class PlotCanvas(BufferedCanvas):
         """ Set the data to be plotted
 
         data (list of 2 tuples): the X, Y coordinates of each point. The X values
-          must be ordered and not duplicated. 
+          must be ordered and not duplicated.
 
         """
         # FIXME: why not doing anything when data is empty?
