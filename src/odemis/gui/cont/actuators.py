@@ -40,6 +40,16 @@ KB_SECOM = {
         wx.WXK_NUMPAD3: ("aligner", "b", 1),
         wx.WXK_NUMPAD1: ("aligner", "a", -1),
         wx.WXK_NUMPAD9: ("aligner", "a", 1),
+        # For SECOMv2 (aligner has X/Y)
+        wx.WXK_NUMPAD_LEFT: ("aligner", "x", -1),
+        wx.WXK_NUMPAD_RIGHT: ("aligner", "x", 1),
+        wx.WXK_NUMPAD_DOWN: ("aligner", "y", -1),
+        wx.WXK_NUMPAD_UP: ("aligner", "y", 1),
+        # same but with NumLock
+        wx.WXK_NUMPAD4: ("aligner", "x", -1),
+        wx.WXK_NUMPAD6: ("aligner", "x", 1),
+        wx.WXK_NUMPAD2: ("aligner", "y", -1),
+        wx.WXK_NUMPAD8: ("aligner", "y", 1),
 }
 
 KB_SPARC = {
@@ -118,7 +128,13 @@ class ActuatorController(object):
 
                 btn.Bind(wx.EVT_BUTTON, btn_action)
                 self._btns.append(btn)
-        
+
+        # Show the right aligner panel (X/Y or A/B)
+        if ("aligner", "x") in tab_data.axes:
+            main_frame.pnl_xy_align.Show()
+        if ("aligner", "a") in tab_data.axes:
+            main_frame.pnl_ab_align.Show()
+
         tab_data.main.is_acquiring.subscribe(self._on_acquisition)
     
     def _on_acquisition(self, acquiring):

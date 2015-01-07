@@ -1504,6 +1504,10 @@ class AnalysisTab(Tab):
 class LensAlignTab(Tab):
     """ Tab for the lens alignment on the Secom platform
     The streams are automatically active when the tab is shown
+    It provides three ways to move the "aligner" (= optical lens position):
+     * raw (via the A/B or X/Y buttons)
+     * dicho mode (move opposite of the relative position of the ROI center)
+     * spot mode (move equal to the relative position of the spot center)
     """
 
     def __init__(self, name, button, panel, main_frame, main_data):
@@ -1519,24 +1523,34 @@ class LensAlignTab(Tab):
 
         main_frame.vp_align_sem.ShowLegend(False)
 
-        # See axes convention: A/B are 135° from Y/X
+        # For the SECOMv1, we need to convert A/B to Y/X (with an angle of 135°)
         # Note that this is an approximation of the actual movements.
         # In the current SECOM design, B affects both axes (not completely in a
         # linear fashion) and A affects mostly X (not completely in a linear
         # fashion). By improving the model (=conversion A/B <-> X/Y), the GUI
         # could behave in a more expected way to the user, but the current
         # approximation is enough to do the calibration relatively quickly.
-        self._stage_ab = ConvertStage("converter-ab", "stage",
-                                      children={"orig": main_data.aligner},
-                                      axes=["b", "a"],
-                                      rotation=math.radians(-135))
+        if "a" in main_data.aligner.axes:
+            # There is an error in the configuration of the SECOMv1 and the
+            # axes are opposite to what is defined in the convention
+            self._aligner_xy = ConvertStage("converter-ab", "stage",
+                                          children={"orig": main_data.aligner},
+                                          axes=["b", "a"],
+                                          rotation=math.radians(-135))
+            self._convert_to_aligner = self._convert_xy_to_ab
+        else: # SECOMv2 => it's directly X/Y
+            if not "x" in main_data.aligner.axes:
+                logging.error("Unknown axes in lens aligner stage")
+            self._aligner_xy = main_data.aligner
+            self._convert_to_aligner = lambda x: x
+
         # vp_align_sem is connected to the stage
         vpv = collections.OrderedDict([
             (
                 main_frame.vp_align_ccd,  # focused view
                 {
                     "name": "Optical CL",
-                    "stage": self._stage_ab,
+                    "stage": self._aligner_xy,
                     "focus": main_data.focus,
                     "stream_classes": (streammod.CameraNoLightStream,),
                 }
@@ -1580,7 +1594,7 @@ class LensAlignTab(Tab):
                                                    main_data.ccd,
                                                    main_data.ccd.data,
                                                    main_data.light,
-                                                   position=self._stage_ab.position)
+                                                   position=self._aligner_xy.position)
         self.tab_data_model.streams.value.insert(0, ccd_stream) # current stream
         self._ccd_stream = ccd_stream
         self._ccd_view = main_frame.vp_align_ccd.microscope_view
@@ -1606,7 +1620,7 @@ class LensAlignTab(Tab):
 
         # Dicho mode: during this mode, the label & button "move to center" are
         # shown. If the sequence is empty, or a move is going, it's disabled.
-        self._ab_move = None  # the future of the move (to know if it's over)
+        self._aligner_move = None  # the future of the move (to know if it's over)
         main_frame.lens_align_btn_to_center.Bind(wx.EVT_BUTTON,
                                                  self._on_btn_to_center)
 
@@ -1762,12 +1776,16 @@ class LensAlignTab(Tab):
         # * seq is not empty
         # * (and) no move currently going on
         seq = self.tab_data_model.dicho_seq.value
-        if seq and (self._ab_move is None or self._ab_move.done()):
+        if seq and (self._aligner_move is None or self._aligner_move.done()):
             roi = self._sem_stream.roi.value
-            a, b = self._computeROICenterAB(roi)
-            a_txt = units.readable_str(a, unit="m", sig=2)
-            b_txt = units.readable_str(b, unit="m", sig=2)
-            lbl = "Approximate center away by:\nA = %s, B = %s." % (a_txt, b_txt)
+            move = self._computeROICenterMove(roi)
+            # Convert to a text like "A = 45µm, B = -9µm"
+            mov_txts = []
+            for a in sorted(move.keys()):
+                v = units.readable_str(move[a], unit="m", sig=2)
+                mov_txts.append("%s = %s" % (a.upper(), v))
+
+            lbl = "Approximate center away by:\n%s." % ", ".join(mov_txts)
             enabled = True
 
             # TODO: Warn if move is bigger than previous move (or simply too big)
@@ -1788,17 +1806,15 @@ class LensAlignTab(Tab):
         # computes the center position
         seq = self.tab_data_model.dicho_seq.value
         roi = align.dichotomy_to_region(seq)
-        a, b = self._computeROICenterAB(roi)
+        move = self._computeROICenterMove(roi)
 
         # disable the button to avoid another move
         self.main_frame.lens_align_btn_to_center.Disable()
 
         # run the move
-        move = {"a": a, "b": b}
-        aligner = self.tab_data_model.main.aligner
         logging.debug("Moving by %s", move)
-        self._ab_move = aligner.moveRel(move)
-        self._ab_move.add_done_callback(self._on_move_to_center_done)
+        self._aligner_move = self.tab_data_model.main.aligner.moveRel(move)
+        self._aligner_move.add_done_callback(self._on_move_to_center_done)
 
     def _on_move_to_center_done(self, future):
         """
@@ -1808,40 +1824,46 @@ class LensAlignTab(Tab):
         logging.debug("Move over")
         self.tab_data_model.dicho_seq.value = []
 
-    def _computeROICenterAB(self, roi):
+    def _computeROICenterMove(self, roi):
         """
-        Computes the position of the center of ROI, in the A/B coordinates
+        Computes the move require to go to the center of ROI, in the aligner
+         coordinates
         roi (tuple of 4: 0<=float<=1): left, top, right, bottom (in ratio)
-        returns (tuple of 2: floats): relative coordinates of center in A/B
+        returns (dict of str -> floats): relative move needed
         """
         # compute center in X/Y coordinates
         pxs = self.tab_data_model.main.ebeam.pixelSize.value
         eshape = self.tab_data_model.main.ebeam.shape
         fov_size = (eshape[0] * pxs[0], eshape[1] * pxs[1])  # m
         l, t, r, b = roi
-        xc, yc = (fov_size[0] * ((l + r) / 2 - 0.5),
-                  fov_size[1] * ((t + b) / 2 - 0.5))
+        center = {"x": fov_size[0] * ((l + r) / 2 - 0.5),
+                  "y":-fov_size[1] * ((t + b) / 2 - 0.5)} # physical Y is reversed
+        logging.debug("center of ROI at %s", center)
 
+        # The move is opposite direction of the relative center
+        shift_xy = {"x":-center["x"], "y":-center["y"]}
+        shift = self._convert_to_aligner(shift_xy)
+        # Drop the moves if very close to it (happens often with A/B as they can
+        # be just on the axis)
+        for a, v in shift.items():
+            if abs(v) < 1e-10:
+                shift[a] = 0
+
+        return shift
+
+    def _convert_xy_to_ab(self, shift):
         # same formula as ConvertStage._convertPosToChild()
-        ang = math.radians(45)
-        ac, bc = [xc * math.cos(ang) - yc * math.sin(ang),
-                  xc * math.sin(ang) + yc * math.cos(ang)]
+        ang = math.radians(-135) # should be 45° but conventions were inversed
 
-        # Force values to 0 if very close to it (happens often as can be on just
-        # on the axis)
-        if abs(ac) < 1e-10:
-            ac = 0
-        if abs(bc) < 1e-10:
-            bc = 0
-
-        return ac, bc
+        return {"b": shift["x"] * math.cos(ang) - shift["y"] * math.sin(ang),
+                "a": shift["x"] * math.sin(ang) + shift["y"] * math.cos(ang)}
 
     def _onSEMpxs(self, pixel_size):
         """
         Called when the SEM pixel size changes, which means the FoV changes
         pixel_size (tuple of 2 floats): in meter
         """
-        # in dicho search, it means A, B are actually different values
+        # in dicho search, it means A/B or X/Y are actually different values
         self._update_to_center()
 
         eshape = self.tab_data_model.main.ebeam.shape

@@ -262,7 +262,7 @@ class OdemisGUIApp(wx.App):
             sys.excepthook = sys.__excepthook__
 
             try:
-                exc = traceback.format_exception(type, value, trace)
+                exc = traceback.format_exception(etype, value, trace)
                 try:
                     remote_tb = value._pyroTraceback
                     rmt_exc = "Remote exception %s" % ("".join(remote_tb),)
@@ -280,7 +280,7 @@ class OdemisGUIApp(wx.App):
                 # put us back
                 sys.excepthook = self.excepthook
         else:
-            exc = traceback.format_exception(type, value, trace)
+            exc = traceback.format_exception(etype, value, trace)
             print "".join(exc)
 
 class OdemisOutputWindow(object):

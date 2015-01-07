@@ -99,8 +99,8 @@ class xrcfr_main(wx.Frame):
         self.pnl_xy_align = xrc.XRCCTRL(self, "pnl_xy_align")
         self.lens_align_btn_p_aligner_y = xrc.XRCCTRL(self, "lens_align_btn_p_aligner_y")
         self.lens_align_btn_m_aligner_y = xrc.XRCCTRL(self, "lens_align_btn_m_aligner_y")
-        self.lens_align_btn_p_aligner_x = xrc.XRCCTRL(self, "lens_align_btn_p_aligner_x")
         self.lens_align_btn_m_aligner_x = xrc.XRCCTRL(self, "lens_align_btn_m_aligner_x")
+        self.lens_align_btn_p_aligner_x = xrc.XRCCTRL(self, "lens_align_btn_p_aligner_x")
         self.pnl_move_to_center = xrc.XRCCTRL(self, "pnl_move_to_center")
         self.lens_align_lbl_approc_center = xrc.XRCCTRL(self, "lens_align_lbl_approc_center")
         self.lens_align_btn_to_center = xrc.XRCCTRL(self, "lens_align_btn_to_center")
@@ -902,16 +902,16 @@ def __init_resources():
                         <orient>wxVERTICAL</orient>
                         <object class="sizeritem">
                           <object class="FoldPanelBar">
-                            <object class="FoldPanelItem" name="fp_settings_secom_sem">
-                              <label>SEM SETTINGS</label>
+                            <object class="FoldPanelItem" name="fp_settings_secom_optical">
+                              <label>OPTICAL SETTINGS</label>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
                               <XRCED>
                                 <assign_var>1</assign_var>
                               </XRCED>
                             </object>
-                            <object class="FoldPanelItem" name="fp_settings_secom_optical">
-                              <label>OPTICAL SETTINGS</label>
+                            <object class="FoldPanelItem" name="fp_settings_secom_sem">
+                              <label>SEM SETTINGS</label>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
                               <XRCED>
@@ -1223,8 +1223,8 @@ def __init_resources():
                     <object class="wxPanel" name="pnl_xy_align">
                       <object class="wxGridBagSizer">
                         <object class="sizeritem">
-                          <object class="wxStaticText" name="lbl_my">
-                            <label>-Y</label>
+                          <object class="wxStaticText" name="lbl_py">
+                            <label>+Y</label>
                             <fg>#E5E5E5</fg>
                             <font>
                               <size>16</size>
@@ -1240,8 +1240,8 @@ def __init_resources():
                           <cellpos>0,2</cellpos>
                         </object>
                         <object class="sizeritem">
-                          <object class="wxStaticText" name="lbl_py">
-                            <label>+Y</label>
+                          <object class="wxStaticText" name="lbl_my">
+                            <label>-Y</label>
                             <fg>#E5E5E5</fg>
                             <font>
                               <size>16</size>
@@ -1340,7 +1340,7 @@ def __init_resources():
                           <cellpos>3,2</cellpos>
                         </object>
                         <object class="sizeritem">
-                          <object class="ImageTextButton" name="lens_align_btn_p_aligner_x">
+                          <object class="ImageTextButton" name="lens_align_btn_m_aligner_x">
                             <label>←</label>
                             <delta>1</delta>
                             <bitmap>img_button_btn_64x48_png</bitmap>
@@ -1362,7 +1362,7 @@ def __init_resources():
                           <cellpos>2,1</cellpos>
                         </object>
                         <object class="sizeritem">
-                          <object class="ImageTextButton" name="lens_align_btn_m_aligner_x">
+                          <object class="ImageTextButton" name="lens_align_btn_p_aligner_x">
                             <label>→</label>
                             <delta>1</delta>
                             <bitmap>img_button_btn_64x48_png</bitmap>

@@ -989,7 +989,8 @@ class SecomSettingsController(SettingsBarController):
                                     "No optical microscope found",
                                     highlight_change)
 
-        # Query Odemis daemon (Should move this to separate thread)
+        # Add the components based on what is available
+        # TODO: move it to a separate thread to save time at init?
         if main_data.ccd:
             self.add_component("Camera",
                                 main_data.ccd,
@@ -1216,7 +1217,7 @@ class AnalysisSettingsController(SettingsBarController):
         # individually
         self._pnl_acqfile = None
         self._pnl_arfile = None
-        self._specfile_controller = None
+        self._pnl_specfile = None
 
         self._arfile_ctrl = None
         self._spec_bckfile_ctrl = None
@@ -1226,7 +1227,7 @@ class AnalysisSettingsController(SettingsBarController):
 
         # Subscribe to the VAs that influence how the settings look.
         # All these VAs contain FileInfo object
-        tab_data.acq_fileinfo.subscribe(self.on_acqfile_change, init=True)
+        tab_data.acq_fileinfo.subscribe(self.on_acqfile_change)
 
         # The following three can be replaced by callables taking a unicode and
         # returning a unicode (or raising a ValueError exception). They are
@@ -1269,8 +1270,8 @@ class AnalysisSettingsController(SettingsBarController):
 
         # Panel with spectrum background + efficiency compensation file information
         # They are displayed only if there are Spectrum streams
-        self._specfile_controller = FileInfoSettingsController(self.parent.fp_fileinfo, "")
-        self._spec_bckfile_ctrl = self._specfile_controller.add_browse_button(
+        self._pnl_specfile = FileInfoSettingsController(self.parent.fp_fileinfo, "")
+        self._spec_bckfile_ctrl = self._pnl_specfile.add_browse_button(
             "Spec. background",
             "Spectrum background correction file",
             "None").value_ctrl
@@ -1278,15 +1279,18 @@ class AnalysisSettingsController(SettingsBarController):
         self._spec_bckfile_ctrl.Bind(EVT_FILE_SELECT, self._on_spec_bck_file_select)
         self.tab_data.spec_bck_cal.subscribe(self._on_spec_bck_cal, init=True)
 
-        self._specfile_ctrl = self._specfile_controller.add_browse_button(
+        self._specfile_ctrl = self._pnl_specfile.add_browse_button(
             "Spec. correction",
             "Spectrum efficiency correction file",
             "None").value_ctrl
         self._specfile_ctrl.SetWildcard(wildcards)
-        self._specfile_controller.hide_panel()
+        self._pnl_specfile.hide_panel()
         self._specfile_ctrl.Bind(EVT_FILE_SELECT, self._on_spec_file_select)
         self.tab_data.spec_cal.subscribe(self._on_spec_cal, init=True)
 
+        # FIXME: foldpanelbar.expand() force showing all the children, including
+        # the panels we've just hided => make it more clever and leave the
+        # shown/hidden state as is. (use a window to contain all the children?)
         self.parent.fp_fileinfo.expand()
 
     def on_acqfile_change(self, file_info):
@@ -1384,13 +1388,12 @@ class AnalysisSettingsController(SettingsBarController):
 
         ar (boolean or None): show, hide or don't change AR calib panel
         spec (boolean or None): show, hide or don't change spec calib panel
-
         """
 
         if ar is not None:
             self._pnl_arfile.show_panel(ar)
         if spec is not None:
-            self._specfile_controller.show_panel(spec)
+            self._pnl_specfile.show_panel(spec)
 
         self.parent.Layout()
 
