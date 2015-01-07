@@ -639,7 +639,7 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, base.PixelDataMixin):
             self.drag_v_end_pos = self.select_v_end_pos = v_pos
 
             self._view_to_world()
-            self.cnvs.update_drawing()
+            wx.CallAfter(self.cnvs.update_drawing)
 
     # The following code is for debugging purposes. It draws a grid visualise the data pixel
 
@@ -725,7 +725,7 @@ class PixelSelectOverlay(base.WorldOverlay, base.PixelDataMixin, base.DragMixin)
 
     def _on_selection(self, _):
         """ Event handler that requests a redraw when the selected line changes """
-        self.cnvs.update_drawing()
+        wx.CallAfter(self.cnvs.update_drawing)
 
     def deactivate(self):
         """ Clear the hover pixel when the overlay is deactivated """
