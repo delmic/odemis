@@ -194,23 +194,31 @@ class AnchoredEstimator(object):
         """
         # TODO: implement more clever calculation
         pxs_dc_period = []
-        pxs = period // dwell_time # number of pixels per period
+        pxs = int(period // dwell_time) # number of pixels per period
         pxs_per_line = repetitions[0]
         if pxs > pxs_per_line:
             # Correct every (pxs // pxs_per_line) lines
             pxs_dc_period.append((pxs // pxs_per_line) * pxs_per_line)
+        elif pxs <= 1: # also catches cases that would be 1,1,2,1,...
+            # Correct every pixel
+            pxs_dc_period.append(1)
         else:
-            half_rep = pxs_per_line // 2
-            if pxs < half_rep:
-                # Correct every pixel
-                pxs_dc_period.append(1)
+            # Correct every X or X+1 pixel
+            # number of acquisition per line
+            nacq = int((pxs_per_line * dwell_time) // period)
+            # average duration of a period when fitted to the line
+            avgp = pxs_per_line / nacq
+            tot_pxi = 0 # total pixels rounded down
+            for i in range(1, nacq):
+                prev_tot_pxi = tot_pxi
+                tot_pxi = int(avgp * i)
+                pxs_dc_period.append(tot_pxi - prev_tot_pxi)
             else:
-                # Correct every half a line
-                pxs_dc_period.append(half_rep)
-                pxs_dc_period.append(pxs_per_line - half_rep)
+                # last one explicit, to avoid floating point errors
+                pxs_dc_period.append(pxs_per_line - tot_pxi)
 
         logging.debug("Drift correction will be performed every %s pixels",
-                        pxs_dc_period)
+                      pxs_dc_period)
         return itertools.cycle(pxs_dc_period)
 
     def _updateSEMSettings(self):
