@@ -144,25 +144,21 @@ def main(args):
         # We want to be as close as possible to the center when we are zoomed in
         escan.horizontalFoV.value = escan.horizontalFoV.range[0]
 
-        logging.debug("Initial calibration to align and calculate the offset...")
-        try:
-            align_offsetf = aligndelphi.AlignAndOffset(ccd, detector, escan, sem_stage,
-                                                   opt_stage, focus)
-            offset = align_offsetf.result()
-        except Exception:
-            # Configure CCD and e-beam to write CL spots
-            ccd.binning.value = (1, 1)
-            ccd.resolution.value = ccd.resolution.range[1]
-            ccd.exposureTime.value = 900e-03
-            escan.scale.value = (1, 1)
-            escan.resolution.value = (1, 1)
-            escan.translation.value = (0, 0)
-            escan.dwellTime.value = 5e-06
-            msg = "Offset calculation failed. Please turn on the Optical stream, set Power to 0 Watt and focus the image so you have a clearly visible spot. Then turn off the stream and press Enter to retry..."
-            raw_input(msg)
-            align_offsetf = aligndelphi.AlignAndOffset(ccd, detector, escan, sem_stage,
-                                                   opt_stage, focus)
-            offset = align_offsetf.result()
+        # Configure CCD and e-beam to write CL spots
+        ccd.binning.value = (1, 1)
+        ccd.resolution.value = ccd.resolution.range[1]
+        ccd.exposureTime.value = 900e-03
+        escan.scale.value = (1, 1)
+        escan.resolution.value = (1, 1)
+        escan.translation.value = (0, 0)
+        escan.dwellTime.value = 5e-06
+        detector.data.subscribe(_discard_data)
+        msg = "Please turn on the Optical stream, set Power to 0 Watt and focus the image so you have a clearly visible spot. Then turn off the stream and press Enter..."
+        raw_input(msg)
+        detector.data.unsubscribe(_discard_data)
+        align_offsetf = aligndelphi.AlignAndOffset(ccd, detector, escan, sem_stage,
+                                               opt_stage, focus)
+        offset = align_offsetf.result()
         center_focus = focus.position.value.get('z')
 
         logging.debug("Calculating rotation and scaling...")
@@ -179,11 +175,20 @@ def main(args):
             escan.resolution.value = (1, 1)
             escan.translation.value = (0, 0)
             escan.dwellTime.value = 5e-06
+            detector.data.subscribe(_discard_data)
             msg = "Rotation calculation failed. Please turn on the Optical stream, set Power to 0 Watt and focus the image so you have a clearly visible spot. Then turn off the stream and press Enter to retry..."
             raw_input(msg)
+            detector.data.unsubscribe(_discard_data)
             rotation_scalingf = aligndelphi.RotationAndScaling(ccd, detector, escan, sem_stage,
                                                            opt_stage, focus, offset)
             rotation, scaling = rotation_scalingf.result()
+
+        # Offset is divided by scaling, since Convert Stage applies scaling
+        # also in the given offset
+        pure_offset = offset
+        offset = ((offset[0] / scaling[0]), (offset[1] / scaling[1]))
+
+        logging.info("\n**Computed calibration values**\n first hole: %s (unit: m,m)\n second hole: %s (unit: m,m)\n hole focus: %f (unit: m)\n offset: %s (unit: m,m)\n rotation: %f (unit: radians)\n scaling: %s \n", first_hole, second_hole, hole_focus, offset, rotation, scaling)
 
         logging.debug("Calculating shift parameters...")
         try:
@@ -199,8 +204,10 @@ def main(args):
             escan.resolution.value = (1, 1)
             escan.translation.value = (0, 0)
             escan.dwellTime.value = 5e-06
+            detector.data.subscribe(_discard_data)
             msg = "Spot shift calculation failed. Please turn on the Optical stream, set Power to 0 Watt and focus the image so you have a clearly visible spot. Then turn off the stream and press Enter to retry..."
             raw_input(msg)
+            detector.data.unsubscribe(_discard_data)
             spot_shiftf = aligndelphi.SpotShiftFactor(ccd, detector, escan, focus)
             spotshift = spot_shiftf.result()
 
@@ -211,13 +218,10 @@ def main(args):
         # Compute HFW-related values
         hfw_shiftf = aligndelphi.HFWShiftFactor(detector, escan, sem_stage, ebeam_focus, hole_focus)
         hfwa = hfw_shiftf.result()
-
-        # Offset is divided by scaling, since Convert Stage applies scaling
-        # also in the given offset
-        offset = ((offset[0] / scaling[0]), (offset[1] / scaling[1]))
         
+        logging.info("\n**Computed SEM shift parameters**\n resa: %s \n resb: %s \n hfwa: %s \n spotshift: %s \n", resa, resb, hfwa, spotshift)
         # Return to the center so fine alignment can be executed just after calibration
-        f = sem_stage.moveAbs({"x":position[0], "y":position[1]})
+        f = sem_stage.moveAbs({"x":-pure_offset[0], "y":-pure_offset[1]})
         f.result()
         f = opt_stage.moveAbs({"x":0, "y":0})
         f.result()
@@ -242,8 +246,11 @@ def main(args):
             escan.resolution.value = (1, 1)
             escan.translation.value = (0, 0)
             escan.dwellTime.value = 5e-06
+            detector.data.subscribe(_discard_data)
             msg = "Fine alignment failed. Please turn on the Optical stream, set Power to 0 Watt and focus the image so you have a clearly visible spot. Then turn off the stream and press Enter to retry..."
             raw_input(msg)
+            detector.data.unsubscribe(_discard_data)
+            escan.horizontalFoV.value = 80e-06
             f = align.FindOverlay((4, 4),
                       0.5,  # s, dwell time
                       10e-06,  # m, maximum difference allowed
@@ -265,10 +272,14 @@ def main(args):
         logging.exception("Unexpected error while performing action.")
         return 127
 
-    logging.info("\n**Computed calibration values**\n first hole: %s (unit: m,m)\n second hole: %s (unit: m,m)\n hole focus: %f (unit: m)\n offset: %s (unit: m,m)\n rotation: %f (unit: radians)\n scaling: %s \n", first_hole, second_hole, hole_focus, offset, rotation, scaling)
-    logging.info("\n**Computed SEM shift parameters**\n resa: %s \n resb: %s \n hfwa: %s \n spotshift: %s \n", resa, resb, hfwa, spotshift)
     logging.info("\n**Computed fine alignment parameters**\n scaling: %s \n rotation: %f \n", iscale, irot)
     return 0
+
+def _discard_data(df, data):
+    """
+    Does nothing, just discard the SEM data received (for spot mode)
+    """
+    pass
 
 if __name__ == '__main__':
     ret = main(sys.argv)

@@ -741,7 +741,7 @@ class Detector(model.Detector):
             BX, BY = self._metadata.get(model.MD_RESOLUTION_INTERCEPT, (0, 0))
             CX, CY = self._metadata.get(model.MD_HFW_SLOPE, (0, 0))
             # SEM spot shift correction parameters
-            spot_shift = self._metadata.get(model.MD_RESOLUTION_SLOPE, (0, 0))
+            spot_shift = self._metadata.get(model.MD_SPOT_SHIFT, (0, 0))
             resolution = self.parent._scanner.resolution.value
             self._scanParams.center.x = -(1 / (2 * math.pi) * numpy.arctan(-AX / (resolution[0] + BX)) + CX / 100)
             self._scanParams.center.y = -(1 / (2 * math.pi) * numpy.arctan(-AY / (resolution[1] + BY)) + CY / 100)

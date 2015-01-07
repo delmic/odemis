@@ -365,6 +365,9 @@ def _DoDelphiCalibration(future, main_data, overview_pressure, vacuum_pressure,
                 logging.debug("Try to update the remaining time...")
                 future.set_end_time(time.time() + 60)
 
+                # Proper hfw for spot grid to be within the ccd fov
+                main_data.ebeam.horizontalFoV.value = 80e-06
+
                 # Run the optical fine alignment
                 # TODO: reuse the exposure time
                 f = align.FindOverlay((4, 4),

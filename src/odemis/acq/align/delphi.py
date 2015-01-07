@@ -50,7 +50,7 @@ ROTATION_SPOTS = ({"x":4e-03, "y":0}, {"x":-4e-03, "y":0},
                   {"x":0, "y":4e-03}, {"x":0, "y":-4e-03})
 EXPECTED_OFFSET = (0.00047, 0.00014)    #Fallback sem position in case of
                                         #lens alignment failure 
-SHIFT_DETECTION = {"x":0, "y":11.3e-03}  # Use holder hole images to measure the shift
+SHIFT_DETECTION = {"x":0, "y":11.7e-03}  # Use holder hole images to measure the shift
 SEM_KNOWN_FOCUS = 0.006386  # Fallback sem focus position for the first insertion
 
 
@@ -270,10 +270,11 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
             # metadata as the current sample holder will be unloaded
             # Offset is divided by scaling, since Convert Stage applies scaling
             # also in the given offset
+            pure_offset = offset
             offset = ((offset[0] / scaling[0]), (offset[1] / scaling[1]))
 
-            # Return to the center so fine alignment can be executed just after calibration
-            f = sem_stage.moveAbs({"x":sem_position[0], "y":sem_position[1]})
+            # Return to the center so fine overlay can be executed just after calibration
+            f = sem_stage.moveAbs({"x":-pure_offset[0], "y":-pure_offset[1]})
             f.result()
             f = opt_stage.moveAbs({"x":0, "y":0})
             f.result()
