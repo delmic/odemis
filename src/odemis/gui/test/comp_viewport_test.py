@@ -66,24 +66,21 @@ BAD_RANGED_PLOTS = [
 ]
 
 
-class CanvasTestCase(test.GuiTestCase):
+class ViewportTestCase(test.GuiTestCase):
 
     frame_class = test.test_gui.xrccanvas_frame
 
     def test_sandbox(self):
         vwp = viewport.PlotViewport(self.panel)
         vwp.canvas.SetBackgroundColour("#333")
-        self.add_control(vwp, wx.EXPAND, proportion=1)
         vwp.canvas.SetForegroundColour("#A0CC27")
+        self.add_control(vwp, wx.EXPAND, proportion=1)
 
         vwp.canvas.set_plot_mode(canvas.PLOT_MODE_BAR)
 
         plot = RANGED_PLOTS[-1]
 
-        vwp.canvas.set_1d_data(plot[2],
-                               plot[3],
-                               range_x=plot[0],
-                               range_y=plot[1])
+        vwp.canvas.set_1d_data(plot[2], plot[3], range_x=plot[0], range_y=plot[1])
 
         vwp.left_legend.unit = 'm'
         vwp.bottom_legend.unit = 'm'
