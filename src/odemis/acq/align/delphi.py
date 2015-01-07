@@ -641,7 +641,9 @@ def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, fo
         # From the sets of 4 positions calculate rotation and scaling matrices
         unused, scaling, rotation = transform.CalculateTransform(opt_spots,
                                                                  sem_spots)
-        # TODO: warn if the translation is > epsilon?
+        # Take care of negative rotation
+        if rotation < 0:
+            rotation = 2 * math.pi + rotation
         return rotation, scaling
 
     finally:
