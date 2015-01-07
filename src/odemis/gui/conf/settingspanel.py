@@ -372,6 +372,19 @@ CONFIG_PER_ROLE = {
             "control_type": odemis.gui.CONTROL_COMBO,
         },
     },
+    "streamsem":
+    {
+        # VAs from the stream
+        "dcPeriod":
+        {
+            "label": "Drift corr. period",
+            "tooltip": "Maximum time between anchor region acquisitions",
+            "control_type": odemis.gui.CONTROL_SLIDER,
+            "scale": "log",
+            "range": (1, 300), # s, the VA allows a wider range, not typically needed
+            "accuracy": 2,
+        },
+    },
     "streamspec":
     {
         # VAs from the stream, temporarily here

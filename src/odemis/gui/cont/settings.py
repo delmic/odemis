@@ -1041,7 +1041,7 @@ class LensAlignSettingsController(SettingsBarController):
 class SparcSettingsController(SettingsBarController):
 
     def __init__(self, parent_frame, tab_data, highlight_change=False,
-                 spec_stream=None, ar_stream=None):
+                 sem_stream=None, spec_stream=None, ar_stream=None):
         super(SparcSettingsController, self).__init__(tab_data,
                                                       highlight_change)
         main_data = tab_data.main
@@ -1074,6 +1074,13 @@ class SparcSettingsController(SettingsBarController):
                 self._sem_panel
             )
 
+            if sem_stream:
+                self.sem_dcperiod_ent = self._sem_panel.add_value(
+                    "dcPeriod",
+                    sem_stream.dcPeriod,
+                    None,  # component
+                    self._va_config["streamsem"]["dcPeriod"]
+                )
         if main_data.spectrometer:
             self.add_component(
                 "Spectrometer",
