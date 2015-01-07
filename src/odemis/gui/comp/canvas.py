@@ -810,7 +810,9 @@ class BitmapCanvas(BufferedCanvas):
                 if not blend_mode:
                     blend_mode = BLEND_DEFAULT
 
-                if im.shape[2] != 4:  # Both ARGB32 and RGB24 need 4 bytes
+                if im.shape[2] == 3:
+                    pass
+                elif im.shape[2] != 4:  # Both ARGB32 and RGB24 need 4 bytes
                     raise ValueError("Unsupported colour byte size (%s)!" % (im.shape[2],))
 
                 im.metadata['dc_center'] = w_pos
