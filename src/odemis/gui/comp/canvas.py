@@ -150,13 +150,14 @@ from __future__ import division
 
 from abc import ABCMeta, abstractmethod
 import cairo
-from wx._core import PyDeadObjectError
 from decorator import decorator
 import logging
 import math
+import numpy
 from odemis.gui import BLEND_DEFAULT, BLEND_SCREEN
 from odemis.gui.comp.overlay.base import WorldOverlay, ViewOverlay
 from odemis.gui.util import call_after
+from odemis.model._dataflow import DataArray
 from odemis.util import intersect
 from odemis.util.conversion import wxcol_to_frgb
 import os
@@ -811,7 +812,13 @@ class BitmapCanvas(BufferedCanvas):
                     blend_mode = BLEND_DEFAULT
 
                 if im.shape[2] == 3:
-                    pass
+                    # TODO: Move this code to some utility function
+                    # Create an empty array of the shape x,y,4
+                    new_im = DataArray(numpy.zeros(im.shape[:2] + (4,),
+                                                   dtype=numpy.uint8), im.metadata)
+                    # Copy the data
+                    new_im[:, :, :-1] = im
+                    im = new_im
                 elif im.shape[2] != 4:  # Both ARGB32 and RGB24 need 4 bytes
                     raise ValueError("Unsupported colour byte size (%s)!" % (im.shape[2],))
 

@@ -702,6 +702,7 @@ class SpatialSpectrumViewport(ViewPort):
         self.left_legend.redraw()
         self.bottom_legend.redraw()
         super(SpatialSpectrumViewport, self).Refresh(*args, **kwargs)
+        wx.CallAfter(self.canvas.update_drawing)
 
     def setView(self, microscope_view, tab_data):
         """
