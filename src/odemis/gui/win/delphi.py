@@ -27,6 +27,7 @@ from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
 import odemis.acq.align.delphi as aligndelphi
 import threading
 import time
+import math
 from odemis.acq import align
 
 DELPHI_OPT_GOOD_FOCUS = 0.03826  # somehow possibly not too bad focus position
@@ -379,6 +380,9 @@ def _DoDelphiCalibration(future, main_data, overview_pressure, vacuum_pressure,
                 trans_val, cor_md = f.result()
                 iscale = cor_md[model.MD_PIXEL_SIZE_COR]
                 irot = cor_md[model.MD_ROTATION_COR]
+                iscale = 1 / iscale
+                if irot < 0:
+                    irot = 2 * math.pi + irot
                 return htop, hbot, hfoc, strans, sscale, srot, iscale, irot, resa, resb, hfwa, spotshift
             # Secondary calibration
             else:

@@ -26,6 +26,7 @@ from odemis.driver import phenom
 import sys
 from odemis.acq import align
 from odemis.gui.conf import get_calib_conf
+import math
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -97,7 +98,6 @@ def main(args):
 
         # Calculate offset approximation
         try:
-            logging.debug("Starting lens alignment...")
             f = aligndelphi.LensAlignment(overview_ccd, sem_stage)
             position = f.result()
             logging.debug("SEM position after lens alignment: %s", position)
@@ -261,7 +261,9 @@ def main(args):
 
         iscale = cor_md[model.MD_PIXEL_SIZE_COR]
         irot = cor_md[model.MD_ROTATION_COR]
-
+        iscale = 1 / iscale
+        if irot < 0:
+            irot = 2 * math.pi + irot
         # Update calibration file
         calibconf = get_calib_conf()
         shid, sht = chamber.sampleHolder.value
