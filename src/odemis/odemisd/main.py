@@ -94,35 +94,38 @@ class BackendContainer(model.Container):
         ghosts_names = set(self._instantiator.ast.keys()) - {mic.name}
         mic.ghosts.value = dict((n, ST_UNLOADED) for n in ghosts_names)
 
+        if self._dry_run:
+            # Try to instantiate everything, it will raise an exception if it fails
+            try:
+                self._instantiate_all()
+            finally:
+                self.terminate()
+
+            logging.info("model has been successfully validated, exiting")
+            return    # everything went fine
+
         # Start the metadata update
         # TODO: upgrade metadata updater to support online changes
         self._mdupdater = self.instantiate(MetadataUpdater,
                                {"name": "Metadata Updater", "microscope": mic})
 
         # Keep instantiating the other components in a separate thread
-        self._inst_thread = threading.Thread(target=self._instantiate_forever,
+        self._inst_thread = threading.Thread(target=self._instantiate_all,
                                              name="Component instantiator")
         self._inst_thread.start()
-
-        if self._dry_run:
-            # TODO: wait until all the components have been instantiated or one
-            # error happened
-
-            logging.info("model has been successfully validated, exiting")
-            return    # everything went fine
 
         logging.info("Microscope is now available in container '%s'", self._name)
 
         # From now on, we'll really listen to external calls
-        model.Container.run(self)
+        super(BackendContainer, self).run()
 
-    def _instantiate_forever(self):
+    def _instantiate_all(self):
         """
         Thread continuously monitoring the components that need to be instantiated
         """
         try:
             # Hack warning: there is a bug in python when using lock (eg, logging)
-            # and simultaneously using theads and process: is a thread acquires
+            # and simultaneously using threads and process: is a thread acquires
             # a lock while a process is created, it will never be released.
             # See http://bugs.python.org/issue6721
             # To ensure this is not happening, we wait long enough that all (2)
@@ -142,6 +145,9 @@ class BackendContainer(model.Container):
                     # otherwise give some time for things to get fixed or broken
                     nexts -= failed
                     if not nexts:
+                        if self._dry_run:
+                            return # everything instantiated, good enough
+
                         if self._must_stop.wait(10):
                             return
                         failed = set() # not recent anymore
@@ -162,6 +168,8 @@ class BackendContainer(model.Container):
                         mic.ghosts.value = ghosts
                         newcmps = self._instantiate_component(n)
                     except ValueError:
+                        if self._dry_run:
+                            raise
                         # We now need to stop, but cannot call terminate()
                         # directly, as it would deadlock, waiting for us
                         threading.Thread(target=self.terminate).start()
@@ -171,6 +179,7 @@ class BackendContainer(model.Container):
 
         except Exception:
             logging.exception("Instantiator thread failed")
+            raise
         finally:
             logging.debug("Instantiator thread finished")
 

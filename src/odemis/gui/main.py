@@ -279,9 +279,8 @@ class OdemisGUIApp(wx.App):
             finally:
                 # put us back
                 sys.excepthook = self.excepthook
-        else:
-            exc = traceback.format_exception(etype, value, trace)
-            print "".join(exc)
+        else: # python is ending... can't rely on anything
+            print etype, value, trace
 
 class OdemisOutputWindow(object):
     """ Helper class which allows ``wx`` to display uncaught
@@ -325,7 +324,7 @@ def main(args):
     """
 
     # arguments handling
-    parser = argparse.ArgumentParser(prog="odemis-cli",
+    parser = argparse.ArgumentParser(prog="odemis-gui",
                                      description=odemis.__fullname__)
 
     parser.add_argument('--version', dest="version", action='store_true',
