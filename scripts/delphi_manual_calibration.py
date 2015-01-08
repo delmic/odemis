@@ -165,7 +165,7 @@ def main(args):
         try:
             rotation_scalingf = aligndelphi.RotationAndScaling(ccd, detector, escan, sem_stage,
                                                            opt_stage, focus, offset)
-            rotation, scaling = rotation_scalingf.result()
+            acc_offset, rotation, scaling = rotation_scalingf.result()
         except Exception:
             # Configure CCD and e-beam to write CL spots
             ccd.binning.value = (1, 1)
