@@ -181,12 +181,12 @@ def main(args):
             detector.data.unsubscribe(_discard_data)
             rotation_scalingf = aligndelphi.RotationAndScaling(ccd, detector, escan, sem_stage,
                                                            opt_stage, focus, offset)
-            rotation, scaling = rotation_scalingf.result()
+            acc_offset, rotation, scaling = rotation_scalingf.result()
 
         # Offset is divided by scaling, since Convert Stage applies scaling
         # also in the given offset
-        pure_offset = offset
-        offset = ((offset[0] / scaling[0]), (offset[1] / scaling[1]))
+        pure_offset = acc_offset
+        offset = ((acc_offset[0] / scaling[0]), (acc_offset[1] / scaling[1]))
 
         logging.info("\n**Computed calibration values**\n first hole: %s (unit: m,m)\n second hole: %s (unit: m,m)\n hole focus: %f (unit: m)\n offset: %s (unit: m,m)\n rotation: %f (unit: radians)\n scaling: %s \n", first_hole, second_hole, hole_focus, offset, rotation, scaling)
 

@@ -243,7 +243,7 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
             try:
                 future._rotation_scalingf = RotationAndScaling(ccd, detector, escan, sem_stage,
                                                                opt_stage, focus, offset)
-                rotation, scaling = future._rotation_scalingf.result()
+                acc_offset, rotation, scaling = future._rotation_scalingf.result()
             except Exception:
                 raise IOError("Conversion update failed to calculate rotation and scaling.")
 
@@ -270,8 +270,8 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
             # metadata as the current sample holder will be unloaded
             # Offset is divided by scaling, since Convert Stage applies scaling
             # also in the given offset
-            pure_offset = offset
-            offset = ((offset[0] / scaling[0]), (offset[1] / scaling[1]))
+            pure_offset = acc_offset
+            offset = ((acc_offset[0] / scaling[0]), (acc_offset[1] / scaling[1]))
 
             # Return to the center so fine overlay can be executed just after calibration
             f = sem_stage.moveAbs({"x":-pure_offset[0], "y":-pure_offset[1]})
@@ -639,12 +639,13 @@ def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, fo
                               opt_stage.position.value["y"]))
 
         # From the sets of 4 positions calculate rotation and scaling matrices
-        unused, scaling, rotation = transform.CalculateTransform(opt_spots,
+        acc_offset, scaling, rotation = transform.CalculateTransform(opt_spots,
                                                                  sem_spots)
         # Take care of negative rotation
+        scaling = 1 / scaling
         if rotation < 0:
             rotation = 2 * math.pi + rotation
-        return rotation, scaling
+        return acc_offset, rotation, scaling
 
     finally:
         escan.resolution.value = (512, 512)
