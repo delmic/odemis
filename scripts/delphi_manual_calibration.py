@@ -261,7 +261,7 @@ def main(args):
 
         iscale = cor_md[model.MD_PIXEL_SIZE_COR]
         irot = cor_md[model.MD_ROTATION_COR]
-        iscale = 1 / iscale
+        iscale = (1 / iscale[0], 1 / iscale[1])
         if irot < 0:
             irot = 2 * math.pi + irot
         # Update calibration file
