@@ -775,6 +775,10 @@ class BitmapCanvas(BufferedCanvas):
 
         self.margins = (0, 0)
 
+    def clear(self):
+        self.images = [None]
+        BufferedCanvas.clear(self)
+
     def set_images(self, im_args):
         """ Set (or update)  image
 
