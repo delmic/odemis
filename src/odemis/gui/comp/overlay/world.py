@@ -623,6 +623,7 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, base.PixelDataMixin):
     def connect_selection(self, selection_va):
         """ Connect the overlay to an external selection VA so it can update itself on value changes
         """
+        self.clear_selection()
         self._selected_line_va = selection_va
         self._selected_line_va.subscribe(self._on_selection, init=True)
 
