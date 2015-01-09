@@ -40,7 +40,7 @@ import odemis.util.units as units
 class WorldSelectOverlay(base.WorldOverlay, base.SelectionMixin):
 
     def __init__(self, cnvs, colour=gui.SELECTION_COLOUR, center=(0, 0)):
-        super(WorldSelectOverlay, self).__init__(cnvs)
+        base.WorldOverlay.__init__(self, cnvs)
         base.SelectionMixin.__init__(self, colour, center, base.EDIT_MODE_BOX)
 
         self._w_start_pos = None
@@ -179,20 +179,20 @@ class WorldSelectOverlay(base.WorldOverlay, base.SelectionMixin):
     def on_left_down(self, evt):
         """ Start drag action if enabled, otherwise call super method so event will propagate """
         if self.active:
-            super(WorldSelectOverlay, self)._on_left_down(evt)  # Call the SelectionMixin handler
+            base.SelectionMixin._on_left_down(self, evt)
             self._view_to_world()
             self.cnvs.update_drawing()
-        else:
-            super(WorldSelectOverlay, self).on_left_down(evt)
+
+        base.WorldOverlay.on_left_down(self, evt)
 
     def on_left_up(self, evt):
         """ End drag action if enabled, otherwise call super method so event will propagate """
         if self.active:
-            super(WorldSelectOverlay, self)._on_left_up(evt)  # Call the SelectionMixin handler
+            base.SelectionMixin._on_left_up(self, evt)
             self._view_to_world()
             self.cnvs.update_drawing()
-        else:
-            super(WorldSelectOverlay, self).on_left_up(evt)
+
+        base.WorldOverlay.on_left_up(self, evt)
 
     def on_motion(self, evt):
         """ Process drag motion if enabled, otherwise call super method so event will propagate """
@@ -220,7 +220,7 @@ class WorldSelectOverlay(base.WorldOverlay, base.SelectionMixin):
             # buffer.
             self.cnvs.request_drawing_update()
         else:
-            super(WorldSelectOverlay, self).on_motion(evt)
+            base.WorldOverlay.on_motion(self, evt)
 
     # END Event Handlers
 
@@ -237,7 +237,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
     FILL_POINT = 2
 
     def __init__(self, cnvs, roa=None, colour=gui.SELECTION_COLOUR):
-        super(RepetitionSelectOverlay, self).__init__(cnvs, colour)
+        WorldSelectOverlay.__init__(self, cnvs, colour)
 
         self._fill = self.FILL_NONE
         self._repetition = (0, 0)
@@ -280,7 +280,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
         wx.CallAfter(self.cnvs.request_drawing_update)
 
     def on_left_up(self, evt):
-        super(RepetitionSelectOverlay, self).on_left_up(evt)
+        WorldSelectOverlay.on_left_up(self, evt)
 
         if self._roa:
             if self.active:
@@ -474,7 +474,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
                 self.selection_mode = base.SEL_MODE_EDIT
             ctx.restore()
 
-        super(RepetitionSelectOverlay, self).draw(ctx, shift, scale)
+        WorldSelectOverlay.draw(self, ctx, shift, scale)
         self.selection_mode = mode_cache
 
 
@@ -482,7 +482,7 @@ class LineSelectOverlay(WorldSelectOverlay):
     """ Selection overlay that allows for the selection of a line in world coordinates"""
 
     def __init__(self, cnvs):
-        super(LineSelectOverlay, self).__init__(cnvs)
+        WorldSelectOverlay.__init__(self, cnvs)
         self.edit_mode = base.EDIT_MODE_POINT
 
     @property
@@ -606,13 +606,13 @@ class LineSelectOverlay(WorldSelectOverlay):
             # buffer.
             self.cnvs.request_drawing_update()
         else:
-            super(WorldSelectOverlay, self).on_motion(evt)
+            WorldSelectOverlay.on_motion(self, evt)
 
 
 class SpectrumLineSelectOverlay(LineSelectOverlay, base.PixelDataMixin):
 
     def __init__(self, cnvs):
-        super(SpectrumLineSelectOverlay, self).__init__(cnvs)
+        LineSelectOverlay.__init__(self, cnvs)
         base.PixelDataMixin.__init__(self)
 
         self.start_pixel = None
@@ -644,7 +644,7 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, base.PixelDataMixin):
     # The following code is for debugging purposes. It draws a grid visualise the data pixel
 
     # def draw(self, ctx, shift=(0, 0), scale=1.0):
-    #     super(SpectrumLineSelectOverlay, self).draw(ctx, shift, scale)
+    #     LineSelectOverlay.draw(self, ctx, shift, scale)
     #
     #     ctx.set_source_rgba(*self.colour)
     #     ctx.set_line_width(0.5)
@@ -664,7 +664,7 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, base.PixelDataMixin):
                 LineSelectOverlay.on_left_down(self, evt)
                 self._snap_to_pixel()
         else:
-            super(SpectrumLineSelectOverlay, self).on_left_down(evt)
+            LineSelectOverlay.on_left_down(self, evt)
 
     def on_left_up(self, evt):
         """ Stop drawing a selection line if the overlay is active """
@@ -674,7 +674,7 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, base.PixelDataMixin):
             LineSelectOverlay.on_left_up(self, evt)
             self._selected_line_va.value = (self.start_pixel, self.end_pixel)
         else:
-            super(SpectrumLineSelectOverlay, self).on_left_up(evt)
+            LineSelectOverlay.on_left_up(self, evt)
 
     def _snap_to_pixel(self):
         """ Snap the current start and end view positions to the center of the closest data pixels
@@ -703,14 +703,14 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, base.PixelDataMixin):
             else:
                 self.cnvs.reset_dynamic_cursor()
         else:
-            super(SpectrumLineSelectOverlay, self).on_motion(evt)
+            LineSelectOverlay.on_motion(self, evt)
 
 
 class PixelSelectOverlay(base.WorldOverlay, base.PixelDataMixin, base.DragMixin):
     """ Selection overlay that allows the selection of a pixel in a data set """
 
     def __init__(self, cnvs):
-        super(PixelSelectOverlay, self).__init__(cnvs)
+        base.WorldOverlay.__init__(self, cnvs)
         base.PixelDataMixin.__init__(self)
         base.DragMixin.__init__(self)
 
@@ -730,7 +730,7 @@ class PixelSelectOverlay(base.WorldOverlay, base.PixelDataMixin, base.DragMixin)
     def deactivate(self):
         """ Clear the hover pixel when the overlay is deactivated """
         self._pixel_pos = None
-        super(PixelSelectOverlay, self).deactivate()
+        base.WorldOverlay.deactivate(self)
         self.cnvs.update_drawing()
 
     # Event handlers
@@ -758,15 +758,14 @@ class PixelSelectOverlay(base.WorldOverlay, base.PixelDataMixin, base.DragMixin)
             else:
                 self.cnvs.reset_dynamic_cursor()
         else:
-            super(PixelSelectOverlay, self).on_motion(evt)
+            base.WorldOverlay.on_motion(self, evt)
 
     def on_left_down(self, evt):
-
         if self.active:
             if self.data_properties_are_set:
-                super(PixelSelectOverlay, self)._on_left_down(evt)
+                base.DragMixin._on_left_down(self, evt)
         else:
-            super(PixelSelectOverlay, self).on_left_down(evt)
+            base.WorldOverlay.on_left_down(self, evt)
 
     def on_left_up(self, evt):
         """ Set the selected pixel, if a pixel position is known """
@@ -777,10 +776,9 @@ class PixelSelectOverlay(base.WorldOverlay, base.PixelDataMixin, base.DragMixin)
                     self._selected_pixel_va.value = self._pixel_pos
                     self.cnvs.update_drawing()
                     logging.debug("Pixel %s selected", self._selected_pixel_va.value)
-            super(PixelSelectOverlay, self)._on_left_up(evt)
+            base.DragMixin._on_left_up(self, evt)
 
-        # Call the super class,
-        super(PixelSelectOverlay, self).on_left_up(evt)
+        base.WorldOverlay.on_left_up(self, evt)
 
     # END Event handlers
 
@@ -816,7 +814,7 @@ class PointsOverlay(base.WorldOverlay):
     MIN_DOT_RADIUS = 3.5
 
     def __init__(self, cnvs):
-        super(PointsOverlay, self).__init__(cnvs)
+        base.WorldOverlay.__init__(self, cnvs)
 
         # A VA tracking the selected point
         self.point = None
@@ -856,9 +854,6 @@ class PointsOverlay(base.WorldOverlay):
 
     # Event Handlers
 
-    def on_left_down(self, evt):
-        super(PointsOverlay, self).on_left_down(evt)
-
     def on_left_up(self, evt):
         """ Set the selected point if the mouse cursor is hovering over one """
         if self.active:
@@ -871,7 +866,7 @@ class PointsOverlay(base.WorldOverlay):
                 self.cursor_over_point = None
                 self.b_hover_box = None
 
-        super(PointsOverlay, self).on_left_up(evt)
+        base.WorldOverlay.on_left_up(self, evt)
 
     def on_wheel(self, evt):
         """ Clear the hover when the canvas is zooming """
@@ -879,7 +874,7 @@ class PointsOverlay(base.WorldOverlay):
             self.cursor_over_point = None
             self.b_hover_box = None
 
-        super(PointsOverlay, self).on_wheel(evt)
+        base.WorldOverlay.on_wheel(self, evt)
 
     def on_motion(self, evt):
         """ Detect when the cursor hovers over a dot """
@@ -911,7 +906,7 @@ class PointsOverlay(base.WorldOverlay):
             else:
                 self.cnvs.reset_dynamic_cursor()
 
-        super(PointsOverlay, self).on_motion(evt)
+        base.WorldOverlay.on_motion(self, evt)
 
     def _calc_choices(self):
         """ Create a mapping between world coordinates and physical points
@@ -922,7 +917,6 @@ class PointsOverlay(base.WorldOverlay):
         logging.debug("Calculating choices as buffer positions")
 
         self.choices = {}
-        min_dist = 0
 
         # Translate physical to buffer coordinates
         physical_points = [c for c in self.point.choices if None not in c]
@@ -935,8 +929,10 @@ class PointsOverlay(base.WorldOverlay):
             # normally all the points are uniformly distributed, so just need to
             # look at the distance from the first point
             p0 = physical_points[0]
+
             def distance(p):
                 return math.hypot(p[0] - p0[0], p[1] - p0[1])
+
             min_dist = min(distance(p) for p in physical_points[1:])
         else:
             # can't compute the distance => pick something typical

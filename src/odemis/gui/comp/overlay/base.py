@@ -137,6 +137,8 @@ class Overlay(object):
             self.add_label(label)
 
         # When an overlay is active, it will process mouse events
+        # So, check for this attribute if the sub class needs to process an event only if it's
+        # active.
         self.active = False
 
         # Binding mouse events in this class will allow us to intercept them if we don't want them
@@ -372,28 +374,24 @@ class DragMixin(object):
         if not self.right_dragging:
             self._left_dragging = True
             self.drag_v_start_pos = evt.GetPositionTuple()
-            self.cnvs.on_mouse_down()
 
     def _on_left_up(self, evt):
         """ End a left drag if no right drag is in progress """
         if not self.right_dragging:
             self._left_dragging = False
             self.drag_v_end_pos = evt.GetPositionTuple()
-            self.cnvs.on_mouse_up()
 
     def _on_right_down(self, evt):
         """ Start a right drag if no left drag is in progress """
         if not self.left_dragging:
             self._right_dragging = True
             self.drag_v_start_pos = evt.GetPositionTuple()
-            self.cnvs.on_mouse_down()
 
     def _on_right_up(self, evt):
         """ End a right drag if no left drag is in progress """
         if not self.left_dragging:
             self._right_dragging = False
             self.drag_v_end_pos = evt.GetPositionTuple()
-            self.cnvs.on_mouse_up()
 
     def _on_motion(self, evt):
         """ Update the drag end position if a drag movement is in progress """
@@ -458,7 +456,7 @@ class SelectionMixin(DragMixin):
 
     def __init__(self, colour=gui.SELECTION_COLOUR, center=(0, 0), edit_mode=EDIT_MODE_BOX):
 
-        super(SelectionMixin, self).__init__()
+        DragMixin.__init__(self)
 
         # The start and end points of the selection rectangle in view port
         # coordinates
@@ -553,7 +551,7 @@ class SelectionMixin(DragMixin):
         """ Clear the selection """
         logging.debug("Clearing selections")
 
-        super(SelectionMixin, self).clear_drag()
+        DragMixin.clear_drag(self)
 
         self.selection_mode = SEL_MODE_NONE
 
@@ -735,7 +733,7 @@ class SelectionMixin(DragMixin):
     def _on_left_down(self, evt):
         """ Call this method from the 'on_left_down' method of super classes """
 
-        super(SelectionMixin, self)._on_left_down(evt)
+        DragMixin._on_left_down(self, evt)
 
         if self.left_dragging:
             hover = self.get_hover(self.drag_v_start_pos)
@@ -750,7 +748,7 @@ class SelectionMixin(DragMixin):
     def _on_left_up(self, evt):
         """ Call this method from the 'on_left_up' method of super classes"""
 
-        super(SelectionMixin, self)._on_left_up(evt)
+        DragMixin._on_left_up(self, evt)
 
         # IMPORTANT: The check for selection clearing includes the left drag attribute for the
         # following reason: When the (test) window was maximized by double clicking on the title bar
@@ -764,7 +762,7 @@ class SelectionMixin(DragMixin):
 
     def _on_motion(self, evt):
 
-        super(SelectionMixin, self)._on_motion(evt)
+        DragMixin._on_motion(self, evt)
 
         self.hover = self.get_hover(evt.GetPositionTuple())
 

@@ -41,7 +41,7 @@ class TextViewOverlay(base.ViewOverlay):
     """ Render the present labels to the screen """
 
     def __init__(self, cnvs):
-        super(TextViewOverlay, self).__init__(cnvs)
+        base.ViewOverlay.__init__(self, cnvs)
 
     def draw(self, ctx):
         if self.labels:
@@ -52,7 +52,7 @@ class CrossHairOverlay(base.ViewOverlay):
     """ Render a static cross hair to the center of the view """
 
     def __init__(self, cnvs, colour=gui.CROSSHAIR_COLOR, size=gui.CROSSHAIR_SIZE):
-        super(CrossHairOverlay, self).__init__(cnvs)
+        base.ViewOverlay.__init__(self, cnvs)
 
         self.colour = conversion.hex_to_frgba(colour)
         self.size = size
@@ -60,7 +60,7 @@ class CrossHairOverlay(base.ViewOverlay):
 
     def on_size(self, evt):
         self.center = self.cnvs.get_half_view_size()
-        super(CrossHairOverlay, self).on_size(evt)
+        base.ViewOverlay.on_size(self, evt)
 
     def draw(self, ctx):
         """ Draw a cross hair to the Cairo context """
@@ -95,7 +95,7 @@ class SpotModeOverlay(base.ViewOverlay):
     """ Render the spot mode indicator in the center of the view """
 
     def __init__(self, cnvs):
-        super(SpotModeOverlay, self).__init__(cnvs)
+        base.ViewOverlay.__init__(self, cnvs)
 
         self.marker_bmp = img.getspot_markerBitmap()
         marker_size = self.marker_bmp.GetSize()
@@ -132,7 +132,7 @@ class StreamIconOverlay(base.ViewOverlay):
     opacity = 0.8
 
     def __init__(self, cnvs):
-        super(StreamIconOverlay, self).__init__(cnvs)
+        base.ViewOverlay.__init__(self, cnvs)
         self.pause = False  # if True: displayed
         self.play = 0  # opacity of the play icon
         self.colour = conversion.hex_to_frgba(gui.FG_COLOUR_HIGHLIGHT, self.opacity)
@@ -228,7 +228,7 @@ class FocusOverlay(base.ViewOverlay):
     """ Display the focus modification indicator """
 
     def __init__(self, cnvs):
-        super(FocusOverlay, self).__init__(cnvs)
+        base.ViewOverlay.__init__(self, cnvs)
 
         self.margin = 10
         self.line_width = 16
@@ -301,7 +301,7 @@ class FocusOverlay(base.ViewOverlay):
 class ViewSelectOverlay(base.ViewOverlay, base.SelectionMixin):
 
     def __init__(self, cnvs, colour=gui.SELECTION_COLOUR, center=(0, 0)):
-        super(ViewSelectOverlay, self).__init__(cnvs)
+        base.ViewOverlay.__init__(self, cnvs)
         base.SelectionMixin.__init__(self, colour, center, base.EDIT_MODE_BOX)
 
         self.position_label = self.add_label("")
@@ -341,23 +341,23 @@ class ViewSelectOverlay(base.ViewOverlay, base.SelectionMixin):
     def on_left_down(self, evt):
         """ Start drag action if enabled, otherwise call super method so event will propagate """
         if self.active:
-            super(ViewSelectOverlay, self)._on_left_down(evt)
-        else:
-            super(ViewSelectOverlay, self).on_left_down(evt)
+            base.SelectionMixin._on_left_down(self, evt)
+
+        base.ViewOverlay.on_left_down(self, evt)
 
     def on_left_up(self, evt):
         """ End drag action if enabled, otherwise call super method so event will propagate """
         if self.active:
-            super(ViewSelectOverlay, self)._on_left_up(evt)
-        else:
-            super(ViewSelectOverlay, self).on_left_up(evt)
+            base.SelectionMixin._on_left_up(self, evt)
+
+        base.ViewOverlay.on_left_up(self, evt)
 
     def on_motion(self, evt):
         """ Process drag motion if enabled, otherwise call super method so event will propagate """
         if self.active:
-            super(ViewSelectOverlay, self)._on_motion(evt)
-        else:
-            super(ViewSelectOverlay, self).on_motion(evt)
+            base.SelectionMixin._on_motion(self, evt)
+
+        base.ViewOverlay.on_motion(self, evt)
 
 
 class MarkingLineOverlay(base.ViewOverlay, base.DragMixin):
@@ -373,7 +373,7 @@ class MarkingLineOverlay(base.ViewOverlay, base.DragMixin):
 
     def __init__(self, cnvs, colour=gui.SELECTION_COLOUR, orientation=None):
 
-        super(MarkingLineOverlay, self).__init__(cnvs)
+        base.ViewOverlay.__init__(self, cnvs)
         base.DragMixin.__init__(self)
 
         self.label = None
@@ -410,27 +410,27 @@ class MarkingLineOverlay(base.ViewOverlay, base.DragMixin):
 
     def on_left_down(self, evt):
         if self.active:
-            super(MarkingLineOverlay, self)._on_left_down(evt)
+            base.DragMixin._on_left_down(self, evt)
             self.colour = self.colour[:3] + (0.5,)
             self._store_event_pos(evt)
-        else:
-            super(MarkingLineOverlay, self).on_left_down(evt)
+
+        base.ViewOverlay.on_left_down(self, evt)
 
     def on_left_up(self, evt):
         if self.active:
-            super(MarkingLineOverlay, self)._on_left_up(evt)
+            base.DragMixin._on_left_up(self, evt)
             self.colour = self.colour[:3] + (1.0,)
             self._store_event_pos(evt)
             self.cnvs.Refresh()
-        else:
-            super(MarkingLineOverlay, self).on_left_up(evt)
+
+        base.ViewOverlay.on_left_up(self, evt)
 
     def on_motion(self, evt):
         if self.active and self.left_dragging:
             self._store_event_pos(evt)
             self.cnvs.Refresh()
-        else:
-            super(MarkingLineOverlay, self).on_motion(evt)
+
+        base.ViewOverlay.on_motion(self, evt)
 
     # END Event Handlers
 
@@ -496,7 +496,7 @@ class DichotomyOverlay(base.ViewOverlay):
     def __init__(self, cnvs, sequence_va, colour=gui.SELECTION_COLOUR):
         """ :param sequence_va: (ListVA) VA to store the sequence in
         """
-        super(DichotomyOverlay, self).__init__(cnvs)
+        base.ViewOverlay.__init__(self, cnvs)
 
         self.colour = conversion.hex_to_frgba(colour)
         # Color for quadrant that will expand the sequence
@@ -555,7 +555,7 @@ class DichotomyOverlay(base.ViewOverlay):
             self.hover_pos = (None, None)
             self.cnvs.Refresh()
         else:
-            super(DichotomyOverlay, self).on_leave(evt)
+            base.ViewOverlay.on_leave(self, evt)
 
     def on_motion(self, evt):
         """ Mouse motion event handler """
@@ -563,12 +563,12 @@ class DichotomyOverlay(base.ViewOverlay):
         if self.active:
             self._update_hover(evt.GetPosition())
         else:
-            super(DichotomyOverlay, self).on_leave(evt)
+            base.ViewOverlay.on_motion(self, evt)
 
     def on_left_down(self, evt):
         """ Prevent the left mouse button event from propagating when the overlay is active"""
         if not self.active:
-            evt.Skip()
+            base.ViewOverlay.on_motion(self, evt)
 
     def on_left_up(self, evt):
         """ Mouse button handler """
@@ -590,14 +590,14 @@ class DichotomyOverlay(base.ViewOverlay):
 
                 self._update_hover(evt.GetPosition())
         else:
-            super(DichotomyOverlay, self).on_leave(evt)
+            base.ViewOverlay.on_leave(self, evt)
 
     def on_size(self, evt):
         """ Called when size of canvas changes
         """
         # Force the re-computation of rectangles
         self.on_sequence_change(self.sequence_va.value)
-        super(DichotomyOverlay, self).on_size(evt)
+        base.ViewOverlay.on_size(self, evt)
 
     # END Event Handlers
 
@@ -722,7 +722,7 @@ class DichotomyOverlay(base.ViewOverlay):
 class PolarOverlay(base.ViewOverlay):
 
     def __init__(self, cnvs):
-        super(PolarOverlay, self).__init__(cnvs)
+        base.ViewOverlay.__init__(self, cnvs)
 
         self.canvas_padding = 0
         # Rendering attributes
@@ -920,17 +920,16 @@ class PolarOverlay(base.ViewOverlay):
     def on_left_down(self, evt):
         if self.active:
             self.dragging = True
-            self.cnvs.SetFocus()
-        else:
-            super(PolarOverlay, self).on_left_down(evt)
+
+        base.ViewOverlay.on_left_down(self, evt)
 
     def on_left_up(self, evt):
         if self.active:
             self._calculate_display(evt.GetPositionTuple())
             self.dragging = False
             self.cnvs.Refresh()
-        else:
-            super(PolarOverlay, self).on_left_up(evt)
+
+        base.ViewOverlay.on_left_up(self, evt)
 
     def on_motion(self, evt):
         # Only change the values when the user is dragging
@@ -938,19 +937,19 @@ class PolarOverlay(base.ViewOverlay):
             self._calculate_display(evt.GetPositionTuple())
             self.cnvs.Refresh()
         else:
-            super(PolarOverlay, self).on_motion(evt)
+            base.ViewOverlay.on_motion(self, evt)
 
     def on_enter(self, evt):
         if self.active:
             self.cnvs.set_default_cursor(wx.CROSS_CURSOR)
         else:
-            super(PolarOverlay, self).on_enter(evt)
+            base.ViewOverlay.on_enter(self, evt)
 
     def on_leave(self, evt):
         if self.active:
             self.cnvs.reset_default_cursor()
         else:
-            super(PolarOverlay, self).on_leave(evt)
+            base.ViewOverlay.on_leave(self, evt)
 
     def on_size(self, evt=None):
         # Calculate the characteristic values
@@ -992,7 +991,7 @@ class PolarOverlay(base.ViewOverlay):
         self._calculate_display()
 
         if evt:
-            super(PolarOverlay, self).on_size(evt)
+            base.ViewOverlay.on_size(self, evt)
 
     # END Event Handlers
 
@@ -1090,7 +1089,7 @@ class PointSelectOverlay(base.ViewOverlay):
     """ Overlay for the selection of canvas points in view, world and physical coordinates """
 
     def __init__(self, cnvs):
-        super(PointSelectOverlay, self).__init__(cnvs)
+        base.ViewOverlay.__init__(self, cnvs)
         # Prevent the cursor from resetting on clicks
 
         # Physical position of the last click
@@ -1104,17 +1103,17 @@ class PointSelectOverlay(base.ViewOverlay):
         if self.active:
             self.cnvs.set_default_cursor(wx.CROSS_CURSOR)
         else:
-            super(PointSelectOverlay, self).on_enter(evt)
+            base.ViewOverlay.on_enter(self, evt)
 
     def on_leave(self, evt):
         if self.active:
             self.cnvs.reset_default_cursor()
         else:
-            super(PointSelectOverlay, self).on_leave(evt)
+            base.ViewOverlay.on_leave(self, evt)
 
     def on_left_down(self, evt):
         if not self.active:
-            super(PointSelectOverlay, self).on_left_down(evt)
+            base.ViewOverlay.on_left_down(self, evt)
 
     def on_left_up(self, evt):
         if self.active:
@@ -1127,7 +1126,7 @@ class PointSelectOverlay(base.ViewOverlay):
             logging.debug("Point selected (view, world, physical): %s, %s, %s)",
                           self.v_pos.value, self.w_pos.value, self.p_pos.value)
         else:
-            super(PointSelectOverlay, self).on_left_up(evt)
+            base.ViewOverlay.on_left_up(self, evt)
 
     # END Event Handlers
 
@@ -1139,7 +1138,7 @@ class HistoryOverlay(base.ViewOverlay):
     """ Display rectangles on locations that the microscope was previously positioned at """
 
     def __init__(self, cnvs, history_list_va):
-        super(HistoryOverlay, self).__init__(cnvs)
+        base.ViewOverlay.__init__(self, cnvs)
 
         self.trail_colour = conversion.hex_to_frgb(gui.FG_COLOUR_HIGHLIGHT)
         self.pos_colour = conversion.hex_to_frgb(gui.FG_COLOUR_EDIT)
@@ -1153,11 +1152,11 @@ class HistoryOverlay(base.ViewOverlay):
     # # Event Handlers
     #
     # def on_enter(self, evt):
-    #     super(HistoryOverlay, self).on_enter(evt)
+    #     base.ViewOverlay.on_enter(self, evt)
     #     self.cnvs.Refresh()
     #
     # def on_leave(self, evt):
-    #     super(HistoryOverlay, self).on_leave(evt)
+    #     base.ViewOverlay.on_leave(self, evt)
     #     self.cnvs.Refresh()
     #
     # # END Event Handlers
