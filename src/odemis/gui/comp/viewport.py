@@ -185,6 +185,7 @@ class ViewPort(wx.Panel):
     def OnSize(self, evt):
         evt.Skip()  # processed also by the parent
 
+
 class MicroscopeViewport(ViewPort):
     """ A panel that shows a microscope view and its legend below it.
 

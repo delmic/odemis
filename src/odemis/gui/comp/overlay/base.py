@@ -372,24 +372,28 @@ class DragMixin(object):
         if not self.right_dragging:
             self._left_dragging = True
             self.drag_v_start_pos = evt.GetPositionTuple()
+            self.cnvs.on_mouse_down()
 
     def _on_left_up(self, evt):
         """ End a left drag if no right drag is in progress """
         if not self.right_dragging:
             self._left_dragging = False
             self.drag_v_end_pos = evt.GetPositionTuple()
+            self.cnvs.on_mouse_up()
 
     def _on_right_down(self, evt):
         """ Start a right drag if no left drag is in progress """
         if not self.left_dragging:
             self._right_dragging = True
             self.drag_v_start_pos = evt.GetPositionTuple()
+            self.cnvs.on_mouse_down()
 
     def _on_right_up(self, evt):
         """ End a right drag if no left drag is in progress """
         if not self.left_dragging:
             self._right_dragging = False
             self.drag_v_end_pos = evt.GetPositionTuple()
+            self.cnvs.on_mouse_up()
 
     def _on_motion(self, evt):
         """ Update the drag end position if a drag movement is in progress """

@@ -227,8 +227,8 @@ class AxisLegend(wx.Panel):
         style = style | wx.NO_BORDER
         super(AxisLegend, self).__init__(parent, wid, pos, size, style)
 
-        # self.SetBackgroundColour(parent.GetBackgroundColour())
-        # self.SetForegroundColour(parent.GetForegroundColour())
+        self.SetBackgroundColour(parent.GetBackgroundColour())
+        self.SetForegroundColour(parent.GetForegroundColour())
 
         self.Bind(wx.EVT_PAINT, self.on_paint)
         self.Bind(wx.EVT_SIZE, self.on_size)

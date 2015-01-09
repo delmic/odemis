@@ -1481,14 +1481,14 @@ class AnalysisTab(Tab):
         #     self.tab_data_model.visible_views.value = self._def_views
         pass
 
-    def _on_point_select(self, selected_point):
+    def _on_point_select(self, _):
         """ Event handler for when a point is selected """
         # If we're in 1x1 view, we're bringing the plot to the front
         if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
             ang_view = self.main_frame.vp_angular.microscope_view
             self.tab_data_model.focussedView.value = ang_view
 
-    def _on_pixel_select(self, selected_pixel):
+    def _on_pixel_select(self, _):
         """ Event handler for when a spectrum pixel is selected """
 
         # If we're in 1x1 view, we're bringing the plot to the front
