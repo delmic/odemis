@@ -633,10 +633,11 @@ class Detector(model.Detector):
                 for shift_pos in self._coordinates:
                     if self._scan_params_view.scale != 0:
                         self._scan_params_view.scale = 0
-                    # TODO, also add spot_shift? Maybe not really useful since
-                    # translation measured in FineOverlay is not used in Delphi
-                    self._scan_params_view.center.x = shift_pos[0]
-                    self._scan_params_view.center.y = shift_pos[1]
+                    # Also compensate for spot_shift
+                    md_bsd = self.getMetadata()
+                    spot_shift = md_bsd.get(model.MD_SPOT_SHIFT, (0, 0))
+                    self._scan_params_view.center.x = shift_pos[0] + spot_shift[0]
+                    self._scan_params_view.center.y = shift_pos[1] + spot_shift[1]
                     try:
                         self._grid_device.SetSEMViewingMode(self._scan_params_view, 'SEM-SCAN-MODE-IMAGING')
                     except suds.WebFault:
