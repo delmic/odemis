@@ -700,6 +700,11 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, base.PixelDataMixin):
             v_pos = evt.GetPositionTuple()
             if self.is_over_pixel_data(v_pos):
                 LineSelectOverlay.on_motion(self, evt)
+                # Little test for real time spectrum display, which was too slow, as expected
+                # self._snap_to_pixel()
+                # if None not in (self.start_pixel, self.end_pixel):
+                #     if self._selected_line_va.value != (self.start_pixel, self.end_pixel):
+                #         self._selected_line_va.value = (self.start_pixel, self.end_pixel)
             else:
                 self.cnvs.reset_dynamic_cursor()
         else:

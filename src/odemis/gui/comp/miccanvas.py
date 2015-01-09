@@ -1345,11 +1345,16 @@ class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
             # Set the filter, so we get low quality but fast scaling
             surfpat.set_filter(cairo.FILTER_FAST)
 
+            # Save and restore the transformation matrix, to prevent scale accumulation
+            self.ctx.save()
+
             # Scale the width and height separately in such a way that the image data fill the
             # entire canvas
             self.ctx.scale(self.ClientSize.x / width, self.ClientSize.y / height)
             self.ctx.set_source(surfpat)
             self.ctx.paint()
+
+            self.ctx.restore()
         else:
             # The background only needs to be drawn when there is no image data, since the image
             # data will always fill the entire view.
