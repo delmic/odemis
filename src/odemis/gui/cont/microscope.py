@@ -792,7 +792,7 @@ class DelphiStateController(SecomStateController):
             logging.info("Calibration cancelled, ejecting the sample holder")
 
         # Eject the sample holder
-        self._main_data.chamberState.value = CHAMBER_VENTING
+        self._start_chamber_venting()
 
     def _run_full_calibration(self, shid):
         # TODO: once the hole focus is not fixed, save it in the config too
