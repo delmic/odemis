@@ -448,8 +448,12 @@ class SecomStateController(MicroscopeStateController):
             s.should_update.value = False
 
         self._setEbeamPower(False)
-        self._main_data.chamber.moveAbs({"pressure": self._vented_pressure})
+        f = self._main_data.chamber.moveAbs({"pressure": self._vented_pressure})
+        f.add_done_callback(self._on_vented)
 
+
+    def _on_vented(self, future):
+        self.on_chamber_pressure(self._main_data.chamber.position.value)
 
     # TODO: have multiple versions of this method depending on the type of
     # chamber?
@@ -792,7 +796,7 @@ class DelphiStateController(SecomStateController):
             logging.info("Calibration cancelled, ejecting the sample holder")
 
         # Eject the sample holder
-        self._start_chamber_venting()
+        self._main_data.chamberState.value = CHAMBER_VENTING
 
     def _run_full_calibration(self, shid):
         # TODO: once the hole focus is not fixed, save it in the config too
