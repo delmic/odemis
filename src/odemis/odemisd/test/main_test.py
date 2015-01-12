@@ -32,6 +32,8 @@ import time
 import unittest
 
 
+logging.getLogger().setLevel(logging.DEBUG)
+
 ODEMISD_CMD = "python2 -m odemis.odemisd.main"
 SIM_CONFIG = "optical-sim.odm.yaml"
 
@@ -70,6 +72,7 @@ class TestCommandLine(unittest.TestCase):
     @staticmethod
     def create_test_validate_pass(filename):
         def test_validate_pass(self):
+            logging.info("testing run with %s (should succeed)", filename)
             cmdline = "odemisd --log-level=2 --log-target=test.log --validate %s" % filename
             ret = main.main(cmdline.split())
             self.assertEqual(ret, 0, "error detected in correct config "
@@ -80,6 +83,7 @@ class TestCommandLine(unittest.TestCase):
     @staticmethod
     def create_test_validate_error(filename):
         def test_validate_error(self):
+            logging.info("testing run with %s (should fail)", filename)
             cmdline = "odemisd --log-level=2 --log-target=test.log --validate %s" % filename
             ret = main.main(cmdline.split())
             self.assertNotEqual(ret, 0, "no error detected in erroneous config "
@@ -153,9 +157,19 @@ class TestCommandLine(unittest.TestCase):
         
         time.sleep(1) # give some time to start
         
-        # now it should say it's running
+        # now it should say it's starting, and eventually running
+        timeout = time.time() + 5 # give another 5 s
         cmdline = "odemisd --log-level=2 --log-target=test.log --check"
-        ret = main.main(cmdline.split())
+        while time.time() < timeout:
+            ret = main.main(cmdline.split())
+            if ret == 3:
+                logging.info("Backend is starting...")
+                time.sleep(1)
+            else:
+                break
+        else:
+            self.fail("Backend still in starting status after 5 s")
+
         self.assertEqual(ret, 0, "command '%s' returned %d" % (cmdline, ret))
         
         # stop the backend
@@ -180,11 +194,29 @@ class TestCommandLine(unittest.TestCase):
         filename = "semantic-error-3.odm.yaml"
         cmdline = "odemisd --log-target=test.log %s" % filename
         ret = main.main(cmdline.split())
+        self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
+
+        # FIXME: this will now always return 0, but --check after a few seconds
+        # should return error
+        # now it should say it's starting, and eventually running
+        timeout = time.time() + 5 # give another 5 s
+        cmdline = "odemisd --log-level=2 --log-target=test.log --check"
+        while time.time() < timeout:
+            ret = main.main(cmdline.split())
+            if ret == 3:
+                logging.info("Backend is starting...")
+                time.sleep(1)
+            else:
+                break
+        else:
+            self.fail("Backend still in starting status after 5 s")
+
         if ret == 0:
             # We also need to stop the backend then
             cmdline = "odemisd --kill"
             ret = main.main(cmdline.split())
             self.fail("no error detected in erroneous config file '%s'" % filename)
+
         os.remove("test.log")
         
     @timeout(10)
