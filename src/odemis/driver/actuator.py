@@ -25,6 +25,7 @@ from __future__ import division
 import collections
 import logging
 import math
+import numbers
 import numpy
 from odemis import model
 from odemis.model import CancellableThreadPoolExecutor, isasync
@@ -644,6 +645,12 @@ class AntiBacklashActuator(model.Actuator):
         """
         if len(children) != 1:
             raise ValueError("AntiBacklashActuator needs 1 child")
+
+        for a, v in backlash.items():
+            if not isinstance(a, basestring):
+                raise ValueError("Backlash key must be a string but got '%s'" % (a,))
+            if not isinstance(v, numbers.Real):
+                raise ValueError("Backlash value of %s must be a number but got '%s'" % (a, v))
 
         self._child = children.values()[0]
         self._backlash = backlash
