@@ -1367,7 +1367,7 @@ class CLController(Controller):
         # This can only be done if the servo is turned off
         self.SetServo(axis, False)
         if 0x56 in self._avail_params:
-            # TODO: don't check the error in SetParameter
+            # TODO: don't check the error in SetParameter, and add a sleep as it can take a lot of time (1s)
             self.SetParameter(axis, 0x56, 0) # 0 = off
 
     def _startEncoder(self, axis):
