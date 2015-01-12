@@ -275,7 +275,6 @@ class AxisLegend(wx.Panel):
         plot_range = (int(range[0] / 25), int((range[1] + 1) / 25))
         print plot_range
 
-
         self.redraw()
 
     def on_paint(self, evt=None):
@@ -283,11 +282,12 @@ class AxisLegend(wx.Panel):
         if not hasattr(self.Parent, 'canvas'):
             font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
             ctx = wx.lib.wxcairo.ContextFromDC(wx.PaintDC(self))
-            ctx.select_font_face(font.GetFaceName(), cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+            ctx.select_font_face(font.GetFaceName(),
+                                 cairo.FONT_SLANT_NORMAL,
+                                 cairo.FONT_WEIGHT_NORMAL)
             ctx.set_font_size(font.GetPointSize())
 
             return
-
 
         if not hasattr(self.Parent.canvas, 'has_data') or not self.Parent.canvas.has_data():
             return
@@ -308,7 +308,7 @@ class AxisLegend(wx.Panel):
         ctx.set_line_join(cairo.LINE_JOIN_MITER)
 
         max_width = 0
-        prev_lpos = 0
+        prev_lpos = 0 if self.orientation == wx.HORIZONTAL else self.ClientSize.y
 
         for i, (pos, val) in enumerate(self.ticks):
             label = units.readable_str(val, self.unit, 3)
@@ -326,13 +326,15 @@ class AxisLegend(wx.Panel):
                 prev_lpos = lpos + lbl_width
             else:
                 max_width = max(max_width, lbl_width)
-
                 lpos = pos + (lbl_height / 2)
                 lpos = max(min(lpos, self.ClientSize.y), 2)
-                ctx.move_to(self.ClientSize.x - lbl_width - 9, lpos)
-                ctx.show_text(label)
-                ctx.move_to(self.ClientSize.x - 5, pos)
-                ctx.line_to(self.ClientSize.x, pos)
+
+                if prev_lpos >= lpos + 20 or i == 0:
+                    ctx.move_to(self.ClientSize.x - lbl_width - 9, lpos)
+                    ctx.show_text(label)
+                    ctx.move_to(self.ClientSize.x - 5, pos)
+                    ctx.line_to(self.ClientSize.x, pos)
+                prev_lpos = lpos + lbl_height
 
             ctx.stroke()
 
