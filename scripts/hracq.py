@@ -22,25 +22,53 @@ You should have received a copy of the GNU General Public License along with Ode
 
 import argparse
 import logging
-from odemis import dataio
+from odemis import dataio, model
 import odemis
+from odemis.gui.util import get_picture_folder
+import os
 import sys
 
 
 class HRAcquirer(object):
     
-    def __init__(self, fn, number, exposure, power, wavelength):
+    def __init__(self, fn, number):
+        self.number = number
 
+        # get the components
+        self.light = model.getComponent(role="light")
+        self.ccd = model.getComponent(role="ccd")
+
+        # prepare the data export
         self.exporter = dataio.find_fittest_exporter(fn)
         
-        # TODO insert ~/Pictures + fn + fn-XXXX.ext
-        self.fntmpl =  
+        # Make the name "fn" -> "~/Pictures + fn + fn-XXXX.ext"
+        path, base = os.path.split(fn)
+        bn, ext = os.path.splitext(base)
+        tmpl = os.path.join(path, bn, bn + "-%05d." + ext)
+        if path.startswith("/"):
+            # if fn starts with / => don't add ~/Pictures
+            self.fntmpl = tmpl
+        else:
+            self.fntmpl = os.path.join(get_picture_folder(), tmpl)
 
-    def set_hardware_settings(self):
+
+        self._n = 0
+
+    def set_hardware_settings(self, exposure, binning, power, wavelength):
         """
         Setup the hardware to the defined settings
         """
-        pass
+        self.exposure = exposure
+        self.power = power
+        self.binning = binning
+
+        # find the fitting wavelength for the light
+        spectra = self.light.spectra.value
+        for s in spectra:
+            # each spectrum contains 5 values, with center wl as 3rd value
+            if s[2] == wavelength:
+        
+        self._full_intensity = [0]
     
     def _on_continuous_image(self, df, data):
         
@@ -52,7 +80,7 @@ class HRAcquirer(object):
             self.ccd.data.unsubscribe(self._on_continuous_image)
             self._acq_done.set()
         
-        
+
     def run_acquisition_continuous(self):
         """
         Run the acquisition with the maximum frame rate
@@ -136,62 +164,12 @@ def main(args):
                "Licensed under the " + odemis.__license__)
         return 0
 
-    # anything to do?
-    if options.setattr:
-        for l in options.setattr:
-            if len(l) < 3 or (len(l) - 1) % 2 == 1:
-                logging.error("--set-attr expects component name and then a even number of arguments")
-    if options.upmd:
-        for l in options.upmd:
-            if len(l) < 3 or (len(l) - 1) % 2 == 1:
-                logging.error("--update-metadata expects component name and then a even number of arguments")
-
-    logging.debug("Trying to find the backend")
-    status = get_backend_status()
-    if options.check:
-        logging.info("Status of back-end is %s", status)
-        return status_to_xtcode[status]
+    # TODO: if arguments not present, ask for them on the console
 
     try:
-        # check if there is already a backend running
-        if status == BACKEND_STOPPED:
-            raise IOError("No running back-end")
-        elif status == BACKEND_DEAD:
-            raise IOError("Back-end appears to be non-responsive.")
-
-        if options.setattr is not None:
-            for l in options.setattr:
-                # C A B E F => C, {A: B, E: F}
-                c = l[0]
-                avs = dict(zip(l[1::2], l[2::2]))
-                set_attr(c, avs)
-        elif options.upmd is not None:
-            for l in options.upmd:
-                c = l[0]
-                kvs = dict(zip(l[1::2], l[2::2]))
-                update_metadata(c, kvs)
-        # TODO: catch keyboard interrupt and stop the moves
-        elif options.reference is not None:
-            for c, a in options.reference:
-                reference(c, a)
-        elif options.position is not None:
-            for c, a, d in options.position:
-                move_abs(c, a, d)
-#             time.sleep(0.5)
-        elif options.move is not None:
-            # TODO warn if same axis multiple times
-            # TODO move commands to the same actuator should be agglomerated
-            for c, a, d in options.move:
-                move(c, a, d)
-#             time.sleep(0.5) # wait a bit for the futures to close nicely
-        elif options.stop:
-            stop_move()
-        elif options.acquire is not None:
-            component = options.acquire[0]
-            if len(options.acquire) == 1:
-                dataflows = ["data"]
-            else:
-                dataflows = options.acquire[1:]
+        acquirer = HRAcquirer(options.output, options.number)
+        acquirer.set_hardware_settings(options.exposure, options.binning,
+                                       options.power, options.wavelength)
             filename = options.output.decode(sys.getfilesystemencoding())
             acquire(component, dataflows, filename)
     except ValueError as exp:
