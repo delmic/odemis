@@ -1,9 +1,9 @@
 SimSECOM: {
     class: Microscope,
     role: secom,
-    emitters: [Spectra, "Nikon Super Duper", "FW102C", "EBeam ExtXY"],
-    detectors: ["Andor SimCam", "SED ExtXY"],
-    actuators: ["OLStage", "SEM-Optical Alignment", "OpticalZ actuator", "EBeam Focus"],
+    emitters: ["Light Engine", "Optical Objective", "Optical Emission Filter", "SEM E-beam"],
+    detectors: ["Andor SimCam", "SEM Detector"],
+    actuators: ["Sample Stage", "Objective Stage", "Optical Focus", "EBeam Focus"],
 }
 
 #Light: {
@@ -15,7 +15,7 @@ SimSECOM: {
 #    }
 #}
 
-Spectra: {
+"Light Engine": {
     class: lle.FakeLLE,
     role: light,
     init: {
@@ -33,30 +33,30 @@ Spectra: {
     affects: ["Andor SimCam"],
 }
 
-"SEM ExtXY": {
+"SEM Scan Interface": {
     class: simsem.SimSEM,
     role: none,
     init: {
            image: "simsem-fake-output.h5", # any large 16 bit image is fine
            drift_period: 5, # s, comment out to disable drift
     },
-    children: {scanner: "EBeam ExtXY",
-               detector0: "SED ExtXY",
+    children: {scanner: "SEM E-beam",
+               detector0: "SEM Detector",
                focus: "EBeam Focus",
     }
 }
 
-"EBeam ExtXY": {
+"SEM E-beam": {
     # Internal child of SimSEM, so no class
     role: e-beam,
     init: {},
     properties: {
         dwellTime: 10.e-6, # s
     },
-    affects: ["SED ExtXY", "Andor SimCam"] # affects the CCD in case of cathodoluminescence
+    affects: ["SEM Detector", "Andor SimCam"] # affects the CCD in case of cathodoluminescence
 }
 
-"SED ExtXY": { # aka ETD
+"SEM Detector": { # aka ETD
     # Internal child of SimSEM, so no class
     role: se-detector,
     init: {},
@@ -67,14 +67,14 @@ Spectra: {
     role: ebeam-focus,
 }
 
-"Nikon Super Duper": {
+"Optical Objective": {
     class: static.OpticalLens,
     role: lens,
     init: {mag: 60.0}, # ratio
     affects: ["Andor SimCam"]
 }
 
-#"MultiBand Fixed Filter": {
+#"Optical Emission Filter": {
 #    class: static.LightFilter,
 #    role: filter,
 #    init: {band: [[420.e-9, 460.e-9],
@@ -85,7 +85,7 @@ Spectra: {
 #}
 
 # Thorlabs FW102C with 6 filters
-"FW102C": {
+"Optical Emission Filter": {
     class: tlfw.FakeFW102c,
     role: filter,
     init: {port: "/dev/ttyFTDI*", # will automatically find the right port
@@ -124,22 +124,22 @@ Spectra: {
 # Axes should be synchronized with the camera
 # Stage axes are moving the sample, so they should opposite direction than convention
 # (so the stage "position" is the current position observed)
-"OLStage": {
+"Sample Stage": {
     class: actuator.MultiplexActuator,
     role: stage,
-    affects: ["Andor SimCam", "EBeam ExtXY"],
-    children: {"x": PIGCS, "y": PIGCS},
+    affects: ["Andor SimCam", "SEM E-beam"],
+    children: {"x": "Stage Actuators", "y": "Stage Actuators"},
     init: {
         axes_map: {"x": "x", "y": "y"},
         inverted: ["x"],
     },
 }
 
-"SEM-Optical Alignment": {
+"Objective Stage": {
     class: actuator.MultiplexActuator,
     role: align,
     affects: ["Andor SimCam"],
-    children: {"a": PIGCS, "b": PIGCS},
+    children: {"a": "Stage Actuators", "b": "Stage Actuators"},
     init: {
         axes_map: {"a": "a", "b": "b"},
         inverted: ["a", "b"]
@@ -148,17 +148,17 @@ Spectra: {
 
 # Axis Z: (Physical) bottom->top when looking at the door
 #         (On screen) bottom->top (so distance to sample is smaller when going up)    
-"OpticalZ actuator": {
+"Optical Focus": {
     class: actuator.MultiplexActuator,
     role: focus,
     affects: ["Andor SimCam"],
-    children: {"z": PIGCS},
+    children: {"z": "Stage Actuators"},
     init: {
         axes_map: {"z": "z"}
     },
 }
 
-PIGCS: {
+"Stage Actuators": {
     class: pigcs.FakeBus,
     role: none,
     init: {

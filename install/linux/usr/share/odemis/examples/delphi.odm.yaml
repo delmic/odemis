@@ -1,13 +1,13 @@
 DELPHI: {
     class: Microscope,
     role: delphi,
-    emitters: ["Spectra", "Nikon Lens", "MultiBand Filter", "EBeam Phenom"],
-    detectors: ["Zyla", "BSED Phenom", "NavCam"],
-    actuators: ["Stage Phenom", "Optical stage", "Optical focus",
+    emitters: ["Light Engine", "Optical Objective", "Optical Emission Filter", "EBeam Phenom"],
+    detectors: ["Camera", "BSED Phenom", "NavCam"],
+    actuators: ["Stage Phenom", "Objective Stage", "Optical Focus",
                 "Chamber Phenom", "EBeam focus", "NavCam focus", "TwinStage", "AntiBacklash Stage", "AntiBacklash Focus"],
 }
 
-Spectra: {
+"Light Engine": {
     class: lle.LLE,
     role: light,
     init: {
@@ -21,7 +21,7 @@ Spectra: {
                  }
         },
         # The light is reflected via a Semrock FF410/504/582/669-DI01-25X36
-    affects: ["Zyla"],
+    affects: ["Camera"],
 }
 
 # Connection to the Phenom, which must have API access activated
@@ -52,7 +52,7 @@ Spectra: {
     # Internal child of SEM Phenom, so no class
     role: e-beam,
     init: {},
-    affects: ["BSED Phenom", "Zyla"], # affects the CCD in case of cathodoluminescence
+    affects: ["BSED Phenom", "Camera"], # affects the CCD in case of cathodoluminescence
     properties: {
         bpp: 8,  # 8 bit per pixel by default as it has a much faster refresh rate
     },
@@ -95,27 +95,27 @@ Spectra: {
     init: {},
 }
 
-"Nikon Lens": {
+"Optical Objective": {
     class: static.OpticalLens,
     role: lens,
     init: {mag: 40.0}, # ratio
-    affects: ["Zyla"]
+    affects: ["Camera"]
 }
 
 # Semrock FF01-440/521/607/700
-"MultiBand Filter": {
+"Optical Emission Filter": {
     class: static.LightFilter,
     role: filter,
     init: {band: [[420.e-9, 460.e-9],
                   [510.e-9, 532.e-9], 
                   [590.e-9, 624.e-9],
                   [677.e-9, 723.e-9]]}, # m,m
-    affects: ["Zyla"]
+    affects: ["Camera"]
 }
 
 # Axes: X is horizontal on screen (going left->right), physical: far->close when looking at the door
 #       Y is vertical on screen (going bottom->top), physical: left->right when looking at the door
-"Zyla": {
+"Camera": {
     class: andorcam3.AndorCam3,
     role: ccd,
     init: {device: 0,
@@ -132,7 +132,7 @@ Spectra: {
 "TwinStage": {
     class: actuator.CoupledStage,
     role: stage,
-    affects: ["EBeam Phenom", "Zyla"],
+    affects: ["EBeam Phenom", "Camera"],
     init: {},
     children: {"master": "Stage Phenom", "slave": "AntiBacklash Stage"},
 }
@@ -143,15 +143,15 @@ Spectra: {
     init: {
         backlash: {"x": 100.e-6, "y": 100.e-6},
     },
-    children: {"slave": "Optical stage"},
+    children: {"slave": "Objective Stage"},
 }
 
 # Use 2 MultiplexActuators to separate the axes of the TMCM over different roles
-"Optical stage": {
+"Objective Stage": {
     class: actuator.MultiplexActuator,
     role: None,
-    affects: ["Zyla"],
-    children: {"x": TMCM, "y": TMCM},
+    affects: ["Camera"],
+    children: {"x": "Sample Holder Actuators", "y": "Sample Holder Actuators"},
     init: {
         axes_map: {"x": "x", "y": "y"},
         inverted: ["x", "y"], # inverted so it moves oppositely to the SEM stage
@@ -166,22 +166,22 @@ Spectra: {
     init: {
         backlash: {"z": 200.e-6}, # 100µm should be enough for the focus, but 200µm should also compensate for the cross-talk with the Y backlash
     },
-    children: {"slave": "Optical focus"},
+    children: {"slave": "Optical Focus"},
 }
 # Axis Z: (Physical) bottom->top when looking at the door
 #         (On screen) bottom->top (so distance to sample is smaller when going up)    
-"Optical focus": {
+"Optical Focus": {
     class: actuator.MultiplexActuator,
     role: None,
-    affects: ["Zyla"],
-    children: {"z": TMCM},
+    affects: ["Camera"],
+    children: {"z": "Sample Holder Actuators"},
     init: {
         axes_map: {"z": "z"}
     },
 }
 
 # Controller for the X, Y, Z axes of the optical lens
-TMCM: {
+"Sample Holder Actuators": {
     class: tmcm.TMCM3110,
     role: none,
     init: {
