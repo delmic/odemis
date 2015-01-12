@@ -508,7 +508,7 @@ def estimateOffsetTime(et, dist=None):
         steps = min(steps, MAX_STEPS)
     return steps * (et + 2)  # s
 
-def RotationAndScaling(ccd, detector, escan, sem_stage, opt_stage, focus, offset):
+def RotationAndScaling(ccd, detector, escan, sem_stage, opt_stage, focus, offset, manual=False):
     """
     Wrapper for DoRotationAndScaling. It provides the ability to check the 
     progress of the procedure.
@@ -534,13 +534,13 @@ def RotationAndScaling(ccd, detector, escan, sem_stage, opt_stage, focus, offset
     rotation_thread = threading.Thread(target=executeTask,
                   name="Rotation and scaling",
                   args=(f, _DoRotationAndScaling, f, ccd, detector, escan, sem_stage, opt_stage,
-                        focus, offset))
+                        focus, offset, manual))
 
     rotation_thread.start()
     return f
 
 def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, focus,
-                          offset):
+                          offset, manual):
     """
     Move the stages to four diametrically opposite positions in order to 
     calculate the rotation and scaling.
@@ -600,6 +600,11 @@ def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, fo
             # different error margin, and moves the SEM stage.
             dist = None
             steps = 0
+            if manual == True:
+                det_dataflow.subscribe(_discard_data)
+                msg = "Please turn on the Optical stream, set Power to 0 Watt and focus the image so you have a clearly visible spot. Then turn off the stream and press Enter to retry..."
+                raw_input(msg)
+                det_dataflow.unsubscribe(_discard_data)
             while True:
                 if future._rotation_scaling_state == CANCELLED:
                     raise CancelledError()
@@ -681,6 +686,12 @@ def estimateRotationAndScalingTime(et, dist=None):
         steps = math.log(dist / err_mrg) / math.log(2)
         steps = min(steps, MAX_STEPS)
     return steps * (et + 2)  # s
+
+def _discard_data(df, data):
+    """
+    Does nothing, just discard the SEM data received (for spot mode)
+    """
+    pass
 
 def HoleDetection(detector, escan, sem_stage, ebeam_focus, known_focus=None):
     """

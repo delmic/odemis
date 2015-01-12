@@ -164,7 +164,7 @@ def main(args):
         logging.debug("Calculating rotation and scaling...")
         try:
             rotation_scalingf = aligndelphi.RotationAndScaling(ccd, detector, escan, sem_stage,
-                                                           opt_stage, focus, offset)
+                                                           opt_stage, focus, offset, manual=True)
             acc_offset, rotation, scaling = rotation_scalingf.result()
         except Exception:
             # Configure CCD and e-beam to write CL spots
@@ -180,7 +180,7 @@ def main(args):
             raw_input(msg)
             detector.data.unsubscribe(_discard_data)
             rotation_scalingf = aligndelphi.RotationAndScaling(ccd, detector, escan, sem_stage,
-                                                           opt_stage, focus, offset)
+                                                           opt_stage, focus, offset, manual=True)
             acc_offset, rotation, scaling = rotation_scalingf.result()
 
         # Offset is divided by scaling, since Convert Stage applies scaling
