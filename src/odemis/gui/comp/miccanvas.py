@@ -29,6 +29,7 @@ import time
 import weakref
 import cairo
 import wx
+from wx.lib.imageutils import stepColour
 import wx.lib.wxcairo as wxcairo
 
 from decorator import decorator
@@ -178,7 +179,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
                 self.points_overlay = world_overlay.PointsOverlay(self)
                 self.pixel_overlay = world_overlay.PixelSelectOverlay(self)
             if guimodel.TOOL_LINE in tab_data.tool.choices:
-                self.line_overlay = world_overlay.LineSelectOverlay(self)
+                self.line_overlay = world_overlay.SpectrumLineSelectOverlay(self)
             tab_data.tool.subscribe(self._on_tool, init=True)
 
     def _on_tool(self, tool_mode):
@@ -412,12 +413,12 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         super(DblMicroscopeCanvas, self).update_drawing()
 
         if self.microscope_view:
-            self._updateThumbnail()
+            self._update_thumbnail()
 
     @wxlimit_invocation(2)  # max 1/2 Hz
     @call_after  # needed as it accesses the DC
     @ignore_dead
-    def _updateThumbnail(self):
+    def _update_thumbnail(self):
         # TODO: avoid doing 2 copies, by using directly the wxImage from the
         # result of the StreamTree
         # logging.debug("Updating thumbnail with size = %s", self.ClientSize)
@@ -800,7 +801,7 @@ class OverviewCanvas(DblMicroscopeCanvas):
     @wxlimit_invocation(2)  # max 1/2 Hz
     @call_after  # needed as it accesses the DC
     @ignore_dead
-    def _updateThumbnail(self):
+    def _update_thumbnail(self):
         if self.ClientSize.x * self.ClientSize.y <= 0:
             return  # nothing to update
 
@@ -827,7 +828,7 @@ class OverviewCanvas(DblMicroscopeCanvas):
         dc.SelectObject(bitmap)
 
         ctx = wxcairo.ContextFromDC(dc)
-        self.history_overlay.Draw(ctx, gui.VIEW_BTN_SIZE)
+        self.history_overlay.draw(ctx, gui.VIEW_BTN_SIZE)
 
         # close the DC, to be sure the bitmap can be used safely
         image = wx.ImageFromBitmap(bitmap)
@@ -1182,6 +1183,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
     values of the selected position.
 
     TODO: change name?
+
     """
 
     def __init__(self, *args, **kwargs):
@@ -1200,7 +1202,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
 
         self.drag_init_pos = None
 
-        self.SetBackgroundColour(self.Parent.BackgroundColour)
+        self.SetBackgroundColour(stepColour(self.Parent.BackgroundColour, 50))
         self.SetForegroundColour(self.Parent.ForegroundColour)
 
         self.closed = canvas.PLOT_CLOSE_BOTTOM
@@ -1226,6 +1228,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         self.val_x.value = None
         self.val_y.value = None
         self.markline_overlay.clear_labels()
+        self._update_thumbnail()
 
     # Event handlers
 
@@ -1263,8 +1266,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         :param microscope_view:(model.MicroscopeView)
         :param tab_data: (model.MicroscopyGUIData)
         """
-        # This is a kind of kludge, see mscviewport.MicroscopeViewport for
-        # details
+        # This is a kind of kludge, see mscviewport.MicroscopeViewport for details
         assert(self.microscope_view is None)
 
         self.microscope_view = microscope_view
@@ -1272,7 +1274,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
 
     @wxlimit_invocation(2)  # max 1/2 Hz
     @call_after  # needed as it accesses the DC
-    def _updateThumbnail(self):
+    def _update_thumbnail(self):
         csize = self.ClientSize
         if (csize[0] * csize[1]) <= 0:
             return  # nothing to update
@@ -1295,7 +1297,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         super(ZeroDimensionalPlotCanvas, self).update_drawing()
 
         if self.microscope_view:
-            self._updateThumbnail()
+            self._update_thumbnail()
 
     def get_y_value(self):
         """ Return the current y value """
@@ -1307,6 +1309,10 @@ class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
     def __init__(self, *args, **kwargs):
 
         super(OneDimensionalSpatialSpectrumCanvas, self).__init__(*args, **kwargs)
+
+        self.SetBackgroundColour(stepColour(self.Parent.BackgroundColour, 50))
+        self.SetForegroundColour(self.Parent.ForegroundColour)
+
         self.microscope_view = None
         self._tab_data_model = None
 
@@ -1339,11 +1345,16 @@ class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
             # Set the filter, so we get low quality but fast scaling
             surfpat.set_filter(cairo.FILTER_FAST)
 
+            # Save and restore the transformation matrix, to prevent scale accumulation
+            self.ctx.save()
+
             # Scale the width and height separately in such a way that the image data fill the
             # entire canvas
             self.ctx.scale(self.ClientSize.x / width, self.ClientSize.y / height)
             self.ctx.set_source(surfpat)
             self.ctx.paint()
+
+            self.ctx.restore()
         else:
             # The background only needs to be drawn when there is no image data, since the image
             # data will always fill the entire view.
@@ -1353,11 +1364,11 @@ class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
         """ Update the drawing and thumbnail """
         super(OneDimensionalSpatialSpectrumCanvas, self).update_drawing()
         if self.microscope_view:
-            self._updateThumbnail()
+            self._update_thumbnail()
 
     def clear(self):
         super(OneDimensionalSpatialSpectrumCanvas, self).clear()
-        self._updateThumbnail()
+        self._update_thumbnail()
 
     def setView(self, microscope_view, tab_data):
         """ Set the microscope_view that this canvas is displaying/representing
@@ -1385,7 +1396,7 @@ class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
 
     @wxlimit_invocation(2)  # max 1/2 Hz
     @call_after  # needed as it accesses the DC
-    def _updateThumbnail(self):
+    def _update_thumbnail(self):
         # new bitmap to copy the DC
         bitmap = wx.EmptyBitmap(*self.ClientSize)
         # print [self.Shown, self.Size]
@@ -1479,11 +1490,11 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         super(AngularResolvedCanvas, self).update_drawing()
 
         if self.microscope_view:
-            self._updateThumbnail()
+            self._update_thumbnail()
 
     @wxlimit_invocation(2)  # max 1/2 Hz
     @call_after  # needed as it accesses the DC
-    def _updateThumbnail(self):
+    def _update_thumbnail(self):
         csize = self.ClientSize
         if (csize[0] * csize[1]) <= 0:
             return  # nothing to update

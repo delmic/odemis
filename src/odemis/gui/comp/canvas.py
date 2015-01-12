@@ -153,9 +153,11 @@ import cairo
 from decorator import decorator
 import logging
 import math
+import numpy
 from odemis.gui import BLEND_DEFAULT, BLEND_SCREEN
 from odemis.gui.comp.overlay.base import WorldOverlay, ViewOverlay
 from odemis.gui.util import call_after
+from odemis.model._dataflow import DataArray
 from odemis.util import intersect
 from odemis.util.conversion import wxcol_to_frgb
 import os
@@ -276,6 +278,10 @@ class BufferedCanvas(wx.Panel):
     @property
     def view_height(self):
         return self.ClientSize.y
+
+    @property
+    def dc_buffer(self):
+        return self._dc_buffer
 
     def set_default_cursor(self, cursor):
         """ Set the default cursor
@@ -544,8 +550,12 @@ class BufferedCanvas(wx.Panel):
             `wx.CallAfter(canvas.request_drawing_update)`
         """
 
-        if not self.draw_timer.IsRunning():
-            self.draw_timer.Start(delay * 1000.0, oneShot=True)
+        try:
+            if not self.draw_timer.IsRunning():
+                self.draw_timer.Start(delay * 1000.0, oneShot=True)
+        except PyDeadObjectError:
+            # This only should happen when running test cases
+            logging.warn("Drawing requested on dead canvas")
 
     def update_drawing(self):
         """ Redraw the buffer and display it """
@@ -596,7 +606,7 @@ class BufferedCanvas(wx.Panel):
         """
 
         for vo in self.view_overlays:
-            vo.Draw(ctx)
+            vo.draw(ctx)
 
     def _draw_world_overlays(self, ctx):
         """ Draw all the world overlays
@@ -606,7 +616,7 @@ class BufferedCanvas(wx.Panel):
         """
 
         for wo in self.world_overlays:
-            wo.Draw(ctx, self.w_buffer_center, self.scale)
+            wo.draw(ctx, self.w_buffer_center, self.scale)
 
     # ########### Position conversion ############
 
@@ -712,10 +722,10 @@ class BufferedCanvas(wx.Panel):
         """
 
         return cls.buffer_to_world_pos(
-                    cls.view_to_buffer_pos(v_pos, margins),
-                    w_buff_cent,
-                    scale,
-                    offset
+            cls.view_to_buffer_pos(v_pos, margins),
+            w_buff_cent,
+            scale,
+            offset
         )
 
     @classmethod
@@ -765,6 +775,10 @@ class BitmapCanvas(BufferedCanvas):
 
         self.margins = (0, 0)
 
+    def clear(self):
+        self.images = [None]
+        BufferedCanvas.clear(self)
+
     def set_images(self, im_args):
         """ Set (or update)  image
 
@@ -801,7 +815,15 @@ class BitmapCanvas(BufferedCanvas):
                 if not blend_mode:
                     blend_mode = BLEND_DEFAULT
 
-                if im.shape[2] != 4:  # Both ARGB32 and RGB24 need 4 bytes
+                if im.shape[2] == 3:
+                    # TODO: Move this code to some utility function
+                    # Create an empty array of the shape x,y,4
+                    new_im = DataArray(numpy.zeros(im.shape[:2] + (4,),
+                                                   dtype=numpy.uint8), im.metadata)
+                    # Copy the data
+                    new_im[:, :, :-1] = im
+                    im = new_im
+                elif im.shape[2] != 4:  # Both ARGB32 and RGB24 need 4 bytes
                     raise ValueError("Unsupported colour byte size (%s)!" % (im.shape[2],))
 
                 im.metadata['dc_center'] = w_pos
@@ -847,7 +869,7 @@ class BitmapCanvas(BufferedCanvas):
         # Each overlay draws itself
         # Remember that the device context being passed belongs to the *buffer*
         for o in self.world_overlays:
-            o.Draw(self.ctx, self.w_buffer_center, self.scale)
+            o.draw(self.ctx, self.w_buffer_center, self.scale)
             self.ctx.identity_matrix()
 
     def _draw_merged_images(self, ctx):
@@ -1727,7 +1749,7 @@ class PlotCanvas(BufferedCanvas):
         """ Set the data to be plotted
 
         data (list of 2 tuples): the X, Y coordinates of each point. The X values
-          must be ordered and not duplicated. 
+          must be ordered and not duplicated.
 
         """
         # FIXME: why not doing anything when data is empty?
@@ -1931,7 +1953,7 @@ class PlotCanvas(BufferedCanvas):
         """ Draws all the view overlays on the ctx Cairo context"""
         # coordinates are at the center
         for o in self.view_overlays:
-            o.Draw(ctx)
+            o.draw(ctx)
 
     def _plot_data(self, ctx):
         """ Plot the current `_data` to the given context """

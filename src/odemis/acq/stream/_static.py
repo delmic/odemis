@@ -582,6 +582,7 @@ class StaticSpectrumStream(StaticStream):
         return (None or DataArray with 1 dimension): the spectrum of the given
          pixel or None if no spectrum is selected.
         """
+
         if self.selected_pixel.value == (None, None):
             return None
         x, y = self.selected_pixel.value
@@ -614,16 +615,18 @@ class StaticSpectrumStream(StaticStream):
         return mean.astype(spec2d.dtype)
 
     def get_line_spectrum(self):
-        """
-        Return the 1D spectrum representing the (average) spectrum
-        See get_spectrum_range() to know the wavelength values for each index of
-          the spectrum dimension
+        """ Return the 1D spectrum representing the (average) spectrum
+
+        See get_spectrum_range() to know the wavelength values for each index of the spectrum
+        dimension.
+
         return (None or DataArray with 3 dimensions): first axis (Y) is spatial
           (along the line), second axis (X) is spectrum, third axis (RGB) is
           colour (always greyscale).
           MD_PIXEL_SIZE[1] contains the spatial distance between each spectrum
           If the selected_line is not valid, it will return None
         """
+
         if (None, None) in self.selected_line.value:
             return None
 
@@ -676,7 +679,7 @@ class StaticSpectrumStream(StaticStream):
         # Use metadata to indicate spatial distance between pixel
         pxs_data = self._calibrated.metadata[MD_PIXEL_SIZE]
         pxs = math.hypot(v[0] * pxs_data[0], v[1] * pxs_data[1]) / (n - 1)
-        md = {MD_PIXEL_SIZE: (None, pxs)} # for the spectrum, use get_spectrum_range()
+        md = {MD_PIXEL_SIZE: (None, pxs)}  # for the spectrum, use get_spectrum_range()
         return model.DataArray(rgb8, md)
 
     # TODO: have an "area=None" argument which allows to specify the 2D region
@@ -774,9 +777,11 @@ class StaticSpectrumStream(StaticStream):
         """
         called when the background or efficiency compensation is changed
         """
+
         # histogram will change as the pixel intensity is different
         self._updateDRange()
         self._updateHistogram()
+
         self._updateImage()
 
         self._force_selected_spectrum_update()

@@ -185,6 +185,7 @@ class ViewPort(wx.Panel):
     def OnSize(self, evt):
         evt.Skip()  # processed also by the parent
 
+
 class MicroscopeViewport(ViewPort):
     """ A panel that shows a microscope view and its legend below it.
 
@@ -560,7 +561,6 @@ class PlotViewport(ViewPort):
 
     def __init__(self, *args, **kwargs):
         ViewPort.__init__(self, *args, **kwargs)
-        self.canvas.SetBackgroundColour("#111111")
         # We need a local reference to the spectrum stream, because if we rely
         # on the reference within the MicroscopeView, it might be replaced
         # before we get an explicit chance to unsubscribe event handlers
@@ -696,7 +696,6 @@ class SpatialSpectrumViewport(ViewPort):
         """
         # Call parent constructor at the end, because it needs the legend panel
         super(SpatialSpectrumViewport, self).__init__(*args, **kwargs)
-        self.canvas.SetBackgroundColour(wx.RED)
         self.spectrum_stream = None
 
     def Refresh(self, *args, **kwargs):
@@ -704,6 +703,7 @@ class SpatialSpectrumViewport(ViewPort):
         self.left_legend.redraw()
         self.bottom_legend.redraw()
         super(SpatialSpectrumViewport, self).Refresh(*args, **kwargs)
+        wx.CallAfter(self.canvas.update_drawing)
 
     def setView(self, microscope_view, tab_data):
         """
@@ -772,7 +772,8 @@ class SpatialSpectrumViewport(ViewPort):
 
         # length = self.canvas._line
         data = self.spectrum_stream.get_line_spectrum()
-        if data:
+
+        if data is not None:
             domain = self.spectrum_stream.get_spectrum_range()
             unit_x = self.spectrum_stream.spectrumBandwidth.unit
             self.bottom_legend.unit = unit_x

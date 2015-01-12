@@ -61,7 +61,7 @@ class Message(wx.PopupTransientWindow):
         self.panel.SetSizer(self.sizer)
 
     @classmethod
-    def show_message(cls, parent, title, message=None, timeout=1.5, bgcolour=BG_COLOUR_NOTIFY):
+    def show_message(cls, parent, title, message=None, timeout=0.5, bgcolour=BG_COLOUR_NOTIFY):
         """ Show a small message popup
 
         :param parent: (wxWindow)

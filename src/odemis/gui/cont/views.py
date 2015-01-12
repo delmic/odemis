@@ -593,12 +593,13 @@ class ViewButtonController(object):
                 b.SetToggle(False)
 
     @call_after
-    def _update_22_thumbnail(self, im):
+    def _update_22_thumbnail(self, _):
+        """ Called when any thumbnail is changed, to recompute the 2x2 thumbnail of the first button
+
+        :param _: (Image) Unused
+
         """
-        Called when any thumbnail is changed, to recompute the 2x2 thumbnail of
-        the first button.
-        im (unused)
-        """
+
         # Create an image from the 4 thumbnails in a 2x2 layout with small
         # border. The button without a viewport attached is assumed to be the
         # one assigned to the 2x2 view
@@ -624,7 +625,7 @@ class ViewButtonController(object):
                 # => rescale and crop on the center
                 # Rescale to have the smallest axis as big as the thumbnail
                 rsize = list(size_sub)
-                if (size_sub[0] / im.Width) > (size_sub[1] / im.Height):
+                if (size_sub[0] / im.Width) < (size_sub[1] / im.Height):
                     rsize[1] = int(im.Height * (size_sub[0] / im.Width))
                 else:
                     rsize[0] = int(im.Width * (size_sub[1] / im.Height))
@@ -633,7 +634,7 @@ class ViewButtonController(object):
                 # crop to the right shape
                 lt = ((size_sub[0] - sim.Width) // 2,
                       (size_sub[1] - sim.Height) // 2)
-                sim.Resize(size_sub, lt)
+                sim.Resize(size_sub, lt, 0, 0, 0)
 
                 # compute placement
                 y, x = divmod(i, 2)

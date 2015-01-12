@@ -424,6 +424,9 @@ class OverlayTestCase(test.GuiTestCase):
         tol.add_label("Right click to toggle tool")
         cnvs.add_view_overlay(tol)
 
+        wsol.w_start_pos = (-2e-05, -2e-05)
+        wsol.w_end_pos = (2e-05, 2e-05)
+
         test.gui_loop()
 
         def toggle(evt):
@@ -498,9 +501,11 @@ class OverlayTestCase(test.GuiTestCase):
 
         cnvs.add_world_overlay(psol)
 
-        # psol.set_values(33, (0.0, 0.0), (30, 30))
-        psol.set_values(1e-05, (0.0, 0.0), (17, 19), omodel.TupleVA())
+        psol.set_data_properties(1e-05, (0.0, 0.0), (17, 19))
+        psol.connect_selection(omodel.TupleVA())
         view.mpp.value = 1e-06
+
+        psol._selected_pixel_va.value = (8, 8)
         test.gui_loop()
 
         # Tool toggle for debugging
@@ -514,6 +519,45 @@ class OverlayTestCase(test.GuiTestCase):
                 psol.deactivate()
             else:
                 psol.activate()
+            evt.Skip()
+
+        cnvs.Bind(wx.EVT_RIGHT_UP, toggle)
+
+    def test_spectrum_line_select_overlay(self):
+        cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
+
+        tab_mod = self.create_simple_tab_model()
+        view = tab_mod.focussedView.value
+
+        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
+        cnvs.setView(view, tab_mod)
+        cnvs.current_mode = TOOL_POINT
+
+        slol = wol.SpectrumLineSelectOverlay(cnvs)
+        slol.activate()
+
+        cnvs.add_world_overlay(slol)
+
+        slol.set_data_properties(1e-05, (0.0, 0.0), (17, 19))
+        slol.connect_selection(omodel.TupleVA())
+        view.mpp.value = 1e-06
+        test.gui_loop()
+
+        # Tool toggle for debugging
+
+        tol = vol.TextViewOverlay(cnvs)
+        tol.add_label("Right click to toggle tool", (10, 30))
+        cnvs.add_view_overlay(tol)
+
+        test.gui_loop()
+        slol._selected_line_va.value = ((0, 0), (8, 8))
+        test.gui_loop()
+
+        def toggle(evt):
+            if slol.active:
+                slol.deactivate()
+            else:
+                slol.activate()
             evt.Skip()
 
         cnvs.Bind(wx.EVT_RIGHT_UP, toggle)
@@ -533,8 +577,8 @@ class OverlayTestCase(test.GuiTestCase):
         lsol.activate()
         lsol.enabled = True
 
-        lsol.set_world_start((1e-4, 1e-4))
-        lsol.set_world_end((-1e-4, -1e-4))
+        lsol.w_start_pos = (1e-4, 1e-4)
+        lsol.w_end_pos = (-1e-4, -1e-4)
         cnvs.add_world_overlay(lsol)
 
         # Tool toggle for debugging
