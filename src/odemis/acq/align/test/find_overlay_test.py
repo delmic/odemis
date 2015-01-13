@@ -80,24 +80,18 @@ class TestOverlay(unittest.TestCase):
         """
         Test FindOverlay
         """
-        escan = self.ebeam
-        detector = self.sed
-        ccd = self.ccd
-        escan.magnification.value = 20000
-        f = align.FindOverlay((7, 7), 0.1, 1e-06, escan, ccd, detector)
+        f = align.FindOverlay((7, 7), 0.1, 1e-06, self.ebeam, self.ccd, self.sed)
 
         t, md = f.result()
+        self.assertEqual(len(t), 3)
+        self.assertIn(model.MD_PIXEL_SIZE_COR, md)
 
     # @unittest.skip("skip")
     def test_find_overlay_failure(self):
         """
         Test FindOverlay failure due to low maximum allowed difference
         """
-        escan = self.ebeam
-        detector = self.sed
-        ccd = self.ccd
-        escan.magnification.value = 20000
-        f = align.FindOverlay((6, 6), 1e-06, 1e-08, escan, ccd, detector)
+        f = align.FindOverlay((6, 6), 1e-6, 1e-08, self.ebeam, self.ccd, self.sed)
 
         with self.assertRaises(ValueError):
             f.result()
@@ -107,11 +101,7 @@ class TestOverlay(unittest.TestCase):
         """
         Test FindOverlay cancellation
         """
-        escan = self.ebeam
-        detector = self.sed
-        ccd = self.ccd
-        escan.magnification.value = 20000
-        f = align.FindOverlay((6, 6), 1e-06, 1e-07, escan, ccd, detector)
+        f = align.FindOverlay((6, 6), 1e-06, 1e-07, self.ebeam, self.ccd, self.sed)
         time.sleep(0.04)  # Cancel almost after the half grid is scanned
 
         f.cancel()
@@ -122,6 +112,7 @@ class TestOverlay(unittest.TestCase):
         
 
 if __name__ == '__main__':
-    suite = unittest.TestLoader().loadTestsFromTestCase(TestOverlay)
-    unittest.TextTestRunner(verbosity=2).run(suite)
+    unittest.main()
+#     suite = unittest.TestLoader().loadTestsFromTestCase(TestOverlay)
+#     unittest.TextTestRunner(verbosity=2).run(suite)
 
