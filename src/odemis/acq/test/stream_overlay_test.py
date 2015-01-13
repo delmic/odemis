@@ -26,15 +26,13 @@ import logging
 from odemis import model, acq
 import odemis
 from odemis.acq import stream
-from odemis.util import driver, test
+from odemis.util import test
 import os
-import subprocess
 import time
 import unittest
 
 
 logging.getLogger().setLevel(logging.DEBUG)
-
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 SECOM_LENS_CONFIG = CONFIG_PATH + "secom-sim-lens-align.odm.yaml" # 7x7
