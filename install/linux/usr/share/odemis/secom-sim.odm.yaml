@@ -2,14 +2,14 @@ SimSECOM: {
     class: Microscope,
     role: secom,
     emitters: ["Light Engine", "Optical Objective", "Optical Emission Filter", "SEM E-beam"],
-    detectors: ["Andor SimCam", "SEM Detector"],
+    detectors: ["Camera", "SEM Detector"],
     actuators: ["Sample Stage", "Objective Stage", "Optical Focus", "EBeam Focus"],
 }
 
 #Light: {
 #    class: simulated.Light,
 #    role: light,
-#    affects: ["Andor SimCam"],
+#    affects: ["Camera"],
 #    properties: {
 #        power: 100 # W
 #    }
@@ -30,7 +30,7 @@ SimSECOM: {
                   "teal": [495.e-9, 505.e-9, 513.e-9, 520.e-9, 530.e-9],
                  }
         },
-    affects: ["Andor SimCam"],
+    affects: ["Camera"],
 }
 
 "SEM Scan Interface": {
@@ -53,7 +53,7 @@ SimSECOM: {
     properties: {
         dwellTime: 10.e-6, # s
     },
-    affects: ["SEM Detector", "Andor SimCam"] # affects the CCD in case of cathodoluminescence
+    affects: ["SEM Detector", "Camera"] # affects the CCD in case of cathodoluminescence
 }
 
 "SEM Detector": { # aka ETD
@@ -71,7 +71,7 @@ SimSECOM: {
     class: static.OpticalLens,
     role: lens,
     init: {mag: 60.0}, # ratio
-    affects: ["Andor SimCam"]
+    affects: ["Camera"]
 }
 
 #"Optical Emission Filter": {
@@ -81,7 +81,7 @@ SimSECOM: {
 #                  [510.e-9, 532.e-9], 
 #                  [590.e-9, 624.e-9],
 #                  [677.e-9, 723.e-9]]}, # m,m
-#    affects: ["Andor SimCam"]
+#    affects: ["Camera"]
 #}
 
 # Thorlabs FW102C with 6 filters
@@ -96,13 +96,13 @@ SimSECOM: {
                    5: [635.e-9, 675.e-9],
                    6: [633.e-9, 1200.e-9]}, 
            },
-    affects: ["Andor SimCam"]
+    affects: ["Camera"]
 }
 
 
 # Axes: X is horizontal on screen (going left->right), physical: far->close when looking at the door
 #       Y is vertical on screen (going bottom->top), physical: left->right when looking at the door
-"Andor SimCam": {
+"Camera": {
     class: andorcam2.FakeAndorCam2,
     role: ccd,
     init: {device: 0,
@@ -127,7 +127,7 @@ SimSECOM: {
 "Sample Stage": {
     class: actuator.MultiplexActuator,
     role: stage,
-    affects: ["Andor SimCam", "SEM E-beam"],
+    affects: ["Camera", "SEM E-beam"],
     children: {"x": "Stage Actuators", "y": "Stage Actuators"},
     init: {
         axes_map: {"x": "x", "y": "y"},
@@ -138,7 +138,7 @@ SimSECOM: {
 "Objective Stage": {
     class: actuator.MultiplexActuator,
     role: align,
-    affects: ["Andor SimCam"],
+    affects: ["Camera"],
     children: {"a": "Stage Actuators", "b": "Stage Actuators"},
     init: {
         axes_map: {"a": "a", "b": "b"},
@@ -151,7 +151,7 @@ SimSECOM: {
 "Optical Focus": {
     class: actuator.MultiplexActuator,
     role: focus,
-    affects: ["Andor SimCam"],
+    affects: ["Camera"],
     children: {"z": "Stage Actuators"},
     init: {
         axes_map: {"z": "z"}
