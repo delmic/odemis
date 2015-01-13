@@ -570,6 +570,11 @@ class DichotomyOverlay(base.ViewOverlay):
         if not self.active:
             base.ViewOverlay.on_motion(self, evt)
 
+    def on_dbl_click(self, evt):
+        """ Prevent the double click event from propagating if the overlay is active"""
+        if not self.active:
+            base.ViewOverlay.on_dbl_click(self, evt)
+
     def on_left_up(self, evt):
         """ Mouse button handler """
 
