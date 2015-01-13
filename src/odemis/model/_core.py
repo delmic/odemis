@@ -66,7 +66,13 @@ def getMicroscope():
     global _microscope # cached at the module level
     if _microscope is None:
         backend = getContainer(BACKEND_NAME, validate=False)
+
+        # Force a short timeout, because if the backend is not reachable very
+        # soon it's unlikely it will ever get better
+        prev_to = backend._pyroTimeout
+        backend._pyroTimeout = 5  # s
         _microscope = backend.getRoot()
+        backend._pyroTimeout = prev_to
     return _microscope
 
 def getComponent(name=None, role=None):
