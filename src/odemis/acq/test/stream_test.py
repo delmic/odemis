@@ -27,21 +27,18 @@ from odemis import model
 import odemis
 from odemis.acq import stream, calibration
 from odemis.driver import simcam
-from odemis.util import driver, conversion, timeout, img
+from odemis.util import test, conversion, img
 import os
-import subprocess
 import time
 import unittest
 from unittest.case import skip
 
 
-logging.basicConfig(format=" - %(levelname)s \t%(message)s")
+# logging.basicConfig(format=" - %(levelname)s \t%(message)s")
 logging.getLogger().setLevel(logging.DEBUG)
-_frm = "%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s"
-logging.getLogger().handlers[0].setFormatter(logging.Formatter(_frm))
+# _frm = "%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s"
+# logging.getLogger().handlers[0].setFormatter(logging.Formatter(_frm))
 
-ODEMISD_CMD = ["python2", "-m", "odemis.odemisd.main"]
-ODEMISD_ARG = ["--log-level=2", "--log-target=testdaemon.log", "--daemonize"]
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 SPARC_CONFIG = CONFIG_PATH + "sparc-sim.odm.yaml"
 SECOM_CONFIG = CONFIG_PATH + "secom-sim.odm.yaml"
@@ -318,18 +315,15 @@ class SECOMTestCase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        if driver.get_backend_status() == driver.BACKEND_RUNNING:
+        try:
+            test.start_backend(SECOM_CONFIG)
+        except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
             return
-
-        # run the backend as a daemon
-        # we cannot run it normally as the child would also think he's in a unittest
-        cmd = ODEMISD_CMD + ODEMISD_ARG + [SECOM_CONFIG]
-        ret = subprocess.call(cmd)
-        if ret != 0:
-            logging.error("Failed starting backend with '%s'", cmd)
-        time.sleep(1) # time to start
+        except IOError as exp:
+            logging.error(str(exp))
+            raise
 
         # Find CCD & SEM components
         cls.ccd = model.getComponent(role="ccd")
@@ -342,11 +336,7 @@ class SECOMTestCase(unittest.TestCase):
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
-        # end the backend
-        cmd = ODEMISD_CMD + ["--kill"]
-        subprocess.call(cmd)
-        model._core._microscope = None # force reset of the microscope for next connection
-        time.sleep(1) # time to stop
+        test.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:
@@ -443,18 +433,15 @@ class SPARCTestCase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        if driver.get_backend_status() == driver.BACKEND_RUNNING:
+        try:
+            test.start_backend(SPARC_CONFIG)
+        except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
             return
-
-        # run the backend as a daemon
-        # we cannot run it normally as the child would also think he's in a unittest
-        cmd = ODEMISD_CMD + ODEMISD_ARG + [SPARC_CONFIG]
-        ret = subprocess.call(cmd)
-        if ret != 0:
-            logging.error("Failed starting backend with '%s'", cmd)
-        time.sleep(1) # time to start
+        except IOError as exp:
+            logging.error(str(exp))
+            raise
 
         # Find CCD & SEM components
         cls.ccd = model.getComponent(role="ccd")
@@ -466,11 +453,7 @@ class SPARCTestCase(unittest.TestCase):
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
-        # end the backend
-        cmd = ODEMISD_CMD + ["--kill"]
-        subprocess.call(cmd)
-        model._core._microscope = None # force reset of the microscope for next connection
-        time.sleep(1) # time to stop
+        test.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:
@@ -487,7 +470,7 @@ class SPARCTestCase(unittest.TestCase):
 
         # Create the stream
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
-        ars = stream.ARStream("test ar", self.ccd, self.ccd.data, self.ebeam)
+        ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam)
         sas = stream.SEMARMDStream("test sem-ar", sems, ars)
 
         ars.roi.value = (0.1, 0.1, 0.8, 0.8)
@@ -541,7 +524,7 @@ class SPARCTestCase(unittest.TestCase):
 
         # Create the stream
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
-        ars = stream.ARStream("test ar", self.ccd, self.ccd.data, self.ebeam)
+        ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam)
         sas = stream.SEMARMDStream("test sem-ar", sems, ars)
 
         ars.roi.value = (0.1, 0.1, 0.8, 0.8)
@@ -596,7 +579,7 @@ class SPARCTestCase(unittest.TestCase):
         """
         # Create the stream
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
-        ars = stream.ARStream("test ar", self.ccd, self.ccd.data, self.ebeam)
+        ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam)
         sas = stream.SEMARMDStream("test sem-ar", sems, ars)
 
         ars.roi.value = (0.1, 0.1, 0.8, 0.8)
@@ -892,7 +875,7 @@ class TestStaticStreams(unittest.TestCase):
         self.assertTrue(numpy.all(sp0d <= spec.max()))
 
         # Check width > 1 (on the border)
-        specs.width.value = 12
+        specs.selectionWidth.value = 12
         sp0d = specs.get_pixel_spectrum()
         wl0d = specs.get_spectrum_range()
         self.assertEqual(sp0d.shape, (spec.shape[0],))
@@ -901,7 +884,7 @@ class TestStaticStreams(unittest.TestCase):
         self.assertTrue(numpy.all(sp0d <= spec.max()))
 
         # Check with very large width
-        specs.width.value = specs.width.range[1]
+        specs.selectionWidth.value = specs.selectionWidth.range[1]
         specs.selected_pixel.value = (55, 106)
         sp0d = specs.get_pixel_spectrum()
         wl0d = specs.get_spectrum_range()
@@ -955,7 +938,7 @@ class TestStaticStreams(unittest.TestCase):
 
         # Check 1d with larger width
         specs.selected_line.value = [(30, 65), (5, 1)]
-        specs.width.value = 12
+        specs.selectionWidth.value = 12
         sp1d = specs.get_line_spectrum()
         wl1d = specs.get_spectrum_range()
         self.assertEqual(sp1d.ndim, 3)
@@ -967,7 +950,7 @@ class TestStaticStreams(unittest.TestCase):
         self.assertEqual(wl1d.shape, (spec.shape[0],))
 
         specs.selected_line.value = [(30, 65), (5, 12)]
-        specs.width.value = 13 # brings bad luck?
+        specs.selectionWidth.value = 13 # brings bad luck?
         sp1d = specs.get_line_spectrum()
         wl1d = specs.get_spectrum_range()
         self.assertEqual(sp1d.ndim, 3)
