@@ -30,6 +30,7 @@ from odemis.dataio import hdf5
 from odemis.util import test
 import os
 import threading
+import time
 import unittest
 import weakref
 
@@ -101,8 +102,8 @@ class TestSpotAlignment(unittest.TestCase):
         align = self.align
         escan = self.ebeam
         ccd = FakeCCD(self, align)
-        f = spot.CenterSpot(ccd, align, escan, 10, spot.STAGE_MOVE)
-        res = f.result()
+        f = spot.CenterSpot(ccd, align, escan, 10, spot.OBJECTIVE_MOVE)
+        res, tab = f.result()
 
         pixelSize = self.fake_img.metadata[model.MD_PIXEL_SIZE]
         err_mrg = max(2 * pixelSize[0], 1e-06)  # m
@@ -173,6 +174,7 @@ class FakeCCD(model.HwComponent):
             xc = ac * math.sin(ang) + bc * math.cos(ang)
             yc = ac * math.cos(ang) - bc * math.sin(ang)
             pixelSize = self.fake_img.metadata[model.MD_PIXEL_SIZE]
+            self.fake_img.metadata[model.MD_ACQ_DATE] = time.time()
             x_pxs = xc / pixelSize[0]
             y_pxs = yc / pixelSize[1]
 
