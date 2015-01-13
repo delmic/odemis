@@ -23,27 +23,21 @@ This file is part of Odemis.
 
 import logging
 from odemis import model
-from odemis.util import driver
-import os
 import odemis
+from odemis.acq import stream
+from odemis.util import test
+import os
 import time
 import unittest
-import subprocess
-
-from odemis.acq import stream
 
 
-logging.basicConfig(format=" - %(levelname)s \t%(message)s")
+# logging.basicConfig(format=" - %(levelname)s \t%(message)s")
 logging.getLogger().setLevel(logging.DEBUG)
-_frm = "%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s"
-logging.getLogger().handlers[0].setFormatter(logging.Formatter(_frm))
+# _frm = "%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s"
+# logging.getLogger().handlers[0].setFormatter(logging.Formatter(_frm))
 
-ODEMISD_CMD = ["python2", "-m", "odemis.odemisd.main"]
-ODEMISD_ARG = ["--log-level=2", "--log-target=testdaemon.log", "--daemonize"]
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
-SPARC_CONFIG = CONFIG_PATH + "sparc-sim.odm.yaml"
 SECOM_CONFIG = CONFIG_PATH + "secom-sim.odm.yaml"
-logging.getLogger().setLevel(logging.DEBUG)
 
 class TestDriftStream(unittest.TestCase):
     backend_was_running = False
@@ -51,18 +45,15 @@ class TestDriftStream(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
 
-        if driver.get_backend_status() == driver.BACKEND_RUNNING:
+        try:
+            test.start_backend(SECOM_CONFIG)
+        except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
             return
-
-        # run the backend as a daemon
-        # we cannot run it normally as the child would also think he's in a unittest
-        cmd = ODEMISD_CMD + ODEMISD_ARG + [SECOM_CONFIG]
-        ret = subprocess.call(cmd)
-        if ret != 0:
-            logging.error("Failed starting backend with '%s'", cmd)
-        time.sleep(1)  # time to start
+        except IOError as exp:
+            logging.error(str(exp))
+            raise
 
         # find components by their role
         cls.ebeam = model.getComponent(role="e-beam")
@@ -75,11 +66,7 @@ class TestDriftStream(unittest.TestCase):
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
-        # end the backend
-        cmd = ODEMISD_CMD + ["--kill"]
-        subprocess.call(cmd)
-        model._core._microscope = None  # force reset of the microscope for next connection
-        time.sleep(1)  # time to stop
+        test.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:
