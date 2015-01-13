@@ -23,6 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import StringIO
 import logging
+from odemis import model
 from odemis.odemisd import main
 from odemis.util import timeout
 import os
@@ -216,6 +217,37 @@ class TestCommandLine(unittest.TestCase):
         ret = main.main(cmdline.split())
         os.remove("test.log")
         os.remove("testdaemon.log")
+
+    @timeout(20)
+    def test_properties_set(self):
+        """Test creating component with specific properties"""
+        filename = "example-secom.odm.yaml"
+        cmdline = ODEMISD_CMD + " --log-level=2 --log-target=testdaemon.log --daemonize %s" % filename
+        ret = subprocess.call(cmdline.split())
+        self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
+
+        # eventually it should say it's running
+        ret = self._wait_backend_starts(10)
+        self.assertEqual(ret, 0, "backend status check returned %d" % (ret,))
+
+
+        # Check that the specific properties are set
+        ccd = model.getComponent(role="ccd")
+        self.assertEqual(ccd.exposureTime.value, 0.3)
+
+        ebeam = model.getComponent(role="e-beam")
+        self.assertEqual(ebeam.horizontalFoV.value, 1e-6)
+
+        # stop the backend
+        cmdline = "odemisd --log-level=2 --log-target=test.log --kill"
+        ret = main.main(cmdline.split())
+        self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
+
+        time.sleep(5) # give some time to stop
+        ret = main.main(cmdline.split())
+        os.remove("test.log")
+        os.remove("testdaemon.log")
+
 
     def _wait_backend_starts(self, timeout=5):
         """

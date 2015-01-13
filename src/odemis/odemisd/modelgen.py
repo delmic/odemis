@@ -552,9 +552,10 @@ class Instantiator(object):
                             "file: Component '%s' has no property (VA) '%s'." % (name, prop_name))
                 try:
                     va.value = value
-                except Exception:
-                    raise ValueError("Error in microscope "
-                            "file: %s.%s = '%s' failed." % (name, prop_name, value))
+                except Exception as exp:
+                    raise ValueError("Error in microscope file: "
+                                     "%s.%s = '%s' failed due to '%s'" %
+                                     (name, prop_name, value, exp))
 
     def _update_affects(self, name):
         """
@@ -616,13 +617,14 @@ class Instantiator(object):
                 raise ValueError("Trying to instantiate again component %s" % name)
 
         comp = self._instantiate_comp(name)
-        self._update_properties(name)
-        self._update_affects(name)
 
         # Add to the microscope all the new components that should be child
         mchildren = self._microscope_ast["children"].values()
         # we only care about children created by delegation, but all is fine
-        newcmps = self.get_children(comp)
+        newcmps = self.get_children(comp) # that includes comp itself
+        for c in newcmps:
+            self._update_properties(c.name)
+            self._update_affects(c.name)
         newchildren = set(c for c in newcmps if c.name in mchildren)
         self.microscope.children.value = self.microscope.children.value | newchildren
 
