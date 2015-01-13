@@ -239,15 +239,23 @@ class BackendStarter(object):
                     logging.debug("Waiting a bit more for the backend to appear")
                     time.sleep(1)
 
+        try:
+            self._mic.ghosts.subscribe(self._on_ghosts, init=True)
+        except (IOError, CommunicationError):
+            self._notif.update("Odemis back-end failed to start",
+                   "For more information look at the log messages in %s "
+                   "or type odemis-start in a terminal." % self._config["LOGFILE"],
+                   "dialog-warning")
+            self._notif.show()
+            raise IOError("Back-end failed to fully instantiate")
+
+        # create a window with the list of the components
         self._frame = self._create_component_frame()
 
 #         # In theory Python raise KeyboardInterrupt on SIGINT, which is what we
 #         # need. But that doesn't happen if in a wait(), and in addition, when
 #         # there are several threads, only one of them receives the exception.
 #         signal.signal(signal.SIGINT, self._on_sigint)
-
-        # TODO: create a window with the list of the components
-        self._mic.ghosts.subscribe(self._on_ghosts, init=True)
 
         # Check in background if the back-end is ready
         check_thread = threading.Thread(target=self._check_backend_status,

@@ -64,11 +64,14 @@ class HRAcquirer(object):
 
         # find the fitting wavelength for the light
         spectra = self.light.spectra.value
-        for s in spectra:
+        for i, s in enumerate(spectra):
             # each spectrum contains 5 values, with center wl as 3rd value
-            if s[2] == wavelength:
-        
-        self._full_intensity = [0]
+            if abs(s[2] - wavelength * 1e-9) < 2e-9:
+                wli = i
+
+        self._off_intensity = [0] * len(spectra)
+        self._full_intensity = list(self._off_intensity) # copy
+        self._full_intensity[wli] = 1
     
     def _on_continuous_image(self, df, data):
         
@@ -78,8 +81,7 @@ class HRAcquirer(object):
         
         if self._n == self.number:
             self.ccd.data.unsubscribe(self._on_continuous_image)
-            self._acq_done.set()
-        
+            self._acq_done.set() # indicate it's over
 
     def run_acquisition_continuous(self):
         """
@@ -87,6 +89,8 @@ class HRAcquirer(object):
         """
         
 #       Switch on [lasersource] at [laserpower]
+        self.light.intensity.value = self._full_intensity
+        self.light.power.value = self.power
         self._n = 0
         self.ccd.data.subscribe(self._on_continuous_image)
         
@@ -94,6 +98,7 @@ class HRAcquirer(object):
         self._acq_done.wait() # TODO: put large timeout
         
 #       switch off laser
+        self.light.power.value = 0
     
     def run_acquisition_discreet(self):
         """
@@ -115,11 +120,12 @@ class HRAcquirer(object):
     def save_data(self, data, n):
         """
         Save the data under the right file name and format
-        
+        data (DataArray): data to save
+        n (int): iteration number
         """
         # TODO: disable compression to save time
 
-        filename = self.fntmpl
+        filename = self.fntmpl % (n,)
         try:
             self.exporter.export(filename, data)
         except IOError as exc:

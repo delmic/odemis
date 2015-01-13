@@ -32,6 +32,8 @@ import time
 import unittest
 
 
+logging.getLogger().setLevel(logging.DEBUG)
+
 ODEMISD_CMD = "python2 -m odemis.odemisd.main"
 SIM_CONFIG = "optical-sim.odm.yaml"
 
@@ -70,6 +72,7 @@ class TestCommandLine(unittest.TestCase):
     @staticmethod
     def create_test_validate_pass(filename):
         def test_validate_pass(self):
+            logging.info("testing run with %s (should succeed)", filename)
             cmdline = "odemisd --log-level=2 --log-target=test.log --validate %s" % filename
             ret = main.main(cmdline.split())
             self.assertEqual(ret, 0, "error detected in correct config "
@@ -80,6 +83,7 @@ class TestCommandLine(unittest.TestCase):
     @staticmethod
     def create_test_validate_error(filename):
         def test_validate_error(self):
+            logging.info("testing run with %s (should fail)", filename)
             cmdline = "odemisd --log-level=2 --log-target=test.log --validate %s" % filename
             ret = main.main(cmdline.split())
             self.assertNotEqual(ret, 0, "no error detected in erroneous config "
@@ -153,10 +157,9 @@ class TestCommandLine(unittest.TestCase):
         
         time.sleep(1) # give some time to start
         
-        # now it should say it's running
-        cmdline = "odemisd --log-level=2 --log-target=test.log --check"
-        ret = main.main(cmdline.split())
-        self.assertEqual(ret, 0, "command '%s' returned %d" % (cmdline, ret))
+        # now it should say it's starting, and eventually running
+        ret = self._wait_backend_starts(5)
+        self.assertEqual(ret, 0, "backend status check returned %d" % (ret,))
         
         # stop the backend
         cmdline = "odemisd --log-level=2 --log-target=test.log --kill"
@@ -180,11 +183,16 @@ class TestCommandLine(unittest.TestCase):
         filename = "semantic-error-3.odm.yaml"
         cmdline = "odemisd --log-target=test.log %s" % filename
         ret = main.main(cmdline.split())
+        self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
+
+        # now it should say it's starting, and eventually failed
+        ret = self._wait_backend_starts(5)
         if ret == 0:
             # We also need to stop the backend then
             cmdline = "odemisd --kill"
             ret = main.main(cmdline.split())
             self.fail("no error detected in erroneous config file '%s'" % filename)
+
         os.remove("test.log")
         
     @timeout(10)
@@ -195,10 +203,9 @@ class TestCommandLine(unittest.TestCase):
         ret = subprocess.call(cmdline.split())
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
 
-        # now it should say it's running
-        cmdline = "odemisd --log-level=2 --log-target=test.log --check"
-        ret = main.main(cmdline.split())
-        self.assertEqual(ret, 0, "command '%s' returned %d" % (cmdline, ret))
+        # eventually it should say it's running
+        ret = self._wait_backend_starts(5)
+        self.assertEqual(ret, 0, "backend status check returned %d" % (ret,))
 
         # stop the backend
         cmdline = "odemisd --log-level=2 --log-target=test.log --kill"
@@ -209,6 +216,26 @@ class TestCommandLine(unittest.TestCase):
         ret = main.main(cmdline.split())
         os.remove("test.log")
         os.remove("testdaemon.log")
+
+    def _wait_backend_starts(self, timeout=5):
+        """
+        Wait until the backend status is different from "STARTING" (3)
+        timeout (0<float): maximum time to wait
+        return (int): the new status
+        """
+        end = time.time() + timeout
+        cmdline = "odemisd --log-level=2 --log-target=test.log --check"
+        while time.time() < end:
+            ret = main.main(cmdline.split())
+            if ret == 3:
+                logging.info("Backend is starting...")
+                time.sleep(1)
+            else:
+                break
+        else:
+            self.fail("Backend still in starting status after %g s" % timeout)
+
+        return ret
 
 # extends the class fully at module 
 TestCommandLine.create_tests()

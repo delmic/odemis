@@ -24,21 +24,16 @@ from __future__ import division
 
 import logging
 from odemis import model, acq
-from odemis.acq import stream
-from odemis.util import driver
-import os
-import subprocess
-import time
 import odemis
+from odemis.acq import stream
+from odemis.util import test
+import os
+import time
 import unittest
 
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-# ODEMISD_CMD = ["/usr/bin/python2", "-m", "odemis.odemisd.main"]
-# -m doesn't work when run from PyDev... not entirely sure why
-ODEMISD_CMD = ["/usr/bin/python2", os.path.dirname(odemis.__file__) + "/odemisd/main.py"]
-ODEMISD_ARG = ["--log-level=2" , "--log-target=testdaemon.log", "--daemonize"]
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 SECOM_LENS_CONFIG = CONFIG_PATH + "secom-sim-lens-align.odm.yaml" # 7x7
 
@@ -48,21 +43,15 @@ class TestOverlayStream(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
 
-        if driver.get_backend_status() == driver.BACKEND_RUNNING:
+        try:
+            test.start_backend(SECOM_LENS_CONFIG)
+        except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
             return
-
-        # run the backend as a daemon
-        # we cannot run it normally as the child would also think he's in a unittest
-        cmd = ODEMISD_CMD + ODEMISD_ARG + [SECOM_LENS_CONFIG]
-        # FIXME: give an informative warning when the comedi module has not been loaded
-        ret = subprocess.call(cmd)
-
-        if ret != 0:
-            logging.error("Failed starting backend with '%s'", cmd)
-
-        time.sleep(1) # time to start
+        except IOError as exp:
+            logging.error(str(exp))
+            raise
 
         # find components by their role
         cls.ebeam = model.getComponent(role="e-beam")
@@ -75,11 +64,7 @@ class TestOverlayStream(unittest.TestCase):
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
-        # end the backend
-        cmd = ODEMISD_CMD + ["--kill"]
-        subprocess.call(cmd)
-        model._core._microscope = None # force reset of the microscope for next connection
-        time.sleep(1) # time to stop
+        test.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:
@@ -104,6 +89,7 @@ class TestOverlayStream(unittest.TestCase):
         time.sleep(1)
         f.cancel()
         self.assertTrue(f.cancelled())
+
 #     @unittest.skip("skip")
     def test_acq_fine_align(self):
         """
@@ -151,7 +137,7 @@ class TestOverlayStream(unittest.TestCase):
         self.assertGreater(dur, est_time / 2) # Estimated time shouldn't be too small
 
         self.assertIsInstance(data[0], model.DataArray)
-        self.assertIsNone(e)
+        self.assertIsNone(e) # Check there was no exception
         self.assertEqual(len(data), len(streams) - 1)
 
         # No overlay correction metadata anywhere (it has all been merged)
