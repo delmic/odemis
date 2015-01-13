@@ -20,31 +20,25 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import logging
-import time
-import os
-import unittest
-import subprocess
-
-from odemis.util import driver
 from odemis import model
-from odemis.dataio import hdf5
 import odemis
 from odemis.acq import align
 from odemis.acq.align import autofocus
+from odemis.dataio import hdf5
+from odemis.util import test, timeout
+import os
 from scipy import ndimage
+import time
+import unittest
 
-logging.basicConfig(format=" - %(levelname)s \t%(message)s")
+
+# logging.basicConfig(format=" - %(levelname)s \t%(message)s")
 logging.getLogger().setLevel(logging.DEBUG)
-_frm = "%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s"
-logging.getLogger().handlers[0].setFormatter(logging.Formatter(_frm))
+# _frm = "%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s"
+# logging.getLogger().handlers[0].setFormatter(logging.Formatter(_frm))
 
-# ODEMISD_CMD = ["/usr/bin/python2", "-m", "odemis.odemisd.main"]
-# -m doesn't work when run from PyDev... not entirely sure why
-ODEMISD_CMD = ["/usr/bin/python2", os.path.dirname(odemis.__file__) + "/odemisd/main.py"]
-ODEMISD_ARG = ["--log-level=2", "--log-target=testdaemon.log", "--daemonize"]
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
-logging.debug("Config path = %s", CONFIG_PATH)
-SECOM_LENS_CONFIG = CONFIG_PATH + "secom-focus-test.odm.yaml"  # 7x7
+SECOM_CONFIG = CONFIG_PATH + "secom-focus-test.odm.yaml"  # 7x7
 
 
 class TestAutofocus(unittest.TestCase):
@@ -56,18 +50,15 @@ class TestAutofocus(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
 
-        if driver.get_backend_status() == driver.BACKEND_RUNNING:
+        try:
+            test.start_backend(SECOM_CONFIG)
+        except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
             return
-
-        # run the backend as a daemon
-        # we cannot run it normally as the child would also think he's in a unittest
-        cmd = ODEMISD_CMD + ODEMISD_ARG + [SECOM_LENS_CONFIG]
-        ret = subprocess.call(cmd)
-        if ret != 0:
-            logging.error("Failed starting backend with '%s'", cmd)
-        time.sleep(1)  # time to start
+        except IOError as exp:
+            logging.error(str(exp))
+            raise
 
         # find components by their role
         cls.ebeam = model.getComponent(role="e-beam")
@@ -82,11 +73,7 @@ class TestAutofocus(unittest.TestCase):
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
-        # end the backend
-        cmd = ODEMISD_CMD + ["--kill"]
-        subprocess.call(cmd)
-        model._core._microscope = None  # force reset of the microscope for next connection
-        time.sleep(1)  # time to stop
+        test.stop_backend()
 
     def setUp(self):
         self.data = hdf5.read_data("grid_10x10.h5")
@@ -110,6 +97,7 @@ class TestAutofocus(unittest.TestCase):
             self.assertGreater(prev_res, res)
             prev_res = res
 
+    @timeout(120)
     def test_autofocus(self):
         """
         Test AutoFocus
@@ -119,8 +107,9 @@ class TestAutofocus(unittest.TestCase):
         ccd = self.ccd
         focus.moveAbs({"z": 60e-06})
         future_focus = align.AutoFocus(ccd, ebeam, focus, 10e-06)
-        foc_pos, fm_final = future_focus.result()
+        foc_pos, foc_lev = future_focus.result(timeout=120) # timeout necessary because decorator doesn't catch in wait()
         self.assertAlmostEqual(foc_pos, 0, 4)
+        self.assertGreater(foc_lev, 0)
 
 if __name__ == '__main__':
     suite = unittest.TestLoader().loadTestsFromTestCase(TestAutofocus)

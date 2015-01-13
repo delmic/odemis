@@ -20,25 +20,17 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import logging
-import unittest
-import numpy
 import math
-import operator
-
-from scipy.spatial import cKDTree
 from numpy import random
-from random import uniform
-from numpy import reshape
-from odemis import model
-from odemis.dataio import hdf5
+import numpy
 from odemis.acq.align import coordinates
 from odemis.acq.align import transform
+from odemis.dataio import hdf5
+import operator
 from random import shuffle
-from numpy import genfromtxt
-from operator import itemgetter
-from scipy import ndimage
-from scipy import misc
-from scipy import imag
+from random import uniform
+import unittest
+
 
 logging.getLogger().setLevel(logging.DEBUG)
 
