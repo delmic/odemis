@@ -106,6 +106,7 @@ class TestAutofocus(unittest.TestCase):
         ebeam = self.ebeam
         ccd = self.ccd
         focus.moveAbs({"z": 60e-06})
+        ccd.exposureTime.value = ccd.exposureTime.range[0]
         future_focus = align.AutoFocus(ccd, ebeam, focus, 10e-06)
         foc_pos, foc_lev = future_focus.result(timeout=120) # timeout necessary because decorator doesn't catch in wait()
         self.assertAlmostEqual(foc_pos, 0, 4)
