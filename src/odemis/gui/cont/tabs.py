@@ -1272,7 +1272,7 @@ class AnalysisTab(Tab):
                             iimg.metadata[model.MD_POS],
                             (width, height)
                         )
-                        ol.connect_selection(spec_stream.selected_pixel)
+                        ol.connect_selection(spec_stream.selected_pixel, spec_stream.selectionWidth)
 
                     if hasattr(viewport.canvas, "line_overlay"):
                         ol = viewport.canvas.line_overlay
@@ -1281,7 +1281,7 @@ class AnalysisTab(Tab):
                             iimg.metadata[model.MD_POS],
                             (width, height)
                         )
-                        ol.connect_selection(spec_stream.selected_line)
+                        ol.connect_selection(spec_stream.selected_line, spec_stream.selectionWidth)
 
                 spec_stream.selected_pixel.subscribe(self._on_pixel_select, init=True)
                 spec_stream.selected_line.subscribe(self._on_line_select, init=True)

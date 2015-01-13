@@ -502,7 +502,9 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.add_world_overlay(psol)
 
         psol.set_data_properties(1e-05, (0.0, 0.0), (17, 19))
-        psol.connect_selection(omodel.TupleVA())
+        width_va = omodel.IntVA(1)
+
+        psol.connect_selection(omodel.TupleVA(), width_va)
         view.mpp.value = 1e-06
 
         psol._selected_pixel_va.value = (8, 8)
@@ -523,6 +525,20 @@ class OverlayTestCase(test.GuiTestCase):
 
         cnvs.Bind(wx.EVT_RIGHT_UP, toggle)
 
+        cnvs.disable_drag()
+
+        def on_key(evt):
+            k = evt.GetKeyCode()
+
+            if k == wx.WXK_DOWN and width_va.value > 1:
+                width_va.value -= 1
+            elif k == wx.WXK_UP:
+                width_va.value += 1
+            else:
+                pass
+
+        cnvs.Bind(wx.EVT_KEY_UP, on_key)
+
     def test_spectrum_line_select_overlay(self):
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
 
@@ -539,7 +555,8 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.add_world_overlay(slol)
 
         slol.set_data_properties(1e-05, (0.0, 0.0), (17, 19))
-        slol.connect_selection(omodel.TupleVA())
+        width_va = omodel.IntVA(1)
+        slol.connect_selection(omodel.TupleVA(), width_va)
         view.mpp.value = 1e-06
         test.gui_loop()
 
@@ -561,6 +578,20 @@ class OverlayTestCase(test.GuiTestCase):
             evt.Skip()
 
         cnvs.Bind(wx.EVT_RIGHT_UP, toggle)
+
+        cnvs.disable_drag()
+
+        def on_key(evt):
+            k = evt.GetKeyCode()
+
+            if k == wx.WXK_DOWN and width_va.value > 1:
+                width_va.value -= 1
+            elif k == wx.WXK_UP:
+                width_va.value += 1
+            else:
+                pass
+
+        cnvs.Bind(wx.EVT_KEY_UP, on_key)
 
     def test_line_select_overlay(self):
         logging.getLogger().setLevel(logging.DEBUG)

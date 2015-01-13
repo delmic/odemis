@@ -25,7 +25,6 @@ from __future__ import division
 
 import logging
 import math
-
 import cairo
 import wx
 
@@ -33,6 +32,7 @@ from odemis.acq.stream import UNDEFINED_ROI
 import odemis.gui as gui
 import odemis.gui.comp.overlay.base as base
 import odemis.gui.img.data as img
+from odemis.gui.util.raster import rasterize_line
 import odemis.util.conversion as conversion
 import odemis.util.units as units
 
@@ -619,18 +619,21 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, base.PixelDataMixin):
         self.end_pixel = None
 
         self._selected_line_va = None
+        self._selected_width_va = None
 
-    def connect_selection(self, selection_va):
+    def connect_selection(self, selection_va, width_va):
         """ Connect the overlay to an external selection VA so it can update itself on value changes
         """
         self.clear_selection()
         self._selected_line_va = selection_va
+        self._selected_width_va = width_va
         self._selected_line_va.subscribe(self._on_selection, init=True)
+        self._selected_width_va.subscribe(self._on_width, init=False)
 
     def _on_selection(self, selected_line):
         """ Event handler that requests a redraw when the selected line changes """
 
-        if (None, None) not in selected_line:
+        if selected_line and (None, None) not in selected_line:
             self.start_pixel, self.end_pixel = selected_line
 
             v_pos = self.data_pixel_to_view(self.start_pixel)
@@ -642,19 +645,30 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, base.PixelDataMixin):
             self._view_to_world()
             wx.CallAfter(self.cnvs.update_drawing)
 
-    # The following code is for debugging purposes. It draws a grid visualise the data pixel
+    def _on_width(self, _):
+        wx.CallAfter(self.cnvs.update_drawing)
 
-    # def draw(self, ctx, shift=(0, 0), scale=1.0):
-    #     LineSelectOverlay.draw(self, ctx, shift, scale)
-    #
-    #     ctx.set_source_rgba(*self.colour)
-    #     ctx.set_line_width(0.5)
-    #
-    #     for i in range(self._data_resolution[0]):
-    #         for j in range(self._data_resolution[1]):
-    #             rect = self.pixel_to_rect((i, j), scale)
-    #             ctx.rectangle(*rect)
-    #             ctx.stroke()
+    def draw(self, ctx, shift=(0, 0), scale=1.0):
+
+        if None in (self.start_pixel, self.end_pixel):
+            return
+
+        pixel_colour = conversion.hex_to_frgba(gui.FG_COLOUR_HIGHLIGHT, 0.5)
+        ctx.set_source_rgba(*pixel_colour)
+
+        points = rasterize_line(self.start_pixel, self.end_pixel, self._selected_width_va.value)
+        # Clip points
+        w, h = self._data_resolution
+        points = [p for p in points if 0 <= p[0] < w and 0 <= p[1] < h]
+
+        for point in set(points):
+            # ctx.line_to(*self.data_pixel_to_view(point))
+            rect = self.pixel_to_rect(point, scale)
+            ctx.rectangle(*rect)
+            ctx.rectangle(*rect)
+            ctx.fill()
+
+        LineSelectOverlay.draw(self, ctx, shift, scale)
 
     def on_left_down(self, evt):
         """ Start drawing a selection line if the overlay is active """
@@ -721,25 +735,39 @@ class PixelSelectOverlay(base.WorldOverlay, base.PixelDataMixin, base.DragMixin)
         base.DragMixin.__init__(self)
 
         self._selected_pixel_va = None
+        self._selected_width_va = None
 
         self.colour = conversion.hex_to_frgba(gui.SELECTION_COLOUR, 0.5)
         self.select_color = conversion.hex_to_frgba(gui.FG_COLOUR_HIGHLIGHT, 0.5)
 
-    def connect_selection(self, selection_va):
+    def connect_selection(self, selection_va, width_va):
         self._selected_pixel_va = selection_va
+        self._selected_width_va = width_va
         self._selected_pixel_va.subscribe(self._on_selection, init=True)
+        self._selected_width_va.subscribe(self._on_width, init=False)
 
     def _on_selection(self, _):
         """ Event handler that requests a redraw when the selected line changes """
+        wx.CallAfter(self.cnvs.update_drawing)
+
+    def _on_width(self, _):
         wx.CallAfter(self.cnvs.update_drawing)
 
     def deactivate(self):
         """ Clear the hover pixel when the overlay is deactivated """
         self._pixel_pos = None
         base.WorldOverlay.deactivate(self)
-        self.cnvs.update_drawing()
+        wx.CallAfter(self.cnvs.update_drawing)
 
     # Event handlers
+
+    def on_leave(self, evt):
+
+        if self.active:
+            self._pixel_pos = None
+            wx.CallAfter(self.cnvs.update_drawing)
+
+        base.WorldOverlay.on_leave(self, evt)
 
     def on_motion(self, evt):
         """ Update the current mouse position """
@@ -788,6 +816,20 @@ class PixelSelectOverlay(base.WorldOverlay, base.PixelDataMixin, base.DragMixin)
 
     # END Event handlers
 
+    def selection_points(self, point):
+
+        x, y = point
+        radius = self._selected_width_va.value / 2
+        w, h = self._data_resolution
+        points = []
+
+        for px in range(max(0, x - int(radius)), min(x + int(radius) + 1, w)):
+            for py in range(max(0, y - int(radius)), min(y + int(radius) + 1, h)):
+                if math.hypot(x - px, y - py) <= radius:
+                    points.append((px, py))
+
+        return points
+
     def draw(self, ctx, shift=(0, 0), scale=1.0):
 
         # If a selection VA is assigned...
@@ -797,17 +839,19 @@ class PixelSelectOverlay(base.WorldOverlay, base.PixelDataMixin, base.DragMixin)
                 self._selected_pixel_va.value != self._pixel_pos and
                 self.is_over_pixel_data()
             ):
-                rect = self.pixel_to_rect(self._pixel_pos, scale)
 
-                if rect:
+                for point in self.selection_points(self._pixel_pos):
+                    rect = self.pixel_to_rect(point, scale)
+
                     ctx.set_source_rgba(*self.colour)
                     ctx.rectangle(*rect)
                     ctx.fill()
 
             if self._selected_pixel_va.value not in (None, (None, None)):
-                rect = self.pixel_to_rect(self._selected_pixel_va.value, scale)
 
-                if rect:
+                for point in self.selection_points(self._selected_pixel_va.value):
+                    rect = self.pixel_to_rect(point, scale)
+
                     ctx.set_source_rgba(*self.select_color)
                     ctx.rectangle(*rect)
                     ctx.fill()
