@@ -233,7 +233,7 @@ class TestCommandLine(unittest.TestCase):
             else:
                 break
         else:
-            self.fail("Backend still in starting status after 5 s")
+            self.fail("Backend still in starting status after %g s" % timeout)
 
         return ret
 
