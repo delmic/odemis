@@ -83,12 +83,12 @@ class TestOverlay(unittest.TestCase):
         escan = self.ebeam
         detector = self.sed
         ccd = self.ccd
-
+        escan.magnification.value = 20000
         f = align.FindOverlay((7, 7), 0.1, 1e-06, escan, ccd, detector)
 
         t, md = f.result()
 
-#     @unittest.skip("skip")
+    # @unittest.skip("skip")
     def test_find_overlay_failure(self):
         """
         Test FindOverlay failure due to low maximum allowed difference
@@ -96,13 +96,13 @@ class TestOverlay(unittest.TestCase):
         escan = self.ebeam
         detector = self.sed
         ccd = self.ccd
-
-        f = align.FindOverlay((9, 9), 1e-06, 1e-08, escan, ccd, detector)
+        escan.magnification.value = 20000
+        f = align.FindOverlay((6, 6), 1e-06, 1e-08, escan, ccd, detector)
 
         with self.assertRaises(ValueError):
             f.result()
 
-#     @unittest.skip("skip")
+    # @unittest.skip("skip")
     def test_find_overlay_cancelled(self):
         """
         Test FindOverlay cancellation
@@ -110,8 +110,8 @@ class TestOverlay(unittest.TestCase):
         escan = self.ebeam
         detector = self.sed
         ccd = self.ccd
-
-        f = align.FindOverlay((9, 9), 1e-06, 1e-07, escan, ccd, detector)
+        escan.magnification.value = 20000
+        f = align.FindOverlay((6, 6), 1e-06, 1e-07, escan, ccd, detector)
         time.sleep(0.04)  # Cancel almost after the half grid is scanned
 
         f.cancel()
