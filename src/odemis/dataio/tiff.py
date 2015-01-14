@@ -28,7 +28,7 @@ import math
 import numpy
 from odemis import model, util
 import odemis
-from odemis.util import spectrum, img
+from odemis.util import spectrum, img, fluo
 import os
 import re
 import sys
@@ -475,9 +475,11 @@ def _updateMDFromOME(root, das, basename):
             except KeyError:
                 pass
 
+            # TODO: based on whether it's apifluo or brightfield, put different
+            # bandwith (cf hdf5)
             try:
                 iwl = float(che.attrib["ExcitationWavelength"]) * 1e-9 # nm -> m
-                mdc[model.MD_IN_WL] = (iwl, iwl)
+                mdc[model.MD_IN_WL] = (iwl - 1e-9, iwl + 1e-9)
             except (KeyError, ValueError):
                 pass
 
@@ -488,7 +490,7 @@ def _updateMDFromOME(root, das, basename):
                     wl_list.append(owl)
                 else:
                     # Fluorescence
-                    mdc[model.MD_OUT_WL] = (owl, owl)
+                    mdc[model.MD_OUT_WL] = (owl - 1e-9, owl + 1e-9)
             except (KeyError, ValueError):
                 pass
 
@@ -1030,11 +1032,11 @@ def _addImageElement(root, das, ifd, rois):
             # TODO create a Filter with the cut range?
             if model.MD_IN_WL in da.metadata:
                 iwl = da.metadata[model.MD_IN_WL]
-                xwl = numpy.mean(iwl) * 1e9 # in nm
+                xwl = fluo.get_center(iwl) * 1e9 # in nm
                 chan.attrib["ExcitationWavelength"] = "%d" % round(xwl)
 
                 # if input wavelength range is small, it means we are in epifluoresence
-                if abs(iwl[1] - iwl[0]) < 100e-9:
+                if abs(iwl[-1] - iwl[0]) < 100e-9:
                     chan.attrib["IlluminationType"] = "Epifluorescence"
                     chan.attrib["AcquisitionMode"] = "WideField"
                     chan.attrib["ContrastMethod"] = "Fluorescence"
@@ -1045,7 +1047,7 @@ def _addImageElement(root, das, ifd, rois):
 
             if model.MD_OUT_WL in da.metadata:
                 owl = da.metadata[model.MD_OUT_WL]
-                ewl = numpy.mean(owl) * 1e9 # in nm
+                ewl = fluo.get_center(owl) * 1e9 # in nm
                 chan.attrib["EmissionWavelength"] = "%d" % round(ewl)
 
             if wl_list is not None and len(wl_list) > 0:

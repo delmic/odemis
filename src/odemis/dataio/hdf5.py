@@ -25,7 +25,7 @@ import h5py
 import logging
 import numpy
 from odemis import model
-from odemis.util import spectrum, img
+from odemis.util import spectrum, img, fluo
 import os
 import time
 
@@ -599,12 +599,12 @@ def _add_image_metadata(group, image, mds):
 
     # Wavelengths are not a band, but a single value, so we pick the center
     xwls = [md.get(model.MD_IN_WL) for md in mds]
-    gp["ExcitationWavelength"] = [1e-9 if v is None else numpy.mean(v) for v in xwls] # in m
+    gp["ExcitationWavelength"] = [1e-9 if v is None else fluo.get_center(v) for v in xwls] # in m
     state = [ST_INVALID if v is None else ST_REPORTED for v in xwls]
     _h5svi_set_state(gp["ExcitationWavelength"], state)
 
     ewls = [md.get(model.MD_OUT_WL) for md in mds]
-    gp["EmissionWavelength"] = [1e-9 if v is None else numpy.mean(v) for v in ewls] # in m
+    gp["EmissionWavelength"] = [1e-9 if v is None else fluo.get_center(v) for v in ewls] # in m
     state = [ST_INVALID if v is None else ST_REPORTED for v in ewls]
     _h5svi_set_state(gp["EmissionWavelength"], state)
 

@@ -728,8 +728,9 @@ class FluoStream(CameraStream):
 
         # TODO: should be handled by the MD updater?
         if model.MD_OUT_WL not in data.metadata:
-            # TODO: check that multi-band can be handled correctly by dataio
-            data.metadata[model.MD_OUT_WL] = self.emission.value
+            # If multi-band, just use the best guess as dataio can't do that better
+            em_band = fluo.get_one_band_em(self.emission.value, self.excitation.value)
+            data.metadata[model.MD_OUT_WL] = em_band
 
         data.metadata[model.MD_USER_TINT] = self.tint.value
         super(FluoStream, self).onNewImage(dataflow, data)
