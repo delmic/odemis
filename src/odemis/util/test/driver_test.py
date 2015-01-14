@@ -22,20 +22,18 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 import logging
 from odemis import model
-from odemis.util import driver
+import odemis
+from odemis.util import test
 from odemis.util.driver import getSerialDriver, reproduceTypedValue, \
     speedUpPyroConnect
 import os
-import subprocess
 import time
 import unittest
 
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-ODEMISD_CMD = ["python2", "-m", "odemis.odemisd.main"]
-ODEMISD_ARG = ["--log-level=2", "--log-target=testdaemon.log", "--daemonize"]
-CONFIG_PATH = os.path.dirname(__file__) + "/../../../../install/linux/usr/share/odemis/"
+CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 SECOM_CONFIG = CONFIG_PATH + "secom-sim.odm.yaml"
 
 class TestDriver(unittest.TestCase):
@@ -97,22 +95,23 @@ class TestDriver(unittest.TestCase):
                 out = reproduceTypedValue(ex_val, str_val)
 
     def test_speedUpPyroConnect(self):
-        need_stop = False
-        if driver.get_backend_status() != driver.BACKEND_RUNNING:
+        try:
+            test.start_backend(SECOM_CONFIG)
             need_stop = True
-            cmd = ODEMISD_CMD + ODEMISD_ARG + [SECOM_CONFIG]
-            ret = subprocess.call(cmd)
-            if ret != 0:
-                logging.error("Failed starting backend with '%s'", cmd)
-            time.sleep(1) # time to start
-        else:
-            model._components._microscope = None # force reset of the microscope for next connection
+        except LookupError:
+            logging.info("A running backend is already found, will not stop it")
+            need_stop = False
+        except IOError as exp:
+            logging.error(str(exp))
+            raise
+
+        model._components._microscope = None # force reset of the microscope for next connection
 
         speedUpPyroConnect(model.getMicroscope())
 
+        time.sleep(2)
         if need_stop:
-            cmd = ODEMISD_CMD + ["--kill"]
-            subprocess.call(cmd)
+            test.stop_backend()
 
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']
