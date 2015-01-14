@@ -1694,16 +1694,16 @@ def __init_resources():
                         <orient>wxVERTICAL</orient>
                         <object class="sizeritem">
                           <object class="FoldPanelBar">
-                            <object class="FoldPanelItem" name="fp_lens_sem_settings">
-                              <label>SEM SETTINGS</label>
+                            <object class="FoldPanelItem" name="fp_lens_opt_settings">
+                              <label>OPTICAL SETTINGS</label>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
                               <XRCED>
                                 <assign_var>1</assign_var>
                               </XRCED>
                             </object>
-                            <object class="FoldPanelItem" name="fp_lens_opt_settings">
-                              <label>OPTICAL SETTINGS</label>
+                            <object class="FoldPanelItem" name="fp_lens_sem_settings">
+                              <label>SEM SETTINGS</label>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
                               <XRCED>
