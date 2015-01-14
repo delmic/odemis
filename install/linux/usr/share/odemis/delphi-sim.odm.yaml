@@ -182,7 +182,7 @@ DELPHI: {
     init: {
         port: "/dev/fake",
         axes: ["x", "y", "z"],
-        ustepsize: [5.9e-9, 5.9e-9, 5.e-9], # m/µstep
+        ustepsize: [5.9e-9, 5.9e-9, 0.302e-9], # m/µstep
         refproc: "FakeReferencing", # referencing procedure for simulator
         temp: True,
         # inverted: ["y"],
