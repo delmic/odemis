@@ -71,7 +71,7 @@ def get_major_version():
 __version__ = _get_version()
 __fullname__ = "Open Delmic Microscope Software"
 __shortname__ = "Odemis"
-__copyright__ = "Copyright © 2012-2014 Delmic"
+__copyright__ = "Copyright © 2012-2015 Delmic"
 __authors__ = ["Éric Piel", "Rinze de Laat", "Kimon Tsitsikas"]
 __license__ = "GNU General Public License version 2"
 __licensetxt__ = (
