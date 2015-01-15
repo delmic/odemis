@@ -566,10 +566,6 @@ class PlotViewport(ViewPort):
         # before we get an explicit chance to unsubscribe event handlers
         self.spectrum_stream = None
 
-    def clear(self):
-        self.canvas.clear()
-        self.Refresh()
-
     def Refresh(self, *args, **kwargs):
         """ Refresh the ViewPort while making sure the legends get redrawn as well """
         self.left_legend.redraw()
@@ -587,6 +583,8 @@ class PlotViewport(ViewPort):
         """ This method will connect this ViewPort to the Spectrum Stream so it
         it can react to spectrum pixel selection.
         """
+
+        self.clear()
 
         ss = self.microscope_view.stream_tree.spectrum_streams
 
@@ -740,6 +738,8 @@ class SpatialSpectrumViewport(ViewPort):
         """ This method will connect this ViewPort to the Spectrum Stream so it
         it can react to spectrum pixel selection.
         """
+
+        self.clear()
 
         ss = self.microscope_view.stream_tree.spectrum_streams
 

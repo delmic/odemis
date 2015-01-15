@@ -355,9 +355,11 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         return images
 
     def _convert_streams_to_images(self):
-        """ Temporary function to convert the StreamTree to a list of images as
-        the canvas currently expects.
+        """ Temporary function to convert the StreamTree to a list of images as the canvas
+        currently expects.
+
         """
+
         images = self._get_ordered_images()
 
         # add the images in order
@@ -375,8 +377,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
             ims.append([rgba_im, pos, scale, keepalpha, rot, blend_mode, name])
 
-        # TODO: Canvas needs to accept the NDArray (+ specific attributes
-        # recorded separately).
+        # TODO: Canvas needs to accept the NDArray (+ specific attributes recorded separately).
         self.set_images(ims)
 
         # For debug only:
@@ -1239,14 +1240,18 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
 
         if data is None:
             self.markline_overlay.v_pos.unsubscribe(self._map_to_plot_values)
+            self.markline_overlay.deactivate()
         else:
             self.markline_overlay.v_pos.subscribe(self._map_to_plot_values, init=True)
+            self.markline_overlay.activate()
 
     def clear(self):
         super(ZeroDimensionalPlotCanvas, self).clear()
         self.val_x.value = None
         self.val_y.value = None
         self.markline_overlay.clear_labels()
+        self.markline_overlay.deactivate()
+        self.update_drawing()
         self._update_thumbnail()
 
     # Event handlers
@@ -1387,6 +1392,9 @@ class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
 
     def clear(self):
         super(OneDimensionalSpatialSpectrumCanvas, self).clear()
+        self.markline_overlay.clear_labels()
+        self.markline_overlay.deactivate()
+        self.update_drawing()
         self._update_thumbnail()
 
     def setView(self, microscope_view, tab_data):
@@ -1412,6 +1420,7 @@ class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
         """
 
         self.set_images([(im_data, (0.0, 0.0), 1.0, True, None, None, "Spatial Spectrum")])
+        self.markline_overlay.activate()
 
     @wxlimit_invocation(2)  # max 1/2 Hz
     @call_after  # needed as it accesses the DC
