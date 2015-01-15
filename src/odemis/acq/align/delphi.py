@@ -647,10 +647,11 @@ def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, fo
         acc_offset, scaling, rotation = transform.CalculateTransform(opt_spots,
                                                                  sem_spots)
         # Take care of negative rotation
-        scaling = (1 / scaling[0], 1 / scaling[1])
-        if rotation < 0:
-            rotation = 2 * math.pi + rotation
-        return acc_offset, rotation, scaling
+        scaling = (scaling[0], scaling[1])
+        cor_rot = -rotation
+        if cor_rot < 0:
+            cor_rot = 2 * math.pi + cor_rot
+        return acc_offset, cor_rot, scaling
 
     finally:
         escan.resolution.value = (512, 512)
