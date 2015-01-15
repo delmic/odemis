@@ -673,6 +673,8 @@ class SparcAcquiController(object):
             self._reset_acquisition_gui("Saving acquisition file failed")
             return
 
+        # TODO: we should add the file to the list of recently-used files
+        # cf http://pyxdg.readthedocs.org/en/latest/recentfiles.html
         if exp is None:
             # display in the analysis tab
             self._show_acquisition(data, open(filename))
