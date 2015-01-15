@@ -460,8 +460,10 @@ class OverviewController(object):
 
         # If the 'new' position is identical to the last one in the history, ignore
         # TODO: do not care about the p_size, and override,
-        if (self._data_model.stage_history.value and
-            (p_center, p_size) == self._data_model.stage_history.value[-1]):
+        if (
+                self._data_model.stage_history.value and
+                (p_center, p_size) == self._data_model.stage_history.value[-1]
+        ):
             return
 
         # If max length reached, remove the oldest

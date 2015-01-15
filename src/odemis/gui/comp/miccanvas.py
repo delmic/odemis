@@ -38,7 +38,9 @@ from odemis import util, model
 from odemis.acq import stream
 from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
 from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS, BitmapCanvas
-from odemis.gui.comp.overlay.view import HistoryOverlay, PointSelectOverlay, MarkingLineOverlay
+from odemis.gui.comp.overlay.base import Label
+from odemis.gui.comp.overlay.view import HistoryOverlay, PointSelectOverlay, MarkingLineOverlay, \
+    TextViewOverlay
 from odemis.gui.util import wxlimit_invocation, call_after, ignore_dead, img
 from odemis.model import VigilantAttributeBase
 from odemis.util import units
@@ -781,7 +783,11 @@ class OverviewCanvas(DblMicroscopeCanvas):
     def __init__(self, *args, **kwargs):
         super(OverviewCanvas, self).__init__(*args, **kwargs)
 
-        self.abilities = set() # Cannot move, zoom...
+        self.default_margin = 0
+        self.margins = (self.default_margin, self.default_margin)
+
+        self.abilities = set()  # Cannot move, zoom...
+
         self.background_brush = wx.SOLID
 
         # Point select overlay for stage navigation
@@ -813,26 +819,44 @@ class OverviewCanvas(DblMicroscopeCanvas):
         dc.SelectObject(bitmap)
 
         # simplified version of on_paint()
-        margin = ((self._bmp_buffer_size[0] - self.ClientSize.x) // 2,
-                  (self._bmp_buffer_size[1] - self.ClientSize.y) // 2)
+        # margin = ((self._bmp_buffer_size[0] - self.ClientSize.x) // 2,
+        #           (self._bmp_buffer_size[1] - self.ClientSize.y) // 2)
 
-        dc.BlitPointSize((0, 0), self.ClientSize, self._dc_buffer, margin)
+        dc.BlitPointSize((0, 0), self.ClientSize, self._dc_buffer, (0, 0))
+
+        # We need to scale the thumbnail ourselves, instead of letting the button handle it, because
+        # we need to be able to draw the history overlay without it being rescaled afterwards
 
         image = wx.ImageFromBitmap(bitmap)
-        image = image.Scale(*gui.VIEW_BTN_SIZE, quality=wx.IMAGE_QUALITY_HIGH)
 
-        del dc
+        thumbnail_size = wx.Size(*gui.VIEW_BTN_SIZE)
+        rsize = wx.Size(*gui.VIEW_BTN_SIZE)
+
+        if (thumbnail_size.x / image.Width) < (thumbnail_size.y / image.Height):
+            rsize[1] = int(image.Height * (thumbnail_size.x / image.Width))
+        else:
+            rsize[0] = int(image.Width * (thumbnail_size.y / image.Height))
+
+        scaled_img = image.Scale(*rsize, quality=wx.IMAGE_QUALITY_HIGH)
 
         dc = wx.MemoryDC()
-        bitmap = wx.BitmapFromImage(image)
+        bitmap = wx.BitmapFromImage(scaled_img)
         dc.SelectObject(bitmap)
 
         ctx = wxcairo.ContextFromDC(dc)
-        self.history_overlay.draw(ctx, gui.VIEW_BTN_SIZE)
+        self.history_overlay.draw(ctx, rsize)
+
+        # Resize crops or adds a border, without scaling the image data
+        lt = ((thumbnail_size.x - scaled_img.Width) // 2,
+              (thumbnail_size.y - scaled_img.Height) // 2)
+
+        scaled_img.Resize(thumbnail_size, lt, 0, 0, 0)
+
+        del dc
 
         # close the DC, to be sure the bitmap can be used safely
-        image = wx.ImageFromBitmap(bitmap)
-        self.microscope_view.thumbnail.value = image
+        scaled_img = wx.ImageFromBitmap(bitmap)
+        self.microscope_view.thumbnail.value = scaled_img
 
 
 class SecomCanvas(DblMicroscopeCanvas):

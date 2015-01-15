@@ -20,17 +20,13 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
-#===============================================================================
-# Test module for Odemis' gui.comp.buttons module
-#===============================================================================
-
 from collections import OrderedDict
-from odemis.gui import test
+import unittest
+import wx
+
 from odemis.gui.img import data
 import odemis.gui.comp.buttons as buttons
 import odemis.gui.test as test
-import unittest
-import wx
 from odemis.gui.test import gui_loop
 
 
@@ -50,66 +46,66 @@ class ButtonsTestCase(test.GuiTestCase):
         cls.buttons = OrderedDict()
         panel = cls.app.panel_finder()
 
-        cls.buttons['ImageButton'] = buttons.ImageButton(panel, -1,
-                                                data.getbtn_128x24Bitmap())
+        cls.buttons['ImageButton'] = buttons.ImageButton(panel, -1, data.getbtn_128x24Bitmap())
+
         cls.buttons['ImageButton'].SetBitmaps(data.getbtn_128x24_hBitmap())
 
+        cls.buttons['ImageTextButton'] = buttons.ImageTextButton(panel,
+                                                                 -1,
+                                                                 data.getbtn_128x24Bitmap(),
+                                                                 "ImageTextButton",
+                                                                 label_delta=1)
 
-        cls.buttons['ImageTextButton'] = buttons.ImageTextButton(panel, -1,
-                                                data.getbtn_128x24Bitmap(),
-                                                "ImageTextButton",
-                                                label_delta=1)
         cls.buttons['ImageTextButton'].SetBitmaps(data.getbtn_128x24_hBitmap(),
-                                                   data.getbtn_128x24_aBitmap())
+                                                  data.getbtn_128x24_aBitmap())
 
+        cls.buttons['ImageToggleButton'] = buttons.ImageToggleButton(panel,
+                                                                     -1,
+                                                                     data.getbtn_128x24Bitmap(),
+                                                                     label_delta=10)
 
-        cls.buttons['ImageToggleButton'] = buttons.ImageToggleButton(panel, -1,
-                                                data.getbtn_128x24Bitmap(),
-                                                label_delta=10)
-        cls.buttons['ImageToggleButton'].SetBitmaps(
-                                                data.getbtn_128x24_hBitmap(),
-                                                data.getbtn_128x24_aBitmap())
+        cls.buttons['ImageToggleButton'].SetBitmaps(data.getbtn_128x24_hBitmap(),
+                                                    data.getbtn_128x24_aBitmap())
 
         cls.buttons['ImageTextToggleButton'] = buttons.ImageTextToggleButton(
-                                                panel, -1,
-                                                data.getbtn_256x24_hBitmap(),
-                                                "ImageTextToggleButton",
-                                                label_delta=1,
-                                                style=wx.ALIGN_CENTER)
-        cls.buttons['ImageTextToggleButton'].SetBitmaps(
-                                                data.getbtn_256x24_hBitmap(),
-                                                data.getbtn_256x24_aBitmap())
+            panel, -1,
+            data.getbtn_256x24_hBitmap(),
+            "ImageTextToggleButton",
+            label_delta=1,
+            style=wx.ALIGN_CENTER)
 
+        cls.buttons['ImageTextToggleButton'].SetBitmaps(data.getbtn_256x24_hBitmap(),
+                                                        data.getbtn_256x24_aBitmap())
 
-        cls.buttons['ViewButton'] = buttons.ViewButton(panel, -1,
-                                                data.getpreview_blockBitmap(),
-                                                label_delta=1,
-                                                style=wx.ALIGN_CENTER)
+        cls.buttons['ViewButton'] = buttons.ViewButton(panel,
+                                                       -1,
+                                                       data.getpreview_blockBitmap(),
+                                                       label_delta=1,
+                                                       style=wx.ALIGN_CENTER)
         cls.buttons['ViewButton'].set_overlay_image(data.gettest_10x10Image())
+
         cls.buttons['ViewButton'].SetBitmaps(data.getpreview_block_aBitmap())
 
+        cls.buttons['ColourButton'] = buttons.ColourButton(panel, -1, data.getbtn_128x24Bitmap())
 
-        cls.buttons['ColourButton'] = buttons.ColourButton(panel, -1,
-                                                data.getbtn_128x24Bitmap())
+        cls.buttons['PopupImageButton'] = buttons.PopupImageButton(panel,
+                                                                   -1,
+                                                                   data.getbtn_128x24Bitmap(),
+                                                                   r"\/",
+                                                                   style=wx.ALIGN_CENTER)
 
-
-        cls.buttons['PopupImageButton'] = buttons.PopupImageButton(panel, -1,
-                                                data.getbtn_128x24Bitmap(),
-                                                r"\/",
-                                                style=wx.ALIGN_CENTER)
         cls.buttons['PopupImageButton'].SetBitmaps(data.getbtn_128x24_hBitmap())
 
-        cls.buttons['TabButton'] = buttons.TabButton(panel, -1,
-                                                data.gettab_inactiveBitmap(),
-                                                "Tab Test",
-                                                style=wx.ALIGN_CENTER)
-
-        cls.buttons['TabButton'].SetBitmaps(data.gettab_hoverBitmap(),
-                                            data.gettab_activeBitmap())
+        cls.buttons['TabButton'] = buttons.TabButton(panel,
+                                                     -1,
+                                                     data.gettab_inactiveBitmap(),
+                                                     "Tab Test",
+                                                     style=wx.ALIGN_CENTER)
+        cls.buttons['TabButton'].SetBitmaps(data.gettab_hoverBitmap(), data.gettab_activeBitmap())
         cls.buttons['TabButton'].Enable()
 
         for btn in cls.buttons.values():
-            cls.add_control(btn, wx.ALL|wx.ALIGN_CENTER_HORIZONTAL)
+            cls.add_control(btn, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
 
     def test_tab_button(self):
         self.buttons['TabButton'].notify(True)
@@ -132,6 +128,7 @@ class ButtonsTestCase(test.GuiTestCase):
                 print "option %s chosen" % option
 
             pib.add_choice("option %s" % i, tmp)
+
         test.gui_loop()
         self.assertEqual(len(pib.choices), nb_options)
         self.assertEqual(pib.menu.MenuItemCount, nb_options)
@@ -140,6 +137,18 @@ class ButtonsTestCase(test.GuiTestCase):
         self.assertEqual(len(pib.choices), nb_options - 1)
         self.assertEqual(pib.menu.MenuItemCount, nb_options - 1)
         test.gui_loop()
+
+    def test_view_button(self):
+        self.view_button = self.buttons['ViewButton']
+        self.imgs = (data.gettest_5x10Image(), data.gettest_10x5Image(), data.gettest_10x10Image())
+
+        def switch_image(evt):
+            self.view_button.set_overlay_image(self.imgs[0])
+            self.imgs = self.imgs[1:] + self.imgs[:1]
+            evt.Skip()
+
+        self.view_button.Bind(wx.EVT_LEFT_DOWN, switch_image)
+
 
 if __name__ == "__main__":
     unittest.main()
