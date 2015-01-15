@@ -129,6 +129,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.zoom_overlay = None
         self.update_overlay = None
 
+        self.background_brush = wx.SOLID
+
     # Ability manipulation
 
     def disable_zoom(self):
