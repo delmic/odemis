@@ -43,13 +43,13 @@ def get_center(band):
         center = band[len(band) // 2]
     return center
 
-def get_one_center_em(band, ex_band):
+def get_one_band_em(band, ex_band):
     """
-    Return the center of an emission band, and if it's a multi-band, return just
-    one of the centers based on the current excitation band
-    band ((list of) tuple of 2 or 5 floats): emission band
-    ex_band ((list of) tuple of 2 or 5 floats): excitation band
-    return (float): wavelength in m
+    Return the band given or if it's a multi-band, return just the most likely
+    one based on the current excitation band
+    band ((list of) tuple of 2 or 5 floats): emission band(s)
+    ex_band ((list of) tuple of 2 or 5 floats): excitation band(s)
+    return (tuple of 2 or 5 floats): emission band
     """
     if isinstance(band[0], collections.Iterable):
         # Need to guess: the closest above the excitation wavelength
@@ -59,25 +59,35 @@ def get_one_center_em(band, ex_band):
         else:
             ex_center = get_center(ex_band)
 
-        em_centers = get_center(band)
-        em_centers_above = [c for c in em_centers if c > ex_center]
-        if em_centers_above:
-            em_center = min(em_centers_above)
+        em_b2c = dict((b, get_center(b)) for b in band)
+        bands_above = [b for b, c in em_b2c.items() if c > ex_center]
+        if bands_above:
+            em_band = min(bands_above, key=em_b2c.get)
         else:
             # excitation and emission don't seem to match, so fallback to the
             # less crazy value
-            em_center = max(em_centers)
+            em_band = max(band, key=em_b2c.get)
 
-        return em_center
+        return em_band
     else:
-        return get_center(band)
+        return band
+
+def get_one_center_em(band, ex_band):
+    """
+    Return the center of an emission band, and if it's a multi-band, return just
+    one of the centers based on the current excitation band
+    band ((list of) tuple of 2 or 5 floats): emission band(s)
+    ex_band ((list of) tuple of 2 or 5 floats): excitation band(s)
+    return (float): wavelength in m
+    """
+    return get_center(get_one_band_em(band, ex_band))
 
 def get_one_center_ex(band, em_band):
     """
     Return the center of an excitation band, and if it's a multi-band, return
     just one of the centers based on the current emission band
-    band ((list of) tuple of 2 or 5 floats): excitation band
-    em_band ((list of) tuple of 2 or 5 floats): emission band
+    band ((list of) tuple of 2 or 5 floats): excitation band(s)
+    em_band ((list of) tuple of 2 or 5 floats): emission band(s)
     return (float): wavelength in m
     """
     if isinstance(band[0], collections.Iterable):
@@ -95,7 +105,7 @@ def get_one_center_ex(band, em_band):
         else:
             # excitation and emission don't seem to match, so fallback to the
             # less crazy value
-            ex_center = max(ex_centers)
+            ex_center = min(ex_centers)
 
         return ex_center
     else:

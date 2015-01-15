@@ -748,7 +748,7 @@ def main(args):
             if status == BACKEND_RUNNING:
                 raise ValueError("Back-end running while trying to scan for devices")
             scan()
-            return
+            return 0
 
         # check if there is already a backend running
         if status == BACKEND_STOPPED:

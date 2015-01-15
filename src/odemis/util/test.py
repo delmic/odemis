@@ -1,0 +1,92 @@
+# -*- coding: utf-8 -*-
+'''
+Created on 13 Jan 2015
+
+@author: Éric Piel
+
+Copyright © 2015 Éric Piel, Delmic
+
+This file is part of Odemis.
+
+Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License version 2 as published by the Free Software Foundation.
+
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
+'''
+# Helper functions for unit tests
+
+import logging
+from odemis import model
+import odemis
+from odemis.util import driver
+import os
+import subprocess
+import time
+
+
+# ODEMISD_CMD = ["/usr/bin/python2", "-m", "odemis.odemisd.main"]
+# -m doesn't work when run from PyDev... not entirely sure why
+ODEMISD_CMD = ["/usr/bin/python2", os.path.dirname(odemis.__file__) + "/odemisd/main.py"]
+ODEMISD_ARG = ["--log-level=2" , "--log-target=testdaemon.log", "--daemonize"]
+
+def start_backend(config):
+    """
+    Start the backend
+    config (str): path to the microscope config file
+    raises:
+        LookupError: if a backend is already running
+        IOError: if backend failed to start
+    """
+    if driver.get_backend_status() == driver.BACKEND_RUNNING:
+        raise LookupError("A running backend is already found")
+
+    logging.info("Starting backend with config file '%s'", config)
+
+    # run the backend as a daemon
+    # we cannot run it normally as the child would also think he's in a unittest
+    cmd = ODEMISD_CMD + ODEMISD_ARG + [config]
+    ret = subprocess.call(cmd)
+    if ret != 0:
+        raise IOError("Failed starting backend with '%s' (returned %d)" % (cmd, ret))
+
+    end = time.time() + 15 # s timeout
+    while time.time() < end:
+        status = driver.get_backend_status()
+        if status == driver.BACKEND_STARTING:
+            logging.info("Backend is starting...")
+            time.sleep(1)
+        else:
+            break
+    else:
+        raise IOError("Backend still starting after 15 s")
+
+    if status != driver.BACKEND_RUNNING:
+        raise IOError("Backend failed to start, now %s" % status)
+
+def stop_backend():
+    """
+    Stop the backend and wait for it to be fully stopped
+    """
+    cmd = ODEMISD_CMD + ["--kill"]
+    ret = subprocess.call(cmd)
+    if ret != 0:
+        raise IOError("Failed stopping backend with '%s' (returned %d)" % (cmd, ret))
+
+    # wait for the backend to be fully stopped
+    time.sleep(1) # time to stop
+    end = time.time() + 15 # s timeout
+    while time.time() < end:
+        status = driver.get_backend_status()
+        if status in (driver.BACKEND_RUNNING, driver.BACKEND_STARTING):
+            logging.info("Backend is stopping...")
+            time.sleep(1)
+        else:
+            break
+    else:
+        raise IOError("Backend still stopping after 15 s")
+
+    model._core._microscope = None # force reset of the microscope for next connection
+
+    if status != driver.BACKEND_STOPPED:
+        raise IOError("Backend failed to stop, now %s" % status)

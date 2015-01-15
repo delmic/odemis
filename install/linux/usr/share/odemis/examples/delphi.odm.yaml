@@ -188,7 +188,7 @@ DELPHI: {
         port: "/dev/ttyTMCM0",
         #port: "/dev/fake",
         axes: ["x", "y", "z"],
-        ustepsize: [5.9e-9, 5.9e-9, 5.e-9], # m/µstep
+        ustepsize: [5.9e-9, 5.9e-9, 0.302e-9], # m/µstep
         #refproc: "FakeReferencing", # referencing procedure for simulator
         refproc: "2xFinalForward", # official referencing procedure for the Delphi
         temp: True,

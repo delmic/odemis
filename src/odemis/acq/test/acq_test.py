@@ -24,9 +24,8 @@ import logging
 import numpy
 from odemis import model, acq
 import odemis
-from odemis.util import driver
+from odemis.util import test
 import os
-import subprocess
 import time
 import unittest
 from unittest.case import skip
@@ -36,11 +35,7 @@ import odemis.acq.stream as stream
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-# ODEMISD_CMD = ["/usr/bin/python2", "-m", "odemis.odemisd.main"]
-# -m doesn't work when run from PyDev... not entirely sure why
-ODEMISD_CMD = ["/usr/bin/python2", os.path.dirname(odemis.__file__) + "/odemisd/main.py"]
-ODEMISD_ARG = ["--log-level=2", "--log-target=testdaemon.log", "--daemonize"]
-CONFIG_PATH = os.path.dirname(__file__) + "/../../../../install/linux/usr/share/odemis/"
+CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 SPARC_CONFIG = CONFIG_PATH + "sparc-sim.odm.yaml"
 SECOM_CONFIG = CONFIG_PATH + "secom-sim.odm.yaml"
 
@@ -59,40 +54,30 @@ class SECOMTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
 
-        if driver.get_backend_status() == driver.BACKEND_RUNNING:
+        try:
+            test.start_backend(SECOM_CONFIG)
+        except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
             return
-
-        # run the backend as a daemon
-        # we cannot run it normally as the child would also think he's in a unittest
-        cmd = ODEMISD_CMD + ODEMISD_ARG + [SECOM_CONFIG]
-        ret = subprocess.call(cmd)
-        if ret != 0:
-            logging.error("Failed starting backend with '%s'", cmd)
-        time.sleep(1) # time to start
+        except IOError as exp:
+            logging.error(str(exp))
+            raise
 
         # create some streams connected to the backend
         cls.microscope = model.getMicroscope()
-        for comp in model.getComponents():
-            if comp.role == "ccd":
-                cls.ccd = comp
-            elif comp.role == "spectrometer":
-                cls.spec = comp
-            elif comp.role == "e-beam":
-                cls.ebeam = comp
-            elif comp.role == "se-detector":
-                cls.sed = comp
-            elif comp.role == "light":
-                cls.light = comp
-            elif comp.role == "filter":
-                cls.light_filter = comp
+        cls.ccd = model.getComponent(role="ccd")
+        cls.ebeam = model.getComponent(role="e-beam")
+        cls.sed = model.getComponent(role="se-detector")
+        cls.light = model.getComponent(role="light")
+        cls.light_filter = model.getComponent(role="filter")
 
         s1 = stream.FluoStream("fluo1", cls.ccd, cls.ccd.data,
                                cls.light, cls.light_filter)
+        s1.excitation.value = sorted(s1.excitation.choices)[0]
         s2 = stream.FluoStream("fluo2", cls.ccd, cls.ccd.data,
                                cls.light, cls.light_filter)
-        s2.excitation.value = s2.excitation.choices[-1]
+        s2.excitation.value = sorted(s2.excitation.choices)[-1]
         s3 = stream.BrightfieldStream("bf", cls.ccd, cls.ccd.data, cls.light)
         cls.streams = [s1, s2, s3]
 
@@ -100,11 +85,7 @@ class SECOMTestCase(unittest.TestCase):
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
-        # end the backend
-        cmd = ODEMISD_CMD + ["--kill"]
-        subprocess.call(cmd)
-        model._core._microscope = None # force reset of the microscope for next connection
-        time.sleep(1) # time to stop
+        test.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:
@@ -196,44 +177,28 @@ class SPARCTestCase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        if driver.get_backend_status() == driver.BACKEND_RUNNING:
+        try:
+            test.start_backend(SPARC_CONFIG)
+        except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
             return
-
-        # run the backend as a daemon
-        # we cannot run it normally as the child would also think he's in a unittest
-        cmd = ODEMISD_CMD + ODEMISD_ARG + [SPARC_CONFIG]
-        ret = subprocess.call(cmd)
-        if ret != 0:
-            logging.error("Failed starting backend with '%s'", cmd)
-        time.sleep(1) # time to start
+        except IOError as exp:
+            logging.error(str(exp))
+            raise
 
         # Find CCD & SEM components
         cls.microscope = model.getMicroscope()
-        for comp in model.getComponents():
-            if comp.role == "ccd":
-                cls.ccd = comp
-            elif comp.role == "spectrometer":
-                cls.spec = comp
-            elif comp.role == "e-beam":
-                cls.ebeam = comp
-            elif comp.role == "se-detector":
-                cls.sed = comp
-            elif comp.role == "light":
-                cls.light = comp
-            elif comp.role == "filter":
-                cls.light_filter = comp
+        cls.ccd = model.getComponent(role="ccd")
+        cls.spec = model.getComponent(role="spectrometer")
+        cls.ebeam = model.getComponent(role="e-beam")
+        cls.sed = model.getComponent(role="se-detector")
 
     @classmethod
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
-        # end the backend
-        cmd = ODEMISD_CMD + ["--kill"]
-        subprocess.call(cmd)
-        model._core._microscope = None # force reset of the microscope for next connection
-        time.sleep(1) # time to stop
+        test.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:
@@ -246,7 +211,7 @@ class SPARCTestCase(unittest.TestCase):
         # Create the streams and streamTree
         semsur = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         sems = stream.SEMStream("test sem cl", self.sed, self.sed.data, self.ebeam)
-        ars = stream.ARStream("test ar", self.ccd, self.ccd.data, self.ebeam)
+        ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam)
         semars = stream.SEMARMDStream("test SEM/AR", sems, ars)
         st = stream.StreamTree(streams=[semsur, semars])
 

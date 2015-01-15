@@ -297,7 +297,7 @@ def _transformMetadata(optical_image, transformation_values, escan, ccd):
     scale = (escan_pxs[0] * calc_scaling_x,
              escan_pxs[1] * calc_scaling_y)
 
-    transform_md = {model.MD_ROTATION_COR: calc_rotation}
+    transform_md = {model.MD_ROTATION_COR:-calc_rotation}
 
     # X axis is same direction in image and physical referentials
     # Y axis is opposite direction, that's why we don't need a "-"

@@ -210,7 +210,7 @@ def DivideInNeighborhoods(data, number_of_spots, scale, sensitivity_limit=100):
                 continue
             
             # if spots detected too close keep the brightest one
-            if math.hypot(tab[0], tab[1]) < (scale / 2):
+            if (len(subimages) > 0) and (math.hypot(tab[0], tab[1]) < (scale / 2)):
                 if numpy.sum(subimage) > numpy.sum(subimages[len(subimages) - 1]):
                     subimages.pop()
                     subimage_coordinates.pop()

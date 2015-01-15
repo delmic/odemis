@@ -479,7 +479,7 @@ class TestTiffIO(unittest.TestCase):
                      model.MD_POS: (13.7e-3, -30e-3), # m
                      model.MD_EXP_TIME: 1.2, # s
                      model.MD_IN_WL: (500e-9, 520e-9), # m
-                     model.MD_OUT_WL: (600e-9, 630e-9), # m
+                     model.MD_OUT_WL: (650e-9, 660e-9, 675e-9, 678e-9, 680e-9), # m
                     },
                     {model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake spec",
@@ -664,7 +664,7 @@ class TestTiffIO(unittest.TestCase):
                      model.MD_POS: (13.7e-3, -30e-3), # m
                      model.MD_EXP_TIME: 1.2, # s
                      model.MD_IN_WL: (500e-9, 520e-9), # m
-                     model.MD_OUT_WL: (600e-9, 630e-9), # m
+                     model.MD_OUT_WL: (650e-9, 660e-9, 675e-9, 678e-9, 680e-9), # m
                      model.MD_USER_TINT: (255, 0, 65) # purple
                     },
                     {model.MD_SW_VERSION: "1.0-test",
@@ -722,11 +722,11 @@ class TestTiffIO(unittest.TestCase):
 
             iwl = im.metadata[model.MD_IN_WL] # nm
             self.assertTrue((md[model.MD_IN_WL][0] <= iwl[0] and
-                             iwl[1] <= md[model.MD_IN_WL][1]))
+                             iwl[1] <= md[model.MD_IN_WL][-1]))
 
             owl = im.metadata[model.MD_OUT_WL] # nm
             self.assertTrue((md[model.MD_OUT_WL][0] <= owl[0] and
-                             owl[1] <= md[model.MD_OUT_WL][1]))
+                             owl[1] <= md[model.MD_OUT_WL][-1]))
 
             self.assertAlmostEqual(im.metadata.get(model.MD_ROTATION, 0), md.get(model.MD_ROTATION, 0))
 

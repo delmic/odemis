@@ -46,8 +46,8 @@ MD_POS = "Centre position" # (m, m), location of the picture centre relative to 
 # Note that for angular resolved acquisitions, MD_POS corresponds to the position of the e-beam on the sample
 MD_ROTATION = "Rotation" # radians (0<=float<2*PI) rotation applied to the image (from its center) counter-clockwise
 # Note that the following two might be a set of ranges
-MD_IN_WL = "Input wavelength range" # (m, m), lower and upper range of the wavelength input
-MD_OUT_WL = "Output wavelength range"  # (m, m), lower and upper range of the filtered wavelength before the camera
+MD_IN_WL = "Input wavelength range" # (m, m) or (m, m, m, m, m), lower and upper range of the wavelength input
+MD_OUT_WL = "Output wavelength range"  # (m, m) or (m, m, m, m, m), lower and upper range of the filtered wavelength before the camera
 MD_LIGHT_POWER = "Light power" # W, power of the emitting light
 MD_LENS_NAME = "Lens name" # str, product name of the lens
 MD_LENS_MAG = "Lens magnification" # float (ratio), magnification factor

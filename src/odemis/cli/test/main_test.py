@@ -25,8 +25,9 @@ import Image
 import StringIO
 import logging
 from odemis import model
+import odemis
 from odemis.cli import main
-from odemis.util import driver
+from odemis.util import test
 import os
 import re
 import subprocess
@@ -35,12 +36,11 @@ import time
 import unittest
 from unittest.case import skip
 
+
 logging.getLogger().setLevel(logging.DEBUG)
 
-ODEMISD_CMD = ["python2", "-m", "odemis.odemisd.main"]
 ODEMISCLI_CMD = ["python2", "-m", "odemis.cli.main"]
-ODEMISD_ARG = ["--log-level=2", "--log-target=testdaemon.log", "--daemonize"]
-CONFIG_PATH = os.path.dirname(__file__) + "/../../../../install/linux/usr/share/odemis/"
+CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 SECOM_CONFIG = CONFIG_PATH + "secom-sim.odm.yaml"
 
 class TestWithoutBackend(unittest.TestCase):
@@ -63,9 +63,9 @@ class TestWithoutBackend(unittest.TestCase):
             
             cmdline = "cli --help"
             ret = main.main(cmdline.split())
-        except SystemExit, exc:
+        except SystemExit as exc:
             ret = exc.code
-        self.assertEqual(ret, 0, "trying to run '%s' returned %d" % (cmdline, ret))
+        self.assertEqual(ret, 0, "trying to run '%s' returned %s" % (cmdline, ret))
         
         output = out.getvalue()
         self.assertTrue("optional arguments" in output)
@@ -76,7 +76,7 @@ class TestWithoutBackend(unittest.TestCase):
         It checks handling when wrong number of argument is given
         """
         try:
-            cmdline = "cli --set-attr Light power"
+            cmdline = "cli --set-attr light power"
             ret = main.main(cmdline.split())
         except SystemExit, exc: # because it's handled by argparse
             ret = exc.code
@@ -91,9 +91,9 @@ class TestWithoutBackend(unittest.TestCase):
             
             cmdline = "cli --log-level=2 --scan"
             ret = main.main(cmdline.split())
-        except SystemExit, exc:
+        except SystemExit as exc:
             ret = exc.code
-        self.assertEqual(ret, 0, "trying to run '%s' returned %d" % (cmdline, ret))
+        self.assertEqual(ret, 0, "trying to run '%s' returned %s" % (cmdline, ret))
         
         output = out.getvalue()
         # AndorCam3 SimCam should be there for sure
@@ -105,18 +105,16 @@ class TestWithBackend(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        if driver.get_backend_status() == driver.BACKEND_RUNNING:
+        try:
+            test.start_backend(SECOM_CONFIG)
+        except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
             return
+        except IOError as exp:
+            logging.error(str(exp))
+            raise
 
-        # run the backend as a daemon
-        # we cannot run it normally as the child would also think he's in a unittest
-        cmd = ODEMISD_CMD + ODEMISD_ARG + [SECOM_CONFIG]
-        ret = subprocess.call(cmd)
-        if ret != 0:
-            logging.error("Failed starting backend with '%s'", cmd)
-        time.sleep(1) # time to start
 
     def setUp(self):
         if self.backend_was_running:
@@ -130,10 +128,7 @@ class TestWithBackend(unittest.TestCase):
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
-        # end the backend
-        cmd = ODEMISD_CMD + ["--kill"]
-        subprocess.call(cmd)
-        time.sleep(1) # time to stop
+        test.stop_backend()
 
     def tearDown(self):
         model._core._microscope = None # force reset of the microscope for next connection
@@ -152,8 +147,8 @@ class TestWithBackend(unittest.TestCase):
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
         
         output = out.getvalue()
-        self.assertTrue("Spectra" in output)
-        self.assertTrue("Andor SimCam" in output)
+        self.assertTrue("Light Engine" in output)
+        self.assertTrue("Camera" in output)
 
     def test_check(self):
         try:
@@ -169,8 +164,8 @@ class TestWithBackend(unittest.TestCase):
             out = StringIO.StringIO()
             sys.stdout = out
             
-            cmdline = "cli --list-prop Spectra"
-            ret = main.main(cmdline.split())
+            cmdline = ["cli", "--list-prop", "Light Engine"]
+            ret = main.main(cmdline)
         except SystemExit as exc:
             ret = exc.code
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
@@ -183,7 +178,7 @@ class TestWithBackend(unittest.TestCase):
     def test_encoding(self):
         """Check no problem happens due to unicode encoding to ascii"""
         f = open("test.txt", "w")
-        cmd = ODEMISCLI_CMD + ["--list-prop", "Spectra"]
+        cmd = ODEMISCLI_CMD + ["--list-prop", "Light Engine"]
         ret = subprocess.check_call(cmd, stdout=f)
         self.assertEqual(ret, 0, "trying to run %s" % cmd)
         f.close()
@@ -199,8 +194,8 @@ class TestWithBackend(unittest.TestCase):
             out = StringIO.StringIO()
             sys.stdout = out
             
-            cmdline = "cli --list-prop Spectra"
-            ret = main.main(cmdline.split())
+            cmdline = ["cli", "--list-prop", "Light Engine"]
+            ret = main.main(cmdline)
         except SystemExit as exc:
             ret = exc.code
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
@@ -215,8 +210,8 @@ class TestWithBackend(unittest.TestCase):
             out = StringIO.StringIO()
             sys.stdout = out
             
-            cmdline = "cli --set-attr Spectra power 0"
-            ret = main.main(cmdline.split())
+            cmdline = ["cli", "--set-attr", "Light Engine", "power", "0"]
+            ret = main.main(cmdline)
         except SystemExit as exc:
             ret = exc.code
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
@@ -227,8 +222,8 @@ class TestWithBackend(unittest.TestCase):
             out = StringIO.StringIO()
             sys.stdout = out
             
-            cmdline = "cli --list-prop Spectra"
-            ret = main.main(cmdline.split())
+            cmdline = ["cli", "--list-prop", "Light Engine"]
+            ret = main.main(cmdline)
         except SystemExit as exc:
             ret = exc.code
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
@@ -244,7 +239,7 @@ class TestWithBackend(unittest.TestCase):
             out = StringIO.StringIO()
             sys.stdout = out
             
-            cmdline = ["cli", "--set-attr", "OLStage", "speed", "x: 0.5, y: 0.2"]
+            cmdline = ["cli", "--set-attr", "Sample Stage", "speed", "x: 0.5, y: 0.2"]
             ret = main.main(cmdline)
         except SystemExit as exc:
             ret = exc.code
@@ -258,8 +253,8 @@ class TestWithBackend(unittest.TestCase):
             out = StringIO.StringIO()
             sys.stdout = out
             
-            cmdline = "cli --move OLStage x 5 --move OLStage y -0.2"
-            ret = main.main(cmdline.split())
+            cmdline = ["cli", "--move", "Sample Stage", "x", "5", "--move", "Sample Stage", "y", "-0.2"]
+            ret = main.main(cmdline)
         except SystemExit as exc:
             ret = exc.code
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
@@ -270,8 +265,8 @@ class TestWithBackend(unittest.TestCase):
             out = StringIO.StringIO()
             sys.stdout = out
 
-            cmdline = "cli --position OLStage x 50e-6"
-            ret = main.main(cmdline.split())
+            cmdline = ["cli", "--position", "Sample Stage", "x", "50e-6"]
+            ret = main.main(cmdline)
         except SystemExit as exc:
             ret = exc.code
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
@@ -284,8 +279,8 @@ class TestWithBackend(unittest.TestCase):
             out = StringIO.StringIO()
             sys.stdout = out
 
-            cmdline = "cli --reference OLStage x"
-            ret = main.main(cmdline.split())
+            cmdline = ["cli", "--reference", "Sample Stage", "x"]
+            ret = main.main(cmdline)
         except SystemExit as exc:
             ret = exc.code
         self.assertNotEqual(ret, 0, "Referencing should have failed with '%s'" % cmdline)
@@ -309,7 +304,7 @@ class TestWithBackend(unittest.TestCase):
         # change resolution
         try:
             # "Andor SimCam" contains a space, so cut the line ourselves
-            cmdline = ["cli", "--set-attr", "Andor SimCam", "resolution", "%d,%d" % size]
+            cmdline = ["cli", "--set-attr", "Camera", "resolution", "%d,%d" % size]
             ret = main.main(cmdline)
         except SystemExit as exc:
             ret = exc.code
@@ -318,7 +313,7 @@ class TestWithBackend(unittest.TestCase):
         # acquire (simulated) image
         try:
             # "Andor SimCam" contains a space, so cut the line ourselves
-            cmdline = ["cli", "--acquire", "Andor SimCam", "--output=%s" % picture_name]
+            cmdline = ["cli", "--acquire", "Camera", "--output=%s" % picture_name]
             ret = main.main(cmdline)
         except SystemExit as exc:
             ret = exc.code

@@ -27,9 +27,8 @@ import math
 from odemis import model
 import odemis
 from odemis.driver import simulated
-from odemis.util import driver
+from odemis.util import test
 import os
-import subprocess
 import time
 import unittest
 
@@ -40,12 +39,8 @@ import simulated_test
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-# ODEMISD_CMD = ["/usr/bin/python2", "-m", "odemis.odemisd.main"]
-# -m doesn't work when run from PyDev... not entirely sure why
-ODEMISD_CMD = ["/usr/bin/python2", os.path.dirname(odemis.__file__) + "/odemisd/main.py"]
-ODEMISD_ARG = ["--log-level=2" , "--log-target=testdaemon.log", "--daemonize"]
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
-SECOM_LENS_CONFIG = CONFIG_PATH + "delphi-sim.odm.yaml"
+DELPHI_CONFIG = CONFIG_PATH + "delphi-sim.odm.yaml"
 
 class MultiplexTest(unittest.TestCase, simulated_test.ActuatorTest):
 
@@ -68,38 +63,27 @@ class TestCoupledStage(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-
-        if driver.get_backend_status() == driver.BACKEND_RUNNING:
+        try:
+            test.start_backend(DELPHI_CONFIG)
+        except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
             return
-
-        # run the backend as a daemon
-        # we cannot run it normally as the child would also think he's in a unittest
-        cmd = ODEMISD_CMD + ODEMISD_ARG + [SECOM_LENS_CONFIG]
-        # FIXME: give an informative warning when the comedi module has not been loaded
-        ret = subprocess.call(cmd)
-
-        if ret != 0:
-            logging.error("Failed starting backend with '%s'", cmd)
-
-        time.sleep(1)  # time to start
+        except IOError as exp:
+            logging.error(str(exp))
+            raise
 
         # find components by their role
         cls.stage = model.getComponent(role="stage")
         cls.sem_stage = model.getComponent(role="sem-stage")
         cls.align = model.getComponent(role="align")
-        cls.tmcm = model.getComponent(name="TMCM") # low level actuator
+        cls.tmcm = model.getComponent(name="Sample Holder Actuators") # low level actuator
 
     @classmethod
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
-        # end the backend
-        cmd = ODEMISD_CMD + ["--kill"]
-        subprocess.call(cmd)
-        model._core._microscope = None  # force reset of the microscope for next connection
-        time.sleep(1)  # time to stop
+        test.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:

@@ -14,6 +14,8 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+from __future__ import division
+
 import wx
 from odemis.gui.win.dialog_xrc import xrcprogress_dialog
 from odemis.gui.util.widgets import ProgessiveFutureConnector
@@ -379,10 +381,8 @@ def _DoDelphiCalibration(future, main_data, overview_pressure, vacuum_pressure,
                                       main_data.bsd)
                 trans_val, cor_md = f.result()
                 iscale = cor_md[model.MD_PIXEL_SIZE_COR]
-                irot = cor_md[model.MD_ROTATION_COR]
+                irot = -cor_md[model.MD_ROTATION_COR] % (2 * math.pi)
                 iscale = (1 / iscale[0], 1 / iscale[1])
-                if irot < 0:
-                    irot = 2 * math.pi + irot
                 return htop, hbot, hfoc, strans, sscale, srot, iscale, irot, resa, resb, hfwa, spotshift
             # Secondary calibration
             else:

@@ -727,7 +727,7 @@ class AntiBacklashActuator(model.Actuator):
 
         # backlash move
         f = self._child.moveAbs(fpos)
-        return f
+        f.result()
 
     @isasync
     def moveRel(self, shift):

@@ -27,9 +27,8 @@ from odemis import model
 import odemis
 from odemis.acq import align, stream
 from odemis.dataio import hdf5
-from odemis.util import driver
+from odemis.util import test
 import os
-import subprocess
 import threading
 import time
 import unittest
@@ -37,17 +36,12 @@ from unittest.case import skip
 import weakref
 
 
-logging.basicConfig(format=" - %(levelname)s \t%(message)s")
+# logging.basicConfig(format=" - %(levelname)s \t%(message)s")
 logging.getLogger().setLevel(logging.DEBUG)
-_frm = "%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s"
-logging.getLogger().handlers[0].setFormatter(logging.Formatter(_frm))
+# _frm = "%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s"
+# logging.getLogger().handlers[0].setFormatter(logging.Formatter(_frm))
 
-# ODEMISD_CMD = ["/usr/bin/python2", "-m", "odemis.odemisd.main"]
-# -m doesn't work when run from PyDev... not entirely sure why
-ODEMISD_CMD = ["/usr/bin/python2", os.path.dirname(odemis.__file__) + "/odemisd/main.py"]
-ODEMISD_ARG = ["--log-level=2", "--log-target=testdaemon.log", "--daemonize"]
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
-logging.debug("Config path = %s", CONFIG_PATH)
 SECOM_LENS_CONFIG = CONFIG_PATH + "secom-sim-lens-align.odm.yaml"  # 7x7
 
 
@@ -60,18 +54,15 @@ class TestAlignment(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
 
-        if driver.get_backend_status() == driver.BACKEND_RUNNING:
+        try:
+            test.start_backend(SECOM_LENS_CONFIG)
+        except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
             return
-
-        # run the backend as a daemon
-        # we cannot run it normally as the child would also think he's in a unittest
-        cmd = ODEMISD_CMD + ODEMISD_ARG + [SECOM_LENS_CONFIG]
-        ret = subprocess.call(cmd)
-        if ret != 0:
-            logging.error("Failed starting backend with '%s'", cmd)
-        time.sleep(1)  # time to start
+        except IOError as exp:
+            logging.error(str(exp))
+            raise
 
         # find components by their role
         cls.ebeam = model.getComponent(role="e-beam")
@@ -87,11 +78,7 @@ class TestAlignment(unittest.TestCase):
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
-        # end the backend
-        cmd = ODEMISD_CMD + ["--kill"]
-        subprocess.call(cmd)
-        model._core._microscope = None  # force reset of the microscope for next connection
-        time.sleep(1)  # time to stop
+        test.stop_backend()
 
     def setUp(self):
         # image for FakeCCD
@@ -149,11 +136,11 @@ class TestAlignment(unittest.TestCase):
         Test the AlignedSEMStream
         """
         # Use fake ccd in order to have just one spot
-        ccd = self.FakeCCD(self, self.align)
+        ccd = FakeCCD(self, self.align)
 
         # first try using the metadata correction
         st = stream.AlignedSEMStream("sem-md", self.sed, self.sed.data, self.ebeam,
-                                     ccd, self.stage, shiftebeam=False)
+                                     ccd, self.stage, shiftebeam="Metadata update")
 
         # we don't really care about the SEM image, so the faster the better
         self.ebeam.dwellTime.value = self.ebeam.dwellTime.range[0]
@@ -227,105 +214,106 @@ class TestAlignment(unittest.TestCase):
         self.image = im
         self.image_received.set()
 
-    class FakeCCD():
+class FakeCCD(model.HwComponent):
+    """
+    Fake CCD component that returns a spot image
+    """
+    def __init__(self, testCase, align):
+        super(FakeCCD, self).__init__("testccd", "ccd")
+        self.testCase = testCase
+        self.align = align
+        self.exposureTime = model.FloatContinuous(1, (1e-6, 1000), unit="s")
+        self.binning = model.TupleContinuous((1, 1), [(1, 1), (8, 8)],
+                                       cls=(int, long, float), unit="")
+        self.resolution = model.ResolutionVA((2160, 2560), [(1, 1), (2160, 2560)])
+
+        self.data = CCDDataFlow(self)
+        self._acquisition_thread = None
+        self._acquisition_lock = threading.Lock()
+        self._acquisition_init_lock = threading.Lock()
+        self._acquisition_must_stop = threading.Event()
+
+        self.fake_img = self.testCase.fake_img
+
+    def start_acquire(self, callback):
+        with self._acquisition_lock:
+            self._wait_acquisition_stopped()
+            target = self._acquire_thread
+            self._acquisition_thread = threading.Thread(target=target,
+                    name="FakeCCD acquire flow thread",
+                    args=(callback,))
+            self._acquisition_thread.start()
+
+    def stop_acquire(self):
+        with self._acquisition_lock:
+            with self._acquisition_init_lock:
+                self._acquisition_must_stop.set()
+
+    def _wait_acquisition_stopped(self):
         """
-        Fake CCD component that returns a spot image
+        Waits until the acquisition thread is fully finished _iff_ it was requested
+        to stop.
         """
-        def __init__(self, testCase, align):
-            self.testCase = testCase
-            self.align = align
-            self.role = "ccd"
-            self.exposureTime = model.FloatContinuous(1, (1e-6, 1000), unit="s")
-            self.binning = model.TupleContinuous((1, 1), [(1, 1), (8, 8)],
-                                           cls=(int, long, float), unit="")
-            self.resolution = model.ResolutionVA((2160, 2560), [(1, 1), (2160, 2560)])
+        # "if" is to not wait if it's already finished
+        if self._acquisition_must_stop.is_set():
+            logging.debug("Waiting for thread to stop.")
+            self._acquisition_thread.join(10)  # 10s timeout for safety
+            if self._acquisition_thread.isAlive():
+                logging.exception("Failed to stop the acquisition thread")
+                # Now let's hope everything is back to normal...
+            # ensure it's not set, even if the thread died prematurely
+            self._acquisition_must_stop.clear()
 
-            self.data = self.testCase.CCDDataFlow(self)
-            self._acquisition_thread = None
-            self._acquisition_lock = threading.Lock()
-            self._acquisition_init_lock = threading.Lock()
-            self._acquisition_must_stop = threading.Event()
-
-            self.fake_img = self.testCase.fake_img
-
-        def start_acquire(self, callback):
-            with self._acquisition_lock:
-                self._wait_acquisition_stopped()
-                target = self._acquire_thread
-                self._acquisition_thread = threading.Thread(target=target,
-                        name="FakeCCD acquire flow thread",
-                        args=(callback,))
-                self._acquisition_thread.start()
-
-        def stop_acquire(self):
-            with self._acquisition_lock:
-                with self._acquisition_init_lock:
-                    self._acquisition_must_stop.set()
-
-        def _wait_acquisition_stopped(self):
-            """
-            Waits until the acquisition thread is fully finished _iff_ it was requested
-            to stop.
-            """
-            # "if" is to not wait if it's already finished
-            if self._acquisition_must_stop.is_set():
-                logging.debug("Waiting for thread to stop.")
-                self._acquisition_thread.join(10)  # 10s timeout for safety
-                if self._acquisition_thread.isAlive():
-                    logging.exception("Failed to stop the acquisition thread")
-                    # Now let's hope everything is back to normal...
-                # ensure it's not set, even if the thread died prematurely
-                self._acquisition_must_stop.clear()
-
-        def _simulate_image(self):
-            """
-            Generates the fake output.
-            """
-            with self._acquisition_lock:
-                self.fake_img.metadata[model.MD_ACQ_DATE] = time.time()
-                output = model.DataArray(self.fake_img, self.fake_img.metadata)
-                return self.fake_img
-
-        def _acquire_thread(self, callback):
-            """
-            Thread that simulates the CCD acquisition.
-            """
-            try:
-                while not self._acquisition_must_stop.is_set():
-                    # dummy
-                    duration = 1
-                    if self._acquisition_must_stop.wait(duration):
-                        break
-                    callback(self._simulate_image())
-            except:
-                logging.exception("Unexpected failure during image acquisition")
-            finally:
-                logging.debug("Acquisition thread closed")
-                self._acquisition_must_stop.clear()
-
-    class CCDDataFlow(model.DataFlow):
+    def _simulate_image(self):
         """
-        This is an extension of model.DataFlow. It receives notifications from the
-        FakeCCD component once the fake output is generated. This is the dataflow to
-        which the CCD acquisition streams subscribe.
+        Generates the fake output.
         """
-        def __init__(self, ccd):
-            model.DataFlow.__init__(self)
-            self.component = weakref.ref(ccd)
+        with self._acquisition_lock:
+            self.fake_img.metadata[model.MD_ACQ_DATE] = time.time()
+            output = model.DataArray(self.fake_img, self.fake_img.metadata)
+            return self.fake_img
 
-        def start_generate(self):
-            try:
-                self.component().start_acquire(self.notify)
-            except ReferenceError:
-                pass
+    def _acquire_thread(self, callback):
+        """
+        Thread that simulates the CCD acquisition.
+        """
+        try:
+            while not self._acquisition_must_stop.is_set():
+                # dummy
+                duration = 1
+                if self._acquisition_must_stop.wait(duration):
+                    break
+                callback(self._simulate_image())
+        except:
+            logging.exception("Unexpected failure during image acquisition")
+        finally:
+            logging.debug("Acquisition thread closed")
+            self._acquisition_must_stop.clear()
 
-        def stop_generate(self):
-            try:
-                self.component().stop_acquire()
-            except ReferenceError:
-                pass
+class CCDDataFlow(model.DataFlow):
+    """
+    This is an extension of model.DataFlow. It receives notifications from the
+    FakeCCD component once the fake output is generated. This is the dataflow to
+    which the CCD acquisition streams subscribe.
+    """
+    def __init__(self, ccd):
+        model.DataFlow.__init__(self)
+        self.component = weakref.ref(ccd)
+
+    def start_generate(self):
+        try:
+            self.component().start_acquire(self.notify)
+        except ReferenceError:
+            pass
+
+    def stop_generate(self):
+        try:
+            self.component().stop_acquire()
+        except ReferenceError:
+            pass
 
 if __name__ == '__main__':
-    suite = unittest.TestLoader().loadTestsFromTestCase(TestAlignment)
-    unittest.TextTestRunner(verbosity=2).run(suite)
+#     suite = unittest.TestLoader().loadTestsFromTestCase(TestAlignment)
+#     unittest.TextTestRunner(verbosity=2).run(suite)
+    unittest.main()
 

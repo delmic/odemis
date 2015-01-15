@@ -227,16 +227,17 @@ def timeout(seconds):
     """
     assert seconds > 0
     def handle_timeout(signum, frame):
+        logging.info("Stopping function after timeout of %g s", seconds)
         raise TimeoutError("Function took more than %g s to execute" % seconds)
 
     def wrapper(f, *args, **kwargs):
-        signal.signal(signal.SIGALRM, handle_timeout)
-        signal.setitimer(signal.ITIMER_REAL, seconds) # same as alarm, but accepts float
+        prev_handler = signal.signal(signal.SIGALRM, handle_timeout)
         try:
-            result = f(*args, **kwargs)
+            signal.setitimer(signal.ITIMER_REAL, seconds) # same as alarm, but accepts float
+            return f(*args, **kwargs)
         finally:
             signal.setitimer(signal.ITIMER_REAL, 0)
-        return result
+            signal.signal(signal.SIGALRM, prev_handler)
 
     return decorator(wrapper)
 
