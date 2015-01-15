@@ -1529,7 +1529,7 @@ class LensAlignTab(Tab):
 
         main_frame.vp_align_sem.ShowLegend(False)
 
-        # For the SECOMv1, we need to convert A/B to Y/X (with an angle of 135°)
+        # For the SECOMv1, we need to convert A/B to Y/X (with an angle of 45°)
         # Note that this is an approximation of the actual movements.
         # In the current SECOM design, B affects both axes (not completely in a
         # linear fashion) and A affects mostly X (not completely in a linear
@@ -1537,12 +1537,10 @@ class LensAlignTab(Tab):
         # could behave in a more expected way to the user, but the current
         # approximation is enough to do the calibration relatively quickly.
         if "a" in main_data.aligner.axes:
-            # There is an error in the configuration of the SECOMv1 and the
-            # axes are opposite to what is defined in the convention
             self._aligner_xy = ConvertStage("converter-ab", "stage",
                                           children={"orig": main_data.aligner},
                                           axes=["b", "a"],
-                                          rotation=math.radians(-135))
+                                          rotation=math.radians(45))
             self._convert_to_aligner = self._convert_xy_to_ab
         else: # SECOMv2 => it's directly X/Y
             if not "x" in main_data.aligner.axes:
@@ -1859,7 +1857,7 @@ class LensAlignTab(Tab):
 
     def _convert_xy_to_ab(self, shift):
         # same formula as ConvertStage._convertPosToChild()
-        ang = math.radians(-135) # should be 45° but conventions were inversed
+        ang = math.radians(45) # Used to be -135° when conventions were inversed
 
         return {"b": shift["x"] * math.cos(ang) - shift["y"] * math.sin(ang),
                 "a": shift["x"] * math.sin(ang) + shift["y"] * math.cos(ang)}
