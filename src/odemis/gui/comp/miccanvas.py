@@ -808,27 +808,17 @@ class OverviewCanvas(DblMicroscopeCanvas):
     @call_after  # needed as it accesses the DC
     @ignore_dead
     def _update_thumbnail(self):
+
         if self.ClientSize.x * self.ClientSize.y <= 0:
             return  # nothing to update
-
-        # TODO: could we disable the margins of the buffer (as this canvas doesn't
-        # move), and directly use ._bmp_buffer, instead of blitting _dc_buffer?
-        # new bitmap to copy the DC
-        bitmap = wx.EmptyBitmap(*self.ClientSize)
-        dc = wx.MemoryDC()
-        dc.SelectObject(bitmap)
-
-        # simplified version of on_paint()
-        # margin = ((self._bmp_buffer_size[0] - self.ClientSize.x) // 2,
-        #           (self._bmp_buffer_size[1] - self.ClientSize.y) // 2)
-
-        dc.BlitPointSize((0, 0), self.ClientSize, self._dc_buffer, (0, 0))
 
         # We need to scale the thumbnail ourselves, instead of letting the button handle it, because
         # we need to be able to draw the history overlay without it being rescaled afterwards
 
-        image = wx.ImageFromBitmap(bitmap)
+        # Create an image from the bitmap buffer
+        image = wx.ImageFromBitmap(self._bmp_buffer)
 
+        # Rescale. This is the same algorithm as is used by the OverviewButton
         thumbnail_size = wx.Size(*gui.VIEW_BTN_SIZE)
         rsize = wx.Size(*gui.VIEW_BTN_SIZE)
 
