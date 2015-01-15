@@ -458,8 +458,6 @@ class OverviewViewport(MicroscopeViewport):
     def OnSize(self, evt):
         # TODO: this can be avoided by just setting a different minimum mpp
 
-        self.canvas.SetSize((self.Parent.Size.x, self.Parent.Size.y - self.bottom_legend.Size.y))
-
         if self.canvas.horizontal_field_width < 10e-3:
             self.canvas.horizontal_field_width = 10e-3
             logging.debug("Canvas HFW too small! Setting it to %s", 10e-3)

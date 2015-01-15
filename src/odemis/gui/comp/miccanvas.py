@@ -31,16 +31,13 @@ import cairo
 import wx
 from wx.lib.imageutils import stepColour
 import wx.lib.wxcairo as wxcairo
-
 from decorator import decorator
 
 from odemis import util, model
 from odemis.acq import stream
 from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
 from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS, BitmapCanvas
-from odemis.gui.comp.overlay.base import Label
-from odemis.gui.comp.overlay.view import HistoryOverlay, PointSelectOverlay, MarkingLineOverlay, \
-    TextViewOverlay
+from odemis.gui.comp.overlay.view import HistoryOverlay, PointSelectOverlay, MarkingLineOverlay
 from odemis.gui.util import wxlimit_invocation, call_after, ignore_dead, img
 from odemis.model import VigilantAttributeBase
 from odemis.util import units
@@ -797,6 +794,12 @@ class OverviewCanvas(DblMicroscopeCanvas):
 
         # This canvas can have a special overlay for tracking position history
         self.history_overlay = None
+
+        self.SetMinSize((400, 400))
+
+    def _on_view_mpp(self, mpp):
+        DblMicroscopeCanvas._on_view_mpp(self, mpp)
+        self.fit_view_to_content(True)
 
     def setView(self, microscope_view, tab_data):
         super(OverviewCanvas, self).setView(microscope_view, tab_data)
