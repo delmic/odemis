@@ -110,6 +110,9 @@ class OdemisGUIApp(wx.App):
         logging.info("\n\n************  Starting Odemis GUI  ************\n")
         logging.info(wx.version())
 
+        # TODO: if microscope.ghost is not empty => wait and/or display a special
+        # "hardware status" tab.
+
         self.main_data = guimodel.MainGUIData(microscope)
         # Load the main frame
         self.main_frame = main_xrc.xrcfr_main(None)
