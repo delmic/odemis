@@ -517,18 +517,6 @@ class SecomViewport(MicroscopeViewport):
             else:
                 self.canvas.abilities -= {CAN_DRAG, CAN_FOCUS}
 
-    def _checkMergeSliderDisplay(self):
-        # Overridden to avoid displaying merge slide if only SEM or only Optical
-        # display iif both EM and OPT streams
-        streams = self._microscope_view.getStreams()
-        has_opt = any(isinstance(s, OpticalStream) for s in streams)
-        has_em = any(isinstance(s, EMStream) for s in streams)
-
-        if has_opt and has_em:
-            self.ShowMergeSlider(True)
-        else:
-            self.ShowMergeSlider(False)
-
 
 class SparcAcquisitionViewport(MicroscopeViewport):
 
