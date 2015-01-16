@@ -873,8 +873,8 @@ class BitmapCanvas(BufferedCanvas):
             self.ctx.identity_matrix()
 
     def _draw_merged_images(self, ctx):
-        """ Draw the two images on the buffer DC, centred around their
-        _dc_center, with their own scale and an opacity of "mergeratio" for im1.
+        """ Draw the two images on the buffer DC, centred around their _dc_center, with their own
+        scale and an opacity of "mergeratio" for im1.
 
         *IMPORTANT*: The origin (0, 0) of the dc_buffer is in the center!
 
@@ -901,7 +901,6 @@ class BitmapCanvas(BufferedCanvas):
 
         if images:
             last_image = images.pop()
-
             # For every image, except the last
             for im in images:
                 # print "Drawing %s %s %s %s merge: %s" % (id(im),

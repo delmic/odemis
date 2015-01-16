@@ -31,16 +31,13 @@ import cairo
 import wx
 from wx.lib.imageutils import stepColour
 import wx.lib.wxcairo as wxcairo
-
 from decorator import decorator
 
 from odemis import util, model
 from odemis.acq import stream
 from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
 from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS, BitmapCanvas
-from odemis.gui.comp.overlay.base import Label
-from odemis.gui.comp.overlay.view import HistoryOverlay, PointSelectOverlay, MarkingLineOverlay, \
-    TextViewOverlay
+from odemis.gui.comp.overlay.view import HistoryOverlay, PointSelectOverlay, MarkingLineOverlay
 from odemis.gui.util import wxlimit_invocation, call_after, ignore_dead, img
 from odemis.model import VigilantAttributeBase
 from odemis.util import units
@@ -131,6 +128,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # Unused at the moment
         self.zoom_overlay = None
         self.update_overlay = None
+
+        self.background_brush = wx.SOLID
 
     # Ability manipulation
 
@@ -356,9 +355,11 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         return images
 
     def _convert_streams_to_images(self):
-        """ Temporary function to convert the StreamTree to a list of images as
-        the canvas currently expects.
+        """ Temporary function to convert the StreamTree to a list of images as the canvas
+        currently expects.
+
         """
+
         images = self._get_ordered_images()
 
         # add the images in order
@@ -376,8 +377,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
             ims.append([rgba_im, pos, scale, keepalpha, rot, blend_mode, name])
 
-        # TODO: Canvas needs to accept the NDArray (+ specific attributes
-        # recorded separately).
+        # TODO: Canvas needs to accept the NDArray (+ specific attributes recorded separately).
         self.set_images(ims)
 
         # For debug only:
@@ -797,6 +797,12 @@ class OverviewCanvas(DblMicroscopeCanvas):
 
         # This canvas can have a special overlay for tracking position history
         self.history_overlay = None
+
+        self.SetMinSize((400, 400))
+
+    def _on_view_mpp(self, mpp):
+        DblMicroscopeCanvas._on_view_mpp(self, mpp)
+        self.fit_view_to_content(True)
 
     def setView(self, microscope_view, tab_data):
         super(OverviewCanvas, self).setView(microscope_view, tab_data)
@@ -1234,14 +1240,18 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
 
         if data is None:
             self.markline_overlay.v_pos.unsubscribe(self._map_to_plot_values)
+            self.markline_overlay.deactivate()
         else:
             self.markline_overlay.v_pos.subscribe(self._map_to_plot_values, init=True)
+            self.markline_overlay.activate()
 
     def clear(self):
         super(ZeroDimensionalPlotCanvas, self).clear()
         self.val_x.value = None
         self.val_y.value = None
         self.markline_overlay.clear_labels()
+        self.markline_overlay.deactivate()
+        self.update_drawing()
         self._update_thumbnail()
 
     # Event handlers
@@ -1382,6 +1392,9 @@ class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
 
     def clear(self):
         super(OneDimensionalSpatialSpectrumCanvas, self).clear()
+        self.markline_overlay.clear_labels()
+        self.markline_overlay.deactivate()
+        self.update_drawing()
         self._update_thumbnail()
 
     def setView(self, microscope_view, tab_data):
@@ -1407,6 +1420,7 @@ class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
         """
 
         self.set_images([(im_data, (0.0, 0.0), 1.0, True, None, None, "Spatial Spectrum")])
+        self.markline_overlay.activate()
 
     @wxlimit_invocation(2)  # max 1/2 Hz
     @call_after  # needed as it accesses the DC

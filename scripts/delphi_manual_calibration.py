@@ -220,10 +220,6 @@ def main(args):
         hfwa = hfw_shiftf.result()
         
         logging.info("\n**Computed SEM shift parameters**\n resa: %s \n resb: %s \n hfwa: %s \n spotshift: %s \n", resa, resb, hfwa, spotshift)
-        # Refocus the SEM
-        escan.resolution.value = (512, 512)
-        msg = "Please turn on the SEM stream and focus the SEM image. You are allowed to navigate through in order to find a feature to focus on, as also to change the SEM settings. Then turn off the stream and press Enter ..."
-        raw_input(msg)
 
         # Return to the center so fine alignment can be executed just after calibration
         f = sem_stage.moveAbs({"x":-pure_offset[0], "y":-pure_offset[1]})
@@ -232,6 +228,12 @@ def main(args):
         f.result()
         f = focus.moveAbs({"z": center_focus})
         f.result()
+
+        # Refocus the SEM
+        escan.resolution.value = (512, 512)
+        msg = "Please turn on the SEM stream and focus the SEM image. Then turn off the stream and press Enter ..."
+        raw_input(msg)
+
         # Run the optical fine alignment
         # TODO: reuse the exposure time
         # Configure CCD and e-beam to write CL spots
@@ -278,10 +280,7 @@ def main(args):
             trans_val, cor_md = f.result()
 
         iscale = cor_md[model.MD_PIXEL_SIZE_COR]
-        irot = cor_md[model.MD_ROTATION_COR]
-        iscale = (1 / iscale[0], 1 / iscale[1])
-        if irot < 0:
-            irot = 2 * math.pi + irot
+        irot = -cor_md[model.MD_ROTATION_COR] % (2 * math.pi)
         # Update calibration file
         calibconf = get_calib_conf()
         shid, sht = chamber.sampleHolder.value
