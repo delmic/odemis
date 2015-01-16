@@ -1195,11 +1195,12 @@ def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus, kn
         cur_resolution = max_resolution
         shift_values = []
         resolution_values = []
+        # Just to force autocontrast
+        escan.accelVoltage.value += 100
         # Apply the given sem focus value for a good focus level
         f = ebeam_focus.moveAbs({"z":known_focus})
         f.result()
-        # Just to force autocontrast
-        escan.accelVoltage.value += 100
+
         smaller_image = None
         largest_image = None
 
