@@ -271,18 +271,11 @@ class PlotsAxisLegend(wx.Panel):
     def range(self, range):
         self._range = range
 
-    def on_paint(self, evt=None):
+    def clear(self):
+        self._range = None
+        self.redraw()
 
-        # if not hasattr(self.Parent, 'canvas'):
-        #     font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
-        #     ctx = wx.lib.wxcairo.ContextFromDC(wx.PaintDC(self))
-        #     ctx.select_font_face(font.GetFaceName(),
-        #                          cairo.FONT_SLANT_NORMAL,
-        #                          cairo.FONT_WEIGHT_NORMAL)
-        #     ctx.set_font_size(font.GetPointSize())
-        #
-        #
-        #     return
+    def on_paint(self, evt=None):
 
         if not hasattr(self.Parent.canvas, 'has_data') or not self.Parent.canvas.has_data():
             return
@@ -418,7 +411,7 @@ class BitmapAxisLegend(wx.Panel):
         self.Bind(wx.EVT_SIZE, self.on_size)
 
         self._value_range = None  # 2 tuple with the minimum and maximum value
-        self._ticks = None  # Lust of 2 tuples, containing the pixel position and value
+        self._tick_list = None  # Lust of 2 tuples, containing the pixel position and value
 
         self._value_space = None
         self._pixel_space = None
@@ -458,7 +451,7 @@ class BitmapAxisLegend(wx.Panel):
 
     def redraw(self):
         """ Clear all the ticks so a recalculation is forced """
-        self._ticks = None
+        self._tick_list = None
         self.Refresh()
 
     def clear(self):
@@ -474,7 +467,7 @@ class BitmapAxisLegend(wx.Panel):
         if self._value_range is None:
             return
 
-        if self._ticks is None:
+        if self._tick_list is None:
             self.calculate_ticks()
 
         # Set Font
@@ -491,7 +484,7 @@ class BitmapAxisLegend(wx.Panel):
         max_width = 0
         prev_lpos = 0 if self._orientation == wx.HORIZONTAL else self.ClientSize.y
 
-        for i, (pos, val) in enumerate(self._ticks):
+        for i, (pos, val) in enumerate(self._tick_list):
             label = units.readable_str(val, self.unit, 3)
             _, _, lbl_width, lbl_height, _, _ = ctx.text_extents(label)
 
@@ -530,9 +523,16 @@ class BitmapAxisLegend(wx.Panel):
         return pixel if self._orientation == wx.HORIZONTAL else self._pixel_space - pixel
 
     def pixel_to_value(self, pixel):
-        pass
+        """ Map pixel value to range value """
+        pixel = pixel if self._orientation == wx.HORIZONTAL else self._pixel_space - pixel
+        return ((pixel / float(self._pixel_space)) * self._value_space) + self._value_range[0]
 
     def calculate_ticks(self):
+        """ Calculate which values in the range to represent as ticks on the axis
+
+        The result is stored in the _tick_list attribute as a list of pixel position and value pairs
+
+        """
 
         # Get the horizontal/vertical space in pixels
         self._pixel_space = self.ClientSize[self._orientation != wx.HORIZONTAL]
@@ -571,15 +571,15 @@ class BitmapAxisLegend(wx.Panel):
             tick_values.append(cur_val)
             cur_val += value_step
 
-        self._ticks = []
+        self._tick_list = []
 
         for tick_value in tick_values:
-            pos = self.value_to_pixel(tick_value)
-            pixval = (pos, tick_value)
-            if pixval not in self._ticks:
+            pixel = self.value_to_pixel(tick_value)
+            pix_val = (pixel, tick_value)
+            if pix_val not in self._tick_list:
                 if self._orientation == wx.HORIZONTAL:
-                    if 0 <= pos <= self._pixel_space:
-                        self._ticks.append(pixval)
+                    if 0 <= pixel <= self._pixel_space:
+                        self._tick_list.append(pix_val)
                 else:
-                    if 10 <= pos <= self._pixel_space:
-                        self._ticks.append(pixval)
+                    if 10 <= pixel <= self._pixel_space:
+                        self._tick_list.append(pix_val)

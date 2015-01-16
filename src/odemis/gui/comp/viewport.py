@@ -139,6 +139,10 @@ class ViewPort(wx.Panel):
 
     def clear(self):
         self.canvas.clear()
+        if self.bottom_legend:
+            self.bottom_legend.clear()
+        if self.left_legend:
+            self.left_legend.clear()
         self.Refresh()
 
     def setView(self, microscope_view, tab_data):
@@ -689,6 +693,14 @@ class SpatialSpectrumViewport(ViewPort):
         # Call parent constructor at the end, because it needs the legend panel
         super(SpatialSpectrumViewport, self).__init__(*args, **kwargs)
         self.spectrum_stream = None
+
+        self.canvas.markline_overlay.v_pos.subscribe(self.on_spectrum_motion)
+
+    def on_spectrum_motion(self, vpos):
+
+        if vpos:
+            value = self.bottom_legend.pixel_to_value(vpos[0])
+            self.canvas.markline_overlay.x_label = units.readable_str(value, self.bottom_legend.unit, 3)
 
     def Refresh(self, *args, **kwargs):
         """ Refresh the ViewPort while making sure the legends get redrawn as well """
