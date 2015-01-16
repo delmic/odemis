@@ -70,14 +70,15 @@ def scan(cls=None):
     for module_name in driver.__all__:
         module = importlib.import_module("." + module_name, "odemis.driver")
         for cls_name, clso in inspect.getmembers(module, inspect.isclass):
-            if cls:
-                full_name = "%s.%s" % (module_name, cls_name)
-                if cls != full_name:
-                    logging.debug("Skipping %s", full_name)
-                    continue
-                else:
-                    cls_found = True
             if issubclass(clso, model.HwComponent) and hasattr(clso, "scan"):
+                if cls:
+                    full_name = "%s.%s" % (module_name, cls_name)
+                    if cls != full_name:
+                        logging.debug("Skipping %s", full_name)
+                        continue
+                    else:
+                        cls_found = True
+
                 logging.info("Scanning for %s.%s components", module_name, cls_name)
                 # do it in a separate container so that we don't have to load
                 # all drivers in the same process (andor cams don't like it)
@@ -91,8 +92,11 @@ def scan(cls=None):
                 except Exception:
                     logging.exception("Failed to scan %s.%s components", module_name, cls_name)
                 else:
+                    if not devices:
+                        logging.info("No device found")
                     for name, args in devices:
                         print "%s.%s: '%s' init=%s" % (module_name, cls_name, name, str(args))
+
 
     if cls and not cls_found:
         raise ValueError("Failed to find class %s" % cls)
