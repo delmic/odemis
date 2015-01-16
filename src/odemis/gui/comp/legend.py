@@ -271,6 +271,10 @@ class PlotsAxisLegend(wx.Panel):
     def range(self, range):
         self._range = range
 
+    def clear(self):
+        self._range = None
+        self.redraw()
+
     def on_paint(self, evt=None):
 
         # if not hasattr(self.Parent, 'canvas'):
@@ -530,7 +534,9 @@ class BitmapAxisLegend(wx.Panel):
         return pixel if self._orientation == wx.HORIZONTAL else self._pixel_space - pixel
 
     def pixel_to_value(self, pixel):
-        pass
+        """ Map pixel value to range value """
+        pixel = pixel if self._orientation == wx.HORIZONTAL else self._pixel_space - pixel
+        return ((pixel / float(self._pixel_space)) * self._value_space) + self._value_range[0]
 
     def calculate_ticks(self):
 
