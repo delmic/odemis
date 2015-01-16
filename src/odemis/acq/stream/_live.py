@@ -371,6 +371,7 @@ class AlignedSEMStream(SEMStream):
                 # current limit. Happens when accel. voltage is changed
                 self._emitter.translation.value = (0, 0)
                 shift = FindEbeamCenter(self._ccd, self._detector, self._emitter)
+                logging.debug("Spot shift is %s m,m", shift)
                 self._beamshift = shift
                 if self._shiftebeam == "Stage move":
                     for child in self._stage.children.value:
