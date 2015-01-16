@@ -763,15 +763,6 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
             if hole_focus is not None:
                 f = ebeam_focus.moveAbs({"z":hole_focus})
                 f.result()
-                # For the first hole apply autofocus anyway
-                if (pos == EXPECTED_HOLES[0]):
-                    escan.horizontalFoV.value = 160e-06  # m
-                    escan.scale.value = (2, 2)
-                    # escan.accelVoltage.value += 50
-                    f = autofocus.AutoFocus(detector, escan, ebeam_focus, autofocus.ROUGH_SPOTMODE_ACCURACY)
-                    hole_focus, fm_level = f.result()
-                    escan.horizontalFoV.value = escan.horizontalFoV.range[1]
-                    escan.scale.value = (1, 1)
 
             # From SEM image determine hole position relative to the center of
             # the SEM
@@ -780,7 +771,7 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
                 hole_coordinates = FindCircleCenter(image, HOLE_RADIUS, 6)
             except IOError:
                 # If hole was not found, apply autofocus and retry detection
-                escan.horizontalFoV.value = 250e-06  # m
+                escan.horizontalFoV.value = 200e-06  # m
                 f = autofocus.AutoFocus(detector, escan, ebeam_focus, autofocus.ROUGH_SPOTMODE_ACCURACY)
                 hole_focus, fm_level = f.result()
                 escan.horizontalFoV.value = escan.horizontalFoV.range[1]
@@ -899,8 +890,8 @@ def UpdateOffsetAndRotation(new_first_hole, new_second_hole, expected_first_hole
     e_offset, unused, e_rotation = transform.CalculateTransform([new_first_hole, new_second_hole],
                                                                  [expected_first_hole, expected_second_hole])
     e_offset = ((e_offset[0] / scaling[0]), (e_offset[1] / scaling[1]))
-    updated_offset = [a + b for a, b in zip(offset, e_offset)]
-    updated_rotation = rotation + e_rotation
+    updated_offset = [a - b for a, b in zip(offset, e_offset)]
+    updated_rotation = rotation - e_rotation
     return updated_offset, updated_rotation
 
 # LensAlignment is called by the GUI after the objective stage is referenced and
