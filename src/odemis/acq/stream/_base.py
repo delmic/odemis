@@ -269,6 +269,8 @@ class Stream(object):
         """
         return the min/max values to display. It also updates the intensityRange
          VA if needed.
+        return (number, number): the min/max values to map to black/white. It is
+          the same type as the data type.
         """
         if self.auto_bc.value:
             # The histogram might be slightly old, but not too much

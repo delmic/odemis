@@ -798,8 +798,8 @@ class PixelSelectOverlay(base.WorldOverlay, base.PixelDataMixin, base.DragMixin)
         if self.active:
             if self.data_properties_are_set:
                 base.DragMixin._on_left_down(self, evt)
-        else:
-            base.WorldOverlay.on_left_down(self, evt)
+
+        base.WorldOverlay.on_left_down(self, evt)
 
     def on_left_up(self, evt):
         """ Set the selected pixel, if a pixel position is known """

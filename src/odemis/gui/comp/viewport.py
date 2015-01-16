@@ -26,10 +26,12 @@ Created on 8 Feb 2012
 from __future__ import division
 
 import logging
+import wx
+
 from odemis import gui, model
 from odemis.acq import stream
 from odemis.acq.stream import OpticalStream, EMStream
-from odemis.gui import BG_COLOUR_LEGEND, FG_COLOUR_LEGEND, BG_COLOUR_MAIN
+from odemis.gui import BG_COLOUR_LEGEND, FG_COLOUR_LEGEND
 from odemis.gui.comp import miccanvas
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
 from odemis.gui.comp.legend import InfoLegend, AxisLegend
@@ -38,7 +40,6 @@ from odemis.gui.model import CHAMBER_VACUUM, CHAMBER_UNKNOWN
 from odemis.gui.util import call_after
 from odemis.model import NotApplicableError
 from odemis.util import units
-import wx
 
 
 class ViewPort(wx.Panel):
@@ -56,7 +57,7 @@ class ViewPort(wx.Panel):
         wx.Panel.__init__(self, *args, **kwargs)
 
         self._microscope_view = None  # model.MicroscopeView
-        self._tab_data_model = None # model.MicroscopyGUIData
+        self._tab_data_model = None  # model.MicroscopyGUIData
 
         # Keep track of this panel's pseudo focus
         self._has_focus = False
@@ -66,7 +67,7 @@ class ViewPort(wx.Panel):
         self.SetBackgroundColour(BG_COLOUR_LEGEND)
         self.SetForegroundColour(FG_COLOUR_LEGEND)
 
-        # This attribute can be used to track the (GribBag) sizer position of the viewport (if any)
+        # This attribute can be used to track the (GridBag) sizer position of the viewport (if any)
         self.sizer_pos = None
 
         # main widget
@@ -148,7 +149,7 @@ class ViewPort(wx.Panel):
 
     def ShowLegend(self, show):
         """ Show or hide the merge slider """
-        self.bottom_legend.Show(show)  # pylint: disable=E1103
+        self.bottom_legend.Show(show)
 
     def HasFocus(self, *args, **kwargs):
         return self._has_focus is True
@@ -211,10 +212,10 @@ class MicroscopeViewport(ViewPort):
         # The 24" @ 1920x1200 screens from Dell have an mpp value of 0.00027 m/px
         self._mpp_screen = 1e-3 * wx.DisplaySizeMM()[0] / wx.DisplaySize()[0]
 
-        # This attribute is set to True if this object (i.e. 'self') was responsible for chaning
+        # This attribute is set to True if this object (i.e. 'self') was responsible for changing
         # the HFW value
         self.self_set_hfw = False
-        self._fov_va = None # (hardware) VA to follow for HFW
+        self._fov_va = None  # (hardware) VA to follow for HFW
 
     def setView(self, microscope_view, tab_data):
         """
@@ -242,14 +243,14 @@ class MicroscopeViewport(ViewPort):
         # set/subscribe merge ratio
         microscope_view.merge_ratio.subscribe(self._onMergeRatio, init=True)
 
-        # subscribe to image, to update legend on streamtree/image change
+        # subscribe to image, to update legend on stream tree/image change
         microscope_view.lastUpdate.subscribe(self._onImageUpdate, init=True)
 
         # canvas handles also directly some of the view properties
         self.canvas.setView(microscope_view, tab_data)
 
     ################################################
-    ## Panel control
+    #  Panel control
     ################################################
 
     def ShowMergeSlider(self, show):
@@ -284,14 +285,14 @@ class MicroscopeViewport(ViewPort):
         # all have the same mpp value), indicate the digital zoom.
         if len(mpps) == 1:
             mpp_im = mpps.pop()
-#             mag_im = self._mpp_screen / mpp_im  # as if 1 im.px == 1 sc.px
+            # mag_im = self._mpp_screen / mpp_im  # as if 1 im.px == 1 sc.px
             mag_dig = mpp_im / self._microscope_view.mpp.value
             label += u" (Digital: × %s)" % units.readable_str(units.round_significant(mag_dig, 2))
 
         self.bottom_legend.set_mag_label(label)
 
     ################################################
-    ## VA handling
+    #  VA handling
     ################################################
 
     @call_after
@@ -314,8 +315,8 @@ class MicroscopeViewport(ViewPort):
         # MergeSlider is displayed if:
         # * Root operator of StreamTree accepts merge argument
         # * (and) Root operator of StreamTree has >= 2 images
-        if ("merge" in self._microscope_view.stream_tree.kwargs and
-            len(self._microscope_view.stream_tree) >= 2):
+        if ("merge" in self._microscope_view.stream_tree.kwargs
+                and len(self._microscope_view.stream_tree) >= 2):
 
             streams = self._microscope_view.getStreams()
             all_opt = all(isinstance(s, OpticalStream) for s in streams)
@@ -330,7 +331,7 @@ class MicroscopeViewport(ViewPort):
                 # For now, special hack for the SecomCanvas which always sets
                 # the EM image as "right"
                 if (any(isinstance(s, EMStream) for s in streams)
-                    and any(isinstance(s, OpticalStream) for s in streams)):
+                        and any(isinstance(s, OpticalStream) for s in streams)):
                     self.bottom_legend.set_stream_type(wx.LEFT, stream.CameraStream)
                     self.bottom_legend.set_stream_type(wx.RIGHT, stream.SEMStream)
                 else:
@@ -345,7 +346,7 @@ class MicroscopeViewport(ViewPort):
             self.ShowMergeSlider(False)
 
     @call_after
-    def _onImageUpdate(self, timestamp):
+    def _onImageUpdate(self, _):
         self._checkMergeSliderDisplay()
 
         # magnification might have changed (eg, image with different binning)
@@ -419,7 +420,7 @@ class MicroscopeViewport(ViewPort):
 
         self.self_set_hfw = False
 
-    def _on_mpp_set_hfw(self, mpp):
+    def _on_mpp_set_hfw(self, _):
         """ Set the microscope's hfw when the MicroscopeView's mpp value changes
 
         The canvas calculates the new hfw value.
@@ -457,7 +458,7 @@ class OverviewViewport(MicroscopeViewport):
 
     def OnSize(self, evt):
         # TODO: this can be avoided by just setting a different minimum mpp
-        self.canvas.SetSize(self.Parent.Size)
+
         if self.canvas.horizontal_field_width < 10e-3:
             self.canvas.horizontal_field_width = 10e-3
             logging.debug("Canvas HFW too small! Setting it to %s", 10e-3)
@@ -480,8 +481,8 @@ class OverviewViewport(MicroscopeViewport):
         # If state is unknown, it's probably going to be unknown forever, so
         # we have to allow (and in the worst case the user will be able to move
         # while the chamber is opened)
-        if (chamber_state in {CHAMBER_VACUUM, CHAMBER_UNKNOWN}
-            and self._microscope_view.has_stage()):
+        if (chamber_state in {CHAMBER_VACUUM, CHAMBER_UNKNOWN} and
+                self._microscope_view.has_stage()):
             self.canvas.point_select_overlay.activate()
         else:
             self.canvas.point_select_overlay.deactivate()
@@ -547,7 +548,6 @@ class SparcAlignViewport(MicroscopeViewport):
         super(SparcAlignViewport, self).__init__(*args, **kwargs)
         # TODO: should be done on the fly by _checkMergeSliderDisplay()
         # change SEM icon to Goal
-        # pylint: disable=E1103
         self.bottom_legend.bmp_slider_right.SetBitmap(getico_blending_goalBitmap())
 
 
@@ -566,10 +566,6 @@ class PlotViewport(ViewPort):
         # before we get an explicit chance to unsubscribe event handlers
         self.spectrum_stream = None
 
-    def clear(self):
-        self.canvas.clear()
-        self.Refresh()
-
     def Refresh(self, *args, **kwargs):
         """ Refresh the ViewPort while making sure the legends get redrawn as well """
         self.left_legend.redraw()
@@ -587,6 +583,8 @@ class PlotViewport(ViewPort):
         """ This method will connect this ViewPort to the Spectrum Stream so it
         it can react to spectrum pixel selection.
         """
+
+        self.clear()
 
         ss = self.microscope_view.stream_tree.spectrum_streams
 
@@ -740,6 +738,8 @@ class SpatialSpectrumViewport(ViewPort):
         """ This method will connect this ViewPort to the Spectrum Stream so it
         it can react to spectrum pixel selection.
         """
+
+        self.clear()
 
         ss = self.microscope_view.stream_tree.spectrum_streams
 

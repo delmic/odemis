@@ -498,21 +498,7 @@ class StaticSpectrumStream(StaticStream):
         return low_px, high_px
 
     def _updateImageAverage(self, data):
-        if self.auto_bc.value:
-            # The histogram might be slightly old, but not too much
-            irange = img.findOptimalRange(self.histogram._full_hist,
-                                          self.histogram._edges,
-                                          self.auto_bc_outliers.value / 100)
-
-            # Also update the intensityRanges if auto BC
-            edges = self.histogram._edges
-            rrange = [(v - edges[0]) / (edges[1] - edges[0]) for v in irange]
-            self.intensityRange.value = tuple(rrange)
-        else:
-            # just convert from the user-defined (as ratio) to actual values
-            rrange = sorted(self.intensityRange.value)
-            edges = self.histogram._edges
-            irange = [edges[0] + (edges[1] - edges[0]) * v for v in rrange]
+        irange = self._getDisplayIRange()
 
         # pick only the data inside the bandwidth
         spec_range = self._get_bandwidth_in_pixel()

@@ -157,7 +157,7 @@ import numpy
 from odemis.gui import BLEND_DEFAULT, BLEND_SCREEN
 from odemis.gui.comp.overlay.base import WorldOverlay, ViewOverlay
 from odemis.gui.util import call_after
-from odemis.model._dataflow import DataArray
+from odemis.model import DataArray
 from odemis.util import intersect
 from odemis.util.conversion import wxcol_to_frgb
 import os
@@ -553,7 +553,7 @@ class BufferedCanvas(wx.Panel):
         try:
             if not self.draw_timer.IsRunning():
                 self.draw_timer.Start(delay * 1000.0, oneShot=True)
-        except PyDeadObjectError:
+        except wx.PyDeadObjectError:
             # This only should happen when running test cases
             logging.warn("Drawing requested on dead canvas")
 
@@ -873,8 +873,8 @@ class BitmapCanvas(BufferedCanvas):
             self.ctx.identity_matrix()
 
     def _draw_merged_images(self, ctx):
-        """ Draw the two images on the buffer DC, centred around their
-        _dc_center, with their own scale and an opacity of "mergeratio" for im1.
+        """ Draw the two images on the buffer DC, centred around their _dc_center, with their own
+        scale and an opacity of "mergeratio" for im1.
 
         *IMPORTANT*: The origin (0, 0) of the dc_buffer is in the center!
 
@@ -901,7 +901,6 @@ class BitmapCanvas(BufferedCanvas):
 
         if images:
             last_image = images.pop()
-
             # For every image, except the last
             for im in images:
                 # print "Drawing %s %s %s %s merge: %s" % (id(im),
@@ -1569,8 +1568,8 @@ class DraggableCanvas(BitmapCanvas):
         self.Update()
 
     def update_drawing(self):
-        """ Redraws everything (that is viewed in the buffer)
-        """
+        """ Redraws everything (that is viewed in the buffer) """
+
         prev_world_pos = self.w_buffer_center
 
         self.w_buffer_center = self.requested_world_pos

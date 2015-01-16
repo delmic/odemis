@@ -31,7 +31,6 @@ import cairo
 import wx
 from wx.lib.imageutils import stepColour
 import wx.lib.wxcairo as wxcairo
-
 from decorator import decorator
 
 from odemis import util, model
@@ -129,6 +128,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # Unused at the moment
         self.zoom_overlay = None
         self.update_overlay = None
+
+        self.background_brush = wx.SOLID
 
     # Ability manipulation
 
@@ -354,9 +355,11 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         return images
 
     def _convert_streams_to_images(self):
-        """ Temporary function to convert the StreamTree to a list of images as
-        the canvas currently expects.
+        """ Temporary function to convert the StreamTree to a list of images as the canvas
+        currently expects.
+
         """
+
         images = self._get_ordered_images()
 
         # add the images in order
@@ -374,8 +377,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
             ims.append([rgba_im, pos, scale, keepalpha, rot, blend_mode, name])
 
-        # TODO: Canvas needs to accept the NDArray (+ specific attributes
-        # recorded separately).
+        # TODO: Canvas needs to accept the NDArray (+ specific attributes recorded separately).
         self.set_images(ims)
 
         # For debug only:
@@ -781,7 +783,11 @@ class OverviewCanvas(DblMicroscopeCanvas):
     def __init__(self, *args, **kwargs):
         super(OverviewCanvas, self).__init__(*args, **kwargs)
 
-        self.abilities = set() # Cannot move, zoom...
+        self.default_margin = 0
+        self.margins = (self.default_margin, self.default_margin)
+
+        self.abilities = set()  # Cannot move, zoom...
+
         self.background_brush = wx.SOLID
 
         # Point select overlay for stage navigation
@@ -791,6 +797,12 @@ class OverviewCanvas(DblMicroscopeCanvas):
 
         # This canvas can have a special overlay for tracking position history
         self.history_overlay = None
+
+        self.SetMinSize((400, 400))
+
+    def _on_view_mpp(self, mpp):
+        DblMicroscopeCanvas._on_view_mpp(self, mpp)
+        self.fit_view_to_content(True)
 
     def setView(self, microscope_view, tab_data):
         super(OverviewCanvas, self).setView(microscope_view, tab_data)
@@ -802,37 +814,45 @@ class OverviewCanvas(DblMicroscopeCanvas):
     @call_after  # needed as it accesses the DC
     @ignore_dead
     def _update_thumbnail(self):
+
         if self.ClientSize.x * self.ClientSize.y <= 0:
             return  # nothing to update
 
-        # TODO: could we disable the margins of the buffer (as this canvas doesn't
-        # move), and directly use ._bmp_buffer, instead of blitting _dc_buffer?
-        # new bitmap to copy the DC
-        bitmap = wx.EmptyBitmap(*self.ClientSize)
+        # We need to scale the thumbnail ourselves, instead of letting the button handle it, because
+        # we need to be able to draw the history overlay without it being rescaled afterwards
+
+        # Create an image from the bitmap buffer
+        image = wx.ImageFromBitmap(self._bmp_buffer)
+
+        # Rescale. This is the same algorithm as is used by the OverviewButton
+        thumbnail_size = wx.Size(*gui.VIEW_BTN_SIZE)
+        rsize = wx.Size(*gui.VIEW_BTN_SIZE)
+
+        if (thumbnail_size.x / image.Width) < (thumbnail_size.y / image.Height):
+            rsize[1] = int(image.Height * (thumbnail_size.x / image.Width))
+        else:
+            rsize[0] = int(image.Width * (thumbnail_size.y / image.Height))
+
+        scaled_img = image.Scale(*rsize, quality=wx.IMAGE_QUALITY_HIGH)
+
         dc = wx.MemoryDC()
-        dc.SelectObject(bitmap)
-
-        # simplified version of on_paint()
-        margin = ((self._bmp_buffer_size[0] - self.ClientSize.x) // 2,
-                  (self._bmp_buffer_size[1] - self.ClientSize.y) // 2)
-
-        dc.BlitPointSize((0, 0), self.ClientSize, self._dc_buffer, margin)
-
-        image = wx.ImageFromBitmap(bitmap)
-        image = image.Scale(*gui.VIEW_BTN_SIZE, quality=wx.IMAGE_QUALITY_HIGH)
-
-        del dc
-
-        dc = wx.MemoryDC()
-        bitmap = wx.BitmapFromImage(image)
+        bitmap = wx.BitmapFromImage(scaled_img)
         dc.SelectObject(bitmap)
 
         ctx = wxcairo.ContextFromDC(dc)
-        self.history_overlay.draw(ctx, gui.VIEW_BTN_SIZE)
+        self.history_overlay.draw(ctx, rsize)
+
+        # Resize crops or adds a border, without scaling the image data
+        lt = ((thumbnail_size.x - scaled_img.Width) // 2,
+              (thumbnail_size.y - scaled_img.Height) // 2)
+
+        scaled_img.Resize(thumbnail_size, lt, 0, 0, 0)
+
+        del dc
 
         # close the DC, to be sure the bitmap can be used safely
-        image = wx.ImageFromBitmap(bitmap)
-        self.microscope_view.thumbnail.value = image
+        scaled_img = wx.ImageFromBitmap(bitmap)
+        self.microscope_view.thumbnail.value = scaled_img
 
 
 class SecomCanvas(DblMicroscopeCanvas):
@@ -1220,14 +1240,18 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
 
         if data is None:
             self.markline_overlay.v_pos.unsubscribe(self._map_to_plot_values)
+            self.markline_overlay.deactivate()
         else:
             self.markline_overlay.v_pos.subscribe(self._map_to_plot_values, init=True)
+            self.markline_overlay.activate()
 
     def clear(self):
         super(ZeroDimensionalPlotCanvas, self).clear()
         self.val_x.value = None
         self.val_y.value = None
         self.markline_overlay.clear_labels()
+        self.markline_overlay.deactivate()
+        self.update_drawing()
         self._update_thumbnail()
 
     # Event handlers
@@ -1368,6 +1392,9 @@ class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
 
     def clear(self):
         super(OneDimensionalSpatialSpectrumCanvas, self).clear()
+        self.markline_overlay.clear_labels()
+        self.markline_overlay.deactivate()
+        self.update_drawing()
         self._update_thumbnail()
 
     def setView(self, microscope_view, tab_data):
@@ -1393,6 +1420,7 @@ class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
         """
 
         self.set_images([(im_data, (0.0, 0.0), 1.0, True, None, None, "Spatial Spectrum")])
+        self.markline_overlay.activate()
 
     @wxlimit_invocation(2)  # max 1/2 Hz
     @call_after  # needed as it accesses the DC
