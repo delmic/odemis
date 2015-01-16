@@ -200,3 +200,6 @@ class FluoTestCase(unittest.TestCase):
         self.assertEqual(b, out, "find_best(%f, %s) returned %s while expected %s" % (wl, bands, out, b))
 
 
+if __name__ == "__main__":
+    # import sys;sys.argv = ['', 'Test.testName']
+    unittest.main()
