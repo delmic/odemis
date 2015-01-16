@@ -1413,7 +1413,7 @@ class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
         self.microscope_view = microscope_view
         self._tab_data_model = tab_data
 
-    def set_2d_data(self, domain, im_data, unit_x, unit_y=None):
+    def set_2d_data(self, im_data):
         """ Set the data to be displayed
 
         TODO: Process the units for both the horizontal and vertical legends/axis
