@@ -892,27 +892,36 @@ class BitmapCanvas(BufferedCanvas):
             return
 
         # The idea:
-        # * display all the images but the last as average (fluo => expected all big)
+        # * display all the images but the last with average blend as average:
         #   N images -> mergeratio = 1-(0/N), 1-(1/N),... 1-((N-1)/N)
+        # * display all the images but the last with screen blend full opacity,
+        #   because this blend already don't destroy the underlay information.
+        #   In practice, it's used for the fluorescent images.
         # * display the last image (SEM => expected smaller), with the given
         #   mergeratio (or 1 if it's the only one)
 
         images = [im for im in self.images if im is not None]
 
         if images:
+            n = len(images)
             last_image = images.pop()
             # For every image, except the last
-            for im in images:
+            for i, im in enumerate(images):
                 # print "Drawing %s %s %s %s merge: %s" % (id(im),
                 #                                          im.shape,
                 #                                          im.metadata['blend_mode'],
                 #                                          im.metadata['name'],
                 #                                          1.0)
+                if im.metadata['blend_mode'] == BLEND_SCREEN:
+                    merge_ratio = 1.0
+                else:
+                    merge_ratio = 1 - i / n
+
                 self._draw_image(
                     ctx,
                     im,
                     im.metadata['dc_center'],
-                    1.0,
+                    merge_ratio,
                     im_scale=im.metadata['dc_scale'],
                     rotation=im.metadata['dc_rotation'],
                     blend_mode=im.metadata['blend_mode']

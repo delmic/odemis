@@ -328,31 +328,46 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
     # END Overlay creation and activation
 
     def _get_ordered_images(self):
-        """ Return the list of images to display, ordered bottom to top (=last to draw) """
+        """
+        Return the list of images to display, ordered bottom to top (=last to draw)
+        """
+        # The ordering is as follow:
+        # * Optical images all together first, to be blended with screen operator
+        # * (Other) images going from the biggest to the smallest, so that
+        #   the biggest one is at the bottom and displayed at full opacity.
 
         streams = self.microscope_view.getStreams()
-        images = []
+        images_opt = []
+        images_std = []
 
-        # Non-SEM stream images will always be blended using the screen blend operator
         for s in streams:
-            if isinstance(s, stream.EMStream):
-                images.append((s.image.value, BLEND_DEFAULT, s.name.value))
+            if not s:
+                # should not happen, but let's not completely fail on this
+                logging.error("StreamTree has a None stream")
+                continue
+
+            if not hasattr(s, "image") or s.image.value is None:
+                continue
+
+            # FluoStreams are merged using the "Screen" method that handles colour
+            # merging without decreasing the intensity.
+            if isinstance(s, stream.OpticalStream):
+                images_opt.append((s.image.value, BLEND_SCREEN, s.name.value))
             else:
-                images.append((s.image.value, BLEND_SCREEN, s.name.value))
+                images_std.append((s.image.value, BLEND_DEFAULT, s.name.value))
 
         # Sort by size, so that the biggest picture is first drawn (no opacity)
-        images.sort(
-            lambda a, b: cmp(
-                numpy.prod(b[0].shape[0:2]) * b[0].metadata[model.MD_PIXEL_SIZE][0],
-                numpy.prod(a[0].shape[0:2]) * a[0].metadata[model.MD_PIXEL_SIZE][0]
-            )
-        )
+        def get_area(d):
+            return numpy.prod(d[0].shape[0:2]) * d[0].metadata[model.MD_PIXEL_SIZE][0]
+        images_opt.sort(key=get_area, reverse=True)
+        images_std.sort(key=get_area, reverse=True)
 
-        # Reset the first image to be drawn to the default blend operator
-        if images:
-            images[0] = (images[0][0], BLEND_DEFAULT, images[0][2])
+        # Reset the first image to be drawn to the default blend operator to be
+        # drawn full opacity
+        if images_opt:
+            images_opt[0] = (images_opt[0][0], BLEND_DEFAULT, images_opt[0][2])
 
-        return images
+        return images_opt + images_std
 
     def _convert_streams_to_images(self):
         """ Temporary function to convert the StreamTree to a list of images as the canvas
@@ -861,54 +876,9 @@ class SecomCanvas(DblMicroscopeCanvas):
     def __init__(self, *args, **kwargs):
         super(SecomCanvas, self).__init__(*args, **kwargs)
 
-        # TODO: once the StreamTrees can render fully, reactivate the background
-        # pattern
         self.background_brush = wx.SOLID
 
-    # Special version which put the SEM images last, as with the current
-    # display mechanism in the canvas, the fluorescent images must be displayed
-    # together first
-    def _get_ordered_images(self):
-        """
-        return the list of images to display, in order from lowest to topest
-         (last to draw)
-        """
-        images = []
-
-        streams = self.microscope_view.getStreams()
-        has_sem_image = False
-        for s in streams:
-            if not s:
-                # should not happen, but let's not completely fail on this
-                logging.error("StreamTree has a None stream")
-                continue
-
-            if not hasattr(s, "image"):
-                continue
-
-            rgbim = s.image.value
-            if rgbim is None:
-                continue
-
-            if isinstance(s, stream.EMStream):
-                # Add as last image, always use default blend operator with SEM images
-                images.append((rgbim, BLEND_DEFAULT, s.name.value))
-
-                # FIXME: See the log warning
-                if has_sem_image:
-                    logging.warning(("Multiple SEM images are not handled "
-                                     "correctly for now"))
-                has_sem_image = True
-            else:
-                # Use screen blending for non-SEM images. The first image will later be reset to
-                # default blending, so it can serve as a base for the following screen 'layers'.
-                images.insert(0, (rgbim, BLEND_SCREEN, s.name.value))
-
-        # Fix the blend operator for the first image
-        if images:
-            images[0] = (images[0][0], BLEND_DEFAULT, images[0][2])
-
-        return images
+    # TODO: merge the following mode management into the super class
 
     # Prevent certain events from being processed by the canvas
 

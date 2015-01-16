@@ -497,6 +497,11 @@ class OverviewViewport(MicroscopeViewport):
 
 
 class SecomViewport(MicroscopeViewport):
+    """
+    Used to display live streams on Secom and Delphi.
+    The main difference is the handling of the pause state, which prevents 
+    stage move and indicate it via an icon.
+    """
 
     canvas_class = miccanvas.SecomCanvas
 
