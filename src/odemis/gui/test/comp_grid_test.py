@@ -178,7 +178,12 @@ class GridPanelTestCase(test.GuiTestCase):
         self.frame.SetSize((600, 600))
         self.frame.Center()
 
-        # gui_loop()
+        gui_loop()
+
+        self.frame.SetSize((400, 400))
+        self.frame.Center()
+
+        gui_loop()
 
 
 

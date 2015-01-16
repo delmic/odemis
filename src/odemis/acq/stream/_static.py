@@ -542,8 +542,8 @@ class StaticSpectrumStream(StaticStream):
         self.image.value = model.DataArray(rgbim, self._find_metadata(data.metadata))
 
     def get_spectrum_range(self):
-        """
-        Return the wavelength for each pixel of a (complete) spectrum
+        """ Return the wavelength for each pixel of a (complete) spectrum
+
         returns (list of numbers or None): one wavelength per spectrum pixel.
           Values are in meters, unless the spectrum cannot be determined, in
           which case integers representing pixels index is returned.

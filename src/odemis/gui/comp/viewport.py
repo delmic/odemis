@@ -27,6 +27,7 @@ from __future__ import division
 
 import logging
 import wx
+import math
 
 from odemis import gui, model
 from odemis.acq import stream
@@ -34,7 +35,7 @@ from odemis.acq.stream import OpticalStream, EMStream
 from odemis.gui import BG_COLOUR_LEGEND, FG_COLOUR_LEGEND
 from odemis.gui.comp import miccanvas
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
-from odemis.gui.comp.legend import InfoLegend, AxisLegend
+from odemis.gui.comp.legend import InfoLegend, PlotsAxisLegend, BitmapAxisLegend
 from odemis.gui.img.data import getico_blending_goalBitmap
 from odemis.gui.model import CHAMBER_VACUUM, CHAMBER_UNKNOWN
 from odemis.gui.util import call_after
@@ -544,8 +545,8 @@ class PlotViewport(ViewPort):
 
     # Default class
     canvas_class = miccanvas.ZeroDimensionalPlotCanvas
-    bottom_legend_class = AxisLegend
-    left_legend_class = AxisLegend
+    bottom_legend_class = PlotsAxisLegend
+    left_legend_class = PlotsAxisLegend
 
     def __init__(self, *args, **kwargs):
         ViewPort.__init__(self, *args, **kwargs)
@@ -673,8 +674,8 @@ class SpatialSpectrumViewport(ViewPort):
     """
 
     canvas_class = miccanvas.OneDimensionalSpatialSpectrumCanvas
-    bottom_legend_class = AxisLegend
-    left_legend_class = AxisLegend
+    bottom_legend_class = BitmapAxisLegend
+    left_legend_class = BitmapAxisLegend
 
     def __init__(self, *args, **kwargs):
         """Note: The MicroscopeViewport is not fully initialised until setView()
@@ -762,10 +763,15 @@ class SpatialSpectrumViewport(ViewPort):
         data = self.spectrum_stream.get_line_spectrum()
 
         if data is not None:
-            domain = self.spectrum_stream.get_spectrum_range()
+            spectrum_range = self.spectrum_stream.get_spectrum_range()
+            line_length = data.shape[0] * data.metadata[model.MD_PIXEL_SIZE][1]
+
             unit_x = self.spectrum_stream.spectrumBandwidth.unit
             self.bottom_legend.unit = unit_x
-            self.canvas.set_2d_data(domain, data, unit_x)
+            self.bottom_legend.range = (spectrum_range[0], spectrum_range[-1])
+            self.left_legend.unit = 'm'
+            self.left_legend.range = (0, line_length)
+            self.canvas.set_2d_data(data)
         else:
             logging.warn("No data to display for the selected line!")
 
