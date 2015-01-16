@@ -65,9 +65,9 @@ class MultiplexActuator(model.Actuator):
             # Ducktyping (useful to support also testing with MockComponent)
             # At least, it has .axes
             if not isinstance(child, model.ComponentBase):
-                raise ValueError("Child %s is not a component." % str(child))
+                raise ValueError("Child %s is not a component." % (child,))
             if not hasattr(child, "axes") or not isinstance(child.axes, dict):
-                raise ValueError("Child %s is not an actuator." % str(child))
+                raise ValueError("Child %s is not an actuator." % child.name)
             axes[axis] = child.axes[axes_map[axis]]
             self._position[axis] = child.position.value[axes_map[axis]]
             if (hasattr(child, "speed") and
@@ -659,7 +659,7 @@ class AntiBacklashActuator(model.Actuator):
         # look for axes in backlash not existing in the child
         missing = set(backlash.keys()) - set(axes_def.keys())
         if missing:
-            raise ValueError("Child actuator doesn't have the axes %s", missing)
+            raise ValueError("Child actuator doesn't have the axes %s" % (missing,))
 
         model.Actuator.__init__(self, name, role, axes=axes_def,
                                 children=children, **kwargs)

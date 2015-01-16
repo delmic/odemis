@@ -183,7 +183,7 @@ class Chamber(model.Actuator):
             try:
                 chp[PRESSURES[p]] = p
             except KeyError:
-                raise ValueError("Pressure position %s is unknown", p)
+                raise ValueError("Pressure position %s is unknown" % (p,))
         axes = {"pressure": model.Axis(unit="Pa", choices=chp)}
         model.Actuator.__init__(self, name, role, axes=axes, **kwargs)
         # For simulating moves

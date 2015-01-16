@@ -1880,7 +1880,11 @@ class AndorCam2(model.DigitalCamera):
         Note: it's not recommended to call this method when cameras are being used
         return (list of 2-tuple: name (strin), device number (int))
         """
-        camera = AndorCam2("System", "bus", device="fakesys") # system
+        # Get "system" device
+        if _fake:
+            camera = AndorCam2("System", "bus", device="fakesys")
+        else:
+            camera = AndorCam2("System", "bus")
         dc = camera.GetAvailableCameras()
         logging.debug("found %d devices.", dc)
 

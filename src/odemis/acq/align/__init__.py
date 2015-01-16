@@ -108,7 +108,7 @@ def FindEbeamCenter(ccd, detector, escan):
         ccd.binning.value = prev_bin
         ccd.resolution.value = prev_res
 
-    raise LookupError("Failed to locate spot after exposure time %g s", exp)
+    raise LookupError("Failed to locate spot after exposure time %g s" % exp)
 
 
 def discard_data(df, data):

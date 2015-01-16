@@ -31,34 +31,42 @@ import odemis.gui.test as test
 
 test.goto_manual()
 
-RANGES = [(0, 0), (-5, 5)]
+RANGES = [(-5, 5), (0, 37)]
+BAD_RANGES = [(0, 0)]
 
 
 class LegendTestCase(test.GuiTestCase):
 
     frame_class = test.test_gui.xrccanvas_frame
 
-    def test_axis_legend(self):
+    def test_bitmap_axis_legend(self):
+        self.frame.SetSize((400, 300))
+        test.gui_loop()
+
         self.panel.SetBackgroundColour("#333")
 
         grid_sizer = wx.GridBagSizer()
 
-        hleg = legend.AxisLegend(self.panel)
+        hleg = legend.BitmapAxisLegend(self.panel)
         hleg.SetBackgroundColour("#887DFF")
 
-        vleg = legend.AxisLegend(self.panel, orientation=wx.VERTICAL)
+        grid_sizer.Add(hleg, pos=(1, 1), flag=wx.EXPAND)
+        grid_sizer.AddGrowableCol(1)
+
+        vleg = legend.BitmapAxisLegend(self.panel, orientation=wx.VERTICAL)
         vleg.SetBackgroundColour("#FF5D38")
 
         grid_sizer.Add(vleg, pos=(0, 0), flag=wx.EXPAND)
-        grid_sizer.Add(hleg, pos=(1, 1), flag=wx.EXPAND)
+        grid_sizer.AddGrowableRow(0, proportion=1)
 
-        # self.
+        self.add_control(grid_sizer, flags=wx.EXPAND, proportion=1)
+
         test.gui_loop()
 
         for r in RANGES:
             hleg.range = r
+            vleg.range = r
             test.gui_loop()
-
 
 
 if __name__ == "__main__":

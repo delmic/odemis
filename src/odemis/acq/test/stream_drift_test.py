@@ -80,7 +80,7 @@ class TestDriftStream(unittest.TestCase):
         
         # Create the stream
         sems = stream.SEMStream("test sem", detector, detector.data, escan)
-        ars = stream.ARStream("test ar", ccd, ccd.data, escan)
+        ars = stream.ARSettingsStream("test ar", ccd, ccd.data, escan)
         sas = stream.SEMARMDStream("test sem-ar", sems, ars)
 
         # Long acquisition

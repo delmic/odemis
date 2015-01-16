@@ -159,7 +159,10 @@ DELPHI: {
     class: actuator.AntiBacklashActuator,
     role: focus,
     init: {
-        backlash: {"z": 200.e-6}, # 100µm should be enough for the focus, but 200µm should also compensate for the cross-talk with the Y backlash
+        # 10µm is equivalent to 200µm on the motor, due to the focus ratio.
+        # 100µm should be enough for the focus, but 200µm should also compensate
+        # for the cross-talk with the Y backlash.
+        backlash: {"z": 10.e-6},
     },
     children: {"slave": "Optical Focus"},
 }

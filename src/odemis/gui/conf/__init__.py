@@ -359,19 +359,19 @@ class CalibrationConfig(Config):
 
                 sscale = self._get_tuple(sec, "stage_scaling")
                 if not (sscale[0] > 0 and sscale[1] > 0):
-                    raise ValueError("stage_scaling %s must be > 0", sscale)
+                    raise ValueError("stage_scaling %s must be > 0" % sscale)
 
                 srot = self.config.getfloat(sec, "stage_rotation")
                 if not 0 <= srot <= (2 * math.pi):
-                    raise ValueError("stage_rotation %f out of range", srot)
+                    raise ValueError("stage_rotation %f out of range" % srot)
 
                 iscale = self._get_tuple(sec, "image_scaling")
                 if not (iscale[0] > 0 and iscale[1] > 0):
-                    raise ValueError("image_scaling %s must be > 0", iscale)
+                    raise ValueError("image_scaling %s must be > 0" % iscale)
 
                 irot = self.config.getfloat(sec, "image_rotation")
                 if not 0 <= irot <= (2 * math.pi):
-                    raise ValueError("image_rotation %f out of range", irot)
+                    raise ValueError("image_rotation %f out of range" % irot)
 
                 #Take care of old calibration files
                 try:

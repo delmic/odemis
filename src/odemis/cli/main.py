@@ -55,35 +55,51 @@ class Scanner(model.Component):
     def scan(self):
         return self.cls.scan()
 
-def scan():
+def scan(cls=None):
     """
     Scan for connected devices and list them
+    cls (str or None): the class name to scan (as written in the microscope file)
     Output like:
     Classname: 'Name of Device' init={arg: value, arg2: value2}
     """
     # only here, to avoid importing everything for other commands
     from odemis import driver
     num = 0
+    cls_found = False
     # we scan by using every HwComponent class which has a .scan() method
     for module_name in driver.__all__:
         module = importlib.import_module("." + module_name, "odemis.driver")
-        for cls_name, cls in inspect.getmembers(module, inspect.isclass):
-            if issubclass(cls, model.HwComponent) and hasattr(cls, "scan"):
+        for cls_name, clso in inspect.getmembers(module, inspect.isclass):
+            if issubclass(clso, model.HwComponent) and hasattr(clso, "scan"):
+                if cls:
+                    full_name = "%s.%s" % (module_name, cls_name)
+                    if cls != full_name:
+                        logging.debug("Skipping %s", full_name)
+                        continue
+                    else:
+                        cls_found = True
+
                 logging.info("Scanning for %s.%s components", module_name, cls_name)
                 # do it in a separate container so that we don't have to load
                 # all drivers in the same process (andor cams don't like it)
                 container_name = "scanner%d" % num
                 num += 1
                 try:
-                    cont, scanner = model.createInNewContainer(container_name, Scanner, {"cls": cls})
+                    cont, scanner = model.createInNewContainer(container_name, Scanner, {"cls": clso})
                     devices = scanner.scan()
                     scanner.terminate()
                     cont.terminate()
                 except Exception:
                     logging.exception("Failed to scan %s.%s components", module_name, cls_name)
                 else:
+                    if not devices:
+                        logging.info("No device found")
                     for name, args in devices:
                         print "%s.%s: '%s' init=%s" % (module_name, cls_name, name, str(args))
+
+
+    if cls and not cls_found:
+        raise ValueError("Failed to find class %s" % cls)
 
 def kill_backend():
     try:
@@ -560,7 +576,7 @@ def acquire(comp_name, dataflow_names, filename):
                 dim_sens = (image.shape[0] * spxs[0], image.shape[1] * spxs[1])
                 logging.info("Physical dimension of sensor is %fx%f m.", dim_sens[0], dim_sens[1])
         except Exception as exc:
-            raise IOError("Failed to read image information: %s", exc)
+            raise IOError("Failed to read image information: %s" % exc)
 
     exporter = dataio.find_fittest_exporter(filename)
     try:
@@ -652,7 +668,7 @@ def main(args):
                          help="kill the running back-end")
     dm_grpe.add_argument("--check", dest="check", action="store_true", default=False,
                          help="check for a running back-end (only returns exit code)")
-    dm_grpe.add_argument("--scan", dest="scan", action="store_true", default=False,
+    dm_grpe.add_argument("--scan", dest="scan", const=True, default=False, nargs="?",
                          help="scan for possible devices to connect (the back-end must be stopped)")
     dm_grpe.add_argument("--list", "-l", dest="list", action="store_true", default=False,
                          help="list the components of the microscope")
@@ -747,7 +763,10 @@ def main(args):
         if options.scan:
             if status == BACKEND_RUNNING:
                 raise ValueError("Back-end running while trying to scan for devices")
-            scan()
+            if isinstance(options.scan, basestring):
+                scan(options.scan)
+            else:
+                scan()
             return 0
 
         # check if there is already a backend running

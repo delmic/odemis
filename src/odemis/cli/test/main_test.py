@@ -96,9 +96,19 @@ class TestWithoutBackend(unittest.TestCase):
         self.assertEqual(ret, 0, "trying to run '%s' returned %s" % (cmdline, ret))
         
         output = out.getvalue()
-        # AndorCam3 SimCam should be there for sure
-        self.assertTrue("andorcam3.AndorCam3" in output)
-    
+        # AndorCam3 SimCam should be there for sure (if libandor3-dev is installed)
+        # self.assertTrue("andorcam3.AndorCam3" in output)
+
+        self.assertTrue("andorcam2.FakeAndorCam2" in output)
+
+    def test_error_scan(self):
+        try:
+            cmdline = "cli --scan bar.foo"
+            ret = main.main(cmdline.split())
+        except SystemExit, exc: # because it's handled by argparse
+            ret = exc.code
+        self.assertNotEqual(ret, 0, "Wrongly succeeded trying to run scan with unknown class: '%s'" % cmdline)
+
 #@skip("Simple")
 class TestWithBackend(unittest.TestCase):
     backend_was_running = False

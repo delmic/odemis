@@ -17,7 +17,7 @@ grep -IrL "from __future__ import.*division" --include=*.py src/
 echo "---"
 
 echo "These files do not have the license header:"
-grep -LIr "GNU General Public License"--include=*.py src/
+grep -LIr "GNU General Public License" --include=*.py src/
 echo "---"
 
 PYTHONPATH=./src/:../Pyro4/src/
@@ -59,9 +59,10 @@ for f in $testfiles; do
     echo "Running $f:" >> "$TESTLOG"
     # run it in its own directory (sometimes they need specific files from there)
     pushd "$(dirname $f)" > /dev/null
-        python $f >> "$TESTLOG" 2>&1
+        python $f --verbose >> "$TESTLOG" 2>&1
         #echo coucou >> "$TESTLOG" 2>&1
         status=$?
+        echo $f returned $status >> "$TESTLOG" 2>&1
     popd > /dev/null
     grep -E "(OK|FAILED)" "$TESTLOG" | tail -1
     if [ "$status" -gt 0 ]; then

@@ -1196,9 +1196,9 @@ class NavCam(model.DigitalCamera):
 
         # TODO: provide contrast and brightness via a new Light component
         if not 0 <= contrast <= 1:
-            raise ValueError("contrast argument = %s, not between 0 and 1", contrast)
+            raise ValueError("contrast argument = %s, not between 0 and 1" % contrast)
         if not 0 <= brightness <= 1:
-            raise ValueError("brightness argument = %s, not between 0 and 1", brightness)
+            raise ValueError("brightness argument = %s, not between 0 and 1" % brightness)
         self._contrast = contrast
         self._brightness = brightness
         self._hfw = hfw

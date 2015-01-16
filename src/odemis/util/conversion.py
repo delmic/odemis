@@ -81,7 +81,7 @@ def hex_to_rgb(hex_str):
     """
 
     if len(hex_str) != 7:
-        raise ValueError("Invalid HEX colour %s", hex_str)
+        raise ValueError("Invalid HEX colour %s" % hex_str)
     hex_str = hex_str[-6:]
     return tuple(int(hex_str[i:i + 2], 16) for i in [0, 2, 4])
 
@@ -96,7 +96,7 @@ def hex_to_rgba(hex_str, af=255):
     """
 
     if len(hex_str) != 7:
-        raise ValueError("Invalid HEX colour %s", hex_str)
+        raise ValueError("Invalid HEX colour %s" % hex_str)
     return hex_to_rgb(hex_str) + (af,)
 
 
@@ -251,7 +251,7 @@ def change_brightness(colour, weight):
             _col = rgb_to_frgb(colour[:3])
             _alpha = colour[-1] if len(colour) == 4 else None
         else:
-            raise ValueError("Unknown colour format (%s)", colour)
+            raise ValueError("Unknown colour format (%s)" % (colour,))
     elif isinstance(colour, wx.Colour):
         _col = wxcol_to_frgb(colour)
         _alpha = None
