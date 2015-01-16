@@ -698,7 +698,7 @@ class SpectraPro(model.Actuator):
             try:
                 logging.debug("Trying port %s", p)
                 dev = SpectraPro(None, None, p, _noinit=True)
-            except serial.SerialException:
+            except (serial.SerialException, HwError):
                 # not possible to use this port? next one!
                 continue
 
