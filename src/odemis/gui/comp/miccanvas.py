@@ -627,13 +627,13 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         """
 
         if axis == 1 and self.microscope_view.focus is not None:
-            # conversion: 1 unit => 0.01 μm (so a whole screen, ~44000u, is a
+            # conversion: 1 unit => 5 nm (so a whole screen, ~44000u, is a
             # less than a mm)
-            # TODO: this should be adjusted by the lens magnification:
+            # TODO: this should be adjusted by the lens NA or magnification:
             # the higher the magnification, the smaller is the change
             # (=> proportional ?)
             # negative == go up == closer from the sample
-            val = 0.01e-6 * shift  # m
+            val = 5e-9 * shift  # m
             assert(abs(val) < 0.01) # a move of 1 cm is a clear sign of bug
             # logging.error("%s, %s", axis, shift)
             self.microscope_view.moveFocusRel(val)
