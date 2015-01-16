@@ -642,7 +642,7 @@ class SPARCTestCase(unittest.TestCase):
         """
         # Create the stream
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
-        specs = stream.SpectrumStream("test spec", self.spec, self.spec.data, self.ebeam)
+        specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data, self.ebeam)
         sps = stream.SEMSpectrumMDStream("test sem-spec", sems, specs)
 
         specs.roi.value = (0.15, 0.6, 0.8, 0.8)
