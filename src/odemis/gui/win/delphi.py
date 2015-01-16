@@ -382,7 +382,6 @@ def _DoDelphiCalibration(future, main_data, overview_pressure, vacuum_pressure,
                 trans_val, cor_md = f.result()
                 iscale = cor_md[model.MD_PIXEL_SIZE_COR]
                 irot = -cor_md[model.MD_ROTATION_COR] % (2 * math.pi)
-                iscale = (1 / iscale[0], 1 / iscale[1])
                 return htop, hbot, hfoc, strans, sscale, srot, iscale, irot, resa, resb, hfwa, spotshift
             # Secondary calibration
             else:

@@ -647,10 +647,7 @@ def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, fo
         acc_offset, scaling, rotation = transform.CalculateTransform(opt_spots,
                                                                  sem_spots)
         # Take care of negative rotation
-        scaling = (scaling[0], scaling[1])
-        cor_rot = -rotation
-        if cor_rot < 0:
-            cor_rot = 2 * math.pi + cor_rot
+        cor_rot = -rotation % (2 * math.pi)
         return acc_offset, cor_rot, scaling
 
     finally:

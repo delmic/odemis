@@ -278,10 +278,7 @@ def main(args):
             trans_val, cor_md = f.result()
 
         iscale = cor_md[model.MD_PIXEL_SIZE_COR]
-        irot = cor_md[model.MD_ROTATION_COR]
-        iscale = (1 / iscale[0], 1 / iscale[1])
-        if irot < 0:
-            irot = 2 * math.pi + irot
+        irot = -cor_md[model.MD_ROTATION_COR] % (2 * math.pi)
         # Update calibration file
         calibconf = get_calib_conf()
         shid, sht = chamber.sampleHolder.value
