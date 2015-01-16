@@ -560,7 +560,7 @@ def acquire(comp_name, dataflow_names, filename):
                 dim_sens = (image.shape[0] * spxs[0], image.shape[1] * spxs[1])
                 logging.info("Physical dimension of sensor is %fx%f m.", dim_sens[0], dim_sens[1])
         except Exception as exc:
-            raise IOError("Failed to read image information: %s", exc)
+            raise IOError("Failed to read image information: %s" % exc)
 
     exporter = dataio.find_fittest_exporter(filename)
     try:

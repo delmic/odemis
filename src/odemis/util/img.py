@@ -344,7 +344,7 @@ def ensureYXC(data):
         dims = "YXC"
 
     if not dims == "YXC":
-        raise NotImplementedError("Don't know how to handle dim order %s", dims)
+        raise NotImplementedError("Don't know how to handle dim order %s" % (dims,))
 
     if not data.shape[-1] in {3, 4}:
         logging.warning("RGB data should has C dimension of length %d", data.shape[-1])
