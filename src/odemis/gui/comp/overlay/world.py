@@ -650,7 +650,7 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, base.PixelDataMixin):
 
     def draw(self, ctx, shift=(0, 0), scale=1.0):
 
-        if None in (self.start_pixel, self.end_pixel):
+        if None in (self.w_start_pos, self.w_end_pos) or self.w_start_pos == self.w_end_pos:
             return
 
         pixel_colour = conversion.hex_to_frgba(gui.FG_COLOUR_HIGHLIGHT, 0.5)
