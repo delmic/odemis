@@ -340,11 +340,6 @@ def _DoDelphiCalibration(future, main_data, overview_pressure, vacuum_pressure,
                 f = main_data.chamber.moveAbs({"pressure": vacuum_pressure})
                 f.result()
 
-                # Lens to a good optical focus position
-                logging.debug("Move focus to a good initial level...")
-                f = main_data.focus.moveAbs({"z": DELPHI_OPT_GOOD_FOCUS})
-                f.result()
-
                 # Update progress of the future
                 logging.debug("Try to update the remaining time...")
                 future.set_end_time(time.time() + 12.5 * 60)

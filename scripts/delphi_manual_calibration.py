@@ -30,7 +30,6 @@ import math
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-DELPHI_OPT_GOOD_FOCUS = 0.03826  # somehow possibly not too bad focus position
 
 def main(args):
     """
@@ -110,11 +109,6 @@ def main(args):
 
         # Move to SEM
         f = chamber.moveAbs({"pressure": phenom.PRESSURE_SEM})
-        f.result()
-
-        # Lens to a good optical focus position
-        logging.debug("Moving focus to a good initial level...")
-        f = focus.moveAbs({"z": DELPHI_OPT_GOOD_FOCUS})
         f.result()
 
         # Compute stage calibration values
