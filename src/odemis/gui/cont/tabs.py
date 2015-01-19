@@ -1302,9 +1302,9 @@ class AnalysisTab(Tab):
                                 self.tab_data_model.spec_cal.value)
                 self.tab_data_model.spec_cal.value = u""  # remove the calibration
 
-            # ########### Make the spectrum viewport visible
+            # ########### Combined views and spectrum view visible
 
-            new_visible_views[0:2] = self._def_views[2:4]
+            new_visible_views[0:2] = self._def_views[2:4] # Combined
             new_visible_views[2] = self.main_frame.vp_spatialspec.microscope_view
             new_visible_views[3] = self.main_frame.vp_inspection_plot.microscope_view
 
@@ -1334,9 +1334,12 @@ class AnalysisTab(Tab):
                                 self.tab_data_model.ar_cal.value)
                 self.tab_data_model.ar_cal.value = u""  # remove the calibration
 
-            # ########### Make the Angular Viewport visible
+            # ########### Combined views and Angular view visible
 
+            new_visible_views[0] = self._def_views[1] # SEM only
+            new_visible_views[1] = self._def_views[2] # Combined 1
             new_visible_views[2] = self.main_frame.vp_angular.microscope_view
+            new_visible_views[3] = self._def_views[3] # Combined 2
 
             # ########### Update tool menu
 

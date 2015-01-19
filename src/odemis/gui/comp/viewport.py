@@ -581,30 +581,31 @@ class PlotViewport(ViewPort):
         """ This method will connect this ViewPort to the Spectrum Stream so it
         it can react to spectrum pixel selection.
         """
-
-        self.clear()
-
         ss = self.microscope_view.stream_tree.spectrum_streams
+        if self.spectrum_stream in ss:
+            logging.debug("not reconnecting to stream as it's already connected")
+            return
 
         # There should be exactly one Spectrum stream. In the future there
         # might be scenarios where there are more than one.
         if not ss:
-            if self.spectrum_stream is not None:
-                self.spectrum_stream.selected_pixel.unsubscribe(self._on_pixel_select)
             self.spectrum_stream = None
-            logging.warn("No spectrum streams found")
+            logging.info("No spectrum stream found")
+            self.clear() # Remove legend ticks and clear plot
             return
         elif len(ss) > 1:
             logging.warning("Found %d spectrum streams, will pick one randomly", len(ss))
 
         self.spectrum_stream = ss[0]
-        self.spectrum_stream.selected_pixel.subscribe(self._on_pixel_select)
+        self.spectrum_stream.selected_pixel.subscribe(self._on_pixel_select, init=True)
 
     def _on_pixel_select(self, pixel):
         """ Pixel selection event handler """
         if pixel == (None, None):
             # TODO: handle more graciously when pixel is unselected?
-            logging.warning("Don't know what to do when no pixel is selected")
+            logging.debug("No pixel selected")
+            # Remove legend ticks and clear plot
+            self.clear()
             return
         elif self.spectrum_stream is None:
             logging.warning("No Spectrum Stream present!")
@@ -744,39 +745,35 @@ class SpatialSpectrumViewport(ViewPort):
         """ This method will connect this ViewPort to the Spectrum Stream so it
         it can react to spectrum pixel selection.
         """
-
-        self.clear()
-
         ss = self.microscope_view.stream_tree.spectrum_streams
+        if self.spectrum_stream in ss:
+            logging.debug("not reconnecting to stream as it's already connected")
+            return
 
         # There should be exactly one Spectrum stream. In the future there
         # might be scenarios where there are more than one.
         if not ss:
-            # if self.spectrum_stream is not None:
-                # self.spectrum_stream.selected_pixel.unsubscribe(self._on_pixel_select)
             self.spectrum_stream = None
-            logging.warn("No spectrum streams found")
+            logging.info("No spectrum streams found")
+            self.clear() # Remove legend ticks and clear image
             return
         elif len(ss) > 1:
             logging.warning("Found %d spectrum streams, will pick one randomly", len(ss))
 
         self.spectrum_stream = ss[0]
-        self.spectrum_stream.selected_line.subscribe(self._on_line_select)
+        self.spectrum_stream.selected_line.subscribe(self._on_line_select, init=True)
 
     def _on_line_select(self, line):
         """ Line selection event handler """
 
-        if line == (None, None):
-            # TODO: handle more graciously when line is unselected?
-            logging.warning("Don't know what to do when no line is selected")
-            self.canvas.Refresh(eraseBackground=True)
+        if (None, None) in line:
+            logging.debug("Line is not (fully) selected")
+            self.clear()
             return
         elif self.spectrum_stream is None:
             logging.warning("No Spectrum Stream present!")
-            self.canvas.Refresh(eraseBackground=True)
             return
 
-        # length = self.canvas._line
         data = self.spectrum_stream.get_line_spectrum()
 
         if data is not None:
