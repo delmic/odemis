@@ -300,16 +300,16 @@ def AutoFocus(detector, scanner, focus, accuracy, background=False, dataflow=Non
 
     # Set proper step and thres factor according to detector type
     thres_factor = INIT_THRES_FACTOR
-    role = detector.role
-    if role == "ccd":  # CCD
+    role = focus.role
+    if role == "focus":  # CCD
         max_step = 3 * detector.pixelSize.value[0]
         if detector.binning.value[0] > 2:
             thres_factor = 10 * thres_factor  # better snr
         else:
             thres_factor = 5 * thres_factor
-    elif role == "overview-ccd":  # NAVCAM
+    elif role == "overview-focus":  # NAVCAM
         max_step = 100 * detector.pixelSize.value[0]
-    elif role == "se-detector" or role == "bs-detector":  # SEM
+    elif role == "ebeam-focus":  # SEM
         thres_factor = 5 * thres_factor
         max_step = 5.5e03 * scanner.pixelSize.value[0]
     else:

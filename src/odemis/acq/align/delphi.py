@@ -280,6 +280,21 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
             f.result()
             f = focus.moveAbs({"z": center_focus})
             f.result()
+
+            # Focus the CL spot using SEM focus
+            # Configure CCD and e-beam to write CL spots
+            ccd.binning.value = (1, 1)
+            ccd.resolution.value = ccd.resolution.range[1]
+            ccd.exposureTime.value = 900e-03
+            escan.horizontalFoV.value = escan.horizontalFoV.range[0]
+            escan.scale.value = (1, 1)
+            escan.resolution.value = (1, 1)
+            escan.translation.value = (0, 0)
+            escan.dwellTime.value = 5e-06
+            det_dataflow = detector.data
+            f = autofocus.AutoFocus(ccd, escan, ebeam_focus, autofocus.ROUGH_SPOTMODE_ACCURACY, background=True, dataflow=det_dataflow)
+            f.result()
+
             # TODO also calculate and return Phenom shift parameters
             # Data returned needs to be filled in the calibration file
             return first_hole, second_hole, hole_focus, offset, rotation, scaling, resa, resb, hfwa, spotshift
