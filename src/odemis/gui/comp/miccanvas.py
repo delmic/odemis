@@ -1222,8 +1222,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         self.val_y.value = None
         self.markline_overlay.clear_labels()
         self.markline_overlay.deactivate()
-        self.update_drawing()
-        self._update_thumbnail()
+        wx.CallAfter(self.update_drawing)
 
     # Event handlers
 
@@ -1366,8 +1365,7 @@ class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
         super(OneDimensionalSpatialSpectrumCanvas, self).clear()
         self.markline_overlay.clear_labels()
         self.markline_overlay.deactivate()
-        self.update_drawing()
-        self._update_thumbnail()
+        wx.CallAfter(self.update_drawing)
 
     def setView(self, microscope_view, tab_data):
         """ Set the microscope_view that this canvas is displaying/representing
