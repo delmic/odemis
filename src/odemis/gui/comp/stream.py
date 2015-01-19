@@ -1579,7 +1579,7 @@ class StreamBar(wx.Panel):
         while not isinstance(p, FoldPanelItem):
             p = p.Parent
 
-        p._refresh()
+        p.Refresh()
 
     # TODO maybe should be provided after init by the controller (like key of
     # sorted()), to separate the GUI from the model ?

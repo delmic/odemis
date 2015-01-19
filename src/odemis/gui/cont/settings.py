@@ -201,10 +201,10 @@ class SettingsController(object):
 
     __metaclass__ = ABCMeta
 
-    def __init__(self, fold_panel, default_msg, highlight_change=False):
+    def __init__(self, fold_panel_item, default_msg, highlight_change=False):
 
-        self.panel = SettingsPanel(fold_panel, default_msg=default_msg)
-        fold_panel.add_item(self.panel)
+        self.panel = SettingsPanel(fold_panel_item, default_msg=default_msg)
+        fold_panel_item.add_item(self.panel)
 
         self.highlight_change = highlight_change
         self.num_entries = 0

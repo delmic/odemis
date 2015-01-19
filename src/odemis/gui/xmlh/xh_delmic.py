@@ -160,6 +160,7 @@ class CaptionBarXmlHandler(xrc.XmlResourceHandler):
             return w
 HANDLER_CLASS_LIST.append(CaptionBarXmlHandler)
 
+
 class FoldPanelItemXmlHandler(xrc.XmlResourceHandler):
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)
@@ -170,12 +171,10 @@ class FoldPanelItemXmlHandler(xrc.XmlResourceHandler):
     def CanHandle(self, node):
         return self.IsOfClass(node, 'FoldPanelItem')
 
-
     # Process XML parameters and create the object
     def DoCreateResource(self):
 
         if self.GetClass() == 'FoldPanelItem':
-            #print "Creating FoldpanelItem"
             parent = self.GetParentAsWindow()
             w = fpb.FoldPanelItem(parent,
                                   self.GetID(),
@@ -186,7 +185,6 @@ class FoldPanelItemXmlHandler(xrc.XmlResourceHandler):
                                   self.GetBool('collapsed'),
                                   nocaption=self.GetBool('nocaption'))
             self.SetupWindow(w)
-
             self.CreateChildren(w, False)
 
             # Move all the FoldPanelItem children to the main sizer
