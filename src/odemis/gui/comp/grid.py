@@ -276,11 +276,11 @@ class ViewportGrid(wx.Panel):
 
         self.visible_viewports = vis_viewports
 
-        for vis_viewport, viewport in zip(vis_viewports, self.viewports):
-            if vis_viewport not in self.viewports:
+        for i, vvp in enumerate(vis_viewports):
+            if vvp not in self.viewports:
                 raise ValueError("Unknown Viewport!")
             # Swap won't happen if the viewports are the same
-            self._swap_viewports(vis_viewport, viewport)
+            self._swap_viewports(vvp, self.viewports[i])
 
         self._layout_viewports()
         self._show_hide_viewports()
