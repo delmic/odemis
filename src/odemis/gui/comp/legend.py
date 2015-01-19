@@ -287,8 +287,13 @@ class PlotsAxisLegend(wx.Panel):
         ctx.set_font_size(font.GetPointSize())
 
         # TODO: only put label for some of the ticks
-        if not self.ticks:
-            self.calc_ticks(ctx)
+
+        # read self.ticks only once so that if .redraw() is called during this
+        # time (from another thread), we don't suddenly get None
+        ticks = self.ticks
+        if ticks is None:
+            ticks = self.calc_ticks()
+            self.ticks = ticks
 
         ctx.set_source_rgb(*self.tick_colour)
 
@@ -298,7 +303,7 @@ class PlotsAxisLegend(wx.Panel):
         max_width = 0
         prev_lpos = 0 if self.orientation == wx.HORIZONTAL else self.ClientSize.y
 
-        for i, (pos, val) in enumerate(self.ticks):
+        for i, (pos, val) in enumerate(ticks):
             label = units.readable_str(val, self.unit, 3)
             _, _, lbl_width, lbl_height, _, _ = ctx.text_extents(label)
 
@@ -331,10 +336,13 @@ class PlotsAxisLegend(wx.Panel):
             self.SetMinSize((self.max_tick_width + 14, -1))
             self.Parent.GetSizer().Layout()
 
-    def calc_ticks(self, ctx=None):
-        """ Determine where the ticks should be placed """
+    def calc_ticks(self):
+        """
+        Determine where the ticks should be placed
+        return (list of (int, float)): position (in px) and actual value of each
+         tick (ordered)
+        """
 
-        self.ticks = []
         pcanv = self.Parent.canvas
 
         # Get orientation dependant values
@@ -369,17 +377,20 @@ class PlotsAxisLegend(wx.Panel):
         first_tick = (int(min_val / val_step) + 1) * val_step if val_step else 0
         logging.debug("Setting first tick at value %s", first_tick)
 
-        ticks = [min_val] + [first_tick + i * val_step for i in range(2 * num_ticks)]
+        tick_vals = [min_val] + [first_tick + i * val_step for i in range(2 * num_ticks)]
 
-        for tick in ticks:
+        ticks = []
+        for tick in tick_vals:
             pos = val_to_pos(tick)
-            if (pos, tick) not in self.ticks:
+            if (pos, tick) not in ticks:
                 if self.orientation == wx.HORIZONTAL:
                     if 0 <= pos <= size - self.tick_pixel_gap / 2:
-                        self.ticks.append((pos, tick))
+                        ticks.append((pos, tick))
                 else:
                     if 10 <= pos <= size:
-                        self.ticks.append((pos, tick))
+                        ticks.append((pos, tick))
+
+        return ticks
 
     def redraw(self):
         """
@@ -390,7 +401,6 @@ class PlotsAxisLegend(wx.Panel):
 
     def on_size(self, event):
         self.redraw()
-        self.Refresh(eraseBackground=False)
 
 
 class BitmapAxisLegend(wx.Panel):
