@@ -1461,7 +1461,7 @@ class StreamPanel(wx.Panel):
             self._sld_selection_width.SetToolTipString(tooltip_txt)
             self._vac_selection_width = VigilantAttributeConnector(self.stream.selectionWidth,
                                                                    self._sld_selection_width,
-                                                                   events=wx.EVT_SCROLL_CHANGED)
+                                                                   events=wx.EVT_SLIDER)
 
             self.control_gbsizer.Add(lbl_selection_width,
                                      (self.row_count, 0),
