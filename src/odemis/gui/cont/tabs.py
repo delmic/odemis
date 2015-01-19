@@ -1286,22 +1286,6 @@ class AnalysisTab(Tab):
                 spec_stream.selected_pixel.subscribe(self._on_pixel_select, init=True)
                 spec_stream.selected_line.subscribe(self._on_line_select, init=True)
 
-            # ########### Reload current calibration on the new streams
-
-            try:
-                self.set_spec_background(self.tab_data_model.spec_bck_cal.value)
-            except ValueError:
-                logging.warning(u"Calibration file not accepted any more '%s'",
-                                self.tab_data_model.spec_bck_cal.value)
-                self.tab_data_model.spec_bck_cal.value = u""  # remove the calibration
-
-            try:
-                self.set_spec_comp(self.tab_data_model.spec_cal.value)
-            except ValueError:
-                logging.warning(u"Calibration file not accepted any more '%s'",
-                                self.tab_data_model.spec_cal.value)
-                self.tab_data_model.spec_cal.value = u""  # remove the calibration
-
             # ########### Combined views and spectrum view visible
 
             new_visible_views[0:2] = self._def_views[2:4] # Combined
@@ -1325,15 +1309,6 @@ class AnalysisTab(Tab):
 
                 ar_stream.point.subscribe(self._on_point_select, init=True)
 
-            # ########### Reload current calibration on the new streams
-
-            try:
-                self.set_ar_background(self.tab_data_model.ar_cal.value)
-            except ValueError:
-                logging.warning(u"Calibration file not accepted any more '%s'",
-                                self.tab_data_model.ar_cal.value)
-                self.tab_data_model.ar_cal.value = u""  # remove the calibration
-
             # ########### Combined views and Angular view visible
 
             new_visible_views[0] = self._def_views[1] # SEM only
@@ -1356,6 +1331,30 @@ class AnalysisTab(Tab):
         # Load the Streams and their data into the model and views
         for s in streams:
             self._stream_controller.addStream(s, add_to_all_views=True)
+
+        # Reload current calibration on the new streams (must be done after .streams is set)
+        if spec_streams:
+            try:
+                self.set_spec_background(self.tab_data_model.spec_bck_cal.value)
+            except ValueError:
+                logging.warning(u"Calibration file not accepted any more '%s'",
+                                self.tab_data_model.spec_bck_cal.value)
+                self.tab_data_model.spec_bck_cal.value = u""  # remove the calibration
+
+            try:
+                self.set_spec_comp(self.tab_data_model.spec_cal.value)
+            except ValueError:
+                logging.warning(u"Calibration file not accepted any more '%s'",
+                                self.tab_data_model.spec_cal.value)
+                self.tab_data_model.spec_cal.value = u""  # remove the calibration
+
+        if ar_streams:
+            try:
+                self.set_ar_background(self.tab_data_model.ar_cal.value)
+            except ValueError:
+                logging.warning(u"Calibration file not accepted any more '%s'",
+                                self.tab_data_model.ar_cal.value)
+                self.tab_data_model.ar_cal.value = u""  # remove the calibration
 
         # Update the visible views if they've changed
         for vold, vnew in zip(self.tab_data_model.visible_views.value, new_visible_views):
