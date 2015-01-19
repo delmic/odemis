@@ -627,8 +627,8 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, base.PixelDataMixin):
         self.clear_selection()
         self._selected_line_va = selection_va
         self._selected_width_va = width_va
+        self._selected_width_va.subscribe(self._on_width)
         self._selected_line_va.subscribe(self._on_selection, init=True)
-        self._selected_width_va.subscribe(self._on_width, init=False)
 
     def _on_selection(self, selected_line):
         """ Event handler that requests a redraw when the selected line changes """
@@ -743,8 +743,8 @@ class PixelSelectOverlay(base.WorldOverlay, base.PixelDataMixin, base.DragMixin)
     def connect_selection(self, selection_va, width_va):
         self._selected_pixel_va = selection_va
         self._selected_width_va = width_va
+        self._selected_width_va.subscribe(self._on_width)
         self._selected_pixel_va.subscribe(self._on_selection, init=True)
-        self._selected_width_va.subscribe(self._on_width, init=False)
 
     def _on_selection(self, _):
         """ Event handler that requests a redraw when the selected line changes """
