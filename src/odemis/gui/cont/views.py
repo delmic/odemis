@@ -524,7 +524,7 @@ class ViewButtonController(object):
         for btn in self.buttons:
             btn.Bind(wx.EVT_BUTTON, self.on_btn_click)
 
-        self._subscriptions = {}
+        self._subscriptions = {} # btn -> dict(str -> subscriber)
         self._subscribe()
 
         # subscribe to layout and view changes
@@ -533,17 +533,9 @@ class ViewButtonController(object):
         self._data_model.focussedView.subscribe(self._on_focus_change, init=True)
 
     def _subscribe(self):
-
-        # Explicitly unsubscribe the current event handlers
-        for btn, (vp, _) in self.buttons.items():
-            if btn in self._subscriptions:
-                vp.microscope_view.thumbnail.unsubscribe(self._subscriptions[btn]["thumb"])
-                vp.microscope_view.name.unsubscribe(self._subscriptions[btn]["label"])
-
-        # Clear the subscriptions
-        self._subscriptions = {}
-
-        # subscribe to change of name
+        """
+        Subscribe to change of thumbnail & name
+        """
         for btn, (vp, lbl) in self.buttons.items():
             if vp is None:  # 2x2 layout
                 lbl.SetLabel("All")
@@ -571,6 +563,19 @@ class ViewButtonController(object):
             btn.Thaw()
 
             self._subscriptions[btn]["label"] = on_name
+
+    def _unsubscribe(self):
+        """
+        Unsubscribe from the thumbnail and name VAs for all the buttons
+        """
+        # Explicitly unsubscribe the current event handlers
+        for btn, subs in self._subscriptions.items():
+            vp, lbl = self.buttons[btn]
+            if vp is not None:
+                vp.microscope_view.thumbnail.unsubscribe(subs["thumb"])
+                vp.microscope_view.name.unsubscribe(subs["label"])
+
+        self._subscriptions = {}
 
     def toggle_btn_for_view(self, microscope_view):
         """
@@ -657,26 +662,24 @@ class ViewButtonController(object):
     def _on_visible_views_change(self, visible_views):
         """ Associate each button with the correct visible viewport """
 
-        if self.viewports:
-            vis_viewports = []
-
-            for view in visible_views:
-                for vp in self.viewports:
-                    if vp.microscope_view == view:
-                        vis_viewports.append(vp)
-
-            vp_buttons = [(b, (vp, l)) for b, (vp, l) in self.buttons.items() if vp is not None]
-
-            for (btn, (btn_vp, btn_lbl)), vis_vp in zip(vp_buttons, vis_viewports):
-                if btn_vp != vis_vp:
-                    # We must unsubscribe here, instead of letting _subscribe handle it
-                    btn_vp.microscope_view.thumbnail.unsubscribe(self._subscriptions[b]["thumb"])
-                    btn_vp.microscope_view.name.unsubscribe(self._subscriptions[b]["label"])
-                    self.buttons[btn] = (vis_vp, btn_lbl)
-
-            self._subscribe()
-        else:
+        if not self.viewports:
             logging.warn("Could not handle view change, viewports unknown!")
+            return
+
+        self._unsubscribe()
+
+        # update viewport of each button
+        vis_viewports = []
+        for view in visible_views:
+            for vp in self.viewports:
+                if vp.microscope_view == view:
+                    vis_viewports.append(vp)
+
+        vp_buttons = [(b, (vp, l)) for b, (vp, l) in self.buttons.items() if vp is not None]
+        for (btn, (btn_vp, btn_lbl)), vis_vp in zip(vp_buttons, vis_viewports):
+            self.buttons[btn] = (vis_vp, btn_lbl)
+
+        self._subscribe()
 
     def _on_layout_change(self, _):
         """ Called when another view is focused, or viewlayout is changed """
