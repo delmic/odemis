@@ -200,7 +200,7 @@ class FoldPanelItem(wx.Panel):
 
     def insert_item(self, item, pos):
         """ Insert a wx.Window or Sizer into the panel at location `pos` """
-        self._container_sizer.Insert(pos + 1, item, flag=wx.EXPAND | wx.BOTTOM, border=1)
+        self._container_sizer.Insert(pos, item, flag=wx.EXPAND | wx.BOTTOM, border=1)
 
     def remove_item(self, item):
         """ Remove the given item from the panel """
