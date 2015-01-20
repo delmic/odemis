@@ -253,6 +253,8 @@ class BufferedCanvas(wx.Panel):
         self.Bind(wx.EVT_LEAVE_WINDOW, self.on_leave)
         self.Bind(wx.EVT_ENTER_WINDOW, self.on_enter)
 
+        self.Bind(wx.EVT_KILL_FOCUS, self.on_focus_lost)
+
         # Keyboard events
         self.Bind(wx.EVT_CHAR, self.on_char)
 
@@ -498,6 +500,11 @@ class BufferedCanvas(wx.Panel):
             # logging.debug("Buffer size didn't change, refreshing...")
             # eraseBackground=False prevents flicker
             self.Refresh(eraseBackground=False)
+
+    def on_focus_lost(self, _):
+        """ Release any mouse capture when the focus is lost """
+        if self.HasCapture():
+            self.ReleaseMouse()
 
     def on_draw_timer(self):
         """ Update the drawing when the on draw timer fires """

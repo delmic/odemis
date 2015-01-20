@@ -43,7 +43,7 @@ from wx import html
 from odemis import dataio, model
 from odemis.acq import calibration
 from odemis.gui.comp import overlay
-from odemis.gui.comp.canvas import CAN_ZOOM
+from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG
 from odemis.gui.comp.popup import Message
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.stream import StreamPanel
@@ -1499,9 +1499,12 @@ class AnalysisTab(Tab):
         """ Event handler for when a spectrum pixel is selected """
 
         # If we're in 1x1 view, we're bringing the plot to the front
+        # if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
+        #     plot_view = self.main_frame.vp_inspection_plot.microscope_view
+        #     self.tab_data_model.focussedView.value = plot_view
+
         if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
-            plot_view = self.main_frame.vp_inspection_plot.microscope_view
-            self.tab_data_model.focussedView.value = plot_view
+            self.tab_data_model.viewLayout.value = guimod.VIEW_LAYOUT_22
 
     def _on_line_select(self, _):
         """ Event handler for when a spectrum line is selected """
