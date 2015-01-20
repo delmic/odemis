@@ -223,6 +223,8 @@ class TestPolarConversion(unittest.TestCase):
         C, T, Z, Y, X = desired_output[0].shape
         desired_output[0].shape = Y, X
 
+        # FIXME: doesn't seem to pass on 64 bits ?! floating point computation differences?
+
         numpy.testing.assert_allclose(result, desired_output[0], rtol=1e-04)
 
     def test_background_substraction_precomputed(self):
