@@ -26,12 +26,10 @@ Created on 8 Feb 2012
 from __future__ import division
 
 import logging
-import wx
 import math
-
 from odemis import gui, model
 from odemis.acq import stream
-from odemis.acq.stream import OpticalStream, EMStream
+from odemis.acq.stream import OpticalStream, EMStream, SpectrumStream
 from odemis.gui import BG_COLOUR_LEGEND, FG_COLOUR_LEGEND
 from odemis.gui.comp import miccanvas
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
@@ -41,6 +39,7 @@ from odemis.gui.model import CHAMBER_VACUUM, CHAMBER_UNKNOWN
 from odemis.gui.util import call_after
 from odemis.model import NotApplicableError
 from odemis.util import units
+import wx
 
 
 class ViewPort(wx.Panel):
@@ -333,12 +332,18 @@ class MicroscopeViewport(ViewPort):
             else:
                 # TODO: How is the order guaranteed? (Left vs Right)
                 # => it should be done in the MicroscopeView when adding a stream
-                # For now, special hack for the SecomCanvas which always sets
-                # the EM image as "right"
+                # For now, special hack for the MicroscopeCanvas which always sets
+                # the EM image as "right" (ie, it's drawn last).
+                # If there is SEM and Spectrum, the spectrum image is always
+                # set as "right" (ie, it's drawn last).
                 if (any(isinstance(s, EMStream) for s in streams)
-                        and any(isinstance(s, OpticalStream) for s in streams)):
-                    self.bottom_legend.set_stream_type(wx.LEFT, stream.CameraStream)
-                    self.bottom_legend.set_stream_type(wx.RIGHT, stream.SEMStream)
+                    and any(isinstance(s, OpticalStream) for s in streams)):
+                    self.bottom_legend.set_stream_type(wx.LEFT, OpticalStream)
+                    self.bottom_legend.set_stream_type(wx.RIGHT, EMStream)
+                elif (any(isinstance(s, EMStream) for s in streams)
+                      and any(isinstance(s, SpectrumStream) for s in streams)):
+                    self.bottom_legend.set_stream_type(wx.LEFT, EMStream)
+                    self.bottom_legend.set_stream_type(wx.RIGHT, SpectrumStream)
                 else:
                     sc = self._microscope_view.stream_tree[0]
                     self.bottom_legend.set_stream_type(wx.LEFT, sc.__class__)

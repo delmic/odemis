@@ -325,14 +325,24 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
     def _get_ordered_images(self):
         """
         Return the list of images to display, ordered bottom to top (=last to draw)
+        The last image of the list will have the merge ratio applied (as opacity)
         """
         # The ordering is as follow:
         # * Optical images all together first, to be blended with screen operator
-        # * (Other) images going from the biggest to the smallest, so that
-        #   the biggest one is at the bottom and displayed at full opacity.
+        #   The biggest one is set as first and drawn full opacity in order to
+        #   even if the background is not black.
+        # * Spectrum images all together (normally there is just one), and put
+        #   as the end, so that the merge ratio applies to it.
+        # * Other images (ie, SEM) going from the biggest to the smallest, so
+        #   that the biggest one is at the bottom and displayed at full opacity.
+        #   In that case it's normally fine to reorder the images wrt to the
+        #   merge ratio because they are (typically) all the same type, the GUI
+        #   widget is unspecifying anyway.
+        # The merge ratio actually corresponds to the opacity of the last image drawn
 
         streams = self.microscope_view.getStreams()
         images_opt = []
+        images_spc = []
         images_std = []
 
         for s in streams:
@@ -348,6 +358,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             # merging without decreasing the intensity.
             if isinstance(s, stream.OpticalStream):
                 images_opt.append((s.image.value, BLEND_SCREEN, s.name.value))
+            elif isinstance(s, stream.SpectrumStream):
+                images_spc.append((s.image.value, BLEND_DEFAULT, s.name.value))
             else:
                 images_std.append((s.image.value, BLEND_DEFAULT, s.name.value))
 
@@ -355,14 +367,15 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         def get_area(d):
             return numpy.prod(d[0].shape[0:2]) * d[0].metadata[model.MD_PIXEL_SIZE][0]
         images_opt.sort(key=get_area, reverse=True)
+        images_spc.sort(key=get_area, reverse=True)
         images_std.sort(key=get_area, reverse=True)
 
         # Reset the first image to be drawn to the default blend operator to be
-        # drawn full opacity
+        # drawn full opacity (only useful if the background is not full black)
         if images_opt:
             images_opt[0] = (images_opt[0][0], BLEND_DEFAULT, images_opt[0][2])
 
-        return images_opt + images_std
+        return images_opt + images_std + images_spc
 
     def _convert_streams_to_images(self):
         """ Temporary function to convert the StreamTree to a list of images as the canvas
