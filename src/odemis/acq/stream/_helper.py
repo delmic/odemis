@@ -101,6 +101,7 @@ class RepetitionStream(Stream):
         # SEM FoV and with the same repetition.
         # The bigger is the magnification, the smaller should be the pixel size
         ratio = self._prev_mag / mag
+        self._prev_mag = mag
         self.pixelSize._value *= ratio
         self.pixelSize.notify(self.pixelSize._value)
 
