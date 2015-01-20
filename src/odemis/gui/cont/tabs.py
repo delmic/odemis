@@ -1647,6 +1647,7 @@ class LensAlignTab(Tab):
                                                           self._settings_controller)
 
         self._ac_controller = acqcont.AutoCenterController(self.tab_data_model,
+                                                           self._aligner_xy,
                                                            main_frame,
                                                            self._settings_controller)
 

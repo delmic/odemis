@@ -23,10 +23,12 @@ from __future__ import division
 
 from concurrent import futures
 import logging
+import math
 from odemis import model
 import odemis
 from odemis.acq import align, stream
 from odemis.dataio import hdf5
+from odemis.driver.actuator import ConvertStage
 from odemis.util import test
 import os
 import threading
@@ -74,6 +76,12 @@ class TestAlignment(unittest.TestCase):
         cls.light_filter = model.getComponent(role="filter")
         cls.stage = model.getComponent(role="stage")
 
+        # Used for OBJECTIVE_MOVE type
+        cls.aligner_xy = ConvertStage("converter-ab", "stage",
+                                      children={"orig": cls.align},
+                                      axes=["b", "a"],
+                                      rotation=math.radians(45))
+
     @classmethod
     def tearDownClass(cls):
         if cls.backend_was_running:
@@ -81,14 +89,14 @@ class TestAlignment(unittest.TestCase):
         test.stop_backend()
 
     def setUp(self):
+        if self.backend_was_running:
+            self.skipTest("Running backend found")
+
         # image for FakeCCD
         self.data = hdf5.read_data("../align/test/one_spot.h5")
         C, T, Z, Y, X = self.data[0].shape
         self.data[0].shape = Y, X
         self.fake_img = self.data[0]
-
-        if self.backend_was_running:
-            self.skipTest("Running backend found")
 
 #     @skip("skip")
     def test_spot_alignment(self):
@@ -96,11 +104,10 @@ class TestAlignment(unittest.TestCase):
         Test AlignSpot
         """
         escan = self.ebeam
-        stage = self.align
         ccd = self.ccd
         focus = self.focus
 
-        f = align.AlignSpot(ccd, stage, escan, focus)
+        f = align.AlignSpot(ccd, self.aligner_xy, escan, focus)
         with self.assertRaises(IOError):
             f.result()
 
@@ -110,11 +117,10 @@ class TestAlignment(unittest.TestCase):
         Test AlignSpot cancellation
         """
         escan = self.ebeam
-        stage = self.align
         ccd = self.ccd
         focus = self.focus
 
-        f = align.AlignSpot(ccd, stage, escan, focus)
+        f = align.AlignSpot(ccd, self.aligner_xy, escan, focus)
         time.sleep(0.01)  # Cancel almost after the half grid is scanned
 
         f.cancel()

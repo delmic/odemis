@@ -27,6 +27,7 @@ from odemis import model
 import odemis
 from odemis.acq.align import spot
 from odemis.dataio import hdf5
+from odemis.driver.actuator import ConvertStage
 from odemis.util import test
 import os
 import threading
@@ -71,6 +72,12 @@ class TestSpotAlignment(unittest.TestCase):
         cls.light = model.getComponent(role="light")
         cls.light_filter = model.getComponent(role="filter")
 
+        # Used for OBJECTIVE_MOVE type
+        cls.aligner_xy = ConvertStage("converter-ab", "stage",
+                                      children={"orig": cls.align},
+                                      axes=["b", "a"],
+                                      rotation=math.radians(45))
+
     @classmethod
     def tearDownClass(cls):
         if cls.backend_was_running:
@@ -99,10 +106,9 @@ class TestSpotAlignment(unittest.TestCase):
         """
         Test CenterSpot
         """
-        align = self.align
         escan = self.ebeam
-        ccd = FakeCCD(self, align)
-        f = spot.CenterSpot(ccd, align, escan, 10, spot.OBJECTIVE_MOVE)
+        ccd = FakeCCD(self, self.align)
+        f = spot.CenterSpot(ccd, self.aligner_xy, escan, 10, spot.OBJECTIVE_MOVE)
         res, tab = f.result()
 
         pixelSize = self.fake_img.metadata[model.MD_PIXEL_SIZE]
@@ -171,8 +177,8 @@ class FakeCCD(model.HwComponent):
             ac, bc = pos.get("a"), pos.get("b")
             ang = math.radians(135)
             # AB->XY
-            xc = ac * math.sin(ang) + bc * math.cos(ang)
-            yc = ac * math.cos(ang) - bc * math.sin(ang)
+            xc = -(ac * math.sin(ang) + bc * math.cos(ang))
+            yc = -(ac * math.cos(ang) - bc * math.sin(ang))
             pixelSize = self.fake_img.metadata[model.MD_PIXEL_SIZE]
             self.fake_img.metadata[model.MD_ACQ_DATE] = time.time()
             x_pxs = xc / pixelSize[0]

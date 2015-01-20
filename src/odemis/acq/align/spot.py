@@ -310,7 +310,7 @@ def CenterSpot(ccd, stage, escan, mx_steps, type=OBJECTIVE_MOVE, background=Fals
     stage (model.Actuator): The stage
     escan (model.Emitter): The e-beam scanner
     mx_steps (int): Maximum number of steps to reach the center
-    type (string): Type of move in order to align
+    type (*_MOVE or BEAM_SHIFT): Type of move in order to align
     returns (model.ProgressiveFuture):    Progress of _DoCenterSpot,
                                          whose result() will return:
             returns (float):    Final distance to the center #m 
@@ -345,18 +345,13 @@ def _DoCenterSpot(future, ccd, stage, escan, mx_steps, type, background, dataflo
     stage (model.Actuator): The stage
     escan (model.Emitter): The e-beam scanner
     mx_steps (int): Maximum number of steps to reach the center
-    type (string): Type of move in order to align
+    type (*_MOVE or BEAM_SHIFT): Type of move in order to align
     returns (float or None):    Final distance to the center #m 
     raises:
             CancelledError() if cancelled
     """
     try:
         logging.debug("Aligning spot...")
-        if type == OBJECTIVE_MOVE:
-            stage_ab = ConvertStage("converter-ab", "stage",
-                                    children={"orig": stage},
-                                    axes=["b", "a"],
-                                    rotation=math.radians(-135))
         image = ccd.data.get(asap=False)
         # Center of optical image
         pixelSize = image.metadata[model.MD_PIXEL_SIZE]
@@ -390,7 +385,7 @@ def _DoCenterSpot(future, ccd, stage, escan, mx_steps, type, background, dataflo
     
             # Move to the found spot
             if type == OBJECTIVE_MOVE:
-                f = stage_ab.moveRel({"x":tab[0], "y":-tab[1]})
+                f = stage.moveRel({"x":tab[0], "y":-tab[1]})
                 f.result()
             elif type == STAGE_MOVE:
                 f = stage.moveRel({"x":-tab[0], "y":tab[1]})

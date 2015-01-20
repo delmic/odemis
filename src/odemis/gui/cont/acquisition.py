@@ -30,14 +30,17 @@ of microscope images.
 from __future__ import division
 
 from concurrent import futures
+from concurrent.futures._base import CancelledError
 import logging
 import math
 from odemis import model, dataio, acq
 from odemis.acq import align
+from odemis.acq.align.spot import OBJECTIVE_MOVE
 from odemis.acq.stream import UNDEFINED_ROI
 from odemis.gui import conf, acqmng
 from odemis.gui.acqmng import preset_as_is
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
+from odemis.gui.comp.popup import Message
 from odemis.gui.util import img, get_picture_folder, call_after, \
     wxlimit_invocation
 from odemis.gui.util.widgets import ProgessiveFutureConnector
@@ -52,9 +55,8 @@ import time
 import wx
 from wx.lib.pubsub import pub
 
-from odemis.gui.comp.popup import Message
 import odemis.gui.model as guimod
-from concurrent.futures._base import CancelledError
+
 
 class SnapshotController(object):
     """ Controller to handle snapshot acquisition in a 'global' context.
@@ -896,13 +898,15 @@ class AutoCenterController(object):
     applied to the microscope
     """
 
-    def __init__(self, tab_data, main_frame, settings_controller):
+    def __init__(self, tab_data, aligner_xy, main_frame, settings_controller):
         """
         tab_data (MicroscopyGUIData): the representation of the microscope GUI
+        aligner_xy (Stage): the stage used to move the objective, with axes X/Y
         main_frame: (wx.Frame): the frame which contains the viewports
         settings_controller (SettingController)
         """
         self._tab_data_model = tab_data
+        self._aligner_xy = aligner_xy
         self._main_data_model = tab_data.main
         self._main_frame = main_frame
         self._settings_controller = settings_controller
@@ -975,9 +979,10 @@ class AutoCenterController(object):
 
         logging.debug("Starting auto centering procedure")
         f = align.AlignSpot(main_data.ccd,
-                            main_data.aligner,
+                            self._aligner_xy,
                             main_data.ebeam,
-                            main_data.focus)
+                            main_data.focus,
+                            type=OBJECTIVE_MOVE)
         logging.debug("Auto centering is running...")
         self._acq_future = f
         # Transform auto centering button into cancel
