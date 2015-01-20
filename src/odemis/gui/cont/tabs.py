@@ -1510,9 +1510,12 @@ class AnalysisTab(Tab):
         """ Event handler for when a spectrum line is selected """
 
         # If we're in 1x1 view, we're bringing the plot to the front
+        # if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
+        #     spatial_view = self.main_frame.vp_spatialspec.microscope_view
+        #     self.tab_data_model.focussedView.value = spatial_view
+
         if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
-            spatial_view = self.main_frame.vp_spatialspec.microscope_view
-            self.tab_data_model.focussedView.value = spatial_view
+            self.tab_data_model.viewLayout.value = guimod.VIEW_LAYOUT_22
 
 
 class LensAlignTab(Tab):
