@@ -527,6 +527,10 @@ class BitmapAxisLegend(wx.Panel):
         pixel = pixel if self._orientation == wx.HORIZONTAL else self._pixel_space - pixel
         return ((pixel / float(self._pixel_space)) * self._value_space) + self._value_range[0]
 
+    def pixel_to_ratio(self, pixel):
+        pixel = pixel if self._orientation == wx.HORIZONTAL else self._pixel_space - pixel
+        return pixel / float(self._pixel_space)
+
     def calculate_ticks(self):
         """ Calculate which values in the range to represent as ticks on the axis
 

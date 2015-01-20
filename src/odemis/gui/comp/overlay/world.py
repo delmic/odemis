@@ -620,15 +620,20 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, base.PixelDataMixin):
 
         self._selected_line_va = None
         self._selected_width_va = None
+        self._selected_pixel_va = None
 
-    def connect_selection(self, selection_va, width_va):
+        self._width_colour = conversion.hex_to_frgba(gui.FG_COLOUR_HIGHLIGHT, 0.5)
+        self._pixel_colour = conversion.hex_to_frgba(gui.FG_COLOUR_EDIT, 0.5)
+
+    def connect_selection(self, selection_va, width_va, pixel_va = None):
         """ Connect the overlay to an external selection VA so it can update itself on value changes
         """
         self.clear_selection()
         self._selected_line_va = selection_va
         self._selected_width_va = width_va
-        self._selected_width_va.subscribe(self._on_width)
         self._selected_line_va.subscribe(self._on_selection, init=True)
+        self._selected_width_va.subscribe(self._on_width, init=False)
+        self._selected_pixel_va = pixel_va
 
     def _on_selection(self, selected_line):
         """ Event handler that requests a redraw when the selected line changes """
@@ -653,16 +658,18 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, base.PixelDataMixin):
         if None in (self.w_start_pos, self.w_end_pos) or self.w_start_pos == self.w_end_pos:
             return
 
-        pixel_colour = conversion.hex_to_frgba(gui.FG_COLOUR_HIGHLIGHT, 0.5)
-        ctx.set_source_rgba(*pixel_colour)
-
         points = rasterize_line(self.start_pixel, self.end_pixel, self._selected_width_va.value)
         # Clip points
         w, h = self._data_resolution
         points = [p for p in points if 0 <= p[0] < w and 0 <= p[1] < h]
 
+        selected_pixel = self._selected_pixel_va.value if self._selected_pixel_va else None
+
         for point in set(points):
-            # ctx.line_to(*self.data_pixel_to_view(point))
+            if selected_pixel == point:
+                ctx.set_source_rgba(*self._pixel_colour)
+            else:
+                ctx.set_source_rgba(*self._width_colour)
             rect = self.pixel_to_rect(point, scale)
             ctx.rectangle(*rect)
             ctx.rectangle(*rect)
@@ -743,8 +750,8 @@ class PixelSelectOverlay(base.WorldOverlay, base.PixelDataMixin, base.DragMixin)
     def connect_selection(self, selection_va, width_va):
         self._selected_pixel_va = selection_va
         self._selected_width_va = width_va
-        self._selected_width_va.subscribe(self._on_width)
         self._selected_pixel_va.subscribe(self._on_selection, init=True)
+        self._selected_width_va.subscribe(self._on_width, init=False)
 
     def _on_selection(self, _):
         """ Event handler that requests a redraw when the selected line changes """
