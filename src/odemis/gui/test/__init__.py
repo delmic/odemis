@@ -44,8 +44,9 @@ SLEEP_TIME = 50  # ms: time to sleep between actions (to slow down the tests)
 def goto_manual():
     """ Call this function as soon as possible, to go to manual mode, where
     the test GUI will stay open after finishing the test case. """
+    import os
     global MANUAL
-    MANUAL = True
+    MANUAL = False if os.environ.get('NOMANUAL') == '1' else True
 
 
 def goto_inspect():

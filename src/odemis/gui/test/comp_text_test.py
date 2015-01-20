@@ -20,35 +20,40 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
-#===============================================================================
+# ===============================================================================
 # Test module for Odemis' gui.comp.text module
-#===============================================================================
+# ===============================================================================
 
-from odemis.gui import test
-from odemis.gui.xmlh import odemis_get_test_resources
 import locale
-import odemis.gui.test as test
 import unittest
 import wx
 
-test.goto_manual()
+import odemis.gui.test as test
+
+
+# test.goto_manual()
 
 TEST_LST = ["Aap", u"nöot", "noot", "mies", "kees", "vuur", "quantummechnica",
             "Repelsteeltje", "", "XXX", "a", "aa", "aaa", "aaaa",
             "aaaaa", "aaaaaa", "aaaaaaa"]
 
-TEST_FLT = [1234567489.0, 123456748.9, 12345674.89, 1234567.489, 123456.7489, 12345.67489, 1234.567489, 123.4567489, 12.34567489, 1.234567489, 0.1234567489, 0.01234567489, 0.001234567489, 0.0001234567489, 1.234567489e-05, 1.234567489e-06, 1.234567489e-07, 1.234567489e-08, 1.234567489e-09, 1.234567489e-10]
+TEST_FLT = [1234567489.0, 123456748.9, 12345674.89, 1234567.489, 123456.7489, 12345.67489,
+            1234.567489, 123.4567489, 12.34567489, 1.234567489, 0.1234567489, 0.01234567489,
+            0.001234567489, 0.0001234567489, 1.234567489e-05, 1.234567489e-06, 1.234567489e-07,
+            1.234567489e-08, 1.234567489e-09, 1.234567489e-10]
+
 
 def gen_test_data():
     data = [1234567489.0 / 10**i for i in range(20)]
     print data
 
+
 def suggest(val):
     val = str(val.lower())
     data = [name for name in TEST_LST if name.lower().startswith(val)]
     data.sort(cmp=locale.strcoll)
-    #return ['<font size="2"><b>%s</b>%s</font>' % (d[:len(val)], d[len(val):]) for d in data], data
     return data
+
 
 class OwnerDrawnComboBoxTestCase(test.GuiTestCase):
 

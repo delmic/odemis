@@ -369,6 +369,8 @@ class DragMixin(object):
         self.drag_v_start_pos = None
         self.drag_v_end_pos = None
 
+        self.cnvs.Bind(wx.EVT_KILL_FOCUS, self._on_focus_lost)
+
     def _on_left_down(self, evt):
         """ Start a left drag if no right drag is in progress """
         if not self.right_dragging:
@@ -397,6 +399,11 @@ class DragMixin(object):
         """ Update the drag end position if a drag movement is in progress """
         if self.dragging:
             self.drag_v_end_pos = evt.GetPositionTuple()
+
+    def _on_focus_lost(self, evt):
+        """ Cancel any drag when the parent canvas loses focus """
+        self.clear_drag()
+        evt.Skip()
 
     def clear_drag(self):
         """ Set the dragging attributes to their initial values """

@@ -279,7 +279,7 @@ class PlotCanvasTestCase(test.GuiTestCase):
 
         im_data = generate_img_data(200, 10, 4)
 
-        cnvs.set_2d_data(None, im_data, None)
+        cnvs.set_2d_data(im_data)
         cnvs.update_drawing()
 
         test.gui_loop()

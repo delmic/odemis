@@ -256,9 +256,9 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         self.app.test_frame.Layout()
         test.gui_loop()
 
-        # The height of the parent should be 41 pixels higher
+        # The height of the parent should be 42 pixels higher
         # (CaptionBar height + 1px border)
-        self.assertEqual(fpb_height + 41, appfpb.BestSize.GetHeight())
+        self.assertEqual(fpb_height + 42, appfpb.BestSize.GetHeight())
         self.assertEqual(len(appfpb.GetChildren()), 4)
 
         wx.MilliSleep(test.SLEEP_TIME)
@@ -295,20 +295,19 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         test.gui_loop()
 
         # 10 Child windows in the new panel
-        self.assertEqual(len(new_panel.GetChildren()), 10)
+        self.assertEqual(len(new_panel._container.GetChildren()), 9)
 
         # 4 fold panels total in the bar
         self.assertEqual(len(appfpb.GetChildren()), 4)
 
         wx.MilliSleep(test.SLEEP_TIME)
 
-        self.app.test_frame.fpb.remove_item(new_panel)
+        appfpb.remove_item(new_panel)
         test.gui_loop()
         test.gui_loop()
 
         # New panel removed, back to 3
-        self.assertEqual(
-            len(self.app.test_frame.fpb.GetChildren()[0].GetChildren()), 3)
+        self.assertEqual(len(appfpb.GetChildren()), 3)
 
         false_pos_warn = ("This might be a false positive. "
                           "Run test module stand-alone to verify")
@@ -350,7 +349,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
         # Count children of the top fold panel: 1 caption bar, 2 labels and 4
         # added labels: 7 total
-        self.assertEqual(len(top_panel.GetChildren()), 8)
+        self.assertEqual(len(top_panel._container.GetChildren()), 7)
 
         new_labels.reverse()
         for label in new_labels:
@@ -361,7 +360,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         wx.MilliSleep(test.SLEEP_TIME)
 
         # Count children of the top fold panel: 1 caption bar, 2 labels
-        self.assertEqual(len(top_panel.GetChildren()), 3)
+        self.assertEqual(len(top_panel._container.GetChildren()), 2)
 
         top_panel.remove_all()
 
@@ -370,7 +369,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         wx.MilliSleep(test.SLEEP_TIME)
 
         # Count children of the top fold panel: 1 caption bar
-        self.assertEqual(len(top_panel.GetChildren()), 1)
+        self.assertEqual(len(top_panel._container.GetChildren()), 0)
 
         # Insert 3 windows, out of order, into the top fold panel
         item = wx.StaticText(top_panel, top_panel.GetId(), "LABEL 1")
