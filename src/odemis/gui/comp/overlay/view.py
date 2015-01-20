@@ -413,6 +413,7 @@ class MarkingLineOverlay(base.ViewOverlay, base.DragMixin):
             base.DragMixin._on_left_down(self, evt)
             self.colour = self.colour[:3] + (0.5,)
             self._store_event_pos(evt)
+            self.cnvs.Refresh()
 
         base.ViewOverlay.on_left_down(self, evt)
 
