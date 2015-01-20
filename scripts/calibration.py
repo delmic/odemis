@@ -97,10 +97,6 @@ def main(args):
         f = chamber.moveAbs({"pressure":1e-02})
         f.result()
 
-        # Lens to a good focus position
-        f = focus.moveAbs(LENS_KNOWN_FOCUS)
-        f.result()
-
         # Compute calibration values
         f = delphi.UpdateConversion(ccd, detector, escan, sem_stage, opt_stage, ebeam_focus,
                                     focus, comb_stage, True, sem_position=position)

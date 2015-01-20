@@ -329,6 +329,7 @@ class AlignedSEMStream(SEMStream):
         """
         # Check if the position has really changed, as some stage tend to 
         # report "new" position even when no actual move has happened
+        logging.debug("Stage location is %s m,m", pos)
         if self._last_pos == pos:
             return
 

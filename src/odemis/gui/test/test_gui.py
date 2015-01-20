@@ -197,8 +197,8 @@ def __init_resources():
 
     test_gui_xrc = '''\
 <?xml version="1.0" ?><resource version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
-
   <object class="wxFrame" name="text_frame">
+    <object_ref ref="menu_bar"/>
     <object class="wxPanel" name="text_panel">
       <object class="wxBoxSizer">
         <orient>wxVERTICAL</orient>
@@ -372,6 +372,7 @@ def __init_resources():
     <bg>#4D4D4D</bg>
   </object>
   <object class="wxFrame" name="fpb_frame">
+    <object_ref ref="menu_bar"/>
     <object class="wxBoxSizer">
       <object class="sizeritem">
         <object class="wxScrolledWindow" name="scrwin">

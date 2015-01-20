@@ -37,6 +37,7 @@ from odemis.gui.comp.legend import InfoLegend, PlotsAxisLegend, BitmapAxisLegend
 from odemis.gui.img.data import getico_blending_goalBitmap
 from odemis.gui.model import CHAMBER_VACUUM, CHAMBER_UNKNOWN
 from odemis.gui.util import call_after
+from odemis.gui.util.raster import rasterize_line
 from odemis.model import NotApplicableError
 from odemis.util import units
 import wx
@@ -508,7 +509,7 @@ class OverviewViewport(MicroscopeViewport):
 class SecomViewport(MicroscopeViewport):
     """
     Used to display live streams on Secom and Delphi.
-    The main difference is the handling of the pause state, which prevents 
+    The main difference is the handling of the pause state, which prevents
     stage move and indicate it via an icon.
     """
 
@@ -699,6 +700,7 @@ class SpatialSpectrumViewport(ViewPort):
         # Call parent constructor at the end, because it needs the legend panel
         super(SpatialSpectrumViewport, self).__init__(*args, **kwargs)
         self.spectrum_stream = None
+        self.current_line = None
 
         self.canvas.markline_overlay.v_pos.subscribe(self.on_spectrum_motion)
 
@@ -706,7 +708,12 @@ class SpatialSpectrumViewport(ViewPort):
 
         if vpos:
             value = self.bottom_legend.pixel_to_value(vpos[0])
-            self.canvas.markline_overlay.x_label = units.readable_str(value, self.bottom_legend.unit, 3)
+            self.canvas.markline_overlay.x_label = units.readable_str(value,
+                                                                      self.bottom_legend.unit,
+                                                                      3)
+            rat = self.left_legend.pixel_to_ratio(vpos[1])
+            line_pixels = rasterize_line(*self.current_line)
+            self.spectrum_stream.selected_pixel.value = line_pixels[int(len(line_pixels) * rat)]
 
     def Refresh(self, *args, **kwargs):
         """ Refresh the ViewPort while making sure the legends get redrawn as well """
@@ -774,12 +781,14 @@ class SpatialSpectrumViewport(ViewPort):
         if (None, None) in line:
             logging.debug("Line is not (fully) selected")
             self.clear()
+            self.current_line = None
             return
         elif self.spectrum_stream is None:
             logging.warning("No Spectrum Stream present!")
             return
 
         data = self.spectrum_stream.get_line_spectrum()
+        self.current_line = line
 
         if data is not None:
             spectrum_range = self.spectrum_stream.get_spectrum_range()

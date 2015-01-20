@@ -617,7 +617,7 @@ def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, fo
             steps = 0
             if manual == True:
                 det_dataflow.subscribe(_discard_data)
-                msg = "Please turn on the Optical stream, set Power to 0 Watt and focus the image so you have a clearly visible spot. Then turn off the stream and press Enter to retry..."
+                msg = "Please turn on the Optical stream, set Power to 0 Watt and focus the image so you have a clearly visible spot. Then turn off the stream and press Enter ..."
                 raw_input(msg)
                 det_dataflow.unsubscribe(_discard_data)
             while True:
