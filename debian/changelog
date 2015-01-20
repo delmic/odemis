@@ -6,16 +6,17 @@ odemis (2.0-1ubuntu1) precise; urgency=low
       user feedback
     - New line tool to cross-cut spectrum cube into a space/wavelength projection (SPARC)
     - Width selection for the point and line spectrum tool (SPARC)
-    - Gallery/Analisys tab automatically adapt to the file type displayed
+    - Gallery/Analysis tab automatically adapts to the file type displayed
     - Support for X/Y objective stage (SECOMv2)
-    - DELPHI calibration can be done via the GUI
-
+    - DELPHI sample holder calibration can be done via the GUI
   * Main bugs fixed and improvements
     - Drift correction was moving incorrectly (SPARC)
     - Anchor region acquisitions are now saved in the acquisition file (SPARC)
     - Possibility to select the drift correction period (SPARC)
+    - Beam shift is used to align the SEM on the optical image (DELPHI)
     - Autofocus was sometimes using the second best position (DELPHI)
     - Much more precise and robust calibration for the DELPHI
+    - Improve reliability of the connection with the Phenom (DELPHI)
     - Many small improvements/simplifications in the GUI for the DELPHI
     - Fix A/B axes direction in lens alignment tab of the SECOMv1. This might 
       require to inverse (back) the A/B axes in the microscope file.
