@@ -652,6 +652,9 @@ class StaticSpectrumStream(StaticStream):
             # simple version for the most usual case
             spec1d = ndimage.map_coordinates(spec2d, coord[:, 0, :, :], order=2)
         else:
+            # FIXME: the mean should be dependent on how many pixels inside the
+            # original data were pick on each line. Currently if some pixels fall
+            # out of the original data, the outside pixels count as 0.
             # force the intermediate values to float, as mean() still needs to run
             spec1d_w = ndimage.map_coordinates(spec2d, coord, output=numpy.float, order=2)
             spec1d = spec1d_w.mean(axis=0).astype(spec2d.dtype)
