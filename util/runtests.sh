@@ -6,6 +6,9 @@
 TESTLOG=./test.log
 ODEMISPATH="$(readlink -m "./src/odemis")"
 
+# This environment variable makes the GUI test cases automatically close the test frames
+export NOMANUAL=1
+
 # Not related to tests, but to QA in general: Expections usually take only 1 argument
 # So a comma is probably a sign of syntax error and should be replace by a %
 echo "These files might have syntax error when raising an exception:"
