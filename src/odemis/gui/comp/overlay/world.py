@@ -653,6 +653,28 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, base.PixelDataMixin):
     def _on_width(self, _):
         wx.CallAfter(self.cnvs.update_drawing)
 
+    def selection_points(self, point):
+        """ Calculate the surounding points around the given point according to the selection width
+        """
+
+        if None in point:
+            return []
+
+        if self._selected_width_va.value == 1:
+            return [point]
+
+        x, y = point
+        radius = self._selected_width_va.value / 2
+        w, h = self._data_resolution
+        points = []
+
+        for px in range(max(0, x - int(radius)), min(x + int(radius) + 1, w)):
+            for py in range(max(0, y - int(radius)), min(y + int(radius) + 1, h)):
+                if math.hypot(x - px, y - py) <= radius:
+                    points.append((px, py))
+
+        return points
+
     def draw(self, ctx, shift=(0, 0), scale=1.0):
 
         if None in (self.w_start_pos, self.w_end_pos) or self.w_start_pos == self.w_end_pos:
@@ -664,9 +686,10 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, base.PixelDataMixin):
         points = [p for p in points if 0 <= p[0] < w and 0 <= p[1] < h]
 
         selected_pixel = self._selected_pixel_va.value if self._selected_pixel_va else None
+        selected_pixels = self.selection_points(selected_pixel)
 
         for point in set(points):
-            if selected_pixel == point:
+            if point in selected_pixels:
                 ctx.set_source_rgba(*self._pixel_colour)
             else:
                 ctx.set_source_rgba(*self._width_colour)
@@ -824,6 +847,17 @@ class PixelSelectOverlay(base.WorldOverlay, base.PixelDataMixin, base.DragMixin)
     # END Event handlers
 
     def selection_points(self, point):
+        """ Calculate the surounding points around the given point according to the selection width
+
+        TODO: Duplicate code from SpectrumLineOverlay, so...
+
+        """
+
+        if None in point:
+            return []
+
+        if self._selected_width_va.value == 1:
+            return [point]
 
         x, y = point
         radius = self._selected_width_va.value / 2
