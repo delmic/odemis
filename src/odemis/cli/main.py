@@ -669,7 +669,10 @@ def main(args):
     dm_grpe.add_argument("--check", dest="check", action="store_true", default=False,
                          help="check for a running back-end (only returns exit code)")
     dm_grpe.add_argument("--scan", dest="scan", const=True, default=False, nargs="?",
-                         help="scan for possible devices to connect (the back-end must be stopped)")
+                         metavar="class",
+                         help="scan for possible devices to connect (the "
+                         "back-end must be stopped). Optionally class name of "
+                         "a specific hardware to scan can be specified.")
     dm_grpe.add_argument("--list", "-l", dest="list", action="store_true", default=False,
                          help="list the components of the microscope")
     dm_grpe.add_argument("--list-prop", "-L", dest="listprop", metavar="<component>",
