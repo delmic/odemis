@@ -797,7 +797,6 @@ class StreamPanel(wx.Panel):
             value=self.stream.auto_bc_outliers.value,
             min_val=self.stream.auto_bc_outliers.range[0],
             max_val=self.stream.auto_bc_outliers.range[1],
-            t_size=(50, -1),
             unit="%",
             scale="cubic",
             accuracy=2
@@ -1454,7 +1453,6 @@ class StreamPanel(wx.Panel):
                 value=self.stream.selectionWidth.value,
                 min_val=self.stream.selectionWidth.range[0],
                 max_val=self.stream.selectionWidth.range[1],
-                t_size=(50, -1),
                 unit="px",
             )
             tooltip_txt = "Width of the point or line selected"

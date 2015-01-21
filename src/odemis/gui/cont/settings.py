@@ -511,7 +511,6 @@ class SettingsController(object):
                 'max_val': max_val,
                 'scale': conf.get('scale', None),
                 'unit': unit,
-                't_size': (50, -1),
                 'accuracy': conf.get('accuracy', 4),
                 }
 

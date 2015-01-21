@@ -658,6 +658,9 @@ class UnitFloatSlider(NumberSlider):
     def __init__(self, *args, **kwargs):
         kwargs['t_class'] = UnitFloatCtrl
         kwargs['accuracy'] = kwargs.get('accuracy', 3)
+        if "t_size" not in kwargs:
+            # adapt the text entry size to the maximum number of characters
+            kwargs['t_size'] = ((kwargs['accuracy'] + 5) * 7, -1)
 
         NumberSlider.__init__(self, *args, **kwargs)
 
