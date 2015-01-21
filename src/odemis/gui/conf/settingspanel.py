@@ -26,6 +26,7 @@ Provides the, partially dynamically generated, configuration for the settings
 panel and various private support functions.
 
 """
+from __future__ import division
 
 import logging
 import math

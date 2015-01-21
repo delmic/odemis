@@ -25,7 +25,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 Combobox and similar controls.
 
 """
-
+from __future__ import division
 import wx.combo
 
 import odemis.gui

@@ -28,7 +28,7 @@ Purpose:
 This module contains classes that allow to create ToolBars for the MicroscopeGUI.
 
 """
-
+from __future__ import division
 from odemis.gui import model, img
 from odemis.gui.comp.buttons import ImageButton, ImageToggleButton, darken_image
 import wx

@@ -19,18 +19,18 @@ This file is part of Odemis.
     Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
+from __future__ import division
 
 from decorator import decorator
-
-import wx
-
-import odemis.gui as gui
 from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.file import FileBrowser
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
 from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider
 from odemis.gui.comp.text import UnitIntegerCtrl, UnitFloatCtrl
+import wx
+
+import odemis.gui as gui
 
 
 @decorator

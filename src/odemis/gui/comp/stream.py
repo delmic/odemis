@@ -27,6 +27,7 @@ Stream panels are custom, specialized controls that allow the user to view and
 manipulate various data streams coming from the microscope.
 
 """
+from __future__ import division
 
 import collections
 import logging
@@ -295,7 +296,7 @@ class Expander(wx.Control):
                 1 if self.Parent.collapsed else 0,
                 dc,
                 x_pos,
-                (win_rect.GetHeight() - ICON_HEIGHT) / 2,
+                (win_rect.GetHeight() - ICON_HEIGHT) // 2,
                 wx.IMAGELIST_DRAW_TRANSPARENT
             )
 
@@ -1364,7 +1365,7 @@ class StreamPanel(wx.Panel):
             wl_rng = (va.range[0][0], va.range[1][1])
 
             width = wl[1] - wl[0]
-            ctr_rng = wl_rng[0] + width / 2, wl_rng[1] - width / 2
+            ctr_rng = wl_rng[0] + width // 2, wl_rng[1] - width // 2
             req_center = ctrl.GetValue()
             new_center = min(max(ctr_rng[0], req_center), ctr_rng[1])
 
@@ -1372,7 +1373,7 @@ class StreamPanel(wx.Panel):
                 # VA might not change => update value ourselves
                 ctrl.SetValue(new_center)
 
-            return (new_center - width / 2, new_center + width / 2)
+            return (new_center - width // 2, new_center + width // 2)
 
         self._vac_scenter = VigilantAttributeConnector(
             self.stream.spectrumBandwidth,
@@ -1407,13 +1408,13 @@ class StreamPanel(wx.Panel):
             center = (wl[0] + wl[1]) / 2
             max_width = max(center - wl_rng[0], wl_rng[1] - center) * 2
             req_width = ctrl.GetValue()
-            new_width = max(min(max_width, req_width), max_width / 1024)
+            new_width = max(min(max_width, req_width), max_width // 1024)
 
             if req_width != new_width:
                 # VA might not change => update value ourselves
                 ctrl.SetValue(new_width)
 
-            return (center - new_width / 2, center + new_width / 2)
+            return (center - new_width // 2, center + new_width // 2)
 
         self._vac_sbw = VigilantAttributeConnector(
             self.stream.spectrumBandwidth,
@@ -1492,7 +1493,7 @@ class StreamPanel(wx.Panel):
 
         base = mins # for spectrum, 0 has little sense, just care of the min
         try:
-            coef = 1. / (maxs - base)
+            coef = 1 / (maxs - base)
         except ZeroDivisionError:
             coef = 1
 

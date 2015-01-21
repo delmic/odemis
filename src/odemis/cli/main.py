@@ -22,6 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 # This is a basic command line interface to the odemis back-end
 
+from __future__ import division
 import argparse
 import codecs
 import collections

@@ -22,6 +22,7 @@
 
 """
 
+from __future__ import division
 
 import cairo
 import logging
@@ -308,7 +309,7 @@ class PlotsAxisLegend(wx.Panel):
             _, _, lbl_width, lbl_height, _, _ = ctx.text_extents(label)
 
             if self.orientation == wx.HORIZONTAL:
-                lpos = pos - (lbl_width / 2)
+                lpos = pos - (lbl_width // 2)
                 lpos = max(min(lpos, self.ClientSize.x - lbl_width - 2), 2)
                 # print (i, prev_right, lpos)
                 if prev_lpos < lpos:
@@ -319,7 +320,7 @@ class PlotsAxisLegend(wx.Panel):
                 prev_lpos = lpos + lbl_width
             else:
                 max_width = max(max_width, lbl_width)
-                lpos = pos + (lbl_height / 2)
+                lpos = pos + (lbl_height // 2)
                 lpos = max(min(lpos, self.ClientSize.y), 2)
 
                 if prev_lpos >= lpos + 20 or i == 0:
@@ -357,7 +358,7 @@ class PlotsAxisLegend(wx.Panel):
             val_size = pcanv.data_height
             val_to_pos = pcanv._val_y_to_pos_y
 
-        num_ticks = size / self.tick_pixel_gap
+        num_ticks = size // self.tick_pixel_gap
         logging.debug("Aiming for %s ticks with a client of size %s", num_ticks, size)
         # Calculate the best step size in powers of 10, so it will cover at
         # least the distance `val_dist`
@@ -384,7 +385,7 @@ class PlotsAxisLegend(wx.Panel):
             pos = val_to_pos(tick)
             if (pos, tick) not in ticks:
                 if self.orientation == wx.HORIZONTAL:
-                    if 0 <= pos <= size - self.tick_pixel_gap / 2:
+                    if 0 <= pos <= size - self.tick_pixel_gap // 2:
                         ticks.append((pos, tick))
                 else:
                     if 10 <= pos <= size:
@@ -402,6 +403,7 @@ class PlotsAxisLegend(wx.Panel):
     def on_size(self, event):
         self.redraw()
 
+# TODO: merge with PlotAxisLegend, or at least share a parent class
 
 class BitmapAxisLegend(wx.Panel):
     """ Lgend to be used to show ticks and values to indicate the scale of a bitmap canvas """
@@ -499,7 +501,7 @@ class BitmapAxisLegend(wx.Panel):
             _, _, lbl_width, lbl_height, _, _ = ctx.text_extents(label)
 
             if self._orientation == wx.HORIZONTAL:
-                lpos = pos - (lbl_width / 2)
+                lpos = pos - (lbl_width // 2)
                 lpos = max(min(lpos, self.ClientSize.x - lbl_width - 2), 2)
                 # print (i, prev_right, lpos)
                 if prev_lpos < lpos:
@@ -510,7 +512,7 @@ class BitmapAxisLegend(wx.Panel):
                 prev_lpos = lpos + lbl_width
             else:
                 max_width = max(max_width, lbl_width)
-                lpos = pos + (lbl_height / 2)
+                lpos = pos + (lbl_height // 2)
                 lpos = max(min(lpos, self.ClientSize.y), 2)
 
                 if prev_lpos >= lpos + 20 or i == 0:
@@ -535,11 +537,11 @@ class BitmapAxisLegend(wx.Panel):
     def pixel_to_value(self, pixel):
         """ Map pixel value to range value """
         pixel = pixel if self._orientation == wx.HORIZONTAL else self._pixel_space - pixel
-        return ((pixel / float(self._pixel_space)) * self._value_space) + self._value_range[0]
+        return ((pixel / self._pixel_space) * self._value_space) + self._value_range[0]
 
     def pixel_to_ratio(self, pixel):
         pixel = pixel if self._orientation == wx.HORIZONTAL else self._pixel_space - pixel
-        return pixel / float(self._pixel_space)
+        return pixel / self._pixel_space
 
     def calculate_ticks(self):
         """ Calculate which values in the range to represent as ticks on the axis
@@ -554,7 +556,7 @@ class BitmapAxisLegend(wx.Panel):
         # Range width
         self._value_space = self._value_range[1] - self._value_range[0]
 
-        num_ticks = self._pixel_space / self._tick_spacing
+        num_ticks = self._pixel_space // self._tick_spacing
         logging.debug("Aiming for %s ticks with a client of size %s", num_ticks, self._pixel_space)
         # Calculate the best step size in powers of 10, so it will cover at
         # least the distance `val_dist`

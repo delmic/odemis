@@ -21,6 +21,7 @@
 
 """
 
+from __future__ import division
 from odemis.gui import BG_COLOUR_NOTIFY
 from odemis.gui.util import call_after
 import wx
@@ -94,7 +95,7 @@ class Message(wx.PopupTransientWindow):
 
         pw, ph = self.Parent.GetSize()
         mw, mh = self.GetSize()
-        pos = (pw / 2) - (mw / 2), (ph / 2) - (mh / 2)
+        pos = (pw - mw) // 2, (ph - mh) // 2
 
         self.Position(pos, (0, 0))
 

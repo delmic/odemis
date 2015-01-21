@@ -19,7 +19,7 @@
     You should have received a copy of the GNU General Public License along with
     Odemis. If not, see http://www.gnu.org/licenses/.
 """
-
+from __future__ import division
 from odemis.gui.img.data import getarr_rightBitmap, getarr_downBitmap
 from odemis.util.conversion import change_brightness, wxcol_to_frgb
 import wx
@@ -318,7 +318,7 @@ class CaptionBar(wx.Window):
             dc.SetTextForeground(self.GetForegroundColour())
         # dc.SetTextForeground("#000000")
 
-        y_pos = (win_rect.GetHeight() - abs(caption_font.GetPixelSize().GetHeight())) / 2
+        y_pos = (win_rect.GetHeight() - abs(caption_font.GetPixelSize().GetHeight())) // 2
 
         dc.DrawText(self._caption, CAPTION_PADDING_LEFT, y_pos)
 
@@ -330,7 +330,7 @@ class CaptionBar(wx.Window):
 
         self._foldIcons.Draw(
             index, dc, x_pos,
-            (win_rect.GetHeight() - self._icon_size.y) / 2,
+            (win_rect.GetHeight() - self._icon_size.y) // 2,
             wx.IMAGELIST_DRAW_TRANSPARENT
         )
 

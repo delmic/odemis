@@ -25,6 +25,7 @@ Content:
     throughout Odemis.
 
 """
+from __future__ import division
 
 import logging
 import locale
@@ -571,7 +572,7 @@ class NumberValidator(wx.PyValidator):
 def _step_from_range(min_val, max_val):
     """ Dynamically create step size based on range """
     try:
-        step = (max_val - min_val) / 255.0
+        step = (max_val - min_val) / 255
         # To keep the inc/dec values 'clean', set the step
         # value to the nearest power of 10
         step = 10 ** round(math.log10(step))
