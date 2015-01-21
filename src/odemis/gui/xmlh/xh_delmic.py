@@ -108,7 +108,6 @@ class FoldPanelBarXmlHandler(xrc.XmlResourceHandler):
         #        self._isInside and self.IsOfClass(node, 'foldpanel')
         return self.IsOfClass(node, 'FoldPanelBar')
 
-
     # Process XML parameters and create the object
     def DoCreateResource(self):
 

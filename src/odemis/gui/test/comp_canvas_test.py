@@ -60,7 +60,7 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         self.mmodel = self.create_simple_tab_model()
         self.view = self.mmodel.focussedView.value
         self.canvas = miccanvas.DblMicroscopeCanvas(self.panel)
-        self.canvas.background_brush = wx.SOLID  # no special background
+        self.canvas.background_brush = wx.BRUSHSTYLE_SOLID  # no special background
         self.add_control(self.canvas, flags=wx.EXPAND, proportion=1)
         test.gui_loop()
 

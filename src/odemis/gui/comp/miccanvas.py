@@ -129,7 +129,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.zoom_overlay = None
         self.update_overlay = None
 
-        self.background_brush = wx.SOLID
+        self.background_brush = wx.BRUSHSTYLE_SOLID
 
     # Ability manipulation
 
@@ -812,7 +812,7 @@ class OverviewCanvas(DblMicroscopeCanvas):
 
         self.abilities = set()  # Cannot move, zoom...
 
-        self.background_brush = wx.SOLID
+        self.background_brush = wx.BRUSHSTYLE_SOLID
 
         # Point select overlay for stage navigation
         self.point_select_overlay = PointSelectOverlay(self)
@@ -884,7 +884,7 @@ class SecomCanvas(DblMicroscopeCanvas):
     def __init__(self, *args, **kwargs):
         super(SecomCanvas, self).__init__(*args, **kwargs)
 
-        self.background_brush = wx.SOLID
+        self.background_brush = wx.BRUSHSTYLE_SOLID
 
     # TODO: merge the following mode management into the super class
 
@@ -1325,7 +1325,7 @@ class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
         self.add_view_overlay(self.markline_overlay)
         self.markline_overlay.activate()
 
-        self.background_brush = wx.SOLID
+        self.background_brush = wx.BRUSHSTYLE_SOLID
 
     def draw(self):
         """ Map the image data to the canvas and draw it """
@@ -1437,7 +1437,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         self._tab_data_model = None
         self.abilities -= set([CAN_DRAG, CAN_FOCUS])
 
-        self.background_brush = wx.SOLID  # background is always black
+        self.background_brush = wx.BRUSHSTYLE_SOLID  # background is always black
 
         # Overlays
 

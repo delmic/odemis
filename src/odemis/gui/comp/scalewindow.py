@@ -186,7 +186,7 @@ class ScaleWindow(BufferedWindow):
         background_col = self.Parent.GetBackgroundColour()
         foreground_col = self.Parent.GetForegroundColour()
 
-        dc.SetBackgroundMode(wx.SOLID)
+        dc.SetBackgroundMode(wx.BRUSHSTYLE_SOLID)
         dc.SetBackground(wx.Brush(background_col))
         dc.Clear()
 
@@ -231,7 +231,7 @@ class ScaleWindow(BufferedWindow):
         # nod = 3
         # vmiddle = self.Height / 2
         # # not sure how to do this with GC
-        # dc.SetBackgroundMode(wx.SOLID)
+        # dc.SetBackgroundMode(wx.BRUSHSTYLE_SOLID)
         # dc.SetBackground(wx.Brush(self.va.colBg))
         # dc.Clear()
         # #gc.Clear(self.va.colBg) # doesn't actual exist

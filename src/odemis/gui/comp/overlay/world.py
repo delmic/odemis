@@ -654,10 +654,10 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, base.PixelDataMixin):
         wx.CallAfter(self.cnvs.update_drawing)
 
     def selection_points(self, point):
-        """ Calculate the surounding points around the given point according to the selection width
+        """ Calculate the surrounding points around the given point according to the selection width
         """
 
-        if None in point:
+        if point is None or None in point:
             return []
 
         if self._selected_width_va.value == 1:

@@ -182,8 +182,7 @@ def ignore_if_disabled(f, self, *args, **kwargs):
 
 
 class BufferedCanvas(wx.Panel):
-    """
-    Abstract base class for buffered canvasses that display graphical data
+    """ Abstract base class for buffered canvasses that display graphical data
 
     :ivar abilities: Set of special features that the Canvas supports
 
@@ -199,9 +198,9 @@ class BufferedCanvas(wx.Panel):
         # Set of features/restrictions dynamically changeable
         self.abilities = set()  # filled by CAN_*
 
-        # Graphical overlays that display relative to the canvas
+        # Graphical overlays drawn into the buffer
         self.world_overlays = []
-        # Graphical overlays that display in an absolute position
+        # Graphical overlays drawn onto the canvas
         self.view_overlays = []
         # TODO: rename to action_overlay?
         # Or maybe delete as it's unused (the overlays just bind to the
@@ -215,15 +214,16 @@ class BufferedCanvas(wx.Panel):
 
         # Memory buffer device context
         self._dc_buffer = wx.MemoryDC()
+        # The Cairo context derived from the DC buffer
+        self.ctx = None
         # Center of the buffer in world coordinates
         self.w_buffer_center = (0, 0)
         # wx.Bitmap that will always contain the image to be displayed
         self._bmp_buffer = None
-        self.ctx = None
         # very small first, so that for sure it'll be resized with on_size
         self._bmp_buffer_size = (1, 1)
 
-        self.background_brush = wx.CROSS_HATCH
+        self.background_brush = wx.BRUSHSTYLE_CROSS_HATCH
 
         if os.name == "nt":
             # Avoids flickering on windows, but prevents black background on
@@ -542,7 +542,7 @@ class BufferedCanvas(wx.Panel):
         # Select the bitmap into the device context
         self._dc_buffer.SelectObject(self._bmp_buffer)
         # On Linux necessary after every 'SelectObject'
-        self._dc_buffer.SetBackground(wx.Brush(self.BackgroundColour, wx.SOLID))
+        self._dc_buffer.SetBackground(wx.Brush(self.BackgroundColour, wx.BRUSHSTYLE_SOLID))
 
         self.ctx = wxcairo.ContextFromDC(self._dc_buffer)
 
@@ -581,8 +581,8 @@ class BufferedCanvas(wx.Panel):
     def _draw_background(self, ctx):
         """ Draw checkered background """
 
-        # Only support wx.SOLID, and anything else is checkered
-        if self.background_brush == wx.SOLID:
+        # Only support wx.BRUSHSTYLE_SOLID, and anything else is checkered
+        if self.background_brush == wx.BRUSHSTYLE_SOLID:
             ctx.set_source_rgb(*wxcol_to_frgb(self.BackgroundColour))
             ctx.paint()
             return
@@ -1749,7 +1749,7 @@ class PlotCanvas(BufferedCanvas):
         self.plot_closed = PLOT_CLOSE_BOTTOM
         self.plot_mode = PLOT_MODE_LINE
 
-        self.background_brush = wx.SOLID
+        self.background_brush = wx.BRUSHSTYLE_SOLID
 
     # Getters and Setters
 

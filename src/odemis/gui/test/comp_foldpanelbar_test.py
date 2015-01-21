@@ -245,8 +245,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
     def test_foldpanel_manipulation(self):
 
-        wx.MilliSleep(test.SLEEP_TIME)
-
+        test.set_sleep_time(100)
         appfpb = self.app.test_frame.fpb
         fpb_height = appfpb.BestSize.GetHeight()
 
@@ -261,28 +260,22 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         self.assertEqual(fpb_height + 42, appfpb.BestSize.GetHeight())
         self.assertEqual(len(appfpb.GetChildren()), 4)
 
-        wx.MilliSleep(test.SLEEP_TIME)
-
-        new_panel.add_item(wx.StaticText(new_panel,
-                                         new_panel.GetId(),
-                                         "ADDED LABEL"))
-        test.gui_loop()
         test.gui_loop()
 
-        wx.MilliSleep(test.SLEEP_TIME)
+        new_panel.add_item(wx.StaticText(new_panel, new_panel.GetId(), "ADDED LABEL"))
+
+        test.gui_loop()
+        test.gui_loop(100)
 
         # A scroll bars should not appear yet
         self.assertEqual(appfpb.has_vert_scrollbar(), False)
         self.assertEqual(appfpb.has_horz_scrollbar(), False)
 
-        for dummy in range(6):
-            new_panel.add_item(wx.StaticText(new_panel,
-                                             new_panel.GetId(),
-                                             "ADDED LABEL"))
+        for i in range(6):
+            new_panel.add_item(wx.StaticText(new_panel, new_panel.GetId(), "ADDED LABEL %d" % i))
 
         test.gui_loop()
-        wx.MilliSleep(test.SLEEP_TIME)
-        test.gui_loop()
+        test.gui_loop(100)
 
         # Vertical scroll bar should have appeared
         self.assertEqual(appfpb.has_vert_scrollbar(), True)
@@ -292,7 +285,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         new_panel.add_item(wx.StaticText(new_panel, new_panel.GetId(), "ADDED LABEL"))
 
         test.gui_loop()
-        test.gui_loop()
+        test.gui_loop(100)
 
         # 10 Child windows in the new panel
         self.assertEqual(len(new_panel._container.GetChildren()), 9)
@@ -322,19 +315,19 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
         new_labels = []
 
-        for dummy in range(4):
+        for dummy in range(3):
             item = wx.StaticText(top_panel, top_panel.GetId(), "ADDED LABEL")
             top_panel.add_item(item)
             new_labels.append(item)
 
         test.gui_loop()
-        test.gui_loop()
+        test.gui_loop(100)
 
         # No Scroll bars yet
         self.assertEqual(appfpb.has_vert_scrollbar(), False, false_pos_warn)
         self.assertEqual(appfpb.has_horz_scrollbar(), False, false_pos_warn)
 
-        wx.MilliSleep(test.SLEEP_TIME)
+        test.gui_loop()
 
         item = wx.StaticText(top_panel, top_panel.GetId(), "ADDED LABEL")
         top_panel.add_item(item)
@@ -347,9 +340,8 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         self.assertEqual(appfpb.has_vert_scrollbar(), True, false_pos_warn)
         self.assertEqual(appfpb.has_horz_scrollbar(), False, false_pos_warn)
 
-        # Count children of the top fold panel: 1 caption bar, 2 labels and 4
-        # added labels: 7 total
-        self.assertEqual(len(top_panel._container.GetChildren()), 7)
+        # Count children of the top fold panel: 2 labels and 4 added labels: 6 total
+        self.assertEqual(len(top_panel._container.GetChildren()), 6)
 
         new_labels.reverse()
         for label in new_labels:
@@ -357,16 +349,13 @@ class FoldPanelBarTestCase(test.GuiTestCase):
             test.gui_loop()
             test.gui_loop()
 
-        wx.MilliSleep(test.SLEEP_TIME)
-
         # Count children of the top fold panel: 1 caption bar, 2 labels
         self.assertEqual(len(top_panel._container.GetChildren()), 2)
 
         top_panel.remove_all()
 
         test.gui_loop()
-        test.gui_loop()
-        wx.MilliSleep(test.SLEEP_TIME)
+        test.gui_loop(100)
 
         # Count children of the top fold panel: 1 caption bar
         self.assertEqual(len(top_panel._container.GetChildren()), 0)
@@ -375,22 +364,18 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         item = wx.StaticText(top_panel, top_panel.GetId(), "LABEL 1")
         top_panel.insert_item(item, 0)
         test.gui_loop()
-        test.gui_loop()
-        wx.MilliSleep(test.SLEEP_TIME)
+        test.gui_loop(100)
 
         item = wx.StaticText(top_panel, top_panel.GetId(), "LABEL 2")
         top_panel.insert_item(item, 0)
         test.gui_loop()
-        test.gui_loop()
-        wx.MilliSleep(test.SLEEP_TIME)
+        test.gui_loop(100)
 
         item = wx.StaticText(top_panel, top_panel.GetId(), "LABEL 3")
         top_panel.insert_item(item, 0)
 
         test.gui_loop()
-        test.gui_loop()
-
-        wx.MilliSleep(test.SLEEP_TIME)
+        test.gui_loop(100)
 
 
 if __name__ == "__main__":

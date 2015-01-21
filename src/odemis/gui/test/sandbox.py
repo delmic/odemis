@@ -192,8 +192,8 @@ class MainWindow(wx.Frame):
         self.SetSizerAndFit(self.sizerPanel)
         self.Show()
 
-        cpd = CalibrationProgressDialog(self, 1, 1, 1, 1, 1, 1)
-        cpd.ShowModal()
+        # cpd = CalibrationProgressDialog(self, 1, 1, 1, 1, 1, 1)
+        # cpd.ShowModal()
 
 app = wx.App(False)
 win = MainWindow(None)

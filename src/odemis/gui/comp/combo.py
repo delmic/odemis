@@ -90,7 +90,7 @@ class ComboBox(wx.combo.OwnerDrawnComboBox):
     def draw(self, dc):
         """ Clear the widget with the correct background colour """
         back_colour = self.Parent.GetBackgroundColour()
-        back_brush = wx.Brush(back_colour, wx.SOLID)
+        back_brush = wx.Brush(back_colour, wx.BRUSHSTYLE_SOLID)
         dc.SetBackground(back_brush)
         dc.Clear()
 
