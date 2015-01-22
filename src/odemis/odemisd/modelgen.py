@@ -311,7 +311,6 @@ class Instantiator(object):
                 else:
                     # the child has a class or is created by another component
                     # => we explicitly reuse it
-                    # init["children"][internal_name] = self.get_or_instantiate_comp(child_name)
                     init["children"][internal_role] = self._get_component_by_name(child_name)
 
         return init
@@ -397,32 +396,6 @@ class Instantiator(object):
                 return comp
         raise LookupError("No component named '%s' found" % name)
 
-#     def get_or_instantiate_comp(self, name):
-#         """
-#         returns a component for the given name, either from the components already
-#           instantiated, or a new instantiated one if it does not exist. final_comps
-#           is also updated.
-#         """
-#         try:
-#             return self._get_component_by_name(name)
-#         except LookupError:
-#             # we need to instantiate it
-#             attr = self.ast[name]
-#             if "class" in attr:
-#                 comp = self._instantiate_comp(name)
-#                 return comp
-#             else:
-#                 # created by delegation => we instantiate the parent
-#                 try:
-#                     creator = attr["creator"]
-#                 except KeyError:
-#                     raise SemanticError("Error in microscope file: "
-#                                         "component %s has no class specified and "
-#                                         "is not created by any component." % name)
-#                 creator_comp = self._instantiate_comp(creator)
-#                 # now the child ought to be created
-#                 return self._get_component_by_name(name)
-
     def get_delegated_children(self, name):
         """
         Return all the components created by delegation when creating the given
@@ -452,72 +425,6 @@ class Instantiator(object):
 
         return ret
 
-#     def instantiate_model(self):
-#         """
-#         Generates the real microscope model from the microscope instantiation model
-#
-#         Raises:
-#             SemanticError: an error in the model is detected. Note that
-#             (obviously) not every error can be detected.
-#             LookupError
-#             ParseError
-#             Exception (dependent on the driver): in case initialisation of a driver fails
-#         """
-#         # try to get every component, at the end, we have all of them
-#         for name in self.ast:
-#             self.get_or_instantiate_comp(name)
-#
-#         # look for the microscope component (check there is only one)
-#         microscopes = [m for m in self.components if isinstance(m, model.Microscope)]
-#         if len(microscopes) == 1:
-#             self.microscope = microscopes[0]
-#         elif len(microscopes) > 1:
-#             raise SemanticError("Error in microscope file: "
-#                     "there are several Microscopes (%s)." %
-#                     ", ".join([m.name for m in microscopes]))
-#         else:
-#             raise SemanticError("Error in microscope "
-#                     "file: no Microscope component found.")
-#
-#         # Some validation:
-#         # The only components which are not either Microscope or referenced by it
-#         # should be parents
-#         left_over = self.components - self.get_children(self.microscope)
-#         for c in left_over:
-#             if not hasattr(c, "children"):
-#                 logging.warning("Component '%s' is never used.", c.name)
-#
-#         # for each component, set the affect
-#         for name, attr in self.ast.items():
-#             affected_names = attr.get("affects", [])
-#             comp = self._get_component_by_name(name)
-#             affected = [self._get_component_by_name(n) for n in affected_names]
-#             try:
-#                 comp._set_affects(affected)
-#             except AttributeError:
-#                 raise SemanticError("Error in microscope "
-#                         "file: Component '%s' does not support 'affects'." % name)
-#
-#         # for each component set the properties
-#         for name, attr in self.ast.items():
-#             if "properties" in attr:
-#                 comp = self._get_component_by_name(name)
-#                 for prop_name, value in attr["properties"].items():
-#                     try:
-#                         va = getattr(comp, prop_name)
-#                     except AttributeError:
-#                         raise SemanticError("Error in microscope "
-#                                 "file: Component '%s' has no property '%s'." % (name, prop_name))
-#                     if not isinstance(va, model.VigilantAttributeBase):
-#                         raise SemanticError("Error in microscope "
-#                                 "file: Component '%s' has no property (VA) '%s'." % (name, prop_name))
-#                     try:
-#                         va.value = value
-#                     except Exception:
-#                         raise ValueError("Error in microscope "
-#                                 "file: %s.%s = '%s' failed." % (name, prop_name, value))
-
-    # New methods, for online instantiation
     def instantiate_microscope(self):
         """
         Generates the just the microscope component
@@ -567,34 +474,10 @@ class Instantiator(object):
         """
         comp = self._get_component_by_name(name)
         attrs = self.ast[name]
+        # Just set all the components (by name), even if they are not yet active
         comp.affects.value = attrs.get("affects", [])
         logging.debug("Updating affect %s -> %s", name,
                        ", ".join(comp.affects.value))
-        # TODO: does it work to just set all the components (name), even if they
-        # are not yet active?
-
-#         # Set the affects of the given component with all the components which
-#         # already exists
-#         affected_names = comp.affects.value
-#         for n in attrs.get("affects", []):
-#             try:
-#                 self._get_component_by_name(n)
-#             except LookupError:
-#                 logging.debug("Not setting affect %s->%s yet", name, n)
-#                 pass
-#             else:
-#                 affected_names.add(n)
-#         logging.debug("Updating affect %s -> %s", name,
-#                       ", ".join(affected_names))
-#         comp.affects.value = affected_names
-#
-#         # Set the affects of all the components which already exists and affects
-#         # this new component
-#         for c in self.components:
-#             attrs = self.ast[c.name]
-#             if name in attrs.get("affects", []):
-#                 logging.debug("Setting affect %s -> %s", c.name, comp.name)
-#                 c._set_affects(c.affects | {comp})
 
     def instantiate_component(self, name):
         """
@@ -660,73 +543,3 @@ class Instantiator(object):
 
         return comps
 
-
-# def instantiate_model(inst_file, container=None, create_sub_containers=False,
-#                       dry_run=False):
-#     """
-#     Generates the real microscope model from the microscope instantiation model
-#     inst_file (file): opened file that contains the yaml
-#     container (Container): container in which to instantiate the components
-#     create_sub_containers (bool): whether the leave components (components which
-#        have no children created separately) are running in isolated containers
-#     dry_run (bool): if True, it will check the semantic and try to instantiate the
-#       model without actually any driver contacting the hardware.
-#     returns 3-tuple (Microscope, set (HwComponents), set(Containers)):
-#         * the Microscope component
-#         * the set of all the HwComponents in the model (or proxy to them)
-#         * the sub_containers created (if create_sub_containers is True)
-#
-#     Raises:
-#         SemanticError: an error in the model is detected. Note that
-#         (obviously) not every error can be detected.
-#         LookupError
-#         ParseError
-#         Exception (dependent on the driver): in case initialisation of a driver fails
-#     """
-#     instantiator = Instantiator(inst_file, container, create_sub_containers, dry_run)
-#     try:
-#         # instantiator.instantiate_model()
-#         m = instantiator.instantiate_microscope()
-#         mchildren = instantiator.ast[m.name]["children"].values()
-#         nexts = instantiator.get_instantiables()
-#         while nexts:
-#             for n in nexts:
-#                 comp = instantiator.instantiate_component(n)
-#                 newcmps = instantiator.get_children(comp) # "potentially" new
-#                 # TODO: update .active instead of .children and update .ghosts on failure
-#                 # m.children.value = m.children.value | newcmps
-#
-#             nexts = instantiator.get_instantiables()
-#         # in theory, it's done, but if there is a dependency loop some components
-#         # will never be instantiable
-#         instantiated = set(c.name for c in instantiator.components)
-#         left = set(instantiator.ast.keys()) - instantiated
-#         if left:
-#             raise SemanticError("Some components could not be instantiated due "
-#                                 "to cyclic dependency: %s" %
-#                                 (", ".join(left)))
-#     except Exception as exp:
-#         logging.error("Failed to instantiate the model")
-#         logging.info("Full traceback of the error follows", exc_info=1)
-#         try:
-#             remote_tb = exp._pyroTraceback
-#             logging.info("Remote exception %s", "".join(remote_tb))
-#         except AttributeError:
-#             pass
-#
-#         # clean up by stopping everything which we had started
-#         for comp in instantiator.components:
-#             try:
-#                 comp.terminate()
-#             except:
-#                 pass
-#         for container in instantiator.sub_containers:
-#             try:
-#                 container.terminate()
-#             except:
-#                 pass
-#         raise exp
-#
-#     return instantiator.microscope, instantiator.components, instantiator.sub_containers
-
-# vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
