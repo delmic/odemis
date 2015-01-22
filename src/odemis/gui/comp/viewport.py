@@ -712,10 +712,16 @@ class SpatialSpectrumViewport(ViewPort):
     def on_spectrum_motion(self, vpos):
 
         if vpos:
-            value = self.bottom_legend.pixel_to_value(vpos[0])
-            self.canvas.markline_overlay.x_label = units.readable_str(value,
-                                                                      self.bottom_legend.unit,
-                                                                      3)
+            self.canvas.markline_overlay.x_label = units.readable_str(
+                self.bottom_legend.pixel_to_value(vpos[0]),
+                self.bottom_legend.unit,
+                3
+            )
+            self.canvas.markline_overlay.y_label = units.readable_str(
+                self.left_legend.pixel_to_value(vpos[1]),
+                self.left_legend.unit,
+                3
+            )
             rat = self.left_legend.pixel_to_ratio(vpos[1])
             line_pixels = rasterize_line(*self.current_line)
             self.spectrum_stream.selected_pixel.value = line_pixels[int(len(line_pixels) * rat)]
