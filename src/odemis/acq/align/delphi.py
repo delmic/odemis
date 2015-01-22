@@ -779,6 +779,16 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
                 f = ebeam_focus.moveAbs({"z":hole_focus})
                 f.result()
 
+            # For the first hole apply autofocus anyway
+            if (pos == EXPECTED_HOLES[0]):
+                escan.horizontalFoV.value = 250e-06  # m
+                escan.scale.value = (2, 2)
+                # escan.accelVoltage.value += 50
+                f = autofocus.AutoFocus(detector, escan, ebeam_focus, autofocus.ROUGH_SPOTMODE_ACCURACY)
+                hole_focus, fm_level = f.result()
+                escan.horizontalFoV.value = escan.horizontalFoV.range[1]
+                escan.scale.value = (1, 1)
+
             # From SEM image determine hole position relative to the center of
             # the SEM
             image = detector.data.get(asap=False)
