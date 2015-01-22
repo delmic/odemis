@@ -70,7 +70,7 @@ physical:
     Because only this minor difference exists between the systems, they will
     most likely be merge into one in the future.
 
-    Attributes related to the physical coordinate sytem have the prefix `p_`
+    Attributes related to the physical coordinate system have the prefix `p_`
 
 Scales
 ~~~~~~
@@ -182,16 +182,13 @@ def ignore_if_disabled(f, self, *args, **kwargs):
 
 
 class BufferedCanvas(wx.Panel):
-    """ Abstract base class for buffered canvasses that display graphical data
-
-    :ivar abilities: Set of special features that the Canvas supports
-
-    """
+    """ Abstract base class for buffered canvasses that display graphical data """
 
     __metaclass__ = ABCMeta
 
     def __init__(self, *args, **kwargs):
         # Set default style
+        # Note: NO_FULL_REPAINT_ON_RESIZE will be the default behaviour in WxPython Phoenix
         kwargs['style'] = wx.NO_FULL_REPAINT_ON_RESIZE | kwargs.get('style', 0)
         super(BufferedCanvas, self).__init__(*args, **kwargs)
 
@@ -202,6 +199,7 @@ class BufferedCanvas(wx.Panel):
         self.world_overlays = []
         # Graphical overlays drawn onto the canvas
         self.view_overlays = []
+
         # TODO: rename to action_overlay?
         # Or maybe delete as it's unused (the overlays just bind to the
         # events they care about)

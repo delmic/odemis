@@ -26,21 +26,20 @@ Created on 8 Feb 2012
 from __future__ import division
 
 import logging
-import math
+import wx
+
 from odemis import gui, model
-from odemis.acq import stream
 from odemis.acq.stream import OpticalStream, EMStream, SpectrumStream
 from odemis.gui import BG_COLOUR_LEGEND, FG_COLOUR_LEGEND
 from odemis.gui.comp import miccanvas
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
-from odemis.gui.comp.legend import InfoLegend, PlotsAxisLegend, BitmapAxisLegend
+from odemis.gui.comp.legend import InfoLegend, AxisLegend
 from odemis.gui.img.data import getico_blending_goalBitmap
 from odemis.gui.model import CHAMBER_VACUUM, CHAMBER_UNKNOWN
 from odemis.gui.util import call_after
 from odemis.gui.util.raster import rasterize_line
 from odemis.model import NotApplicableError
 from odemis.util import units
-import wx
 
 
 class ViewPort(wx.Panel):
@@ -560,8 +559,8 @@ class PlotViewport(ViewPort):
 
     # Default class
     canvas_class = miccanvas.ZeroDimensionalPlotCanvas
-    bottom_legend_class = PlotsAxisLegend
-    left_legend_class = PlotsAxisLegend
+    bottom_legend_class = AxisLegend
+    left_legend_class = AxisLegend
 
     def __init__(self, *args, **kwargs):
         ViewPort.__init__(self, *args, **kwargs)
@@ -597,7 +596,7 @@ class PlotViewport(ViewPort):
         if not ss:
             self.spectrum_stream = None
             logging.info("No spectrum stream found")
-            self.clear() # Remove legend ticks and clear plot
+            self.clear()  # Remove legend ticks and clear plot
             return
         elif len(ss) > 1:
             logging.warning("Found %d spectrum streams, will pick one randomly", len(ss))
@@ -618,10 +617,14 @@ class PlotViewport(ViewPort):
             return
 
         data = self.spectrum_stream.get_pixel_spectrum()
-        domain = self.spectrum_stream.get_spectrum_range()
+        spectrum_range = self.spectrum_stream.get_spectrum_range()
         unit_x = self.spectrum_stream.spectrumBandwidth.unit
+
         self.bottom_legend.unit = unit_x
-        self.canvas.set_1d_data(domain, data, unit_x)
+        self.bottom_legend.range = (spectrum_range[0], spectrum_range[-1])
+        self.left_legend.range = (min(data), max(data))
+
+        self.canvas.set_1d_data(spectrum_range, data, unit_x)
         self.Refresh()
 
     def setView(self, microscope_view, tab_data):
@@ -690,8 +693,8 @@ class SpatialSpectrumViewport(ViewPort):
     """
 
     canvas_class = miccanvas.OneDimensionalSpatialSpectrumCanvas
-    bottom_legend_class = BitmapAxisLegend
-    left_legend_class = BitmapAxisLegend
+    bottom_legend_class = AxisLegend
+    left_legend_class = AxisLegend
 
     def __init__(self, *args, **kwargs):
         """Note: The MicroscopeViewport is not fully initialised until setView()
@@ -767,7 +770,7 @@ class SpatialSpectrumViewport(ViewPort):
         if not ss:
             self.spectrum_stream = None
             logging.info("No spectrum streams found")
-            self.clear() # Remove legend ticks and clear image
+            self.clear()  # Remove legend ticks and clear image
             return
         elif len(ss) > 1:
             logging.warning("Found %d spectrum streams, will pick one randomly", len(ss))

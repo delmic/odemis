@@ -42,6 +42,7 @@ class InfoLegend(wx.Panel):
     provide information about live data streams.
 
     TODO: give this class a more descriptive name
+
     """
 
     def __init__(self, parent, wid=-1, pos=(0, 0), size=wx.DefaultSize,
@@ -214,204 +215,12 @@ class InfoLegend(wx.Panel):
             self.bmp_slider_right.SetBitmap(icon)
 
 
-class PlotsAxisLegend(wx.Panel):
-    """ This legend can be used to show ticks and values to indicate the scale of a canvas plot """
-
-    def __init__(self, parent, wid=wx.ID_ANY, pos=(0, 0), size=wx.DefaultSize,
-                 style=wx.NO_BORDER, orientation=wx.HORIZONTAL):
-        """
-        parent: must have an attribute .canvas, which is a PlotCanvas
-        """
-        # TODO: this is really a weird API => just let the parent give all the
-        # info needed to draw the ticks (eg, by reading the PlotCanvas attributes)
-
-        style = style | wx.NO_BORDER
-        super(PlotsAxisLegend, self).__init__(parent, wid, pos, size, style)
-
-        self.SetBackgroundColour(parent.GetBackgroundColour())
-        self.SetForegroundColour(parent.GetForegroundColour())
-
-        self.Bind(wx.EVT_PAINT, self.on_paint)
-        self.Bind(wx.EVT_SIZE, self.on_size)
-
-        self.tick_colour = wxcol_to_frgb(self.ForegroundColour)
-
-        self._range = None
-
-        self.ticks = None
-        self.max_tick_width = 32  # px
-
-        # The guiding distance between ticks in pixels
-        self.tick_pixel_gap = 120
-        self.orientation = orientation
-
-        self._unit = None
-
-        # Explicitly set the min size
-        if orientation == wx.HORIZONTAL:
-            self.SetMinSize((-1, 28))
-        else:
-            self.SetMinSize((42, -1))
-
-        self.on_size(None)
-
-    @property
-    def unit(self):
-        return self._unit
-
-    @unit.setter
-    def unit(self, val):
-        self._unit = val
-        self.redraw()
-
-    @property
-    def range(self):
-        return self._range
-
-    @range.setter
-    def range(self, range):
-        self._range = range
-
-    def clear(self):
-        self._range = None
-        self.redraw()
-
-    def on_paint(self, evt=None):
-
-        if not hasattr(self.Parent.canvas, 'has_data') or not self.Parent.canvas.has_data():
-            return
-
-        ctx = wx.lib.wxcairo.ContextFromDC(wx.PaintDC(self))
-
-        font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
-        ctx.select_font_face(font.GetFaceName(), cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
-        ctx.set_font_size(font.GetPointSize())
-
-        # TODO: only put label for some of the ticks
-
-        # read self.ticks only once so that if .redraw() is called during this
-        # time (from another thread), we don't suddenly get None
-        ticks = self.ticks
-        if ticks is None:
-            ticks = self.calc_ticks()
-            self.ticks = ticks
-
-        ctx.set_source_rgb(*self.tick_colour)
-
-        ctx.set_line_width(2)
-        ctx.set_line_join(cairo.LINE_JOIN_MITER)
-
-        max_width = 0
-        prev_lpos = 0 if self.orientation == wx.HORIZONTAL else self.ClientSize.y
-
-        for i, (pos, val) in enumerate(ticks):
-            label = units.readable_str(val, self.unit, 3)
-            _, _, lbl_width, lbl_height, _, _ = ctx.text_extents(label)
-
-            if self.orientation == wx.HORIZONTAL:
-                lpos = pos - (lbl_width // 2)
-                lpos = max(min(lpos, self.ClientSize.x - lbl_width - 2), 2)
-                # print (i, prev_right, lpos)
-                if prev_lpos < lpos:
-                    ctx.move_to(lpos, lbl_height + 8)
-                    ctx.show_text(label)
-                    ctx.move_to(pos, 5)
-                    ctx.line_to(pos, 0)
-                prev_lpos = lpos + lbl_width
-            else:
-                max_width = max(max_width, lbl_width)
-                lpos = pos + (lbl_height // 2)
-                lpos = max(min(lpos, self.ClientSize.y), 2)
-
-                if prev_lpos >= lpos + 20 or i == 0:
-                    ctx.move_to(self.ClientSize.x - lbl_width - 9, lpos)
-                    ctx.show_text(label)
-                    ctx.move_to(self.ClientSize.x - 5, pos)
-                    ctx.line_to(self.ClientSize.x, pos)
-                prev_lpos = lpos + lbl_height
-
-            ctx.stroke()
-
-        if self.orientation == wx.VERTICAL and max_width != self.max_tick_width:
-            self.max_tick_width = max_width
-            self.SetMinSize((self.max_tick_width + 14, -1))
-            self.Parent.GetSizer().Layout()
-
-    def calc_ticks(self):
-        """
-        Determine where the ticks should be placed
-        return (list of (int, float)): position (in px) and actual value of each
-         tick (ordered)
-        """
-
-        pcanv = self.Parent.canvas
-
-        # Get orientation dependant values
-        if self.orientation == wx.HORIZONTAL:
-            size = self.ClientSize.x
-            min_val = pcanv.min_x if pcanv.range_x is None else pcanv.range_x[0]
-            val_size = pcanv.data_width
-            val_to_pos = pcanv._val_x_to_pos_x
-        else:
-            size = self.ClientSize.y
-            min_val = pcanv.min_y if pcanv.range_y is None else pcanv.range_y[0]
-            val_size = pcanv.data_height
-            val_to_pos = pcanv._val_y_to_pos_y
-
-        num_ticks = size // self.tick_pixel_gap
-        logging.debug("Aiming for %s ticks with a client of size %s", num_ticks, size)
-        # Calculate the best step size in powers of 10, so it will cover at
-        # least the distance `val_dist`
-        val_step = 1e-12
-
-        # Increase the value step tenfold while it fits more than num_ticks times
-        # in the range
-        while val_step and val_size / val_step > num_ticks:
-            val_step *= 10
-        logging.debug("Value step is %s after first iteration with range %s", val_step, val_size)
-
-        # Divide the value step by two,
-        while val_step and val_size / val_step < num_ticks:
-            val_step /= 2
-        logging.debug("Value step is %s after second iteration with range %s", val_step, val_size)
-
-        first_tick = (int(min_val / val_step) + 1) * val_step if val_step else 0
-        logging.debug("Setting first tick at value %s", first_tick)
-
-        tick_vals = [min_val] + [first_tick + i * val_step for i in range(2 * num_ticks)]
-
-        ticks = []
-        for tick in tick_vals:
-            pos = val_to_pos(tick)
-            if (pos, tick) not in ticks:
-                if self.orientation == wx.HORIZONTAL:
-                    if 0 <= pos <= size - self.tick_pixel_gap // 2:
-                        ticks.append((pos, tick))
-                else:
-                    if 10 <= pos <= size:
-                        ticks.append((pos, tick))
-
-        return ticks
-
-    def redraw(self):
-        """
-        Force to redraw the axis on the next refresh
-        """
-        self.ticks = None
-        self.Refresh()
-
-    def on_size(self, event):
-        self.redraw()
-
-# TODO: merge with PlotAxisLegend, or at least share a parent class
-
-class BitmapAxisLegend(wx.Panel):
-    """ Lgend to be used to show ticks and values to indicate the scale of a bitmap canvas """
+class AxisLegend(wx.Panel):
 
     def __init__(self, parent, wid=wx.ID_ANY, pos=(0, 0), size=wx.DefaultSize,
                  style=wx.NO_BORDER, orientation=wx.HORIZONTAL):
 
-        style = style | wx.NO_BORDER
+        style |= wx.NO_BORDER
         wx.Panel.__init__(self, parent, wid, pos, size, style)
 
         self.SetBackgroundColour(parent.GetBackgroundColour())
@@ -425,12 +234,12 @@ class BitmapAxisLegend(wx.Panel):
         self._value_range = None  # 2 tuple with the minimum and maximum value
         self._tick_list = None  # Lust of 2 tuples, containing the pixel position and value
 
-        self._value_space = None
-        self._pixel_space = None
+        self._value_space = None  # Difference between min and max values
+        self._pixel_space = None  # Number of available pixels
 
-        self._max_tick_width = 32  # The biggest label width for any value (VERT only)
-        self._tick_spacing = 120 if orientation == wx.HORIZONTAL else 80
         self._orientation = orientation
+        self._max_tick_width = 32  # Largest pixel width of any label in use
+        self._tick_spacing = 120 if orientation == wx.HORIZONTAL else 80
         self._unit = None
 
         # Explicitly set the min size
@@ -489,7 +298,6 @@ class BitmapAxisLegend(wx.Panel):
         ctx.set_font_size(font.GetPointSize())
 
         ctx.set_source_rgb(*self.tick_colour)
-
         ctx.set_line_width(2)
         ctx.set_line_join(cairo.LINE_JOIN_MITER)
 
@@ -540,6 +348,12 @@ class BitmapAxisLegend(wx.Panel):
         return ((pixel / self._pixel_space) * self._value_space) + self._value_range[0]
 
     def pixel_to_ratio(self, pixel):
+        """ Map the given pixel value to the ratio of the pixel space
+
+        :return: (float) [0..1]
+
+        """
+
         pixel = pixel if self._orientation == wx.HORIZONTAL else self._pixel_space - pixel
         return pixel / self._pixel_space
 
@@ -599,3 +413,95 @@ class BitmapAxisLegend(wx.Panel):
                 else:
                     if 10 <= pixel <= self._pixel_space:
                         self._tick_list.append(pix_val)
+
+# class PlotsAxisLegend(wx.Panel):
+#     """ This legend can be used to show ticks and values to indicate the scale of a canvas plot """
+#
+#
+#     def calc_ticks(self):
+#         """
+#         Determine where the ticks should be placed
+#         return (list of (int, float)): position (in px) and actual value of each
+#          tick (ordered)
+#         """
+#
+#         pcanv = self.Parent.canvas
+#
+#         # Get orientation dependant values
+#         if self.orientation == wx.HORIZONTAL:
+#             size = self.ClientSize.x
+#             min_val = pcanv.min_x if pcanv.range_x is None else pcanv.range_x[0]
+#             val_size = pcanv.data_width
+#             val_to_pos = pcanv._val_x_to_pos_x
+#         else:
+#             size = self.ClientSize.y
+#             min_val = pcanv.min_y if pcanv.range_y is None else pcanv.range_y[0]
+#             val_size = pcanv.data_height
+#             val_to_pos = pcanv._val_y_to_pos_y
+#
+#         num_ticks = size / self.tick_pixel_gap
+#         logging.debug("Aiming for %s ticks with a client of size %s", num_ticks, size)
+#         # Calculate the best step size in powers of 10, so it will cover at
+#         # least the distance `val_dist`
+#         val_step = 1e-12
+#
+#         # Increase the value step tenfold while it fits more than num_ticks times
+#         # in the range
+#         while val_step and val_size / val_step > num_ticks:
+#             val_step *= 10
+#         logging.debug("Value step is %s after first iteration with range %s", val_step, val_size)
+#
+#         # Divide the value step by two,
+#         while val_step and val_size / val_step < num_ticks:
+#             val_step /= 2
+#         logging.debug("Value step is %s after second iteration with range %s", val_step, val_size)
+#
+#         first_tick = (int(min_val / val_step) + 1) * val_step if val_step else 0
+#         logging.debug("Setting first tick at value %s", first_tick)
+#
+#         tick_vals = [min_val] + [first_tick + i * val_step for i in range(2 * num_ticks)]
+#
+#         ticks = []
+#         for tick in tick_vals:
+#             pos = val_to_pos(tick)
+#             if (pos, tick) not in ticks:
+#                 if self.orientation == wx.HORIZONTAL:
+#                     if 0 <= pos <= size - self.tick_pixel_gap / 2:
+#                         ticks.append((pos, tick))
+#                 else:
+#                     if 10 <= pos <= size:
+#                         ticks.append((pos, tick))
+#
+#         return ticks
+#
+#     def redraw(self):
+#         """
+#         Force to redraw the axis on the next refresh
+#         """
+#         self.ticks = None
+#         self.Refresh()
+#
+#     def on_size(self, event):
+#         self.redraw()
+#
+#
+# class BitmapAxisLegend(wx.Panel):
+#     """ Lgend to be used to show ticks and values to indicate the scale of a bitmap canvas """
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
