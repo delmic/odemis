@@ -27,6 +27,7 @@ import sys
 from odemis.acq import align
 from odemis.gui.conf import get_calib_conf
 import math
+from odemis.acq.align import autofocus
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -223,9 +224,23 @@ def main(args):
         f = focus.moveAbs({"z": center_focus})
         f.result()
 
+        # Focus the CL spot using SEM focus
+        # Configure CCD and e-beam to write CL spots
+        ccd.binning.value = (1, 1)
+        ccd.resolution.value = ccd.resolution.range[1]
+        ccd.exposureTime.value = 900e-03
+        escan.horizontalFoV.value = escan.horizontalFoV.range[0]
+        escan.scale.value = (1, 1)
+        escan.resolution.value = (1, 1)
+        escan.translation.value = (0, 0)
+        escan.dwellTime.value = 5e-06
+        det_dataflow = detector.data
+        f = autofocus.AutoFocus(ccd, escan, ebeam_focus, autofocus.ROUGH_SPOTMODE_ACCURACY, background=True, dataflow=det_dataflow)
+        f.result()
+
         # Refocus the SEM
         escan.resolution.value = (512, 512)
-        msg = "Please turn on the SEM stream and focus the SEM image. Then turn off the stream and press Enter ..."
+        msg = "Please turn on the SEM stream and focus the SEM image if needed. Then turn off the stream and press Enter ..."
         raw_input(msg)
 
         # Run the optical fine alignment
