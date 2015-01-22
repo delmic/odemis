@@ -622,7 +622,9 @@ class PlotViewport(ViewPort):
 
         self.bottom_legend.unit = unit_x
         self.bottom_legend.range = (spectrum_range[0], spectrum_range[-1])
+        self.bottom_legend.tooltip = "Wavelength"
         self.left_legend.range = (min(data), max(data))
+        self.left_legend.tooltip = "Intensity"
 
         self.canvas.set_1d_data(spectrum_range, data, unit_x)
         self.Refresh()
@@ -800,8 +802,11 @@ class SpatialSpectrumViewport(ViewPort):
             unit_x = self.spectrum_stream.spectrumBandwidth.unit
             self.bottom_legend.unit = unit_x
             self.bottom_legend.range = (spectrum_range[0], spectrum_range[-1])
+            self.bottom_legend.tooltip = "Wavelength"
             self.left_legend.unit = 'm'
             self.left_legend.range = (0, line_length)
+            self.left_legend.tooltip = "Distance from origin"
+
             self.canvas.set_2d_data(data)
         else:
             logging.warn("No data to display for the selected line!")

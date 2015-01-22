@@ -248,7 +248,22 @@ class AxisLegend(wx.Panel):
         else:
             self.SetMinSize((42, -1))
 
+        self.tooltip_ctrl = None
+
         self.on_size()  # Force a refresh
+
+    @property
+    def tooltip(self):
+        return self.tooltip_ctrl.GetTip()
+
+    @tooltip.setter
+    def tooltip(self, val):
+        if not self.tooltip_ctrl:
+            self.tooltip_ctrl = wx.ToolTip(val)
+            self.tooltip_ctrl.SetDelay(0)
+            self.SetToolTip(self.tooltip_ctrl)
+        else:
+            self.tooltip_ctrl.SetTip(val)
 
     @property
     def unit(self):
