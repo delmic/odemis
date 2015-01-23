@@ -27,15 +27,14 @@ You should have received a copy of the GNU General Public License along with Ode
 from __future__ import division
 
 from concurrent.futures._base import CancelledError
-import glob
 import logging
 import numpy
-from odemis import model, util
+from odemis import model
 import odemis
 from odemis.model import (isasync, CancellableThreadPoolExecutor,
                           CancellableFuture, HwError)
-from odemis.util import driver
 import os
+import re
 import socket
 import struct
 from subprocess import CalledProcessError
@@ -53,6 +52,12 @@ class NewFocusError(Exception):
     def __str__(self):
         return "%d: %s" % (self.errno, self.strerror)
 
+# Motor types
+MT_NONE = 0
+MT_UNKNOWN = 1
+MT_TINY = 2
+MT_STANDARD = 3
+
 class PM8742(model.Actuator):
     """
     Represents one New Focus picomotor controller 8742.
@@ -60,7 +65,7 @@ class PM8742(model.Actuator):
     def __init__(self, name, role, address, axes, stepsize, sn=None, **kwargs):
         """
         address (str): ip address (use "autoip" to automatically scan and find the
-        controller, "fake" for a simulator)
+          controller, "fake" for a simulator)
         axes (list of str): names of the axes, from the 1st to the 4th, if present.
           if an axis is not connected, put a "".
         stepsize (list of float): size of a step in m (the smaller, the
@@ -72,51 +77,64 @@ class PM8742(model.Actuator):
         """
         if not 1 <= len(axes) <= 4:
             raise ValueError("Axes must be a list of 1 to 4 axis names (got %s)" % (axes,))
-        self._axes_names = axes # axes names in order
-
         if len(axes) != len(stepsize):
             raise ValueError("Expecting %d stepsize (got %s)" %
                              (len(axes), stepsize))
+        self._name_to_axis = {} # str -> int: name -> axis number
+        for i, n in enumerate(axes):
+            if n == "": # skip this non-connected axis
+                continue
+            self._name_to_axis[n] = i + 1
 
         for sz in stepsize:
             if sz > 10e-3: # sz is typically ~1µm, so > 1 cm is very fishy
                 raise ValueError("stepsize should be in meter, but got %g" % (sz,))
-        self._ustepsize = stepsize
+        self._stepsize = stepsize
 
-        self._socket = self._openConnection(address, sn)
-        self._net_access = threading.Lock()
+        self._accesser = self._openConnection(address, sn)
 
         self._resynchonise()
 
-        modl, vmaj, vmin = self.GetVersion()
-        if modl != 3110:
-            logging.warning("Controller TMCM-%d is not supported, will try anyway",
-                            modl)
+        if name is None and role is None: # For scan only
+            return
+
+        modl, fw, sn = self.GetIdentification()
+        if modl != "8742":
+            logging.warning("Controller %s is not supported, will try anyway", modl)
 
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1) # one task at a time
 
+        # Let the controller check the actuators are connected
+        self.MotorCheck()
+
         axes_def = {}
-        for n, sz in zip(self._axes_names, self._stepsize):
-            if n == "": # skip this non-connected axis
-                continue
+        for n, i in self._name_to_axis.items():
+            sz = self._stepsize[i-1]
             # TODO: allow to pass the range in m in the arguments
-            # Mov abs supports ±2³¹, probably not that much in reality, but
+            # Position supports ±2³¹, probably not that much in reality, but
             # there is no info.
             rng = [(-2 ** 31) * sz, (2 ** 31 - 1) * sz]
             axes_def[n] = model.Axis(range=rng, unit="m")
+
+            # Check the actuator is connected
+            mt = self.GetMotorType(i)
+            if mt in {MT_NONE, MT_UNKNOWN}:
+                raise HwError("Controller failed to detect motor %d, check the "
+                              "actuator is connected to the controller" %
+                              (i,))
+
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
 
-        for i, a in enumerate(self._axes_names):
-            self._init_axis(i)
+        self._swVersion = "%s (IP connection)" % (odemis.__version__,)
+        self._hwVersion = "New Focus %s (firmware %s, S/N %s)" % (modl, fw, sn)
 
-        self._swVersion = "%s (serial driver: %s)" % (odemis.__version__, driver_name)
-        self._hwVersion = "TMCM-%d (firmware %d.%02d)" % (modl, vmaj, vmin)
-
+        # Note that the "0" position is just the position at which the
+        # controller turned on
         self.position = model.VigilantAttribute({}, unit="m", readonly=True)
         self._updatePosition()
 
-        # TODO: add support for changing speed. cf p.68: axis param 4 + p.81 + TMC 429 p.6
+        # TODO: add support for changing speed
         self.speed = model.VigilantAttribute({}, unit="m/s", readonly=True)
         self._updateSpeed()
 
@@ -126,275 +144,185 @@ class PM8742(model.Actuator):
             self._executor.shutdown(wait=True)
             self._executor = None
         
-        with self._ser_access:
-            if self._serial:
-                self._serial.close()
-                self._serial = None
+        if self._accesser:
+            self._accesser.terminate()
+            self._accesser = None
 
-    @classmethod
-    def _openConnection(cls, address, sn=None):
-        if address == "fake":
-            return PM8742Simulator()
-        elif address == "autoip":
-            conts = cls._scanOverIP()
-            if sn is not None:
-                try:
-                    modl, host, port = conts[sn]
-                except KeyError:
-                    raise HwError("Failed to find New Focus controller %s over the "
-                                  "network. Ensure it is turned on and connected to "
-                                  "the network." % (sn))
-            else:
-                # just pick the first one (of model 8742)
-                try:
-                    while True:
-                        sn, (modl, host, port) = conts.popitem()
-                        if modl == "8742":
-                            break
-                    logging.info("Connecting to New Focus %s", sn)
-                except KeyError:
-                    raise HwError("Failed to find New Focus controller over the "
-                                  "network. Ensure it is turned on and connected to "
-                                  "the network.")
+    # Low level functions
+    def GetIdentification(self):
+        """
+        return (str, str, str): 
+             Model name
+             Firmware version (and date)
+             serial number
+        """
+        resp = self._accesser.sendQueryCommand("*IDN")
+        # expects something like this:
+        # New_Focus 8742 v2.2 08/01/13 11511
+        try:
+            m = re.match("\w+ (?P<model>\w+) (?P<fw>v\S+ \S+) (?P<sn>\d+)", resp)
+            modl, fw, sn = m.group("model"), m.group("fw"), m.group("sn")
+        except Exception:
+            raise IOError("Failed to decode firmware answer '%s'" %
+                          resp.encode('string_escape'))
 
+        return modl, fw, sn
+
+    def GetMotorType(self, axis):
+        """
+        Read the motor type.
+        The motor check action must have been performed before to get correct
+          values. 
+        axis (1<=int<=4): axis number
+        return (0<=int<=3): the motor type
+        """
+        resp = self._accesser.sendQueryCommand("QM", axis=axis)
+        return int(resp)
+
+    def GetVelocity(self, axis):
+        """
+        Read the max speed
+        axis (1<=int<=4): axis number
+        return (0<=int<=2000): the speed in step/s
+        """
+        resp = self._accesser.sendQueryCommand("VA", axis=axis)
+        return int(resp)
+
+    def SetVelocity(self, axis, val):
+        """
+        Write the max speed
+        axis (1<=int<=4): axis number
+        val (1<=int<=2000): the speed in step/s
+        """
+        if not 1 <= val <= 2000:
+            raise ValueError("Velocity outside of the range 0->2000")
+        self._accesser.sendOrderCommand("VA", "%d" % (val,), axis)
+
+    def GetAccel(self, axis):
+        """
+        Read the acceleration
+        axis (1<=int<=4): axis number
+        return (0<=int): the acceleration in step/s²
+        """
+        resp = self._accesser.sendQueryCommand("AC", axis=axis)
+        return int(resp)
+
+    def SetAccel(self, axis, val):
+        """
+        Write the acceleration
+        axis (1<=int<=4): axis number
+        val (1<=int<=200000): the acceleration in step/s²
+        """
+        if not 1 <= val <= 200000:
+            raise ValueError("Acceleration outside of the range 0->200000")
+        self._accesser.sendOrderCommand("AC", "%d" % (val,), axis)
+
+    def MotorCheck(self):
+        """
+        Run the motor check command, that automatically configure the right
+        values based on the type of motors connected.
+        """
+        self._accesser.sendOrderCommand("MC")
+
+    def MoveAbs(self, axis, pos):
+        """
+        Requests a move to an absolute position. This is non-blocking.
+        axis (1<=int<=4): axis number
+        pos (-2**31 <= int 2*31-1): position in step
+        """
+        self._accesser.sendOrderCommand("PA", "%d" % (pos,), axis)
+
+    def GetTarget(self, axis):
+        """
+        Read the target position for the given axis
+        axis (1<=int<=4): axis number
+        return (int): the position in steps
+        """
+        # Note, it's not clear what's the difference with PR?
+        resp = self._accesser.sendQueryCommand("PA", axis=axis)
+        return int(resp)
+
+    def MoveRel(self, axis, offset):
+        """
+        Requests a move to a relative position. This is non-blocking.
+        axis (1<=int<=4): axis number
+        offset (-2**31 <= int 2*31-1): offset in step
+        """
+        self._accesser.sendOrderCommand("PR", "%d" % (offset,), axis)
+
+    def GetPosition(self, axis):
+        """
+        Read the actual position for the given axis
+        axis (1<=int<=4): axis number
+        return (int): the position in steps
+        """
+        resp = self._accesser.sendQueryCommand("TP", axis=axis)
+        return int(resp)
+
+    def IsMoving(self, axis):
+        """
+        Check whether the axis is in motion 
+        axis (1<=int<=4): axis number
+        return (bool): True if in motion
+        """
+        resp = self._accesser.sendQueryCommand("MD", axis=axis)
+        if resp == "0": # motion in progress
+            return True
+        elif resp == "1": # no motion
+            return False
         else:
-            # split the (IP) port, separated by a :
-            if ":" in address:
-                host, ipport_str = port.split(":")
-                port = int(ipport_str)
-            else:
-                host = address
-                port = 23 # default
+            raise IOError("Failed to decode answer about motion '%s'" %
+                          resp.encode('string_escape'))
 
-        return cls._openIPSocket(host, port)
+    def AbortMotion(self, axis):
+        """
+        Stop immediatelly the motion on all the axes
+        """
+        self._accesser.sendOrderCommand("AB")
 
-    @staticmethod
-    def _scanOverIP():
+    def StopMotion(self, axis):
         """
-        Scan the network for all the responding new focus controllers
-        Note: it actually calls a separate executable because it relies on opening
-          a network port which needs special privileges.
-        return (dict str -> (str, str, int)): serial number to model, ip address, and port number
+        Stop nicely the motion (using accel/decel values)
+        axis (1<=int<=4): axis number
         """
-        # Run the separate program via authbind
+        self._accesser.sendOrderCommand("ST", axis=axis)
+
+    def GetError(self):
+        """
+        Read the oldest error in memory.
+        The error buffer is FIFO with 10 elements, so it might not be the 
+        latest error if multiple errors have happened since the last time this
+        function was called.
+        return (None or (int, str)): the error number and message
+        """
+        # Note: there is another one "TE" which only returns the number, and so
+        # is faster, but then there is no way to get the message
+        resp = self._accesser.sendQueryCommand("TB")
+        # returns something like "108, MOTOR NOT CONNECTED"
         try:
-            exc = os.path.join(os.path.dirname(__file__), "nfpm_netscan.py")
-            out = subprocess.check_output(["authbind", "python", exc])
-        except CalledProcessError as exp:
-            # and handle all the possible errors:
-            # - no authbind (127)
-            # - cannot find the separate program (2)
-            # - no authorisation (13)
-            ret = exp.returncode
-            if ret == 127:
-                raise IOError("Failed to find authbind")
-            elif ret == 2:
-                raise IOError("Failed to find %s" % exc)
-            elif ret == 13:
-                raise IOError("No permission to open network port 23")
+            m = re.match("(?P<no>\d+), (?P<msg>.+)", resp)
+            no, msg = int(m.group("no")), m.group("msg")
+        except Exception:
+            raise IOError("Failed to decode error info '%s'" %
+                          resp.encode('string_escape'))
 
-        # or decode the output
-        # model \t SN \t host \t port
-        ret = {}
-        for l in out.split("\n"):
-            if not l:
-                continue
-            try:
-                modl, sn, host, port = l.split("\t")
-            except Exception:
-                logging.exception("Failed to decode scanner line '%s'", l)
-            ret[sn] = (modl, host, port)
+        if no == 0:
+            return None
+        else:
+            return no, msg
 
-        return ret
-
-    # TODO: return an "Accesser" object instead of a simple socket?
-    @staticmethod
-    def _openIPSocket(host, port=23):
-        """
-        Opens a socket connection to a controller over IP.
-        host (string): the IP address or host name of the master controller
-        port (int): the (IP) port number
-        return (socket): the opened socket connection
-        """
-        try:
-            sock = socket.create_connection((host, port), timeout=5)
-        except socket.timeout:
-            raise model.HwError("Failed to connect to '%s:%d', check the New Focus "
-                                "controller is connected to the network, turned "
-                                " on, and correctly configured." % (host, port))
-        sock.settimeout(1.0) # s
-        return sock
-
-
-    # Communication functions
-
-    @staticmethod
-    def _instr_to_str(instr):
-        """
-        instr (buffer of 9 bytes)
-        """
-        target, n, typ, mot, val, chk = struct.unpack('>BBBBiB', instr)
-        s = "%d, %d, %d, %d, %d (%d)" % (target, n, typ, mot, val, chk)
-        return s
-
-    @staticmethod
-    def _reply_to_str(rep):
-        """
-        rep (buffer of 9 bytes)
-        """
-        ra, rt, status, rn, rval, chk = struct.unpack('>BBBBiB', rep)
-        s = "%d, %d, %d, %d, %d (%d)" % (ra, rt, status, rn, rval, chk)
-        return s
+    # TODO: make a check error function that raises NewFocusError if needed
 
     def _resynchonise(self):
         """
         Ensures the device communication is "synchronised"
         """
-        with self._ser_access:
-            self._serial.flushInput()
-            garbage = self._serial.read(1000)
-            if garbage:
-                logging.debug("Received unexpected bytes '%s'", garbage)
-            if len(garbage) == 1000:
-                # Probably a sign that it's not the device we are expecting
-                logging.warning("Lots of garbage sent from device")
+        self._accesser.flushInput()
 
-            # In case the device has received some data before, resynchronise by
-            # sending one byte at a time until we receive a reply.
-            # On Ubuntu, when plugging the device, udev automatically checks
-            # whether this is a real modem, which messes up everything immediately.
-            # As there is no command 0, either we will receive a "wrong command" or
-            # a "wrong checksum", but it's unlikely to ever do anything more.
-            for i in range(9): # a message is 9 bytes
-                self._serial.write(b"\x00")
-                self._serial.flush()
-                res = self._serial.read(9)
-                if len(res) == 9:
-                    break # just got synchronised
-                elif len(res) == 0:
-                    continue
-                else:
-                    logging.error("Device not answering with a 9 bytes reply: %s", res)
-            else:
-                logging.error("Device not answering to a 9 bytes message")
+        # drop all the errors
+        while self.GetError():
+            pass
 
-    def SendInstruction(self, n, typ=0, mot=0, val=0):
-        """
-        Sends one instruction, and return the reply.
-        n (0<=int<=255): instruction ID
-        typ (0<=int<=255): instruction type
-        mot (0<=int<=255): motor/bank number
-        val (0<=int<2**32): value to send
-        return (0<=int<2**32): value of the reply (if status is good)
-        raises:
-            IOError: if problem with sending/receiving data over the serial port
-            TMCLError: if status if bad
-        """
-        msg = numpy.empty(9, dtype=numpy.uint8)
-        struct.pack_into('>BBBBiB', msg, 0, self._target, n, typ, mot, val, 0)
-        # compute the checksum (just the sum of all the bytes)
-        msg[-1] = numpy.sum(msg[:-1], dtype=numpy.uint8)
-        with self._ser_access:
-            logging.debug("Sending %s", self._instr_to_str(msg))
-            self._serial.write(msg)
-            self._serial.flush()
-            while True:
-                res = self._serial.read(9)
-                if len(res) < 9: # TODO: TimeoutError?
-                    raise IOError("Received only %d bytes after %s" %
-                                  (len(res), self._instr_to_str(msg)))
-                logging.debug("Received %s", self._reply_to_str(res))
-                ra, rt, status, rn, rval, chk = struct.unpack('>BBBBiB', res)
-
-                return rval
-
-    # Low level functions
-    def GetVersion(self):
-        """
-        return (int, int, int): 
-             Controller ID: 3110 for the TMCM-3110
-             Firmware major version number
-             Firmware minor version number
-        """
-        val = self.SendInstruction(136, 1) # Ask for binary reply
-        cont = val >> 16
-        vmaj, vmin = (val & 0xff00) >> 8, (val & 0xff)
-        return cont, vmaj, vmin
-
-    def GetAxisParam(self, axis, param):
-        """
-        Read the axis/parameter setting from the RAM
-        axis (0<=int<=2): axis number
-        param (0<=int<=255): parameter number
-        return (0<=int): the value stored for the given axis/parameter
-        """
-        val = self.SendInstruction(6, param, axis)
-        return val
-
-    def SetAxisParam(self, axis, param, val):
-        """
-        Write the axis/parameter setting from the RAM
-        axis (0<=int<=2): axis number
-        param (0<=int<=255): parameter number
-        val (int): the value to store
-        """
-        self.SendInstruction(5, param, axis, val)
-
-    def GetGlobalParam(self, bank, param):
-        """
-        Read the parameter setting from the RAM
-        bank (0<=int<=2): bank number
-        param (0<=int<=255): parameter number
-        return (0<=int): the value stored for the given bank/parameter
-        """
-        val = self.SendInstruction(10, param, bank)
-        return val
-
-    def SetGlobalParam(self, bank, param, val):
-        """
-        Write the parameter setting from the RAM
-        bank (0<=int<=2): bank number
-        param (0<=int<=255): parameter number
-        val (int): the value to store
-        """
-        self.SendInstruction(9, param, bank, val)
-
-    def GetCoordinate(self, axis, num):
-        """
-        Read the axis/parameter setting from the RAM
-        axis (0<=int<=2): axis number
-        num (0<=int<=20): coordinate number
-        return (0<=int): the coordinate stored
-        """
-        val = self.SendInstruction(30, num, axis)
-        return val
-
-    def MoveAbsPos(self, axis, pos):
-        """
-        Requests a move to an absolute position. This is non-blocking.
-        axis (0<=int<=2): axis number
-        pos (-2**31 <= int 2*31-1): position
-        """
-        self.SendInstruction(4, 0, axis, pos) # 0 = absolute
-        
-    def MoveRelPos(self, axis, offset):
-        """
-        Requests a move to a relative position. This is non-blocking.
-        axis (0<=int<=2): axis number
-        offset (-2**31 <= int 2*31-1): relative position
-        """
-        self.SendInstruction(4, 1, axis, offset) # 1 = relative
-        # it returns the expected final absolute position
-        
-    def MotorStop(self, axis):
-        self.SendInstruction(3, mot=axis)
-        
-    def _isOnTarget(self, axis):
-        """
-        return (bool): True if the target position is reached
-        """
-        reached = self.GetAxisParam(axis, 8)
-        return (reached != 0)
 
     # high-level methods (interface)
     def _updatePosition(self, axes=None):
@@ -403,13 +331,10 @@ class PM8742(model.Actuator):
         axes (set of str): names of the axes to update or None if all should be
           updated
         """
-        if axes is None:
-            axes = self._axes_names
         pos = self.position.value
-        for i, n in enumerate(self._axes_names):
-            if n in axes:
-                # param 1 = current position
-                pos[n] = self.GetAxisParam(i, 1) * self._ustepsize[i]
+        for n, i in self._name_to_axis.items():
+            if axes is None or n in axes:
+                pos[n] = self.GetPosition(i) * self._stepsize[i - 1]
 
         # it's read-only, so we change it via _value
         self.position._value = pos
@@ -420,6 +345,9 @@ class PM8742(model.Actuator):
         Update the speed VA from the controller settings
         """
         speed = {}
+        for n, i in self._name_to_axis.items():
+            speed[n] = self.GetVelocity(i) * self._stepsize[i - 1]
+
         # TODO: make it read/write
         # it's read-only, so we change it via _value
         self.speed._value = speed
@@ -443,8 +371,8 @@ class PM8742(model.Actuator):
         
         # Check if the distance is big enough to make sense
         for an, v in shift.items():
-            aid = self._axes_names.index(an)
-            if abs(v) < self._ustepsize[aid]:
+            aid = self._name_to_axis[an]
+            if abs(v) < self._stepsize[aid - 1]:
                 # TODO: store and accumulate all the small moves instead of dropping them?
                 del shift[an]
                 logging.info("Dropped too small move of %f m", abs(v))
@@ -481,12 +409,12 @@ class PM8742(model.Actuator):
             end = 0 # expected end
             moving_axes = set()
             for an, v in pos.items():
-                aid = self._axes_names.index(an)
+                aid = self._name_to_axis[an]
                 moving_axes.add(aid)
-                usteps = int(round(v / self._ustepsize[aid]))
-                self.MoveRelPos(aid, usteps)
+                steps = int(round(v / self._stepsize[aid - 1]))
+                self.MoveRel(aid, steps)
                 # compute expected end
-                dur = abs(usteps) * self._ustepsize[aid] / self.speed.value[an]
+                dur = abs(steps) * self._stepsize[aid - 1] / self.speed.value[an]
                 end = max(time.time() + dur, end)
 
             self._waitEndMove(future, moving_axes, end)
@@ -503,10 +431,10 @@ class PM8742(model.Actuator):
             old_pos = self.position.value
             moving_axes = set()
             for an, v in pos.items():
-                aid = self._axes_names.index(an)
+                aid = self._name_to_axis[an]
                 moving_axes.add(aid)
-                usteps = int(round(v / self._ustepsize[aid]))
-                self.MoveAbsPos(aid, usteps)
+                steps = int(round(v / self._stepsize[aid - 1]))
+                self.MoveAbs(aid, steps)
                 # compute expected end
                 dur = abs(v - old_pos[an]) / self.speed.value[an]
                 end = max(time.time() + dur, end)
@@ -531,7 +459,7 @@ class PM8742(model.Actuator):
         try:
             while not future._must_stop.is_set():
                 for aid in moving_axes.copy(): # need copy to remove during iteration
-                    if self._isOnTarget(aid):
+                    if not self.IsMoving(aid):
                         moving_axes.discard(aid)
                 if not moving_axes:
                     # no more axes to wait for
@@ -539,7 +467,7 @@ class PM8742(model.Actuator):
 
                 # Update the position from time to time (10 Hz)
                 if time.time() - last_upd > 0.1 or last_axes != moving_axes:
-                    last_names = set(self._axes_names[i] for i in last_axes)
+                    last_names = set(n for n, i in self._name_to_axis.items() if i in last_axes)
                     self._updatePosition(last_names)
                     last_upd = time.time()
                     last_axes = moving_axes.copy()
@@ -552,7 +480,7 @@ class PM8742(model.Actuator):
             logging.debug("Move of axes %s cancelled before the end", axes)
             # stop all axes still moving them
             for i in moving_axes:
-                self.MotorStop(i)
+                self.StopMotion(i)
             future._was_stopped = True
             raise CancelledError()
         finally:
@@ -579,39 +507,265 @@ class PM8742(model.Actuator):
     @classmethod
     def scan(cls):
         """
-        returns (list of 2-tuple): name, args (sn)
+        returns (list of (str, dict)): name, kwargs
         Note: it's obviously not advised to call this function if a device is already under use
         """
-        # TODO: use serial.tools.list_ports.comports() (but only availabe in pySerial 2.6)
-        if os.name == "nt":
-            ports = ["COM" + str(n) for n in range (0, 8)]
-        else:
-            ports = glob.glob('/dev/ttyACM?*')
-
         logging.info("Scanning for TMCM controllers in progress...")
-        found = []  # (list of 2-tuple): name, args (port, axes(channel -> CL?)
-        for p in ports:
+        found = []  # (list of 2-tuple): name, kwargs
+        try:
+            conts = cls._scanOverIP()
+        except IOError as exp:
+            logging.exception("Failed to scan for New Focus controllers: %s", exp)
+
+        for hn, host, port in conts:
             try:
-                logging.debug("Trying port %s", p)
-                dev = cls(None, None, p, axes=["x", "y", "z"],
-                          ustepsize=[10e-9, 10e-9, 10e-9])
-                modl, vmaj, vmin = dev.GetVersion()
-                # TODO: based on the model name (ie, the first number) deduce
-                # the number of axes
+                logging.debug("Trying controller at %s", host)
+                dev = cls(None, None, address=host, axes=["a"], stepsize=[1e-6])
+                modl, fw, sn = dev.GetIdentification()
+
+                # find out about the axes
+                dev.MotorCheck()
+                axes = []
+                stepsize = []
+                for i in range(1, 5):
+                    mt = dev.GetMotorType(i)
+                    n = chr(ord('a') + i - 1)
+                    # No idea about the stepsize, but make it different to allow
+                    # distinguishing between motor types
+                    if mt == MT_STANDARD:
+                        ss = 10e-6
+                    elif mt == MT_TINY:
+                        ss = 1e-6
+                    else:
+                        n = ""
+                        ss = 0
+                    axes.append(n)
+                    stepsize.append(ss)
             except IOError:
                 # not possible to use this port? next one!
                 continue
             except Exception:
-                logging.exception("Error while communicating with port %s", p)
+                logging.exception("Error while communicating with controller %s @ %s:%s",
+                                  hn, host, port)
                 continue
 
             found.append(("TMCM-%s" % modl,
-                          {"port": p,
-                           "axes": ["x", "y", "z"],
-                           "ustepsize": [10e-9, 10e-9, 10e-9]})
+                          {"address": host,
+                           "axes": axes,
+                           "stepsize": stepsize,
+                           "sn": sn})
                         )
 
         return found
+
+    @classmethod
+    def _openConnection(cls, address, sn=None):
+        """
+        return (Accesser)
+        """
+        if address == "fake":
+            host, port = "fake", 23
+        elif address == "autoip":
+            conts = cls._scanOverIP()
+            if sn is not None:
+                for hn, host, port in conts:
+                    # Open connection to each controller and ask for their SN
+                    dev = cls(None, None, address=host, axes=["a"], stepsize=[1e-6])
+                    _, _, devsn = dev.GetIdentification()
+                    if sn == devsn:
+                        break
+                else:
+                    raise HwError("Failed to find New Focus controller %s over the "
+                                  "network. Ensure it is turned on and connected to "
+                                  "the network." % (sn))
+            else:
+                # just pick the first one
+                # TODO: only pick the ones of model 8742
+                try:
+                    hn, host, port = conts[0]
+                    logging.info("Connecting to New Focus %s", hn)
+                except IndexError:
+                    raise HwError("Failed to find New Focus controller over the "
+                                  "network. Ensure it is turned on and connected to "
+                                  "the network.")
+
+        else:
+            # split the (IP) port, separated by a :
+            if ":" in address:
+                host, ipport_str = port.split(":")
+                port = int(ipport_str)
+            else:
+                host = address
+                port = 23 # default
+
+        return IPAccesser(host, port)
+
+    @staticmethod
+    def _scanOverIP():
+        """
+        Scan the network for all the responding new focus controllers
+        Note: it actually calls a separate executable because it relies on opening
+          a network port which needs special privileges.
+        return (list of (str, str, int)): hostname, ip address, and port number
+        """
+        # Run the separate program via authbind
+        try:
+            exc = os.path.join(os.path.dirname(__file__), "nfpm_netscan.py")
+            out = subprocess.check_output(["authbind", "python", exc])
+        except CalledProcessError as exp:
+            # and handle all the possible errors:
+            # - no authbind (127)
+            # - cannot find the separate program (2)
+            # - no authorisation (13)
+            ret = exp.returncode
+            if ret == 127:
+                raise IOError("Failed to find authbind")
+            elif ret == 2:
+                raise IOError("Failed to find %s" % exc)
+            elif ret == 13:
+                raise IOError("No permission to open network port 23")
+
+        # or decode the output
+        # hostname \t host \t port
+        ret = []
+        for l in out.split("\n"):
+            if not l:
+                continue
+            try:
+                hn, host, port = l.split("\t")
+            except Exception:
+                logging.exception("Failed to decode scanner line '%s'", l)
+            ret.append((hn, host, port))
+
+        return ret
+
+class IPAccesser(object):
+    """
+    Manages low-level connections over IP
+    """
+    def __init__(self, host, port=23):
+        """
+        host (string): the IP address or host name of the master controller
+        port (int): the (IP) port number
+        """
+        self._host = host
+        self._port = port
+        if host == "fake":
+            self.socket = PM8742Simulator()
+        else:
+            try:
+                self.socket = socket.create_connection((host, port), timeout=5)
+            except socket.timeout:
+                raise model.HwError("Failed to connect to '%s:%d', check the New Focus "
+                                    "controller is connected to the network, turned "
+                                    " on, and correctly configured." % (host, port))
+
+        self.socket.settimeout(1.0) # s
+
+        # it always sends '\xff\xfd\x03\xff\xfb\x01' on a new connection
+        # => discard it
+        try:
+            data = self.socket.recv(100)
+        except socket.timeout:
+            logging.debug("Didn't receive any welcome message")
+        
+        # to acquire before sending anything on the socket
+        self._net_access = threading.Lock()
+
+    def terminate(self):
+        self.socket.close()
+
+    def sendOrderCommand(self, cmd, val="", axis=None):
+        """
+        Sends one command, and don't expect any reply
+        cmd (str): command to send
+        val (str): value to send (if any) 
+        axis (1<=int<=4 or None): axis number
+        raises:
+            IOError: if problem with sending/receiving data over the connection
+            NewFocusError: if error happened
+        """
+        if axis is None:
+            str_axis = ""
+        else:
+            str_axis = "%d" % axis
+
+        if not 1 <= len(cmd) <= 10:
+            raise ValueError("Command %s is very likely wrong" % (cmd,))
+
+        # Note: it also accept a N> prefix to specify the controller number,
+        # but we don't support multiple controllers (for now)
+        msg = "%s%s%s\r" % (str_axis, cmd, val)
+
+        with self._net_access:
+            logging.debug("Sending: '%s'", msg.encode('string_escape'))
+            self.socket.sendall(msg)
+
+    def sendQueryCommand(self, cmd, val="", axis=None):
+        """
+        Sends one command, and don't expect any reply
+        cmd (str): command to send, without ?
+        val (str): value to send (if any) 
+        axis (1<=int<=4 or None): axis number
+        raises:
+            IOError: if problem with sending/receiving data over the connection
+            NewFocusError: if error happened
+        """
+        if axis is None:
+            str_axis = ""
+        else:
+            str_axis = "%d" % axis
+
+        if not 1 <= len(cmd) <= 10:
+            raise ValueError("Command %s is very likely wrong" % (cmd,))
+
+        # Note: it also accept a N> prefix to specify the controller number,
+        # but we don't support multiple controllers (for now)
+        msg = "%s%s?%s\r" % (str_axis, cmd, val)
+
+        with self._net_access:
+            logging.debug("Sending: '%s'", msg.encode('string_escape'))
+            self.socket.sendall(msg)
+
+            # read the answer
+            end_time = time.time() + 0.5
+            ans = ""
+            while True:
+                try:
+                    data = self.socket.recv(4096)
+                except socket.timeout:
+                    raise HwError("Controller %s timed out after %s" %
+                                  (self._host, msg.encode('string_escape')))
+
+                if not data:
+                    logging.debug("Received empty message")
+
+                ans += data
+                # does it look like we received a full answer?
+                if len(ans) >= 3 and ans[-2:] == "\r\n":
+                    break
+
+                if time.time() > end_time:
+                    raise IOError("Controller %s timed out after %s" %
+                                  (self._host, msg.encode('string_escape')))
+                time.sleep(0.01)
+
+        logging.debug("Received: %s", ans.encode('string_escape'))
+        return ans[:-2] # remove the end of line characters
+
+    def flushInput(self):
+        """
+        Ensure there is no more data queued to be read on the bus
+        """
+        with self._net_access:
+            try:
+                while True:
+                    data = self.socket.recv(4096)
+            except socket.timeout:
+                pass
+            except Exception:
+                logging.exception("Failed to flush correctly the socket")
+
 
 class PM8742Simulator(object):
     """

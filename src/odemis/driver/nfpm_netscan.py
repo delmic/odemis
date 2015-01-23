@@ -28,11 +28,10 @@ def scan():
                 continue
             elif data.startswith("\xfe") and len(data) > 25: # That should be an answer packet
                 try:
-                    # contains thing like "8742-15433\x00"
-                    end_ver = data.index("\x00", 19)
-                    ver = data[19:end_ver]
-                    modl, sn = ver.split("-")
-                    print "%s\t%s\t%s\t%d" % (modl, sn, addr, p)
+                    # Look for the hostname (default is like "8742-15433\x00")
+                    end_hn = data.index("\x00", 19)
+                    hn = data[19:end_hn]
+                    print "%s\t%s\t%d" % (hn, addr, p)
                 except Exception:
                     logging.exception("Failed to decode packet %r from %s", data, addr)
             else:
