@@ -763,7 +763,11 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
         holes_found = []
         et = escan.dwellTime.value * numpy.prod(escan.resolution.value)
         hole_focus = known_focus
-        escan.accelVoltage.value = 5.5e03  # 5.5 kV, to ensure that holes are visible
+
+        detector.data.subscribe(_discard_data)  # unblank the beam
+        escan.accelVoltage.value = 5.6e03  # to ensure that features are visible
+        detector.data.unsubscribe(_discard_data)
+
         for pos in EXPECTED_HOLES:
             if future._hole_detection_state == CANCELLED:
                 raise CancelledError()
@@ -772,8 +776,12 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
             f.result()
             # Set the FoV to almost 2mm
             escan.horizontalFoV.value = escan.horizontalFoV.range[1]
-            # Just to force autocontrast
-            escan.accelVoltage.value += 50
+            # Apply autocontrast
+            detector.data.subscribe(_discard_data)  # unblank the beam
+            f = escan.applyAutoContrast()
+            f.result()
+            detector.data.unsubscribe(_discard_data)
+
             # Apply the given sem focus value for a good initial focus level
             if hole_focus is not None:
                 f = ebeam_focus.moveAbs({"z":hole_focus})
@@ -783,7 +791,6 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
             if (pos == EXPECTED_HOLES[0]):
                 escan.horizontalFoV.value = 250e-06  # m
                 escan.scale.value = (2, 2)
-                # escan.accelVoltage.value += 50
                 f = autofocus.AutoFocus(detector, escan, ebeam_focus, autofocus.ROUGH_SPOTMODE_ACCURACY)
                 hole_focus, fm_level = f.result()
                 escan.horizontalFoV.value = escan.horizontalFoV.range[1]
@@ -1059,7 +1066,6 @@ def _DoHFWShiftFactor(future, detector, escan, sem_stage, ebeam_focus, known_foc
         escan.resolution.value = escan.resolution.range[1]
         escan.translation.value = (0, 0)
         escan.dwellTime.value = 7.5e-07  # s
-        escan.accelVoltage.value = 5.5e03  # 5 kV, to ensure that features are visible
 
         # Move Phenom sample stage to the first expected hole position
         # to ensure there are some features for the phase correlation
@@ -1072,8 +1078,11 @@ def _DoHFWShiftFactor(future, detector, escan, sem_stage, ebeam_focus, known_foc
         shift_values = []
         hfw_values = []
         zoom_f = 2  # zoom factor
-        # Just to force autocontrast
-        escan.accelVoltage.value += 100
+
+        detector.data.subscribe(_discard_data)  # unblank the beam
+        escan.accelVoltage.value = 5.6e03  # to ensure that features are visible
+        detector.data.unsubscribe(_discard_data)
+
         # Apply the given sem focus value for a good focus level
         f = ebeam_focus.moveAbs({"z":known_focus})
         f.result()
@@ -1208,7 +1217,6 @@ def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus, kn
         escan.horizontalFoV.value = 1200e-06  # m
         escan.translation.value = (0, 0)
         et = 7.5e-07 * numpy.prod(escan.resolution.range[1])
-        escan.accelVoltage.value = 5.5e03  # 5 kV, to ensure that features are visible
 
         # Move Phenom sample stage to the first expected hole position
         # to ensure there are some features for the phase correlation
@@ -1220,8 +1228,11 @@ def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus, kn
         cur_resolution = max_resolution
         shift_values = []
         resolution_values = []
-        # Just to force autocontrast
-        escan.accelVoltage.value += 100
+
+        detector.data.subscribe(_discard_data)  # unblank the beam
+        escan.accelVoltage.value = 5.6e03  # to ensure that features are visible
+        detector.data.unsubscribe(_discard_data)
+
         # Apply the given sem focus value for a good focus level
         f = ebeam_focus.moveAbs({"z":known_focus})
         f.result()
