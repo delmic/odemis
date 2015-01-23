@@ -131,22 +131,26 @@ class PM8742(model.Actuator):
                 self._serial.close()
                 self._serial = None
 
-    def _openConnection(self, address, sn=None):
+    @classmethod
+    def _openConnection(cls, address, sn=None):
         if address == "fake":
             return PM8742Simulator()
         elif address == "autoip":
-            conts = self._scanOverIP()
+            conts = cls._scanOverIP()
             if sn is not None:
                 try:
-                    host, port = conts[sn]
+                    modl, host, port = conts[sn]
                 except KeyError:
                     raise HwError("Failed to find New Focus controller %s over the "
                                   "network. Ensure it is turned on and connected to "
                                   "the network." % (sn))
             else:
-                # just pick the first one
+                # just pick the first one (of model 8742)
                 try:
-                    sn, (host, port) = conts.popitem()
+                    while True:
+                        sn, (modl, host, port) = conts.popitem()
+                        if modl == "8742":
+                            break
                     logging.info("Connecting to New Focus %s", sn)
                 except KeyError:
                     raise HwError("Failed to find New Focus controller over the "
@@ -162,7 +166,7 @@ class PM8742(model.Actuator):
                 host = address
                 port = 23 # default
 
-        return self._openIPSocket(host, port)
+        return cls._openIPSocket(host, port)
 
     @staticmethod
     def _scanOverIP():
@@ -170,22 +174,40 @@ class PM8742(model.Actuator):
         Scan the network for all the responding new focus controllers
         Note: it actually calls a separate executable because it relies on opening
           a network port which needs special privileges.
-        return (dict str -> (str, int)): serial number to ip address and port number
+        return (dict str -> (str, str, int)): serial number to model, ip address, and port number
         """
-        # TODO: Run the separate program via authbind
-
+        # Run the separate program via authbind
         try:
-            exc = os.path.joing(os.path.dirname(__file__), "nfpm_netscan.py")
-            out = subprocess.check_output(["authbind", exc])
+            exc = os.path.join(os.path.dirname(__file__), "nfpm_netscan.py")
+            out = subprocess.check_output(["authbind", "python", exc])
         except CalledProcessError as exp:
             # and handle all the possible errors:
-            # - no authbind
-            # - cannot find the separate program
-            # - no authorisation
+            # - no authbind (127)
+            # - cannot find the separate program (2)
+            # - no authorisation (13)
             ret = exp.returncode
-        
-        # or decode the output
+            if ret == 127:
+                raise IOError("Failed to find authbind")
+            elif ret == 2:
+                raise IOError("Failed to find %s" % exc)
+            elif ret == 13:
+                raise IOError("No permission to open network port 23")
 
+        # or decode the output
+        # model \t SN \t host \t port
+        ret = {}
+        for l in out.split("\n"):
+            if not l:
+                continue
+            try:
+                modl, sn, host, port = l.split("\t")
+            except Exception:
+                logging.exception("Failed to decode scanner line '%s'", l)
+            ret[sn] = (modl, host, port)
+
+        return ret
+
+    # TODO: return an "Accesser" object instead of a simple socket?
     @staticmethod
     def _openIPSocket(host, port=23):
         """
