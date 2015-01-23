@@ -477,6 +477,8 @@ class PM8742(model.Actuator):
                 sleept = max(0, min(left / 2, 0.1))
                 future._must_stop.wait(sleept)
 
+                # TODO: timeout if really too long
+
             logging.debug("Move of axes %s cancelled before the end", axes)
             # stop all axes still moving them
             for i in moving_axes:
@@ -485,6 +487,7 @@ class PM8742(model.Actuator):
             raise CancelledError()
         finally:
             self._updatePosition() # update (all axes) with final position
+            # TODO: self._checkError()
 
     def _cancelCurrentMove(self, future):
         """
@@ -773,25 +776,22 @@ class PM8742Simulator(object):
     Same interface as the network socket
     """
     def __init__(self):
-        self._output_buf = "" # what the commands sends back to the "host computer"
+        self._timeout = 1 # s
+        self._output_buf = "\xff\xfd\x03\xff\xfb\x01" # what the commands sends back to the "host computer"
         self._input_buf = "" # what we receive from the "host computer"
 
         self._naxes = 4
 
-        # internal state
-        self._id = 1
-
-        # internal global param values
-        # 4 * dict(int -> int: param number -> value)
-        self._gstate = [{}, {}, {}, {}]
+        # internal error fifo (int, max len 10)
+        self._error = []
 
         # internal axis param values
-        # int -> int: param number -> value
-        orig_axis_state = {0: 0, # target position
-                           1: 0, # current position (unused directly)
-                           4: 1024, # maximum positioning speed
-                           8: 1, # target reached? (unused directly)
-                           154: 3, # pulse div
+        # str -> int: command name -> value
+        orig_axis_state = {"QM": MT_TINY, # Motor type
+                           "PA": 0, # target position
+                           "TP": 0, # current position
+                           "VA": 1750, # velocity
+                           "AC": 100000, # acceleration
                            }
         self._astates = [dict(orig_axis_state) for i in range(self._naxes)]
 
@@ -812,28 +812,17 @@ class PM8742Simulator(object):
         pos = startp + (endp - startp) * (now - startt) / (endt - startt)
         return pos
 
-    def _getMaxSpeed(self, axis):
-        """
-        return (float): speed in microsteps/s
-        """
-        velocity = self._astates[axis][4]
-        pulse_div = self._astates[axis][154]
-        usf = (16e6 * velocity) / (2 ** pulse_div * 2048 * 32)
-        return usf # µst/s
-
-    def write(self, data):
-        # We accept both a string/bytes and numpy array
-        if isinstance(data, numpy.ndarray):
-            data = data.tostring()
+    # socket interface
+    def sendall(self, data):
         self._input_buf += data
 
-        # each message is 9 bytes => take the first 9 and process them
+        # separate into commands by splitting around any separator "\n\r;"
         while len(self._input_buf) >= 9:
             msg = self._input_buf[:9]
             self._input_buf = self._input_buf[9:]
             self._parseMessage(msg) # will update _output_buf
 
-    def read(self, size=1):
+    def recv(self, size=1):
         ret = self._output_buf[:size]
         self._output_buf = self._output_buf[len(ret):]
 
@@ -842,8 +831,8 @@ class PM8742Simulator(object):
             time.sleep(self.timeout)
         return ret
 
-    def flush(self):
-        pass
+    def settimeout(self, t):
+        self.timeout = t
 
     def flushInput(self):
         self._output_buf = ""
@@ -853,13 +842,7 @@ class PM8742Simulator(object):
         del self._output_buf
         del self._input_buf
 
-    def _sendReply(self, inst, status=100, val=0):
-        msg = numpy.empty(9, dtype=numpy.uint8)
-        struct.pack_into('>BBBBiB', msg, 0, 2, self._id, status, inst, val, 0)
-        # compute the checksum (just the sum of all the bytes)
-        msg[-1] = numpy.sum(msg[:-1], dtype=numpy.uint8)
-
-        self._output_buf += msg.tostring()
+    # Command decoding
         
     def _parseMessage(self, msg):
         """
