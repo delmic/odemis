@@ -1081,6 +1081,8 @@ def _DoHFWShiftFactor(future, detector, escan, sem_stage, ebeam_focus, known_foc
 
         detector.data.subscribe(_discard_data)  # unblank the beam
         escan.accelVoltage.value = 5.6e03  # to ensure that features are visible
+        f = escan.applyAutoContrast()
+        f.result()
         detector.data.unsubscribe(_discard_data)
 
         # Apply the given sem focus value for a good focus level
@@ -1231,6 +1233,8 @@ def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus, kn
 
         detector.data.subscribe(_discard_data)  # unblank the beam
         escan.accelVoltage.value = 5.6e03  # to ensure that features are visible
+        f = escan.applyAutoContrast()
+        f.result()
         detector.data.unsubscribe(_discard_data)
 
         # Apply the given sem focus value for a good focus level
