@@ -1290,7 +1290,7 @@ class AnalysisTab(Tab):
 
             # ########### Combined views and spectrum view visible
 
-            new_visible_views[0:2] = self._def_views[2:4] # Combined
+            new_visible_views[0:2] = self._def_views[2:4]  # Combined
             new_visible_views[2] = self.main_frame.vp_spatialspec.microscope_view
             new_visible_views[3] = self.main_frame.vp_inspection_plot.microscope_view
 

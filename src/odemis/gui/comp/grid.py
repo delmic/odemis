@@ -121,6 +121,16 @@ class ViewportGrid(wx.Panel):
             self._layout_viewports()
             self._show_hide_viewports()
 
+    def set_enabled_viewports(self, enabled_viewports):
+        """ Disable the given viewports, so they won't update """
+        for viewport in self.viewports:
+            viewport.Enable(viewport in enabled_viewports)
+
+    def set_disabled_viewports(self, disable_viewports):
+        """ Disable the given viewports, so they won't update """
+        for viewport in self.viewports:
+            viewport.Enable(viewport not in disable_viewports)
+
     # #### END Viewport showing and hiding #### #
 
     def on_size(self, _):

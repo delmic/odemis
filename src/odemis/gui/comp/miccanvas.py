@@ -55,8 +55,7 @@ SPARC_MODES = (guimodel.TOOL_ROA, guimodel.TOOL_POINT, guimodel.TOOL_RO_ANCHOR)
 
 @decorator
 def microscope_view_check(f, self, *args, **kwargs):
-    """ This method decorator check if the microscope_view attribute is set
-    """
+    """ This method decorator check if the microscope_view attribute is set """
     if self.microscope_view:
         return f(self, *args, **kwargs)
 
@@ -83,6 +82,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
     def __init__(self, *args, **kwargs):
         canvas.DraggableCanvas.__init__(self, *args, **kwargs)
+
         self.microscope_view = None
         self._tab_data_model = None
 
@@ -105,8 +105,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # physical coordinates and down in world coordinates.
 
         self._previous_size = self.ClientSize
-
-        self.cursor = wx.STANDARD_CURSOR
 
         # Overlays
 
@@ -149,6 +147,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         :param microscope_view:(model.MicroscopeView)
         :param tab_data: (model.MicroscopyGUIData)
         """
+
         # This is a kind of kludge, see mscviewport.MicroscopeViewport for details
         assert(self.microscope_view is None)
 
@@ -167,7 +166,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.requested_world_pos = world_pos
 
         # any image changes
-        self.microscope_view.lastUpdate.subscribe(self._onViewImageUpdate, init=True)
+        self.microscope_view.lastUpdate.subscribe(self._on_view_image_update, init=True)
 
         # handle cross hair
         self.microscope_view.show_crosshair.subscribe(self._on_cross_hair_show, init=True)
@@ -189,6 +188,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # A weird situation which should not happen
         if self.dragging:
             logging.error("Changing to mode (%s) while dragging is not supported!", tool_mode)
+            return
 
         # Check if the desired tool mode is allowed
         if self.allowed_modes and tool_mode not in self.allowed_modes:
@@ -224,7 +224,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         """ Activate the cross hair view overlay """
         if activated:
             if self._crosshair_ol is None:
-                self._crosshair_ol = self.add_view_overlay(view_overlay.CrossHairOverlay(self))
+                self._crosshair_ol = view_overlay.CrossHairOverlay(self)
             self.add_view_overlay(self._crosshair_ol)
         elif self._crosshair_ol:
             self.remove_view_overlay(self._crosshair_ol)
@@ -239,7 +239,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         """ Called when GUI debug mode changes => display FPS overlay """
         if activated:
             if self._fps_ol is None:
-                self._fps_ol = self.add_view_overlay(view_overlay.TextViewOverlay(self))
+                self._fps_ol = view_overlay.TextViewOverlay(self)
                 self._fps_ol.add_label("")
             self.add_view_overlay(self._fps_ol)
         elif self._fps_ol:
@@ -252,7 +252,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         if is_activated:
             if self._spotmode_ol is None:
-                self._spotmode_ol = self.add_view_overlay(view_overlay.SpotModeOverlay(self))
+                self._spotmode_ol = view_overlay.SpotModeOverlay(self)
             self.add_view_overlay(self._spotmode_ol)
         elif self._spotmode_ol:
             self.remove_view_overlay(self._spotmode_ol)
@@ -264,12 +264,11 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
     def _set_dichotomy_mode(self, tool_mode):
         """ Activate the dichotomy overlay if needed """
+
         if tool_mode == guimodel.TOOL_DICHO:
             if not self.dicho_overlay:
-                self.dicho_overlay = view_overlay.DichotomyOverlay(
-                    self,
-                    self._tab_data_model.dicho_seq
-                )
+                self.dicho_overlay = view_overlay.DichotomyOverlay(self,
+                                                                   self._tab_data_model.dicho_seq)
                 self.add_view_overlay(self.dicho_overlay)
             self.dicho_overlay.activate()
         elif self.dicho_overlay:
@@ -323,10 +322,12 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
     # END Overlay creation and activation
 
     def _get_ordered_images(self):
-        """
-        Return the list of images to display, ordered bottom to top (=last to draw)
+        """ Return the list of images to display, ordered bottom to top (=last to draw)
+
         The last image of the list will have the merge ratio applied (as opacity)
+
         """
+
         # The ordering is as follow:
         # * Optical images all together first, to be blended with screen operator
         #   The biggest one is set as first and drawn full opacity in order to
@@ -420,9 +421,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
     # seems to keep reference to the SecomCanvas, which prevents it from being
     # fully destroyed.
     @ignore_dead
-    def _onViewImageUpdate(self, t):
-        # TODO: use the real streamtree functions
-        # for now we call a conversion layer
+    def _on_view_image_update(self, t):
+        # TODO: use the real streamtree functions,for now we call a conversion layer
         self._convert_streams_to_images()
         if self.fit_view_to_next_image and any([i is not None for i in self.images]):
             self.fit_view_to_content()
@@ -444,7 +444,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
     @call_after  # needed as it accesses the DC
     @ignore_dead
     def _update_thumbnail(self):
-        if self.Parent.IsShown():
+        if self.IsEnabled():
             # TODO: avoid doing 2 copies, by using directly the wxImage from the
             # result of the StreamTree
             # logging.debug("Updating thumbnail with size = %s", self.ClientSize)
@@ -814,10 +814,9 @@ class OverviewCanvas(DblMicroscopeCanvas):
 
         self.background_brush = wx.BRUSHSTYLE_SOLID
 
-        # Point select overlay for stage navigation
+        # Point select overlay for stage navigation. Does not need to be assigned to any overlay
+        # list, because it does not draw anything.
         self.point_select_overlay = PointSelectOverlay(self)
-        self.add_active_overlay(self.point_select_overlay)
-        # It will be activated by the viewport (when needed)
 
         # This canvas can have a special overlay for tracking position history
         self.history_overlay = None
@@ -830,7 +829,6 @@ class OverviewCanvas(DblMicroscopeCanvas):
 
     def setView(self, microscope_view, tab_data):
         super(OverviewCanvas, self).setView(microscope_view, tab_data)
-
         self.history_overlay = HistoryOverlay(self, tab_data.stage_history)
         self.add_view_overlay(self.history_overlay)
 
@@ -839,7 +837,7 @@ class OverviewCanvas(DblMicroscopeCanvas):
     @ignore_dead
     def _update_thumbnail(self):
 
-        if self.ClientSize.x * self.ClientSize.y <= 0:
+        if not self.IsEnabled() or self.ClientSize.x * self.ClientSize.y <= 0:
             return  # nothing to update
 
         # We need to scale the thumbnail ourselves, instead of letting the button handle it, because
@@ -1274,10 +1272,10 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         self.microscope_view = microscope_view
         self._tab_data_model = tab_data
 
-    @wxlimit_invocation(2)  # max 1/2 Hz
+    # @wxlimit_invocation(2)  # max 1/2 Hz
     @call_after  # needed as it accesses the DC
     def _update_thumbnail(self):
-        if self.Parent.IsShown():
+        if self.IsEnabled():
             csize = self.ClientSize
             if (csize[0] * csize[1]) <= 0:
                 return  # nothing to update
@@ -1323,7 +1321,6 @@ class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
             self,
             orientation=MarkingLineOverlay.HORIZONTAL | MarkingLineOverlay.VERTICAL)
         self.add_view_overlay(self.markline_overlay)
-        self.markline_overlay.activate()
 
         self.background_brush = wx.BRUSHSTYLE_SOLID
 
@@ -1400,11 +1397,12 @@ class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
         self.set_images([(im_data, (0.0, 0.0), 1.0, True, None, None, "Spatial Spectrum")])
         self.markline_overlay.activate()
 
-    @wxlimit_invocation(2)  # max 1/2 Hz
+    # @wxlimit_invocation(2)  # max 1/2 Hz
     @call_after  # needed as it accesses the DC
     def _update_thumbnail(self):
-        if self.Parent.IsShown():
+        if self.IsEnabled():
             # new bitmap to copy the DC
+
             bitmap = wx.EmptyBitmap(*self.ClientSize)
             # print [self.Shown, self.Size]
             context = wx.ClientDC(self)
@@ -1444,7 +1442,6 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         self.polar_overlay = view_overlay.PolarOverlay(self)
         self.polar_overlay.canvas_padding = 10
         self.add_view_overlay(self.polar_overlay)
-        self.add_active_overlay(self.polar_overlay)
 
     # Event handlers
 
@@ -1502,7 +1499,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
     @wxlimit_invocation(2)  # max 1/2 Hz
     @call_after  # needed as it accesses the DC
     def _update_thumbnail(self):
-        if self.Parent.IsShown():
+        if self.IsEnabled():
             csize = self.ClientSize
             if (csize[0] * csize[1]) <= 0:
                 return  # nothing to update

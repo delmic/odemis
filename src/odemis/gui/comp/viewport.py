@@ -190,6 +190,16 @@ class ViewPort(wx.Panel):
     def OnSize(self, evt):
         evt.Skip()  # processed also by the parent
 
+    def Disable(self, *args, **kwargs):
+        logging.debug("Disabling %s", self.canvas)
+        wx.Panel.Disable(self, *args, **kwargs)
+        self.canvas.Disable(*args, **kwargs)
+
+    def Enable(self, *args, **kwargs):
+        logging.debug("Enabling %s", self.canvas)
+        wx.Panel.Enable(self, *args, **kwargs)
+        self.canvas.Enable(*args, **kwargs)
+
 
 class MicroscopeViewport(ViewPort):
     """ A panel that shows a microscope view and its legend(s)
