@@ -192,9 +192,10 @@ class ViewPort(wx.Panel):
 
 
 class MicroscopeViewport(ViewPort):
-    """ A panel that shows a microscope view and its legend below it.
+    """ A panel that shows a microscope view and its legend(s)
 
     This is a generic class, that should be inherited by more specific classes.
+
     """
 
     bottom_legend_class = InfoLegend
@@ -785,6 +786,12 @@ class SpatialSpectrumViewport(ViewPort):
 
         self.spectrum_stream = ss[0]
         self.spectrum_stream.selected_line.subscribe(self._on_line_select, init=True)
+        self.spectrum_stream.selected_pixel.subscribe(self._on_pixel_select)
+
+    def _on_pixel_select(self, pixel):
+        """ Clear the makring line when the selected pixel is cleared """
+        if None in pixel:
+            self.canvas.markline_overlay.clear_labels()
 
     def _on_line_select(self, line):
         """ Line selection event handler """

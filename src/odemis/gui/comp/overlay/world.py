@@ -648,6 +648,10 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, base.PixelDataMixin):
             self.drag_v_end_pos = self.select_v_end_pos = v_pos
 
             self._view_to_world()
+
+            # Clear the selected pixel when the line changes
+            self._selected_pixel_va.value = (None, None)
+
             wx.CallAfter(self.cnvs.update_drawing)
 
     def _on_width(self, _):
