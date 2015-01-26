@@ -161,7 +161,7 @@ class PM8742(model.Actuator):
         # New_Focus 8742 v2.2 08/01/13 11511
         try:
             m = re.match("\w+ (?P<model>\w+) (?P<fw>v\S+ \S+) (?P<sn>\d+)", resp)
-            modl, fw, sn = m.group("model"), m.group("fw"), m.group("sn")
+            modl, fw, sn = m.groups()
         except Exception:
             raise IOError("Failed to decode firmware answer '%s'" %
                           resp.encode('string_escape'))
@@ -259,24 +259,24 @@ class PM8742(model.Actuator):
         resp = self._accesser.sendQueryCommand("TP", axis=axis)
         return int(resp)
 
-    def IsMoving(self, axis):
+    def IsMotionDone(self, axis):
         """
         Check whether the axis is in motion 
         axis (1<=int<=4): axis number
-        return (bool): True if in motion
+        return (bool): False if in motion, True if motion is finished
         """
         resp = self._accesser.sendQueryCommand("MD", axis=axis)
         if resp == "0": # motion in progress
-            return True
-        elif resp == "1": # no motion
             return False
+        elif resp == "1": # no motion
+            return True
         else:
             raise IOError("Failed to decode answer about motion '%s'" %
                           resp.encode('string_escape'))
 
     def AbortMotion(self, axis):
         """
-        Stop immediatelly the motion on all the axes
+        Stop immediately the motion on all the axes
         """
         self._accesser.sendOrderCommand("AB")
 
@@ -459,7 +459,7 @@ class PM8742(model.Actuator):
         try:
             while not future._must_stop.is_set():
                 for aid in moving_axes.copy(): # need copy to remove during iteration
-                    if not self.IsMoving(aid):
+                    if self.IsMotionDone(aid):
                         moving_axes.discard(aid)
                 if not moving_axes:
                     # no more axes to wait for
@@ -474,7 +474,7 @@ class PM8742(model.Actuator):
 
                 # Wait half of the time left (maximum 0.1 s)
                 left = end - time.time()
-                sleept = max(0, min(left / 2, 0.1))
+                sleept = max(0.001, min(left / 2, 0.1))
                 future._must_stop.wait(sleept)
 
                 # TODO: timeout if really too long
@@ -801,34 +801,55 @@ class PM8742Simulator(object):
 
     def _getCurrentPos(self, axis):
         """
-        return (int): position in microsteps
+        axis (1<=int<=4)
+        return (int): position in steps
         """
         now = time.time()
-        startt, endt, startp = self._axis_move[axis]
-        endp = self._astates[axis][0]
+        startt, endt, startp = self._axis_move[axis - 1]
+        endp = self._astates[axis - 1]["PA"]
         if endt < now:
             return endp
         # model as if it was linear (it's not, it's ramp-based positioning)
         pos = startp + (endp - startp) * (now - startt) / (endt - startt)
         return pos
 
+    def _push_error(self, errno):
+        """
+        Add an error to the error fifo
+        errno (int)
+        """
+        logging.warning("Pushing error #%d", errno)
+        self._error = [errno] + self._error[:9] # max 10 errors
+
+    def _pop_error(self):
+        """
+        return (int): oldest error recorded
+        """
+        try:
+            return self._error.pop()
+        except IndexError:
+            return 0 # no error
+
     # socket interface
     def sendall(self, data):
         self._input_buf += data
 
         # separate into commands by splitting around any separator "\n\r;"
-        while len(self._input_buf) >= 9:
-            msg = self._input_buf[:9]
-            self._input_buf = self._input_buf[9:]
+        msgs = re.split("\r|\n|;", self._input_buf, maxsplit=1)
+        while len(msgs) == 2:
+            msg, self._input_buf = msgs
             self._parseMessage(msg) # will update _output_buf
+            msgs = re.split("\r|\n|;", self._input_buf, maxsplit=1)
 
     def recv(self, size=1):
-        ret = self._output_buf[:size]
-        self._output_buf = self._output_buf[len(ret):]
-
-        if len(ret) < size:
+        if not self._output_buf:
             # simulate timeout
             time.sleep(self.timeout)
+            raise socket.timeout("No data after %g s", self.timeout)
+
+        ret = self._output_buf[:size]
+        self._output_buf = self._output_buf[len(ret):]
+        logging.debug("SIM: Sending %s", ret.encode('string_escape'))
         return ret
 
     def settimeout(self, t):
@@ -842,105 +863,121 @@ class PM8742Simulator(object):
         del self._output_buf
         del self._input_buf
 
+    # Command templates: command -> axis (bool), value converter (or None), readable (?)
+    _cmd_tmpl = {"PA": (True, int, True),
+                 "PR": (True, int, True),
+                 "VA": (True, int, True),
+                 "AC": (True, int, True),
+                 "QM": (True, int, True),
+                 "MD": (True, None, True),
+                 "TP": (True, None, True),
+                 "MC": (False, None, False),
+                 "AB": (False, None, False),
+                 "ST": (True, None, False),
+                 "TB": (False, None, True),
+                 "TE": (False, None, True),
+                 "*IDN": (False, None, True),
+                 }
     # Command decoding
-        
     def _parseMessage(self, msg):
         """
-        msg (buffer of length 9): the message to parse
+        msg: the command to parse (without separator)
         return None: self._output_buf is updated if necessary
         """
-        target, inst, typ, mot, val, chk = struct.unpack('>BBBBiB', msg)
-#         logging.debug("SIM: parsing %s", TMCM3110._instr_to_str(msg))
-
-        # Check it's a valid message... for us
-        npmsg = numpy.frombuffer(msg, dtype=numpy.uint8)
-        good_chk = numpy.sum(npmsg[:-1], dtype=numpy.uint8)
-        if chk != good_chk:
-            self._sendReply(inst, status=1) # "Wrong checksum" message
+        # decode command into axis | command | (query | value) (xxCC?nn)
+        m = re.match("(?P<axis>\d+|) ?(?P<cmd>[*A-Za-z]+)(?P<val>\??| ?\S+|)$", msg)
+        if not m:
+            logging.warning("SIM: failed to decode '%s'", msg.encode('string_escape'))
+            self._push_error(6) # COMMAND DOES NOT EXIST
             return
-        if target != self._id:
-            logging.warning("SIM: skipping message for %d", target)
-            # The real controller doesn't seem to care
 
-        # decode the instruction
-        if inst == 3: # Motor stop
-            if not 0 <= mot <= self._naxes:
-                self._sendReply(inst, status=4) # invalid value
+        axis, cmd, val = m.groups()
+        isquery = (val == "?")
+        logging.debug("Decoded command to %s %s %s", axis, cmd, val)
+
+        # axis must be integer => so directly convert to integer and check it
+        if axis:
+            try:
+                axis = int(axis)
+            except ValueError:
+                self._push_error(6) # COMMAND DOES NOT EXIST
                 return
-            # Note: the target position in axis param is not changed (in the
-            # real controller)
-            self._axis_move[mot] = (0, 0, 0)
-            self._sendReply(inst)
-        elif inst == 4: # Move to position
-            if not 0 <= mot <= self._naxes:
-                self._sendReply(inst, status=4) # invalid value
+
+            if not 1 <= axis <= self._naxes:
+                self._push_error(9) # AXIS NUMBER OUT OF RANGE
                 return
-            if not typ in [0, 1, 2]:
-                self._sendReply(inst, status=3) # wrong type
-                return
-            pos = self._getCurrentPos(mot)
-            if typ == 1: # Relative
-                # convert to absolute and continue
-                val += pos
-            elif typ == 2: # Coordinate
-                raise NotImplementedError("simulator doesn't support coordinates")
-            # new move
-            now = time.time()
-            end = now + abs(pos - val) / self._getMaxSpeed(mot)
-            self._astates[mot][0] = val
-            self._axis_move[mot] = (now, end, pos)
-            self._sendReply(inst, val=val)
-        elif inst == 5: # Set axis parameter
-            if not 0 <= mot <= self._naxes:
-                self._sendReply(inst, status=4) # invalid value
-                return
-            if not 0 <= typ <= 255:
-                self._sendReply(inst, status=3) # wrong type
-                return
-            # Warning: we don't handle special addresses
-            if typ == 1: # actual position
-                self._astates[mot][0] = val # set target position, which will be used for current pos
-            else:
-                self._astates[mot][typ] = val
-            self._sendReply(inst, val=val)
-        elif inst == 6: # Get axis parameter
-            if not 0 <= mot <= self._naxes:
-                self._sendReply(inst, status=4) # invalid value
-                return
-            if not 0 <= typ <= 255:
-                self._sendReply(inst, status=3) # wrong type
-                return
-            # special code for special values
-            if typ == 1: # actual position
-                rval = self._getCurrentPos(mot)
-            elif typ == 8: # target reached?
-                rval = 0 if self._axis_move[mot][1] > time.time() else 1
-            else:
-                rval = self._astates[mot].get(typ, 0) # default to 0
-            self._sendReply(inst, val=rval)
-        elif inst == 15: # Get IO
-            if not 0 <= mot <= 2:
-                self._sendReply(inst, status=4) # invalid value
-                return
-            if not 0 <= typ <= 7:
-                self._sendReply(inst, status=3) # wrong type
-                return
-            if mot == 0: # digital inputs
-                rval = 0 # between 0..1
-            elif mot == 1: # analogue inputs
-                rval = 178 # between 0..4095
-            elif mot == 2: # digital outputs
-                rval = 0 # between 0..1
-            self._sendReply(inst, val=rval)
-        elif inst == 136: # Get firmware version
-            if typ == 0: # string
-                raise NotImplementedError("Can't simulated GFV string")
-            elif typ == 1: # binary
-                self._sendReply(inst, val=0x0c260102) # 3110 v1.02
-            else:
-                self._sendReply(inst, status=3) # wrong type
-        elif inst == 138: # Request Target Position Reached Event
-            raise NotImplementedError("Can't simulated RTP string")
         else:
-            logging.warning("SIM: Unsupported instruction %d", inst)
-            self._sendReply(inst, status=2) # wrong instruction
+            axis = None
+
+        cmd = cmd.upper()
+        # Check the command's parameters based on the template
+        try:
+            needa, valconv, canqry = self._cmd_tmpl[cmd]
+            if needa and not axis:
+                self._push_error(37) # AXIS NUMBER MISSING
+                return
+
+            if isquery and not canqry:
+                self._push_error(7) # PARAMETER OUT OF RANGE
+                return
+
+            if valconv and not isquery:
+                # is there a value?
+                if not val:
+                    self._push_error(38) # COMMAND PARAMETER MISSING
+                    return
+                # try to convert
+                try:
+                    vconvd = valconv(val)
+                except ValueError:
+                    self._push_error(7) # PARAMETER OUT OF RANGE
+                    return
+        except KeyError:
+            logging.error("SIM doesn't know command %s", cmd)
+            self._push_error(6) # COMMAND DOES NOT EXIST
+            return
+
+        # decode the command
+        ret = None
+        if cmd in ("VA", "AC", "QM"): # everything about read/writing values
+            if isquery:
+                ret = "%d" % self._astates[axis - 1][cmd]
+            else:
+                self._astates[axis - 1][cmd] = vconvd
+        elif cmd == "MC": # motor check
+            # In theory, we should reset QM, but for now we don't do anything
+            pass
+        elif cmd in ("PA", "PR"): # absolute/relative move
+            if isquery:
+                ret = "%d" % self._astates[axis - 1]["PA"] # TODO: same value as PA for PR?
+            else:
+                pos = self._getCurrentPos(axis)
+                if cmd == "PR": # Relative
+                    # convert to absolute and continue
+                    vconvd += pos
+                # new move
+                speed = self._astates[axis - 1]["VA"]
+                now = time.time()
+                end = now + abs(pos - vconvd) / speed
+                self._astates[axis - 1]["PA"] = vconvd
+                self._axis_move[axis - 1] = (now, end, pos)
+        elif cmd == "TP": # get current postion
+            ret = "%d" % self._getCurrentPos(axis)
+        elif cmd == "MD": # motion done ?
+            ret = "0" if self._axis_move[axis - 1][1] > time.time() else "1"
+        elif cmd == "ST": # stop motion
+            self._axis_move[axis - 1] = (0, 0, 0)
+        elif cmd == "AB": # abort motion on all axes immediately
+            self._axis_move = [(0, 0, 0)] * self._naxes
+        elif cmd == "TB": # error message
+            errno = self._pop_error()
+            ret = "%d, MESSAGE ABOUT ERROR %d" % (errno, errno)
+        elif cmd == "TE": # error no
+            ret = "%d" % self._pop_error()
+        elif cmd == "*IDN": # identificate
+            ret = "New_Focus 8742 v2.2fake 26/01/15 01234"
+        else:
+            logging.error("Unhandled command in simulator %s", cmd)
+
+        if ret is not None:
+            self._output_buf += "%s\r\n" % ret
