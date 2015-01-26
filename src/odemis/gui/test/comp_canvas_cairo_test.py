@@ -70,7 +70,7 @@ class TestCanvas(test.GuiTestCase):
         img = generate_img_data(200, 200, 4)
         steps = 10000
 
-        try:
+        if cnvs:
             for i in range(steps):
                 images = [
                     # Simplest case with the image drawn in the center
@@ -83,8 +83,6 @@ class TestCanvas(test.GuiTestCase):
                 cnvs.update_drawing()
                 if i % 100 == 0:
                     test.gui_loop()
-        except wx.PyDeadObjectError:
-            pass
 
     def test_threading(self):
 
@@ -104,7 +102,7 @@ class TestCanvas(test.GuiTestCase):
         cnvs.default_margin = 0
         cnvs.fit_view_to_next_image = False
         # Create a even black background, so we can test pixel values
-        cnvs.background_brush = wx.SOLID
+        cnvs.background_brush = wx.BRUSHSTYLE_SOLID
 
         self.add_control(cnvs, flags=wx.EXPAND, proportion=1)
         test.gui_loop()
@@ -162,7 +160,7 @@ class TestCanvas(test.GuiTestCase):
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
         cnvs.fit_view_to_next_image = False
         # Create a even black background, so we can test pixel values
-        cnvs.background_brush = wx.SOLID
+        cnvs.background_brush = wx.BRUSHSTYLE_SOLID
 
         self.add_control(cnvs, flags=wx.EXPAND, proportion=1)
         test.gui_loop(10)
@@ -351,7 +349,7 @@ class TestCanvas(test.GuiTestCase):
         view = tab.focussedView.value
         old_canvas = miccanvas.DblMicroscopeCanvas(self.panel)
         old_canvas.use_threading = True
-        # self.canvas.background_brush = wx.SOLID # no special background
+        # self.canvas.background_brush = wx.BRUSHSTYLE_SOLID # no special background
         old_canvas.setView(view, tab)
         self.add_control(old_canvas, flags=wx.EXPAND, proportion=1)
 
@@ -437,7 +435,7 @@ class TestCanvas(test.GuiTestCase):
         tab = self.create_simple_tab_model()
         view = tab.focussedView.value
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
-        # cnvs.background_brush = wx.SOLID  # no special background
+        # cnvs.background_brush = wx.BRUSHSTYLE_SOLID  # no special background
         cnvs.setView(view, tab)
         self.add_control(cnvs, flags=wx.EXPAND, proportion=1)
 

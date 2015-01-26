@@ -26,21 +26,20 @@ Created on 8 Feb 2012
 from __future__ import division
 
 import logging
-import math
+import wx
+
 from odemis import gui, model
-from odemis.acq import stream
 from odemis.acq.stream import OpticalStream, EMStream, SpectrumStream
 from odemis.gui import BG_COLOUR_LEGEND, FG_COLOUR_LEGEND
 from odemis.gui.comp import miccanvas
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
-from odemis.gui.comp.legend import InfoLegend, PlotsAxisLegend, BitmapAxisLegend
+from odemis.gui.comp.legend import InfoLegend, AxisLegend
 from odemis.gui.img.data import getico_blending_goalBitmap
 from odemis.gui.model import CHAMBER_VACUUM, CHAMBER_UNKNOWN
 from odemis.gui.util import call_after
 from odemis.gui.util.raster import rasterize_line
 from odemis.model import NotApplicableError
 from odemis.util import units
-import wx
 
 
 class ViewPort(wx.Panel):
@@ -191,11 +190,22 @@ class ViewPort(wx.Panel):
     def OnSize(self, evt):
         evt.Skip()  # processed also by the parent
 
+    def Disable(self, *args, **kwargs):
+        logging.debug("Disabling %s", self.canvas)
+        wx.Panel.Disable(self, *args, **kwargs)
+        self.canvas.Disable(*args, **kwargs)
+
+    def Enable(self, *args, **kwargs):
+        logging.debug("Enabling %s", self.canvas)
+        wx.Panel.Enable(self, *args, **kwargs)
+        self.canvas.Enable(*args, **kwargs)
+
 
 class MicroscopeViewport(ViewPort):
-    """ A panel that shows a microscope view and its legend below it.
+    """ A panel that shows a microscope view and its legend(s)
 
     This is a generic class, that should be inherited by more specific classes.
+
     """
 
     bottom_legend_class = InfoLegend
@@ -560,8 +570,8 @@ class PlotViewport(ViewPort):
 
     # Default class
     canvas_class = miccanvas.ZeroDimensionalPlotCanvas
-    bottom_legend_class = PlotsAxisLegend
-    left_legend_class = PlotsAxisLegend
+    bottom_legend_class = AxisLegend
+    left_legend_class = AxisLegend
 
     def __init__(self, *args, **kwargs):
         ViewPort.__init__(self, *args, **kwargs)
@@ -597,7 +607,7 @@ class PlotViewport(ViewPort):
         if not ss:
             self.spectrum_stream = None
             logging.info("No spectrum stream found")
-            self.clear() # Remove legend ticks and clear plot
+            self.clear()  # Remove legend ticks and clear plot
             return
         elif len(ss) > 1:
             logging.warning("Found %d spectrum streams, will pick one randomly", len(ss))
@@ -618,10 +628,16 @@ class PlotViewport(ViewPort):
             return
 
         data = self.spectrum_stream.get_pixel_spectrum()
-        domain = self.spectrum_stream.get_spectrum_range()
+        spectrum_range = self.spectrum_stream.get_spectrum_range()
         unit_x = self.spectrum_stream.spectrumBandwidth.unit
+
         self.bottom_legend.unit = unit_x
-        self.canvas.set_1d_data(domain, data, unit_x)
+        self.bottom_legend.range = (spectrum_range[0], spectrum_range[-1])
+        self.bottom_legend.tooltip = "Wavelength"
+        self.left_legend.range = (min(data), max(data))
+        self.left_legend.tooltip = "Intensity"
+
+        self.canvas.set_1d_data(spectrum_range, data, unit_x)
         self.Refresh()
 
     def setView(self, microscope_view, tab_data):
@@ -690,8 +706,8 @@ class SpatialSpectrumViewport(ViewPort):
     """
 
     canvas_class = miccanvas.OneDimensionalSpatialSpectrumCanvas
-    bottom_legend_class = BitmapAxisLegend
-    left_legend_class = BitmapAxisLegend
+    bottom_legend_class = AxisLegend
+    left_legend_class = AxisLegend
 
     def __init__(self, *args, **kwargs):
         """Note: The MicroscopeViewport is not fully initialised until setView()
@@ -707,10 +723,16 @@ class SpatialSpectrumViewport(ViewPort):
     def on_spectrum_motion(self, vpos):
 
         if vpos:
-            value = self.bottom_legend.pixel_to_value(vpos[0])
-            self.canvas.markline_overlay.x_label = units.readable_str(value,
-                                                                      self.bottom_legend.unit,
-                                                                      3)
+            self.canvas.markline_overlay.x_label = units.readable_str(
+                self.bottom_legend.pixel_to_value(vpos[0]),
+                self.bottom_legend.unit,
+                3
+            )
+            self.canvas.markline_overlay.y_label = units.readable_str(
+                self.left_legend.pixel_to_value(vpos[1]),
+                self.left_legend.unit,
+                3
+            )
             rat = self.left_legend.pixel_to_ratio(vpos[1])
             line_pixels = rasterize_line(*self.current_line)
             self.spectrum_stream.selected_pixel.value = line_pixels[int(len(line_pixels) * rat)]
@@ -767,13 +789,19 @@ class SpatialSpectrumViewport(ViewPort):
         if not ss:
             self.spectrum_stream = None
             logging.info("No spectrum streams found")
-            self.clear() # Remove legend ticks and clear image
+            self.clear()  # Remove legend ticks and clear image
             return
         elif len(ss) > 1:
             logging.warning("Found %d spectrum streams, will pick one randomly", len(ss))
 
         self.spectrum_stream = ss[0]
         self.spectrum_stream.selected_line.subscribe(self._on_line_select, init=True)
+        self.spectrum_stream.selected_pixel.subscribe(self._on_pixel_select)
+
+    def _on_pixel_select(self, pixel):
+        """ Clear the makring line when the selected pixel is cleared """
+        if None in pixel:
+            self.canvas.markline_overlay.clear_labels()
 
     def _on_line_select(self, line):
         """ Line selection event handler """
@@ -797,8 +825,11 @@ class SpatialSpectrumViewport(ViewPort):
             unit_x = self.spectrum_stream.spectrumBandwidth.unit
             self.bottom_legend.unit = unit_x
             self.bottom_legend.range = (spectrum_range[0], spectrum_range[-1])
+            self.bottom_legend.tooltip = "Wavelength"
             self.left_legend.unit = 'm'
             self.left_legend.range = (0, line_length)
+            self.left_legend.tooltip = "Distance from origin"
+
             self.canvas.set_2d_data(data)
         else:
             logging.warn("No data to display for the selected line!")

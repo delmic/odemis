@@ -303,7 +303,7 @@ class Slider(BaseSlider):
         half_height = height // 2
 
         bgc = self.Parent.GetBackgroundColour()
-        dc.SetBackground(wx.Brush(bgc, wx.SOLID))
+        dc.SetBackground(wx.Brush(bgc, wx.BRUSHSTYLE_SOLID))
         dc.Clear()
 
         fgc = self.Parent.GetForegroundColour()
@@ -568,10 +568,8 @@ class NumberSlider(Slider):
         self.linked_field.SetForegroundColour(colour)
 
     def __del__(self):
-        try:
+        if self.linked_field:
             self.linked_field.Unbind(wx.EVT_COMMAND_ENTER, self._update_slider)
-        except wx.PyDeadObjectError:
-            pass
 
     def _update_slider(self, evt):
         """ Private event handler called when the slider should be updated, for
@@ -1004,7 +1002,7 @@ class VisualRangeSlider(BaseSlider):
     def UpdateContent(self):
         dc = wx.MemoryDC()
         dc.SelectObject(self._content_buffer)
-        dc.SetBackground(wx.Brush(self.BackgroundColour, wx.SOLID))
+        dc.SetBackground(wx.Brush(self.BackgroundColour, wx.BRUSHSTYLE_SOLID))
         dc.Clear() # make sure you clear the bitmap!
 
         if len(self.content_list): # using len to be compatible with numpy arrays

@@ -255,15 +255,13 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
         event.Skip()
 
     def onControlChanged(self, event):
-        try:
-            if self.IsShown():
-                self._showDropDown(False)
-        except wx.PyDeadObjectError:
-            pass
+        if self and self.IsShown():
+            self._showDropDown(False)
 
         if isinstance(event, wx.FocusEvent):
             # KILL_FOCUS => that means the user is happy with the current value
             self._send_change_event()
+
         event.Skip()
 
     def SetChoices(self, choices):

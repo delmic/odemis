@@ -316,6 +316,7 @@ class ViewPortController(object):
 
             if isinstance(parent, ViewportGrid):
                 parent.set_visible_viewports(visible_viewports)
+                parent.set_enabled_viewports(visible_viewports)
 
         finally:
             wx.CallAfter(parent.Thaw)
@@ -524,7 +525,7 @@ class ViewButtonController(object):
         for btn in self.buttons:
             btn.Bind(wx.EVT_BUTTON, self.on_btn_click)
 
-        self._subscriptions = {} # btn -> dict(str -> subscriber)
+        self._subscriptions = {}  # btn -> dict(str -> subscriber)
         self._subscribe()
 
         # subscribe to layout and view changes
@@ -536,9 +537,9 @@ class ViewButtonController(object):
         """
         Subscribe to change of thumbnail & name
         """
-        for btn, (vp, lbl) in self.buttons.items():
+        for btn, (vp, lbl_ctrl) in self.buttons.items():
             if vp is None:  # 2x2 layout
-                lbl.SetLabel("All")
+                lbl_ctrl.SetLabel("All")
                 continue
 
             @call_after
@@ -554,7 +555,7 @@ class ViewButtonController(object):
             # also subscribe for updating the 2x2 button
             vp.microscope_view.thumbnail.subscribe(self._update_22_thumbnail)
 
-            def on_name(name, label_ctrl=lbl):  # save lbl in scope
+            def on_name(name, label_ctrl=lbl_ctrl):  # save lbl in scope
                 label_ctrl.SetLabel(name)
 
             btn.Freeze()
@@ -627,6 +628,7 @@ class ViewButtonController(object):
                 continue
 
             im = vp.microscope_view.thumbnail.value
+
             if im:
                 # im doesn't have the same aspect ratio as the actual thumbnail
                 # => rescale and crop on the center
@@ -642,17 +644,16 @@ class ViewButtonController(object):
                 lt = ((size_sub[0] - sim.Width) // 2,
                       (size_sub[1] - sim.Height) // 2)
                 sim.Resize(size_sub, lt, 0, 0, 0)
-
-                # compute placement
-                y, x = divmod(i, 2)
-                # copy im in the right place
-                im_22.Paste(sim,
-                            x * (size_sub[0] + border_width),
-                            y * (size_sub[1] + border_width))
             else:
-                # black image
-                # Should never happen
-                pass
+                # Create an empty black image, if no image is set
+                sim = wx.EmptyImage(*size_sub)
+
+            # compute placement
+            y, x = divmod(i, 2)
+            # copy im in the right place
+            im_22.Paste(sim,
+                        x * (size_sub[0] + border_width),
+                        y * (size_sub[1] + border_width))
 
             i += 1
 

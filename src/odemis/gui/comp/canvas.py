@@ -70,7 +70,7 @@ physical:
     Because only this minor difference exists between the systems, they will
     most likely be merge into one in the future.
 
-    Attributes related to the physical coordinate sytem have the prefix `p_`
+    Attributes related to the physical coordinate system have the prefix `p_`
 
 Scales
 ~~~~~~
@@ -115,10 +115,10 @@ Graphical data is drawn using the following sequence of method calls:
 
     This method is typically called from the `_onViewImageUpdate` method, a listener that tracks
     updates to view images. It is also called from a variety of other methods, that require the
-    image to be redrawn.
+    image to be redrawn, like:
 
-    , _on_view_mpp, show_repetition
-     recenter_buffer, fit_to_content, _calc_data_characteristics, set_plot_mode
+    _on_view_mpp, show_repetition recenter_buffer, fit_to_content, _calc_data_characteristics and
+    set_plot_mode
 
     This method triggers the on_draw_timer handler, but only if time delay
     criteria are met, so drawing doesn't happen too often. This can of course be
@@ -182,48 +182,40 @@ def ignore_if_disabled(f, self, *args, **kwargs):
 
 
 class BufferedCanvas(wx.Panel):
-    """
-    Abstract base class for buffered canvasses that display graphical data
-
-    :ivar abilities: Set of special features that the Canvas supports
-
-    """
+    """ Abstract base class for buffered canvasses that display graphical data """
 
     __metaclass__ = ABCMeta
 
     def __init__(self, *args, **kwargs):
         # Set default style
+        # Note: NO_FULL_REPAINT_ON_RESIZE will be the default behaviour in WxPython Phoenix
         kwargs['style'] = wx.NO_FULL_REPAINT_ON_RESIZE | kwargs.get('style', 0)
         super(BufferedCanvas, self).__init__(*args, **kwargs)
 
         # Set of features/restrictions dynamically changeable
         self.abilities = set()  # filled by CAN_*
 
-        # Graphical overlays that display relative to the canvas
+        # Graphical overlays drawn into the buffer
         self.world_overlays = []
-        # Graphical overlays that display in an absolute position
+        # Graphical overlays drawn onto the canvas
         self.view_overlays = []
-        # TODO: rename to action_overlay?
-        # Or maybe delete as it's unused (the overlays just bind to the
-        # events they care about)
-        # The overlays which will (just) receive mouse and keyboard events
-        self.active_overlays = []
 
         # Set default background colour
         self.SetBackgroundColour(wx.BLACK)
-        self.bg_offset = (0, 0)  # in px
+        self.background_brush = wx.BRUSHSTYLE_CROSS_HATCH
+        self.background_img = imgdata.getcanvasbgBitmap()
+        self.background_offset = (0, 0)  # offset of checkered background in px
 
         # Memory buffer device context
         self._dc_buffer = wx.MemoryDC()
+        # The Cairo context derived from the DC buffer
+        self.ctx = None
         # Center of the buffer in world coordinates
         self.w_buffer_center = (0, 0)
         # wx.Bitmap that will always contain the image to be displayed
         self._bmp_buffer = None
-        self.ctx = None
         # very small first, so that for sure it'll be resized with on_size
         self._bmp_buffer_size = (1, 1)
-
-        self.background_brush = wx.CROSS_HATCH
 
         if os.name == "nt":
             # Avoids flickering on windows, but prevents black background on
@@ -267,8 +259,6 @@ class BufferedCanvas(wx.Panel):
         # Timer used to set a maximum of frames per second
         self.draw_timer = wx.PyTimer(self.on_draw_timer)
 
-        self.background_img = imgdata.getcanvasbgBitmap()
-
     @property
     def buffer_size(self):
         return self._bmp_buffer_size
@@ -284,6 +274,8 @@ class BufferedCanvas(wx.Panel):
     @property
     def dc_buffer(self):
         return self._dc_buffer
+
+    # ########### Cursor Management ###########
 
     def set_default_cursor(self, cursor):
         """ Set the default cursor
@@ -302,7 +294,7 @@ class BufferedCanvas(wx.Panel):
         logging.debug("Default cursor set")
 
     def reset_default_cursor(self):
-        """ Reset the default cursor to the 'standard' default cursor """
+        """ Reset the default cursor to the 'standard' cursor """
         self.default_cursor = wx.STANDARD_CURSOR
         self.SetCursor(self.default_cursor)
         logging.debug("Default cursor reset")
@@ -371,21 +363,6 @@ class BufferedCanvas(wx.Panel):
     def clear_world_overlays(self):
         self.world_overlays = []
 
-    # Active overlays
-
-    def add_active_overlay(self, *overlays):
-        for overlay in overlays:
-            if overlay not in self.active_overlays:
-                self.active_overlays.append(overlay)
-
-    def remove_active_overlay(self, *overlays):
-        for overlay in overlays:
-            if overlay in self.active_overlays:
-                self.active_overlays.remove(overlay)
-
-    def clear_active_overlays(self):
-        self.active_overlays = []
-
     # ########### Event Handlers ############
 
     def on_mouse_down(self):
@@ -453,10 +430,12 @@ class BufferedCanvas(wx.Panel):
         """ Standard mouse wheel processor """
         evt.Skip()
 
+    @ignore_if_disabled
     def on_enter(self, evt):
         """ Standard mouse enter processor """
         evt.Skip()
 
+    @ignore_if_disabled
     def on_leave(self, evt):
         """ Standard mouse leave processor """
         evt.Skip()
@@ -466,12 +445,18 @@ class BufferedCanvas(wx.Panel):
         """ Standard key stroke processor """
         evt.Skip()
 
+    def on_focus_lost(self, _):
+        """ Release any mouse capture when the focus is lost """
+        if self.HasCapture():
+            self.ReleaseMouse()
+
     @ignore_if_disabled
     def on_paint(self, evt):
-        """ Copy the buffer to the screen (i.e. the device context) """
+        """ Copy the buffer to the screen (i.e. the device context)
 
-        # TODO: what was the reason for this to be used instead of blit?
-        # wx.BufferedPaintDC(self, self._bmp_buffer)
+        Note: the bitmap buffer is selected into the DC buffer in the buffer resize method
+
+        """
 
         dc_view = wx.PaintDC(self)
         # Blit the appropriate area from the buffer to the view port
@@ -485,11 +470,9 @@ class BufferedCanvas(wx.Panel):
         self._draw_view_overlays(ctx)
 
     def on_size(self, evt):
-        """ Handle size events
+        """ Resize the bitmap buffer so it's size will match the view's """
 
-        Ensures that the buffer still fits in the view and recenter the view.
-        """
-        # Ensure the buffer is always at least as big as the window
+        # Ensure the buffer is always at least as big as the window (i.e. the view)
         min_size = self.get_minimum_buffer_size()
 
         if min_size != self._bmp_buffer_size:
@@ -500,11 +483,6 @@ class BufferedCanvas(wx.Panel):
             # logging.debug("Buffer size didn't change, refreshing...")
             # eraseBackground=False prevents flicker
             self.Refresh(eraseBackground=False)
-
-    def on_focus_lost(self, _):
-        """ Release any mouse capture when the focus is lost """
-        if self.HasCapture():
-            self.ReleaseMouse()
 
     def on_draw_timer(self):
         """ Update the drawing when the on draw timer fires """
@@ -534,6 +512,7 @@ class BufferedCanvas(wx.Panel):
         :param size: (2-tuple int) The new size
 
         """
+
         logging.debug("Resizing buffer for %s to %s", id(self), size)
         # Make new off-screen bitmap
         self._bmp_buffer = wx.EmptyBitmap(*size)
@@ -542,23 +521,25 @@ class BufferedCanvas(wx.Panel):
         # Select the bitmap into the device context
         self._dc_buffer.SelectObject(self._bmp_buffer)
         # On Linux necessary after every 'SelectObject'
-        self._dc_buffer.SetBackground(wx.Brush(self.BackgroundColour, wx.SOLID))
-
+        self._dc_buffer.SetBackground(wx.Brush(self.BackgroundColour, wx.BRUSHSTYLE_SOLID))
         self.ctx = wxcairo.ContextFromDC(self._dc_buffer)
 
     def request_drawing_update(self, delay=0.1):
         """ Schedule an update of the buffer if the timer is not already running
 
+        .. warning:: always call this method from the main GUI thread! If you're unsure about the
+            current thread, use `wx.CallAfter(canvas.request_drawing_update)`
+
         :param delay: (float) maximum number of seconds to wait before the
             buffer will be updated.
 
-        .. warning:: always call this method from the main GUI thread!
-            If you're unsure about the current thread, use:
-            `wx.CallAfter(canvas.request_drawing_update)`
         """
 
         try:
             if not self.draw_timer.IsRunning():
+                # TODO: can we change this around? So that we immediately draw when no timer is
+                # running and then start the timer? Now there's always a delay before anything
+                # gets drawn, even if it's not necessary.
                 self.draw_timer.Start(delay * 1000.0, oneShot=True)
         except wx.PyDeadObjectError:
             # This only should happen when running test cases
@@ -579,28 +560,28 @@ class BufferedCanvas(wx.Panel):
         raise NotImplementedError
 
     def _draw_background(self, ctx):
-        """ Draw checkered background """
+        """ Draw the background of the Canvas
 
-        # Only support wx.SOLID, and anything else is checkered
-        if self.background_brush == wx.SOLID:
+        This method can be called from the `draw` method or it can be used to clear the canvas.
+
+        The background will be solid if the `background_brush` attribute is set to
+        `wx.BRUSHSTYLE_SOLID` or checkered otherwise.
+
+        """
+
+        if self.background_brush == wx.BRUSHSTYLE_SOLID:
             ctx.set_source_rgb(*wxcol_to_frgb(self.BackgroundColour))
             ctx.paint()
             return
 
         surface = wxcairo.ImageSurfaceFromBitmap(self.background_img)
-
-        surface.set_device_offset(self.bg_offset[0], self.bg_offset[1])
+        surface.set_device_offset(self.background_offset[0], self.background_offset[1])
 
         pattern = cairo.SurfacePattern(surface)
         pattern.set_extend(cairo.EXTEND_REPEAT)
         ctx.set_source(pattern)
 
-        ctx.rectangle(
-            0,
-            0,
-            self._bmp_buffer_size[0],
-            self._bmp_buffer_size[1]
-        )
+        ctx.rectangle(0, 0, self._bmp_buffer_size[0], self._bmp_buffer_size[1])
         ctx.fill()
 
     # END Buffer and drawing methods
@@ -631,23 +612,21 @@ class BufferedCanvas(wx.Panel):
     def world_to_buffer_pos(cls, w_pos, w_buff_center, scale, offset=(0, 0)):
         """ Convert a position in world coordinates into buffer coordinates
 
-        The value calculated is relative to the buffer center, which is regarded
-        as the 0,0 origin.
+        The value calculated is relative to the buffer center, which is regarded as the 0,0 origin.
 
-        The offset can be used to move the origin. E.g. an offset of half the
-        buffer size, will translate the origin to the top left corner of buffer.
+        The offset can be used to move the origin. E.g. an offset of half the buffer size,
+        will translate the origin to the top left corner of buffer.
 
         ..Note:
-            This method does not check if the given world position actually
-            falls within the buffer.
+            This method does not check if the given world position actually falls within the buffer.
 
         :param w_pos: (float, float) the coordinates in the world
         :param w_buff_center: the center of the buffer in world coordinates
         :param scale: the scale of the world compared to the buffer.
-            I.e.: with scale 2, 100px of world data are displayed using 200px
-            of buffer space. (The world is zoomed in with a scale > 1)
-        :param offset (int, int): the returned value is translated using the
-            offset
+            I.e.: with scale 2, 100px of world data are displayed using 200px of buffer space.
+            (The world is zoomed in with a scale > 1)
+        :param offset (int, int): the returned value is translated using the offset
+
         :return: (int or float, int or float)
 
         """
@@ -662,10 +641,10 @@ class BufferedCanvas(wx.Panel):
         :param b_pos: (int, int) the buffer coordinates
         :param w_buffer_center: the center of the buffer in world coordinates
         :param scale: the scale of the world compared to the buffer.
-            I.e.: with scale 2, 100px of world data are displayed using 200px
-            of buffer space. (The world is zoomed in with a scale > 1)
-        :param offset (int, int): the returned value is translated using the
-            offset
+            I.e.: with scale 2, 100px of world data are displayed using 200px of buffer space.
+            (The world is zoomed in with a scale > 1)
+        :param offset (int, int): the returned value is translated using the offset
+
         :return: (float, float)
 
         """
@@ -673,18 +652,18 @@ class BufferedCanvas(wx.Panel):
         return (w_buffer_center[0] + (b_pos[0] - offset[0]) / scale,
                 w_buffer_center[1] + (b_pos[1] - offset[1]) / scale)
 
-    # View <-> Buffer
     @classmethod
     def view_to_buffer_pos(cls, v_pos, margins):
         """ Convert view port coordinates to buffer coordinates
 
-        The top left of the view is considered to have coordinates (0, 0), with
-        to the right and bottom of that the positive x and y directions.
+        The top left of the view is considered to have coordinates (0, 0), with to the right and
+        bottom of that the positive x and y directions.
 
-        A view position is tranformed by adding the margin width and height.
+        A view position is transformed by adding the margin width and height.
 
         :param v_pos: (int, int) the coordinates in the view
         :param margins: (int, int) the horizontal and vertical buffer margins
+
         :return: (wx.Point) or (int, int) the calculated buffer position
 
         """
@@ -700,15 +679,14 @@ class BufferedCanvas(wx.Panel):
     def buffer_to_view_pos(cls, b_pos, margins):
         """ Convert a buffer position into a view position
 
-        Note:
-            If the buffer position does not fall within the view, negative
-            values might be returned or values that otherwise fall outside of
-            the view.
+        ..note::
+            If the buffer position does not fall within the view, negative values might be
+            returned or values that otherwise fall outside of the view.
 
         :param v_pos: (int, int) the coordinates in the buffer
         :param margins: (int, int) the horizontal and vertical buffer margins
-        :return: (wx.Point) or (int or float, int or float) the calculated view
-            position
+
+        :return: (wx.Point) or (int or float, int or float) the calculated view position
 
         """
 
@@ -773,23 +751,23 @@ class BitmapCanvas(BufferedCanvas):
     def __init__(self, *args, **kwargs):
         super(BitmapCanvas, self).__init__(*args, **kwargs)
 
-        # wx.Images. Should always have at least 1 element, to allow the direct
-        # addition of a 2nd image.
+        # List of odemis.model.DataArray images to draw. Should always have at least 1 element,
+        # to allow the direct addition of a 2nd image.
         self.images = [None]
         # Merge ratio for combining the images
         self.merge_ratio = 0.3
         self.scale = 1.0  # px/wu
-
         self.margins = (0, 0)
 
     def clear(self):
+        """ Remove the images and clear the canvas """
         self.images = [None]
         BufferedCanvas.clear(self)
 
     def set_images(self, im_args):
         """ Set (or update)  image
 
-        im_args (list of tuple): Each element is either None or
+        :paran im_args: (list of tuples): Each element is either None or
             (im, w_pos, scale, keepalpha, rotation, name, blend_mode)
 
             0. im (wx.Image): the image
@@ -801,7 +779,9 @@ class BitmapCanvas(BufferedCanvas):
             6. blend_mode (int): blend mode to use for the image. Defaults to `source` which
                     just overrides underlying layers.
 
-        note: call request_drawing_update() to actually get the image redrawnafterwards
+        ..note::
+            Call request_drawing_update() after calling `set_images` to actually get the images
+            drawn.
 
         """
 
@@ -845,53 +825,44 @@ class BitmapCanvas(BufferedCanvas):
         self.images = images
 
     def draw(self):
-        """ Redraw the buffer with the images and overlays
+        """ Draw the images and overlays into the buffer
 
-        Overlays must have a `Draw(ctx, shift, scale)` method.
+        In between the draw calls the Cairo context gets its transformation matrix reset,
+        to prevent the accidental accumulation of transformations.
+
         """
 
-        # TODO: Do we need clear here? Or can we just handling 'clearing' in
-        # the _draw_background method?
-        # self._dc_buffer.Clear()
-
-        # At this point, we create a Cairo Context to which we will draw.
-        # Since we will pass this context around to various methods, we will
-        # reset its transformation matrix in between various calls to prevent
-        # unexpected behaviour.
-
-        # if self.use_threading:
-        #     imgsurface = cairo.ImageSurface(cairo.FORMAT_ARGB32, self._bmp_buffer_size[0],
-        #                                     self._bmp_buffer_size[1])
-        #     ctx = cairo.Context(imgsurface)
-        # else:
-        #
-        #     ctx = self.ctx
-
         self._draw_background(self.ctx)
-        self.ctx.identity_matrix()
+        self.ctx.identity_matrix()  # Reset the transformation matrix
+
+        # Don't draw anything else if the canvas is disabled
+        if not self.IsEnabled():
+            return
 
         self._draw_merged_images(self.ctx)
-        self.ctx.identity_matrix()
+        self.ctx.identity_matrix()  # Reset the transformation matrix
 
-        # Each overlay draws itself
-        # Remember that the device context being passed belongs to the *buffer*
+        # Remember that the device context being passed belongs to the *buffer* and the view
+        # overlays are drawn in the `on_paint` method where the buffer is blitted to the device
+        # context.
         for o in self.world_overlays:
             o.draw(self.ctx, self.w_buffer_center, self.scale)
             self.ctx.identity_matrix()
 
     def _draw_merged_images(self, ctx):
-        """ Draw the two images on the buffer DC, centred around their _dc_center, with their own
+        """ Draw the images on the DC buffer, centred around their _dc_center, with their own
         scale and an opacity of "mergeratio" for im1.
 
         *IMPORTANT*: The origin (0, 0) of the dc_buffer is in the center!
 
-        Both _dc_center's should be close in order to have the parts with only
-        one picture drawn without transparency
+        All _dc_center's should be close in order to have the parts with only one picture drawn
+        without transparency
 
         :return: (int) Frames per second
 
-        Note: this is a very rough implementation. It's not fully optimized and
-        uses only a basic averaging algorithm.
+        ..note::
+            This is a very rough implementation. It's not fully optimized and uses only a basic
+            averaging algorithm.
 
         """
 
@@ -1000,12 +971,12 @@ class BitmapCanvas(BufferedCanvas):
 
         # Combine the image scale and the buffer scale
         total_scale = im_scale * self.scale
-        if abs(total_scale - 1) < 1e-8: # in case of small floating errors
+        if abs(total_scale - 1) < 1e-8:  # in case of small floating errors
             total_scale = 1
         # logging.debug("Total scale: %s x %s = %s", im_scale, self.scale, total_scale)
 
         # Rotate if needed
-        if rotation is not None and abs(rotation) >= 0.008: # > 0.5°
+        if rotation is not None and abs(rotation) >= 0.008:  # > 0.5°
             x, y, w, h = b_im_rect
 
             rot_x = x + w / 2
@@ -1050,11 +1021,10 @@ class BitmapCanvas(BufferedCanvas):
         height, width, _ = im_data.shape
         # logging.debug("Image data shape is %s", im_data.shape)
 
-        # Note: Stride calculation is done automatically when no stride
-        # parameter is provided.
+        # Note: Stride calculation is done automatically when no stride parameter is provided.
         stride = cairo.ImageSurface.format_stride_for_width(im_format, width)
-        # In Cairo a surface is a target that it can render to. Here we're going
-        # to use it as the source for a pattern
+        # In Cairo a surface is a target that it can render to. Here we're going to use it as the
+        #  source for a pattern
         imgsurface = cairo.ImageSurface.create_for_data(im_data, im_format,
                                                         width, height, stride)
 
@@ -1077,8 +1047,8 @@ class BitmapCanvas(BufferedCanvas):
         # Debug print statement
         # print ctx.get_matrix(), im_data.shape
 
-        # The following method won't work, because we need to
-        # set the filter used for scaling. Using set_source instead
+        # The following method won't work, because we need to set the filter used for scaling.
+        # We're using set_source instead
         # ctx.set_source_surface(imgsurface)
         ctx.set_source(surfpat)
 
@@ -1098,6 +1068,7 @@ class BitmapCanvas(BufferedCanvas):
         The (top, left) value are relative to the 0,0 top left of the buffer.
 
         :return: (float, float, float, float) top, left, width, height
+
         """
 
         # There are two scales:
@@ -1263,6 +1234,7 @@ class BitmapCanvas(BufferedCanvas):
 # Maybe could be replaced by a GLCanvas + magic, or a Cairo Canvas
 #
 
+
 class DraggableCanvas(BitmapCanvas):
     """ A draggable, buffered window class.
 
@@ -1288,7 +1260,7 @@ class DraggableCanvas(BitmapCanvas):
     def __init__(self, *args, **kwargs):
         super(DraggableCanvas, self).__init__(*args, **kwargs)
 
-        self.abilities |= set([CAN_DRAG, CAN_FOCUS])
+        self.abilities |= {CAN_DRAG, CAN_FOCUS}
 
         # When resizing, margin to put around the current size
         # TODO: Maybe make the margin related to the canvas size?
@@ -1537,19 +1509,21 @@ class DraggableCanvas(BitmapCanvas):
                 self.ClientSize.y + self.default_margin * 2)
 
     def _calc_bg_offset(self, new_pos):
+        """ Calculate the offset needed for the checkered background after a canvas shift
+
+        :param new_pos: (float, float) new world position
+
         """
-        new_pos (2 floats): new world position
-        """
+
         # Convert the shift in world units into pixels
         old_pos = self.requested_world_pos
         shift_world = (old_pos[0] - new_pos[0],
                        old_pos[1] - new_pos[1])
         shift_px = (int(round(self.scale * shift_world[0])),
                     int(round(self.scale * shift_world[1])))
-        # TODO: change the 40 to the size of the background image
-        self.bg_offset = (
-            (self.bg_offset[0] - shift_px[0]) % 40,
-            (self.bg_offset[1] - shift_px[1]) % 40
+        self.background_offset = (
+            (self.background_offset[0] - shift_px[0]) % self.background_img.Size.x,
+            (self.background_offset[1] - shift_px[1]) % self.background_img.Size.y
         )
 
     def recenter_buffer(self, world_pos):
@@ -1558,8 +1532,8 @@ class DraggableCanvas(BitmapCanvas):
         :param world_pos: (2-tuple float) The world coordinates to center the
             buffer on.
 
-        Warning: always call from the main GUI thread. So if you're not sure
-        in which thread you are, do: wx.CallAfter(canvas.recenter_buffer, pos)
+        Warning: always call from the main GUI thread. So if you're not sure in which thread you
+        are, do: wx.CallAfter(canvas.recenter_buffer, pos)
         """
 
         if self.requested_world_pos != world_pos:
@@ -1572,9 +1546,8 @@ class DraggableCanvas(BitmapCanvas):
     def repaint(self):
         """ repaint the canvas
 
-        This convenience method was added, because requesting a repaint from an
-        overlay using `update_drawing`, could cause the view to 'jump' while
-        dragging.
+        This convenience method was added, because requesting a repaint from an overlay using
+        `update_drawing`, could cause the view to 'jump' while dragging.
 
         """
 
@@ -1598,16 +1571,14 @@ class DraggableCanvas(BitmapCanvas):
             (self.w_buffer_center[1] - prev_world_pos[1]) * self.scale,
         )
 
-        # Adjust the dragging attributes according to the change in
-        # buffer center
+        # Adjust the dragging attributes according to the change in buffer center
         if self._ldragging:
             self.drag_init_pos = (self.drag_init_pos[0] - shift_view[0],
                                   self.drag_init_pos[1] - shift_view[1])
             self.drag_shift = (self.drag_shift[0] + shift_view[0],
                                self.drag_shift[1] + shift_view[1])
         else:
-            # in theory, it's the same, but just to be sure we reset to 0,0
-            # exactly
+            # in theory, it's the same, but just to be sure we reset to 0,0 exactly
             self.drag_shift = (0, 0)
 
         # eraseBackground doesn't seem to matter, but just in case...
@@ -1639,28 +1610,30 @@ class DraggableCanvas(BitmapCanvas):
         """
         called when the extra dimensions are modified (right drag)
 
-        axis (int>0): the axis modified
+        :param axis: (int > 0): the axis modified
             0 => X (horizontal)
             1 => Y (vertical)
-        shift (int): relative amount of pixel moved
-            >0: toward up/right
+        :param shift: (int): relative amount of pixel moved
+            > 0: towards up/right
+
         """
-        # We have nothing to do
-        # Inheriting classes can do more
+
+        # We have nothing to do, inheriting classes might do more
         pass
 
     # TODO: just return best scale and center? And let the caller do what it wants?
-    # It would allow to decide how to redraw depending if it's on size event
-    # or more high level.
+    # It would allow to decide how to redraw depending if it's on size event or more high level.
     def fit_to_content(self, recenter=False):
+        """ Adapt the scale and (optionally) center to fit to the current content
+
+        :param recenter: (boolean) If True, also recenter the view.
+
         """
-        Adapts the scale and (optionally) center to fit to the current content
-        recenter (boolean): If True, also recenter the view.
-        """
-        # TODO: take into account the dragging. For now we skip it (should be
-        # unlikely to happen anyway)
-        # find bounding box of all the content
-        bbox = [None, None, None, None] # ltrb in wu
+
+        # TODO: take into account the dragging. For now we skip it (is unlikely to happen anyway)
+
+        # Find bounding box of all the content
+        bbox = [None, None, None, None]  # ltrb in wu
         for im in self.images:
             if im is None:
                 continue
@@ -1698,7 +1671,7 @@ class DraggableCanvas(BitmapCanvas):
 
         if recenter:
             c = (bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2
-            self.requested_world_pos = c # as recenter_buffer but without request_drawing_update
+            self.requested_world_pos = c  # As recenter_buffer but without request_drawing_update
 
         wx.CallAfter(self.request_drawing_update)
 
@@ -1717,7 +1690,7 @@ class PlotCanvas(BufferedCanvas):
     """ This is a general canvas for plotting numerical data in various ways """
 
     def __init__(self, *args, **kwargs):
-        super(PlotCanvas, self).__init__(*args, **kwargs)
+        BufferedCanvas.__init__(self, *args, **kwargs)
 
         # The data to be plotted, a list of numerical value pairs
         self._data = None
@@ -1749,7 +1722,7 @@ class PlotCanvas(BufferedCanvas):
         self.plot_closed = PLOT_CLOSE_BOTTOM
         self.plot_mode = PLOT_MODE_LINE
 
-        self.background_brush = wx.SOLID
+        self.background_brush = wx.BRUSHSTYLE_SOLID
 
     # Getters and Setters
 
@@ -1763,13 +1736,11 @@ class PlotCanvas(BufferedCanvas):
     def set_data(self, data, unit_x=None, unit_y=None, range_x=None, range_y=None):
         """ Set the data to be plotted
 
-        data (list of 2 tuples): the X, Y coordinates of each point. The X values
-          must be ordered and not duplicated.
+        :param data: (list of 2-tuples) The X, Y coordinates of each point. The X values must be
+            ordered and not duplicated.
 
         """
-        # FIXME: why not doing anything when data is empty?
-        # => shall we clear() instead, or display a warning?
-        logging.debug("updating data to %d values", len(data))
+
         if data:
             # Check if sorted
             s = all(data[i][0] < data[i + 1][0] for i in xrange(len(data) - 1))
@@ -1782,12 +1753,16 @@ class PlotCanvas(BufferedCanvas):
                 raise ValueError("The data should be 2D!")
 
             self._data = data
+
             self.unit_x = unit_x
             self.unit_y = unit_y
             self.range_x = range_x
             self.range_y = range_y
 
             self._calc_data_characteristics()
+        else:
+            logging.warn("Trying to fill PlotCanvas with empty data!")
+            self.clear()
 
     def clear(self):
         self._data = None
@@ -1798,7 +1773,7 @@ class PlotCanvas(BufferedCanvas):
         self.data_width = None
         self.data_height = None
         self.outline = None
-        super(PlotCanvas, self).clear()
+        BufferedCanvas.clear(self)
 
     def has_data(self):
         return self._data is not None and len(self._data) > 2
@@ -1808,10 +1783,11 @@ class PlotCanvas(BufferedCanvas):
     def _calc_data_characteristics(self):
         """ Get the minimum and maximum
 
-        This method can be used to override the values derived from the data
-        set, so that the extreme values will not make the graph touch the edge
-        of the canvas.
+        This method can be used to override the values derived from the data set, so that the
+        extreme values will not make the graph touch the edge of the canvas.
+
         """
+
         horz, vert = zip(*self._data)
 
         self.min_x = min(horz)
@@ -1848,49 +1824,52 @@ class PlotCanvas(BufferedCanvas):
     # Value calculation methods
 
     def value_to_position(self, value_tuple):
-        """
-        Translate a value tuple to a pixel position tuple
+        """ Translate a value tuple to a pixel position tuple
 
         If a value (x or y) is out of range, it will be clippped.
 
         :param value_tuple: (float, float) The value coordinates to translate
+
         :return: (int, int)
+
         """
+
         x, y = value_tuple
         return self._val_x_to_pos_x(x), self._val_y_to_pos_y(y)
 
-    # FIXME: When the memoize on the method is activated,
-    # _pos_x_to_val_x starts returning weird value.
-    # Reproduce: draw the smallest graph in the test case and drage back and
-    # forth between 0 and 1
+    # FIXME: When the memoize on the method is activated, _pos_x_to_val_x starts returning weird
+    # values. To reproduce: draw the smallest graph in the test case and drag back and forth between
+    # 0 and 1
 
     def _val_x_to_pos_x(self, val_x):
-        """
-        Translate an x value to an x position in pixels
+        """ Translate an x value to an x position in pixels
 
-        The minimum x value is considered to be pixel 0 and the maximum is the
-        canvas width. The parameter will be clipped if it's out of range.
+        The minimum x value is considered to be pixel 0 and the maximum is the canvas width. The
+        parameter will be clipped if it's out of range.
 
         :param val_x: (float) The value to map
+
         :return: (float)
+
         """
+
         # Clip val_x
         x = min(max(self.range_x[0], val_x), self.range_x[1])
         perc_x = float(x - self.range_x[0]) / self.data_width
         return perc_x * self.ClientSize.x
 
     def _val_y_to_pos_y(self, val_y):
-        """
-        Translate an y value to an y position in pixels
+        """ Translate an y value to an y position in pixels
 
-        The minimum y value is considered to be pixel 0 and the maximum is the
-        canvas width. The parameter will be clipped if it's out of range.
+        The minimum y value is considered to be pixel 0 and the maximum is the canvas width. The
+        parameter will be clipped if it's out of range.
 
         :param val_y: (float) The value to map
+
         :return: (float)
+
         """
 
-        # If the
         if self.data_height:
             y = min(max(self.range_y[0], val_y), self.range_y[1])
             perc_y = float(self.range_y[1] - y) / self.data_height
@@ -1901,8 +1880,9 @@ class PlotCanvas(BufferedCanvas):
     def _pos_x_to_val_x(self, pos_x, snap=False):
         """ Map the given pixel position to an x value from the data
 
-        If snap is True, the closest snap from `self._data` will be returned,
-        otherwise interpolation will occur.
+        If snap is True, the closest snap from `self._data` will be returned, otherwise
+        interpolation will occur.
+
         """
 
         perc_x = pos_x / float(self.ClientSize.x)
@@ -1922,7 +1902,7 @@ class PlotCanvas(BufferedCanvas):
         return min([(abs(val_x - x), y) for x, y in self._data])[1]
 
     def SetForegroundColour(self, *args, **kwargs):
-        super(PlotCanvas, self).SetForegroundColour(*args, **kwargs)
+        BufferedCanvas.SetForegroundColour(self, *args, **kwargs)
         self.line_colour = wxcol_to_frgb(self.ForegroundColour)
         self.fill_colour = self.line_colour
 
@@ -1935,43 +1915,24 @@ class PlotCanvas(BufferedCanvas):
 
     # Image generation
 
-    def on_size(self, evt):
-        """ size change handler
-
-        Same as the standard handler, but we need to always redraw.
-        """
-        # Ensure the buffer is always at least as big as the window
-        min_size = self.get_minimum_buffer_size()
-
-        if min_size != self._bmp_buffer_size:
-            self.resize_buffer(min_size)
-
-        self.update_drawing()
-
     def draw(self):
-        """
-        This method updates the graph image
-        """
-        #TODO: It seems this method gets called twice in a row -> investigate!
-        # It is possible that the buffer has not been initialized yet, because
-        # this method can be called before the Size event handler sets it.
+        """ Draw the plot if data is present """
+
+        # TODO: It seems this method gets called twice in a row -> investigate!
+        # It is possible that the buffer has not been initialized yet, because this method can be
+        # called before the Size event handler sets it.
         # if not self._bmp_buffer:
         #     logging.warn("No buffer created yet, ignoring draw request")
         #     return
 
         self._draw_background(self.ctx)
 
-        if self._data:
+        if self._data and self.IsEnabled():
             self._plot_data(self.ctx)
-
-    def _draw_view_overlays(self, ctx):
-        """ Draws all the view overlays on the ctx Cairo context"""
-        # coordinates are at the center
-        for o in self.view_overlays:
-            o.draw(ctx)
 
     def _plot_data(self, ctx):
         """ Plot the current `_data` to the given context """
+
         if self._data:
             if self.plot_mode == PLOT_MODE_LINE:
                 self._line_plot(ctx)
@@ -2025,6 +1986,7 @@ class PlotCanvas(BufferedCanvas):
 
     def _line_plot(self, ctx):
         """ Do a line plot of the current `_data` """
+
         ctx.move_to(*self.value_to_position(self._data[0]))
 
         value_to_position = self.value_to_position
@@ -2049,6 +2011,7 @@ class PlotCanvas(BufferedCanvas):
 
     def _point_plot(self, ctx):
         """ Do a line plot of the current `_data` """
+
         value_to_position = self.value_to_position
         move_to = ctx.move_to
         line_to = ctx.line_to

@@ -79,7 +79,7 @@ class Histogram(wx.PyControl):
     def UpdateContent(self):
         dc = wx.MemoryDC()
         dc.SelectObject(self._content_buffer)
-        dc.SetBackground(wx.Brush(self.BackgroundColour, wx.SOLID))
+        dc.SetBackground(wx.Brush(self.BackgroundColour, wx.BRUSHSTYLE_SOLID))
         dc.Clear() # make sure you clear the bitmap!
 
         if len(self.content_list): # using len to be compatible with numpy arrays

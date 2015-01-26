@@ -97,6 +97,12 @@ def wxlimit_invocation(delay_s):
                 hasattr(self, last_call_name) and now - getattr(self, last_call_name) < delay_s
                 and not force
         ):
+            # Test code that replaces the running timer with a new one
+            # if hasattr(self, timer_name):
+            #     timer = getattr(self, timer_name)
+            #     if timer.is_alive():
+            #         timer.cancel()
+
             # logging.warn('Delaying method call')
             if now < getattr(self, last_call_name):
                 # this means a timer is already set, nothing else to do
@@ -124,7 +130,7 @@ def wxlimit_invocation(delay_s):
 def ignore_dead(f, self, *args, **kwargs):
     try:
         return f(self, *args, **kwargs)
-    except wx.PyDeadObjectError:
+    except (wx.PyDeadObjectError, RuntimeError):
         logging.warn("Dead object ignored in %s", f.__name__)
 
 
@@ -185,7 +191,7 @@ def dead_object_wrapper(f, *args, **kwargs):
             app = wx.GetApp()
             if app:
                 return f(*args, **kwargs)
-        except wx.PyDeadObjectError:
+        except (wx.PyDeadObjectError, RuntimeError):
             logging.warn("Dead object ignored in %s", f.__name__)
     return dead_object_wrapzor
 

@@ -25,7 +25,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import numpy
 from odemis import model
 from odemis.gui import test
-from odemis.gui.comp.canvas import BufferedCanvas
+from odemis.gui.comp.canvas import BufferedCanvas, BitmapCanvas
 import unittest
 import wx
 
@@ -52,6 +52,17 @@ def get_image_from_buffer(canvas):
     return wx.ImageFromBitmap(result_bmp)
 
 
+class TestCanvas(test.GuiTestCase):
+    frame_class = test.test_gui.xrccanvas_frame
+
+    def test_bitmap_canvas(self):
+        test.goto_manual()
+
+        cnvs = BitmapCanvas(self.panel)
+        cnvs.SetBackgroundColour("#00599B")
+        self.add_control(cnvs, wx.EXPAND, proportion=1)
+
+
 class TestDblMicroscopeCanvas(test.GuiTestCase):
     frame_class = test.test_gui.xrccanvas_frame
 
@@ -60,7 +71,7 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         self.mmodel = self.create_simple_tab_model()
         self.view = self.mmodel.focussedView.value
         self.canvas = miccanvas.DblMicroscopeCanvas(self.panel)
-        self.canvas.background_brush = wx.SOLID  # no special background
+        self.canvas.background_brush = wx.BRUSHSTYLE_SOLID  # no special background
         self.add_control(self.canvas, flags=wx.EXPAND, proportion=1)
         test.gui_loop()
 

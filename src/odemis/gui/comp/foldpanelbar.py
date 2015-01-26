@@ -57,7 +57,7 @@ class FoldPanelBar(wx.Panel):
         self.Bind(wx.EVT_SIZE, self.OnSize)
 
         global SCROLLBAR_WIDTH
-        SCROLLBAR_WIDTH = wx.SystemSettings_GetMetric(wx.SYS_VSCROLL_X)
+        SCROLLBAR_WIDTH = wx.SystemSettings.GetMetric(wx.SYS_VSCROLL_X)
 
         assert isinstance(parent, wx.ScrolledWindow)
 
@@ -200,7 +200,10 @@ class FoldPanelItem(wx.Panel):
 
     def insert_item(self, item, pos):
         """ Insert a wx.Window or Sizer into the panel at location `pos` """
+        if item.Parent != self._container:
+            item.Reparent(self._container)
         self._container_sizer.Insert(pos, item, flag=wx.EXPAND | wx.BOTTOM, border=1)
+        self.Refresh()
 
     def remove_item(self, item):
         """ Remove the given item from the panel """
@@ -304,7 +307,7 @@ class CaptionBar(wx.Window):
         dc.SetPen(wx.TRANSPARENT_PEN)
 
         # draw simple rectangle
-        dc.SetBrush(wx.Brush(self.Parent.GetBackgroundColour(), wx.SOLID))
+        dc.SetBrush(wx.Brush(self.Parent.GetBackgroundColour(), wx.BRUSHSTYLE_SOLID))
         dc.DrawRectangleRect(win_rect)
 
         self._draw_gradient(dc, win_rect)
@@ -362,7 +365,7 @@ class CaptionBar(wx.Window):
         rf, gf, bf = col1
         for y in range(rect.y, rect.y + rect.height):
             cur_col = (rf * 255, gf * 255, bf * 255)
-            dc.SetBrush(wx.Brush(cur_col, wx.SOLID))
+            dc.SetBrush(wx.Brush(cur_col, wx.BRUSHSTYLE_SOLID))
             dc.DrawRectangle(rect.x, rect.y + (y - rect.y), rect.width, rect.height)
             rf = rf + rstep
             gf = gf + gstep

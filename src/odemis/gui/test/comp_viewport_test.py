@@ -83,7 +83,9 @@ class ViewportTestCase(test.GuiTestCase):
         vwp.canvas.set_1d_data(plot[2], plot[3], range_x=plot[0], range_y=plot[1])
 
         vwp.left_legend.unit = 'm'
-        vwp.bottom_legend.unit = 'm'
+        vwp.left_legend.range = (min(plot[1]), max(plot[1]))
+        vwp.bottom_legend.unit = 'g'
+        vwp.bottom_legend.range = (min(plot[0]), max(plot[0]))
 
         test.gui_loop()
 
@@ -119,6 +121,8 @@ class ViewportTestCase(test.GuiTestCase):
 
             for plot in PLOTS:
                 vwp.canvas.set_1d_data(plot[0], plot[1])
+                vwp.bottom_legend.range = (min(plot[0]), max(plot[0]))
+                vwp.left_legend.range = (min(plot[1]), max(plot[1]))
                 test.gui_loop()
 
             vwp.Refresh()
@@ -128,6 +132,8 @@ class ViewportTestCase(test.GuiTestCase):
                                        plot[3],
                                        range_x=plot[0],
                                        range_y=plot[1])
+                vwp.bottom_legend.range = (min(plot[0]), max(plot[0]))
+                vwp.left_legend.range = (min(plot[1]), max(plot[1]))
                 test.gui_loop()
 
             vwp.Refresh()

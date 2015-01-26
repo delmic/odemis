@@ -40,7 +40,7 @@ import unittest
 import wx
 
 
-test.goto_manual()
+# test.goto_manual()
 # logging.getLogger().setLevel(logging.DEBUG)
 # test.set_sleep_time(1000)
 
@@ -245,11 +245,11 @@ class OverlayTestCase(test.GuiTestCase):
 
         sol = vol.StreamIconOverlay(cnvs)
         cnvs.add_view_overlay(sol)
-        test.gui_loop(2000)
+        test.gui_loop(100)
         sol.hide_pause(False)
         test.gui_loop()
-        test.gui_loop(2000)
         sol.hide_pause(True)
+        test.gui_loop(500)
 
     def test_focus_overlay(self):
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
@@ -389,8 +389,8 @@ class OverlayTestCase(test.GuiTestCase):
 
         test.gui_loop()
 
-        steps = 1000
-        step_size = 10
+        steps = 800
+        step_size = 16
         for i in xrange(0, steps * step_size, step_size):
             phi = (math.pi * 2) / steps
             x = (100 * i / (steps * 5)) * math.cos(i * phi)

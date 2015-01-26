@@ -47,13 +47,13 @@ class LegendTestCase(test.GuiTestCase):
 
         grid_sizer = wx.GridBagSizer()
 
-        hleg = legend.BitmapAxisLegend(self.panel)
+        hleg = legend.AxisLegend(self.panel)
         hleg.SetBackgroundColour("#887DFF")
 
         grid_sizer.Add(hleg, pos=(1, 1), flag=wx.EXPAND)
         grid_sizer.AddGrowableCol(1)
 
-        vleg = legend.BitmapAxisLegend(self.panel, orientation=wx.VERTICAL)
+        vleg = legend.AxisLegend(self.panel, orientation=wx.VERTICAL)
         vleg.SetBackgroundColour("#FF5D38")
 
         grid_sizer.Add(vleg, pos=(0, 0), flag=wx.EXPAND)

@@ -1177,9 +1177,7 @@ class AnalysisTab(Tab):
                 logging.warning("Couldn't guess format from filename '%s', will use %s.", fn, fmt)
 
         Message.show_message(self.main_frame, "Opening file")
-        # Since the loading of data can take relatively long, we use CallAfter so we are sure the
-        # message is displayed *before* the GUI blocks.
-        wx.CallAfter(self.load_data, fmt, fn)
+        self.load_data(fmt, fn)
         return True
 
     def on_file_open_button(self, evt):
@@ -1194,6 +1192,7 @@ class AnalysisTab(Tab):
 
         self.display_new_data(fn, data)
 
+    @call_after
     def display_new_data(self, filename, data):
         """
         Display a new data set (removing all references to the current one)
@@ -1290,7 +1289,7 @@ class AnalysisTab(Tab):
 
             # ########### Combined views and spectrum view visible
 
-            new_visible_views[0:2] = self._def_views[2:4] # Combined
+            new_visible_views[0:2] = self._def_views[2:4]  # Combined
             new_visible_views[2] = self.main_frame.vp_spatialspec.microscope_view
             new_visible_views[3] = self.main_frame.vp_inspection_plot.microscope_view
 
