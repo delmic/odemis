@@ -628,6 +628,7 @@ class ViewButtonController(object):
                 continue
 
             im = vp.microscope_view.thumbnail.value
+
             if im:
                 # im doesn't have the same aspect ratio as the actual thumbnail
                 # => rescale and crop on the center
@@ -643,17 +644,16 @@ class ViewButtonController(object):
                 lt = ((size_sub[0] - sim.Width) // 2,
                       (size_sub[1] - sim.Height) // 2)
                 sim.Resize(size_sub, lt, 0, 0, 0)
-
-                # compute placement
-                y, x = divmod(i, 2)
-                # copy im in the right place
-                im_22.Paste(sim,
-                            x * (size_sub[0] + border_width),
-                            y * (size_sub[1] + border_width))
             else:
-                # black image
-                # Should never happen
-                pass
+                # Create an empty black image, if no image is set
+                sim = wx.EmptyImage(*size_sub)
+
+            # compute placement
+            y, x = divmod(i, 2)
+            # copy im in the right place
+            im_22.Paste(sim,
+                        x * (size_sub[0] + border_width),
+                        y * (size_sub[1] + border_width))
 
             i += 1
 

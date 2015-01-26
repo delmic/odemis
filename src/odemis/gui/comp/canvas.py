@@ -835,6 +835,10 @@ class BitmapCanvas(BufferedCanvas):
         self._draw_background(self.ctx)
         self.ctx.identity_matrix()  # Reset the transformation matrix
 
+        # Don't draw anything else if the canvas is disabled
+        if not self.IsEnabled():
+            return
+
         self._draw_merged_images(self.ctx)
         self.ctx.identity_matrix()  # Reset the transformation matrix
 
@@ -1923,7 +1927,7 @@ class PlotCanvas(BufferedCanvas):
 
         self._draw_background(self.ctx)
 
-        if self._data:
+        if self._data and self.IsEnabled():
             self._plot_data(self.ctx)
 
     def _plot_data(self, ctx):

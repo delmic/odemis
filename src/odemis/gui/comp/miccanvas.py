@@ -438,12 +438,12 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         super(DblMicroscopeCanvas, self).update_drawing()
 
         if self.microscope_view:
-            self._update_thumbnail()
+            self.update_thumbnail()
 
     @wxlimit_invocation(2)  # max 1/2 Hz
     @call_after  # needed as it accesses the DC
     @ignore_dead
-    def _update_thumbnail(self):
+    def update_thumbnail(self):
         if self.IsEnabled():
             # TODO: avoid doing 2 copies, by using directly the wxImage from the
             # result of the StreamTree
@@ -835,7 +835,7 @@ class OverviewCanvas(DblMicroscopeCanvas):
     @wxlimit_invocation(2)  # max 1/2 Hz
     @call_after  # needed as it accesses the DC
     @ignore_dead
-    def _update_thumbnail(self):
+    def update_thumbnail(self):
 
         if not self.IsEnabled() or self.ClientSize.x * self.ClientSize.y <= 0:
             return  # nothing to update
@@ -1272,33 +1272,36 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         self.microscope_view = microscope_view
         self._tab_data_model = tab_data
 
-    # @wxlimit_invocation(2)  # max 1/2 Hz
+    @wxlimit_invocation(2)  # max 1/2 Hz
     @call_after  # needed as it accesses the DC
-    def _update_thumbnail(self):
+    def update_thumbnail(self):
         if self.IsEnabled():
-            csize = self.ClientSize
-            if (csize[0] * csize[1]) <= 0:
-                return  # nothing to update
+            if self._data is None:
+                self.microscope_view.thumbnail.value = None
+            else:
+                csize = self.ClientSize
+                if (csize[0] * csize[1]) <= 0:
+                    return  # nothing to update
 
-            # new bitmap to copy the DC
-            bitmap = wx.EmptyBitmap(*self.ClientSize)
-            context = wx.ClientDC(self)
+                # new bitmap to copy the DC
+                bitmap = wx.EmptyBitmap(*self.ClientSize)
+                context = wx.ClientDC(self)
 
-            dc = wx.MemoryDC()
-            dc.SelectObject(bitmap)
+                dc = wx.MemoryDC()
+                dc.SelectObject(bitmap)
 
-            dc.BlitPointSize((0, 0), self.ClientSize, context, (0, 0))
+                dc.BlitPointSize((0, 0), self.ClientSize, context, (0, 0))
 
-            # close the DC, to be sure the bitmap can be used safely
-            del dc
+                # close the DC, to be sure the bitmap can be used safely
+                del dc
 
-            self.microscope_view.thumbnail.value = wx.ImageFromBitmap(bitmap)
+                self.microscope_view.thumbnail.value = wx.ImageFromBitmap(bitmap)
 
     def update_drawing(self):
         super(ZeroDimensionalPlotCanvas, self).update_drawing()
 
         if self.microscope_view:
-            self._update_thumbnail()
+            self.update_thumbnail()
 
     def get_y_value(self):
         """ Return the current y value """
@@ -1329,7 +1332,7 @@ class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
 
         im_data = self.images[0]
 
-        if im_data is not None:
+        if im_data is not None and self.IsEnabled():
             im_format = cairo.FORMAT_RGB24
             height, width, _ = im_data.shape
 
@@ -1364,7 +1367,7 @@ class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
         """ Update the drawing and thumbnail """
         super(OneDimensionalSpatialSpectrumCanvas, self).update_drawing()
         if self.microscope_view:
-            self._update_thumbnail()
+            self.update_thumbnail()
 
     def clear(self):
         super(OneDimensionalSpatialSpectrumCanvas, self).clear()
@@ -1397,25 +1400,27 @@ class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
         self.set_images([(im_data, (0.0, 0.0), 1.0, True, None, None, "Spatial Spectrum")])
         self.markline_overlay.activate()
 
-    # @wxlimit_invocation(2)  # max 1/2 Hz
+    @wxlimit_invocation(2)  # max 1/2 Hz
     @call_after  # needed as it accesses the DC
-    def _update_thumbnail(self):
+    def update_thumbnail(self):
         if self.IsEnabled():
-            # new bitmap to copy the DC
+            if self.images == [None]:
+                self.microscope_view.thumbnail.value = None
+            else:
+                # new bitmap to copy the DC
+                bitmap = wx.EmptyBitmap(*self.ClientSize)
+                # print [self.Shown, self.Size]
+                context = wx.ClientDC(self)
 
-            bitmap = wx.EmptyBitmap(*self.ClientSize)
-            # print [self.Shown, self.Size]
-            context = wx.ClientDC(self)
+                dc = wx.MemoryDC()
+                dc.SelectObject(bitmap)
 
-            dc = wx.MemoryDC()
-            dc.SelectObject(bitmap)
+                dc.BlitPointSize((0, 0), self.ClientSize, context, (0, 0))
 
-            dc.BlitPointSize((0, 0), self.ClientSize, context, (0, 0))
+                # close the DC, to be sure the bitmap can be used safely
+                del dc
 
-            # close the DC, to be sure the bitmap can be used safely
-            del dc
-
-            self.microscope_view.thumbnail.value = wx.ImageFromBitmap(bitmap)
+                self.microscope_view.thumbnail.value = wx.ImageFromBitmap(bitmap)
 
 
 class AngularResolvedCanvas(canvas.DraggableCanvas):
@@ -1492,13 +1497,12 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
 
     def update_drawing(self):
         super(AngularResolvedCanvas, self).update_drawing()
-
         if self.microscope_view:
-            self._update_thumbnail()
+            self.update_thumbnail()
 
     @wxlimit_invocation(2)  # max 1/2 Hz
     @call_after  # needed as it accesses the DC
-    def _update_thumbnail(self):
+    def update_thumbnail(self):
         if self.IsEnabled():
             csize = self.ClientSize
             if (csize[0] * csize[1]) <= 0:
