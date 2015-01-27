@@ -625,7 +625,7 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, base.PixelDataMixin):
         self._width_colour = conversion.hex_to_frgba(gui.FG_COLOUR_HIGHLIGHT, 0.5)
         self._pixel_colour = conversion.hex_to_frgba(gui.FG_COLOUR_EDIT, 0.5)
 
-    def connect_selection(self, selection_va, width_va, pixel_va = None):
+    def connect_selection(self, selection_va, width_va, pixel_va=None):
         """ Connect the overlay to an external selection VA so it can update itself on value changes
         """
         self.clear_selection()
@@ -638,7 +638,7 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, base.PixelDataMixin):
     def _on_selection(self, selected_line):
         """ Event handler that requests a redraw when the selected line changes """
 
-        if selected_line and (None, None) not in selected_line:
+        if selected_line and (None, None) not in selected_line and self.active:
             self.start_pixel, self.end_pixel = selected_line
 
             v_pos = self.data_pixel_to_view(self.start_pixel)
@@ -649,13 +649,11 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, base.PixelDataMixin):
 
             self._view_to_world()
 
-            # Clear the selected pixel when the line changes
-            self._selected_pixel_va.value = (None, None)
-
             wx.CallAfter(self.cnvs.update_drawing)
 
     def _on_width(self, _):
-        wx.CallAfter(self.cnvs.update_drawing)
+        if self.active:
+            wx.CallAfter(self.cnvs.update_drawing)
 
     def selection_points(self, point):
         """ Calculate the surrounding points around the given point according to the selection width

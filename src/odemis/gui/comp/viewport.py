@@ -799,7 +799,7 @@ class SpatialSpectrumViewport(ViewPort):
         self.spectrum_stream.selected_pixel.subscribe(self._on_pixel_select)
 
     def _on_pixel_select(self, pixel):
-        """ Clear the makring line when the selected pixel is cleared """
+        """ Clear the marking line when the selected pixel is cleared """
         if None in pixel:
             self.canvas.markline_overlay.clear_labels()
 
