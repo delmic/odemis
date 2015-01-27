@@ -318,7 +318,16 @@ class PM8742(model.Actuator):
         else:
             return no, msg
 
-    # TODO: make a check error function that raises NewFocusError if needed
+    def _checkError(self):
+        """
+        Check if an error happened and convert to a python exception
+        return None
+        raise NewFocusError if an error happened
+        """
+        err = self.GetError()
+        if err:
+            errno, msg = err
+            raise NewFocusError(errno, msg)
 
     def _resynchonise(self):
         """
@@ -329,7 +338,6 @@ class PM8742(model.Actuator):
         # drop all the errors
         while self.GetError():
             pass
-
 
     # high-level methods (interface)
     def _updatePosition(self, axes=None):
@@ -510,7 +518,7 @@ class PM8742(model.Actuator):
             raise CancelledError()
         finally:
             self._updatePosition() # update (all axes) with final position
-            # TODO: self._checkError()
+            self._checkError()
 
     def _cancelCurrentMove(self, future):
         """
