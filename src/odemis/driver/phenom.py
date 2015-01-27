@@ -296,7 +296,6 @@ class Scanner(model.Emitter):
                                               cls=(int, long, float), unit="",
                                               setter=self._setTranslation)
         self.translation.subscribe(self._onTranslation)
-        self.last_translation = (0, 0)  # m, m
 
         # .resolution is the number of pixels actually scanned. If it's less than
         # the whole possible area, it's centered.
@@ -512,16 +511,13 @@ class Scanner(model.Emitter):
 
     def _onTranslation(self, translation):
         beamShift = self.parent._objects.create('ns0:position')
-        navAlgorithm = 'NAVIGATION-AUTO'
         with self.parent._acq_progress_lock:
             pixelSize = self.pixelSize.value
             new_trans = (translation[0] * pixelSize[0],
                          translation[1] * pixelSize[1])
-            diff_trans = (new_trans[0] - self.last_translation[0], new_trans[1] - self.last_translation[1])
-            beamShift.x, beamShift.y = diff_trans[0], diff_trans[1]
-            logging.debug("EBeam shifted by %s m,m", diff_trans)
-            self.parent._device.SetSEMImageShift(beamShift, False)
-            self.last_translation = new_trans
+            beamShift.x, beamShift.y = new_trans[0], new_trans[1]
+            logging.debug("EBeam shifted by %s m,m", new_trans)
+            self.parent._device.SetSEMImageShift(beamShift, True)
 
     def _setTranslation(self, value):
         """
