@@ -26,9 +26,8 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 
-from concurrent.futures._base import CancelledError
+from concurrent.futures import CancelledError
 import logging
-import numpy
 from odemis import model
 import odemis
 from odemis.model import (isasync, CancellableThreadPoolExecutor,
@@ -36,7 +35,6 @@ from odemis.model import (isasync, CancellableThreadPoolExecutor,
 import os
 import re
 import socket
-import struct
 from subprocess import CalledProcessError
 import subprocess
 import threading
@@ -139,8 +137,6 @@ class PM8742(model.Actuator):
         self.position = model.VigilantAttribute({}, unit="m", readonly=True)
         self._updatePosition()
 
-        # TODO: add support for changing speed
-        # self.speed = model.VigilantAttribute({}, unit="m/s", readonly=True)
         max_speed = max(a.speed[1] for a in axes_def.values())
         self.speed = model.MultiSpeedVA(speed, range=(0, max_speed),
                                         unit="m/s", setter=self._setSpeed)
@@ -819,7 +815,7 @@ class PM8742Simulator(object):
         # internal axis param values
         # str -> int: command name -> value
         orig_axis_state = {"QM": MT_TINY, # Motor type
-                           "PA": 0, # target position
+                           "PA": 0, # target position (PA? same as PR?)
                            "TP": 0, # current position
                            "VA": 1750, # velocity
                            "AC": 100000, # acceleration
@@ -980,7 +976,7 @@ class PM8742Simulator(object):
             pass
         elif cmd in ("PA", "PR"): # absolute/relative move
             if isquery:
-                ret = "%d" % self._astates[axis - 1]["PA"] # TODO: same value as PA for PR?
+                ret = "%d" % self._astates[axis - 1]["PA"] # same value as PA for PR?
             else:
                 pos = self._getCurrentPos(axis)
                 if cmd == "PR": # Relative
