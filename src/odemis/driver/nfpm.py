@@ -109,13 +109,13 @@ class PM8742(model.Actuator):
         self.MotorCheck()
 
         axes_def = {}
+        speed = {}
         for n, i in self._name_to_axis.items():
-            sz = self._stepsize[i-1]
+            sz = self._stepsize[i - 1]
             # TODO: allow to pass the range in m in the arguments
             # Position supports ±2³¹, probably not that much in reality, but
             # there is no info.
             rng = [(-2 ** 31) * sz, (2 ** 31 - 1) * sz]
-            axes_def[n] = model.Axis(range=rng, unit="m")
 
             # Check the actuator is connected
             mt = self.GetMotorType(i)
@@ -123,6 +123,11 @@ class PM8742(model.Actuator):
                 raise HwError("Controller failed to detect motor %d, check the "
                               "actuator is connected to the controller" %
                               (i,))
+            max_stp_s = {MT_STANDARD: 2000, MT_TINY:1750}[mt]
+            srng = (0, self._speedToMS(i, max_stp_s))
+            speed[n] = self._speedToMS(i, self.GetVelocity(i))
+
+            axes_def[n] = model.Axis(range=rng, speed=srng, unit="m")
 
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
 
@@ -135,8 +140,10 @@ class PM8742(model.Actuator):
         self._updatePosition()
 
         # TODO: add support for changing speed
-        self.speed = model.VigilantAttribute({}, unit="m/s", readonly=True)
-        self._updateSpeed()
+        # self.speed = model.VigilantAttribute({}, unit="m/s", readonly=True)
+        max_speed = max(a.speed[1] for a in axes_def.values())
+        self.speed = model.MultiSpeedVA(speed, range=(0, max_speed),
+                                        unit="m/s", setter=self._setSpeed)
 
     def terminate(self):
         if self._executor:
@@ -340,18 +347,34 @@ class PM8742(model.Actuator):
         self.position._value = pos
         self.position.notify(self.position.value)
     
-    def _updateSpeed(self):
+    def _speedToMS(self, axis, sps):
         """
-        Update the speed VA from the controller settings
+        Convert speed in step/s to m/s
+        axis (1<=int<=4): axis number
+        sps (int): steps/s
+        return (float): m/s
         """
-        speed = {}
-        for n, i in self._name_to_axis.items():
-            speed[n] = self.GetVelocity(i) * self._stepsize[i - 1]
+        return sps * self._stepsize[axis - 1]
 
-        # TODO: make it read/write
-        # it's read-only, so we change it via _value
-        self.speed._value = speed
-        self.speed.notify(self.speed.value)
+    def _setSpeed(self, value):
+        """
+        value (dict string-> float): speed for each axis
+        returns (dict string-> float): the new value
+        """
+        if set(value.keys()) != set(self._axes.keys()):
+            raise ValueError("Requested speed %s doesn't specify all axes %s" %
+                             (value, self._axes.keys()))
+        for axis, v in value.items():
+            rng = self._axes[axis].speed
+            if not rng[0] < v <= rng[1]:
+                raise ValueError("Requested speed of %f for axis %s not within %f->%f" %
+                                 (v, axis, rng[0], rng[1]))
+
+            i = self._name_to_axis[axis]
+            sps = max(1, int(round(v / self._stepsize[i - 1])))
+            self.SetVelocity(i, sps)
+
+        return value
 
     def _createFuture(self):
         """
