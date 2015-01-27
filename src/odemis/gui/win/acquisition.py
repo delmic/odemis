@@ -270,7 +270,7 @@ class AcquisitionDialog(xrcfr_acq):
         """
         self.update_setting_display()
 
-    def on_setting_change(self, setting_ctrl):
+    def on_setting_change(self):
         self.update_setting_display()
 
         # check presets and fall-back to custom

@@ -1,27 +1,27 @@
-#-*- coding: utf-8 -*-
-"""
-@author: Rinze de Laat
+# -*- coding: utf-8 -*-
 
-Copyright © 2012-2013 Rinze de Laat, Delmic
+"""
+:author: Rinze de Laat
+:copyright: © 2012-2013 Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the
-terms of the GNU General Public License version 2 as published by the Free
-Software Foundation.
+.. license::
+    Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU
+    General Public License version 2 as published by the Free Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
-WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
-PARTICULAR PURPOSE. See the GNU General Public License for more details.
+    Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even
+    the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
+    Public License for more details.
 
-You should have received a copy of the GNU General Public License along with
-Odemis. If not, see http://www.gnu.org/licenses/.
+    You should have received a copy of the GNU General Public License along with Odemis. If not,
+    see http://www.gnu.org/licenses/.
 
 
 ### Purpose ###
 
-This module contains classes to control the settings controls in the right
-setting column of the user interface.
+This module contains classes to control the settings controls in the right setting column of the
+user interface.
 
 """
 
@@ -53,7 +53,8 @@ import odemis.gui.conf as guiconf
 import odemis.util.units as utun
 
 
-####### Utility functions #######
+# ###### Utility functions #######
+
 def choice_to_str(choice):
     if not isinstance(choice, collections.Iterable):
         choice = [unicode(choice)]
@@ -61,31 +62,32 @@ def choice_to_str(choice):
 
 
 def label_to_human(camel_label):
-    """ Converts a camel-case label into a human readable one """
-    # add space after each upper case
-    # then, make the first letter uppercase and all the other ones lowercase
+    """ Convert a camel-case label into a human readable string """
+
+    # Add space after each upper case, then make the first letter uppercase and all the other ones
+    # lowercase
     return re.sub(r"([A-Z])", r" \1", camel_label).capitalize()
 
 
-def bind_menu(se):
-    """ Add a menu to reset a setting entry to the original (current) value
+def bind_menu(settings_entry):
+    """ Add a context menu to the settings entry to reset it to its original value
 
-    .. note:
-        `se` must at least have a valid label, ctrl and va
+    The added menu is used in the acquisition window, to give the user the ability to reset values
+    that have been adjusted by Odemis.
 
-    :param se: (SettingEntry)
+    :param settings_entry: (SettingEntry) Must at least have a valid label, ctrl and va
 
     """
 
-    orig_val = se.va.value
+    orig_val = settings_entry.va.value
 
-    def reset_value(evt):
-        se.va.value = orig_val
-        wx.CallAfter(pub.sendMessage, 'setting.changed', setting_ctrl=se.value_ctrl)
+    def reset_value(_):
+        settings_entry.va.value = orig_val
+        wx.CallAfter(pub.sendMessage, 'setting.changed')
 
     def show_reset_menu(evt):
         # No menu needed if value hasn't changed
-        if se.va.value == orig_val:
+        if settings_entry.va.value == orig_val:
             return  # TODO: or display it greyed out?
 
         menu = wx.Menu()
@@ -97,8 +99,8 @@ def bind_menu(se):
         menu.AppendItem(mi)
         eo.PopupMenu(menu)
 
-    se.value_ctrl.Bind(wx.EVT_CONTEXT_MENU, show_reset_menu)
-    se.lbl_ctrl.Bind(wx.EVT_CONTEXT_MENU, show_reset_menu)
+    settings_entry.value_ctrl.Bind(wx.EVT_CONTEXT_MENU, show_reset_menu)
+    settings_entry.lbl_ctrl.Bind(wx.EVT_CONTEXT_MENU, show_reset_menu)
 
 
 ####### Classes #######
@@ -866,7 +868,7 @@ class SettingsController(object):
         logging.debug("Setting has changed")
         evt_obj = evt.GetEventObject()
         # Make sure the message is sent form the main thread
-        wx.CallAfter(pub.sendMessage, 'setting.changed', setting_ctrl=evt_obj)
+        wx.CallAfter(pub.sendMessage, 'setting.changed')
         evt.Skip()
 
     def Refresh(self):

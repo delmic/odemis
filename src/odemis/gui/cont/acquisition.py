@@ -472,7 +472,7 @@ class SparcAcquiController(object):
         """
         self.update_acquisition_time() # to update the message
 
-    def on_setting_change(self, setting_ctrl):
+    def on_setting_change(self):
         """ Handler for pubsub 'setting.changed' messages """
         self.update_acquisition_time()
 
