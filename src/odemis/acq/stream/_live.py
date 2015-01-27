@@ -320,6 +320,8 @@ class AlignedSEMStream(SEMStream):
         self._calibrated = False # whether the calibration has been already done
         self._last_pos = None # last known position of the stage
         self._shift = (0, 0) # (float, float): shift to apply in meters
+        self._last_shift = (0, 0)  # (float, float): last ebeam shift applied
+        self._cur_trans = None
         stage.position.subscribe(self._onStageMove)
 
     def _onStageMove(self, pos):
@@ -333,6 +335,14 @@ class AlignedSEMStream(SEMStream):
         if self._last_pos == pos:
             return
 
+        md_stage = self._stage.getMetadata()
+        trans = md_stage.get(model.MD_POS_COR, (0, 0))
+        if self._cur_trans != None and self._cur_trans != trans:
+            logging.debug("Current stage translation %s m,m", trans)
+            self._stage.updateMetadata({
+                model.MD_POS_COR: self._cur_trans
+            })
+            logging.debug("Compensated stage translation %s m,m", self._cur_trans)
         self._last_pos = pos
         self._calibrated = False
 
@@ -377,6 +387,13 @@ class AlignedSEMStream(SEMStream):
                 shift = FindEbeamCenter(self._ccd, self._detector, self._emitter)
                 logging.debug("Spot shift is %s m,m", shift)
                 self._beamshift = shift
+                # Also update the last beam shift in order to be used for stage
+                # offset correction in the next stage moves
+                self._last_shift = (0.75 * self._last_shift[0] + 0.25 * shift[0], 0.75 * self._last_shift[1] + 0.25 * shift[1])
+                md_stage = self._stage.getMetadata()
+                self._cur_trans = md_stage.get(model.MD_POS_COR, (0, 0))
+                self._cur_trans = (self._cur_trans[0] - self._last_shift[0], self._cur_trans[1] - self._last_shift[1])
+
                 if self._shiftebeam == "Stage move":
                     for child in self._stage.children.value:
                         if child.role == "sem-stage":
