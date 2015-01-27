@@ -37,40 +37,35 @@ from odemis.gui.util import get_picture_folder, get_home_folder
 import os.path
 from odemis.acq.align import delphi
 
+
 CONF_PATH = os.path.join(get_home_folder(), u".config/odemis")
 ACQUI_PATH = get_picture_folder()
 
 CONF_GENERAL = None
+CONF_ACQUI = None
+CONF_CALIB = None
+
+
 def get_general_conf():
     global CONF_GENERAL
-
     if not CONF_GENERAL:
         CONF_GENERAL = GeneralConfig()
-
     return CONF_GENERAL
 
-CONF_ACQUI = None
-def get_acqui_conf():
-    """ Return the Acquisition config object and create/read it first if it does
-        not yet exist.
-    """
-    global CONF_ACQUI
 
+def get_acqui_conf():
+    """ Return the Acquisition config object and create/read it first if it does not yet exist """
+    global CONF_ACQUI
     if not CONF_ACQUI:
         CONF_ACQUI = AcquisitionConfig()
-
     return CONF_ACQUI
 
-CONF_CALIB = None
-def get_calib_conf():
-    """ Return the calibration config object and create/read it first if it does
-        not yet exist.
-    """
-    global CONF_CALIB
 
+def get_calib_conf():
+    """ Return the calibration config object and create/read it first if it does not yet exist """
+    global CONF_CALIB
     if not CONF_CALIB:
         CONF_CALIB = CalibrationConfig()
-
     return CONF_CALIB
 
 
@@ -84,6 +79,7 @@ class Config(object):
         automatically saved.
     """
     __metaclass__ = ABCMeta
+
     @abstractproperty
     def file_name(self):
         """Name of the configuration file"""
@@ -155,10 +151,12 @@ class Config(object):
         except (ConfigParser.NoOptionError, ConfigParser.NoSectionError):
             return self.default.get(section, option)
 
+
 class GeneralConfig(Config):
     """ General configuration values """
 
     file_name = "odemis.config"
+
     def __init__(self):
 
         super(GeneralConfig, self).__init__()
@@ -166,15 +164,9 @@ class GeneralConfig(Config):
         # Define the default settings
         self.default.add_section("help")
 
-        self.default.set("help",
-                         "manual_base_name",
-                         u"user-guide.pdf"
-                        )
+        self.default.set("help", "manual_base_name", u"user-guide.pdf")
 
-        self.default.set("help",
-                         "manual_path",
-                         u"/usr/share/doc/odemis/"
-                        )
+        self.default.set("help", "manual_path", u"/usr/share/doc/odemis/")
 
         # For the calibration files (used in analysis tab)
         self.default.add_section("calibration")
@@ -194,9 +186,9 @@ class GeneralConfig(Config):
 
         if role:
             full_path = os.path.join(
-                                manual_path,
-                                u"%s-%s" % (role, manual_base_name)
-                        )
+                manual_path,
+                u"%s-%s" % (role, manual_base_name)
+            )
             if os.path.exists(full_path):
                 return full_path
             else:
@@ -218,9 +210,10 @@ class GeneralConfig(Config):
             return full_path
         return None
 
-class AcquisitionConfig(Config):
 
+class AcquisitionConfig(Config):
     file_name = "acquisition.config"
+
     def __init__(self):
         super(AcquisitionConfig, self).__init__()
 
@@ -258,20 +251,20 @@ class AcquisitionConfig(Config):
     def last_extension(self, last_extension):
         self.set("acquisition", "last_extension", last_extension)
 
+
 class CalibrationConfig(Config):
-    """
-    For saving/restoring sample holder calibration data in the Delphi
-    """
+    """ For saving/restoring sample holder calibration data in the Delphi """
 
     file_name = "calibration.config"
 
-    def _get_section_name(self, shid):
+    @staticmethod
+    def _get_section_name(shid):
         return "delphi-%x" % shid
 
     def set_sh_calib(self, shid, htop, hbot, hfoc, strans, sscale, srot,
                      iscale, irot, resa, resb, hfwa, spotshift):
-        """
-        Store the calibration data for a given sample holder
+        """ Store the calibration data for a given sample holder
+
         shid (int): the sample holder ID
         htop (2 floats): position of the top hole
         hbot (2 floats): position of the bottom hole
@@ -285,7 +278,9 @@ class CalibrationConfig(Config):
         resb (2 floats): resolution related SEM image shift, intercept of linear fit
         hfwa (2 floats): hfw related SEM image shift, slope of linear fit
         spotshift (2 floats): SEM spot shift in percentage of HFW
+
         """
+
         sec = self._get_section_name(shid)
         if self.config.has_section(sec):
             logging.info("ID %s already exists, overwriting...", sec)
@@ -317,20 +312,23 @@ class CalibrationConfig(Config):
         self.write()
 
     def _get_tuple(self, section, option):
-        """
-        Reads a tuple of float with the option name + _x and _y
+        """ Read a tuple of float with the option name + _x and _y
+
         return (2 floats)
-        raises:
+
+        :raises:
             ValueError: if the config file doesn't contain floats
             NoOptionError: if not all the options are present
+
         """
+
         x = self.config.getfloat(section, option + "_x")
         y = self.config.getfloat(section, option + "_y")
         return x, y
 
     def get_sh_calib(self, shid):
-        """
-        Reads the calibration of a given sample holder
+        """ Read the calibration of a given sample holder
+
         shid (int): the sample holder ID
         returns None (if no calibration data available), or :
             htop (2 floats): position of the top hole
@@ -345,7 +343,9 @@ class CalibrationConfig(Config):
             resb (2 floats): resolution related SEM image shift, intercept of linear fit
             hfwa (2 floats): hfw related SEM image shift, slope of linear fit
             spotshift (2 floats): SEM spot shift in percentage of HFW
+
         """
+
         sec = self._get_section_name(shid)
         if self.config.has_section(sec):
             try:
@@ -359,7 +359,7 @@ class CalibrationConfig(Config):
 
                 sscale = self._get_tuple(sec, "stage_scaling")
                 if not (sscale[0] > 0 and sscale[1] > 0):
-                    raise ValueError("stage_scaling %s must be > 0" % sscale)
+                    raise ValueError("stage_scaling %s must be > 0" % str(sscale))
 
                 srot = self.config.getfloat(sec, "stage_rotation")
                 if not 0 <= srot <= (2 * math.pi):
@@ -367,13 +367,13 @@ class CalibrationConfig(Config):
 
                 iscale = self._get_tuple(sec, "image_scaling")
                 if not (iscale[0] > 0 and iscale[1] > 0):
-                    raise ValueError("image_scaling %s must be > 0" % iscale)
+                    raise ValueError("image_scaling %s must be > 0" % str(iscale))
 
                 irot = self.config.getfloat(sec, "image_rotation")
                 if not 0 <= irot <= (2 * math.pi):
                     raise ValueError("image_rotation %f out of range" % irot)
 
-                #Take care of old calibration files
+                # Take care of old calibration files
                 try:
                     resa = self._get_tuple(sec, "resolution_a")
                     resb = self._get_tuple(sec, "resolution_b")
@@ -385,7 +385,8 @@ class CalibrationConfig(Config):
                     hfwa = (0, 0)
                     spotshift = (0.035, 0)  # Rough approximation used until the calibration
 
-                return htop, hbot, hfoc, strans, sscale, srot, iscale, irot, resa, resb, hfwa, spotshift
+                return (htop, hbot, hfoc, strans, sscale, srot, iscale, irot, resa, resb, hfwa,
+                        spotshift)
             except (ValueError, NoOptionError):
                 logging.info("Not all calibration data readable, new calibration is required",
                              exc_info=True)
@@ -393,4 +394,3 @@ class CalibrationConfig(Config):
                 logging.exception("Failed to read calibration data")
 
         return None
-
