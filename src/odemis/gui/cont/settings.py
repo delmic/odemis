@@ -69,7 +69,7 @@ def label_to_human(camel_label):
     return re.sub(r"([A-Z])", r" \1", camel_label).capitalize()
 
 
-def bind_menu(settings_entry):
+def bind_setting_context_menu(settings_entry):
     """ Add a context menu to the settings entry to reset it to its original value
 
     The added menu is used in the acquisition window, to give the user the ability to reset values
@@ -82,23 +82,24 @@ def bind_menu(settings_entry):
     orig_val = settings_entry.va.value
 
     def reset_value(_):
+        """ Reset the value of the setting VA back to its original value """
         settings_entry.va.value = orig_val
         wx.CallAfter(pub.sendMessage, 'setting.changed')
 
     def show_reset_menu(evt):
-        # No menu needed if value hasn't changed
-        if settings_entry.va.value == orig_val:
-            return  # TODO: or display it greyed out?
-
+        """ Create and show a context menu which has a menu item to reset the settings's value """
         menu = wx.Menu()
         mi = wx.MenuItem(menu, wx.NewId(), 'Reset value')
-
         eo = evt.GetEventObject()
         eo.Bind(wx.EVT_MENU, reset_value, mi)
-
         menu.AppendItem(mi)
+        # Disable the menu item if the value has not changed
+        disable = settings_entry.va.value != orig_val
+        mi.Enable(disable)
+        # Show the menu
         eo.PopupMenu(menu)
 
+    # Bind the menu to both the label and the value controls
     settings_entry.value_ctrl.Bind(wx.EVT_CONTEXT_MENU, show_reset_menu)
     settings_entry.lbl_ctrl.Bind(wx.EVT_CONTEXT_MENU, show_reset_menu)
 
@@ -690,7 +691,7 @@ class SettingsController(object):
         self.entries.append(ne)
 
         if self.highlight_change:
-            bind_menu(ne)
+            bind_setting_context_menu(ne)
 
         self.panel.Parent.Parent.Layout()
 
@@ -813,7 +814,7 @@ class SettingsController(object):
         self.panel.num_rows += 1
 
         if self.highlight_change:
-            bind_menu(ne)
+            bind_setting_context_menu(ne)
 
         self.panel.Parent.Parent.Layout()
 
