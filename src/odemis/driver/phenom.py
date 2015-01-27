@@ -108,8 +108,8 @@ TILT_BLANK = (-1, -1)  # tilt to imitate beam blanking
 # unloaded state
 HFW_RANGE = [2.5e-06, 0.0031]
 TENSION_RANGE = [4797.56, 20006.84]
-REFERENCE_TENSION = 10e03 #Volt
-BEAM_SHIFT_AT_REFERENCE = 19e-06  # Maximum beam shit at the reference tension #m
+# REFERENCE_TENSION = 10e03 #Volt
+# BEAM_SHIFT_AT_REFERENCE = 19e-06  # Maximum beam shit at the reference tension #m
 SPOT_RANGE = [0.0, 5.73018379531] # TODO: what means a spot of 0? => small value like 1e-3?
 NAVCAM_PIXELSIZE = (1.3267543859649122e-05, 1.3267543859649122e-05)
 DELPHI_OVERVIEW_FOCUS = 0.0052  # Good focus position for navcam focus initialization
@@ -520,7 +520,7 @@ class Scanner(model.Emitter):
             diff_trans = (new_trans[0] - self.last_translation[0], new_trans[1] - self.last_translation[1])
             beamShift.x, beamShift.y = diff_trans[0], diff_trans[1]
             logging.debug("EBeam shifted by %s m,m", diff_trans)
-            self.parent._device.MoveBy(beamShift, navAlgorithm)
+            self.parent._device.SetSEMImageShift(beamShift, False)
             self.last_translation = new_trans
 
     def _setTranslation(self, value):
@@ -536,7 +536,9 @@ class Scanner(model.Emitter):
         # Calculate shift distance
         tran_d = norm(numpy.asarray([0, tran[0]]) - numpy.asarray([tran[1], 0]))
         # Change to the actual maximum beam shift
-        limit = (REFERENCE_TENSION / self.accelVoltage.value) * BEAM_SHIFT_AT_REFERENCE
+        # limit = (REFERENCE_TENSION / self.accelVoltage.value) * BEAM_SHIFT_AT_REFERENCE
+        range = self.parent._device.GetSEMImageShiftRange()
+        limit = range.max
         # The ratio between the shift distance and the limit
         ratio = 1
         if tran_d > limit:
