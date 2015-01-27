@@ -536,9 +536,9 @@ class PM8742(model.Actuator):
                     # No idea about the stepsize, but make it different to allow
                     # distinguishing between motor types
                     if mt == MT_STANDARD:
-                        ss = 10e-6
-                    elif mt == MT_TINY:
                         ss = 1e-6
+                    elif mt == MT_TINY:
+                        ss = 0.1e-6
                     else:
                         n = ""
                         ss = 0
@@ -552,7 +552,7 @@ class PM8742(model.Actuator):
                                   hn, host, port)
                 continue
 
-            found.append(("TMCM-%s" % modl,
+            found.append(("NF-%s-%s" % (modl, sn),
                           {"address": host,
                            "axes": axes,
                            "stepsize": stepsize,
