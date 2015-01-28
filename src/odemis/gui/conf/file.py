@@ -108,6 +108,14 @@ class Config(object):
         self.config.set(section, option, value)
         self.write()
 
+    def set_many(self, section, option_value_list):
+        if not self.config.has_section(section):
+            logging.warn("Section %s not found, creating...", section)
+            self.config.add_section(section)
+        for option, value in option_value_list:
+            self.config.set(section, option, value)
+        self.write()
+
     def get(self, section, option):
         """ Get the value of an option """
         try:
@@ -144,7 +152,9 @@ class GeneralConfig(Config):
         First, it will look for a specific manual if a role is defined. If no
         role is defined or it does not exists, it will try and find the general
         user manual and return its path. If that also fails, None is returned.
+
         """
+
         manual_path = self.get("help", "manual_path")
         manual_base_name = self.get("help", "manual_base_name")
 
@@ -165,9 +175,12 @@ class GeneralConfig(Config):
             return None
 
     def get_dev_manual(self):
+        """ Return the full path to the developer manual
+
+        :return: (unicode) the path to the developer manual (or None)
+
         """
-        Returns (unicode): the path to the developer manual (or None)
-        """
+
         manual_path = self.get("help", "manual_path")
         full_path = os.path.join(manual_path, u"odemis-develop.pdf")
         if os.path.exists(full_path):
@@ -251,29 +264,29 @@ class CalibrationConfig(Config):
         else:
             self.config.add_section(sec)
 
-        # Don't use self.set() to avoid checking the section/writing every time
-        self.config.set(sec, "top_hole_x", "%.15f" % htop[0])
-        self.config.set(sec, "top_hole_y", "%.15f" % htop[1])
-        self.config.set(sec, "bottom_hole_x", "%.15f" % hbot[0])
-        self.config.set(sec, "bottom_hole_y", "%.15f" % hbot[1])
-        self.config.set(sec, "hole_focus", "%.15f" % hfoc)
-        self.config.set(sec, "stage_trans_x", "%.15f" % strans[0])
-        self.config.set(sec, "stage_trans_y", "%.15f" % strans[1])
-        self.config.set(sec, "stage_scaling_x", "%.15f" % sscale[0])
-        self.config.set(sec, "stage_scaling_y", "%.15f" % sscale[1])
-        self.config.set(sec, "stage_rotation", "%.15f" % srot)
-        self.config.set(sec, "image_scaling_x", "%.15f" % iscale[0])
-        self.config.set(sec, "image_scaling_y", "%.15f" % iscale[1])
-        self.config.set(sec, "image_rotation", "%.15f" % irot)
-        self.config.set(sec, "resolution_a_x", "%.15f" % resa[0])
-        self.config.set(sec, "resolution_a_y", "%.15f" % resa[1])
-        self.config.set(sec, "resolution_b_x", "%.15f" % resb[0])
-        self.config.set(sec, "resolution_b_y", "%.15f" % resb[1])
-        self.config.set(sec, "hfw_a_x", "%.15f" % hfwa[0])
-        self.config.set(sec, "hfw_a_y", "%.15f" % hfwa[1])
-        self.config.set(sec, "spot_shift_x", "%.15f" % spotshift[0])
-        self.config.set(sec, "spot_shift_y", "%.15f" % spotshift[1])
-        self.write()
+        self.set_many(sec, [
+            ("top_hole_x", "%.15f" % htop[0]),
+            ("top_hole_y", "%.15f" % htop[1]),
+            ("bottom_hole_x", "%.15f" % hbot[0]),
+            ("bottom_hole_y", "%.15f" % hbot[1]),
+            ("hole_focus", "%.15f" % hfoc),
+            ("stage_trans_x", "%.15f" % strans[0]),
+            ("stage_trans_y", "%.15f" % strans[1]),
+            ("stage_scaling_x", "%.15f" % sscale[0]),
+            ("stage_scaling_y", "%.15f" % sscale[1]),
+            ("stage_rotation", "%.15f" % srot),
+            ("image_scaling_x", "%.15f" % iscale[0]),
+            ("image_scaling_y", "%.15f" % iscale[1]),
+            ("image_rotation", "%.15f" % irot),
+            ("resolution_a_x", "%.15f" % resa[0]),
+            ("resolution_a_y", "%.15f" % resa[1]),
+            ("resolution_b_x", "%.15f" % resb[0]),
+            ("resolution_b_y", "%.15f" % resb[1]),
+            ("hfw_a_x", "%.15f" % hfwa[0]),
+            ("hfw_a_y", "%.15f" % hfwa[1]),
+            ("spot_shift_x", "%.15f" % spotshift[0]),
+            ("spot_shift_y", "%.15f" % spotshift[1]),
+        ])
 
     def _get_tuple(self, section, option):
         """ Read a tuple of float with the option name + _x and _y

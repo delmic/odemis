@@ -1,42 +1,46 @@
 # -*- coding: utf-8 -*-
-'''
-Created on 27 Aug 2014
 
-@author: Éric Piel
-
-Copyright © 2014 Éric Piel, Delmic
+"""
+:created: 27 Aug 2014
+:author: Éric Piel
+:copyright: © 2014 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License version 2 as published by the Free Software Foundation.
+.. license::
+    Odemis is free software: you can redistribute it and/or modify it under the terms  of the GNU
+    General Public License version 2 as published by the Free Software  Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+    Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;  without
+    even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR  PURPOSE. See the GNU
+    General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+    You should have received a copy of the GNU General Public License along with Odemis. If not,
+    see http://www.gnu.org/licenses/.
+
+"""
 
 from __future__ import division
 
 import logging
-from odemis import gui
+import odemis.gui.conf.file as conffile
+import odemis.gui as gui
 import os
 import shutil
 import unittest
 from unittest.case import skip
 
-
 logging.getLogger().setLevel(logging.DEBUG)
 
+
 class ConfigTest(object):
-    """
-    Generic test setup/teardown methods for testing one configuration
-    """
+    """ Generic test setup/teardown methods for testing one configuration """
 
     # .conf_class must be defined
 
     def setUp(self):
         # save the real user file to be able to do whatever we like
-        filename = os.path.join(gui.conf.CONF_PATH, self.conf_class.file_name)
+        filename = os.path.join(conffile.CONF_PATH, self.conf_class.file_name)
         backname = filename + u".testbak"
         if os.path.exists(filename):
             logging.info("Saving file %s", filename)
@@ -71,6 +75,7 @@ class ConfigTest(object):
         for f, s in zip(first, second):
             self.assertAlmostEqual(f, s, places=places, msg=msg, delta=delta)
 
+
 class GeneralConfigTest(ConfigTest, unittest.TestCase):
 
     conf_class = gui.conf.GeneralConfig
@@ -78,13 +83,13 @@ class GeneralConfigTest(ConfigTest, unittest.TestCase):
     def test_simple(self):
         conf = gui.conf.get_general_conf()
         path = conf.get_manual()
-        self.assertTrue(path.endswith(u".pdf"))
+        self.assertIsNone(path)
 
         path = conf.get_manual("secom")
-        self.assertTrue(path.endswith(u".pdf"))
+        self.assertIsNone(path)
 
         path = conf.get_dev_manual()
-        self.assertTrue(path.endswith(u".pdf"))
+        self.assertIsNone(path)
 
     def test_save(self):
         conf = gui.conf.get_general_conf()
@@ -185,5 +190,4 @@ class CalibrationConfigTest(ConfigTest, unittest.TestCase):
                 self.assertAlmostEqual(o, b)
 
 if __name__ == "__main__":
-    # import sys;sys.argv = ['', 'Test.testName']
     unittest.main()
