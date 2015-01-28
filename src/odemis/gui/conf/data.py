@@ -58,8 +58,6 @@ CONFIG = {
         {
             "control_type": odemis.gui.CONTROL_RADIO,
             "choices": util.binning_1d_from_2d,
-            # means will make sure both dimensions are treated as one
-            "type": "1d_binning",
         },
         "resolution":
         {

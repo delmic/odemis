@@ -25,6 +25,7 @@ This module contains functions that help in the generation of dynamic configurat
 """
 
 from __future__ import division
+from collections import OrderedDict
 
 import logging
 import math
@@ -46,7 +47,7 @@ def resolution_from_range(comp, va, conf, init=None):
 
     if len(cur_val) != 2:
         logging.warning("Got a resolution not of length 2: %s", cur_val)
-        return [cur_val]
+        return {cur_val: str(cur_val)}
 
     try:
         if init is None:
@@ -63,9 +64,10 @@ def resolution_from_range(comp, va, conf, init=None):
             if len(choices) >= 4 and (res[0] * res[1] < num_pixels):
                 break
 
-        return sorted(choices)  # return a list, to be sure it's in order
+        return OrderedDict({(v, v): str(v) for v in choices})
+        # return sorted(choices)  # return a list, to be sure it's in order
     except NotApplicableError:
-        return [cur_val]
+        return {cur_val: str(cur_val)}
 
 
 def resolution_from_range_plus_point(comp, va, conf):
@@ -83,11 +85,10 @@ def binning_1d_from_2d(comp, va, conf):
 
     cur_val = va.value
     if len(cur_val) != 2:
-        logging.warning("Got a binning not of length 2: %s, will try anyway",
-                        cur_val)
+        logging.warning("Got a binning not of length 2: %s, will try anyway", cur_val)
 
     try:
-        choices = set([cur_val[0]])
+        choices = {cur_val[0]}
         minbin = max(va.range[0])
         maxbin = min(va.range[1])
 
@@ -103,9 +104,9 @@ def binning_1d_from_2d(comp, va, conf):
             b *= 2
             # logging.error(choices)
 
-        return sorted(choices)  # return a list, to be sure it's in order
+        return OrderedDict({(v, v): str(v) for v in choices})
     except NotApplicableError:
-        return [cur_val[0]]
+        return {(cur_val[0], cur_val[0]): str(cur_val[0])}
 
 
 def binning_firstd_only(comp, va, conf):

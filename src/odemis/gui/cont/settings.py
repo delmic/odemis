@@ -577,6 +577,8 @@ class SettingsController(object):
 
             lbl_ctrl, value_ctrl = self.panel.add_radio_control(label_text, conf=ctrl_conf)
 
+            # This code should soon be redundant
+
             if conf.get('type', None) == "1d_binning":
                 # need to convert back and forth between 1D and 2D
                 # from 2D to 1D (just pick X)
@@ -591,6 +593,7 @@ class SettingsController(object):
                 def radio_get(ctrl=value_ctrl):
                     value = ctrl.GetValue()
                     return (value, value)
+            # END This code should soon be redundant
             elif conf.get('type', None) == "1std_binning":
                 # need to convert back and forth between 1D and 2D
                 # from 2D to 1D (just pick X)
@@ -628,7 +631,7 @@ class SettingsController(object):
 
             # Set choices
             for choice, formatted in choices_fmt:
-                value_ctrl.Append(u"%s %s" % (formatted, (prefix or "") + unit), choice)
+                value_ctrl.Append(u"xx%s %s" % (formatted, (prefix or "") + unit), choice)
 
             # A small wrapper function makes sure that the value can
             # be set by passing the actual value (As opposed to the text label)
