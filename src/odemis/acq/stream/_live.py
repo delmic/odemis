@@ -371,6 +371,9 @@ class AlignedSEMStream(SEMStream):
                 # TODO Handle cases where current beam shift is larger than
                 # current limit. Happens when accel. voltage is changed
                 self._emitter.translation.value = (0, 0)
+                # store current settings
+                no_spot_settings = (self._emitter.dwellTime.value,
+                                    self._emitter.resolution.value)
                 shift = FindEbeamCenter(self._ccd, self._detector, self._emitter)
                 logging.debug("Spot shift is %s m,m", shift)
                 self._beamshift = shift
@@ -388,6 +391,9 @@ class AlignedSEMStream(SEMStream):
                     # Then by updating the metadata
                     shift = (0, 0)  # just in case of failure
                     shift = FindEbeamCenter(self._ccd, self._detector, self._emitter)
+                # restore hw settings
+                (self._emitter.dwellTime.value,
+                 self._emitter.resolution.value) = no_spot_settings
             except LookupError:
                 logging.error("Failed to locate the ebeam center, SEM image will not be aligned")
             except Exception:

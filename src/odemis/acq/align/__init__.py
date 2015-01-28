@@ -57,9 +57,6 @@ def FindEbeamCenter(ccd, detector, escan):
         ccd.binning.value = (1, 1)
         ccd.resolution.value = ccd.resolution.range[1]
 
-        # store current settings
-        no_spot_settings = (escan.dwellTime.value,
-                            escan.resolution.value)
         # set ebeam to spot mode
         # resolution -> translation: order matters
         escan.resolution.value = (1, 1)
@@ -101,9 +98,6 @@ def FindEbeamCenter(ccd, detector, escan):
 
     finally:
         detector.data.unsubscribe(discard_data)
-        # restore hw settings
-        (escan.dwellTime.value,
-         escan.resolution.value) = no_spot_settings
         ccd.exposureTime.value = prev_exp
         ccd.binning.value = prev_bin
         ccd.resolution.value = prev_res

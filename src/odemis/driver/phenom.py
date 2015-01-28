@@ -295,7 +295,7 @@ class Scanner(model.Emitter):
         self.translation = model.TupleContinuous((0, 0), tran_rng,
                                               cls=(int, long, float), unit="",
                                               setter=self._setTranslation)
-        self.translation.subscribe(self._onTranslation)
+        self.translation.subscribe(self._onTranslation, init=True)
 
         # .resolution is the number of pixels actually scanned. If it's less than
         # the whole possible area, it's centered.
