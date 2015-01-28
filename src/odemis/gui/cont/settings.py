@@ -36,7 +36,7 @@ import odemis.dataio
 from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.file import EVT_FILE_SELECT
 from odemis.gui.comp.slider import UnitFloatSlider
-from odemis.gui.conf.settingspanel import CONFIG, CONFIG_PER_ROLE
+from odemis.gui.conf.data import CONFIG, CONFIG_PER_ROLE
 import odemis.gui.util
 from odemis.gui.util.widgets import VigilantAttributeConnector, AxisConnector
 from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase
@@ -79,11 +79,11 @@ def bind_setting_context_menu(settings_entry):
 
     """
 
-    orig_val = settings_entry.va.value
+    orig_val = settings_entry.vigilattr.value
 
     def reset_value(_):
         """ Reset the value of the setting VA back to its original value """
-        settings_entry.va.value = orig_val
+        settings_entry.vigilattr.value = orig_val
         wx.CallAfter(pub.sendMessage, 'setting.changed')
 
     def show_reset_menu(evt):
@@ -94,7 +94,7 @@ def bind_setting_context_menu(settings_entry):
         eo.Bind(wx.EVT_MENU, reset_value, mi)
         menu.AppendItem(mi)
         # Disable the menu item if the value has not changed
-        disable = settings_entry.va.value != orig_val
+        disable = settings_entry.vigilattr.value != orig_val
         mi.Enable(disable)
         # Show the menu
         eo.PopupMenu(menu)
@@ -104,25 +104,29 @@ def bind_setting_context_menu(settings_entry):
     settings_entry.lbl_ctrl.Bind(wx.EVT_CONTEXT_MENU, show_reset_menu)
 
 
-####### Classes #######
+# ###### END Utility functions #######
+
+# ###### Classes #######
 
 class Entry(object):
+    """ Describes a setting entry in the settings panel """
 
-    def __init__(self, name, comp, lbl_ctrl, value_ctrl):
+    def __init__(self, name, hw_comp, lbl_ctrl, value_ctrl):
+        """
+        :param name: (str): The name of the setting
+        :param hw_comp: (HardwareComponent): The component to which the setting belongs
+        :param lbl_ctrl: (wx.StaticText): The setting label
+        :param value_ctrl: (wx.Window): The widget containing the current value
+
+        """
+
         self.name = name
-        self.comp = comp
+        self.hw_comp = hw_comp
         self.lbl_ctrl = lbl_ctrl
         self.value_ctrl = value_ctrl
 
     def __repr__(self):
         return "Label: %s" % self.lbl_ctrl.GetLabel() if self.lbl_ctrl else None
-
-    @property
-    def va(self):
-        """ Added for quick & dirty backwards compatibility. Can/should be replaced """
-        if hasattr(self, 'vigilattr'):
-            return self.vigilattr
-        return None
 
     def highlight(self, active=True):
         """ Highlight the setting entry by adjusting its colour
@@ -142,36 +146,28 @@ class Entry(object):
 
 class SettingEntry(VigilantAttributeConnector, Entry):
 
-    def __init__(self, name, va=None, comp=None, lbl_ctrl=None, value_ctrl=None,
-                 va_2_ctrl=None, ctrl_2_va=None, events=None):
-        """
-        :param name: (str): The name of the setting
-        :param va: (VA): The VigilantAttribute associated with the setting
-        :param comp: (HardwareComponent): The component to which the setting belongs
-        :param lbl_ctrl: (wx.StaticText): The setting label
-        :param value_ctrl: (wx.Window): The widget containing the current value
+    def __init__(self, name, va=None, hw_comp=None, lbl_ctrl=None, value_ctrl=None, va_2_ctrl=None,
+                 ctrl_2_va=None, events=None):
+        """ See the super classes for parameter descriptions """
 
-        See the VigilantAttributeConnector class for a description of the other parameters.
-
-        """
-
-        Entry.__init__(self, name, comp, lbl_ctrl, value_ctrl)
+        Entry.__init__(self, name, hw_comp, lbl_ctrl, value_ctrl)
 
         if None not in (va, value_ctrl):
-            super(SettingEntry, self).__init__(va, value_ctrl, va_2_ctrl, ctrl_2_va, events)
+            VigilantAttributeConnector.__init__(self, va, value_ctrl, va_2_ctrl, ctrl_2_va, events)
         elif any([va_2_ctrl, ctrl_2_va, events]):
             logging.error("Cannot create VigilantAttributeConnector")
         else:
+            self.vigilattr = None
             logging.debug("Cannot create VigilantAttributeConnector")
 
 
 class AxisSettingEntry(AxisConnector, Entry):
 
-    def __init__(self, name, comp, lbl_ctrl=None, value_ctrl=None,
+    def __init__(self, name, hw_comp, lbl_ctrl=None, value_ctrl=None,
                  pos_2_ctrl=None, ctrl_2_pos=None, events=None):
         """
         :param name: (str): The name of the setting
-        :param comp: (HardwareComponent): The component to which the setting belongs
+        :param hw_comp: (HardwareComponent): The component to which the setting belongs
         :param lbl_ctrl: (wx.StaticText): The setting label
         :param value_ctrl: (wx.Window): The widget containing the current value
 
@@ -179,11 +175,10 @@ class AxisSettingEntry(AxisConnector, Entry):
 
         """
 
-        Entry.__init__(self, name, comp, lbl_ctrl, value_ctrl)
+        Entry.__init__(self, name, hw_comp, lbl_ctrl, value_ctrl)
 
         if None not in (name, value_ctrl):
-            super(AxisSettingEntry, self).__init__(name, comp, value_ctrl,
-                                                   pos_2_ctrl, ctrl_2_pos, events)
+            AxisConnector.__init__(self, name, hw_comp, value_ctrl, pos_2_ctrl, ctrl_2_pos, events)
         elif any([pos_2_ctrl, ctrl_2_pos, events]):
             logging.error("Cannot create AxisConnector")
         else:
@@ -320,14 +315,18 @@ class SettingsController(object):
                 minv, maxv = min(minv, val), max(maxv, val)
 
         choices = conf.get("choices", None)
+
         try:
             if callable(choices):
                 choices = choices(comp, va, conf)
             elif choices is None:
                 choices = va.choices
-            elif hasattr(va, "choices") and isinstance(va.choices, collections.Mapping):
+            elif hasattr(va, "choices") and isinstance(va.choices, set):
                 # Intersect the two choice sets
                 choices &= va.choices
+            elif hasattr(va, "choices") and isinstance(va.choices, collections.Mapping):  # dicts
+                # Only keep the items of va.choices which are also choices
+                choices = {x: va.choices[x] for x in va.choices if x in choices}
             elif hasattr(va, "range") and isinstance(va.range, collections.Iterable):
                 # Ensure that each choice is within the range
                 rng = va.range
@@ -337,12 +336,13 @@ class SettingsController(object):
 
         # Ensure the choices contain the current value
         if choices is not None and va.value not in choices:
+            logging.info("Current value %s not in choices %s", va.value, choices)
             if isinstance(choices, set):
                 choices.add(va.value)
             elif isinstance(choices, dict):
                 choices[va.value] = unicode(va.value)
             else:
-                logging.warning("Don't know how to handle choices")
+                logging.warning("Don't know how to extend choices of type %s", type(choices))
 
         # Get unit from config, vigilant attribute or use an empty one
         unit = conf.get('unit', va.unit or "")
@@ -452,7 +452,7 @@ class SettingsController(object):
         if control_type == odemis.gui.CONTROL_NONE:
             # No value, not even label
             # Just an empty entry, so that the settings are saved during acquisition
-            ne = SettingEntry(name=name, va=vigil_attr, comp=comp)
+            ne = SettingEntry(name=name, va=vigil_attr, hw_comp=comp)
             self.entries.append(ne)
             # don't increase panel.num_rows, as it doesn't add any graphical element
             return
@@ -467,7 +467,7 @@ class SettingsController(object):
             val = vigil_attr.value  # only format if it's a number
             lbl_ctrl, value_ctrl = self.panel.add_readonly_field(label_text, val)
             value_formatter = self._get_number_formatter(value_ctrl, val, unit)
-            ne = SettingEntry(name=name, va=vigil_attr, comp=comp,
+            ne = SettingEntry(name=name, va=vigil_attr, hw_comp=comp,
                               lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
                               va_2_ctrl=value_formatter)
 
@@ -475,7 +475,7 @@ class SettingsController(object):
             val = vigil_attr.value  # only format if it's a number
             lbl_ctrl, value_ctrl = self.panel.add_text_field(label_text, val)
             value_formatter = self._get_number_formatter(value_ctrl, val, unit)
-            ne = SettingEntry(name=name, va=vigil_attr, comp=comp,
+            ne = SettingEntry(name=name, va=vigil_attr, hw_comp=comp,
                               lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
                               va_2_ctrl=value_formatter)
 
@@ -519,7 +519,7 @@ class SettingsController(object):
 
             lbl_ctrl, value_ctrl = factory(label_text, vigil_attr.value, ctrl_conf)
 
-            ne = SettingEntry(name=name, va=vigil_attr, comp=comp,
+            ne = SettingEntry(name=name, va=vigil_attr, hw_comp=comp,
                               lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
                               events=update_event)
 
@@ -539,7 +539,7 @@ class SettingsController(object):
 
             lbl_ctrl, value_ctrl = self.panel.add_int_field(label_text, conf=ctrl_conf)
 
-            ne = SettingEntry(name=name, va=vigil_attr, comp=comp,
+            ne = SettingEntry(name=name, va=vigil_attr, hw_comp=comp,
                               lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
                               events=wx.EVT_COMMAND_ENTER)
 
@@ -559,7 +559,7 @@ class SettingsController(object):
 
             lbl_ctrl, value_ctrl = self.panel.add_float_field(label_text, conf=ctrl_conf)
 
-            ne = SettingEntry(name=name, va=vigil_attr, comp=comp,
+            ne = SettingEntry(name=name, va=vigil_attr, hw_comp=comp,
                               lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
                               events=wx.EVT_COMMAND_ENTER)
 
@@ -581,11 +581,11 @@ class SettingsController(object):
                 # need to convert back and forth between 1D and 2D
                 # from 2D to 1D (just pick X)
                 def radio_set(value, ctrl=value_ctrl):
-                    v = value[0]
-                    logging.debug("Setting Radio value to %d", v)
+                    ctrl_value = value[0]
+                    logging.debug("Setting Radio value to %d", ctrl_value)
                     # it's fine to set a value not in the choices, it will
                     # just not set any of the buttons.
-                    return ctrl.SetValue(v)
+                    return ctrl.SetValue(ctrl_value)
 
                 # from 1D to 2D (both identical)
                 def radio_get(ctrl=value_ctrl):
@@ -611,7 +611,7 @@ class SettingsController(object):
                 radio_get = None
                 radio_set = None
 
-            ne = SettingEntry(name=name, va=vigil_attr, comp=comp,
+            ne = SettingEntry(name=name, va=vigil_attr, hw_comp=comp,
                               lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
                               va_2_ctrl=radio_set, ctrl_2_va=radio_get, events=wx.EVT_BUTTON)
 
@@ -674,7 +674,7 @@ class SettingsController(object):
                         cb_set(cur_val)
                     return new_val
 
-            ne = SettingEntry(name=name, va=vigil_attr, comp=comp,
+            ne = SettingEntry(name=name, va=vigil_attr, hw_comp=comp,
                               lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
                               va_2_ctrl=cb_set, ctrl_2_va=cb_get, events=(wx.EVT_COMBOBOX,
                                                                           wx.EVT_TEXT_ENTER))
