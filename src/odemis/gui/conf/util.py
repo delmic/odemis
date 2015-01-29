@@ -26,14 +26,19 @@ This module contains functions that help in the generation of dynamic configurat
 
 from __future__ import division
 from collections import OrderedDict
-
+import collections
 import logging
 import math
+import re
+import wx
+from wx.lib.pubsub import pub
 
 from odemis import model
 import odemis.gui
 from odemis.model import NotApplicableError
 
+
+# Setting choice generators, used to create certain value choices for settings controls
 
 def resolution_from_range(comp, va, conf, init=None):
     """ Construct a list of resolutions depending on range values
@@ -64,14 +69,14 @@ def resolution_from_range(comp, va, conf, init=None):
             if len(choices) >= 4 and (res[0] * res[1] < num_pixels):
                 break
 
-        return OrderedDict({(v, v): str(v) for v in choices})
+        return OrderedDict({v: "%d x %d" % v for v in choices})
         # return sorted(choices)  # return a list, to be sure it's in order
     except NotApplicableError:
         return {cur_val: str(cur_val)}
 
 
 def resolution_from_range_plus_point(comp, va, conf):
-    """ Same as _resolution_from_range() but also add a 1x1 value """
+    """ Same as resolution_from_range() but also add a 1x1 value """
     return resolution_from_range(comp, va, conf, init={va.value, (1, 1)})
 
 
@@ -119,7 +124,7 @@ def binning_firstd_only(comp, va, conf):
     cur_val = va.value[0]
 
     try:
-        choices = set([cur_val])
+        choices = {cur_val}
         minbin = va.range[0][0]
         maxbin = va.range[1][0]
 
@@ -161,7 +166,7 @@ def hfw_choices(comp, va, conf):
 
 
 def mag_if_no_hfw_ctype(comp, va, conf):
-    """ Return the control type for ebeam magnification
+    """ Return the control type for e-beam magnification
 
     This control is only useful if horizontalFoV is available.
 
@@ -175,3 +180,112 @@ def mag_if_no_hfw_ctype(comp, va, conf):
     else:
         # Just use a text field => it's for copy-paste
         return odemis.gui.CONTROL_FLT
+
+# END Setting choice generators
+
+
+def determine_default_control(va):
+    """ Determine the default control to use to represent a vigilant attribute
+
+    :param va: (VigilantAttribute)
+
+    :return: (odemis.gui.CONTROL_*)
+
+    """
+
+    if not va:
+        logging.warn("No VA provided!")
+        return odemis.gui.CONTROL_NONE
+
+    if va.readonly:
+        # Uncomment this line to hide Read only VAs by default
+        # return odemis.gui.CONTROL_NONE
+        return odemis.gui.CONTROL_READONLY
+    else:
+        try:
+            # This statement will raise an exception when no choices are present
+            logging.debug("Found choices %s", va.choices)
+
+            max_num_choices = 5
+            max_value_len = 5
+
+            # If there are too many choices, or their values are too long in string
+            # representation, use a drop-down box
+
+            choices_str = "".join([str(c) for c in va.choices])
+
+            if len(va.choices) <= 1:
+                # One or no choices, so the control can be read only
+                return odemis.gui.CONTROL_READONLY
+            elif (len(va.choices) < max_num_choices and
+                  len(choices_str) < max_num_choices * max_value_len):
+                # Short strings values can be accommodated by radio buttons
+                return odemis.gui.CONTROL_RADIO
+            else:
+                # Combo boxes (drop down) are used otherwise
+                return odemis.gui.CONTROL_COMBO
+        except (AttributeError, NotApplicableError):
+            pass
+
+        try:
+            # An exception will be raised if no range attribute is found
+            logging.debug("Found range %s", va.range)
+
+            # TODO: if unit is "s" => scale=exp
+            if isinstance(va.value, (int, long, float)):
+                # If the value is a number with a range, return the slider control
+                return odemis.gui.CONTROL_SLIDER
+        except (AttributeError, NotApplicableError):
+            pass
+
+        # Return default control
+        return odemis.gui.CONTROL_TEXT
+
+
+def bind_setting_context_menu(settings_entry):
+    """ Add a context menu to the settings entry to reset it to its original value
+
+    The added menu is used in the acquisition window, to give the user the ability to reset values
+    that have been adjusted by Odemis.
+
+    :param settings_entry: (SettingEntry) Must at least have a valid label, ctrl and va
+
+    """
+
+    orig_val = settings_entry.vigilattr.value
+
+    def reset_value(_):
+        """ Reset the value of the setting VA back to its original value """
+        settings_entry.vigilattr.value = orig_val
+        wx.CallAfter(pub.sendMessage, 'setting.changed')
+
+    def show_reset_menu(evt):
+        """ Create and show a context menu which has a menu item to reset the settings's value """
+        menu = wx.Menu()
+        mi = wx.MenuItem(menu, wx.NewId(), 'Reset value')
+        eo = evt.GetEventObject()
+        eo.Bind(wx.EVT_MENU, reset_value, mi)
+        menu.AppendItem(mi)
+        # Disable the menu item if the value has not changed
+        disable = settings_entry.vigilattr.value != orig_val
+        mi.Enable(disable)
+        # Show the menu
+        eo.PopupMenu(menu)
+
+    # Bind the menu to both the label and the value controls
+    settings_entry.value_ctrl.Bind(wx.EVT_CONTEXT_MENU, show_reset_menu)
+    settings_entry.lbl_ctrl.Bind(wx.EVT_CONTEXT_MENU, show_reset_menu)
+
+
+def choice_to_str(choice):
+    if not isinstance(choice, collections.Iterable):
+        choice = [unicode(choice)]
+    return u" x ".join([unicode(c) for c in choice])
+
+
+def label_to_human(camel_label):
+    """ Convert a camel-case label into a human readable string """
+
+    # Add space after each upper case, then make the first letter uppercase and all the other ones
+    # lowercase
+    return re.sub(r"([A-Z])", r" \1", camel_label).capitalize()

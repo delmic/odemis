@@ -31,82 +31,28 @@ from abc import ABCMeta
 import collections
 import logging
 import numbers
+import time
+import wx
+from wx.lib.pubsub import pub
+
 from odemis import model, util
 import odemis.dataio
 from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.file import EVT_FILE_SELECT
 from odemis.gui.comp.slider import UnitFloatSlider
 from odemis.gui.conf.data import CONFIG, CONFIG_PER_ROLE
+from odemis.gui.conf.util import determine_default_control, choice_to_str, \
+    bind_setting_context_menu, label_to_human
 import odemis.gui.util
 from odemis.gui.util.widgets import VigilantAttributeConnector, AxisConnector
 from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase
 from odemis.util.driver import reproduceTypedValue
 from odemis.util.units import readable_str
-import re
-import time
-import wx
-from wx.lib.pubsub import pub
-
 import odemis.gui.comp.hist as hist
 from odemis.gui.comp.settings import SettingsPanel
 import odemis.gui.conf as guiconf
 import odemis.util.units as utun
 
-
-# ###### Utility functions #######
-
-def choice_to_str(choice):
-    if not isinstance(choice, collections.Iterable):
-        choice = [unicode(choice)]
-    return u" x ".join([unicode(c) for c in choice])
-
-
-def label_to_human(camel_label):
-    """ Convert a camel-case label into a human readable string """
-
-    # Add space after each upper case, then make the first letter uppercase and all the other ones
-    # lowercase
-    return re.sub(r"([A-Z])", r" \1", camel_label).capitalize()
-
-
-def bind_setting_context_menu(settings_entry):
-    """ Add a context menu to the settings entry to reset it to its original value
-
-    The added menu is used in the acquisition window, to give the user the ability to reset values
-    that have been adjusted by Odemis.
-
-    :param settings_entry: (SettingEntry) Must at least have a valid label, ctrl and va
-
-    """
-
-    orig_val = settings_entry.vigilattr.value
-
-    def reset_value(_):
-        """ Reset the value of the setting VA back to its original value """
-        settings_entry.vigilattr.value = orig_val
-        wx.CallAfter(pub.sendMessage, 'setting.changed')
-
-    def show_reset_menu(evt):
-        """ Create and show a context menu which has a menu item to reset the settings's value """
-        menu = wx.Menu()
-        mi = wx.MenuItem(menu, wx.NewId(), 'Reset value')
-        eo = evt.GetEventObject()
-        eo.Bind(wx.EVT_MENU, reset_value, mi)
-        menu.AppendItem(mi)
-        # Disable the menu item if the value has not changed
-        disable = settings_entry.vigilattr.value != orig_val
-        mi.Enable(disable)
-        # Show the menu
-        eo.PopupMenu(menu)
-
-    # Bind the menu to both the label and the value controls
-    settings_entry.value_ctrl.Bind(wx.EVT_CONTEXT_MENU, show_reset_menu)
-    settings_entry.lbl_ctrl.Bind(wx.EVT_CONTEXT_MENU, show_reset_menu)
-
-
-# ###### END Utility functions #######
-
-# ###### Classes #######
 
 class Entry(object):
     """ Describes a setting entry in the settings panel """
@@ -131,7 +77,7 @@ class Entry(object):
     def highlight(self, active=True):
         """ Highlight the setting entry by adjusting its colour
 
-        active (boolean): whether it should be highlighted or not
+        :param active: (boolean) whether it should be highlighted or not
 
         """
 
@@ -150,6 +96,8 @@ class SettingEntry(VigilantAttributeConnector, Entry):
                  ctrl_2_va=None, events=None):
         """ See the super classes for parameter descriptions """
 
+        self.vigilattr = None  # This attribute is needed, even if there's not VAC to provide it
+
         Entry.__init__(self, name, hw_comp, lbl_ctrl, value_ctrl)
 
         if None not in (va, value_ctrl):
@@ -157,7 +105,6 @@ class SettingEntry(VigilantAttributeConnector, Entry):
         elif any([va_2_ctrl, ctrl_2_va, events]):
             logging.error("Cannot create VigilantAttributeConnector")
         else:
-            self.vigilattr = None
             logging.debug("Cannot create VigilantAttributeConnector")
 
 
@@ -186,15 +133,14 @@ class AxisSettingEntry(AxisConnector, Entry):
 
 
 class SettingsController(object):
-    """ Settings base class which describes an indirect wrapper for
-    FoldPanelItems.
+    """ Settings base class which describes an indirect wrapper for FoldPanelItems
 
-    :param fold_panel: (FoldPanelItem) Parent window
-    :param default_msg: (str) Text message which will be shown if the
-        SettingPanel does not contain any child windows.
-    :param highlight_change: (bool) If set to True, the values will be
-        highlighted when they match the cached values.
-    NOTE: Do not instantiate this class, but always inherit it.
+    :param fold_panel_item: (FoldPanelItem) Parent window
+    :param default_msg: (str) Text message which will be shown if the SettingPanel does not
+        contain any child windows.
+    :param highlight_change: (bool) If set to True, the values will be highlighted when they
+        match the cached values.
+
     """
 
     __metaclass__ = ABCMeta
@@ -216,79 +162,23 @@ class SettingsController(object):
 
     def pause(self):
         """ Pause SettingEntry related control updates """
-        for entry in self.entries:
-            if hasattr(entry, 'vigilattr') and entry.vigilattr:
-                entry.pause()
+        for entry in [e for e in self.entries if e.vigilattr]:
+            entry.pause()
 
     def resume(self):
         """ Pause SettingEntry related control updates """
-        for entry in self.entries:
-            if hasattr(entry, 'vigilattr') and entry.vigilattr:
-                entry.resume()
+        for entry in [e for e in self.entries if e.vigilattr]:
+            entry.resume()
 
     def enable(self, enabled):
-        for entry in self.entries:
-            if entry.value_ctrl:
-                entry.value_ctrl.Enable(enabled)
-
-    @staticmethod
-    def _determine_default_control(va):
-        """ Determine the default control to use to represent a vigilant attribute
-
-        :param va: (VigilantAttribute)
-
-        return (odemis.gui.CONTROL_*)
-
-        """
-
-        if not va:
-            logging.warn("No VA provided!")
-            return odemis.gui.CONTROL_NONE
-
-        if va.readonly:
-            # Uncomment this line to hide Read only VAs by default
-            # return odemis.gui.CONTROL_NONE
-            return odemis.gui.CONTROL_READONLY
-        else:
-            try:
-                # This statement will raise an exception when no choices are present
-                logging.debug("found choices %s", va.choices)
-
-                max_num_choices = 5
-                max_value_len = 5
-
-                # If there are too many choices, or their values are too long
-                # in string representation, use a drop-down box
-
-                choices_str = "".join([str(c) for c in va.choices])
-                if len(va.choices) <= 1:
-                    # not much choices really
-                    return odemis.gui.CONTROL_READONLY
-                elif (len(va.choices) < max_num_choices and
-                      len(choices_str) < max_num_choices * max_value_len):
-                    return odemis.gui.CONTROL_RADIO
-                else:
-                    return odemis.gui.CONTROL_COMBO
-            except (AttributeError, NotApplicableError):
-                pass
-
-            try:
-                # An exception will be raised if no range attribute is found
-                logging.debug("found range %s", va.range)
-
-                # TODO: if unit is "s" => scale=exp
-                if isinstance(va.value, (int, long, float)):
-                    return odemis.gui.CONTROL_SLIDER
-            except (AttributeError, NotApplicableError):
-                pass
-
-            # Return default control
-            return odemis.gui.CONTROL_TEXT
+        """ Enable or disable all SettingEntries """
+        for entry in [e for e in self.entries if e.value_ctrl]:
+            entry.value_ctrl.Enable(enabled)
 
     @staticmethod
     def _get_va_meta(comp, va, conf):
-        """ Retrieve the range and choices values from the vigilant attribute
-        or override them with the values provided in the configuration.
+        """ Retrieve the range and choices values from the vigilant attribute or override them
+        with the values provided in the configuration.
 
         """
 
@@ -434,7 +324,7 @@ class SettingsController(object):
             if vigil_attr.readonly and control_type != odemis.gui.CONTROL_NONE:
                 control_type = odemis.gui.CONTROL_READONLY
         except KeyError:
-            control_type = self._determine_default_control(vigil_attr)
+            control_type = determine_default_control(vigil_attr)
 
         # Change radio type to fitting type depending on its content
         if control_type == odemis.gui.CONTROL_RADIO:
@@ -593,6 +483,7 @@ class SettingsController(object):
                 def radio_get(ctrl=value_ctrl):
                     value = ctrl.GetValue()
                     return (value, value)
+
             # END This code should soon be redundant
             elif conf.get('type', None) == "1std_binning":
                 # need to convert back and forth between 1D and 2D
@@ -631,7 +522,7 @@ class SettingsController(object):
 
             # Set choices
             for choice, formatted in choices_fmt:
-                value_ctrl.Append(u"xx%s %s" % (formatted, (prefix or "") + unit), choice)
+                value_ctrl.Append(u"%s %s" % (formatted, (prefix or "") + unit), choice)
 
             # A small wrapper function makes sure that the value can
             # be set by passing the actual value (As opposed to the text label)
@@ -1225,8 +1116,7 @@ class AnalysisSettingsController(SettingsBarController):
         # Gui data model
         self.tab_data = tab_data
 
-        # We add 3 different panels so, they can each be hidden/shown
-        # individually
+        # We add 3 different panels so, they can each be hidden/shown individually
         self._pnl_acqfile = None
         self._pnl_arfile = None
         self._pnl_specfile = None
