@@ -391,9 +391,6 @@ class AlignedSEMStream(SEMStream):
                     # Then by updating the metadata
                     shift = (0, 0)  # just in case of failure
                     shift = FindEbeamCenter(self._ccd, self._detector, self._emitter)
-                # restore hw settings
-                (self._emitter.dwellTime.value,
-                 self._emitter.resolution.value) = no_spot_settings
             except LookupError:
                 logging.error("Failed to locate the ebeam center, SEM image will not be aligned")
             except Exception:
@@ -401,6 +398,10 @@ class AlignedSEMStream(SEMStream):
             else:
                 logging.info("Aligning SEM image using shift of %s", shift)
                 self._calibrated = True
+            finally:
+                # restore hw settings
+                (self._emitter.dwellTime.value,
+                 self._emitter.resolution.value) = no_spot_settings
 
             self._shift = shift
             self._compensateShift()
