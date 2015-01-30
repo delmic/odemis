@@ -84,8 +84,8 @@ class xrcfr_main(wx.Frame):
         self.live_btn_opt = xrc.XRCCTRL(self, "live_btn_opt")
         self.live_btn_sem = xrc.XRCCTRL(self, "live_btn_sem")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
-        self.fp_settings_secom_sem = xrc.XRCCTRL(self, "fp_settings_secom_sem")
         self.fp_settings_secom_optical = xrc.XRCCTRL(self, "fp_settings_secom_optical")
+        self.fp_settings_secom_sem = xrc.XRCCTRL(self, "fp_settings_secom_sem")
         self.pnl_secom_streams = xrc.XRCCTRL(self, "pnl_secom_streams")
         self.fp_annotations = xrc.XRCCTRL(self, "fp_annotations")
         self.btn_secom_acquire = xrc.XRCCTRL(self, "btn_secom_acquire")
@@ -117,8 +117,8 @@ class xrcfr_main(wx.Frame):
         self.lens_align_btn_opt = xrc.XRCCTRL(self, "lens_align_btn_opt")
         self.cmb_lens_align_presets = xrc.XRCCTRL(self, "cmb_lens_align_presets")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
-        self.fp_lens_sem_settings = xrc.XRCCTRL(self, "fp_lens_sem_settings")
         self.fp_lens_opt_settings = xrc.XRCCTRL(self, "fp_lens_opt_settings")
+        self.fp_lens_sem_settings = xrc.XRCCTRL(self, "fp_lens_sem_settings")
         self.pnl_secom_align_streams = xrc.XRCCTRL(self, "pnl_secom_align_streams")
         self.pnl_sem_toolbar = xrc.XRCCTRL(self, "pnl_sem_toolbar")
         self.lens_align_tb = xrc.XRCCTRL(self, "lens_align_tb")
@@ -214,8 +214,8 @@ class xrcfr_acq(wx.Dialog):
         self.btn_change_file = xrc.XRCCTRL(self, "btn_change_file")
         self.txt_destination = xrc.XRCCTRL(self, "txt_destination")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
-        self.fp_settings_secom_sem = xrc.XRCCTRL(self, "fp_settings_secom_sem")
         self.fp_settings_secom_optical = xrc.XRCCTRL(self, "fp_settings_secom_optical")
+        self.fp_settings_secom_sem = xrc.XRCCTRL(self, "fp_settings_secom_sem")
         self.pnl_secom_streams = xrc.XRCCTRL(self, "pnl_secom_streams")
         self.chkbox_fine_align = xrc.XRCCTRL(self, "chkbox_fine_align")
         self.gauge_acq = xrc.XRCCTRL(self, "gauge_acq")
@@ -3247,16 +3247,16 @@ def __init_resources():
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
                     <object class="FoldPanelBar">
-                      <object class="FoldPanelItem" name="fp_settings_secom_sem">
-                        <label>SEM SETTINGS</label>
+                      <object class="FoldPanelItem" name="fp_settings_secom_optical">
+                        <label>OPTICAL SETTINGS</label>
                         <fg>#1A1A1A</fg>
                         <bg>#555555</bg>
                         <XRCED>
                           <assign_var>1</assign_var>
                         </XRCED>
                       </object>
-                      <object class="FoldPanelItem" name="fp_settings_secom_optical">
-                        <label>OPTICAL SETTINGS</label>
+                      <object class="FoldPanelItem" name="fp_settings_secom_sem">
+                        <label>SEM SETTINGS</label>
                         <fg>#1A1A1A</fg>
                         <bg>#555555</bg>
                         <XRCED>
