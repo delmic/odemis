@@ -19,6 +19,18 @@ case "$1" in
     if ! getent group odemis >/dev/null; then
       addgroup --quiet --system odemis
     fi
+
+    # Authorize user odemis to open port 23 for scanning of New Focus controllers
+	if [ ! -f "/etc/authbind/byport/23" ]; then
+		if [ ! -d "/etc/authbind/byport" ]; then
+			mkdir -p /etc/authbind/byport
+			chmod 755 /etc/authbind
+			chmod 755 /etc/authbind/byport
+		fi
+		touch /etc/authbind/byport/23
+		chown root:odemis /etc/authbind/byport/23
+		chmod 774 /etc/authbind/byport/23
+	fi
   ;;
   abort-upgrade|abort-remove|abort-deconfigure)
   ;;

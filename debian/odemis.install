@@ -1,4 +1,3 @@
 install/linux/etc/sudoers.d/odemis etc/sudoers.d/
 install/linux/etc/bash_completion.d/odemis-cli etc/bash_completion.d/
 install/linux/etc/bash_completion.d/odemis-convert etc/bash_completion.d/
-install/linux/etc/authbind/byport/23 etc/authbind/byport/

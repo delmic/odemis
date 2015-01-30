@@ -5,6 +5,10 @@ set -e
 #DEBHELPER#
 
 if [ "$1" = "purge" ] ; then
+	if [ -f "/etc/authbind/byport/23" ]; then
+		rm -f /etc/authbind/byport/23
+	fi
+
     delgroup --quiet --system odemis > /dev/null || true
     # Cleanup /var/run/odemisd
     f=/var/run/odemisd
