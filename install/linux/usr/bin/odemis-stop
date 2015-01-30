@@ -11,21 +11,34 @@ if pgrep -f $GUI > /dev/null; then
 fi
 
 
-# Stop the backend 
-if pgrep -f $BACKEND > /dev/null; then
+# Stop the backend
+BEP_PID=$(pgrep odemisd) # parent PID
+BE_PIDS=$(pgrep -f $BACKEND)
+if [ -n "$BE_PIDS" ]; then
     # try nicely
     odemis-cli --kill
-    
-    sleep 2
-    # still there?
+
+    sleep 3 # wait for the backend to finish peacefully
+    # in case it's still there => kill
     if pgrep -f $BACKEND > /dev/null; then
         echo "Back-end still running, killing it..."
         # TODO: only use sudo if the backend is running as root
-        sudo pkill -f $BACKEND
+        # Only kill the old processes, so that if the user has started a new
+        # instance in the mean time, it doesn't get killed
+        # We use pkill so that it can be authorized by a sudoer command
+        #sudo /bin/kill $BE_PIDS
+        sudo pkill -P $BEP_PID,${BE_PIDS//$'\n'/,} -f $BACKEND
+
+        sleep 1
+        # Try even harder
+        if pgrep -f $BACKEND > /dev/null; then
+            sudo pkill -CONT -P $BEP_PID,${BE_PIDS//$'\n'/,} -f $BACKEND
+            sudo pkill -KILL -P $BEP_PID,${BE_PIDS//$'\n'/,} -f $BACKEND
+    fi
     fi
 fi
 
 # clean up
 if [ -e /var/run/odemisd ]; then
-	sudo rm -rf /var/run/odemisd/*
+    sudo rm -rf /var/run/odemisd/*
 fi

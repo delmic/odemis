@@ -17,5 +17,5 @@ Actions=Stop
 
 [Desktop Action Stop]
 Name=Full stop
-Exec=odemis-stop
+Exec=sudo /usr/bin/odemis-stop
 OnlyShowIn=Unity;

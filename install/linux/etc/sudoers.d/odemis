@@ -3,5 +3,6 @@ ALL    ALL = (root) NOPASSWD: /usr/bin/odemisd
 
 # these 3 are also needed to start/stop cleanly
 ALL    ALL = (root) NOPASSWD: /usr/bin/cgcreate -a \:odemis -g memory\:odemisd
-ALL    ALL = (root) NOPASSWD: /usr/bin/pkill -f odemis.odemisd.main
-ALL    ALL = (root) NOPASSWD: /bin/rm -rf /var/run/odemisd/*
+#ALL    ALL = (root) NOPASSWD: /usr/bin/pkill -f odemis.odemisd.main
+#ALL    ALL = (root) NOPASSWD: /bin/rm -rf /var/run/odemisd/\*
+ALL    ALL = (root) NOPASSWD: /usr/bin/odemis-stop
