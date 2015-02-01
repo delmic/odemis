@@ -29,6 +29,7 @@ from collections import OrderedDict
 import collections
 import logging
 import math
+import numbers
 import re
 import wx
 from wx.lib.pubsub import pub
@@ -275,6 +276,70 @@ def bind_setting_context_menu(settings_entry):
     # Bind the menu to both the label and the value controls
     settings_entry.value_ctrl.Bind(wx.EVT_CONTEXT_MENU, show_reset_menu)
     settings_entry.lbl_ctrl.Bind(wx.EVT_CONTEXT_MENU, show_reset_menu)
+
+
+def get_va_meta(comp, va, conf):
+    """ Retrieve the range and choices values from the vigilant attribute or override them
+    with the values provided in the configuration.
+
+    """
+
+    r = conf.get("range", (None, None))
+    minv, maxv = (None, None)
+
+    try:
+        if callable(r):
+            minv, maxv = r(comp, va, conf)
+        elif r == (None, None):
+            minv, maxv = va.range
+        else:
+            # Intersect the two ranges
+            # TODO: handle iterables
+            minv, maxv = r
+            minv, maxv = max(minv, va.range[0]), min(maxv, va.range[1])
+    except (AttributeError, NotApplicableError):
+        pass
+
+    # Ensure the range encompasses the current value
+    if None not in (minv, maxv):
+        val = va.value
+        if isinstance(val, numbers.Real):
+            minv, maxv = min(minv, val), max(maxv, val)
+
+    choices = conf.get("choices", None)
+
+    try:
+        if callable(choices):
+            choices = choices(comp, va, conf)
+        elif choices is None:
+            choices = va.choices
+        elif hasattr(va, "choices") and isinstance(va.choices, set):
+            # Intersect the two choice sets
+            choices &= va.choices
+        elif hasattr(va, "choices") and isinstance(va.choices, collections.Mapping):  # dicts
+            # Only keep the items of va.choices which are also choices
+            choices = {x: va.choices[x] for x in va.choices if x in choices}
+        elif hasattr(va, "range") and isinstance(va.range, collections.Iterable):
+            # Ensure that each choice is within the range
+            rng = va.range
+            choices = set(c for c in choices if rng[0] <= c <= rng[1])
+    except (AttributeError, NotApplicableError):
+        pass
+
+    # Ensure the choices contain the current value
+    if choices is not None and va.value not in choices:
+        logging.info("Current value %s not in choices %s", va.value, choices)
+        if isinstance(choices, set):
+            choices.add(va.value)
+        elif isinstance(choices, dict):
+            choices[va.value] = unicode(va.value)
+        else:
+            logging.warning("Don't know how to extend choices of type %s", type(choices))
+
+    # Get unit from config, vigilant attribute or use an empty one
+    unit = conf.get('unit', va.unit or "")
+
+    return minv, maxv, choices, unit
 
 
 def choice_to_str(choice):

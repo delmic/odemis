@@ -40,12 +40,12 @@ import odemis.dataio
 from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.file import EVT_FILE_SELECT
 from odemis.gui.comp.slider import UnitFloatSlider
-from odemis.gui.conf.data import CONFIG, CONFIG_PER_ROLE
+from odemis.gui.conf.data import HW_SETTINGS_CONFIG, HW_SETTINGS_CONFIG_PER_ROLE
 from odemis.gui.conf.util import determine_default_control, choice_to_str, \
-    bind_setting_context_menu, label_to_human
+    bind_setting_context_menu, label_to_human, get_va_meta
 import odemis.gui.util
 from odemis.gui.util.widgets import VigilantAttributeConnector, AxisConnector
-from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase
+from odemis.model import getVAs, VigilantAttributeBase
 from odemis.util.driver import reproduceTypedValue
 from odemis.util.units import readable_str
 import odemis.gui.comp.hist as hist
@@ -91,9 +91,10 @@ class Entry(object):
 
 
 class SettingEntry(VigilantAttributeConnector, Entry):
+    """ An Entry linked to a Vigilant Attribute """
 
-    def __init__(self, name, va=None, hw_comp=None, lbl_ctrl=None, value_ctrl=None, va_2_ctrl=None,
-                 ctrl_2_va=None, events=None):
+    def __init__(self, name, va=None, hw_comp=None, lbl_ctrl=None, value_ctrl=None,
+                 va_2_ctrl=None, ctrl_2_va=None, events=None):
         """ See the super classes for parameter descriptions """
 
         self.vigilattr = None  # This attribute is needed, even if there's not VAC to provide it
@@ -109,6 +110,7 @@ class SettingEntry(VigilantAttributeConnector, Entry):
 
 
 class AxisSettingEntry(AxisConnector, Entry):
+    """ An Axis setting linked to a Vigilant Attribute """
 
     def __init__(self, name, hw_comp, lbl_ctrl=None, value_ctrl=None,
                  pos_2_ctrl=None, ctrl_2_pos=None, events=None):
@@ -175,70 +177,6 @@ class SettingsController(object):
         for entry in [e for e in self.entries if e.value_ctrl]:
             entry.value_ctrl.Enable(enabled)
 
-    @staticmethod
-    def _get_va_meta(comp, va, conf):
-        """ Retrieve the range and choices values from the vigilant attribute or override them
-        with the values provided in the configuration.
-
-        """
-
-        r = conf.get("range", (None, None))
-        minv, maxv = (None, None)
-
-        try:
-            if callable(r):
-                minv, maxv = r(comp, va, conf)
-            elif r == (None, None):
-                minv, maxv = va.range
-            else:
-                # Intersect the two ranges
-                # TODO: handle iterables
-                minv, maxv = r
-                minv, maxv = max(minv, va.range[0]), min(maxv, va.range[1])
-        except (AttributeError, NotApplicableError):
-            pass
-
-        # Ensure the range encompasses the current value
-        if None not in (minv, maxv):
-            val = va.value
-            if isinstance(val, numbers.Real):
-                minv, maxv = min(minv, val), max(maxv, val)
-
-        choices = conf.get("choices", None)
-
-        try:
-            if callable(choices):
-                choices = choices(comp, va, conf)
-            elif choices is None:
-                choices = va.choices
-            elif hasattr(va, "choices") and isinstance(va.choices, set):
-                # Intersect the two choice sets
-                choices &= va.choices
-            elif hasattr(va, "choices") and isinstance(va.choices, collections.Mapping):  # dicts
-                # Only keep the items of va.choices which are also choices
-                choices = {x: va.choices[x] for x in va.choices if x in choices}
-            elif hasattr(va, "range") and isinstance(va.range, collections.Iterable):
-                # Ensure that each choice is within the range
-                rng = va.range
-                choices = set(c for c in choices if rng[0] <= c <= rng[1])
-        except (AttributeError, NotApplicableError):
-            pass
-
-        # Ensure the choices contain the current value
-        if choices is not None and va.value not in choices:
-            logging.info("Current value %s not in choices %s", va.value, choices)
-            if isinstance(choices, set):
-                choices.add(va.value)
-            elif isinstance(choices, dict):
-                choices[va.value] = unicode(va.value)
-            else:
-                logging.warning("Don't know how to extend choices of type %s", type(choices))
-
-        # Get unit from config, vigilant attribute or use an empty one
-        unit = conf.get('unit', va.unit or "")
-
-        return minv, maxv, choices, unit
-
     def add_browse_button(self, label, label_tl=None, clearlabel=None):
         config = guiconf.get_acqui_conf()
         lbl_ctrl, value_ctrl = self.panel.add_file_button(label, config.last_path, clearlabel)
@@ -251,7 +189,8 @@ class SettingsController(object):
         self.entries.append(ne)
         return ne
 
-    def _get_number_formatter(self, value_ctrl, val, val_unit):
+    @staticmethod
+    def _get_number_formatter(value_ctrl, val, val_unit):
         """ TODO: replace/refactor. This method was added as a quick fix """
         value_formatter = None
 
@@ -285,7 +224,7 @@ class SettingsController(object):
         conf = conf or {}
 
         # Get the range and choices
-        min_val, max_val, choices, unit = self._get_va_meta(comp, vigil_attr, conf)
+        min_val, max_val, choices, unit = get_va_meta(comp, vigil_attr, conf)
         ctrl_format = conf.get("format", True)
         prefix = None
 
@@ -436,7 +375,7 @@ class SettingsController(object):
             value_ctrl.Bind(wx.EVT_COMMAND_ENTER, self.on_setting_changed)
 
         elif control_type == odemis.gui.CONTROL_FLT:
-            if unit == "": # don't display unit prefix if no unit
+            if unit == "":  # don't display unit prefix if no unit
                 unit = None
 
             ctrl_conf = {
@@ -531,8 +470,6 @@ class SettingsController(object):
                     if ctrl.GetClientData(i) == value:
                         logging.debug("Setting ComboBox value to %s", ctrl.Items[i])
                         ctrl.SetSelection(i)
-                        # Note: with wxpython < 3.0, use:
-                        # ctrl.SetValue(ctrl.Items[i])
                         break
                 else:
                     logging.debug("No existing label found for value %s", value)
@@ -546,8 +483,6 @@ class SettingsController(object):
                 # Try to use the predefined value if it's available
                 i = ctrl.GetSelection()
 
-                # Note: with wxpython < 3.0, use:
-                # for i in range(ctrl.Count):
                 # Warning: if the text contains an unknown value, GetSelection will
                 # not return wx.NOT_FOUND (as expected), but the last selection value
                 if i != wx.NOT_FOUND and ctrl.Items[i] == value:
@@ -607,7 +542,7 @@ class SettingsController(object):
         # Add the label to the panel
         lbl_ctrl = wx.StaticText(self.panel, -1, u"%s" % label)
         self.panel._gb_sizer.Add(lbl_ctrl, (self.panel.num_rows, 0),
-                           flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
+                                 flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
 
         logging.debug("Adding Axis control %s", label)
 
@@ -746,10 +681,14 @@ class SettingsController(object):
                 nice_str = time.strftime(u"%c", time.localtime(value))
             else:
                 # Still try to beautify a bit if it's a number
-                if (isinstance(value, (int, long, float)) or
-                    (isinstance(value, collections.Iterable) and len(value) > 0
-                      and isinstance(value[0], (int, long, float)))
-                    ):
+                if (
+                    isinstance(value, (int, long, float)) or
+                    (
+                        isinstance(value, collections.Iterable) and
+                        len(value) > 0 and
+                        isinstance(value[0], (int, long, float))
+                    )
+                ):
                     nice_str = readable_str(value, sig=3)
                 else:
                     nice_str = unicode(value)
@@ -761,7 +700,6 @@ class SettingsController(object):
 
     def on_setting_changed(self, evt):
         logging.debug("Setting has changed")
-        evt_obj = evt.GetEventObject()
         # Make sure the message is sent form the main thread
         wx.CallAfter(pub.sendMessage, 'setting.changed')
         evt.Skip()
@@ -805,7 +743,7 @@ class SettingsBarController(object):
 
     """
 
-    def __init__(self, tab_data, highlight_change=False):
+    def __init__(self, tab_data):
         self._tab_data_model = tab_data
         self.settings_panels = []
 
@@ -814,9 +752,9 @@ class SettingsBarController(object):
         # and it avoids pausing the settings controllers from other tabs.
 
         # build the default config value based on the global one + the role
-        self._va_config = CONFIG.copy()
-        if tab_data.main.role in CONFIG_PER_ROLE:
-            util.rec_update(self._va_config, CONFIG_PER_ROLE[tab_data.main.role])
+        self._va_config = HW_SETTINGS_CONFIG.copy()
+        if tab_data.main.role in HW_SETTINGS_CONFIG_PER_ROLE:
+            util.rec_update(self._va_config, HW_SETTINGS_CONFIG_PER_ROLE[tab_data.main.role])
 
     def pause(self):
         """ Pause SettingEntry related control updates """
@@ -842,6 +780,7 @@ class SettingsBarController(object):
 
     # VAs which should never be displayed
     HIDDEN_VAS = {"children", "affects", "state"}
+
     def add_component(self, label, comp, panel):
 
         self.settings_panels.append(panel)
@@ -871,36 +810,26 @@ class SettingsBarController(object):
 class SecomSettingsController(SettingsBarController):
 
     def __init__(self, parent_frame, tab_data, highlight_change=False):
-        super(SecomSettingsController, self).__init__(tab_data,
-                                                      highlight_change)
+        super(SecomSettingsController, self).__init__(tab_data)
         main_data = tab_data.main
 
-        self._sem_panel = SemSettingsController(
-                                    parent_frame.fp_settings_secom_sem,
-                                    "No SEM found",
-                                    highlight_change)
+        self._sem_panel = SemSettingsController(parent_frame.fp_settings_secom_sem,
+                                                "No SEM found", highlight_change)
 
-        self._optical_panel = OpticalSettingsController(
-                                    parent_frame.fp_settings_secom_optical,
-                                    "No optical microscope found",
-                                    highlight_change)
+        self._optical_panel = OpticalSettingsController(parent_frame.fp_settings_secom_optical,
+                                                        "No optical microscope found",
+                                                        highlight_change)
 
         # Add the components based on what is available
         # TODO: move it to a separate thread to save time at init?
         if main_data.ccd:
-            self.add_component("Camera",
-                                main_data.ccd,
-                                self._optical_panel)
+            self.add_component("Camera", main_data.ccd, self._optical_panel)
 
             if main_data.light:
                 self._optical_panel.panel.add_divider()
 
-                self._optical_panel.add_value(
-                                        "power",
-                                        main_data.light.power,
-                                        main_data.light,
-                                        self._va_config["light"]["power"]
-                                        )
+                self._optical_panel.add_value("power", main_data.light.power, main_data.light,
+                                              self._va_config["light"]["power"])
 
         if main_data.ebeam:
             self.add_component("SEM", main_data.ebeam, self._sem_panel)
@@ -909,37 +838,32 @@ class SecomSettingsController(SettingsBarController):
 class LensAlignSettingsController(SettingsBarController):
 
     def __init__(self, parent_frame, tab_data, highlight_change=False):
-        super(LensAlignSettingsController, self).__init__(tab_data,
-                                                          highlight_change)
+        super(LensAlignSettingsController, self).__init__(tab_data)
         main_data = tab_data.main
 
-        self._sem_panel = SemSettingsController(
-                                    parent_frame.fp_lens_sem_settings,
-                                    "No SEM found",
-                                    highlight_change)
+        self._sem_panel = SemSettingsController(parent_frame.fp_lens_sem_settings,
+                                                "No SEM found",
+                                                highlight_change)
 
-        self._optical_panel = OpticalSettingsController(
-                                    parent_frame.fp_lens_opt_settings,
-                                    "No optical microscope found",
-                                    highlight_change)
+        self._optical_panel = OpticalSettingsController(parent_frame.fp_lens_opt_settings,
+                                                        "No optical microscope found",
+                                                        highlight_change)
 
         # Query Odemis daemon (Should move this to separate thread)
         if main_data.ccd:
-            self.add_component("Camera",
-                                main_data.ccd,
-                                self._optical_panel)
+            self.add_component("Camera", main_data.ccd, self._optical_panel)
 
         # TODO: allow to change light.power
 
         if main_data.ebeam:
             self.add_component("SEM", main_data.ebeam, self._sem_panel)
 
+
 class SparcSettingsController(SettingsBarController):
 
     def __init__(self, parent_frame, tab_data, highlight_change=False,
                  sem_stream=None, spec_stream=None, ar_stream=None):
-        super(SparcSettingsController, self).__init__(tab_data,
-                                                      highlight_change)
+        super(SparcSettingsController, self).__init__(tab_data)
         main_data = tab_data.main
 
         self._sem_panel = SemSettingsController(
@@ -995,7 +919,7 @@ class SparcSettingsController(SettingsBarController):
                 self.spectro_rep_ent = self._spectrum_panel.add_value(
                     "repetition",
                     spec_stream.repetition,
-                    None,  #component
+                    None,  # component
                     self._va_config["streamspec"]["repetition"]
                 )
                 spec_stream.repetition.subscribe(self.on_spec_rep)
@@ -1003,13 +927,12 @@ class SparcSettingsController(SettingsBarController):
                 self.spec_pxs_ent = self._spectrum_panel.add_value(
                     "pixelSize",
                     spec_stream.pixelSize,
-                    None,  #component
+                    None,  # component
                     self._va_config["streamspec"]["pixelSize"]
                 )
             else:
                 logging.warning("Spectrometer available, but no spectrum "
                                 "stream provided")
-
 
             # Add spectrograph control if available
             if main_data.spectrograph:
@@ -1026,15 +949,15 @@ class SparcSettingsController(SettingsBarController):
                         self._va_config["spectrograph"]["grating"])
 
             # Add a intensity/time graph
-            self.spec_graph = hist.Histogram(self._spectrum_panel.panel,
-                                        size=(-1, 40))
+            self.spec_graph = hist.Histogram(self._spectrum_panel.panel, size=(-1, 40))
             self.spec_graph.SetBackgroundColour("#000000")
             self._spectrum_panel.add_widgets(self.spec_graph)
             # the "Mean" value bellow the graph
             lbl_mean = wx.StaticText(self._spectrum_panel.panel, label="Mean")
             tooltip_txt = "Average intensity value of the last image"
             lbl_mean.SetToolTipString(tooltip_txt)
-            self.txt_mean = wx.TextCtrl(self._spectrum_panel.panel, style=wx.BORDER_NONE | wx.TE_READONLY)
+            self.txt_mean = wx.TextCtrl(self._spectrum_panel.panel,
+                                        style=wx.BORDER_NONE | wx.TE_READONLY)
             self.txt_mean.SetForegroundColour(odemis.gui.FG_COLOUR_DIS)
             self.txt_mean.SetBackgroundColour(odemis.gui.BG_COLOUR_MAIN)
             self.txt_mean.SetToolTipString(tooltip_txt)
@@ -1055,7 +978,7 @@ class SparcSettingsController(SettingsBarController):
                 self.angular_rep_ent = self._angular_panel.add_value(
                     "repetition",
                     ar_stream.repetition,
-                    None,  #component
+                    None,  # component
                     self._va_config["streamar"]["repetition"]
                 )
 
@@ -1079,7 +1002,7 @@ class SparcSettingsController(SettingsBarController):
         ratio = rep[1] / rep[0]
 
         # Create the entries:
-        choices = [(1, 1)] # 1 x 1 should always be there
+        choices = [(1, 1)]  # 1 x 1 should always be there
 
         # Add a couple values below/above the current repetition
         for m in [1/4, 1/2, 1, 2, 4, 10]:
@@ -1095,15 +1018,15 @@ class SparcSettingsController(SettingsBarController):
             # problem as the VA setter will silently limit the repetition
             return (rep_va.range[0][0] <= c[0] <= rep_va.range[1][0] and
                     rep_va.range[0][1] <= c[1] <= rep_va.range[1][1])
-        choices = [c for c in choices if is_compatible(c)]
+        choices = [choice for choice in choices if is_compatible(choice)]
 
         # remove duplicates and sort
         choices = sorted(set(choices))
 
         # replace the old list with this new version
         rep_ctrl.Clear()
-        for c in choices:
-            rep_ctrl.Append(u"%s x %s px" % c, c)
+        for choice in choices:
+            rep_ctrl.Append(u"%s x %s px" % choice, choice)
 
 
 class AnalysisSettingsController(SettingsBarController):
@@ -1153,10 +1076,10 @@ class AnalysisSettingsController(SettingsBarController):
         they can pass on their changing data.
         """
 
-        ### Panel containing information about the acquisition file
+        # Panel containing information about the acquisition file
         self._pnl_acqfile = FileInfoSettingsController(self.parent.fp_fileinfo, "No file loaded")
 
-        ### Panel with AR background file information
+        # Panel with AR background file information
         # It's displayed only if there are AR streams (handled by the tab cont)
         self._pnl_arfile = FileInfoSettingsController(self.parent.fp_fileinfo, "")
         self._arfile_ctrl = self._pnl_arfile.add_browse_button(
@@ -1190,9 +1113,6 @@ class AnalysisSettingsController(SettingsBarController):
         self._specfile_ctrl.Bind(EVT_FILE_SELECT, self._on_spec_file_select)
         self.tab_data.spec_cal.subscribe(self._on_spec_cal, init=True)
 
-        # FIXME: foldpanelbar.expand() force showing all the children, including
-        # the panels we've just hided => make it more clever and leave the
-        # shown/hidden state as is. (use a window to contain all the children?)
         self.parent.fp_fileinfo.expand()
 
     def on_acqfile_change(self, file_info):
@@ -1225,7 +1145,7 @@ class AnalysisSettingsController(SettingsBarController):
     def _on_ar_file_select(self, evt):
         """ Pass the selected AR background file on to the VA """
         logging.debug("AR background selected by user")
-        fn = evt.selected_file or u"" # selected_file is None if no file
+        fn = evt.selected_file or u""  # selected_file is None if no file
         if self.setter_ar_file:
             try:
                 fn = self.setter_ar_file(fn)
@@ -1306,34 +1226,27 @@ class SparcAlignSettingsController(SettingsBarController):
         super(SparcAlignSettingsController, self).__init__(tab_data)
         main_data = tab_data.main
 
-        self._ar_panel = AngularSettingsController(
-                                parent_frame.fp_ma_settings_ar,
-                                "No angle-resolved camera found")
-        self._spectrum_panel = SpectrumSettingsController(
-                                    parent_frame.fp_ma_settings_spectrum,
-                                    "No spectrometer found")
+        self._ar_panel = AngularSettingsController(parent_frame.fp_ma_settings_ar,
+                                                   "No angle-resolved camera found")
+        self._spectrum_panel = SpectrumSettingsController(parent_frame.fp_ma_settings_spectrum,
+                                                          "No spectrometer found")
 
         if main_data.ccd:
             self.add_component("Camera", main_data.ccd, self._ar_panel)
 
         if main_data.spectrometer:
-            self.add_component(
-                    "Spectrometer",
-                    main_data.spectrometer,
-                    self._spectrum_panel
-            )
+            self.add_component("Spectrometer", main_data.spectrometer, self._spectrum_panel)
             # Add a intensity/time graph
-            self.spec_graph = hist.Histogram(self._spectrum_panel.panel,
-                                        size=(-1, 40))
+            self.spec_graph = hist.Histogram(self._spectrum_panel.panel, size=(-1, 40))
             self.spec_graph.SetBackgroundColour("#000000")
             self._spectrum_panel.add_widgets(self.spec_graph)
             # the "Mean" value bellow the graph
             lbl_mean = wx.StaticText(self._spectrum_panel.panel, label="Mean")
             tooltip_txt = "Average intensity value of the last image"
             lbl_mean.SetToolTipString(tooltip_txt)
-            self.txt_mean = wx.TextCtrl(self._spectrum_panel.panel, style=wx.BORDER_NONE | wx.TE_READONLY)
+            self.txt_mean = wx.TextCtrl(self._spectrum_panel.panel,
+                                        style=wx.BORDER_NONE | wx.TE_READONLY)
             self.txt_mean.SetForegroundColour(odemis.gui.FG_COLOUR_DIS)
             self.txt_mean.SetBackgroundColour(odemis.gui.BG_COLOUR_MAIN)
             self.txt_mean.SetToolTipString(tooltip_txt)
             self._spectrum_panel.add_widgets(lbl_mean, self.txt_mean)
-

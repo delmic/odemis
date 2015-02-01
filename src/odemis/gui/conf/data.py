@@ -43,7 +43,7 @@ import odemis.gui.conf.util as util
 # Any value can be replaced with a function, to allow for dynamic values which can be depending on
 # the backend configuration.
 
-CONFIG = {
+HW_SETTINGS_CONFIG = {
     "ccd":
     {
         "exposureTime":
@@ -202,7 +202,7 @@ CONFIG = {
 }
 
 # Allows to override some values based on the microscope role
-CONFIG_PER_ROLE = {
+HW_SETTINGS_CONFIG_PER_ROLE = {
     "sparc": {
         "ccd":
         {
