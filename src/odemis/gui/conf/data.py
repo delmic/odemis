@@ -27,23 +27,29 @@ import odemis.gui.conf.util as util
 
 # All values in CONFIG are optional
 #
-# We only need to define configurations for VAs that a not automatically displayed correctly.
+# We only need to define configurations for VAs that a not automatically
+# displayed correctly. To force the order, some VAs are just named, without
+# specifying configuration.
 #
 # Format:
 #   role of component
 #       vigilant attribute name
 #           label
-#           control_type (CONTROL_NONE to hide it)
-#           range
-#           choices
+#           tooltip
+#           control_type * (CONTROL_NONE to hide it)
+#           range *
+#           choices *
 #           scale
 #           type
 #           format
+#           accuracy
 #           event (The wx.Event type that will trigger a value update)
 #
-# Any value can be replaced with a function, to allow for dynamic values which can be depending on
-# the backend configuration.
+# The configurations with a * can be replaced with a function, to allow for
+# dynamic values which can be depending on the backend configuration.
 
+# This is the default global settings, with ordered dict, to specify the order
+# on which they are displayed.
 HW_SETTINGS_CONFIG = {
     "ccd":
         OrderedDict((
@@ -129,10 +135,10 @@ HW_SETTINGS_CONFIG = {
                 "tooltip": "Bits per pixel",
             }),
 
+             # what we don't want to display:
             ("power", {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
-            # what we don't want to display:
             ("translation", {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
@@ -256,15 +262,15 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
                 "control_type": odemis.gui.CONTROL_RADIO,
                 "choices": {2.1, 2.4, 2.7, 3, 3.3},  # some weird unit
             },
+            "bpp":  # TODO: re-enable if 16-bits ever works correctly
+            {
+                "control_type": odemis.gui.CONTROL_NONE,
+            },
         },
         # what we don't want to display:
         "ccd":
         {
             "temperature":  # On the Delphi it's pretty always at the target temp
-            {
-                "control_type": odemis.gui.CONTROL_NONE,
-            },
-            "bpp":  # TODO: re-enable if 16-bits ever works correctly
             {
                 "control_type": odemis.gui.CONTROL_NONE,
             },
