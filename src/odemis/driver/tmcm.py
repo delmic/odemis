@@ -117,6 +117,11 @@ class TMCM3110(model.Actuator):
         if modl != 3110:
             logging.warning("Controller TMCM-%d is not supported, will try anyway",
                             modl)
+        if (vmaj + vmin / 100) < 1.09:
+            raise ValueError("Firmware of TMCM controller %s is version %d.%02d, "
+                             "while version 1.09 or later is needed" %
+                             (name, vmaj, vmin))
+
         if name is None and role is None: # For scan only
             return
 
@@ -1203,7 +1208,7 @@ class TMCM3110Simulator(object):
             if typ == 0: # string
                 raise NotImplementedError("Can't simulated GFV string")
             elif typ == 1: # binary
-                self._sendReply(inst, val=0x0c260102) # 3110 v1.02
+                self._sendReply(inst, val=0x0c260109) # 3110 v1.09
             else:
                 self._sendReply(inst, status=3) # wrong type
         elif inst == 138: # Request Target Position Reached Event
