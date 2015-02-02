@@ -22,7 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 from numpy.core import umath
 from odemis import model
-from odemis.model._core import roattribute
+from odemis.model import roattribute
 import gc
 import glob
 import logging
