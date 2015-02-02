@@ -83,6 +83,7 @@ class xrcfr_main(wx.Frame):
         self.live_btn_press = xrc.XRCCTRL(self, "live_btn_press")
         self.live_btn_opt = xrc.XRCCTRL(self, "live_btn_opt")
         self.live_btn_sem = xrc.XRCCTRL(self, "live_btn_sem")
+        self.pnl_hw_info = xrc.XRCCTRL(self, "pnl_hw_info")
         self.gauge_load_time = xrc.XRCCTRL(self, "gauge_load_time")
         self.lbl_load_time = xrc.XRCCTRL(self, "lbl_load_time")
         self.lbl_load_status = xrc.XRCCTRL(self, "lbl_load_status")
@@ -900,7 +901,7 @@ def __init_resources():
                           <flag>wxEXPAND</flag>
                         </object>
                         <object class="sizeritem">
-                          <object class="wxPanel" name="hw_info">
+                          <object class="wxPanel" name="pnl_hw_info">
                             <object class="wxBoxSizer">
                               <orient>wxVERTICAL</orient>
                               <object class="sizeritem">
@@ -911,6 +912,7 @@ def __init_resources():
                                       <range>100</range>
                                       <value>0</value>
                                       <bg>#333333</bg>
+                                      <hidden>1</hidden>
                                       <style>wxGA_SMOOTH</style>
                                       <XRCED>
                                         <assign_var>1</assign_var>
@@ -924,6 +926,7 @@ def __init_resources():
                                     <object class="wxStaticText" name="lbl_load_time">
                                       <label>Load timer</label>
                                       <fg>#E5E5E5</fg>
+                                      <hidden>1</hidden>
                                       <XRCED>
                                         <assign_var>1</assign_var>
                                       </XRCED>
@@ -954,6 +957,9 @@ def __init_resources():
                             <size>-1,24</size>
                             <bg>#333333</bg>
                             <hidden>1</hidden>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
                           </object>
                           <flag>wxEXPAND</flag>
                         </object>
