@@ -553,7 +553,7 @@ class ViewButtonController(object):
             self._subscriptions[btn] = {"thumb": on_thumbnail}
 
             # also subscribe for updating the 2x2 button
-            vp.microscope_view.thumbnail.subscribe(self._update_22_thumbnail)
+            vp.microscope_view.thumbnail.subscribe(self._update_22_thumbnail, init=True)
 
             def on_name(name, label_ctrl=lbl_ctrl):  # save lbl in scope
                 label_ctrl.SetLabel(name)

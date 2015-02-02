@@ -29,6 +29,8 @@ import odemis.gui.conf.util as util
 #
 # We only need to define configurations for VAs that a not automatically displayed correctly.
 #
+# The order in which the VA's are shown can be defined by using an OrderedDict.
+#
 # Format:
 #   role of component
 #       vigilant attribute name
