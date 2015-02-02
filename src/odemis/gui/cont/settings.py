@@ -207,7 +207,7 @@ class SettingsController(object):
 
         return value_formatter
 
-    def add_value(self, name, vigil_attr, comp, conf=None):
+    def add_setting_entry(self, name, vigil_attr, comp, conf=None):
         """ Add a name/value pair to the settings panel.
 
         :param name: (string): name of the value
@@ -527,13 +527,14 @@ class SettingsController(object):
         return ne
 
     def add_axis(self, name, comp, conf=None):
-        """
-        Add a widget to the setting panel to control an axis
+        """ Add a widget to the setting panel to control an axis
 
         :param name: (string): name of the axis
         :param comp: (Component): the component that contains this axis
         :param conf: ({}): Configuration items that may override default settings
+
         """
+
         # If no conf provided, set it to an empty dictionary
         conf = conf or {}
 
@@ -648,10 +649,12 @@ class SettingsController(object):
         self.panel.Parent.Parent.Layout()
 
     def add_widgets(self, *wdg):
+        """ Adds a widget at the end of the panel, on the whole width
+
+        :param wdg: (wxWindow) the widgets to add (max 2)
+
         """
-        Adds a widget at the end of the panel, on the whole width
-        wdg (wxWindow): the widgets to add (max 2)
-        """
+
         # if only one widget: span over all the panel width
         if len(wdg) == 1:
             span = (1, 2)
@@ -665,12 +668,15 @@ class SettingsController(object):
         self.panel.num_rows += 1
 
     def add_metadata(self, key, value):
+        """ Adds an entry representing specific metadata
+
+        According to the metadata key, the right representation is used for the value.
+
+        :param key: (model.MD_*) the metadata key
+        :param value: (depends on the metadata) the value to display
+
         """
-        Adds an entry representing specific metadata. According to the
-         metadata key, the right representation is used for the value.
-        key (model.MD_*): the metadata key
-        value (depends on the metadata): the value to display
-        """
+
         # By default the key is a nice user-readable string
         label = unicode(key)
 
@@ -705,6 +711,7 @@ class SettingsController(object):
         evt.Skip()
 
     def Refresh(self):
+        """ TODO: check if this is still necessary after the foldpanel update """
         self.panel.Layout()
 
         p = self.panel.Parent
@@ -781,27 +788,28 @@ class SettingsBarController(object):
     # VAs which should never be displayed
     HIDDEN_VAS = {"children", "affects", "state"}
 
-    def add_component(self, label, comp, panel):
-
+    def add_hw_component(self, hw_comp, panel):
+        """ Add setting entries for the given hardware component  """
         self.settings_panels.append(panel)
 
+        name = "Name"  # for exception handling only
+
         try:
-            name = "Name"  # for exception handling only
             # We no longer display the component name
             # panel.add_label(label, comp.name, selectable=False)
-            vigil_attrs = getVAs(comp)
+            vigil_attrs = getVAs(hw_comp)
             for name, value in vigil_attrs.items():
                 if name in self.HIDDEN_VAS:
                     continue
-                if comp.role in self._va_config and name in self._va_config[comp.role]:
-                    conf = self._va_config[comp.role][name]
+                if hw_comp.role in self._va_config and name in self._va_config[hw_comp.role]:
+                    conf = self._va_config[hw_comp.role][name]
                 else:
-                    logging.info("No config found for %s: %s", comp.role, name)
+                    logging.info("No config found for %s: %s", hw_comp.role, name)
                     conf = None
-                panel.add_value(name, value, comp, conf)
+                panel.add_setting_entry(name, value, hw_comp, conf)
         except TypeError:
             msg = "Error adding %s setting for: %s"
-            logging.exception(msg, comp.name, name)
+            logging.exception(msg, hw_comp.name, name)
 
     def add_stream(self, stream):
         pass
@@ -823,16 +831,16 @@ class SecomSettingsController(SettingsBarController):
         # Add the components based on what is available
         # TODO: move it to a separate thread to save time at init?
         if main_data.ccd:
-            self.add_component("Camera", main_data.ccd, self._optical_panel)
+            self.add_hw_component(main_data.ccd, self._optical_panel)
 
             if main_data.light:
                 self._optical_panel.panel.add_divider()
 
-                self._optical_panel.add_value("power", main_data.light.power, main_data.light,
+                self._optical_panel.add_setting_entry("power", main_data.light.power, main_data.light,
                                               self._va_config["light"]["power"])
 
         if main_data.ebeam:
-            self.add_component("SEM", main_data.ebeam, self._sem_panel)
+            self.add_hw_component(main_data.ebeam, self._sem_panel)
 
 
 class LensAlignSettingsController(SettingsBarController):
@@ -851,12 +859,12 @@ class LensAlignSettingsController(SettingsBarController):
 
         # Query Odemis daemon (Should move this to separate thread)
         if main_data.ccd:
-            self.add_component("Camera", main_data.ccd, self._optical_panel)
+            self.add_hw_component(main_data.ccd, self._optical_panel)
 
         # TODO: allow to change light.power
 
         if main_data.ebeam:
-            self.add_component("SEM", main_data.ebeam, self._sem_panel)
+            self.add_hw_component(main_data.ebeam, self._sem_panel)
 
 
 class SparcSettingsController(SettingsBarController):
@@ -888,25 +896,19 @@ class SparcSettingsController(SettingsBarController):
         self.spec_pxs_ent = None
 
         if main_data.ebeam:
-            self.add_component(
-                "SEM",
-                main_data.ebeam,
-                self._sem_panel
-            )
+            self.add_hw_component(main_data.ebeam, self._sem_panel)
 
             if sem_stream:
-                self.sem_dcperiod_ent = self._sem_panel.add_value(
+                self.sem_dcperiod_ent = self._sem_panel.add_setting_entry(
                     "dcPeriod",
                     sem_stream.dcPeriod,
                     None,  # component
                     self._va_config["streamsem"]["dcPeriod"]
                 )
+
         if main_data.spectrometer:
-            self.add_component(
-                "Spectrometer",
-                main_data.spectrometer,
-                self._spectrum_panel
-            )
+            self.add_hw_component(main_data.spectrometer, self._spectrum_panel)
+
             # If available, add filter selection
             # TODO: have the control in a (common) separate panel?
             # TODO: also add it to the Mirror alignment tab?
@@ -916,7 +918,7 @@ class SparcSettingsController(SettingsBarController):
 
             self._spectrum_panel.panel.add_divider()
             if spec_stream:
-                self.spectro_rep_ent = self._spectrum_panel.add_value(
+                self.spectro_rep_ent = self._spectrum_panel.add_setting_entry(
                     "repetition",
                     spec_stream.repetition,
                     None,  # component
@@ -924,7 +926,7 @@ class SparcSettingsController(SettingsBarController):
                 )
                 spec_stream.repetition.subscribe(self.on_spec_rep)
 
-                self.spec_pxs_ent = self._spectrum_panel.add_value(
+                self.spec_pxs_ent = self._spectrum_panel.add_setting_entry(
                     "pixelSize",
                     spec_stream.pixelSize,
                     None,  # component
@@ -967,7 +969,7 @@ class SparcSettingsController(SettingsBarController):
             parent_frame.fp_settings_sparc_spectrum.Hide()
 
         if main_data.ccd:
-            self.add_component("Camera", main_data.ccd, self._angular_panel)
+            self.add_hw_component(main_data.ccd, self._angular_panel)
 
             if main_data.light_filter:
                 self._angular_panel.add_axis("band", main_data.light_filter,
@@ -975,7 +977,7 @@ class SparcSettingsController(SettingsBarController):
 
             self._angular_panel.panel.add_divider()
             if ar_stream is not None:
-                self.angular_rep_ent = self._angular_panel.add_value(
+                self.angular_rep_ent = self._angular_panel.add_setting_entry(
                     "repetition",
                     ar_stream.repetition,
                     None,  # component
@@ -1232,10 +1234,10 @@ class SparcAlignSettingsController(SettingsBarController):
                                                           "No spectrometer found")
 
         if main_data.ccd:
-            self.add_component("Camera", main_data.ccd, self._ar_panel)
+            self.add_hw_component(main_data.ccd, self._ar_panel)
 
         if main_data.spectrometer:
-            self.add_component("Spectrometer", main_data.spectrometer, self._spectrum_panel)
+            self.add_hw_component(main_data.spectrometer, self._spectrum_panel)
             # Add a intensity/time graph
             self.spec_graph = hist.Histogram(self._spectrum_panel.panel, size=(-1, 40))
             self.spec_graph.SetBackgroundColour("#000000")
