@@ -30,8 +30,7 @@ from odemis.gui.model import STATE_ON, CHAMBER_PUMPING, CHAMBER_VENTING, \
     CHAMBER_VACUUM, CHAMBER_VENTED, CHAMBER_UNKNOWN, STATE_OFF
 from odemis.gui.util import call_after
 from odemis.gui.util.widgets import VigilantAttributeConnector
-from odemis.model import getVAs
-from odemis.model._vattributes import VigilantAttributeBase
+from odemis.model import getVAs, VigilantAttributeBase
 import wx
 import odemis.gui.img.data as imgdata
 import odemis.gui.win.delphi as windelphi
@@ -39,11 +38,12 @@ import odemis.util.units as units
 from odemis.gui.win.delphi import CalibrationProgressDialog
 
 # Sample holder types in the Delphi, as defined by Phenom World
-PHENOM_SH_TYPE_STANDARD = 1 # standard sample holder
+PHENOM_SH_TYPE_STANDARD = 1  # standard sample holder
 # FIXME: need to find out the real type number
 PHENOM_SH_TYPE_OPTICAL = 1023  # sample holder for the Delphi, containing a lens
 
-DELPHI_OVERVIEW_POS = {"x": 0, "y": 0} # good position of the stage for overview
+DELPHI_OVERVIEW_POS = {"x": 0, "y": 0}  # good position of the stage for overview
+
 
 class MicroscopeStateController(object):
     """
@@ -65,9 +65,8 @@ class MicroscopeStateController(object):
         self._tab_data = tab_data
         self._main_frame = main_frame
 
-        # Look for which buttons actually exist, and which VAs exist. Bind the
-        # fitting ones
-        self._btn_controllers = []
+        # Look for which buttons actually exist, and which VAs exist. Bind the fitting ones
+        self._btn_controllers = {}
 
         for btn_name, (va_name, control_class) in self.btn_to_va.items():
             btn = getattr(main_frame, btn_prefix + btn_name, None)
@@ -84,7 +83,7 @@ class MicroscopeStateController(object):
 
             logging.debug("Connecting button %s to %s", btn_name, va_name)
             btn_cont = control_class(btn, va, tab_data.main)
-            self._btn_controllers.append(btn_cont)
+            self._btn_controllers[btn_name] = btn_cont
 
         if not self._btn_controllers:
             logging.warning("No microscope button found in tab %s", btn_prefix)
@@ -110,15 +109,17 @@ class HardwareButtonController(object):
 
 
 class ChamberButtonController(HardwareButtonController):
-    """
-    Controller that allows for the more complex state updates required by the chamber button
-    """
+    """ Controller that allows for the more complex state updates required by the chamber button """
 
     def __init__(self, btn_ctrl, va, main_data):
         """
-        :type btn_ctrl: odemis.gui.comp.buttons.ImageTextToggleButton
+
+        :param btn_ctrl: (ImageTextToggleButton) Button that controls and displays the chamber state
+        :param va: (VigillantAttribute) The chamber state
+        :param main_data: (MainGUIData) GUI microscope model
 
         """
+
         super(ChamberButtonController, self).__init__(btn_ctrl, va, main_data)
         self.main_data = main_data
 
@@ -126,6 +127,7 @@ class ChamberButtonController(HardwareButtonController):
         # otherwise assume it uses a sample loader like the Phenom or Delphi.
         if 'pressure' in getVAs(main_data.chamber):
             main_data.chamber.pressure.subscribe(self._update_label, init=True)
+
             self._btn_faces = {
                 'normal': {
                     'normal': imgdata.btn_press.Bitmap,
@@ -143,6 +145,7 @@ class ChamberButtonController(HardwareButtonController):
                     'active': imgdata.btn_press_green_a.Bitmap,
                 }
             }
+
             self._tooltips = {
                 CHAMBER_PUMPING: "Pumping...",
                 CHAMBER_VENTING: "Venting...",
@@ -217,8 +220,11 @@ class ChamberButtonController(HardwareButtonController):
         When the button is pressed down (i.e. toggled), the chamber is expected to be pumping to
         create a vacuum. When the button is up (i.e. un-toggled), the chamber is expected to be
         venting.
+
         """
+
         logging.debug("Requesting change of chamber pressure")
+
         if self.btn.GetToggle():
             return CHAMBER_PUMPING
         else:
@@ -282,7 +288,7 @@ class SecomStateController(MicroscopeStateController):
                 else:
                     self._overview_pressure = None
 
-            self._main_data.chamberState.subscribe(self.onChamberState)
+            self._main_data.chamberState.subscribe(self.on_chamber_state)
             ch_pos = self._main_data.chamber.position
             ch_pos.subscribe(self.on_chamber_pressure, init=True)
 
@@ -318,7 +324,7 @@ class SecomStateController(MicroscopeStateController):
                     logging.error("Unknown light power range, setting to 1 W")
                     light.power.value = 1
 
-    def _setEbeamPower(self, on):
+    def _set_ebeam_power(self, on):
         """ Set the ebeam power (if there is an ebeam that can be controlled)
         on (boolean): if True, we set the power on, other will turn it off
         """
@@ -333,7 +339,7 @@ class SecomStateController(MicroscopeStateController):
 
         if on:
             try:
-                power.value = power.range[1] # max!
+                power.value = power.range[1]  # max!
             except (AttributeError, model.NotApplicableError):
                 try:
                     # if enumerated: the second lowest
@@ -363,7 +369,7 @@ class SecomStateController(MicroscopeStateController):
                 s.histogram.notify(s.histogram._value)
 
     @call_after
-    def onChamberState(self, state):
+    def on_chamber_state(self, state):
         """ Set the desired pressure on the chamber when the chamber's state changes
 
         Only 'active' states (i.e. either CHAMBER_PUMPING or CHAMBER_VENTING)
@@ -380,7 +386,7 @@ class SecomStateController(MicroscopeStateController):
             # TODO: enable overview move
             self._stream_controller.enableStreams(True)
 
-            self._setEbeamPower(True)
+            self._set_ebeam_power(True)
             # if no special place for overview, then we do it once after
             # the chamber is ready.
             if self._main_data.overview_ccd and self._overview_pressure is None:
@@ -391,17 +397,22 @@ class SecomStateController(MicroscopeStateController):
             # TODO: disable overview move
 
             # Disable button and stop streams for the types affected by the chamber
-            if (hasattr(self._tab_data, "emState")
-                and issubclass(stream.SEMStream, self.cls_streams_involved)):
+            if (
+                hasattr(self._tab_data, "emState") and
+                issubclass(stream.SEMStream, self.cls_streams_involved)
+            ):
                 self._tab_data.emState.value = STATE_OFF
                 self._sem_btn.Enable(False)
                 self._sem_btn.SetToolTipString("Chamber must be under vacuum to activate the SEM")
 
-            if (hasattr(self._tab_data, "opticalState")
-                and issubclass(stream.CameraStream, self.cls_streams_involved)):
+            if (
+                hasattr(self._tab_data, "opticalState") and
+                issubclass(stream.CameraStream, self.cls_streams_involved)
+            ):
                 self._tab_data.opticalState.value = STATE_OFF
                 self._opt_btn.Enable(False)
-                self._opt_btn.SetToolTipString("Chamber must be under vacuum to activate the optical view")
+                self._opt_btn.SetToolTipString("Chamber must be under vacuum to activate "
+                                               "the optical view")
 
             self._stream_controller.enableStreams(False, self.cls_streams_involved)
 
@@ -421,14 +432,13 @@ class SecomStateController(MicroscopeStateController):
             self._main_data.chamber.stop()
             self._start_chamber_venting()
 
-
     def _start_chamber_pumping(self):
         if self._overview_pressure is not None:
             # _on_overview_position() will take care of going further
             f = self._main_data.chamber.moveAbs({"pressure": self._overview_pressure})
             f.add_done_callback(self._on_overview_position)
         else:
-            f = self._main_data.chamber.moveAbs({"pressure": self._vacuum_pressure})
+            self._main_data.chamber.moveAbs({"pressure": self._vacuum_pressure})
 
         # TODO: if the future is a progressiveFuture, it will provide info
         # on when it will finish => display that (in the tooltip of the chamber
@@ -448,18 +458,15 @@ class SecomStateController(MicroscopeStateController):
             s.is_active.value = False
             s.should_update.value = False
 
-        self._setEbeamPower(False)
+        self._set_ebeam_power(False)
         f = self._main_data.chamber.moveAbs({"pressure": self._vented_pressure})
         f.add_done_callback(self._on_vented)
-
 
     def _on_vented(self, future):
         self.on_chamber_pressure(self._main_data.chamber.position.value)
 
-    # TODO: have multiple versions of this method depending on the type of
-    # chamber?
-    # TODO: have a special states for CHAMBER_OVERVIEW_PRE_VACUUM and
-    # CHAMBER_OVERVIEW_POST_VACUUM ?
+    # TODO: have multiple versions of this method depending on the type of chamber?
+    # TODO: have a special states for CHAMBER_OVERVIEW_PRE_VACUUM and CHAMBER_OVERVIEW_POST_VACUUM?
     def on_chamber_pressure(self, position):
         """ Determine the state of the chamber when the pressure changes, and
         do the overview imaging if possible.
@@ -488,7 +495,7 @@ class SecomStateController(MicroscopeStateController):
         else:
             # This can happen at initialisation if the chamber pressure is changing
             logging.info("Pressure position unknown: %s", currentp)
-            #self._main_data.chamberState.value = CHAMBER_UNKNOWN
+            # self._main_data.chamberState.value = CHAMBER_UNKNOWN
 
     def _on_overview_position(self, unused):
         logging.debug("Overview position reached")
@@ -564,13 +571,14 @@ class SecomStateController(MicroscopeStateController):
         except Exception:
             logging.exception("Failed to acquire overview image")
 
-        if not self._main_data.chamberState.value in {CHAMBER_PUMPING, CHAMBER_VACUUM}:
+        if self._main_data.chamberState.value not in {CHAMBER_PUMPING, CHAMBER_VACUUM}:
             logging.warning("Receive an overview image while in state %s",
                             self._main_data.chamberState.value)
-            return # don't ask for vacuum
+            return  # don't ask for vacuum
 
         # move further to fully under vacuum (should do nothing if already there)
         self._main_data.chamber.moveAbs({"pressure": self._vacuum_pressure})
+
 
 class DelphiStateController(SecomStateController):
     """
@@ -584,10 +592,15 @@ class DelphiStateController(SecomStateController):
         super(DelphiStateController, self).__init__(*args, **kwargs)
         self._calibconf = get_calib_conf()
 
+        # if self.gauge_ctrl and self.lbl_loadtime:
+        #         self.gauge_ctrl.Show()
+        #         self.lbl_loadtime.Show()
+        #         self.gauge_ctrl.Parent.Layout()
+
         # If starts with the sample fully loaded, check for the calibration now
         ch_pos = self._main_data.chamber.position
         if ch_pos.value["pressure"] == self._vacuum_pressure:
-            # If it's loaded, the sample holdre is registered for sure, and the
+            # If it's loaded, the sample holder is registered for sure, and the
             # calibration should have already been done.
             self._load_holder_calib()
 
@@ -619,7 +632,7 @@ class DelphiStateController(SecomStateController):
         """
         # Move to stage to center to be at a good position in overview
         f = self._main_data.stage.moveAbs(DELPHI_OVERVIEW_POS)
-        f.result() # to be sure referencing doesn't cancel the move
+        f.result()  # to be sure referencing doesn't cancel the move
 
         self._load_holder_calib()
 
@@ -656,23 +669,23 @@ class DelphiStateController(SecomStateController):
 
         # update metadata to stage
         self._main_data.stage.updateMetadata({
-                  model.MD_POS_COR: strans,
-                  model.MD_PIXEL_SIZE_COR: sscale,
-                  model.MD_ROTATION_COR: srot
-                  })
+            model.MD_POS_COR: strans,
+            model.MD_PIXEL_SIZE_COR: sscale,
+            model.MD_ROTATION_COR: srot
+        })
 
         # use image scaling as scaling correction metadata to ccd
         self._main_data.ccd.updateMetadata({
-                  model.MD_PIXEL_SIZE_COR: iscale,
-                  })
+            model.MD_PIXEL_SIZE_COR: iscale,
+        })
 
         # use image rotation as rotation of the SEM (note that this works fine
         # wrt to the stage referential because the rotation is very small)
         if self._main_data.ebeam.rotation.readonly:
             # normally only happens with the simulator
             self._main_data.ccd.updateMetadata({
-                  model.MD_ROTATION_COR: (-irot) % (2 * math.pi),
-                  })
+                model.MD_ROTATION_COR: (-irot) % (2 * math.pi),
+            })
         else:
             self._main_data.ebeam.rotation.value = irot
             # need to also set the rotation correction to indicate that the
@@ -682,12 +695,11 @@ class DelphiStateController(SecomStateController):
         # update detector metadata with the SEM image and spot shift correction
         # values
         self._main_data.bsd.updateMetadata({
-                  model.MD_RESOLUTION_SLOPE: resa,
-                  model.MD_RESOLUTION_INTERCEPT: resb,
-                  model.MD_HFW_SLOPE: hfwa,
-                  model.MD_SPOT_SHIFT: spotshift
-                  })
-
+            model.MD_RESOLUTION_SLOPE: resa,
+            model.MD_RESOLUTION_INTERCEPT: resb,
+            model.MD_HFW_SLOPE: hfwa,
+            model.MD_SPOT_SHIFT: spotshift
+        })
 
     def _check_holder_calib(self):
         """
@@ -717,9 +729,11 @@ class DelphiStateController(SecomStateController):
                 return False
 
             # TODO: just subscribe to the change of sample holder?
-            if (isinstance(self._main_data.chamber.registeredSampleHolder, VigilantAttributeBase)
-                and not self._main_data.chamber.registeredSampleHolder.value):
-
+            if (
+                    isinstance(self._main_data.chamber.registeredSampleHolder,
+                               VigilantAttributeBase) and
+                    not self._main_data.chamber.registeredSampleHolder.value
+            ):
                 self._request_holder_calib() # async
                 return False
 
@@ -769,7 +783,7 @@ class DelphiStateController(SecomStateController):
             need_register = False
 
         dlg = windelphi.FirstCalibrationDialog(self._main_frame, shid, need_register)
-        val = dlg.ShowModal() # blocks
+        val = dlg.ShowModal()  # blocks
         regcode = dlg.registrationCode
         dlg.Destroy()
 
@@ -803,8 +817,8 @@ class DelphiStateController(SecomStateController):
         # TODO: once the hole focus is not fixed, save it in the config too
         # Perform calibration and update the progress dialog
         calib_dialog = CalibrationProgressDialog(self._main_frame, self._main_data,
-                                               self._overview_pressure, self._vacuum_pressure,
-                                               self._vented_pressure, self._calibconf, shid)
+                                                 self._overview_pressure, self._vacuum_pressure,
+                                                 self._vented_pressure, self._calibconf, shid)
         calib_dialog.Center()
         calib_dialog.ShowModal()
 

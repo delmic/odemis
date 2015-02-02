@@ -110,7 +110,7 @@ def binning_1d_from_2d(comp, va, conf):
             b *= 2
             # logging.error(choices)
 
-        return OrderedDict({(v, v): str(v) for v in choices})
+        return OrderedDict({(v, v): str(int(v)) for v in choices})
     except NotApplicableError:
         return {(cur_val[0], cur_val[0]): str(cur_val[0])}
 

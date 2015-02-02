@@ -1389,7 +1389,7 @@ class AnalysisTab(Tab):
             for strm in ar_strms:
                 strm.background.value = cdata
 
-        except Exception, err:  #pylint: disable=W0703
+        except Exception, err:
             logging.info("Failed using file %s as AR background", fn, exc_info=True)
             msg = "File '%s' not suitable as angle-resolved background:\n\n%s"
             dlg = wx.MessageDialog(self.main_frame,

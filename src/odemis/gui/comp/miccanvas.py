@@ -1401,6 +1401,7 @@ class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
         """
 
         self.set_images([(im_data, (0.0, 0.0), 1.0, True, None, None, "Spatial Spectrum")])
+        self.markline_overlay.clear_labels()
         self.markline_overlay.activate()
 
     @wxlimit_invocation(2)  # max 1/2 Hz
