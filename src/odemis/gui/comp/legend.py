@@ -379,8 +379,6 @@ class AxisLegend(wx.Panel):
 
         """
 
-        self._tick_list = []
-
         # Get the horizontal/vertical space in pixels
         self._pixel_space = self.ClientSize[self._orientation != wx.HORIZONTAL]
 
@@ -418,10 +416,12 @@ class AxisLegend(wx.Panel):
             tick_values.append(cur_val)
             cur_val += value_step
 
+        self._tick_list = []
+
         for tick_value in tick_values:
             pixel = self.value_to_pixel(tick_value)
             pix_val = (pixel, tick_value)
-            if pix_val not in self._tick_list:
+            if self._tick_list is not None and pix_val not in self._tick_list:
                 if self._orientation == wx.HORIZONTAL:
                     if 0 <= pixel <= self._pixel_space:
                         self._tick_list.append(pix_val)

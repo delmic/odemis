@@ -917,7 +917,7 @@ class GraphicRadioButton(ImageTextToggleButton):
 
     def __init__(self, *args, **kwargs):
         self.value = kwargs.pop('value')
-        if not kwargs.get('label', False):
+        if 'label' not in kwargs:
             kwargs['label'] = u"%g" % self.value
         ImageTextToggleButton.__init__(self, *args, **kwargs)
 

@@ -206,7 +206,7 @@ class AcquisitionDialog(xrcfr_acq):
             # compare each value between the current and proposed
             different = False
             for entry, value in settings.items():
-                if entry.va.value != value:
+                if entry.vigilattr.value != value:
                     different = True
                     break
             if not different:
@@ -262,7 +262,7 @@ class AcquisitionDialog(xrcfr_acq):
 
         # update highlight
         for se, value in self._orig_settings.items():
-            se.highlight(se.va.value != value)
+            se.highlight(se.vigilattr.value != value)
 
     def on_streams_changed(self, val):
         """
@@ -270,7 +270,7 @@ class AcquisitionDialog(xrcfr_acq):
         """
         self.update_setting_display()
 
-    def on_setting_change(self, setting_ctrl):
+    def on_setting_change(self):
         self.update_setting_display()
 
         # check presets and fall-back to custom
@@ -341,7 +341,7 @@ class AcquisitionDialog(xrcfr_acq):
         # stream settings, and not directly the hardware.
         if preset_name not in self._presets_confirmed:
             for se in new_preset.keys():
-                new_preset[se] = se.va.value
+                new_preset[se] = se.vigilattr.value
             self._presets_confirmed.add(preset_name)
 
         self.update_setting_display()

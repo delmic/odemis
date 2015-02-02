@@ -690,21 +690,21 @@ class SparcAcquisitionTab(Tab):
         # handlers to it.
         self.spec_rep = self._settings_controller.spectro_rep_ent
         if self.spec_rep:
-            self.spec_rep.va.subscribe(self.on_rep_change)
+            self.spec_rep.vigilattr.subscribe(self.on_rep_change)
             self.spec_rep.value_ctrl.Bind(wx.EVT_SET_FOCUS, self.on_rep_focus)
             self.spec_rep.value_ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
             self.spec_rep.value_ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_spec_rep_enter)
             self.spec_rep.value_ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_spec_rep_leave)
         self.spec_pxs = self._settings_controller.spec_pxs_ent
         if self.spec_pxs:
-            self.spec_pxs.va.subscribe(self.on_rep_change)
+            self.spec_pxs.vigilattr.subscribe(self.on_rep_change)
             self.spec_pxs.value_ctrl.Bind(wx.EVT_SET_FOCUS, self.on_rep_focus)
             self.spec_pxs.value_ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
             self.spec_pxs.value_ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_spec_rep_enter)
             self.spec_pxs.value_ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_spec_rep_leave)
         self.angu_rep = self._settings_controller.angular_rep_ent
         if self.angu_rep:
-            self.angu_rep.va.subscribe(self.on_rep_change)
+            self.angu_rep.vigilattr.subscribe(self.on_rep_change)
             self.angu_rep.value_ctrl.Bind(wx.EVT_SET_FOCUS, self.on_rep_focus)
             self.angu_rep.value_ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
             self.angu_rep.value_ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_ar_rep_enter)

@@ -53,7 +53,7 @@ def apply_preset(preset):
             if se.name == name:
                 logging.debug("Updating preset %s -> %s", se.name, value)
                 try:
-                    se.va.value = value
+                    se.vigilattr.value = value
                 except Exception:
                     logging.exception("Failed to update preset %s", se.name)
                 del preset[se]
@@ -66,11 +66,11 @@ def apply_preset(preset):
     for se, value in preset.items():
         logging.debug("Updating preset %s -> %s", se.name, value)
         try:
-            se.va.value = value
+            se.vigilattr.value = value
         except Exception:
             logging.exception("Failed to update preset %s", se.name)
 
-def _get_entry(entries, comp, name):
+def _get_entry(entries, hw_comp, name):
     """
     find the entry for the given component with the name
     entries (list of SettingEntries): all the entries
@@ -79,7 +79,7 @@ def _get_entry(entries, comp, name):
     return (SettingEntry or None)
     """
     for e in entries:
-        if e.comp == comp and e.name == name:
+        if e.hw_comp == hw_comp and e.name == name:
             return e
     else:
         return None
@@ -95,51 +95,51 @@ def preset_hq(entries):
     ret = {}
 
     for entry in entries:
-        if not entry.va or entry.va.readonly:
+        if not entry.vigilattr or entry.vigilattr.readonly:
             # not a real setting, just info
             logging.debug("Skipping the value %s", entry.name)
             continue
 
 
-        value = entry.va.value
+        value = entry.vigilattr.value
         if entry.name == "resolution":
             # if resolution => get the best one
             try:
-                value = entry.va.range[1] # max
+                value = entry.vigilattr.range[1] # max
             except (AttributeError, model.NotApplicableError):
                 pass
 
         elif entry.name == "dwellTime":
             # SNR improves logarithmically with the dwell time => x4
-            value = entry.va.value * 4
+            value = entry.vigilattr.value * 4
 
             # make sure it still fits
-            if isinstance(entry.va.range, collections.Iterable):
-                value = sorted(list(entry.va.range) + [value])[1] # clip
+            if isinstance(entry.vigilattr.range, collections.Iterable):
+                value = sorted(list(entry.vigilattr.range) + [value])[1] # clip
 
         elif entry.name == "scale": # for scanners only
             # Double the current resolution (in each dimensions)
             # (best == smallest == 1,1)
-            value = tuple(v / 2 for v in entry.va.value)
-            
+            value = tuple(v / 2 for v in entry.vigilattr.value)
+
             # make sure it still fits
-            if isinstance(entry.va.range, collections.Iterable):
-                value = tuple(max(v, m) for v, m in zip(value, entry.va.range[0]))
+            if isinstance(entry.vigilattr.range, collections.Iterable):
+                value = tuple(max(v, m) for v, m in zip(value, entry.vigilattr.range[0]))
 
         elif entry.name == "binning":
             # if binning => smallest
-            prev_val = entry.va.value
+            prev_val = entry.vigilattr.value
             try:
-                value = entry.va.range[0] # min
+                value = entry.vigilattr.range[0]  # min
             except (AttributeError, model.NotApplicableError):
                 try:
-                    value = min(entry.va.choices)
+                    value = min(entry.vigilattr.choices)
                 except (AttributeError, model.NotApplicableError):
                     pass
             # Compensate decrease in energy by longer exposure time
-            et_entry = _get_entry(entries, entry.comp, "exposureTime")
+            et_entry = _get_entry(entries, entry.hw_comp, "exposureTime")
             if et_entry:
-                et_value = ret.get(et_entry, et_entry.va.value)
+                et_value = ret.get(et_entry, et_entry.vigilattr.value)
                 for prevb, newb in zip(prev_val, value):
                     et_value *= prevb / newb
                 ret[et_entry] = et_value
@@ -147,18 +147,19 @@ def preset_hq(entries):
         elif entry.name == "readoutRate":
             # the smallest, the less noise (and slower, but we don't care)
             try:
-                value = entry.va.range[0] # min
+                value = entry.vigilattr.range[0]  # min
             except (AttributeError, model.NotApplicableError):
                 try:
-                    value = min(entry.va.choices)
+                    value = min(entry.vigilattr.choices)
                 except (AttributeError, model.NotApplicableError):
                     pass
         # rest => as is
 
-        logging.debug("Adapting value %s from %s to %s", entry.name, entry.va.value, value)
+        logging.debug("Adapting value %s from %s to %s", entry.name, entry.vigilattr.value, value)
         ret[entry] = value
 
     return ret
+
 
 def preset_as_is(entries):
     """
@@ -169,16 +170,17 @@ def preset_as_is(entries):
     """
     ret = {}
     for entry in entries:
-        if not entry.va or entry.va.readonly:
+        if not entry.vigilattr or entry.vigilattr.readonly:
             # not a real setting, just info
             logging.debug("Skipping the value %s", entry.name)
             continue
 
         # everything as-is
-        logging.debug("Copying value %s = %s", entry.name, entry.va.value)
-        ret[entry] = entry.va.value
+        logging.debug("Copying value %s = %s", entry.name, entry.vigilattr.value)
+        ret[entry] = entry.vigilattr.value
 
     return ret
+
 
 def preset_no_change(entries):
     """
@@ -188,9 +190,8 @@ def preset_no_change(entries):
 
 
 # Name -> callable (list of SettingEntries -> dict (SettingEntries -> value))
-presets = OrderedDict(
-            (   (u"High quality", preset_hq),
-                (u"Fast", preset_as_is),
-                (u"Custom", preset_no_change)
-            )
-)
+presets = OrderedDict((
+    (u"High quality", preset_hq),
+    (u"Fast", preset_as_is),
+    (u"Custom", preset_no_change)
+))
