@@ -39,7 +39,7 @@ class SettingsPanelTestCase(test.GuiTestCase):
     @classmethod
     def setUpClass(cls):
         super(SettingsPanelTestCase, cls).setUpClass()
-        parent = cls.frame.stream_bar.Parent
+        parent = cls.frame.stream_bar.Parent.Parent
         cls.frame.stream_bar.Destroy()
         cls.settings_panel = SettingsPanel(parent, default_msg="Initial text!")
         parent.add_item(cls.settings_panel)
