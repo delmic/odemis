@@ -29,6 +29,7 @@ from __future__ import division
 
 from abc import ABCMeta
 import collections
+from collections import OrderedDict
 import logging
 import numbers
 import time
@@ -795,18 +796,27 @@ class SettingsBarController(object):
         name = "Name"  # for exception handling only
 
         try:
-            # We no longer display the component name
-            # panel.add_label(label, comp.name, selectable=False)
-            vigil_attrs = getVAs(hw_comp)
-            for name, value in vigil_attrs.items():
+            vigil_attrs = getVAs(hw_comp).items()
+            va_configs = self._va_config.get(hw_comp.role, None)
+
+            # Re-order the VA's if possible
+            if isinstance(va_configs, OrderedDict):
+                va_names = [n for n, va in vigil_attrs]
+                for i, (name, conf) in enumerate(va_configs.items()):
+                    if name in va_names:
+                        j = va_names.index(name)
+                        vigil_attrs[i], vigil_attrs[j] = vigil_attrs[j], vigil_attrs[i]
+                        va_names[i], va_names[j] = va_names[j], va_names[i]
+
+            for name, value in vigil_attrs:
                 if name in self.HIDDEN_VAS:
                     continue
-                if hw_comp.role in self._va_config and name in self._va_config[hw_comp.role]:
-                    conf = self._va_config[hw_comp.role][name]
+                if va_configs and name in va_configs:
+                    va_conf = va_configs[name]
                 else:
                     logging.info("No config found for %s: %s", hw_comp.role, name)
-                    conf = None
-                panel.add_setting_entry(name, value, hw_comp, conf)
+                    va_conf = None
+                panel.add_setting_entry(name, value, hw_comp, va_conf)
         except TypeError:
             msg = "Error adding %s setting for: %s"
             logging.exception(msg, hw_comp.name, name)

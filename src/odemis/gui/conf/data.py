@@ -18,6 +18,7 @@ This file is part of Odemis.
     see http://www.gnu.org/licenses/.
 
 """
+from collections import OrderedDict
 
 import wx
 
@@ -45,160 +46,145 @@ import odemis.gui.conf.util as util
 
 HW_SETTINGS_CONFIG = {
     "ccd":
-    {
-        "exposureTime":
-        {
-            "control_type": odemis.gui.CONTROL_SLIDER,
-            "scale": "log",
-            "range": (0.001, 60.0),
-            "type": "float",
-            "accuracy": 2,
+        OrderedDict((
+            ("exposureTime", {
+                "control_type": odemis.gui.CONTROL_SLIDER,
+                "scale": "log",
+                "range": (0.001, 60.0),
+                "type": "float",
+                "accuracy": 2,
+            }),
+            ("binning", {
+                "control_type": odemis.gui.CONTROL_RADIO,
+                "choices": util.binning_1d_from_2d,
+            }),
+            ("resolution", {
+                "control_type": odemis.gui.CONTROL_COMBO,
+                "choices": util.resolution_from_range,
+            }),
+            ("gain", {}),
+            ("readoutRate", {}),
+            ("temperature", {}),
+            # what we don't want to display:
+            ("translation", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("targetTemperature", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("fanSpeed", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("pixelSize", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+        )),
+    "light": {
+            "power":
+            {
+                "control_type": odemis.gui.CONTROL_SLIDER,
+                "scale": "cubic",
+            },
         },
-        "binning":
-        {
-            "control_type": odemis.gui.CONTROL_RADIO,
-            "choices": util.binning_1d_from_2d,
-        },
-        "resolution":
-        {
-            "control_type": odemis.gui.CONTROL_COMBO,
-            "choices": util.resolution_from_range,
-        },
-        # what we don't want to display:
-        "translation":
-        {
-            "control_type": odemis.gui.CONTROL_NONE,
-        },
-        "targetTemperature":
-        {
-            "control_type": odemis.gui.CONTROL_NONE,
-        },
-        "fanSpeed":
-        {
-            "control_type": odemis.gui.CONTROL_NONE,
-        },
-        "pixelSize":
-        {
-            "control_type": odemis.gui.CONTROL_NONE,
-        },
-    },
-    "light":
-    {
-        "power":
-        {
-            "control_type": odemis.gui.CONTROL_SLIDER,
-            "scale": "cubic",
-        },
-    },
     "e-beam":
-    {
-        "dwellTime":
-        {
-            "control_type": odemis.gui.CONTROL_SLIDER,
-            "range": (1e-9, 1),
-            "scale": "log",
-            "type": "float",
-            "accuracy": 2,
-            "event": wx.EVT_SCROLL_CHANGED
-        },
-        "horizontalFoV":
-        {
-            "label": "HFW",
-            "tooltip": "Horizontal Field Width",
-            "control_type": odemis.gui.CONTROL_COMBO,
-            "choices": util.hfw_choices,
-            "accuracy": 2,
-        },
-        "magnification":
-        {
-            # Depends whether horizontalFoV is available or not
-            "control_type": util.mag_if_no_hfw_ctype,
-        },
-        "resolution":
-        {
-            "control_type": odemis.gui.CONTROL_COMBO,
-            "choices": util.resolution_from_range,
-        },
-        "power":
-        {
-            "control_type": odemis.gui.CONTROL_NONE,
-        },
-        "scale":
-        {
-            # same as binning (but accepts floats)
-            "control_type": odemis.gui.CONTROL_RADIO,
-            "choices": util.binning_1d_from_2d,
-            # means will make sure both dimensions are treated as one
-            "type": "1d_binning",
-        },
-        "accelVoltage":
-        {
-            "label": "Accel. voltage",
-            "tooltip": "Acceleration voltage"
-        },
-        "bpp":
-        {
-            "label": "BPP",
-            "tooltip": "Bits per pixel",
-        },
-        # what we don't want to display:
-        "translation":
-        {
-            "control_type": odemis.gui.CONTROL_NONE,
-        },
-        # TODO: might be useful iff it's not read-only
-        "rotation":
-        {
-            "control_type": odemis.gui.CONTROL_NONE,
-        },
-        "pixelSize":
-        {
-            "control_type": odemis.gui.CONTROL_NONE,
-        },
-    },
+        OrderedDict((
+            ("accelVoltage", {
+                "label": "Accel. voltage",
+                "tooltip": "Acceleration voltage"
+            }),
+            ("probeCurrent", {}),
+            ("spotSize", {}),
+            ("horizontalFoV", {
+                "label": "HFW",
+                "tooltip": "Horizontal Field Width",
+                "control_type": odemis.gui.CONTROL_COMBO,
+                "choices": util.hfw_choices,
+                "accuracy": 2,
+            }),
+            ("magnification", {
+                # Depends whether horizontalFoV is available or not
+                "control_type": util.mag_if_no_hfw_ctype,
+            }),
+            ("dwellTime", {
+                "control_type": odemis.gui.CONTROL_SLIDER,
+                "range": (1e-9, 1),
+                "scale": "log",
+                "type": "float",
+                "accuracy": 2,
+                "event": wx.EVT_SCROLL_CHANGED
+            }),
+            ("scale", {
+                # same as binning (but accepts floats)
+                "control_type": odemis.gui.CONTROL_RADIO,
+                "choices": util.binning_1d_from_2d,
+                # means will make sure both dimensions are treated as one
+                "type": "1d_binning",
+            }),
+            ("resolution", {
+                "control_type": odemis.gui.CONTROL_COMBO,
+                "choices": util.resolution_from_range,
+            }),
+            ("bpp", {
+                "label": "BPP",
+                "tooltip": "Bits per pixel",
+            }),
+
+            ("power", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            # what we don't want to display:
+            ("translation", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            # TODO: might be useful if it's not read-only
+            ("rotation", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("pixelSize", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+        )),
     "spectrometer":
-    {
-        "exposureTime":
-        {
-            "control_type": odemis.gui.CONTROL_SLIDER,
-            "scale": "log",
-            "range": (0.01, 500.0),
-            "type": "float",
-            "accuracy": 2,
+        OrderedDict((
+            ("exposureTime", {
+                "control_type": odemis.gui.CONTROL_SLIDER,
+                "scale": "log",
+                "range": (0.01, 500.0),
+                "type": "float",
+                "accuracy": 2,
+            }),
+            ("binning", {
+                "control_type": odemis.gui.CONTROL_RADIO,
+                "choices": util.binning_firstd_only,
+                # means only 1st dimension can change
+                "type": "1std_binning",
+            }),
+            ("resolution", {}),
+            ("gain", {}),
+            ("readoutRate", {}),
+            ("temperature", {}),
+            # what we don't want to display:
+            ("targetTemperature", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("fanSpeed", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("pixelSize", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+        )),
+    "spectrograph": {
+            "wavelength":
+            {
+                "control_type": odemis.gui.CONTROL_SLIDER,
+                "accuracy": 3,
+            },
+            "grating":  # that select the bandwidth observed
+            {
+                "control_type": odemis.gui.CONTROL_COMBO,
+            },
         },
-        "binning":
-        {
-            "control_type": odemis.gui.CONTROL_RADIO,
-            "choices": util.binning_firstd_only,
-            # means only 1st dimension can change
-            "type": "1std_binning",
-        },
-        # what we don't want to display:
-        "targetTemperature":
-        {
-            "control_type": odemis.gui.CONTROL_NONE,
-        },
-        "fanSpeed":
-        {
-            "control_type": odemis.gui.CONTROL_NONE,
-        },
-        "pixelSize":
-        {
-            "control_type": odemis.gui.CONTROL_NONE,
-        },
-    },
-    "spectrograph":
-    {
-        "wavelength":
-        {
-            "control_type": odemis.gui.CONTROL_SLIDER,
-            "accuracy": 3,
-        },
-        "grating":  # that select the bandwidth observed
-        {
-            "control_type": odemis.gui.CONTROL_COMBO,
-        },
-    },
 }
 
 # Allows to override some values based on the microscope role
