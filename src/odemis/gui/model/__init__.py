@@ -30,8 +30,8 @@ from odemis import model
 from odemis.acq.stream import Stream, StreamTree
 from odemis.gui.conf import get_general_conf
 from odemis.model import (FloatContinuous, VigilantAttribute, IntEnumerated,
-                          NotSettableError, StringVA, getVAs)
-from odemis.model._vattributes import BooleanVA
+                          NotSettableError, StringVA, getVAs, BooleanVA,
+                          MD_POS, MD_ACQ_DATE, InstantaneousFuture)
 import os
 import threading
 import time
@@ -687,6 +687,8 @@ class StreamView(View):
 
         self.view_pos = model.ListVA(view_pos_init, unit="m")
 
+        self._fstage_move = InstantaneousFuture() # latest future representing a move request
+
         # current density (meter per pixel, ~ scale/zoom level)
         # 1µm/px => ~large view of the sample (view width ~= 1000 px)
         self.mpp = FloatContinuous(1e-6, range=(10e-12, 50e-6), unit="m/px")
@@ -763,6 +765,36 @@ class StreamView(View):
         # FIXME: "stop all axes" should also clear the queue
         self._focus_queue.put(shift)
 
+    def moveStageBy(self, shift):
+        """
+        Request a relative move of the stage
+        pos (tuple of 2 float): X, Y offset in m
+        :return (None or Future): a future (that allows to know when the move is finished)
+        """
+        if not self._stage:
+            return None
+
+        # TODO: Use the max FoV of the streams to determine what's a big
+        # distance (because on the overview cam a  move can be much bigger than
+        # on a SEM image at high mag).
+
+        # Check it makes sense (=> not too big)
+        distance = math.hypot(*shift)
+        if distance > MAX_SAFE_MOVE_DISTANCE:
+            logging.error("Cancelling request to move by %f m (because > %f m)",
+                          distance, MAX_SAFE_MOVE_DISTANCE)
+            return
+        elif distance < 0.1e-9:
+            logging.debug("skipping move request of almost 0")
+            return
+
+        move = {"x": shift[0], "y": shift[1]}
+        logging.debug("Sending move request of %s", move)
+        f = self._stage.moveRel(move)
+        self._fstage_move = f
+        f.add_done_callback(self._on_stage_move_done)
+        return f
+
     def moveStageToView(self):
         """ Move the stage to the current view_pos
 
@@ -770,36 +802,36 @@ class StreamView(View):
 
         Note: once the move is finished stage_pos will be updated (by the
         back-end)
-
         """
         if not self._stage:
             return
 
         view_pos = self.view_pos.value
-
-        # TODO: Use the max FoV of the streams to determine what's a big
-        # distance (because on the overview cam a  move can be much bigger than
-        # on a SEM image at high mag).
-
-        # relative
         prev_pos = self.stage_pos.value
-        move = {
-            "x": view_pos[0] - prev_pos["x"],
-            "y": view_pos[1] - prev_pos["y"]
-        }
-        if abs(move["x"]) < 1e-12 and abs(move["y"]) < 1e-12:
-            logging.debug("skipping move request of 0")
-            return
+        shift = (view_pos[0] - prev_pos["x"], view_pos[1] - prev_pos["y"])
+        return self.moveStageBy(shift)
 
-        # Check it makes sense (=> not too big)
-        distance = math.sqrt(sum([v ** 2 for v in move.values()]))
-        if distance > MAX_SAFE_MOVE_DISTANCE:
-            logging.error("Cancelling request to move by %f m (because > %f m)",
-                          distance, MAX_SAFE_MOVE_DISTANCE)
-            return
+    def moveStageTo(self, pos):
+        """
+        Request an absolute move of the stage to a given position
+        pos (tuple of 2 float): X, Y absolute coordinates
+        :return (None or Future): a future (that allows to know when the move is finished)
+        """
+        if not self._stage:
+            return None
 
-        logging.debug("Sending move request of %s", move)
-        return self._stage.moveRel(move)
+        move = {"x": pos[0], "y": pos[1]}
+        # TODO: clip to the range of the axes
+        f = self._stage.moveAbs(move)
+        self._fstage_move = f
+        f.add_done_callback(self._on_stage_move_done)
+        return f
+
+    def _on_stage_move_done(self, f):
+        """
+        Called whenever a stage move is completed
+        """
+        pass # only used in the children classes
 
     def getStreams(self):
         """
@@ -898,6 +930,7 @@ class StreamView(View):
 class MicroscopeView(StreamView):
     """
     Represents a view from a microscope and ways to alter it.
+    It will stay centered on the stage position.
     """
     def __init__(self, name, stage=None, **kwargs):
         StreamView.__init__(self, name, stage=stage, **kwargs)
@@ -906,10 +939,56 @@ class MicroscopeView(StreamView):
 
     def _on_stage_pos(self, pos):
         # we want to recenter the viewports whenever the stage moves
-        # TODO: avoid it to move the view when the user is dragging the view
-        #  => might require cleverness in the canvas
+
+        # Don't recenter if a stage move has been requested and on going
+        # as view_pos is already at the (expected) final position
+        if not self._fstage_move.done():
+            return
+
         self.view_pos.value = [pos["x"], pos["y"]]
 
+    def _on_stage_move_done(self, f):
+        """
+        Called whenever a stage move is completed
+        """
+
+        self._on_stage_pos(self.stage_pos.value)
+
+class ContentView(StreamView):
+    """
+    Represents a view from a microscope but (almost) always centered on the
+    content
+    """
+    def __init__(self, name, **kwargs):
+        StreamView.__init__(self, name, **kwargs)
+
+    def _onNewImage(self, im):
+        # Don't recenter if a stage move has been requested and on going
+        # as view_pos is already at the (expected) final position
+        if not self._fstage_move.done():
+            return
+
+        # Move the center's view to the center of this new image
+        try:
+            pos = im.metadata[MD_POS]
+        except IndexError:
+            pass
+        self.view_pos.value = pos
+
+        super(ContentView, self)._onNewImage(im)
+
+    def _on_stage_move_done(self, f):
+        """
+        Called whenever a stage move is completed
+        """
+        # find the latest image
+        try:
+            im = max((i for i in self.stream_tree.getImages()),
+                     key=lambda d: d.metadata.get(MD_ACQ_DATE))
+        except ValueError:
+            return # no image at all
+
+        self._onNewImage(im)
 
 class OverviewView(StreamView):
     """
@@ -918,17 +997,7 @@ class OverviewView(StreamView):
     The main difference with the standard MicroscopeView is that it is not
     centered on the current stage position.
     """
-    def __init__(self, name, stage=None, **kwargs):
-        StreamView.__init__(self, name, stage=stage, **kwargs)
+    def __init__(self, name, **kwargs):
+        StreamView.__init__(self, name, **kwargs)
 
         self.show_crosshair.value = False
-
-    def moveStageTo(self, pos):
-        """
-        Request an absolute move of the stage to a given position
-        pos (tuple of 2 float): X, Y absolute coordinates
-        :return (None or Future): a future (that allows to know when the move is finished)
-        """
-        move = {"x": pos[0], "y": pos[1]}
-        # TODO: clip to the range of the axes
-        return self._stage.moveAbs(move)

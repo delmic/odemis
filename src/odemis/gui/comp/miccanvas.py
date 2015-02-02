@@ -486,7 +486,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         """
         # in case we are not attached to a view yet (shouldn't happen)
         if not self.microscope_view:
-            logging.debug("recenter_buffer called without microscope view")
+            logging.warning("recenter_buffer called without microscope view")
             super(DblMicroscopeCanvas, self).recenter_buffer(world_pos)
         else:
             self._calc_bg_offset(world_pos)
@@ -495,6 +495,9 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             # This will call _onViewPos() -> recenter_buffer()
             self.microscope_view.view_pos.value = physical_pos
 
+            # TODO: instead, convert this into
+            # - an event about how many world pixels the view was moved
+            # - a function that receives the event and move the stage relatively
             self.microscope_view.moveStageToView()  # will do nothing if no stage
             # stage_pos will be updated once the move is completed
 

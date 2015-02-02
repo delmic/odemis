@@ -1605,21 +1605,21 @@ class DraggableCanvas(BitmapCanvas):
         )
 
     # END View manipulation
-
-    def on_extra_axis_move(self, axis, shift):
-        """
-        called when the extra dimensions are modified (right drag)
-
-        :param axis: (int > 0): the axis modified
-            0 => X (horizontal)
-            1 => Y (vertical)
-        :param shift: (int): relative amount of pixel moved
-            > 0: towards up/right
-
-        """
-
-        # We have nothing to do, inheriting classes might do more
-        pass
+#
+#     def on_extra_axis_move(self, axis, shift):
+#         """
+#         called when the extra dimensions are modified (right drag)
+#
+#         :param axis: (int > 0): the axis modified
+#             0 => X (horizontal)
+#             1 => Y (vertical)
+#         :param shift: (int): relative amount of pixel moved
+#             > 0: towards up/right
+#
+#         """
+#
+#         # We have nothing to do, inheriting classes might do more
+#         pass
 
     # TODO: just return best scale and center? And let the caller do what it wants?
     # It would allow to decide how to redraw depending if it's on size event or more high level.
