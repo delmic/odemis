@@ -515,15 +515,15 @@ class StaticSpectrumStream(StaticStream):
             # the visible light's band, we should take a weighted average of the
             # whole spectrum for each band.
 
-            # divide the range into 3 sub-ranges of almost the same length
+            # divide the range into 3 sub-ranges (BRG) of almost the same length
             len_rng = spec_range[1] - spec_range[0] + 1
-            rrange = [spec_range[0], int(round(spec_range[0] + len_rng / 3)) - 1]
-            grange = [rrange[1] + 1, int(round(spec_range[0] + 2 * len_rng / 3)) - 1]
-            brange = [grange[1] + 1, spec_range[1]]
+            brange = [spec_range[0], int(round(spec_range[0] + len_rng / 3)) - 1]
+            grange = [brange[1] + 1, int(round(spec_range[0] + 2 * len_rng / 3)) - 1]
+            rrange = [grange[1] + 1, spec_range[1]]
             # ensure each range contains at least one pixel
-            rrange[1] = max(rrange)
-            grange[1] = max(grange)
             brange[1] = max(brange)
+            grange[1] = max(grange)
+            rrange[1] = max(rrange)
 
             # FIXME: unoptimized, as each channel is duplicated 3 times, and discarded
             av_data = numpy.mean(data[rrange[0]:rrange[1] + 1], axis=0)

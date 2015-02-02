@@ -1293,12 +1293,12 @@ class StreamPanel(wx.Panel):
 
         self._btn_fit_rgb = buttons.ImageTextToggleButton(
                                                 self._panel,
-                                                - 1,
+                                                wx.ID_ANY,
                                                 img.getbtn_spectrumBitmap(),
                                                 label="RGB",
                                                 size=(68, 26),
                                                 style=wx.ALIGN_RIGHT)
-        tooltip = "Toggle sub-bandwidths to Red/Green/Blue display"
+        tooltip = "Toggle sub-bandwidths to Blue/Green/Red display"
         self._btn_fit_rgb.SetToolTipString(tooltip)
         self._btn_fit_rgb.SetBitmaps(bmp_h=img.getbtn_spectrum_hBitmap(),
                                      bmp_sel=img.getbtn_spectrum_aBitmap())
