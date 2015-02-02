@@ -83,9 +83,12 @@ class xrcfr_main(wx.Frame):
         self.live_btn_press = xrc.XRCCTRL(self, "live_btn_press")
         self.live_btn_opt = xrc.XRCCTRL(self, "live_btn_opt")
         self.live_btn_sem = xrc.XRCCTRL(self, "live_btn_sem")
+        self.gauge_load_time = xrc.XRCCTRL(self, "gauge_load_time")
+        self.lbl_load_time = xrc.XRCCTRL(self, "lbl_load_time")
+        self.lbl_load_status = xrc.XRCCTRL(self, "lbl_load_status")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
-        self.fp_settings_secom_sem = xrc.XRCCTRL(self, "fp_settings_secom_sem")
         self.fp_settings_secom_optical = xrc.XRCCTRL(self, "fp_settings_secom_optical")
+        self.fp_settings_secom_sem = xrc.XRCCTRL(self, "fp_settings_secom_sem")
         self.pnl_secom_streams = xrc.XRCCTRL(self, "pnl_secom_streams")
         self.fp_annotations = xrc.XRCCTRL(self, "fp_annotations")
         self.btn_secom_acquire = xrc.XRCCTRL(self, "btn_secom_acquire")
@@ -117,8 +120,8 @@ class xrcfr_main(wx.Frame):
         self.lens_align_btn_opt = xrc.XRCCTRL(self, "lens_align_btn_opt")
         self.cmb_lens_align_presets = xrc.XRCCTRL(self, "cmb_lens_align_presets")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
-        self.fp_lens_sem_settings = xrc.XRCCTRL(self, "fp_lens_sem_settings")
         self.fp_lens_opt_settings = xrc.XRCCTRL(self, "fp_lens_opt_settings")
+        self.fp_lens_sem_settings = xrc.XRCCTRL(self, "fp_lens_sem_settings")
         self.pnl_secom_align_streams = xrc.XRCCTRL(self, "pnl_secom_align_streams")
         self.pnl_sem_toolbar = xrc.XRCCTRL(self, "pnl_sem_toolbar")
         self.lens_align_tb = xrc.XRCCTRL(self, "lens_align_tb")
@@ -811,84 +814,148 @@ def __init_resources():
                   <object class="sizeritem">
                     <object class="wxPanel" name="main_buttons">
                       <object class="wxBoxSizer">
-                        <orient>wxHORIZONTAL</orient>
+                        <orient>wxVERTICAL</orient>
                         <object class="sizeritem">
-                          <object class="ImageTextToggleButton" name="live_btn_press">
-                            <size>110,48</size>
-                            <label>CHAMBER</label>
-                            <delta>1</delta>
-                            <bitmap>img_button_btn_press_png</bitmap>
-                            <hover>img_button_btn_press_h_png</hover>
-                            <selected>img_button_btn_press_orange_a_png</selected>
-                            <fg>#1A1A1A</fg>
-                            <font>
-                              <size>11</size>
-                              <style>normal</style>
-                              <weight>normal</weight>
-                              <underlined>0</underlined>
-                              <face>Ubuntu</face>
-                              <encoding>UTF-8</encoding>
-                            </font>
-                            <style>wxALIGN_RIGHT</style>
-                            <XRCED>
-                              <assign_var>1</assign_var>
-                            </XRCED>
+                          <object class="wxBoxSizer">
+                            <object class="sizeritem">
+                              <object class="ImageTextToggleButton" name="live_btn_press">
+                                <size>110,48</size>
+                                <label>CHAMBER</label>
+                                <delta>1</delta>
+                                <bitmap>img_button_btn_press_png</bitmap>
+                                <hover>img_button_btn_press_h_png</hover>
+                                <selected>img_button_btn_press_orange_a_png</selected>
+                                <fg>#1A1A1A</fg>
+                                <font>
+                                  <size>11</size>
+                                  <style>normal</style>
+                                  <weight>normal</weight>
+                                  <underlined>0</underlined>
+                                  <face>Ubuntu</face>
+                                  <encoding>UTF-8</encoding>
+                                </font>
+                                <style>wxALIGN_RIGHT</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <flag>wxTOP|wxBOTTOM|wxLEFT|wxEXPAND</flag>
+                              <border>10</border>
+                            </object>
+                            <object class="spacer">
+                              <option>1</option>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="ImageTextToggleButton" name="live_btn_opt">
+                                <size>92,48</size>
+                                <label>OPTICAL</label>
+                                <delta>1</delta>
+                                <bitmap>img_button_btn_opt_png</bitmap>
+                                <hover>img_button_btn_opt_h_png</hover>
+                                <selected>img_button_btn_opt_green_a_png</selected>
+                                <fg>#1A1A1A</fg>
+                                <font>
+                                  <size>11</size>
+                                  <style>normal</style>
+                                  <weight>normal</weight>
+                                  <underlined>0</underlined>
+                                  <face>Ubuntu</face>
+                                  <encoding>UTF-8</encoding>
+                                </font>
+                                <style>wxALIGN_RIGHT</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <flag>wxTOP|wxBOTTOM|wxLEFT</flag>
+                              <border>10</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="ImageTextToggleButton" name="live_btn_sem">
+                                <size>92,48</size>
+                                <label>SEM      </label>
+                                <delta>1</delta>
+                                <bitmap>img_button_btn_sem_png</bitmap>
+                                <hover>img_button_btn_sem_h_png</hover>
+                                <selected>img_button_btn_sem_green_a_png</selected>
+                                <fg>#1A1A1A</fg>
+                                <font>
+                                  <size>11</size>
+                                  <style>normal</style>
+                                  <weight>normal</weight>
+                                  <underlined>0</underlined>
+                                  <face>Ubuntu</face>
+                                  <encoding>UTF-8</encoding>
+                                </font>
+                                <style>wxALIGN_RIGHT</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <flag>wxALL</flag>
+                              <border>10</border>
+                            </object>
+                            <orient>wxHORIZONTAL</orient>
                           </object>
-                          <flag>wxTOP|wxBOTTOM|wxLEFT|wxEXPAND</flag>
-                          <border>10</border>
-                        </object>
-                        <object class="spacer">
-                          <option>1</option>
+                          <flag>wxEXPAND</flag>
                         </object>
                         <object class="sizeritem">
-                          <object class="ImageTextToggleButton" name="live_btn_opt">
-                            <size>92,48</size>
-                            <label>OPTICAL</label>
-                            <delta>1</delta>
-                            <bitmap>img_button_btn_opt_png</bitmap>
-                            <hover>img_button_btn_opt_h_png</hover>
-                            <selected>img_button_btn_opt_green_a_png</selected>
-                            <fg>#1A1A1A</fg>
-                            <font>
-                              <size>11</size>
-                              <style>normal</style>
-                              <weight>normal</weight>
-                              <underlined>0</underlined>
-                              <face>Ubuntu</face>
-                              <encoding>UTF-8</encoding>
-                            </font>
-                            <style>wxALIGN_RIGHT</style>
-                            <XRCED>
-                              <assign_var>1</assign_var>
-                            </XRCED>
+                          <object class="wxPanel" name="hw_info">
+                            <object class="wxBoxSizer">
+                              <orient>wxVERTICAL</orient>
+                              <object class="sizeritem">
+                                <object class="wxBoxSizer">
+                                  <object class="sizeritem">
+                                    <object class="wxGauge" name="gauge_load_time">
+                                      <size>-1,10</size>
+                                      <range>100</range>
+                                      <value>0</value>
+                                      <bg>#333333</bg>
+                                      <style>wxGA_SMOOTH</style>
+                                      <XRCED>
+                                        <assign_var>1</assign_var>
+                                      </XRCED>
+                                    </object>
+                                    <option>3</option>
+                                    <flag>wxBOTTOM|wxLEFT|wxRIGHT|wxALIGN_BOTTOM</flag>
+                                    <border>10</border>
+                                  </object>
+                                  <object class="sizeritem">
+                                    <object class="wxStaticText" name="lbl_load_time">
+                                      <label>Load timer</label>
+                                      <fg>#E5E5E5</fg>
+                                      <XRCED>
+                                        <assign_var>1</assign_var>
+                                      </XRCED>
+                                    </object>
+                                    <option>1</option>
+                                    <flag>wxBOTTOM|wxRIGHT|wxRESERVE_SPACE_EVEN_IF_HIDDEN</flag>
+                                    <border>10</border>
+                                  </object>
+                                  <orient>wxHORIZONTAL</orient>
+                                </object>
+                                <option>1</option>
+                                <flag>wxEXPAND</flag>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="wxStaticText" name="lbl_load_status">
+                                  <label>Load timer</label>
+                                  <fg>#E5E5E5</fg>
+                                  <hidden>1</hidden>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                                <option>1</option>
+                                <flag>wxBOTTOM|wxRIGHT|wxRESERVE_SPACE_EVEN_IF_HIDDEN</flag>
+                                <border>10</border>
+                              </object>
+                            </object>
+                            <size>-1,24</size>
+                            <bg>#333333</bg>
+                            <hidden>1</hidden>
                           </object>
-                          <flag>wxTOP|wxBOTTOM|wxLEFT</flag>
-                          <border>10</border>
-                        </object>
-                        <object class="sizeritem">
-                          <object class="ImageTextToggleButton" name="live_btn_sem">
-                            <size>92,48</size>
-                            <label>SEM      </label>
-                            <delta>1</delta>
-                            <bitmap>img_button_btn_sem_png</bitmap>
-                            <hover>img_button_btn_sem_h_png</hover>
-                            <selected>img_button_btn_sem_green_a_png</selected>
-                            <fg>#1A1A1A</fg>
-                            <font>
-                              <size>11</size>
-                              <style>normal</style>
-                              <weight>normal</weight>
-                              <underlined>0</underlined>
-                              <face>Ubuntu</face>
-                              <encoding>UTF-8</encoding>
-                            </font>
-                            <style>wxALIGN_RIGHT</style>
-                            <XRCED>
-                              <assign_var>1</assign_var>
-                            </XRCED>
-                          </object>
-                          <flag>wxALL</flag>
-                          <border>10</border>
+                          <flag>wxEXPAND</flag>
                         </object>
                       </object>
                       <size>400,-1</size>
