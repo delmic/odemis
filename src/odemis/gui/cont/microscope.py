@@ -123,7 +123,7 @@ class ChamberButtonController(HardwareButtonController):
         super(ChamberButtonController, self).__init__(btn_ctrl, va, main_data)
         self.main_data = main_data
 
-        # If pressure information, assume it is a complete SEM chamber,
+        # If there is pressure information, assume it is a complete SEM chamber,
         # otherwise assume it uses a sample loader like the Phenom or Delphi.
         if 'pressure' in getVAs(main_data.chamber):
             main_data.chamber.pressure.subscribe(self._update_label, init=True)
@@ -153,7 +153,7 @@ class ChamberButtonController(HardwareButtonController):
                 CHAMBER_VACUUM: "Vent the chamber",
             }
         else:
-            self.btn.SetLabel("CHAMBER")
+            self.btn.SetLabel("LOAD      ")  # Extra spaces are needed for alignment
             self._btn_faces = {
                 'normal': {
                     'normal': imgdata.btn_eject.Bitmap,
@@ -195,6 +195,7 @@ class ChamberButtonController(HardwareButtonController):
                 bmp_sel=self._btn_faces['vacuum']['active']
             )
 
+            self.btn.SetLabel("UNLOAD  ")  # Extra spaces are needed for alignment
             # In case the GUI is launched with the chamber pump turned on already, we need to
             # toggle the button by code.
             self.btn.SetToggle(True)
@@ -205,6 +206,7 @@ class ChamberButtonController(HardwareButtonController):
                 bmp_sel=self._btn_faces['normal']['active']
             )
             self.btn.SetToggle(False)
+            self.btn.SetLabel("LOAD      ")  # Extra spaces are needed for alignment
         else:
             logging.error("Unknown chamber state %d", state)
 
@@ -459,7 +461,12 @@ class SecomStateController(MicroscopeStateController):
 
         self._set_ebeam_power(False)
         f = self._main_data.chamber.moveAbs({"pressure": self._vented_pressure})
+        # f.add_update_callback(self._on_vent_update)
         f.add_done_callback(self._on_vented)
+
+    @call_after
+    def _on_vent_update(self, past, left):
+        self._main_frame.lbl_load_time.SetLabel(str(left))
 
     def _on_vented(self, future):
         self.on_chamber_pressure(self._main_data.chamber.position.value)
@@ -605,9 +612,28 @@ class DelphiStateController(SecomStateController):
         self._dlg = None
 
     def _show_progress_indicators(self, show):
+        """ Show or hide the loading progress indicators for the chamber and sample holder
+
+        The loading status text will always be hidden.
+
+        """
+
         self._main_frame.gauge_load_time.Show(show)
         self._main_frame.lbl_load_time.Show(show)
+        self._main_frame.lbl_load_status.Show(False)
         self._main_frame.gauge_load_time.Parent.Layout()
+
+    def _show_progress_status(self, show):
+        """ Show or hide the loading status text
+
+        The loading progress controls will always be hidden.
+
+        """
+
+        self._main_frame.gauge_load_time.Show(False)
+        self._main_frame.lbl_load_time.Show(False)
+        self._main_frame.lbl_load_status.Show(show)
+        self._main_frame.lbl_load_status.Parent.Layout()
 
     def _start_chamber_pumping(self):
         # Warning: if the sample holder is not yet registered, the Phenom will

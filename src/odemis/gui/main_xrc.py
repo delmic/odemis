@@ -927,6 +927,7 @@ def __init_resources():
                                       <label>Load timer</label>
                                       <fg>#E5E5E5</fg>
                                       <hidden>1</hidden>
+                                      <style>wxALIGN_RIGHT</style>
                                       <XRCED>
                                         <assign_var>1</assign_var>
                                       </XRCED>
