@@ -424,8 +424,7 @@ class SecomStateController(MicroscopeStateController):
 
         # Actually start the pumping/venting
         if state == CHAMBER_PUMPING:
-            # in case the chamber was venting, or has several queued move, will
-            # reset everything
+            # in case the chamber was venting, or has several queued move, will reset everything
             self._main_data.chamber.stop()
             self._start_chamber_pumping()
         elif state == CHAMBER_VENTING:
@@ -592,10 +591,8 @@ class DelphiStateController(SecomStateController):
         super(DelphiStateController, self).__init__(*args, **kwargs)
         self._calibconf = get_calib_conf()
 
-        # if self.gauge_ctrl and self.lbl_loadtime:
-        #         self.gauge_ctrl.Show()
-        #         self.lbl_loadtime.Show()
-        #         self.gauge_ctrl.Parent.Layout()
+        # Display the panel with the loading progress indicators
+        self._main_frame.pnl_hw_info.Show()
 
         # If starts with the sample fully loaded, check for the calibration now
         ch_pos = self._main_data.chamber.position
@@ -607,6 +604,11 @@ class DelphiStateController(SecomStateController):
         # Progress dialog for calibration
         self._dlg = None
 
+    def _show_progress_indicators(self, show):
+        self._main_frame.gauge_load_time.Show(show)
+        self._main_frame.lbl_load_time.Show(show)
+        self._main_frame.gauge_load_time.Parent.Layout()
+
     def _start_chamber_pumping(self):
         # Warning: if the sample holder is not yet registered, the Phenom will
         # not accept to even load it to the overview. That's why checking for
@@ -616,6 +618,7 @@ class DelphiStateController(SecomStateController):
         if not self._check_holder_calib():
             return
 
+        self._show_progress_indicators(True)
         super(DelphiStateController, self)._start_chamber_pumping()
 
     def _start_chamber_venting(self):
@@ -623,7 +626,12 @@ class DelphiStateController(SecomStateController):
         # position), so that referencing will be faster on next load
         self._main_data.aligner.moveAbs({"x": 0, "y": 0})
 
+        self._show_progress_indicators(True)
         super(DelphiStateController, self)._start_chamber_venting()
+
+    def _on_vented(self, future):
+        super(DelphiStateController, self)._on_vented(future)
+        self._show_progress_indicators(False)
 
     def _on_overview_position(self, unused):
         """
