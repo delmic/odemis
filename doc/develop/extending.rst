@@ -325,7 +325,7 @@ it should be done in ``src/odemis/gui/img``. After the modifications, you need t
 regenerate the ``data.py`` file::
 
     cd src/odemis/gui/img
-    ./images2python
+    ./img2python.py
 
 
 Speed optimization
