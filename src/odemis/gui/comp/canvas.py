@@ -59,7 +59,7 @@ world:
 
     World coordinates are expressed using float numbers.
 
-    Attributes related to the world coordinate system have the prefix `b_`.
+    Attributes related to the world coordinate system have the prefix `w_`.
 
     The relation between world and buffer is determined by `scale`.
 
@@ -78,19 +78,14 @@ Scales
 While rendering, the canvas has to take into account two different scales:
 
 Image scale:
-    The image scale is the ratio between 'meters per pixel' and 'meters per
-    world unit' (mpp / mpwu), which expresses the number of 'world units' per
-    'pixel' of image data (wupp). The higher this value, the larger the picture
-    will seem.
+    The image scale is the size of a pixel in 'world unit'. The higher this value,
+    the larger the picture will seem.
 
-    This scale should be calculated using the image's MD_PIXEL_SIZE meta data,
-    and the current canvas' mpwu.
+    This scale should be calculated using the image's MD_PIXEL_SIZE meta-data.
 
 Canvas scale:
-    The canvas scale is the ratio between 'meters per world unit' and 'meters
-    per pixel' (mpwu / mpp), which expresses the number of 'pixels' per 'world
-    unit' to use to display data (ppwu). The higher the number, the more pixel
-    that are used to display the data.
+    The canvas scale is the size of a pixel buffer in 'world unit'. The higher the
+    number, the more pixel that are used to display the data.
 
     The canvas scale is updated when the mpp of a connected MicroscopeView is
     updated.
@@ -557,7 +552,7 @@ class BufferedCanvas(wx.Panel):
     @abstractmethod
     def draw(self):
         """ Create an image within the buffer device context (`_dc_buffer`) """
-        raise NotImplementedError
+        pass
 
     def _draw_background(self, ctx):
         """ Draw the background of the Canvas
@@ -747,7 +742,10 @@ class BufferedCanvas(wx.Panel):
 
 
 class BitmapCanvas(BufferedCanvas):
-
+    """
+    A canvas that can display multiple overlapping images at various position
+    and scale, but it cannot be moved by the user.
+    """
     def __init__(self, *args, **kwargs):
         super(BitmapCanvas, self).__init__(*args, **kwargs)
 
@@ -1291,7 +1289,7 @@ class DraggableCanvas(BitmapCanvas):
         self._rdrag_prev_value = None
 
         # Track if the canvas was dragged. It should be reset to False at the
-        # end of button up handlers, giving overlay the change to check if a
+        # end of button up handlers, giving overlay the chance to check if a
         # drag occurred.
         self.was_dragged = False
 
@@ -1364,13 +1362,13 @@ class DraggableCanvas(BitmapCanvas):
             self._ldragging = False
             # Update the position of the buffer to where the view is centered
             # self.drag_shift is the delta we want to apply
-            new_pos = (
-                self.w_buffer_center[0] - self.drag_shift[0] / self.scale,
-                self.w_buffer_center[1] - self.drag_shift[1] / self.scale
-            )
-            self.recenter_buffer(new_pos)
-            # Update the drawing, since w_buffer_center need to be
-            # updates
+            offset = (-self.drag_shift[0] / self.scale,
+                      - self.drag_shift[1] / self.scale)
+            self.recenter_buffer((self.w_buffer_center[0] + offset[0],
+                                  self.w_buffer_center[1] + offset[1]))
+
+            self.on_center_position_changed(offset)
+            # Update the drawing immediately, since w_buffer_center need to be updated
             self.update_drawing()
 
         super(DraggableCanvas, self).on_left_up(evt)
@@ -1420,9 +1418,12 @@ class DraggableCanvas(BitmapCanvas):
             self.Refresh()
 
             # recompute the view
-            new_pos = (self.w_buffer_center[0] - shift[0] / self.scale,
-                       self.w_buffer_center[1] - shift[1] / self.scale)
+            offset = (-shift[0] / self.scale, -shift[1] / self.scale)
+            new_pos = (self.w_buffer_center[0] + offset[0],
+                       self.w_buffer_center[1] + offset[1])
             self.recenter_buffer(new_pos)
+
+            self.on_center_position_changed(offset)
 
             logging.debug("Double click at %s", new_pos)
 
@@ -1438,7 +1439,7 @@ class DraggableCanvas(BitmapCanvas):
 
         """
 
-        if CAN_DRAG in self.abilities and self.left_dragging:
+        if CAN_DRAG in self.abilities and self._ldragging:
             v_pos = evt.GetPositionTuple()
             drag_shift = (v_pos[0] - self.drag_init_pos[0],
                           v_pos[1] - self.drag_init_pos[1])
@@ -1454,24 +1455,46 @@ class DraggableCanvas(BitmapCanvas):
         self.was_dragged = self.dragging
         super(DraggableCanvas, self).on_motion(evt)
 
+    # keycode to px: 100px ~= a 10th of the screen
+    _key_to_move = {
+        wx.WXK_LEFT: (100, 0),
+        wx.WXK_RIGHT: (-100, 0),
+        wx.WXK_UP: (0, 100),
+        wx.WXK_DOWN:(0, -100),
+    }
     def on_char(self, evt):
         key = evt.GetKeyCode()
 
-        if CAN_DRAG in self.abilities:
-            change = 100  # about a 10th of the screen
-            if evt.ShiftDown():
-                change //= 8  # softer
+        if CAN_DRAG in self.abilities and key in self._key_to_move:
+            move = self._key_to_move[key]
+            if evt.ShiftDown(): # softer
+                move = tuple(s // 8 for s in move)
 
-            if key == wx.WXK_LEFT:
-                self.shift_view((change, 0))
-            elif key == wx.WXK_RIGHT:
-                self.shift_view((-change, 0))
-            elif key == wx.WXK_DOWN:
-                self.shift_view((0, -change))
-            elif key == wx.WXK_UP:
-                self.shift_view((0, change))
+            self.shift_view(move)
+        else:
+            super(DraggableCanvas, self).on_char(evt)
 
-        super(DraggableCanvas, self).on_char(evt)
+    def shift_view(self, shift):
+        """ Moves the position of the view by a delta
+
+        :param shift: (int, int) delta in buffer coordinates (pixels)
+        """
+        offset = (-shift[0] / self.scale, -shift[1] / self.scale)
+        self.recenter_buffer((self.w_buffer_center[0] + offset[0],
+                              self.w_buffer_center[1] + offset[1]))
+
+        self.on_center_position_changed(offset)
+
+    def on_center_position_changed(self, shift):
+        """
+        Called whenever the view position changes.
+        This can be overriden by sub-classes to detect such changes.
+        The new (absolute) position is in .requested_world_pos
+
+        shift (float, float): offset moved in world coordinates
+        """
+        logging.debug("Canvas position changed by %s, new position is %s wu",
+                      shift, self.requested_world_pos)
 
     def on_paint(self, evt):
         """ Quick update of the window content with the buffer + the static
@@ -1512,7 +1535,6 @@ class DraggableCanvas(BitmapCanvas):
         """ Calculate the offset needed for the checkered background after a canvas shift
 
         :param new_pos: (float, float) new world position
-
         """
 
         # Convert the shift in world units into pixels
@@ -1560,19 +1582,18 @@ class DraggableCanvas(BitmapCanvas):
         """ Redraws everything (that is viewed in the buffer) """
 
         prev_world_pos = self.w_buffer_center
-
         self.w_buffer_center = self.requested_world_pos
 
         self.draw()
 
-        # Calculate the amount the view has shifted in pixels
-        shift_view = (
-            (self.w_buffer_center[0] - prev_world_pos[0]) * self.scale,
-            (self.w_buffer_center[1] - prev_world_pos[1]) * self.scale,
-        )
-
         # Adjust the dragging attributes according to the change in buffer center
         if self._ldragging:
+            # Calculate the amount the view has shifted in pixels
+            shift_view = (
+                (self.w_buffer_center[0] - prev_world_pos[0]) * self.scale,
+                (self.w_buffer_center[1] - prev_world_pos[1]) * self.scale,
+            )
+
             self.drag_init_pos = (self.drag_init_pos[0] - shift_view[0],
                                   self.drag_init_pos[1] - shift_view[1])
             self.drag_shift = (self.drag_shift[0] + shift_view[0],
@@ -1589,37 +1610,6 @@ class DraggableCanvas(BitmapCanvas):
         self.Update()
 
     # END Buffer and drawing methods
-
-    # View manipulation
-
-    def shift_view(self, shift):
-        """ Moves the position of the view by a delta
-
-        :param shift: (int, int) delta in buffer coordinates (pixels)
-
-        """
-
-        self.recenter_buffer(
-            (self.w_buffer_center[0] - (shift[0] / self.scale),
-             self.w_buffer_center[1] - (shift[1] / self.scale))
-        )
-
-    # END View manipulation
-#
-#     def on_extra_axis_move(self, axis, shift):
-#         """
-#         called when the extra dimensions are modified (right drag)
-#
-#         :param axis: (int > 0): the axis modified
-#             0 => X (horizontal)
-#             1 => Y (vertical)
-#         :param shift: (int): relative amount of pixel moved
-#             > 0: towards up/right
-#
-#         """
-#
-#         # We have nothing to do, inheriting classes might do more
-#         pass
 
     # TODO: just return best scale and center? And let the caller do what it wants?
     # It would allow to decide how to redraw depending if it's on size event or more high level.

@@ -95,15 +95,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # None (all allowed) or a set of guimodel.TOOL_* allowed (rest is treated like NONE)
         self.allowed_modes = None
 
-        # meter per "world unit"
-        # for conversion between "world pos" in the canvas and a real unit
-        # mpp == mpwu => 1 world coord == 1 px => scale == 1
-        self.mpwu = 1.0  # m/wu
-        # This is a const, don't change at runtime!
-        # FIXME: turns out to be useless. => Need to directly use physical
-        # coordinates. Currently, the only difference is that Y in going up in
-        # physical coordinates and down in world coordinates.
-
         self._previous_size = self.ClientSize
 
         # Overlays
@@ -395,7 +386,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
             rgba_im = img.format_rgba_darray(rgbim)
             keepalpha = False
-            scale = rgbim.metadata[model.MD_PIXEL_SIZE][0] / self.mpwu
+            scale = rgbim.metadata[model.MD_PIXEL_SIZE][0]
             pos = self.physical_to_world_pos(rgbim.metadata[model.MD_POS])
             rot = -rgbim.metadata.get(model.MD_ROTATION, 0)  # ccw -> cw
 
@@ -481,25 +472,27 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
     def recenter_buffer(self, world_pos):
         """
         Update the position of the buffer on the world
-        pos (2-tuple float): the coordinates of the center of the buffer in
-                             fake units
+        world_pos (float, float): the coordinates of the center of the buffer in
+                                  world units
         """
         # in case we are not attached to a view yet (shouldn't happen)
-        if not self.microscope_view:
-            logging.warning("recenter_buffer called without microscope view")
-            super(DblMicroscopeCanvas, self).recenter_buffer(world_pos)
-        else:
-            self._calc_bg_offset(world_pos)
-            self.requested_world_pos = world_pos
+        super(DblMicroscopeCanvas, self).recenter_buffer(world_pos)
+        if self.microscope_view:
             physical_pos = self.world_to_physical_pos(world_pos)
-            # This will call _onViewPos() -> recenter_buffer()
+            # This will call _onViewPos() -> recenter_buffer(), but as
+            # recenter_buffer() has already been called with this position,
+            # nothing will happen
             self.microscope_view.view_pos.value = physical_pos
 
-            # TODO: instead, convert this into
-            # - an event about how many world pixels the view was moved
-            # - a function that receives the event and move the stage relatively
-            self.microscope_view.moveStageToView()  # will do nothing if no stage
-            # stage_pos will be updated once the move is completed
+    def on_center_position_changed(self, shift):
+        """
+        Called whenever the view position changes.
+
+        shift (float, float): offset moved in world coordinates
+        """
+        if self.microscope_view:
+            phys_shift = self.world_to_physical_pos(shift)
+            self.microscope_view.moveStageBy(phys_shift)
 
     def fit_view_to_content(self, recenter=None):
         """ Adapts the MPP and center to fit to the current content
@@ -516,12 +509,12 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         # this will indirectly call _on_view_mpp(), but not have any additional effect
         if self.microscope_view:
-            new_mpp = self.mpwu / self.scale
+            new_mpp = 1 / self.scale
             self.microscope_view.mpp.value = self.microscope_view.mpp.clip(new_mpp)
 
     def _on_view_mpp(self, mpp):
         """ Called when the view.mpp is updated """
-        self.scale = self.mpwu / mpp
+        self.scale = 1 / mpp
         wx.CallAfter(self.request_drawing_update)
 
     # TODO: move to viewport?
@@ -746,40 +739,27 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
     def world_to_physical_pos(self, pos):
         """ Translate world coordinates into physical coordinates.
-
-        Note: The y value needs to be flipped between world and physical
-            coordinates.
-
-        Note: If 'meters per world unit' (mpwu) is one, world and physical
-            coordinates are the same.
+        Works both for absolute and relative values.
 
         :param pos: (float, float) "world" coordinates
         :return: (float, float)
-
         """
-
-        phy_pos = (pos[0] * self.mpwu, -pos[1] * self.mpwu)
-        return phy_pos
+        # The y value needs to be flipped between physical and world coordinates.
+        return (pos[0], -pos[1])
 
     def physical_to_world_pos(self, phy_pos):
         """ Translate physical coordinates into world coordinates.
-
-        Note: The y value needs to be flipped between physical and world
-            coordinates.
-
-        Note: If 'meters per world unit' (mpwu) is one, world and physical
-            coordinates are the same.
+        Works both for absolute and relative values.
 
         :param phy_pos: (float, float) "physical" coordinates in m
         :return: (float, float)
-
         """
-        world_pos = (phy_pos[0] / self.mpwu, -phy_pos[1] / self.mpwu)
-        return world_pos
+        # The y value needs to be flipped between physical and world coordinates.
+        return phy_pos[0], -phy_pos[1]
 
     def selection_to_real_size(self, start_w_pos, end_w_pos):
-        w = abs(start_w_pos[0] - end_w_pos[0]) * self.mpwu
-        h = abs(start_w_pos[1] - end_w_pos[1]) * self.mpwu
+        w = abs(start_w_pos[0] - end_w_pos[0])
+        h = abs(start_w_pos[1] - end_w_pos[1])
         return w, h
 
     def draw(self):
@@ -1153,7 +1133,7 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
 
             keepalpha = (rgbim.shape[2] == 4)
 
-            scale = rgbim.metadata[model.MD_PIXEL_SIZE][0] / self.mpwu
+            scale = rgbim.metadata[model.MD_PIXEL_SIZE][0]
             pos = (0, 0) # the sensor image should be centered on the sensor center
 
             if s.name.value == "Goal":
