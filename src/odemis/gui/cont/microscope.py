@@ -439,7 +439,8 @@ class SecomStateController(MicroscopeStateController):
             f = self._main_data.chamber.moveAbs({"pressure": self._overview_pressure})
             f.add_done_callback(self._on_overview_position)
         else:
-            self._main_data.chamber.moveAbs({"pressure": self._vacuum_pressure})
+            f = self._main_data.chamber.moveAbs({"pressure": self._vacuum_pressure})
+            f.add_done_callback(self._on_vacuum)
 
         # TODO: if the future is a progressiveFuture, it will provide info
         # on when it will finish => display that (in the tooltip of the chamber
@@ -451,6 +452,9 @@ class SecomStateController(MicroscopeStateController):
         # Empty the stage history, as the interesting locations on the previous
         # sample have probably nothing in common with this new sample
         self._tab_data.stage_history.value = []
+
+    def _on_vacuum(self, _):
+        pass
 
     def _start_chamber_venting(self):
         # Pause all streams (SEM streams are most important, but it's
@@ -560,7 +564,8 @@ class SecomStateController(MicroscopeStateController):
             ovs.is_active.value = True
         except Exception:
             logging.exception("Failed to start overview image acquisition")
-            self._main_data.chamber.moveAbs({"pressure": self._vacuum_pressure})
+            f = self._main_data.chamber.moveAbs({"pressure": self._vacuum_pressure})
+            f.add_done_callback(self._on_vacuum)
 
         # TODO: have a timer to detect if no image ever comes, give up and move
         # to final pressure
@@ -583,7 +588,8 @@ class SecomStateController(MicroscopeStateController):
             return  # don't ask for vacuum
 
         # move further to fully under vacuum (should do nothing if already there)
-        self._main_data.chamber.moveAbs({"pressure": self._vacuum_pressure})
+        f = self._main_data.chamber.moveAbs({"pressure": self._vacuum_pressure})
+        f.add_done_callback(self._on_vacuum)
 
 
 class DelphiStateController(SecomStateController):
@@ -614,24 +620,26 @@ class DelphiStateController(SecomStateController):
     def _show_progress_indicators(self, show):
         """ Show or hide the loading progress indicators for the chamber and sample holder
 
-        The loading status text will always be hidden.
+        The loading status text will be hidden if the progress indicators are shown.
 
         """
 
         self._main_frame.gauge_load_time.Show(show)
         self._main_frame.lbl_load_time.Show(show)
-        self._main_frame.lbl_load_status.Show(False)
+        if show:
+            self._main_frame.lbl_load_status.Show(False)
         self._main_frame.gauge_load_time.Parent.Layout()
 
     def _show_progress_status(self, show):
         """ Show or hide the loading status text
 
-        The loading progress controls will always be hidden.
+        The loading progress controls will be hidden if the status is shown.
 
         """
 
-        self._main_frame.gauge_load_time.Show(False)
-        self._main_frame.lbl_load_time.Show(False)
+        if show:
+            self._main_frame.gauge_load_time.Show(False)
+            self._main_frame.lbl_load_time.Show(False)
         self._main_frame.lbl_load_status.Show(show)
         self._main_frame.lbl_load_status.Parent.Layout()
 
@@ -657,6 +665,9 @@ class DelphiStateController(SecomStateController):
 
     def _on_vented(self, future):
         super(DelphiStateController, self)._on_vented(future)
+        self._show_progress_indicators(False)
+
+    def _on_vacuum(self, _):
         self._show_progress_indicators(False)
 
     def _on_overview_position(self, unused):
