@@ -20,9 +20,11 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
+
 from Pyro4.errors import CommunicationError
 import collections
 import logging
+import math
 from odemis import model
 import os
 import re
@@ -46,6 +48,33 @@ def getSerialDriver(name):
         # TODO: Windows version
         return "Unknown"
 
+
+def estimateMoveDuration(distance, speed, accel):
+    """
+    Compute the theoretical duration of a move given the maximum speed and
+    acceleration. It considers that the speed curve of the move will follow
+    a trapezoidal profile: first acceleration, then maximum speed, and then
+    deceleration.
+    distance (0 <= float): distance that will be travelled (in m)
+    speed (0 < float): maximum speed allowed (in m/s)
+    accel (0 < float): acceleration and deceleration (in m²/s)
+    return (0 <= float): time in s
+    """
+    # Given the distance to be traveled, determine whether we have a
+    # triangular or a trapezoidal motion profile.
+    A = (2 * accel) / (accel ** 2)
+    s = 0.5 * A * speed ** 2
+    if distance > s:
+        t1 = speed / accel
+        t2 = (distance - s) / speed
+        t3 = speed / accel
+        return t1 + t2 + t3
+    else:
+        vp = math.sqrt(2.0 * distance / A)
+        t1 = vp / accel
+        t2 = vp / accel
+        return t1 + t2
+
 # String -> VA conversion helper
 
 def boolify(s):
@@ -54,6 +83,7 @@ def boolify(s):
     if s == 'False' or s == 'false':
         return False
     raise ValueError('Not a boolean value: %s' % s)
+
 
 def reproduceTypedValue(real_val, str_val):
     """
