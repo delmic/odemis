@@ -1,4 +1,4 @@
-#-*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 Created on 21 Aug 2012
 
@@ -22,10 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
-from decorator import decorator
-import functools
 import inspect
-from itertools import izip
 import logging
 import os.path
 import subprocess
@@ -33,6 +30,8 @@ import sys
 import threading
 import time
 import wx
+
+from decorator import decorator
 
 
 # ============== Decorators
@@ -43,13 +42,6 @@ def call_in_wx_main(f, self, *args, **kwargs):
     (GUI) thread.
     """
     return wx.CallAfter(f, self, *args, **kwargs)
-
-    # The dead_object_wrapper was added to prevent PyDeadObjectError when
-    # delayed calls were made on a deleted dialog (i.e. the acquisition dialog)
-    # return wx.CallAfter(dead_object_wrapper(f, self, *args, **kwargs),
-    #                     self,
-    #                     *args,
-    #                     **kwargs)
 
 
 # TODO: also do a call_after ?
@@ -80,11 +72,6 @@ def wxlimit_invocation(delay_s):
                              "assigned to instance methods!")
 
         now = time.time()
-
-        # The next statement was not useful in the sense that we cannot
-        # add attributes to bound methods.
-        # Get the bound version of the function
-        #bf = f.__get__(self)
 
         # Hacky way to store value per instance and per methods
         last_call_name = '%s_lim_inv_last_call' % f.__name__
@@ -133,43 +120,6 @@ def ignore_dead(f, self, *args, **kwargs):
     except (wx.PyDeadObjectError, RuntimeError):
         logging.warn("Dead object ignored in %s", f.__name__)
 
-
-class Memoize(object):
-    """ Decorator that caches a function's return value each time it is called.
-    If called later with the same arguments, the cached value is returned, and
-    not re-evaluated.
-    """
-
-    def __init__(self, func):
-        self.func = func
-        self.cache = {}
-
-    def __call__(self, *args):
-        try:
-            if len(self.cache) > 1000:
-                self._flush()
-            return self.cache[args]
-        except KeyError:
-            value = self.func(*args)
-            self.cache[args] = value
-            return value
-        except TypeError:
-            # uncachable -- for instance, passing a list as an argument.
-            # Better to not cache than to blow up entirely.
-            return self.func(*args)
-
-    def __repr__(self):
-        """Return the function's docstring."""
-        return self.func.__doc__
-
-    def __get__(self, obj, objtype):
-        """Support instance methods."""
-        fn = functools.partial(self.__call__, obj)
-        fn.flush = self._flush
-        return fn
-
-    def _flush(self):
-        self.cache = {}
 
 # ============== END Decorators
 
