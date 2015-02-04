@@ -23,7 +23,7 @@
 
 from __future__ import division
 from odemis.gui import BG_COLOUR_NOTIFY
-from odemis.gui.util import call_after
+from odemis.gui.util import call_in_wx_main
 import wx
 
 
@@ -76,7 +76,7 @@ class Message(wx.PopupTransientWindow):
         mo = Message(parent)
         mo.construct_message(title, message, timeout, bgcolour)
 
-    @call_after
+    @call_in_wx_main
     def construct_message(self, title, message, timeout, bgcolour):
 
         self.panel.SetBackgroundColour(bgcolour)

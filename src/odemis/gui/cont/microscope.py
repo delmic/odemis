@@ -28,7 +28,7 @@ from odemis.acq import align, stream
 from odemis.gui.conf import get_calib_conf
 from odemis.gui.model import STATE_ON, CHAMBER_PUMPING, CHAMBER_VENTING, \
     CHAMBER_VACUUM, CHAMBER_VENTED, CHAMBER_UNKNOWN, STATE_OFF
-from odemis.gui.util import call_after
+from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import VigilantAttributeConnector
 from odemis.model import getVAs, VigilantAttributeBase
 import wx
@@ -126,7 +126,7 @@ class ChamberButtonController(HardwareButtonController):
         # If there is pressure information, assume it is a complete SEM chamber,
         # otherwise assume it uses a sample loader like the Phenom or Delphi.
         if 'pressure' in getVAs(main_data.chamber):
-            main_data.chamber.pressure.subscribe(self._update_label, init=True)
+            main_data.chamber.pressure.subscribe(self._on_pressure_change, init=True)
 
             self._btn_faces = {
                 'normal': {
@@ -232,8 +232,8 @@ class ChamberButtonController(HardwareButtonController):
         else:
             return CHAMBER_VENTING
 
-    @call_after
-    def _update_label(self, pressure_val):
+    @call_in_wx_main
+    def _on_pressure_change(self, pressure_val):
         """ Set a formatted pressure value as the label of the button """
 
         str_value = units.readable_str(pressure_val, sig=2,
@@ -370,7 +370,7 @@ class SecomStateController(MicroscopeStateController):
                 s.histogram._value = numpy.empty(0)
                 s.histogram.notify(s.histogram._value)
 
-    @call_after
+    @call_in_wx_main
     def on_chamber_state(self, state):
         """ Set the desired pressure on the chamber when the chamber's state changes
 
@@ -468,7 +468,7 @@ class SecomStateController(MicroscopeStateController):
         # f.add_update_callback(self._on_vent_update)
         f.add_done_callback(self._on_vented)
 
-    @call_after
+    @call_in_wx_main
     def _on_vent_update(self, past, left):
         self._main_frame.lbl_load_time.SetLabel(str(left))
 
@@ -803,7 +803,7 @@ class DelphiStateController(SecomStateController):
 
         return True
 
-    @call_after
+    @call_in_wx_main
     def _request_holder_calib(self):
         """
         Handle all the actions needed when no calibration data is available
@@ -844,7 +844,7 @@ class DelphiStateController(SecomStateController):
                                            wx.OK | wx.ICON_WARNING)
                     dlg.ShowModal()
                     dlg.Destroy()
-                    # looks like recursive, but as it's call_after, it will
+                    # looks like recursive, but as it's call_in_wx_main, it will
                     # return immediately and be actually called later
                     self._request_holder_calib()
                     return

@@ -41,7 +41,7 @@ from odemis.gui import conf, acqmng
 from odemis.gui.acqmng import preset_as_is
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
 from odemis.gui.comp.popup import Message
-from odemis.gui.util import img, get_picture_folder, call_after, \
+from odemis.gui.util import img, get_picture_folder, call_in_wx_main, \
     wxlimit_invocation
 from odemis.gui.util.widgets import ProgessiveFutureConnector
 from odemis.gui.win.acquisition import AcquisitionDialog, \
@@ -487,7 +487,7 @@ class SparcAcquiController(object):
             self.filename.value = new_name
 
     @wxlimit_invocation(1) # max 1/s
-    @call_after
+    @call_in_wx_main
     def update_acquisition_time(self):
 
         if self._roa.value == UNDEFINED_ROI:
@@ -630,7 +630,7 @@ class SparcAcquiController(object):
         logging.info(u"Acquisition saved as file '%s'.", filename)
         return data, exp, filename
 
-    @call_after
+    @call_in_wx_main
     def on_acquisition_done(self, future):
         """
         Callback called when the acquisition is finished (either successfully or
@@ -659,7 +659,7 @@ class SparcAcquiController(object):
         sf = self._executor.submit(self._export_to_file, future)
         sf.add_done_callback(self.on_file_export_done)
 
-    @call_after
+    @call_in_wx_main
     def on_file_export_done(self, future):
         """
         Callback called when the acquisition is finished (either successfully or
@@ -722,7 +722,7 @@ class FineAlignController(object):
         self._main_data_model.fineAlignDwellTime.subscribe(self._on_dwell_time)
         self._tab_data_model.tool.subscribe(self._onTool, init=True)
 
-    @call_after
+    @call_in_wx_main
     def _onTool(self, tool):
         """
         Called when the tool (mode) is changed
@@ -741,7 +741,7 @@ class FineAlignController(object):
     def _on_dwell_time(self, dt):
         self._update_est_time()
 
-    @call_after
+    @call_in_wx_main
     def _update_est_time(self):
         """
         Compute and displays the estimated time for the fine alignment
@@ -846,7 +846,7 @@ class FineAlignController(object):
         # all the rest will be handled by _on_fa_done()
 
 
-    @call_after
+    @call_in_wx_main
     def _on_fa_done(self, future):
         logging.debug("End of overlay procedure")
         main_data = self._main_data_model
@@ -918,7 +918,7 @@ class AutoCenterController(object):
 
         self._main_data_model.ccd.exposureTime.subscribe(self._update_est_time, init=True)
 
-    @call_after
+    @call_in_wx_main
     def _update_est_time(self, unused):
         """
         Compute and displays the estimated time for the auto centering
@@ -1010,7 +1010,7 @@ class AutoCenterController(object):
         self._acq_future.cancel()
         # all the rest will be handled by _on_ac_done()
 
-    @call_after
+    @call_in_wx_main
     def _on_ac_done(self, future):
         logging.debug("End of auto centering procedure")
         main_data = self._main_data_model

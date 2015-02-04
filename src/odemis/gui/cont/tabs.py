@@ -51,7 +51,7 @@ from odemis.gui.conf import get_acqui_conf
 from odemis.gui.cont import settings, tools
 from odemis.gui.cont.actuators import ActuatorController
 from odemis.gui.cont.microscope import SecomStateController, DelphiStateController
-from odemis.gui.util import call_after
+from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.img import scale_to_alpha
 from odemis.util import units
 import odemis.acq.stream as streammod
@@ -400,7 +400,7 @@ class SecomStreamsTab(Tab):
             if self._autofocus_f is not None:
                 self._autofocus_f.cancel()
 
-    @call_after
+    @call_in_wx_main
     def _on_autofocus_done(self, future):
         self.tab_data_model.autofocus_active.value = guimod.TOOL_AUTO_FOCUS_OFF
 
@@ -461,7 +461,7 @@ class SecomStreamsTab(Tab):
                 sp = self._add_em_stream(add_to_all_views=True, play=False)
                 sp.show_remove_btn(False)
 
-    @call_after
+    @call_in_wx_main
     def on_chamber_state(self, state):
         if state == guimod.CHAMBER_PUMPING:
             # Ensure we still have both optical and SEM streams
@@ -717,7 +717,7 @@ class SparcAcquisitionTab(Tab):
             self._txt_mean = self._settings_controller.txt_mean
             self._scount_stream.image.subscribe(self._on_spec_count, init=True)
 
-    @call_after
+    @call_in_wx_main
     def _on_spec_count(self, scount):
         """
         Called when a new spectrometer data comes in (and so the whole intensity
@@ -1192,7 +1192,7 @@ class AnalysisTab(Tab):
 
         self.display_new_data(fn, data)
 
-    @call_after
+    @call_in_wx_main
     def display_new_data(self, filename, data):
         """
         Display a new data set (removing all references to the current one)
@@ -1475,7 +1475,7 @@ class AnalysisTab(Tab):
         return fn
 
 
-    @guiutil.call_after
+    @guiutil.call_in_wx_main
     def _onTool(self, tool):
         """ Called when the tool (mode) is changed """
 
@@ -1632,7 +1632,7 @@ class LensAlignTab(Tab):
         tb.add_tool(tools.TOOL_DICHO, self.tab_data_model.tool)
         tb.add_tool(tools.TOOL_SPOT, self.tab_data_model.tool)
 
-        # Dicho mode: during this mode, the label & button "move to center" are
+        # Dichotomy mode: during this mode, the label & button "move to center" are
         # shown. If the sequence is empty, or a move is going, it's disabled.
         self._aligner_move = None  # the future of the move (to know if it's over)
         main_frame.lens_align_btn_to_center.Bind(wx.EVT_BUTTON,
@@ -1642,7 +1642,7 @@ class LensAlignTab(Tab):
         pnl_sem_toolbar = main_frame.pnl_sem_toolbar
         fa_sizer = pnl_sem_toolbar.GetSizer()
         scale_win = ScaleWindow(pnl_sem_toolbar)
-        self._on_mpp = guiutil.call_after_wrapper(scale_win.SetMPP)  # need to keep ref
+        self._on_mpp = guiutil.call_in_wx_main_wrapper(scale_win.SetMPP)  # need to keep ref
         self._sem_view.mpp.subscribe(self._on_mpp, init=True)
         fa_sizer.Add(scale_win, proportion=3, flag=wx.ALIGN_RIGHT | wx.TOP | wx.LEFT, border=10)
         fa_sizer.Layout()
@@ -1694,7 +1694,7 @@ class LensAlignTab(Tab):
         for s in self.tab_data_model.streams.value:
             s.is_active.value = False
 
-    @call_after
+    @call_in_wx_main
     def on_chamber_state(self, state):
         # Lock or enable lens alignment
         if state in {guimod.CHAMBER_VACUUM, guimod.CHAMBER_UNKNOWN}:
@@ -1704,7 +1704,7 @@ class LensAlignTab(Tab):
             self.button.Disable()
             self.clear_notification()
 
-    @call_after
+    @call_in_wx_main
     def _onTool(self, tool):
         """
         Called when the tool (mode) is changed
@@ -1785,7 +1785,7 @@ class LensAlignTab(Tab):
 
 
     # "Move to center" functions
-    @call_after
+    @call_in_wx_main
     def _update_to_center(self):
         # Enable a special "move to SEM center" button iif:
         # * seq is not empty
@@ -2005,7 +2005,7 @@ class MirrorAlignTab(Tab):
         self._actuator_controller.bind_keyboard(main_frame.pnl_tab_sparc_align)
 
     # TODO: factorize with SparcAcquisitionTab
-    @call_after
+    @call_in_wx_main
     def _on_spec_count(self, scount):
         """
         Called when a new spectrometer data comes in (and so the whole intensity

@@ -38,7 +38,7 @@ from odemis.acq import stream
 from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
 from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS, BitmapCanvas
 from odemis.gui.comp.overlay.view import HistoryOverlay, PointSelectOverlay, MarkingLineOverlay
-from odemis.gui.util import wxlimit_invocation, call_after, ignore_dead, img
+from odemis.gui.util import wxlimit_invocation, call_in_wx_main, ignore_dead, img
 from odemis.model import VigilantAttributeBase
 from odemis.util import units
 from odemis.acq.stream import UNDEFINED_ROI
@@ -432,7 +432,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self.update_thumbnail()
 
     @wxlimit_invocation(2)  # max 1/2 Hz
-    @call_after  # needed as it accesses the DC
+    @call_in_wx_main  # needed as it accesses the DC
     @ignore_dead
     def update_thumbnail(self):
         if self.IsEnabled():
@@ -816,7 +816,7 @@ class OverviewCanvas(DblMicroscopeCanvas):
         self.add_view_overlay(self.history_overlay)
 
     @wxlimit_invocation(2)  # max 1/2 Hz
-    @call_after  # needed as it accesses the DC
+    @call_in_wx_main  # needed as it accesses the DC
     @ignore_dead
     def update_thumbnail(self):
 
@@ -1256,7 +1256,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         self._tab_data_model = tab_data
 
     @wxlimit_invocation(2)  # max 1/2 Hz
-    @call_after  # needed as it accesses the DC
+    @call_in_wx_main  # needed as it accesses the DC
     def update_thumbnail(self):
         if self.IsEnabled():
             if self._data is None:
@@ -1385,7 +1385,7 @@ class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
         self.markline_overlay.activate()
 
     @wxlimit_invocation(2)  # max 1/2 Hz
-    @call_after  # needed as it accesses the DC
+    @call_in_wx_main  # needed as it accesses the DC
     def update_thumbnail(self):
         if self.IsEnabled():
             if self.images == [None]:
@@ -1485,7 +1485,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
             self.update_thumbnail()
 
     @wxlimit_invocation(2)  # max 1/2 Hz
-    @call_after  # needed as it accesses the DC
+    @call_in_wx_main  # needed as it accesses the DC
     def update_thumbnail(self):
         if self.IsEnabled():
             csize = self.ClientSize

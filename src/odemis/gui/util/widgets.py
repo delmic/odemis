@@ -26,7 +26,7 @@ from __future__ import division
 import collections
 import logging
 import math
-from odemis.gui.util import call_after_wrapper, call_after, dead_object_wrapper
+from odemis.gui.util import call_in_wx_main_wrapper, call_in_wx_main, dead_object_wrapper
 from odemis.util import units
 import time
 import wx
@@ -99,7 +99,7 @@ class VigilantAttributeConnector(object):
 
         # Dead_object_wrapper might need/benefit from recognizing bound methods.
         # Or it can be tough to recognize wxPyDeadObjects being passed as 'self'
-        self.va_2_ctrl = call_after_wrapper(dead_object_wrapper(va_2_ctrl or value_ctrl.SetValue))
+        self.va_2_ctrl = call_in_wx_main_wrapper(dead_object_wrapper(va_2_ctrl or value_ctrl.SetValue))
         self.ctrl_2_va = ctrl_2_va or value_ctrl.GetValue
         if events is None:
             self.change_events = ()
@@ -203,7 +203,7 @@ class AxisConnector(object):
             self.value_ctrl.Disable()
             future.add_done_callback(self._on_move_done)
 
-    @call_after
+    @call_in_wx_main
     def _on_move_done(self, future):
         """
         Called after the end of a move
@@ -213,7 +213,7 @@ class AxisConnector(object):
         self.value_ctrl.Enable()
         logging.debug("Axis %s finished moving", self.axis)
 
-    @call_after
+    @call_in_wx_main
     def _on_pos_change(self, positions):
         """
         Called when position changes
@@ -288,7 +288,7 @@ class ProgessiveFutureConnector(object):
         self._start = now - past
         self._end = now + left
 
-    @call_after
+    @call_in_wx_main
     def _on_done(self, future):
         """
         Called when it's over

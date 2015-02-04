@@ -33,7 +33,7 @@ from odemis.gui.comp.viewport import MicroscopeViewport, AngularResolvedViewport
     SpatialSpectrumViewport
 from odemis.gui.cont import tools
 from odemis.acq.stream import OpticalStream, EMStream, SpectrumStream, ARStream
-from odemis.gui.util import call_after
+from odemis.gui.util import call_in_wx_main
 from odemis.model import VigilantAttributeBase
 from odemis.model import MD_PIXEL_SIZE
 
@@ -452,7 +452,7 @@ class OverviewController(object):
         if tab_data.main.stage:
             tab_data.main.stage.position.subscribe(self.on_stage_pos_change)
 
-    @call_after
+    @call_in_wx_main
     def on_stage_pos_change(self, p_pos):
         """ Store the new position in the overview history when the stage moves """
 
@@ -542,7 +542,7 @@ class ViewButtonController(object):
                 lbl_ctrl.SetLabel("All")
                 continue
 
-            @call_after
+            @call_in_wx_main
             def on_thumbnail(im, b=btn):  # save btn in scope
                 # import traceback
                 # traceback.print_stack()
@@ -600,7 +600,7 @@ class ViewButtonController(object):
                     logging.debug("untoggling button of view All")
                 b.SetToggle(False)
 
-    @call_after
+    @call_in_wx_main
     def _update_22_thumbnail(self, _):
         """ Called when any thumbnail is changed, to recompute the 2x2 thumbnail of the first button
 

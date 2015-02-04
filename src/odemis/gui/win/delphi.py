@@ -21,7 +21,7 @@ from odemis.gui.win.dialog_xrc import xrcprogress_dialog
 from odemis.gui.util.widgets import ProgessiveFutureConnector
 import logging
 from odemis.util import units
-from odemis.gui.util import call_after, ignore_dead
+from odemis.gui.util import call_in_wx_main, ignore_dead
 from odemis import model
 from odemis.acq._futures import executeTask
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
@@ -152,7 +152,7 @@ class CalibrationProgressDialog(xrcprogress_dialog):
         self.calib_future.cancel()
         # all the rest will be handled by on_acquisition_done()
 
-    @call_after
+    @call_in_wx_main
     def on_calib_done(self, future):
         """ Callback called when the calibration is finished (either successfully or cancelled) """
         # bind button back to direct closure
@@ -186,7 +186,7 @@ class CalibrationProgressDialog(xrcprogress_dialog):
         # As the action is complete, rename "Cancel" to "Close"
         self.cancel_btn.SetLabel("Close")
 
-    @call_after
+    @call_in_wx_main
     @ignore_dead
     def on_calib_update(self, future, past, left):
         """ Callback called when the calibration time is updated (either successfully or cancelled) """
@@ -208,9 +208,9 @@ def DelphiCalibration(main_data, overview_pressure, vacuum_pressure, vented_pres
     known_first_hole (tuple of floats): Hole coordinates found in the calibration file
     known_second_hole (tuple of floats): Hole coordinates found in the calibration file
     known_focus (float): Focus used for hole detection #m
-    known_offset (tuple of floats): Offset of sample holder found in the calibration file #m,m 
+    known_offset (tuple of floats): Offset of sample holder found in the calibration file #m,m
     known_rotation (float): Rotation of sample holder found in the calibration file #radians
-    known_scaling (tuple of floats): Scaling of sample holder found in the calibration file 
+    known_scaling (tuple of floats): Scaling of sample holder found in the calibration file
     returns (ProgressiveFuture): Progress DoDelphiCalibration
     """
     # Create ProgressiveFuture and update its state to RUNNING
@@ -251,9 +251,9 @@ def _DoDelphiCalibration(future, main_data, overview_pressure, vacuum_pressure,
     known_first_hole (tuple of floats): Hole coordinates found in the calibration file
     known_second_hole (tuple of floats): Hole coordinates found in the calibration file
     known_focus (float): Focus used for hole detection #m
-    known_offset (tuple of floats): Offset of sample holder found in the calibration file #m,m 
+    known_offset (tuple of floats): Offset of sample holder found in the calibration file #m,m
     known_rotation (float): Rotation of sample holder found in the calibration file #radians
-    known_scaling (tuple of floats): Scaling of sample holder found in the calibration file 
+    known_scaling (tuple of floats): Scaling of sample holder found in the calibration file
     returns (tuple of floats): Hole top
             (tuple of floats): Hole bottom
             (float): Focus used for hole detection

@@ -151,7 +151,7 @@ import math
 import numpy
 from odemis.gui import BLEND_DEFAULT, BLEND_SCREEN
 from odemis.gui.comp.overlay.base import WorldOverlay, ViewOverlay
-from odemis.gui.util import call_after
+from odemis.gui.util import call_in_wx_main
 from odemis.model import DataArray
 from odemis.util import intersect
 from odemis.util.conversion import wxcol_to_frgb
@@ -735,7 +735,7 @@ class BufferedCanvas(wx.Panel):
         return (max(1, min(pos[0], self._bmp_buffer_size[0] - 1)),
                 max(1, min(pos[1], self._bmp_buffer_size[1] - 1)))
 
-    @call_after
+    @call_in_wx_main
     def clear(self):
         """ Clear the canvas by redrawing the background """
         self._draw_background(self.ctx)

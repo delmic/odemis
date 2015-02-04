@@ -21,7 +21,7 @@ from odemis.acq import stream, align
 from odemis.gui.comp.popup import Message
 import odemis.gui.conf
 from odemis.gui.model.dye import DyeDatabase
-from odemis.gui.util import call_after
+from odemis.gui.util import call_in_wx_main
 import subprocess
 import wx
 
@@ -198,8 +198,8 @@ class MenuController(object):
         fit_enable = hasattr(tab, "view_controller") and tab.view_controller is not None
         self._main_frame.menu_item_fit_content.Enable(fit_enable)
 
-        
-    @call_after
+
+    @call_in_wx_main
     def _on_current_stream(self, streams):
         """
         Called when some VAs affecting the current stream change
@@ -403,7 +403,7 @@ see http://www.fluorophores.org/disclaimer/ .
 #         webbrowser.open('http://localhost:8000')
 
 
-    @call_after
+    @call_in_wx_main
     def _on_debug_va(self, enabled):
         """ Update the debug menu check """
         self._main_frame.menu_item_debug.Check(enabled)

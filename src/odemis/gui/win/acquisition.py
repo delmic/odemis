@@ -32,7 +32,7 @@ from odemis.gui.conf import get_acqui_conf
 from odemis.gui.cont.settings import SecomSettingsController
 from odemis.gui.cont.streams import StreamController
 from odemis.gui.main_xrc import xrcfr_acq
-from odemis.gui.util import call_after, formats_to_wildcards
+from odemis.gui.util import call_in_wx_main, formats_to_wildcards
 from odemis.gui.util.widgets import ProgessiveFutureConnector
 from odemis.util import units
 import os.path
@@ -242,7 +242,7 @@ class AcquisitionDialog(xrcfr_acq):
 
         return True
 
-    @call_after
+    @call_in_wx_main
     def update_setting_display(self):
         # if gauge was left over from an error => now hide it
         if self.gauge_acq.IsShown():
@@ -454,7 +454,7 @@ class AcquisitionDialog(xrcfr_acq):
         self.acq_future.cancel()
         # all the rest will be handled by on_acquisition_done()
 
-    @call_after
+    @call_in_wx_main
     def on_acquisition_done(self, future):
         """ Callback called when the acquisition is finished (either successfully or cancelled) """
         self._set_fan(True)  # Turn the fan back on

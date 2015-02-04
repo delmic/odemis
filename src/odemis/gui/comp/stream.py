@@ -45,7 +45,7 @@ from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider,\
     UnitIntegerSlider
 from odemis.gui.comp.text import SuggestTextCtrl, \
     UnitFloatCtrl, FloatTextCtrl
-from odemis.gui.util import call_after, wxlimit_invocation, dead_object_wrapper, \
+from odemis.gui.util import call_in_wx_main, wxlimit_invocation, dead_object_wrapper, \
     ignore_dead
 from odemis.gui.util.widgets import VigilantAttributeConnector
 from odemis.util import fluo
@@ -349,7 +349,7 @@ class Expander(wx.Control):
         if self.label_change_callback:
             self.label_change_callback(self._label_ctrl.GetValue())
 
-    @call_after
+    @call_in_wx_main
     def _on_tint_value(self, colour):
         """ Update the colour button to reflect the provided colour """
         self._btn_tint.set_colour(colour)
@@ -948,7 +948,7 @@ class StreamPanel(wx.Panel):
         # Can only do that once all the controls are here
         self.stream.auto_bc.subscribe(self._onAutoBC, init=True)
 
-    @call_after
+    @call_in_wx_main
     def _onAutoBC(self, enabled):
         # disable the manual controls if it's on
         self._sld_bc_outliers.Enable(enabled)
@@ -956,7 +956,7 @@ class StreamPanel(wx.Panel):
         self._txt_lowi.Enable(not enabled)
         self._txt_highi.Enable(not enabled)
 
-    @call_after
+    @call_in_wx_main
     @ignore_dead
     def _update_drange(self, drange):
         self._sld_hist.SetRange(drange[0], drange[1])

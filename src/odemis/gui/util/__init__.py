@@ -35,10 +35,10 @@ import time
 import wx
 
 
-#### Decorators ########
-# TODO: rename to something more clear, like "call_in_wx_main"
+# ============== Decorators
+
 @decorator
-def call_after(f, self, *args, **kwargs):
+def call_in_wx_main(f, self, *args, **kwargs):
     """ This method decorator makes sure the method is called from the main
     (GUI) thread.
     """
@@ -67,7 +67,7 @@ def wxlimit_invocation(delay_s):
     :param delay_s: (float) The minimum interval between executions in seconds.
 
     Note that the method might be called in a separate thread. In wxPython, you
-    might need to decorate it by @call_after to ensure it is called in the GUI
+    might need to decorate it by @call_in_wx_main to ensure it is called in the GUI
     thread.
     """
     if delay_s > 5:
@@ -134,7 +134,7 @@ def ignore_dead(f, self, *args, **kwargs):
         logging.warn("Dead object ignored in %s", f.__name__)
 
 
-class memoize(object):
+class Memoize(object):
     """ Decorator that caches a function's return value each time it is called.
     If called later with the same arguments, the cached value is returned, and
     not re-evaluated.
@@ -171,10 +171,12 @@ class memoize(object):
     def _flush(self):
         self.cache = {}
 
+# ============== END Decorators
 
-#### Wrappers ########
 
-def call_after_wrapper(f, *args, **kwargs):
+# ============== Wrappers
+
+def call_in_wx_main_wrapper(f, *args, **kwargs):
     def call_after_wrapzor(*args, **kwargs):
         app = wx.GetApp()
         if app:
@@ -194,6 +196,8 @@ def dead_object_wrapper(f, *args, **kwargs):
         except (wx.PyDeadObjectError, RuntimeError):
             logging.warn("Dead object ignored in %s", f.__name__)
     return dead_object_wrapzor
+
+# ============== ENDWrappers
 
 
 # Path functions
@@ -234,7 +238,6 @@ def get_picture_folder():
     else:
         logging.warning("Platform not supported for picture folder")
 
-
     # fall-back to HOME
     folder = os.path.expanduser(u"~")
     if os.path.isdir(folder):
@@ -242,6 +245,7 @@ def get_picture_folder():
 
     # last resort: current working directory should always be existing
     return os.getcwd()
+
 
 def formats_to_wildcards(formats2ext, include_all=False, include_any=False):
     """Convert formats into wildcards string compatible with wx.FileDialog()
@@ -278,8 +282,8 @@ def formats_to_wildcards(formats2ext, include_all=False, include_any=False):
     # the whole importance is that they are in the same order
     return u"|".join(wildcards), formats
 
-# Data container
 
+# Data container
 
 class AttrDict(dict):
     def __init__(self, *args, **kwargs):

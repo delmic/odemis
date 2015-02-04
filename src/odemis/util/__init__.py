@@ -168,7 +168,7 @@ def limit_invocation(delay_s):
     :param delay_s: (float) The minimum interval between executions in seconds.
 
     Note that the method might be called in a separate thread. In wxPython, you
-    might need to decorate it by @call_after to ensure it is called in the GUI
+    might need to decorate it by @call_in_wx_main to ensure it is called in the GUI
     thread.
     """
     if delay_s > 5:

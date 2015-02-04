@@ -36,7 +36,7 @@ from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
 from odemis.gui.comp.legend import InfoLegend, AxisLegend
 from odemis.gui.img.data import getico_blending_goalBitmap
 from odemis.gui.model import CHAMBER_VACUUM, CHAMBER_UNKNOWN
-from odemis.gui.util import call_after
+from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.raster import rasterize_line
 from odemis.model import NotApplicableError
 from odemis.util import units
@@ -310,13 +310,13 @@ class MicroscopeViewport(ViewPort):
     #  VA handling
     ################################################
 
-    @call_after
+    @call_in_wx_main
     def _onMergeRatio(self, val):
         # round is important because int can cause unstable value
         # int(0.58*100) = 57
         self.bottom_legend.merge_slider.SetValue(round(val * 100))
 
-    @call_after
+    @call_in_wx_main
     def _onMPP(self, mpp):
         self.bottom_legend.scale_win.SetMPP(mpp)
         self.UpdateHFWLabel()
@@ -366,7 +366,7 @@ class MicroscopeViewport(ViewPort):
         else:
             self.ShowMergeSlider(False)
 
-    @call_after
+    @call_in_wx_main
     def _onImageUpdate(self, _):
         self._checkMergeSliderDisplay()
 

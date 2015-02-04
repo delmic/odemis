@@ -27,7 +27,7 @@ from odemis import model
 import odemis
 from odemis.gui import main_xrc, log
 from odemis.gui.cont import acquisition
-from odemis.gui.util import call_after
+from odemis.gui.util import call_in_wx_main
 from odemis.gui.xmlh import odemis_get_resources
 from odemis.util import driver
 import sys
@@ -213,7 +213,7 @@ class OdemisGUIApp(wx.App):
             # the program keeps running in the background.
             raise
 
-    @call_after
+    @call_in_wx_main
     def on_debug_va(self, enabled):
         """ This method (un)sets the application into debug mode, setting the
         log level and opening the log panel. """
