@@ -38,8 +38,10 @@ from ._core import WeakMethod, WeakRefLostError
 class NotSettableError(AttributeError):
     pass
 
+
 class NotApplicableError(Exception):
     pass
+
 
 class VigilantAttributeBase(object):
     """
@@ -86,7 +88,7 @@ class VigilantAttributeBase(object):
         self._listeners.add(WeakMethod(listener))
 
         if init:
-            listener(self.value, **kwargs)  #pylint: disable=E1101
+            listener(self.value, **kwargs)
 
     def unsubscribe(self, listener):
         self._listeners.discard(WeakMethod(listener))
@@ -102,6 +104,7 @@ class VigilantAttributeBase(object):
                                   "receiving value %s", l, v)
 
 
+# noinspection PyBroadException
 class VigilantAttribute(VigilantAttributeBase):
     """
     A VigilantAttribute represents a value (an object) with:
@@ -236,7 +239,7 @@ class VigilantAttribute(VigilantAttributeBase):
                 self._ctx.term()
                 self._ctx = None
         except Exception:
-            pass # we've done our best
+            pass  # we've done our best
 
     @oneway
     def subscribe(self, listener, init=False, **kwargs):
@@ -276,6 +279,7 @@ class VigilantAttribute(VigilantAttributeBase):
         self._unregister()
 
 
+# noinspection PyBroadException
 class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
     # init is as light as possible to reduce creation overhead in case the
     # object is actually never used
@@ -345,7 +349,6 @@ class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
         VigilantAttributeBase.__init__(self, unit=unit)
         _core.load_roattributes(self, roattributes)
 
-        #pylint: disable=E1101
         self._global_name = self._pyroUri.sockname + "@" + self._pyroUri.object
 
         self._ctx = None
@@ -401,19 +404,21 @@ class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
             if self._thread:
                 if self._thread.is_alive():
                     if len(self._listeners):
-                        logging.warning("Stopping subscription while there are still subscribers because VA '%s' is going out of context", self._global_name)
+                        logging.warning("Stopping subscription while there are still subscribers "
+                                        "because VA '%s' is going out of context",
+                                        self._global_name)
                         Pyro4.Proxy.__getattr__(self, "unsubscribe")(self._global_name)
                     self._commands.send("STOP")
                     self._thread.join(1)
                 self._commands.close()
-#             self._ctx.term()
+            # self._ctx.term()
         except Exception:
             pass
 
         try:
             Pyro4.Proxy.__del__(self)
         except Exception:
-            pass # don't be too rough if that fails, it's not big deal anymore
+            pass  # don't be too rough if that fails, it's not big deal anymore
 
 
 class SubscribeProxyThread(threading.Thread):
@@ -468,8 +473,10 @@ class SubscribeProxyThread(threading.Thread):
             if socks.get(self.data) == zmq.POLLIN:
                 value = self.data.recv_pyobj()
                 # more fresh data already?
-                if (self.data.getsockopt(zmq.EVENTS) & zmq.POLLIN and
-                    discarded < self.max_discard):
+                if (
+                        self.data.getsockopt(zmq.EVENTS) & zmq.POLLIN and
+                        discarded < self.max_discard
+                ):
                     discarded += 1
                     continue
                 if discarded:
@@ -488,6 +495,7 @@ def unregister_vigilant_attributes(self):
     for _, value in inspect.getmembers(self, lambda x: isinstance(x, VigilantAttribute)):
         value._unregister()
 
+
 def dump_vigilant_attributes(self):
     """
     return the names and value of all the VAs added to an object (component)
@@ -504,6 +512,7 @@ def dump_vigilant_attributes(self):
         vas[name] = value
     return vas
 
+
 def load_vigilant_attributes(self, vas):
     """
     duplicate the given VAs into the instance.
@@ -512,6 +521,7 @@ def load_vigilant_attributes(self, vas):
     for name, df in vas.items():
         setattr(self, name, df)
 
+
 def VASerializer(self):
     """reduce function that automatically replaces Pyro objects by a Proxy"""
     daemon = getattr(self, "_pyroDaemon", None)
@@ -519,9 +529,9 @@ def VASerializer(self):
     if daemon:
         if isinstance(self, ListVA):
             # more advanced proxy for ListVA
-            return (ListVAProxy, (daemon.uriFor(self),), self._getproxystate())
+            return ListVAProxy, (daemon.uriFor(self),), self._getproxystate()
         else:
-            return (VigilantAttributeProxy, (daemon.uriFor(self),), self._getproxystate())
+            return VigilantAttributeProxy, (daemon.uriFor(self),), self._getproxystate()
     else:
         return self.__reduce__()
 
@@ -540,6 +550,7 @@ class StringVA(VigilantAttribute):
         if not isinstance(value, basestring):
             raise TypeError("Value '%r' is not a string." % value)
 
+
 class FloatVA(VigilantAttribute):
     """
     A VA which contains a float
@@ -553,6 +564,7 @@ class FloatVA(VigilantAttribute):
         # can be anything that looks more or less like a float
         if not isinstance(value, numbers.Real):
             raise TypeError("Value '%r' is not a float." % value)
+
 
 class IntVA(VigilantAttribute):
     """
@@ -575,6 +587,7 @@ class IntVA(VigilantAttribute):
 # which ensures that changes on the list go back to the original object, so
 # every modification is converted into a ".value =".
 
+
 # Helper for the _NotifyingList
 def _call_with_notifier(func):
     """ This special function wraps any given method, making sure the
@@ -595,6 +608,7 @@ def _call_with_notifier(func):
                 pass
         return res
     return newfunc
+
 
 class _NotifyingList(list):
     """ This is a subclass of Python's default `list` class for us in ListVA
@@ -637,6 +651,7 @@ class _NotifyingList(list):
     reverse = _call_with_notifier(list.reverse)
     sort = _call_with_notifier(list.sort)
 
+
 class ListVA(VigilantAttribute):
     """ A VA which contains a list of values
         Modifying the list will cause a notification
@@ -666,6 +681,7 @@ class ListVA(VigilantAttribute):
                      VigilantAttribute._del_value,
                      "The actual value")
 
+
 class ListVAProxy(VigilantAttributeProxy):
     # VAProxy + listen to modifications inside the list
 
@@ -687,6 +703,7 @@ class ListVAProxy(VigilantAttributeProxy):
             raise NotSettableError("Value is read-only")
         self.__getattr__("_set_value")(v)
 
+
 class BooleanVA(VigilantAttribute):
     """
     A VA which contains a boolean
@@ -700,6 +717,7 @@ class BooleanVA(VigilantAttribute):
         if not isinstance(value, bool):
             raise TypeError("Value '%r' is not a boolean." % value)
 
+
 class TupleVA(VigilantAttribute):
     """
     A VA which contains a tuple
@@ -712,6 +730,7 @@ class TupleVA(VigilantAttribute):
         # only accept tuple and None, to avoid hidden data changes, as can occur in lists
         if not isinstance(value, (tuple, NoneType)):
             raise TypeError("Value '%r' is not a tuple." % value)
+
 
 # TODO maybe should provide a factory that can take a VigilantAttributeBase class and return it
 # either Continuous or Enumerated
@@ -768,7 +787,6 @@ class Continuous(object):
             raise TypeError("Range min %s should be smaller than max %s."
                                    % (str(start), str(end)))
 
-        #pylint: disable=E1101,E0203
         if hasattr(self, "value"):
             if not isinstance(self.value, collections.Iterable):
                 value = (self.value,)
@@ -784,9 +802,10 @@ class Continuous(object):
                 self.value = self.clip(self.value)
                 return
             else:
-                if (any([v < mn for v, mn in zip(value, start)]) or
-                    any([v > mx for v, mx in zip(value, end)])):
-
+                if (
+                        any([v < mn for v, mn in zip(value, start)]) or
+                        any([v > mx for v, mx in zip(value, end)])
+                ):
                     msg = "Current value '%s' is outside of the range %s→%s."
                     raise IndexError(msg % (value, start, end))
 
@@ -835,10 +854,13 @@ class Continuous(object):
             msg = "Value '%s' is not a %d-tuple."
             raise TypeError(msg % (value, len(start)))
 
-        if (any([v < mn for v, mn in zip(value, start)]) or
-            any([v > mx for v, mx in zip(value, end)])):
+        if (
+                any([v < mn for v, mn in zip(value, start)]) or
+                any([v > mx for v, mx in zip(value, end)])
+        ):
             msg = "Trying to assign value '%s' outside of the range %s->%s."
             raise IndexError(msg % (value, start, end))
+
 
 class Enumerated(object):
     """
@@ -875,8 +897,7 @@ class Enumerated(object):
         else:
             raise TypeError("Choices %s is not a set." % str(new_choices_raw))
         if hasattr(self, "value"):
-            #pylint: disable=E1101
-            if not self.value in new_choices:
+            if self.value not in new_choices:
                 raise IndexError("Current value %s is not part of possible choices: %s." %
                             (self.value, ", ".join([str(c) for c in new_choices])))
         self._choices = new_choices
@@ -888,6 +909,7 @@ class Enumerated(object):
     @choices.deleter
     def choices(self):
         del self._choices
+
 
 class VAEnumerated(VigilantAttribute, Enumerated):
     """
@@ -907,6 +929,7 @@ class VAEnumerated(VigilantAttribute, Enumerated):
         Enumerated._check(self, value)
         VigilantAttribute._check(self, value)
 
+
 class FloatContinuous(FloatVA, Continuous):
     """
     A simple class which is both float and continuous
@@ -918,6 +941,7 @@ class FloatContinuous(FloatVA, Continuous):
     def _check(self, value):
         Continuous._check(self, value)
         FloatVA._check(self, value)
+
 
 class IntContinuous(IntVA, Continuous):
     """
@@ -931,6 +955,7 @@ class IntContinuous(IntVA, Continuous):
         Continuous._check(self, value)
         IntVA._check(self, value)
 
+
 class StringEnumerated(StringVA, Enumerated):
     """
     A simple class which is both string and Enumerated
@@ -942,6 +967,7 @@ class StringEnumerated(StringVA, Enumerated):
     def _check(self, value):
         Enumerated._check(self, value)
         StringVA._check(self, value)
+
 
 class FloatEnumerated(FloatVA, Enumerated):
     """
@@ -956,6 +982,7 @@ class FloatEnumerated(FloatVA, Enumerated):
         FloatVA._check(self, value)
 
     # TODO: _set_value should allow some room for floating point error
+
 
 class IntEnumerated(IntVA, Enumerated):
     """
@@ -989,9 +1016,9 @@ class MultiSpeedVA(VigilantAttribute, Continuous):
         for axis, v in value.items():
             # It has to be within the range, but also > 0
             if v <= 0 or v < self._range[0] or v > self._range[1]:
-                raise IndexError("Trying to assign axis '%s' value '%s' outside of the range %s->%s." %
-                            (axis, v, self._range[0], self._range[1]))
-
+                raise IndexError(
+                    "Trying to assign axis '%s' value '%s' outside of the range %s->%s." %
+                    (axis, v, self._range[0], self._range[1]))
 
 
 class TupleContinuous(VigilantAttribute, Continuous):
@@ -1018,20 +1045,19 @@ class TupleContinuous(VigilantAttribute, Continuous):
         value = tuple(value)
         VigilantAttribute._set_value(self, value)
     # need to overwrite the whole property
-    value = property(VigilantAttribute._get_value, _set_value, VigilantAttribute._del_value, "The actual value")
+    value = property(VigilantAttribute._get_value, _set_value, VigilantAttribute._del_value,
+                     "The actual value")
 
     def _check(self, value):
         if not all([isinstance(v, self._cls) for v in value]):
-            msg = "Value '%s' is not a tuple of %s."
-            raise TypeError(msg % (value, self._cls))
+            msg = "Value '%s' must be a tuple only consisting of types %s."
+            raise TypeError(msg % (value, ",".join(self._cls)))
         Continuous._check(self, value)
+
 
 class ResolutionVA(TupleContinuous):
     # old name for TupleContinuous, when it was fixed to len == 2 and cls == int
     # and default unit == "px"
-    def __init__(self, value, range, unit="px", cls=None, **kwargs):
+    def __init__(self, value, rng, unit="px", cls=None, **kwargs):
         cls = cls or (int, long)
-        TupleContinuous.__init__(self, value, range, unit=unit, cls=cls, **kwargs)
-
-
-# vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
+        TupleContinuous.__init__(self, value, rng, unit=unit, cls=cls, **kwargs)
