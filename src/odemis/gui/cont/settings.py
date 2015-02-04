@@ -235,8 +235,10 @@ class SettingsController(object):
             if isinstance(choices, dict):
                 # it's then already value -> string (user-friendly display)
                 choices_fmt = choices.items()
-            elif (ctrl_format and len(choices) > 1 and
-                  all([isinstance(c, numbers.Real) for c in choices])):
+            elif (
+                    ctrl_format and len(choices) > 1 and
+                    all([isinstance(c, numbers.Real) for c in choices])
+            ):
                 # Try to share the same unit prefix, if the range is not too big
                 choices_abs = set(abs(c) for c in choices)
                 # 0 doesn't affect the unit prefix but is annoying for divisions
@@ -253,7 +255,8 @@ class SettingsController(object):
             else:
                 choices_fmt = [(c, choice_to_str(c)) for c in choices]
 
-            choices_fmt = sorted(choices_fmt)  # sort 2-tuples = according to first value in tuple
+            if not isinstance(choices, OrderedDict):
+                choices_fmt = sorted(choices_fmt)
 
         # Get the defined type of control or assign a default one
         try:

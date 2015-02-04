@@ -136,7 +136,7 @@ HW_SETTINGS_CONFIG = {
                 "tooltip": "Bits per pixel",
             }),
 
-             # what we don't want to display:
+            # what we don't want to display:
             ("power", {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
