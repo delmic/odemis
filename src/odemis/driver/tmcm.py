@@ -24,7 +24,7 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 
-from concurrent.futures._base import CancelledError
+from concurrent.futures import CancelledError
 import glob
 import logging
 import numpy
