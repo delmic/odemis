@@ -70,8 +70,8 @@ def resolution_from_range(comp, va, conf, init=None):
             if len(choices) >= 4 and (res[0] * res[1] < num_pixels):
                 break
 
-        return OrderedDict({v: "%d x %d" % v for v in choices})
-        # return sorted(choices)  # return a list, to be sure it's in order
+        choices = sorted(list(choices))
+        return OrderedDict(tuple((v, "%d x %d" % v) for v in choices))
     except NotApplicableError:
         return {cur_val: str(cur_val)}
 
