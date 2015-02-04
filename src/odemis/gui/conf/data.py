@@ -125,8 +125,6 @@ HW_SETTINGS_CONFIG = {
                 # same as binning (but accepts floats)
                 "control_type": odemis.gui.CONTROL_RADIO,
                 "choices": util.binning_1d_from_2d,
-                # means will make sure both dimensions are treated as one
-                "type": "1d_binning",
             }),
             ("resolution", {
                 "control_type": odemis.gui.CONTROL_COMBO,
@@ -137,7 +135,7 @@ HW_SETTINGS_CONFIG = {
                 "tooltip": "Bits per pixel",
             }),
 
-             # what we don't want to display:
+            # what we don't want to display:
             ("power", {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),

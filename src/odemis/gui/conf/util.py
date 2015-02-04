@@ -108,9 +108,9 @@ def binning_1d_from_2d(comp, va, conf):
                 break
 
             b *= 2
-            # logging.error(choices)
 
-        return OrderedDict({(v, v): str(int(v)) for v in choices})
+        choices = sorted(list(choices))
+        return OrderedDict(tuple(((v, v), str(int(v))) for v in choices))
     except NotApplicableError:
         return {(cur_val[0], cur_val[0]): str(cur_val[0])}
 

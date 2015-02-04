@@ -235,8 +235,10 @@ class SettingsController(object):
             if isinstance(choices, dict):
                 # it's then already value -> string (user-friendly display)
                 choices_fmt = choices.items()
-            elif (ctrl_format and len(choices) > 1 and
-                  all([isinstance(c, numbers.Real) for c in choices])):
+            elif (
+                    ctrl_format and len(choices) > 1 and
+                    all([isinstance(c, numbers.Real) for c in choices])
+            ):
                 # Try to share the same unit prefix, if the range is not too big
                 choices_abs = set(abs(c) for c in choices)
                 # 0 doesn't affect the unit prefix but is annoying for divisions
@@ -253,7 +255,8 @@ class SettingsController(object):
             else:
                 choices_fmt = [(c, choice_to_str(c)) for c in choices]
 
-            choices_fmt = sorted(choices_fmt)  # sort 2-tuples = according to first value in tuple
+            if not isinstance(choices, OrderedDict):
+                choices_fmt = sorted(choices_fmt)
 
         # Get the defined type of control or assign a default one
         try:
@@ -407,25 +410,7 @@ class SettingsController(object):
 
             lbl_ctrl, value_ctrl = self.panel.add_radio_control(label_text, conf=ctrl_conf)
 
-            # This code should soon be redundant
-
-            if conf.get('type', None) == "1d_binning":
-                # need to convert back and forth between 1D and 2D
-                # from 2D to 1D (just pick X)
-                def radio_set(value, ctrl=value_ctrl):
-                    ctrl_value = value[0]
-                    logging.debug("Setting Radio value to %d", ctrl_value)
-                    # it's fine to set a value not in the choices, it will
-                    # just not set any of the buttons.
-                    return ctrl.SetValue(ctrl_value)
-
-                # from 1D to 2D (both identical)
-                def radio_get(ctrl=value_ctrl):
-                    value = ctrl.GetValue()
-                    return (value, value)
-
-            # END This code should soon be redundant
-            elif conf.get('type', None) == "1std_binning":
+            if conf.get('type', None) == "1std_binning":
                 # need to convert back and forth between 1D and 2D
                 # from 2D to 1D (just pick X)
                 def radio_set(value, ctrl=value_ctrl):
