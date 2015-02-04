@@ -407,58 +407,16 @@ class SettingsController(object):
 
             lbl_ctrl, value_ctrl = self.panel.add_radio_control(label_text, conf=ctrl_conf)
 
-            # This code should soon be redundant
-
-            if conf.get('type', None) == "1d_binning":
-                # need to convert back and forth between 1D and 2D
-                # from 2D to 1D (just pick X)
-                def radio_set(value, ctrl=value_ctrl):
-                    ctrl_value = value[0]
-                    logging.debug("Setting Radio value to %d", ctrl_value)
-                    # it's fine to set a value not in the choices, it will
-                    # just not set any of the buttons.
-                    return ctrl.SetValue(ctrl_value)
-
-                # from 1D to 2D (both identical)
-                def radio_get(ctrl=value_ctrl):
-                    value = ctrl.GetValue()
-                    return (value, value)
-
-            # END This code should soon be redundant
-            elif conf.get('type', None) == "1std_binning":
-                # need to convert back and forth between 1D and 2D
-                # from 2D to 1D (just pick X)
-                def radio_set(value, ctrl=value_ctrl):
-                    v = value[0]
-                    logging.debug("Setting Radio value to %d", v)
-                    # it's fine to set a value not in the choices, it will
-                    # just not set any of the buttons.
-                    return ctrl.SetValue(v)
-
-                # from 1D to 2D (don't change dimensions >1)
-                def radio_get(ctrl=value_ctrl, va=vigil_attr):
-                    value = ctrl.GetValue()
-                    new_val = list(va.value)
-                    new_val[0] = value
-                    return new_val
-            else:
-                radio_get = None
-                radio_set = None
-
             ne = SettingEntry(name=name, va=vigil_attr, hw_comp=comp,
                               lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
-                              va_2_ctrl=radio_set, ctrl_2_va=radio_get, events=wx.EVT_BUTTON)
+                              events=wx.EVT_BUTTON)
 
             value_ctrl.Bind(wx.EVT_BUTTON, self.on_setting_changed)
 
         elif control_type == odemis.gui.CONTROL_COMBO:
 
-            ctrl_conf = {
-
-            }
-
             # TODO: Might need size=(100, 16)!!
-            lbl_ctrl, value_ctrl = self.panel.add_combobox_control(label_text, '', ctrl_conf)
+            lbl_ctrl, value_ctrl = self.panel.add_combobox_control(label_text)
 
             # Set choices
             for choice, formatted in choices_fmt:
@@ -793,33 +751,34 @@ class SettingsBarController(object):
         """ Add setting entries for the given hardware component  """
         self.settings_panels.append(panel)
 
-        name = "Name"  # for exception handling only
+        vas_comp = list(getVAs(hw_comp).items())
+        vas_config = self._va_config.get(hw_comp.role, {}) # OrderedDict or dict
 
-        try:
-            vigil_attrs = getVAs(hw_comp).items()
-            va_configs = self._va_config.get(hw_comp.role, None)
+        # Re-order the VAs of the component in the same order as in the config
+        vas_config_names = list(vas_config.keys())
+        def index_in_config(va_def):
+            """ return the position of the VA name in vas_config """
+            n, va = va_def
+            try:
+                return vas_config_names.index(n)
+            except ValueError: # VA name is not in the config => put last
+                return len(vas_config) + 1
 
-            # Re-order the VA's if possible
-            if isinstance(va_configs, OrderedDict):
-                va_names = [n for n, va in vigil_attrs]
-                for i, (name, conf) in enumerate(va_configs.items()):
-                    if name in va_names:
-                        j = va_names.index(name)
-                        vigil_attrs[i], vigil_attrs[j] = vigil_attrs[j], vigil_attrs[i]
-                        va_names[i], va_names[j] = va_names[j], va_names[i]
+        vas_comp.sort(key=index_in_config)
 
-            for name, value in vigil_attrs:
+        for name, value in vas_comp:
+            try:
                 if name in self.HIDDEN_VAS:
                     continue
-                if va_configs and name in va_configs:
-                    va_conf = va_configs[name]
+                elif name in vas_config:
+                    va_conf = vas_config[name]
                 else:
-                    logging.info("No config found for %s: %s", hw_comp.role, name)
+                    logging.debug("No config found for %s: %s", hw_comp.role, name)
                     va_conf = None
                 panel.add_setting_entry(name, value, hw_comp, va_conf)
-        except TypeError:
-            msg = "Error adding %s setting for: %s"
-            logging.exception(msg, hw_comp.name, name)
+            except TypeError:
+                msg = "Error adding %s setting for: %s"
+                logging.exception(msg, hw_comp.name, name)
 
     def add_stream(self, stream):
         pass

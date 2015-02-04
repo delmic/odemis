@@ -124,9 +124,8 @@ HW_SETTINGS_CONFIG = {
             ("scale", {
                 # same as binning (but accepts floats)
                 "control_type": odemis.gui.CONTROL_RADIO,
-                "choices": util.binning_1d_from_2d,
                 # means will make sure both dimensions are treated as one
-                "type": "1d_binning",
+                "choices": util.binning_1d_from_2d,
             }),
             ("resolution", {
                 "control_type": odemis.gui.CONTROL_COMBO,
@@ -163,9 +162,8 @@ HW_SETTINGS_CONFIG = {
             }),
             ("binning", {
                 "control_type": odemis.gui.CONTROL_RADIO,
-                "choices": util.binning_firstd_only,
                 # means only 1st dimension can change
-                "type": "1std_binning",
+                "choices": util.binning_firstd_only,
             }),
             ("resolution", {}),
             ("gain", {}),

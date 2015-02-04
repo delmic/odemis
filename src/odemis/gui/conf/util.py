@@ -88,7 +88,6 @@ def binning_1d_from_2d(comp, va, conf):
     integers.
 
     """
-
     cur_val = va.value
     if len(cur_val) != 2:
         logging.warning("Got a binning not of length 2: %s, will try anyway", cur_val)
@@ -112,7 +111,7 @@ def binning_1d_from_2d(comp, va, conf):
 
         return OrderedDict({(v, v): str(int(v)) for v in choices})
     except NotApplicableError:
-        return {(cur_val[0], cur_val[0]): str(cur_val[0])}
+        return {cur_val: str(cur_val[0])}
 
 
 def binning_firstd_only(comp, va, conf):
@@ -121,11 +120,10 @@ def binning_firstd_only(comp, va, conf):
     The second dimension stays at a fixed size.
 
     """
-
-    cur_val = va.value[0]
+    cur_val = va.value
 
     try:
-        choices = {cur_val}
+        choices = {cur_val[0]}
         minbin = va.range[0][0]
         maxbin = va.range[1][0]
 
@@ -135,14 +133,14 @@ def binning_firstd_only(comp, va, conf):
             if minbin <= b <= maxbin:
                 choices.add(b)
 
-            if len(choices) >= 5 and b >= cur_val:
+            if len(choices) >= 5 and b >= cur_val[0]:
                 break
 
             b *= 2
 
-        return sorted(choices)  # return a list, to be sure it's in order
+        return OrderedDict({(v, cur_val[1]): str(int(v)) for v in choices})
     except NotApplicableError:
-        return [cur_val]
+        return {cur_val: str(cur_val[0])}
 
 
 def hfw_choices(comp, va, conf):

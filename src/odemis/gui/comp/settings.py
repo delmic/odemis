@@ -258,12 +258,14 @@ class SettingsPanel(wx.Panel):
         :param conf: (None or dict) Dictionary containing parameters for the control
 
         """
+        if conf is None:
+            conf = {}
 
         lbl_ctrl = self._add_side_label(label_text)
         value_ctrl = GraphicalRadioButtonControl(self, -1, style=wx.NO_BORDER, **conf)
         self._gb_sizer.Add(value_ctrl, (self.num_rows, 1),
                            flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
-        if value:
+        if value is not None:
             value_ctrl.SetValue(value)
 
         return lbl_ctrl, value_ctrl
@@ -277,6 +279,8 @@ class SettingsPanel(wx.Panel):
         :param conf: (None or dict) Dictionary containing parameters for the control
 
         """
+        if conf is None:
+            conf = {}
 
         lbl_ctrl = self._add_side_label(label_text)
         value_ctrl = ComboBox(self, wx.ID_ANY, pos=(0, 0), size=(-1, 16),
