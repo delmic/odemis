@@ -573,21 +573,23 @@ class Controller(object):
             raise ValueError("Parameter %d %d unknown" % (axis, param))
         return value
 
-    def SetParameter(self, axis, param, val):
+    def SetParameter(self, axis, param, val, check=True):
         """
         axis (1<int<16): axis number
         param (0<int): parameter id (cf p.35)
         val (str): value to set (if not a string, it will be converted)
+        check (bool): if True, will check whether the hardware raised an error
         Raises ValueError if hardware complains
         """
         # SPA (Set Volatile Memory Parameters)
         assert((1 <= axis) and (axis <= 16))
         assert(0 <= param)
         self._sendOrderCommand("SPA %d %d %s\n" % (axis, param, val))
-        err = self.GetErrorNum()
-        if err:
-            raise ValueError("Error %d: setting param 0x%X with val %s failed." %
-                             (err, param, val), err)
+        if check:
+            err = self.GetErrorNum()
+            if err:
+                raise ValueError("Error %d: setting param 0x%X with val %s failed." %
+                                 (err, param, val), err)
 
     def _readAxisValue(self, com, axis):
         """
@@ -912,7 +914,7 @@ class Controller(object):
         Start an absolute move of an axis to specific position.
          Can only be done with servo on and referenced.
         axis (1<int<16): axis number
-        pos (float): position in "user" unit (~m)
+        pos (float): position in "user" unit
         """
         #MOV (Set Target Position)
         assert(axis in self._channels)
@@ -923,7 +925,7 @@ class Controller(object):
         Start an relative move of an axis to specific position.
          Can only be done with servo on and referenced.
         axis (1<int<16): axis number
-        shift (float): change of position in "user" unit (~m)
+        shift (float): change of position in "user" unit
         """
         #MVR (Set Target Relative To Current Position)
         assert(axis in self._channels)
@@ -967,6 +969,15 @@ class Controller(object):
         #POS? (GetRealPosition)
         return self._readAxisValue("POS?", axis)
 
+    def SetPosition(self, axis, pos):
+        """
+        Get the position (in "user" units)
+        axis (1<int<16): axis number
+        pos (float): pos can be negative
+        """
+        #POS (SetRealPosition)
+        return self._sendOrderCommand("POS %d %.5g\n" % (axis, pos))
+
     def GetMinPosition(self, axis):
         """
         Get the minimum reachable position (in "user" units)
@@ -986,6 +997,15 @@ class Controller(object):
         assert(axis in self._channels)
         return self._readAxisValue("TMX?", axis)
 
+    def GetCLVelocity(self, axis):
+        """
+        Get velocity for closed-loop montion.
+        axis (1<int<16): axis number
+        """
+        # VEL (Get Closed-Loop Velocity)
+        assert(axis in self._channels)
+        return self._readAxisValue("VEL?", axis)
+
     def SetCLVelocity(self, axis, velocity):
         """
         Set velocity for closed-loop montion.
@@ -996,6 +1016,15 @@ class Controller(object):
         assert(axis in self._channels)
         assert(velocity > 0)
         self._sendOrderCommand("VEL %d %.5g\n" % (axis, velocity))
+
+    def GetCLAcceleration(self, axis):
+        """
+        Get acceleration for closed-loop montion.
+        axis (1<int<16): axis number
+        """
+        # VEL (Get Closed-Loop Acceleration)
+        assert(axis in self._channels)
+        return self._readAxisValue("ACC?", axis)
 
     def SetCLAcceleration(self, axis, value):
         """
@@ -1317,11 +1346,11 @@ class CLController(Controller):
             # is correctly as long as the controller is powered.
             # * if referenced => beleive it and stay in this mode.
 
-            # Start with servo, non-referenced mode, assume the position is
-            # correct, and set units to meters
-            self._startEncoder(a) # TODO: Needed? For position?
-#             self.SetServo(a, True)
-#             self.SetReferenceMode(a, False)
+            # At start, the encoder is either on or (probably) off. In any
+            # case, the current position is the most likely one: either it has
+            # moved with the encoder off, and the position is entirely unknown
+            # anyway, or it hasn't moved and the position is correct. => so we
+            # must make sure to _not_ start the encoder.
 
             # Movement range before referencing is max range in both directions
             pos = self.GetPosition(a) * 1e-3
@@ -1335,8 +1364,8 @@ class CLController(Controller):
             self.pos_rng[a] = (pos - width, pos + width)
 
             # Read speed/accel ranges
-            self._speed[a] = self._readAxisValue("VEL?", a) * 1e-3 # m/s
-            self._accel[a] = self._readAxisValue("ACC?", a) * 1e-3 # m/s²
+            self._speed[a] = self.GetCLVelocity(a) * 1e-3 # m/s
+            self._accel[a] = self.GetCLAcceleration(a) * 1e-3 # m/s²
 
             # TODO: also use per-axis info
             try:
@@ -1346,7 +1375,7 @@ class CLController(Controller):
                 self.max_speed = self._speed[a]
                 self.max_accel = self._accel[a]
 
-            self._stopEncoder(a)
+            self._stopEncoder(a) # in case it was not off yet
 
         self.min_speed = 10e-6 # m/s (default low value)
         self._prev_speed_accel = ({}, {})
@@ -1355,8 +1384,17 @@ class CLController(Controller):
         super(CLController, self).terminate()
         # Disable servo, to allow the user to move the axis manually
         for a in self._channels:
-            self.SetServo(a, False)
+            self._stopEncoder(a)
 
+    # TODO: move to some KeepAlive message + thread
+    # Need:
+    # * one thread per axis :
+    #   - if receive the KA signal: add ENCODER_TIMEOUT from now until turn off
+    # * way to force the encoder off (reset)
+    # * way to ask the encoder is on (=> = send KA and block until it's ready)
+    # * way to say we don't need the encoder any more
+    # * possible to start encoders simultaneously
+    # => context manager to manage encoder on?
     def _stopEncoder(self, axis):
         """
         Turn off the supply power of the encoder. That means during this time
@@ -1367,20 +1405,30 @@ class CLController(Controller):
         # This can only be done if the servo is turned off
         self.SetServo(axis, False)
         if 0x56 in self._avail_params:
-            # TODO: don't check the error in SetParameter, and add a sleep as it can take a lot of time (1s)
+            # Store the position before turning off the encoder because while
+            # turning off the encoder, some signal will be received which will
+            # make the controller beleive it has moved.
+            pos = self.GetPosition(axis)
             self.SetParameter(axis, 0x56, 0) # 0 = off
+            # SetParameter checks the error num, which gives a bit of time to
+            # the encoder signal to fully settle down
+            self.SetPosition(axis, pos)
 
     def _startEncoder(self, axis):
         """
         Turn on the suplly power of the encoder.
         axis (1<=int<=16): the axis
         """
-        # TODO: this works fine as long as the axis has not been referenced
-        # If it already was referenced, we need to re-write POS
+        pos = self.GetPosition(axis)
         if 0x56 in self._avail_params:
-            self.SetParameter(axis, 0x56, 1) # 1 = on
+            # Warning: turning on the encoder can reset the USB connection
+            # (if it's on this very controller)
+            # Turning on the encoder resets the current position
+            self.SetParameter(axis, 0x56, 1, check=False) # 1 = on
+            time.sleep(2) # 2 s seems long enough for the encoder to initialise
         self.SetServo(axis, True)
         self.SetReferenceMode(axis, False)
+        self.SetPosition(axis, pos)
 
     def _updateSpeedAccel(self, axis):
         """
@@ -1443,15 +1491,7 @@ class CLController(Controller):
         Find current position as reported by the sensor
         return (float): the current position of the given axis
         """
-        # TODO: find out if we need sensor to be turned on to read the position
-        # (according to the doc, it seems not, and the E861 doesn't need the servo to be turned on)
-#        self._startEncoder(axis)
         return self.GetPosition(axis) * 1e-3
-
-#         # This is called by the Bus in various situation while not moving,
-#         # so we need a way to turn off the encoder afterwards => double-hack
-#         self.isMoving(axes={axis})
-
 
     # Warning: if the settling window is too small or settling time too big,
     # it might take several seconds to reach target (or even never reach it)
@@ -1501,6 +1541,11 @@ class CLController(Controller):
         # MOV? 1  # should be new pos
         # POS? 1  # Should be very close
         # ONT? 1 # Should be true at worst a little after the settle time window
+
+    def stopMotion(self):
+        super(CLController, self).stopMotion()
+        for c in self._channels:
+            self._stopEncoder(c)
 
     def startReferencing(self, axis):
         """
@@ -1672,7 +1717,6 @@ class OLController(Controller):
         return distance
 
     def stopMotion(self):
-        # Controller.stopMotion(self)
         super(OLController, self).stopMotion()
         for c in self._channels:
             self._storeStop(c)
@@ -2810,6 +2854,7 @@ class ActionFuture(object):
                     # TODO: Stop the axes still moving. (Because on closed-loop
                     # it's most likely due to strong oscillations, which are much
                     # worse than having the stage at a sligthly wrong position)
+                    # FIXME: turn off the encoder (if there is one)
                     break # move took too much time
                 if now > end_wait:
                     return False # could wait more but the caller is not interested
@@ -3252,6 +3297,11 @@ class E861Simulator(object):
                 self._end_move = self._start_move + duration
                 self._position = cur_pos
                 self._target = cur_pos + distance
+            elif args[0] == "POS" and len(args) == 3: # Closed-Loop position set
+                axis, pos = int(args[1]), float(args[2])
+                if axis != 1:
+                    raise SimulatedError(15)
+                self._position = pos
             elif args[0] == "POS?" and len(args) == 2: # Closed-Loop position query
                 axis = int(args[1])
                 if axis != 1:
