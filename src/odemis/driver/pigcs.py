@@ -28,6 +28,7 @@ from odemis import model
 from odemis.model import isasync, CancellableFuture, CancellableThreadPoolExecutor
 from odemis.util import driver
 import os
+import random
 import re
 import serial
 import socket
@@ -2221,7 +2222,7 @@ class Bus(model.Actuator):
                         controller.checkError()
                 if not moving_axes:
                     # no more axes to wait for
-                    return
+                    break
 
                 now = time.time()
                 if now > timeout:
@@ -2242,14 +2243,14 @@ class Bus(model.Actuator):
                 left = end - time.time()
                 sleept = max(0.001, min(left / 2, 0.1))
                 future._must_stop.wait(sleept)
-
-            logging.debug("Move of axes %s cancelled before the end", axes)
-            # stop all axes still moving
-            ctlrs = set(self._axis_to_cc[an][0] for an in moving_axes)
-            for controller in ctlrs:
-                controller.stopMotion()
-            future._was_stopped = True
-            raise CancelledError()
+            else:
+                logging.debug("Move of axes %s cancelled before the end", axes)
+                # stop all axes still moving
+                ctlrs = set(self._axis_to_cc[an][0] for an in moving_axes)
+                for controller in ctlrs:
+                    controller.stopMotion()
+                future._was_stopped = True
+                raise CancelledError()
         except Exception:
             raise
         else:
@@ -3042,6 +3043,10 @@ class E861Simulator(object):
                 self._end_move = self._start_move + duration
                 self._position = cur_pos
                 self._target = cur_pos + distance
+
+#                 # Introduce an error from time to time, just to try the error path
+#                 if random.randint(0, 10) == 0:
+#                     raise SimulatedError(7)
             elif args[0] == "POS" and len(args) == 3: # Closed-Loop position set
                 axis, pos = int(args[1]), float(args[2])
                 if axis != 1:
