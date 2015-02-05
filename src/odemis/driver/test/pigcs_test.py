@@ -173,6 +173,7 @@ class TestActuator(unittest.TestCase):
         move = {'x':0.01e-6}
         stage.moveRel(move)
         time.sleep(0.1) # wait for the move to finish
+        self.assertAlmostEqual(move["x"], stage.position.value["x"])
         stage.terminate()
 
 #    @skip("faster")

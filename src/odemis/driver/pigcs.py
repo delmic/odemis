@@ -2055,7 +2055,7 @@ class Bus(model.Actuator):
         update the position VA
         axes (None or set of str): the axes to update (None is everyone of them)
         """
-        pos = self.position.value
+        pos = self.position.value.copy()
 
         for a, (controller, channel) in self._axis_to_cc.items():
             if axes is None or a in axes:
