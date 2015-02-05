@@ -33,7 +33,7 @@ KWARGS = dict(name="test", role="fiber-align", address="autoip",
               inverted=["x"])
 KWARGS_SIM = dict(KWARGS)
 KWARGS_SIM["address"] = "fake"
-# KWARGS = KWARGS_SIM # uncomment to force using only the simulator
+KWARGS = KWARGS_SIM # uncomment to force using only the simulator
 
 # @skip("faster")
 class TestStatic(unittest.TestCase):
@@ -83,9 +83,11 @@ class TestActuator(unittest.TestCase):
 
 #    @skip("faster")
     def test_simple(self):
-        move = {'x': 0.01e-6}
+        move = {'x': 0.1e-6}
         self.dev.moveRel(move)
         time.sleep(0.1) # wait for the move to finish
+
+        self.assertAlmostEqual(move["x"], self.dev.position.value["x"])
 
     def test_sync(self):
         # For moves big enough, sync should always take more time than async

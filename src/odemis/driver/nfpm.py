@@ -33,6 +33,7 @@ import odemis
 from odemis.model import (isasync, CancellableThreadPoolExecutor,
                           CancellableFuture, HwError)
 import os
+import random
 import re
 import socket
 from subprocess import CalledProcessError
@@ -146,7 +147,7 @@ class PM8742(model.Actuator):
             self.stop()
             self._executor.shutdown(wait=True)
             self._executor = None
-        
+
         if self._accesser:
             self._accesser.terminate()
             self._accesser = None
@@ -342,15 +343,17 @@ class PM8742(model.Actuator):
         axes (set of str): names of the axes to update or None if all should be
           updated
         """
-        pos = self.position.value
+        pos = self.position.value.copy()
         for n, i in self._name_to_axis.items():
             if axes is None or n in axes:
                 pos[n] = self.GetPosition(i) * self._stepsize[i - 1]
 
+        pos = self._applyInversionAbs(pos)
+
         # it's read-only, so we change it via _value
         self.position._value = pos
         self.position.notify(self.position.value)
-    
+
     def _speedToMS(self, axis, sps):
         """
         Convert speed in step/s to m/s
@@ -395,15 +398,16 @@ class PM8742(model.Actuator):
     def moveRel(self, shift):
         self._checkMoveRel(shift)
         shift = self._applyInversionRel(shift)
-        
+
         # Check if the distance is big enough to make sense
         for an, v in shift.items():
             aid = self._name_to_axis[an]
             if abs(v) < self._stepsize[aid - 1]:
                 # TODO: store and accumulate all the small moves instead of dropping them?
                 del shift[an]
-                logging.info("Dropped too small move of %f m", abs(v))
-        
+                logging.info("Dropped too small move of %g m < %g m",
+                             abs(v), self._stepsize[aid - 1])
+
         if not shift:
             return model.InstantaneousFuture()
 
@@ -490,7 +494,7 @@ class PM8742(model.Actuator):
                         moving_axes.discard(aid)
                 if not moving_axes:
                     # no more axes to wait for
-                    return
+                    break
 
                 # Update the position from time to time (10 Hz)
                 if time.time() - last_upd > 0.1 or last_axes != moving_axes:
@@ -505,16 +509,20 @@ class PM8742(model.Actuator):
                 future._must_stop.wait(sleept)
 
                 # TODO: timeout if really too long
-
-            logging.debug("Move of axes %s cancelled before the end", axes)
-            # stop all axes still moving them
-            for i in moving_axes:
-                self.StopMotion(i)
-            future._was_stopped = True
-            raise CancelledError()
+            else:
+                logging.debug("Move of axes %s cancelled before the end", axes)
+                # stop all axes still moving them
+                for i in moving_axes:
+                    self.StopMotion(i)
+                future._was_stopped = True
+                raise CancelledError()
+        except Exception:
+            raise
+        else:
+            # Did everything really finished fine?
+            self._checkError()
         finally:
             self._updatePosition() # update (all axes) with final position
-            self._checkError()
 
     def _cancelCurrentMove(self, future):
         """
@@ -540,7 +548,7 @@ class PM8742(model.Actuator):
         returns (list of (str, dict)): name, kwargs
         Note: it's obviously not advised to call this function if a device is already under use
         """
-        logging.info("Scanning for TMCM controllers in progress...")
+        logging.info("Scanning for New Focus controllers in progress...")
         found = []  # (list of 2-tuple): name, kwargs
         try:
             conts = cls._scanOverIP()
@@ -698,7 +706,7 @@ class IPAccesser(object):
             data = self.socket.recv(100)
         except socket.timeout:
             logging.debug("Didn't receive any welcome message")
-        
+
         # to acquire before sending anything on the socket
         self._net_access = threading.Lock()
 
@@ -988,6 +996,10 @@ class PM8742Simulator(object):
                 end = now + abs(pos - vconvd) / speed
                 self._astates[axis - 1]["PA"] = vconvd
                 self._axis_move[axis - 1] = (now, end, pos)
+
+                # Introduce an error from time to time, just to try the error path
+#                 if random.randint(0, 10) == 0:
+#                     self._push_error(7) # OUT OF RANGE
         elif cmd == "TP": # get current postion
             ret = "%d" % self._getCurrentPos(axis)
         elif cmd == "MD": # motion done ?
