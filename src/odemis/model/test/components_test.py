@@ -44,6 +44,7 @@ class TestCamera(unittest.TestCase):
         cams = [(None, (1024,)), # 0D CCD
                 (None, (256, 512, 1024,)), # 2D CCD
                 ([-2, 1], (256, 512, 1024,)), # rotated
+                ([1, -2], (256, 512, 1024,)), # mirrored on Y
                 ([-1], (256, 1024,)), # 1D mirrored
                 ([-2, 3, 1], (256, 24, 362, 1024,)), # 3D CCD
                 ]
@@ -51,7 +52,7 @@ class TestCamera(unittest.TestCase):
             cam = DigitalCamera("testcam", "ccd", transpose=trp)
             cam._shape = shp
             logging.info("Testing CCD with shape= %s, transpose= %s", shp, trp)
-            
+
             cam_trp = cam.transpose # always contains a full version (not None)
             self.assertNotEqual(cam_trp, None)
             self.assertEqual(len(cam_trp), len(shp) - 1)
@@ -83,7 +84,7 @@ class TestCamera(unittest.TestCase):
                     exp_pos_user[i] = 0 # the other extreme
             exp_pos_user = tuple(exp_pos_user)
             pos_user = cam._transposePosToUser(pos)
-            logging.info("Pretends bottom right px is at %s", pos_user)
+            logging.info("Pretends bottom right px %s is at %s", pos, pos_user)
             self.assertEqual(exp_pos_user, pos_user)
             self.assertEqual(len(shp) - 1, len(pos_user))
 
@@ -96,18 +97,19 @@ class TestCamera(unittest.TestCase):
 #            self.assertEqual(pc0, cam._transposeSizeToUser(pc0, origin=center))
 #            self.assertEqual(pc0, cam._transposeSizeFromUser(pc0, origin=center))
 
-            # Test DataArrays
-            data = numpy.zeros(res, dtype="uint8")
+            # Test DataArrays (numpy dimensions are ordered in opposite direction)
+            data = numpy.zeros(res[::-1], dtype="uint8")
             md = {model.MD_ACQ_DATE: 12}
             da = model.DataArray(data, md)
             pos0 = (0,) * len(res)
             pos0_user = cam._transposePosToUser(pos0)
-            da[pos0] = 12
-            da[pos] = 42
+            logging.info("Pretends top left px %s is at %s", pos0, pos0_user)
+            da[pos0[::-1]] = 12
+            da[pos[::-1]] = 42
             da_user = cam._transposeDAToUser(da)
-            self.assertEqual(da_user.shape, tuple(res_user))
-            self.assertEqual(da_user[pos0_user], da[pos0])
-            self.assertEqual(da_user[pos_user], da[pos])
+            self.assertEqual(da_user.shape[::-1], tuple(res_user))
+            self.assertEqual(da_user[pos0_user[::-1]], da[pos0[::-1]])
+            self.assertEqual(da_user[pos_user[::-1]], da[pos[::-1]])
 
 
 class TestActuator(unittest.TestCase):
