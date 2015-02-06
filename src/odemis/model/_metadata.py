@@ -29,6 +29,7 @@ MD_AD_LIST = "Acquisition dates" # s since epoch for each element in dimension T
 # distance between two points on the sample that are seen at the centre of two
 # adjacent pixels considering that these two points are in focus
 MD_PIXEL_SIZE = "Pixel size" # (m, m)
+MD_SHEAR = "Shear"  # float, TODO
 MD_BINNING = "Binning" # (px, px), number of pixels acquired as one big pixel, in each dimension
 MD_SAMPLES_PER_PIXEL = "Samples per pixel" # samples (number of samples acquired for each pixel) default: 1
 MD_HW_VERSION = "Hardware version" # str
@@ -78,6 +79,7 @@ MD_USER_TINT = "Display tint" # RGB (3-tuple of 0<int<255): colour to display th
 MD_ROTATION_COR = "Rotation cor" # radians, to be subtracted from MD_ROTATION
 MD_PIXEL_SIZE_COR = "Pixel size cor" # (m, m), to be multiplied with MD_PIXEL_SIZE
 MD_POS_COR = "Centre position cor"  # (m, m), to be subtracted from MD_POS
+MD_SHEAR_COR = "Shear cor"  # float, TODO
 
 # The following metadata is the correction metadata for the Phenom image and
 # spot shift as calculated by delphi.UpdateConversion.
