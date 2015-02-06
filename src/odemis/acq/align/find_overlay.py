@@ -40,7 +40,7 @@ from . import coordinates, transform
 
 MAX_TRIALS_NUMBER = 2  # Maximum number of scan grid repetitions
 
-def FindOverlay(repetitions, dwell_time, max_allowed_diff, escan, ccd, detector):
+def FindOverlay(repetitions, dwell_time, max_allowed_diff, escan, ccd, detector, skew=False):
     """
     Wrapper for DoFindOverlay. It provides the ability to check the progress of overlay procedure 
     or even cancel it.
@@ -50,6 +50,7 @@ def FindOverlay(repetitions, dwell_time, max_allowed_diff, escan, ccd, detector)
     escan (model.Emitter): The e-beam scanner
     ccd (model.DigitalCamera): The CCD
     detector (model.Detector): The electron detector
+    skew (boolean): If True, also compute skew
     returns (model.ProgressiveFuture): Progress of DoFindOverlay, whose result() will return:
             tuple: Transformation parameters
                 translation (Tuple of 2 floats)
@@ -74,13 +75,13 @@ def FindOverlay(repetitions, dwell_time, max_allowed_diff, escan, ccd, detector)
     # Run in separate thread
     overlay_thread = threading.Thread(target=executeTask,
                   name="SEM/CCD overlay",
-                  args=(f, _DoFindOverlay, f, repetitions, dwell_time, max_allowed_diff, escan, ccd, detector))
+                  args=(f, _DoFindOverlay, f, repetitions, dwell_time, max_allowed_diff, escan, ccd, detector, skew))
 
     overlay_thread.start()
     return f
 
 def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan,
-                   ccd, detector):
+                   ccd, detector, skew=False):
     """
     Scans a spots grid using the e-beam and captures the CCD image, isolates the 
     spots in the CCD image and finds the coordinates of their centers, matches the 
@@ -96,6 +97,7 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan,
     escan (model.Emitter): The e-beam scanner
     ccd (model.DigitalCamera): The CCD
     detector (model.Detector): The electron detector
+    skew (boolean): If True, also compute skew
     returns tuple: Transformation parameters
                 translation (Tuple of 2 floats)
                 scaling (Float)
@@ -219,13 +221,13 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan,
         future.set_end_time(time.time() + 1)
 
         logging.debug("Calculating transformation...")
-        ret = transform.CalculateTransform(known_ec, known_oc)
+        ret = transform.CalculateTransform(known_ec, known_oc, skew)
 
         if future._find_overlay_state == CANCELLED:
             raise CancelledError()
         logging.debug("Calculating transform metadata...")
 
-        transform_data = _transformMetadata(optical_image, ret, escan, ccd)
+        transform_data = _transformMetadata(optical_image, ret, escan, ccd, skew)
         # Also indicate which dwell time eventually worked
         transform_data[model.MD_DWELL_TIME] = dwell_time
 
@@ -282,16 +284,23 @@ def estimateOverlayTime(dwell_time, repetitions):
     """
     return 6 + dwell_time * numpy.prod(repetitions)  # s
 
-def _transformMetadata(optical_image, transformation_values, escan, ccd):
+def _transformMetadata(optical_image, transformation_values, escan, ccd, skew=False):
     """
     Returns the transform metadata for the optical image based on the 
     transformation values
     """
     escan_pxs = escan.pixelSize.value
     logging.debug("Ebeam pixel size: %g ", escan_pxs[0])
-    ((calc_translation_x, calc_translation_y),
-             (calc_scaling_x, calc_scaling_y),
-                                calc_rotation) = transformation_values
+    if skew is False:
+        ((calc_translation_x, calc_translation_y),
+                 (calc_scaling_x, calc_scaling_y),
+                                    calc_rotation) = transformation_values
+    else:
+        ((calc_translation_x, calc_translation_y),
+                 (calc_scaling_x, calc_scaling_y),
+                                    calc_rotation,
+                                    calc_scaling_xy,
+                                    calc_shear) = transformation_values
 
     # Update scaling
     scale = (escan_pxs[0] * calc_scaling_x,
@@ -319,6 +328,12 @@ def _transformMetadata(optical_image, transformation_values, escan, ccd):
     logging.debug("Pixel size correction: %s", pixel_size_cor)
     transform_md[model.MD_PIXEL_SIZE_COR] = pixel_size_cor
 
+    # Also return skew related metadata dictionary if available
+    if skew is True:
+        skew_md = {model.MD_SHEAR_COR:calc_shear}
+        scaling_xy = (pixel_size_cor[0] * (1 + calc_scaling_xy), pixel_size_cor[1] * (1 - calc_scaling_xy))
+        skew_md[model.MD_PIXEL_SIZE_COR] = scaling_xy
+        return (transform_md, skew_md)
     return transform_md
 
 
@@ -346,4 +361,3 @@ def _MakeReport(optical_image, repetitions, magnification, pixel_size, dwell_tim
 
     logging.warning("Failed to find overlay. Please check the failure report in %s.",
                     path)
-
