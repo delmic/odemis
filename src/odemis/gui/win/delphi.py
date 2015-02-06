@@ -158,7 +158,7 @@ class CalibrationProgressDialog(xrcprogress_dialog):
         # bind button back to direct closure
         self.cancel_btn.Bind(wx.EVT_BUTTON, self.on_close)
         try:
-            htop, hbot, hfoc, strans, sscale, srot, iscale, irot, resa, resb, hfwa, spotshift = future.result(1)  # timeout is just for safety
+            htop, hbot, hfoc, strans, sscale, srot, iscale, irot, iscale_xy, ishear, resa, resb, hfwa, spotshift = future.result(1)  # timeout is just for safety
         except CancelledError:
             # hide progress bar (+ put pack estimated time)
             self.update_calibration_time(0)
@@ -178,8 +178,8 @@ class CalibrationProgressDialog(xrcprogress_dialog):
 
         # Update the calibration file
         self._calibconf.set_sh_calib(self._shid, htop, hbot, hfoc, strans,
-                                     sscale, srot, iscale, irot, resa, resb, hfwa,
-                                     spotshift)
+                                     sscale, srot, iscale, irot, iscale_xy, ishear,
+                                     resa, resb, hfwa, spotshift)
 
         self.update_calibration_time(0)
         self.time_txt.SetLabel("Calibration completed.")
@@ -373,11 +373,15 @@ def _DoDelphiCalibration(future, main_data, overview_pressure, vacuum_pressure,
                                       10e-06,  # m, maximum difference allowed
                                       main_data.ebeam,
                                       main_data.ccd,
-                                      main_data.bsd)
+                                      main_data.bsd,
+                                      skew=True)
                 trans_val, cor_md = f.result()
-                iscale = cor_md[model.MD_PIXEL_SIZE_COR]
-                irot = -cor_md[model.MD_ROTATION_COR] % (2 * math.pi)
-                return htop, hbot, hfoc, strans, sscale, srot, iscale, irot, resa, resb, hfwa, spotshift
+                trans_md, skew_md = cor_md
+                iscale = trans_md[model.MD_PIXEL_SIZE_COR]
+                irot = -trans_md[model.MD_ROTATION_COR] % (2 * math.pi)
+                ishear = skew_md[model.MD_SHEAR_COR]
+                iscale_xy = skew_md[model.MD_PIXEL_SIZE_COR]
+                return htop, hbot, hfoc, strans, sscale, srot, iscale, irot, iscale_xy, ishear, resa, resb, hfwa, spotshift
             # Secondary calibration
             else:
                 # Move to SEM

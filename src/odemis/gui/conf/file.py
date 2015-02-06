@@ -239,7 +239,7 @@ class CalibrationConfig(Config):
         return "delphi-%x" % shid
 
     def set_sh_calib(self, shid, htop, hbot, hfoc, strans, sscale, srot,
-                     iscale, irot, resa, resb, hfwa, spotshift):
+                     iscale, irot, iscale_xy, ishear, resa, resb, hfwa, spotshift):
         """ Store the calibration data for a given sample holder
 
         shid (int): the sample holder ID
@@ -249,8 +249,10 @@ class CalibrationConfig(Config):
         strans (2 floats): stage translation
         sscale (2 floats > 0): stage scaling
         srot (float): stage rotation (rad)
-        iscale (2 floats > 0): image scaling
+        iscale (2 floats > 0): image scaling applied to CCD
         irot (float): image rotation (rad)
+        iscale_xy (2 floats > 0)): image scaling applied to SEM
+        ishear (float): image shear
         resa (2 floats): resolution related SEM image shift, slope of linear fit
         resb (2 floats): resolution related SEM image shift, intercept of linear fit
         hfwa (2 floats): hfw related SEM image shift, slope of linear fit
@@ -278,6 +280,9 @@ class CalibrationConfig(Config):
             ("image_scaling_x", "%.15f" % iscale[0]),
             ("image_scaling_y", "%.15f" % iscale[1]),
             ("image_rotation", "%.15f" % irot),
+            ("image_scaling_scan_x", "%.15f" % iscale_xy[0]),
+            ("image_scaling_scan_y", "%.15f" % iscale_xy[1]),
+            ("image_shear", "%.15f" % ishear),
             ("resolution_a_x", "%.15f" % resa[0]),
             ("resolution_a_y", "%.15f" % resa[1]),
             ("resolution_b_x", "%.15f" % resb[0]),
@@ -314,8 +319,10 @@ class CalibrationConfig(Config):
             strans (2 floats): stage translation
             sscale (2 floats > 0): stage scaling
             srot (float): stage rotation
-            iscale (2 floats > 0): image scaling
+            iscale (2 floats > 0): image scaling applied to CCD
             irot (float): image rotation
+            iscale_xy (2 floats > 0)): image scaling applied to SEM
+            ishear (float): image shear
             resa (2 floats): resolution related SEM image shift, slope of linear fit
             resb (2 floats): resolution related SEM image shift, intercept of linear fit
             hfwa (2 floats): hfw related SEM image shift, slope of linear fit
@@ -350,6 +357,16 @@ class CalibrationConfig(Config):
                 if not 0 <= irot <= (2 * math.pi):
                     raise ValueError("image_rotation %f out of range" % irot)
 
+                # Take care of missing skew values
+                try:
+                    iscale_xy = self._get_tuple(sec, "image_scaling_scan")
+                    if not (iscale_xy[0] > 0 and iscale_xy[1] > 0):
+                        raise ValueError("image_scaling_scan %s must be > 0" % str(iscale_xy))
+                    ishear = self.config.getfloat(sec, "image_shear")
+                except Exception:
+                    iscale_xy = (1, 1)
+                    ishear = 0
+
                 # Take care of old calibration files
                 try:
                     resa = self._get_tuple(sec, "resolution_a")
@@ -362,8 +379,8 @@ class CalibrationConfig(Config):
                     hfwa = (0, 0)
                     spotshift = (0.035, 0)  # Rough approximation used until the calibration
 
-                return (htop, hbot, hfoc, strans, sscale, srot, iscale, irot, resa, resb, hfwa,
-                        spotshift)
+                return (htop, hbot, hfoc, strans, sscale, srot, iscale, irot,
+                        iscale_xy, ishear, resa, resb, hfwa, spotshift)
             except (ValueError, NoOptionError):
                 logging.info("Not all calibration data readable, new calibration is required",
                              exc_info=True)

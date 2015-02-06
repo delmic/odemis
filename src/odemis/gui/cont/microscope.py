@@ -710,7 +710,7 @@ class DelphiStateController(SecomStateController):
         # locate the top and bottom holes of the sample holder, using
         # the SEM. So once the sample is fully loaded, new and more
         # precise calibration will be set.
-        htop, hbot, hfoc, strans, sscale, srot, iscale, irot, resa, resb, hfwa, spotshift = calib
+        htop, hbot, hfoc, strans, sscale, srot, iscale, irot, iscale_xy, ishear, resa, resb, hfwa, spotshift = calib
 
         # update metadata to stage
         self._main_data.stage.updateMetadata({
@@ -736,6 +736,12 @@ class DelphiStateController(SecomStateController):
             # need to also set the rotation correction to indicate that the
             # acquired image should be seen straight (not rotated)
             self._main_data.ebeam.updateMetadata({model.MD_ROTATION_COR: irot})
+
+        # update the shear correction and ebeam scaling
+        self._main_data.ebeam.updateMetadata({model.MD_SHEAR_COR: ishear})
+        self._main_data.ebeam.updateMetadata({
+            model.MD_PIXEL_SIZE_COR: iscale_xy,
+        })
 
         # update detector metadata with the SEM image and spot shift correction
         # values

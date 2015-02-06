@@ -465,6 +465,13 @@ def mergeMetadata(current, correction=None):
         current[model.MD_POS] = (position[0] - position_cor[0],
                                 position[1] - position_cor[1])
 
+    if model.MD_SHEAR_COR in correction:
+        # Default shear is 0 if not specified
+        shear_cor = correction[model.MD_SHEAR_COR]
+        shear = current.get(model.MD_SHEAR, 0)
+
+        current[model.MD_SHEAR] = shear + shear_cor
+
     # There is no default pixel size (though in some case sensor pixel size can
     # be used as a fallback)
     if model.MD_PIXEL_SIZE in current:
