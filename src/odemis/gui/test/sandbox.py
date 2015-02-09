@@ -245,14 +245,14 @@ class Canvas(glcanvas.GLCanvas):
         self.Bind(wx.EVT_SIZE, self.on_size)
         self.Bind(wx.EVT_PAINT, self.on_paint)
 
-    def on_erase_background(self, event):
+    def on_erase_background(self, evt):
         pass  # Do nothing, to avoid flashing on MSW.
 
     def on_size(self, event):
         wx.CallAfter(self.do_set_viewport)
         event.Skip()
 
-    def on_paint(self, event):
+    def on_paint(self, evt):
         self.SetCurrent(self.context)
         if not self.init:
             self.init_gl()
@@ -270,16 +270,29 @@ class Canvas(glcanvas.GLCanvas):
         self.Refresh()
 
     def do_set_viewport(self):
-        w, h = self.size = self.GetClientSize()
+        w, h = self.GetClientSize()
         self.SetCurrent(self.context)
         glViewport(0, 0, w, h)
 
-    @staticmethod
-    def init_gl():
+    def init_gl(self):
         glClearDepth(1.0)
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
-        glOrtho(-2, 2, 2, -2, 0, 50)
+        glOrtho(-1, 1, 1, -1, 0, 50)
+
+        # Texture
+
+        self.texid = glGenTextures(1)
+        glBindTexture(GL_TEXTURE_2D, self.texid)
+        self.data = gettest_10x10Image().GetData()
+        w, h = gettest_10x10Image().GetSize()
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, self.data)
+
+        glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
+        glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+
+        glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP)
+        glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP)
 
     def on_draw(self):
 
@@ -293,10 +306,25 @@ class Canvas(glcanvas.GLCanvas):
         glMatrixMode(GL_MODELVIEW)
         glLoadIdentity()
 
+        glEnable(GL_TEXTURE_2D)
+
         glBegin(GL_QUADS)
-        for i, (x, y) in enumerate(self.SQAURE):
-            glVertex3f(x, y, 0)
+
+        glTexCoord2f(0, 1)
+        glVertex2f(-1, -1)
+
+        glTexCoord2f(0, 0)
+        glVertex2f(-1, 1)
+
+        glTexCoord2f(1, 0)
+        glVertex2f(1, 1)
+
+        glTexCoord2f(1, 1)
+        glVertex2f(1, -1)
+
         glEnd()
+
+        glDisable(GL_TEXTURE_2D)
 
         self.SwapBuffers()
 
