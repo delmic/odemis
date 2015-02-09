@@ -177,7 +177,6 @@ class TestActuator(unittest.TestCase):
         f.result() # wait for the move to finish
 
         self.assertAlmostEqual(orig_pos + move["x"], stage.position.value["x"])
-        time.sleep(25)
         stage.terminate()
 
 #    @skip("faster")
@@ -416,7 +415,7 @@ class TestActuator(unittest.TestCase):
         small_move_forth = {'x': speed / 10}  # => 0.1s per move
         # test cancel after done => not cancelled
         f = stage.moveRel(small_move_forth)
-        time.sleep(1)
+        time.sleep(3)
         self.assertFalse(f.running())
         f.cancel()
         self.assertFalse(f.cancelled())
