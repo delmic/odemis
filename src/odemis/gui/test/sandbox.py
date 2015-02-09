@@ -39,7 +39,8 @@ class Canvas(glcanvas.GLCanvas):
         self.fit = FIT_HORZ | FIT_VERT
         self.background = True
 
-        # Is this a hack?
+        # Metrics for rendering background images pixel perfect
+        self._bg_size = None
         self._bg_x_ratio = 1
         self._bg_y_ratio = 1
 
@@ -85,15 +86,19 @@ class Canvas(glcanvas.GLCanvas):
             aspect_ratio = h / float(w)
             glOrtho(-1, 1, 1 * aspect_ratio, -1 * aspect_ratio, -1, 1)
 
-        self._bg_x_ratio = w / 80.0
-        self._bg_y_ratio = h / 80.0
+        if self._bg_size:
+            bw, bh = self._bg_size
+
+            self._bg_x_ratio = w / float(bw)
+            self._bg_y_ratio = h / float(bh)
 
     def _add_background(self):
         self._background_id = glGenTextures(1)
         glBindTexture(GL_TEXTURE_2D, self._background_id)
 
         img = getcanvasbgImage()
-        w, h = img.GetSize()
+        # img = gettest_10x10Image()
+        w, h = self._bg_size = img.GetSize()
 
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, img.GetData())
 
@@ -142,19 +147,21 @@ class Canvas(glcanvas.GLCanvas):
             glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_DECAL)
             glBindTexture(GL_TEXTURE_2D, self._background_id)
 
+            glColor4f(1.0, 1.0, 1.0, 1.0)
+
             glBegin(GL_QUADS)
 
-            glTexCoord2f(0, self._bg_y_ratio)
-            glVertex2f(-2, -2)
-
             glTexCoord2f(0, 0)
-            glVertex2f(-2, 2)
+            glVertex2f(-1, -1)
 
-            glTexCoord2f(self._bg_x_ratio, 0)
-            glVertex2f(2, 2)
+            glTexCoord2f(0, self._bg_y_ratio)
+            glVertex2f(-1, 1)
 
             glTexCoord2f(self._bg_x_ratio, self._bg_y_ratio)
-            glVertex2f(2, -2)
+            glVertex2f(1, 1)
+
+            glTexCoord2f(self._bg_x_ratio, 0)
+            glVertex2f(1, -1)
 
             glEnd()
 
@@ -164,8 +171,14 @@ class Canvas(glcanvas.GLCanvas):
             glMatrixMode(GL_MODELVIEW)
             glLoadIdentity()
 
+            glEnable(GL_BLEND)
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+
             glEnable(GL_TEXTURE_2D)
             glBindTexture(GL_TEXTURE_2D, self._texture_ids[0])
+
+            glScalef(0.5, 0.5, 1.0)
+            glColor4f(1.0, 1.0, 1.0, 0.5)
 
             glBegin(GL_QUADS)
 
