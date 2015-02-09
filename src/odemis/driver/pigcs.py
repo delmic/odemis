@@ -4,7 +4,7 @@ Created on 7 Aug 2012
 
 @author: Éric Piel
 
-Copyright © 2012 Éric Piel, Delmic
+Copyright © 2012-2015 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -1478,8 +1478,8 @@ class CLController(Controller):
                         continue
                 else:  # time to stop
                     # the queue should be empty (with some high likelyhood)
-                    logging.debug("Turning off the encoder at %g (queue has %d element)",
-                                  now, q.qsize())
+                    logging.debug("Turning off the encoder at %f > %f (queue has %d element)",
+                                  now, stopt, q.qsize())
                     self._encoder_ready[axis].clear()
                     self._stopEncoder(axis)
                     stopt = None
@@ -1490,8 +1490,9 @@ class CLController(Controller):
                 if msg == MNG_TERMINATE:
                     return
                 elif msg == MNG_START:
-                    self._startEncoder(axis)
-                    self._encoder_ready[axis].set()
+                    if not self._encoder_ready[axis].is_set():
+                        self._startEncoder(axis)
+                        self._encoder_ready[axis].set()
                     stopt = None
                 else:  # time at which to stop the encoder
                     stopt = msg
@@ -1500,6 +1501,16 @@ class CLController(Controller):
             logging.exception("Encoder manager failed:")
         finally:
             logging.info("Encoder manager %d/%s thread over", self.address, axis)
+
+    def prepareEncoder(self, axis):
+        """
+        Request the encoder to be ready. Non-blocking. Can be called before
+        really asking to move to save a bit of time.
+        """
+        self._encoder_req[axis].put(MNG_START)
+        # Just in case eventually no move is requested, it will automatically
+        # stop the encoder.
+        self._releaseEncoder(axis, delay=20)
 
     def _acquireEncoder(self, axis):
         """
@@ -1606,7 +1617,7 @@ class CLController(Controller):
         # Then, need to "ensure the encoder is ON" before any other meaningful command
         # Encoder not needed anymore (until next move)
         for a in axes:
-            self._releaseEncoder(a, 20) # release in 20 s (10x the cost to start)
+            self._releaseEncoder(a, 10) # release in 10 s (5x the cost to start)
         return False
 
 
@@ -2235,6 +2246,11 @@ class Bus(model.Actuator):
         pos (dict str -> float): axis name -> relative target position
         """
         with future._moving_lock:
+            for an, v in pos.items():
+                controller, channel = self._axis_to_cc[an]
+                if hasattr(controller, "prepareEncoder"):
+                    controller.prepareEncoder(channel)
+
             end = 0  # expected end
             moving_axes = set()
             for an, v in pos.items():
@@ -2257,12 +2273,19 @@ class Bus(model.Actuator):
         pos (dict str -> float): axis name -> absolute target position
         """
         with future._moving_lock:
+            for an, v in pos.items():
+                controller, channel = self._axis_to_cc[an]
+                if hasattr(controller, "prepareEncoder"):
+                    controller.prepareEncoder(channel)
+
             end = 0  # expected end
             old_pos = self.position.value
             moving_axes = set()
             for an, v in pos.items():
                 moving_axes.add(an)
                 controller, channel = self._axis_to_cc[an]
+                if hasattr(controller, "prepareEncoder"):
+                    controller.prepareEncoder(channel)
                 dist = controller.moveAbs(channel, v)
                 # compute expected end
                 dur = abs(v - old_pos[an]) / self.speed.value[an]
@@ -2880,6 +2903,7 @@ class E861Simulator(object):
                             0x4B: 5.0, # max dec
                             0x0E: 10000000, # unit num (note: normal default is 10000)
                             0x0F: 1,       # unit denum
+                            0x56: 1,  # encoder on
                             0x7000003: 10.0, # SSA
                             0x7000201: 3.2, # OVL
                             0x7000202: 0.9, # OAC
@@ -3173,6 +3197,7 @@ class E861Simulator(object):
                        "0x1=\t0\t1\tINT\tmotorcontroller\tP term 1 \n" +
                        "0x32=\t0\t1\tINT\tmotorcontroller\thas limit\t(0=limitswitchs 1=no limitswitchs) \n" +
                        "0x3C=\t0\t1\tCHAR\tmotorcontroller\tStagename \n" +
+                       "0x56=\t0\t1\tCHAR\tencoder\tactive \n" +
                        "0x7000000=\t0\t1\tFLOAT\tmotorcontroller\ttravel range minimum \n" +
                        "0x7000601=\t0\t1\tCHAR\tunit\tuser unit \n" +
                        "end of help"
