@@ -21,6 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
+import Queue
 from concurrent.futures import CancelledError, TimeoutError
 import glob
 import logging
@@ -317,9 +318,6 @@ MODEL_C867 = 867
 MODEL_E861 = 861
 MODEL_UNKNOWN = 0
 
-# TODO: Have a separate Controller class for each type of move mode. For now, we
-# are overriding the method dynamically depending on what the controller can do,
-# but that's too hard to read.
 class Controller(object):
     def __new__(cls, busacc, address=None, axes=None, *args, **kwargs):
         """
@@ -338,7 +336,6 @@ class Controller(object):
             if not all(axes.values()):
                 raise ValueError("Controller %d, mix of closed-loop and "
                                  "open-loop axes is not supported", address)
-            # TODO: don't ask user for CL/OL and check if has limit and sensor?
             subcls = CLController
         else:
             # Check controller model by asking it, but cannot rely on the
@@ -352,8 +349,8 @@ class Controller(object):
 
         return super(Controller, cls).__new__(subcls, busacc, address, axes,
                                               *args, **kwargs)
-    
-    
+
+
     def __init__(self, busacc, address=None, axes=None):
         """
         busacc: a BusAccesser
@@ -1314,6 +1311,12 @@ class Controller(object):
         ctrl.address = None
         return present
 
+# Messages to the encoder manager
+MNG_TERMINATE = "T"
+MNG_START = "S"
+# To stop the encoder: send a float representing the earliest time at which it is
+# possible to stop it. 0 will stop it immediately.
+
 class CLController(Controller):
     """
     Controller managed via closed-loop commands (ex: C-867 with encoder).
@@ -1332,15 +1335,26 @@ class CLController(Controller):
         self._accel = {} # m/s² dict axis -> acceleration/deceleration
         self.pos_rng = {} # m, dict axis -> min,max position
 
+        # for managing starting/stopping the encoder:
+        # * one queue to request turning on/off the encoder and terminating the thread
+        #   It uses ENC_TERMINATE, ENC_START, and a float to indicate the time
+        #   at which it should be stopped earliest.
+        # * one event to know when the encoder is ready
+        self._encoder_req = {}
+        self._encoder_ready = {}
+        self._encoder_mng = {}
+        self._pos_lock = {}  # acquire to read/write position
+
         for a, cl in axes.items():
-            if not a in self._channels:
+            if a not in self._channels:
                 raise LookupError("Axis %d is not supported by controller %d" % (a, address))
 
-            if not cl: # want open-loop?
+            if not cl:  # want open-loop?
                 raise ValueError("Initialising CLController with request for open-loop")
             if not self._hasRefSwitch[a]:
                 logging.warning("Closed-loop control requested but controller "
-                                 "%d reports no reference sensor for axis %d", address, a)
+                                "%d reports no reference sensor for axis %d",
+                                address, a)
 
             # Check the unit is mm
             unit = self.GetParameter(a, 0x7000601)
@@ -1358,8 +1372,7 @@ class CLController(Controller):
             # At start, the encoder is either on or (probably) off. In any
             # case, the current position is the most likely one: either it has
             # moved with the encoder off, and the position is entirely unknown
-            # anyway, or it hasn't moved and the position is correct. => so we
-            # must make sure to _not_ start the encoder.
+            # anyway, or it hasn't moved and the position is correct.
 
             # Movement range before referencing is max range in both directions
             pos = self.GetPosition(a) * 1e-3
@@ -1384,26 +1397,28 @@ class CLController(Controller):
                 self.max_speed = self._speed[a]
                 self.max_accel = self._accel[a]
 
-            self._stopEncoder(a) # in case it was not off yet
+            self._pos_lock[a] = threading.Lock()
+            self._stopEncoder(a)  # in case it was not off yet
+            self._encoder_req[a] = Queue.Queue()
+            self._encoder_ready[a] = threading.Event()
+            t = threading.Thread(target=self._encoder_mng_run,
+                                 name="Encoder manager ctrl %d axis %d" % (address, a),
+                                 args=(a,))
+            t.daemon = True
+            self._encoder_mng[a] = t
+            t.start()
 
-        self.min_speed = 10e-6 # m/s (default low value)
+        self.min_speed = 10e-6  # m/s (default low value)
         self._prev_speed_accel = ({}, {})
 
     def terminate(self):
         super(CLController, self).terminate()
+
         # Disable servo, to allow the user to move the axis manually
         for a in self._channels:
+            self._encoder_req[a].put(MNG_TERMINATE)
             self._stopEncoder(a)
 
-    # TODO: move to some KeepAlive message + thread
-    # Need:
-    # * one thread per axis :
-    #   - if receive the KA signal: add ENCODER_TIMEOUT from now until turn off
-    # * way to force the encoder off (reset)
-    # * way to ask the encoder is on (=> = send KA and block until it's ready)
-    # * way to say we don't need the encoder any more
-    # * possible to start encoders simultaneously
-    # => context manager to manage encoder on?
     def _stopEncoder(self, axis):
         """
         Turn off the supply power of the encoder. That means during this time
@@ -1414,30 +1429,94 @@ class CLController(Controller):
         # This can only be done if the servo is turned off
         self.SetServo(axis, False)
         if 0x56 in self._avail_params:
-            # Store the position before turning off the encoder because while
-            # turning off the encoder, some signal will be received which will
-            # make the controller beleive it has moved.
-            pos = self.GetPosition(axis)
-            self.SetParameter(axis, 0x56, 0) # 0 = off
-            # SetParameter checks the error num, which gives a bit of time to
-            # the encoder signal to fully settle down
-            self.SetPosition(axis, pos)
+            with self._pos_lock[axis]:
+                # Store the position before turning off the encoder because while
+                # turning off the encoder, some signal will be received which will
+                # make the controller beleive it has moved.
+                pos = self.GetPosition(axis)
+                self.SetParameter(axis, 0x56, 0)  # 0 = off
+                # SetParameter checks the error num, which gives a bit of time to
+                # the encoder signal to fully settle down
+                self.SetPosition(axis, pos)
 
     def _startEncoder(self, axis):
         """
         Turn on the suplly power of the encoder.
         axis (1<=int<=16): the axis
         """
-        pos = self.GetPosition(axis)
-        if 0x56 in self._avail_params:
-            # Warning: turning on the encoder can reset the USB connection
-            # (if it's on this very controller)
-            # Turning on the encoder resets the current position
-            self.SetParameter(axis, 0x56, 1, check=False) # 1 = on
-            time.sleep(2) # 2 s seems long enough for the encoder to initialise
-        self.SetServo(axis, True)
-        self.SetReferenceMode(axis, False)
-        self.SetPosition(axis, pos)
+        with self._pos_lock[axis]:
+            pos = self.GetPosition(axis)
+            if 0x56 in self._avail_params:
+                # Warning: turning on the encoder can reset the USB connection
+                # (if it's on this very controller)
+                # Turning on the encoder resets the current position
+                self.SetParameter(axis, 0x56, 1, check=False)  # 1 = on
+                time.sleep(2)  # 2 s seems long enough for the encoder to initialise
+            self.SetServo(axis, True)
+            self.SetReferenceMode(axis, False)
+            self.SetPosition(axis, pos)
+
+    def _encoder_mng_run(self, axis):
+        """
+        Main loop for encoder manager thread:
+        Turn on/off the encoder based on the requests received
+        """
+        try:
+            q = self._encoder_req[axis]
+            stopt = None  # None if must be on, otherwise time to stop
+            while True:
+                # wait for a new message or for the time to stop the encoder
+                now = time.time()
+                if stopt is None or not q.empty():
+                    msg = q.get()
+                elif now < stopt:  # soon time to turn off the encoder
+                    timeout = stopt - now
+                    try:
+                        msg = q.get(timeout=timeout)
+                    except Queue.Empty:
+                        # time to stop the encoder => just do the loop again
+                        continue
+                else:  # time to stop
+                    # the queue should be empty (with some high likelyhood)
+                    logging.debug("Turning off the encoder at %g (queue has %d element)",
+                                  now, q.qsize())
+                    self._encoder_ready[axis].clear()
+                    self._stopEncoder(axis)
+                    stopt = None
+                    continue
+
+                # parse the new message
+                logging.debug("Decoding encoder message %s", msg)
+                if msg == MNG_TERMINATE:
+                    return
+                elif msg == MNG_START:
+                    self._startEncoder(axis)
+                    self._encoder_ready[axis].set()
+                    stopt = None
+                else:  # time at which to stop the encoder
+                    stopt = msg
+
+        except Exception:
+            logging.exception("Encoder manager failed:")
+        finally:
+            logging.info("Encoder manager %d/%s thread over", self.address, axis)
+
+    def _acquireEncoder(self, axis):
+        """
+        Ensure the encoder is on. Need to call _releaseEncoder once not needed.
+        It will block until the encoder is actually ready
+        """
+        # TODO: maybe provide a public method as a non-blocking call, to
+        # allow starting the encoders of multiple axes simultaneously
+        self._encoder_req[axis].put(MNG_START)
+        self._encoder_ready[axis].wait()
+
+    def _releaseEncoder(self, axis, delay=0):
+        """
+        Let the encoder be turned off (within some time)
+        delay (0<float): time (in s) before actually turning off the encoder
+        """
+        self._encoder_req[axis].put(time.time() + delay)
 
     def _updateSpeedAccel(self, axis):
         """
@@ -1466,7 +1545,7 @@ class CLController(Controller):
         See Controller.moveRel
         """
         assert(axis in self._channels)
-        self._startEncoder(axis)
+        self._acquireEncoder(axis)
         self._updateSpeedAccel(axis)
         # We trust the caller that it knows it's in range
         # (worst case the hardware will not go further)
@@ -1479,7 +1558,7 @@ class CLController(Controller):
         See Controller.moveAbs
         """
         assert(axis in self._channels)
-        self._startEncoder(axis)
+        self._acquireEncoder(axis)
         self._updateSpeedAccel(axis)
         # We trust the caller that it knows it's in range
         # (worst case the hardware will not go further)
@@ -1500,7 +1579,8 @@ class CLController(Controller):
         Find current position as reported by the sensor
         return (float): the current position of the given axis
         """
-        return self.GetPosition(axis) * 1e-3
+        with self._pos_lock[axis]:
+            return self.GetPosition(axis) * 1e-3
 
     # Warning: if the settling window is too small or settling time too big,
     # it might take several seconds to reach target (or even never reach it)
@@ -1526,7 +1606,7 @@ class CLController(Controller):
         # Then, need to "ensure the encoder is ON" before any other meaningful command
         # Encoder not needed anymore (until next move)
         for a in axes:
-            self._stopEncoder(a)
+            self._releaseEncoder(a, 20) # release in 20 s (10x the cost to start)
         return False
 
 
@@ -1554,7 +1634,7 @@ class CLController(Controller):
     def stopMotion(self):
         super(CLController, self).stopMotion()
         for c in self._channels:
-            self._stopEncoder(c)
+            self._releaseEncoder(c, delay=1)
 
     def startReferencing(self, axis):
         """
@@ -1562,7 +1642,7 @@ class CLController(Controller):
         the move is over. Position will change, as well as absolute positions.
         axis (1<=int<=16)
         """
-        self._startEncoder(axis)
+        self._acquireEncoder(axis)
 
         # Note: setting position only works if ron is disabled. It's possible
         # also indirectly set it after referencing, but then it will conflict
@@ -1620,7 +1700,7 @@ class OLController(Controller):
 
         super(OLController, self).__init__(busacc, address, axes)
         for a, cl in axes.items():
-            if not a in self._channels:
+            if a not in self._channels:
                 raise LookupError("Axis %d is not supported by controller %d" % (a, address))
 
             if cl: # want closed-loop?
@@ -1686,7 +1766,7 @@ class OLController(Controller):
 
     def _updateSpeedAccel(self, axis):
         """
-        Update the speed and acceleration values for the given axis. 
+        Update the speed and acceleration values for the given axis.
         It's only done if necessary, and only for the current closed- or open-
         loop mode.
         axis (1<=int<=16): the axis
@@ -1754,7 +1834,7 @@ class SMOController(Controller):
 
         super(SMOController, self).__init__(busacc, address, axes)
         for a, cl in axes.items():
-            if not a in self._channels:
+            if a not in self._channels:
                 raise LookupError("Axis %d is not supported by controller %d" % (a, address))
 
             if cl: # want closed-loop?
@@ -1837,6 +1917,7 @@ class SMOController(Controller):
         else:
             return True
 
+    # TODO: automatically pick it based on the firmware name
     cycles_per_s = 20000 # 20 kHz for new experimental firmware
     #cycles_per_s = 1000 # 1 kHz for normal firmware
 
@@ -1945,9 +2026,9 @@ class Bus(model.Actuator):
         axes (dict string -> 3-tuple(1<=int<=16, 1<=int, boolean): the configuration
          of the network. For each axis name associates the controller address,
          channel, and whether it's closed-loop (absolute positioning) or not.
-         Note that even if it's made of several controllers, each controller is 
+         Note that even if it's made of several controllers, each controller is
          _not_ seen as a child from the odemis model point of view.
-        baudrate (int): baudrate of the serial port (default is the recommended 
+        baudrate (int): baudrate of the serial port (default is the recommended
           38400). Use .scan() to detect it.
         Next 3 parameters are for calibration, see Controller for definition
         dist_to_steps (dict string -> (0 < float)): axis name -> value
@@ -2489,11 +2570,11 @@ class SerialBusAccesser(object):
     """
     Manages connections to the low-level bus
     """
-    def __init__(self, serial):
-        self.serial = serial
+    def __init__(self, ser):
+        self.serial = ser
         # to acquire before sending anything on the serial port
         self.ser_access = threading.Lock()
-        self.driverInfo = "serial driver: %s" % (driver.getSerialDriver(serial.port),)
+        self.driverInfo = "serial driver: %s" % (driver.getSerialDriver(ser.port),)
 
     def terminate(self):
         self.serial.close()
@@ -2521,8 +2602,8 @@ class SerialBusAccesser(object):
         Send a command and return its report (raw)
         addr (None or 1<=int<=16): address of the controller
         com (string): the command to send (without address prefix but with \n)
-        return (string or list of strings): the report without prefix 
-           (e.g.,"0 1") nor newline. 
+        return (string or list of strings): the report without prefix
+           (e.g.,"0 1") nor newline.
            If answer is multiline: returns a list of each line
         Note: multiline answers seem to always begin with a \x00 character, but
          it's left as is.
@@ -2875,7 +2956,7 @@ class E861Simulator(object):
                      "OAC": 0x7000202,
                      "ODC": 0x7000206,
                      "SSA": 0x7000003,
-                     }
+    }
     _re_addr_com = r"((?P<addr>\d+) (0 )?)?(?P<com>.*)"
     def _processCommand(self, com):
         """
@@ -2883,7 +2964,7 @@ class E861Simulator(object):
         com (str): command
         """
         logging.debug("Fake controller %d processing command '%s'",
-                       self._address, com.encode('string_escape'))
+                      self._address, com.encode('string_escape'))
         out = None # None means error while decoding command
 
         # command can start with a prefix like "5 0 " or "5 "
@@ -2931,7 +3012,7 @@ class E861Simulator(object):
                 # TODO: to check, much more info returned
                 val = 0
                 if time.time() < self._end_move:
-                    val |= 0x400  #  first axis moving
+                    val |= 0x400  # first axis moving
                 out = "0x%x" % val
             elif com == "\x05": # Request Motion Status
                 # return hexadecimal bitmap of moving axes
@@ -3006,7 +3087,7 @@ class E861Simulator(object):
                     self._ref_mode = state
                 else:
                     self._errno = 15
-            elif args[0] == "OSM" and len(args) == 3: #Open-Loop Step Moving
+            elif args[0] == "OSM" and len(args) == 3: # Open-Loop Step Moving
                 axis, steps = int(args[1]), float(args[2])
                 if axis != 1:
                     raise SimulatedError(15)

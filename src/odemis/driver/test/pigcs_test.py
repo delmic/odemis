@@ -166,14 +166,18 @@ class TestActuator(unittest.TestCase):
             print "opening ", name
             stage = CLASS("test", "stage", **kwargs)
             self.assertTrue(stage.selfTest(), "Controller self test failed.")
+            stage.terminate()
 
 #    @skip("faster")
     def test_simple(self):
         stage = CLASS(**self.kwargs)
-        move = {'x':0.01e-6}
-        stage.moveRel(move)
-        time.sleep(0.1) # wait for the move to finish
-        self.assertAlmostEqual(move["x"], stage.position.value["x"])
+        move = {'x': 0.01e-6}
+        orig_pos = stage.position.value["x"]
+        f = stage.moveRel(move)
+        f.result() # wait for the move to finish
+
+        self.assertAlmostEqual(orig_pos + move["x"], stage.position.value["x"])
+        time.sleep(25)
         stage.terminate()
 
 #    @skip("faster")
@@ -184,7 +188,7 @@ class TestActuator(unittest.TestCase):
         stage = CLASS(**self.kwargs)
         speed = max(stage.axes["x"].speed[0], 1e-3) # try as slow as reasonable
         stage.speed.value = {"x": speed}
-        move = {'x':100e-6}
+        move = {'x': 100e-6}
         start = time.time()
         f = stage.moveRel(move)
         dur_async = time.time() - start
@@ -279,7 +283,7 @@ class TestActuator(unittest.TestCase):
         self.prev_pos = stage.position.value
         self.direction = 1
         stage.position.subscribe(self.pos_listener)
-        
+
         f = stage.moveRel(move)
 #        while not f.done():
 #            time.sleep(0.01)
@@ -297,7 +301,7 @@ class TestActuator(unittest.TestCase):
         stage.position.unsubscribe(self.pos_listener)
 
         stage.terminate()
-    
+
     def pos_listener(self, pos):
         diff_pos = pos["x"] - self.prev_pos["x"]
         if diff_pos == 0:
@@ -348,6 +352,7 @@ class TestActuator(unittest.TestCase):
 
         dur = time.time() - start
         self.assertGreaterEqual(dur, expected_time)
+        stage.terminate()
 
     def test_moveAbs(self):
         stage = CLASS(**self.kwargs)
@@ -368,7 +373,8 @@ class TestActuator(unittest.TestCase):
         for a, p in stage.position.value.items():
             self.assertAlmostEqual(move[a], p, msg="Axis %s @ %f != %f" % (a, p, move[a]))
 
-        stage.moveAbs(orig_pos)
+        stage.moveAbs(orig_pos).result()
+        stage.terminate()
 
 #    @skip("faster")
     def test_cancel(self):
