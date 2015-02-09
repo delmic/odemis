@@ -262,6 +262,10 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
                 "control_type": odemis.gui.CONTROL_RADIO,
                 "choices": {2.1, 2.4, 2.7, 3, 3.3},  # some weird unit
             },
+            "resolution":  # Read-only (and not hidden) because it affects acq time
+            {
+                "control_type": odemis.gui.CONTROL_READONLY,
+            },
             "bpp":  # TODO: re-enable if 16-bits ever works correctly
             {
                 "control_type": odemis.gui.CONTROL_NONE,
@@ -275,6 +279,10 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
                 "control_type": odemis.gui.CONTROL_NONE,
             },
             "readoutRate":  # Default value is good for all the standard cases
+            {
+                "control_type": odemis.gui.CONTROL_NONE,
+            },
+            "resolution":  # Just for cropping => keep things simple for user
             {
                 "control_type": odemis.gui.CONTROL_NONE,
             },
