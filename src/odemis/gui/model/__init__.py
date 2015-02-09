@@ -114,7 +114,8 @@ class MainGUIData(object):
         self.focus = None  # actuator to change the camera focus
         self.aligner = None  # actuator to align ebeam/ccd
         self.mirror = None  # actuator to change the mirror position (on SPARC)
-        self.light = None
+        self.light = None  # epi-fluorescence light
+        self.brightlight = None  # brightlight
         self.light_filter = None  # emission light filter for SECOM/output filter for SPARC
         self.lens = None
         self.ebeam = None
@@ -172,6 +173,8 @@ class MainGUIData(object):
                     self.chamber = c
                 elif c.role == "light":
                     self.light = c
+                elif c.role == "brightlight":
+                    self.brightlight = c
                 elif c.role == "filter":
                     self.light_filter = c
                 elif c.role == "lens":
