@@ -26,7 +26,7 @@ import odemis.gui.comp.canvas as canvas
 from odemis.acq.stream import RGBStream
 
 
-# test.goto_manual()
+test.goto_manual()
 logging.getLogger().setLevel(logging.ERROR)
 
 
@@ -124,15 +124,15 @@ class TestCanvas(test.GuiTestCase):
         # 100 pixels is 1e-4 meters
         img.metadata[model.MD_PIXEL_SIZE] = (1e-6, 1e-6)
         img.metadata[model.MD_POS] = (0, 0)
-        im_scale = img.metadata[model.MD_PIXEL_SIZE][0] / cnvs.mpwu
+        # im_scale = img.metadata[model.MD_PIXEL_SIZE][0] / cnvs.mpwu
 
-        self.assertEqual(im_scale, img.metadata[model.MD_PIXEL_SIZE][0])
+        # self.assertEqual(im_scale, img.metadata[model.MD_PIXEL_SIZE][0])
 
         stream1 = RGBStream("s1", img)
         view.addStream(stream1)
 
         # Verify view mpp and canvas scale
-        self.assertEqual(view.mpp.value, 1e-6, "Default mpp value has changed!")
+        # self.assertEqual(view.mpp.value, 1e-6, "Default mpp value has changed!")
         self.assertEqual(cnvs.scale, 1 / view.mpp.value, "Canvas scale should not have changed!")
 
         cnvs.update_drawing()
@@ -395,7 +395,7 @@ class TestCanvas(test.GuiTestCase):
         #     (darray_thr, (0, 0.0), 0.0005, True),
         # ]
 
-        darray_one = generate_img_data(250, 250, 4)
+        darray_one = generate_img_data(250, 250, 3)
 
         images = [
             (darray_one, (0.0, 0.0), 0.0000003, True, None, None, 'one'),

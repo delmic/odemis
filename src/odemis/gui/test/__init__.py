@@ -251,22 +251,25 @@ def generate_img_data(width, height, depth, alpha=255, color=None):
     """
 
     shape = (height, width, depth)
-    rgb = numpy.empty(shape, dtype=numpy.uint8)
+    rgb = numpy.zeros(shape, dtype=numpy.uint8)
+    alpha = min(255, max(alpha, 0))
 
-    if width > 100 or height > 100:
+    if width > 99 or height > 99:
         if color:
-            color += (alpha,)
+            if depth == 4:
+                color += (alpha,)
             tl = color
             tr = color
             bl = color
             br = color
         else:
+            if depth != 4:
+                alpha = None
+
             tl = random_color(alpha=alpha)
             tr = random_color(alpha=alpha)
             bl = random_color(alpha=alpha)
             br = random_color(alpha=alpha)
-
-        rgb = numpy.zeros(shape, dtype=numpy.uint8)
 
         rgb[..., -1, 0] = numpy.linspace(tr[0], br[0], height)
         rgb[..., -1, 1] = numpy.linspace(tr[1], br[1], height)
@@ -284,21 +287,20 @@ def generate_img_data(width, height, depth, alpha=255, color=None):
             rgb[i, :, 1] = numpy.linspace(int(sg), int(eg), width)
             rgb[i, :, 2] = numpy.linspace(int(sb), int(eb), width)
 
-        if depth == 4:
-            rgb[..., 3] = min(255, max(alpha, 0))
-
     else:
-        for w in xrange(width):
-            for h in xrange(height):
-                if color:
-                    rgb[h, w] = color + (alpha,)[:depth]
-                else:
+        if color:
+            if depth == 4:
+                color += (alpha,)
+            rgb[...] = color
+        else:
+            for w in xrange(width):
+                for h in xrange(height):
                     rgb[h, w] = random_color((230, 230, 255), alpha)[:depth]
 
     return omodel.DataArray(rgb)
 
 
-def random_color(mix_color=None, alpha=255):
+def random_color(mix_color=None, alpha=None):
     """ Generate a random color, possibly tinted using mix_color """
 
     red = random.randint(0, 255)
@@ -310,6 +312,8 @@ def random_color(mix_color=None, alpha=255):
         green = (green - mix_color[1]) / 2
         blue = (blue - mix_color[2]) / 2
 
-    a = alpha / 255.0
-
-    return red * a, green * a, blue * a, alpha
+    if alpha is not None:
+        a = alpha / 255.0
+        return red * a, green * a, blue * a, alpha
+    else:
+        return red, green, blue

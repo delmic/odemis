@@ -284,9 +284,13 @@ class Canvas(glcanvas.GLCanvas):
 
         self.texid = glGenTextures(1)
         glBindTexture(GL_TEXTURE_2D, self.texid)
-        self.data = gettest_10x10Image().GetData()
-        w, h = gettest_10x10Image().GetSize()
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, self.data)
+        w, h, d = 800, 800, 3
+        self.data = generate_img_data(w, h, d)
+        if d == 3:
+            format = GL_RGB
+        else:
+            format = GL_RGBA
+        glTexImage2D(GL_TEXTURE_2D, 0, format, w, h, 0, format, GL_UNSIGNED_BYTE, self.data)
 
         glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
         glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
@@ -307,6 +311,7 @@ class Canvas(glcanvas.GLCanvas):
         glLoadIdentity()
 
         glEnable(GL_TEXTURE_2D)
+        glBindTexture(GL_TEXTURE_2D, self.texid)
 
         glBegin(GL_QUADS)
 
