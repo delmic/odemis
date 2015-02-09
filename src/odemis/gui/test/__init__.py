@@ -291,9 +291,9 @@ def generate_img_data(width, height, depth, alpha=255, color=None):
         for w in xrange(width):
             for h in xrange(height):
                 if color:
-                    rgb[h, w] = color + (alpha,)
+                    rgb[h, w] = color + (alpha,)[:depth]
                 else:
-                    rgb[h, w] = random_color((230, 230, 255), alpha)
+                    rgb[h, w] = random_color((230, 230, 255), alpha)[:depth]
 
     return omodel.DataArray(rgb)
 
