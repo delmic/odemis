@@ -1,6 +1,6 @@
 import wx
 from OpenGL.raw.GLU import gluBuild2DMipmaps, gluPerspective
-from odemis.gui.img.data import gettest_10x10Image
+from odemis.gui.img.data import gettest_10x10Image, getcanvasbgData, getcanvasbgImage
 from odemis.gui.test import generate_img_data
 from scipy.misc import lena
 import numpy as np
@@ -37,7 +37,13 @@ class Canvas(glcanvas.GLCanvas):
         self.context = glcanvas.GLContext(self)
 
         self.fit = FIT_HORZ | FIT_VERT
+        self.background = True
 
+        # Is this a hack?
+        self._bg_x_ratio = 1
+        self._bg_y_ratio = 1
+
+        self._background_id = None
         self._texture_ids = []
 
         self.Bind(wx.EVT_ERASE_BACKGROUND, self.on_erase_background)
@@ -79,9 +85,27 @@ class Canvas(glcanvas.GLCanvas):
             aspect_ratio = h / float(w)
             glOrtho(-1, 1, 1 * aspect_ratio, -1 * aspect_ratio, -1, 1)
 
+        self._bg_x_ratio = w / 80.0
+        self._bg_y_ratio = h / 80.0
+
+    def _add_background(self):
+        self._background_id = glGenTextures(1)
+        glBindTexture(GL_TEXTURE_2D, self._background_id)
+
+        img = getcanvasbgImage()
+        w, h = img.GetSize()
+
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, img.GetData())
+
+        glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
+        glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
     def set_image(self, img):
-        self._texture_ids = [glGenTextures(1)]
-        glBindTexture(GL_TEXTURE_2D, self._texture_ids[0])
+        self._texture_ids.append(glGenTextures(1))
+        glBindTexture(GL_TEXTURE_2D, self._texture_ids[-1])
 
         w, h, d = img.shape
 
@@ -99,43 +123,67 @@ class Canvas(glcanvas.GLCanvas):
         glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP)
 
     def init_gl(self):
+        if self.background:
+            self._add_background()
         self._set_projection()
 
     def on_draw(self):
 
-        # glMatrixMode(GL_PROJECTION)
-        # glLoadIdentity()
-        #
-        # glScalef(self.z, self.z, 1)
-
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
-        if not self._texture_ids:
-            return
+        # For scaling, put GL_PROJECT and glScale here, at the start
 
-        glMatrixMode(GL_MODELVIEW)
-        glLoadIdentity()
+        if self.background:
+            glMatrixMode(GL_MODELVIEW)
 
-        glEnable(GL_TEXTURE_2D)
-        glBindTexture(GL_TEXTURE_2D, self._texture_ids[0])
+            glLoadIdentity()
 
-        glBegin(GL_QUADS)
+            glEnable(GL_TEXTURE_2D)
+            glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_DECAL)
+            glBindTexture(GL_TEXTURE_2D, self._background_id)
 
-        glTexCoord2f(0, 1)
-        glVertex2f(-1, -1)
+            glBegin(GL_QUADS)
 
-        glTexCoord2f(0, 0)
-        glVertex2f(-1, 1)
+            glTexCoord2f(0, self._bg_y_ratio)
+            glVertex2f(-2, -2)
 
-        glTexCoord2f(1, 0)
-        glVertex2f(1, 1)
+            glTexCoord2f(0, 0)
+            glVertex2f(-2, 2)
 
-        glTexCoord2f(1, 1)
-        glVertex2f(1, -1)
+            glTexCoord2f(self._bg_x_ratio, 0)
+            glVertex2f(2, 2)
 
-        glEnd()
+            glTexCoord2f(self._bg_x_ratio, self._bg_y_ratio)
+            glVertex2f(2, -2)
 
-        glDisable(GL_TEXTURE_2D)
+            glEnd()
+
+            glDisable(GL_TEXTURE_2D)
+
+        if self._texture_ids:
+            glMatrixMode(GL_MODELVIEW)
+            glLoadIdentity()
+
+            glEnable(GL_TEXTURE_2D)
+            glBindTexture(GL_TEXTURE_2D, self._texture_ids[0])
+
+            glBegin(GL_QUADS)
+
+            glTexCoord2f(0, 1)
+            glVertex2f(-1, -1)
+
+            glTexCoord2f(0, 0)
+            glVertex2f(-1, 1)
+
+            glTexCoord2f(1, 0)
+            glVertex2f(1, 1)
+
+            glTexCoord2f(1, 1)
+            glVertex2f(1, -1)
+
+            glEnd()
+
+            glDisable(GL_TEXTURE_2D)
 
         self.SwapBuffers()
 
