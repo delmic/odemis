@@ -1,10 +1,6 @@
 import wx
-from OpenGL.raw.GLU import gluBuild2DMipmaps, gluPerspective
-from odemis.gui.img.data import gettest_10x10Image, getcanvasbgData, getcanvasbgImage
-from odemis.gui.test import generate_img_data
-from scipy.misc import lena
-import numpy as np
-import numpy.random as rdn
+
+import odemis.gui.img.data as imgdata
 
 try:
     from wx import glcanvas
@@ -96,7 +92,7 @@ class Canvas(glcanvas.GLCanvas):
         self._background_id = glGenTextures(1)
         glBindTexture(GL_TEXTURE_2D, self._background_id)
 
-        img = getcanvasbgImage()
+        img = imgdata.getcanvasbgImage()
         # img = gettest_10x10Image()
         w, h = self._bg_size = img.GetSize()
 
@@ -112,7 +108,23 @@ class Canvas(glcanvas.GLCanvas):
         self._texture_ids.append(glGenTextures(1))
         glBindTexture(GL_TEXTURE_2D, self._texture_ids[-1])
 
-        w, h, d = img.shape
+        if isinstance(img, wx.Image):
+            (w, h), d = img.GetSize(), 4
+
+            def split_rgb(seq):
+                while seq:
+                    yield seq[:3]
+                    seq = seq[3:]
+
+            rgb = img.GetData()
+            alpha = img.GetAlphaData()
+            img = r""
+
+            for i, c in enumerate(split_rgb(rgb)):
+                img += c + alpha[i]
+
+        else:
+            w, h, d = img.shape
 
         if d == 3:
             frmt = GL_RGB
@@ -177,26 +189,27 @@ class Canvas(glcanvas.GLCanvas):
             glEnable(GL_TEXTURE_2D)
             glBindTexture(GL_TEXTURE_2D, self._texture_ids[0])
 
-            glScalef(0.5, 0.5, 1.0)
-            glColor4f(1.0, 1.0, 1.0, 0.5)
+            # glScalef(0.5, 0.5, 1.0)
+            glColor4f(1.0, 1.0, 1.0, 1.0)
 
             glBegin(GL_QUADS)
 
-            glTexCoord2f(0, 1)
+            glTexCoord2f(0, 0)
             glVertex2f(-1, -1)
 
-            glTexCoord2f(0, 0)
+            glTexCoord2f(0, 1)
             glVertex2f(-1, 1)
 
-            glTexCoord2f(1, 0)
+            glTexCoord2f(1, 1)
             glVertex2f(1, 1)
 
-            glTexCoord2f(1, 1)
+            glTexCoord2f(1, 0)
             glVertex2f(1, -1)
 
             glEnd()
 
             glDisable(GL_TEXTURE_2D)
+            glDisable(GL_BLEND)
 
         self.SwapBuffers()
 
@@ -209,7 +222,8 @@ class MainWindow(wx.Frame):
         self.Center()
         self.Show()
 
-        self.canvas.set_image(generate_img_data(100, 100, 3))
+        # self.canvas.set_image(generate_img_data(92, 92, 3))
+        self.canvas.set_image(imgdata.getlogo_delphiImage())
 
 
 if haveGLCanvas and haveOpenGL:
