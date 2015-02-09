@@ -82,8 +82,11 @@ class Canvas(glcanvas.GLCanvas):
             aspect_ratio = h / float(w)
             glOrtho(-1, 1, 1 * aspect_ratio, -1 * aspect_ratio, -1, 1)
 
-        if self._bg_size:
-            bw, bh = self._bg_size
+        self.texid = glGenTextures(1)
+        glBindTexture(GL_TEXTURE_2D, self.texid)
+        self.data = gettest_10x10Image().GetData()
+        w, h = gettest_10x10Image().GetSize()
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, self.data)
 
             self._bg_x_ratio = w / float(bw)
             self._bg_y_ratio = h / float(bh)
@@ -161,9 +164,7 @@ class Canvas(glcanvas.GLCanvas):
 
             glLoadIdentity()
 
-            glEnable(GL_TEXTURE_2D)
-            glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_DECAL)
-            glBindTexture(GL_TEXTURE_2D, self._background_id)
+        glEnable(GL_TEXTURE_2D)
 
             glColor4f(1.0, 1.0, 1.0, 1.0)
 
