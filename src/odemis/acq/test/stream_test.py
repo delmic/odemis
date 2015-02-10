@@ -492,7 +492,7 @@ class SPARCTestCase(unittest.TestCase):
         self.assertEqual(len(data), num_ar + 1)
         self.assertEqual(data[0].shape, exp_shape)
         self.assertGreaterEqual(self.updates, 4) # at least a couple of updates
-        self.assertEqual(self.left, 0)
+        self.assertLessEqual(self.end, time.time())
         self.assertTrue(self.done)
         self.assertTrue(not f.cancelled())
 
@@ -514,7 +514,7 @@ class SPARCTestCase(unittest.TestCase):
         self.assertEqual(len(data), num_ar + 1)
         self.assertEqual(data[0].shape, exp_shape)
         self.assertGreaterEqual(self.updates, 5) # at least a few updates
-        self.assertEqual(self.left, 0)
+        self.assertLessEqual(self.end, time.time())
         self.assertTrue(self.done)
         self.assertTrue(not f.cancelled())
 
@@ -544,7 +544,7 @@ class SPARCTestCase(unittest.TestCase):
         f.cancel()
 
         self.assertGreaterEqual(self.updates, 1) # at least at the end
-        self.assertEqual(self.left, 0)
+        self.assertLessEqual(self.end, time.time())
         self.assertTrue(f.cancelled())
 
         # short acquisition
@@ -561,15 +561,15 @@ class SPARCTestCase(unittest.TestCase):
         f.cancel()
 
         self.assertGreaterEqual(self.updates, 1) # at least at the end
-        self.assertEqual(self.left, 0)
+        self.assertLessEqual(self.end, time.time())
         self.assertTrue(f.cancelled())
 
     def on_done(self, future):
         self.done = True
 
-    def on_progress_update(self, future, past, left):
-        self.past = past
-        self.left = left
+    def on_progress_update(self, future, start, end):
+        self.start = start
+        self.end = end
         self.updates += 1
 
 #    @skip("simple")

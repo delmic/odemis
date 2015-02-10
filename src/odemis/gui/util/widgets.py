@@ -31,7 +31,7 @@ from odemis.util import units
 import time
 import wx
 
-
+# FIXME: unused
 def get_all_children(widget, klass=None):
     """ Recursively get all the child widgets of the given widget
 
@@ -52,7 +52,7 @@ def get_all_children(widget, klass=None):
 
     return result
 
-
+# FIXME: unused
 def get_sizer_position(window):
     """ Return the int index value of a given window within its containing sizer
 
@@ -263,7 +263,7 @@ class ProgessiveFutureConnector(object):
         self._label = label
 
         # Will contain the info of the future as soon as we get it.
-        self._start = None
+        self._start, self._end = future.get_progress()
         self._end = None
         self._prev_left = None
 
@@ -278,15 +278,14 @@ class ProgessiveFutureConnector(object):
         future.add_update_callback(self._on_progress)
         future.add_done_callback(self._on_done)
 
-    def _on_progress(self, future, past, left):
+    def _on_progress(self, future, start, end):
         """
         Callback called during the acquisition to update on its progress
-        past (float): number of s already past
-        left (float): estimated number of s left
+        start (float): time the work started
+        end (float): estimated time at which the work is ending
         """
-        now = time.time()
-        self._start = now - past
-        self._end = now + left
+        self._start = start
+        self._end = end
 
     @call_in_wx_main
     def _on_done(self, future):
@@ -299,9 +298,6 @@ class ProgessiveFutureConnector(object):
             self._bar.Value = 100
 
     def _update_progress(self):
-        if self._start is None: # no info yet
-            return
-
         now = time.time()
         past = now - self._start
         left = max(0, self._end - now)
