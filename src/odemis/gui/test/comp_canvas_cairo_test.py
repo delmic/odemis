@@ -74,7 +74,7 @@ class TestCanvas(test.GuiTestCase):
             for i in range(steps):
                 images = [
                     # Simplest case with the image drawn in the center
-                    (img, (0, 0), 1, True, 0.0, None, "wander bug test"),
+                    (img, (0, 0), 1, True, 0.0, None, None, "wander bug test"),
                     # Image drawn at the bottom right
                     # (img, (100, 100), 1, True, 0.0, None, "wander bug test"),
                 ]
@@ -124,9 +124,9 @@ class TestCanvas(test.GuiTestCase):
         # 100 pixels is 1e-4 meters
         img.metadata[model.MD_PIXEL_SIZE] = (1e-6, 1e-6)
         img.metadata[model.MD_POS] = (0, 0)
-        im_scale = img.metadata[model.MD_PIXEL_SIZE][0] / cnvs.mpwu
+        # im_scale = img.metadata[model.MD_PIXEL_SIZE][0] / cnvs.mpwu
 
-        self.assertEqual(im_scale, img.metadata[model.MD_PIXEL_SIZE][0])
+        # self.assertEqual(im_scale, img.metadata[model.MD_PIXEL_SIZE][0])
 
         stream1 = RGBStream("s1", img)
         view.addStream(stream1)
@@ -398,9 +398,9 @@ class TestCanvas(test.GuiTestCase):
         darray_one = generate_img_data(250, 250, 4)
 
         images = [
-            (darray_one, (0.0, 0.0), 0.0000003, True, None, None, 'one'),
-            # (darray_two, (0.0, 0.0), 0.33, True, None, None, 'two'),
-            # (darray_thr, (0, 0.0), 1, True, None, None, 'three'),
+            (darray_one, (0.0, 0.0), 0.0000003, True, None, None, None, 'one'),
+            # (darray_two, (0.0, 0.0), 0.33, True, None, None, None, 'two'),
+            # (darray_thr, (0, 0.0), 1, True, None, None, None, 'three'),
         ]
 
         old_canvas.set_images(images)
@@ -444,9 +444,9 @@ class TestCanvas(test.GuiTestCase):
         darray_green = generate_img_data(250, 250, 4, 204, (50, 205, 154))
 
         images = [
-            (darray_red, (0.0, 0.0), 0.0000003, True, -0.5, None, "orange"),
-            (darray_blue, (0.0, 0.0), 0.0000003, True, 0.5, BLEND_SCREEN, "purple"),
-            (darray_green, (0.0, 0.0), 0.0000003, True, 1.5, BLEND_SCREEN, "greem"),
+            (darray_red, (0.0, 0.0), 0.0000003, True, -0.5, None, None, "orange"),
+            (darray_blue, (0.0, 0.0), 0.0000003, True, 0.5, None, BLEND_SCREEN, "purple"),
+            (darray_green, (0.0, 0.0), 0.0000003, True, 1.5, None, BLEND_SCREEN, "greem"),
         ]
 
         cnvs.set_images(images)
@@ -491,7 +491,7 @@ class TestCanvas(test.GuiTestCase):
         # Set the mpp again, because the on_size handler will have recalculated it
         view.mpp.value = 1
 
-        images = [(darray, (0.0, 0.0), 2, True, None, None, "nanana")]
+        images = [(darray, (0.0, 0.0), 2, True, None, None, None, "nanana")]
         canvas.set_images(images)
         canvas.scale = 1
         canvas.update_drawing()

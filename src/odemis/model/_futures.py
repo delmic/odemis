@@ -4,7 +4,7 @@ Created on 10 Dec 2013
 
 @author: Éric Piel
 
-Copyright © 2013-2014 Éric Piel, Delmic
+Copyright © 2013-2015 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -205,6 +205,7 @@ class CancellableFuture(futures.Future):
             self._condition.notify_all()
         self._invoke_callbacks()
 
+
 class ProgressiveFuture(CancellableFuture):
     """
     Allows to track the current progress of the task by getting the (expected)
@@ -233,38 +234,44 @@ class ProgressiveFuture(CancellableFuture):
             self._end_time = time.time()
         self._invoke_upd_callbacks()
 
-    # TODO: Add support to get the current status? as a standard call?
-
-    def _report_update(self, fn):
-        # Why the 'with'? Is there some cleanup needed?
+    def get_progress(self):
+        """
+        Return the current known start and end time
+        return (float, float): start and end time (in s from epoch)
+        """
         with self._condition:
-            now = time.time()
-            if self._state in [CANCELLED, CANCELLED_AND_NOTIFIED, FINISHED]:
-                past = self._end_time - self._start_time
-                left = 0
-            elif self._state == PENDING:
-                past = now - self._start_time
-                # ensure we state it's not yet started
-                if past >= 0:
-                    past = -1e-9
-                # ensure past + left == duration
-                left = (self._end_time - self._start_time) - past
-            else: # running
-                past = now - self._start_time
-                left = self._end_time - now
-                if left < 0:
-                    logging.debug("reporting progress on task which should have "
-                                  "finished already %f s ago", -left)
-                    left = 0
-        try:
-            # TODO: better use absolute values: start/now/end ? or current ratio/start/end?
-            fn(self, past, left)
-        except Exception:
-            logging.exception('exception calling callback for %r', self)
+            start, end = self._start_time, self._end_time
+            if self._state == PENDING:
+                # ensure we say the start time is not (too much) in the past
+                now = time.time()
+                if start < now:
+                    dur = end - start
+                    start = now
+                    end = now + dur
+            elif self._state == RUNNING:
+                # ensure we say the end time is not (too much) in the past
+                end = max(end, time.time())
 
-    def _invoke_upd_callbacks(self):
-        for callback in self._upd_callbacks:
-            self._report_update(callback)
+        return start, end
+
+    def set_progress(self, start=None, end=None):
+        """
+        Update the start and end times of the task. To be used by executors only.
+
+        start (float or None): time at which the task started (or will be starting)
+        end (float or None): time at which the task ended (or will be ending)
+        """
+        with self._condition:
+            if start is not None:
+                self._start_time = start
+            if end is not None:
+                self._end_time = end
+
+            if self._start_time > self._end_time:
+                logging.warning("Future start time %f > end time %f",
+                                self._start_time, self._end_time)
+
+        self._invoke_upd_callbacks()
 
     def set_start_time(self, val):
         """
@@ -272,9 +279,7 @@ class ProgressiveFuture(CancellableFuture):
 
         val (float): time at which the task started (or will be starting)
         """
-        with self._condition:
-            self._start_time = val
-        self._invoke_upd_callbacks()
+        self.set_progress(start=val)
 
     def set_end_time(self, val):
         """
@@ -282,9 +287,18 @@ class ProgressiveFuture(CancellableFuture):
 
         val (float): time at which the task ended (or will be ending)
         """
-        with self._condition:
-            self._end_time = val
-        self._invoke_upd_callbacks()
+        self.set_progress(end=val)
+
+    def _report_update(self, fn):
+        start, end = self.get_progress()
+        try:
+            fn(self, start, end)
+        except Exception:
+            logging.exception('exception calling callback for %r', self)
+
+    def _invoke_upd_callbacks(self):
+        for callback in self._upd_callbacks:
+            self._report_update(callback)
 
     def add_update_callback(self, fn):
         """
@@ -314,11 +328,7 @@ class ProgressiveFuture(CancellableFuture):
         """
         running = futures.Future.set_running_or_notify_cancel(self)
         if running:
-            now = time.time()
-            with self._condition:
-                self._start_time = now
-            self._invoke_upd_callbacks()
+            self.set_progress(start=time.time())
 
         return running
-
 
