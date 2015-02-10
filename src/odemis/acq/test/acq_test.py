@@ -120,8 +120,8 @@ class SECOMTestCase(unittest.TestCase):
                 self.streams[0],
                 stream.StreamTree(streams=self.streams[1:3])
                 ])
-        self.past = None
-        self.left = None
+        self.start = None
+        self.end = None
         self.updates = 0
 
         f = acq.acquire(st.getStreams())
@@ -141,8 +141,8 @@ class SECOMTestCase(unittest.TestCase):
                 self.streams[2],
                 stream.StreamTree(streams=self.streams[0:2])
                 ])
-        self.past = None
-        self.left = None
+        self.start = None
+        self.end = None
         self.updates = 0
         self.done = False
 
@@ -156,16 +156,16 @@ class SECOMTestCase(unittest.TestCase):
 
         self.assertRaises(CancelledError, f.result, 1)
         self.assertGreaterEqual(self.updates, 1) # at least one update at cancellation
-        self.assertEqual(self.left, 0)
+        self.assertLessEqual(self.end, time.time())
         self.assertTrue(self.done)
         self.assertTrue(f.cancelled())
 
     def on_done(self, future):
         self.done = True
 
-    def on_progress_update(self, future, past, left):
-        self.past = past
-        self.left = left
+    def on_progress_update(self, future, start, end):
+        self.start = start
+        self.end = end
         self.updates += 1
 
 #@skip("simple")
@@ -230,8 +230,8 @@ class SPARCTestCase(unittest.TestCase):
         est_time = acq.estimateTime(st.getStreams())
 
         # prepare callbacks
-        self.past = None
-        self.left = None
+        self.start = None
+        self.end = None
         self.updates = 0
         self.done = 0
 
@@ -252,16 +252,16 @@ class SPARCTestCase(unittest.TestCase):
         self.assertIsInstance(thumb, model.DataArray)
 
         self.assertGreaterEqual(self.updates, 1) # at least one update at end
-        self.assertEqual(self.left, 0)
+        self.assertLessEqual(self.end, time.time())
         self.assertEqual(self.done, 1)
         self.assertTrue(not f.cancelled())
 
     def on_done(self, future):
         self.done += 1
 
-    def on_progress_update(self, future, past, left):
-        self.past = past
-        self.left = left
+    def on_progress_update(self, future, start, end):
+        self.start = start
+        self.end = end
         self.updates += 1
 
 if __name__ == "__main__":

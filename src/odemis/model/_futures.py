@@ -4,7 +4,7 @@ Created on 10 Dec 2013
 
 @author: Éric Piel
 
-Copyright © 2013-2014 Éric Piel, Delmic
+Copyright © 2013-2015 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -205,6 +205,7 @@ class CancellableFuture(futures.Future):
             self._condition.notify_all()
         self._invoke_callbacks()
 
+
 class ProgressiveFuture(CancellableFuture):
     """
     Allows to track the current progress of the task by getting the (expected)
@@ -289,29 +290,9 @@ class ProgressiveFuture(CancellableFuture):
         self.set_progress(end=val)
 
     def _report_update(self, fn):
-        with self._condition:
-            now = time.time()
-            if self._state in [CANCELLED, CANCELLED_AND_NOTIFIED, FINISHED]:
-                past = self._end_time - self._start_time
-                left = 0
-            elif self._state == PENDING:
-                past = now - self._start_time
-                # ensure we state it's not yet started
-                if past >= 0:
-                    past = -1e-9
-                # ensure past + left == duration
-                left = (self._end_time - self._start_time) - past
-            else: # running
-                past = now - self._start_time
-                left = self._end_time - now
-                if left < 0:
-                    logging.debug("reporting progress on task which should have "
-                                  "finished already %f s ago", -left)
-                    left = 0
+        start, end = self.get_progress()
         try:
-            # TODO: better use absolute values: start/end ? or current ratio/start/end?
-            # start, end = self.get_progress()
-            fn(self, past, left)
+            fn(self, start, end)
         except Exception:
             logging.exception('exception calling callback for %r', self)
 

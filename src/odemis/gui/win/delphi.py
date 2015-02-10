@@ -124,13 +124,13 @@ class CalibrationProgressDialog(xrcprogress_dialog):
                                                                  self.gauge,
                                                                  self.time_txt)
         self.calib_future.add_done_callback(self.on_calib_done)
-        self.calib_future.add_update_callback(self.on_calib_update)
+#         self.calib_future.add_update_callback(self.on_calib_update)
 
-    def update_calibration_time(self, time):
-        txt = "Time remaining: {}"
-        txt = txt.format(units.readable_time(time))
-
-        self.time_txt.SetLabel(txt)
+#     def update_calibration_time(self, time):
+#         txt = "Time remaining: {}"
+#         txt = txt.format(units.readable_time(time))
+#
+#         self.time_txt.SetLabel(txt)
 
     def on_close(self, evt):
         """ Close event handler that executes various cleanup actions
@@ -161,7 +161,6 @@ class CalibrationProgressDialog(xrcprogress_dialog):
             htop, hbot, hfoc, strans, sscale, srot, iscale, irot, iscale_xy, ishear, resa, resb, hfwa, spotshift = future.result(1)  # timeout is just for safety
         except CancelledError:
             # hide progress bar (+ put pack estimated time)
-            self.update_calibration_time(0)
             self.time_txt.SetLabel("Calibration cancelled.")
             self.cancel_btn.SetLabel("Close")
             self.gauge.Hide()
@@ -170,7 +169,6 @@ class CalibrationProgressDialog(xrcprogress_dialog):
         except Exception:
             # We cannot do much: just warn the user and pretend it was cancelled
             self.calib_future.cancel()
-            self.update_calibration_time(0)
             self.time_txt.SetLabel("Calibration failed.")
             self.cancel_btn.SetLabel("Close")
             # leave the gauge, to give a hint on what went wrong.
@@ -181,16 +179,16 @@ class CalibrationProgressDialog(xrcprogress_dialog):
                                      sscale, srot, iscale, irot, iscale_xy, ishear,
                                      resa, resb, hfwa, spotshift)
 
-        self.update_calibration_time(0)
+#         self.update_calibration_time(0)
         self.time_txt.SetLabel("Calibration completed.")
         # As the action is complete, rename "Cancel" to "Close"
         self.cancel_btn.SetLabel("Close")
 
-    @call_in_wx_main
-    @ignore_dead
-    def on_calib_update(self, future, past, left):
-        """ Callback called when the calibration time is updated (either successfully or cancelled) """
-        self.update_calibration_time(left)
+#     @call_in_wx_main
+#     @ignore_dead
+#     def on_calib_update(self, future, past, left):
+#         """ Callback called when the calibration time is updated (either successfully or cancelled) """
+#         self.update_calibration_time(left)
 
 def DelphiCalibration(main_data, overview_pressure, vacuum_pressure, vented_pressure,
                       first_insertion=True, known_first_hole_f=None, known_second_hole_f=None,

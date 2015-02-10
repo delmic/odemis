@@ -121,8 +121,8 @@ class TestOverlayStream(unittest.TestCase):
         self.assertGreaterEqual(est_time, sum_est_time)
 
         # prepare callbacks
-        self.past = None
-        self.left = None
+        self.start = None
+        self.end = None
         self.updates = 0
         self.done = 0
 
@@ -149,16 +149,16 @@ class TestOverlayStream(unittest.TestCase):
         # self.assertIsInstance(thumb, model.DataArray)
 
         self.assertGreaterEqual(self.updates, 1) # at least one update at end
-        self.assertEqual(self.left, 0)
+        self.assertLessEqual(self.end, time.time())
         self.assertEqual(self.done, 1)
         self.assertTrue(not f.cancelled())
 
     def on_done(self, future):
         self.done += 1
 
-    def on_progress_update(self, future, past, left):
-        self.past = past
-        self.left = left
+    def on_progress_update(self, future, start, end):
+        self.start = start
+        self.end = end
         self.updates += 1
 
 if __name__ == "__main__":

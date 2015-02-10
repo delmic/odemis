@@ -4,7 +4,7 @@ Created on 27 Nov 2013
 
 @author: Éric Piel
 
-Copyright © 2013 Éric Piel, Delmic
+Copyright © 2013-2015 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -29,7 +29,7 @@ from __future__ import division
 from Pyro4.core import isasync
 import collections
 from concurrent import futures
-from concurrent.futures._base import CancelledError
+from concurrent.futures import CancelledError
 import logging
 import math
 import numpy
@@ -122,7 +122,7 @@ def computeThumbnail(streamTree, acqTask):
     # poor man's implementation: take the first image of the streams, hoping
     # it actually has a renderer (.image)
     streams = sorted(streamTree.getStreams(), key=_weight_stream,
-                               reverse=True)
+                     reverse=True)
     if not streams:
         logging.warning("No stream found in the stream tree")
         return None
@@ -201,7 +201,7 @@ class AcquisitionTask(object):
         expected_time = numpy.sum(self._streamTimes.values())
         # no need to set the start time of the future: it's automatically done
         # when setting its state to running.
-        self._future.set_end_time(time.time() + expected_time)
+        self._future.set_progress(end=time.time() + expected_time)
 
         raw_images = {} # stream -> list of raw images
         try:
@@ -232,7 +232,7 @@ class AcquisitionTask(object):
 
                 # update the time left
                 expected_time -= self._streamTimes[s]
-                self._future.set_end_time(time.time() + expected_time)
+                self._future.set_progress(end=time.time() + expected_time)
 
             # TODO: if the stream is OverlayStream, apply the metadata to all the
             # data from an optical stream. => put the data
@@ -253,7 +253,7 @@ class AcquisitionTask(object):
 
     def _adjust_metadata(self, raw_data):
         """
-        Update/adjust the metadata of the raw data received based on global 
+        Update/adjust the metadata of the raw data received based on global
         information.
         raw_data (dict Stream -> list of DataArray): the raw data for each stream.
           The raw data is directly updated, and even removed if necessary.
@@ -279,10 +279,10 @@ class AcquisitionTask(object):
         # add the stream name to the image if nothing yet
         for s, data in raw_data.items():
             for d in data:
-                if not model.MD_DESCRIPTION in d.metadata:
+                if model.MD_DESCRIPTION not in d.metadata:
                     d.metadata[model.MD_DESCRIPTION] = s.name.value
-        
-    def _on_progress_update(self, f, past, left):
+
+    def _on_progress_update(self, f, start, end):
         """
         Called when the current future has made a progress (and so it should
         provide a better time estimation).
@@ -291,12 +291,8 @@ class AcquisitionTask(object):
             logging.warning("Progress update from not the current future: %s", f)
             return
 
-        now = time.time()
-        time_left = left
-        for s in self._streams_left:
-            time_left += self._streamTimes[s]
-
-        self._future.set_end_time(now + time_left)
+        total_end = end + sum(self._streamTimes[s] for s in self._streams_left)
+        self._future.set_progress(end=total_end)
 
     def cancel(self, future):
         """

@@ -200,33 +200,34 @@ class TestFutures(unittest.TestCase):
         Only tests a simple ProgressiveFuture
         """
         self.cancelled = 0
-        self.past = None
-        self.left = None
+        self.start = None
+        self.end = None
         future = ProgressiveFuture()
         future.task_canceller = self.cancel_task
 
         now = time.time()
         # try to update progress
-        future.set_end_time(now + 1)
+        future.set_progress(end=now + 1)
         future.add_update_callback(self.on_progress_update)
-        future.set_end_time(now + 2) # should say about 2 s left
-        self.assertTrue(1.9 <= self.left < 2)
-        self.assertLessEqual(self.past, 0)
+        future.set_progress(end=now + 2) # should say about 2 s left
+        self.assertEqual(self.end, now + 2)
+        # before being started, start should always be (a bit) in the future
+        self.assertGreaterEqual(self.start, now)
 
         # "start" the task
         future.set_running_or_notify_cancel()
-        self.assertTrue(0 <= self.past < 0.1)
+        self.assertTrue(0 <= time.time() - self.start < 0.1)
         time.sleep(0.1)
 
         now = time.time()
-        future.set_end_time(now + 1)
-        self.assertTrue(0.9 <= self.left < 1)
+        future.set_progress(end=now + 1)
+        self.assertTrue(0.9 <= self.end - time.time() < 1)
 
         # try to cancel while running
         future.cancel()
         self.assertTrue(future.cancelled())
         self.assertRaises(CancelledError, future.result, 1)
-        self.assertEqual(self.left, 0)
+        self.assertLessEqual(self.end, time.time())
         self.assertEqual(self.cancelled, 1)
 
     def testPF_get_progress(self):
@@ -261,9 +262,9 @@ class TestFutures(unittest.TestCase):
         self.cancelled += 1
         return True
 
-    def on_progress_update(self, future, past, left):
-        self.past = past
-        self.left = left
+    def on_progress_update(self, future, start, end):
+        self.start = start
+        self.end = end
 
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']
