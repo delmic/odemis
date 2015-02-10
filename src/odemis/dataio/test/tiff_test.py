@@ -653,6 +653,7 @@ class TestTiffIO(unittest.TestCase):
                      model.MD_POS_COR: (-1e-6, 3e-6), # m
                      model.MD_PIXEL_SIZE_COR: (1.2, 1.2),
                      model.MD_ROTATION_COR: 6.27, # rad
+                     model.MD_SHEAR_COR: 0.001,
                     },
                     {model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake hw",
@@ -679,6 +680,7 @@ class TestTiffIO(unittest.TestCase):
                      model.MD_IN_WL: (600e-9, 620e-9), # m
                      model.MD_OUT_WL: (620e-9, 650e-9), # m
                      model.MD_ROTATION: 0.1, # rad
+                     model.MD_SHEAR: 0,
                     },
                     ]
         # create 3 greyscale images of same size
@@ -729,7 +731,7 @@ class TestTiffIO(unittest.TestCase):
                              owl[1] <= md[model.MD_OUT_WL][-1]))
 
             self.assertAlmostEqual(im.metadata.get(model.MD_ROTATION, 0), md.get(model.MD_ROTATION, 0))
-
+            self.assertAlmostEqual(im.metadata.get(model.MD_SHEAR, 0), md.get(model.MD_SHEAR, 0))
 
         # check thumbnail
         rthumbs = tiff.read_thumbnail(FILENAME)

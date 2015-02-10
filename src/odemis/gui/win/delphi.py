@@ -379,7 +379,7 @@ def _DoDelphiCalibration(future, main_data, overview_pressure, vacuum_pressure,
                 trans_md, skew_md = cor_md
                 iscale = trans_md[model.MD_PIXEL_SIZE_COR]
                 irot = -trans_md[model.MD_ROTATION_COR] % (2 * math.pi)
-                ishear = skew_md[model.MD_SHEAR_COR]
+                ishear = -skew_md[model.MD_SHEAR_COR]
                 iscale_xy = skew_md[model.MD_PIXEL_SIZE_COR]
                 return htop, hbot, hfoc, strans, sscale, srot, iscale, irot, iscale_xy, ishear, resa, resb, hfwa, spotshift
             # Secondary calibration
