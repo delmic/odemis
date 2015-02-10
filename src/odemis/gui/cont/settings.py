@@ -105,9 +105,17 @@ class SettingEntry(VigilantAttributeConnector, Entry):
         if None not in (va, value_ctrl):
             VigilantAttributeConnector.__init__(self, va, value_ctrl, va_2_ctrl, ctrl_2_va, events)
         elif any([va_2_ctrl, ctrl_2_va, events]):
-            logging.error("Cannot create VigilantAttributeConnector")
+            logging.exception("Cannot create VigilantAttributeConnector")
         else:
             logging.debug("Cannot create VigilantAttributeConnector")
+
+    def pause(self):
+        if self.vigilattr:
+            super(SettingEntry, self).pause()
+
+    def resume(self):
+        if self.vigilattr:
+            super(SettingEntry, self).resume()
 
 
 class AxisSettingEntry(AxisConnector, Entry):
@@ -165,12 +173,12 @@ class SettingsController(object):
 
     def pause(self):
         """ Pause SettingEntry related control updates """
-        for entry in [e for e in self.entries if e.vigilattr]:
+        for entry in self.entries:
             entry.pause()
 
     def resume(self):
         """ Pause SettingEntry related control updates """
-        for entry in [e for e in self.entries if e.vigilattr]:
+        for entry in self.entries:
             entry.resume()
 
     def enable(self, enabled):
