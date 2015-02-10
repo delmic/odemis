@@ -314,6 +314,13 @@ def _add_image_info(group, dataset, image):
         _h5svi_set_state(group["Rotation"], ST_REPORTED)
         group["Rotation"].attrs["UNIT"] = "rad"
 
+    # Shear (2-scalar): X,Y
+    if model.MD_SHEAR in image.metadata:
+        # Shear parallel to X axis, so just set Y to 0
+        group["Shear"] = (image.metadata[model.MD_SHEAR], 0)
+        _h5svi_set_state(group["Shear"], ST_REPORTED)
+        group["Shear"].attrs["UNIT"] = ""
+
 def _read_image_info(group):
     """
     Read the basic metadata information about an image (scale and offset)
@@ -373,6 +380,11 @@ def _read_image_info(group):
             logging.info("Metadata contains rotation vector %s, which cannot be"
                          " fully reproduced in Odemis.", rot) 
 
+        she = group["Shear"]
+        md[model.MD_SHEAR] = float(she[0])
+        if she[1] != 0:
+            logging.info("Metadata contains shear vector %s, which cannot be"
+                         " fully reproduced in Odemis.", she)
     except Exception:
         pass
 
@@ -789,6 +801,7 @@ def _findImageGroups(das):
             if (da0.metadata.get(model.MD_PIXEL_SIZE) != da.metadata.get(model.MD_PIXEL_SIZE)
                 or da0.metadata.get(model.MD_POS) != da.metadata.get(model.MD_POS)
                 or da0.metadata.get(model.MD_ROTATION, 0) != da.metadata.get(model.MD_ROTATION, 0)
+                or da0.metadata.get(model.MD_SHEAR, 0) != da.metadata.get(model.MD_SHEAR, 0)
                 ):
                 continue
             # Found!

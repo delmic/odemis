@@ -389,8 +389,9 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             scale = rgbim.metadata[model.MD_PIXEL_SIZE][0]
             pos = self.physical_to_world_pos(rgbim.metadata[model.MD_POS])
             rot = -rgbim.metadata.get(model.MD_ROTATION, 0)  # ccw -> cw
+            shear = rgba_im.metadata.get(model.MD_SHEAR, None)
 
-            ims.append([rgba_im, pos, scale, keepalpha, rot, blend_mode, name])
+            ims.append([rgba_im, pos, scale, keepalpha, rot, shear, blend_mode, name])
 
         # TODO: Canvas needs to accept the NDArray (+ specific attributes recorded separately).
         self.set_images(ims)
@@ -1095,6 +1096,7 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
         """ Called when the goal_im is dereferenced """
         self._goal_wim = None
 
+    # noinspection PyTypeChecker
     def _convert_streams_to_images(self):
         """
         Same as the overridden method, but ensures the goal image keeps the alpha
@@ -1120,8 +1122,7 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
             # TODO: make it generic
             if s.name.value == "Goal":
                 prev_im = None if self._goal_im_ref is None else self._goal_im_ref()
-                if (self._goal_wim is None or prev_im is None or
-                    prev_im is not rgbim):
+                if self._goal_wim is None or prev_im is None or prev_im is not rgbim:
                     logging.debug("Converting goal image")
                     wim = img.format_rgba_darray(rgbim)
                     self._goal_im_ref = weakref.ref(rgbim, self._reset_goal_im)
@@ -1134,14 +1135,14 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
             keepalpha = (rgbim.shape[2] == 4)
 
             scale = rgbim.metadata[model.MD_PIXEL_SIZE][0]
-            pos = (0, 0) # the sensor image should be centered on the sensor center
+            pos = (0, 0)  # the sensor image should be centered on the sensor center
 
             if s.name.value == "Goal":
                 # goal image => add at the end
-                ims.append((wim, pos, scale, keepalpha, None, None, s.name.value))
+                ims.append((wim, pos, scale, keepalpha, None, None, None, s.name.value))
             else:
                 # add at the beginning
-                ims[0] = (wim, pos, scale, keepalpha, None, None, s.name.value)
+                ims[0] = (wim, pos, scale, keepalpha, None, None, None, s.name.value)
 
         self.set_images(ims)
 
@@ -1380,7 +1381,7 @@ class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
 
         """
 
-        self.set_images([(im_data, (0.0, 0.0), 1.0, True, None, None, "Spatial Spectrum")])
+        self.set_images([(im_data, (0.0, 0.0), 1.0, True, None, None, None, "Spatial Spectrum")])
         self.markline_overlay.clear_labels()
         self.markline_overlay.activate()
 
@@ -1470,7 +1471,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         for s in streams:
             # image is always centered, fitting the whole canvas
             wim = img.format_rgba_darray(s.image.value)
-            ims.append((wim, (0, 0), 0.1, False, None, None, s.name.value))
+            ims.append((wim, (0, 0), 0.1, False, None, None, None, s.name.value))
 
         self.set_images(ims)
 

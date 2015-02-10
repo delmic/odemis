@@ -773,9 +773,10 @@ class BitmapCanvas(BufferedCanvas):
             2. scale (float): scaling of the image
             3. keepalpha (boolean): whether the alpha channel must be used to draw
             4. rotation (float): clockwise rotation in radians on the center of the image
-            5. name (str): name of the stream that the image originated from
+            4. shear (float): horizontal shear relative to the center of the image
             6. blend_mode (int): blend mode to use for the image. Defaults to `source` which
                     just overrides underlying layers.
+            7. name (str): name of the stream that the image originated from
 
         ..note::
             Call request_drawing_update() after calling `set_images` to actually get the images
@@ -785,7 +786,6 @@ class BitmapCanvas(BufferedCanvas):
 
         # TODO:
         # * take an image composition tree (operator + images + scale + pos)
-        # * keepalpha not needed => just use alpha if the image has it
         # * allow to indicate just one image has changed (and so the rest
         #   doesn't need to be recomputed)
 
@@ -795,7 +795,7 @@ class BitmapCanvas(BufferedCanvas):
             if args is None:
                 images.append(None)
             else:
-                im, w_pos, scale, keepalpha, rotation, blend_mode, name = args
+                im, w_pos, scale, keepalpha, rotation, shear, blend_mode, name = args
 
                 if not blend_mode:
                     blend_mode = BLEND_DEFAULT
@@ -814,6 +814,7 @@ class BitmapCanvas(BufferedCanvas):
                 im.metadata['dc_center'] = w_pos
                 im.metadata['dc_scale'] = scale
                 im.metadata['dc_rotation'] = rotation
+                im.metadata['dc_shear'] = shear
                 im.metadata['dc_keepalpha'] = keepalpha
                 im.metadata['blend_mode'] = blend_mode
                 im.metadata['name'] = name
@@ -900,6 +901,7 @@ class BitmapCanvas(BufferedCanvas):
                     merge_ratio,
                     im_scale=im.metadata['dc_scale'],
                     rotation=im.metadata['dc_rotation'],
+                    shear=last_image.metadata['dc_shear'],
                     blend_mode=im.metadata['blend_mode']
                 )
 
@@ -920,11 +922,12 @@ class BitmapCanvas(BufferedCanvas):
                 merge_ratio,
                 im_scale=last_image.metadata['dc_scale'],
                 rotation=last_image.metadata['dc_rotation'],
+                shear=last_image.metadata['dc_shear'],
                 blend_mode=last_image.metadata['blend_mode']
             )
 
-    def _draw_image(self, ctx, im_data, w_im_center, opacity=1.0, im_scale=1.0, rotation=None,
-                    blend_mode=BLEND_DEFAULT):
+    def _draw_image(self, ctx, im_data, w_im_center, opacity=1.0,
+                    im_scale=1.0, rotation=None, shear=None, blend_mode=BLEND_DEFAULT):
         """ Draw the given image to the Cairo context
 
         The buffer is considered to have it's 0,0 origin at the top left
@@ -935,6 +938,8 @@ class BitmapCanvas(BufferedCanvas):
         :param opacity: (float) [0..1] => [transparent..opaque]
         :param im_scale: (float)
         :param rotation: (float) Clock-wise rotation around the image center in radians
+        :param shear: (float) Horizontal shearing of the image data (around it's center)
+        :param blend_mode: (int) Graphical blending type used for transparency
 
         """
 
@@ -985,6 +990,19 @@ class BitmapCanvas(BufferedCanvas):
             ctx.rotate(rotation)
             # Translate back, so the origin is at the top left position of the image
             ctx.translate(-rot_x, -rot_y)
+
+        # Shear if needed
+        if shear is not None:
+            # Shear around the center of the image data. Shearing only occurs on the x axis
+            x, y, w, h = b_im_rect
+            shear_x = x + w / 2
+            shear_y = y + h / 2
+
+            # Translate to the center x of the image (in buffer coordinates)
+            ctx.translate(shear_x, shear_y)
+            shear_matrix = cairo.Matrix(1.0, 0.0, shear, 1.0)
+            ctx.transform(shear_matrix)
+            ctx.translate(-shear_x, -shear_y)
 
         if total_scale == 1.0:
             # logging.debug("No scaling required")

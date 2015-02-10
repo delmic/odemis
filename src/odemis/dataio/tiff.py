@@ -436,16 +436,22 @@ def _updateMDFromOME(root, das, basename):
         trans_mat = ime.find("Transform")
         if trans_mat is not None:
             try:
-                cosv = float(trans_mat.attrib["A00"]) # = ["A11"]
-                sinv = float(trans_mat.attrib["A01"]) # = -["A10"]
-                cosv2 = float(trans_mat.attrib["A11"])
-                sinvm = float(trans_mat.attrib["A10"])
-                if not (util.almost_equal(cosv, cosv2)
-                        and util.almost_equal(sinv, -sinvm)):
+                # It may include shear
+                cossh = float(trans_mat.attrib["A00"])
+                sinv = float(trans_mat.attrib["A01"])
+                cosv = float(trans_mat.attrib["A11"])
+                sinsh = float(trans_mat.attrib["A10"])
+                rot = math.atan2(sinv, cosv) % (2 * math.pi)
+                scaling_y = math.sqrt(math.pow(sinv, 2) + math.pow(cosv, 2))
+                scaling_x = cossh * math.cos(rot) - sinsh * math.sin(rot)
+                shear = (cossh / scaling_x - math.cos(rot)) / math.sin(rot)
+                if not (util.almost_equal(scaling_y, 1)
+                    and util.almost_equal(scaling_x, 1)):
                     logging.warning("Image metadata has complex transformation "
                                     "which is not supported by Odemis.")
-                rot = math.atan2(sinv, cosv) % (2 * math.pi)
                 md[model.MD_ROTATION] = rot
+                if not (util.almost_equal(shear, 0)):
+                    md[model.MD_SHEAR] = shear
             except (AttributeError, KeyError, ValueError):
                 pass
 
@@ -857,6 +863,7 @@ def _findImageGroups(das):
             or prev_da.metadata.get(model.MD_PIXEL_SIZE) != da.metadata.get(model.MD_PIXEL_SIZE)
             # or prev_da.metadata.get(model.MD_POS) != da.metadata.get(model.MD_POS)
             or prev_da.metadata.get(model.MD_ROTATION, 0) != da.metadata.get(model.MD_ROTATION, 0)
+            or prev_da.metadata.get(model.MD_SHEAR, 0) != da.metadata.get(model.MD_SHEAR, 0)
             ):
             # new group
             group_ifd = current_ifd
@@ -947,9 +954,15 @@ def _addImageElement(root, das, ifd, rois):
     if model.MD_ROTATION in globalMD:
         rot = globalMD[model.MD_ROTATION]
         sinr, cosr = math.sin(rot), math.cos(rot)
-        trans_mat = [[cosr, sinr, 0],
-                     [-sinr, cosr, 0]]
         trane = ET.SubElement(ime, "Transform")
+        if model.MD_SHEAR in globalMD:
+            # If shear is available
+            she = globalMD[model.MD_SHEAR]
+            trans_mat = [[cosr + sinr * she, sinr, 0],
+                         [-sinr + cosr * she, cosr, 0]]
+        else:
+            trans_mat = [[cosr, sinr, 0],
+                         [-sinr, cosr, 0]]
         for i in range(2):
             for j in range(3):
                 trane.attrib["A%d%d" % (i, j)] = "%.15f" % trans_mat[i][j]
