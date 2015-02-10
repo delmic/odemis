@@ -34,7 +34,7 @@ class Canvas(glcanvas.GLCanvas):
         self.init = False
         self.context = glcanvas.GLContext(self)
 
-        self.fit = FIT_VERT | FIT_HORZ
+        self.fit = FIT_HORZ | FIT_VERT
         self.background = True
 
         # Metrics for rendering background images pixel perfect
@@ -186,8 +186,7 @@ class Canvas(glcanvas.GLCanvas):
 
         if self.background:
             glMatrixMode(GL_PROJECTION)
-
-            # glPushMatrix()
+            glPushMatrix()
             glLoadIdentity()
 
             glMatrixMode(GL_MODELVIEW)
@@ -216,6 +215,9 @@ class Canvas(glcanvas.GLCanvas):
 
             glDisable(GL_TEXTURE_2D)
 
+            glMatrixMode(GL_PROJECTION)
+            glPopMatrix()
+
         if self._texture_ids:
             glMatrixMode(GL_MODELVIEW)
             glLoadIdentity()
@@ -226,9 +228,8 @@ class Canvas(glcanvas.GLCanvas):
             glEnable(GL_TEXTURE_2D)
             glBindTexture(GL_TEXTURE_2D, self._texture_ids[0])
 
-            print self.scale
             glScalef(self.scale, self.scale, 1)
-            glColor4f(1.0, 1.0, 1.0, 0.3)
+            glColor4f(1.0, 1.0, 1.0, 0.7)
 
             glBegin(GL_QUADS)
 
@@ -260,7 +261,7 @@ class MainWindow(wx.Frame):
         self.Center()
         self.Show()
 
-        self.canvas.set_image(generate_img_data(8000, 8000, 3))
+        self.canvas.set_image(generate_img_data(6000, 6000, 3))
         # self.canvas.set_image(imgdata.gettest_10x10Image())
 
 
