@@ -222,7 +222,7 @@ class StreamController(object):
             self._stream_bar.add_action("Filtered colour", self._userAddFluo, fluor_capable)
 
         # Bright-field
-        if self._main_data_model.light and self._main_data_model.ccd:
+        if self._main_data_model.brightlight and self._main_data_model.ccd:
 
             def brightfield_capable():
                 enabled = self._main_data_model.chamberState.value in {guimodel.CHAMBER_VACUUM,
@@ -294,7 +294,7 @@ class StreamController(object):
             "Bright-field",
             self._main_data_model.ccd,
             self._main_data_model.ccd.data,
-            self._main_data_model.light
+            self._main_data_model.brightlight
         )
         return self._addStream(s, **kwargs)
 

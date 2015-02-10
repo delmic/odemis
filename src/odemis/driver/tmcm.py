@@ -24,7 +24,7 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 
-from concurrent.futures._base import CancelledError
+from concurrent.futures import CancelledError
 import glob
 import logging
 import numpy
@@ -184,7 +184,7 @@ class TMCM3110(model.Actuator):
             self.stop()
             self._executor.shutdown(wait=True)
             self._executor = None
-        
+
         if hasattr(self, "_temp_timer"):
             self._temp_timer.cancel()
             del self._temp_timer
@@ -721,18 +721,18 @@ class TMCM3110(model.Actuator):
         axes (set of str): names of the axes to update or None if all should be
           updated
         """
-        if axes is None:
-            axes = self._axes_names
-        pos = self.position.value
+        pos = self.position.value.copy()
         for i, n in enumerate(self._axes_names):
-            if n in axes:
+            if axes is None or n in axes:
                 # param 1 = current position
                 pos[n] = self.GetAxisParam(i, 1) * self._ustepsize[i]
+
+        pos = self._applyInversionAbs(pos)
 
         # it's read-only, so we change it via _value
         self.position._value = pos
         self.position.notify(self.position.value)
-    
+
     def _updateSpeed(self):
         """
         Update the speed VA from the controller settings
@@ -794,15 +794,16 @@ class TMCM3110(model.Actuator):
     def moveRel(self, shift):
         self._checkMoveRel(shift)
         shift = self._applyInversionRel(shift)
-        
+
         # Check if the distance is big enough to make sense
         for an, v in shift.items():
             aid = self._axes_names.index(an)
             if abs(v) < self._ustepsize[aid]:
                 # TODO: store and accumulate all the small moves instead of dropping them?
                 del shift[an]
-                logging.info("Dropped too small move of %f m", abs(v))
-        
+                logging.info("Dropped too small move of %g m < %g m",
+                             abs(v), self._ustepsize[aid])
+
         if not shift:
             return model.InstantaneousFuture()
 
@@ -899,7 +900,7 @@ class TMCM3110(model.Actuator):
                         moving_axes.discard(aid)
                 if not moving_axes:
                     # no more axes to wait for
-                    return
+                    break
 
                 # Update the position from time to time (10 Hz)
                 if time.time() - last_upd > 0.1 or last_axes != moving_axes:
@@ -910,15 +911,15 @@ class TMCM3110(model.Actuator):
 
                 # Wait half of the time left (maximum 0.1 s)
                 left = end - time.time()
-                sleept = max(0, min(left / 2, 0.1))
+                sleept = max(0.001, min(left / 2, 0.1))
                 future._must_stop.wait(sleept)
-
-            logging.debug("Move of axes %s cancelled before the end", axes)
-            # stop all axes still moving them
-            for i in moving_axes:
-                self.MotorStop(i)
-            future._was_stopped = True
-            raise CancelledError()
+            else:
+                logging.debug("Move of axes %s cancelled before the end", axes)
+                # stop all axes still moving them
+                for i in moving_axes:
+                    self.MotorStop(i)
+                future._was_stopped = True
+                raise CancelledError()
         finally:
             self._updatePosition() # update (all axes) with final position
 
@@ -1115,7 +1116,7 @@ class TMCM3110Simulator(object):
         msg[-1] = numpy.sum(msg[:-1], dtype=numpy.uint8)
 
         self._output_buf += msg.tostring()
-        
+
     def _parseMessage(self, msg):
         """
         msg (buffer of length 9): the message to parse

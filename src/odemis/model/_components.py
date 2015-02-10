@@ -362,8 +362,11 @@ class DigitalCamera(Detector):
 
     def __init__(self, name, role, transpose=None, **kwargs):
         """
-        transpose (None or list of int): 
-        """ 
+        transpose (None or list of int): list of axes (indexed from 1).
+         Allows to rotate/mirror the CCD image. For each axis of the output data
+         is the corresponding axis of the detector indicated. Each detector axis
+         must be indicated precisely once.
+        """
         Detector.__init__(self, name, role, **kwargs)
         if transpose is not None:
             # check a bit it's valid
@@ -372,12 +375,12 @@ class DigitalCamera(Detector):
                 raise ValueError("Transpose argument contains multiple times "
                                  "the same axis: %s" % (transpose,))
             # Shape not yet defined, so can't check precisely all the axes are there
-            if (not 1 <= len(transpose) <= 5 or 0 in transpose 
+            if (not 1 <= len(transpose) <= 5 or 0 in transpose
                 or any(abs(v) > 5 for v in transpose)):
                 raise ValueError("Transpose argument does not define each axis "
                                  "of the camera once: %s" % (transpose,))
         self._transpose = transpose
-        
+
         # To be overridden by a VA
         self.pixelSize = None # (len(dim)-1 * float) size of a pixel (in meters). More precisely it should be the average distance between the centres of two pixels.
         self.binning = None # how many CCD pixels are merged (in each dimension) to form one pixel on the image.
@@ -399,7 +402,7 @@ class DigitalCamera(Detector):
     def _transposePosToUser(self, v):
         """
         For position, etc., origin is top-left
-        v (tuple of Numbers): logical position of a point
+        v (tuple of Numbers): logical position of a point (X, Y...)
         """
         if self._transpose is None:
             return v
@@ -416,7 +419,7 @@ class DigitalCamera(Detector):
     def _transposeTransToUser(self, v):
         """
         For translation, etc., origin is at the center
-        v (tuple of Numbers): logical position of a point
+        v (tuple of Numbers): logical position of a point (X, Y...)
         """
         if self._transpose is None:
             return v
@@ -430,10 +433,10 @@ class DigitalCamera(Detector):
         typev = type(v)
         return typev(vt)
 
-
     def _transposeSizeToUser(self, v):
         """
         For resolution, binning... where mirroring has no effect.
+        v (tuple of Numbers): logical position of a point (X, Y...)
         """
         if self._transpose is None:
             return v
@@ -445,6 +448,7 @@ class DigitalCamera(Detector):
     def _transposeShapeToUser(self, v):
         """
         For shape, where the last element is the depth (so unaffected)
+        v (tuple of Numbers): logical position of a point (X, Y...)
         """
         if self._transpose is None:
             return v
@@ -500,22 +504,36 @@ class DigitalCamera(Detector):
     # _transposeShapeFromUser and _transposeDAFromUser do not seem to have usage
 
     def _transposeDAToUser(self, v):
+        """
+        Transpose the data according to the transpose request
+        v (ndarray): data from the CCD
+        return (ndarray): data for the user
+        """
         if self._transpose is None:
             return v
 
+        # Note: numpy's arrays dimensions are reversed compare to transpose.
         # No copy is made, it's just a different view of the same data
-        dat = v.transpose([abs(idx) - 1 for idx in self._transpose])
+
+        # Switch the axes order
+        v = v.transpose([abs(idx) - 1 for idx in self._transpose])
+        # FIXME: This is wrong due to numpy's arrays being opposite order. We
+        # need the following code to be correct... but then we break all the
+        # microscope files that were using rotation/mirroring.
+        # l = len(self._transpose)
+        # v = v.transpose([l - abs(idx) for idx in reversed(self._transpose)])
 
         # Build slices on the fly, to reorder the whole array in one go
         slc = []
         for idx in self._transpose:
+        # for idx in reversed(self._transpose):
             if idx > 0:
                 slc.append(slice(None)) # [:] (=no change)
             else:
                 slc.append(slice(None, None, -1)) # [::-1] (=fully inverted)
-        
-        dat = dat[tuple(slc)]
-        return dat
+
+        v = v[tuple(slc)]
+        return v
 
 class Axis(object):
     """
@@ -571,7 +589,7 @@ class Axis(object):
 
         if self.unit is not None:
             pos_str += " " + self.unit
-        
+
         if not self.canAbs:
             abs_str = " (relative only)"
         else:

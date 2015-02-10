@@ -38,7 +38,7 @@ KWARGS = dict(name="test", role="stage", port=PORT,
               ustepsize=[5.9e-9, 5.8e-9, 5e-9],
               refproc="2xFinalForward",
               temp=True,
-              inverted=["y"])
+              inverted=["x"])
 KWARGS_SIM = dict(KWARGS)
 KWARGS_SIM["refproc"] = "FakeReferencing" # simulator doesn't support running program (=> fancy referencing)
 KWARGS_SIM["port"] = "/dev/fake"
@@ -95,6 +95,7 @@ class TestActuator(unittest.TestCase):
         move = {'x': 0.01e-6}
         self.dev.moveRel(move)
         time.sleep(0.1) # wait for the move to finish
+        self.assertAlmostEqual(move["x"], self.dev.position.value["x"])
 
     def test_sync(self):
         # For moves big enough, sync should always take more time than async
