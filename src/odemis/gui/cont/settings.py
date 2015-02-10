@@ -965,10 +965,10 @@ class SparcSettingsController(SettingsBarController):
             parent_frame.fp_settings_sparc_angular.Hide()
 
     def on_spec_rep(self, rep):
-        self._on_rep(rep, self.spectro_rep_ent.va, self.spectro_rep_ent.value_ctrl)
+        self._on_rep(rep, self.spectro_rep_ent.vigilattr, self.spectro_rep_ent.value_ctrl)
 
     def on_ar_rep(self, rep):
-        self._on_rep(rep, self.angular_rep_ent.va, self.angular_rep_ent.value_ctrl)
+        self._on_rep(rep, self.angular_rep_ent.vigilattr, self.angular_rep_ent.value_ctrl)
 
     @staticmethod
     def _on_rep(rep, rep_va, rep_ctrl):
@@ -979,7 +979,7 @@ class SparcSettingsController(SettingsBarController):
         choices = [(1, 1)]  # 1 x 1 should always be there
 
         # Add a couple values below/above the current repetition
-        for m in [1/4, 1/2, 1, 2, 4, 10]:
+        for m in (1 / 4, 1 / 2, 1, 2, 4, 10):
             x = int(round(rep[0] * m))
             y = int(round(x * ratio))
             choices.append((x, y))
