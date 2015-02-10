@@ -94,8 +94,10 @@ def preset_hq(entries):
     """
     ret = {}
 
+    # TODO: also handle AxisEntry ?
     for entry in entries:
-        if not entry.vigilattr or entry.vigilattr.readonly:
+        if (not hasattr(entry, "vigilattr") or entry.vigilattr is None
+            or entry.vigilattr.readonly):
             # not a real setting, just info
             logging.debug("Skipping the value %s", entry.name)
             continue
@@ -170,7 +172,8 @@ def preset_as_is(entries):
     """
     ret = {}
     for entry in entries:
-        if not entry.vigilattr or entry.vigilattr.readonly:
+        if (not hasattr(entry, "vigilattr") or entry.vigilattr is None
+            or entry.vigilattr.readonly):
             # not a real setting, just info
             logging.debug("Skipping the value %s", entry.name)
             continue
