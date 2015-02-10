@@ -22,8 +22,8 @@ import threading
 import time
 import unittest
 
-
 logging.getLogger().setLevel(logging.DEBUG)
+
 
 class TestExecutor(unittest.TestCase):
 
@@ -130,6 +130,7 @@ class TestExecutor(unittest.TestCase):
     def _on_end_task(self, future):
         self.called += 1
 
+
 class TestFutures(unittest.TestCase):
 
     def testCancelWhileRunning(self):
@@ -221,13 +222,40 @@ class TestFutures(unittest.TestCase):
         future.set_end_time(now + 1)
         self.assertTrue(0.9 <= self.left < 1)
 
-
         # try to cancel while running
         future.cancel()
         self.assertTrue(future.cancelled())
         self.assertRaises(CancelledError, future.result, 1)
         self.assertEqual(self.left, 0)
         self.assertEqual(self.cancelled, 1)
+
+    def testPF_get_progress(self):
+        """
+        Tests set/get_progress of ProgressiveFuture
+        """
+        f = ProgressiveFuture()
+
+        now = time.time()
+        start, end = now + 1, now + 2
+        # try to update progress
+        f.set_progress(start, end)
+        startf, endf = f.get_progress()
+        self.assertEqual(start, startf)
+        self.assertEqual(end, endf)
+
+        # "start" the task
+        f.set_running_or_notify_cancel()
+        startf, endf = f.get_progress()
+        self.assertLessEqual(startf, time.time())
+        self.assertEqual(end, endf)
+        time.sleep(0.1)
+
+        # "finish" the task
+        f.set_result(None)
+        self.assertTrue(f.done())
+        startf, endf = f.get_progress()
+        self.assertLessEqual(startf, time.time())
+        self.assertLessEqual(endf, time.time())
 
     def cancel_task(self, future):
         self.cancelled += 1

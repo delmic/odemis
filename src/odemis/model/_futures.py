@@ -233,10 +233,62 @@ class ProgressiveFuture(CancellableFuture):
             self._end_time = time.time()
         self._invoke_upd_callbacks()
 
-    # TODO: Add support to get the current status? as a standard call?
+    def get_progress(self):
+        """
+        Return the current known start and end time
+        return (float, float): start and end time (in s from epoch)
+        """
+        with self._condition:
+            start, end = self._start_time, self._end_time
+            if self._state == PENDING:
+                # ensure we say the start time is not (too much) in the past
+                now = time.time()
+                if start < now:
+                    dur = end - start
+                    start = now
+                    end = now + dur
+            elif self._state == RUNNING:
+                # ensure we say the end time is not (too much) in the past
+                end = max(end, time.time())
+
+        return start, end
+
+    def set_progress(self, start=None, end=None):
+        """
+        Update the start and end times of the task. To be used by executors only.
+
+        start (float or None): time at which the task started (or will be starting)
+        end (float or None): time at which the task ended (or will be ending)
+        """
+        with self._condition:
+            if start is not None:
+                self._start_time = start
+            if end is not None:
+                self._end_time = end
+
+            if self._start_time > self._end_time:
+                logging.warning("Future start time %f > end time %f",
+                                self._start_time, self._end_time)
+
+        self._invoke_upd_callbacks()
+
+    def set_start_time(self, val):
+        """
+        Update the start time of the task. To be used by executors only.
+
+        val (float): time at which the task started (or will be starting)
+        """
+        self.set_progress(start=val)
+
+    def set_end_time(self, val):
+        """
+        Update the end time of the task. To be used by executors only.
+
+        val (float): time at which the task ended (or will be ending)
+        """
+        self.set_progress(end=val)
 
     def _report_update(self, fn):
-        # Why the 'with'? Is there some cleanup needed?
         with self._condition:
             now = time.time()
             if self._state in [CANCELLED, CANCELLED_AND_NOTIFIED, FINISHED]:
@@ -257,7 +309,8 @@ class ProgressiveFuture(CancellableFuture):
                                   "finished already %f s ago", -left)
                     left = 0
         try:
-            # TODO: better use absolute values: start/now/end ? or current ratio/start/end?
+            # TODO: better use absolute values: start/end ? or current ratio/start/end?
+            # start, end = self.get_progress()
             fn(self, past, left)
         except Exception:
             logging.exception('exception calling callback for %r', self)
@@ -265,26 +318,6 @@ class ProgressiveFuture(CancellableFuture):
     def _invoke_upd_callbacks(self):
         for callback in self._upd_callbacks:
             self._report_update(callback)
-
-    def set_start_time(self, val):
-        """
-        Update the start time of the task. To be used by executors only.
-
-        val (float): time at which the task started (or will be starting)
-        """
-        with self._condition:
-            self._start_time = val
-        self._invoke_upd_callbacks()
-
-    def set_end_time(self, val):
-        """
-        Update the end time of the task. To be used by executors only.
-
-        val (float): time at which the task ended (or will be ending)
-        """
-        with self._condition:
-            self._end_time = val
-        self._invoke_upd_callbacks()
 
     def add_update_callback(self, fn):
         """
@@ -314,11 +347,7 @@ class ProgressiveFuture(CancellableFuture):
         """
         running = futures.Future.set_running_or_notify_cancel(self)
         if running:
-            now = time.time()
-            with self._condition:
-                self._start_time = now
-            self._invoke_upd_callbacks()
+            self.set_progress(start=time.time())
 
         return running
-
 
