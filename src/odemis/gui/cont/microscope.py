@@ -729,7 +729,7 @@ class DelphiStateController(SecomStateController):
             logging.exception("Failed to start overview image acquisition")
             f = self._main_data.chamber.moveAbs({"pressure": self._vacuum_pressure})
             self.rest_time_est = 0  # s, see estimateDelphiLoading()
-            f.add_update_callback(self.on_step_update)
+            # f.add_update_callback(self.on_step_update)
             f.add_done_callback(self._on_vacuum)
 
     def _on_overview_image(self, image):
@@ -752,7 +752,7 @@ class DelphiStateController(SecomStateController):
         # move further to fully under vacuum (should do nothing if already there)
         f = self._main_data.chamber.moveAbs({"pressure": self._vacuum_pressure})
         self.rest_time_est = 0  # s, see estimateDelphiLoading()
-        f.add_update_callback(self.on_step_update)
+        # f.add_update_callback(self.on_step_update)
         f.add_done_callback(self._on_vacuum)
 
     def _load_holder_calib(self):
@@ -980,7 +980,7 @@ class DelphiStateController(SecomStateController):
                 # _on_overview_position() will take care of going further
                 f = self._main_data.chamber.moveAbs({"pressure": self._overview_pressure})
                 self.rest_time_est = 75  # s, see estimateDelphiLoading()
-                f.add_update_callback(self.on_step_update)
+                # f.add_update_callback(self.on_step_update)
                 f.add_done_callback(self._on_overview_position)
 
                 # reset the streams to avoid having data from the previous sample
