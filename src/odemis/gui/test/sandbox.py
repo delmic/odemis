@@ -109,7 +109,7 @@ class Canvas(glcanvas.GLCanvas):
         glBindTexture(GL_TEXTURE_2D, self._texture_ids[-1])
 
         if isinstance(img, wx.Image):
-            (w, h), d = img.GetSize(), 4
+            (w, h) = img.GetSize()
 
             def split_rgb(seq):
                 while seq:
@@ -117,11 +117,17 @@ class Canvas(glcanvas.GLCanvas):
                     seq = seq[3:]
 
             rgb = img.GetData()
-            alpha = img.GetAlphaData()
-            img = r""
 
-            for i, c in enumerate(split_rgb(rgb)):
-                img += c + alpha[i]
+            if img.HasAlpha():
+                alpha = img.GetAlphaData()
+                rgba = r""
+                d = 4
+
+                for i, rgb in enumerate(split_rgb(rgb)):
+                    rgba += rgb + alpha[i]
+            else:
+                img = rgb
+                d = 3
 
         else:
             w, h, d = img.shape
@@ -189,7 +195,7 @@ class Canvas(glcanvas.GLCanvas):
             glEnable(GL_TEXTURE_2D)
             glBindTexture(GL_TEXTURE_2D, self._texture_ids[0])
 
-            # glScalef(0.5, 0.5, 1.0)
+            glScalef(0.5, 0.5, 1.0)
             glColor4f(1.0, 1.0, 1.0, 1.0)
 
             glBegin(GL_QUADS)
@@ -223,7 +229,7 @@ class MainWindow(wx.Frame):
         self.Show()
 
         # self.canvas.set_image(generate_img_data(92, 92, 3))
-        self.canvas.set_image(imgdata.getlogo_delphiImage())
+        self.canvas.set_image(imgdata.gettest_10x10Image())
 
 
 if haveGLCanvas and haveOpenGL:
