@@ -470,7 +470,7 @@ def mergeMetadata(current, correction=None):
         shear_cor = correction[model.MD_SHEAR_COR]
         shear = current.get(model.MD_SHEAR, 0)
 
-        current[model.MD_SHEAR] = shear + shear_cor
+        current[model.MD_SHEAR] = shear - shear_cor
 
     # There is no default pixel size (though in some case sensor pixel size can
     # be used as a fallback)
