@@ -28,7 +28,7 @@ from odemis.acq import align, stream
 from odemis.gui.conf import get_calib_conf
 from odemis.gui.model import STATE_ON, CHAMBER_PUMPING, CHAMBER_VENTING, \
     CHAMBER_VACUUM, CHAMBER_VENTED, CHAMBER_UNKNOWN, STATE_OFF
-from odemis.gui.util import call_in_wx_main
+from odemis.gui.util import call_in_wx_main, ignore_dead
 from odemis.gui.util.widgets import VigilantAttributeConnector
 from odemis.model import getVAs, VigilantAttributeBase
 import wx
@@ -36,6 +36,12 @@ import odemis.gui.img.data as imgdata
 import odemis.gui.win.delphi as windelphi
 import odemis.util.units as units
 from odemis.gui.win.delphi import CalibrationProgressDialog
+import time
+from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
+    RUNNING
+from odemis.acq._futures import executeTask
+import threading
+from odemis.gui.util.widgets import ProgessiveFutureConnector
 
 # Sample holder types in the Delphi, as defined by Phenom World
 PHENOM_SH_TYPE_STANDARD = 1  # standard sample holder
@@ -653,7 +659,10 @@ class DelphiStateController(SecomStateController):
             return
 
         self._show_progress_indicators(True)
-        super(DelphiStateController, self)._start_chamber_pumping()
+        self.load_future = self.DelphiLoading()
+        self._load_future_connector = ProgessiveFutureConnector(self.load_future,
+                                                                 self._main_frame.gauge_load_time,
+                                                                 self._main_frame.lbl_load_time)
 
     def _start_chamber_venting(self):
         # On the DELPHI, we also move the optical stage to 0,0 (= reference
@@ -693,6 +702,58 @@ class DelphiStateController(SecomStateController):
         # FIXME: need to check if autofocus is needed sometimes (and improves
         # over the default good position set by the driver)
         self._on_overview_focused(None)
+
+    def _on_overview_focused(self, future):
+        """
+        Called when the overview image is focused
+        """
+        # We cannot do much if the focus failed, so always go on...
+        if future:
+            try:
+                future.result()
+                logging.debug("Overview focused")
+            except Exception:
+                logging.info("Auto-focus on overview failed")
+        else:
+            logging.debug("Acquiring overview image after skipping auto-focus")
+
+        # now acquire one image
+        try:
+            ovs = self._get_overview_stream()
+
+            ovs.image.subscribe(self._on_overview_image)
+            # start acquisition
+            ovs.should_update.value = True
+            ovs.is_active.value = True
+        except Exception:
+            logging.exception("Failed to start overview image acquisition")
+            f = self._main_data.chamber.moveAbs({"pressure": self._vacuum_pressure})
+            self.rest_time_est = 0  # s, see estimateDelphiLoading()
+            # f.add_update_callback(self.on_step_update)
+            f.add_done_callback(self._on_vacuum)
+
+    def _on_overview_image(self, image):
+        """ Called once the overview image has been acquired """
+
+        logging.debug("New overview image acquired")
+        # Stop the stream (the image is immediately displayed in the view)
+        try:
+            ovs = self._get_overview_stream()
+            ovs.is_active.value = False
+            ovs.should_update.value = False
+        except Exception:
+            logging.exception("Failed to acquire overview image")
+
+        if self._main_data.chamberState.value not in {CHAMBER_PUMPING, CHAMBER_VACUUM}:
+            logging.warning("Receive an overview image while in state %s",
+                            self._main_data.chamberState.value)
+            return  # don't ask for vacuum
+
+        # move further to fully under vacuum (should do nothing if already there)
+        f = self._main_data.chamber.moveAbs({"pressure": self._vacuum_pressure})
+        self.rest_time_est = 0  # s, see estimateDelphiLoading()
+        # f.add_update_callback(self.on_step_update)
+        f.add_done_callback(self._on_vacuum)
 
     def _load_holder_calib(self):
         """
@@ -877,3 +938,97 @@ class DelphiStateController(SecomStateController):
 # TODO SparcStateController?
 #     "spectrometer": ("specState", HardwareButtonController),
 #     "angular": ("arState", HardwareButtonController),
+
+    def DelphiLoading(self):
+        """
+        Wrapper for DoDelphiLoading. It provides the ability to check the
+        progress of the procedure.
+        returns (ProgressiveFuture): Progress DoDelphiLoading
+        """
+        # Create ProgressiveFuture and update its state to RUNNING
+        est_start = time.time() + 0.1
+        f = model.ProgressiveFuture(start=est_start,
+                                    end=est_start + self.estimateDelphiLoading())
+        f._delphi_load_state = RUNNING
+
+        # Task to run
+        f.task_canceller = self._CancelDelphiLoading
+        f._delphi_load_lock = threading.Lock()
+
+        # Run in separate thread
+        delphi_load_thread = threading.Thread(target=executeTask,
+                      name="Delphi Loading",
+                      args=(f, self._DoDelphiLoading, f))
+
+        delphi_load_thread.start()
+        return f
+
+    def _DoDelphiLoading(self, future):
+        """
+        It performs all the loading steps for Delphi.
+        future (model.ProgressiveFuture): Progressive future provided by the wrapper
+        raises:
+            CancelledError() if cancelled
+        """
+        logging.debug("Delphi loading...")
+
+        try:
+            if future._delphi_load_state == CANCELLED:
+                raise CancelledError()
+
+            try:
+                # _on_overview_position() will take care of going further
+                f = self._main_data.chamber.moveAbs({"pressure": self._overview_pressure})
+                self.rest_time_est = 75  # s, see estimateDelphiLoading()
+                # f.add_update_callback(self.on_step_update)
+                f.add_done_callback(self._on_overview_position)
+
+                # reset the streams to avoid having data from the previous sample
+                self._reset_streams()
+
+                # Empty the stage history, as the interesting locations on the previous
+                # sample have probably nothing in common with this new sample
+                self._tab_data.stage_history.value = []
+
+                return
+            except Exception:
+                raise IOError("Delphi loading failed.")
+        finally:
+            with future._delphi_load_lock:
+                if future._delphi_load_state == CANCELLED:
+                    raise CancelledError()
+                future._delphi_load_state = FINISHED
+
+    def _CancelDelphiLoading(self, future):
+        """
+        Canceller of _DoDelphiLoading task.
+        """
+        logging.debug("Cancelling Delphi loading...")
+
+        with future._delphi_load_lock:
+            if future._delphi_load_state == FINISHED:
+                return False
+            future._delphi_load_state = CANCELLED
+            logging.debug("Delphi loading cancelled.")
+
+        return True
+
+    def estimateDelphiLoading(self):
+        """
+        Estimates Delphi loading procedure duration
+        returns (float):  process estimated time #s
+        """
+        # Rough approximation
+        # 5 sec from unload to NavCam, 10 sec for alignment and overview acquisition
+        # and 65 sec from NavCam to SEM
+        return 80  # s
+
+    @call_in_wx_main
+    @ignore_dead
+    def on_step_update(self, future, past, left):
+        # Add the estimated time that the rest of the procedure will take
+        self.update_load_time(left + self.rest_time_est)
+
+    def update_load_time(self, time):
+        self.load_future.set_end_time(time.time() + time)
+        logging.debug("Loading future remaining time: %f", time)
