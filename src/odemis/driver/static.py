@@ -55,13 +55,13 @@ class OpticalLens(model.HwComponent):
 
         # allow the user to modify the value, if the lens is manually changed
         self.magnification = model.FloatContinuous(mag, range=[1e-3, 1e6], unit="")
-        
+
         if pole_pos is not None:
             if (not isinstance(pole_pos, collections.Iterable) or
                 len(pole_pos) != 2 or any(v < 0 for v in pole_pos)):
                 raise ValueError("pole_pos must be 2 positive values, got %s" % pole_pos)
             self.polePosition = model.ResolutionVA(pole_pos,
-                                                   range=[(0, 0), (1e6, 1e6)])
+                                                   rng=[(0, 0), (1e6, 1e6)])
 
 class LightFilter(model.Actuator):
     """
