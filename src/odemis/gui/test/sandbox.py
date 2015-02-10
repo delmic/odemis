@@ -1,6 +1,8 @@
 import wx
 
 import odemis.gui.img.data as imgdata
+from odemis.gui.test import generate_img_data
+
 
 try:
     from wx import glcanvas
@@ -32,7 +34,7 @@ class Canvas(glcanvas.GLCanvas):
         self.init = False
         self.context = glcanvas.GLContext(self)
 
-        self.fit = FIT_HORZ | FIT_VERT
+        self.fit = FIT_VERT | FIT_HORZ
         self.background = True
 
         # Metrics for rendering background images pixel perfect
@@ -43,12 +45,30 @@ class Canvas(glcanvas.GLCanvas):
         self._background_id = None
         self._texture_ids = []
 
+        self._img_x_ratio = 1
+        self._img_y_ratio = 1
+
+        self.scale = 1.0
+        self.scale_step = 2
+
         self.Bind(wx.EVT_ERASE_BACKGROUND, self.on_erase_background)
         self.Bind(wx.EVT_SIZE, self.on_size)
         self.Bind(wx.EVT_PAINT, self.on_paint)
 
+        self.Bind(wx.EVT_MOUSEWHEEL, self.on_mouse_wheel)
+
     def on_erase_background(self, evt):
         pass  # Do nothing, to avoid flashing on MSW.
+
+    def on_mouse_wheel(self, evt):
+        glMatrixMode(GL_MODELVIEW)
+
+        if evt.GetWheelRotation() > 0:
+            self.scale /= self.scale_step
+        else:
+            self.scale *= self.scale_step
+
+        self.Refresh()
 
     def on_size(self, event):
         wx.CallAfter(self.do_set_viewport)
@@ -81,6 +101,11 @@ class Canvas(glcanvas.GLCanvas):
         elif self.fit & FIT_HORZ == FIT_HORZ:
             aspect_ratio = h / float(w)
             glOrtho(-1, 1, 1 * aspect_ratio, -1 * aspect_ratio, -1, 1)
+        elif self.fit & FIT_NONE == FIT_NONE:
+            glOrtho(-1, 1, 1, -1, -1, 1)
+            # FIXME
+            self._img_x_ratio = w / float(1000)
+            self._img_y_ratio = h / float(1000)
 
         self.texid = glGenTextures(1)
         glBindTexture(GL_TEXTURE_2D, self.texid)
@@ -104,8 +129,8 @@ class Canvas(glcanvas.GLCanvas):
         glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
         glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
 
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
 
     def set_image(self, img):
         self._texture_ids.append(glGenTextures(1))
@@ -160,6 +185,11 @@ class Canvas(glcanvas.GLCanvas):
         # For scaling, put GL_PROJECT and glScale here, at the start
 
         if self.background:
+            glMatrixMode(GL_PROJECTION)
+
+            # glPushMatrix()
+            glLoadIdentity()
+
             glMatrixMode(GL_MODELVIEW)
 
             glLoadIdentity()
@@ -196,8 +226,9 @@ class Canvas(glcanvas.GLCanvas):
             glEnable(GL_TEXTURE_2D)
             glBindTexture(GL_TEXTURE_2D, self._texture_ids[0])
 
-            glScalef(0.5, 0.5, 1.0)
-            glColor4f(1.0, 1.0, 1.0, 1.0)
+            print self.scale
+            glScalef(self.scale, self.scale, 1)
+            glColor4f(1.0, 1.0, 1.0, 0.3)
 
             glBegin(GL_QUADS)
 
@@ -229,8 +260,8 @@ class MainWindow(wx.Frame):
         self.Center()
         self.Show()
 
-        # self.canvas.set_image(generate_img_data(92, 92, 3))
-        self.canvas.set_image(imgdata.gettest_10x10Image())
+        self.canvas.set_image(generate_img_data(8000, 8000, 3))
+        # self.canvas.set_image(imgdata.gettest_10x10Image())
 
 
 if haveGLCanvas and haveOpenGL:
