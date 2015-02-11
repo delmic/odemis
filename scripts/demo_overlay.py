@@ -80,7 +80,7 @@ def main(args):
         for c in model.getComponents():
             if c.role == "e-beam":
                 escan = c
-            elif c.role == "se-detector":
+            elif c.role == "bs-detector":
                 detector = c
             elif c.role == "ccd":
                 ccd = c
@@ -94,8 +94,15 @@ def main(args):
 
         # optical_image_1, optical_image_2, optical_image_3, electron_image = f_acq.result()
         
-        f = find_overlay.FindOverlay(repetitions, dwell_time, max_allowed_diff, escan, ccd, detector)
-        trans_val, correction_md = f.result()
+        f = find_overlay.FindOverlay(repetitions, dwell_time, max_allowed_diff, escan, ccd, detector,
+                                      skew=True)
+        trans_val, cor_md = f.result()
+        trans_md, skew_md = cor_md
+        iscale = trans_md[model.MD_PIXEL_SIZE_COR]
+        irot = -trans_md[model.MD_ROTATION_COR] % (2 * math.pi)
+        ishear = -skew_md[model.MD_SHEAR_COR]
+        iscale_xy = skew_md[model.MD_PIXEL_SIZE_COR]
+        logging.debug("iscale: %s irot: %s ishear: %s iscale_xy: %s", iscale, irot, ishear, iscale_xy)
 
         # md_1 = img.mergeMetadata(optical_image_1.metadata, correction_md)
         # md_2 = img.mergeMetadata(optical_image_2.metadata, correction_md)
