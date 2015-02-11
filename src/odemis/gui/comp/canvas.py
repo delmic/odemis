@@ -152,6 +152,7 @@ import numpy
 from odemis.gui import BLEND_DEFAULT, BLEND_SCREEN
 from odemis.gui.comp.overlay.base import WorldOverlay, ViewOverlay
 from odemis.gui.util import call_in_wx_main
+from odemis.gui.util.img import add_alpha_byte
 from odemis.model import DataArray
 from odemis.util import intersect
 from odemis.util.conversion import wxcol_to_frgb
@@ -770,7 +771,7 @@ class BitmapCanvas(BufferedCanvas):
 
             0. im (wx.Image): the image
             1. w_pos (2-tuple of float): position of the center of the image (in world units)
-            2. scale (float): scaling of the image
+            2. scale (float, float): scale of the image
             3. keepalpha (boolean): whether the alpha channel must be used to draw
             4. rotation (float): clockwise rotation in radians on the center of the image
             4. shear (float): horizontal shear relative to the center of the image
@@ -800,16 +801,12 @@ class BitmapCanvas(BufferedCanvas):
                 if not blend_mode:
                     blend_mode = BLEND_DEFAULT
 
-                if im.shape[2] == 3:
-                    # TODO: Move this code to some utility function
-                    # Create an empty array of the shape x,y,4
-                    new_im = DataArray(numpy.zeros(im.shape[:2] + (4,),
-                                                   dtype=numpy.uint8), im.metadata)
-                    # Copy the data
-                    new_im[:, :, :-1] = im
-                    im = new_im
-                elif im.shape[2] != 4:  # Both ARGB32 and RGB24 need 4 bytes
-                    raise ValueError("Unsupported colour byte size (%s)!" % (im.shape[2],))
+                depth = im.shape[2]
+
+                if depth == 3:
+                    im = add_alpha_byte(im)
+                elif depth != 4:  # Both ARGB32 and RGB24 need 4 bytes
+                    raise ValueError("Unsupported colour byte size (%s)!" % depth)
 
                 im.metadata['dc_center'] = w_pos
                 im.metadata['dc_scale'] = scale
@@ -901,7 +898,7 @@ class BitmapCanvas(BufferedCanvas):
                     merge_ratio,
                     im_scale=im.metadata['dc_scale'],
                     rotation=im.metadata['dc_rotation'],
-                    shear=last_image.metadata['dc_shear'],
+                    shear=im.metadata['dc_shear'],
                     blend_mode=im.metadata['blend_mode']
                 )
 
@@ -927,7 +924,7 @@ class BitmapCanvas(BufferedCanvas):
             )
 
     def _draw_image(self, ctx, im_data, w_im_center, opacity=1.0,
-                    im_scale=1.0, rotation=None, shear=None, blend_mode=BLEND_DEFAULT):
+                    im_scale=(1.0, 1.0), rotation=None, shear=None, blend_mode=BLEND_DEFAULT):
         """ Draw the given image to the Cairo context
 
         The buffer is considered to have it's 0,0 origin at the top left
@@ -936,7 +933,7 @@ class BitmapCanvas(BufferedCanvas):
         :param im_data: (DataArray) Image to draw
         :param w_im_center: (2-tuple float)
         :param opacity: (float) [0..1] => [transparent..opaque]
-        :param im_scale: (float)
+        :param im_scale: (float, float)
         :param rotation: (float) Clock-wise rotation around the image center in radians
         :param shear: (float) Horizontal shearing of the image data (around it's center)
         :param blend_mode: (int) Graphical blending type used for transparency
@@ -971,12 +968,7 @@ class BitmapCanvas(BufferedCanvas):
         # logging.debug("Intersection (%s, %s, %s, %s)", *intersection)
         # Cache the current transformation matrix
         ctx.save()
-
         # Combine the image scale and the buffer scale
-        total_scale = im_scale * self.scale
-        if abs(total_scale - 1) < 1e-8:  # in case of small floating errors
-            total_scale = 1
-        # logging.debug("Total scale: %s x %s = %s", im_scale, self.scale, total_scale)
 
         # Rotate if needed
         if rotation is not None and abs(rotation) >= 0.008:  # > 0.5°
@@ -987,12 +979,12 @@ class BitmapCanvas(BufferedCanvas):
             # Translate to the center of the image (in buffer coordinates)
             ctx.translate(rot_x, rot_y)
             # Rotate
-            ctx.rotate(rotation)
+            ctx.rotate(-rotation)
             # Translate back, so the origin is at the top left position of the image
             ctx.translate(-rot_x, -rot_y)
 
         # Shear if needed
-        if shear is not None:
+        if shear is not None and abs(shear) >= 0.0005:
             # Shear around the center of the image data. Shearing only occurs on the x axis
             x, y, w, h = b_im_rect
             shear_x = x + w / 2
@@ -1000,32 +992,28 @@ class BitmapCanvas(BufferedCanvas):
 
             # Translate to the center x of the image (in buffer coordinates)
             ctx.translate(shear_x, shear_y)
-            shear_matrix = cairo.Matrix(1.0, 0.0, shear, 1.0)
+            shear_matrix = cairo.Matrix(1.0, shear, 0.0, 1.0)
             ctx.transform(shear_matrix)
             ctx.translate(-shear_x, -shear_y)
 
-        if total_scale == 1.0:
-            # logging.debug("No scaling required")
-            pass
-        elif total_scale < 1.0:
-            # logging.debug("Down scaling required")
-            pass
-        elif total_scale > 1.0:
+        # logging.debug("Total scale: %s x %s = %s", im_scale, self.scale, total_scale)
+
+        scale_x, scale_y = im_scale
+        total_scale = total_scale_x, total_scale_y = (scale_x * self.scale, scale_y * self.scale)
+
+        # in case of small floating errors
+        if abs(total_scale_x - 1) < 1e-8 or abs(total_scale_y - 1) < 1e-8:
+            total_scale = (1.0, 1.0)
+
+        if total_scale_x > 1.0 or total_scale_y > .0:
             # logging.debug("Up scaling required")
 
-            # Make clipping a bit smarter: if very little data is trimmed, it's
-            # better to scale the entire image than to create a slightly smaller
-            # copy first.
+            # If very little data is trimmed, it's better to scale the entire image than to create
+            # a slightly smaller copy first.
             if b_im_rect[2] > intersection[2] * 1.1 or b_im_rect[3] > intersection[3] * 1.1:
 
                 im_data, tl = self._get_sub_img(intersection, b_im_rect, im_data, total_scale)
-
-                b_im_rect = (
-                    tl[0],
-                    tl[1],
-                    b_im_rect[2],
-                    b_im_rect[3],
-                )
+                b_im_rect = (tl[0], tl[1], b_im_rect[2], b_im_rect[3], )
 
         # Render the image data to the context
 
@@ -1041,16 +1029,12 @@ class BitmapCanvas(BufferedCanvas):
         stride = cairo.ImageSurface.format_stride_for_width(im_format, width)
         # In Cairo a surface is a target that it can render to. Here we're going to use it as the
         #  source for a pattern
-        imgsurface = cairo.ImageSurface.create_for_data(im_data, im_format,
-                                                        width, height, stride)
+        imgsurface = cairo.ImageSurface.create_for_data(im_data, im_format, width, height, stride)
 
         # In Cairo a pattern is the 'paint' that it uses to draw
         surfpat = cairo.SurfacePattern(imgsurface)
         # Set the filter, so we get low quality but fast scaling
         surfpat.set_filter(cairo.FILTER_FAST)
-
-        # TEST: Changing the order of translate and scale didn't solve the problem
-        # ctx.translate(b_im_rect[0] / total_scale, b_im_rect[1] / total_scale)
 
         x, y, _, _ = b_im_rect
 
@@ -1058,16 +1042,12 @@ class BitmapCanvas(BufferedCanvas):
         ctx.translate(x, y)
 
         # Apply total scale
-        ctx.scale(total_scale, total_scale)
+        ctx.scale(total_scale_x, total_scale_y)
 
         # Debug print statement
         # print ctx.get_matrix(), im_data.shape
 
-        # The following method won't work, because we need to set the filter used for scaling.
-        # We're using set_source instead
-        # ctx.set_source_surface(imgsurface)
         ctx.set_source(surfpat)
-
         ctx.set_operator(blend_mode)
 
         if opacity < 1.0:
@@ -1083,6 +1063,10 @@ class BitmapCanvas(BufferedCanvas):
 
         The (top, left) value are relative to the 0,0 top left of the buffer.
 
+        :param im_data: (DataArray) image data
+        :param im_scale: (float, float) The x and y scales of the image
+        :param w_im_center: (float, float) The center of the image in world coordinates
+
         :return: (float, float, float, float) top, left, width, height
 
         """
@@ -1094,7 +1078,8 @@ class BitmapCanvas(BufferedCanvas):
 
         # Scale the image
         im_h, im_w = im_data.shape[:2]
-        scaled_im_size = (im_w * im_scale, im_h * im_scale)
+        scale_x, scale_y = im_scale
+        scaled_im_size = (im_w * scale_x, im_h * scale_y)
 
         # Calculate the top left
         w_topleft = (w_im_center[0] - (scaled_im_size[0] / 2),
@@ -1104,8 +1089,7 @@ class BitmapCanvas(BufferedCanvas):
         b_topleft = self.world_to_buffer(w_topleft, self.get_half_buffer_size())
         # Adjust the size to the buffer scale (on top of the earlier image
         # scale)
-        final_size = (scaled_im_size[0] * self.scale,
-                      scaled_im_size[1] * self.scale)
+        final_size = (scaled_im_size[0] * self.scale, scaled_im_size[1] * self.scale)
 
         return b_topleft + final_size
 
@@ -1117,7 +1101,7 @@ class BitmapCanvas(BufferedCanvas):
         :param b_im_rect: (rect) The area the full image would occupy in the
             buffer
         :param im_data: (DataArray) The original image data
-        :param total_scale: (float) The scale used to convert the image data to
+        :param total_scale: (float, float) The scale used to convert the image data to
             buffer pixels. (= image scale * buffer scale)
 
         :return: (DataArray, (float, float))
@@ -1141,10 +1125,10 @@ class BitmapCanvas(BufferedCanvas):
 
         # where is this intersection in the original image?
         unsc_rect = (
-            (b_intersect[0] - b_im_rect[0]) / total_scale,
-            (b_intersect[1] - b_im_rect[1]) / total_scale,
-            b_intersect[2] / total_scale,
-            b_intersect[3] / total_scale
+            (b_intersect[0] - b_im_rect[0]) / total_scale[0],
+            (b_intersect[1] - b_im_rect[1]) / total_scale[1],
+            b_intersect[2] / total_scale[0],
+            b_intersect[3] / total_scale[1]
         )
 
         # Round the rectangle values to whole pixel values
@@ -1169,8 +1153,8 @@ class BitmapCanvas(BufferedCanvas):
             unsc_rnd_rect[3] = im_h - unsc_rnd_rect[1]  # clip height
 
         # New top left origin in buffer coordinates to account for the clipping
-        b_new_x = (unsc_rnd_rect[0] * total_scale) + b_im_rect[0]
-        b_new_y = (unsc_rnd_rect[1] * total_scale) + b_im_rect[1]
+        b_new_x = (unsc_rnd_rect[0] * total_scale[0]) + b_im_rect[0]
+        b_new_y = (unsc_rnd_rect[1] * total_scale[1]) + b_im_rect[1]
 
         # Calculate slicing parameters
         sub_im_x, sub_im_y = unsc_rnd_rect[:2]
@@ -1646,7 +1630,7 @@ class DraggableCanvas(BitmapCanvas):
             if im is None:
                 continue
             im_scale = im.metadata['dc_scale']
-            w, h = im.shape[1] * im_scale, im.shape[0] * im_scale
+            w, h = im.shape[1] * im_scale[0], im.shape[0] * im_scale[1]
             c = im.metadata['dc_center']
             bbox_im = [c[0] - w / 2, c[1] - h / 2, c[0] + w / 2, c[1] + h / 2]
             if bbox[0] is None:

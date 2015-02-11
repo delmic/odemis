@@ -26,7 +26,7 @@ import odemis.gui.comp.canvas as canvas
 from odemis.acq.stream import RGBStream
 
 
-# test.goto_manual()
+test.goto_manual()
 logging.getLogger().setLevel(logging.ERROR)
 
 
@@ -74,7 +74,7 @@ class TestCanvas(test.GuiTestCase):
             for i in range(steps):
                 images = [
                     # Simplest case with the image drawn in the center
-                    (img, (0, 0), 1, True, 0.0, None, None, "wander bug test"),
+                    (img, (0, 0), (1.0, 1.0), True, 0.0, None, None, "wander bug test"),
                     # Image drawn at the bottom right
                     # (img, (100, 100), 1, True, 0.0, None, "wander bug test"),
                 ]
@@ -183,7 +183,7 @@ class TestCanvas(test.GuiTestCase):
         # 100 pixels is 1e-4 meters
         img.metadata[model.MD_PIXEL_SIZE] = (1e-6, 1e-6)
         img.metadata[model.MD_POS] = im_pos = (0, 0)
-        im_scale = img.metadata[model.MD_PIXEL_SIZE][0] / cnvs.mpwu
+        im_scale = img.metadata[model.MD_PIXEL_SIZE][0]
 
         self.assertEqual(im_scale, img.metadata[model.MD_PIXEL_SIZE][0])
 
@@ -229,7 +229,7 @@ class TestCanvas(test.GuiTestCase):
 
         logging.getLogger().setLevel(logging.DEBUG)
 
-        buffer_rect = (0, 0) + canvas._bmp_buffer_size
+        buffer_rect = (0, 0) + cnvs._bmp_buffer_size
         logging.debug("Buffer size is %s", buffer_rect)
 
         im_scales = [0.00001, 0.33564, 0.9999, 1, 1.3458, 2, 3.0, 101.0, 333.5]
@@ -253,14 +253,14 @@ class TestCanvas(test.GuiTestCase):
             logging.debug("Center: %s", im_center)
             for im_scale, rect in zip(im_scales, rects):
                 logging.debug("Scale: %s", im_scale)
-                b_rect = canvas._calc_img_buffer_rect(darray, im_scale, im_center)
+                b_rect = cnvs._calc_img_buffer_rect(darray, im_scale, im_center)
 
                 for v in b_rect:
                     self.assertIsInstance(v, float)
 
                 rect = (
-                    rect[0] + im_center[0] * canvas.scale,
-                    rect[1] + im_center[1] * canvas.scale,
+                    rect[0] + im_center[0] * cnvs.scale,
+                    rect[1] + im_center[1] * cnvs.scale,
                     rect[2],
                     rect[3]
                 )
@@ -286,15 +286,15 @@ class TestCanvas(test.GuiTestCase):
             logging.debug("Center: %s", im_center)
             for im_scale, rect in zip(im_scales, rects):
                 logging.debug("Scale: %s", im_scale)
-                b_rect = canvas._calc_img_buffer_rect(darray, im_scale, im_center)
+                b_rect = cnvs._calc_img_buffer_rect(darray, im_scale, im_center)
 
                 for v in b_rect:
                     self.assertIsInstance(v, float)
 
                 # logging.debug(b_rect)
                 rect = (
-                    rect[0] + im_center[0] * canvas.scale,
-                    rect[1] + im_center[1] * canvas.scale,
+                    rect[0] + im_center[0] * cnvs.scale,
+                    rect[1] + im_center[1] * cnvs.scale,
                     rect[2],
                     rect[3]
                 )
@@ -320,15 +320,15 @@ class TestCanvas(test.GuiTestCase):
             logging.debug("Center: %s", im_center)
             for im_scale, rect in zip(im_scales, rects):
                 logging.debug("Scale: %s", im_scale)
-                b_rect = canvas._calc_img_buffer_rect(darray, im_scale, im_center)
+                b_rect = cnvs._calc_img_buffer_rect(darray, im_scale, im_center)
 
                 for v in b_rect:
                     self.assertIsInstance(v, float)
 
                 # logging.debug(b_rect)
                 rect = (
-                    rect[0] + im_center[0] * canvas.scale,
-                    rect[1] + im_center[1] * canvas.scale,
+                    rect[0] + im_center[0] * cnvs.scale,
+                    rect[1] + im_center[1] * cnvs.scale,
                     rect[2],
                     rect[3]
                 )
@@ -340,7 +340,7 @@ class TestCanvas(test.GuiTestCase):
 
     # @profile
     def test(self):
-        self.app.test_frame.SetSize((500, 1000))
+        self.app.test_frame.SetSize((500, 500))
         self.app.test_frame.Center()
         self.app.test_frame.Layout()
 
@@ -348,84 +348,26 @@ class TestCanvas(test.GuiTestCase):
         tab = self.create_simple_tab_model()
         view = tab.focussedView.value
         old_canvas = miccanvas.DblMicroscopeCanvas(self.panel)
+        old_canvas.SetBackgroundColour("#444444")
+        old_canvas.default_margin = 0
         old_canvas.use_threading = True
         # self.canvas.background_brush = wx.BRUSHSTYLE_SOLID # no special background
         old_canvas.setView(view, tab)
         self.add_control(old_canvas, flags=wx.EXPAND, proportion=1)
 
-        # new_canvas = DraggableCanvas(self.panel)
-        # self.add_control(new_canvas, flags=wx.EXPAND, proportion=1)
-
-        # # Test images: (im, w_pos, scale, keepalpha)
-        # images = [
-        #     (gettest_patternImage(), (0.0, 0.0), 1, False),
-        #     (gettest_patternImage(), (0.0, 0.0), 1, True),
-        # ]
-
-        # shape = (250, 250, 4)
-        # rgb = numpy.empty(shape, dtype=numpy.uint8)
-        # rgb[..., 0] = numpy.linspace(0, 255, shape[1])
-        # rgb[..., 1] = numpy.linspace(123, 156, shape[1])
-        # rgb[..., 2] = numpy.linspace(100, 255, shape[1])
-        # rgb[..., 3] = 255
-        # rgb[..., [0, 1, 2, 3]] = rgb[..., [2, 1, 0, 3]]
-        # darray_one = DataArray(rgb)
-
-        # shape = (250, 250, 4)
-        # rgb = numpy.empty(shape, dtype=numpy.uint8)
-        # rgb[..., 0] = 255
-        # rgb[..., 1] = 0
-        # rgb[..., 2] = 127
-        # rgb[..., 3] = 255
-        # rgb[..., [0, 1, 2, 3]] = rgb[..., [2, 1, 0, 3]]
-        # darray_two = DataArray(rgb)
-
-        # shape = (250, 250, 4)
-        # rgb = numpy.empty(shape, dtype=numpy.uint8)
-        # rgb[..., 0] = 0
-        # rgb[..., 1] = 0
-        # rgb[..., 2] = 255
-        # rgb[..., 3] = 255
-        # rgb[..., [0, 1, 2, 3]] = rgb[..., [2, 1, 0, 3]]
-        # darray_thr = DataArray(rgb)
-
-        # images = [
-        #     (darray_one, (0.0002, 0.0), 0.0002, True),
-        #     (darray_two, (0.0, 0.0), 0.0003, True),
-        #     (darray_thr, (0, 0.0), 0.0005, True),
-        # ]
-
-        darray_one = generate_img_data(250, 250, 4)
+        darray_one = generate_img_data(250, 250, 4, color=(255, 0, 0))
+        darray_two = generate_img_data(50, 50, 4, color=(0, 0, 255))
+        print darray_two
 
         images = [
-            (darray_one, (0.0, 0.0), 0.0000003, True, None, None, None, 'one'),
+            (darray_one, (0.0, 0.0), (0.0000003, 0.0000003), True, None, 0.1, None, 'one'),
+            (darray_two, (-0.000001, 0.0), (0.0000003, 0.0000003), True, 0.2, None, None, 'one'),
             # (darray_two, (0.0, 0.0), 0.33, True, None, None, None, 'two'),
             # (darray_thr, (0, 0.0), 1, True, None, None, None, 'three'),
         ]
 
         old_canvas.set_images(images)
-        old_canvas.shift_view((125, 125))
-        # new_canvas.set_images(images)
-
-        # Number of redraw we're going to request
-        # FRAMES_TO_DRAW = 2
-
-        # t_start = time.time()
-        # for _ in range(FRAMES_TO_DRAW):
-        #     old_canvas.update_drawing()
-        #     test.gui_loop()
-        # print "%ss"% (time.time() - t_start)
-
-        # t_start = time.time()
-        # for _ in range(FRAMES_TO_DRAW):
-        #     new_canvas.update_drawing()
-        #     test.gui_loop()
-        # print "%ss"% (time.time() - t_start)
-
-        # self.app.test_frame.SetSize((500, 500))
-        # print old_canvas.GetSize(), old_canvas.ClientSize, old_canvas._bmp_buffer_size
-
-        print "Done"
+        # old_canvas.shift_view((125, 125))
 
     def test_blending(self):
         self.app.test_frame.SetSize((500, 500))
@@ -435,18 +377,21 @@ class TestCanvas(test.GuiTestCase):
         tab = self.create_simple_tab_model()
         view = tab.focussedView.value
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
+        cnvs.SetBackgroundColour("#222222")
         # cnvs.background_brush = wx.BRUSHSTYLE_SOLID  # no special background
         cnvs.setView(view, tab)
         self.add_control(cnvs, flags=wx.EXPAND, proportion=1)
 
-        darray_red = generate_img_data(250, 250, 4, 255, (0, 140, 255))
-        darray_blue = generate_img_data(250, 250, 4, 102, (128, 0, 128))
+        darray_grey = generate_img_data(300, 300, 4, 255, (50, 50, 50))
+        darray_orange = generate_img_data(99, 99, 4)
+        darray_blue = generate_img_data(250, 250, 4, 102, (0, 0, 128))
         darray_green = generate_img_data(250, 250, 4, 204, (50, 205, 154))
 
         images = [
-            (darray_red, (0.0, 0.0), 0.0000003, True, -0.5, None, None, "orange"),
-            (darray_blue, (0.0, 0.0), 0.0000003, True, 0.5, None, BLEND_SCREEN, "purple"),
-            (darray_green, (0.0, 0.0), 0.0000003, True, 1.5, None, BLEND_SCREEN, "greem"),
+            (darray_grey, (0.0, 0.0), (0.0000003, 0.0000003), True, None, None, None, "grey"),
+            (darray_orange, (0.0, 0.0), (0.0000003, 0.0000002), True, None, 0.1, None, "orange"),
+            # (darray_blue, (0.0, 0.0), (0.0000003, 0.0000003), True, 0.5, None, BLEND_SCREEN, "purple"),
+            # (darray_green, (0.0, 0.0), (0.0000003, 0.0000003), True, 1.5, None, BLEND_SCREEN, "greem"),
         ]
 
         cnvs.set_images(images)
@@ -491,7 +436,7 @@ class TestCanvas(test.GuiTestCase):
         # Set the mpp again, because the on_size handler will have recalculated it
         view.mpp.value = 1
 
-        images = [(darray, (0.0, 0.0), 2, True, None, None, None, "nanana")]
+        images = [(darray, (0.0, 0.0), (2, 2), True, None, None, None, "nanana")]
         canvas.set_images(images)
         canvas.scale = 1
         canvas.update_drawing()

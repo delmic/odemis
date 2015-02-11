@@ -22,7 +22,7 @@ import math
 import numbers
 import numpy
 from odemis import model
-from odemis.model import MD_POS, MD_PIXEL_SIZE, MD_ROTATION, MD_ACQ_DATE
+from odemis.model import MD_POS, MD_PIXEL_SIZE, MD_ROTATION, MD_ACQ_DATE, MD_SHEAR
 from odemis.util import img, limit_invocation
 import threading
 import time
@@ -317,6 +317,7 @@ class Stream(object):
             # logging.warning(msg)
 
         rot = md.get(MD_ROTATION, 0)
+        she = md.get(MD_SHEAR, 0)
 
         # Not necessary, but handy to debug latency problems
         try:
@@ -327,6 +328,7 @@ class Stream(object):
         return {MD_PIXEL_SIZE: pxs,
                 MD_POS: pos,
                 MD_ROTATION: rot,
+                MD_SHEAR: she,
                 MD_ACQ_DATE: date}
 
     @limit_invocation(0.1) # Max 10 Hz

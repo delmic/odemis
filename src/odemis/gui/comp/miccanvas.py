@@ -385,11 +385,12 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             # On large images it costs 100 ms (per image and per canvas)
 
             rgba_im = img.format_rgba_darray(rgbim)
+
             keepalpha = False
-            scale = rgbim.metadata[model.MD_PIXEL_SIZE][0]
+            scale = rgbim.metadata[model.MD_PIXEL_SIZE]
             pos = self.physical_to_world_pos(rgbim.metadata[model.MD_POS])
-            rot = -rgbim.metadata.get(model.MD_ROTATION, 0)  # ccw -> cw
-            shear = rgba_im.metadata.get(model.MD_SHEAR, None)
+            rot = rgbim.metadata.get(model.MD_ROTATION, 0)
+            shear = rgbim.metadata.get(model.MD_SHEAR, 0)
 
             ims.append([rgba_im, pos, scale, keepalpha, rot, shear, blend_mode, name])
 

@@ -227,9 +227,13 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan,
             raise CancelledError()
         logging.debug("Calculating transform metadata...")
 
-        transform_data = _transformMetadata(optical_image, ret, escan, ccd, skew)
-        # Also indicate which dwell time eventually worked
-        transform_data[model.MD_DWELL_TIME] = dwell_time
+        if skew is True:
+            transform_d, skew_d = _transformMetadata(optical_image, ret, escan, ccd, skew)
+            transform_data = (transform_d, skew_d)
+        else:
+            transform_d = _transformMetadata(optical_image, ret, escan, ccd, skew)  # Also indicate which dwell time eventually worked
+            transform_data = transform_d
+        transform_d[model.MD_DWELL_TIME] = dwell_time
 
         logging.debug("Overlay done.")
         return ret, transform_data
@@ -331,7 +335,7 @@ def _transformMetadata(optical_image, transformation_values, escan, ccd, skew=Fa
     # Also return skew related metadata dictionary if available
     if skew is True:
         skew_md = {model.MD_SHEAR_COR:-calc_shear}
-        scaling_xy = ((1 + calc_scaling_xy), (1 - calc_scaling_xy))
+        scaling_xy = ((1 - calc_scaling_xy), (1 + calc_scaling_xy))
         skew_md[model.MD_PIXEL_SIZE_COR] = scaling_xy
         return (transform_md, skew_md)
     return transform_md
