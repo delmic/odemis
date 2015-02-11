@@ -1000,7 +1000,7 @@ class BitmapCanvas(BufferedCanvas):
 
             # Translate to the center x of the image (in buffer coordinates)
             ctx.translate(shear_x, shear_y)
-            shear_matrix = cairo.Matrix(1.0, -shear, 0.0, 1.0)
+            shear_matrix = cairo.Matrix(1.0, shear, 0.0, 1.0)
             ctx.transform(shear_matrix)
             ctx.translate(-shear_x, -shear_y)
 
