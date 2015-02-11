@@ -927,7 +927,7 @@ class BitmapCanvas(BufferedCanvas):
             )
 
     def _draw_image(self, ctx, im_data, w_im_center, opacity=1.0,
-                    im_scale=1.0, rotation=None, shear=None, blend_mode=BLEND_DEFAULT):
+                    im_scale=(1.0, 1.0), rotation=None, shear=None, blend_mode=BLEND_DEFAULT):
         """ Draw the given image to the Cairo context
 
         The buffer is considered to have it's 0,0 origin at the top left
@@ -936,7 +936,7 @@ class BitmapCanvas(BufferedCanvas):
         :param im_data: (DataArray) Image to draw
         :param w_im_center: (2-tuple float)
         :param opacity: (float) [0..1] => [transparent..opaque]
-        :param im_scale: (float)
+        :param im_scale: (float, float)
         :param rotation: (float) Clock-wise rotation around the image center in radians
         :param shear: (float) Horizontal shearing of the image data (around it's center)
         :param blend_mode: (int) Graphical blending type used for transparency
@@ -972,10 +972,6 @@ class BitmapCanvas(BufferedCanvas):
         # Cache the current transformation matrix
         ctx.save()
         # Combine the image scale and the buffer scale
-        total_scale = im_scale * self.scale
-        if abs(total_scale - 1) < 1e-8:  # in case of small floating errors
-            total_scale = 1
-        # logging.debug("Total scale: %s x %s = %s", im_scale, self.scale, total_scale)
 
         # Rotate if needed
         if rotation is not None and abs(rotation) >= 0.008:  # > 0.5°
@@ -1003,13 +999,16 @@ class BitmapCanvas(BufferedCanvas):
             ctx.transform(shear_matrix)
             ctx.translate(-shear_x, -shear_y)
 
-        if total_scale == 1.0:
-            # logging.debug("No scaling required")
-            pass
-        elif total_scale < 1.0:
-            # logging.debug("Down scaling required")
-            pass
-        elif total_scale > 1.0:
+        # logging.debug("Total scale: %s x %s = %s", im_scale, self.scale, total_scale)
+
+        scale_x, scale_y = im_scale
+        total_scale = total_scale_x, total_scale_y = (scale_x * self.scale, scale_y * self.scale)
+
+        # in case of small floating errors
+        if abs(total_scale_x - 1) < 1e-8 or abs(total_scale_y - 1) < 1e-8:
+            total_scale = (1.0, 1.0)
+
+        if total_scale_x > 1.0 or total_scale_y > .0:
             # logging.debug("Up scaling required")
 
             # Make clipping a bit smarter: if very little data is trimmed, it's
@@ -1018,13 +1017,7 @@ class BitmapCanvas(BufferedCanvas):
             if b_im_rect[2] > intersection[2] * 1.1 or b_im_rect[3] > intersection[3] * 1.1:
 
                 im_data, tl = self._get_sub_img(intersection, b_im_rect, im_data, total_scale)
-
-                b_im_rect = (
-                    tl[0],
-                    tl[1],
-                    b_im_rect[2],
-                    b_im_rect[3],
-                )
+                b_im_rect = (tl[0], tl[1], b_im_rect[2], b_im_rect[3], )
 
         # Render the image data to the context
 
@@ -1040,8 +1033,7 @@ class BitmapCanvas(BufferedCanvas):
         stride = cairo.ImageSurface.format_stride_for_width(im_format, width)
         # In Cairo a surface is a target that it can render to. Here we're going to use it as the
         #  source for a pattern
-        imgsurface = cairo.ImageSurface.create_for_data(im_data, im_format,
-                                                        width, height, stride)
+        imgsurface = cairo.ImageSurface.create_for_data(im_data, im_format, width, height, stride)
 
         # In Cairo a pattern is the 'paint' that it uses to draw
         surfpat = cairo.SurfacePattern(imgsurface)
@@ -1057,7 +1049,7 @@ class BitmapCanvas(BufferedCanvas):
         ctx.translate(x, y)
 
         # Apply total scale
-        ctx.scale(total_scale, total_scale)
+        ctx.scale(total_scale_x, total_scale_y)
 
         # Debug print statement
         # print ctx.get_matrix(), im_data.shape
@@ -1082,6 +1074,10 @@ class BitmapCanvas(BufferedCanvas):
 
         The (top, left) value are relative to the 0,0 top left of the buffer.
 
+        :param im_data: (DataArray) image data
+        :param im_scale: (float, float) The x and y scales of the image
+        :param w_im_center: (float, float) The center of the image in world coordinates
+
         :return: (float, float, float, float) top, left, width, height
 
         """
@@ -1093,7 +1089,8 @@ class BitmapCanvas(BufferedCanvas):
 
         # Scale the image
         im_h, im_w = im_data.shape[:2]
-        scaled_im_size = (im_w * im_scale, im_h * im_scale)
+        scale_x, scale_y = im_scale
+        scaled_im_size = (im_w * scale_x, im_h * scale_y)
 
         # Calculate the top left
         w_topleft = (w_im_center[0] - (scaled_im_size[0] / 2),
@@ -1103,8 +1100,7 @@ class BitmapCanvas(BufferedCanvas):
         b_topleft = self.world_to_buffer(w_topleft, self.get_half_buffer_size())
         # Adjust the size to the buffer scale (on top of the earlier image
         # scale)
-        final_size = (scaled_im_size[0] * self.scale,
-                      scaled_im_size[1] * self.scale)
+        final_size = (scaled_im_size[0] * self.scale, scaled_im_size[1] * self.scale)
 
         return b_topleft + final_size
 
@@ -1645,7 +1641,7 @@ class DraggableCanvas(BitmapCanvas):
             if im is None:
                 continue
             im_scale = im.metadata['dc_scale']
-            w, h = im.shape[1] * im_scale, im.shape[0] * im_scale
+            w, h = im.shape[1] * im_scale[0], im.shape[0] * im_scale[1]
             c = im.metadata['dc_center']
             bbox_im = [c[0] - w / 2, c[1] - h / 2, c[0] + w / 2, c[1] + h / 2]
             if bbox[0] is None:
