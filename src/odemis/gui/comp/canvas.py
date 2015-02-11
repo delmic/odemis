@@ -1112,7 +1112,7 @@ class BitmapCanvas(BufferedCanvas):
         :param b_im_rect: (rect) The area the full image would occupy in the
             buffer
         :param im_data: (DataArray) The original image data
-        :param total_scale: (float) The scale used to convert the image data to
+        :param total_scale: (float, float) The scale used to convert the image data to
             buffer pixels. (= image scale * buffer scale)
 
         :return: (DataArray, (float, float))
@@ -1136,10 +1136,10 @@ class BitmapCanvas(BufferedCanvas):
 
         # where is this intersection in the original image?
         unsc_rect = (
-            (b_intersect[0] - b_im_rect[0]) / total_scale,
-            (b_intersect[1] - b_im_rect[1]) / total_scale,
-            b_intersect[2] / total_scale,
-            b_intersect[3] / total_scale
+            (b_intersect[0] - b_im_rect[0]) / total_scale[0],
+            (b_intersect[1] - b_im_rect[1]) / total_scale[1],
+            b_intersect[2] / total_scale[0],
+            b_intersect[3] / total_scale[1]
         )
 
         # Round the rectangle values to whole pixel values
@@ -1164,8 +1164,8 @@ class BitmapCanvas(BufferedCanvas):
             unsc_rnd_rect[3] = im_h - unsc_rnd_rect[1]  # clip height
 
         # New top left origin in buffer coordinates to account for the clipping
-        b_new_x = (unsc_rnd_rect[0] * total_scale) + b_im_rect[0]
-        b_new_y = (unsc_rnd_rect[1] * total_scale) + b_im_rect[1]
+        b_new_x = (unsc_rnd_rect[0] * total_scale[0]) + b_im_rect[0]
+        b_new_y = (unsc_rnd_rect[1] * total_scale[1]) + b_im_rect[1]
 
         # Calculate slicing parameters
         sub_im_x, sub_im_y = unsc_rnd_rect[:2]
