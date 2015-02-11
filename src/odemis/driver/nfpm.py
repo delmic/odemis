@@ -155,7 +155,7 @@ class PM8742(model.Actuator):
     # Low level functions
     def GetIdentification(self):
         """
-        return (str, str, str): 
+        return (str, str, str):
              Model name
              Firmware version (and date)
              serial number
@@ -420,7 +420,7 @@ class PM8742(model.Actuator):
         if not pos:
             return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
-        pos = self._applyInversionRel(pos)
+        pos = self._applyInversionAbs(pos)
 
         f = self._createFuture()
         f = self._executor.submitf(f, self._doMoveAbs, f, pos)
