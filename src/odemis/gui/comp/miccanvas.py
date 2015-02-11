@@ -389,7 +389,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             scale = rgbim.metadata[model.MD_PIXEL_SIZE][0]
             pos = self.physical_to_world_pos(rgbim.metadata[model.MD_POS])
             rot = -rgbim.metadata.get(model.MD_ROTATION, 0)  # ccw -> cw
-            shear = rgba_im.metadata.get(model.MD_SHEAR, None)
+            shear = rgbim.metadata.get(model.MD_SHEAR, None)
 
             ims.append([rgba_im, pos, scale, keepalpha, rot, shear, blend_mode, name])
 
