@@ -770,7 +770,7 @@ class BitmapCanvas(BufferedCanvas):
 
             0. im (wx.Image): the image
             1. w_pos (2-tuple of float): position of the center of the image (in world units)
-            2. scale (float): scaling of the image
+            2. scale (float, float): scale of the image
             3. keepalpha (boolean): whether the alpha channel must be used to draw
             4. rotation (float): clockwise rotation in radians on the center of the image
             4. shear (float): horizontal shear relative to the center of the image
