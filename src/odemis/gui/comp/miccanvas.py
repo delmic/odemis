@@ -387,7 +387,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             rgba_im = img.format_rgba_darray(rgbim)
 
             keepalpha = False
-            scale = rgbim.metadata[model.MD_PIXEL_SIZE][0]
+            scale = rgbim.metadata[model.MD_PIXEL_SIZE]
             pos = self.physical_to_world_pos(rgbim.metadata[model.MD_POS])
             rot = rgbim.metadata.get(model.MD_ROTATION, 0)
             shear = rgbim.metadata.get(model.MD_SHEAR, 0)
