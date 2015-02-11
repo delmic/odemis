@@ -52,17 +52,6 @@ def get_image_from_buffer(canvas):
     return wx.ImageFromBitmap(result_bmp)
 
 
-class TestCanvas(test.GuiTestCase):
-    frame_class = test.test_gui.xrccanvas_frame
-
-    def test_bitmap_canvas(self):
-        test.goto_manual()
-
-        cnvs = BitmapCanvas(self.panel)
-        cnvs.SetBackgroundColour("#00599B")
-        self.add_control(cnvs, wx.EXPAND, proportion=1)
-
-
 class TestDblMicroscopeCanvas(test.GuiTestCase):
     frame_class = test.test_gui.xrccanvas_frame
 
@@ -183,7 +172,7 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         stream1 = RGBStream("s1", im1)
 
         im2 = model.DataArray(numpy.zeros((201, 201, 3), dtype="uint8"))
-        #pylint: disable=E1101
+
         px2_cent = tuple((s - 1) // 2 for s in im2.shape[:2])
         # Blue pixel at center (100,100)
         im2[px2_cent] = [0, 0, 255]
@@ -434,13 +423,15 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         # World to physical
         for _, _, world_point, physical_point in view_buffer_world_values:
             pp = self.canvas.world_to_physical_pos(world_point)
-            self.assertTrue(all([isinstance(v, float) for v in pp]))
+            wp_pp = zip(world_point, pp)
+            self.assertTrue(all([type(w) == type(p) for w, p in wp_pp]))
             self.assertEqual(physical_point, pp)
 
         # Physical to world
         for _, _, world_point, physical_point in view_buffer_world_values:
             pp = self.canvas.world_to_physical_pos(world_point)
-            self.assertTrue(all([isinstance(v, float) for v in pp]))
+            wp_pp = zip(world_point, pp)
+            self.assertTrue(all([type(w) == type(p) for w, p in wp_pp]))
             self.assertEqual(physical_point, pp)
 
 
