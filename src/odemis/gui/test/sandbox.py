@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import wx
 
 import odemis.gui.img.data as imgdata
@@ -107,11 +109,8 @@ class Canvas(glcanvas.GLCanvas):
             self._img_x_ratio = w / float(1000)
             self._img_y_ratio = h / float(1000)
 
-        self.texid = glGenTextures(1)
-        glBindTexture(GL_TEXTURE_2D, self.texid)
-        self.data = gettest_10x10Image().GetData()
-        w, h = gettest_10x10Image().GetSize()
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, self.data)
+        if self._bg_size:
+            bw, bh = self._bg_size
 
             self._bg_x_ratio = w / float(bw)
             self._bg_y_ratio = h / float(bh)
@@ -121,7 +120,6 @@ class Canvas(glcanvas.GLCanvas):
         glBindTexture(GL_TEXTURE_2D, self._background_id)
 
         img = imgdata.getcanvasbgImage()
-        # img = gettest_10x10Image()
         w, h = self._bg_size = img.GetSize()
 
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, img.GetData())
@@ -193,7 +191,8 @@ class Canvas(glcanvas.GLCanvas):
 
             glLoadIdentity()
 
-        glEnable(GL_TEXTURE_2D)
+            glEnable(GL_TEXTURE_2D)
+            glBindTexture(GL_TEXTURE_2D, self._background_id)
 
             glColor4f(1.0, 1.0, 1.0, 1.0)
 
