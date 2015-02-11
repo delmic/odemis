@@ -1025,10 +1025,11 @@ class DelphiStateController(SecomStateController):
 
     @call_in_wx_main
     @ignore_dead
-    def on_step_update(self, future, past, left):
+    def on_step_update(self, future, start, end):
         # Add the estimated time that the rest of the procedure will take
-        self.update_load_time(left + self.rest_time_est)
+        self.update_load_time(end + self.rest_time_est)
 
-    def update_load_time(self, time):
-        self.load_future.set_end_time(time.time() + time)
-        logging.debug("Loading future remaining time: %f", time)
+    def update_load_time(self, end):
+        self.load_future.set_end_time(end)
+        rem_time = end - time.time()
+        logging.debug("Loading future remaining time: %f", rem_time)
