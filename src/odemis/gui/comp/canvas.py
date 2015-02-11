@@ -987,12 +987,12 @@ class BitmapCanvas(BufferedCanvas):
             # Translate to the center of the image (in buffer coordinates)
             ctx.translate(rot_x, rot_y)
             # Rotate
-            ctx.rotate(rotation)
+            ctx.rotate(-rotation)
             # Translate back, so the origin is at the top left position of the image
             ctx.translate(-rot_x, -rot_y)
 
         # Shear if needed
-        if shear is not None:
+        if shear is not None and abs(shear) >= 0.0005:
             # Shear around the center of the image data. Shearing only occurs on the x axis
             x, y, w, h = b_im_rect
             shear_x = x + w / 2
@@ -1000,7 +1000,7 @@ class BitmapCanvas(BufferedCanvas):
 
             # Translate to the center x of the image (in buffer coordinates)
             ctx.translate(shear_x, shear_y)
-            shear_matrix = cairo.Matrix(1.0, 0.0, shear, 1.0)
+            shear_matrix = cairo.Matrix(1.0, -shear, 0.0, 1.0)
             ctx.transform(shear_matrix)
             ctx.translate(-shear_x, -shear_y)
 
