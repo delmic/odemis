@@ -618,7 +618,13 @@ class Actuator(HwComponent):
         """
         axes (dict of str -> Axis): names of the axes and their static information.
         inverted (set of string): sub-set of axes with the name of all axes which
-            are to be inverted (move in opposite direction)
+          are to be inverted (move in opposite direction). Note that wrt
+          absolute positions, an "inverted" axis means that the range stays
+          identical but the reported position is reflected on the center of the
+          range. For instance, if an axis has a range of 1 -> 11, and is
+          inverted, it will still be advertized as having a range of 1 -> 11.
+          However, when the actual position is at 2, the reported position will
+          be 10.
         """
         HwComponent.__init__(self, name, role, **kwargs)
 
@@ -683,7 +689,7 @@ class Actuator(HwComponent):
     # helper methods
     def _applyInversionRel(self, shift):
         """
-        Convert from external relative position to internal position and 
+        Convert from external relative position to internal position and
         vice-versa. (It's an involutary function, so it works in both ways)
         shift (dict string -> float): the shift for a moveRel()
         return (dict string -> float): the shift with inversion of axes applied
@@ -696,7 +702,7 @@ class Actuator(HwComponent):
 
     def _applyInversionAbs(self, pos):
         """
-        Convert from external absolute position to internal position and 
+        Convert from external absolute position to internal position and
         vice-versa. (It's an involutary function, so it works in both ways)
         pos (dict string -> float): the new position for a moveAbs()
         return (dict string -> float): the position with inversion of axes applied
