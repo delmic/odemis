@@ -32,6 +32,9 @@ import wx
 
 # @profile
 # TODO: rename to *_bgra_*
+from odemis.model._dataflow import DataArray
+
+
 def format_rgba_darray(im_darray, alpha=None):
     """ Reshape the given numpy.ndarray from RGB to BGRA format
 
@@ -69,6 +72,28 @@ def format_rgba_darray(im_darray, alpha=None):
         return new_darray
     else:
         raise ValueError("Unsupported colour depth!")
+
+
+def add_alpha_byte(im_darray, alpha=255):
+
+    height, width, depth = im_darray.shape
+
+    if depth == 4:
+        return im_darray
+    elif depth == 3:
+        new_im = numpy.empty((height, width, 4), dtype=numpy.uint8)
+        new_im[:, :, -1] = alpha
+        new_im[:, :, :-1] = im_darray
+
+        if alpha != 255:
+            new_im = scale_to_alpha(new_im)
+
+        if isinstance(im_darray, DataArray):
+            return DataArray(new_im, im_darray.metadata)
+        else:
+            return new_im
+    else:
+        raise ValueError("Unexpected colour depth of %d bytes!" % depth)
 
 
 def scale_to_alpha(im_darray):
