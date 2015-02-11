@@ -901,7 +901,7 @@ class BitmapCanvas(BufferedCanvas):
                     merge_ratio,
                     im_scale=im.metadata['dc_scale'],
                     rotation=im.metadata['dc_rotation'],
-                    shear=last_image.metadata['dc_shear'],
+                    shear=im.metadata['dc_shear'],
                     blend_mode=im.metadata['blend_mode']
                 )
 
@@ -971,7 +971,6 @@ class BitmapCanvas(BufferedCanvas):
         # logging.debug("Intersection (%s, %s, %s, %s)", *intersection)
         # Cache the current transformation matrix
         ctx.save()
-
         # Combine the image scale and the buffer scale
         total_scale = im_scale * self.scale
         if abs(total_scale - 1) < 1e-8:  # in case of small floating errors
