@@ -2078,7 +2078,6 @@ class Bus(model.Actuator):
         self._axis_to_cc = {} # axis name => (Controller, channel)
         axes_def = {} # axis name => axis definition
         # TODO also a rangesRel : min and max of a step
-        position = {}
         speed = {}
         referenced = {}
         for address, kwc in controllers.items():
@@ -2095,7 +2094,6 @@ class Bus(model.Actuator):
                 axis = ac_to_axis[(address, c)]
                 self._axis_to_cc[axis] = (controller, c)
 
-                position[axis] = controller.getPosition(c)
                 # TODO if closed-loop, the ranges should be updated after homing
                 try:
                     rng = controller.pos_rng[c]
@@ -2118,8 +2116,8 @@ class Bus(model.Actuator):
 
         # TODO: allow to override the unit (per axis)
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
-        self.position = model.VigilantAttribute(self._applyInversionAbs(position),
-                                                unit="m", readonly=True)
+        self.position = model.VigilantAttribute({}, unit="m", readonly=True)
+        self._updatePosition()
 
         # RO VA dict axis -> bool: True if the axis has been referenced
         # Only axes which can be referenced are listed
@@ -2204,7 +2202,7 @@ class Bus(model.Actuator):
         if not pos:
             return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
-        pos = self._applyInversionRel(pos)
+        pos = self._applyInversionAbs(pos)
 
         f = self._createFuture()
         f = self._executor.submitf(f, self._doMoveAbs, f, pos)
