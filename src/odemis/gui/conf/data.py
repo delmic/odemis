@@ -284,7 +284,7 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
             },
             "resolution":  # Just for cropping => keep things simple for user
             {
-                "control_type": odemis.gui.CONTROL_NONE,
+                "control_type": odemis.gui.CONTROL_READONLY,
             },
         },
     },
