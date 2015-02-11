@@ -1,0 +1,185 @@
+# Configuration for the SPARC system at Monash University
+SPARC-MONASH: {
+    class: Microscope,
+    role: sparc,
+    children: ["SEM E-beam", "Focus Lens", "Optical Emission Filter",
+    "SEM Detector", "Angular Camera", "Spectrometer", "Fiber Flipper",
+    "Mirror Actuators", "Focus Lens Flipper", "Fiber Actuators"],
+}
+
+# FEI SEM driven via external X/Y connection, using a DAQ board
+"SEM Scan Interface": {
+    class: semcomedi.SEMComedi,
+    role: none,
+    init: {device: "/dev/comedi0"},
+    # more detectors can be added, if necessary
+    children: {scanner: "SEM E-beam", detector0: "SEM Detector"}
+}
+
+# Connect:
+# X -> AO 0
+# Y -> AO 1
+# Ground -> AO GND
+"SEM E-beam": {
+    # Internal child of SEM ExtXY, so no class
+    role: e-beam,
+    init: {
+        channels: [0, 1],
+        limits: [[-3.1754, 3.1754], [-3.7, 3.7]],  # V
+        park: [-5, -5], # V
+        settle_time: 5.e-6, # s
+        hfw_nomag: 0.25, # m
+    },
+    properties: {
+        scale: [8, 8], # (ratio) : start with a pretty fast scan
+        dwellTime: 10.e-6, # s
+        magnification: 100, # (ratio)
+    },
+    affects: ["SEM Detector", "Spectrometer", "Angular Camera"] # affects the CCD in case of cathodoluminescence
+}
+
+# Must be connected on AI 0/AI GND
+"SEM Detector": { # aka ETD
+    # Internal child of Quanta ExtXY, so no class
+    role: se-detector,
+    init: {
+        channel: 0,
+        limits: [-3, 3] # V
+    },
+}
+
+"Focus Lens": {
+    class: static.OpticalLens,
+    role: lens,
+    init: {mag: 0.4917, # ratio
+           pole_pos: [1280, 1080], # (px, px), position of the pole (aka the hole in the mirror)
+          }, 
+    affects: ["Angular Camera"]
+}
+
+# Thorlabs MFF102 holding the lens
+# The convention for the position is:
+# 0° (1)  -> no lens
+# 90° (2) -> lens
+"Focus Lens Flipper": {
+    class: tlaptmf.MFF,
+    role: lens-switch,
+    init: {sn: "37848823",
+           axis: "rx",
+           # inverted: ["rx"],
+    },
+    affects: ["Focus Lens", "Angular Camera", "Spectrometer"]  
+}
+
+# Thorlabs FW102C with some filters
+"Optical Emission Filter": {
+    class: tlfw.FW102c,
+    role: filter,
+    init: {port: "/dev/ttyFTDI*", # will automatically find the right port
+           bands: {1: [420.e-9, 460.e-9], # pos -> m,m
+                   2: [500.e-9, 550.e-9], 
+                   3: "polariser",
+                   6: "pass-through"},
+           },
+    affects: ["Angular Camera", "Spectrometer"]
+}
+
+# Andor Neo
+"Angular Camera": {
+    class: andorcam3.AndorCam3,
+    role: ccd,
+    init: {
+        device: 0,  # if a real camera is plugged in, it's usually 0
+        bitflow_install_dirs: "/usr/share/bitflow/", # Put the path where Bitflow data is installed
+        transpose: [1, -2], # mirrored on Y axis
+    },
+    properties: {
+        fanSpeed: 0.0, # 0 = Off, 0.5= half speed, 1 = max speed
+    }
+}
+
+# Thorlabs MFF102 holding the mirror to select AR or spectrometer
+# The convention for the position is:
+# 0° (1)  -> AR
+# 90° (2) -> spectrometer
+"Fiber Flipper": {
+    class: tlaptmf.MFF,
+    role: ar-spec-selector,
+    init: {sn: "37848720",
+           axis: "rx",
+           # inverted: ["rx"],
+    },
+    affects: ["Angular Camera", "Spectrometer"]  
+}
+
+# Andor iDus 406 + Shamrock SR303i
+"Spectrometer": {
+    class: andorshrk.AndorSpec, # Instantiates an Andorcam2 + Shamrock
+    role: spectrometer,
+    children: {andorcam2: "Spectral Camera", shamrock: "Spectrograph"},
+    init: {},
+    properties: {
+        #binning: [4, 256],
+    },
+}
+
+"Spectral Camera": {
+    # no class, as it's instantiated by AndorSpec
+    role: sp-ccd,
+    init: {
+           device: 0, # 0 = first and only Andor SDK 2 camera
+           #transpose: [-1, 2], # mirrored on X axis if camera is upside-down
+    },
+    properties: {
+        targetTemperature: -55, # °C
+    },
+}
+
+"Spectrograph": {
+    # no class, as it's instantiated by AndorSpec
+    role: spectrograph,
+    init: {
+        device: 0,
+    },
+}
+
+# PI E-861 jumpers (. = off):
+# X          = 1234.6..
+# Y          = 123..6..
+# RZ (yaw)   = 12.4.6..
+# RY (pitch) = 12...6..
+"Mirror Actuators": {
+    class: pigcs.Bus,
+    role: mirror,
+    init: {
+        port: "/dev/ttyPIGCS",
+        # X/Y are same axes as SEM
+        # yaw/pitch are axes according to Mirror's orientation
+        # rz = yaw, ry = pitch (from Mirror's point of view)
+        # axis -> controller, channel, closed-loop?
+        axes: {"y":  [1, 1, False],
+               "x":  [2, 1, False],
+               "ry": [3, 1, False],
+               "rz": [4, 1, False]},
+        # inverted: ["y", "ry"],
+        #dist_to_steps: {"x": 100000, "y": 100000}, # step/m
+    },
+    properties: {
+        speed: {"x": 0.01, "y": 0.01, "rz": 0.01, "ry": 0.01} # m/s
+    }
+}
+
+# New Focus 8742, configured to use network connection with DCHP
+# X axis as motor 1
+# Y axis as motor 2
+"Fiber Actuators": {
+    class: nfpm.PM8742,
+    role: fiber-aligner,
+    init: {
+        address: "autoip", # put the IP address if static IP is used
+        sn: "11511",
+        # X/Y are wrt light path (from the sample to the detector)
+        axes: ["x", "y"],
+        stepsize: [33.e-9, 33.e-9] # m/step
+    },
+}
