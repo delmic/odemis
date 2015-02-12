@@ -59,7 +59,8 @@ class Canvas(glcanvas.GLCanvas):
         self.scale = 1.0
         self.scale_step = 2
 
-        self.rot = 0
+        self.rot = 0.0
+        self.opacity = 1.0
 
         self.Bind(wx.EVT_ERASE_BACKGROUND, self.on_erase_background)
         self.Bind(wx.EVT_SIZE, self.on_size)
@@ -78,6 +79,11 @@ class Canvas(glcanvas.GLCanvas):
                 self.rot = (self.rot - 5) % 360
             else:
                 self.rot = (self.rot + 5) % 360
+        elif evt.AltDown():
+            if evt.GetWheelRotation() > 0:
+                self.opacity = max(0.0, (self.opacity - 0.1))
+            else:
+                self.opacity = min(1.0, (self.opacity + 0.1))
         else:
             if evt.GetWheelRotation() > 0:
                 self.scale /= self.scale_step
@@ -321,7 +327,7 @@ class Canvas(glcanvas.GLCanvas):
 
             glScalef(self.scale, self.scale, 1)
             glRotate(self.rot, 0, 0, 1)
-            glColor4f(1.0, 1.0, 1.0, 0.5)
+            glColor4f(1.0, 1.0, 1.0, self.opacity)
 
             glBegin(GL_QUADS)
 
@@ -439,7 +445,7 @@ class MainWindow(wx.Frame):
 
             buff[...] = palette[(plasma[...] + palette_shift) % 255]
 
-            # print "Buffer filled in %f seconds" % (time.time() - start)
+            # print "%f FPS" % (1.0 / (time.time() - start))
             yield buff
 
 
