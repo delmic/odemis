@@ -289,14 +289,17 @@ def main(args):
                       skew=True)
             trans_val, cor_md = f.result()
 
-        iscale = cor_md[model.MD_PIXEL_SIZE_COR]
-        irot = -cor_md[model.MD_ROTATION_COR] % (2 * math.pi)
+        trans_md, skew_md = cor_md
+        iscale = trans_md[model.MD_PIXEL_SIZE_COR]
+        irot = -trans_md[model.MD_ROTATION_COR] % (2 * math.pi)
+        ishear = -skew_md[model.MD_SHEAR_COR]
+        iscale_xy = skew_md[model.MD_PIXEL_SIZE_COR]
         # Update calibration file
         calibconf = get_calib_conf()
         shid, sht = chamber.sampleHolder.value
         calibconf.set_sh_calib(shid, first_hole, second_hole, hole_focus, offset,
-                             scaling, rotation, iscale, irot, resa, resb, hfwa,
-                             spotshift)
+                             scaling, rotation, iscale, irot, iscale_xy, ishear,
+                             resa, resb, hfwa, spotshift)
     except:
         logging.exception("Unexpected error while performing action.")
         return 127
