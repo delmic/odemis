@@ -285,7 +285,8 @@ def main(args):
                       10e-06,  # m, maximum difference allowed
                       escan,
                       ccd,
-                      detector)
+                      detector,
+                      skew=True)
             trans_val, cor_md = f.result()
 
         iscale = cor_md[model.MD_PIXEL_SIZE_COR]
