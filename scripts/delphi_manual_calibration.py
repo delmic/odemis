@@ -264,7 +264,8 @@ def main(args):
                                   10e-06,  # m, maximum difference allowed
                                   escan,
                                   ccd,
-                                  detector)
+                                  detector,
+                                  skew=True)
             trans_val, cor_md = f.result()
         except Exception:
             # Configure CCD and e-beam to write CL spots
