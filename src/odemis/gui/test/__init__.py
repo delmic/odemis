@@ -29,6 +29,7 @@ import unittest
 import numpy
 
 import wx
+from odemis.gui.util.img import scale_to_alpha
 
 import test_gui
 import odemis.gui.model as gmodel
@@ -271,6 +272,9 @@ def generate_img_data(width, height, depth, alpha=255, color=None):
             bl = random_color(alpha=alpha)
             br = random_color(alpha=alpha)
 
+        if depth == 4:
+            rgb[:, :, -1] = alpha
+
         rgb[..., -1, 0] = numpy.linspace(tr[0], br[0], height)
         rgb[..., -1, 1] = numpy.linspace(tr[1], br[1], height)
         rgb[..., -1, 2] = numpy.linspace(tr[2], br[2], height)
@@ -296,6 +300,8 @@ def generate_img_data(width, height, depth, alpha=255, color=None):
             for w in xrange(width):
                 for h in xrange(height):
                     rgb[h, w] = random_color((230, 230, 255), alpha)[:depth]
+
+        rgb = scale_to_alpha(rgb)
 
     return omodel.DataArray(rgb)
 
