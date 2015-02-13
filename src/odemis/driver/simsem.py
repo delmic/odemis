@@ -153,7 +153,7 @@ class Scanner(model.Emitter):
 
         # .resolution is the number of pixels actually scanned. If it's less than
         # the whole possible area, it's centered.
-        resolution = (self._shape[0] // 8, self._shape[1] // 8)
+        resolution = (self._shape[0] // 4, self._shape[1] // 4)
         self.resolution = model.ResolutionVA(resolution, [(1, 1), self._shape],
                                              setter=self._setResolution)
         self._resolution = resolution
