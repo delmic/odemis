@@ -30,6 +30,7 @@ import odemis.acq.align.delphi as aligndelphi
 import threading
 import time
 import math
+import os
 from odemis.acq import align
 
 DELPHI_OPT_GOOD_FOCUS = 0.03826  # somehow possibly not too bad focus position
@@ -109,6 +110,8 @@ class CalibrationProgressDialog(xrcprogress_dialog):
 
         # ProgressiveFuture for the ongoing calibration
         self._calibconf = calibconf
+        self._main_data = main_data
+        self._vented_pressure = vented_pressure
         self._shid = shid
         self.calib_future = None
         self._calib_future_connector = None
@@ -140,6 +143,9 @@ class CalibrationProgressDialog(xrcprogress_dialog):
             logging.info(msg)
             self.calib_future.cancel()
 
+        if self.cancel_btn.GetLabel() == "Run":
+            os.system("gnome-terminal -e 'python development/odemis/scripts/delphi_manual_calibration.py &'")
+
         self.Destroy()
 
     def on_cancel(self, evt):
@@ -167,10 +173,12 @@ class CalibrationProgressDialog(xrcprogress_dialog):
             self.Layout()
             return
         except Exception:
-            # We cannot do much: just warn the user and pretend it was cancelled
+            # Suggest to the user to run the semi-manual calibration
             self.calib_future.cancel()
-            self.time_txt.SetLabel("Calibration failed.")
-            self.cancel_btn.SetLabel("Close")
+            self.time_txt.SetLabel("Automatic calibration failed.\n"
+                                   "Please follow the manual calibration procedure. \n"
+                                   "Press Run to start.")
+            self.cancel_btn.SetLabel("Run")
             # leave the gauge, to give a hint on what went wrong.
             return
 
