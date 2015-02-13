@@ -445,7 +445,8 @@ def main(args):
             # TODO: if backend running but with a different model, also restart it
             if status == driver.BACKEND_DEAD:
                 logging.warning("Back-end is not responding, will restart it...")
-                subprocess.call(["/usr/bin/pkill", "-f", config["BACKEND"]])
+                #subprocess.call(["/usr/bin/pkill", "-f", config["BACKEND"]])
+                subprocess.call(["sudo", "/usr/bin/odemis-stop"])
                 time.sleep(1)
 
             try:
