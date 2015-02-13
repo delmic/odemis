@@ -199,7 +199,7 @@ class SettingsController(object):
         return ne
 
     @staticmethod
-    def _get_number_formatter(value_ctrl, val, val_unit):
+    def _get_number_formatter(value_ctrl, val, val_unit, sig=3):
         """ TODO: replace/refactor. This method was added as a quick fix """
         value_formatter = None
 
@@ -212,7 +212,7 @@ class SettingsController(object):
                 )
         ):
             def value_formatter(value, unit=val_unit):
-                value_ctrl.SetValue(readable_str(value, unit, sig=3))
+                value_ctrl.SetValue(readable_str(value, unit, sig=sig))
 
         return value_formatter
 
@@ -306,16 +306,18 @@ class SettingsController(object):
         # Create the needed wxPython controls
         if control_type == odemis.gui.CONTROL_READONLY:
             val = vigil_attr.value  # only format if it's a number
+            accuracy = conf.get('accuracy', 3)
             lbl_ctrl, value_ctrl = self.panel.add_readonly_field(label_text, val)
-            value_formatter = self._get_number_formatter(value_ctrl, val, unit)
+            value_formatter = self._get_number_formatter(value_ctrl, val, unit, accuracy)
             ne = SettingEntry(name=name, va=vigil_attr, hw_comp=comp,
                               lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
                               va_2_ctrl=value_formatter)
 
         elif control_type == odemis.gui.CONTROL_TEXT:
             val = vigil_attr.value  # only format if it's a number
+            accuracy = conf.get('accuracy', 3)
             lbl_ctrl, value_ctrl = self.panel.add_text_field(label_text, val)
-            value_formatter = self._get_number_formatter(value_ctrl, val, unit)
+            value_formatter = self._get_number_formatter(value_ctrl, val, unit, accuracy)
             ne = SettingEntry(name=name, va=vigil_attr, hw_comp=comp,
                               lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
                               va_2_ctrl=value_formatter)

@@ -81,6 +81,7 @@ def resolution_from_range_plus_point(comp, va, conf):
     return resolution_from_range(comp, va, conf, init={va.value, (1, 1)})
 
 
+MIN_RES = 200 * 200 # px, minimum amount of pixels to consider it acceptable
 def binning_1d_from_2d(comp, va, conf):
     """ Find simple binnings available in one dimension
 
@@ -93,6 +94,7 @@ def binning_1d_from_2d(comp, va, conf):
         logging.warning("Got a binning not of length 2: %s, will try anyway", cur_val)
 
     try:
+        nbpx_full = comp.shape[0] * comp.shape[1] # res at binning 1
         choices = {cur_val[0]}
         minbin = max(va.range[0])
         maxbin = min(va.range[1])
@@ -100,12 +102,18 @@ def binning_1d_from_2d(comp, va, conf):
         # add up to 5 binnings
         b = int(math.ceil(minbin))  # in most cases, that's 1
         for _ in range(6):
-            if minbin <= b <= maxbin:
-                choices.add(b)
+            # does it still make sense to add such a small binning?
+            if b > cur_val[0]:
+                nbpx = nbpx_full / (b ** 2)
+                if nbpx < MIN_RES: # too small resolution
+                    break
+                if len(choices) >= 5: # too many choices
+                    break
 
-            if len(choices) >= 5 and b >= cur_val[0]:
+            if b > maxbin:
                 break
 
+            choices.add(b)
             b *= 2
 
         choices = sorted(list(choices))
