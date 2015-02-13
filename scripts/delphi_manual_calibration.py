@@ -70,8 +70,20 @@ def main(args):
             logging.error("Failed to find all the components")
             raise KeyError("Not all components found")
 
+        # Get pressure values
+        pressures = chamber.axes["pressure"].choices
+        vacuum_pressure = min(pressures.keys())
+        vented_pressure = max(pressures.keys())
+        if overview_ccd:
+            for p, pn in pressures.items():
+                if pn == "overview":
+                    overview_pressure = p
+                    break
+            else:
+                overview_pressure = None
+
         # Move to the overview position first
-        f = chamber.moveAbs({"pressure": phenom.PRESSURE_NAVCAM})
+        f = chamber.moveAbs({"pressure": overview_pressure})
         f.result()
 
         # Clear all the previous calibration
@@ -109,7 +121,7 @@ def main(args):
         f.result()
 
         # Move to SEM
-        f = chamber.moveAbs({"pressure": phenom.PRESSURE_SEM})
+        f = chamber.moveAbs({"pressure": vacuum_pressure})
         f.result()
 
         # Compute stage calibration values
@@ -295,6 +307,7 @@ def main(args):
         irot = -trans_md[model.MD_ROTATION_COR] % (2 * math.pi)
         ishear = -skew_md[model.MD_SHEAR_COR]
         iscale_xy = skew_md[model.MD_PIXEL_SIZE_COR]
+        logging.info("\n**Computed fine alignment parameters**\n scaling: %s \n rotation: %f \n", iscale, irot)
         # Update calibration file
         calibconf = get_calib_conf()
         shid, sht = chamber.sampleHolder.value
@@ -304,8 +317,11 @@ def main(args):
     except:
         logging.exception("Unexpected error while performing action.")
         return 127
+    finally:
+        # Eject the sample holder
+        f = chamber.moveAbs({"pressure": vented_pressure})
+        f.result()
 
-    logging.info("\n**Computed fine alignment parameters**\n scaling: %s \n rotation: %f \n", iscale, irot)
     return 0
 
 def _discard_data(df, data):
