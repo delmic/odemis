@@ -22,18 +22,16 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import Pyro4
 from concurrent import futures
-from concurrent.futures.thread import ThreadPoolExecutor
 import gc
 import logging
 from multiprocessing.process import Process
+from threading import Thread
 import numpy
 from odemis import model
-from odemis.model import roattribute, oneway, isasync
-from odemis.model._vattributes import VigilantAttributeBase
+from odemis.model import roattribute, oneway, isasync, VigilantAttributeBase
 from odemis.util import mock, timeout
 import os
 import pickle
-from threading import Thread
 import threading
 import time
 import unittest
@@ -42,8 +40,8 @@ import unittest
 logging.getLogger().setLevel(logging.DEBUG)
 #gc.set_debug(gc.DEBUG_LEAK | gc.DEBUG_STATS)
 
-# pyrolog = logging.getLogger("Pyro4")
-# pyrolog.setLevel(min(pyrolog.getEffectiveLevel(), logging.DEBUG))
+pyrolog = logging.getLogger("Pyro4")
+pyrolog.setLevel(min(pyrolog.getEffectiveLevel(), logging.DEBUG))
 
 # Use processes or threads? Threads are easier to debug, but less real
 USE_THREADS = True
@@ -131,7 +129,6 @@ class SerializerTest(unittest.TestCase):
         parentc_unpickled = pickle.loads(dump)
         self.assertEqual(parentc_unpickled.value, 42)
 
-
     def test_mock(self):
         try:
             os.remove("test")
@@ -159,7 +156,6 @@ class ProxyOfProxyTest(unittest.TestCase):
 #  create one remote container with an object (Component)
 #  create a second remote container with a HwComponent
 #  change .affects of HwComponent to the first object
-#  
     def test_component(self):
         cont, comp = model.createInNewContainer("testscont", model.HwComponent,
                                           {"name":"MyHwComp", "role":"affected"})
@@ -472,6 +468,35 @@ class RemoteTest(unittest.TestCase):
 
         self.assertEqual(self.comp.get_number_futures(), 2)
 
+    def test_prog_future(self):
+        """
+        Test ProgressiveFuture (remotely)
+        """
+        self._done_calls = 0
+        self._progess_calls = 0
+        self._start = None
+        self._end = None
+        ft = self.comp.do_progressive_long(5)
+        ft.add_update_callback(self._on_future_proress)
+        ft.add_done_callback(self._on_future_done)
+
+        # we should have received at least one progress update already
+        self.assertGreaterEqual(self._progess_calls, 1)
+
+        ft.result()
+        self.assertGreaterEqual(self._progess_calls, 5)
+        self.assertEqual(self._done_calls, 1)
+
+    def _on_future_done(self, f):
+        self._done_calls += 1
+
+    def _on_future_proress(self, f, start, end):
+        self._progess_calls += 1
+        logging.info("Received future update for %f -> %f", start, end)
+
+        self._start = start
+        self._end = end
+
 #    @unittest.skip("simple")
     def test_subcomponents(self):
         # via method and via roattributes
@@ -501,7 +526,6 @@ class RemoteTest(unittest.TestCase):
         time.sleep(0.1)
         self.assertEqual(count_end, self.count)
         self.assertGreaterEqual(count_end, 1)
-
 
     def test_synchronized_df(self):
         """
@@ -792,7 +816,7 @@ class MyComponent(model.Component):
     """
     def __init__(self, name, daemon):
         model.Component.__init__(self, name=name, daemon=daemon)
-        self.executor = ThreadPoolExecutor(max_workers=1)
+        self.executor = futures.ThreadPoolExecutor(max_workers=1)
         self.number_futures = 0
         self.startAcquire = model.Event() # triggers when the acquisition of .data starts
         self.data = FakeDataFlow(sae=self.startAcquire)
@@ -855,6 +879,33 @@ class MyComponent(model.Component):
         time.sleep(duration)
         return (time.time() - start)
 
+    @isasync
+    def do_progressive_long(self, duration=5):
+        """
+        return a ProgressiveFuture, which will have the estimated time shorten
+        """
+        # First estimate the time to 10s, and then it will be shorten
+        start = time.time() + 1
+        end = start + 10
+        f = model.ProgressiveFuture(start, end)
+
+        # run executeTask in a thread
+        thread = threading.Thread(target=executeTask, name="Long task",
+                            args=(f, self._long_pessimistic_task, f, duration))
+        thread.start()
+        return f
+
+    def _long_pessimistic_task(self, future, duration):
+        start = time.time()
+        end = start + duration
+        psmt_end = start + 2 * duration + 1
+        while time.time() < end:
+            time.sleep(1)
+            psmt_end = max(psmt_end - 1, time.time())
+            future.set_progress(end=psmt_end)
+
+        return (time.time() - start)
+
     def get_number_futures(self):
         return self.number_futures
 
@@ -882,6 +933,32 @@ class MyComponent(model.Component):
     @oneway
     def stopServer(self):
         self._pyroDaemon.shutdown()
+
+
+def executeTask(future, fn, *args, **kwargs):
+    """
+    Executes a task represented by a future.
+    Usually, called as main task of a (separate thread).
+    Based on the standard futures code _WorkItem.run()
+    future (Future): future that is used to represent the task
+    fn (callable): function to call for running the future
+    *args, **kwargs: passed to the fn
+    returns None: when the task is over (or cancelled)
+    """
+    if not future.set_running_or_notify_cancel():
+        return
+
+    try:
+        result = fn(*args, **kwargs)
+    except CancelledError:
+        # cancelled via the future (while running) => it's all already handled
+        pass
+    except BaseException:
+        e = sys.exc_info()[1]
+        future.set_exception(e)
+    else:
+        future.set_result(result)
+
 
 
 class FamilyValueComponent(model.Component):
