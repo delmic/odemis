@@ -998,10 +998,16 @@ class StreamPanel(wx.Panel):
 
     def _add_optical_override_controls(self):
         """ Add controls so optical streams can have their own exposure and power settings """
-        # ====== Top row, auto contrast toggle button
+
+
+        light = self.stream._emitter
+        detector = self.stream._detector
+
+        if not light and not detector:
+            return
 
         msg = "Uncheck to enable custom Exposure time and Power for this stream"
-
+        ctrls = []
         # Create Checkbox label and control
 
         lbl_override = wx.StaticText(self._panel, -1, "Use global settings")
@@ -1023,52 +1029,57 @@ class StreamPanel(wx.Panel):
 
         # Create Exposure time control
 
-        lbl_exposure = wx.StaticText(self._panel, -1, "Exposure time")
-        self.control_gbsizer.Add(lbl_exposure, (self.row_count, 0), span=(1, 1),
-                                 flag=wx.ALIGN_CENTRE_VERTICAL | wx.ALL, border=5)
-        lbl_exposure.Disable()
+        if detector is not None:
+            lbl_exposure = wx.StaticText(self._panel, -1, "Exposure time")
+            self.control_gbsizer.Add(lbl_exposure, (self.row_count, 0), span=(1, 1),
+                                     flag=wx.ALIGN_CENTRE_VERTICAL | wx.ALL, border=5)
+            lbl_exposure.Disable()
 
-        self._sld_exposure = UnitFloatSlider(
-            self._panel,
-            value=2,
-            min_val=0,
-            max_val=4,
-            unit="s",
-            scale="cubic",
-            accuracy=2
-        )
-        self._sld_exposure.Disable()
+            self._sld_exposure = UnitFloatSlider(
+                self._panel,
+                value=detector.exposureTime.value,
+                min_val=0,
+                max_val=4,
+                unit="s",
+                scale="cubic",
+                accuracy=2
+            )
+            self._sld_exposure.Disable()
 
-        self.control_gbsizer.Add(self._sld_exposure, (self.row_count, 1), span=(1, 1),
-                                 flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
-        self.row_count += 1
+            self.control_gbsizer.Add(self._sld_exposure, (self.row_count, 1), span=(1, 1),
+                                     flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
+            ctrls += [lbl_exposure, self._sld_exposure]
+            self.row_count += 1
 
-        lbl_power = wx.StaticText(self._panel, -1, "Power")
-        self.control_gbsizer.Add(lbl_power, (self.row_count, 0), span=(1, 1),
-                                 flag=wx.ALIGN_CENTRE_VERTICAL | wx.ALL, border=5)
-        lbl_power.Disable()
+        if light is not None:
+            lbl_power = wx.StaticText(self._panel, -1, "Power")
+            self.control_gbsizer.Add(lbl_power, (self.row_count, 0), span=(1, 1),
+                                     flag=wx.ALIGN_CENTRE_VERTICAL | wx.ALL, border=5)
+            lbl_power.Disable()
 
-        # Create Power control
-        self._sld_power = UnitFloatSlider(
-            self._panel,
-            value=2,
-            min_val=0,
-            max_val=4,
-            unit="W",
-            scale="cubic",
-            accuracy=2
-        )
-        self._sld_power.Disable()
+            # Create Power control
+            self._sld_power = UnitFloatSlider(
+                self._panel,
+                value=light.power.value,
+                min_val=0,
+                max_val=4,
+                unit="W",
+                scale="cubic",
+                accuracy=4
+            )
+            self._sld_power.Disable()
 
-        self.control_gbsizer.Add(self._sld_power, (self.row_count, 1), span=(1, 1),
-                                 flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
-        self.row_count += 1
+            self.control_gbsizer.Add(self._sld_power, (self.row_count, 1), span=(1, 1),
+                                     flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
 
-        # Create a functin for (en/dis)abling the slider controls
+            ctrls += [lbl_power, self._sld_power]
+            self.row_count += 1
+
+        # Create a function for enabling/disabling the slider controls
 
         def toggle_controls(evt):
-            ctrls = [lbl_exposure, lbl_power, self._sld_exposure, self._sld_power]
-            for c in ctrls:
+            controls = list(ctrls)
+            for c in controls:
                 c.Enable(not c.Enabled)
 
         self._chk_override.Bind(wx.EVT_CHECKBOX, toggle_controls)
