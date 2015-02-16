@@ -64,7 +64,7 @@ SPARC-MONASH: {
 "Focus Lens Flipper": {
     class: tlaptmf.MFF,
     role: lens-switch,
-    init: {sn: "37848823",
+    init: {sn: "37857191",
            axis: "rx",
            # inverted: ["rx"],
     },
@@ -98,6 +98,21 @@ SPARC-MONASH: {
     }
 }
 
+# Thorlabs MFF102 holding the mirror to select AR CCD or AR PMT
+# The convention for the position is:
+# 0° (1)  -> AR CCD
+# 90° (2) -> AR PMT
+"AR CCD/PMT Flipper": {
+    class: tlaptmf.MFF,
+    role: ar-det-selector,
+    init: {sn: "37857195",
+           axis: "rx",
+           # inverted: ["rx"],
+    },
+    affects: ["Angular Camera"]  
+}
+
+
 # Thorlabs MFF102 holding the mirror to select AR or spectrometer
 # The convention for the position is:
 # 0° (1)  -> AR
@@ -105,7 +120,7 @@ SPARC-MONASH: {
 "Fiber Flipper": {
     class: tlaptmf.MFF,
     role: ar-spec-selector,
-    init: {sn: "37848720",
+    init: {sn: "37857201",
            axis: "rx",
            # inverted: ["rx"],
     },
