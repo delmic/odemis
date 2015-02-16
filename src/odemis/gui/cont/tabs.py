@@ -390,7 +390,7 @@ class SecomStreamsTab(Tab):
                 d, e, f = self._get_focus_hw(curr_s)
 
             if all((d, f)):
-                self._autofocus_f = AutoFocus(d, e, f, 0) # 0 = max accuracy
+                self._autofocus_f = AutoFocus(d, e, f)
                 self._autofocus_f.add_done_callback(self._on_autofocus_done)
             else:
                 # Should never happen as normally the menu/icon are disabled

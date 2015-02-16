@@ -526,7 +526,7 @@ class SecomStateController(MicroscopeStateController):
             # We are using the best accuracy possible: 0
             try:
                 f = align.autofocus.AutoFocus(self._main_data.overview_ccd, None,
-                                              self._main_data.overview_focus, 0)
+                                              self._main_data.overview_focus)
             except Exception:
                 logging.exception("Failed to start auto-focus")
                 self._on_overview_focused(None)

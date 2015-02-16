@@ -8,12 +8,12 @@ Copyright © 2014-2015 Kimon Tsitsikas, Delmic
 
 This script allows the user to perform the whole delphi calibration procedure
 step by step in a semi-manual way. It attempts to apply each step automatically
-and in case of failure it waits for the user to perform the step failed manually. 
+and in case of failure it waits for the user to perform the step failed manually.
 
 run as:
 python delphi_manual_calibration.py
 
-You first need to run the odemis backend with the SECOM config:
+You first need to run the odemis backend with the DELPHI config:
 odemisd --log-level 2 install/linux/usr/share/odemis/delphi.odm.yaml
 """
 
@@ -22,7 +22,6 @@ from __future__ import division
 import logging
 from odemis import model
 import odemis.acq.align.delphi as aligndelphi
-from odemis.driver import phenom
 import sys
 from odemis.acq import align
 from odemis.gui.conf import get_calib_conf
@@ -91,7 +90,7 @@ def main(args):
         stage.updateMetadata({
                   model.MD_POS_COR: (0, 0),
                   model.MD_PIXEL_SIZE_COR: (1, 1),
-                  model.MD_ROTATION_COR: 0
+                  model.MD_ROTATION_COR: 0,
                   })
 
         # Reference the (optical) stage
@@ -105,7 +104,7 @@ def main(args):
 
         # SEM stage to (0,0)
         logging.debug("Moving to the center of SEM stage...")
-        f = sem_stage.moveAbs({"x":0, "y":0})
+        f = sem_stage.moveAbs({"x": 0, "y": 0})
         f.result()
 
         # Calculate offset approximation
@@ -135,7 +134,7 @@ def main(args):
         raw_input(msg)
         logging.debug("Trying to detect the holes/markers of the sample holder...")
         hole_detectionf = aligndelphi.HoleDetection(detector, escan, sem_stage,
-                                                ebeam_focus)
+                                                    ebeam_focus)
         first_hole, second_hole, hole_focus = hole_detectionf.result()
         logging.debug("First hole: %s (m,m) Second hole: %s (m,m)", first_hole, second_hole)
         hole_focus = ebeam_focus.position.value.get('z')
@@ -145,7 +144,7 @@ def main(args):
         f.result()
 
         logging.debug("Moving objective stage to (0,0)...")
-        f = opt_stage.moveAbs({"x":0, "y":0})
+        f = opt_stage.moveAbs({"x": 0, "y": 0})
         f.result()
         # Set min fov
         # We want to be as close as possible to the center when we are zoomed in
@@ -225,13 +224,13 @@ def main(args):
         # Compute HFW-related values
         hfw_shiftf = aligndelphi.HFWShiftFactor(detector, escan, sem_stage, ebeam_focus, hole_focus)
         hfwa = hfw_shiftf.result()
-        
+
         logging.info("\n**Computed SEM shift parameters**\n resa: %s \n resb: %s \n hfwa: %s \n spotshift: %s \n", resa, resb, hfwa, spotshift)
 
         # Return to the center so fine alignment can be executed just after calibration
         f = sem_stage.moveAbs({"x":-pure_offset[0], "y":-pure_offset[1]})
         f.result()
-        f = opt_stage.moveAbs({"x":0, "y":0})
+        f = opt_stage.moveAbs({"x": 0, "y": 0})
         f.result()
         f = focus.moveAbs({"z": center_focus})
         f.result()
@@ -247,7 +246,7 @@ def main(args):
         escan.translation.value = (0, 0)
         escan.dwellTime.value = 5e-06
         det_dataflow = detector.data
-        f = autofocus.AutoFocus(ccd, escan, ebeam_focus, autofocus.ROUGH_SPOTMODE_ACCURACY, background=True, dataflow=det_dataflow)
+        f = autofocus.AutoFocus(ccd, escan, ebeam_focus, dfbkg=det_dataflow)
         f.result()
 
         # Refocus the SEM
