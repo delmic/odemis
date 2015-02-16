@@ -347,6 +347,10 @@ class CheckBox(wx.PyControl):
 
         return self._checked
 
+    def toggle(self, evt):
+        self._checked = not self._checked
+        self.SendCheckBoxEvent()
+        self.Refresh()
 
     def SetValue(self, state):
         """
