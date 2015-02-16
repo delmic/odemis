@@ -22,16 +22,17 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import Pyro4
 from concurrent import futures
+from concurrent.futures import CancelledError
 import gc
 import logging
 from multiprocessing.process import Process
-from threading import Thread
 import numpy
 from odemis import model
 from odemis.model import roattribute, oneway, isasync, VigilantAttributeBase
 from odemis.util import mock, timeout
 import os
 import pickle
+import sys
 import threading
 import time
 import unittest
@@ -46,7 +47,7 @@ pyrolog.setLevel(min(pyrolog.getEffectiveLevel(), logging.DEBUG))
 # Use processes or threads? Threads are easier to debug, but less real
 USE_THREADS = True
 
-#@unittest.skip("simple")
+# @unittest.skip("simple")
 class ContainerTest(unittest.TestCase):
     def test_empty_container(self):
         container = model.createNewContainer("testempty")
@@ -135,17 +136,20 @@ class SerializerTest(unittest.TestCase):
         except OSError:
             pass
         daemon = Pyro4.Daemon(unixsocket="test")
-        CONFIG_SED = {"name": "sed", "role": "sed", "channel":5, "limits": [-3, 3]}
-        CONFIG_SCANNER = {"name": "scanner", "role": "ebeam", "limits": [[0, 5], [0, 5]]} 
-        CONFIG_SEM = {"name": "sem", "role": "sem", "device": "/dev/comedi0", 
+        CONFIG_SED = {"name": "sed", "role": "sed", "channel": 5, "limits": [-3, 3]}
+        CONFIG_SCANNER = {"name": "scanner", "role": "ebeam", "limits": [[0, 5], [0, 5]]}
+        CONFIG_SEM = {"name": "sem", "role": "sem", "device": "/dev/comedi0",
               "children": {"detector0": CONFIG_SED, "scanner": CONFIG_SCANNER}
-              }
+        }
         sem = mock.MockComponent(daemon=daemon, _realcls=model.HwComponent, **CONFIG_SEM)
 
         dump = pickle.dumps(sem, pickle.HIGHEST_PROTOCOL)
 #        print "dump size is", len(dump)
         sem_unpickled = pickle.loads(dump)
-        self.assertEqual(len(sem_unpickled.children.value), 2)
+        # Cannot check children because it's (now) a VA, which requires the
+        # daemon to be actually running
+        # self.assertEqual(len(sem_unpickled.children.value), 2)
+        self.assertEqual(sem_unpickled.name, "sem")
         sem.terminate()
 
 
@@ -222,11 +226,11 @@ class ProxyOfProxyTest(unittest.TestCase):
 
     def test_roattributes(self):
         cont, comp = model.createInNewContainer("testscont", MyComponent,
-                                          {"name":"MyComp"})
+                                                {"name": "MyComp"})
         self.assertEqual(comp.name, "MyComp")
 
         cont2, comp2 = model.createInNewContainer("testscont2", model.HwComponent,
-                                           {"name":"MyHwComp2", "role":"affecter"})
+                                                  {"name": "MyHwComp2", "role": "affecter"})
         self.assertEqual(comp2.name, "MyHwComp2")
 
         comp2.affects.value.append(comp)
@@ -282,9 +286,9 @@ class ProxyOfProxyTest(unittest.TestCase):
         disappears.
         """
         cont, comp = model.createInNewContainer("testscont", MyComponent,
-                                          {"name":"MyComp"})
+                                                {"name": "MyComp"})
         cont2, comp2 = model.createInNewContainer("testscont2", MyComponent,
-                                           {"name":"MyComp2"})
+                                                  {"name": "MyComp2"})
 
         self.count = 0
         self.data_arrays_sent = 0
@@ -329,7 +333,7 @@ class RemoteTest(unittest.TestCase):
     def setUp(self):
         # Use Thread for debug:
         if USE_THREADS:
-            self.server = Thread(target=ServerLoop, args=(self.container_name,))
+            self.server = threading.Thread(target=ServerLoop, args=(self.container_name,))
         else:
             self.server = Process(target=ServerLoop, args=(self.container_name,))
         self.server.start()
@@ -337,7 +341,7 @@ class RemoteTest(unittest.TestCase):
         self.count = 0
         self.data_arrays_sent = 0
         time.sleep(0.1) # give it some time to start
-        self.rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+self.container_name)
+        self.rdaemon = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:" + self.container_name)
         self.comp = self.rdaemon.getObject("mycomp")
 
     def tearDown(self):
@@ -832,11 +836,9 @@ class MyComponent(model.Component):
         self.cut = model.IntVA(0, setter=self._setCut)
         self.listval = model.ListVA([2, 65])
 
-
     def _setCut(self, value):
         self.data.cut = value
         return self.data.cut
-
 
     @roattribute
     def my_value(self):
@@ -958,7 +960,6 @@ def executeTask(future, fn, *args, **kwargs):
         future.set_exception(e)
     else:
         future.set_result(result)
-
 
 
 class FamilyValueComponent(model.Component):
