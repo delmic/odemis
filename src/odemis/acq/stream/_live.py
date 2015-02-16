@@ -499,6 +499,7 @@ class BrightfieldStream(CameraStream):
         em = [1.] * len(self._emitter.emissions.value)
         self._emitter.emissions.value = em
 
+# TODO: unused (now gui.model.ContentView can be used to the same)
 class CameraNoLightStream(CameraStream):
     """ Stream containing images obtained via optical CCD but without any light
      source on. Used for the SECOM lens alignment tab.

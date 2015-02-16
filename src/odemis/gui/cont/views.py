@@ -47,7 +47,8 @@ class ViewPortController(object):
         :param main_frame: wx.Frame -- the frame which contains the 4 viewports
         :param viewports: [MicroscopeViewport] or OrderedDict(MicroscopeViewport -> {}) -- the
             viewports to update. The first one is the one focused. If it's an OrderedDict, the
-            kwargs are passed to the MicroscopeView creation.
+            kwargs are passed to the MicroscopeView creation. A special kwarg "cls"
+            can be used to use a specific class for the View (instead of MicroscopeView)
             If there are more than 4 viewports, only the first 4 will be made visible and any others
             will be hidden.
         :param toolbar: ToolBar or None-- toolbar to manage the TOOL_ZOOM_FIT tool.
@@ -120,16 +121,13 @@ class ViewPortController(object):
         # create the viewports according to the stream classes.
         # It could be possible to even delete viewports and create new ones
         # when .views changes.
-        # When .visible_views changes, but the viewports in the right order
+        # When .visible_views changes, put the viewports in the right order
         # in the sizer.
 
         assert not self._data_model.views.value  # should still be empty
 
         # If AnalysisTab for Sparc: SEM/Spec/AR/SEM
         if isinstance(self._data_model, model.AnalysisGUIData):
-
-            # FIXME: Since displaying viewports should be completely dynamic, the button labels
-            # should also be made to be dynamic in some way
 
             # Viewport type checking to avoid mismatches
             for vp in self._viewports[:4]:
@@ -186,16 +184,19 @@ class ViewPortController(object):
 
             logging.info("Creating combined SEM/Optical viewport layout")
             vpv = collections.OrderedDict([
-                (self._viewports[0],
+                (self._viewports[0], # focused view
                  {"name": "Optical",
                   "stage": self._main_data_model.stage,
                   "focus": self._main_data_model.focus,
                   "stream_classes": OpticalStream,
                   }),
-                (self._viewports[1],  # focused view
+                (self._viewports[1],
                  {"name": "SEM",
+                  # centered on content, even on Delphi when POS_COR used to
+                  # align on the optical streams
+                  "cls": model.ContentView,
                   "stage": self._main_data_model.stage,
-                  "focus":  self._main_data_model.ebeam_focus,
+                  "focus": self._main_data_model.ebeam_focus,
                   "stream_classes": EMStream,
                   }),
                 (self._viewports[2],
@@ -381,7 +382,7 @@ class ViewPortController(object):
                     grid_panel.set_shown_viewports(viewport)
                     break
             else:
-                raise ValueError("No foccused view found!")
+                raise ValueError("No focussed view found!")
 
         elif layout == model.VIEW_LAYOUT_22:
             logging.debug("Displaying 2x2 viewport grid")
