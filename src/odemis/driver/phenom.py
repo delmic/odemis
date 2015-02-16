@@ -1580,7 +1580,7 @@ class ChamberPressure(model.Actuator):
             # Usually about five minutes
             timeRemaining = 5 * 60
         else:
-            timeRemaining = 20
+            timeRemaining = 60
         return timeRemaining  # s
 
     def _changePressure(self, future, p):
@@ -1632,7 +1632,7 @@ class ChamberPressure(model.Actuator):
     def _updateTime(self, future, target):
         try:
             remainingTime = self.parent._device.GetProgressAreaSelection().progress.timeRemaining
-            future.set_end_time(time.time() + self.wakeUpTime + remainingTime + 5)
+            future.set_end_time(time.time() + self.wakeUpTime + remainingTime)
         except suds.WebFault:
             logging.warning("Time updater failed, cannot move to another state.", exc_info=True)
 
