@@ -104,6 +104,7 @@ class InstantaneousFuture(futures.Future):
     def __init__(self, result=None, exception=None):
         self._result = result
         self._exception = exception
+        self._end = time.time()
 
     def cancel(self):
         return False
@@ -127,6 +128,12 @@ class InstantaneousFuture(futures.Future):
 
     def add_done_callback(self, fn):
         fn(self)
+
+    def get_progress(self):
+        return self._end, self._end
+
+    def add_update_callback(self, fn):
+        fn(self, self._end, self._end)
 
 
 class CancellableFuture(futures.Future):
