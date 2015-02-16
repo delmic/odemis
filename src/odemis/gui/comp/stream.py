@@ -27,18 +27,22 @@ Stream panels are custom, specialized controls that allow the user to view and
 manipulate various data streams coming from the microscope.
 
 """
+
 from __future__ import division
 
 import collections
 import logging
 import numpy
+import wx
 import wx.lib.newevent
 from wx.lib.pubsub import pub
 
 from odemis import acq
+from odemis.acq.stream import OpticalStream
 from odemis.gui import FG_COLOUR_EDIT, FG_COLOUR_MAIN, \
     BG_COLOUR_MAIN, BG_COLOUR_STREAM, FG_COLOUR_DIS, \
     FG_COLOUR_WARNING, FG_COLOUR_ERROR
+from odemis.gui.comp.checkbox import CheckBox
 from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider,\
@@ -65,11 +69,11 @@ BUTTON_SIZE = (18, 18)
 # information themselves.
 
 # Values to control which option is available
-OPT_NAME_EDIT = 1 # allow the renaming of the stream (for one time only)
-OPT_BTN_REMOVE = 2 # remove the stream entry
-OPT_BTN_VISIBLE = 4 # show/hide the stream image
-OPT_BTN_UPDATED = 8 # update/stop the stream acquisition
-OPT_BTN_TINT = 16 # tint of the stream (if the VA exists)
+OPT_NAME_EDIT = 1  # allow the renaming of the stream (for one time only)
+OPT_BTN_REMOVE = 2  # remove the stream entry
+OPT_BTN_VISIBLE = 4  # show/hide the stream image
+OPT_BTN_UPDATED = 8  # update/stop the stream acquisition
+OPT_BTN_TINT = 16  # tint of the stream (if the VA exists)
 
 CAPTION_PADDING_RIGHT = 5
 ICON_WIDTH, ICON_HEIGHT = 16, 16
@@ -455,6 +459,8 @@ class StreamPanel(wx.Panel):
         self._expander = None
         self._panel = None
 
+        self._prev_drange = None
+
         self.control_gbsizer = wx.GridBagSizer()
 
         # Counter that keeps track of the number of rows containing controls inside this panel
@@ -516,6 +522,9 @@ class StreamPanel(wx.Panel):
 
         if self._has_wl(self.stream):
             self._add_wl_controls()
+
+        if isinstance(self.stream, OpticalStream):
+            self._add_optical_override_controls()
 
         # FIXME: only add if some controls are available
         self.control_gbsizer.AddGrowableCol(1)  # This makes the 2nd column's width variable
@@ -984,6 +993,96 @@ class StreamPanel(wx.Panel):
             self._update_drange(drange)
 
         wx.CallAfter(dead_object_wrapper(self._sld_hist.SetContent), norm_hist)
+
+    # ===== For separate Optical stream settings
+
+    def _add_optical_override_controls(self):
+        """ Add controls so optical streams can have their own exposure and power settings """
+
+
+        light = self.stream._emitter
+        detector = self.stream._detector
+
+        if not light and not detector:
+            return
+
+        msg = "Uncheck to enable custom Exposure time and Power for this stream"
+        ctrls = []
+        # Create Checkbox label and control
+
+        lbl_override = wx.StaticText(self._panel, -1, "Use global settings")
+        lbl_override.SetToolTipString(msg)
+        self.control_gbsizer.Add(lbl_override, (self.row_count, 0), span=(1, 1),
+                                 flag=wx.ALIGN_CENTRE_VERTICAL | wx.ALL, border=5)
+
+        self._chk_override = CheckBox(self._panel, -1)
+        self._chk_override.SetValue(True)  # checked
+        self._chk_override.SetToolTipString(msg)
+        self.control_gbsizer.Add(self._chk_override, (self.row_count, 1), span=(1, 1),
+                                 flag=wx.ALIGN_CENTRE_VERTICAL | wx.ALL, border=5)
+
+        # Associate the checkbox label with the checkbox control, so clicking it will toggle the
+        # checkbox
+        lbl_override.Bind(wx.EVT_LEFT_UP, self._chk_override.toggle)
+
+        self.row_count += 1
+
+        # Create Exposure time control
+
+        if detector is not None:
+            lbl_exposure = wx.StaticText(self._panel, -1, "Exposure time")
+            self.control_gbsizer.Add(lbl_exposure, (self.row_count, 0), span=(1, 1),
+                                     flag=wx.ALIGN_CENTRE_VERTICAL | wx.ALL, border=5)
+            lbl_exposure.Disable()
+
+            self._sld_exposure = UnitFloatSlider(
+                self._panel,
+                value=detector.exposureTime.value,
+                min_val=0,
+                max_val=4,
+                unit="s",
+                scale="cubic",
+                accuracy=2
+            )
+            self._sld_exposure.Disable()
+
+            self.control_gbsizer.Add(self._sld_exposure, (self.row_count, 1), span=(1, 1),
+                                     flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
+            ctrls += [lbl_exposure, self._sld_exposure]
+            self.row_count += 1
+
+        if light is not None:
+            lbl_power = wx.StaticText(self._panel, -1, "Power")
+            self.control_gbsizer.Add(lbl_power, (self.row_count, 0), span=(1, 1),
+                                     flag=wx.ALIGN_CENTRE_VERTICAL | wx.ALL, border=5)
+            lbl_power.Disable()
+
+            # Create Power control
+            self._sld_power = UnitFloatSlider(
+                self._panel,
+                value=light.power.value,
+                min_val=0,
+                max_val=4,
+                unit="W",
+                scale="cubic",
+                accuracy=4
+            )
+            self._sld_power.Disable()
+
+            self.control_gbsizer.Add(self._sld_power, (self.row_count, 1), span=(1, 1),
+                                     flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
+
+            ctrls += [lbl_power, self._sld_power]
+            self.row_count += 1
+
+        # Create a function for enabling/disabling the slider controls
+
+        def toggle_controls(evt):
+            controls = list(ctrls)
+            for c in controls:
+                c.Enable(not c.Enabled)
+
+        self._chk_override.Bind(wx.EVT_CHECKBOX, toggle_controls)
 
     # ====== For the dyes
     def _has_dye(self, stream):

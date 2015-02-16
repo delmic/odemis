@@ -978,18 +978,10 @@ class ContentView(StreamView):
 
         super(ContentView, self)._onNewImage(im)
 
-    def _on_stage_move_done(self, f):
-        """
-        Called whenever a stage move is completed
-        """
-        # find the latest image
-        try:
-            im = max((i for i in self.stream_tree.getImages()),
-                     key=lambda d: d.metadata.get(MD_ACQ_DATE))
-        except ValueError:
-            return # no image at all
-
-        self._onNewImage(im)
+    # Note: we don't reset the view position at the end of the move. It will
+    # only be reset on the next image after the end of the move (if it ever
+    # comes). This is done on purpose to clearly show that the image displayed
+    # is not yet at the place where the move finished.
 
 class OverviewView(StreamView):
     """
