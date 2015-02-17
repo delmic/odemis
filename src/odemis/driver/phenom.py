@@ -1580,7 +1580,7 @@ class ChamberPressure(model.Actuator):
             # Usually about five minutes
             timeRemaining = 5 * 60
         else:
-            timeRemaining = 20
+            timeRemaining = 60
         return timeRemaining  # s
 
     def _changePressure(self, future, p):
@@ -1609,6 +1609,9 @@ class ChamberPressure(model.Actuator):
                     except suds.WebFault:
                         # TODO, check why this exception appears only in CRUK
                         logging.debug("Move appears not to be completed.")
+                    # Rough estimation until SEM is ready
+                    TimeUpdater.cancel()
+                    future.set_end_time(time.time() + 5)
                     # Take care of the calibration that takes place when we move to SEM
                     self._waitForDevice()
                 elif p["pressure"] == PRESSURE_NAVCAM:
@@ -1617,22 +1620,24 @@ class ChamberPressure(model.Actuator):
                         # If in standby or currently waking up, open event channel
                         self._wakeUp()
                     self._pressure_device.SelectImagingDevice(self._imagingDevice.NAVCAMIMDEV)
+                    # Rough estimation until NavCam is ready
+                    TimeUpdater.cancel()
+                    future.set_end_time(time.time() + 1)
                     # Wait for NavCam
                     self._waitForDevice()
                 else:
                     self._pressure_device.UnloadSample()
+                    TimeUpdater.cancel()
             except suds.WebFault:
                 logging.warning("Acquisition in progress, cannot move to another state.", exc_info=True)
         self._chamber_event.set()
         # Wait for position to be updated
         self._position_event.wait()
 
-        TimeUpdater.cancel()
-
     def _updateTime(self, future, target):
         try:
             remainingTime = self.parent._device.GetProgressAreaSelection().progress.timeRemaining
-            future.set_end_time(time.time() + self.wakeUpTime + remainingTime + 5)
+            future.set_end_time(time.time() + self.wakeUpTime + remainingTime)
         except suds.WebFault:
             logging.warning("Time updater failed, cannot move to another state.", exc_info=True)
 
