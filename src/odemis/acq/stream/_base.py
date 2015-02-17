@@ -129,7 +129,7 @@ class Stream(object):
         self.intensityRange.subscribe(self._onIntensityRange)
         self._ht_needs_recompute = threading.Event()
         self._hthread = threading.Thread(target=self._histogram_thread,
-                                        name="Histogram computation")
+                                         name="Histogram computation")
         self._hthread.daemon = True
         self._hthread.start()
 
@@ -174,7 +174,7 @@ class Stream(object):
 
         warning (WARNING_*): the warning to add
         """
-        if not warning in self.warnings.value:
+        if warning not in self.warnings.value:
             self.warnings.value.append(warning)
 
     def onActive(self, active):
@@ -228,7 +228,7 @@ class Stream(object):
                         depth = self._detector.shape[-1]
                         if depth <= 1:
                             logging.warning("Detector %s report a depth of %d",
-                                             self._detector.name, depth)
+                                            self._detector.name, depth)
                             raise ValueError()
 
                         if data.dtype.kind == "i":
@@ -366,11 +366,11 @@ class Stream(object):
 
     def _onAutoBC(self, enabled):
         # if changing to auto: B/C might be different from the manual values
-        if enabled == True:
+        if enabled:
             self._updateImage()
 
     def _onOutliers(self, outliers):
-        if self.auto_bc.value == True:
+        if self.auto_bc.value:
             self._updateImage()
 
     def _setIntensityRange(self, irange):
@@ -385,7 +385,7 @@ class Stream(object):
     def _onIntensityRange(self, irange):
         # If auto_bc is active, it updates intensities (from _updateImage()),
         # so no need to refresh image again.
-        if self.auto_bc.value == False:
+        if not self.auto_bc.value:
             self._updateImage()
 
     def _shouldUpdateHistogram(self):
