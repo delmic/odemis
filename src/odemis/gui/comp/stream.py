@@ -1014,10 +1014,12 @@ class StreamPanel(wx.Panel):
         self._dye_xwl = None
         self._dye_ewl = None
 
+        self._prev_ewl_center = None # ewl when tint was last changed
+
         # Excitation and emission are:
         # Label + wavelength combo box + peak label + a colour display
         ex_center = fluo.get_one_center_ex(self.stream.excitation.value,
-                                            self.stream.emission.value)
+                                           self.stream.emission.value)
         r = self._add_filter_line(u"Excitation", self.stream.excitation,
                                   ex_center,
                                   self._excitation_2_ctrl,
@@ -1143,8 +1145,6 @@ class StreamPanel(wx.Panel):
         of the centers.
         return (float): wavelength in m
         """
-        # TODO: be clever, and guess which one is most likely based on the other
-        # wavelength? (needs to have 2 versions: excitation and emission)
         if isinstance(band[0], collections.Iterable):
             return fluo.get_center(band[0])
         else:
@@ -1214,12 +1214,30 @@ class StreamPanel(wx.Panel):
             low, high = [int(round(b * 1e9)) for b in (band[0], band[-1])]
             lbl_ctrl.SetToolTipString(tooltip % (low, high))
 
+    def _sync_tint_on_emission(self, ewl, xwl):
+        """
+        Set the tint to the same colour as emission, if no dye has been
+         selected. If a dye is selected, it's dependent on the dye information.
+        ewl ((tuple of) tuple of floats): emission wavelength
+        wwl ((tuple of) tuple of floats): excitation wavelength
+        """
+        if self._dye_ewl is None: # if dye is used, keep the peak wavelength
+            ewl_center = fluo.get_one_center_em(ewl, xwl)
+            if self._prev_ewl_center == ewl_center:
+                return
+            self._prev_ewl_center = ewl_center
+            colour = wave2rgb(ewl_center)
+            logging.debug("Synchronising tint to %s", colour)
+            self.stream.tint.value = colour
+
     def _excitation_2_va(self):
         """
         Called when the text is changed (by the user).
         returns a value to set for the VA
         """
-        return self._txt_excitation.GetClientData(self._txt_excitation.GetSelection())
+        xwl = self._txt_excitation.GetClientData(self._txt_excitation.GetSelection())
+        self._sync_tint_on_emission(self.stream.emission.value, xwl)
+        return xwl
 
     def _excitation_2_ctrl(self, value):
         """
@@ -1236,7 +1254,7 @@ class StreamPanel(wx.Panel):
             logging.error("No existing label found for value %s", value)
 
         if self._dye_xwl is None: # no dye info => use hardware settings
-            colour = wave2rgb(self._get_one_center(value))
+            colour = wave2rgb(fluo.get_one_center_ex(value, self.stream.emission.value))
             self._btn_excitation.set_colour(colour)
         else:
             self._update_peak_label_fit(self._lbl_exc_peak, self._btn_excitation,
@@ -1245,7 +1263,6 @@ class StreamPanel(wx.Panel):
         if self._dye_ewl is None:
             colour = wave2rgb(fluo.get_one_center_em(self.stream.emission.value, value))
             self._btn_emission.set_colour(colour)
-            self.stream.tint.value = colour
 
     def _emission_2_va(self):
         """
@@ -1253,7 +1270,9 @@ class StreamPanel(wx.Panel):
         Also updates the tint as a side-effect.
         returns a value to set for the VA
         """
-        return self._txt_emission.GetClientData(self._txt_emission.GetSelection())
+        ewl = self._txt_emission.GetClientData(self._txt_emission.GetSelection())
+        self._sync_tint_on_emission(ewl, self.stream.excitation.value)
+        return ewl
 
     def _emission_2_ctrl(self, value):
         """
@@ -1270,14 +1289,13 @@ class StreamPanel(wx.Panel):
         if self._dye_ewl is None: # no dye info => use hardware settings
             colour = wave2rgb(fluo.get_one_center_em(value, self.stream.excitation.value))
             self._btn_emission.set_colour(colour)
-            # if dye is used, keep the peak wavelength
-            self.stream.tint.value = colour
         else:
             self._update_peak_label_fit(self._lbl_em_peak, self._btn_emission,
                                         self._dye_ewl, value)
         # also update excitation colour as it's dependent on emission when multiband
-        if self._dye_ewl is None:
+        if self._dye_xwl is None:
             colour = wave2rgb(fluo.get_one_center_ex(self.stream.excitation.value, value))
+            self._btn_excitation.set_colour(colour)
 
     # ===== Wavelength bandwidth for SpectrumSettingsStream
 
