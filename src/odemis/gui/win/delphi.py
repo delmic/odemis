@@ -304,14 +304,6 @@ def _DoDelphiCalibration(future, main_data, overview_pressure, vacuum_pressure,
                 f = main_data.chamber.moveAbs({"pressure": overview_pressure})
                 f.result()
 
-                # Clear all the previous calibration
-                logging.debug("Clear all the previous calibration...")
-                main_data.stage.updateMetadata({
-                          model.MD_POS_COR: (0, 0),
-                          model.MD_PIXEL_SIZE_COR: (1, 1),
-                          model.MD_ROTATION_COR: 0
-                          })
-
                 # Reference the (optical) stage
                 logging.debug("Reference the (optical) stage...")
                 f = opt_stage.reference({"x", "y"})
