@@ -999,9 +999,8 @@ class StreamPanel(wx.Panel):
     def _add_optical_override_controls(self):
         """ Add controls so optical streams can have their own exposure and power settings """
 
-
-        light = self.stream._emitter
-        detector = self.stream._detector
+        light = self.stream.emitter
+        detector = self.stream.detector
 
         if not light and not detector:
             return
