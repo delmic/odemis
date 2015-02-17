@@ -86,7 +86,8 @@ class VigilantAttributeConnector(object):
         ctrl (wx.Window): a wx widget to connect to
         va_2_ctrl (None or callable ((value) -> None)): a function to be called
             when the VA is updated, to update the widget. If None, try to use
-            the default SetValue().
+            the default SetValue(). It is always called in the main WX thread.
+            It is called once at initialisation.
         ctrl_2_va (None or callable ((None) -> value)): a function to be called
             when the widget is updated, to update the VA. If None, try to use
             the default GetValue().
