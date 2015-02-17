@@ -118,7 +118,7 @@ class TestFindOptimalRange(unittest.TestCase):
 
             logging.info("shortcut took %g s, while full took %g s", dur_sc, dur_full)
             self.assertLessEqual(dur_sc, dur_full)
-        
+
 
     def test_auto_vs_manual(self):
         """
@@ -383,6 +383,27 @@ class TestDataArray2RGB(unittest.TestCase):
         self.assertTrue(numpy.all(pixel0 <= pixel1))
         self.assertTrue(numpy.all(pixel0 <= pixelg))
         self.assertTrue(numpy.all(pixelg <= pixel1))
+
+    def test_uint8(self):
+        # uint8 is special because it's so close from the output that bytescale
+        # normally does nothing
+        irange = (25, 135)
+        shape = (1024, 836)
+        tint = (0, 73, 255)
+        data = numpy.random.random_integers(irange[0], irange[1], shape).astype(numpy.uint8)
+        # to be really sure there is at least one of the min and max values
+        data[0, 0] = irange[0]
+        data[0, 1] = irange[1]
+
+        out = img.DataArray2RGB(data, irange, tint=tint)
+
+        pixel1 = out[0, 1]
+        numpy.testing.assert_array_equal(pixel1, list(tint))
+
+        self.assertTrue(numpy.all(out[..., 0] == 0))
+
+        self.assertEqual(out[..., 2].min(), 0)
+        self.assertEqual(out[..., 2].max(), 255)
 
 
 class TestMergeMetadata(unittest.TestCase):

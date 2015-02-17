@@ -233,11 +233,15 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
 
     # fit it to 8 bits and update brightness and contrast at the same time
     if irange is None:
-        # automatic scaling (not so fast as min and max must be found)
-        # drescaled = scipy.misc.bytescale(data)
         irange = (data.view(numpy.ndarray).min(), data.view(numpy.ndarray).max())
+    else:
+        # ensure irange is the same type as the data. It ensures we don't get
+        # crazy values, and also that numpy doesn't get confused in the
+        # intermediary dtype (cf .clip()).
+        irange = numpy.array(irange, data.dtype)
+        # TODO: warn if irange looks too different from original value?
 
-    if data.dtype == "uint8" and irange == (0, 255):
+    if data.dtype == "uint8" and irange[0] == 0 and irange[1] == 255:
         # short-cut when data is already the same type
         # logging.debug("Applying direct range mapping to RGB")
         drescaled = data
@@ -275,10 +279,16 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
             data = data.clip(*irange)
             if force_white:
                 irange = [irange[1] - 1, irange[1]]
-        drescaled = scipy.misc.bytescale(data, cmin=irange[0], cmax=irange[1])
+
+        if data.dtype != "uint8":
+            drescaled = scipy.misc.bytescale(data, cmin=irange[0], cmax=irange[1])
+        else: # bytescale never does anything on a data already in uint8
+            b = 255 / (irange[1] - irange[0])
+            drescaled = data - irange[0]
+            drescaled *= b # keep memory and dtype
 
 
-    # Now duplicate it 3 times to make it rgb (as a simple approximation of
+    # Now duplicate it 3 times to make it RGB (as a simple approximation of
     # greyscale)
     # dstack doesn't work because it doesn't generate in C order (uses strides)
     # apparently this is as fast (or even a bit better):
