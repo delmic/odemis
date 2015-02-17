@@ -1580,7 +1580,7 @@ class ChamberPressure(model.Actuator):
             # Usually about five minutes
             timeRemaining = 5 * 60
         else:
-            timeRemaining = 60
+            timeRemaining = 65
         return timeRemaining  # s
 
     def _changePressure(self, future, p):
@@ -1609,20 +1609,21 @@ class ChamberPressure(model.Actuator):
                     except suds.WebFault:
                         # TODO, check why this exception appears only in CRUK
                         logging.debug("Move appears not to be completed.")
-                    # Rough estimation until SEM is ready
                     TimeUpdater.cancel()
-                    future.set_end_time(time.time() + 5)
                     # Take care of the calibration that takes place when we move to SEM
                     self._waitForDevice()
                 elif p["pressure"] == PRESSURE_NAVCAM:
                     if self._pressure_device.GetInstrumentMode() != "INSTRUMENT-MODE-OPERATIONAL":
                         self._pressure_device.SetInstrumentMode("INSTRUMENT-MODE-OPERATIONAL")
-                        # If in standby or currently waking up, open event channel
+                    # Typically we can now move to NavCam without waiting to wake up.
+                    # We only open the channel in order to obtain the updates in
+                    # waking up remaining time, assuming that eventually we will
+                    # try to move to the SEM.
+                    if (self._pressure_device.GetSEMDeviceMode() != "SEM-MODE-BLANK" and
+                        self._pressure_device.GetSEMDeviceMode() != "SEM-MODE-IMAGING"):
                         self._wakeUp()
                     self._pressure_device.SelectImagingDevice(self._imagingDevice.NAVCAMIMDEV)
-                    # Rough estimation until NavCam is ready
                     TimeUpdater.cancel()
-                    future.set_end_time(time.time() + 1)
                     # Wait for NavCam
                     self._waitForDevice()
                 else:
@@ -1637,7 +1638,12 @@ class ChamberPressure(model.Actuator):
     def _updateTime(self, future, target):
         try:
             remainingTime = self.parent._device.GetProgressAreaSelection().progress.timeRemaining
-            future.set_end_time(time.time() + self.wakeUpTime + remainingTime)
+            area = self.parent._device.GetProgressAreaSelection().target
+            if area == "LOADING-WORK-AREA-SEM":
+                waiting_time = 6
+            else:
+                waiting_time = 0
+            future.set_end_time(time.time() + self.wakeUpTime + remainingTime + waiting_time)
         except suds.WebFault:
             logging.warning("Time updater failed, cannot move to another state.", exc_info=True)
 
