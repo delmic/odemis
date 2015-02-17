@@ -55,7 +55,7 @@ cdef void cDataArray2RGB(uint16_t* data, int datalen, uint16_t irange0, uint16_t
             retpos += 1
             ret[retpos] = di
             retpos += 1
-    else:    
+    else:
         for i in range(datalen):
             # clip
             if data[i] <= irange0:
@@ -73,7 +73,7 @@ cdef void cDataArray2RGB(uint16_t* data, int datalen, uint16_t irange0, uint16_t
                 ret[retpos] = tint[2]
                 retpos += 1
             else:
-                df = (data[i] - irange0) 
+                df = (data[i] - irange0)
                 ret[retpos] = <numpy.uint8_t> (df * br + 0.5)
                 retpos += 1
                 ret[retpos] = <numpy.uint8_t> (df * bg + 0.5)
@@ -98,9 +98,9 @@ def wrapDataArray2RGB(numpy.ndarray[uint16_t, ndim=2] data not None,
 def DataArray2RGB(data, irange, tint=(255, 255, 255)):
     if not data.flags.c_contiguous:
         raise ValueError("Optimised version only works with C-contiguous arrays")
-    # Note: we could also make an optimised version for F-contiguous arrays, 
+    # Note: we could also make an optimised version for F-contiguous arrays,
     # but it's not clear when it'd be useful. For more complex arrays, it's also
-    # probably possible to generate a faster version than numpy, but I don't 
+    # probably possible to generate a faster version than numpy, but I don't
     # know how.
     if irange[0] >= irange[1]:
         raise ValueError("irange needs to be a tuple of low/high values")
