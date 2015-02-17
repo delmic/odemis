@@ -59,8 +59,6 @@ def main(args):
                 navcam_focus = c
             elif c.role == "focus":
                 focus = c
-            elif c.role == "stage":
-                stage = c
             elif c.role == "overview-ccd":
                 overview_ccd = c
             elif c.role == "chamber":
@@ -84,14 +82,6 @@ def main(args):
         # Move to the overview position first
         f = chamber.moveAbs({"pressure": overview_pressure})
         f.result()
-
-        # Clear all the previous calibration
-        logging.debug("Clearing all the previous calibration...")
-        stage.updateMetadata({
-                  model.MD_POS_COR: (0, 0),
-                  model.MD_PIXEL_SIZE_COR: (1, 1),
-                  model.MD_ROTATION_COR: 0,
-                  })
 
         # Reference the (optical) stage
         logging.debug("Referencing the (optical) stage...")
