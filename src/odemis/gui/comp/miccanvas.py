@@ -1135,7 +1135,7 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
 
             keepalpha = (rgbim.shape[2] == 4)
 
-            scale = rgbim.metadata[model.MD_PIXEL_SIZE][0]
+            scale = rgbim.metadata[model.MD_PIXEL_SIZE]
             pos = (0, 0)  # the sensor image should be centered on the sensor center
 
             if s.name.value == "Goal":
