@@ -293,7 +293,7 @@ class Scanner(model.Emitter):
         tran_rng = ((-100000, -100000),
                     (100000, 100000))
         self.translation = model.TupleContinuous((0, 0), tran_rng,
-                                              cls=(int, long, float), unit="",
+                                              cls=(int, long, float), unit="px",
                                               setter=self._setTranslation)
         self.translation.subscribe(self._onTranslation, init=True)
 
@@ -319,7 +319,7 @@ class Scanner(model.Emitter):
         # Just the initialization of rotation. The actual value will be acquired
         # once we start the stream
         rotation = 0
-        rot_range = (-2 * math.pi, 2 * math.pi)
+        rot_range = (-2 * math.pi, 2 * math.pi) # TODO: only limit to 0->2 Pi?
         self.rotation = model.FloatContinuous(rotation, rot_range, unit="rad")
         self.rotation.subscribe(self._onRotation)
 
@@ -373,7 +373,7 @@ class Scanner(model.Emitter):
         self._updateMagnification()
 
     def _setHorizontalFoV(self, value):
-        #Make sure you are in the current range
+        # Make sure you are in the current range
         try:
             rng = self.parent._device.GetSEMHFWRange()
             new_fov = numpy.clip(value, rng.min, rng.max)
@@ -533,8 +533,8 @@ class Scanner(model.Emitter):
         tran_d = norm(numpy.asarray([0, tran[0]]) - numpy.asarray([tran[1], 0]))
         # Change to the actual maximum beam shift
         # limit = (REFERENCE_TENSION / self.accelVoltage.value) * BEAM_SHIFT_AT_REFERENCE
-        range = self.parent._device.GetSEMImageShiftRange()
-        limit = range.max
+        rng = self.parent._device.GetSEMImageShiftRange()
+        limit = rng.max
         # The ratio between the shift distance and the limit
         ratio = 1
         if tran_d > limit:
@@ -607,7 +607,7 @@ class Detector(model.Detector):
         # Used for grid scanning
         self._spot_scanner = None
         self._coordinates = None
-        self._scanning_state = False
+        self._is_scanning = False
         self._last_res = None
         self._updater = functools.partial(self._scanSpots)
 
@@ -643,7 +643,6 @@ class Detector(model.Detector):
 
         except Exception:
             logging.exception("Unexpected failure during spot scanning")
-
 
     def update_parameters(self):
         # Update stage and focus position
@@ -685,8 +684,12 @@ class Detector(model.Detector):
             self._acquisition_thread.start()
 
     def beam_blank(self, blank):
+        """
+        (Un)blank the beam
+        blank (boolean): If True, will blank the beam, otherwise will unblank it
+        """
         with self.parent._acq_progress_lock:
-            if blank == True:
+            if blank:
                 self.parent._device.SetSEMSourceTilt(TILT_BLANK[0], TILT_BLANK[1], False)
             else:
                 self.parent._device.SetSEMSourceTilt(self._tilt_unblank[0], self._tilt_unblank[1], False)
@@ -710,7 +713,7 @@ class Detector(model.Detector):
         # "if" is to not wait if it's already finished
         if self._acquisition_must_stop.is_set():
             logging.debug("Waiting for thread to stop.")
-            if not self._acquisition_thread is None:
+            if self._acquisition_thread is not None:
                 self._acquisition_thread.join(10)  # 10s timeout for safety
                 if self._acquisition_thread.isAlive():
                     logging.exception("Failed to stop the acquisition thread")
@@ -760,9 +763,9 @@ class Detector(model.Detector):
             # Check if spot mode is required
             if res == (1, 1):
                 # Cancel possible grid scanning
-                if self._scanning_state == True:
+                if self._is_scanning:
                     self._spot_scanner.cancel()
-                    self._scanning_state = False
+                    self._is_scanning = False
                     # Wait grid scanner to stop
                     with self._grid_lock:
                         # Move back to the center
@@ -789,7 +792,7 @@ class Detector(model.Detector):
                 # Compute the exact spot coordinates within the current fov
                 # and scan spot by spot
                 # Start scanning
-                if self._scanning_state == False:
+                if not self._is_scanning:
                     fov = (1.0 - (1.0 / res[0]), 1.0 - (1.0 / res[1]))
                     spot_dist = (fov[0] / (res[0] - 1),
                                  fov[1] / (res[1] - 1))
@@ -797,34 +800,31 @@ class Detector(model.Detector):
                     bound = (fov[0] / 2.0,
                              fov[1] / 2.0)
 
-                    pos = self.parent._device.GetStageModeAndPosition()
-                    cur_pos = pos.position.x, pos.position.y
                     for i in range(res[0]):
                         for j in range(res[1]):
                             self._coordinates.append((-bound[0] + i * spot_dist[0],
-                                        - bound[1] + j * spot_dist[1]
-                                        ))
+                                                      - bound[1] + j * spot_dist[1]))
                     # Straight use of Phenom API. In the future the Stage component
                     # will only move the physical stage (BACKLASH-ONLY') and not the
                     # ebeam thus we avoid using it.
                     self._stagePos = self.parent._objects.create('ns0:position')
-                    self._navAlgorithm = self.parent._objects.create('ns0:navigationAlgorithm')
+                    # self._navAlgorithm = self.parent._objects.create('ns0:navigationAlgorithm')
                     self._navAlgorithm = 'NAVIGATION-AUTO'
                     self._spot_scanner = util.RepeatingTimer(0, self._updater, "Grid scanner")
                     self._spot_scanner.start()
-                    self._scanning_state = True
+                    self._is_scanning = True
                 elif self._last_res != res:
                     self._spot_scanner.cancel()
-                    self._scanning_state = False
+                    self._is_scanning = False
 
                 self._last_res = res
                 return model.DataArray(numpy.array([[0]], dtype=dataType), metadata)
 
             else:
                 # Cancel possible grid scanning
-                if self._scanning_state == True:
+                if self._is_scanning:
                     self._spot_scanner.cancel()
-                    self._scanning_state = False
+                    self._is_scanning = False
 
                 self._scanParams.scale = 1
                 self._scanParams.resolution.width = res[0]
@@ -948,7 +948,7 @@ class Stage(model.Actuator):
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
 
         # Just initialization, position will be updated once we move
-        self._position = {"x":0, "y": 0}
+        self._position = {"x": 0, "y": 0}
 
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
         self.position = model.VigilantAttribute(
@@ -1049,8 +1049,7 @@ class PhenomFocus(model.Actuator):
         self._swVersion = parent._swVersion
 
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
-        self.position = model.VigilantAttribute({},
-                                    unit="m", readonly=True)
+        self.position = model.VigilantAttribute({}, unit="m", readonly=True)
         self._updatePosition()
 
         # Queue maintaining moves to be done
@@ -1233,7 +1232,7 @@ class NavCam(model.DigitalCamera):
         # Check if Phenom is in the proper mode
         area = self.parent._device.GetProgressAreaSelection().target
         if area != "LOADING-WORK-AREA-NAVCAM":
-            raise IOError("Cannot initiate stream, Phenom is not in NAVCAM mode."
+            raise IOError("Cannot initiate stream, Phenom is not in NAVCAM mode. "
                           "Make sure the chamber pressure is set for overview.")
 
         # if there is a very quick unsubscribe(), subscribe(), the previous
@@ -1267,11 +1266,11 @@ class NavCam(model.DigitalCamera):
         try:
             # Common call for SEM and NavCam HFW. Set max if None
             try:
-                range = self.parent._device.GetSEMHFWRange()
+                rng = self.parent._device.GetSEMHFWRange()
                 if self._hfw is None:
-                    self.parent._device.SetSEMHFW(range.max)
-                elif not range.min <= self._hfw <= range.max:
-                    raise ValueError("NavCam hfw out of range %s" [range.min, range.max])
+                    self.parent._device.SetSEMHFW(rng.max)
+                elif not rng.min <= self._hfw <= rng.max:
+                    raise ValueError("NavCam hfw out of range %s" % ((rng.min, rng.max),))
                 else:
                     self.parent._device.SetSEMHFW(self._hfw)
             except suds.WebFault as e:
@@ -1286,7 +1285,7 @@ class NavCam(model.DigitalCamera):
                 logging.warning("Failed to set brightness to %f: %s", self._brightness, e)
             # Start to a good focus position
             logging.debug("Setting initial overview focus to %f", DELPHI_OVERVIEW_FOCUS)
-            f = self.parent._navcam_focus.moveAbs({"z":DELPHI_OVERVIEW_FOCUS})
+            f = self.parent._navcam_focus.moveAbs({"z": DELPHI_OVERVIEW_FOCUS})
             f.result()
 
             while not self.acquire_must_stop.is_set():
@@ -1366,13 +1365,12 @@ class NavCamFocus(PhenomFocus):
     """
     def __init__(self, name, role, parent, axes, ranges=None, **kwargs):
         rng = parent._device.GetNavCamWDRange()
-        # Calibrate range to 0
-        min = rng.min - rng.min
-        max = rng.max - rng.min
+        # Each Phenom seems to have different range, so generalise by making it
+        # always start at 0.
         self._offset = rng.min
-
+        diff = rng.max - self._offset
         PhenomFocus.__init__(self, name, role, parent=parent, axes=axes,
-                             rng=(min, max), **kwargs)
+                             rng=(0, diff), **kwargs)
 
     def GetWD(self):
         wd = self.parent._device.GetNavCamWD()
@@ -1529,7 +1527,6 @@ class ChamberPressure(model.Actuator):
         self.registeredSampleHolder._value = registered
         self.sampleHolder.notify(val)
         self.registeredSampleHolder.notify(registered)
-        
 
     @isasync
     def moveRel(self, shift):
@@ -1559,7 +1556,7 @@ class ChamberPressure(model.Actuator):
     def stop(self, axes=None):
         # Empty the queue for the given axes
         self._executor.cancel()
-        logging.warning("Stopping all axes: %s", ", ".join(self.axes))
+        logging.info("Stopping all axes: %s", ", ".join(self.axes))
 
     def terminate(self):
         if self._executor:
@@ -1575,8 +1572,8 @@ class ChamberPressure(model.Actuator):
         """
         # Just an indicative time. It will be updated by polling the remaining
         # time.
-        if (self.parent._device.GetSEMDeviceMode() != "SEM-MODE-BLANK" and
-            self.parent._device.GetSEMDeviceMode() != "SEM-MODE-IMAGING"):
+        semmod = self.parent._device.GetSEMDeviceMode()
+        if semmod not in ("SEM-MODE-BLANK", "SEM-MODE-IMAGING"):
             # Usually about five minutes
             timeRemaining = 5 * 60
         else:
@@ -1600,8 +1597,8 @@ class ChamberPressure(model.Actuator):
                 if p["pressure"] == PRESSURE_SEM:
                     if self._pressure_device.GetInstrumentMode() != "INSTRUMENT-MODE-OPERATIONAL":
                         self._pressure_device.SetInstrumentMode("INSTRUMENT-MODE-OPERATIONAL")
-                    if (self._pressure_device.GetSEMDeviceMode() != "SEM-MODE-BLANK" and
-                        self._pressure_device.GetSEMDeviceMode() != "SEM-MODE-IMAGING"):
+                    semmod = self._pressure_device.GetSEMDeviceMode()
+                    if semmod not in ("SEM-MODE-BLANK", "SEM-MODE-IMAGING"):
                         # If in standby or currently waking up, open event channel
                         self._wakeUp()
                     try:
@@ -1619,8 +1616,8 @@ class ChamberPressure(model.Actuator):
                     # We only open the channel in order to obtain the updates in
                     # waking up remaining time, assuming that eventually we will
                     # try to move to the SEM.
-                    if (self._pressure_device.GetSEMDeviceMode() != "SEM-MODE-BLANK" and
-                        self._pressure_device.GetSEMDeviceMode() != "SEM-MODE-IMAGING"):
+                    semmod = self._pressure_device.GetSEMDeviceMode()
+                    if semmod not in ("SEM-MODE-BLANK", "SEM-MODE-IMAGING"):
                         self._wakeUp()
                     self._pressure_device.SelectImagingDevice(self._imagingDevice.NAVCAMIMDEV)
                     TimeUpdater.cancel()
@@ -1831,4 +1828,4 @@ class ChamberPressure(model.Actuator):
                     logging.warning("Retrying to connect to Phenom...")
         finally:
             logging.debug("Phenom reconnection attempt thread closed")
-            self._reconnection_must_stop.clear()              
+            self._reconnection_must_stop.clear()
