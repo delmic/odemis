@@ -32,7 +32,6 @@ from concurrent import futures
 from concurrent.futures import CancelledError
 import logging
 import math
-import numpy
 from odemis import model
 from odemis.acq import _futures
 from odemis.acq.stream import FluoStream, SEMCCDMDStream, \
@@ -198,7 +197,7 @@ class AcquisitionTask(object):
         """
         exp = None
         assert(self._current_stream is None) # Task should be used only once
-        expected_time = numpy.sum(self._streamTimes.values())
+        expected_time = sum(self._streamTimes.values())
         # no need to set the start time of the future: it's automatically done
         # when setting its state to running.
         self._future.set_progress(end=time.time() + expected_time)
