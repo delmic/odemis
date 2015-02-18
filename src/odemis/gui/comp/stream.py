@@ -483,7 +483,7 @@ class StreamPanel(wx.Panel):
         stream = self.stream
         expand_opt = (OPT_BTN_REMOVE | OPT_BTN_VISIBLE | OPT_BTN_UPDATED | OPT_BTN_TINT)
 
-        if self._has_dye(stream ) and not (stream.excitation.readonly or stream.emission.readonly):
+        if self._has_dye(stream) and not (stream.excitation.readonly or stream.emission.readonly):
             expand_opt |= OPT_NAME_EDIT
 
         self._expander = Expander(self, self.stream, options=expand_opt)
