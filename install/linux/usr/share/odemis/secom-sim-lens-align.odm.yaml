@@ -83,11 +83,12 @@ Spectra: {
         limits: [[0, 5], [0, 5]],  # V
         park: [-5, -5], # V
         fastpark: True,
+        max_res: [16384, 16384], # px
         settle_time: 10.e-6, # s
         hfw_nomag: 0.25, # m
     },
     properties: {
-        scale: [16, 16], # (ratio) : start with a pretty fast scan
+        scale: [64, 64], # (ratio) : start with a pretty fast scan
         dwellTime: 10.e-6, # s
         magnification: 20000, # (ratio)
     },
