@@ -977,7 +977,9 @@ class DelphiStateController(SecomStateController):
     @ignore_dead
     def on_step_update(self, future, start, end):
         # Add the estimated time that the rest of the procedure will take
-        self.update_load_time(end + self.rest_time_est)
+        rem_time = end - time.time()
+        if rem_time >= 0:
+            self.update_load_time(end + self.rest_time_est)
 
     def update_load_time(self, end):
         self.load_future.set_progress(end=end)
