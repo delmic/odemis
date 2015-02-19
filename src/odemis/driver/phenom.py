@@ -260,9 +260,6 @@ class Scanner(model.Emitter):
         self._hwVersion = parent._hwVersion
         self._swVersion = parent._swVersion
 
-        # will take care of executing autocontrast asynchronously
-        self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
-
         self._shape = (2048, 2048)
 
         # TODO: document where this funky number comes from
@@ -340,10 +337,6 @@ class Scanner(model.Emitter):
         self.accelVoltage = model.FloatContinuous(volt, volt_range, unit="V")
         self.accelVoltage.subscribe(self._onVoltage)
 
-        # 16 or 8 bits image
-        self.bpp = model.IntEnumerated(8, set([8, 16]),
-                                          unit="", setter=self._setBpp)
-
         # Directly set spot size instead of probe current due to Phenom API
         spot_rng = SPOT_RANGE
         self._spotSize = numpy.mean(SPOT_RANGE)
@@ -417,9 +410,6 @@ class Scanner(model.Emitter):
         self.parent._device.SetSEMSourceTilt(current_tilt[0], current_tilt[1], False)
         # Brightness and contrast have to be adjusted just once
         # we set up the detector (see SEMACB())
-
-    def _setBpp(self, value):
-        return value
 
     def _setSpotSize(self, value):
         # Set the corresponding spot size to Phenom SEM
@@ -545,28 +535,6 @@ class Scanner(model.Emitter):
                     clipped_tran[1] / pixelSize[1])
         return tran_pxs
 
-    @isasync
-    def applyAutoContrast(self):
-        # Create ProgressiveFuture and update its state to RUNNING
-        est_start = time.time() + 0.1
-        f = model.ProgressiveFuture(start=est_start,
-                                    end=est_start + 2)  # rough time estimation
-        f._move_lock = threading.Lock()
-
-        return self._executor.submitf(f, self._applyAutoContrast, f)
-
-    def _applyAutoContrast(self, future):
-        """
-        Trigger Phenom's AutoContrast
-        """
-        with self.parent._acq_progress_lock:
-            self.parent._device.SEMACB()
-
-    def terminate(self):
-        if self._executor:
-            self._executor.shutdown()
-            self._executor = None
-
 class Detector(model.Detector):
     """
     This is an extension of model.Detector class. It performs the main functionality
@@ -581,6 +549,13 @@ class Detector(model.Detector):
         model.Detector.__init__(self, name, role, parent=parent, **kwargs)
         self._hwVersion = parent._hwVersion
         self._swVersion = parent._swVersion
+
+        # will take care of executing autocontrast asynchronously
+        self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
+
+        # 16 or 8 bits image
+        self.bpp = model.IntEnumerated(8, set([8, 16]),
+                                          unit="", setter=self._setBpp)
 
         # setup detector
         self._scanParams = self.parent._objects.create('ns0:scanParams')
@@ -623,6 +598,40 @@ class Detector(model.Detector):
                         username=self.parent._username, password=self.parent._password,
                         timeout=SOCKET_TIMEOUT)
         self._grid_device = grid_client.service
+
+    @isasync
+    def applyAutoContrast(self):
+        # Create ProgressiveFuture and update its state to RUNNING
+        est_start = time.time() + 0.1
+        f = model.ProgressiveFuture(start=est_start,
+                                    end=est_start + 2)  # rough time estimation
+        f._move_lock = threading.Lock()
+
+        return self._executor.submitf(f, self._applyAutoContrast, f)
+
+    def _applyAutoContrast(self, future):
+        """
+        Trigger Phenom's AutoContrast
+        """
+        # Check if we need to temporarily unblank the ebeam
+        beam_blanked = (self.parent._device.GetSEMSourceTilt() == TILT_BLANK)
+        if beam_blanked:
+            try:
+                # "Unblank" the beam
+                self.beam_blank(False)
+            except suds.WebFault:
+                logging.warning("Beam might still be blanked!")
+        with self.parent._acq_progress_lock:
+            self.parent._device.SEMACB()
+        if beam_blanked:
+            try:
+                # "Blank" the beam
+                self.beam_blank(True)
+            except suds.WebFault:
+                logging.warning("Beam might still be unblanked!")
+
+    def _setBpp(self, value):
+        return value
 
     def _scanSpots(self):
         try:
@@ -729,7 +738,7 @@ class Detector(model.Detector):
         with self.parent._acq_progress_lock:
             res = self.parent._scanner.resolution.value
             # Set dataType based on current bpp value
-            bpp = self.parent._scanner.bpp.value
+            bpp = self.bpp.value
             if bpp == 16:
                 dataType = numpy.uint16
             else:
@@ -879,6 +888,9 @@ class Detector(model.Detector):
 
     def terminate(self):
         logging.info("Terminating SEM stream...")
+        if self._executor:
+            self._executor.shutdown()
+            self._executor = None
         try:
             # "Unblank" the beam
             if self._tilt_unblank is not None:
