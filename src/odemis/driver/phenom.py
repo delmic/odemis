@@ -557,6 +557,12 @@ class Detector(model.Detector):
         self.bpp = model.IntEnumerated(8, set([8, 16]),
                                           unit="", setter=self._setBpp)
 
+        # HW contrast and brightness
+        self.contrast = model.FloatContinuous(0.5, [0, 1], unit="")
+        self.contrast.subscribe(self._onContrast)
+        self.brightness = model.FloatContinuous(0.5, [0, 1], unit="")
+        self.brightness.subscribe(self._onBrightness)
+
         # setup detector
         self._scanParams = self.parent._objects.create('ns0:scanParams')
         # use all detector segments
@@ -630,9 +636,42 @@ class Detector(model.Detector):
                 self.beam_blank(True)
             except suds.WebFault:
                 logging.warning("Beam might still be unblanked!")
+        # Update with the new values after automatic procedure is completed
+        self._updateContrast()
+        self._updateBrightness()
 
     def _setBpp(self, value):
         return value
+
+    def _onContrast(self, value):
+        with self.parent._acq_progress_lock:
+            # Actual range in Phenom is (0,4]
+            contr = numpy.clip(4 * value, 0.00001, 4)
+            self.parent._device.SetSEMContrast(contr)
+
+    def _onBrightness(self, value):
+        with self.parent._acq_progress_lock:
+            self.parent._device.SetSEMBrightness(value)
+
+    def _updateContrast(self):
+        """
+        Reads again the hardware setting and update the VA
+        """
+        contr = (self.parent._device.GetSEMContrast() / 4)
+
+        # we don't set it explicitly, to avoid calling .onContrast()
+        self.contrast._value = contr
+        self.contrast.notify(contr)
+
+    def _updateBrightness(self):
+        """
+        Reads again the hardware setting and update the VA
+        """
+        bright = self.parent._device.GetSEMBrightness()
+
+        # we don't set it explicitly, to avoid calling .onBrightness()
+        self.brightness._value = bright
+        self.brightness.notify(bright)
 
     def _scanSpots(self):
         try:
@@ -674,6 +713,12 @@ class Detector(model.Detector):
         # Get current spot size
         self.parent._scanner._spotSize = self._acq_device.SEMGetSpotSize()
         self.parent._scanner.spotSize.value = self.parent._scanner._spotSize
+
+        # Update all Detector VAs
+        contr = (self._acq_device.GetSEMContrast() / 4)
+        self.parent._detector.contrast.value = contr
+        bright = self._acq_device.GetSEMBrightness()
+        self.parent._detector.brightness.value = bright
 
     def start_acquire(self, callback):
         # Check if Phenom is in the proper mode
