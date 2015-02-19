@@ -435,6 +435,7 @@ class AlignedSEMStream(SEMStream):
 
         super(AlignedSEMStream, self).onActive(active)
 
+
 class CameraStream(Stream):
     """ Abstract class representing streams which have a digital camera as a
     detector.
@@ -443,6 +444,23 @@ class CameraStream(Stream):
 
     Mostly used to share time estimation only.
     """
+
+    def __init__(self, name, detector, dataflow, emitter):
+        Stream.__init__(self, name, detector, dataflow, emitter)
+
+        # Create VAs for exposureTime and light power, based on the hardware VA, that can be used
+        # to override the hardware setting on a per stream basis
+
+        self.exposureTime = None if not detector else model.FloatContinuous(
+            detector.exposureTime.value,
+            detector.exposureTime.range,
+            unit=detector.exposureTime.unit
+        )
+
+        self.lightPower = None if not emitter else model.FloatContinuous(emitter.power.value,
+                                                                         emitter.power.range,
+                                                                         unit=emitter.power.unit)
+
     def estimateAcquisitionTime(self):
         # exposure time + readout time * pixels (if CCD) + set-up time
         try:
