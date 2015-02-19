@@ -614,7 +614,8 @@ class Detector(model.Detector):
         Trigger Phenom's AutoContrast
         """
         # Check if we need to temporarily unblank the ebeam
-        beam_blanked = (self.parent._device.GetSEMSourceTilt() == TILT_BLANK)
+        cur_tilt = self.parent._device.GetSEMSourceTilt()
+        beam_blanked = ((cur_tilt.aX, cur_tilt.aY) == TILT_BLANK)
         if beam_blanked:
             try:
                 # "Unblank" the beam
