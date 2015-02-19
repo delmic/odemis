@@ -1002,11 +1002,11 @@ class StreamPanel(wx.Panel):
     def _add_optical_override_controls(self):
         """ Add controls so optical streams can have their own exposure and power settings """
 
-        light = self.stream.emitter
-        detector = self.stream.detector
+        hw_light_power_va = self.stream.emitter.power
+        hw_exposure_time_va = self.stream.detector.exposureTime
 
-        if not light and not detector:
-            return
+        st_light_power_va = self.stream.lightPower
+        st_exposure_time_va = self.stream.exposureTime
 
         line_ctrl = wx.StaticLine(self._panel, size=(-1, 1))
         self.control_gbsizer.Add(line_ctrl, (self.row_count, 0), span=(1, 3),
@@ -1029,11 +1029,18 @@ class StreamPanel(wx.Panel):
         self.control_gbsizer.Add(self._chk_override, (self.row_count, 1), span=(1, 2),
                                  flag=wx.ALIGN_CENTRE_VERTICAL | wx.ALL, border=5)
 
+        # FIXME: 'useLocalSettings Not implemented yet
+        # override_vac = VigilantAttributeConnector(
+        #     self.stream.useLocalSettings,
+        #     self._chk_override,
+        #     events=wx.EVT_CHECKBOX
+        # )
+
         self.row_count += 1
 
         # Create Exposure time control
 
-        if detector is not None:
+        if st_exposure_time_va:
             self.lbl_exposure = wx.StaticText(self._panel, -1, "Exposure time")
             self.control_gbsizer.Add(self.lbl_exposure, (self.row_count, 0), span=(1, 1),
                                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.ALL, border=5)
@@ -1042,16 +1049,25 @@ class StreamPanel(wx.Panel):
 
             self._sld_exposure = UnitFloatSlider(
                 self._panel,
-                value=detector.exposureTime.value,
+                value=hw_exposure_time_va.value,
                 min_val=et_config["range"][0],
                 max_val=et_config["range"][1],
-                unit=detector.exposureTime.unit,
+                unit=hw_exposure_time_va.unit,
                 scale=et_config["scale"],
                 accuracy=et_config["accuracy"]
             )
 
-            exposure_vac = VigilantAttributeConnector(
-                detector.exposureTime,
+            # Connect the stream exposure time, but immediately pause it, because we listen to the
+            # hardware values by default
+            st_exposure_vac = VigilantAttributeConnector(
+                st_exposure_time_va,
+                self._sld_exposure,
+                events=wx.EVT_SLIDER
+            )
+            st_exposure_vac.pause()
+
+            hw_exposure_vac = VigilantAttributeConnector(
+                hw_exposure_time_va,
                 self._sld_exposure,
                 events=wx.EVT_SLIDER
             )
@@ -1061,7 +1077,7 @@ class StreamPanel(wx.Panel):
             ctrls += [self.lbl_exposure, self._sld_exposure]
             self.row_count += 1
 
-        if light is not None:
+        if hw_light_power_va is not None:
             self.lbl_power = wx.StaticText(self._panel, -1, "Power")
             self.control_gbsizer.Add(self.lbl_power, (self.row_count, 0), span=(1, 1),
                                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.ALL, border=5)
@@ -1071,16 +1087,25 @@ class StreamPanel(wx.Panel):
             # Create Power control
             self._sld_power = UnitFloatSlider(
                 self._panel,
-                value=light.power.value,
-                min_val=light.power.range[0],
-                max_val=light.power.range[1],
-                unit=light.power.unit,
+                value=hw_light_power_va.value,
+                min_val=hw_light_power_va.range[0],
+                max_val=hw_light_power_va.range[1],
+                unit=hw_light_power_va.unit,
                 scale=power_config["scale"],
                 accuracy=4
             )
 
-            power_vac = VigilantAttributeConnector(
-                light.power,
+            # Connect the stream exposure time, but immediately pause it, because we listen to the
+            # hardware values by default
+            st_power_vac = VigilantAttributeConnector(
+                st_light_power_va,
+                self._sld_power,
+                events=wx.EVT_SLIDER
+            )
+            st_power_vac.pause()
+
+            hw_power_vac = VigilantAttributeConnector(
+                hw_light_power_va,
                 self._sld_power,
                 events=wx.EVT_SLIDER
             )
@@ -1106,16 +1131,21 @@ class StreamPanel(wx.Panel):
                 # TODO: Enable showing/hiding of the controls? There are some layout issues.
                 # c.Show(state)
 
-            if not self._chk_override.GetValue():
-                if detector:
-                    exposure_vac.pause()
-                if light:
-                    power_vac.pause()
+            # If global values are used...
+            if self._chk_override.GetValue():
+                if st_exposure_vac:
+                    st_exposure_vac.pause()
+                    hw_exposure_vac.resume()
+                if st_light_power_va:
+                    st_power_vac.pause()
+                    hw_power_vac.resume()
             else:
-                if detector:
-                    exposure_vac.resume()
-                if light:
-                    power_vac.resume()
+                if st_exposure_vac:
+                    st_exposure_vac.resume()
+                    hw_exposure_vac.pause()
+                if st_light_power_va:
+                    st_power_vac.resume()
+                    hw_power_vac.pause()
 
         # Initialize the correct state for the controls
         toggle_controls()
