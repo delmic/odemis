@@ -651,6 +651,7 @@ class UnitIntegerSlider(NumberSlider):
         val = super(UnitIntegerSlider, self)._pixel_to_val()
         return int(round(val))
 
+
 class UnitFloatSlider(NumberSlider):
 
     def __init__(self, *args, **kwargs):

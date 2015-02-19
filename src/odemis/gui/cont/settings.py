@@ -818,8 +818,9 @@ class SecomSettingsController(SettingsBarController):
             if main_data.light:
                 self._optical_panel.panel.add_divider()
 
-                self._optical_panel.add_setting_entry("power", main_data.light.power, main_data.light,
-                                              self._va_config["light"]["power"])
+                self._optical_panel.add_setting_entry("power", main_data.light.power,
+                                                      main_data.light,
+                                                      self._va_config["light"]["power"])
 
         if main_data.ebeam:
             self.add_hw_component(main_data.ebeam, self._sem_panel)

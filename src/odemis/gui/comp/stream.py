@@ -49,6 +49,7 @@ from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider,\
     UnitIntegerSlider
 from odemis.gui.comp.text import SuggestTextCtrl, \
     UnitFloatCtrl, FloatTextCtrl
+from odemis.gui.conf.data import HW_SETTINGS_CONFIG
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation, dead_object_wrapper, \
     ignore_dead
 from odemis.gui.util.widgets import VigilantAttributeConnector
@@ -523,6 +524,8 @@ class StreamPanel(wx.Panel):
         if self._has_wl(self.stream):
             self._add_wl_controls()
 
+        # FIXME: is this the correct and/or preferred way? Or should this option only be offered on
+        # the Delphi?
         if isinstance(self.stream, OpticalStream):
             self._add_optical_override_controls()
 
@@ -1005,6 +1008,12 @@ class StreamPanel(wx.Panel):
         if not light and not detector:
             return
 
+        line_ctrl = wx.StaticLine(self._panel, size=(-1, 1))
+        self.control_gbsizer.Add(line_ctrl, (self.row_count, 0), span=(1, 3),
+                                 flag=wx.ALL | wx.EXPAND, border=5)
+
+        self.row_count += 1
+
         msg = "Uncheck to enable custom Exposure time and Power for this stream"
         ctrls = []
         # Create Checkbox label and control
@@ -1017,7 +1026,7 @@ class StreamPanel(wx.Panel):
         self._chk_override = CheckBox(self._panel, -1, lbl_override)
         self._chk_override.SetValue(True)  # checked
         self._chk_override.SetToolTipString(msg)
-        self.control_gbsizer.Add(self._chk_override, (self.row_count, 1), span=(1, 1),
+        self.control_gbsizer.Add(self._chk_override, (self.row_count, 1), span=(1, 2),
                                  flag=wx.ALIGN_CENTRE_VERTICAL | wx.ALL, border=5)
 
         self.row_count += 1
@@ -1025,61 +1034,95 @@ class StreamPanel(wx.Panel):
         # Create Exposure time control
 
         if detector is not None:
-            lbl_exposure = wx.StaticText(self._panel, -1, "Exposure time")
-            self.control_gbsizer.Add(lbl_exposure, (self.row_count, 0), span=(1, 1),
+            self.lbl_exposure = wx.StaticText(self._panel, -1, "Exposure time")
+            self.control_gbsizer.Add(self.lbl_exposure, (self.row_count, 0), span=(1, 1),
                                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.ALL, border=5)
-            lbl_exposure.Disable()
+
+            et_config = HW_SETTINGS_CONFIG['ccd']['exposureTime']
 
             self._sld_exposure = UnitFloatSlider(
                 self._panel,
                 value=detector.exposureTime.value,
-                min_val=0,
-                max_val=4,
-                unit="s",
-                scale="cubic",
-                accuracy=2
+                min_val=et_config["range"][0],
+                max_val=et_config["range"][1],
+                unit=detector.exposureTime.unit,
+                scale=et_config["scale"],
+                accuracy=et_config["accuracy"]
             )
-            self._sld_exposure.Disable()
 
-            self.control_gbsizer.Add(self._sld_exposure, (self.row_count, 1), span=(1, 1),
+            exposure_vac = VigilantAttributeConnector(
+                detector.exposureTime,
+                self._sld_exposure,
+                events=wx.EVT_SLIDER
+            )
+
+            self.control_gbsizer.Add(self._sld_exposure, (self.row_count, 1), span=(1, 2),
                                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
-            ctrls += [lbl_exposure, self._sld_exposure]
+            ctrls += [self.lbl_exposure, self._sld_exposure]
             self.row_count += 1
 
         if light is not None:
-            lbl_power = wx.StaticText(self._panel, -1, "Power")
-            self.control_gbsizer.Add(lbl_power, (self.row_count, 0), span=(1, 1),
+            self.lbl_power = wx.StaticText(self._panel, -1, "Power")
+            self.control_gbsizer.Add(self.lbl_power, (self.row_count, 0), span=(1, 1),
                                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.ALL, border=5)
-            lbl_power.Disable()
+
+            power_config = HW_SETTINGS_CONFIG['light']['power']
 
             # Create Power control
             self._sld_power = UnitFloatSlider(
                 self._panel,
                 value=light.power.value,
-                min_val=0,
-                max_val=4,
-                unit="W",
-                scale="cubic",
+                min_val=light.power.range[0],
+                max_val=light.power.range[1],
+                unit=light.power.unit,
+                scale=power_config["scale"],
                 accuracy=4
             )
-            self._sld_power.Disable()
 
-            self.control_gbsizer.Add(self._sld_power, (self.row_count, 1), span=(1, 1),
+            power_vac = VigilantAttributeConnector(
+                light.power,
+                self._sld_power,
+                events=wx.EVT_SLIDER
+            )
+
+            self.control_gbsizer.Add(self._sld_power, (self.row_count, 1), span=(1, 2),
                                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
 
-            ctrls += [lbl_power, self._sld_power]
+            ctrls += [self.lbl_power, self._sld_power]
             self.row_count += 1
 
         # Create a function for enabling/disabling the slider controls
 
-        def toggle_controls(evt):
-            controls = list(ctrls)
-            for c in controls:
-                c.Enable(not c.Enabled)
+        def toggle_controls(_=None):
+            """ Enable or disable the stream controls according to the 'use global' checkbox
 
+            When the controls are disabled, they 'follow' the global optical settings.
+
+            """
+
+            for c in ctrls:
+                state = not self._chk_override.GetValue()
+                c.Enable(state)
+                # TODO: Enable showing/hiding of the controls? There are some layout issues.
+                # c.Show(state)
+
+            if not self._chk_override.GetValue():
+                if detector:
+                    exposure_vac.pause()
+                if light:
+                    power_vac.pause()
+            else:
+                if detector:
+                    exposure_vac.resume()
+                if light:
+                    power_vac.resume()
+
+        # Initialize the correct state for the controls
+        toggle_controls()
         self._chk_override.Bind(wx.EVT_CHECKBOX, toggle_controls)
 
     # ====== For the dyes
+
     def _has_dye(self, stream):
         """
         return True if the stream looks like a stream using dye.
