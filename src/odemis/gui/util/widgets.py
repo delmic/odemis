@@ -98,6 +98,8 @@ class VigilantAttributeConnector(object):
         self.vigilattr = va
         self.value_ctrl = value_ctrl
 
+        self.paused = False
+
         # Dead_object_wrapper might need/benefit from recognizing bound methods.
         # Or it can be tough to recognize wxPyDeadObjects being passed as 'self'
         self.va_2_ctrl = call_in_wx_main_wrapper(dead_object_wrapper(va_2_ctrl or value_ctrl.SetValue))
@@ -113,8 +115,12 @@ class VigilantAttributeConnector(object):
         self._connect(init=True)
 
     def _on_value_change(self, evt):
-        """ This method is called when the value of the control is changed.
-        """
+        """ This method is called when the value of the control is changed """
+
+        # Don't do anything when paused
+        if self.paused:
+            return
+
         try:
             value = self.ctrl_2_va()
             logging.debug("Assign value %s to vigilant attribute", value)
@@ -126,11 +132,14 @@ class VigilantAttributeConnector(object):
             evt.Skip()
 
     def pause(self):
-        """ Temporarily prevent vigilant attributes from updating controls """
+        """ Temporarily prevent VAs from updating controls and controls from updating VAs """
+
+        self.paused = True
         self.vigilattr.unsubscribe(self.va_2_ctrl)
 
     def resume(self):
-        """ Resume updating controls """
+        """ Resume updating controls and VAs """
+        self.paused = False
         self.vigilattr.subscribe(self.va_2_ctrl, init=True)
 
     def _connect(self, init):
