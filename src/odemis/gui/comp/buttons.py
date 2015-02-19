@@ -702,7 +702,7 @@ class ImageTextToggleButton(GenBitmapTextToggleButton):
             bw, bh = bmp.GetWidth(), bmp.GetHeight()
             if not self.up:
                 dx = dy = self.labelDelta
-            hasMask = bmp.GetMask() is not None
+            has_mask = bmp.GetMask() is not None
         else:
             bw = bh = 0     # no bitmap -> size is zero
 
@@ -715,13 +715,13 @@ class ImageTextToggleButton(GenBitmapTextToggleButton):
             )
 
         label = self.GetLabel()
-        tw, th = dc.GetTextExtent(label) # size of text
+        tw, th = dc.GetTextExtent(label)  # size of text
         if not self.up:
             dx = dy = self.labelDelta
 
         pos_x = (width - bw) // 2 + dx
         if bmp is not None:
-            dc.DrawBitmap(bmp, (width - bw) // 2, (height - bh) // 2, hasMask)
+            dc.DrawBitmap(bmp, (width - bw) // 2, (height - bh) // 2, has_mask)
 
         if self.HasFlag(wx.ALIGN_CENTER):
             pos_x = pos_x + (bw - tw) // 2

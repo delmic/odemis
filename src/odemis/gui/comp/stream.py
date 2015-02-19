@@ -786,7 +786,7 @@ class StreamPanel(wx.Panel):
         self._btn_autobc = buttons.ImageTextToggleButton(self._panel, -1,
                                                          img.getbtn_contrastBitmap(),
                                                          label="Auto",
-                                                         size=(68, 26),
+                                                         label_delta=1,
                                                          style=wx.ALIGN_RIGHT)
 
         tooltip = "Toggle auto brightness and contrast"
@@ -1014,15 +1014,11 @@ class StreamPanel(wx.Panel):
         self.control_gbsizer.Add(lbl_override, (self.row_count, 0), span=(1, 1),
                                  flag=wx.ALIGN_CENTRE_VERTICAL | wx.ALL, border=5)
 
-        self._chk_override = CheckBox(self._panel, -1)
+        self._chk_override = CheckBox(self._panel, -1, lbl_override)
         self._chk_override.SetValue(True)  # checked
         self._chk_override.SetToolTipString(msg)
         self.control_gbsizer.Add(self._chk_override, (self.row_count, 1), span=(1, 1),
                                  flag=wx.ALIGN_CENTRE_VERTICAL | wx.ALL, border=5)
-
-        # Associate the checkbox label with the checkbox control, so clicking it will toggle the
-        # checkbox
-        lbl_override.Bind(wx.EVT_LEFT_UP, self._chk_override.toggle)
 
         self.row_count += 1
 
