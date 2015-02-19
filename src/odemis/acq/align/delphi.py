@@ -36,7 +36,7 @@ from odemis.acq.drift import CalculateDrift
 import threading
 import time
 from . import autofocus
-from autofocus import SubstractBackground
+from autofocus import AcquireNoBackground
 from scipy.ndimage import zoom
 from numpy import array, ones, linalg
 
@@ -292,7 +292,7 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
             escan.translation.value = (0, 0)
             escan.dwellTime.value = 5e-06
             det_dataflow = detector.data
-            f = autofocus.AutoFocus(ccd, escan, ebeam_focus, autofocus.ROUGH_SPOTMODE_ACCURACY, background=True, dataflow=det_dataflow)
+            f = autofocus.AutoFocus(ccd, escan, ebeam_focus, dataflow=det_dataflow)
             f.result()
 
             # TODO also calculate and return Phenom shift parameters
@@ -440,7 +440,7 @@ def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus)
         try:
             image = ccd.data.get(asap=False)
             # Move the sem_stage instead of objective lens
-            future_spot = spot.AlignSpot(ccd, sem_stage, escan, focus, type=spot.STAGE_MOVE, background=True, dataflow=detector.data)
+            future_spot = spot.AlignSpot(ccd, sem_stage, escan, focus, type=spot.STAGE_MOVE, dfbkg=detector.data)
             dist, vector = future_spot.result()
             # Almost done
             future.set_end_time(time.time() + 1)
@@ -451,7 +451,7 @@ def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus)
             f = focus.moveRel({"z": 0.0007})
             f.result()
             try:
-                future_spot = spot.AlignSpot(ccd, sem_stage, escan, focus, type=spot.STAGE_MOVE, background=True, dataflow=detector.data)
+                future_spot = spot.AlignSpot(ccd, sem_stage, escan, focus, type=spot.STAGE_MOVE, dfbkg=detector.data)
                 dist, vector = future_spot.result()
                 # Almost done
                 future.set_end_time(time.time() + 1)
@@ -472,7 +472,7 @@ def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus)
                     tab = (tab_pxs[0] * pixelSize[0], tab_pxs[1] * pixelSize[1])
                     f = sem_stage.moveRel({"x":-tab[0], "y":tab[1]})
                     f.result()
-                    future_spot = spot.AlignSpot(ccd, sem_stage, escan, focus, type=spot.STAGE_MOVE, background=True, dataflow=detector.data)
+                    future_spot = spot.AlignSpot(ccd, sem_stage, escan, focus, type=spot.STAGE_MOVE, dfbkg=detector.data)
                     dist, vector = future_spot.result()
                     # Almost done
                     future.set_end_time(time.time() + 1)
@@ -557,7 +557,7 @@ def RotationAndScaling(ccd, detector, escan, sem_stage, opt_stage, focus, offset
 def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, focus,
                           offset, manual):
     """
-    Move the stages to four diametrically opposite positions in order to 
+    Move the stages to four diametrically opposite positions in order to
     calculate the rotation and scaling.
     future (model.ProgressiveFuture): Progressive future provided by the wrapper
     ccd (model.DigitalCamera): The ccd
@@ -566,9 +566,10 @@ def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, fo
     opt_stage (model.Actuator): The objective stage
     focus (model.Actuator): Focus of objective lens
     offset (tuple of floats): #m,m
+    manual (boolean): will pause and wait for user input between each spot
     returns (float): rotation #radians
             (tuple of floats): scaling
-    raises:    
+    raises:
         CancelledError() if cancelled
         IOError if CL spot not found
     """
@@ -615,7 +616,7 @@ def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, fo
             # different error margin, and moves the SEM stage.
             dist = None
             steps = 0
-            if manual == True:
+            if manual:
                 det_dataflow.subscribe(_discard_data)
                 msg = "Please turn on the Optical stream, set Power to 0 Watt and focus the image so you have a clearly visible spot. Then turn off the stream and press Enter ..."
                 raw_input(msg)
@@ -625,14 +626,14 @@ def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, fo
                     raise CancelledError()
                 if steps >= MAX_STEPS:
                     break
-                image = SubstractBackground(ccd, det_dataflow)
+                image = AcquireNoBackground(ccd, det_dataflow)
                 try:
                     spot_coordinates = spot.FindSpot(image)
                 except ValueError:
                     # If failed to find spot, try first to focus
-                    f = autofocus.AutoFocus(ccd, escan, focus, autofocus.ROUGH_SPOTMODE_ACCURACY, background=True, dataflow=det_dataflow)
+                    f = autofocus.AutoFocus(ccd, escan, focus, dfbkg=det_dataflow)
                     f.result()
-                    image = SubstractBackground(ccd, det_dataflow)
+                    image = AcquireNoBackground(ccd, det_dataflow)
                     try:
                         spot_coordinates = spot.FindSpot(image)
                     except ValueError:
@@ -747,10 +748,12 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
     escan (model.Emitter): The e-beam scanner
     sem_stage (model.Actuator): The SEM stage
     ebeam_focus (model.Actuator): EBeam focus
-    known_focus (float): Focus used for hole detection #m
-    returns (tuple of tuples of floats): first_hole and second_hole #m,m 
-                                         hole_focus(float): focus used for hole detection
-    raises:    
+    known_focus (float): Focus used for hole detection (m)
+    returns:
+      first_hole (float, float): position (m,m)
+      second_hole (float, float): position (m,m)
+      hole_focus (float): focus used for hole detection (m)
+    raises:
         CancelledError() if cancelled
         IOError if holes not found
     """
@@ -761,7 +764,6 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
         escan.translation.value = (0, 0)
         escan.dwellTime.value = 5.2e-06  # good enough for clear SEM image
         holes_found = []
-        et = escan.dwellTime.value * numpy.prod(escan.resolution.value)
         hole_focus = known_focus
 
         detector.data.subscribe(_discard_data)  # unblank the beam
@@ -784,14 +786,14 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
 
             # Apply the given sem focus value for a good initial focus level
             if hole_focus is not None:
-                f = ebeam_focus.moveAbs({"z":hole_focus})
+                f = ebeam_focus.moveAbs({"z": hole_focus})
                 f.result()
 
             # For the first hole apply autofocus anyway
             if (pos == EXPECTED_HOLES[0]):
                 escan.horizontalFoV.value = 250e-06  # m
                 escan.scale.value = (2, 2)
-                f = autofocus.AutoFocus(detector, escan, ebeam_focus, autofocus.ROUGH_SPOTMODE_ACCURACY)
+                f = autofocus.AutoFocus(detector, escan, ebeam_focus)
                 hole_focus, fm_level = f.result()
                 escan.horizontalFoV.value = escan.horizontalFoV.range[1]
                 escan.scale.value = (1, 1)
@@ -804,7 +806,7 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
             except IOError:
                 # If hole was not found, apply autofocus and retry detection
                 escan.horizontalFoV.value = 200e-06  # m
-                f = autofocus.AutoFocus(detector, escan, ebeam_focus, autofocus.ROUGH_SPOTMODE_ACCURACY)
+                f = autofocus.AutoFocus(detector, escan, ebeam_focus)
                 hole_focus, fm_level = f.result()
                 escan.horizontalFoV.value = escan.horizontalFoV.range[1]
                 image = detector.data.get(asap=False)
@@ -814,7 +816,7 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
                     # Fallback to known focus
                     if known_focus is not None:
                         hole_focus = known_focus
-                        f = ebeam_focus.moveAbs({"z":hole_focus})
+                        f = ebeam_focus.moveAbs({"z": hole_focus})
                         f.result()
                     image = detector.data.get(asap=False)
                     try:
@@ -825,12 +827,11 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
             center_pxs = (image.shape[1] / 2, image.shape[0] / 2)
             vector_pxs = [a - b for a, b in zip(hole_coordinates, center_pxs)]
             vector = (vector_pxs[0] * pixelSize[0], vector_pxs[1] * pixelSize[1])
-            dist = math.hypot(*vector)
 
-            #SEM stage position plus offset from hole detection
+            # SEM stage position plus offset from hole detection
             holes_found.append({"x": sem_stage.position.value["x"] + vector[0],
                                 "y": sem_stage.position.value["y"] - vector[1]})
-        
+
         first_hole = (holes_found[0]["x"], holes_found[0]["y"])
         second_hole = (holes_found[1]["x"], holes_found[1]["y"])
         return first_hole, second_hole, hole_focus
@@ -875,7 +876,7 @@ def FindCircleCenter(image, radius, max_diff):
     radius (float): radius of circle #m
     max_diff (float): precision of radius in pixels
     returns (tuple of floats): Coordinates of circle center
-    raises:    
+    raises:
         IOError if circle not found
     """
     img = cv2.medianBlur(image, 5)
@@ -902,10 +903,10 @@ def FindCircleCenter(image, radius, max_diff):
     return cntr
 
 def UpdateOffsetAndRotation(new_first_hole, new_second_hole, expected_first_hole,
-                         expected_second_hole, offset, rotation, scaling):
+                            expected_second_hole, offset, rotation, scaling):
     """
-    Given the hole coordinates found in the calibration file and the new ones, 
-    determine the offset and rotation of the current sample holder insertion. 
+    Given the hole coordinates found in the calibration file and the new ones,
+    determine the offset and rotation of the current sample holder insertion.
     new_first_hole (tuple of floats): New coordinates of the holes
     new_second_hole (tuple of floats)
     expected_first_hole (tuple of floats): expected coordinates
@@ -920,7 +921,7 @@ def UpdateOffsetAndRotation(new_first_hole, new_second_hole, expected_first_hole
 
     # Extra offset and rotation
     e_offset, unused, e_rotation = transform.CalculateTransform([new_first_hole, new_second_hole],
-                                                                 [expected_first_hole, expected_second_hole])
+                                                                [expected_first_hole, expected_second_hole])
     e_offset = ((e_offset[0] / scaling[0]), (e_offset[1] / scaling[1]))
     updated_offset = [a - b for a, b in zip(offset, e_offset)]
     updated_rotation = rotation - e_rotation
@@ -1011,7 +1012,7 @@ def estimateLensAlignmentTime():
 
 def HFWShiftFactor(detector, escan, sem_stage, ebeam_focus, known_focus=SEM_KNOWN_FOCUS):
     """
-    Wrapper for DoHFWShiftFactor. It provides the ability to check the 
+    Wrapper for DoHFWShiftFactor. It provides the ability to check the
     progress of the procedure.
     detector (model.Detector): The se-detector
     escan (model.Emitter): The e-beam scanner
@@ -1086,7 +1087,7 @@ def _DoHFWShiftFactor(future, detector, escan, sem_stage, ebeam_focus, known_foc
         detector.data.unsubscribe(_discard_data)
 
         # Apply the given sem focus value for a good focus level
-        f = ebeam_focus.moveAbs({"z":known_focus})
+        f = ebeam_focus.moveAbs({"z": known_focus})
         f.result()
         smaller_image = None
         larger_image = None
@@ -1101,10 +1102,10 @@ def _DoHFWShiftFactor(future, detector, escan, sem_stage, ebeam_focus, known_foc
             larger_image = detector.data.get(asap=False)
             # If not the first iteration
             if smaller_image is not None:
-                #Crop the part of the larger image that corresponds to the
-                #smaller image Fov
+                # Crop the part of the larger image that corresponds to the
+                # smaller image Fov
                 cropped_image = larger_image[(crop_res[0] / 2):3 * (crop_res[0] / 2),
-                                          (crop_res[1] / 2):3 * (crop_res[1] / 2)]
+                                             (crop_res[1] / 2):3 * (crop_res[1] / 2)]
                 # Resample the cropped image to fit the resolution of the smaller
                 # image
                 resampled_image = zoom(cropped_image, zoom=zoom_f)
@@ -1160,7 +1161,7 @@ def estimateHFWShiftFactorTime(et):
     """
     # Approximately 6 acquisitions
     dur = 6 * et + 1
-    return  dur  # s
+    return dur  # s
 
 def ResolutionShiftFactor(detector, escan, sem_stage, ebeam_focus, known_focus=SEM_KNOWN_FOCUS):
     """
@@ -1385,29 +1386,29 @@ def _DoSpotShiftFactor(future, ccd, detector, escan, focus):
         spot_no_rot = None
         spot_rot_pi = None
 
-        image = SubstractBackground(ccd, det_dataflow)
+        image = AcquireNoBackground(ccd, det_dataflow)
         try:
             spot_no_rot = spot.FindSpot(image)
         except ValueError:
             # If failed to find spot, try first to focus
-            f = autofocus.AutoFocus(ccd, escan, focus, autofocus.ROUGH_SPOTMODE_ACCURACY, background=True, dataflow=det_dataflow)
+            f = autofocus.AutoFocus(ccd, escan, focus, dfbkg=det_dataflow)
             f.result()
-            image = SubstractBackground(ccd, det_dataflow)
+            image = AcquireNoBackground(ccd, det_dataflow)
             try:
                 spot_no_rot = spot.FindSpot(image)
             except ValueError:
                 raise IOError("CL spot not found.")
-        
-        #Now rotate and reacquire
+
+        # Now rotate and reacquire
         escan.rotation.value = cur_rot - math.pi
-        image = SubstractBackground(ccd, det_dataflow)
+        image = AcquireNoBackground(ccd, det_dataflow)
         try:
             spot_rot_pi = spot.FindSpot(image)
         except ValueError:
             # If failed to find spot, try first to focus
-            f = autofocus.AutoFocus(ccd, escan, focus, autofocus.ROUGH_SPOTMODE_ACCURACY, background=True, dataflow=det_dataflow)
+            f = autofocus.AutoFocus(ccd, escan, focus, dfbkg=det_dataflow)
             f.result()
-            image = SubstractBackground(ccd, det_dataflow)
+            image = AcquireNoBackground(ccd, det_dataflow)
             try:
                 spot_rot_pi = spot.FindSpot(image)
             except ValueError:

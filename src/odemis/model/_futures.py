@@ -104,6 +104,7 @@ class InstantaneousFuture(futures.Future):
     def __init__(self, result=None, exception=None):
         self._result = result
         self._exception = exception
+        self._end = time.time()
 
     def cancel(self):
         return False
@@ -127,6 +128,12 @@ class InstantaneousFuture(futures.Future):
 
     def add_done_callback(self, fn):
         fn(self)
+
+    def get_progress(self):
+        return self._end, self._end
+
+    def add_update_callback(self, fn):
+        fn(self, self._end, self._end)
 
 
 class CancellableFuture(futures.Future):
@@ -154,7 +161,7 @@ class CancellableFuture(futures.Future):
             if self._state == FINISHED:
                 return False
 
-            if self._state in [CANCELLED, CANCELLED_AND_NOTIFIED]:
+            if self._state in (CANCELLED, CANCELLED_AND_NOTIFIED):
                 return True
 
             if self._state == RUNNING:
@@ -174,7 +181,7 @@ class CancellableFuture(futures.Future):
         Should only be used by Executor implementations and unit tests.
         """
         with self._condition:
-            if self._state in [CANCELLED, CANCELLED_AND_NOTIFIED]:
+            if self._state in (CANCELLED, CANCELLED_AND_NOTIFIED):
                 # Can happen if was cancelled just before the end and the
                 # task failed to raise an CancelledError
                 logging.warning("Task was cancelled but returned result instead "
@@ -193,7 +200,7 @@ class CancellableFuture(futures.Future):
         Should only be used by Executor implementations and unit tests.
         """
         with self._condition:
-            if self._state in [CANCELLED, CANCELLED_AND_NOTIFIED]:
+            if self._state in (CANCELLED, CANCELLED_AND_NOTIFIED):
                 # Can happen if was cancelled just before the end
                 # TODO: check it is a CancelledError?
                 logging.debug("Skipping exception from task after it was cancelled")
@@ -291,31 +298,29 @@ class ProgressiveFuture(CancellableFuture):
 
     def _report_update(self, fn):
         start, end = self.get_progress()
-        try:
-            fn(self, start, end)
-        except Exception:
-            logging.exception('exception calling callback for %r', self)
+        fn(self, start, end)
 
     def _invoke_upd_callbacks(self):
         for callback in self._upd_callbacks:
-            self._report_update(callback)
+            try:
+                self._report_update(callback)
+            except Exception:
+                logging.exception('exception calling callback for %r', self)
 
     def add_update_callback(self, fn):
         """
         Adds a callback that will receive progress updates whenever a new one is
-          available. The callback receives 2 floats: past and left.
-          "past" is the number of seconds elapsed since the beginning of the
-          task, and "left" is the estimated number of seconds until the end of the
-          task. If the task is not yet started, past can be negative, indicating
-          the estimated time before the task starts. If the task is finished (or
-          cancelled) the time left is 0 and the time past is the duration of the
-          task. The callback is always called at least once, when the task is
+          available. The callback receives 2 floats: start and end.
+          "start" is time of the beginning of the task, and "end" is the
+          estimated time at the end of the task. If the task is finished (or
+          cancelled) the end time is the time the task was completed or cancelled
+          The callback is always called at least once, when the task is
           finished.
         fn (callable: (Future, float, float) -> None): the callback, that will
-          be called with this future as argument and the past and left information.
+          be called with this future as argument and the start and end information.
         """
         with self._condition:
-            if self._state not in [CANCELLED, FINISHED]:
+            if self._state not in (CANCELLED, FINISHED):
                 self._upd_callbacks.append(fn)
 
         # Immediately report the current known information (even if finished)
@@ -331,4 +336,3 @@ class ProgressiveFuture(CancellableFuture):
             self.set_progress(start=time.time())
 
         return running
-

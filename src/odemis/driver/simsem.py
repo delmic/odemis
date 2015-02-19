@@ -153,7 +153,7 @@ class Scanner(model.Emitter):
 
         # .resolution is the number of pixels actually scanned. If it's less than
         # the whole possible area, it's centered.
-        resolution = (self._shape[0] // 8, self._shape[1] // 8)
+        resolution = (self._shape[0] // 4, self._shape[1] // 4)
         self.resolution = model.ResolutionVA(resolution, [(1, 1), self._shape],
                                              setter=self._setResolution)
         self._resolution = resolution
@@ -337,7 +337,7 @@ class Detector(model.Detector):
                     name="SimSEM acquire flow thread",
                     args=(callback,))
             self._acquisition_thread.start()
-    
+
     def stop_acquire(self):
         with self._acquisition_lock:
             with self._acquisition_init_lock:
@@ -397,7 +397,7 @@ class Detector(model.Detector):
             coord = ([int(round(lt[0] + i * scale[0])) for i in range(res[0])],
                      [int(round(lt[1] + i * scale[1])) for i in range(res[1])])
             sim_img = self.fake_img[numpy.ix_(coord[1], coord[0])]
-            
+
             # reduce image depth if requested
             if metadata.get(model.MD_BPP, 16) < 16:
                 minv = sim_img.min()
@@ -422,7 +422,7 @@ class Detector(model.Detector):
             metadata[model.MD_EBEAM_CURRENT] = scanner.probeCurrent.value
             metadata[model.MD_EBEAM_VOLTAGE] = scanner.accelVoltage.value
             return model.DataArray(sim_img, metadata)
-    
+
     def _acquire_thread(self, callback):
         """
         Thread that simulates the SEM acquisition. It calculates and updates the
@@ -438,7 +438,7 @@ class Detector(model.Detector):
                 if self._acquisition_must_stop.wait(duration):
                     break
                 callback(self._simulate_image())
-        except: 
+        except Exception:
             logging.exception("Unexpected failure during image acquisition")
         finally:
             logging.debug("Acquisition thread closed")

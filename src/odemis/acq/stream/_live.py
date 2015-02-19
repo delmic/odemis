@@ -296,6 +296,9 @@ class SEMStream(Stream):
             return
         super(SEMStream, self).onNewImage(df, data)
 
+MTD_EBEAM_SHIFT = "Ebeam shift"
+MTD_MD_UPD = "Metadata update"
+MTD_STAGE_MOVE = "Stage move"
 class AlignedSEMStream(SEMStream):
     """
     This is a special SEM stream which automatically first aligns with the
@@ -304,11 +307,11 @@ class AlignedSEMStream(SEMStream):
     by just updating the image position.
     """
     def __init__(self, name, detector, dataflow, emitter,
-                 ccd, stage, shiftebeam="Metadata update"):
+                 ccd, stage, shiftebeam=MTD_MD_UPD):
         """
-        shiftebeam (str): if "Ebeam shift", will correct the SEM position using beam shift
-         (iow, using emitter.translation). If "Metadata update", it will just update the
-         position correction metadata on the SEM images. If "Stage move", it will
+        shiftebeam (MTD_*): if MTD_EBEAM_SHIFT, will correct the SEM position using beam shift
+         (iow, using emitter.translation). If MTD_MD_UPD, it will just update the
+         position correction metadata on the SEM images. If MTD_STAGE_MOVE, it will
          move the stage or beam (depending on how large is the move) and then update
          the correction metadata (note that if the stage has moved, the optical
          stream will need to be updated too).
@@ -321,7 +324,8 @@ class AlignedSEMStream(SEMStream):
         self._last_pos = None # last known position of the stage
         self._shift = (0, 0) # (float, float): shift to apply in meters
         self._last_shift = (0, 0)  # (float, float): last ebeam shift applied
-        self._cur_trans = None
+        # stage shift + temporary correction shift (based on ebeam correction)
+        self._cur_trans = stage.getMetadata().get(model.MD_POS_COR, (0, 0))
         stage.position.subscribe(self._onStageMove)
 
     def _onStageMove(self, pos):
@@ -329,15 +333,20 @@ class AlignedSEMStream(SEMStream):
         Called when the stage moves (changes position)
         pos (dict): new position
         """
-        # Check if the position has really changed, as some stage tend to 
+        # Check if the position has really changed, as some stage tend to
         # report "new" position even when no actual move has happened
         logging.debug("Stage location is %s m,m", pos)
         if self._last_pos == pos:
             return
 
+        # If it's moving for the first time since we've measured the shift,
+        # update the coupled stage metadata to use this latest error information.
+        # Note: this means that two moves in a row will be performed by the
+        # optical stage. This could be avoided if updateMetadata was not
+        # automatically synchronising the slave stage.
         md_stage = self._stage.getMetadata()
         trans = md_stage.get(model.MD_POS_COR, (0, 0))
-        if self._cur_trans != None and self._cur_trans != trans:
+        if self._cur_trans != trans:
             logging.debug("Current stage translation %s m,m", trans)
             self._stage.updateMetadata({
                 model.MD_POS_COR: self._cur_trans
@@ -353,7 +362,7 @@ class AlignedSEMStream(SEMStream):
         """
         res, trans = self._computeROISettings(self.roi.value)
 
-        if (self._shiftebeam == "Ebeam shift") and (self._beamshift is not None):
+        if (self._shiftebeam == MTD_EBEAM_SHIFT) and (self._beamshift is not None):
             # convert shift into SEM pixels
             pxs = self._emitter.pixelSize.value
             trans_cor = tuple(s / p for s, p in zip(self._beamshift, pxs))
@@ -389,12 +398,13 @@ class AlignedSEMStream(SEMStream):
                 self._beamshift = shift
                 # Also update the last beam shift in order to be used for stage
                 # offset correction in the next stage moves
-                self._last_shift = (0.75 * self._last_shift[0] + 0.25 * shift[0], 0.75 * self._last_shift[1] + 0.25 * shift[1])
-                md_stage = self._stage.getMetadata()
-                self._cur_trans = md_stage.get(model.MD_POS_COR, (0, 0))
-                self._cur_trans = (self._cur_trans[0] - self._last_shift[0], self._cur_trans[1] - self._last_shift[1])
+                self._last_shift = (0.75 * self._last_shift[0] + 0.25 * shift[0],
+                                    0.75 * self._last_shift[1] + 0.25 * shift[1])
+                cur_trans = self._stage.getMetadata().get(model.MD_POS_COR, (0, 0))
+                self._cur_trans = (cur_trans[0] - self._last_shift[0],
+                                   cur_trans[1] - self._last_shift[1])
 
-                if self._shiftebeam == "Stage move":
+                if self._shiftebeam == MTD_STAGE_MOVE:
                     for child in self._stage.children.value:
                         if child.role == "sem-stage":
                             f = child.moveRel({"x": shift[0], "y": shift[1]})
@@ -402,7 +412,7 @@ class AlignedSEMStream(SEMStream):
 
                     shift = (0, 0) # just in case of failure
                     shift = FindEbeamCenter(self._ccd, self._detector, self._emitter)
-                elif self._shiftebeam == "Ebeam shift":
+                elif self._shiftebeam == MTD_EBEAM_SHIFT:
                     # First align using translation
                     self._applyROI()
                     # Then by updating the metadata
@@ -425,6 +435,7 @@ class AlignedSEMStream(SEMStream):
 
         super(AlignedSEMStream, self).onActive(active)
 
+
 class CameraStream(Stream):
     """ Abstract class representing streams which have a digital camera as a
     detector.
@@ -433,6 +444,23 @@ class CameraStream(Stream):
 
     Mostly used to share time estimation only.
     """
+
+    def __init__(self, name, detector, dataflow, emitter):
+        Stream.__init__(self, name, detector, dataflow, emitter)
+
+        # Create VAs for exposureTime and light power, based on the hardware VA, that can be used
+        # to override the hardware setting on a per stream basis
+
+        self.exposureTime = None if not detector else model.FloatContinuous(
+            detector.exposureTime.value,
+            detector.exposureTime.range,
+            unit=detector.exposureTime.unit
+        )
+
+        self.lightPower = None if not emitter else model.FloatContinuous(emitter.power.value,
+                                                                         emitter.power.range,
+                                                                         unit=emitter.power.unit)
+
     def estimateAcquisitionTime(self):
         # exposure time + readout time * pixels (if CCD) + set-up time
         try:
@@ -499,6 +527,7 @@ class BrightfieldStream(CameraStream):
         em = [1.] * len(self._emitter.emissions.value)
         self._emitter.emissions.value = em
 
+# TODO: unused (now gui.model.ContentView can be used to the same)
 class CameraNoLightStream(CameraStream):
     """ Stream containing images obtained via optical CCD but without any light
      source on. Used for the SECOM lens alignment tab.

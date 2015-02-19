@@ -26,21 +26,21 @@ from abc import ABCMeta
 import collections
 import logging
 import math
-from odemis import model
-from odemis.acq.stream import Stream, StreamTree
-from odemis.gui.conf import get_general_conf
-from odemis.model import (FloatContinuous, VigilantAttribute, IntEnumerated,
-                          NotSettableError, StringVA, getVAs, BooleanVA,
-                          MD_POS, MD_ACQ_DATE, InstantaneousFuture)
 import os
 import threading
 import time
+
+from odemis import model
+from odemis.acq.stream import Stream, StreamTree
+from odemis.gui.conf import get_general_conf
+from odemis.model import (FloatContinuous, VigilantAttribute, IntEnumerated, StringVA, BooleanVA,
+                          MD_POS, InstantaneousFuture)
 
 
 # The different states of a microscope
 STATE_OFF = 0
 STATE_ON = 1
-STATE_DISABLED = 2 # TODO: use this state when cannot be used
+STATE_DISABLED = 2  # TODO: use this state when cannot be used
 
 # Chamber states
 CHAMBER_UNKNOWN = 0  # Chamber in an unknown state
@@ -50,9 +50,9 @@ CHAMBER_PUMPING = 3  # Decreasing chamber pressure (set it to request pumping)
 CHAMBER_VENTING = 4  # Pressurizing chamber (set it to request venting)
 
 # The different types of view layouts
-VIEW_LAYOUT_ONE = 0 # one big view
-VIEW_LAYOUT_22 = 1 # 2x2 layout
-VIEW_LAYOUT_FULLSCREEN = 2 # Fullscreen view (not yet supported)
+VIEW_LAYOUT_ONE = 0  # one big view
+VIEW_LAYOUT_22 = 1  # 2x2 layout
+VIEW_LAYOUT_FULLSCREEN = 2  # Fullscreen view (not yet supported)
 
 # The different tools (selectable in the tool bar). Actually, only the ones which
 # have a mode, the ones which have a direct action don't need to be known
@@ -978,18 +978,10 @@ class ContentView(StreamView):
 
         super(ContentView, self)._onNewImage(im)
 
-    def _on_stage_move_done(self, f):
-        """
-        Called whenever a stage move is completed
-        """
-        # find the latest image
-        try:
-            im = max((i for i in self.stream_tree.getImages()),
-                     key=lambda d: d.metadata.get(MD_ACQ_DATE))
-        except ValueError:
-            return # no image at all
-
-        self._onNewImage(im)
+    # Note: we don't reset the view position at the end of the move. It will
+    # only be reset on the next image after the end of the move (if it ever
+    # comes). This is done on purpose to clearly show that the image displayed
+    # is not yet at the place where the move finished.
 
 class OverviewView(StreamView):
     """

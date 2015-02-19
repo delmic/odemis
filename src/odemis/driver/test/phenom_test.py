@@ -473,7 +473,7 @@ class TestSEM(unittest.TestCase):
         """
         Check it's possible to apply AutoContrast
         """
-        f = self.scanner.applyAutoContrast()
+        f = self.sed.applyAutoContrast()
         f.result()
 
 if __name__ == "__main__":

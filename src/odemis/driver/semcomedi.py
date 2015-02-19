@@ -694,10 +694,10 @@ class SEMComedi(model.HwComponent):
                                                   wcmd, nwchans, period_ns)
         period_ns = wcmd.scan_begin_arg
         min_rperiod_ns = int(self._min_ai_periods[nrchans] * 1e9)
-        
+
         rcmd = comedi.cmd_struct()
         best_found = None # None or tuple of (wperiod, osr)
-        
+
         # If period very small, try first with a read period just fitting.
         rperiod_ns = min_rperiod_ns
         osr = max(1, min(period_ns // rperiod_ns, max_osr))
@@ -753,13 +753,12 @@ class SEMComedi(model.HwComponent):
         logging.error("Failed to find compatible over-sampling rate for dwell time of %g s", period)
         return dpr * self._min_ai_periods[nrchans], 1, dpr
 
-
     def _is_period_possible(self, subdevice, nchans, period_ns):
         """
         Check if a period is _exactly_ compatible with the subdevice
         subdevice (0<int): subdevice id
         nchans (0<int): number of channels of the command
-        period_ns (0<int): sampling period in ns        
+        period_ns (0<int): sampling period in ns
         return (boolean): true if compatible
         """
         wcmd = comedi.cmd_struct()
@@ -769,7 +768,6 @@ class SEMComedi(model.HwComponent):
             comedi.get_cmd_generic_timed(self._device, subdevice,
                                           wcmd, nchans, period_ns)
         return (wcmd.scan_begin_arg == period_ns)
-
 
     def setup_timed_command(self, subdevice, channels, ranges, period_ns,
                             start_src=comedi.TRIG_INT, start_arg=0,
@@ -814,7 +812,7 @@ class SEMComedi(model.HwComponent):
         comedi.command(self._device, cmd)
 
     def write_read_2d_data_raw(self, wchannels, wranges, rchannels, rranges,
-                            period, margin, osr, dpr, data):
+                               period, margin, osr, dpr, data):
         """
         write data on the given analog output channels and read synchronously on
          the given analog input channels and convert back to 2d array 
@@ -851,7 +849,7 @@ class SEMComedi(model.HwComponent):
         if linesz < self._max_bufsz and not force_per_pixel:
             lines = self._max_bufsz // linesz
             return self._write_read_2d_lines(wchannels, wranges, rchannels, rranges,
-                         period, margin, osr, lines, data)
+                                             period, margin, osr, lines, data)
 
         # fit a pixel
         max_dpr = (self._max_bufsz / self._reader.dtype.itemsize) // osr
@@ -873,11 +871,11 @@ class SEMComedi(model.HwComponent):
                             pixelsz / 2 ** 20)
 
         return self._write_read_2d_subpixel(wchannels, wranges, rchannels, rranges,
-                                         period, margin, osr, dpr, data)
+                                            period, margin, osr, dpr, data)
 
 
     def _write_read_2d_lines(self, wchannels, wranges, rchannels, rranges,
-                            period, margin, osr, maxlines, data):
+                             period, margin, osr, maxlines, data):
         """
         Implementation of write_read_2d_data_raw by reading the input data n
           lines at a time.
@@ -945,7 +943,7 @@ class SEMComedi(model.HwComponent):
             umath.true_divide(acc, osr, out=oarray, casting='unsafe', subok=False)
 
     def _write_read_2d_pixel(self, wchannels, wranges, rchannels, rranges,
-                            period, margin, osr, dpr, data):
+                             period, margin, osr, dpr, data):
         """
         Implementation of write_read_2d_data_raw by reading the input data one 
           pixel at a time.
@@ -961,7 +959,7 @@ class SEMComedi(model.HwComponent):
         # TODO: as we do point per point, we could do the margin (=settle time)
         # shorter than a standard point
         logging.debug("Reading one pixel at a time: %d samples/read every %g µs",
-                       dpr * osr * len(rchannels), period * 1e6)
+                      dpr * osr * len(rchannels), period * 1e6)
         wdata = numpy.empty((dpr, data.shape[2]), dtype=data.dtype) # just one pixel
         # read one pixel at a time
         for x, y in numpy.ndindex(data.shape[0], data.shape[1]):
@@ -1001,7 +999,7 @@ class SEMComedi(model.HwComponent):
         # but would make the code more complex and anyway it's already huge
         # acquisitions.
         logging.debug("Reading one sub-pixel at a time: %d samples/read every %g µs",
-                       osr * nrchans, (period / dpr) * 1e6)
+                      osr * nrchans, (period / dpr) * 1e6)
         px_rbuf = numpy.empty((dpr, nrchans), dtype=adtype) # intermediary sum for mean
         for x, y in numpy.ndindex(data.shape[0], data.shape[1]):
             if y < margin:
@@ -1042,7 +1040,7 @@ class SEMComedi(model.HwComponent):
         oarray[x, y - margin] = numpy.sum(data, dtype=adtype) / (osr * dpr)
 
     def _fake_write_read_raw_one_cmd(self, wchannels, wranges, rchannels, rranges,
-                                 period, osr, data, settling_samples, rest=False):
+                                     period, osr, data, settling_samples, rest=False):
         """
         Imitates _write_read_raw_one_cmd() but works with the comedi_test driver,
           just read data.
@@ -1101,8 +1099,8 @@ class SEMComedi(model.HwComponent):
         self._reader.run()
         self._writer.run()
         self._start_new_position_notifier(np_to_report,
-                                      start + shift_report * period,
-                                      period)
+                                          start + shift_report * period,
+                                          period)
 
         timeout = expected_time * 1.10 + 0.1 # s   == expected time + 10% + 0.1s
         logging.debug("Waiting %g s for the acquisition to finish", timeout)
@@ -1116,7 +1114,7 @@ class SEMComedi(model.HwComponent):
         return rbuf
 
     def _write_read_raw_one_cmd(self, wchannels, wranges, rchannels, rranges,
-                            period, osr, data, settling_samples, rest=False):
+                                period, osr, data, settling_samples, rest=False):
         """
         write data on the given analog output channels and read synchronously
           on the given analog input channels in one command
@@ -1208,8 +1206,8 @@ class SEMComedi(model.HwComponent):
         if nwscans != 1:
             self._writer.run()
         self._start_new_position_notifier(np_to_report,
-                                      start + shift_report * period,
-                                      period)
+                                          start + shift_report * period,
+                                          period)
 
         timeout = expected_time * 1.10 + 0.1 # s   == expected time + 10% + 0.1s
         logging.debug("Waiting %g s for the acquisition to finish", timeout)
@@ -2003,29 +2001,31 @@ class FakeWriter(Accesser):
 class Scanner(model.Emitter):
     """
     Represents the e-beam scanner
-    
-    Note that the .resolution, .translation, .scale and .rotation VAs are 
+
+    Note that the .resolution, .translation, .scale and .rotation VAs are
       linked, so that the region of interest stays approximately the same (in
-      terms of physical space). So to change them to specific values, it is 
-      recommended to set them in the following order: Rotation > Scale > 
-      Resolution > Translation.  
+      terms of physical space). So to change them to specific values, it is
+      recommended to set them in the following order: Rotation > Scale >
+      Resolution > Translation.
     """
     def __init__(self, name, role, parent, channels, limits, settle_time,
-                 hfw_nomag, park=None, fastpark=False, **kwargs):
+                 hfw_nomag, park=None, fastpark=False, max_res=None, **kwargs):
         """
         channels (2-tuple of (0<=int)): output channels for X/Y to drive. X is
           the fast scanned axis, Y is the slow scanned axis. 
         limits (2x2 array of float): lower/upper bounds of the scan area in V.
           first dim is the X/Y, second dim is min/max. Ex: limits[0][1] is the
-          voltage for the max value of X. 
+          voltage for the max value of X.
         settle_time (0<=float<=1e-3): time in s for the signal to settle after
           each scan line
-        hfw_nomag (0<float<=1): (theoretical) distance between horizontal borders 
+        hfw_nomag (0<float<=1): (theoretical) distance between horizontal borders
           (lower/upper limit in X) if magnification is 1 (in m)
-        park (None or 2-tuple of (0<=float)): voltage of resting position, 
+        park (None or 2-tuple of (0<=float)): voltage of resting position,
           if None, it will default to top-left corner.
         fastpart (boolean): if True, will park immediatly after finishing a scan
           (otherwise, it will wait a few ms to check there if a new scan
+        max_res (None or 2-tuple of (0<int)): maximum scan resolution allowed.
+          By default it uses 4096 x 4096.
         """
         if len(channels) != 2:
             raise ValueError("E-beam scanner '%s' needs 2 channels" % (name,))
@@ -2083,11 +2083,23 @@ class Scanner(model.Emitter):
         # It will set up ._shape and .parent
         model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
 
-        # In theory the shape depends on the X/Y ranges, the actual ranges that
-        # can be used and the maxdata. For simplicity we just fix it to 4096
-        # which is probably sufficient for most usages and almost always reachable
+        # In theory the maximum resolution depends on the X/Y ranges, the actual
+        # ranges that can be used and the maxdata. It also depends on the noise
+        # on the scanning cable, and the scanning precision of the SEM.
+        # For simplicity we just fix it to 4096 by default, which is probably
+        # sufficient for most usages and almost always achievable.
         # shapeX = (diff_limitsX / diff_bestrangeX) * maxdataX
-        self._shape = (4096, 4096)
+        if max_res is None:
+            self._shape = (4096, 4096)
+        else:
+            max_res = tuple(max_res)
+            if len(max_res) != 2:
+                raise ValueError("max_res should be 2 integers >= 1 but got %s."
+                                 % (max_res,))
+            if any(r > 2 ** 14 for r in max_res):
+                raise ValueError("max_res %s too big: maximum 16384 px allowed."
+                                 % (max_res,))
+            self._shape = max_res
 
         # next two values are just to determine the pixel size
         # Distance between borders if magnification = 1. It should be found out
@@ -2121,7 +2133,7 @@ class Scanner(model.Emitter):
 
         # .resolution is the number of pixels actually scanned. If it's less than
         # the whole possible area, it's centered.
-        resolution = (self._shape[0] // 16, self._shape[1] // 16)
+        resolution = (256, 256)
         self.resolution = model.ResolutionVA(resolution, [(1, 1), self._shape],
                                              setter=self._setResolution)
         self._resolution = resolution

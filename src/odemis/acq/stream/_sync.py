@@ -353,8 +353,13 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 cur_dc_period = tot_num
 
             for i in numpy.ndindex(*rep[::-1]): # last dim (X) iterates first
-                self._emitter.translation.value = (spot_pos[i[::-1]][0],
-                                                   spot_pos[i[::-1]][1])
+                trans = (spot_pos[i[::-1]][0], spot_pos[i[::-1]][1])
+                cptrans = self._emitter.translation.clip(trans)
+                if cptrans != trans:
+                    logging.error("Drift of %s px caused acquisition region out "
+                                  "of bounds: needed to scan spot at %s.",
+                                  drift_shift, trans)
+                self._emitter.translation.value = cptrans
                 logging.debug("E-beam spot after drift correction: %s",
                               self._emitter.translation.value)
 

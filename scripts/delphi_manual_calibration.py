@@ -8,12 +8,12 @@ Copyright © 2014-2015 Kimon Tsitsikas, Delmic
 
 This script allows the user to perform the whole delphi calibration procedure
 step by step in a semi-manual way. It attempts to apply each step automatically
-and in case of failure it waits for the user to perform the step failed manually. 
+and in case of failure it waits for the user to perform the step failed manually.
 
 run as:
 python delphi_manual_calibration.py
 
-You first need to run the odemis backend with the SECOM config:
+You first need to run the odemis backend with the DELPHI config:
 odemisd --log-level 2 install/linux/usr/share/odemis/delphi.odm.yaml
 """
 
@@ -22,7 +22,6 @@ from __future__ import division
 import logging
 from odemis import model
 import odemis.acq.align.delphi as aligndelphi
-from odemis.driver import phenom
 import sys
 from odemis.acq import align
 from odemis.gui.conf import get_calib_conf
@@ -60,8 +59,6 @@ def main(args):
                 navcam_focus = c
             elif c.role == "focus":
                 focus = c
-            elif c.role == "stage":
-                stage = c
             elif c.role == "overview-ccd":
                 overview_ccd = c
             elif c.role == "chamber":
@@ -70,17 +67,21 @@ def main(args):
             logging.error("Failed to find all the components")
             raise KeyError("Not all components found")
 
-        # Move to the overview position first
-        f = chamber.moveAbs({"pressure": phenom.PRESSURE_NAVCAM})
-        f.result()
+        # Get pressure values
+        pressures = chamber.axes["pressure"].choices
+        vacuum_pressure = min(pressures.keys())
+        vented_pressure = max(pressures.keys())
+        if overview_ccd:
+            for p, pn in pressures.items():
+                if pn == "overview":
+                    overview_pressure = p
+                    break
+            else:
+                overview_pressure = None
 
-        # Clear all the previous calibration
-        logging.debug("Clearing all the previous calibration...")
-        stage.updateMetadata({
-                  model.MD_POS_COR: (0, 0),
-                  model.MD_PIXEL_SIZE_COR: (1, 1),
-                  model.MD_ROTATION_COR: 0
-                  })
+        # Move to the overview position first
+        f = chamber.moveAbs({"pressure": overview_pressure})
+        f.result()
 
         # Reference the (optical) stage
         logging.debug("Referencing the (optical) stage...")
@@ -93,7 +94,7 @@ def main(args):
 
         # SEM stage to (0,0)
         logging.debug("Moving to the center of SEM stage...")
-        f = sem_stage.moveAbs({"x":0, "y":0})
+        f = sem_stage.moveAbs({"x": 0, "y": 0})
         f.result()
 
         # Calculate offset approximation
@@ -109,7 +110,7 @@ def main(args):
         f.result()
 
         # Move to SEM
-        f = chamber.moveAbs({"pressure": phenom.PRESSURE_SEM})
+        f = chamber.moveAbs({"pressure": vacuum_pressure})
         f.result()
 
         # Compute stage calibration values
@@ -123,7 +124,7 @@ def main(args):
         raw_input(msg)
         logging.debug("Trying to detect the holes/markers of the sample holder...")
         hole_detectionf = aligndelphi.HoleDetection(detector, escan, sem_stage,
-                                                ebeam_focus)
+                                                    ebeam_focus)
         first_hole, second_hole, hole_focus = hole_detectionf.result()
         logging.debug("First hole: %s (m,m) Second hole: %s (m,m)", first_hole, second_hole)
         hole_focus = ebeam_focus.position.value.get('z')
@@ -133,7 +134,7 @@ def main(args):
         f.result()
 
         logging.debug("Moving objective stage to (0,0)...")
-        f = opt_stage.moveAbs({"x":0, "y":0})
+        f = opt_stage.moveAbs({"x": 0, "y": 0})
         f.result()
         # Set min fov
         # We want to be as close as possible to the center when we are zoomed in
@@ -213,13 +214,13 @@ def main(args):
         # Compute HFW-related values
         hfw_shiftf = aligndelphi.HFWShiftFactor(detector, escan, sem_stage, ebeam_focus, hole_focus)
         hfwa = hfw_shiftf.result()
-        
+
         logging.info("\n**Computed SEM shift parameters**\n resa: %s \n resb: %s \n hfwa: %s \n spotshift: %s \n", resa, resb, hfwa, spotshift)
 
         # Return to the center so fine alignment can be executed just after calibration
         f = sem_stage.moveAbs({"x":-pure_offset[0], "y":-pure_offset[1]})
         f.result()
-        f = opt_stage.moveAbs({"x":0, "y":0})
+        f = opt_stage.moveAbs({"x": 0, "y": 0})
         f.result()
         f = focus.moveAbs({"z": center_focus})
         f.result()
@@ -235,7 +236,7 @@ def main(args):
         escan.translation.value = (0, 0)
         escan.dwellTime.value = 5e-06
         det_dataflow = detector.data
-        f = autofocus.AutoFocus(ccd, escan, ebeam_focus, autofocus.ROUGH_SPOTMODE_ACCURACY, background=True, dataflow=det_dataflow)
+        f = autofocus.AutoFocus(ccd, escan, ebeam_focus, dfbkg=det_dataflow)
         f.result()
 
         # Refocus the SEM
@@ -264,7 +265,8 @@ def main(args):
                                   10e-06,  # m, maximum difference allowed
                                   escan,
                                   ccd,
-                                  detector)
+                                  detector,
+                                  skew=True)
             trans_val, cor_md = f.result()
         except Exception:
             # Configure CCD and e-beam to write CL spots
@@ -285,22 +287,30 @@ def main(args):
                       10e-06,  # m, maximum difference allowed
                       escan,
                       ccd,
-                      detector)
+                      detector,
+                      skew=True)
             trans_val, cor_md = f.result()
 
-        iscale = cor_md[model.MD_PIXEL_SIZE_COR]
-        irot = -cor_md[model.MD_ROTATION_COR] % (2 * math.pi)
+        trans_md, skew_md = cor_md
+        iscale = trans_md[model.MD_PIXEL_SIZE_COR]
+        irot = -trans_md[model.MD_ROTATION_COR] % (2 * math.pi)
+        ishear = -skew_md[model.MD_SHEAR_COR]
+        iscale_xy = skew_md[model.MD_PIXEL_SIZE_COR]
+        logging.info("\n**Computed fine alignment parameters**\n scaling: %s \n rotation: %f \n", iscale, irot)
         # Update calibration file
         calibconf = get_calib_conf()
         shid, sht = chamber.sampleHolder.value
         calibconf.set_sh_calib(shid, first_hole, second_hole, hole_focus, offset,
-                             scaling, rotation, iscale, irot, resa, resb, hfwa,
-                             spotshift)
+                             scaling, rotation, iscale, irot, iscale_xy, ishear,
+                             resa, resb, hfwa, spotshift)
     except:
         logging.exception("Unexpected error while performing action.")
         return 127
+    finally:
+        # Eject the sample holder
+        f = chamber.moveAbs({"pressure": vented_pressure})
+        f.result()
 
-    logging.info("\n**Computed fine alignment parameters**\n scaling: %s \n rotation: %f \n", iscale, irot)
     return 0
 
 def _discard_data(df, data):

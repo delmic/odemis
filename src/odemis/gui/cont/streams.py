@@ -314,7 +314,7 @@ class StreamController(object):
                 self._main_data_model.ebeam,
                 self._main_data_model.ccd,
                 self._main_data_model.stage,
-                shiftebeam="Ebeam shift"
+                shiftebeam=acqstream.MTD_EBEAM_SHIFT
             )
             # Select between "Metadata update" and "Stage move"
             # TODO: use shiftebeam once the phenom driver supports it
@@ -343,7 +343,7 @@ class StreamController(object):
                 self._main_data_model.ebeam,
                 self._main_data_model.ccd,
                 self._main_data_model.stage,
-                shiftebeam="Ebeam shift"
+                shiftebeam=acqstream.MTD_EBEAM_SHIFT
             )
             # Select between "Metadata update" and "Stage move"
             # TODO: use shiftebeam once the phenom driver supports it

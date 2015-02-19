@@ -324,7 +324,7 @@ class TMCM3110(model.Actuator):
             # or /proc/pid/fd/n link to a *(deleted)
             # How to handle the fact it will then probably get a different name
             # on replug? Use a pattern for the file name?
-            
+
             self._resynchonise()
 
     def SendInstruction(self, n, typ=0, mot=0, val=0):
@@ -453,7 +453,7 @@ class TMCM3110(model.Actuator):
         pos (-2**31 <= int 2*31-1): position
         """
         self.SendInstruction(4, 0, axis, pos) # 0 = absolute
-        
+
     def MoveRelPos(self, axis, offset):
         """
         Requests a move to a relative position. This is non-blocking.
@@ -462,10 +462,10 @@ class TMCM3110(model.Actuator):
         """
         self.SendInstruction(4, 1, axis, offset) # 1 = relative
         # it returns the expected final absolute position
-        
+
     def MotorStop(self, axis):
         self.SendInstruction(3, mot=axis)
-        
+
     def StartRefSearch(self, axis):
         self.SendInstruction(13, 0, axis) # 0 = start
 
@@ -816,7 +816,7 @@ class TMCM3110(model.Actuator):
         if not pos:
             return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
-        pos = self._applyInversionRel(pos)
+        pos = self._applyInversionAbs(pos)
 
         f = self._createFuture()
         f = self._executor.submitf(f, self._doMoveAbs, f, pos)

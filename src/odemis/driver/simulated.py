@@ -260,14 +260,19 @@ class Chamber(model.Actuator):
 
     @isasync
     def moveAbs(self, pos):
-
-        if not isinstance(pos, dict):
-            raise ValueError("Dictionary required")
-
         if not pos:
             return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
-        return self._executor.submit(self._changePressure, pos["pressure"])
+
+        new_pres = pos["pressure"]
+        est_start = time.time() + 0.1
+        f = model.ProgressiveFuture(start=est_start,
+                                    end=est_start + self._getDuration(new_pres))
+
+        return self._executor.submitf(f, self._changePressure, new_pres)
+
+    def _getDuration(self, pos):
+        return abs(self._position - pos) / SPEED_PUMP
 
     def _changePressure(self, p):
         """
@@ -276,7 +281,7 @@ class Chamber(model.Actuator):
         """
         # TODO: allow to cancel during the change
         now = time.time()
-        duration = abs(self._position - p) / SPEED_PUMP # s
+        duration = self._getDuration(p) # s
         self._time_start = now
         self._time_goal = now + duration # s
         self._goal = p

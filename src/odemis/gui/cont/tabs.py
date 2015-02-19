@@ -43,7 +43,7 @@ from wx import html
 from odemis import dataio, model
 from odemis.acq import calibration
 from odemis.gui.comp import overlay
-from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG
+from odemis.gui.comp.canvas import CAN_ZOOM
 from odemis.gui.comp.popup import Message
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.stream import StreamPanel
@@ -63,7 +63,6 @@ import odemis.gui.util as guiutil
 import odemis.gui.util.align as align
 from odemis.driver.actuator import ConvertStage
 from odemis.acq.align import AutoFocus
-from odemis.model._futures import InstantaneousFuture
 from odemis.acq import stream
 
 
@@ -287,7 +286,7 @@ class SecomStreamsTab(Tab):
         # Add fit view to content to toolbar
         self.tb.add_tool(tools.TOOL_ZOOM_FIT, self.view_controller.fitViewToContent)
         # auto focus
-        self._autofocus_f = InstantaneousFuture()
+        self._autofocus_f = model.InstantaneousFuture()
         self.tb.add_tool(tools.TOOL_AUTO_FOCUS, self.tab_data_model.autofocus_active)
         self.tb.enable_button(tools.TOOL_AUTO_FOCUS, False)
         self.tab_data_model.autofocus_active.subscribe(self._onAutofocus)
@@ -390,7 +389,7 @@ class SecomStreamsTab(Tab):
                 d, e, f = self._get_focus_hw(curr_s)
 
             if all((d, f)):
-                self._autofocus_f = AutoFocus(d, e, f, 0) # 0 = max accuracy
+                self._autofocus_f = AutoFocus(d, e, f)
                 self._autofocus_f.add_done_callback(self._on_autofocus_done)
             else:
                 # Should never happen as normally the menu/icon are disabled
@@ -1553,7 +1552,7 @@ class LensAlignTab(Tab):
                                           rotation=math.radians(45))
             self._convert_to_aligner = self._convert_xy_to_ab
         else: # SECOMv2 => it's directly X/Y
-            if not "x" in main_data.aligner.axes:
+            if "x" not in main_data.aligner.axes:
                 logging.error("Unknown axes in lens aligner stage")
             self._aligner_xy = main_data.aligner
             self._convert_to_aligner = lambda x: x
@@ -1564,9 +1563,10 @@ class LensAlignTab(Tab):
                 main_frame.vp_align_ccd,  # focused view
                 {
                     "name": "Optical CL",
+                    "cls": guimod.ContentView,
                     "stage": self._aligner_xy,
                     "focus": main_data.focus,
-                    "stream_classes": (streammod.CameraNoLightStream,),
+                    "stream_classes": streammod.CameraStream,
                 }
             ),
             (
@@ -1604,11 +1604,10 @@ class LensAlignTab(Tab):
         self.tab_data_model.dicho_seq.subscribe(self._onDichoSeq, init=True)
 
         # create CCD stream
-        ccd_stream = streammod.CameraNoLightStream("Optical CL",
-                                                   main_data.ccd,
-                                                   main_data.ccd.data,
-                                                   main_data.light,
-                                                   position=self._aligner_xy.position)
+        ccd_stream = streammod.CameraStream("Optical CL",
+                                            main_data.ccd,
+                                            main_data.ccd.data,
+                                            main_data.light)
         self.tab_data_model.streams.value.insert(0, ccd_stream) # current stream
         self._ccd_stream = ccd_stream
         self._ccd_view = main_frame.vp_align_ccd.microscope_view
@@ -1920,8 +1919,6 @@ class MirrorAlignTab(Tab):
 
         # create the stream to the AR image + goal image
         if main_data.ccd:
-            # Not ARSettingsStream as this is for multiple repetitions, and we just care
-            # about what's on the CCD
             ccd_stream = streammod.CameraStream(
                 "Angle-resolved sensor",
                 main_data.ccd,

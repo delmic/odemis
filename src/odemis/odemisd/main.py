@@ -290,6 +290,10 @@ class BackendRunner(object):
         self._main_thread = threading.current_thread()
         signal.signal(signal.SIGINT, self.handle_signal)
 
+    # TODO: drop the need to be root (and allow to run directly as a standard user)
+    # need to ensure that BASE_DIRECTORY is already existing, and that the log
+    # file exists either in a sub-directory with odemis group write permissions,
+    # or use logrotate (+ use WatchedFileHandler).
     def set_base_group(self):
         """
         Change the current process to be running in the base group (odemis)

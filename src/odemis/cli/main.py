@@ -23,6 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # This is a basic command line interface to the odemis back-end
 
 from __future__ import division
+
 import argparse
 import codecs
 import collections
@@ -178,7 +179,7 @@ def print_axes(name, value, pretty):
 def print_roattribute(name, value, pretty):
     if name == "axes":
         return print_axes(name, value, pretty)
-    
+
     if pretty:
         print u"\t%s (RO Attribute)\tvalue: %s" % (name, value)
     else:
@@ -280,7 +281,6 @@ def print_metadata(component, pretty):
     else:
         for name, value in md.items():
             print(u"%s\ttype:metadata\tvalue:%s" % (name, value))
-        
 
 def print_attributes(component, pretty):
     if pretty:
@@ -403,7 +403,7 @@ def update_metadata(comp_name, key_val_str):
         raise IOError("Failed to update metadata of %s to %s: %s" %
                       (comp_name, md, exc))
 
-MAX_DISTANCE = 0.01 #m
+MAX_DISTANCE = 0.01 # m
 def move(comp_name, axis_name, str_distance):
     """
     move (relatively) the axis of the given component by the specified amount of µm
@@ -533,6 +533,24 @@ def stop_move():
     if error:
         raise IOError("Failed to stop all the actuators")
 
+def _get_big_image(df):
+    """
+    Same as df.get(), but avoids "out of memory" errors more often in case of
+    really big images (>100 Mb)
+    df (Dataflow)
+    """
+    evt = threading.Event()
+    images = []
+
+    def get_data(dflow, da):
+        dflow.unsubscribe(get_data)
+        images.append(da)
+        evt.set()
+
+    df.subscribe(get_data)
+    evt.wait()
+    return images[-1]
+
 def acquire(comp_name, dataflow_names, filename):
     """
     Acquire an image from one (or more) dataflow
@@ -558,26 +576,32 @@ def acquire(comp_name, dataflow_names, filename):
     images = []
     for df in dataflows:
         try:
+            # Note: currently, get() uses Pyro, which is not as memory efficient
+            # as .subscribe(), which uses ZMQ. So would need to use
+            # _get_big_image() if very large image is requested.
             image = df.get()
-            images.append(image)
-            logging.info("Acquired an image of dimension %r.", image.shape)
         except Exception as exc:
             raise IOError("Failed to acquire image from component %s: %s" % (comp_name, exc))
+
+        logging.info("Acquired an image of dimension %r.", image.shape)
+        images.append(image)
 
         try:
             if model.MD_PIXEL_SIZE in image.metadata:
                 pxs = image.metadata[model.MD_PIXEL_SIZE]
                 dim = (image.shape[0] * pxs[0], image.shape[1] * pxs[1])
-                logging.info("Physical dimension of image is %fx%f m.", dim[0], dim[1])
+                logging.info("Physical dimension of image is %s.",
+                             units.readable_str(dim, unit="m", sig=3))
             else:
                 logging.warning("Physical dimension of image is unknown.")
 
             if model.MD_SENSOR_PIXEL_SIZE in image.metadata:
                 spxs = image.metadata[model.MD_SENSOR_PIXEL_SIZE]
                 dim_sens = (image.shape[0] * spxs[0], image.shape[1] * spxs[1])
-                logging.info("Physical dimension of sensor is %fx%f m.", dim_sens[0], dim_sens[1])
+                logging.info("Physical dimension of sensor is %s.",
+                             units.readable_str(dim_sens, unit="m", sig=3))
         except Exception as exc:
-            raise IOError("Failed to read image information: %s" % exc)
+            logging.exception("Failed to read image information.")
 
     exporter = dataio.find_fittest_exporter(filename)
     try:

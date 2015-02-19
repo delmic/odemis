@@ -128,7 +128,7 @@ class TestAlignment(unittest.TestCase):
         self.assertTrue(f.done())
         with self.assertRaises(futures.CancelledError):
             f.result()
-        
+
     def on_done(self, future):
         self.done += 1
 
@@ -146,7 +146,7 @@ class TestAlignment(unittest.TestCase):
 
         # first try using the metadata correction
         st = stream.AlignedSEMStream("sem-md", self.sed, self.sed.data, self.ebeam,
-                                     ccd, self.stage, shiftebeam="Metadata update")
+                                     ccd, self.stage, shiftebeam=stream.MTD_MD_UPD)
 
         # we don't really care about the SEM image, so the faster the better
         self.ebeam.dwellTime.value = self.ebeam.dwellTime.range[0]

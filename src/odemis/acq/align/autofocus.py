@@ -33,8 +33,6 @@ import threading
 import time
 from odemis.util.img import Subtract
 
-FINE_SPOTMODE_ACCURACY = 5e-6  # fine focus accuracy in spot mode #m
-ROUGH_SPOTMODE_ACCURACY = 10e-6  # rough focus accuracy in spot mode #m
 INIT_THRES_FACTOR = 4e-3  # initial autofocus threshold factor
 
 MAX_STEPS_NUMBER = 30  # Max steps to perform autofocus
@@ -60,22 +58,25 @@ def MeasureFocus(image):
         gray = image
     return ndimage.standard_deviation(image)
 
-def SubstractBackground(ccd, det_dataflow=None):
+
+def AcquireNoBackground(ccd, dfbkg=None):
     """
-    Performs optical acquisition with background substraction. Particularly
-    used in order to eliminate the source background in Delphi.
-    ccd (model.DigitalCamera)
-    det_dataflow (model.DataFlow): dataflow of se- or bs- detector
-    enabled (boolean): if True, apply background substraction
+    Performs optical acquisition with background subtraction if possible.
+    Particularly used in order to eliminate the e-beam source background in the
+    Delphi.
+    ccd (model.DigitalCamera): detector from which to acquire an image
+    dfbkg (model.DataFlow or None): dataflow of se- or bs- detector to
+    start/stop the source. If None, a standard acquisition is performed (without
+    background subtraction)
     returns (model.DataArray):
-        Image with substracted background
+        Image (with subtracted background if requested)
     """
-    if det_dataflow is not None:
+    if dfbkg is not None:
         bg_image = ccd.data.get(asap=False)
-        det_dataflow.subscribe(_discard_data)
+        dfbkg.subscribe(_discard_data)
         image = ccd.data.get(asap=False)
+        dfbkg.unsubscribe(_discard_data)
         ret_data = Subtract(image, bg_image)
-        det_dataflow.unsubscribe(_discard_data)
         return ret_data
     else:
         image = ccd.data.get(asap=False)
@@ -87,22 +88,21 @@ def _discard_data(df, data):
     """
     pass
 
-def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, background, dataflow):
+def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, dfbkg):
     """
-    Iteratively acquires an optical image, measures its focus level and adjusts 
+    Iteratively acquires an optical image, measures its focus level and adjusts
     the optical focus with respect to the focus level.
-    future (model.ProgressiveFuture): Progressive future provided by the wrapper 
+    future (model.ProgressiveFuture): Progressive future provided by the wrapper
     detector: model.DigitalCamera or model.Detector
-    max_step: step used in case we are completely out of focus
+    max_step (float): step size (m) used in case we are completely out of focus
     thres_factor: threshold factor depending on type of detector and binning
-    et: exposure time if detector is a ccd, 
+    et (float): acquisition time (s) of one image exposure time if detector is a ccd,
         dwellTime*prod(resolution) if detector is an SEM
     focus (model.Actuator): The optical focus
-    background (boolean): If True apply background substraction
-    dataflow (model.DataFlow): dataflow of se- or bs- detector
-    returns (float):    Focus position #m
+    dfbkg (model.DataFlow): dataflow of se- or bs- detector
+    returns (float):    Focus position (m)
                         Focus level
-    raises:    
+    raises:
             CancelledError if cancelled
             IOError if procedure failed
     """
@@ -117,13 +117,13 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, background
             best_pos = init_pos
             step = max_step / 2
             cur_pos = focus.position.value.get('z')
-            image = SubstractBackground(detector, dataflow)
+            image = AcquireNoBackground(detector, dfbkg)
             fm_cur = MeasureFocus(image)
             init_fm = fm_cur
             best_fm = init_fm
             #Clip within range
             new_pos = _ClippedMove(rng, focus, step)
-            image = SubstractBackground(detector, dataflow)
+            image = AcquireNoBackground(detector, dfbkg)
             fm_test = MeasureFocus(image)
             if fm_test > best_fm:
                 best_pos = new_pos
@@ -156,7 +156,7 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, background
                     pos = focus.position.value.get('z')
                     shift = cur_pos - pos
                     new_pos = _ClippedMove(rng, focus, shift)
-                    image = SubstractBackground(detector, dataflow)
+                    image = AcquireNoBackground(detector, dfbkg)
                     fm_new = MeasureFocus(image)
                     if fm_new > best_fm:
                         best_pos = new_pos
@@ -165,13 +165,13 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, background
                         raise CancelledError()
                     steps += 1
 
-                image = SubstractBackground(detector, dataflow)
+                image = AcquireNoBackground(detector, dfbkg)
                 fm_cur = MeasureFocus(image)
                 if fm_cur > best_fm:
                     best_pos = new_pos
                     best_fm = fm_cur
                 new_pos = _ClippedMove(rng, focus, step)
-                image = SubstractBackground(detector, dataflow)
+                image = AcquireNoBackground(detector, dfbkg)
                 fm_test = MeasureFocus(image)
                 if fm_test > best_fm:
                     best_pos = new_pos
@@ -206,7 +206,7 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, background
                 # Do not stuck to the border
                 if before_move == after_move:
                     sign = -sign
-                image = SubstractBackground(detector, dataflow)
+                image = AcquireNoBackground(detector, dfbkg)
                 fm_new = MeasureFocus(image)
                 if fm_new > best_fm:
                     best_pos = new_pos
@@ -276,18 +276,20 @@ def estimateAutoFocusTime(exposure_time, steps=MAX_STEPS_NUMBER):
     """
     return steps * exposure_time
 
-def AutoFocus(detector, scanner, focus, accuracy, background=False, dataflow=None):
+def AutoFocus(detector, scanner, focus, dfbkg=None):
     """
     Wrapper for DoAutoFocus. It provides the ability to check the progress of autofocus 
     procedure or even cancel it.
-    detector (model.DigitalCamera or model.Detector): Type of detector
+    detector (model.DigitalCamera or model.Detector): Detector on which to
+      improve the focus quality
     scanner (None or model.Scanner): In case of a SED this is the scanner used
-    focus (model.Actuator): The optical focus
-    accuracy (float): Focus precision #m
-    background (boolean): If True apply background substraction
-    dataflow (model.DataFlow): dataflow of se- or bs- detector
-    returns (model.ProgressiveFuture):    Progress of DoAutoFocus, whose result() will return:
-            Focus position #m
+    focus (model.Actuator): The focus actuator
+    dfbkg (model.DataFlow or None): If provided, will be used to start/stop
+     the e-beam emission (it must be the dataflow of se- or bs-detector) in
+     order to do background subtraction. If None, no background subtraction is
+     performed.
+    returns (model.ProgressiveFuture):  Progress of DoAutoFocus, whose result() will return:
+            Focus position (m)
             Focus level
     """
     # Create ProgressiveFuture and update its state to RUNNING
@@ -302,32 +304,31 @@ def AutoFocus(detector, scanner, focus, accuracy, background=False, dataflow=Non
     thres_factor = INIT_THRES_FACTOR
     role = focus.role
     if role == "focus":  # CCD
-        max_step = 3 * detector.pixelSize.value[0]
+        max_stp_sz = 3 * detector.pixelSize.value[0]
         if detector.binning.value[0] > 2:
             thres_factor = 10 * thres_factor  # better snr
         else:
             thres_factor = 5 * thres_factor
     elif role == "overview-focus":  # NAVCAM
-        max_step = 100 * detector.pixelSize.value[0]
+        max_stp_sz = 100 * detector.pixelSize.value[0]
     elif role == "ebeam-focus":  # SEM
         thres_factor = 5 * thres_factor
-        max_step = 5.5e03 * scanner.pixelSize.value[0]
+        max_stp_sz = 5.5e03 * scanner.pixelSize.value[0]
     else:
-        raise IOError("The given detector does not support autofocus.")
+        logging.warning("Unknown focus %s, will try autofocus anyway.", role)
+        max_stp_sz = 3 * detector.pixelSize.value[0]
 
     f = model.ProgressiveFuture(start=est_start,
                                 end=est_start + estimateAutoFocusTime(et))
     f._autofocus_state = RUNNING
     f._autofocus_lock = threading.Lock()
-
-    # Task to run
-    doAutoFocus = _DoAutoFocus
     f.task_canceller = _CancelAutoFocus
 
     # Run in separate thread
     autofocus_thread = threading.Thread(target=executeTask,
                   name="Autofocus",
-                  args=(f, doAutoFocus, f, detector, max_step, thres_factor, et, focus, background, dataflow))
+                  args=(f, _DoAutoFocus, f, detector, max_stp_sz, thres_factor,
+                        et, focus, dfbkg))
 
     autofocus_thread.start()
     return f

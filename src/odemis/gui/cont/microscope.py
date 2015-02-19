@@ -42,6 +42,7 @@ from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
 from odemis.acq._futures import executeTask
 import threading
 from odemis.gui.util.widgets import ProgessiveFutureConnector
+from odemis.acq import _futures
 
 # Sample holder types in the Delphi, as defined by Phenom World
 PHENOM_SH_TYPE_STANDARD = 1  # standard sample holder
@@ -49,6 +50,10 @@ PHENOM_SH_TYPE_STANDARD = 1  # standard sample holder
 PHENOM_SH_TYPE_OPTICAL = 1023  # sample holder for the Delphi, containing a lens
 
 DELPHI_OVERVIEW_POS = {"x": 0, "y": 0}  # good position of the stage for overview
+DELPHI_LOADING_TIMES = (80, 75, 0)  # Initial time estimation (80), time remaining after
+                                    # moving to overview (75), time for the rest
+                                    # of the steps while moving to SEM (0)
+
 
 
 class MicroscopeStateController(object):
@@ -471,7 +476,9 @@ class SecomStateController(MicroscopeStateController):
 
         self._set_ebeam_power(False)
         f = self._main_data.chamber.moveAbs({"pressure": self._vented_pressure})
-        # f.add_update_callback(self._on_vent_update)
+        self._unload_future_connector = ProgessiveFutureConnector(f,
+                                                                  self._main_frame.gauge_load_time,
+                                                                  self._main_frame.lbl_load_time)
         f.add_done_callback(self._on_vented)
 
     @call_in_wx_main
@@ -526,7 +533,7 @@ class SecomStateController(MicroscopeStateController):
             # We are using the best accuracy possible: 0
             try:
                 f = align.autofocus.AutoFocus(self._main_data.overview_ccd, None,
-                                              self._main_data.overview_focus, 0)
+                                              self._main_data.overview_focus)
             except Exception:
                 logging.exception("Failed to start auto-focus")
                 self._on_overview_focused(None)
@@ -675,85 +682,6 @@ class DelphiStateController(SecomStateController):
     def _on_vented(self, future):
         super(DelphiStateController, self)._on_vented(future)
         self._show_progress_indicators(False)
-
-    def _on_vacuum(self, _):
-        self._show_progress_indicators(False)
-
-    def _on_overview_position(self, unused):
-        """
-        Move the stage to good position for the overview acquisition, and load
-        the calibration if it's an optical sample holder.
-        """
-        # Move to stage to center to be at a good position in overview
-        f = self._main_data.stage.moveAbs(DELPHI_OVERVIEW_POS)
-        f.result()  # to be sure referencing doesn't cancel the move
-
-        self._load_holder_calib()
-
-        # Reference the (optical) stage
-        f = self._main_data.stage.reference({"x", "y"})
-        f.result()
-
-        # continue business as usual
-        self._start_overview_acquisition()
-
-    def _start_overview_acquisition(self):
-        logging.debug("Starting overview acquisition")
-        # FIXME: need to check if autofocus is needed sometimes (and improves
-        # over the default good position set by the driver)
-        self._on_overview_focused(None)
-
-    def _on_overview_focused(self, future):
-        """
-        Called when the overview image is focused
-        """
-        # We cannot do much if the focus failed, so always go on...
-        if future:
-            try:
-                future.result()
-                logging.debug("Overview focused")
-            except Exception:
-                logging.info("Auto-focus on overview failed")
-        else:
-            logging.debug("Acquiring overview image after skipping auto-focus")
-
-        # now acquire one image
-        try:
-            ovs = self._get_overview_stream()
-
-            ovs.image.subscribe(self._on_overview_image)
-            # start acquisition
-            ovs.should_update.value = True
-            ovs.is_active.value = True
-        except Exception:
-            logging.exception("Failed to start overview image acquisition")
-            f = self._main_data.chamber.moveAbs({"pressure": self._vacuum_pressure})
-            self.rest_time_est = 0  # s, see estimateDelphiLoading()
-            # f.add_update_callback(self.on_step_update)
-            f.add_done_callback(self._on_vacuum)
-
-    def _on_overview_image(self, image):
-        """ Called once the overview image has been acquired """
-
-        logging.debug("New overview image acquired")
-        # Stop the stream (the image is immediately displayed in the view)
-        try:
-            ovs = self._get_overview_stream()
-            ovs.is_active.value = False
-            ovs.should_update.value = False
-        except Exception:
-            logging.exception("Failed to acquire overview image")
-
-        if self._main_data.chamberState.value not in {CHAMBER_PUMPING, CHAMBER_VACUUM}:
-            logging.warning("Receive an overview image while in state %s",
-                            self._main_data.chamberState.value)
-            return  # don't ask for vacuum
-
-        # move further to fully under vacuum (should do nothing if already there)
-        f = self._main_data.chamber.moveAbs({"pressure": self._vacuum_pressure})
-        self.rest_time_est = 0  # s, see estimateDelphiLoading()
-        # f.add_update_callback(self.on_step_update)
-        f.add_done_callback(self._on_vacuum)
 
     def _load_holder_calib(self):
         """
@@ -978,11 +906,33 @@ class DelphiStateController(SecomStateController):
 
             try:
                 # _on_overview_position() will take care of going further
-                f = self._main_data.chamber.moveAbs({"pressure": self._overview_pressure})
-                self.rest_time_est = 75  # s, see estimateDelphiLoading()
-                # f.add_update_callback(self.on_step_update)
-                f.add_done_callback(self._on_overview_position)
+                move_to_overview = self._main_data.chamber.moveAbs({"pressure": self._overview_pressure})
+                self.rest_time_est = DELPHI_LOADING_TIMES[1]  # s, see estimateDelphiLoading()
+                move_to_overview.add_update_callback(self.on_step_update)
+                move_to_overview.result()
 
+                # Move to stage to center to be at a good position in overview
+                f = self._main_data.stage.moveAbs(DELPHI_OVERVIEW_POS)
+                f.result()  # to be sure referencing doesn't cancel the move
+
+                self._load_holder_calib()
+
+                # Reference the (optical) stage
+                f = self._main_data.stage.reference({"x", "y"})
+                f.result()
+
+                # now acquire one image
+                ovs = self._get_overview_stream()
+                f = _futures.wrapSimpleStreamIntoFuture(ovs)
+                f.result()
+
+                # move further to fully under vacuum (should do nothing if already there)
+                move_to_sem = self._main_data.chamber.moveAbs({"pressure": self._vacuum_pressure})
+                self.rest_time_est = DELPHI_LOADING_TIMES[2]  # s, see estimateDelphiLoading()
+                move_to_sem.add_update_callback(self.on_step_update)
+                move_to_sem.result()
+
+                self._show_progress_indicators(False)
                 # reset the streams to avoid having data from the previous sample
                 self._reset_streams()
 
@@ -1021,15 +971,17 @@ class DelphiStateController(SecomStateController):
         # Rough approximation
         # 5 sec from unload to NavCam, 10 sec for alignment and overview acquisition
         # and 65 sec from NavCam to SEM
-        return 80  # s
+        return DELPHI_LOADING_TIMES[0]  # s
 
     @call_in_wx_main
     @ignore_dead
     def on_step_update(self, future, start, end):
         # Add the estimated time that the rest of the procedure will take
-        self.update_load_time(end + self.rest_time_est)
+        rem_time = end - time.time()
+        if rem_time >= 0:
+            self.update_load_time(end + self.rest_time_est)
 
     def update_load_time(self, end):
-        self.load_future.set_end_time(end)
+        self.load_future.set_progress(end=end)
         rem_time = end - time.time()
         logging.debug("Loading future remaining time: %f", rem_time)

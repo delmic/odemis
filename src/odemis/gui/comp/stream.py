@@ -27,24 +27,29 @@ Stream panels are custom, specialized controls that allow the user to view and
 manipulate various data streams coming from the microscope.
 
 """
+
 from __future__ import division
 
 import collections
 import logging
 import numpy
+import wx
 import wx.lib.newevent
 from wx.lib.pubsub import pub
 
 from odemis import acq
+from odemis.acq.stream import OpticalStream
 from odemis.gui import FG_COLOUR_EDIT, FG_COLOUR_MAIN, \
     BG_COLOUR_MAIN, BG_COLOUR_STREAM, FG_COLOUR_DIS, \
     FG_COLOUR_WARNING, FG_COLOUR_ERROR
+from odemis.gui.comp.checkbox import CheckBox
 from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider,\
     UnitIntegerSlider
 from odemis.gui.comp.text import SuggestTextCtrl, \
     UnitFloatCtrl, FloatTextCtrl
+from odemis.gui.conf.data import HW_SETTINGS_CONFIG
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation, dead_object_wrapper, \
     ignore_dead
 from odemis.gui.util.widgets import VigilantAttributeConnector
@@ -65,11 +70,11 @@ BUTTON_SIZE = (18, 18)
 # information themselves.
 
 # Values to control which option is available
-OPT_NAME_EDIT = 1 # allow the renaming of the stream (for one time only)
-OPT_BTN_REMOVE = 2 # remove the stream entry
-OPT_BTN_VISIBLE = 4 # show/hide the stream image
-OPT_BTN_UPDATED = 8 # update/stop the stream acquisition
-OPT_BTN_TINT = 16 # tint of the stream (if the VA exists)
+OPT_NAME_EDIT = 1  # allow the renaming of the stream (for one time only)
+OPT_BTN_REMOVE = 2  # remove the stream entry
+OPT_BTN_VISIBLE = 4  # show/hide the stream image
+OPT_BTN_UPDATED = 8  # update/stop the stream acquisition
+OPT_BTN_TINT = 16  # tint of the stream (if the VA exists)
 
 CAPTION_PADDING_RIGHT = 5
 ICON_WIDTH, ICON_HEIGHT = 16, 16
@@ -455,6 +460,8 @@ class StreamPanel(wx.Panel):
         self._expander = None
         self._panel = None
 
+        self._prev_drange = None
+
         self.control_gbsizer = wx.GridBagSizer()
 
         # Counter that keeps track of the number of rows containing controls inside this panel
@@ -477,7 +484,7 @@ class StreamPanel(wx.Panel):
         stream = self.stream
         expand_opt = (OPT_BTN_REMOVE | OPT_BTN_VISIBLE | OPT_BTN_UPDATED | OPT_BTN_TINT)
 
-        if self._has_dye(stream ) and not (stream.excitation.readonly or stream.emission.readonly):
+        if self._has_dye(stream) and not (stream.excitation.readonly or stream.emission.readonly):
             expand_opt |= OPT_NAME_EDIT
 
         self._expander = Expander(self, self.stream, options=expand_opt)
@@ -516,6 +523,11 @@ class StreamPanel(wx.Panel):
 
         if self._has_wl(self.stream):
             self._add_wl_controls()
+
+        # FIXME: is this the correct and/or preferred way? Or should this option only be offered on
+        # the Delphi?
+        if isinstance(self.stream, OpticalStream):
+            self._add_optical_override_controls()
 
         # FIXME: only add if some controls are available
         self.control_gbsizer.AddGrowableCol(1)  # This makes the 2nd column's width variable
@@ -777,7 +789,7 @@ class StreamPanel(wx.Panel):
         self._btn_autobc = buttons.ImageTextToggleButton(self._panel, -1,
                                                          img.getbtn_contrastBitmap(),
                                                          label="Auto",
-                                                         size=(68, 26),
+                                                         label_delta=1,
                                                          style=wx.ALIGN_RIGHT)
 
         tooltip = "Toggle auto brightness and contrast"
@@ -985,7 +997,162 @@ class StreamPanel(wx.Panel):
 
         wx.CallAfter(dead_object_wrapper(self._sld_hist.SetContent), norm_hist)
 
+    # ===== For separate Optical stream settings
+
+    def _add_optical_override_controls(self):
+        """ Add controls so optical streams can have their own exposure and power settings """
+
+        hw_light_power_va = self.stream.emitter.power
+        hw_exposure_time_va = self.stream.detector.exposureTime
+
+        st_light_power_va = self.stream.lightPower
+        st_exposure_time_va = self.stream.exposureTime
+
+        line_ctrl = wx.StaticLine(self._panel, size=(-1, 1))
+        self.control_gbsizer.Add(line_ctrl, (self.row_count, 0), span=(1, 3),
+                                 flag=wx.ALL | wx.EXPAND, border=5)
+
+        self.row_count += 1
+
+        msg = "Uncheck to enable custom Exposure time and Power for this stream"
+        ctrls = []
+        # Create Checkbox label and control
+
+        lbl_override = wx.StaticText(self._panel, -1, "Use global settings")
+        lbl_override.SetToolTipString(msg)
+        self.control_gbsizer.Add(lbl_override, (self.row_count, 0), span=(1, 1),
+                                 flag=wx.ALIGN_CENTRE_VERTICAL | wx.ALL, border=5)
+
+        self._chk_override = CheckBox(self._panel, -1, lbl_override)
+        self._chk_override.SetValue(True)  # checked
+        self._chk_override.SetToolTipString(msg)
+        self.control_gbsizer.Add(self._chk_override, (self.row_count, 1), span=(1, 2),
+                                 flag=wx.ALIGN_CENTRE_VERTICAL | wx.ALL, border=5)
+
+        # FIXME: 'useLocalSettings Not implemented yet
+        # override_vac = VigilantAttributeConnector(
+        #     self.stream.useLocalSettings,
+        #     self._chk_override,
+        #     events=wx.EVT_CHECKBOX
+        # )
+
+        self.row_count += 1
+
+        # Create Exposure time control
+
+        if st_exposure_time_va:
+            self.lbl_exposure = wx.StaticText(self._panel, -1, "Exposure time")
+            self.control_gbsizer.Add(self.lbl_exposure, (self.row_count, 0), span=(1, 1),
+                                     flag=wx.ALIGN_CENTRE_VERTICAL | wx.ALL, border=5)
+
+            et_config = HW_SETTINGS_CONFIG['ccd']['exposureTime']
+
+            self._sld_exposure = UnitFloatSlider(
+                self._panel,
+                value=hw_exposure_time_va.value,
+                min_val=et_config["range"][0],
+                max_val=et_config["range"][1],
+                unit=hw_exposure_time_va.unit,
+                scale=et_config["scale"],
+                accuracy=et_config["accuracy"]
+            )
+
+            # Connect the stream exposure time, but immediately pause it, because we listen to the
+            # hardware values by default
+            st_exposure_vac = VigilantAttributeConnector(
+                st_exposure_time_va,
+                self._sld_exposure,
+                events=wx.EVT_SLIDER
+            )
+            st_exposure_vac.pause()
+
+            hw_exposure_vac = VigilantAttributeConnector(
+                hw_exposure_time_va,
+                self._sld_exposure,
+                events=wx.EVT_SLIDER
+            )
+
+            self.control_gbsizer.Add(self._sld_exposure, (self.row_count, 1), span=(1, 2),
+                                     flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
+            ctrls += [self.lbl_exposure, self._sld_exposure]
+            self.row_count += 1
+
+        if hw_light_power_va is not None:
+            self.lbl_power = wx.StaticText(self._panel, -1, "Power")
+            self.control_gbsizer.Add(self.lbl_power, (self.row_count, 0), span=(1, 1),
+                                     flag=wx.ALIGN_CENTRE_VERTICAL | wx.ALL, border=5)
+
+            power_config = HW_SETTINGS_CONFIG['light']['power']
+
+            # Create Power control
+            self._sld_power = UnitFloatSlider(
+                self._panel,
+                value=hw_light_power_va.value,
+                min_val=hw_light_power_va.range[0],
+                max_val=hw_light_power_va.range[1],
+                unit=hw_light_power_va.unit,
+                scale=power_config["scale"],
+                accuracy=4
+            )
+
+            # Connect the stream exposure time, but immediately pause it, because we listen to the
+            # hardware values by default
+            st_power_vac = VigilantAttributeConnector(
+                st_light_power_va,
+                self._sld_power,
+                events=wx.EVT_SLIDER
+            )
+            st_power_vac.pause()
+
+            hw_power_vac = VigilantAttributeConnector(
+                hw_light_power_va,
+                self._sld_power,
+                events=wx.EVT_SLIDER
+            )
+
+            self.control_gbsizer.Add(self._sld_power, (self.row_count, 1), span=(1, 2),
+                                     flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
+
+            ctrls += [self.lbl_power, self._sld_power]
+            self.row_count += 1
+
+        # Create a function for enabling/disabling the slider controls
+
+        def toggle_controls(_=None):
+            """ Enable or disable the stream controls according to the 'use global' checkbox
+
+            When the controls are disabled, they 'follow' the global optical settings.
+
+            """
+
+            for c in ctrls:
+                state = not self._chk_override.GetValue()
+                c.Enable(state)
+                # TODO: Enable showing/hiding of the controls? There are some layout issues.
+                # c.Show(state)
+
+            # If global values are used...
+            if self._chk_override.GetValue():
+                if st_exposure_vac:
+                    st_exposure_vac.pause()
+                    hw_exposure_vac.resume()
+                if st_light_power_va:
+                    st_power_vac.pause()
+                    hw_power_vac.resume()
+            else:
+                if st_exposure_vac:
+                    st_exposure_vac.resume()
+                    hw_exposure_vac.pause()
+                if st_light_power_va:
+                    st_power_vac.resume()
+                    hw_power_vac.pause()
+
+        # Initialize the correct state for the controls
+        toggle_controls()
+        self._chk_override.Bind(wx.EVT_CHECKBOX, toggle_controls)
+
     # ====== For the dyes
+
     def _has_dye(self, stream):
         """
         return True if the stream looks like a stream using dye.
@@ -1014,10 +1181,12 @@ class StreamPanel(wx.Panel):
         self._dye_xwl = None
         self._dye_ewl = None
 
+        self._prev_ewl_center = None # ewl when tint was last changed
+
         # Excitation and emission are:
         # Label + wavelength combo box + peak label + a colour display
         ex_center = fluo.get_one_center_ex(self.stream.excitation.value,
-                                            self.stream.emission.value)
+                                           self.stream.emission.value)
         r = self._add_filter_line(u"Excitation", self.stream.excitation,
                                   ex_center,
                                   self._excitation_2_ctrl,
@@ -1143,8 +1312,6 @@ class StreamPanel(wx.Panel):
         of the centers.
         return (float): wavelength in m
         """
-        # TODO: be clever, and guess which one is most likely based on the other
-        # wavelength? (needs to have 2 versions: excitation and emission)
         if isinstance(band[0], collections.Iterable):
             return fluo.get_center(band[0])
         else:
@@ -1214,12 +1381,30 @@ class StreamPanel(wx.Panel):
             low, high = [int(round(b * 1e9)) for b in (band[0], band[-1])]
             lbl_ctrl.SetToolTipString(tooltip % (low, high))
 
+    def _sync_tint_on_emission(self, ewl, xwl):
+        """
+        Set the tint to the same colour as emission, if no dye has been
+         selected. If a dye is selected, it's dependent on the dye information.
+        ewl ((tuple of) tuple of floats): emission wavelength
+        wwl ((tuple of) tuple of floats): excitation wavelength
+        """
+        if self._dye_ewl is None: # if dye is used, keep the peak wavelength
+            ewl_center = fluo.get_one_center_em(ewl, xwl)
+            if self._prev_ewl_center == ewl_center:
+                return
+            self._prev_ewl_center = ewl_center
+            colour = wave2rgb(ewl_center)
+            logging.debug("Synchronising tint to %s", colour)
+            self.stream.tint.value = colour
+
     def _excitation_2_va(self):
         """
         Called when the text is changed (by the user).
         returns a value to set for the VA
         """
-        return self._txt_excitation.GetClientData(self._txt_excitation.GetSelection())
+        xwl = self._txt_excitation.GetClientData(self._txt_excitation.GetSelection())
+        self._sync_tint_on_emission(self.stream.emission.value, xwl)
+        return xwl
 
     def _excitation_2_ctrl(self, value):
         """
@@ -1236,7 +1421,7 @@ class StreamPanel(wx.Panel):
             logging.error("No existing label found for value %s", value)
 
         if self._dye_xwl is None: # no dye info => use hardware settings
-            colour = wave2rgb(self._get_one_center(value))
+            colour = wave2rgb(fluo.get_one_center_ex(value, self.stream.emission.value))
             self._btn_excitation.set_colour(colour)
         else:
             self._update_peak_label_fit(self._lbl_exc_peak, self._btn_excitation,
@@ -1245,7 +1430,6 @@ class StreamPanel(wx.Panel):
         if self._dye_ewl is None:
             colour = wave2rgb(fluo.get_one_center_em(self.stream.emission.value, value))
             self._btn_emission.set_colour(colour)
-            self.stream.tint.value = colour
 
     def _emission_2_va(self):
         """
@@ -1253,7 +1437,9 @@ class StreamPanel(wx.Panel):
         Also updates the tint as a side-effect.
         returns a value to set for the VA
         """
-        return self._txt_emission.GetClientData(self._txt_emission.GetSelection())
+        ewl = self._txt_emission.GetClientData(self._txt_emission.GetSelection())
+        self._sync_tint_on_emission(ewl, self.stream.excitation.value)
+        return ewl
 
     def _emission_2_ctrl(self, value):
         """
@@ -1270,14 +1456,13 @@ class StreamPanel(wx.Panel):
         if self._dye_ewl is None: # no dye info => use hardware settings
             colour = wave2rgb(fluo.get_one_center_em(value, self.stream.excitation.value))
             self._btn_emission.set_colour(colour)
-            # if dye is used, keep the peak wavelength
-            self.stream.tint.value = colour
         else:
             self._update_peak_label_fit(self._lbl_em_peak, self._btn_emission,
                                         self._dye_ewl, value)
         # also update excitation colour as it's dependent on emission when multiband
-        if self._dye_ewl is None:
+        if self._dye_xwl is None:
             colour = wave2rgb(fluo.get_one_center_ex(self.stream.excitation.value, value))
+            self._btn_excitation.set_colour(colour)
 
     # ===== Wavelength bandwidth for SpectrumSettingsStream
 

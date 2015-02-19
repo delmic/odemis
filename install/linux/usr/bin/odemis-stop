@@ -38,7 +38,12 @@ if [ -n "$BE_PIDS" ]; then
     fi
 fi
 
+RUN_DIR="/var/run/odemisd"
+
 # clean up
-if [ -e /var/run/odemisd ]; then
-    sudo rm -rf /var/run/odemisd/*
+if [ -e "$RUN_DIR" ]; then
+	# try only if there is something worthy to delete (ie, dir is not empty)
+	if ! find "$RUN_DIR" -maxdepth 0 -empty | read v; then
+	    sudo rm -rf "$RUN_DIR"/*
+	fi
 fi

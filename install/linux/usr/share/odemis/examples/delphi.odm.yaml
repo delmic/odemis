@@ -53,9 +53,6 @@ DELPHI: {
     role: e-beam,
     init: {},
     affects: ["BSED Phenom", "Camera"], # affects the CCD in case of cathodoluminescence
-    properties: {
-        bpp: 8,  # 8 bit per pixel by default as it has a much faster refresh rate
-    },
 }
 
 "EBeam focus": {
@@ -66,7 +63,10 @@ DELPHI: {
 
 "BSED Phenom": {
     role: bs-detector,
-    init: {}
+    init: {},
+    properties: {
+        bpp: 8,  # 8 bit per pixel by default as it has a much faster refresh rate
+    },
 }
 
 "Stage Phenom": {

@@ -152,6 +152,7 @@ import numpy
 from odemis.gui import BLEND_DEFAULT, BLEND_SCREEN
 from odemis.gui.comp.overlay.base import WorldOverlay, ViewOverlay
 from odemis.gui.util import call_in_wx_main
+from odemis.gui.util.img import add_alpha_byte
 from odemis.model import DataArray
 from odemis.util import intersect
 from odemis.util.conversion import wxcol_to_frgb
@@ -800,16 +801,12 @@ class BitmapCanvas(BufferedCanvas):
                 if not blend_mode:
                     blend_mode = BLEND_DEFAULT
 
-                if im.shape[2] == 3:
-                    # TODO: Move this code to some utility function
-                    # Create an empty array of the shape x,y,4
-                    new_im = DataArray(numpy.zeros(im.shape[:2] + (4,),
-                                                   dtype=numpy.uint8), im.metadata)
-                    # Copy the data
-                    new_im[:, :, :-1] = im
-                    im = new_im
-                elif im.shape[2] != 4:  # Both ARGB32 and RGB24 need 4 bytes
-                    raise ValueError("Unsupported colour byte size (%s)!" % (im.shape[2],))
+                depth = im.shape[2]
+
+                if depth == 3:
+                    im = add_alpha_byte(im)
+                elif depth != 4:  # Both ARGB32 and RGB24 need 4 bytes
+                    raise ValueError("Unsupported colour byte size (%s)!" % depth)
 
                 im.metadata['dc_center'] = w_pos
                 im.metadata['dc_scale'] = scale
@@ -1011,9 +1008,8 @@ class BitmapCanvas(BufferedCanvas):
         if total_scale_x > 1.0 or total_scale_y > .0:
             # logging.debug("Up scaling required")
 
-            # Make clipping a bit smarter: if very little data is trimmed, it's
-            # better to scale the entire image than to create a slightly smaller
-            # copy first.
+            # If very little data is trimmed, it's better to scale the entire image than to create
+            # a slightly smaller copy first.
             if b_im_rect[2] > intersection[2] * 1.1 or b_im_rect[3] > intersection[3] * 1.1:
 
                 im_data, tl = self._get_sub_img(intersection, b_im_rect, im_data, total_scale)
@@ -1040,9 +1036,6 @@ class BitmapCanvas(BufferedCanvas):
         # Set the filter, so we get low quality but fast scaling
         surfpat.set_filter(cairo.FILTER_FAST)
 
-        # TEST: Changing the order of translate and scale didn't solve the problem
-        # ctx.translate(b_im_rect[0] / total_scale, b_im_rect[1] / total_scale)
-
         x, y, _, _ = b_im_rect
 
         # Translate to the top left position of the image data
@@ -1054,11 +1047,7 @@ class BitmapCanvas(BufferedCanvas):
         # Debug print statement
         # print ctx.get_matrix(), im_data.shape
 
-        # The following method won't work, because we need to set the filter used for scaling.
-        # We're using set_source instead
-        # ctx.set_source_surface(imgsurface)
         ctx.set_source(surfpat)
-
         ctx.set_operator(blend_mode)
 
         if opacity < 1.0:

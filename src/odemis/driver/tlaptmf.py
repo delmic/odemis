@@ -126,7 +126,7 @@ class MFF(model.Actuator):
         port (str): port name (only if sn is not specified)
         axis (str): name of the axis
         inverted (set of str): names of the axes which are inverted (IOW, either
-         empty or the name of the axis) 
+         empty or the name of the axis)
         """
         if (sn is None and port is None) or (sn is not None and port is not None):
             raise ValueError("sn or port argument must be specified (but not both)")
@@ -394,7 +394,7 @@ class MFF(model.Actuator):
                 return # don't change position
 
         # it's read-only, so we change it via _value
-        self.position._value = pos
+        self.position._value = self._applyInversionAbs(pos)
         self.position.notify(self.position.value)
 
     def _waitNoMotion(self, timeout=None):
@@ -421,6 +421,8 @@ class MFF(model.Actuator):
         if not shift:
             return model.InstantaneousFuture()
         self._checkMoveRel(shift)
+        shift = self._applyInversionRel(shift)
+
         # TODO move to the +N next position? (and modulo number of axes)
         raise NotImplementedError("Relative move on enumerated axis not supported")
 
@@ -429,6 +431,7 @@ class MFF(model.Actuator):
         if not pos:
             return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
+        pos = self._applyInversionAbs(pos)
 
         return self._executor.submit(self._doMovePos, pos.values()[0])
 
