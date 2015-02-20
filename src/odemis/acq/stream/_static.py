@@ -44,15 +44,14 @@ class StaticStream(Stream):
         image (DataArray of shape (111)YX): static raw data.
           The metadata should contain at least MD_POS and MD_PIXEL_SIZE.
         """
-        Stream.__init__(self, name, None, None, None)
-        # Check it's 2D
+        # Check it's a 2D data
         if len(image.shape) < 2:
             raise ValueError("Data must be 2D")
         # make it 2D by removing first dimensions (which must 1)
         if len(image.shape) > 2:
             image = img.ensure2DImage(image)
 
-        self.onNewImage(None, image)
+        Stream.__init__(self, name, None, None, None, raw=[image])
 
     def onActive(self, active):
         # don't do anything
@@ -76,7 +75,6 @@ class RGBStream(StaticStream):
         # TODO: use original image as raw, to allow changing the B/C/tint
         # Need to distinguish between greyscale (possible) and colour (impossible)
         self.image = VigilantAttribute(image)
-
 
 class StaticSEMStream(StaticStream):
     """
@@ -159,8 +157,6 @@ class StaticARStream(StaticStream):
         data (model.DataArray of shape (YX) or list of such DataArray). The
          metadata MD_POS and MD_AR_POLE should be provided
         """
-        Stream.__init__(self, name, None, None, None)
-
         if not isinstance(data, collections.Iterable):
             data = [data] # from now it's just a list of DataArray
 
@@ -174,10 +170,8 @@ class StaticARStream(StaticStream):
                 logging.info("Skipping DataArray without known position")
 
         # Cached conversion of the CCD image to polar representation
-        self._polar = {} # dict tuple 2 floats -> DataArray
         # TODO: automatically fill it in a background thread
-
-        self.raw = list(self._sempos.values())
+        self._polar = {} # dict tuple 2 floats -> DataArray
 
         # SEM position displayed, (None, None) == no point selected
         self.point = model.VAEnumerated((None, None),
@@ -191,6 +185,9 @@ class StaticARStream(StaticStream):
                                                   setter=self._setBackground)
         self.background.subscribe(self._onBackground)
 
+        Stream.__init__(self, name, None, None, None,
+                        raw=list(self._sempos.values()))
+
         if self._sempos:
             # Pick one point, e.g., top-left
             bbtl = (min(x for x, y in self._sempos.keys() if x is not None),
@@ -202,6 +199,7 @@ class StaticARStream(StaticStream):
                 except TypeError:
                     return float("inf") # for None, None
             self.point.value = min(self._sempos.keys(), key=dis_bbtl)
+
 
     def _getPolarProjection(self, pos):
         """
@@ -356,8 +354,6 @@ class StaticSpectrumStream(StaticStream):
         MD_WL_POLYNOMIAL should be included in order to associate the C to a
         wavelength.
         """
-        self._calibrated = None # just for the _updateDRange to not complain
-        Stream.__init__(self, name, None, None, None)
         # Spectrum stream has in addition to normal stream:
         #  * information about the current bandwidth displayed (avg. spectrum)
         #  * coordinates of 1st point (1-point, line)
@@ -436,12 +432,8 @@ class StaticSpectrumStream(StaticStream):
         self.background.subscribe(self._onCalib)
         self.selectionWidth.subscribe(self._onSelectionWidth)
 
-        self.raw = [image] # for compatibility with other streams (like saving...)
         self._calibrated = image # the raw data after calibration
-
-        self._updateDRange()
-        self._updateHistogram()
-        self._updateImage()
+        Stream.__init__(self, name, None, None, None, raw=[image])
 
     # The tricky part is we need to keep the raw data as .raw for things
     # like saving the stream or updating the calibration, but all the
