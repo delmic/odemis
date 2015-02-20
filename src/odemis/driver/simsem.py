@@ -411,14 +411,20 @@ class Detector(model.Detector):
             # compute each row and column that will be included
             coord = ([int(round(lt[0] + i * scale[0])) for i in range(res[0])],
                      [int(round(lt[1] + i * scale[1])) for i in range(res[1])])
-            sim_img = self.fake_img[numpy.ix_(coord[1], coord[0])]
+            sim_img = self.fake_img[numpy.ix_(coord[1], coord[0])] # copy
 
             # reduce image depth if requested
-            if self.bpp.value < 16:
-                minv = sim_img.min()
-                maxv = (2 ** self.bpp.value) - 1
-                sim_img -= minv
-                sim_img = numpy.clip(sim_img, 0, maxv)
+            bpp = self.bpp.value
+            if bpp < 16:
+                mind, maxd = sim_img.min(), sim_img.max()
+                maxf = 2 ** bpp - 1
+                b = maxf / (maxd - mind)
+                sim_img -= mind
+                sim_img *= b
+                if bpp <= 8:
+                    sim_img = sim_img.astype(numpy.uint8)
+
+            metadata[model.MD_BPP] = bpp
 
             if scanner.power.value == 0:
                 sim_img[...] = 0 # black it out
@@ -443,7 +449,7 @@ class Detector(model.Detector):
         Thread that simulates the SEM acquisition. It calculates and updates the
         center (e-beam) position based on the translation, imitates the delay according 
         to the dwell time and resolution and provides the new generated output to 
-        the Dataflow. 
+        the Dataflow.
         """
         try:
             while not self._acquisition_must_stop.is_set():
