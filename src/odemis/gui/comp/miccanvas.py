@@ -1472,7 +1472,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         for s in streams:
             # image is always centered, fitting the whole canvas
             wim = img.format_rgba_darray(s.image.value)
-            ims.append((wim, (0, 0), 0.1, False, None, None, None, s.name.value))
+            ims.append((wim, (0, 0), (1, 1), False, None, None, None, s.name.value))
 
         self.set_images(ims)
 
