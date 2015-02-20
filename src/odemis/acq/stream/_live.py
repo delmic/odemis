@@ -28,6 +28,7 @@ from odemis.acq import drift
 from odemis.acq.align import FindEbeamCenter
 from odemis.model import MD_POS, MD_POS_COR, MD_PIXEL_SIZE_COR, \
     MD_ROTATION_COR
+from odemis.model._vattributes import NotApplicableError
 from odemis.util import img, limit_invocation, conversion, fluo
 import time
 
@@ -448,18 +449,23 @@ class CameraStream(Stream):
     def __init__(self, name, detector, dataflow, emitter):
         Stream.__init__(self, name, detector, dataflow, emitter)
 
-        # Create VAs for exposureTime and light power, based on the hardware VA, that can be used
-        # to override the hardware setting on a per stream basis
+        # Create VAs for exposureTime and light power, based on the hardware VA,
+        # that can be used, to override the hardware setting on a per stream basis
+        try:
+            self.exposureTime = model.FloatContinuous(
+                                            detector.exposureTime.value,
+                                            detector.exposureTime.range,
+                                            unit=detector.exposureTime.unit)
+        except (AttributeError, NotApplicableError):
+            pass # no exposureTime or no .range
 
-        self.exposureTime = None if not detector else model.FloatContinuous(
-            detector.exposureTime.value,
-            detector.exposureTime.range,
-            unit=detector.exposureTime.unit
-        )
-
-        self.lightPower = None if not emitter else model.FloatContinuous(emitter.power.value,
-                                                                         emitter.power.range,
-                                                                         unit=emitter.power.unit)
+        if emitter is not None:
+            try:
+                self.lightPower = model.FloatContinuous(emitter.power.value,
+                                                        emitter.power.range,
+                                                        unit=emitter.power.unit)
+            except (AttributeError, NotApplicableError):
+                pass # no power or no .range
 
     def estimateAcquisitionTime(self):
         # exposure time + readout time * pixels (if CCD) + set-up time
