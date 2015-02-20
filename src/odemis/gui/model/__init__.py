@@ -968,13 +968,14 @@ class ContentView(StreamView):
     def _onNewImage(self, im):
         # Don't recenter if a stage move has been requested and on going
         # as view_pos is already at the (expected) final position
-        if self._fstage_move.done():
+        if self._fstage_move.done() and im is not None:
             # Move the center's view to the center of this new image
             try:
                 pos = im.metadata[MD_POS]
             except IndexError:
                 pass
-            self.view_pos.value = pos
+            else:
+                self.view_pos.value = pos
 
         super(ContentView, self)._onNewImage(im)
 
