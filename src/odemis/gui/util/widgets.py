@@ -31,52 +31,15 @@ from odemis.util import units
 import time
 import wx
 
-# FIXME: unused
-def get_all_children(widget, klass=None):
-    """ Recursively get all the child widgets of the given widget
-
-    Results can be filtered by providing a class.
-    """
-
-    result = []
-
-    for w in widget.GetChildren():
-        cl = w.GetChildren()
-
-        if cl:
-            result.extend(get_all_children(w, klass))
-        elif klass is None:
-            result.append(w)
-        elif isinstance(w, klass):
-            result.append(w)
-
-    return result
-
-# FIXME: unused
-def get_sizer_position(window):
-    """ Return the int index value of a given window within its containing sizer
-
-    The window must be contained within a BoxSizer
-    """
-    sizer = window.GetContainingSizer()
-
-    if not sizer or not isinstance(sizer, wx.BoxSizer):
-        return None
-
-    for i, sizer_item in enumerate(sizer.GetChildren()):
-        if sizer_item.IsWindow() and sizer_item.GetWindow() == window:
-            return i
-
-    raise ValueError("Widget not found")
-
 
 class VigilantAttributeConnector(object):
-    """ This class connects a vigilant attribute with a wxPython control,
-    making sure that the changes in one are automatically reflected in the
-    other.
+    """ This class connects a vigilant attribute with a wxPython control, making sure that the
+    changes in one are automatically reflected in the other.
 
-    At the end of the constructor, the value of the VA is assigned to the
-    control!
+    At the end of the constructor, the value of the VA is assigned to the control.
+
+    Important note: The VA is dominant, meaning the after pausing and resuming, it's always the
+    value of the VA that is sent to the control, never the other way around.
 
     """
 
@@ -102,7 +65,8 @@ class VigilantAttributeConnector(object):
 
         # Dead_object_wrapper might need/benefit from recognizing bound methods.
         # Or it can be tough to recognize wxPyDeadObjects being passed as 'self'
-        self.va_2_ctrl = call_in_wx_main_wrapper(dead_object_wrapper(va_2_ctrl or value_ctrl.SetValue))
+        self.va_2_ctrl = call_in_wx_main_wrapper(dead_object_wrapper(va_2_ctrl or
+                                                                     value_ctrl.SetValue))
         self.ctrl_2_va = ctrl_2_va or value_ctrl.GetValue
         if events is None:
             self.change_events = ()
@@ -133,7 +97,6 @@ class VigilantAttributeConnector(object):
 
     def pause(self):
         """ Temporarily prevent VAs from updating controls and controls from updating VAs """
-
         self.paused = True
         self.vigilattr.unsubscribe(self.va_2_ctrl)
 
@@ -214,20 +177,16 @@ class AxisConnector(object):
             future.add_done_callback(self._on_move_done)
 
     @call_in_wx_main
-    def _on_move_done(self, future):
-        """
-        Called after the end of a move
-        """
-        # _on_pos_change() is almost always called as well, but not if the move
-        # was so small that the position didn't change. So need to be separate.
+    def _on_move_done(self, _):
+        """ Process the end of the move """
+        # _on_pos_change() is almost always called as well, but not if the move was so small that
+        #  the position didn't change. That's why this separate method is needed.
         self.value_ctrl.Enable()
         logging.debug("Axis %s finished moving", self.axis)
 
     @call_in_wx_main
     def _on_pos_change(self, positions):
-        """
-        Called when position changes
-        """
+        """ Process a position change """
         position = positions[self.axis]
         logging.debug("Axis has moved to position %g", position)
         self.pos_2_ctrl(position)
@@ -254,13 +213,12 @@ class AxisConnector(object):
 
 
 class ProgessiveFutureConnector(object):
-    """
-    Connects a progressive future to a progress bar
-    """
+    """ Connects a progressive future to a progress bar and label """
+
     def __init__(self, future, bar, label=None):
-        """
-        Update a gauge widget, based on the progress reported by the
+        """ Update a gauge widget and label, based on the progress reported by the
         ProgressiveFuture.
+
         future (ProgressiveFuture)
         bar (gauge): the progress bar widget
         label (TextLabel or None): if given, will also update a the text with
@@ -279,7 +237,7 @@ class ProgessiveFutureConnector(object):
 
         # a repeating timer, always called in the GUI thread
         self._timer = wx.PyTimer(self._update_progress)
-        self._timer.Start(250.0) # 4 Hz
+        self._timer.Start(250.0)  # 4 Hz
 
         # Set the progress bar to 0
         bar.Range = 100
@@ -288,26 +246,28 @@ class ProgessiveFutureConnector(object):
         future.add_update_callback(self._on_progress)
         future.add_done_callback(self._on_done)
 
-    def _on_progress(self, future, start, end):
-        """
-        Callback called during the acquisition to update on its progress
+    def _on_progress(self, _, start, end):
+        """ Process any progression
+
         start (float): time the work started
         end (float): estimated time at which the work is ending
+
         """
+
         self._start = start
         self._end = end
 
     @call_in_wx_main
     def _on_done(self, future):
-        """
-        Called when it's over
-        """
+        """ Process the completion of the future """
         self._timer.Stop()
         if not future.cancelled():
             self._bar.Range = 100
             self._bar.Value = 100
 
     def _update_progress(self):
+        """ Update the progression controls """
+
         now = time.time()
         past = now - self._start
         left = max(0, self._end - now)
