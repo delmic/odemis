@@ -665,19 +665,19 @@ class DelphiStateController(SecomStateController):
         if not self._check_holder_calib():
             return
 
-        self._show_progress_indicators(True)
         self.load_future = self.DelphiLoading()
         self._load_future_connector = ProgessiveFutureConnector(self.load_future,
-                                                                 self._main_frame.gauge_load_time,
-                                                                 self._main_frame.lbl_load_time)
+                                                                self._main_frame.gauge_load_time,
+                                                                self._main_frame.lbl_load_time)
+        self._show_progress_indicators(True)
 
     def _start_chamber_venting(self):
         # On the DELPHI, we also move the optical stage to 0,0 (= reference
         # position), so that referencing will be faster on next load
         self._main_data.aligner.moveAbs({"x": 0, "y": 0})
 
-        self._show_progress_indicators(True)
         super(DelphiStateController, self)._start_chamber_venting()
+        self._show_progress_indicators(True)
 
     def _on_vented(self, future):
         super(DelphiStateController, self)._on_vented(future)

@@ -926,6 +926,14 @@ def __init_resources():
                                     <object class="wxStaticText" name="lbl_load_time">
                                       <label>Load timer</label>
                                       <fg>#E5E5E5</fg>
+                                      <font>
+                                        <size>12</size>
+                                        <style>normal</style>
+                                        <weight>normal</weight>
+                                        <underlined>0</underlined>
+                                        <face>Ubuntu</face>
+                                        <encoding>UTF-8</encoding>
+                                      </font>
                                       <hidden>1</hidden>
                                       <style>wxALIGN_RIGHT</style>
                                       <XRCED>

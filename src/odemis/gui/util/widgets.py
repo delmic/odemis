@@ -320,8 +320,7 @@ class ProgessiveFutureConnector(object):
             # Don't update gauge if ratio reduces
             prev_ratio = self._bar.Value / self._bar.Range
             logging.debug("current ratio %g, old ratio %g", ratio * 100, prev_ratio * 100)
-            if (prev_left is not None and
-                prev_ratio - 0.1 < ratio < prev_ratio):
+            if prev_left is not None and prev_ratio - 0.1 < ratio < prev_ratio:
                 can_update = False
         except ZeroDivisionError:
             pass
@@ -331,7 +330,6 @@ class ProgessiveFutureConnector(object):
             self._bar.Range = 100 * (past + left)
             self._bar.Value = 100 * past
 
-
         if self._future.done():
             # make really sure we don't update the text after the future is over
             return
@@ -339,17 +337,17 @@ class ProgessiveFutureConnector(object):
         # Time left
         left = math.ceil(left) # pessimistic
         # Avoid back and forth estimation => don't increase unless really huge (> 5s)
-        if (prev_left is not None and 0 < left - prev_left < 5):
+        if prev_left is not None and 0 < left - prev_left < 5:
             logging.debug("No updating progress bar as new estimation is %g s "
                           "while the previous was only %g s",
                           left, prev_left)
             return
 
         if left > 2:
-            lbl_txt = "%s left." % units.readable_time(left)
+            lbl_txt = "%s" % units.readable_time(left)
         else:
             # don't be too precise
-            lbl_txt = "a few seconds left."
+            lbl_txt = "almost done"
 
         if self._label is None:
             self._bar.SetToolTipString(lbl_txt)
