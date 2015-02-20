@@ -19,12 +19,14 @@ This file is part of Odemis.
 
 """
 
+from odemis.gui.comp.slider import UnitFloatSlider
+import unittest
 import wx
 
-from odemis.gui.comp.slider import UnitFloatSlider
 import odemis.gui.test as test
-import odemis.model as model
 import odemis.gui.util.widgets as widgets
+import odemis.model as model
+
 
 test.goto_manual()
 
@@ -88,3 +90,6 @@ class ConnectorTestCase(test.GuiTestCase):
         con.resume()
         test.gui_loop(200)
         self.assertEqual(slider.GetValue(), 0.1)
+
+if __name__ == "__main__":
+    unittest.main()
