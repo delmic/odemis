@@ -49,12 +49,14 @@ class Stream(object):
     # Minimum overhead time in seconds when acquiring an image
     SETUP_OVERHEAD = 0.1
 
-    def __init__(self, name, detector, dataflow, emitter):
+    def __init__(self, name, detector, dataflow, emitter, raw=None):
         """
         name (string): user-friendly name of this stream
         detector (Detector): the detector which has the dataflow
         dataflow (Dataflow): the dataflow from which to get the data
         emitter (Emitter): the emitter
+        raw (None or list of DataArrays): raw data to be used at initialisation
+         by default, it will contain no data.
         """
 
         self.name = model.StringVA(name)
@@ -75,7 +77,10 @@ class Stream(object):
         self._running_upd_img = False # to avoid simultaneous updates in different threads
         # list of DataArray received and used to generate the image
         # every time it's modified, image is also modified
-        self.raw = []
+        if raw is None:
+            self.raw = []
+        else:
+            self.raw = raw
         # the most important attribute
         self.image = model.VigilantAttribute(None)
 
@@ -118,6 +123,12 @@ class Stream(object):
         self.intensityRange.clip_on_range = True
         self._updateDRange()
 
+        if self._drange == (0, 255): # 8 bits
+            # It's so similar to RBG, the data doesn't need scaling by default
+            self.intensityRange.value = (0, 255)
+            self.auto_bc.value = False
+            self.auto_bc_outliers.value = 0
+
         # Histogram of the current image _or_ slightly older image.
         # Note it's an ndarray. Use .tolist() to get a python list.
         self.histogram = model.VigilantAttribute(numpy.empty(0), readonly=True)
@@ -138,6 +149,10 @@ class Stream(object):
         # list of warnings to display to the user
         # TODO should be a set
         self.warnings = model.ListVA([]) # should only contain WARNING_*
+
+        # if there is already some data, update image with it
+        if self.raw:
+            self.onNewImage(None, self.raw[-1])
 
     @property
     def emitter(self):
@@ -225,7 +240,11 @@ class Stream(object):
                         drange = (0, depth - 1)
                 except (KeyError, ValueError):
                     try:
-                        depth = self._detector.shape[-1]
+                        if isinstance(self._detector.bpp, model.VigilantAttributeBase):
+                            depth = 2 ** self._detector.bpp.value
+                        else:
+                            depth = self._detector.shape[-1]
+
                         if depth <= 1:
                             logging.warning("Detector %s report a depth of %d",
                                             self._detector.name, depth)
@@ -248,12 +267,17 @@ class Stream(object):
         else:
             # no data, assume it's uint
             try:
-                # The last element of the shape indicates the bit depth, which
-                # is used for brightness/contrast adjustment.
-                depth = self._detector.shape[-1]
+                # If the detector has .bpp, use this info
+                if isinstance(self._detector.bpp, model.VigilantAttributeBase):
+                    depth = 2 ** self._detector.bpp.value
+                else:
+                    # The last element of the shape indicates the bit depth, which
+                    # is used for brightness/contrast adjustment.
+                    depth = self._detector.shape[-1]
+
                 if depth <= 1:
                     logging.warning("Detector %s report a depth of %d",
-                                     self._detector.name, depth)
+                                    self._detector.name, depth)
                     raise ValueError()
                 drange = (0, depth - 1)
             except (AttributeError, IndexError, ValueError):
