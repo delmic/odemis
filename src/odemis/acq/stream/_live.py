@@ -27,8 +27,7 @@ from odemis import model
 from odemis.acq import drift
 from odemis.acq.align import FindEbeamCenter
 from odemis.model import MD_POS, MD_POS_COR, MD_PIXEL_SIZE_COR, \
-    MD_ROTATION_COR
-from odemis.model._vattributes import NotApplicableError
+    MD_ROTATION_COR, NotApplicableError
 from odemis.util import img, limit_invocation, conversion, fluo
 import time
 
