@@ -911,6 +911,8 @@ class DelphiStateController(SecomStateController):
                 move_to_overview.add_update_callback(self.on_step_update)
                 move_to_overview.result()
 
+                # TODO: check whether the loading was cancelled and stop if so.
+
                 # Move to stage to center to be at a good position in overview
                 f = self._main_data.stage.moveAbs(DELPHI_OVERVIEW_POS)
                 f.result()  # to be sure referencing doesn't cancel the move
@@ -932,6 +934,10 @@ class DelphiStateController(SecomStateController):
                 move_to_sem.add_update_callback(self.on_step_update)
                 move_to_sem.result()
 
+                # FIXME: don't mess with the GUI in this Future. => move all the
+                # reset code to a callback for when the pressure is reached
+                # (ie, the sample is loaded).
+                # In particular, this seems to be running in the wrong wx thread
                 self._show_progress_indicators(False)
                 # reset the streams to avoid having data from the previous sample
                 self._reset_streams()
@@ -959,6 +965,7 @@ class DelphiStateController(SecomStateController):
             if future._delphi_load_state == FINISHED:
                 return False
             future._delphi_load_state = CANCELLED
+            # TODO: actually stop what is current happening
             logging.debug("Delphi loading cancelled.")
 
         return True
