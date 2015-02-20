@@ -314,8 +314,7 @@ class Slider(BaseSlider):
         dc.SetPen(wx.Pen(fgc, 1))
 
         # Main line
-        dc.DrawLine(self.half_h_width, half_height,
-                    width - self.half_h_width, half_height)
+        dc.DrawLine(self.half_h_width, half_height, width - self.half_h_width, half_height)
 
         # ticks
         steps = [v / 10 for v in range(1, 10)]

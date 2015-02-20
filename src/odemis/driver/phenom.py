@@ -647,17 +647,25 @@ class Detector(model.Detector):
         with self.parent._acq_progress_lock:
             # Actual range in Phenom is (0,4]
             contr = numpy.clip(4 * value, 0.00001, 4)
-            self.parent._device.SetSEMContrast(contr)
+            try:
+                self.parent._device.SetSEMContrast(contr)
+            except suds.WebFault:
+                logging.debug("Setting SEM contrast may be unsuccesful")
+
 
     def _onBrightness(self, value):
         with self.parent._acq_progress_lock:
-            self.parent._device.SetSEMBrightness(value)
+            try:
+                self.parent._device.SetSEMBrightness(value)
+            except suds.WebFault:
+                logging.debug("Setting SEM brightness may be unsuccesful")
 
     def _updateContrast(self):
         """
         Reads again the hardware setting and update the VA
         """
         contr = (self.parent._device.GetSEMContrast() / 4)
+        contr = self.contrast.clip(contr)
 
         # we don't set it explicitly, to avoid calling .onContrast()
         self.contrast._value = contr
@@ -668,6 +676,7 @@ class Detector(model.Detector):
         Reads again the hardware setting and update the VA
         """
         bright = self.parent._device.GetSEMBrightness()
+        bright = self.brightness.clip(bright)
 
         # we don't set it explicitly, to avoid calling .onBrightness()
         self.brightness._value = bright
@@ -716,9 +725,10 @@ class Detector(model.Detector):
 
         # Update all Detector VAs
         contr = (self._acq_device.GetSEMContrast() / 4)
-        self.parent._detector.contrast.value = contr
+        # Handle cases where Phenom returns weird values
+        self.parent._detector.contrast.value = self.parent._detector.contrast.clip(contr)
         bright = self._acq_device.GetSEMBrightness()
-        self.parent._detector.brightness.value = bright
+        self.parent._detector.brightness.value = self.parent._detector.brightness.clip(bright)
 
     def start_acquire(self, callback):
         # Check if Phenom is in the proper mode
