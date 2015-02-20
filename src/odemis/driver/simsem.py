@@ -311,6 +311,13 @@ class Detector(model.Detector):
         data_depth = idt.max - idt.min + 1
         self._shape = (data_depth,) # only one point
 
+        # 8 or 16 bits image
+        if data_depth == 255:
+            bpp = 8
+        else:
+            bpp = 16
+        self.bpp = model.IntEnumerated(bpp, set([8, 16]))
+
         self.drift_factor = 1  # dummy value for drift in pixels
         self.current_drift = 0
         # Given that max resolution is half the shape of fake_img,
@@ -328,6 +335,14 @@ class Detector(model.Detector):
 
     def getMetadata(self):
         return self.parent.getMetadata()
+
+    @isasync
+    def applyAutoContrast(self):
+        """
+        (Simulation of) run the calibration for the brightness/contrast.
+        (Identical interface as the phenom driver)
+        """
+        return model.InstantaneousFuture()
 
     def start_acquire(self, callback):
         with self._acquisition_lock:
@@ -399,9 +414,9 @@ class Detector(model.Detector):
             sim_img = self.fake_img[numpy.ix_(coord[1], coord[0])]
 
             # reduce image depth if requested
-            if metadata.get(model.MD_BPP, 16) < 16:
+            if self.bpp.value < 16:
                 minv = sim_img.min()
-                maxv = (2 ** metadata[model.MD_BPP]) - 1
+                maxv = (2 ** self.bpp.value) - 1
                 sim_img -= minv
                 sim_img = numpy.clip(sim_img, 0, maxv)
 
