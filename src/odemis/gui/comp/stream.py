@@ -786,7 +786,7 @@ class StreamPanel(wx.Panel):
         """
         # ====== Top row, auto contrast toggle button
 
-        self._btn_autobc = buttons.ImageTextToggleButton(self._panel, -1,
+        self._btn_autobc = buttons.ImageTextToggleButton(self._panel, wx.ID_ANY,
                                                          img.getbtn_contrastBitmap(),
                                                          label="Auto",
                                                          label_delta=1,
@@ -1481,7 +1481,7 @@ class StreamPanel(wx.Panel):
                                                 wx.ID_ANY,
                                                 img.getbtn_spectrumBitmap(),
                                                 label="RGB",
-                                                size=(68, 26),
+                                                label_delta=1,
                                                 style=wx.ALIGN_RIGHT)
         tooltip = "Toggle sub-bandwidths to Blue/Green/Red display"
         self._btn_fit_rgb.SetToolTipString(tooltip)
