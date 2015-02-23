@@ -30,6 +30,7 @@ from __future__ import division
 from abc import ABCMeta
 import collections
 from collections import OrderedDict
+from functools import partial
 import logging
 import numbers
 import time
@@ -38,12 +39,15 @@ from wx.lib.pubsub import pub
 
 from odemis import model, util
 import odemis.dataio
+from odemis.gui.comp.buttons import ImageTextToggleButton
 from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.file import EVT_FILE_SELECT
 from odemis.gui.comp.slider import UnitFloatSlider
 from odemis.gui.conf.data import HW_SETTINGS_CONFIG, HW_SETTINGS_CONFIG_PER_ROLE
 from odemis.gui.conf.util import determine_default_control, choice_to_str, \
     bind_setting_context_menu, label_to_human, get_va_meta
+import odemis.gui.img.data as img
+from odemis.gui.model import CHAMBER_UNKNOWN, CHAMBER_VACUUM, STATE_ON
 import odemis.gui.util
 from odemis.gui.util.widgets import VigilantAttributeConnector, AxisConnector
 from odemis.model import getVAs, VigilantAttributeBase
@@ -156,12 +160,14 @@ class SettingsController(object):
 
     __metaclass__ = ABCMeta
 
-    def __init__(self, fold_panel_item, default_msg, highlight_change=False):
+    def __init__(self, fold_panel_item, default_msg, highlight_change=False, tab_data=None):
 
         self.panel = SettingsPanel(fold_panel_item, default_msg=default_msg)
         fold_panel_item.add_item(self.panel)
 
         self.highlight_change = highlight_change
+        self.tab_data = tab_data
+
         self.num_entries = 0
         self.entries = []  # list of SettingEntry
 
@@ -514,7 +520,7 @@ class SettingsController(object):
         label = conf.get('label', label_to_human(name))
         # Add the label to the panel
         lbl_ctrl = wx.StaticText(self.panel, -1, u"%s" % label)
-        self.panel._gb_sizer.Add(lbl_ctrl, (self.panel.num_rows, 0),
+        self.panel.gb_sizer.Add(lbl_ctrl, (self.panel.num_rows, 0),
                                  flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
 
         logging.debug("Adding Axis control %s", label)
@@ -608,7 +614,7 @@ class SettingsController(object):
                                   pos_2_ctrl=cb_set, ctrl_2_pos=cb_get,
                                   events=(wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER))
 
-        self.panel._gb_sizer.Add(value_ctrl, (self.panel.num_rows, 1),
+        self.panel.gb_sizer.Add(value_ctrl, (self.panel.num_rows, 1),
                                  flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
                                  border=5)
 
@@ -634,9 +640,8 @@ class SettingsController(object):
             span = wx.DefaultSpan
 
         for i, w in enumerate(wdg):
-            self.panel._gb_sizer.Add(w, (self.panel.num_rows, i), span=span,
-                               flag=wx.ALL | wx.EXPAND,
-                               border=5)
+            self.panel.gb_sizer.Add(w, (self.panel.num_rows, i), span=span,
+                                     flag=wx.ALL | wx.EXPAND, border=5)
         self.panel.num_rows += 1
 
     def add_metadata(self, key, value):
@@ -676,11 +681,59 @@ class SettingsController(object):
 
         self.panel.add_readonly_field(label, nice_str)
 
+    @staticmethod
+    def _on_chamber_state(state, btn):
+        """ Handle changes in chamber state """
+        if state in (CHAMBER_UNKNOWN, CHAMBER_VACUUM):
+            btn.Enable()
+        else:
+            btn.Disable()
+
     def add_bc_control(self, detector):
-        """
-        Add Hw brightness/contrast control
-        """
-        pass # TODO
+        """ Add Hw brightness/contrast control """
+
+        # Create the widgets
+
+        btn_autoadjust = ImageTextToggleButton(
+            self.panel,
+            wx.ID_ANY,
+            img.getbtn_contr_wideBitmap(),
+            label="Auto adjust",
+            label_delta=1,
+            size=(104, -1),
+            style=wx.ALIGN_RIGHT
+        )
+        btn_autoadjust.SetBitmaps(
+            bmp_h=img.getbtn_contr_wide_hBitmap(),
+            bmp_sel=img.getbtn_contr_wide_aBitmap()
+        )
+        btn_autoadjust.SetForegroundColour(wx.BLACK)
+
+        # Add the widgets to the panel
+        self.panel.gb_sizer.Add(btn_autoadjust, (self.panel.num_rows, 0), border=5,
+                                flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL)
+        self.panel.num_rows += 1
+
+        # Using a partial function here to prevent having to create a 'useless' button attribute.
+        # We still need the method, because we need a reference to keep the subscription active.
+        self._on_chamber_state = partial(self._on_chamber_state, btn=btn_autoadjust)
+        self.tab_data.main.chamberState.subscribe(self._on_chamber_state, init=True)
+
+        def adjust_done(_):
+            """ Callback that enables and untoggles the 'auto adjust' contrast button """
+            btn_autoadjust.SetToggle(False)
+            btn_autoadjust.SetLabel("Auto adjust")
+            btn_autoadjust.Enable()
+
+        def auto_adjust(_):
+            """ Call the auto contrast method on the detector if it's not already running """
+            if not btn_autoadjust.up:
+                f = detector.applyAutoContrast()
+                btn_autoadjust.SetLabel("Adjusting...")
+                btn_autoadjust.Disable()
+                f.add_done_callback(adjust_done)
+
+        btn_autoadjust.Bind(wx.EVT_BUTTON, auto_adjust)
 
     def on_setting_changed(self, evt):
         logging.debug("Setting has changed")
@@ -775,6 +828,7 @@ class SettingsBarController(object):
 
         # Re-order the VAs of the component in the same order as in the config
         vas_config_names = list(vas_config.keys())
+
         def index_in_config(va_def):
             """ return the position of the VA name in vas_config """
             n, va = va_def
@@ -810,11 +864,14 @@ class SecomSettingsController(SettingsBarController):
         main_data = tab_data.main
 
         self._sem_panel = SemSettingsController(parent_frame.fp_settings_secom_sem,
-                                                "No SEM found", highlight_change)
+                                                "No SEM found",
+                                                highlight_change,
+                                                tab_data)
 
         self._optical_panel = OpticalSettingsController(parent_frame.fp_settings_secom_optical,
                                                         "No optical microscope found",
-                                                        highlight_change)
+                                                        highlight_change,
+                                                        tab_data)
 
         # Add the components based on what is available
         # TODO: move it to a separate thread to save time at init?
@@ -835,8 +892,7 @@ class SecomSettingsController(SettingsBarController):
             # TODO: check if detector has a .applyAutoContrast() method, instead
             # of detecting indirectly via the presence of .bpp.
             det = main_data.sed or main_data.bsd
-            if (det and hasattr(det, "bpp")
-                and isinstance(det.bpp, VigilantAttributeBase)):
+            if det and hasattr(det, "bpp") and isinstance(det.bpp, VigilantAttributeBase):
                 self._sem_panel.add_bc_control(det)
 
 
@@ -848,7 +904,8 @@ class LensAlignSettingsController(SettingsBarController):
 
         self._sem_panel = SemSettingsController(parent_frame.fp_lens_sem_settings,
                                                 "No SEM found",
-                                                highlight_change)
+                                                highlight_change,
+                                                tab_data)
 
         self._optical_panel = OpticalSettingsController(parent_frame.fp_lens_opt_settings,
                                                         "No optical microscope found",

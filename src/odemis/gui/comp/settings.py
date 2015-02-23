@@ -60,8 +60,8 @@ class SettingsPanel(wx.Panel):
         # The main sizer is used to create a margin on the inside of the panel
         self._main_sizer = wx.BoxSizer(wx.VERTICAL)
         # The GridBagSizer is use to create a 2-column lay-out for the settings controls
-        self._gb_sizer = wx.GridBagSizer()
-        self._gb_sizer.SetEmptyCellSize((0, 0))
+        self.gb_sizer = wx.GridBagSizer()
+        self.gb_sizer.SetEmptyCellSize((0, 0))
 
         # The default message text is added here, because at least control needs to be present
         # before the growable column can be added.
@@ -71,17 +71,17 @@ class SettingsPanel(wx.Panel):
         self.set_default_message(default_msg)
 
         # Make the 2nd column expand
-        self._gb_sizer.AddGrowableCol(1)
+        self.gb_sizer.AddGrowableCol(1)
 
         self.SetSizer(self._main_sizer)
-        self._main_sizer.Add(self._gb_sizer, proportion=1, flag=wx.ALL | wx.EXPAND, border=5)
+        self._main_sizer.Add(self.gb_sizer, proportion=1, flag=wx.ALL | wx.EXPAND, border=5)
 
     def set_default_message(self, msg):
         """ Set the default message in the settings panel """
 
         if not self.message_ctrl:
             self.message_ctrl = wx.StaticText(self, -1, msg)
-            self._gb_sizer.Add(self.message_ctrl, (0, 0), (1, 2))
+            self.gb_sizer.Add(self.message_ctrl, (0, 0), (1, 2))
             self.num_rows = 1
         else:
             self.message_ctrl.SetLabel(msg)
@@ -112,8 +112,8 @@ class SettingsPanel(wx.Panel):
 
         # Create label
         lbl_ctrl = wx.StaticText(self, -1, unicode(label_text))
-        self._gb_sizer.Add(lbl_ctrl, (self.num_rows, 0),
-                           flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
+        self.gb_sizer.Add(lbl_ctrl, (self.num_rows, 0),
+                          flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
 
         return lbl_ctrl
 
@@ -121,8 +121,8 @@ class SettingsPanel(wx.Panel):
     def add_divider(self):
         """ Add a horizontal divider to the panel """
         line_ctrl = wx.StaticLine(self, size=(-1, 1))
-        self._gb_sizer.Add(line_ctrl, (self.num_rows, 0), span=(1, 2),
-                           flag=wx.ALL | wx.EXPAND, border=5)
+        self.gb_sizer.Add(line_ctrl, (self.num_rows, 0), span=(1, 2),
+                          flag=wx.ALL | wx.EXPAND, border=5)
 
     @control_bookkeeper
     def add_readonly_field(self, label_text, value=None, selectable=True):
@@ -144,12 +144,12 @@ class SettingsPanel(wx.Panel):
                                          style=wx.BORDER_NONE | wx.TE_READONLY)
                 value_ctrl.SetForegroundColour(gui.FG_COLOUR_DIS)
                 value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
-                self._gb_sizer.Add(value_ctrl, (self.num_rows, 1),
-                                   flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
+                self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
+                                  flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
             else:
                 value_ctrl = wx.StaticText(self, label=unicode(value))
                 value_ctrl.SetForegroundColour(gui.FG_COLOUR_DIS)
-                self._gb_sizer.Add(value_ctrl, (self.num_rows, 1), flag=wx.ALL, border=5)
+                self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), flag=wx.ALL, border=5)
         else:
             value_ctrl = None
 
@@ -175,8 +175,8 @@ class SettingsPanel(wx.Panel):
         else:
             value_ctrl.SetForegroundColour(gui.FG_COLOUR_EDIT)
         value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
-        self._gb_sizer.Add(value_ctrl, (self.num_rows, 1),
-                           flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
+        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
+                          flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
 
         return lbl_ctrl, value_ctrl
 
@@ -192,8 +192,8 @@ class SettingsPanel(wx.Panel):
 
         lbl_ctrl = self._add_side_label(label_text)
         value_ctrl = UnitIntegerSlider(self, value=value, **conf)
-        self._gb_sizer.Add(value_ctrl, (self.num_rows, 1),
-                           flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
+        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
+                          flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
 
         return lbl_ctrl, value_ctrl
 
@@ -209,8 +209,8 @@ class SettingsPanel(wx.Panel):
 
         lbl_ctrl = self._add_side_label(label_text)
         value_ctrl = UnitFloatSlider(self, value=value, **conf)
-        self._gb_sizer.Add(value_ctrl, (self.num_rows, 1),
-                           flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
+        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
+                          flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
 
         return lbl_ctrl, value_ctrl
 
@@ -242,8 +242,8 @@ class SettingsPanel(wx.Panel):
 
         lbl_ctrl = self._add_side_label(label_text)
         value_ctrl = klass(self, value=value, style=wx.NO_BORDER, **conf)
-        self._gb_sizer.Add(value_ctrl, (self.num_rows, 1),
-                           flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
+        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
+                          flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
         value_ctrl.SetForegroundColour(gui.FG_COLOUR_EDIT)
         value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
 
@@ -263,8 +263,8 @@ class SettingsPanel(wx.Panel):
 
         lbl_ctrl = self._add_side_label(label_text)
         value_ctrl = GraphicalRadioButtonControl(self, -1, style=wx.NO_BORDER, **conf)
-        self._gb_sizer.Add(value_ctrl, (self.num_rows, 1),
-                           flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
+        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
+                          flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
         if value is not None:
             value_ctrl.SetValue(value)
 
@@ -286,8 +286,8 @@ class SettingsPanel(wx.Panel):
         value_ctrl = ComboBox(self, wx.ID_ANY, pos=(0, 0), size=(-1, 16),
                               style=wx.NO_BORDER | wx.TE_PROCESS_ENTER, **conf)
 
-        self._gb_sizer.Add(value_ctrl, (self.num_rows, 1),
-                           flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
+        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
+                          flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
 
         # TODO: move this to ComboBox?
         def _eat_event(evt):
@@ -322,10 +322,10 @@ class SettingsPanel(wx.Panel):
         value_ctrl.SetForegroundColour(gui.FG_COLOUR_EDIT)
         value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
 
-        self._gb_sizer.Add(value_ctrl,
-                           (self.num_rows, 1),
-                           flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
-                           border=5)
+        self.gb_sizer.Add(value_ctrl,
+                          (self.num_rows, 1),
+                          flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
+                          border=5)
 
         return lbl_ctrl, value_ctrl
 
