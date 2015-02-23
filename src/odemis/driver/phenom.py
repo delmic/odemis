@@ -37,6 +37,8 @@ import time
 import weakref
 from numpy.linalg import norm
 from odemis.model import HwError
+from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
+    RUNNING
 
 # The Phenom API relies on the SOAP protocol. One good thing is that the standard
 # Phenom GUI uses it. So anything the GUI can do can be performed via the
@@ -1616,6 +1618,10 @@ class ChamberPressure(model.Actuator):
         est_start = time.time() + 0.1
         f = model.ProgressiveFuture(start=est_start,
                                     end=est_start + self._estimateMoveTime())
+        f._move_state = RUNNING
+
+        # Task to run
+        f.task_canceller = self._CancelMove
         f._move_lock = threading.Lock()
 
         return self._executor.submitf(f, self._changePressure, f, pos)
@@ -1667,7 +1673,9 @@ class ChamberPressure(model.Actuator):
                     semmod = self._pressure_device.GetSEMDeviceMode()
                     if semmod not in ("SEM-MODE-BLANK", "SEM-MODE-IMAGING"):
                         # If in standby or currently waking up, open event channel
-                        self._wakeUp()
+                        self._wakeUp(future)
+                    if future._move_state == CANCELLED:
+                        raise CancelledError()
                     try:
                         self._pressure_device.SelectImagingDevice(self._imagingDevice.SEMIMDEV)
                     except suds.WebFault:
@@ -1685,7 +1693,9 @@ class ChamberPressure(model.Actuator):
                     # try to move to the SEM.
                     semmod = self._pressure_device.GetSEMDeviceMode()
                     if semmod not in ("SEM-MODE-BLANK", "SEM-MODE-IMAGING"):
-                        self._wakeUp()
+                        self._wakeUp(future)
+                    if future._move_state == CANCELLED:
+                        raise CancelledError()
                     self._pressure_device.SelectImagingDevice(self._imagingDevice.NAVCAMIMDEV)
                     TimeUpdater.cancel()
                     # Wait for NavCam
@@ -1734,7 +1744,7 @@ class ChamberPressure(model.Actuator):
         if not self.registeredSampleHolder.value:
             raise ValueError("Wrong sample holder registration code")
 
-    def _wakeUp(self):
+    def _wakeUp(self, future):
         # Make sure system is waking up
         self.parent._device.SetInstrumentMode("INSTRUMENT-MODE-OPERATIONAL")
         eventSpecArray = self.parent._objects.create('ns0:EventSpecArray')
@@ -1749,6 +1759,8 @@ class ChamberPressure(model.Actuator):
         ch_id = self._pressure_device.OpenEventChannel(eventSpecArray)
 
         while(True):
+            if future._move_state == CANCELLED:
+                break
             self.wakeUpTime = self._pressure_device.ReadEventChannel(ch_id)[0][0].SEMProgressDeviceModeChanged.timeRemaining
             logging.debug("Time to wake up: %f seconds", self.wakeUpTime)
             if self.wakeUpTime == 0:
@@ -1896,3 +1908,18 @@ class ChamberPressure(model.Actuator):
         finally:
             logging.debug("Phenom reconnection attempt thread closed")
             self._reconnection_must_stop.clear()
+
+    def _CancelMove(self, future):
+        """
+        Canceller of _changePressure task.
+        """
+        logging.debug("Cancelling chamber move...")
+
+        with future._move_lock:
+            if future._move_state == FINISHED:
+                return False
+            future._move_state = CANCELLED
+            # TODO: actually stop what is current happening
+            logging.debug("Delphi chamber move cancelled.")
+
+        return True
