@@ -419,7 +419,7 @@ class AlignedSEMStream(SEMStream):
                     shift = (0, 0)  # just in case of failure
                     shift = FindEbeamCenter(self._ccd, self._detector, self._emitter)
             except LookupError:
-                logging.error("Failed to locate the ebeam center, SEM image will not be aligned")
+                logging.warning("Failed to locate the ebeam center, SEM image will not be aligned")
             except Exception:
                 logging.exception("Failure while looking for the ebeam center")
             else:
