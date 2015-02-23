@@ -43,6 +43,7 @@ from odemis.acq._futures import executeTask
 import threading
 from odemis.gui.util.widgets import ProgressiveFutureConnector
 from odemis.acq import _futures
+from odemis.model._futures import InstantaneousFuture
 
 # Sample holder types in the Delphi, as defined by Phenom World
 PHENOM_SH_TYPE_STANDARD = 1  # standard sample holder
@@ -291,7 +292,7 @@ class SecomStateController(MicroscopeStateController):
             self._vacuum_pressure = min(pressures.keys())
             self._vented_pressure = max(pressures.keys())
 
-            self._chamber_future = None # used when venting/pumping
+            self._chamber_future = InstantaneousFuture()  # used when venting/pumping
 
             # if there is an overview camera, _and_ it has to be reached via a
             # special "pressure" state => note it down
@@ -485,9 +486,11 @@ class SecomStateController(MicroscopeStateController):
         # Actually start the pumping/venting
         if state == CHAMBER_PUMPING:
             # in case the chamber was venting, or has several queued move, will reset everything
+            self._chamber_future.cancel()
             self._main_data.chamber.stop()
             self._start_chamber_pumping()
         elif state == CHAMBER_VENTING:
+            self._chamber_future.cancel()
             self._main_data.chamber.stop()
             self._start_chamber_venting()
 
