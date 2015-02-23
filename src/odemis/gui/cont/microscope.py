@@ -50,10 +50,6 @@ PHENOM_SH_TYPE_STANDARD = 1  # standard sample holder
 PHENOM_SH_TYPE_OPTICAL = 1023  # sample holder for the Delphi, containing a lens
 
 DELPHI_OVERVIEW_POS = {"x": 0, "y": 0}  # good position of the stage for overview
-DELPHI_LOADING_TIMES = (80, 75, 0)  # Initial time estimation (80), time remaining after
-                                    # moving to overview (75), time for the rest
-                                    # of the steps while moving to SEM (0)
-
 
 
 class MicroscopeStateController(object):
@@ -291,6 +287,8 @@ class SecomStateController(MicroscopeStateController):
             self._vacuum_pressure = min(pressures.keys())
             self._vented_pressure = max(pressures.keys())
 
+            self._chamber_future = None # used when venting/pumping
+
             # if there is an overview camera, _and_ it has to be reached via a
             # special "pressure" state => note it down
             if self._main_data.overview_ccd:
@@ -309,6 +307,17 @@ class SecomStateController(MicroscopeStateController):
             # (which will indirectly first acquire an image)
             if ch_pos.value["pressure"] == self._overview_pressure:
                 self._main_data.chamberState.value = CHAMBER_PUMPING
+
+    def _show_progress_indicators(self, show):
+        """
+        Show or hide the loading progress indicators for the chamber and sample holder
+
+        The hw status text will be hidden if the progress indicators are shown.
+        """
+        self._main_frame.gauge_load_time.Show(show)
+        self._main_frame.lbl_load_time.Show(show)
+        self._main_frame.lbl_load_status.Show(not show)
+        self._main_frame.pnl_hw_info.Parent.Layout()
 
     # TODO: move to acq.stream (because there is nothing we can do better here)
     def _onOpticalState(self, state):
@@ -454,8 +463,7 @@ class SecomStateController(MicroscopeStateController):
             f.add_done_callback(self._on_vacuum)
 
         # TODO: if the future is a progressiveFuture, it will provide info
-        # on when it will finish => display that (in the tooltip of the chamber
-        # button)
+        # on when it will finish => display that in the progress bar. cf Delphi
 
         # reset the streams to avoid having data from the previous sample
         self._reset_streams()
@@ -475,15 +483,13 @@ class SecomStateController(MicroscopeStateController):
             s.should_update.value = False
 
         self._set_ebeam_power(False)
-        f = self._main_data.chamber.moveAbs({"pressure": self._vented_pressure})
-        self._unload_future_connector = ProgessiveFutureConnector(f,
-                                                                  self._main_frame.gauge_load_time,
-                                                                  self._main_frame.lbl_load_time)
-        f.add_done_callback(self._on_vented)
-
-    @call_in_wx_main
-    def _on_vent_update(self, past, left):
-        self._main_frame.lbl_load_time.SetLabel(str(left))
+        self._chamber_future = self._main_data.chamber.moveAbs({"pressure": self._vented_pressure})
+        # Will actually be displayed only if the hw_info is shown
+        self._chamber_fc = ProgessiveFutureConnector(self._chamber_future,
+                                              self._main_frame.gauge_load_time,
+                                              self._main_frame.lbl_load_time,
+                                              full=False)
+        self._chamber_future.add_done_callback(self._on_vented)
 
     def _on_vented(self, future):
         self.on_chamber_pressure(self._main_data.chamber.position.value)
@@ -619,6 +625,7 @@ class DelphiStateController(SecomStateController):
 
         # Display the panel with the loading progress indicators
         self._main_frame.pnl_hw_info.Show()
+        self._main_frame.lbl_load_status.SetLabel("") # TODO: handle in a separate code
 
         # If starts with the sample fully loaded, check for the calibration now
         ch_pos = self._main_data.chamber.position
@@ -630,32 +637,6 @@ class DelphiStateController(SecomStateController):
         # Progress dialog for calibration
         self._dlg = None
 
-    def _show_progress_indicators(self, show):
-        """ Show or hide the loading progress indicators for the chamber and sample holder
-
-        The loading status text will be hidden if the progress indicators are shown.
-
-        """
-
-        self._main_frame.gauge_load_time.Show(show)
-        self._main_frame.lbl_load_time.Show(show)
-        if show:
-            self._main_frame.lbl_load_status.Show(False)
-        self._main_frame.gauge_load_time.Parent.Layout()
-
-    def _show_progress_status(self, show):
-        """ Show or hide the loading status text
-
-        The loading progress controls will be hidden if the status is shown.
-
-        """
-
-        if show:
-            self._main_frame.gauge_load_time.Show(False)
-            self._main_frame.lbl_load_time.Show(False)
-        self._main_frame.lbl_load_status.Show(show)
-        self._main_frame.lbl_load_status.Parent.Layout()
-
     def _start_chamber_pumping(self):
         # Warning: if the sample holder is not yet registered, the Phenom will
         # not accept to even load it to the overview. That's why checking for
@@ -665,11 +646,27 @@ class DelphiStateController(SecomStateController):
         if not self._check_holder_calib():
             return
 
-        self.load_future = self.DelphiLoading()
-        self._load_future_connector = ProgessiveFutureConnector(self.load_future,
-                                                                self._main_frame.gauge_load_time,
-                                                                self._main_frame.lbl_load_time)
+        self._chamber_future = self.DelphiLoading()
+        self._chamber_fc = ProgessiveFutureConnector(self._chamber_future,
+                                            self._main_frame.gauge_load_time,
+                                            self._main_frame.lbl_load_time,
+                                            full=False)
         self._show_progress_indicators(True)
+
+        # reset the streams to avoid having data from the previous sample
+        self._reset_streams()
+
+        # Empty the stage history, as the interesting locations on the previous
+        # sample have probably nothing in common with this new sample
+        self._tab_data.stage_history.value = []
+
+        self._chamber_future.add_done_callback(self._on_vacuum)
+
+    @call_in_wx_main
+    def _on_vacuum(self, future):
+        """ Called when the vacuum is reached (ie, the future ended) """
+        super(DelphiStateController, self)._on_vacuum(future)
+        self._show_progress_indicators(False)
 
     def _start_chamber_venting(self):
         # On the DELPHI, we also move the optical stage to 0,0 (= reference
@@ -679,6 +676,7 @@ class DelphiStateController(SecomStateController):
         super(DelphiStateController, self)._start_chamber_venting()
         self._show_progress_indicators(True)
 
+    @call_in_wx_main
     def _on_vented(self, future):
         super(DelphiStateController, self)._on_vented(future)
         self._show_progress_indicators(False)
@@ -862,10 +860,15 @@ class DelphiStateController(SecomStateController):
         calib_dialog.Center()
         calib_dialog.ShowModal()
 
-
-# TODO SparcStateController?
-#     "spectrometer": ("specState", HardwareButtonController),
-#     "angular": ("arState", HardwareButtonController),
+    # Rough approximation of the times of each loading action:
+    # * 5 sec to load to NavCam (will be much longer if Phenom is in stand-by)
+    # * 2 s for moving to the stage center
+    # * 1 s for loading the calibration value
+    # * 5 s for referencing the optical stage
+    # * 2 s for overview acquisition
+    # * 10 sec for alignment and overview acquisition
+    # * 65 sec from NavCam to SEM
+    DELPHI_LOADING_TIMES = (5, 2, 1, 5, 2, 65) # s
 
     def DelphiLoading(self):
         """
@@ -876,8 +879,12 @@ class DelphiStateController(SecomStateController):
         # Create ProgressiveFuture and update its state to RUNNING
         est_start = time.time() + 0.1
         f = model.ProgressiveFuture(start=est_start,
-                                    end=est_start + self.estimateDelphiLoading())
-        f._delphi_load_state = RUNNING
+                                    end=est_start + sum(self.DELPHI_LOADING_TIMES))
+        # will contain a future to cancel or CANCELLED or FINISHED
+        f._delphi_load_state = None
+
+        # Time for each action left
+        f._actions_time = list(self.DELPHI_LOADING_TIMES)
 
         # Task to run
         f.task_canceller = self._CancelDelphiLoading
@@ -902,51 +909,56 @@ class DelphiStateController(SecomStateController):
 
         try:
             if future._delphi_load_state == CANCELLED:
-                raise CancelledError()
+                return
 
             try:
                 # _on_overview_position() will take care of going further
-                move_to_overview = self._main_data.chamber.moveAbs({"pressure": self._overview_pressure})
-                self.rest_time_est = DELPHI_LOADING_TIMES[1]  # s, see estimateDelphiLoading()
-                move_to_overview.add_update_callback(self.on_step_update)
-                move_to_overview.result()
+                future._actions_time.pop(0)
+                pf = self._main_data.chamber.moveAbs({"pressure": self._overview_pressure})
+                future._delphi_load_state = pf
+                pf.add_update_callback(self._update_load_time)
+                pf.result()
 
                 # TODO: check whether the loading was cancelled and stop if so.
-
+                if future._delphi_load_state == CANCELLED:
+                    return
                 # Move to stage to center to be at a good position in overview
+                future._actions_time.pop(0)
                 f = self._main_data.stage.moveAbs(DELPHI_OVERVIEW_POS)
+                future._delphi_load_state = f
                 f.result()  # to be sure referencing doesn't cancel the move
 
+                if future._delphi_load_state == CANCELLED:
+                    return
+                future._actions_time.pop(0)
                 self._load_holder_calib()
 
+                if future._delphi_load_state == CANCELLED:
+                    return
                 # Reference the (optical) stage
+                future._actions_time.pop(0)
                 f = self._main_data.stage.reference({"x", "y"})
+                future._delphi_load_state = f
                 f.result()
 
+                if future._delphi_load_state == CANCELLED:
+                    return
                 # now acquire one image
+                future._actions_time.pop(0)
                 ovs = self._get_overview_stream()
                 f = _futures.wrapSimpleStreamIntoFuture(ovs)
+                future._delphi_load_state = f
                 f.result()
 
+                if future._delphi_load_state == CANCELLED:
+                    return
                 # move further to fully under vacuum (should do nothing if already there)
-                move_to_sem = self._main_data.chamber.moveAbs({"pressure": self._vacuum_pressure})
-                self.rest_time_est = DELPHI_LOADING_TIMES[2]  # s, see estimateDelphiLoading()
-                move_to_sem.add_update_callback(self.on_step_update)
-                move_to_sem.result()
+                future._actions_time.pop(0)
+                pf = self._main_data.chamber.moveAbs({"pressure": self._vacuum_pressure})
+                future._delphi_load_state = pf
+                pf.add_update_callback(self._update_load_time)
+                pf.result()
 
-                # FIXME: don't mess with the GUI in this Future. => move all the
-                # reset code to a callback for when the pressure is reached
-                # (ie, the sample is loaded).
-                # In particular, this seems to be running in the wrong wx thread
-                self._show_progress_indicators(False)
-                # reset the streams to avoid having data from the previous sample
-                self._reset_streams()
-
-                # Empty the stage history, as the interesting locations on the previous
-                # sample have probably nothing in common with this new sample
-                self._tab_data.stage_history.value = []
-
-                return
             except Exception:
                 raise IOError("Delphi loading failed.")
         finally:
@@ -962,33 +974,35 @@ class DelphiStateController(SecomStateController):
         logging.debug("Cancelling Delphi loading...")
 
         with future._delphi_load_lock:
-            if future._delphi_load_state == FINISHED:
+            state = future._delphi_load_state
+
+            if state == FINISHED:
                 return False
             future._delphi_load_state = CANCELLED
-            # TODO: actually stop what is current happening
+
+            if hasattr(state, "cancel"): # a future? => cancel it, to stop quicker
+                state.cancel()
             logging.debug("Delphi loading cancelled.")
 
         return True
 
-    def estimateDelphiLoading(self):
+    def _update_load_time(self, future, start, end):
         """
-        Estimates Delphi loading procedure duration
-        returns (float):  process estimated time #s
+        Called whenever a (sub)future of the load action updates the time info
         """
-        # Rough approximation
-        # 5 sec from unload to NavCam, 10 sec for alignment and overview acquisition
-        # and 65 sec from NavCam to SEM
-        return DELPHI_LOADING_TIMES[0]  # s
+        # Kludge to detect that the progressive future has just been created
+        # and doesn't contain yet the correct information. Once Pyro is fixed,
+        # it should be possible to remove it.
+        if end - start <= 0.1:
+            return
 
-    @call_in_wx_main
-    @ignore_dead
-    def on_step_update(self, future, start, end):
         # Add the estimated time that the rest of the procedure will take
-        rem_time = end - time.time()
-        if rem_time >= 0:
-            self.update_load_time(end + self.rest_time_est)
-
-    def update_load_time(self, end):
-        self.load_future.set_progress(end=end)
-        rem_time = end - time.time()
+        est_end = end + sum(self._chamber_future._actions_time)
+        self._chamber_future.set_progress(end=est_end)
+        rem_time = est_end - time.time()
         logging.debug("Loading future remaining time: %f", rem_time)
+
+
+# TODO SparcStateController?
+#     "spectrometer": ("specState", HardwareButtonController),
+#     "angular": ("arState", HardwareButtonController),
