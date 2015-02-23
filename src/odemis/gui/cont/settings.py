@@ -684,10 +684,7 @@ class SettingsController(object):
     @staticmethod
     def _on_chamber_state(state, btn):
         """ Handle changes in chamber state """
-        if state in (CHAMBER_UNKNOWN, CHAMBER_VACUUM):
-            btn.Enable()
-        else:
-            btn.Disable()
+        btn.Enable(state in (CHAMBER_UNKNOWN, CHAMBER_VACUUM))
 
     def add_bc_control(self, detector):
         """ Add Hw brightness/contrast control """
@@ -700,7 +697,6 @@ class SettingsController(object):
             img.getbtn_contr_wideBitmap(),
             label="Auto adjust",
             label_delta=1,
-            size=(104, -1),
             style=wx.ALIGN_RIGHT
         )
         btn_autoadjust.SetBitmaps(
