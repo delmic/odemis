@@ -676,6 +676,12 @@ class SettingsController(object):
 
         self.panel.add_readonly_field(label, nice_str)
 
+    def add_bc_control(self, detector):
+        """
+        Add Hw brightness/contrast control
+        """
+        pass # TODO
+
     def on_setting_changed(self, evt):
         logging.debug("Setting has changed")
         # Make sure the message is sent form the main thread
@@ -824,6 +830,14 @@ class SecomSettingsController(SettingsBarController):
 
         if main_data.ebeam:
             self.add_hw_component(main_data.ebeam, self._sem_panel)
+
+            # If can do AutoContrast, display the button
+            # TODO: check if detector has a .applyAutoContrast() method, instead
+            # of detecting indirectly via the presence of .bpp.
+            det = main_data.sed or main_data.bsd
+            if (det and hasattr(det, "bpp")
+                and isinstance(det.bpp, VigilantAttributeBase)):
+                self._sem_panel.add_bc_control(det)
 
 
 class LensAlignSettingsController(SettingsBarController):
