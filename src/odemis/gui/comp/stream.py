@@ -526,8 +526,9 @@ class StreamPanel(wx.Panel):
 
         # FIXME: is this the correct and/or preferred way? Or should this option only be offered on
         # the Delphi?
-        if isinstance(self.stream, OpticalStream):
-            self._add_optical_override_controls()
+        # TODO: re-enable when implementation is complete
+        # if isinstance(self.stream, OpticalStream):
+        #     self._add_optical_override_controls()
 
         # FIXME: only add if some controls are available
         self.control_gbsizer.AddGrowableCol(1)  # This makes the 2nd column's width variable
