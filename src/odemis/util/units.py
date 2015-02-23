@@ -218,7 +218,10 @@ def readable_time(seconds, full=True):
         second += 1
     if second == 0 and msec == 0:
         # exactly 0 => special case
-        return u"0 second"
+        if full:
+            return u"0 second"
+        else:
+            return u"0 s"
 
     minute, second = divmod(second, 60)
     hour, minute = divmod(minute, 60)

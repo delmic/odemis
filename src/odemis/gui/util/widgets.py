@@ -215,7 +215,7 @@ class AxisConnector(object):
 class ProgessiveFutureConnector(object):
     """ Connects a progressive future to a progress bar and label """
 
-    def __init__(self, future, bar, label=None):
+    def __init__(self, future, bar, label=None, full=True):
         """ Update a gauge widget and label, based on the progress reported by the
         ProgressiveFuture.
 
@@ -223,12 +223,15 @@ class ProgessiveFutureConnector(object):
         bar (gauge): the progress bar widget
         label (TextLabel or None): if given, will also update a the text with
           the time left.
+        full (bool): If True, the time remaining will be displaying in full text
+        otherwise a short text will displayed (eg, "1 min and 2 s")
         Note: when the future is complete (done), the progress bar will be set
         to 100%, but the text will not be updated.
         """
         self._future = future
         self._bar = bar
         self._label = label
+        self._full_text = full
 
         # Will contain the info of the future as soon as we get it.
         self._start, self._end = future.get_progress()
@@ -267,7 +270,6 @@ class ProgessiveFutureConnector(object):
 
     def _update_progress(self):
         """ Update the progression controls """
-
         now = time.time()
         past = now - self._start
         left = max(0, self._end - now)
@@ -304,12 +306,17 @@ class ProgessiveFutureConnector(object):
             return
 
         if left > 2:
-            lbl_txt = "%s" % units.readable_time(left)
+            lbl_txt = u"%s" % units.readable_time(left, full=self._full_text)
         else:
             # don't be too precise
-            lbl_txt = "almost done"
+            lbl_txt = u"a few seconds"
+        if self._full_text:
+            lbl_txt += u" left"
 
         if self._label is None:
             self._bar.SetToolTipString(lbl_txt)
         else:
+            # TODO: if the text is too big for the label, rewrite with full=False
+            # we could try to rely on IsEllipsized() (which requires support for
+            # wxST_ELLIPSIZE_END in xrc) or dc.GetTextExtend()
             self._label.SetLabel(lbl_txt)
