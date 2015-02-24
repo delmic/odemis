@@ -276,7 +276,8 @@ class SecomStateController(MicroscopeStateController):
         self._opt_btn = getattr(main_frame, btn_prefix + "opt")
         self._acq_btn = getattr(main_frame, btn_prefix + "opt")
 
-        # I
+        # To update the stream status
+        self._prev_stream = None
         self._tab_data.streams.subscribe(self._subscribe_active_stream_status)
 
         # Optical state is almost entirely handled by the streams, but for the
@@ -318,36 +319,43 @@ class SecomStateController(MicroscopeStateController):
         2nd one, was the previous newest.
 
         """
-        if len(streams):
-            if streams[0].is_active.value:
-                logging.debug("Tracking new active stream status")
-                streams[0].status.subscribe(self._on_active_stream_status, init=True)
-            if len(streams) > 1:
-                streams[1].status.unsubscribe(self._on_active_stream_status)
+        if self._prev_stream is not None:
+            self._prev_stream.status.unsubscribe(self._on_active_stream_status)
+
+        if streams:
+            s = streams[0]
+            s.status.subscribe(self._on_active_stream_status, init=True)
+        else:
+            s = None
+        self._prev_stream = s
 
     def _on_active_stream_status(self, (lvl, msg)):
-        """ Display the given message, or clear it when the message is None """
-        if not msg:
+        """ Display the given message, or clear it
+        lvl, msg (int, str): same as Stream.status. Cleared when lvl is None.
+        """
+        if lvl is None:
             msg = ""
         self._show_status_icons(lvl)
-        self._main_frame.lbl_load_status.SetLabel(msg)
+        self._main_frame.lbl_stream_status.SetLabel(msg)
+
+        # Whether the status is actually displayed or the progress bar is shown
+        # is only dependent on _show_progress_indicators()
 
     def _show_status_icons(self, lvl):
-        self._main_frame.bmp_load_status_info.Show(lvl in (logging.INFO, logging.DEBUG))
-        self._main_frame.bmp_load_status_warn.Show(lvl == logging.WARN)
-        self._main_frame.bmp_load_status_error.Show(lvl == logging.ERROR)
+        self._main_frame.bmp_stream_status_info.Show(lvl in (logging.INFO, logging.DEBUG))
+        self._main_frame.bmp_stream_status_warn.Show(lvl == logging.WARN)
+        self._main_frame.bmp_stream_status_error.Show(lvl == logging.ERROR)
         self._main_frame.pnl_hw_info.Parent.Layout()
 
     def _show_progress_indicators(self, show):
         """
         Show or hide the loading progress indicators for the chamber and sample holder
 
-        The hw status text will be hidden if the progress indicators are shown.
+        The stream status text will be hidden if the progress indicators are shown.
         """
         self._main_frame.gauge_load_time.Show(show)
         self._main_frame.lbl_load_time.Show(show)
-        self._show_status_icons(None)  # Always hide the icons
-        self._main_frame.lbl_load_status.Show(not show)
+        self._main_frame.pnl_stream_status.Show(not show)
         self._main_frame.pnl_hw_info.Parent.Layout()
 
     # TODO: move to acq.stream (because there is nothing we can do better here)
@@ -656,7 +664,6 @@ class DelphiStateController(SecomStateController):
 
         # Display the panel with the loading progress indicators
         self._main_frame.pnl_hw_info.Show()
-        self._main_frame.lbl_load_status.SetLabel("") # TODO: handle in a separate code
 
         # If starts with the sample fully loaded, check for the calibration now
         ch_pos = self._main_data.chamber.position
@@ -1022,16 +1029,14 @@ class DelphiStateController(SecomStateController):
         Called whenever a (sub)future of the load action updates the time info
         """
         # Kludge to detect that the progressive future has just been created
-        # and doesn't contain yet the correct information. Once Pyro is fixed,
-        # it should be possible to remove it.
+        # and doesn't contain yet the correct information.
+        # TODO: Once Pyro is fixed, it should be possible to remove it.
         if end - start <= 0.1:
             return
 
         # Add the estimated time that the rest of the procedure will take
         est_end = end + sum(self._chamber_future._actions_time)
         self._chamber_future.set_progress(end=est_end)
-        rem_time = est_end - time.time()
-        logging.debug("Loading future remaining time: %f", rem_time)
 
 
 # TODO SparcStateController?

@@ -86,10 +86,11 @@ class xrcfr_main(wx.Frame):
         self.pnl_hw_info = xrc.XRCCTRL(self, "pnl_hw_info")
         self.gauge_load_time = xrc.XRCCTRL(self, "gauge_load_time")
         self.lbl_load_time = xrc.XRCCTRL(self, "lbl_load_time")
-        self.bmp_load_status_info = xrc.XRCCTRL(self, "bmp_load_status_info")
-        self.bmp_load_status_warn = xrc.XRCCTRL(self, "bmp_load_status_warn")
-        self.bmp_load_status_error = xrc.XRCCTRL(self, "bmp_load_status_error")
-        self.lbl_load_status = xrc.XRCCTRL(self, "lbl_load_status")
+        self.pnl_stream_status = xrc.XRCCTRL(self, "pnl_stream_status")
+        self.bmp_stream_status_info = xrc.XRCCTRL(self, "bmp_stream_status_info")
+        self.bmp_stream_status_warn = xrc.XRCCTRL(self, "bmp_stream_status_warn")
+        self.bmp_stream_status_error = xrc.XRCCTRL(self, "bmp_stream_status_error")
+        self.lbl_stream_status = xrc.XRCCTRL(self, "lbl_stream_status")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fp_settings_secom_optical = xrc.XRCCTRL(self, "fp_settings_secom_optical")
         self.fp_settings_secom_sem = xrc.XRCCTRL(self, "fp_settings_secom_sem")
@@ -944,57 +945,63 @@ def __init_resources():
                                 <flag>wxEXPAND</flag>
                               </object>
                               <object class="sizeritem">
-                                <object class="wxBoxSizer">
-                                  <object class="sizeritem">
-                                    <object class="wxStaticBitmap" name="bmp_load_status_info">
-                                      <bitmap>img_icon_dialog_info_png</bitmap>
-                                      <hidden>1</hidden>
-                                      <XRCED>
-                                        <assign_var>1</assign_var>
-                                      </XRCED>
+                                <object class="wxPanel" name="pnl_stream_status">
+                                  <object class="wxBoxSizer">
+                                    <object class="sizeritem">
+                                      <object class="wxStaticBitmap" name="bmp_stream_status_info">
+                                        <bitmap>img_icon_dialog_info_png</bitmap>
+                                        <hidden>1</hidden>
+                                        <XRCED>
+                                          <assign_var>1</assign_var>
+                                        </XRCED>
+                                      </object>
+                                      <flag>wxRIGHT</flag>
+                                      <border>5</border>
                                     </object>
-                                    <flag>wxRIGHT</flag>
-                                    <border>5</border>
-                                  </object>
-                                  <object class="sizeritem">
-                                    <object class="wxStaticBitmap" name="bmp_load_status_warn">
-                                      <bitmap>img_icon_dialog_warning_png</bitmap>
-                                      <hidden>1</hidden>
-                                      <XRCED>
-                                        <assign_var>1</assign_var>
-                                      </XRCED>
+                                    <object class="sizeritem">
+                                      <object class="wxStaticBitmap" name="bmp_stream_status_warn">
+                                        <bitmap>img_icon_dialog_warning_png</bitmap>
+                                        <hidden>1</hidden>
+                                        <XRCED>
+                                          <assign_var>1</assign_var>
+                                        </XRCED>
+                                      </object>
+                                      <flag>wxRIGHT</flag>
+                                      <border>5</border>
                                     </object>
-                                    <flag>wxRIGHT</flag>
-                                    <border>5</border>
-                                  </object>
-                                  <object class="sizeritem">
-                                    <object class="wxStaticBitmap" name="bmp_load_status_error">
-                                      <bitmap>img_icon_dialog_error_png</bitmap>
-                                      <hidden>1</hidden>
-                                      <XRCED>
-                                        <assign_var>1</assign_var>
-                                      </XRCED>
+                                    <object class="sizeritem">
+                                      <object class="wxStaticBitmap" name="bmp_stream_status_error">
+                                        <bitmap>img_icon_dialog_error_png</bitmap>
+                                        <hidden>1</hidden>
+                                        <XRCED>
+                                          <assign_var>1</assign_var>
+                                        </XRCED>
+                                      </object>
+                                      <flag>wxRIGHT</flag>
+                                      <border>5</border>
                                     </object>
-                                    <flag>wxRIGHT</flag>
-                                    <border>5</border>
-                                  </object>
-                                  <object class="sizeritem">
-                                    <object class="wxStaticText" name="lbl_load_status">
-                                      <label>Load timer</label>
-                                      <fg>#E5E5E5</fg>
-                                      <XRCED>
-                                        <assign_var>1</assign_var>
-                                      </XRCED>
+                                    <object class="sizeritem">
+                                      <object class="wxStaticText" name="lbl_stream_status">
+                                        <fg>#E5E5E5</fg>
+                                        <XRCED>
+                                          <assign_var>1</assign_var>
+                                        </XRCED>
+                                      </object>
                                     </object>
+                                    <orient>wxHORIZONTAL</orient>
                                   </object>
-                                  <orient>wxHORIZONTAL</orient>
+                                  <bg>#333333</bg>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
                                 </object>
-                                <flag>wxLEFT</flag>
+                                <flag>wxEXPAND|wxRIGHT|wxLEFT</flag>
                                 <border>10</border>
                               </object>
                             </object>
                             <size>-1,24</size>
                             <bg>#333333</bg>
+                            <hidden>1</hidden>
                             <XRCED>
                               <assign_var>1</assign_var>
                             </XRCED>
