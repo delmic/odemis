@@ -86,6 +86,9 @@ class xrcfr_main(wx.Frame):
         self.pnl_hw_info = xrc.XRCCTRL(self, "pnl_hw_info")
         self.gauge_load_time = xrc.XRCCTRL(self, "gauge_load_time")
         self.lbl_load_time = xrc.XRCCTRL(self, "lbl_load_time")
+        self.bmp_load_status_info = xrc.XRCCTRL(self, "bmp_load_status_info")
+        self.bmp_load_status_warn = xrc.XRCCTRL(self, "bmp_load_status_warn")
+        self.bmp_load_status_error = xrc.XRCCTRL(self, "bmp_load_status_error")
         self.lbl_load_status = xrc.XRCCTRL(self, "lbl_load_status")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fp_settings_secom_optical = xrc.XRCCTRL(self, "fp_settings_secom_optical")
@@ -912,6 +915,7 @@ def __init_resources():
                                       <range>100</range>
                                       <value>0</value>
                                       <bg>#333333</bg>
+                                      <hidden>1</hidden>
                                       <style>wxGA_SMOOTH</style>
                                       <XRCED>
                                         <assign_var>1</assign_var>
@@ -923,8 +927,9 @@ def __init_resources():
                                   </object>
                                   <object class="sizeritem">
                                     <object class="wxStaticText" name="lbl_load_time">
-                                      <size>100, -1</size>
+                                      <size>100,-1</size>
                                       <fg>#EEEEEE</fg>
+                                      <hidden>1</hidden>
                                       <style>wxALIGN_RIGHT|wxST_NO_AUTORESIZE</style>
                                       <XRCED>
                                         <assign_var>1</assign_var>
@@ -939,16 +944,52 @@ def __init_resources():
                                 <flag>wxEXPAND</flag>
                               </object>
                               <object class="sizeritem">
-                                <object class="wxStaticText" name="lbl_load_status">
-                                  <label>Load timer</label>
-                                  <fg>#E5E5E5</fg>
-                                  <hidden>1</hidden>
-                                  <XRCED>
-                                    <assign_var>1</assign_var>
-                                  </XRCED>
+                                <object class="wxBoxSizer">
+                                  <object class="sizeritem">
+                                    <object class="wxStaticBitmap" name="bmp_load_status_info">
+                                      <bitmap>img_icon_dialog_info_png</bitmap>
+                                      <hidden>1</hidden>
+                                      <XRCED>
+                                        <assign_var>1</assign_var>
+                                      </XRCED>
+                                    </object>
+                                    <flag>wxRIGHT</flag>
+                                    <border>5</border>
+                                  </object>
+                                  <object class="sizeritem">
+                                    <object class="wxStaticBitmap" name="bmp_load_status_warn">
+                                      <bitmap>img_icon_dialog_warning_png</bitmap>
+                                      <hidden>1</hidden>
+                                      <XRCED>
+                                        <assign_var>1</assign_var>
+                                      </XRCED>
+                                    </object>
+                                    <flag>wxRIGHT</flag>
+                                    <border>5</border>
+                                  </object>
+                                  <object class="sizeritem">
+                                    <object class="wxStaticBitmap" name="bmp_load_status_error">
+                                      <bitmap>img_icon_dialog_error_png</bitmap>
+                                      <hidden>1</hidden>
+                                      <XRCED>
+                                        <assign_var>1</assign_var>
+                                      </XRCED>
+                                    </object>
+                                    <flag>wxRIGHT</flag>
+                                    <border>5</border>
+                                  </object>
+                                  <object class="sizeritem">
+                                    <object class="wxStaticText" name="lbl_load_status">
+                                      <label>Load timer</label>
+                                      <fg>#E5E5E5</fg>
+                                      <XRCED>
+                                        <assign_var>1</assign_var>
+                                      </XRCED>
+                                    </object>
+                                  </object>
+                                  <orient>wxHORIZONTAL</orient>
                                 </object>
-                                <option>1</option>
-                                <flag>wxBOTTOM|wxRIGHT|wxRESERVE_SPACE_EVEN_IF_HIDDEN</flag>
+                                <flag>wxLEFT</flag>
                                 <border>10</border>
                               </object>
                             </object>
@@ -4047,6 +4088,97 @@ xo:E\xe0?K\xac\xbc\x9f8\xd1z\xa2|\xdf\xff*\x08\x82\xeft\xe7\xb58pdz\x8d\
 \x8c;\x9d\xce\xd7\xff\x03\xaa\x0b\xf0\xcei\x80]\xf4\x00\x00\x00\x00IEND\
 \xaeB`\x82'''
 
+    img_icon_dialog_info_png = '''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x10\x00\x00\x00\x10\x08\x06\x00\x00\x00\
+\x1f\xf3\xffa\x00\x00\x02\x82IDATx\xda}\x93]H\x93a\x14\xc7\xcf\xfcZ%\x05\
+\xe6e\x10\xd4\x85\x95`\x10\x95m\xb3\xcc\x9c\x94\x1f\x84\x16\x88aYfZ\x96\
+\xa1\x9b\xd3\xfch:E\xa50\xbb\xc8\x95d\x86\xa5\xae\x88\x1c\x96\xe6\xcc\xa6\
+\xd3\x88\xd9\x17\x0eSJ/2wU\xecJ\xe8\xc2\xc8\xd6\xeb\xbf\xb3w\xf0\xae\x1c\
+\xf9\xc0\x8f\xe7\xbc\xe79\xe7\xc7y^\xde\x97\x00,G\xc6\x840\xa1C\x8e\xb9\
+M\xb6\x09\xe7f\x00k\x99UL\xc0\xf2\xfa\xe5\xcd\x81\x17\x9b\x07\x14\xc9z\xf3\
+\xd8\x89&\xeb\xf7
+\xd3\xdb\xa5z\xb3\x03Em\xf6\x85\xac\xeb\xd6\x09C\x97}?\x80\xa0\xff\x09\
+\x02\xb6\xe7\xb4\xe8w\x14t\xfd\xbce\x99\xc6s\xc7W\x8cL\xb9`\x9btq\xfc\x0d\
+\x1d#\xb3\xc8\xbcfs\x27\xea\xcd\x8d\x1e\x89\x9f <\xb9N\x17\x91\xd3\x8e\xf6\
+\xe1Y4=\x9dA\xd5\x83)\\1\xf2 \xc6\x8d=30\xbd\x9cCR\xdd "N\xdf\xa9\x06 \
+\x93\x04\xb4\xabpK\xd0\xc1\x86\x85\xcaN\x07\xb4w\xc7\xa1i\x1b\x87\xde\xf4\
+\x01\x8bnA\x84cON<\xaby8\x09y\x9a\xf1GhR\xed6\x9f@\xa1\xeb\x8e/\xebA\x9e\
+\xf1\x0drn\xbc\x16)\xe6\xe2\xdf\xc2\x92\x08\xc7R>\x97k\xd4z\x0b\xe8@\xad\
+\xd9\x27P\xea\x9c\xeaJ\x0b\xd2\xaf\x8e\xfeC\xfe\xcd1\x9c3\xda\xfd\xf2)\xb5\
+V\x90\xba\xc1)\xf6R\xd4\xf90\x16\x08\x09\xfa\x01$\x1a^H\xfc\xbd\x0e\xd5\
+\x0cqnH:K\xad\xf7\x08\xea\x05\x8a\xba\x10F\x14\xa9]O
+\xad\x10\xad\xe9\x85\xaa\xb4\xcfK\xf9 \x94\x97\xad\x92 \xa6j\x94\x9f\x87\
+\x11Y\xd8\x87\x0d\xd9&\x04\xa7\xb6\x81\xe2\x0c\x02m-\x08\xf7^a\x8f\xd6E\
+\x89\xcd\x90\x1d\xbe\x8d\x90t\x13\xd6d?\xc1\xba\xdc~\xcc\xcf\xcf\x8b\xd0\
+\xa9\x01PV?\xe8\x98\x19t\xb4\x13\x94\xd2\x02\x8a)w\xf9\xde\xc1n\x8d\x9d\
+\x12\x1aAi\xed\xa0\x8c\xc7\xa0\x93\xdc\x90=\xe8\x13\x9c\xb1\x81rG\xc5\xbc\
+x\x9el\x04Ek\xc6$\x01O\xa0$E\x89\x9b\x8et\x80\x8e\xf7z\x1a\xa4fIR\xf0\xce\
++\xca\xe8\x06)J\xdd,PI\x02\xef\x14E\xad\x14[\x0d\xca\xec\x01\x9d}\xc5\x0d\
+\xefA\xc5\x1fA\x97f\xbd{\xd1\x848\x15\xc5\x1a\xc0\x13\xb7\xfa}\x89\xbcd\
+|p\x8f\x27\x11He\xe2{?c\xd94\xef_@y\xc3\xa0}\x8f\x10\xa0,\x15\xb8\xe6\xbe\
+\xa7\xd6O %vj\xe2\xe5{K>\xcb\xe3\xca\x16eJ\x1d\x88\x09N\xa8\xf8\xb5Z]\xe1\
+\x0cT\xe9\xd4+\xfc\x8d\xfe\xc8\xa2\xf27\x12\xb3R\xcd\x1fj\xeah/\xc8\xb3\
+\xae\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    img_icon_dialog_warning_png = '''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x10\x00\x00\x00\x10\x08\x06\x00\x00\x00\
+\x1f\xf3\xffa\x00\x00\x01\xc9IDATx\xda\xa5\xceoH\x13q\x1c\xc7\xf1\xdf\xc9\
+nf\xb2\xda\x8a\xb8\xe7!A\xf40\x08{\xe6\x13\xe9\x8f\x8f\x14\xac\x07\xf5L\
+T0\x98\x10D\xd1\xe13\x89\x1eT\xa0\xac\x87\xda\xc2
+\xac\xe6\xfc3\xd3\xd1\xe8Ql\x0cZ6%\x17D\xd3\xfd\xb9&\xed\x1fw\xde\xddv\
+\x9f\xbe\xdd\xc6"\x0c\xdb\xf4\xc1\xfb\xc1\xe7\x8e\xef\xeb\x8e\x01\xd8W\xbb\
+\xbeT\xdd|O\xf1\x8d\xb9{O@\xd1\xcb_\xd6\xbcm\xba\xe6\xeb\x82\xb2\xc0_\xad\
+\x1b\xd0f,\x09\xac\xbe\x84\xfe\xc9\x05u\xba9U\x17P\xf26\\+\xd2\x97\xf1e\
+\x1a\x88\xb8P|{\x11\xea\x1c?X3\xa0\xceZ\xd2\x08?@`\xb0\x15\x01\xfb\x19\xe8\
+\x81[P\xdcM[5\x01\xda\xbc\xe9\xae\xe6?\x0f\x84\x1dX:w\xc4\x08\xc1~h\xcb\
+\xadP<\xa6\xa1\xff\x02\xb2\xc7\x96\xd5\xc3\x03\x04\xf4\xe2\xfd\x85\xa3F\
+\x08u\xd0_\xb4C~m\xc9\xed
+\xc8nnT\xf5\x9f\x06>w\x02\x91.\x04/\x1dG\xe8\xcaI\xdam\xc0\xcaY(\xfeS\x90\
+^q\xf7\xff\x0d8\x19_xq@\xd2?\xf0@\x88\x01\x1f\x19\xbe\xde8\x86\xe8\xf5\xc3\
+\x84\xd1^e\xd0W\x1a\x91{n\x96\x10d\xfc\x0e ?\xc99\xe5E+\xb0F3J}\xa3\xbe\
+S\x1b\xd4f\xa5\x18\x83\xfc\xce\x8a\xfcSn\xfco`\x825g\x9e\x1cR\xf5(_>HR[\
+\x0c\xf1a\xab\x11\xf2\xb4\xb3\xe5gz\xbc\x09\x19\xe7A5I7U \xf3\x88MIKB\xf9\
+X\xa4~R\x05\x06q\xd8\x06\xd1a\x03d\xda9\x030p\xc9\x27 \xf3\x90=\xab\x02\
+\xa9\x9bL,\xad\xb5\x00q\x81b@\x8aJW\x0e\xd2\x154A\xc5~\x27\xa0\xb4~\x02\
+\xe2=\x93\xf8\x07\xb8\xd30\xf6c\xc4\xbc\xbd\xd9\xc7\xe4Z\x8a\xdb\xcdR\xf2\
+6{\\\x05\xf6\xd3/\xf21\xd2V@\x80\x978\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    img_icon_dialog_error_png = '''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x10\x00\x00\x00\x10\x08\x06\x00\x00\x00\
+\x1f\xf3\xffa\x00\x00\x02SIDAT8\x8d\xa5\x92AHTQ\x14\x86\xbf\xf3\xe6\xbe\
+7S\x93I\x81X\x19S\x13\x06Can\xda\xd8\xb6Y\xc4,j\x13\xa4\x9b\x94 \xa5M\xb4\
+\x08B\\\xb5Q\xd72\xe8\x08\xedr5-\\J T X\x8b\xd4\x85\x05J\x90\x85H#\xcd\xc4\
+8\xa3\xce\xbc\xfb\xee\xbb-\x06l\xb2M\xd4\xbf>\xe7;\xe7\xfc\xffQ\xd6Z\xfe\
+G
+\xe0E:=\xd4\xda\xd9\x99u</\x12\x89Fq\\\x17\xc7u\x91H\xe4\xa0\xd0\x1aC\xa8\
+5\xa1\xd6\xe8J\xc5\x94VW\x1f\xf4.,<S\x00-\xa9T\xf6bO\x8fju\xdd\xbf\x9aZ\
+\xacV\xd5\xb1dr\x1ah\x006\x97\x96\x9cK]]Tvw\xff(\x16\xe0\xf0\x91\xd1x\x9c\
+\xb5\xb99\xae=y\xd28\xe1\xf3\xe2"\xd5[7ao\x9fX[\x1b\x89\xfe~\xbe\xcc\xcc\
+\x10\x16
+\x8d\x86T\x8aS7n\xb015EX\xab\x81\xf6\xf9\xf4\xe6\xcd/\x0f\xb4@\xbdTD\xfc\
+\x80\xd4\xc8\x08\x8e\xe7\x91\xbc\x9f\x0fccx\xed\xed$\xee\xdc\x01\x11\xce\
+\x0d\x0d\xb1\xf6\xf4)\xe2\xd7\xd0\xd2d\xa2\x06\xfcR\x11\xc77l\xcd\xcfs6\
+\x93\xc1Q\x8a\xcb\xc3\xc3\x0d#E\xb0\xd6\xb2\x91\xcfc\xcae\xa8\xef\xa1\x9b\
+S\x08\x00S\xfc\x0eF\xd8\xce\xe5\xf0wv\xb8\xd0\xdb\x8b\xa3T#\x01k\xf98>\x8e\
+\xbc{\x87\x88\xb0[\xa8\x124\x03|\x81\xcd\xd7\xafhQGh\xf5<\xb6\xb4\xe6t&\
+C$\x16\x03\xc0/\x95\xa8\xce\xce\x12/\x14\xf8\xb1\xbdMEY|9\xb4\x81
+4\xce~@\xd8\xddMjr\x92\xfd \xc0\x16
+H,\x06\x9e\xc7\xb9\xe9i\xbe\xde\xbe\xcdq\x11\x02\x87\xdf7\x08\x00%\x10\
+U\x8a\xf3\x13\x13\x84\xf18A\xa9\xc4J_\x1fa"\xc1\xd5l\x16\xa7\xa3\x83\x93\
+\xa3\xa3\xd4\x06\x06p\xe50@\x1a\x81\x87\xc6\xf0mp\x90\xf6\\\x8e\xad\x87\
+\x0f\xb9\xbe\xb2\x82]^\xe6\xad1$\x1e=\xa2\xf6\xf81\x81\x08Vl\xa3\xa79\x85\
+@,uk1\xeb\xeb\x94\xd3i\x92A@\xcdq\x88X\xcb\x95\xb99\x8a\xf3\xf3\xa80\xa4\
+,\x82/\xe1\xef)h+\xbap\xc4D\xcf\x08\xec\x88`\xc4\x12 \xb8\xe2\xe0\x00\x06\
+\xd0\xd6\xb0\x0f\xec\xd9\x90\x9d\x13\x01aU\xf4\x01\xa0\xc3\xf5\xee\xbe\xaf\
+\xfb\xcf_V\x8cj~\xe1f5\xbf\xb3S\x11\x9d<\xea\xdd;\x00dk\xb5<\x90\xe7\x1f\
+\xf4\x13\x033\x01\xae{\xd0\xa9\xd4\x00\x00\x00\x00IEND\xaeB`\x82'''
+
     img_button_btn_acquire_image_png = '''\
 \x89PNG\x0d
 \x1a
@@ -5260,6 +5392,9 @@ Z\xb9A\x04\xc6\x89\x00\x00\x00\x00IEND\xaeB`\x82'''
     wx.MemoryFSHandler.AddFile('XRC/main/img_button_btn_sem_png', img_button_btn_sem_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_button_btn_sem_h_png', img_button_btn_sem_h_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_button_btn_sem_green_a_png', img_button_btn_sem_green_a_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_dialog_info_png', img_icon_dialog_info_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_dialog_warning_png', img_icon_dialog_warning_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_dialog_error_png', img_icon_dialog_error_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_button_btn_acquire_image_png', img_button_btn_acquire_image_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_button_btn_acquire_image_h_png', img_button_btn_acquire_image_h_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_button_btn_acquire_image_a_png', img_button_btn_acquire_image_a_png)

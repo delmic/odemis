@@ -671,6 +671,7 @@
                                       <range>100</range>
                                       <value>0</value>
                                       <bg>#333333</bg>
+                                      <hidden>1</hidden>
                                       <style>wxGA_SMOOTH</style>
                                       <XRCED>
                                         <assign_var>1</assign_var>
@@ -682,8 +683,9 @@
                                   </object>
                                   <object class="sizeritem">
                                     <object class="wxStaticText" name="lbl_load_time">
-                                      <size>100, -1</size>
+                                      <size>100,-1</size>
                                       <fg>#EEEEEE</fg>
+                                      <hidden>1</hidden>
                                       <style>wxALIGN_RIGHT|wxST_NO_AUTORESIZE</style>
                                       <XRCED>
                                         <assign_var>1</assign_var>
@@ -698,16 +700,52 @@
                                 <flag>wxEXPAND</flag>
                               </object>
                               <object class="sizeritem">
-                                <object class="wxStaticText" name="lbl_load_status">
-                                  <label>Load timer</label>
-                                  <fg>#E5E5E5</fg>
-                                  <hidden>1</hidden>
-                                  <XRCED>
-                                    <assign_var>1</assign_var>
-                                  </XRCED>
+                                <object class="wxBoxSizer">
+                                  <object class="sizeritem">
+                                    <object class="wxStaticBitmap" name="bmp_load_status_info">
+                                      <bitmap>img/icon/dialog_info.png</bitmap>
+                                      <hidden>1</hidden>
+                                      <XRCED>
+                                        <assign_var>1</assign_var>
+                                      </XRCED>
+                                    </object>
+                                    <flag>wxRIGHT</flag>
+                                    <border>5</border>
+                                  </object>
+                                  <object class="sizeritem">
+                                    <object class="wxStaticBitmap" name="bmp_load_status_warn">
+                                      <bitmap>img/icon/dialog_warning.png</bitmap>
+                                      <hidden>1</hidden>
+                                      <XRCED>
+                                        <assign_var>1</assign_var>
+                                      </XRCED>
+                                    </object>
+                                    <flag>wxRIGHT</flag>
+                                    <border>5</border>
+                                  </object>
+                                  <object class="sizeritem">
+                                    <object class="wxStaticBitmap" name="bmp_load_status_error">
+                                      <bitmap>img/icon/dialog_error.png</bitmap>
+                                      <hidden>1</hidden>
+                                      <XRCED>
+                                        <assign_var>1</assign_var>
+                                      </XRCED>
+                                    </object>
+                                    <flag>wxRIGHT</flag>
+                                    <border>5</border>
+                                  </object>
+                                  <object class="sizeritem">
+                                    <object class="wxStaticText" name="lbl_load_status">
+                                      <label>Load timer</label>
+                                      <fg>#E5E5E5</fg>
+                                      <XRCED>
+                                        <assign_var>1</assign_var>
+                                      </XRCED>
+                                    </object>
+                                  </object>
+                                  <orient>wxHORIZONTAL</orient>
                                 </object>
-                                <option>1</option>
-                                <flag>wxBOTTOM|wxRIGHT|wxRESERVE_SPACE_EVEN_IF_HIDDEN</flag>
+                                <flag>wxLEFT</flag>
                                 <border>10</border>
                               </object>
                             </object>
