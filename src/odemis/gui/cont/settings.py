@@ -689,6 +689,12 @@ class SettingsController(object):
     def add_bc_control(self, detector):
         """ Add Hw brightness/contrast control """
 
+        self.panel.add_divider()
+
+        # Create extra gird bag sizer
+        gb_sizer = wx.GridBagSizer()
+        gb_sizer.SetEmptyCellSize((0, 0))
+
         # Create the widgets
 
         btn_autoadjust = ImageTextToggleButton(
@@ -705,10 +711,58 @@ class SettingsController(object):
         )
         btn_autoadjust.SetForegroundColour(wx.BLACK)
 
-        # Add the widgets to the panel
-        self.panel.gb_sizer.Add(btn_autoadjust, (self.panel.num_rows, 0), border=5,
-                                flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL)
+        gb_sizer.Add(btn_autoadjust, (0, 0), (2, 1), border=10,
+                     flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT)
+
+        # TODO: Add the ability to pass va_2_ctrl and ctrl_2_va functions. (Needed to scale the
+        # slider values from [0..1] to [0..100]
+        sld_conf = {
+            "accuracy": 2,
+            "event": wx.EVT_SCROLL_CHANGED,
+            "v2c": None,
+            "c2v": None,
+            "control_type": odemis.gui.CONTROL_SLIDER,
+            # "type": "integer",
+        }
+
+        num_rows = 0
+
+        if isinstance(detector.brightness, VigilantAttributeBase):
+            brightness_entry = self.add_setting_entry("brightness", detector.brightness, detector,
+                                                      sld_conf)
+
+            # TODO: 'Ugly' detaching somewhat nullifies the cleanliness created by using
+            # 'add_setting_entry'. 'add_setting_entry' Needs some more refactoring anyway.
+            self.panel.gb_sizer.Detach(brightness_entry.value_ctrl)
+            self.panel.gb_sizer.Detach(brightness_entry.lbl_ctrl)
+
+            gb_sizer.Add(brightness_entry.lbl_ctrl, (num_rows, 1))
+            gb_sizer.Add(brightness_entry.value_ctrl, (num_rows, 2), flag=wx.EXPAND)
+            num_rows += 1
+
+            # wx.EVT_SCROLL_CHANGED
+            # vac = VigilantAttributeConnector(detector.brightness, sld_brightness)
+
+        if isinstance(detector.contrast, VigilantAttributeBase):
+            contrast_entry = self.add_setting_entry("contrast", detector.contrast, detector,
+                                                    sld_conf)
+
+            self.panel.gb_sizer.Detach(contrast_entry.value_ctrl)
+            self.panel.gb_sizer.Detach(contrast_entry.lbl_ctrl)
+
+            gb_sizer.Add(contrast_entry.lbl_ctrl, (num_rows, 1))
+            gb_sizer.Add(contrast_entry.value_ctrl, (num_rows, 2), flag=wx.EXPAND)
+            num_rows += 1
+
+        if num_rows:
+            gb_sizer.AddGrowableCol(2)
+
+        # Add the extra sizer to the main sizer
+        self.panel.gb_sizer.Add(gb_sizer, (self.panel.num_rows, 0), span=(1, 2),
+                                border=5, flag=wx.ALL | wx.EXPAND)
         self.panel.num_rows += 1
+
+        # Connect various events to the auto adjust button
 
         # Using a partial function here to prevent having to create a 'useless' button attribute.
         # We still need the method, because we need a reference to keep the subscription active.
@@ -720,6 +774,8 @@ class SettingsController(object):
             btn_autoadjust.SetToggle(False)
             btn_autoadjust.SetLabel("Auto adjust")
             btn_autoadjust.Enable()
+            brightness_entry.value_ctrl.Enable()
+            contrast_entry.value_ctrl.Enable()
 
         def auto_adjust(_):
             """ Call the auto contrast method on the detector if it's not already running """
@@ -727,6 +783,8 @@ class SettingsController(object):
                 f = detector.applyAutoContrast()
                 btn_autoadjust.SetLabel("Adjusting...")
                 btn_autoadjust.Disable()
+                brightness_entry.value_ctrl.Disable()
+                contrast_entry.value_ctrl.Disable()
                 f.add_done_callback(adjust_done)
 
         btn_autoadjust.Bind(wx.EVT_BUTTON, auto_adjust)
