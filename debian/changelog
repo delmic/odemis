@@ -5,20 +5,21 @@ odemis (2.1-1ubuntu1) precise; urgency=low
     - Correct for the shear and X/Y ratio scanning inaccurcies (DELPHI)
     - Progress bar when (un)loading the sample (DELPHI)
     - Support for New Focus Picomotor controllers 8742
-    - Automatically turn off encoders for PI closed-loop (SECOM). This should reduce stage drift.
+    - Automatically turn off encoders for PI closed-loop, to reduce stage drift. (SECOM)
     - Button to run the hardware auto contrast (DELPHI)
   * Main bugs fixed and improvements
     - SEM view is always centered (DELPHI)
     - Improved SEM/Optical alignment (DELPHI) 
+    - Better looking warning message if the SEM/Optical alignment failed (DELPHI)
     - Hardware settings are ordered is some logical way
-    - Manually changing the brighness/contrast on a 8-bit image works
-    - During acquisition with drift correction, if the ROI goes out of bound, 
+    - Manually changing the brightness/contrast on a 8-bit image works
+    - During acquisition with drift correction, if the ROI goes out of bound,
       the acquisition is not automatically discarded. (SPARC)
     - Absolute move on inversed axis goes to the right place
     - Allow to override the maximum scanning size on the semcomedi
     - Do not provide bright-field stream if the hardware doesn't allow this (SECOM/DELPHI)
 
- -- Éric Piel (Delmic) <piel@delmic.com>  Fri, 20 Feb 2015 16:46:27 +0100
+ -- Éric Piel (Delmic) <piel@delmic.com>  Wed, 25 Feb 2015 16:46:27 +0100
 
 odemis (2.0-1ubuntu1) precise; urgency=low
 
