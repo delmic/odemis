@@ -405,7 +405,9 @@ class ViewPortController(object):
         except IndexError:
             logging.error("Failed to find the current viewport")
         except AttributeError:
-            logging.error("Requested to fit content for a view not able to")
+            # TODO: The toolbar button/menu should be disabled if the current
+            # view doesn't support "fit_view_to_content"
+            logging.info("Requested to fit content for a view not able to")
 
     def focusViewWithStream(self, stream):
         """
