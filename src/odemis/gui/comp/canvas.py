@@ -741,6 +741,31 @@ class BufferedCanvas(wx.Panel):
         """ Clear the canvas by redrawing the background """
         self._draw_background(self.ctx)
 
+    def _get_img_from_buffer(self):
+        """
+        Copy the current part of the buffer that is displayed
+        return (wxImage or None): a copy of the buffer, or None if the size of
+          the canvas is 0,0.
+        """
+        csize = self.ClientSize
+        if (csize[0] * csize[1]) <= 0:
+            return None
+
+        # new bitmap to copy the DC
+        bitmap = wx.EmptyBitmap(*self.ClientSize)
+        dc = wx.MemoryDC()
+        dc.SelectObject(bitmap)
+
+        # simplified version of on_paint()
+        margin = ((self._bmp_buffer_size[0] - self.ClientSize[0]) // 2,
+                  (self._bmp_buffer_size[1] - self.ClientSize[1]) // 2)
+
+        dc.BlitPointSize((0, 0), self.ClientSize, self._dc_buffer, margin)
+
+        # close the DC, to be sure the bitmap can be used safely
+        del dc
+
+        return wx.ImageFromBitmap(bitmap)
 
 class BitmapCanvas(BufferedCanvas):
     """

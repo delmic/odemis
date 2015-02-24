@@ -438,29 +438,9 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
     @ignore_dead
     def update_thumbnail(self):
         if self.IsEnabled():
-            # TODO: avoid doing 2 copies, by using directly the wxImage from the
-            # result of the StreamTree
-            # logging.debug("Updating thumbnail with size = %s", self.ClientSize)
-
-            csize = self.ClientSize
-            if (csize[0] * csize[1]) <= 0:
-                return  # nothing to update
-
-            # new bitmap to copy the DC
-            bitmap = wx.EmptyBitmap(*self.ClientSize)
-            dc = wx.MemoryDC()
-            dc.SelectObject(bitmap)
-
-            # simplified version of on_paint()
-            margin = ((self._bmp_buffer_size[0] - self.ClientSize[0]) // 2,
-                      (self._bmp_buffer_size[1] - self.ClientSize[1]) // 2)
-
-            dc.BlitPointSize((0, 0), self.ClientSize, self._dc_buffer, margin)
-
-            # close the DC, to be sure the bitmap can be used safely
-            del dc
-
-            self.microscope_view.thumbnail.value = wx.ImageFromBitmap(bitmap)
+            img = self._get_img_from_buffer()
+            if img is not None:
+                self.microscope_view.thumbnail.value = img
 
     def _onViewPos(self, phy_pos):
         """
@@ -1264,23 +1244,9 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
             if self._data is None:
                 self.microscope_view.thumbnail.value = None
             else:
-                csize = self.ClientSize
-                if (csize[0] * csize[1]) <= 0:
-                    return  # nothing to update
-
-                # new bitmap to copy the DC
-                bitmap = wx.EmptyBitmap(*self.ClientSize)
-                context = wx.ClientDC(self)
-
-                dc = wx.MemoryDC()
-                dc.SelectObject(bitmap)
-
-                dc.BlitPointSize((0, 0), self.ClientSize, context, (0, 0))
-
-                # close the DC, to be sure the bitmap can be used safely
-                del dc
-
-                self.microscope_view.thumbnail.value = wx.ImageFromBitmap(bitmap)
+                img = self._get_img_from_buffer()
+                if img is not None:
+                    self.microscope_view.thumbnail.value = img
 
     def update_drawing(self):
         super(ZeroDimensionalPlotCanvas, self).update_drawing()
@@ -1393,20 +1359,9 @@ class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
             if self.images == [None]:
                 self.microscope_view.thumbnail.value = None
             else:
-                # new bitmap to copy the DC
-                bitmap = wx.EmptyBitmap(*self.ClientSize)
-                # print [self.Shown, self.Size]
-                context = wx.ClientDC(self)
-
-                dc = wx.MemoryDC()
-                dc.SelectObject(bitmap)
-
-                dc.BlitPointSize((0, 0), self.ClientSize, context, (0, 0))
-
-                # close the DC, to be sure the bitmap can be used safely
-                del dc
-
-                self.microscope_view.thumbnail.value = wx.ImageFromBitmap(bitmap)
+                img = self._get_img_from_buffer()
+                if img is not None:
+                    self.microscope_view.thumbnail.value = img
 
 
 class AngularResolvedCanvas(canvas.DraggableCanvas):
@@ -1488,34 +1443,9 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
 
     @wxlimit_invocation(2)  # max 1/2 Hz
     @call_in_wx_main  # needed as it accesses the DC
+    @ignore_dead
     def update_thumbnail(self):
         if self.IsEnabled():
-            csize = self.ClientSize
-            if (csize[0] * csize[1]) <= 0:
-                return  # nothing to update
-
-            # new bitmap to copy the DC
-            bitmap = wx.EmptyBitmap(*self.ClientSize)
-            # print [self.Shown, self.Size]
-            context = wx.ClientDC(self)
-
-            dc = wx.MemoryDC()
-            dc.SelectObject(bitmap)
-
-            dc.BlitPointSize((0, 0), self.ClientSize, context, (0, 0))
-
-            # close the DC, to be sure the bitmap can be used safely
-            del dc
-
-            self.microscope_view.thumbnail.value = wx.ImageFromBitmap(bitmap)
-
-            # import os
-            #
-            # i = 1
-            # path = '/home/rinze/imgdump/saved%03d.png' % i
-            #
-            # while os.path.exists(path):
-            #     i += 1
-            #     path = '/home/rinze/imgdump/saved%03d.png' % i
-            #
-            # self.microscope_view.thumbnail.value.SaveFile(path, wx.BITMAP_TYPE_PNG)
+            img = self._get_img_from_buffer()
+            if img is not None:
+                self.microscope_view.thumbnail.value = img
