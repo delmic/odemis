@@ -33,7 +33,7 @@ from odemis.gui.cont.settings import SecomSettingsController
 from odemis.gui.cont.streams import StreamController
 from odemis.gui.main_xrc import xrcfr_acq
 from odemis.gui.util import call_in_wx_main, formats_to_wildcards
-from odemis.gui.util.widgets import ProgessiveFutureConnector
+from odemis.gui.util.widgets import ProgressiveFutureConnector
 from odemis.util import units
 import os.path
 import time
@@ -437,7 +437,7 @@ class AcquisitionDialog(xrcfr_acq):
 
         # It should never be possible to reach here with no streams
         self.acq_future = acq.acquire(streams)
-        self._acq_future_connector = ProgessiveFutureConnector(self.acq_future,
+        self._acq_future_connector = ProgressiveFutureConnector(self.acq_future,
                                                                self.gauge_acq,
                                                                self.lbl_acqestimate)
         self.acq_future.add_done_callback(self.on_acquisition_done)

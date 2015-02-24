@@ -18,7 +18,7 @@ from __future__ import division
 
 import wx
 from odemis.gui.win.dialog_xrc import xrcprogress_dialog
-from odemis.gui.util.widgets import ProgessiveFutureConnector
+from odemis.gui.util.widgets import ProgressiveFutureConnector
 import logging
 from odemis.util import units
 from odemis.gui.util import call_in_wx_main, ignore_dead
@@ -123,7 +123,7 @@ class CalibrationProgressDialog(xrcprogress_dialog):
         # self.Layout()  # to put the gauge at the right place
         self.calib_future = DelphiCalibration(main_data, overview_pressure, vacuum_pressure,
                                               vented_pressure)
-        self._calib_future_connector = ProgessiveFutureConnector(self.calib_future,
+        self._calib_future_connector = ProgressiveFutureConnector(self.calib_future,
                                                                  self.gauge,
                                                                  self.time_txt)
         self.calib_future.add_done_callback(self.on_calib_done)

@@ -212,7 +212,7 @@ class AxisConnector(object):
         self.comp.position.unsubscribe(self._on_pos_change)
 
 
-class ProgessiveFutureConnector(object):
+class ProgressiveFutureConnector(object):
     """ Connects a progressive future to a progress bar and label """
 
     def __init__(self, future, bar, label=None, full=True):

@@ -41,7 +41,7 @@ from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
     RUNNING
 from odemis.acq._futures import executeTask
 import threading
-from odemis.gui.util.widgets import ProgessiveFutureConnector
+from odemis.gui.util.widgets import ProgressiveFutureConnector
 from odemis.acq import _futures
 
 # Sample holder types in the Delphi, as defined by Phenom World
@@ -524,7 +524,7 @@ class SecomStateController(MicroscopeStateController):
         self._set_ebeam_power(False)
         self._chamber_future = self._main_data.chamber.moveAbs({"pressure": self._vented_pressure})
         # Will actually be displayed only if the hw_info is shown
-        self._chamber_fc = ProgessiveFutureConnector(self._chamber_future,
+        self._chamber_fc = ProgressiveFutureConnector(self._chamber_future,
                                               self._main_frame.gauge_load_time,
                                               self._main_frame.lbl_load_time,
                                               full=False)
@@ -685,7 +685,7 @@ class DelphiStateController(SecomStateController):
             return
 
         self._chamber_future = self.DelphiLoading()
-        self._chamber_fc = ProgessiveFutureConnector(self._chamber_future,
+        self._chamber_fc = ProgressiveFutureConnector(self._chamber_future,
                                             self._main_frame.gauge_load_time,
                                             self._main_frame.lbl_load_time,
                                             full=False)

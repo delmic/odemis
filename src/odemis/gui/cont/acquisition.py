@@ -43,7 +43,7 @@ from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
 from odemis.gui.comp.popup import Message
 from odemis.gui.util import img, get_picture_folder, call_in_wx_main, \
     wxlimit_invocation
-from odemis.gui.util.widgets import ProgessiveFutureConnector
+from odemis.gui.util.widgets import ProgressiveFutureConnector
 from odemis.gui.win.acquisition import AcquisitionDialog, \
     ShowAcquisitionFileDialog
 from odemis.util import units
@@ -593,7 +593,7 @@ class SparcAcquiController(object):
         streams = self._tab_data_model.acquisitionView.getStreams()
 
         self.acq_future = acq.acquire(streams)
-        self._acq_future_connector = ProgessiveFutureConnector(self.acq_future,
+        self._acq_future_connector = ProgressiveFutureConnector(self.acq_future,
                                                                self.gauge_acq,
                                                                self.lbl_acqestimate)
         self.acq_future.add_done_callback(self.on_acquisition_done)
@@ -827,7 +827,7 @@ class FineAlignController(object):
         self._main_frame.lbl_fine_align.Hide()
         self._main_frame.gauge_fine_align.Show()
         self._sizer.Layout()
-        self._faf_connector = ProgessiveFutureConnector(f,
+        self._faf_connector = ProgressiveFutureConnector(f,
                                             self._main_frame.gauge_fine_align)
 
         f.add_done_callback(self._on_fa_done)
@@ -993,7 +993,7 @@ class AutoCenterController(object):
         self._main_frame.lbl_auto_center.Hide()
         self._main_frame.gauge_auto_center.Show()
         self._sizer.Layout()
-        self._acf_connector = ProgessiveFutureConnector(f,
+        self._acf_connector = ProgressiveFutureConnector(f,
                                             self._main_frame.gauge_auto_center)
 
         f.add_done_callback(self._on_ac_done)
