@@ -319,4 +319,4 @@ class ProgessiveFutureConnector(object):
             # TODO: if the text is too big for the label, rewrite with full=False
             # we could try to rely on IsEllipsized() (which requires support for
             # wxST_ELLIPSIZE_END in xrc) or dc.GetTextExtend()
-            self._label.SetValue(lbl_txt)
+            self._label.SetLabel(lbl_txt)

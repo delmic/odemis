@@ -23473,6 +23473,24 @@ getico_playImage = ico_play.GetImage
 getico_playBitmap = ico_play.GetBitmap
 
 #----------------------------------------------------------------------
+dialog_warning = PyEmbeddedImage(
+    "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAByUlEQVR42qXOb0gTcRzH8d/J"
+    "bmay2oq45yFB9DAIe+YT6Y+PFKwH9UxUMJgQRH/R4TOJHlSgrIfawgqs5vwz09HoUWwMWjYl"
+    "F0TT/bkm7R933t12n77dxiIM2/TB+8Hnju/rjgHYV7u+VN18T/GNuXtPQNHLX9a8bbrm64Ky"
+    "wF+tG9BmLAmsvoT+yQV1ujlVF1DyNlwr0pfxZRqIuFB8exHqHD9YM6DOWtIIP0BgsBUB+xno"
+    "gVtQ3E1bNQHavOmu5j8PhB1YOnfECMF+aMutUDymof8CsseW1cMDBPTi/YWjRgh10F+0Q35t"
+    "ye0KyG5uVPWfBj53ApEuBC8dR+jKSdptwMpZKP5TkF5x9/8NOBlfeHFA0j/wQIgBHxm+3jiG"
+    "6PXDhNFeZdBXGpF7bpYQZPwOID/JOeVFK7BGM0p9o75TG9RmpRiD/M6K/FNu/G9ggjVnnhxS"
+    "9ShfPkhSWwzxYasR8rSz5Wd6vAkZ50E1STdVIPOITUlLQvlYpH5SBQZx2AbRYQNk2jkDMHDJ"
+    "JyDzkD2rAqmbTCyttQBxgWJAikpXDtIVNEHFfiegtH4C4j2T+Ae40zD2Y8S8vdnH5FqK281S"
+    "8jZ7XAX20y/yMdJWQICXOAAAAABJRU5ErkJggg==")
+index.append('dialog_warning')
+catalog['dialog_warning'] = dialog_warning
+getdialog_warningData = dialog_warning.GetData
+getdialog_warningImage = dialog_warning.GetImage
+getdialog_warningBitmap = dialog_warning.GetBitmap
+
+#----------------------------------------------------------------------
 ico_pause_h = PyEmbeddedImage(
     "iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAAAVklEQVQ4y2NggAAlIA4H4jQS"
     "cThUL9yQNAox2LBwKhgEMoNiQ2AYU3Dz5s03YRifGEGDzpw58x+G8YmNGjRqEF0MiomJ6YFh"
@@ -23516,6 +23534,27 @@ catalog['ico_blending_spec'] = ico_blending_spec
 getico_blending_specData = ico_blending_spec.GetData
 getico_blending_specImage = ico_blending_spec.GetImage
 getico_blending_specBitmap = ico_blending_spec.GetBitmap
+
+#----------------------------------------------------------------------
+dialog_error = PyEmbeddedImage(
+    "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAACU0lEQVQ4jaWSQUhUURSGv/Pm"
+    "vjdTk0mBWBlTEwZDYW7a2LZZxCxqE6SblCClTbQIQly1Udcy6AjtcjUtXEogVCBYi9SFBUqQ"
+    "hUgjzcQ4o868++67LQZssk3Uvz7nO+f8/1HWWv5HCuBFOj3U2tmZdTwvEolGcVwXx3WRSOSg"
+    "0BpDqDWh1uhKxZRWVx/0Liw8UwAtqVT2Yk+PanXdv5parFbVsWRyGmgANpeWnEtdXVR2d/8o"
+    "FuDwkdF4nLW5Oa49edI44fPiItVbN2Fvn1hbG4n+fr7MzBAWCo2GVIpTN26wMTVFWKuB9vn0"
+    "5s0vD7RAvVRE/IDUyAiO55G8f58PY2N47e0k7twBEc4NDbH29Cni19DSZKIG/FIRxzdszc9z"
+    "NpPBUYrLw8MNI0Ww1rKRz2PKZajvoZtTCABT/A5G2M7l8Hd2uNDbi6NUIwFr+Tg+jrx7h4iw"
+    "W6gSNAN8gc3Xr2hRR2j1PLa05nQmQyQWA8AvlajOzhIvFPixvU1FWXw5tIEKNM5+QNjdTWpy"
+    "kv0gwBYKSCwGnse56Wm+3r7NcRECh983CAAlEFWK8xMThPE4QanESl8fYSLB1WwWp6ODk6Oj"
+    "1AYGcOUwQBqBh8bwbXCQ9lyOrYcPub6ygl1e5q0xJB49ovb4MYEIVmyjpzmFQCx1azHr65TT"
+    "aZJBQM1xiFjLlbk5ivPzqDCkLIIv4e8paCu6cMREzwjsiGDEEiC44uAABtDWsA/s2ZCdEwFh"
+    "VfQBoMP17r6v+89fVoxqfuFmNb+zUxGdPOrdOwBka7U8kOcf9BMDMwGue9Cp1AAAAABJRU5E"
+    "rkJggg==")
+index.append('dialog_error')
+catalog['dialog_error'] = dialog_error
+getdialog_errorData = dialog_error.GetData
+getdialog_errorImage = dialog_error.GetImage
+getdialog_errorBitmap = dialog_error.GetBitmap
 
 #----------------------------------------------------------------------
 ico_rem_str_h = PyEmbeddedImage(
@@ -23774,6 +23813,27 @@ catalog['ico_blending_opt'] = ico_blending_opt
 getico_blending_optData = ico_blending_opt.GetData
 getico_blending_optImage = ico_blending_opt.GetImage
 getico_blending_optBitmap = ico_blending_opt.GetBitmap
+
+#----------------------------------------------------------------------
+dialog_info = PyEmbeddedImage(
+    "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAACgklEQVR42n2TXUiTYRTHz/xa"
+    "JQXmZRDUhZVgEJVts8yclB+EFohhWWZalqGb0/xoOkWlMLvIlWSGpa6IHJbmzKbTiNkXDlNK"
+    "LzJ3VexK6MLI1uu/s3fwrhz5wI/nvOc558d5Xt6XACxHxoQwoUOOuU22CedmAGuZVUzA8vrl"
+    "zYEXmwcUyXrz2Ikm6/cK09ulerMDRW32hazr1glDl30/gKD/CQK257TodxR0/bxlmcZzx1eM"
+    "TLlgm3Rx/A0dI7PIvGZzJ+rNjR6JnyA8uU4XkdOO9uFZND2dQdWDKVwxf/Igxo09MzC9nENS"
+    "3SAiTt+pBiCTBLSrcEvQwYaFyk4HtHfHoWkbh970AYtuQYRjT048q3k4CXma8UdoUu02n0Ch"
+    "644v60Ge8Q1ybrwWKebi38KSCMdSPpdr1HoL6ECt2SdQ6pzqSgvSr47+Q/7NMZwz2v3yKbVW"
+    "kLrBKfZS1PkwFggJ+gEkGl5I/L0O1Qxxbkg6S633COoFiroQRhSpXU8KrRCt6YWqtM9L+SCU"
+    "l62SIKZqlJ+HEVnYhw3ZJgSntoHiDAJtLQj3XmGP1kWJzZAdvo2QdBPWZD/Butx+zM/Pi9Cp"
+    "AVBWP+iYGXS0E5TSAoopd/newW6NnRIaQWntoIzHoJPckD3oE5yxgXJHxbx4nmwERWvGJAFP"
+    "oCRFiZuOdICO93oapGZJUvDOK8roBilK3SxQSQLvFEWtFFsNyuwBnX3FDe9BxR9Bl2a9e9GE"
+    "OBXFGsATt/p9ibxkfHCPJxFIZeJ7P2PZNO9fQHnDoH2PEKAsFbjmvqfWTyAldmri5XtLPsvj"
+    "yhZlSh2ICU6o+LVaXeEMVOnUK/yN/sii8jcSs1LNH2rqf2gvyLOuAAAAAElFTkSuQmCC")
+index.append('dialog_info')
+catalog['dialog_info'] = dialog_info
+getdialog_infoData = dialog_info.GetData
+getdialog_infoImage = dialog_info.GetImage
+getdialog_infoBitmap = dialog_info.GetBitmap
 
 #----------------------------------------------------------------------
 arr_down = PyEmbeddedImage(

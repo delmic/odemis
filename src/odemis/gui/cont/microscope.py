@@ -276,6 +276,9 @@ class SecomStateController(MicroscopeStateController):
         self._opt_btn = getattr(main_frame, btn_prefix + "opt")
         self._acq_btn = getattr(main_frame, btn_prefix + "opt")
 
+        # I
+        self._tab_data.streams.subscribe(self._subscribe_active_stream_status)
+
         # Optical state is almost entirely handled by the streams, but for the
         # light power we still handle it globally
         if hasattr(tab_data, "opticalState"):
@@ -308,6 +311,33 @@ class SecomStateController(MicroscopeStateController):
             if ch_pos.value["pressure"] == self._overview_pressure:
                 self._main_data.chamberState.value = CHAMBER_PUMPING
 
+    def _subscribe_active_stream_status(self, streams):
+        """ Find the active stream and subscribe to its status VA
+
+        streams is sorted by Least Recently Used, so the first element is the newest and a possible
+        2nd one, was the previous newest.
+
+        """
+        if len(streams):
+            if streams[0].is_active.value:
+                logging.debug("Tracking new active stream status")
+                streams[0].status.subscribe(self._on_active_stream_status, init=True)
+            if len(streams) > 1:
+                streams[1].status.unsubscribe(self._on_active_stream_status)
+
+    def _on_active_stream_status(self, (lvl, msg)):
+        """ Display the given message, or clear it when the message is None """
+        if not msg:
+            msg = ""
+        self._show_status_icons(lvl)
+        self._main_frame.lbl_load_status.SetLabel(msg)
+
+    def _show_status_icons(self, lvl):
+        self._main_frame.bmp_load_status_info.Show(lvl in (logging.INFO, logging.DEBUG))
+        self._main_frame.bmp_load_status_warn.Show(lvl == logging.WARN)
+        self._main_frame.bmp_load_status_error.Show(lvl == logging.ERROR)
+        self._main_frame.pnl_hw_info.Parent.Layout()
+
     def _show_progress_indicators(self, show):
         """
         Show or hide the loading progress indicators for the chamber and sample holder
@@ -316,6 +346,7 @@ class SecomStateController(MicroscopeStateController):
         """
         self._main_frame.gauge_load_time.Show(show)
         self._main_frame.lbl_load_time.Show(show)
+        self._show_status_icons(None)  # Always hide the icons
         self._main_frame.lbl_load_status.Show(not show)
         self._main_frame.pnl_hw_info.Parent.Layout()
 
