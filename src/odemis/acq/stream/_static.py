@@ -457,6 +457,8 @@ class StaticSpectrumStream(StaticStream):
 
         shape = self.raw[0].shape[-1:-3:-1]
         for p in line:
+            if p == (None, None):
+                continue
             if len(p) != 2:
                 raise ValueError("selected_line must contain only tuples of 2 ints")
             if not 0 <= p[0] < shape[0] or not 0 <= p[1] < shape[1]:
