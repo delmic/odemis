@@ -266,7 +266,7 @@ class SEMStream(Stream):
         # works if we are the only subscriber (but that's very likely).
 
         try:
-            if self.is_active.value == False:
+            if not self.is_active.value:
                 # not acquiring => nothing to do
                 return
 
@@ -381,8 +381,14 @@ class AlignedSEMStream(SEMStream):
         self._detector.updateMetadata({MD_POS_COR: self._shift})
 
     def onActive(self, active):
+        # Need to calibrate ?
         if active and not self._calibrated and not self.spot.value:
-            # Need to calibrate
+            # store current settings
+            no_spot_settings = (self._emitter.dwellTime.value,
+                                self._emitter.resolution.value)
+            # Don't mess up with un/subscribing while doing the calibration
+            self.emitter.dwellTime.unsubscribe(self.onDwellTime)
+
             shift = (0, 0)
             self._beamshift = None
             try:
@@ -390,9 +396,6 @@ class AlignedSEMStream(SEMStream):
                 # TODO Handle cases where current beam shift is larger than
                 # current limit. Happens when accel. voltage is changed
                 self._emitter.translation.value = (0, 0)
-                # store current settings
-                no_spot_settings = (self._emitter.dwellTime.value,
-                                    self._emitter.resolution.value)
                 shift = FindEbeamCenter(self._ccd, self._detector, self._emitter)
                 logging.debug("Spot shift is %s m,m", shift)
                 self._beamshift = shift
@@ -418,6 +421,10 @@ class AlignedSEMStream(SEMStream):
                     # Then by updating the metadata
                     shift = (0, 0)  # just in case of failure
                     shift = FindEbeamCenter(self._ccd, self._detector, self._emitter)
+                elif self._shiftebeam == MTD_MD_UPD:
+                    pass
+                else:
+                    logging.error("Unknown shiftbeam method %s", self._shiftebeam)
             except LookupError:
                 logging.warning("Failed to locate the ebeam center, SEM image will not be aligned")
             except Exception:
@@ -429,6 +436,7 @@ class AlignedSEMStream(SEMStream):
                 # restore hw settings
                 (self._emitter.dwellTime.value,
                  self._emitter.resolution.value) = no_spot_settings
+                self._emitter.dwellTime.subscribe(self.onDwellTime)
 
             self._shift = shift
             self._compensateShift()

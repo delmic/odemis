@@ -38,10 +38,8 @@ from unittest.case import skip
 import weakref
 
 
-# logging.basicConfig(format=" - %(levelname)s \t%(message)s")
+logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
 logging.getLogger().setLevel(logging.DEBUG)
-# _frm = "%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s"
-# logging.getLogger().handlers[0].setFormatter(logging.Formatter(_frm))
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 SECOM_LENS_CONFIG = CONFIG_PATH + "secom-sim-lens-align.odm.yaml"  # 7x7
@@ -199,6 +197,7 @@ class TestAlignment(unittest.TestCase):
         # Check calibration happens again after a stage move
         f = self.stage.moveRel({"x": 100e-6})
         f.result() # make sure the move is over
+        time.sleep(0.1) # make sure the stream had time to detect position has changed
 
         self.image_received.clear()
         st.image.subscribe(self.on_image)
