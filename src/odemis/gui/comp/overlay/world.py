@@ -615,8 +615,8 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, base.PixelDataMixin):
         LineSelectOverlay.__init__(self, cnvs)
         base.PixelDataMixin.__init__(self)
 
-        self.start_pixel = None
-        self.end_pixel = None
+        self.start_pixel = (None, None)
+        self.end_pixel = (None, None)
 
         self._selected_line_va = None
         self._selected_width_va = None
@@ -731,14 +731,14 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, base.PixelDataMixin):
             v_pos = self.data_pixel_to_view(self.start_pixel)
             self.drag_v_start_pos = self.select_v_start_pos = v_pos
         else:
-            self.start_pixel = None
+            self.start_pixel = (None, None)
 
         if self.select_v_end_pos:
             self.end_pixel = self.view_to_data_pixel(self.select_v_end_pos)
             v_pos = self.data_pixel_to_view(self.end_pixel)
             self.drag_v_end_pos = self.select_v_end_pos = v_pos
         else:
-            self.end_pixel = None
+            self.end_pixel = (None, None)
 
     def on_motion(self, evt):
         """ Process drag motion if enabled, otherwise call super method so event will propagate """
