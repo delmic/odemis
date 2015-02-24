@@ -146,9 +146,8 @@ class Stream(object):
 
         # self.histogram.subscribe(self._onHistogram) # FIXME -> update outliers and then image
 
-        # list of warnings to display to the user
-        # TODO should be a set
-        self.warnings = model.ListVA([]) # should only contain WARNING_*
+        # Tuple of (int, str) or (None, None): loglevel and message
+        self.status = model.VigilantAttribute((None, None), readonly=True)
 
         # if there is already some data, update image with it
         if self.raw:
@@ -176,21 +175,19 @@ class Stream(object):
         # less than 0.1 seconds)
         return self.SETUP_OVERHEAD
 
-    def _removeWarnings(self, *warnings):
-        """ Remove all the given warnings if any are present
-
-        warnings (set of WARNING_*): the warnings to remove
+    def _setStatus(self, level, message=None):
         """
-        new_warnings = set(self.warnings.value) - set(warnings)
-        self.warnings.value = list(new_warnings)
+        Set the status
 
-    def _addWarning(self, warning):
-        """ Add a warning if not already present
-
-        warning (WARNING_*): the warning to add
+        level (0<=int or None): the bigger the more important, same interpretation
+           as logging.
+        message (str or None): the status message
         """
-        if warning not in self.warnings.value:
-            self.warnings.value.append(warning)
+        if level is None and message is not None:
+            logging.warning("Setting status with no level and message %s", message)
+
+        self.status._value = (level, message)
+        self.status.notify(self.status.value)
 
     def onActive(self, active):
         """ Called when the Stream is activated or deactivated by setting the

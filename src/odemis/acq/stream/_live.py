@@ -353,6 +353,8 @@ class AlignedSEMStream(SEMStream):
             })
             logging.debug("Compensated stage translation %s m,m", self._cur_trans)
         self._last_pos = pos
+
+        self._setStatus(logging.WARNING, u"SEM stream is not aligned")
         self._calibrated = False
 
     # need to override it to support beam shift in the translation
@@ -426,10 +428,12 @@ class AlignedSEMStream(SEMStream):
                 else:
                     logging.error("Unknown shiftbeam method %s", self._shiftebeam)
             except LookupError:
+                self._setStatus(logging.WARNING, u"Automatic SEM alignment unsuccessful")
                 logging.warning("Failed to locate the ebeam center, SEM image will not be aligned")
             except Exception:
                 logging.exception("Failure while looking for the ebeam center")
             else:
+                self._setStatus(None)
                 logging.info("Aligning SEM image using shift of %s", shift)
                 self._calibrated = True
             finally:
