@@ -671,7 +671,6 @@
                                       <range>100</range>
                                       <value>0</value>
                                       <bg>#333333</bg>
-                                      <hidden>1</hidden>
                                       <style>wxGA_SMOOTH</style>
                                       <XRCED>
                                         <assign_var>1</assign_var>
@@ -682,18 +681,15 @@
                                     <border>10</border>
                                   </object>
                                   <object class="sizeritem">
-                                    <object class="wxTextCtrl" name="lbl_load_time">
+                                    <object class="wxStaticText" name="lbl_load_time">
                                       <size>100, -1</size>
-                                      <value>Load timer</value>
-                                      <fg>#eeeeee</fg>
-                                      <bg>#333333</bg>
-                                      <hidden>1</hidden>
-                                      <style>wxBORDER_NONE|wxTE_NO_VSCROLL|wxTE_READONLY|wxTE_RIGHT|wxTE_DONTWRAP</style>
+                                      <fg>#EEEEEE</fg>
+                                      <style>wxALIGN_RIGHT|wxST_NO_AUTORESIZE</style>
                                       <XRCED>
                                         <assign_var>1</assign_var>
                                       </XRCED>
                                     </object>
-                                    <flag>wxBOTTOM|wxRIGHT|wxRESERVE_SPACE_EVEN_IF_HIDDEN</flag>
+                                    <flag>wxBOTTOM|wxRIGHT</flag>
                                     <border>10</border>
                                   </object>
                                   <orient>wxHORIZONTAL</orient>
@@ -717,7 +713,6 @@
                             </object>
                             <size>-1,24</size>
                             <bg>#333333</bg>
-                            <hidden>1</hidden>
                             <XRCED>
                               <assign_var>1</assign_var>
                             </XRCED>
