@@ -93,9 +93,8 @@ class Stage(model.Actuator):
             raise HwError("stage.fail file present, simulating error")
 
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
-        self.position = model.VigilantAttribute(
-                                    self._applyInversionAbs(self._position),
-                                    unit="m", readonly=True)
+        self.position = model.VigilantAttribute({}, unit="m", readonly=True)
+        self._updatePosition()
 
         self.speed = model.MultiSpeedVA(init_speed, [0., 10.], "m/s")
 
