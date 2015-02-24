@@ -428,6 +428,14 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # TODO: detect that the canvas is not visible, and so should no/less
         # frequently be updated? The difficulty is that it must be redrawn as
         # soon as it's shown again.
+
+        # TODO: When disabled, update_drawing() will just draw the background
+        # (probably not a good idea), to save time. Instead, we just don't redraw
+        # at all so that the canvas clears up suddenly when receiving data and
+        # being disabled. => just don't redraw at all in canvas.update_drawing()?
+        if not self.Enabled:
+            return
+
         super(DblMicroscopeCanvas, self).update_drawing()
 
         if self.microscope_view:
