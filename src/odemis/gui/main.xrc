@@ -677,21 +677,22 @@
                                         <assign_var>1</assign_var>
                                       </XRCED>
                                     </object>
-                                    <option>3</option>
+                                    <option>1</option>
                                     <flag>wxBOTTOM|wxLEFT|wxRIGHT|wxALIGN_BOTTOM</flag>
                                     <border>10</border>
                                   </object>
                                   <object class="sizeritem">
-                                    <object class="wxStaticText" name="lbl_load_time">
-                                      <label>Load timer</label>
-                                      <fg>#E5E5E5</fg>
+                                    <object class="wxTextCtrl" name="lbl_load_time">
+                                      <size>100, -1</size>
+                                      <value>Load timer</value>
+                                      <fg>#eeeeee</fg>
+                                      <bg>#333333</bg>
                                       <hidden>1</hidden>
-                                      <style>wxALIGN_RIGHT</style>
+                                      <style>wxBORDER_NONE|wxTE_NO_VSCROLL|wxTE_READONLY|wxTE_RIGHT|wxTE_DONTWRAP</style>
                                       <XRCED>
                                         <assign_var>1</assign_var>
                                       </XRCED>
                                     </object>
-                                    <option>2</option>
                                     <flag>wxBOTTOM|wxRIGHT|wxRESERVE_SPACE_EVEN_IF_HIDDEN</flag>
                                     <border>10</border>
                                   </object>
