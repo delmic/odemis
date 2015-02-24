@@ -410,6 +410,7 @@ class Scanner(model.Emitter):
         self.parent._device.SetSEMSourceTilt(current_tilt[0], current_tilt[1], False)
         # Brightness and contrast have to be adjusted just once
         # we set up the detector (see SEMACB())
+        # TODO reset the beam shift so it is within boundaries
 
     def _setSpotSize(self, value):
         # Set the corresponding spot size to Phenom SEM
@@ -493,10 +494,6 @@ class Scanner(model.Emitter):
                 max(min(value[1], max_size[1]), 1))
         self._resolution = size
 
-        # setting the same value means it will recheck the boundaries with the
-        # new resolution, and reduce the distance to the center if necessary.
-        self.translation.value = self.translation.value
-
         return size
 
     def _onTranslation(self, translation):
@@ -507,6 +504,8 @@ class Scanner(model.Emitter):
                          translation[1] * pixelSize[1])
             beamShift.x, beamShift.y = new_trans[0], new_trans[1]
             logging.debug("EBeam shifted by %s m,m", new_trans)
+            # TODO This has to be done via another beamshift VA (m,m) instead of
+            # translation
             self.parent._device.SetSEMImageShift(beamShift, True)
 
     def _setTranslation(self, value):
