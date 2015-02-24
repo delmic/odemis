@@ -318,6 +318,10 @@ class Detector(model.Detector):
             bpp = 16
         self.bpp = model.IntEnumerated(bpp, set([8, 16]))
 
+        # Simulate the Hw brightness/contrast, but don't actually do anything
+        self.contrast = model.FloatContinuous(0.5, [0, 1], unit="")
+        self.brightness = model.FloatContinuous(0.5, [0, 1], unit="")
+
         self.drift_factor = 1  # dummy value for drift in pixels
         self.current_drift = 0
         # Given that max resolution is half the shape of fake_img,
@@ -342,6 +346,8 @@ class Detector(model.Detector):
         (Simulation of) run the calibration for the brightness/contrast.
         (Identical interface as the phenom driver)
         """
+        self.contrast.value = 0.5
+        self.brightness.value = 0.5
         return model.InstantaneousFuture()
 
     def start_acquire(self, callback):
