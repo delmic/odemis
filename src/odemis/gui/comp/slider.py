@@ -236,7 +236,7 @@ class Slider(BaseSlider):
         # the slider width
         self.handlePos = 0
 
-        #Get Pointer's bitmap
+        # Get Pointer's bitmap
         self.bitmap = getsliderBitmap()
         self.bitmap_dis = getslider_disBitmap()
 
@@ -398,17 +398,17 @@ class Slider(BaseSlider):
                            slider
         """
 
-        #limit movement if X position is greater then self.width
+        # limit movement if X position is greater then self.width
         if xPos > self.GetWidth() - self.half_h_width:
             self.handlePos = self.GetWidth() - self.handle_width
-        #limit movement if X position is less then 0
+        # limit movement if X position is less then 0
         elif xPos < self.half_h_width:
             self.handlePos = 0
-        #if X position is between 0-self.width
+        # if X position is between 0-self.width
         else:
             self.handlePos = xPos - self.half_h_width
 
-        #calculate value, based on pointer position
+        # calculate value, based on pointer position
         self._SetValue(self._pixel_to_val())
         self._send_slider_update_event()
 
@@ -586,12 +586,8 @@ class NumberSlider(Slider):
                 evt.Skip()
 
     def _update_linked_field(self, value):
-        """ Update any linked field to the same value as this slider
-        """
-        logging.debug(
-            "Updating number field from %s to %s",
-            self.current_value,
-            value)
+        """ Update any linked field to the same value as this slider """
+        logging.debug("Updating number field from %s to %s", self.current_value, value)
         self.linked_field.ChangeValue(value)
 
     def set_position_value(self, xPos):
@@ -1009,7 +1005,7 @@ class VisualRangeSlider(BaseSlider):
             ctx = wxcairo.ContextFromDC(dc)
             width, height = self.ClientSize
             self._draw_content(ctx, width, height)
-        del dc # need to get rid of the MemoryDC before Update() is called.
+        del dc  # need to get rid of the MemoryDC before Update() is called.
         self.Refresh(eraseBackground=False)
         self.Update()
 

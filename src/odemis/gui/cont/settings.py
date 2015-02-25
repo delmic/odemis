@@ -358,19 +358,30 @@ class SettingsController(object):
                 # This event type will make the value update continuously as the slider is dragged
                 update_event = wx.EVT_SLIDER
 
+            min_val, max_val = conf.get('range', (min_val, max_val))
+
             ctrl_conf = {
                 'min_val': min_val,
                 'max_val': max_val,
                 'scale': conf.get('scale', None),
                 'unit': unit,
                 'accuracy': conf.get('accuracy', 4),
-                }
+            }
 
             lbl_ctrl, value_ctrl = factory(label_text, vigil_attr.value, ctrl_conf)
 
+            va_2_ctrl = None
+            ctrl_2_va = None
+
+            if "va_2_ctrl" in conf:
+                va_2_ctrl = partial(conf['va_2_ctrl'], ctrl=value_ctrl)
+
+            if "ctrl_2_va" in conf:
+                ctrl_2_va = partial(conf['ctrl_2_va'], ctrl=value_ctrl, va=vigil_attr)
+
             ne = SettingEntry(name=name, va=vigil_attr, hw_comp=comp,
                               lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
-                              events=update_event)
+                              events=update_event, va_2_ctrl=va_2_ctrl, ctrl_2_va=ctrl_2_va)
 
             # TODO: deprecated?
             value_ctrl.Bind(wx.EVT_SLIDER, self.on_setting_changed)
@@ -714,15 +725,22 @@ class SettingsController(object):
         gb_sizer.Add(btn_autoadjust, (0, 0), (2, 1), border=10,
                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT)
 
+        def va_2_ctrl(val, ctrl):
+            ctrl.SetValue(val * 100)
+
+        def ctrl_2_va(ctrl, va):
+            va.value = ctrl.GetValue() / 100.0
+
         # TODO: Add the ability to pass va_2_ctrl and ctrl_2_va functions. (Needed to scale the
         # slider values from [0..1] to [0..100]
         sld_conf = {
             "accuracy": 2,
             "event": wx.EVT_SCROLL_CHANGED,
-            "v2c": None,
-            "c2v": None,
             "control_type": odemis.gui.CONTROL_SLIDER,
-            # "type": "integer",
+            "va_2_ctrl": va_2_ctrl,
+            "ctrl_2_va": ctrl_2_va,
+            "range": (0, 100),
+            "type": "integer",
         }
 
         num_rows = 0
@@ -730,7 +748,6 @@ class SettingsController(object):
         if isinstance(detector.brightness, VigilantAttributeBase):
             brightness_entry = self.add_setting_entry("brightness", detector.brightness, detector,
                                                       sld_conf)
-
             # TODO: 'Ugly' detaching somewhat nullifies the cleanliness created by using
             # 'add_setting_entry'. 'add_setting_entry' Needs some more refactoring anyway.
             self.panel.gb_sizer.Detach(brightness_entry.value_ctrl)

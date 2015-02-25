@@ -81,7 +81,7 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
         text_kwargs['style'] = wx.TE_PROCESS_ENTER | wx.BORDER_NONE | text_kwargs.get('style', 0)
         super(SuggestTextCtrl, self).__init__(parent, **text_kwargs)
 
-        #Some variables
+        # Some variables
         self._drop_down_click = drop_down_click
         self._choices = choices
         self._lastinsertionpoint = 0
@@ -91,29 +91,29 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
         self._match_function = match_function
         self._screenheight = wx.SystemSettings.GetMetric(wx.SYS_SCREEN_Y)
 
-        #sort variable needed by listmix
+        # sort variable needed by listmix
         self.itemDataMap = dict()
 
-        #Load and sort data
+        # Load and sort data
         if not self._choices:
             self._choices = []
-            #raise ValueError, "Pass me at least one of multiChoices OR choices"
+            # raise ValueError, "Pass me at least one of multiChoices OR choices"
 
-        #widgets
+        # widgets
         self.dropdown = wx.PopupWindow(self)
 
-        #Control the style
+        # Control the style
         flags = wx.LC_REPORT | wx.LC_SINGLE_SEL | wx.LC_SORT_ASCENDING
         flags = flags | wx.LC_NO_HEADER
 
-        #Create the list and bind the events
+        # Create the list and bind the events
         self.dropdownlistbox = ChoiceListCtrl(self.dropdown, style=flags, pos=wx.Point(0, 0))
 
         ln = 1
-        #else: ln = len(choices)
+        # else: ln = len(choices)
         listmix.ColumnSorterMixin.__init__(self, ln)
-        #load the data
-        #self.SetChoices(choices)
+        # load the data
+        # self.SetChoices(choices)
 
         gp = self
 
@@ -485,7 +485,7 @@ class NumberValidator(wx.PyValidator):
         # from reaching the text control
         return
 
-    def Validate(self, win=None):#pylint: disable=W0221,W0613
+    def Validate(self, win=None):
         """ This method is called when the 'Validate()' method is called on the
         parent of the TextCtrl to which this validator belongs. It can also
         be called as a standalone validation method.
@@ -567,6 +567,7 @@ class NumberValidator(wx.PyValidator):
         # To be overridden
         raise NotImplementedError
 
+
 def _step_from_range(min_val, max_val):
     """ Dynamically create step size based on range """
     try:
@@ -594,8 +595,8 @@ class NumberTextCtrl(wx.TextCtrl):
 
     Generates a wxEVT_COMMAND_ENTER whenever a new number is set by the user.
     This happens typically when loosing the focus or when pressing "Enter" key.
-    """
 
+    """
 
     def __init__(self, *args, **kwargs):
         """
@@ -643,8 +644,8 @@ class NumberTextCtrl(wx.TextCtrl):
         self.Bind(wx.EVT_TEXT_ENTER, self.on_text_enter)
 
     def _display_raw(self):
-        """ Set the current text to raw style (no truncation/no unit)
-        """
+        """ Set the current text to raw style (no truncation/no unit) """
+
         if self.number is None:
             str_val = u""
         else:
@@ -666,7 +667,7 @@ class NumberTextCtrl(wx.TextCtrl):
             str_val = units.readable_str(self.number, sig=self.accuracy)
         wx.TextCtrl.ChangeValue(self, str_val)
 
-    def GetValue(self): #pylint: disable=W0221
+    def GetValue(self):
         """ Return the value as an integer, or None if no (valid) value is
         present.
         """
@@ -674,25 +675,25 @@ class NumberTextCtrl(wx.TextCtrl):
         # the text field
         return self.number
 
-    def SetValue(self, val): #pylint: disable=W0221
+    def SetValue(self, val):
         self.ChangeValue(val)
         # TODO: call _send_change_event() ? => in this case we need to change
         # all Odemis to use ChangeValue instead of SetValue()
 
     def ChangeValue(self, val):
         """ Set the value of the control
-        No checks are done on the value to be correct
-        If this is needed, use the validator.
+
+        No checks are done on the value to be correct. If this is needed, use the validator.
+
         """
+
         self.number = val
         # logging.debug(
         #         "Setting value to '%s' for %s",
         #         val, self.__class__.__name__)
 
         if self.HasFocus():
-            logging.info(
-                    "Received the new value '%s' to set while in focus",
-                    val)
+            logging.info("Received the new value '%s' to set while in focus", val)
             self._display_raw()
         else:
             self._display_pretty()
@@ -730,10 +731,7 @@ class NumberTextCtrl(wx.TextCtrl):
         if prev_num != self.number:
             self._send_change_event()
 
-    # -----------------
     # Event handlers
-    # -----------------
-
 
     def _send_change_event(self):
         changeEvent = wx.CommandEvent(wx.wxEVT_COMMAND_ENTER, self.GetId())
@@ -743,7 +741,6 @@ class NumberTextCtrl(wx.TextCtrl):
         # Watch for a possible listener of this event that will catch it and
         # eventually process it
         self.GetEventHandler().ProcessEvent(changeEvent)
-
 
     def on_text_enter(self, evt):
         logging.debug("New text entered in %s", self.__class__.__name__)
@@ -799,9 +796,8 @@ class NumberTextCtrl(wx.TextCtrl):
         # SKip the EVT_KILL_FOCUS event when the value is set
         evt.Skip()
 
-    # -----------------
     # END Event handlers
-    # -----------------
+
 
 class UnitNumberCtrl(NumberTextCtrl):
 
@@ -818,6 +814,7 @@ class UnitNumberCtrl(NumberTextCtrl):
         else:
             str_val = units.readable_str(self.number, self.unit, self.accuracy)
         wx.TextCtrl.ChangeValue(self, str_val)
+
 
 #########################################
 # Integer controls
@@ -844,7 +841,6 @@ class IntegerValidator(NumberValidator):
         return int(val)
 
 
-
 class IntegerTextCtrl(NumberTextCtrl):
     """ This class describes a text field that may only hold integer data.
 
@@ -861,6 +857,7 @@ class IntegerTextCtrl(NumberTextCtrl):
     exception will be raised.
 
     """
+
     # TODO: should use the same parameter as NumberSlider: val_range instead
     # of min_val/max_val
 
@@ -878,6 +875,7 @@ class IntegerTextCtrl(NumberTextCtrl):
 
     def SetValue(self, val): #pylint: disable=W0221
         NumberTextCtrl.SetValue(self, int(val))
+
 
 class UnitIntegerCtrl(UnitNumberCtrl):
     """ This class represents a text control which is capable of formatting
@@ -902,8 +900,9 @@ class UnitIntegerCtrl(UnitNumberCtrl):
 
         UnitNumberCtrl.__init__(self, *args, **kwargs)
 
-    def SetValue(self, val): #pylint: disable=W0221
+    def SetValue(self, val):
         UnitNumberCtrl.SetValue(self, int(val))
+
 
 #########################################
 # Float controls
@@ -916,13 +915,13 @@ class FloatValidator(NumberValidator):
         # More legal characters for floats
         self.legal += ".e-" # - is for the exponent (e.g., 1e-6)
 
-
-    def Clone(self):    #pylint: disable=W0221
+    def Clone(self):
         """ Required method """
         return FloatValidator(self.min_val, self.max_val, self.choices)
 
     def cast(self, val):
         return float(val)
+
 
 class FloatTextCtrl(NumberTextCtrl):
     def __init__(self, *args, **kwargs):
@@ -935,6 +934,7 @@ class FloatTextCtrl(NumberTextCtrl):
         kwargs['accuracy'] = kwargs.get('accuracy', 3) # decimal places
 
         NumberTextCtrl.__init__(self, *args, **kwargs)
+
 
 class UnitFloatCtrl(UnitNumberCtrl):
     def __init__(self, *args, **kwargs):

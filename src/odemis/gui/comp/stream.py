@@ -822,18 +822,12 @@ class StreamPanel(wx.Panel):
                                                            events=wx.EVT_SLIDER)
 
         autobc_sz = wx.BoxSizer(wx.HORIZONTAL)
-        autobc_sz.Add(self._btn_autobc, 0,
-                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
-                      border=5)
-        autobc_sz.Add(lbl_bc_outliers, 0,
-                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.LEFT,
-                      border=5)
+        autobc_sz.Add(self._btn_autobc, 0, flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT, border=5)
+        autobc_sz.Add(lbl_bc_outliers, 0, flag=wx.ALIGN_CENTRE_VERTICAL | wx.LEFT, border=5)
         autobc_sz.Add(self._sld_bc_outliers, 1,
-                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND,
-                      border=5)
+                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.LEFT | wx.EXPAND, border=5)
         self.control_gbsizer.Add(autobc_sz, (self.row_count, 0), span=(1, 3),
-                                 flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL,
-                                 border=5)
+                                 flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
         self.row_count += 1
 
         # ====== Second row, histogram
