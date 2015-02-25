@@ -346,8 +346,9 @@ class AlignedSEMStream(SEMStream):
         # TODO We initialize cur_trans to None just to force this condition to
         # fail before spot alignment is performed. Instead we should be able
         # to update with the correct cur_trans even spot alignment is not
-        # performed yet.
-        if self._cur_trans != None and self._cur_trans != trans:
+        # performed yet. => only apply if MD_POS_COR has not changed since we
+        # measured _cur_trans?
+        if self._cur_trans is not None and self._cur_trans != trans:
             logging.debug("Current stage translation %s m,m", trans)
             self._stage.updateMetadata({
                 model.MD_POS_COR: self._cur_trans
@@ -355,7 +356,8 @@ class AlignedSEMStream(SEMStream):
             logging.debug("Compensated stage translation %s m,m", self._cur_trans)
         self._last_pos = pos
 
-        self._setStatus(logging.WARNING, u"SEM stream is not aligned")
+        if self.is_active.value:
+            self._setStatus(logging.WARNING, u"SEM stream is not aligned")
         self._calibrated = False
 
     # need to override it to support beam shift in the translation
