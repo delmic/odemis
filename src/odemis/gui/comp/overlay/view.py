@@ -336,27 +336,28 @@ class ViewSelectOverlay(base.ViewOverlay, base.SelectionMixin):
             ctx.rectangle(*rect)
             ctx.stroke()
 
-            if self.edges:
-                ctx.set_line_width(0.5)
-                ctx.set_dash([])
-
-                inner_rect = (self.edges['i_l'],
-                              self.edges['i_t'],
-                              self.edges['i_r'] - self.edges['i_l'],
-                              self.edges['i_b'] - self.edges['i_t'])
-
-                ctx.set_source_rgba(1, 0, 0, 1)
-                ctx.rectangle(*inner_rect)
-                ctx.stroke()
-
-                outer_rect = (self.edges['o_l'],
-                              self.edges['o_t'],
-                              self.edges['o_r'] - self.edges['o_l'],
-                              self.edges['o_b'] - self.edges['o_t'])
-
-                ctx.set_source_rgba(0, 0, 1, 1)
-                ctx.rectangle(*outer_rect)
-                ctx.stroke()
+            # Render the hover boxes (For debugging purposes)
+            # if self.edges:
+            #     ctx.set_line_width(0.5)
+            #     ctx.set_dash([])
+            #
+            #     inner_rect = (self.edges['i_l'],
+            #                   self.edges['i_t'],
+            #                   self.edges['i_r'] - self.edges['i_l'],
+            #                   self.edges['i_b'] - self.edges['i_t'])
+            #
+            #     ctx.set_source_rgba(1, 0, 0, 1)
+            #     ctx.rectangle(*inner_rect)
+            #     ctx.stroke()
+            #
+            #     outer_rect = (self.edges['o_l'],
+            #                   self.edges['o_t'],
+            #                   self.edges['o_r'] - self.edges['o_l'],
+            #                   self.edges['o_b'] - self.edges['o_t'])
+            #
+            #     ctx.set_source_rgba(0, 0, 1, 1)
+            #     ctx.rectangle(*outer_rect)
+            #     ctx.stroke()
 
             self.position_label.pos = start_pos
 

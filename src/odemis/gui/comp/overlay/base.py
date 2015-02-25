@@ -647,15 +647,34 @@ class SelectionMixin(DragMixin):
 
         if self.select_v_start_pos and self.select_v_end_pos:
             rect = self._normalize(self.select_v_start_pos + self.select_v_end_pos)
-            i_l, i_t, o_r, o_b = [v + self.hover_margin for v in rect]
-            o_l, o_t, i_r, i_b = [v - self.hover_margin for v in rect]
+            i_l, i_t, i_r, i_b = rect
 
-            if i_t == o_b:
-                o_b += self.hover_margin
-                o_t -= self.hover_margin
-            if i_l == o_r:
-                o_r += self.hover_margin
-                o_l -= self.hover_margin
+            width = i_r - i_l
+
+            # Never have an inner box smaller than 2 times the margin
+            if width < 2 * self.hover_margin:
+                grow = (2 * self.hover_margin - width) / 2
+                i_l -= grow
+                i_r += grow
+            else:
+                shrink = min(self.hover_margin, width - 2 * self.hover_margin)
+                i_l += shrink
+                i_r -= shrink
+            o_l = i_l - 2 * self.hover_margin
+            o_r = i_r + 2 * self.hover_margin
+
+            height = i_b - i_t
+
+            if height < 2 * self.hover_margin:
+                grow = (2 * self.hover_margin - height) / 2
+                i_t -= grow
+                i_b += grow
+            else:
+                shrink = min(self.hover_margin, height - 2 * self.hover_margin)
+                i_t += shrink
+                i_b -= shrink
+            o_t = i_t - 2 * self.hover_margin
+            o_b = i_b + 2 * self.hover_margin
 
             self.edges = {
                 "i_l": i_l,
