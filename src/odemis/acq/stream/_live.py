@@ -324,8 +324,10 @@ class AlignedSEMStream(SEMStream):
         self._last_pos = None # last known position of the stage
         self._shift = (0, 0) # (float, float): shift to apply in meters
         self._last_shift = (0, 0)  # (float, float): last ebeam shift applied
-        # stage shift + temporary correction shift (based on ebeam correction)
-        self._cur_trans = stage.getMetadata().get(model.MD_POS_COR, (0, 0))
+        # In case initialization takes place in unload position the
+        # calibration values are not obtained yet. Thus we avoid to initialize
+        # cur_trans before spot alignment takes place.
+        self._cur_trans = None
         stage.position.subscribe(self._onStageMove)
 
     def _onStageMove(self, pos):
@@ -339,14 +341,13 @@ class AlignedSEMStream(SEMStream):
         if self._last_pos == pos:
             return
 
-        # If it's moving for the first time since we've measured the shift,
-        # update the coupled stage metadata to use this latest error information.
-        # Note: this means that two moves in a row will be performed by the
-        # optical stage. This could be avoided if updateMetadata was not
-        # automatically synchronising the slave stage.
         md_stage = self._stage.getMetadata()
         trans = md_stage.get(model.MD_POS_COR, (0, 0))
-        if self._cur_trans != trans:
+        # TODO We initialize cur_trans to None just to force this condition to
+        # fail before spot alignment is performed. Instead we should be able
+        # to update with the correct cur_trans even spot alignment is not
+        # performed yet.
+        if self._cur_trans != None and self._cur_trans != trans:
             logging.debug("Current stage translation %s m,m", trans)
             self._stage.updateMetadata({
                 model.MD_POS_COR: self._cur_trans
