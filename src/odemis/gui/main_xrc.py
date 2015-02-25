@@ -84,6 +84,7 @@ class xrcfr_main(wx.Frame):
         self.live_btn_opt = xrc.XRCCTRL(self, "live_btn_opt")
         self.live_btn_sem = xrc.XRCCTRL(self, "live_btn_sem")
         self.pnl_hw_info = xrc.XRCCTRL(self, "pnl_hw_info")
+        self.pnl_load_status = xrc.XRCCTRL(self, "pnl_load_status")
         self.gauge_load_time = xrc.XRCCTRL(self, "gauge_load_time")
         self.lbl_load_time = xrc.XRCCTRL(self, "lbl_load_time")
         self.pnl_stream_status = xrc.XRCCTRL(self, "pnl_stream_status")
@@ -909,40 +910,46 @@ def __init_resources():
                             <object class="wxBoxSizer">
                               <orient>wxVERTICAL</orient>
                               <object class="sizeritem">
-                                <object class="wxBoxSizer">
-                                  <object class="sizeritem">
-                                    <object class="wxGauge" name="gauge_load_time">
-                                      <size>-1,10</size>
-                                      <range>100</range>
-                                      <value>0</value>
-                                      <bg>#333333</bg>
-                                      <hidden>1</hidden>
-                                      <style>wxGA_SMOOTH</style>
-                                      <XRCED>
-                                        <assign_var>1</assign_var>
-                                      </XRCED>
+                                <object class="wxPanel" name="pnl_load_status">
+                                  <object class="wxBoxSizer">
+                                    <object class="sizeritem">
+                                      <object class="wxGauge" name="gauge_load_time">
+                                        <size>-1,10</size>
+                                        <range>100</range>
+                                        <value>0</value>
+                                        <bg>#333333</bg>
+                                        <style>wxGA_SMOOTH</style>
+                                        <XRCED>
+                                          <assign_var>1</assign_var>
+                                        </XRCED>
+                                      </object>
+                                      <option>1</option>
+                                      <flag>wxBOTTOM|wxRIGHT|wxEXPAND|wxALIGN_BOTTOM</flag>
+                                      <border>10</border>
                                     </object>
-                                    <option>1</option>
-                                    <flag>wxBOTTOM|wxLEFT|wxRIGHT|wxALIGN_BOTTOM</flag>
-                                    <border>10</border>
-                                  </object>
-                                  <object class="sizeritem">
-                                    <object class="wxStaticText" name="lbl_load_time">
-                                      <size>100,-1</size>
-                                      <fg>#EEEEEE</fg>
-                                      <hidden>1</hidden>
-                                      <style>wxALIGN_RIGHT|wxST_NO_AUTORESIZE</style>
-                                      <XRCED>
-                                        <assign_var>1</assign_var>
-                                      </XRCED>
+                                    <object class="sizeritem">
+                                      <object class="wxStaticText" name="lbl_load_time">
+                                        <size>100,-1</size>
+                                        <label>test st s</label>
+                                        <fg>#EEEEEE</fg>
+                                        <style>wxALIGN_RIGHT|wxST_NO_AUTORESIZE</style>
+                                        <XRCED>
+                                          <assign_var>1</assign_var>
+                                        </XRCED>
+                                      </object>
+                                      <flag>wxBOTTOM</flag>
+                                      <border>10</border>
                                     </object>
-                                    <flag>wxBOTTOM|wxRIGHT</flag>
-                                    <border>10</border>
+                                    <orient>wxHORIZONTAL</orient>
                                   </object>
-                                  <orient>wxHORIZONTAL</orient>
+                                  <bg>#333333</bg>
+                                  <hidden>1</hidden>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
                                 </object>
-                                <option>1</option>
-                                <flag>wxEXPAND</flag>
+                                <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
+                                <border>10</border>
                               </object>
                               <object class="sizeritem">
                                 <object class="wxPanel" name="pnl_stream_status">
@@ -991,17 +998,17 @@ def __init_resources():
                                     <orient>wxHORIZONTAL</orient>
                                   </object>
                                   <bg>#333333</bg>
+                                  <hidden>1</hidden>
                                   <XRCED>
                                     <assign_var>1</assign_var>
                                   </XRCED>
                                 </object>
-                                <flag>wxEXPAND|wxRIGHT|wxLEFT</flag>
+                                <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
                                 <border>10</border>
                               </object>
                             </object>
                             <size>-1,24</size>
                             <bg>#333333</bg>
-                            <hidden>1</hidden>
                             <XRCED>
                               <assign_var>1</assign_var>
                             </XRCED>

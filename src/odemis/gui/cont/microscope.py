@@ -347,15 +347,14 @@ class SecomStateController(MicroscopeStateController):
         self._main_frame.bmp_stream_status_error.Show(lvl == logging.ERROR)
         self._main_frame.pnl_hw_info.Parent.Layout()
 
-    def _show_progress_indicators(self, show):
+    def _show_progress_indicators(self, show_load, show_status):
         """
         Show or hide the loading progress indicators for the chamber and sample holder
 
         The stream status text will be hidden if the progress indicators are shown.
         """
-        self._main_frame.gauge_load_time.Show(show)
-        self._main_frame.lbl_load_time.Show(show)
-        self._main_frame.pnl_stream_status.Show(not show)
+        self._main_frame.pnl_load_status.Show(show_load)
+        self._main_frame.pnl_stream_status.Show(show_status)
         self._main_frame.pnl_hw_info.Parent.Layout()
 
     # TODO: move to acq.stream (because there is nothing we can do better here)
@@ -686,10 +685,10 @@ class DelphiStateController(SecomStateController):
 
         self._chamber_future = self.DelphiLoading()
         self._chamber_fc = ProgressiveFutureConnector(self._chamber_future,
-                                            self._main_frame.gauge_load_time,
-                                            self._main_frame.lbl_load_time,
-                                            full=False)
-        self._show_progress_indicators(True)
+                                                      self._main_frame.gauge_load_time,
+                                                      self._main_frame.lbl_load_time,
+                                                      full=False)
+        self._show_progress_indicators(True, False)
 
         # reset the streams to avoid having data from the previous sample
         self._reset_streams()
@@ -704,7 +703,7 @@ class DelphiStateController(SecomStateController):
     def _on_vacuum(self, future):
         """ Called when the vacuum is reached (ie, the future ended) """
         super(DelphiStateController, self)._on_vacuum(future)
-        self._show_progress_indicators(False)
+        self._show_progress_indicators(False, True)
 
     def _start_chamber_venting(self):
         # On the DELPHI, we also move the optical stage to 0,0 (= reference
@@ -712,12 +711,12 @@ class DelphiStateController(SecomStateController):
         self._main_data.aligner.moveAbs({"x": 0, "y": 0})
 
         super(DelphiStateController, self)._start_chamber_venting()
-        self._show_progress_indicators(True)
+        self._show_progress_indicators(True, True)
 
     @call_in_wx_main
     def _on_vented(self, future):
         super(DelphiStateController, self)._on_vented(future)
-        self._show_progress_indicators(False)
+        self._show_progress_indicators(False, False)
 
     def _load_holder_calib(self):
         """
