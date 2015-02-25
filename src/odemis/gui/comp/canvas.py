@@ -853,12 +853,12 @@ class BitmapCanvas(BufferedCanvas):
 
         """
 
-        self._draw_background(self.ctx)
-        self.ctx.identity_matrix()  # Reset the transformation matrix
-
-        # Don't draw anything else if the canvas is disabled
+        # Don't draw anything if the canvas is disabled, leave the current buffer intact.
         if not self.IsEnabled():
             return
+
+        self._draw_background(self.ctx)
+        self.ctx.identity_matrix()  # Reset the transformation matrix
 
         self._draw_merged_images(self.ctx)
         self.ctx.identity_matrix()  # Reset the transformation matrix
@@ -1942,10 +1942,11 @@ class PlotCanvas(BufferedCanvas):
         #     logging.warn("No buffer created yet, ignoring draw request")
         #     return
 
-        self._draw_background(self.ctx)
+        if self.IsEnabled():
+            self._draw_background(self.ctx)
 
-        if self._data and self.IsEnabled():
-            self._plot_data(self.ctx)
+            if self._data:
+                self._plot_data(self.ctx)
 
     def _plot_data(self, ctx):
         """ Plot the current `_data` to the given context """

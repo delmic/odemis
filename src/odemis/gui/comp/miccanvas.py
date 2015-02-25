@@ -38,7 +38,8 @@ from odemis.acq import stream
 from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
 from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS, BitmapCanvas
 from odemis.gui.comp.overlay.view import HistoryOverlay, PointSelectOverlay, MarkingLineOverlay
-from odemis.gui.util import wxlimit_invocation, call_in_wx_main, ignore_dead, img
+from odemis.gui.util import wxlimit_invocation, call_in_wx_main, ignore_dead
+from odemis.gui.util.img import format_rgba_darray
 from odemis.model import VigilantAttributeBase
 from odemis.util import units
 from odemis.acq.stream import UNDEFINED_ROI
@@ -384,7 +385,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             # TODO: convert to RGBA later, in canvas and/or cache the conversion
             # On large images it costs 100 ms (per image and per canvas)
 
-            rgba_im = img.format_rgba_darray(rgbim)
+            rgba_im = format_rgba_darray(rgbim)
 
             keepalpha = False
             scale = rgbim.metadata[model.MD_PIXEL_SIZE]
@@ -425,16 +426,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
     def update_drawing(self):
         """ Update the drawing and thumbnail """
-        # TODO: detect that the canvas is not visible, and so should no/less
-        # frequently be updated? The difficulty is that it must be redrawn as
-        # soon as it's shown again.
-
-        # TODO: When disabled, update_drawing() will just draw the background
-        # (probably not a good idea), to save time. Instead, we just don't redraw
-        # at all so that the canvas clears up suddenly when receiving data and
-        # being disabled. => just don't redraw at all in canvas.update_drawing()?
-        if not self.Enabled:
-            return
+        # TODO: detect that the canvas is not visible, and so should no/less frequently be updated?
+        # The difficulty is that it must be redrawn as soon as it's shown again.
 
         super(DblMicroscopeCanvas, self).update_drawing()
 
@@ -1076,7 +1069,7 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
 
     def __init__(self, *args, **kwargs):
         super(SparcAlignCanvas, self).__init__(*args, **kwargs)
-        self.abilities -= set([CAN_ZOOM, CAN_DRAG])
+        self.abilities -= {CAN_ZOOM, CAN_DRAG}
 
         self._goal_im_ref = None
         self._goal_wim = None
@@ -1113,13 +1106,13 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
                 prev_im = None if self._goal_im_ref is None else self._goal_im_ref()
                 if self._goal_wim is None or prev_im is None or prev_im is not rgbim:
                     logging.debug("Converting goal image")
-                    wim = img.format_rgba_darray(rgbim)
+                    wim = format_rgba_darray(rgbim)
                     self._goal_im_ref = weakref.ref(rgbim, self._reset_goal_im)
                     self._goal_wim = wim
                 else:
                     wim = self._goal_wim
             else:
-                wim = img.format_rgba_darray(rgbim)
+                wim = format_rgba_darray(rgbim)
 
             keepalpha = (rgbim.shape[2] == 4)
 
@@ -1289,38 +1282,39 @@ class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
     def draw(self):
         """ Map the image data to the canvas and draw it """
 
-        im_data = self.images[0]
+        if self.IsEnabled():
+            im_data = self.images[0]
 
-        if im_data is not None and self.IsEnabled():
-            im_format = cairo.FORMAT_RGB24
-            height, width, _ = im_data.shape
+            if im_data is not None:
+                im_format = cairo.FORMAT_RGB24
+                height, width, _ = im_data.shape
 
-            # stride = cairo.ImageSurface.format_stride_for_width(im_format, width)
+                # stride = cairo.ImageSurface.format_stride_for_width(im_format, width)
 
-            # In Cairo a surface is a target that it can render to. Here we're going
-            # to use it as the source for a pattern
-            imgsurface = cairo.ImageSurface.create_for_data(im_data, im_format, width, height)
+                # In Cairo a surface is a target that it can render to. Here we're going
+                # to use it as the source for a pattern
+                imgsurface = cairo.ImageSurface.create_for_data(im_data, im_format, width, height)
 
-            # In Cairo a pattern is the 'paint' that it uses to draw
-            surfpat = cairo.SurfacePattern(imgsurface)
+                # In Cairo a pattern is the 'paint' that it uses to draw
+                surfpat = cairo.SurfacePattern(imgsurface)
 
-            # Set the filter, so we get low quality but fast scaling
-            surfpat.set_filter(cairo.FILTER_FAST)
+                # Set the filter, so we get low quality but fast scaling
+                surfpat.set_filter(cairo.FILTER_FAST)
 
-            # Save and restore the transformation matrix, to prevent scale accumulation
-            self.ctx.save()
+                # Save and restore the transformation matrix, to prevent scale accumulation
+                self.ctx.save()
 
-            # Scale the width and height separately in such a way that the image data fill the
-            # entire canvas
-            self.ctx.scale(self.ClientSize.x / width, self.ClientSize.y / height)
-            self.ctx.set_source(surfpat)
-            self.ctx.paint()
+                # Scale the width and height separately in such a way that the image data fill the
+                # entire canvas
+                self.ctx.scale(self.ClientSize.x / width, self.ClientSize.y / height)
+                self.ctx.set_source(surfpat)
+                self.ctx.paint()
 
-            self.ctx.restore()
-        else:
-            # The background only needs to be drawn when there is no image data, since the image
-            # data will always fill the entire view.
-            self._draw_background(self.ctx)
+                self.ctx.restore()
+            else:
+                # The background only needs to be drawn when there is no image data, since the image
+                # data will always fill the entire view.
+                self._draw_background(self.ctx)
 
     def update_drawing(self):
         """ Update the drawing and thumbnail """
@@ -1387,7 +1381,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
 
         self.microscope_view = None
         self._tab_data_model = None
-        self.abilities -= set([CAN_DRAG, CAN_FOCUS])
+        self.abilities -= {CAN_DRAG, CAN_FOCUS}
 
         self.background_brush = wx.BRUSHSTYLE_SOLID  # background is always black
 
@@ -1434,7 +1428,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         ims = []
         for s in streams:
             # image is always centered, fitting the whole canvas
-            wim = img.format_rgba_darray(s.image.value)
+            wim = format_rgba_darray(s.image.value)
             ims.append((wim, (0, 0), (1, 1), False, None, None, None, s.name.value))
 
         self.set_images(ims)
