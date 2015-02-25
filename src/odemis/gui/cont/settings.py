@@ -335,6 +335,8 @@ class SettingsController(object):
                 if conf["type"] == "integer":
                     # add_integer_slider
                     factory = self.panel.add_integer_slider
+                elif conf["type"] == "slider":
+                    factory = self.panel.add_slider
                 else:
                     factory = self.panel.add_float_slider
             else:
@@ -725,11 +727,11 @@ class SettingsController(object):
         gb_sizer.Add(btn_autoadjust, (0, 0), (2, 1), border=10,
                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT)
 
-        def va_2_ctrl(val, ctrl):
-            ctrl.SetValue(val * 100)
-
-        def ctrl_2_va(ctrl, va):
-            va.value = ctrl.GetValue() / 100.0
+        # def va_2_ctrl(val, ctrl):
+        #     ctrl.SetValue(val * 100)
+        #
+        # def ctrl_2_va(ctrl, va):
+        #     va.value = ctrl.GetValue() / 100.0
 
         # TODO: Add the ability to pass va_2_ctrl and ctrl_2_va functions. (Needed to scale the
         # slider values from [0..1] to [0..100]
@@ -737,10 +739,10 @@ class SettingsController(object):
             "accuracy": 2,
             "event": wx.EVT_SCROLL_CHANGED,
             "control_type": odemis.gui.CONTROL_SLIDER,
-            "va_2_ctrl": va_2_ctrl,
-            "ctrl_2_va": ctrl_2_va,
-            "range": (0, 100),
-            "type": "integer",
+            # "va_2_ctrl": va_2_ctrl,
+            # "ctrl_2_va": ctrl_2_va,
+            # "range": (0, 100),
+            "type": "slider",
         }
 
         num_rows = 0

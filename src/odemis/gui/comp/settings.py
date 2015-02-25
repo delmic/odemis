@@ -26,7 +26,7 @@ from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.file import FileBrowser
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
-from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider
+from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider, Slider
 from odemis.gui.comp.text import UnitIntegerCtrl, UnitFloatCtrl
 import wx
 
@@ -175,6 +175,23 @@ class SettingsPanel(wx.Panel):
         else:
             value_ctrl.SetForegroundColour(gui.FG_COLOUR_EDIT)
         value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
+        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
+                          flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
+
+        return lbl_ctrl, value_ctrl
+
+    @control_bookkeeper
+    def add_slider(self, label_text, value=None, conf=None):
+        """ Add an integer value slider to the settings panel
+
+        :param label_text: (str) Label text to display
+        :param value: (None or int) Value to display
+        :param conf: (None or dict) Dictionary containing parameters for the control
+
+        """
+
+        lbl_ctrl = self._add_side_label(label_text)
+        value_ctrl = Slider(self, value=value, **conf)
         self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
                           flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
 

@@ -194,7 +194,7 @@ class Slider(BaseSlider):
 
     def __init__(self, parent, wid=wx.ID_ANY, value=0.0, min_val=0.0,
                  max_val=1.0, size=(-1, -1), pos=wx.DefaultPosition,
-                 style=wx.NO_BORDER, name="Slider", scale=None):
+                 style=wx.NO_BORDER, name="Slider", scale=None, **ignored):
         """
         :param parent: Parent window. Must not be None.
         :param id:     Slider identifier.
@@ -205,8 +205,9 @@ class Slider(BaseSlider):
         :param style:  use wx.Panel styles
         :param name:   Window name.
         :param scale:  'linear' (default), 'cubic' or 'log'
-            *Note*: Make sure to add any new option to the Slider ParamScale in
-            xmlh.delmic !
+            *Note*: Make sure to add any new option to the Slider ParamScale in xmlh.delmic!
+        :param ignored: This is a way to catch all the extra keyword arguments that might be passed
+            using a conf dict, but not have them cause exceptions (unexpected keyword argument)
 
         Events
 
