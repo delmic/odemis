@@ -81,7 +81,7 @@ def CalculateTransform(optical_coordinates, electron_coordinates, skew=False):
         theta = math.atan2(t_inv[1, 0], t_inv[1, 1])
         scaling_x = t_inv[0, 0] * math.cos(theta) - t_inv[0, 1] * math.sin(theta)
         scaling_y = math.sqrt(math.pow(t_inv[1, 0], 2) + math.pow(t_inv[1, 1], 2))
-        shear = (t_inv[0, 0] / scaling_x - math.cos(theta)) / math.sin(theta)
+        shear = (t_inv[0, 0] * math.sin(theta) + t_inv[0, 1] * math.cos(theta)) / scaling_x
 
         # change values for return values
         translation_xy_ret = -translation_xy

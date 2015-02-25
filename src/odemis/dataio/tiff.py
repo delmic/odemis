@@ -444,7 +444,7 @@ def _updateMDFromOME(root, das, basename):
                 rot = math.atan2(sinv, cosv) % (2 * math.pi)
                 scaling_y = math.sqrt(math.pow(sinv, 2) + math.pow(cosv, 2))
                 scaling_x = cossh * math.cos(rot) - sinsh * math.sin(rot)
-                shear = (cossh / scaling_x - math.cos(rot)) / math.sin(rot)
+                shear = (cossh * math.sin(rot) + sinsh * math.cos(rot)) / scaling_x
                 if not (util.almost_equal(scaling_y, 1)
                     and util.almost_equal(scaling_x, 1)):
                     logging.warning("Image metadata has complex transformation "
