@@ -360,7 +360,7 @@ class SettingsController(object):
                 # This event type will make the value update continuously as the slider is dragged
                 update_event = wx.EVT_SLIDER
 
-            min_val, max_val = conf.get('range', (min_val, max_val))
+            # min_val, max_val = conf.get('range', (min_val, max_val))
 
             ctrl_conf = {
                 'min_val': min_val,

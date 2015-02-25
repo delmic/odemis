@@ -644,10 +644,18 @@ class SelectionMixin(DragMixin):
 
     def _calc_edges(self):
         """ Calculate the inner and outer edges of the selection according to the hover margin """
+
         if self.select_v_start_pos and self.select_v_end_pos:
             rect = self._normalize(self.select_v_start_pos + self.select_v_end_pos)
             i_l, i_t, o_r, o_b = [v + self.hover_margin for v in rect]
             o_l, o_t, i_r, i_b = [v - self.hover_margin for v in rect]
+
+            if i_t == o_b:
+                o_b += self.hover_margin
+                o_t -= self.hover_margin
+            if i_l == o_r:
+                o_r += self.hover_margin
+                o_l -= self.hover_margin
 
             self.edges = {
                 "i_l": i_l,
@@ -673,13 +681,15 @@ class SelectionMixin(DragMixin):
             if self.edit_mode == EDIT_MODE_BOX:
                 # If position outside outer box
                 if (
-                        not self.edges["o_l"] < vpos[0] < self.edges["o_r"] or
-                        not self.edges["o_t"] < vpos[1] < self.edges["o_b"]
+                    not self.edges["o_l"] < vpos[0] < self.edges["o_r"] or
+                    not self.edges["o_t"] < vpos[1] < self.edges["o_b"]
                 ):
                     return gui.HOVER_NONE
                 # If position inside inner box
-                elif (self.edges["i_l"] < vpos[0] < self.edges["i_r"] and
-                      self.edges["i_t"] < vpos[1] < self.edges["i_b"]):
+                elif (
+                    self.edges["i_l"] < vpos[0] < self.edges["i_r"] and
+                    self.edges["i_t"] < vpos[1] < self.edges["i_b"]
+                ):
                     # logging.debug("Selection hover")
                     return gui.HOVER_SELECTION
                 else:

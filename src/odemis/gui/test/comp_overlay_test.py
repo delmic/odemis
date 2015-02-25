@@ -267,6 +267,7 @@ class OverlayTestCase(test.GuiTestCase):
         test.gui_loop()
 
     def test_view_select_overlay(self):
+        test.goto_manual()
         # Create and add a miccanvas
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
