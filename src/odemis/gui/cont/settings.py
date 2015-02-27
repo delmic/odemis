@@ -349,18 +349,11 @@ class SettingsController(object):
                 else:
                     factory = self.panel.add_integer_slider
 
-            # The event configuration determines what event will signal that the setting entry
-            # has changed value.
-            if "event" in conf:
-                if conf["event"] == wx.EVT_SCROLL_CHANGED:
-                    update_event = conf["event"]
-                else:
-                    raise ValueError("Illegal event type for Slider setting entry!")
-            else:
-                # This event type will make the value update continuously as the slider is dragged
-                update_event = wx.EVT_SLIDER
-
-            # min_val, max_val = conf.get('range', (min_val, max_val))
+            # The event configuration determines what event will signal that the
+            # setting entry has changed value.
+            update_event = conf.get("event", wx.EVT_SLIDER)
+            if update_event not in (wx.EVT_SCROLL_CHANGED, wx.EVT_SLIDER):
+                raise ValueError("Illegal event type %d for Slider setting entry!" % (update_event,))
 
             ctrl_conf = {
                 'min_val': min_val,
@@ -371,19 +364,9 @@ class SettingsController(object):
             }
 
             lbl_ctrl, value_ctrl = factory(label_text, vigil_attr.value, ctrl_conf)
-
-            va_2_ctrl = None
-            ctrl_2_va = None
-
-            if "va_2_ctrl" in conf:
-                va_2_ctrl = partial(conf['va_2_ctrl'], ctrl=value_ctrl)
-
-            if "ctrl_2_va" in conf:
-                ctrl_2_va = partial(conf['ctrl_2_va'], ctrl=value_ctrl, va=vigil_attr)
-
             ne = SettingEntry(name=name, va=vigil_attr, hw_comp=comp,
                               lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
-                              events=update_event, va_2_ctrl=va_2_ctrl, ctrl_2_va=ctrl_2_va)
+                              events=update_event)
 
             # TODO: deprecated?
             value_ctrl.Bind(wx.EVT_SLIDER, self.on_setting_changed)
@@ -694,11 +677,6 @@ class SettingsController(object):
 
         self.panel.add_readonly_field(label, nice_str)
 
-    @staticmethod
-    def _on_chamber_state(state, btn):
-        """ Handle changes in chamber state """
-        btn.Enable(state in (CHAMBER_UNKNOWN, CHAMBER_VACUUM))
-
     def add_bc_control(self, detector):
         """ Add Hw brightness/contrast control """
 
@@ -727,21 +705,10 @@ class SettingsController(object):
         gb_sizer.Add(btn_autoadjust, (0, 0), (2, 1), border=10,
                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT)
 
-        # def va_2_ctrl(val, ctrl):
-        #     ctrl.SetValue(val * 100)
-        #
-        # def ctrl_2_va(ctrl, va):
-        #     va.value = ctrl.GetValue() / 100.0
-
-        # TODO: Add the ability to pass va_2_ctrl and ctrl_2_va functions. (Needed to scale the
-        # slider values from [0..1] to [0..100]
         sld_conf = {
             "accuracy": 2,
             "event": wx.EVT_SCROLL_CHANGED,
             "control_type": odemis.gui.CONTROL_SLIDER,
-            # "va_2_ctrl": va_2_ctrl,
-            # "ctrl_2_va": ctrl_2_va,
-            # "range": (0, 100),
             "type": "slider",
         }
 
@@ -758,9 +725,6 @@ class SettingsController(object):
             gb_sizer.Add(brightness_entry.lbl_ctrl, (num_rows, 1))
             gb_sizer.Add(brightness_entry.value_ctrl, (num_rows, 2), flag=wx.EXPAND)
             num_rows += 1
-
-            # wx.EVT_SCROLL_CHANGED
-            # vac = VigilantAttributeConnector(detector.brightness, sld_brightness)
 
         if isinstance(detector.contrast, VigilantAttributeBase):
             contrast_entry = self.add_setting_entry("contrast", detector.contrast, detector,
@@ -783,9 +747,10 @@ class SettingsController(object):
 
         # Connect various events to the auto adjust button
 
-        # Using a partial function here to prevent having to create a 'useless' button attribute.
-        # We still need the method, because we need a reference to keep the subscription active.
-        self._on_chamber_state = partial(self._on_chamber_state, btn=btn_autoadjust)
+        def on_chamber_state(state, btn=btn_autoadjust):
+            btn.Enable(state in (CHAMBER_UNKNOWN, CHAMBER_VACUUM))
+        # We keep a reference to keep the subscription active.
+        self._on_chamber_state = on_chamber_state
         self.tab_data.main.chamberState.subscribe(self._on_chamber_state, init=True)
 
         def adjust_done(_):
