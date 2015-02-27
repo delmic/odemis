@@ -122,6 +122,9 @@ DELPHI: {
            transpose: [-2, -1], # rotated 90° clockwise
            image: "andorcam2-fake-clara.tiff", # only for simulator
     },
+    properties: {
+        resolution: [1040, 1040],  # Crop Y axis which doesn't receive light anyway
+    },
 }
 
 # Special stage that actually moves the SEM stage as requested, and the optical
