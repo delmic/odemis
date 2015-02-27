@@ -1009,6 +1009,7 @@ def __init_resources():
                             </object>
                             <size>-1,24</size>
                             <bg>#333333</bg>
+                            <hidden>1</hidden>
                             <XRCED>
                               <assign_var>1</assign_var>
                             </XRCED>
