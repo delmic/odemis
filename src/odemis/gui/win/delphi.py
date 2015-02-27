@@ -144,7 +144,7 @@ class CalibrationProgressDialog(xrcprogress_dialog):
             self.calib_future.cancel()
 
         if self.cancel_btn.GetLabel() == "Run":
-            os.system("gnome-terminal -e 'python development/odemis/scripts/delphi_manual_calibration.py &'")
+            os.system("gnome-terminal -e 'python -m odemis.acq.align.delphi_man_calib &'")
 
         self.Destroy()
 
