@@ -780,7 +780,7 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
             escan.horizontalFoV.value = escan.horizontalFoV.range[1]
             # Apply autocontrast
             detector.data.subscribe(_discard_data)  # unblank the beam
-            f = escan.applyAutoContrast()
+            f = detector.applyAutoContrast()
             f.result()
             detector.data.unsubscribe(_discard_data)
 
@@ -1082,7 +1082,7 @@ def _DoHFWShiftFactor(future, detector, escan, sem_stage, ebeam_focus, known_foc
 
         detector.data.subscribe(_discard_data)  # unblank the beam
         escan.accelVoltage.value = 5.6e03  # to ensure that features are visible
-        f = escan.applyAutoContrast()
+        f = detector.applyAutoContrast()
         f.result()
         detector.data.unsubscribe(_discard_data)
 
@@ -1234,7 +1234,7 @@ def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus, kn
 
         detector.data.subscribe(_discard_data)  # unblank the beam
         escan.accelVoltage.value = 5.6e03  # to ensure that features are visible
-        f = escan.applyAutoContrast()
+        f = detector.applyAutoContrast()
         f.result()
         detector.data.unsubscribe(_discard_data)
 
