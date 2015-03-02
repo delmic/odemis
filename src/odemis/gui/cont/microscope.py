@@ -694,7 +694,7 @@ class DelphiStateController(SecomStateController):
                                             self._main_frame.gauge_load_time,
                                             self._main_frame.lbl_load_time,
                                             full=False)
-        self._show_progress_indicators(True)
+        self._show_progress_indicators(True, False)
 
         # reset the streams to avoid having data from the previous sample
         self._reset_streams()
