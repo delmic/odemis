@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
 Created on 5 Jan 2015
@@ -6,16 +7,31 @@ Created on 5 Jan 2015
 
 Copyright © 2014-2015 Kimon Tsitsikas, Delmic
 
-This script allows the user to perform the whole delphi calibration procedure
-step by step in a semi-manual way. It attempts to apply each step automatically
-and in case of failure it waits for the user to perform the step failed manually.
+This file is part of Odemis.
 
-run as:
-python delphi_manual_calibration.py
+Odemis is free software: you can redistribute it and/or modify it under the
+terms  of the GNU General Public License version 2 as published by the Free
+Software  Foundation.
 
-You first need to run the odemis backend with the DELPHI config:
-odemisd --log-level 2 install/linux/usr/share/odemis/delphi.odm.yaml
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY;  without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR  PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+Odemis. If not, see http://www.gnu.org/licenses/.
 """
+
+# This script allows the user to perform the whole delphi calibration procedure
+# step by step in a semi-manual way. It attempts to apply each step automatically
+# and in case of failure it waits for the user to perform the step failed manually.
+#
+# run as:
+# python delphi_manual_calibration.py
+#
+# You first need to run the odemis backend with the DELPHI config:
+# odemisd --log-level 2 install/linux/usr/share/odemis/delphi.odm.yaml
+
+
 
 from __future__ import division
 
