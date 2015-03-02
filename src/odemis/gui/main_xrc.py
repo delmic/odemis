@@ -133,13 +133,21 @@ class xrcfr_main(wx.Frame):
         self.lens_align_tb = xrc.XRCCTRL(self, "lens_align_tb")
         self.vp_align_sem = xrc.XRCCTRL(self, "vp_align_sem")
         self.pnl_tab_sparc_align = xrc.XRCCTRL(self, "pnl_tab_sparc_align")
+        self.pnl_sparc_trans = xrc.XRCCTRL(self, "pnl_sparc_trans")
         self.mirror_align_slider_mirror_x = xrc.XRCCTRL(self, "mirror_align_slider_mirror_x")
         self.mirror_align_slider_mirror_y = xrc.XRCCTRL(self, "mirror_align_slider_mirror_y")
         self.mirror_align_btn_p_mirror_y = xrc.XRCCTRL(self, "mirror_align_btn_p_mirror_y")
         self.mirror_align_btn_m_mirror_y = xrc.XRCCTRL(self, "mirror_align_btn_m_mirror_y")
         self.mirror_align_btn_p_mirror_x = xrc.XRCCTRL(self, "mirror_align_btn_p_mirror_x")
         self.mirror_align_btn_m_mirror_x = xrc.XRCCTRL(self, "mirror_align_btn_m_mirror_x")
+        self.pnl_sparc_rot = xrc.XRCCTRL(self, "pnl_sparc_rot")
         self.mirror_align_slider_mirror_r = xrc.XRCCTRL(self, "mirror_align_slider_mirror_r")
+        self.mirror_align_btn_m_mirror_ry = xrc.XRCCTRL(self, "mirror_align_btn_m_mirror_ry")
+        self.mirror_align_btn_p_mirror_ry = xrc.XRCCTRL(self, "mirror_align_btn_p_mirror_ry")
+        self.mirror_align_btn_m_mirror_rz = xrc.XRCCTRL(self, "mirror_align_btn_m_mirror_rz")
+        self.mirror_align_btn_p_mirror_rz = xrc.XRCCTRL(self, "mirror_align_btn_p_mirror_rz")
+        self.pnl_sparc_fib = xrc.XRCCTRL(self, "pnl_sparc_fib")
+        self.mirror_align_slider_mirror_f = xrc.XRCCTRL(self, "mirror_align_slider_mirror_f")
         self.mirror_align_btn_m_mirror_ry = xrc.XRCCTRL(self, "mirror_align_btn_m_mirror_ry")
         self.mirror_align_btn_p_mirror_ry = xrc.XRCCTRL(self, "mirror_align_btn_p_mirror_ry")
         self.mirror_align_btn_m_mirror_rz = xrc.XRCCTRL(self, "mirror_align_btn_m_mirror_rz")
@@ -1928,451 +1936,712 @@ def __init_resources():
                 <object class="wxBoxSizer">
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
-                    <object class="wxStaticText">
-                      <label>Translation</label>
-                      <font>
-                        <size>16</size>
-                        <style>normal</style>
-                        <weight>normal</weight>
-                        <underlined>0</underlined>
-                        <face>Ubuntu</face>
-                        <encoding>UTF-8</encoding>
-                      </font>
+                    <object class="wxPanel" name="pnl_sparc_trans">
+                      <object class="wxBoxSizer">
+                        <orient>wxVERTICAL</orient>
+                        <object class="sizeritem">
+                          <object class="wxStaticText">
+                            <label>Translation</label>
+                            <font>
+                              <size>16</size>
+                              <style>normal</style>
+                              <weight>normal</weight>
+                              <underlined>0</underlined>
+                              <face>Ubuntu</face>
+                              <encoding>UTF-8</encoding>
+                            </font>
+                          </object>
+                          <flag>wxALL</flag>
+                          <border>5</border>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="wxStaticText">
+                            <label>Step size X</label>
+                          </object>
+                          <flag>wxBOTTOM|wxLEFT</flag>
+                          <border>5</border>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="UnitFloatSlider" name="mirror_align_slider_mirror_x">
+                            <size>-1,20</size>
+                            <value>0.000001</value>
+                            <min>0.0000001</min>
+                            <max>0.001</max>
+                            <unit>m</unit>
+                            <scale>log</scale>
+                            <accuracy>2</accuracy>
+                            <fg>#E5E5E5</fg>
+                            <style>wxBORDER_NONE</style>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                          </object>
+                          <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
+                          <border>5</border>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="wxStaticText">
+                            <label>Step size Y</label>
+                          </object>
+                          <flag>wxBOTTOM|wxLEFT</flag>
+                          <border>5</border>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="UnitFloatSlider" name="mirror_align_slider_mirror_y">
+                            <size>-1,20</size>
+                            <value>0.000001</value>
+                            <min>0.0000001</min>
+                            <max>0.001</max>
+                            <unit>m</unit>
+                            <scale>log</scale>
+                            <accuracy>2</accuracy>
+                            <fg>#E5E5E5</fg>
+                            <style>wxBORDER_NONE</style>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                          </object>
+                          <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
+                          <border>5</border>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="wxGridBagSizer">
+                            <object class="sizeritem">
+                              <object class="wxStaticText" name="lbl_my">
+                                <label>-Y</label>
+                                <fg>#E5E5E5</fg>
+                                <font>
+                                  <size>16</size>
+                                  <style>normal</style>
+                                  <weight>bold</weight>
+                                  <underlined>0</underlined>
+                                  <face>Ubuntu</face>
+                                  <encoding>UTF-8</encoding>
+                                </font>
+                              </object>
+                              <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                              <border>5</border>
+                              <cellpos>0,2</cellpos>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxStaticText" name="lbl_py">
+                                <label>+Y</label>
+                                <fg>#E5E5E5</fg>
+                                <font>
+                                  <size>16</size>
+                                  <style>normal</style>
+                                  <weight>bold</weight>
+                                  <underlined>0</underlined>
+                                  <face>Ubuntu</face>
+                                  <encoding>UTF-8</encoding>
+                                </font>
+                              </object>
+                              <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                              <border>5</border>
+                              <cellpos>4,2</cellpos>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxStaticText" name="lbl_px">
+                                <label>+X</label>
+                                <fg>#E5E5E5</fg>
+                                <font>
+                                  <size>16</size>
+                                  <style>normal</style>
+                                  <weight>bold</weight>
+                                  <underlined>0</underlined>
+                                  <face>Ubuntu</face>
+                                  <encoding>UTF-8</encoding>
+                                </font>
+                                <style>wxALIGN_LEFT</style>
+                              </object>
+                              <flag>wxLEFT|wxALIGN_CENTRE_VERTICAL</flag>
+                              <border>5</border>
+                              <cellpos>2,4</cellpos>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxStaticText" name="lbl_mx">
+                                <label>-X</label>
+                                <fg>#E5E5E5</fg>
+                                <font>
+                                  <size>16</size>
+                                  <style>normal</style>
+                                  <weight>bold</weight>
+                                  <underlined>0</underlined>
+                                  <face>Ubuntu</face>
+                                  <encoding>UTF-8</encoding>
+                                </font>
+                              </object>
+                              <flag>wxRIGHT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
+                              <border>5</border>
+                              <cellpos>2,0</cellpos>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="mirror_align_btn_p_mirror_y">
+                                <label>↑</label>
+                                <delta>1</delta>
+                                <bitmap>img_button_btn_64x48_png</bitmap>
+                                <hover>img_button_btn_64x48_h_png</hover>
+                                <selected>img_button_btn_64x48_a_png</selected>
+                                <font>
+                                  <size>24</size>
+                                  <style>normal</style>
+                                  <weight>bold</weight>
+                                  <underlined>0</underlined>
+                                  <face>Ubuntu</face>
+                                  <encoding>UTF-8</encoding>
+                                </font>
+                                <style>wxALIGN_CENTRE</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <flag>wxLEFT|wxRIGHT</flag>
+                              <border>7</border>
+                              <cellpos>1,2</cellpos>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="mirror_align_btn_m_mirror_y">
+                                <label>↓</label>
+                                <delta>1</delta>
+                                <bitmap>img_button_btn_64x48_png</bitmap>
+                                <hover>img_button_btn_64x48_h_png</hover>
+                                <selected>img_button_btn_64x48_a_png</selected>
+                                <font>
+                                  <size>24</size>
+                                  <style>normal</style>
+                                  <weight>bold</weight>
+                                  <underlined>0</underlined>
+                                  <face>Ubuntu</face>
+                                  <encoding>UTF-8</encoding>
+                                </font>
+                                <style>wxALIGN_CENTRE</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <flag>wxLEFT|wxRIGHT</flag>
+                              <border>7</border>
+                              <cellpos>3,2</cellpos>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="mirror_align_btn_p_mirror_x">
+                                <label>←</label>
+                                <delta>1</delta>
+                                <bitmap>img_button_btn_64x48_png</bitmap>
+                                <hover>img_button_btn_64x48_h_png</hover>
+                                <selected>img_button_btn_64x48_a_png</selected>
+                                <font>
+                                  <size>24</size>
+                                  <style>normal</style>
+                                  <weight>bold</weight>
+                                  <underlined>0</underlined>
+                                  <face>Ubuntu</face>
+                                  <encoding>UTF-8</encoding>
+                                </font>
+                                <style>wxALIGN_CENTRE</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <cellpos>2,1</cellpos>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="mirror_align_btn_m_mirror_x">
+                                <label>→</label>
+                                <delta>1</delta>
+                                <bitmap>img_button_btn_64x48_png</bitmap>
+                                <hover>img_button_btn_64x48_h_png</hover>
+                                <selected>img_button_btn_64x48_a_png</selected>
+                                <font>
+                                  <size>24</size>
+                                  <style>normal</style>
+                                  <weight>bold</weight>
+                                  <underlined>0</underlined>
+                                  <face>Ubuntu</face>
+                                  <encoding>UTF-8</encoding>
+                                </font>
+                                <style>wxALIGN_CENTRE</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <cellpos>2,3</cellpos>
+                            </object>
+                            <vgap>0</vgap>
+                            <hgap>5</hgap>
+                            <growablecols/>
+                            <growablerows/>
+                          </object>
+                          <flag>wxALIGN_CENTRE</flag>
+                        </object>
+                      </object>
+                      <fg>#E5E5E5</fg>
+                      <bg>#444444</bg>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
                     </object>
-                    <flag>wxBOTTOM</flag>
-                    <border>10</border>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxStaticText">
-                      <label>Step size X</label>
-                    </object>
-                    <flag>wxBOTTOM</flag>
+                    <flag>wxBOTTOM|wxEXPAND</flag>
                     <border>5</border>
                   </object>
                   <object class="sizeritem">
-                    <object class="UnitFloatSlider" name="mirror_align_slider_mirror_x">
-                      <size>-1,20</size>
-                      <value>0.000001</value>
-                      <min>0.0000001</min>
-                      <max>0.001</max>
-                      <unit>m</unit>
-                      <scale>log</scale>
-                      <accuracy>2</accuracy>
+                    <object class="wxPanel" name="pnl_sparc_rot">
+                      <object class="wxBoxSizer">
+                        <orient>wxVERTICAL</orient>
+                        <object class="sizeritem">
+                          <object class="wxStaticText">
+                            <label>Rotation</label>
+                            <fg>#E5E5E5</fg>
+                            <font>
+                              <size>16</size>
+                              <style>normal</style>
+                              <weight>normal</weight>
+                              <underlined>0</underlined>
+                              <face>Ubuntu</face>
+                              <encoding>UTF-8</encoding>
+                            </font>
+                          </object>
+                          <flag>wxBOTTOM|wxALL</flag>
+                          <border>5</border>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="wxStaticText">
+                            <label>Step size</label>
+                          </object>
+                          <flag>wxLEFT</flag>
+                          <border>5</border>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="UnitFloatSlider" name="mirror_align_slider_mirror_r">
+                            <size>-1,20</size>
+                            <value>0.000001</value>
+                            <min>0.0000001</min>
+                            <max>0.001</max>
+                            <unit>m</unit>
+                            <scale>log</scale>
+                            <accuracy>2</accuracy>
+                            <style>wxBORDER_NONE</style>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                          </object>
+                          <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
+                          <border>5</border>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="wxGridBagSizer">
+                            <object class="sizeritem">
+                              <object class="wxStaticText" name="lbl_pry">
+                                <label>+Pitch</label>
+                                <fg>#E5E5E5</fg>
+                                <font>
+                                  <size>16</size>
+                                  <style>normal</style>
+                                  <weight>bold</weight>
+                                  <underlined>0</underlined>
+                                  <face>Ubuntu</face>
+                                  <encoding>UTF-8</encoding>
+                                </font>
+                              </object>
+                              <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                              <border>5</border>
+                              <cellpos>0,2</cellpos>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxStaticText" name="lbl_mry">
+                                <label>-Pitch</label>
+                                <fg>#E5E5E5</fg>
+                                <font>
+                                  <size>16</size>
+                                  <style>normal</style>
+                                  <weight>bold</weight>
+                                  <underlined>0</underlined>
+                                  <face>Ubuntu</face>
+                                  <encoding>UTF-8</encoding>
+                                </font>
+                              </object>
+                              <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                              <border>5</border>
+                              <cellpos>4,2</cellpos>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxStaticText" name="lbl_prz">
+                                <label>+Yaw</label>
+                                <fg>#E5E5E5</fg>
+                                <font>
+                                  <size>16</size>
+                                  <style>normal</style>
+                                  <weight>bold</weight>
+                                  <underlined>0</underlined>
+                                  <face>Ubuntu</face>
+                                  <encoding>UTF-8</encoding>
+                                </font>
+                                <style>wxALIGN_LEFT</style>
+                              </object>
+                              <flag>wxLEFT|wxALIGN_CENTRE_VERTICAL</flag>
+                              <border>5</border>
+                              <cellpos>2,4</cellpos>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxStaticText" name="lbl_mrz">
+                                <label>-Yaw</label>
+                                <fg>#E5E5E5</fg>
+                                <font>
+                                  <size>16</size>
+                                  <style>normal</style>
+                                  <weight>bold</weight>
+                                  <underlined>0</underlined>
+                                  <face>Ubuntu</face>
+                                  <encoding>UTF-8</encoding>
+                                </font>
+                              </object>
+                              <flag>wxRIGHT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
+                              <border>5</border>
+                              <cellpos>2,0</cellpos>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="mirror_align_btn_m_mirror_ry">
+                                <label>↑</label>
+                                <delta>1</delta>
+                                <bitmap>img_button_btn_64x48_png</bitmap>
+                                <hover>img_button_btn_64x48_h_png</hover>
+                                <selected>img_button_btn_64x48_a_png</selected>
+                                <font>
+                                  <size>24</size>
+                                  <style>normal</style>
+                                  <weight>bold</weight>
+                                  <underlined>0</underlined>
+                                  <face>Ubuntu</face>
+                                  <encoding>UTF-8</encoding>
+                                </font>
+                                <style>wxALIGN_CENTRE</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <flag>wxLEFT|wxRIGHT</flag>
+                              <border>7</border>
+                              <cellpos>1,2</cellpos>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="mirror_align_btn_p_mirror_ry">
+                                <label>↓</label>
+                                <delta>1</delta>
+                                <bitmap>img_button_btn_64x48_png</bitmap>
+                                <hover>img_button_btn_64x48_h_png</hover>
+                                <selected>img_button_btn_64x48_a_png</selected>
+                                <font>
+                                  <size>24</size>
+                                  <style>normal</style>
+                                  <weight>bold</weight>
+                                  <underlined>0</underlined>
+                                  <face>Ubuntu</face>
+                                  <encoding>UTF-8</encoding>
+                                </font>
+                                <style>wxALIGN_CENTRE</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <flag>wxLEFT|wxRIGHT</flag>
+                              <border>7</border>
+                              <cellpos>3,2</cellpos>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="mirror_align_btn_m_mirror_rz">
+                                <label>←</label>
+                                <delta>1</delta>
+                                <bitmap>img_button_btn_64x48_png</bitmap>
+                                <hover>img_button_btn_64x48_h_png</hover>
+                                <selected>img_button_btn_64x48_a_png</selected>
+                                <font>
+                                  <size>24</size>
+                                  <style>normal</style>
+                                  <weight>bold</weight>
+                                  <underlined>0</underlined>
+                                  <face>Ubuntu</face>
+                                  <encoding>UTF-8</encoding>
+                                </font>
+                                <style>wxALIGN_CENTRE</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <cellpos>2,1</cellpos>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="mirror_align_btn_p_mirror_rz">
+                                <label>→</label>
+                                <delta>1</delta>
+                                <bitmap>img_button_btn_64x48_png</bitmap>
+                                <hover>img_button_btn_64x48_h_png</hover>
+                                <selected>img_button_btn_64x48_a_png</selected>
+                                <font>
+                                  <size>24</size>
+                                  <style>normal</style>
+                                  <weight>bold</weight>
+                                  <underlined>0</underlined>
+                                  <face>Ubuntu</face>
+                                  <encoding>UTF-8</encoding>
+                                </font>
+                                <style>wxALIGN_CENTRE</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <cellpos>2,3</cellpos>
+                            </object>
+                            <vgap>0</vgap>
+                            <hgap>5</hgap>
+                            <growablecols/>
+                            <growablerows/>
+                          </object>
+                          <flag>wxLEFT|wxRIGHT|wxALIGN_CENTRE</flag>
+                          <border>5</border>
+                        </object>
+                      </object>
                       <fg>#E5E5E5</fg>
-                      <style>wxBORDER_NONE</style>
+                      <bg>#444444</bg>
                       <XRCED>
                         <assign_var>1</assign_var>
                       </XRCED>
                     </object>
-                    <flag>wxEXPAND</flag>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxStaticText">
-                      <label>Step size Y</label>
-                    </object>
-                    <flag>wxBOTTOM</flag>
+                    <flag>wxBOTTOM|wxEXPAND</flag>
                     <border>5</border>
                   </object>
+                  
+                  
+                  
+                  
                   <object class="sizeritem">
-                    <object class="UnitFloatSlider" name="mirror_align_slider_mirror_y">
-                      <size>-1,20</size>
-                      <value>0.000001</value>
-                      <min>0.0000001</min>
-                      <max>0.001</max>
-                      <unit>m</unit>
-                      <scale>log</scale>
-                      <accuracy>2</accuracy>
+                    <object class="wxPanel" name="pnl_sparc_fib">
+                      <object class="wxBoxSizer">
+                        <orient>wxVERTICAL</orient>
+                        <object class="sizeritem">
+                          <object class="wxStaticText">
+                            <label>Fiber</label>
+                            <fg>#E5E5E5</fg>
+                            <font>
+                              <size>16</size>
+                              <style>normal</style>
+                              <weight>normal</weight>
+                              <underlined>0</underlined>
+                              <face>Ubuntu</face>
+                              <encoding>UTF-8</encoding>
+                            </font>
+                          </object>
+                          <flag>wxBOTTOM|wxALL</flag>
+                          <border>5</border>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="wxStaticText">
+                            <label>Step size</label>
+                          </object>
+                          <flag>wxLEFT</flag>
+                          <border>5</border>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="UnitFloatSlider" name="mirror_align_slider_mirror_f">
+                            <size>-1,20</size>
+                            <value>0.000001</value>
+                            <min>0.0000001</min>
+                            <max>0.001</max>
+                            <unit>m</unit>
+                            <scale>log</scale>
+                            <accuracy>2</accuracy>
+                            <style>wxBORDER_NONE</style>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                          </object>
+                          <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
+                          <border>5</border>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="wxGridBagSizer">
+                            <object class="sizeritem">
+                              <object class="wxStaticText" name="lbl_mfy">
+                                <label>-Y</label>
+                                <fg>#E5E5E5</fg>
+                                <font>
+                                  <size>16</size>
+                                  <style>normal</style>
+                                  <weight>bold</weight>
+                                  <underlined>0</underlined>
+                                  <face>Ubuntu</face>
+                                  <encoding>UTF-8</encoding>
+                                </font>
+                              </object>
+                              <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                              <border>5</border>
+                              <cellpos>0,2</cellpos>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxStaticText" name="lbl_pfy">
+                                <label>+Y</label>
+                                <fg>#E5E5E5</fg>
+                                <font>
+                                  <size>16</size>
+                                  <style>normal</style>
+                                  <weight>bold</weight>
+                                  <underlined>0</underlined>
+                                  <face>Ubuntu</face>
+                                  <encoding>UTF-8</encoding>
+                                </font>
+                              </object>
+                              <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                              <border>5</border>
+                              <cellpos>4,2</cellpos>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxStaticText" name="lbl_mfx">
+                                <label>-X</label>
+                                <fg>#E5E5E5</fg>
+                                <font>
+                                  <size>16</size>
+                                  <style>normal</style>
+                                  <weight>bold</weight>
+                                  <underlined>0</underlined>
+                                  <face>Ubuntu</face>
+                                  <encoding>UTF-8</encoding>
+                                </font>
+                                <style>wxALIGN_LEFT</style>
+                              </object>
+                              <flag>wxLEFT|wxALIGN_CENTRE_VERTICAL</flag>
+                              <border>5</border>
+                              <cellpos>2,4</cellpos>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxStaticText" name="lbl_pfx">
+                                <label>+X</label>
+                                <fg>#E5E5E5</fg>
+                                <font>
+                                  <size>16</size>
+                                  <style>normal</style>
+                                  <weight>bold</weight>
+                                  <underlined>0</underlined>
+                                  <face>Ubuntu</face>
+                                  <encoding>UTF-8</encoding>
+                                </font>
+                              </object>
+                              <flag>wxRIGHT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
+                              <border>5</border>
+                              <cellpos>2,0</cellpos>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="mirror_align_btn_m_mirror_ry">
+                                <label>↑</label>
+                                <delta>1</delta>
+                                <bitmap>img_button_btn_64x48_png</bitmap>
+                                <hover>img_button_btn_64x48_h_png</hover>
+                                <selected>img_button_btn_64x48_a_png</selected>
+                                <font>
+                                  <size>24</size>
+                                  <style>normal</style>
+                                  <weight>bold</weight>
+                                  <underlined>0</underlined>
+                                  <face>Ubuntu</face>
+                                  <encoding>UTF-8</encoding>
+                                </font>
+                                <style>wxALIGN_CENTRE</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <flag>wxLEFT|wxRIGHT</flag>
+                              <border>7</border>
+                              <cellpos>1,2</cellpos>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="mirror_align_btn_p_mirror_ry">
+                                <label>↓</label>
+                                <delta>1</delta>
+                                <bitmap>img_button_btn_64x48_png</bitmap>
+                                <hover>img_button_btn_64x48_h_png</hover>
+                                <selected>img_button_btn_64x48_a_png</selected>
+                                <font>
+                                  <size>24</size>
+                                  <style>normal</style>
+                                  <weight>bold</weight>
+                                  <underlined>0</underlined>
+                                  <face>Ubuntu</face>
+                                  <encoding>UTF-8</encoding>
+                                </font>
+                                <style>wxALIGN_CENTRE</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <flag>wxLEFT|wxRIGHT</flag>
+                              <border>7</border>
+                              <cellpos>3,2</cellpos>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="mirror_align_btn_m_mirror_rz">
+                                <label>←</label>
+                                <delta>1</delta>
+                                <bitmap>img_button_btn_64x48_png</bitmap>
+                                <hover>img_button_btn_64x48_h_png</hover>
+                                <selected>img_button_btn_64x48_a_png</selected>
+                                <font>
+                                  <size>24</size>
+                                  <style>normal</style>
+                                  <weight>bold</weight>
+                                  <underlined>0</underlined>
+                                  <face>Ubuntu</face>
+                                  <encoding>UTF-8</encoding>
+                                </font>
+                                <style>wxALIGN_CENTRE</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <cellpos>2,1</cellpos>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="mirror_align_btn_p_mirror_rz">
+                                <label>→</label>
+                                <delta>1</delta>
+                                <bitmap>img_button_btn_64x48_png</bitmap>
+                                <hover>img_button_btn_64x48_h_png</hover>
+                                <selected>img_button_btn_64x48_a_png</selected>
+                                <font>
+                                  <size>24</size>
+                                  <style>normal</style>
+                                  <weight>bold</weight>
+                                  <underlined>0</underlined>
+                                  <face>Ubuntu</face>
+                                  <encoding>UTF-8</encoding>
+                                </font>
+                                <style>wxALIGN_CENTRE</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <cellpos>2,3</cellpos>
+                            </object>
+                            <vgap>0</vgap>
+                            <hgap>5</hgap>
+                            <growablecols/>
+                            <growablerows/>
+                          </object>
+                          <flag>wxLEFT|wxRIGHT|wxALIGN_CENTRE</flag>
+                          <border>5</border>
+                        </object>
+                      </object>
                       <fg>#E5E5E5</fg>
-                      <style>wxBORDER_NONE</style>
+                      <bg>#444444</bg>
                       <XRCED>
                         <assign_var>1</assign_var>
                       </XRCED>
                     </object>
                     <flag>wxEXPAND</flag>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxGridBagSizer">
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_my">
-                          <label>-Y</label>
-                          <fg>#E5E5E5</fg>
-                          <font>
-                            <size>16</size>
-                            <style>normal</style>
-                            <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
-                            <encoding>UTF-8</encoding>
-                          </font>
-                        </object>
-                        <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
-                        <border>5</border>
-                        <cellpos>0,2</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_py">
-                          <label>+Y</label>
-                          <fg>#E5E5E5</fg>
-                          <font>
-                            <size>16</size>
-                            <style>normal</style>
-                            <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
-                            <encoding>UTF-8</encoding>
-                          </font>
-                        </object>
-                        <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
-                        <border>5</border>
-                        <cellpos>4,2</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_px">
-                          <label>+X</label>
-                          <fg>#E5E5E5</fg>
-                          <font>
-                            <size>16</size>
-                            <style>normal</style>
-                            <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
-                            <encoding>UTF-8</encoding>
-                          </font>
-                          <style>wxALIGN_LEFT</style>
-                        </object>
-                        <flag>wxLEFT|wxALIGN_CENTRE_VERTICAL</flag>
-                        <border>5</border>
-                        <cellpos>2,4</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_mx">
-                          <label>-X</label>
-                          <fg>#E5E5E5</fg>
-                          <font>
-                            <size>16</size>
-                            <style>normal</style>
-                            <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
-                            <encoding>UTF-8</encoding>
-                          </font>
-                        </object>
-                        <flag>wxRIGHT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
-                        <border>5</border>
-                        <cellpos>2,0</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_p_mirror_y">
-                          <label>↑</label>
-                          <delta>1</delta>
-                          <bitmap>img_button_btn_64x48_png</bitmap>
-                          <hover>img_button_btn_64x48_h_png</hover>
-                          <selected>img_button_btn_64x48_a_png</selected>
-                          <font>
-                            <size>24</size>
-                            <style>normal</style>
-                            <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
-                            <encoding>UTF-8</encoding>
-                          </font>
-                          <style>wxALIGN_CENTRE</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <flag>wxLEFT|wxRIGHT</flag>
-                        <border>7</border>
-                        <cellpos>1,2</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_m_mirror_y">
-                          <label>↓</label>
-                          <delta>1</delta>
-                          <bitmap>img_button_btn_64x48_png</bitmap>
-                          <hover>img_button_btn_64x48_h_png</hover>
-                          <selected>img_button_btn_64x48_a_png</selected>
-                          <font>
-                            <size>24</size>
-                            <style>normal</style>
-                            <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
-                            <encoding>UTF-8</encoding>
-                          </font>
-                          <style>wxALIGN_CENTRE</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <flag>wxLEFT|wxRIGHT</flag>
-                        <border>7</border>
-                        <cellpos>3,2</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_p_mirror_x">
-                          <label>←</label>
-                          <delta>1</delta>
-                          <bitmap>img_button_btn_64x48_png</bitmap>
-                          <hover>img_button_btn_64x48_h_png</hover>
-                          <selected>img_button_btn_64x48_a_png</selected>
-                          <font>
-                            <size>24</size>
-                            <style>normal</style>
-                            <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
-                            <encoding>UTF-8</encoding>
-                          </font>
-                          <style>wxALIGN_CENTRE</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <cellpos>2,1</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_m_mirror_x">
-                          <label>→</label>
-                          <delta>1</delta>
-                          <bitmap>img_button_btn_64x48_png</bitmap>
-                          <hover>img_button_btn_64x48_h_png</hover>
-                          <selected>img_button_btn_64x48_a_png</selected>
-                          <font>
-                            <size>24</size>
-                            <style>normal</style>
-                            <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
-                            <encoding>UTF-8</encoding>
-                          </font>
-                          <style>wxALIGN_CENTRE</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <cellpos>2,3</cellpos>
-                      </object>
-                      <vgap>0</vgap>
-                      <hgap>5</hgap>
-                      <growablecols/>
-                      <growablerows/>
-                    </object>
-                    <flag>wxALIGN_CENTRE</flag>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxStaticText">
-                      <label>Rotation</label>
-                      <fg>#E5E5E5</fg>
-                      <font>
-                        <size>16</size>
-                        <style>normal</style>
-                        <weight>normal</weight>
-                        <underlined>0</underlined>
-                        <face>Ubuntu</face>
-                        <encoding>UTF-8</encoding>
-                      </font>
-                    </object>
-                    <flag>wxBOTTOM</flag>
-                    <border>10</border>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxStaticText">
-                      <label>Step size</label>
-                    </object>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="UnitFloatSlider" name="mirror_align_slider_mirror_r">
-                      <size>-1,20</size>
-                      <value>0.000001</value>
-                      <min>0.0000001</min>
-                      <max>0.001</max>
-                      <unit>m</unit>
-                      <scale>log</scale>
-                      <accuracy>2</accuracy>
-                      <style>wxBORDER_NONE</style>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <flag>wxEXPAND</flag>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxGridBagSizer">
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_pry">
-                          <label>+Pitch</label>
-                          <fg>#E5E5E5</fg>
-                          <font>
-                            <size>16</size>
-                            <style>normal</style>
-                            <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
-                            <encoding>UTF-8</encoding>
-                          </font>
-                        </object>
-                        <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
-                        <border>5</border>
-                        <cellpos>0,2</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_mry">
-                          <label>-Pitch</label>
-                          <fg>#E5E5E5</fg>
-                          <font>
-                            <size>16</size>
-                            <style>normal</style>
-                            <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
-                            <encoding>UTF-8</encoding>
-                          </font>
-                        </object>
-                        <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
-                        <border>5</border>
-                        <cellpos>4,2</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_prz">
-                          <label>+Yaw</label>
-                          <fg>#E5E5E5</fg>
-                          <font>
-                            <size>16</size>
-                            <style>normal</style>
-                            <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
-                            <encoding>UTF-8</encoding>
-                          </font>
-                          <style>wxALIGN_LEFT</style>
-                        </object>
-                        <flag>wxLEFT|wxALIGN_CENTRE_VERTICAL</flag>
-                        <border>5</border>
-                        <cellpos>2,4</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_mrz">
-                          <label>-Yaw</label>
-                          <fg>#E5E5E5</fg>
-                          <font>
-                            <size>16</size>
-                            <style>normal</style>
-                            <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
-                            <encoding>UTF-8</encoding>
-                          </font>
-                        </object>
-                        <flag>wxRIGHT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
-                        <border>5</border>
-                        <cellpos>2,0</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_m_mirror_ry">
-                          <label>↑</label>
-                          <delta>1</delta>
-                          <bitmap>img_button_btn_64x48_png</bitmap>
-                          <hover>img_button_btn_64x48_h_png</hover>
-                          <selected>img_button_btn_64x48_a_png</selected>
-                          <font>
-                            <size>24</size>
-                            <style>normal</style>
-                            <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
-                            <encoding>UTF-8</encoding>
-                          </font>
-                          <style>wxALIGN_CENTRE</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <flag>wxLEFT|wxRIGHT</flag>
-                        <border>7</border>
-                        <cellpos>1,2</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_p_mirror_ry">
-                          <label>↓</label>
-                          <delta>1</delta>
-                          <bitmap>img_button_btn_64x48_png</bitmap>
-                          <hover>img_button_btn_64x48_h_png</hover>
-                          <selected>img_button_btn_64x48_a_png</selected>
-                          <font>
-                            <size>24</size>
-                            <style>normal</style>
-                            <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
-                            <encoding>UTF-8</encoding>
-                          </font>
-                          <style>wxALIGN_CENTRE</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <flag>wxLEFT|wxRIGHT</flag>
-                        <border>7</border>
-                        <cellpos>3,2</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_m_mirror_rz">
-                          <label>←</label>
-                          <delta>1</delta>
-                          <bitmap>img_button_btn_64x48_png</bitmap>
-                          <hover>img_button_btn_64x48_h_png</hover>
-                          <selected>img_button_btn_64x48_a_png</selected>
-                          <font>
-                            <size>24</size>
-                            <style>normal</style>
-                            <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
-                            <encoding>UTF-8</encoding>
-                          </font>
-                          <style>wxALIGN_CENTRE</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <cellpos>2,1</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_p_mirror_rz">
-                          <label>→</label>
-                          <delta>1</delta>
-                          <bitmap>img_button_btn_64x48_png</bitmap>
-                          <hover>img_button_btn_64x48_h_png</hover>
-                          <selected>img_button_btn_64x48_a_png</selected>
-                          <font>
-                            <size>24</size>
-                            <style>normal</style>
-                            <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
-                            <encoding>UTF-8</encoding>
-                          </font>
-                          <style>wxALIGN_CENTRE</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <cellpos>2,3</cellpos>
-                      </object>
-                      <vgap>0</vgap>
-                      <hgap>5</hgap>
-                      <growablecols/>
-                      <growablerows/>
-                    </object>
-                    <flag>wxALIGN_CENTRE</flag>
                   </object>
                 </object>
                 <fg>#E5E5E5</fg>
                 <bg>#333333</bg>
               </object>
-              <flag>wxALL|wxEXPAND</flag>
-              <border>10</border>
+              <flag>wxEXPAND</flag>
             </object>
             <object class="sizeritem">
               <object class="SparcAlignViewport" name="vp_sparc_align">
