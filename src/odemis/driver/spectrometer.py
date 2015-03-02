@@ -129,11 +129,11 @@ class CompositedSpectrometer(model.Detector):
         self.resolution = model.ResolutionVA(resolution, [min_res, max_res], 
                                              setter=self._setResolution)
         # 2D binning is like a "small resolution"
-        self._binning = binning
+        self._binning = tuple(binning)
         self.binning = model.ResolutionVA(self._binning, dt.binning.range,
                                           setter=self._setBinning)
    
-        self._setBinning(binning) # will also update the resolution
+        self._setBinning(self._binning) # will also update the resolution
         
         # TODO: support software binning by rolling up our own dataflow that
         # does data merging

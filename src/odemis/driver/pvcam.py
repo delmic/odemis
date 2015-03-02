@@ -314,8 +314,7 @@ class PVCam(model.DigitalCamera):
                                                  unit="Hz", setter=self._setReadoutRate)
         self._setReadoutRate(self._readout_rate)
 
-        # binning is (horizontal, vertical), but odemis
-        # only supports same value on both dimensions (for simplification)
+        # binning is needed for _setResolution()
         self._binning = (1, 1) # px
         max_bin = self._getMaxBinning()
         self._image_rect = (0, resolution[0] - 1, 0, resolution[1] - 1)
