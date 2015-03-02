@@ -43,6 +43,7 @@ from odemis.acq._futures import executeTask
 import threading
 from odemis.gui.util.widgets import ProgressiveFutureConnector
 from odemis.acq import _futures
+from odemis.model._futures import InstantaneousFuture
 
 # Sample holder types in the Delphi, as defined by Phenom World
 PHENOM_SH_TYPE_STANDARD = 1  # standard sample holder
@@ -291,7 +292,8 @@ class SecomStateController(MicroscopeStateController):
             self._vacuum_pressure = min(pressures.keys())
             self._vented_pressure = max(pressures.keys())
 
-            self._chamber_future = None # used when venting/pumping
+            self._chamber_pump_future = InstantaneousFuture()  # used when pumping
+            self._chamber_vent_future = InstantaneousFuture()  # used when pumping
 
             # if there is an overview camera, _and_ it has to be reached via a
             # special "pressure" state => note it down
@@ -484,10 +486,13 @@ class SecomStateController(MicroscopeStateController):
 
         # Actually start the pumping/venting
         if state == CHAMBER_PUMPING:
-            # in case the chamber was venting, or has several queued move, will reset everything
-            self._main_data.chamber.stop()
-            self._start_chamber_pumping()
+            # in case the chamber was venting just ignore
+            if self._chamber_vent_future.running() is False:
+                self._chamber_pump_future.cancel()
+                self._main_data.chamber.stop()
+                self._start_chamber_pumping()
         elif state == CHAMBER_VENTING:
+            self._chamber_pump_future.cancel()
             self._main_data.chamber.stop()
             self._start_chamber_venting()
 
@@ -521,13 +526,13 @@ class SecomStateController(MicroscopeStateController):
             s.should_update.value = False
 
         self._set_ebeam_power(False)
-        self._chamber_future = self._main_data.chamber.moveAbs({"pressure": self._vented_pressure})
+        self._chamber_vent_future = self._main_data.chamber.moveAbs({"pressure": self._vented_pressure})
         # Will actually be displayed only if the hw_info is shown
-        self._chamber_fc = ProgressiveFutureConnector(self._chamber_future,
+        self._chamber_fc = ProgressiveFutureConnector(self._chamber_vent_future,
                                               self._main_frame.gauge_load_time,
                                               self._main_frame.lbl_load_time,
                                               full=False)
-        self._chamber_future.add_done_callback(self._on_vented)
+        self._chamber_vent_future.add_done_callback(self._on_vented)
 
     def _on_vented(self, future):
         self.on_chamber_pressure(self._main_data.chamber.position.value)
@@ -683,11 +688,11 @@ class DelphiStateController(SecomStateController):
         if not self._check_holder_calib():
             return
 
-        self._chamber_future = self.DelphiLoading()
-        self._chamber_fc = ProgressiveFutureConnector(self._chamber_future,
-                                                      self._main_frame.gauge_load_time,
-                                                      self._main_frame.lbl_load_time,
-                                                      full=False)
+        self._chamber_pump_future = self.DelphiLoading()
+        self._chamber_fc = ProgressiveFutureConnector(self._chamber_pump_future,
+                                            self._main_frame.gauge_load_time,
+                                            self._main_frame.lbl_load_time,
+                                            full=False)
         self._show_progress_indicators(True, False)
 
         # reset the streams to avoid having data from the previous sample
@@ -697,7 +702,7 @@ class DelphiStateController(SecomStateController):
         # sample have probably nothing in common with this new sample
         self._tab_data.stage_history.value = []
 
-        self._chamber_future.add_done_callback(self._on_vacuum)
+        self._chamber_pump_future.add_done_callback(self._on_vacuum)
 
     @call_in_wx_main
     def _on_vacuum(self, future):
@@ -1034,8 +1039,10 @@ class DelphiStateController(SecomStateController):
             return
 
         # Add the estimated time that the rest of the procedure will take
-        est_end = end + sum(self._chamber_future._actions_time)
-        self._chamber_future.set_progress(end=est_end)
+        est_end = end + sum(self._chamber_pump_future._actions_time)
+        self._chamber_pump_future.set_progress(end=est_end)
+        rem_time = est_end - time.time()
+        logging.debug("Loading future remaining time: %f", rem_time)
 
 
 # TODO SparcStateController?
