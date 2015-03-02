@@ -2460,8 +2460,8 @@ def __init_resources():
                         <object class="sizeritem">
                           <object class="wxGridBagSizer">
                             <object class="sizeritem">
-                              <object class="wxStaticText" name="lbl_mfy">
-                                <label>-Y</label>
+                              <object class="wxStaticText" name="lbl_pfy">
+                                <label>+Y</label>
                                 <fg>#E5E5E5</fg>
                                 <font>
                                   <size>16</size>
@@ -2477,8 +2477,8 @@ def __init_resources():
                               <cellpos>0,2</cellpos>
                             </object>
                             <object class="sizeritem">
-                              <object class="wxStaticText" name="lbl_pfy">
-                                <label>+Y</label>
+                              <object class="wxStaticText" name="lbl_mfy">
+                                <label>-Y</label>
                                 <fg>#E5E5E5</fg>
                                 <font>
                                   <size>16</size>
@@ -2494,8 +2494,8 @@ def __init_resources():
                               <cellpos>4,2</cellpos>
                             </object>
                             <object class="sizeritem">
-                              <object class="wxStaticText" name="lbl_mfx">
-                                <label>-X</label>
+                              <object class="wxStaticText" name="lbl_pfx">
+                                <label>+X</label>
                                 <fg>#E5E5E5</fg>
                                 <font>
                                   <size>16</size>
@@ -2512,8 +2512,8 @@ def __init_resources():
                               <cellpos>2,4</cellpos>
                             </object>
                             <object class="sizeritem">
-                              <object class="wxStaticText" name="lbl_pfx">
-                                <label>+X</label>
+                              <object class="wxStaticText" name="lbl_mfx">
+                                <label>-X</label>
                                 <fg>#E5E5E5</fg>
                                 <font>
                                   <size>16</size>
