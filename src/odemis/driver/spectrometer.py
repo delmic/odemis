@@ -126,7 +126,7 @@ class CompositedSpectrometer(model.Detector):
 
         min_res = (dt.resolution.range[0][0], 1)
         max_res = (dt.resolution.range[1][0], 1)
-        self.resolution = model.ResolutionVA(resolution, [min_res, max_res],
+        self.resolution = model.ResolutionVA(tuple(resolution), [min_res, max_res],
                                              setter=self._setResolution)
         # 2D binning is like a "small resolution"
         self._binning = tuple(binning)
