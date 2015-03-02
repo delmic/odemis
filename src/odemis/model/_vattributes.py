@@ -1036,6 +1036,8 @@ class TupleContinuous(VigilantAttribute, Continuous):
         cls (class or list of classes): classes allowed for each element of the tuple
           default to the same class as the first element
         """
+        if not isinstance(value, tuple):
+            raise ValueError("value (%s) is not a tuple" % (value,))
         self._cls = cls or value[0].__class__
         Continuous.__init__(self, range)
         VigilantAttribute.__init__(self, value, unit=unit, **kwargs)
