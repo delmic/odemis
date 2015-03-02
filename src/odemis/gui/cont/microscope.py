@@ -492,10 +492,9 @@ class SecomStateController(MicroscopeStateController):
                 self._main_data.chamber.stop()
                 self._start_chamber_pumping()
         elif state == CHAMBER_VENTING:
-            if self._chamber_pump_future.running():
-                self._chamber_pump_future.cancel()
-                self._main_data.chamber.stop()
-                self._start_chamber_venting()
+            self._chamber_pump_future.cancel()
+            self._main_data.chamber.stop()
+            self._start_chamber_venting()
 
     def _start_chamber_pumping(self):
         if self._overview_pressure is not None:
