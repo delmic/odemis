@@ -465,15 +465,17 @@ class CameraStream(Stream):
 
         # Create VAs for exposureTime and light power, based on the hardware VA,
         # that can be used, to override the hardware setting on a per stream basis
-        try:
-            self.exposureTime = model.FloatContinuous(
-                                            detector.exposureTime.value,
-                                            detector.exposureTime.range,
-                                            unit=detector.exposureTime.unit)
-        except (AttributeError, NotApplicableError):
-            pass # no exposureTime or no .range
+        if isinstance(detector.exposureTime, model.VigilantAttributeBase):
+            try:
+                self.exposureTime = model.FloatContinuous(
+                                                detector.exposureTime.value,
+                                                detector.exposureTime.range,
+                                                unit=detector.exposureTime.unit)
+            except (AttributeError, NotApplicableError):
+                pass # no exposureTime or no .range
 
-        if emitter is not None:
+        if (emitter is not None and
+            isinstance(emitter.power, model.VigilantAttributeBase)):
             try:
                 self.lightPower = model.FloatContinuous(emitter.power.value,
                                                         emitter.power.range,
