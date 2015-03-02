@@ -175,7 +175,6 @@ class Scanner(model.Emitter):
         self.dwellTime = model.FloatContinuous(1e-06, (1e-06, 1000), unit="s")
 
         # VAs to control the ebeam, purely fake
-        self.power = model.FloatEnumerated(1, {0, 1})
         self.probeCurrent = model.FloatEnumerated(1.3e-9,
                           {0.1e-9, 1.3e-9, 2.6e-9, 3.4e-9, 11.564e-9, 23e-9},
                           unit="A")
@@ -432,9 +431,7 @@ class Detector(model.Detector):
 
             metadata[model.MD_BPP] = bpp
 
-            if scanner.power.value == 0:
-                sim_img[...] = 0 # black it out
-            elif self.parent._focus:
+            if self.parent._focus:
                 # apply the defocus
                 pos = self.parent._focus.position.value['z']
                 dist = abs(pos - self.parent._focus._good_focus) * 1e4
