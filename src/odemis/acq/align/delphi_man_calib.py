@@ -163,6 +163,7 @@ def main(args):
         escan.scale.value = (1, 1)
         escan.resolution.value = (1, 1)
         escan.translation.value = (0, 0)
+        escan.shift.value = (0, 0)
         escan.dwellTime.value = 5e-06
         detector.data.subscribe(_discard_data)
         msg = "Please turn on the Optical stream, set Power to 0 Watt and focus the image so you have a clearly visible spot. Then turn off the stream and press Enter..."
@@ -186,6 +187,7 @@ def main(args):
             escan.scale.value = (1, 1)
             escan.resolution.value = (1, 1)
             escan.translation.value = (0, 0)
+            escan.shift.value = (0, 0)
             escan.dwellTime.value = 5e-06
             detector.data.subscribe(_discard_data)
             msg = "Rotation calculation failed. Please turn on the Optical stream, set Power to 0 Watt and focus the image so you have a clearly visible spot. Then turn off the stream and press Enter to retry..."
@@ -215,6 +217,7 @@ def main(args):
             escan.scale.value = (1, 1)
             escan.resolution.value = (1, 1)
             escan.translation.value = (0, 0)
+            escan.shift.value = (0, 0)
             escan.dwellTime.value = 5e-06
             detector.data.subscribe(_discard_data)
             msg = "Spot shift calculation failed. Please turn on the Optical stream, set Power to 0 Watt and focus the image so you have a clearly visible spot. Then turn off the stream and press Enter to retry..."
@@ -250,6 +253,7 @@ def main(args):
         escan.scale.value = (1, 1)
         escan.resolution.value = (1, 1)
         escan.translation.value = (0, 0)
+        escan.shift.value = (0, 0)
         escan.dwellTime.value = 5e-06
         det_dataflow = detector.data
         f = autofocus.AutoFocus(ccd, escan, ebeam_focus, dfbkg=det_dataflow)
@@ -269,6 +273,7 @@ def main(args):
         escan.scale.value = (1, 1)
         escan.resolution.value = (1, 1)
         escan.translation.value = (0, 0)
+        escan.shift.value = (0, 0)
         escan.dwellTime.value = 5e-06
         detector.data.subscribe(_discard_data)
         msg = "Please turn on the Optical stream, set Power to 0 Watt and focus the image so you have a clearly visible spot. Then turn off the stream and press Enter..."
@@ -292,6 +297,7 @@ def main(args):
             escan.scale.value = (1, 1)
             escan.resolution.value = (1, 1)
             escan.translation.value = (0, 0)
+            escan.shift.value = (0, 0)
             escan.dwellTime.value = 5e-06
             detector.data.subscribe(_discard_data)
             msg = "Fine alignment failed. Please turn on the Optical stream, set Power to 0 Watt and focus the image so you have a clearly visible spot. Then turn off the stream and press Enter to retry..."

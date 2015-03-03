@@ -253,12 +253,12 @@ class SEM(model.HwComponent):
 class Scanner(model.Emitter):
     """
     This is an extension of the model.Emitter class. It contains Vigilant
-    Attributes and setters for magnification, pixel size, translation, resolution,
+    Attributes and setters for magnification, pixel size, resolution,
     scale, rotation and dwell time. Whenever one of these attributes is changed,
     its setter also updates another value if needed e.g. when scale is changed,
-    resolution is updated, when resolution is changed, the translation is recentered
-    etc. Similarly it subscribes to the VAs of scale and magnification in order
-    to update the pixel size.
+    resolution is updated, when resolution is changed etc. Similarly it 
+    subscribes to the VAs of scale and magnification in order to update the 
+    pixel size.
     """
     def __init__(self, name, role, parent, **kwargs):
         # It will set up ._shape and .parent
@@ -287,18 +287,24 @@ class Scanner(model.Emitter):
         # == smallest size/ between two different ebeam positions
         self.pixelSize = model.VigilantAttribute((0, 0), unit="m", readonly=True)
 
-        # (.resolution), .translation, .rotation, and .scaling are used to
+        # (.resolution), .rotation, and .scaling are used to
         # define the conversion from coordinates to a region of interest.
 
-        # TODO: allow translation to shift the ebeam (so the range is much larger)
-        # (float, float) in px => moves center of acquisition by this amount
-        # independent of scale and rotation.
-        tran_rng = ((-100000, -100000),
-                    (100000, 100000))
+        # (float, float) in m => physically moves the e-beam. The move is
+        # clipped within the actual limits by the setter function.
+        shift_rng = ((-1, -1),
+                    (1, 1))
+        self.shift = model.TupleContinuous((0, 0), shift_rng,
+                                              cls=(int, long, float), unit="m",
+                                              setter=self._setShift)
+        self.shift.subscribe(self._onShift, init=True)
+
+        # (float, float) in px => Supposed to move center of acquisition by this
+        # amount independent of scale and rotation. In this case does nothing.
+        tran_rng = [(-self._shape[0] / 2, -self._shape[1] / 2),
+                    (self._shape[0] / 2, self._shape[1] / 2)]
         self.translation = model.TupleContinuous((0, 0), tran_rng,
-                                              cls=(int, long, float), unit="px",
-                                              setter=self._setTranslation)
-        self.translation.subscribe(self._onTranslation, init=True)
+                                              cls=(int, long, float), unit="px")
 
         # .resolution is the number of pixels actually scanned. If it's less than
         # the whole possible area, it's centered.
@@ -465,7 +471,7 @@ class Scanner(model.Emitter):
     def _setScale(self, value):
         """
         value (1 < float, 1 < float): increase of size between pixels compared to
-         the original pixel size. It will adapt the translation and resolution to
+         the original pixel size. It will adapt the resolution to
          have the same ROI (just different amount of pixels scanned)
         return the actual value used
         """
@@ -478,8 +484,7 @@ class Scanner(model.Emitter):
         old_resolution = self.resolution.value
         new_resolution = (max(int(round(old_resolution[0] * change[0])), 1),
                           max(int(round(old_resolution[1] * change[1])), 1))
-        # no need to update translation, as it's independent of scale and will
-        # be checked by setting the resolution.
+
         self.resolution.value = new_resolution  # will call _setResolution()
 
         return value
@@ -487,9 +492,7 @@ class Scanner(model.Emitter):
     def _setResolution(self, value):
         """
         value (0<int, 0<int): defines the size of the resolution. If the
-         resolution is not possible, it will pick the most fitting one. It will
-         recenter the translation if otherwise it would be out of the whole
-         scanned area.
+         resolution is not possible, it will pick the most fitting one. 
         returns the actual value used
         """
         # In case of resolution 1,1 store the current fov and set the spot mode
@@ -510,43 +513,35 @@ class Scanner(model.Emitter):
 
         return size
 
-    def _onTranslation(self, translation):
+    def _onShift(self, shift):
         beamShift = self.parent._objects.create('ns0:position')
         with self.parent._acq_progress_lock:
-            pixelSize = self.pixelSize.value
-            new_trans = (translation[0] * pixelSize[0],
-                         translation[1] * pixelSize[1])
-            beamShift.x, beamShift.y = new_trans[0], new_trans[1]
-            logging.debug("EBeam shifted by %s m,m", new_trans)
-            # TODO This has to be done via another beamshift VA (m,m) instead of
-            # translation
+            new_shift = (shift[0], shift[1])
+            beamShift.x, beamShift.y = new_shift[0], new_shift[1]
+            logging.debug("EBeam shifted by %s m,m", new_shift)
             self.parent._device.SetSEMImageShift(beamShift, True)
 
-    def _setTranslation(self, value):
+    def _setShift(self, value):
         """
         value (float, float): shift from the center. It will always ensure that
-          the whole ROI fits the screen.
+          the shift is within the hardware limits.
         returns actual shift accepted
         """
-        # Clip translation (i.e. beam shift) within 50 microns due to
+        # Clip shift (i.e. beam shift) within 50 microns due to
         # Phenom limitation
-        pixelSize = self.pixelSize.value
-        tran = (value[0] * pixelSize[0], value[1] * pixelSize[1])  # m
         # Calculate shift distance
-        tran_d = norm(numpy.asarray([0, tran[0]]) - numpy.asarray([tran[1], 0]))
+        shift_d = norm(numpy.asarray([0, value[0]]) - numpy.asarray([value[1], 0]))
         # Change to the actual maximum beam shift
         # limit = (REFERENCE_TENSION / self.accelVoltage.value) * BEAM_SHIFT_AT_REFERENCE
         rng = self.parent._device.GetSEMImageShiftRange()
         limit = rng.max
         # The ratio between the shift distance and the limit
         ratio = 1
-        if tran_d > limit:
-            ratio = tran_d / limit
+        if shift_d > limit:
+            ratio = shift_d / limit
         # Clip within limit
-        clipped_tran = (tran[0] / ratio, tran[1] / ratio)
-        tran_pxs = (clipped_tran[0] / pixelSize[0],
-                    clipped_tran[1] / pixelSize[1])
-        return tran_pxs
+        clipped_shift = (value[0] / ratio, value[1] / ratio)
+        return clipped_shift
 
 class Detector(model.Detector):
     """
@@ -801,7 +796,7 @@ class Detector(model.Detector):
 
     def _acquire_image(self):
         """
-        Acquires the SEM image based on the translation, resolution and
+        Acquires the SEM image based on the resolution and
         current drift.
         """
         with self.parent._acq_progress_lock:
@@ -933,8 +928,8 @@ class Detector(model.Detector):
     def _acquire_thread(self, callback):
         """
         Thread that performs the SEM acquisition. It calculates and updates the
-        center (e-beam) position based on the translation and provides the new
-        generated output to the Dataflow.
+        center (e-beam) position and provides the new generated output to the 
+        Dataflow.
         """
         try:
             while not self._acquisition_must_stop.is_set():

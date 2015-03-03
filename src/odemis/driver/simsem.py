@@ -143,7 +143,13 @@ class Scanner(model.Emitter):
         # (.resolution), .translation, .rotation, and .scaling are used to
         # define the conversion from coordinates to a region of interest.
 
-        # (float, float) in px => moves center of acquisition by this amount
+        # (float, float) in m => physically moves the e-beam. 
+        shift_rng = ((-50e-06, -50e-06),
+                    (50e-06, 50e-06))
+        self.shift = model.TupleContinuous((0, 0), shift_rng,
+                                              cls=(int, long, float), unit="m")
+
+        # (float, float) in m => moves center of acquisition by this amount
         # independent of scale and rotation.
         tran_rng = [(-self._shape[0] / 2, -self._shape[1] / 2),
                     (self._shape[0] / 2, self._shape[1] / 2)]
@@ -400,15 +406,16 @@ class Detector(model.Detector):
             pxs_pos = scanner.translation.value
             scale = scanner.scale.value
             res = scanner.resolution.value
+            shi = scanner.shift.value
 
             phy_pos = metadata.get(model.MD_POS, (0, 0))
             trans = scanner.pixelToPhy(pxs_pos)
             updated_phy_pos = (phy_pos[0] + trans[0], phy_pos[1] + trans[1])
 
             shape = self.fake_img.shape
-            # Simulate drift
-            center = (shape[1] / 2 - self.current_drift,
-                      shape[0] / 2 + self.current_drift)
+            # Simulate shift and drift
+            center = (shape[1] / 2 - shi[0] / pxs[0] - self.current_drift,
+                      shape[0] / 2 - shi[1] / pxs[1] + self.current_drift)
 
             lt = (center[0] + pxs_pos[0] - (res[0] / 2) * scale[0],
                   center[1] + pxs_pos[1] - (res[1] / 2) * scale[1])

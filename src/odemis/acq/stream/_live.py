@@ -353,20 +353,23 @@ class SEMStream(LiveStream):
 
 MTD_EBEAM_SHIFT = "Ebeam shift"
 MTD_MD_UPD = "Metadata update"
-# MTD_STAGE_MOVE = "Stage move"
+MTD_STAGE_MOVE = "Stage move"
 class AlignedSEMStream(SEMStream):
     """
     This is a special SEM stream which automatically first aligns with the
     CCD (using spot alignment) every time the stage position changes.
-    Alignment correction can either be done via beam shift (=translation), or
+    Alignment correction can either be done via beam shift (=shift), or
     by just updating the image position.
     """
     def __init__(self, name, detector, dataflow, emitter,
                  ccd, stage, shiftebeam=MTD_MD_UPD, **kwargs):
         """
         shiftebeam (MTD_*): if MTD_EBEAM_SHIFT, will correct the SEM position using beam shift
-         (iow, using emitter.translation). If MTD_MD_UPD, it will just update the
-         position correction metadata on the SEM images.
+         (iow, using emitter.shift). If MTD_MD_UPD, it will just update the
+         position correction metadata on the SEM images. If MTD_STAGE_MOVE, it will
+         move the stage or beam (depending on how large is the move) and then update
+         the correction metadata (note that if the stage has moved, the optical
+         stream will need to be updated too).
         """
         SEMStream.__init__(self, name, detector, dataflow, emitter, **kwargs)
         self._ccd = ccd
@@ -412,22 +415,19 @@ class AlignedSEMStream(SEMStream):
             self._setStatus(logging.WARNING, u"SEM stream is not aligned")
         self._calibrated = False
 
-    # need to override it to support beam shift in the translation
+    # need to override it to support beam shift
     def _applyROI(self):
         """
         Update the scanning area of the SEM according to the roi
         """
-        res, trans = self._computeROISettings(self.roi.value)
+        res, shift = self._computeROISettings(self.roi.value)
 
         if (self._shiftebeam == MTD_EBEAM_SHIFT) and (self._beamshift is not None):
-            # convert shift into SEM pixels
-            pxs = self._emitter.pixelSize.value
-            trans_cor = tuple(s / p for s, p in zip(self._beamshift, pxs))
-            trans = tuple(t + c for t, c in zip(trans, trans_cor))
+            shift = tuple(s + c for s, c in zip(shift, self._beamshift))
 
         # always in this order
         self._emitter.resolution.value = res
-        self._emitter.translation.value = trans
+        self._emitter.shift.value = shift
 
     def _compensateShift(self):
         """
@@ -453,7 +453,7 @@ class AlignedSEMStream(SEMStream):
                 logging.info("Determining the Ebeam center position")
                 # TODO Handle cases where current beam shift is larger than
                 # current limit. Happens when accel. voltage is changed
-                self._emitter.translation.value = (0, 0)
+                self._emitter.shift.value = (0, 0)
                 shift = FindEbeamCenter(self._ccd, self._detector, self._emitter)
                 logging.debug("Spot shift is %s m,m", shift)
                 self._beamshift = shift
@@ -465,16 +465,16 @@ class AlignedSEMStream(SEMStream):
                 self._cur_trans = (cur_trans[0] - self._last_shift[0],
                                    cur_trans[1] - self._last_shift[1])
 
-#                 if self._shiftebeam == MTD_STAGE_MOVE:
-#                     for child in self._stage.children.value:
-#                         if child.role == "sem-stage":
-#                             f = child.moveRel({"x": shift[0], "y": shift[1]})
-#                             f.result()
-#
-#                     shift = (0, 0) # just in case of failure
-#                     shift = FindEbeamCenter(self._ccd, self._detector, self._emitter)
-                if self._shiftebeam == MTD_EBEAM_SHIFT:
-                    # First align using translation
+                if self._shiftebeam == MTD_STAGE_MOVE:
+                    for child in self._stage.children.value:
+                        if child.role == "sem-stage":
+                            f = child.moveRel({"x": shift[0], "y": shift[1]})
+                            f.result()
+
+                    shift = (0, 0) # just in case of failure
+                    shift = FindEbeamCenter(self._ccd, self._detector, self._emitter)
+                elif self._shiftebeam == MTD_EBEAM_SHIFT:
+                    # First align using shift
                     self._applyROI()
                     # Then by updating the metadata
                     shift = (0, 0)  # just in case of failure
