@@ -1,0 +1,56 @@
+style "checkbox"
+{
+    GtkCheckButton::indicator_size = 16 # checbox size
+    GtkCheckButton::indicator_spacing = 5 # space around checbox
+    GtkCheckButton::focus-line-width = 0
+    GtkButton::relief = GTK_RELIEF_NONE
+
+    base[NORMAL]        = "#eeeeee" # checkbox background
+    #base[PRELIGHT]	    = "#ff0000" # nvt
+    #base[INSENSITIVE]  = "#ff0000" # nvt
+    #base[ACTIVE]       = "#ff0000" # nvt
+    #base[SELECTED]	    = "#ff0000" # nvt
+
+    text[NORMAL]        = "#2FA7D4"
+    text[PRELIGHT]      = "#2FA7D4"
+    text[INSENSITIVE]   = "#2FA7D4"
+    text[ACTIVE]        = "#2FA7D4"
+    text[SELECTED]      = "#2FA7D4"
+
+    bg[NORMAL]		= "#333333" # checkbox edge
+    bg[PRELIGHT]	= "#333333" # hover hightlight
+    bg[INSENSITIVE]	= "#ff0000" # ???
+    bg[ACTIVE]		= "#0000ff" # checkbox edge
+    bg[SELECTED]	= "#eeeeee" # selection hightlight
+}
+
+style "checkbox_label"
+{
+    #base[NORMAL]        = "#ff0000"
+    #base[PRELIGHT]	    = "#ff0000"
+    #base[INSENSITIVE]   = "#ff0000"
+    #base[ACTIVE]        = "#ff0000"
+    #base[SELECTED]      = "#ff0000"
+
+    #text[NORMAL]      = "#ff0000"
+    #text[PRELIGHT]    = "#ff0000"
+    #text[INSENSITIVE] = "#ff0000"
+    #text[ACTIVE]      = "#ff0000"
+    #text[SELECTED]    = "#ff0000"
+
+    #bg[NORMAL]		= "#0000ff" # checkbox edge
+    #bg[PRELIGHT]	= "#0000ff" # hover hightlight
+    #bg[INSENSITIVE]	= "#0000ff" # ???
+    #bg[ACTIVE]		= "#0000ff" # checkbox edge
+    #bg[SELECTED]	= "#0000ff" # selection hightlight
+
+    fg[NORMAL]      = "#eeeeee" # label colour
+    fg[PRELIGHT]    = "#eeeeee" # label hovercolour
+    fg[INSENSITIVE]	= "#999999" # disabled
+    fg[ACTIVE]      = "#eeeeee" # text on unfocused tabs
+    fg[SELECTED]    = "#ff0000"
+
+}
+
+class "GtkCheckButton" style "checkbox"
+widget_class "*.GtkCheckButton.GtkLabel" style "checkbox_label"
