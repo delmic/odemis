@@ -292,7 +292,7 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
             escan.translation.value = (0, 0)
             escan.dwellTime.value = 5e-06
             det_dataflow = detector.data
-            f = autofocus.AutoFocus(ccd, escan, ebeam_focus, dataflow=det_dataflow)
+            f = autofocus.AutoFocus(ccd, escan, ebeam_focus, dfbkg=det_dataflow)
             f.result()
 
             # TODO also calculate and return Phenom shift parameters
