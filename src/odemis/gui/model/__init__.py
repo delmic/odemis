@@ -633,7 +633,7 @@ class View(object):
         return "{}".format(self.name.value)
 
 
-MAX_SAFE_MOVE_DISTANCE = 1e-3  # 1 mm
+MAX_SAFE_MOVE_DISTANCE = 10e-3  # 1 cm
 
 
 class StreamView(View):
