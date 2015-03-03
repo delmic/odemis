@@ -134,9 +134,8 @@ HW_SETTINGS_CONFIG = {
                 "choices": util.resolution_from_range,
                 "accuracy": None, # never simplify the numbers
             }),
-            ("bpp", {
-                "label": "BPP",
-                "tooltip": "Bits per pixel",
+            ("shift", {
+                "control_type": odemis.gui.CONTROL_NONE,
             }),
 
             # what we don't want to display:
