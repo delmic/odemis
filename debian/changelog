@@ -1,3 +1,14 @@
+odemis (2.1.1-1ubuntu1) precise; urgency=low
+
+  * New minor version: 2.1.1
+  * Bug fixes:
+    - Delphi sample holder calibration fails
+    - Delphi manual calibration script cannot be found
+    - SPARC GUI fails to start
+    - Binning on PVCam is not displayed
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Tue, 03 Mar 2015 15:08:35 +0100
+
 odemis (2.1-1ubuntu1) precise; urgency=low
 
   * New version: 2.1
