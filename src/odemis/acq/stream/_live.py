@@ -549,49 +549,6 @@ class BrightfieldStream(CameraStream):
         em = [1.] * len(self._emitter.emissions.value)
         self._emitter.emissions.value = em
 
-# TODO: unused (now gui.model.ContentView can be used to the same)
-class CameraNoLightStream(CameraStream):
-    """ Stream containing images obtained via optical CCD but without any light
-     source on. Used for the SECOM lens alignment tab.
-    In practice, the emitter is the ebeam, but it's already handled by a
-    separate stream, so in practice, it needs no emitter.
-
-    It basically knows how to turn off light and override position information.
-    """
-    # TODO: pass the stage, and not the position VA of the stage, to be more
-    # consistent?
-    # TODO: merge into CameraStream or BrightfieldStream?
-    def __init__(self, name, detector, dataflow, emitter, position=None):
-        """
-        position (VA of dict str -> float): stage position to use instead of the
-         position contained in the metadata.
-        """
-        self._position = position
-        CameraStream.__init__(self, name, detector, dataflow, emitter)
-
-    def _find_metadata(self, md):
-        """
-        Find the PIXEL_SIZE and POS metadata from the given raw image
-        return (dict MD_* -> value)
-        """
-        # No correction to be displayed when aligning the lenses
-        md = md.copy()
-        md.pop(MD_POS_COR, None)
-        md.pop(MD_PIXEL_SIZE_COR, None)
-        md.pop(MD_ROTATION_COR, None)
-
-        # Override the normal metadata by using the ._position we know
-        md = super(CameraNoLightStream, self)._find_metadata(md)
-
-        # override the position if requested
-        try:
-            if self._position:
-                pos = self._position.value # a stage should always have x,y axes
-                md[MD_POS] = pos["x"], pos["y"]
-        except Exception:
-            logging.exception("Failed to get X/Y position")
-
-        return md
 
 class CameraCountStream(CameraStream):
     """
