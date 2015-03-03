@@ -8,7 +8,11 @@ SPARC-MONASH: {
     "Fiber Actuators"],
 }
 
-# FEI SEM driven via external X/Y connection, using a DAQ board
+
+# Can simulate a SEM connected to a DAQ board by using the comedi_test driver:
+# sudo modprobe comedi comedi_num_legacy_minors=4
+# sudo modprobe comedi_test
+# sudo comedi_config /dev/comedi0 comedi_test 1000000,1000000
 "SEM Scan Interface": {
     class: semcomedi.SEMComedi,
     role: none,
@@ -25,9 +29,9 @@ SPARC-MONASH: {
     # Internal child of SEM ExtXY, so no class
     role: e-beam,
     init: {
-        channels: [0, 1],
-        limits: [[-3.1754, 3.1754], [-3.7, 3.7]],  # V
-        park: [-5, -5], # V
+        channels: [1, 0],
+        limits: [[0, 5], [0, 5]],  # V
+        park: [0, 0], # V
         settle_time: 5.e-6, # s
         hfw_nomag: 0.25, # m
     },
@@ -44,7 +48,7 @@ SPARC-MONASH: {
     # Internal child of SEM Scan Interface, so no class
     role: se-detector,
     init: {
-        channel: 0,
+        channel: 0, # 0-> sawtooth waves, 1-> square waves
         limits: [-3, 3] # V
     },
 }
@@ -65,7 +69,8 @@ SPARC-MONASH: {
 "Focus Lens Flipper": {
     class: tlaptmf.MFF,
     role: lens-switch,
-    init: {sn: "37857191",
+    init: {port: "/dev/fake", # for simulator
+           #sn: "37857191",
            axis: "rx",
            # inverted: ["rx"],
     },
@@ -74,7 +79,7 @@ SPARC-MONASH: {
 
 # Thorlabs FW102C with some filters
 "Optical Emission Filter": {
-    class: tlfw.FW102c,
+    class: tlfw.FakeFW102c,
     role: filter,
     init: {port: "/dev/ttyFTDI*", # will automatically find the right port
            bands: {1: [420.e-9, 460.e-9], # pos -> m,m
@@ -86,17 +91,26 @@ SPARC-MONASH: {
 }
 
 # Andor Neo
+#"Angular Camera": {
+#    class: andorcam3.AndorCam3,
+#    role: ccd,
+#    init: {
+#        device: 0,  # if a real camera is plugged in, it's usually 0
+#        bitflow_install_dirs: "/usr/share/bitflow/", # Put the path where Bitflow data is installed
+#        transpose: [1, -2], # mirrored on Y axis
+#    },
+#    properties: {
+#        fanSpeed: 0.0, # 0 = Off, 0.5= half speed, 1 = max speed
+#    }
+#}
+
 "Angular Camera": {
-    class: andorcam3.AndorCam3,
+    class: andorcam2.AndorCam2,
     role: ccd,
     init: {
-        device: 0,  # if a real camera is plugged in, it's usually 0
-        bitflow_install_dirs: "/usr/share/bitflow/", # Put the path where Bitflow data is installed
-        transpose: [1, -2], # mirrored on Y axis
+       device: "fake",
+       image: "sparc-ar-mirror-align.h5", # only for simulator
     },
-    properties: {
-        fanSpeed: 0.0, # 0 = Off, 0.5= half speed, 1 = max speed
-    }
 }
 
 # Thorlabs MFF102 holding the mirror to select AR CCD or AR PMT
@@ -106,7 +120,8 @@ SPARC-MONASH: {
 "AR CCD-PMT Flipper": {
     class: tlaptmf.MFF,
     role: ar-det-selector,
-    init: {sn: "37857195",
+    init: {port: "/dev/fake", # for simulator
+           #sn: "37857195",
            axis: "rx",
            # inverted: ["rx"],
     },
@@ -121,7 +136,8 @@ SPARC-MONASH: {
 "Fiber Flipper": {
     class: tlaptmf.MFF,
     role: ar-spec-selector,
-    init: {sn: "37857201",
+    init: {port: "/dev/fake", # for simulator
+           #sn: "37857201",
            axis: "rx",
            # inverted: ["rx"],
     },
@@ -143,11 +159,12 @@ SPARC-MONASH: {
     # no class, as it's instantiated by AndorSpec
     role: sp-ccd,
     init: {
-           device: 0, # 0 = first and only Andor SDK 2 camera
+           device: "fake",
+           image: "andorcam2-fake-clara.tiff", # only for simulator
            #transpose: [-1, 2], # mirrored on X axis if camera is upside-down
     },
     properties: {
-        targetTemperature: -55, # °C
+        #targetTemperature: -55, # °C
     },
 }
 
@@ -155,7 +172,7 @@ SPARC-MONASH: {
     # no class, as it's instantiated by AndorSpec
     role: spectrograph,
     init: {
-        device: 0,
+        device: "fake",
     },
 }
 
@@ -165,7 +182,7 @@ SPARC-MONASH: {
 # RZ (yaw)   = 12.4.6..
 # RY (pitch) = 12...6..
 "Mirror Actuators": {
-    class: pigcs.Bus,
+    class: pigcs.FakeBus,
     role: mirror,
     init: {
         port: "/dev/ttyPIGCS",
@@ -192,7 +209,7 @@ SPARC-MONASH: {
     class: nfpm.PM8742,
     role: fiber-aligner,
     init: {
-        address: "autoip", # put the IP address if static IP is used
+        address: "fake", # put the IP address if static IP is used, or "autoip"
         sn: "11511",
         # X/Y are wrt light path (from the sample to the detector)
         axes: ["x", "y"],
