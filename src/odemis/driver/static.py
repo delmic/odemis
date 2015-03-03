@@ -60,12 +60,12 @@ class OpticalLens(model.HwComponent):
             if (not isinstance(pole_pos, collections.Iterable) or
                 len(pole_pos) != 2 or any(v < 0 for v in pole_pos)):
                 raise ValueError("pole_pos must be 2 positive values, got %s" % pole_pos)
-            self.polePosition = model.ResolutionVA(pole_pos,
+            self.polePosition = model.ResolutionVA(tuple(pole_pos),
                                                    rng=[(0, 0), (1e6, 1e6)])
 
 class LightFilter(model.Actuator):
     """
-    A very simple class which just represent a light filter (blocks a wavelength 
+    A very simple class which just represent a light filter (blocks a wavelength
     band).
     It should "affect" the detector on which it's in front of, if it's filtering
     the "out" path, or "affect" the emitter in which it's after, if it's
