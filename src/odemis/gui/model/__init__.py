@@ -114,6 +114,7 @@ class MainGUIData(object):
         self.focus = None  # actuator to change the camera focus
         self.aligner = None  # actuator to align ebeam/ccd
         self.mirror = None  # actuator to change the mirror position (on SPARC)
+        self.fibaligner = None # actuator to move/calibrate the fiber (on the SPARC)
         self.light = None  # epi-fluorescence light
         self.brightlight = None  # brightlight
         self.light_filter = None  # emission light filter for SECOM/output filter for SPARC
@@ -165,6 +166,8 @@ class MainGUIData(object):
                     self.mirror = c
                 elif c.role == "align":
                     self.aligner = c
+                elif c.role == "fiber-aligner":
+                    self.fibaligner = c
                 elif c.role == "lens-switch":
                     self.lens_switch = c
                 elif c.role == "ar-spec-selector":
@@ -213,7 +216,7 @@ class MainGUIData(object):
         # when doing manual alignment. 0.1s is not too bad value if the user
         # hasn't specified anything (yet).
         self.fineAlignDwellTime = FloatContinuous(0.1, range=[1e-9, 100],
-                                                        unit="s")
+                                                  unit="s")
 
         # TODO: should we put also the configuration related stuff?
         # Like path/file format
@@ -494,6 +497,7 @@ class ActuatorGUIData(MicroscopyGUIData):
         ss_def = {"stage": (1e-6, [100e-9, 1e-3], "stage", None),
                   # "focus": (100e-9, [10e-9, 1e-4], "focus", None),
                   "aligner": (1e-6, [100e-9, 1e-4], "aligner", None),
+                  "fibaligner": (50e-6, [5e-6, 500e-6], "fibaligner", None),
                   # Mirror is a bit more complicated as it has 4 axes and Y
                   # usually needs to be 10x bigger than X
                   "mirror_x": (1e-6, [100e-9, 1e-3], "mirror", ("x",)),

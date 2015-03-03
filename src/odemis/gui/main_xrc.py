@@ -147,11 +147,11 @@ class xrcfr_main(wx.Frame):
         self.mirror_align_btn_m_mirror_rz = xrc.XRCCTRL(self, "mirror_align_btn_m_mirror_rz")
         self.mirror_align_btn_p_mirror_rz = xrc.XRCCTRL(self, "mirror_align_btn_p_mirror_rz")
         self.pnl_sparc_fib = xrc.XRCCTRL(self, "pnl_sparc_fib")
-        self.mirror_align_slider_mirror_f = xrc.XRCCTRL(self, "mirror_align_slider_mirror_f")
-        self.mirror_align_btn_m_mirror_ry = xrc.XRCCTRL(self, "mirror_align_btn_m_mirror_ry")
-        self.mirror_align_btn_p_mirror_ry = xrc.XRCCTRL(self, "mirror_align_btn_p_mirror_ry")
-        self.mirror_align_btn_m_mirror_rz = xrc.XRCCTRL(self, "mirror_align_btn_m_mirror_rz")
-        self.mirror_align_btn_p_mirror_rz = xrc.XRCCTRL(self, "mirror_align_btn_p_mirror_rz")
+        self.mirror_align_slider_fibaligner = xrc.XRCCTRL(self, "mirror_align_slider_fibaligner")
+        self.mirror_align_btn_p_fibaligner_y = xrc.XRCCTRL(self, "mirror_align_btn_p_fibaligner_y")
+        self.mirror_align_btn_m_fibaligner_y = xrc.XRCCTRL(self, "mirror_align_btn_m_fibaligner_y")
+        self.mirror_align_btn_m_fibaligner_x = xrc.XRCCTRL(self, "mirror_align_btn_m_fibaligner_x")
+        self.mirror_align_btn_p_fibaligner_x = xrc.XRCCTRL(self, "mirror_align_btn_p_fibaligner_x")
         self.vp_sparc_align = xrc.XRCCTRL(self, "vp_sparc_align")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fp_ma_settings_ar = xrc.XRCCTRL(self, "fp_ma_settings_ar")
@@ -2409,10 +2409,6 @@ def __init_resources():
                     <flag>wxBOTTOM|wxEXPAND</flag>
                     <border>5</border>
                   </object>
-                  
-                  
-                  
-                  
                   <object class="sizeritem">
                     <object class="wxPanel" name="pnl_sparc_fib">
                       <object class="wxBoxSizer">
@@ -2441,9 +2437,9 @@ def __init_resources():
                           <border>5</border>
                         </object>
                         <object class="sizeritem">
-                          <object class="UnitFloatSlider" name="mirror_align_slider_mirror_f">
+                          <object class="UnitFloatSlider" name="mirror_align_slider_fibaligner">
                             <size>-1,20</size>
-                            <value>0.000001</value>
+                            <value>0.00001</value>
                             <min>0.0000001</min>
                             <max>0.001</max>
                             <unit>m</unit>
@@ -2529,7 +2525,7 @@ def __init_resources():
                               <cellpos>2,0</cellpos>
                             </object>
                             <object class="sizeritem">
-                              <object class="ImageTextButton" name="mirror_align_btn_m_mirror_ry">
+                              <object class="ImageTextButton" name="mirror_align_btn_p_fibaligner_y">
                                 <label>↑</label>
                                 <delta>1</delta>
                                 <bitmap>img_button_btn_64x48_png</bitmap>
@@ -2553,7 +2549,7 @@ def __init_resources():
                               <cellpos>1,2</cellpos>
                             </object>
                             <object class="sizeritem">
-                              <object class="ImageTextButton" name="mirror_align_btn_p_mirror_ry">
+                              <object class="ImageTextButton" name="mirror_align_btn_m_fibaligner_y">
                                 <label>↓</label>
                                 <delta>1</delta>
                                 <bitmap>img_button_btn_64x48_png</bitmap>
@@ -2577,7 +2573,7 @@ def __init_resources():
                               <cellpos>3,2</cellpos>
                             </object>
                             <object class="sizeritem">
-                              <object class="ImageTextButton" name="mirror_align_btn_m_mirror_rz">
+                              <object class="ImageTextButton" name="mirror_align_btn_m_fibaligner_x">
                                 <label>←</label>
                                 <delta>1</delta>
                                 <bitmap>img_button_btn_64x48_png</bitmap>
@@ -2599,7 +2595,7 @@ def __init_resources():
                               <cellpos>2,1</cellpos>
                             </object>
                             <object class="sizeritem">
-                              <object class="ImageTextButton" name="mirror_align_btn_p_mirror_rz">
+                              <object class="ImageTextButton" name="mirror_align_btn_p_fibaligner_x">
                                 <label>→</label>
                                 <delta>1</delta>
                                 <bitmap>img_button_btn_64x48_png</bitmap>

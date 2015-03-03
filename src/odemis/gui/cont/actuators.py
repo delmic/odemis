@@ -129,14 +129,18 @@ class ActuatorController(object):
                 btn.Bind(wx.EVT_BUTTON, btn_action)
                 self._btns.append(btn)
 
-        # Show the right aligner panel (X/Y or A/B)
+        # On SECOM, show the right aligner panel (X/Y or A/B)
         if ("aligner", "x") in tab_data.axes:
             main_frame.pnl_xy_align.Show()
         if ("aligner", "a") in tab_data.axes:
             main_frame.pnl_ab_align.Show()
 
+        # On SPARC, show the fiber aligner only if needed
+        showfib = ("fibaligner", "x") in tab_data.axes
+        main_frame.pnl_sparc_fib.Show(showfib)
+
         tab_data.main.is_acquiring.subscribe(self._on_acquisition)
-    
+
     def _on_acquisition(self, acquiring):
         for b in self._btns:
             b.Enable(not acquiring)
