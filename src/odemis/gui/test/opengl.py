@@ -8,6 +8,7 @@ import math
 import time
 
 import odemis.gui.img.data as imgdata
+from odemis.gui.img.data import getlogo_delphiImage
 from odemis.gui.test import generate_img_data
 
 
@@ -96,80 +97,41 @@ class Canvas(glcanvas.GLCanvas):
         wx.CallAfter(self.do_set_viewport)
         event.Skip()
 
+    def add_cairo_draw(self):
+        # EmptyBitmap is deprecated in wxPython 3.0.3
+        # buff = wx.Bitmap.FromRGBA(*self.ClientSize)
+        buff = wx.EmptyBitmapRGBA(self.ClientSize.x, self.ClientSize.y, 100, 0, 50, 150)
+        # buff = wx.EmptyBitmap(*self.ClientSize)
+        dc = wx.MemoryDC()
+        dc.SelectObject(buff)
+        #
+        # ctx = wxcairo.ContextFromDC(dc)
+        #
+        # ctx.set_line_width(3)
+        # ctx.set_line_join(cairo.LINE_JOIN_MITER)
+        # ctx.set_source_rgba(1.0, 0, 0, 1)
+        # ctx.move_to(100, 100)
+        # ctx.line_to(300, 300)
+        # ctx.fill()
+
+        del dc
+
+        # array = numpy.zeros((self.ClientSize.x, self.ClientSize.y, 4), 'uint8')
+        # alpha = 100
+        # array[:,:,] = (0, 0, 255 * alpha / 255.0, alpha)
+        # self.set_image(array)
+
+        img = buff.ConvertToImage()
+        # img = getlogo_delphiImage()
+        img.SaveFile('test.png', wx.BITMAP_TYPE_PNG)
+        self.set_image(img)
+
     def on_paint(self, evt):
         self.SetCurrent(self.context)
         if not self.init:
             self.init_gl()
             self.init = True
         self.on_draw()
-
-        # buff = wx.EmptyBitmap(*self.ClientSize)
-        # dc = wx.MemoryDC()
-        # dc.SelectObject(buff)
-        #
-        # # dc_view = wx.PaintDC(self)
-        # ctx = wxcairo.ContextFromDC(dc)
-        #
-        # ctx.save()
-        #
-        # ctx.set_line_width(3)
-        # ctx.set_line_join(cairo.LINE_JOIN_MITER)
-        # ctx.set_source_rgba(1.0, 0, 0, 1)
-        # ctx.move_to(100, 100)
-        # ctx.line_to(200, 200)
-        # ctx.stroke()
-        #
-        # ctx.restore()
-        #
-        # del dc
-        #
-        # self._overlay_id = glGenTextures(1)
-        # glBindTexture(GL_TEXTURE_2D, self._overlay_id)
-        #
-        # img = buff.ConvertToImage()
-        # w, h = self._bg_size = img.GetSize()
-        #
-        # glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, img.GetData())
-        #
-        # glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
-        # glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
-        #
-        # glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
-        # glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
-        #
-        # glMatrixMode(GL_PROJECTION)
-        # glPushMatrix()
-        # glLoadIdentity()
-        #
-        # glMatrixMode(GL_MODELVIEW)
-        #
-        # glLoadIdentity()
-        #
-        # glEnable(GL_TEXTURE_2D)
-        # # glBindTexture(GL_TEXTURE_2D, self._background_id)
-        #
-        # glColor4f(1.0, 1.0, 1.0, 1.0)
-        #
-        # glBegin(GL_QUADS)
-        #
-        # glTexCoord2f(0, 0)
-        # glVertex2f(-1, -1)
-        #
-        # glTexCoord2f(0, self._bg_y_ratio)
-        # glVertex2f(-1, 1)
-        #
-        # glTexCoord2f(self._bg_x_ratio, self._bg_y_ratio)
-        # glVertex2f(1, 1)
-        #
-        # glTexCoord2f(self._bg_x_ratio, 0)
-        # glVertex2f(1, -1)
-        #
-        # glEnd()
-        #
-        # glDisable(GL_TEXTURE_2D)
-        #
-        # glMatrixMode(GL_PROJECTION)
-        # glPopMatrix()
 
     def do_set_viewport(self):
         w, h = self.GetClientSize()
@@ -239,6 +201,8 @@ class Canvas(glcanvas.GLCanvas):
 
                 for i, rgb in enumerate(split_rgb(rgb)):
                     rgba += rgb + alpha[i]
+
+                img = rgba
             else:
                 img = rgb
                 d = 3
@@ -259,9 +223,11 @@ class Canvas(glcanvas.GLCanvas):
         glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP)
         glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP)
 
-    def update_image(self, img):
+        return len(self._texture_ids) - 1
 
-        glBindTexture(GL_TEXTURE_2D, self._texture_ids[-1])
+    def update_image(self, img, idx):
+
+        glBindTexture(GL_TEXTURE_2D, self._texture_ids[idx])
         w, h, d = img.shape
         if d == 3:
             frmt = GL_RGB
@@ -321,29 +287,34 @@ class Canvas(glcanvas.GLCanvas):
 
             glEnable(GL_BLEND)
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
-
             glEnable(GL_TEXTURE_2D)
-            glBindTexture(GL_TEXTURE_2D, self._texture_ids[0])
 
-            glScalef(self.scale, self.scale, 1)
-            glRotate(self.rot, 0, 0, 1)
-            glColor4f(1.0, 1.0, 1.0, self.opacity)
+            for tids in self._texture_ids:
+                glBindTexture(GL_TEXTURE_2D, tids)
 
-            glBegin(GL_QUADS)
+                glScalef(self.scale, self.scale, 1)
+                glRotate(self.rot, 0, 0, 1)
 
-            glTexCoord2f(0, 0)
-            glVertex2f(-1, -1)
+                glColor4f(1.0, 1.0, 1.0, self.opacity)
+                # glColor4f(1.0, 1.0, 1.0, 0.5)
 
-            glTexCoord2f(0, 1)
-            glVertex2f(-1, 1)
+                glBegin(GL_QUADS)
 
-            glTexCoord2f(1, 1)
-            glVertex2f(1, 1)
+                glTexCoord2f(0, 0)
+                glVertex2f(-1, -1)
 
-            glTexCoord2f(1, 0)
-            glVertex2f(1, -1)
+                glTexCoord2f(0, 1)
+                glVertex2f(-1, 1)
 
-            glEnd()
+                glTexCoord2f(1, 1)
+                glVertex2f(1, 1)
+
+                glTexCoord2f(1, 0)
+                glVertex2f(1, -1)
+
+                glEnd()
+
+                glLoadIdentity()
 
             glDisable(GL_TEXTURE_2D)
             glDisable(GL_BLEND)
@@ -361,10 +332,11 @@ class MainWindow(wx.Frame):
         self.Center()
         self.Show()
 
-        # self.canvas.set_image(generate_img_data(WIDTH, HEIGHT, DEPTH=d, alpha=ALPHA))
+        self.canvas.set_image(generate_img_data(WIDTH, HEIGHT, depth=DEPTH, alpha=ALPHA))
 
-        self.plas_gen = self.plasma_generator(WIDTH, HEIGHT, 2)
-        self.canvas.set_image(self.plas_gen.next())
+        self.plas_gen = self.plasma_generator(WIDTH, HEIGHT, 3)
+        self.anim_idx = self.canvas.set_image(self.plas_gen.next())
+        self.canvas.add_cairo_draw()
 
         self.draw_timer = wx.PyTimer(self.animate)
         self.draw_timer.Start(33.0)
@@ -372,13 +344,8 @@ class MainWindow(wx.Frame):
         self.busy = False
         # self.canvas.set_image(imgdata.gettest_10x10Image())
 
-    def weeee(self):
-        self.canvas.set_image(self.plasma_generator().next())
-        # self.canvas.update_image(generate_img_data(w, h, depth=d, alpha=a))
-        self.Refresh()
-
     def animate(self):
-        self.canvas.update_image(self.plas_gen.next())
+        self.canvas.update_image(self.plas_gen.next(), self.anim_idx)
         self.Refresh()
         wx.Yield()
 
