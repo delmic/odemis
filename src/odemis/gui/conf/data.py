@@ -56,7 +56,7 @@ HW_SETTINGS_CONFIG = {
     "ccd":
         OrderedDict((
             ("exposureTime", {
-                "control_type": odemis.gui.CONTROL_SLIDER,
+                "control_type": odemis.gui.CONTROL_NONE,  # odemis.gui.CONTROL_SLIDER,
                 "scale": "log",
                 "range": (0.001, 60.0),
                 "type": "float",

@@ -515,6 +515,10 @@ class StreamPanel(wx.Panel):
         self._panel.SetForegroundColour(FG_COLOUR_MAIN)
         self._panel.SetFont(self.GetFont())
 
+        if isinstance(self.stream, OpticalStream):
+            # If the stream is optical, add override controls if the proper VAs are present
+            self._add_optical_controls()
+
         if self._has_bc(self.stream):
             self._add_bc_controls()
 
@@ -523,12 +527,6 @@ class StreamPanel(wx.Panel):
 
         if self._has_wl(self.stream):
             self._add_wl_controls()
-
-        # FIXME: is this the correct and/or preferred way? Or should this option only be offered on
-        # the Delphi?
-        # TODO: re-enable when implementation is complete
-        # if isinstance(self.stream, OpticalStream):
-        #     self._add_optical_override_controls()
 
         # FIXME: only add if some controls are available
         self.control_gbsizer.AddGrowableCol(1)  # This makes the 2nd column's width variable
@@ -994,48 +992,15 @@ class StreamPanel(wx.Panel):
 
     # ===== For separate Optical stream settings
 
-    def _add_optical_override_controls(self):
+    def _add_optical_controls(self):
         """ Add controls so optical streams can have their own exposure and power settings """
 
-        hw_light_power_va = self.stream.emitter.power
-        hw_exposure_time_va = self.stream.detector.exposureTime
+        st_exposure_time_va = None
+        st_light_power_va = None
 
-        st_light_power_va = self.stream.lightPower
-        st_exposure_time_va = self.stream.exposureTime
+        if hasattr(self.stream, 'exposureTime'):
+            st_exposure_time_va = self.stream.exposureTime
 
-        line_ctrl = wx.StaticLine(self._panel, size=(-1, 1))
-        self.control_gbsizer.Add(line_ctrl, (self.row_count, 0), span=(1, 3),
-                                 flag=wx.ALL | wx.EXPAND, border=5)
-
-        self.row_count += 1
-
-        msg = "Uncheck to enable custom Exposure time and Power for this stream"
-        ctrls = []
-        # Create Checkbox label and control
-
-        lbl_override = wx.StaticText(self._panel, -1, "Use global settings")
-        lbl_override.SetToolTipString(msg)
-        self.control_gbsizer.Add(lbl_override, (self.row_count, 0), span=(1, 1),
-                                 flag=wx.ALIGN_CENTRE_VERTICAL | wx.ALL, border=5)
-
-        self._chk_override = CheckBox(self._panel, -1, lbl_override)
-        self._chk_override.SetValue(True)  # checked
-        self._chk_override.SetToolTipString(msg)
-        self.control_gbsizer.Add(self._chk_override, (self.row_count, 1), span=(1, 2),
-                                 flag=wx.ALIGN_CENTRE_VERTICAL | wx.ALL, border=5)
-
-        # FIXME: 'useLocalSettings Not implemented yet
-        # override_vac = VigilantAttributeConnector(
-        #     self.stream.useLocalSettings,
-        #     self._chk_override,
-        #     events=wx.EVT_CHECKBOX
-        # )
-
-        self.row_count += 1
-
-        # Create Exposure time control
-
-        if st_exposure_time_va:
             self.lbl_exposure = wx.StaticText(self._panel, -1, "Exposure time")
             self.control_gbsizer.Add(self.lbl_exposure, (self.row_count, 0), span=(1, 1),
                                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.ALL, border=5)
@@ -1044,35 +1009,28 @@ class StreamPanel(wx.Panel):
 
             self._sld_exposure = UnitFloatSlider(
                 self._panel,
-                value=hw_exposure_time_va.value,
+                value=st_exposure_time_va.value,
                 min_val=et_config["range"][0],
                 max_val=et_config["range"][1],
-                unit=hw_exposure_time_va.unit,
+                unit=st_exposure_time_va.unit,
                 scale=et_config["scale"],
                 accuracy=et_config["accuracy"]
             )
 
-            # Connect the stream exposure time, but immediately pause it, because we listen to the
-            # hardware values by default
             st_exposure_vac = VigilantAttributeConnector(
                 st_exposure_time_va,
-                self._sld_exposure,
-                events=wx.EVT_SLIDER
-            )
-            st_exposure_vac.pause()
-
-            hw_exposure_vac = VigilantAttributeConnector(
-                hw_exposure_time_va,
                 self._sld_exposure,
                 events=wx.EVT_SLIDER
             )
 
             self.control_gbsizer.Add(self._sld_exposure, (self.row_count, 1), span=(1, 2),
                                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
-            ctrls += [self.lbl_exposure, self._sld_exposure]
+
             self.row_count += 1
 
-        if hw_light_power_va is not None:
+        if hasattr(self.stream.emitter, 'power'):
+            st_light_power_va = self.stream.lightPower
+
             self.lbl_power = wx.StaticText(self._panel, -1, "Power")
             self.control_gbsizer.Add(self.lbl_power, (self.row_count, 0), span=(1, 1),
                                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.ALL, border=5)
@@ -1082,10 +1040,10 @@ class StreamPanel(wx.Panel):
             # Create Power control
             self._sld_power = UnitFloatSlider(
                 self._panel,
-                value=hw_light_power_va.value,
-                min_val=hw_light_power_va.range[0],
-                max_val=hw_light_power_va.range[1],
-                unit=hw_light_power_va.unit,
+                value=st_light_power_va.value,
+                min_val=st_light_power_va.range[0],
+                max_val=st_light_power_va.range[1],
+                unit=st_light_power_va.unit,
                 scale=power_config["scale"],
                 accuracy=4
             )
@@ -1100,7 +1058,7 @@ class StreamPanel(wx.Panel):
             st_power_vac.pause()
 
             hw_power_vac = VigilantAttributeConnector(
-                hw_light_power_va,
+                st_light_power_va,
                 self._sld_power,
                 events=wx.EVT_SLIDER
             )
@@ -1108,47 +1066,19 @@ class StreamPanel(wx.Panel):
             self.control_gbsizer.Add(self._sld_power, (self.row_count, 1), span=(1, 2),
                                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
 
-            ctrls += [self.lbl_power, self._sld_power]
             self.row_count += 1
 
-        # Create a function for enabling/disabling the slider controls
-
-        def toggle_controls(_=None):
-            """ Enable or disable the stream controls according to the 'use global' checkbox
-
-            When the controls are disabled, they 'follow' the global optical settings.
-
-            """
-
-            for c in ctrls:
-                state = not self._chk_override.GetValue()
-                c.Enable(state)
-                # TODO: Enable showing/hiding of the controls? There are some layout issues.
-                # c.Show(state)
-
-            # If global values are used...
-            if self._chk_override.GetValue():
-                if st_exposure_vac:
-                    st_exposure_vac.pause()
-                    hw_exposure_vac.resume()
-                if st_light_power_va:
-                    st_power_vac.pause()
-                    hw_power_vac.resume()
-            else:
-                if st_exposure_vac:
-                    st_exposure_vac.resume()
-                    hw_exposure_vac.pause()
-                if st_light_power_va:
-                    st_power_vac.resume()
-                    hw_power_vac.pause()
-
-        # Initialize the correct state for the controls
-        toggle_controls()
-        self._chk_override.Bind(wx.EVT_CHECKBOX, toggle_controls)
+        # End with a divider line
+        if st_exposure_time_va or st_light_power_va:
+            line_ctrl = wx.StaticLine(self._panel, size=(-1, 1))
+            self.control_gbsizer.Add(line_ctrl, (self.row_count, 0), span=(1, 3),
+                                     flag=wx.ALL | wx.EXPAND, border=5)
+            self.row_count += 1
 
     # ====== For the dyes
 
-    def _has_dye(self, stream):
+    @staticmethod
+    def _has_dye(stream):
         """
         return True if the stream looks like a stream using dye.
         """

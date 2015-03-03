@@ -916,12 +916,15 @@ class SecomSettingsController(SettingsBarController):
         if main_data.ccd:
             self.add_hw_component(main_data.ccd, self._optical_panel)
 
-            if main_data.light:
-                self._optical_panel.panel.add_divider()
+            # Note: Power (light) is now handled by each stream individually. That's why the
+            # following code block is disabled.
 
-                self._optical_panel.add_setting_entry("power", main_data.light.power,
-                                                      main_data.light,
-                                                      self._va_config["light"]["power"])
+            # if main_data.light:
+            #     self._optical_panel.panel.add_divider()
+            #
+            #     self._optical_panel.add_setting_entry("power", main_data.light.power,
+            #                                           main_data.light,
+            #                                           self._va_config["light"]["power"])
 
         if main_data.ebeam:
             self.add_hw_component(main_data.ebeam, self._sem_panel)
