@@ -256,8 +256,8 @@ class Scanner(model.Emitter):
     Attributes and setters for magnification, pixel size, resolution,
     scale, rotation and dwell time. Whenever one of these attributes is changed,
     its setter also updates another value if needed e.g. when scale is changed,
-    resolution is updated, when resolution is changed etc. Similarly it 
-    subscribes to the VAs of scale and magnification in order to update the 
+    resolution is updated, when resolution is changed etc. Similarly it
+    subscribes to the VAs of scale and magnification in order to update the
     pixel size.
     """
     def __init__(self, name, role, parent, **kwargs):
@@ -492,7 +492,7 @@ class Scanner(model.Emitter):
     def _setResolution(self, value):
         """
         value (0<int, 0<int): defines the size of the resolution. If the
-         resolution is not possible, it will pick the most fitting one. 
+         resolution is not possible, it will pick the most fitting one.
         returns the actual value used
         """
         # In case of resolution 1,1 store the current fov and set the spot mode
@@ -928,7 +928,7 @@ class Detector(model.Detector):
     def _acquire_thread(self, callback):
         """
         Thread that performs the SEM acquisition. It calculates and updates the
-        center (e-beam) position and provides the new generated output to the 
+        center (e-beam) position and provides the new generated output to the
         Dataflow.
         """
         try:
