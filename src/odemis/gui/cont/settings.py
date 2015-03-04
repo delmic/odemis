@@ -929,6 +929,30 @@ class SettingsBarController(object):
     def add_stream(self, stream):
         pass
 
+    def add_spec_chronograph(self, ctrl, ftsize=None):
+        """
+        ctrl (SettingsController)
+        ftsize (int or None): font size for the value
+        """
+        # Add a intensity/time graph
+        self.spec_graph = hist.Histogram(ctrl.panel, size=(-1, 40))
+        self.spec_graph.SetBackgroundColour("#000000")
+        ctrl.add_widgets(self.spec_graph)
+        # the "Mean" value bellow the graph
+        lbl_mean = wx.StaticText(ctrl.panel, label="Mean")
+        tooltip_txt = "Average intensity value of the last image"
+        lbl_mean.SetToolTipString(tooltip_txt)
+        self.txt_mean = wx.TextCtrl(ctrl.panel,
+                                    style=wx.BORDER_NONE | wx.TE_READONLY)
+        if ftsize is not None:
+            f = self.txt_mean.GetFont()
+            f.PointSize = ftsize
+            self.txt_mean.SetFont(f)
+        self.txt_mean.SetForegroundColour(odemis.gui.FG_COLOUR_MAIN)
+        self.txt_mean.SetBackgroundColour(odemis.gui.BG_COLOUR_MAIN)
+        self.txt_mean.SetToolTipString(tooltip_txt)
+        ctrl.add_widgets(lbl_mean, self.txt_mean)
+
 
 class SecomSettingsController(SettingsBarController):
 
@@ -1077,21 +1101,7 @@ class SparcSettingsController(SettingsBarController):
                         main_data.spectrograph,
                         self._va_config["spectrograph"]["grating"])
 
-            # Add a intensity/time graph
-            self.spec_graph = hist.Histogram(self._spectrum_panel.panel, size=(-1, 40))
-            self.spec_graph.SetBackgroundColour("#000000")
-            self._spectrum_panel.add_widgets(self.spec_graph)
-            # the "Mean" value bellow the graph
-            lbl_mean = wx.StaticText(self._spectrum_panel.panel, label="Mean")
-            tooltip_txt = "Average intensity value of the last image"
-            lbl_mean.SetToolTipString(tooltip_txt)
-            self.txt_mean = wx.TextCtrl(self._spectrum_panel.panel,
-                                        style=wx.BORDER_NONE | wx.TE_READONLY)
-            self.txt_mean.SetForegroundColour(odemis.gui.FG_COLOUR_DIS)
-            self.txt_mean.SetBackgroundColour(odemis.gui.BG_COLOUR_MAIN)
-            self.txt_mean.SetToolTipString(tooltip_txt)
-            self._spectrum_panel.add_widgets(lbl_mean, self.txt_mean)
-
+            self.add_spec_chronograph(self._spectrum_panel)
         else:
             parent_frame.fp_settings_sparc_spectrum.Hide()
 
@@ -1365,17 +1375,5 @@ class SparcAlignSettingsController(SettingsBarController):
 
         if main_data.spectrometer:
             self.add_hw_component(main_data.spectrometer, self._spectrum_panel)
-            # Add a intensity/time graph
-            self.spec_graph = hist.Histogram(self._spectrum_panel.panel, size=(-1, 40))
-            self.spec_graph.SetBackgroundColour("#000000")
-            self._spectrum_panel.add_widgets(self.spec_graph)
-            # the "Mean" value bellow the graph
-            lbl_mean = wx.StaticText(self._spectrum_panel.panel, label="Mean")
-            tooltip_txt = "Average intensity value of the last image"
-            lbl_mean.SetToolTipString(tooltip_txt)
-            self.txt_mean = wx.TextCtrl(self._spectrum_panel.panel,
-                                        style=wx.BORDER_NONE | wx.TE_READONLY)
-            self.txt_mean.SetForegroundColour(odemis.gui.FG_COLOUR_DIS)
-            self.txt_mean.SetBackgroundColour(odemis.gui.BG_COLOUR_MAIN)
-            self.txt_mean.SetToolTipString(tooltip_txt)
-            self._spectrum_panel.add_widgets(lbl_mean, self.txt_mean)
+            # increase a bit the font size for easy reading from far
+            self.add_spec_chronograph(self._spectrum_panel, 12)
