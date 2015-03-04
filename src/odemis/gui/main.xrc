@@ -2511,7 +2511,7 @@
                       <object class="sizeritem">
                         <object class="wxBoxSizer">
                           <object class="sizeritem">
-                            <object class="wxStaticText" name="lbl_secom_view_all">
+                            <object class="wxStaticText" name="lbl_sparc_view_all">
                               <label>view</label>
                               <fg>#BFBFBF</fg>
                               <XRCED>
@@ -2527,7 +2527,7 @@
                         <border>18</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="ViewButton" name="btn_secom_view_all">
+                        <object class="ViewButton" name="btn_sparc_view_all">
                           <bitmap>img/preview_block.png</bitmap>
                           <hover>img/preview_block_a.png</hover>
                           <selected>img/preview_block_a.png</selected>
@@ -2541,7 +2541,7 @@
                       <object class="sizeritem">
                         <object class="wxBoxSizer">
                           <object class="sizeritem">
-                            <object class="wxStaticText" name="lbl_secom_view_tl">
+                            <object class="wxStaticText" name="lbl_sparc_view_tl">
                               <label>view</label>
                               <fg>#BFBFBF</fg>
                               <XRCED>
@@ -2557,7 +2557,7 @@
                         <border>18</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="ViewButton" name="btn_secom_view_tl">
+                        <object class="ViewButton" name="btn_sparc_view_tl">
                           <bitmap>img/preview_block.png</bitmap>
                           <hover>img/preview_block_a.png</hover>
                           <selected>img/preview_block_a.png</selected>
@@ -2571,7 +2571,7 @@
                       <object class="sizeritem">
                         <object class="wxBoxSizer">
                           <object class="sizeritem">
-                            <object class="wxStaticText" name="lbl_secom_view_tr">
+                            <object class="wxStaticText" name="lbl_sparc_view_tr">
                               <label>view</label>
                               <fg>#BFBFBF</fg>
                               <XRCED>
@@ -2587,7 +2587,7 @@
                         <border>18</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="ViewButton" name="btn_secom_view_tr">
+                        <object class="ViewButton" name="btn_sparc_view_tr">
                           <bitmap>img/preview_block.png</bitmap>
                           <hover>img/preview_block_a.png</hover>
                           <selected>img/preview_block_a.png</selected>
@@ -2601,7 +2601,7 @@
                       <object class="sizeritem">
                         <object class="wxBoxSizer">
                           <object class="sizeritem">
-                            <object class="wxStaticText" name="lbl_secom_view_bl">
+                            <object class="wxStaticText" name="lbl_sparc_view_bl">
                               <label>view</label>
                               <fg>#BFBFBF</fg>
                               <XRCED>
@@ -2617,7 +2617,7 @@
                         <border>18</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="ViewButton" name="btn_secom_view_bl">
+                        <object class="ViewButton" name="btn_sparc_view_bl">
                           <bitmap>img/preview_block.png</bitmap>
                           <hover>img/preview_block_a.png</hover>
                           <selected>img/preview_block_a.png</selected>
@@ -2631,7 +2631,7 @@
                       <object class="sizeritem">
                         <object class="wxBoxSizer">
                           <object class="sizeritem">
-                            <object class="wxStaticText" name="lbl_secom_view_br">
+                            <object class="wxStaticText" name="lbl_sparc_view_br">
                               <label>view</label>
                               <fg>#BFBFBF</fg>
                               <XRCED>
@@ -2647,7 +2647,7 @@
                         <border>18</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="ViewButton" name="btn_secom_view_br">
+                        <object class="ViewButton" name="btn_sparc_view_br">
                           <bitmap>img/preview_block.png</bitmap>
                           <hover>img/preview_block_a.png</hover>
                           <selected>img/preview_block_a.png</selected>
@@ -2670,15 +2670,30 @@
               <flag>wxEXPAND</flag>
             </object>
             <object class="sizeritem">
-              <object class="ViewportGrid">
+              <object class="ViewportGrid" name="pnl_sparc_grid">
+                <object class="MicroscopeViewport" name="vp_sparc_tl">
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
+                </object>
                 <object class="SparcAcquisitionViewport" name="vp_sparc_acq_view">
                   <XRCED>
                     <assign_var>1</assign_var>
                   </XRCED>
                 </object>
-                <object class="MicroscopeViewport"/>
-                <object class="MicroscopeViewport"/>
-                <object class="MicroscopeViewport"/>
+                <object class="MicroscopeViewport" name="vp_sparc_bl">
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
+                </object>
+                <object class="MicroscopeViewport" name="vp_sparc_br">
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
+                </object>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
               </object>
               <option>1</option>
               <flag>wxEXPAND</flag>
