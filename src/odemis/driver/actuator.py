@@ -28,7 +28,8 @@ import math
 import numbers
 import numpy
 from odemis import model
-from odemis.model import CancellableThreadPoolExecutor, isasync
+from odemis.model import CancellableThreadPoolExecutor, isasync, MD_PIXEL_SIZE_COR, MD_ROTATION_COR, \
+    MD_POS_COR
 import threading
 
 
@@ -377,12 +378,14 @@ class CoupledStage(model.Actuator):
         self._stage_conv = ConvertStage("converter-xy", "align",
                     children={"aligner": self._slave},
                     axes=["x", "y"],
-                    scale=self._metadata.get(model.MD_PIXEL_SIZE_COR, (1, 1)),
-                    rotation=self._metadata.get(model.MD_ROTATION_COR, 0),
-                    translation=self._metadata.get(model.MD_POS_COR, (0, 0)))
-        # Schedule a null relative move, just to ensure the stages are
-        # synchronised again.
-        self._executor.submit(self._doMoveRel, {})
+                    scale=self._metadata.get(MD_PIXEL_SIZE_COR, (1, 1)),
+                    rotation=self._metadata.get(MD_ROTATION_COR, 0),
+                    translation=self._metadata.get(MD_POS_COR, (0, 0)))
+        
+        if set(self._metadata.keys()) & {MD_PIXEL_SIZE_COR, MD_ROTATION_COR, MD_POS_COR}:
+            # Schedule a null relative move, just to ensure the stages are
+            # synchronised again (if some metadata is provided)
+            self._executor.submit(self._doMoveRel, {})
 
     def _updatePosition(self):
         """
