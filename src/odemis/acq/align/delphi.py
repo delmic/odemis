@@ -666,8 +666,10 @@ def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, fo
         acc_offset, scaling, rotation = transform.CalculateTransform(opt_spots,
                                                                  sem_spots)
         # Take care of negative rotation
-        cor_rot = -rotation % (2 * math.pi)
-        return acc_offset, cor_rot, scaling
+        cor_rot = rotation % (2 * math.pi)
+        # Since we inversed the master and slave of the TwinStage, we also
+        # have to inverse these values
+        return (-acc_offset[0], -acc_offset[1]), cor_rot, (1 / scaling[0], 1 / scaling[1])
 
     finally:
         escan.resolution.value = (512, 512)
