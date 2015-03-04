@@ -395,7 +395,21 @@ class AlignedSEMStream(SEMStream):
         logging.debug("Stage location is %s m,m", pos)
         if self._last_pos == pos:
             return
+        self._last_pos = pos
 
+        # Once the user moves with the SEM disabled, change the alignment
+        # correction from beamshift + metadata to (rough) mechanical correction.
+        if not self.is_active.value:
+            self._compensateWithStage()
+
+        if self.is_active.value:
+            self._setStatus(logging.WARNING, u"SEM stream is not aligned")
+        self._calibrated = False
+
+    def _compensateWithStage(self):
+        # Note that in theory, beamshift and metadata should be reset here, but
+        # that is not necessary because it will happen anyway next time the
+        # stream is activated.
         md_stage = self._stage.getMetadata()
         trans = md_stage.get(model.MD_POS_COR, (0, 0))
         # TODO We initialize cur_trans to None just to force this condition to
@@ -409,11 +423,6 @@ class AlignedSEMStream(SEMStream):
                 model.MD_POS_COR: self._cur_trans
             })
             logging.debug("Compensated stage translation %s m,m", self._cur_trans)
-        self._last_pos = pos
-
-        if self.is_active.value:
-            self._setStatus(logging.WARNING, u"SEM stream is not aligned")
-        self._calibrated = False
 
     # need to override it to support beam shift
     def _applyROI(self):
@@ -501,6 +510,9 @@ class AlignedSEMStream(SEMStream):
 
             self._shift = shift
             self._compensateShift()
+        elif not active and not self._calibrated and not self.spot.value:
+            # SEM stream just got paused _and_ the stage has moved
+            self._compensateWithStage()
 
         super(AlignedSEMStream, self)._onActive(active)
 
