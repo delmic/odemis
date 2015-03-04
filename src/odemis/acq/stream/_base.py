@@ -81,13 +81,15 @@ class Stream(object):
             self.raw = []
         else:
             self.raw = raw
-        # the most important attribute
+
+        # TODO: should better be based on a BufferedDataFlow: subscribing starts
+        # acquisition and sends (raw) data to whoever is interested. .get()
+        # returns the previous or next image acquired.
+
+        # DataArray or None: RGB projection of the raw data
         self.image = model.VigilantAttribute(None)
 
-        # TODO: should maybe to 2 methods activate/deactivate to explicitly
-        # start/stop acquisition, and one VA "updated" to stated that the user
-        # want this stream updated (as often as possible while other streams are
-        # also updated)
+        # TODO: should_update is a GUI stuff => move away from stream
         # should_update has no effect direct effect, it's just a flag to
         # indicate the user would like to have the stream updated (live)
         self.should_update = model.BooleanVA(False)
@@ -103,6 +105,7 @@ class Stream(object):
 
         self._drange = None # min/max data range, or None if unknown
 
+        # TODO: move to a "Projection" class, layer between Stream and GUI.
         # whether to use auto brightness & contrast
         self.auto_bc = model.BooleanVA(True)
         # % of values considered outliers discarded in auto BC detection
