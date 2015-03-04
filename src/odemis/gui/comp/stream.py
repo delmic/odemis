@@ -1028,7 +1028,7 @@ class StreamPanel(wx.Panel):
 
             self.row_count += 1
 
-        if hasattr(self.stream.emitter, 'power'):
+        if hasattr(self.stream, 'lightPower'):
             st_light_power_va = self.stream.lightPower
 
             self.lbl_power = wx.StaticText(self._panel, -1, "Power")
