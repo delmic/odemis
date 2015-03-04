@@ -542,22 +542,6 @@ class SparcAcquisitionTab(Tab):
                 (self.main_frame.vp_sparc_br, self.main_frame.lbl_sparc_view_br)),
         ])
 
-        # Order matters!
-        # First we create the views, then the streams
-        # self.view_controller = viewcont.ViewPortController(
-        #     self.tab_data_model,
-        #     self.main_frame,
-        #     self.main_frame.pnl_sparc_grid.viewports
-        # )
-
-        # create a view on the tab model
-        self.view_controller = viewcont.ViewPortController(
-            self.tab_data_model,
-            self.main_frame,
-            [self.main_frame.vp_sparc_acq_view]
-        )
-
-
         # Toolbar
         self.tb = self.main_frame.sparc_acq_toolbar
         self.tb.add_tool(tools.TOOL_ROA, self.tab_data_model.tool)
@@ -654,6 +638,13 @@ class SparcAcquisitionTab(Tab):
         vas_settings.append(semcl_stream.dcPeriod)
         # Set anchor region dwell time to the same value as the SEM survey
         main_data.ebeam.dwellTime.subscribe(self._copyDwellTimeToAnchor, init=True)
+
+        # create a view on the tab model
+        self.view_controller = viewcont.ViewPortController(
+            self.tab_data_model,
+            self.main_frame,
+            self.main_frame.pnl_sparc_grid.viewports
+        )
 
         self.tb.add_tool(tools.TOOL_ZOOM_FIT, self.view_controller.fitViewToContent)
 

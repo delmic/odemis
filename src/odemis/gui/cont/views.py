@@ -226,10 +226,10 @@ class ViewPortController(object):
 
             vpv = collections.OrderedDict([
                 (self._viewports[0],  # focused view
-                 {"name": "Optical",
+                {"name": "Optical",
                   "stage": self._main_data_model.stage,
                   "focus": self._main_data_model.focus,
-                  "stream_classes": OpticalStream,
+                  "stream_classes": SpectrumStream,
                   }),
                 (self._viewports[1],
                  {"name": "SEM",
@@ -238,18 +238,18 @@ class ViewPortController(object):
                   "focus": self._main_data_model.ebeam_focus,
                   "stream_classes": EMStream,
                   }),
-                (self._viewports[2],
-                 {"name": "Combined 1",
-                  "stage": self._main_data_model.stage,
-                  "focus": self._main_data_model.focus,
-                  "stream_classes": (EMStream, OpticalStream),
-                  }),
-                (self._viewports[3],
-                 {"name": "Combined 2",
-                  "stage": self._main_data_model.stage,
-                  "focus": self._main_data_model.focus,
-                  "stream_classes": (EMStream, OpticalStream),
-                  }),
+                # (self._viewports[2],
+                #  {"name": "Combined 1",
+                #   "stage": self._main_data_model.stage,
+                #   "focus": self._main_data_model.focus,
+                #   "stream_classes": (EMStream, OpticalStream),
+                #   }),
+                # (self._viewports[3],
+                #  {"name": "Combined 2",
+                #   "stage": self._main_data_model.stage,
+                #   "focus": self._main_data_model.focus,
+                #   "stream_classes": (EMStream, OpticalStream),
+                #   }),
             ])
         # If SEM only: all SEM
         # Works also for the Sparc, as there is no other emitter, and we don't
