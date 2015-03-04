@@ -259,7 +259,7 @@ class PVCam(model.DigitalCamera):
         self._metadata[model.MD_SENSOR_SIZE] = self._transposeSizeToUser(resolution)
 
         # setup everything best (fixed)
-        self._prev_settings = [None, None, None, None] # image, exposure, readout, gain
+        self._prev_settings = [None, None, None, None, None] # image, exposure, readout, gain, shutter period
         # Bit depth is between 6 and 16, but data is _always_ uint16
         self._shape = resolution + (2 ** self.get_param(pv.PARAM_BIT_DEPTH),)
 
@@ -348,11 +348,14 @@ class PVCam(model.DigitalCamera):
         self.exposureTime = model.FloatContinuous(self._exposure_time, range_exp,
                                                   unit="s", setter=self._setExposureTime)
 
-        # TODO: Add shutter IntEnumerated to select the shutter opening mode:
-        # -1 => Auto (as currently implemented)
-        # 0 => Off (shutter stays opens during the whole acquisition)
-        # 1 => On (shutter closes outside of exposure)
-        # ?? => more for setting always on/off?
+        # To control the shutter: select the maximum frequency, aka minimum
+        # period for the shutter. If it the acquisition time is below, the
+        # shutter stays open all the time. So:
+        # 0 => shutter always active
+        # big value => shutter always opened
+        self._shutter_period = 0.1
+        self.shutterMinimumPeriod = model.FloatContinuous(self._shutter_period, [0, 10],
+                                              unit="s", setter=self._setShutterPeriod)
         self.acquisition_lock = threading.Lock()
         self.acquire_must_stop = threading.Event()
         self.acquire_thread = None
@@ -458,7 +461,7 @@ class PVCam(model.DigitalCamera):
         logging.info("Reinitialisation successful")
 
         # put back the settings
-        self._prev_settings = [None, None, None, None]
+        self._prev_settings = [None, None, None, None, None]
         self._setStaticSettings()
         self.setTargetTemperature(self.targetTemperature.value)
 
@@ -932,13 +935,17 @@ class PVCam(model.DigitalCamera):
         self._exposure_time = value
         return self._exposure_time
 
+    def _setShutterPeriod(self, period):
+        self._shutter_period = period
+        return period
+
     def _need_update_settings(self):
         """
         returns (boolean): True if _update_settings() needs to be called
         """
         new_image_settings = self._binning + self._image_rect
         new_settings = [new_image_settings, self._exposure_time,
-                        self._readout_rate, self._gain]
+                        self._readout_rate, self._gain, self._shutter_period]
         return new_settings != self._prev_settings
 
     def _update_settings(self):
@@ -952,7 +959,7 @@ class PVCam(model.DigitalCamera):
                 size (2-tuple of int): the size of the data array that will get acquired
         """
         [prev_image_settings, prev_exp_time,
-                prev_readout_rate, prev_gain] = self._prev_settings
+                prev_readout_rate, prev_gain, prev_shut] = self._prev_settings
 
         if prev_readout_rate != self._readout_rate:
             logging.debug("Updating readout rate settings to %f Hz", self._readout_rate)
@@ -993,7 +1000,7 @@ class PVCam(model.DigitalCamera):
         tot_time = readout_time + self._exposure_time # reality will be slightly longer
         logging.debug("exposure = %f s, readout = %f s", readout_time, self._exposure_time)
         try:
-            if tot_time < 0.1:
+            if tot_time < self._shutter_period:
                 logging.info("Disabling shutter because it would go at %g Hz", 
                              1 / tot_time)
                 self.set_param(pv.PARAM_SHTR_OPEN_MODE, pv.OPEN_PRE_SEQUENCE)
@@ -1009,7 +1016,7 @@ class PVCam(model.DigitalCamera):
             logging.debug("Failed to change shutter mode")
             
         self._prev_settings = [new_image_settings, self._exposure_time,
-                               self._readout_rate, self._gain]
+                               self._readout_rate, self._gain, self._shutter_period]
 
         return self._exposure_time, region, size
 
