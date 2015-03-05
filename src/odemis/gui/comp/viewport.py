@@ -582,8 +582,8 @@ class PlotViewport(ViewPort):
 
     def Refresh(self, *args, **kwargs):
         """ Refresh the ViewPort while making sure the legends get redrawn as well """
-        self.left_legend.redraw()
-        self.bottom_legend.redraw()
+        self.left_legend.Refresh()
+        self.bottom_legend.Refresh()
         super(PlotViewport, self).Refresh(*args, **kwargs)
 
     def OnSize(self, evt):
@@ -739,8 +739,8 @@ class SpatialSpectrumViewport(ViewPort):
 
     def Refresh(self, *args, **kwargs):
         """ Refresh the ViewPort while making sure the legends get redrawn as well """
-        self.left_legend.redraw()
-        self.bottom_legend.redraw()
+        self.left_legend.Refresh()
+        self.bottom_legend.Refresh()
         super(SpatialSpectrumViewport, self).Refresh(*args, **kwargs)
         wx.CallAfter(self.canvas.update_drawing)
 

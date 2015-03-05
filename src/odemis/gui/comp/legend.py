@@ -272,7 +272,8 @@ class AxisLegend(wx.Panel):
     @unit.setter
     def unit(self, val):
         self._unit = val
-        self.redraw()
+        self.calculate_ticks()
+        self.Refresh()
 
     @property
     def range(self):
@@ -283,28 +284,23 @@ class AxisLegend(wx.Panel):
         if val[0] > val[1]:
             raise ValueError("The range values need to be ordered!")
         self._value_range = val
-        self.redraw()
-
-    def redraw(self):
-        """ Clear all the ticks so a recalculation is forced """
-        self._tick_list = None
+        self.calculate_ticks()
         self.Refresh()
 
     def clear(self):
         self._value_range = None
-        self.redraw()
+        self._tick_list = None
+        self.Refresh()
 
     def on_size(self, _=None):
-        self.redraw()
+        if self._value_range:
+            self.calculate_ticks()
         self.Refresh(eraseBackground=False)
 
     def on_paint(self, _):
 
-        if self._value_range is None:
+        if None in (self._value_range, self._tick_list):
             return
-
-        if self._tick_list is None:
-            self.calculate_ticks()
 
         # Set Font
         font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
@@ -379,6 +375,9 @@ class AxisLegend(wx.Panel):
 
         """
 
+        if self._value_range is None:
+            return
+
         # Get the horizontal/vertical space in pixels
         self._pixel_space = self.ClientSize[self._orientation != wx.HORIZONTAL]
 
@@ -428,80 +427,6 @@ class AxisLegend(wx.Panel):
                 else:
                     if 10 <= pixel <= self._pixel_space:
                         self._tick_list.append(pix_val)
-
-# class PlotsAxisLegend(wx.Panel):
-#     """ This legend can be used to show ticks and values to indicate the scale of a canvas plot """
-#
-#
-#     def calc_ticks(self):
-#         """
-#         Determine where the ticks should be placed
-#         return (list of (int, float)): position (in px) and actual value of each
-#          tick (ordered)
-#         """
-#
-#         pcanv = self.Parent.canvas
-#
-#         # Get orientation dependant values
-#         if self.orientation == wx.HORIZONTAL:
-#             size = self.ClientSize.x
-#             min_val = pcanv.min_x if pcanv.range_x is None else pcanv.range_x[0]
-#             val_size = pcanv.data_width
-#             val_to_pos = pcanv._val_x_to_pos_x
-#         else:
-#             size = self.ClientSize.y
-#             min_val = pcanv.min_y if pcanv.range_y is None else pcanv.range_y[0]
-#             val_size = pcanv.data_height
-#             val_to_pos = pcanv._val_y_to_pos_y
-#
-#         num_ticks = size / self.tick_pixel_gap
-#         logging.debug("Aiming for %s ticks with a client of size %s", num_ticks, size)
-#         # Calculate the best step size in powers of 10, so it will cover at
-#         # least the distance `val_dist`
-#         val_step = 1e-12
-#
-#         # Increase the value step tenfold while it fits more than num_ticks times
-#         # in the range
-#         while val_step and val_size / val_step > num_ticks:
-#             val_step *= 10
-#         logging.debug("Value step is %s after first iteration with range %s", val_step, val_size)
-#
-#         # Divide the value step by two,
-#         while val_step and val_size / val_step < num_ticks:
-#             val_step /= 2
-#         logging.debug("Value step is %s after second iteration with range %s", val_step, val_size)
-#
-#         first_tick = (int(min_val / val_step) + 1) * val_step if val_step else 0
-#         logging.debug("Setting first tick at value %s", first_tick)
-#
-#         tick_vals = [min_val] + [first_tick + i * val_step for i in range(2 * num_ticks)]
-#
-#         ticks = []
-#         for tick in tick_vals:
-#             pos = val_to_pos(tick)
-#             if (pos, tick) not in ticks:
-#                 if self.orientation == wx.HORIZONTAL:
-#                     if 0 <= pos <= size - self.tick_pixel_gap / 2:
-#                         ticks.append((pos, tick))
-#                 else:
-#                     if 10 <= pos <= size:
-#                         ticks.append((pos, tick))
-#
-#         return ticks
-#
-#     def redraw(self):
-#         """
-#         Force to redraw the axis on the next refresh
-#         """
-#         self.ticks = None
-#         self.Refresh()
-#
-#     def on_size(self, event):
-#         self.redraw()
-#
-#
-# class BitmapAxisLegend(wx.Panel):
-#     """ Lgend to be used to show ticks and values to indicate the scale of a bitmap canvas """
 
 
 
