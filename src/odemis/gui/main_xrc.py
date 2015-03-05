@@ -182,6 +182,7 @@ class xrcfr_main(wx.Frame):
         self.fp_settings_sparc_sem = xrc.XRCCTRL(self, "fp_settings_sparc_sem")
         self.fp_settings_sparc_angular = xrc.XRCCTRL(self, "fp_settings_sparc_angular")
         self.fp_settings_sparc_spectrum = xrc.XRCCTRL(self, "fp_settings_sparc_spectrum")
+        self.pnl_sparc_streams = xrc.XRCCTRL(self, "pnl_sparc_streams")
         self.txt_filename = xrc.XRCCTRL(self, "txt_filename")
         self.btn_sparc_change_file = xrc.XRCCTRL(self, "btn_sparc_change_file")
         self.txt_destination = xrc.XRCCTRL(self, "txt_destination")
@@ -3069,6 +3070,20 @@ def __init_resources():
                               <XRCED>
                                 <assign_var>1</assign_var>
                               </XRCED>
+                            </object>
+                            <object class="FoldPanelItem">
+                              <object class="StreamBar" name="pnl_sparc_streams">
+                                <size>300,-1</size>
+                                <add_button>1</add_button>
+                                <fg>#7F7F7F</fg>
+                                <bg>#333333</bg>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <label>STREAMS</label>
+                              <fg>#1A1A1A</fg>
+                              <bg>#555555</bg>
                             </object>
                           </object>
                           <flag>wxEXPAND</flag>
