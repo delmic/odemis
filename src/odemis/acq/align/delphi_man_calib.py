@@ -26,7 +26,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # and in case of failure it waits for the user to perform the step failed manually.
 #
 # run as:
-# python delphi_manual_calibration.py
+# python delphi_man_calib.py
 #
 # You first need to run the odemis backend with the DELPHI config:
 # odemisd --log-level 2 install/linux/usr/share/odemis/delphi.odm.yaml
