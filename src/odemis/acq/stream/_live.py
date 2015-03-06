@@ -471,8 +471,8 @@ class AlignedSEMStream(SEMStream):
                 self._last_shift = (0.75 * self._last_shift[0] + 0.25 * shift[0],
                                     0.75 * self._last_shift[1] + 0.25 * shift[1])
                 cur_trans = self._stage.getMetadata().get(model.MD_POS_COR, (0, 0))
-                self._cur_trans = (cur_trans[0] - self._last_shift[0],
-                                   cur_trans[1] - self._last_shift[1])
+                self._cur_trans = (cur_trans[0] + self._last_shift[0],
+                                   cur_trans[1] + self._last_shift[1])
 
                 if self._shiftebeam == MTD_STAGE_MOVE:
                     for child in self._stage.children.value:
