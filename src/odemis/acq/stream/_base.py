@@ -240,7 +240,8 @@ class Stream(object):
                         drange = (0, depth - 1)
                 except (KeyError, ValueError):
                     try:
-                        if isinstance(self._detector.bpp, model.VigilantAttributeBase):
+                        if (hasattr(self._detector, "bpp") and
+                            isinstance(self._detector.bpp, model.VigilantAttributeBase)):
                             depth = 2 ** self._detector.bpp.value
                         else:
                             depth = self._detector.shape[-1]
@@ -268,7 +269,8 @@ class Stream(object):
             # no data, assume it's uint
             try:
                 # If the detector has .bpp, use this info
-                if isinstance(self._detector.bpp, model.VigilantAttributeBase):
+                if (hasattr(self._detector, "bpp") and
+                    isinstance(self._detector.bpp, model.VigilantAttributeBase)):
                     depth = 2 ** self._detector.bpp.value
                 else:
                     # The last element of the shape indicates the bit depth, which
