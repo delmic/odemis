@@ -646,11 +646,18 @@ class SparcAcquisitionTab(Tab):
             self.main_frame.pnl_sparc_grid.viewports
         )
 
+        self._view_selector = viewcont.ViewButtonController(
+            self.tab_data_model,
+            self.main_frame,
+            buttons,
+            self.main_frame.pnl_sparc_grid.viewports
+        )
+
         self.tb.add_tool(tools.TOOL_ZOOM_FIT, self.view_controller.fitViewToContent)
 
         # Add the SEM stream to the focussed (only) view
         self.tab_data_model.streams.value.append(sem_stream)
-        mic_view = self.tab_data_model.focussedView.value
+        mic_view = self.tab_data_model.views.value[1]
         mic_view.addStream(sem_stream)
 
         # needs to have the AR and Spectrum streams on the acquisition view
@@ -661,6 +668,7 @@ class SparcAcquisitionTab(Tab):
             spec_stream=self._spec_stream,
             ar_stream=self._ar_stream
         )
+
         # Bind the Spectrometer/Angle resolved buttons to add/remove the
         # streams. Both from the setting panels and the acquisition view.
         if self._ar_stream and self._spec_stream:
