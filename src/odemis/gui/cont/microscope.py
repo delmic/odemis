@@ -47,8 +47,7 @@ from odemis.model._futures import InstantaneousFuture
 
 # Sample holder types in the Delphi, as defined by Phenom World
 PHENOM_SH_TYPE_STANDARD = 1  # standard sample holder
-# FIXME: need to find out the real type number
-PHENOM_SH_TYPE_OPTICAL = 1023  # sample holder for the Delphi, containing a lens
+PHENOM_SH_TYPE_OPTICAL = 200  # sample holder for the Delphi, containing a lens
 
 DELPHI_OVERVIEW_POS = {"x": 0, "y": 0}  # good position of the stage for overview
 
@@ -808,6 +807,14 @@ class DelphiStateController(SecomStateController):
                 self._main_data.chamberState.value = CHAMBER_VENTING
                 return False
 
+            if sht != PHENOM_SH_TYPE_OPTICAL:
+                logging.info("Sample holder doesn't seem to be an optical one "
+                             "but will pretend it is...")
+                # FIXME: For now it's needed because some sample holders have
+                # not been correctly set and report PHENOM_SH_TYPE_STANDARD
+                # Once they are fixed, just skip the calibration, and disable
+                # the optical microscope.
+
             # TODO: just subscribe to the change of sample holder?
             if (
                     isinstance(self._main_data.chamber.registeredSampleHolder,
@@ -816,14 +823,6 @@ class DelphiStateController(SecomStateController):
             ):
                 self._request_holder_calib() # async
                 return False
-
-            if sht != PHENOM_SH_TYPE_OPTICAL:
-                logging.info("Sample holder doesn't seem to be an optical one "
-                             "but will pretend it is...")
-                # FIXME: For now it's needed because some sample holders have
-                # not been correctly set and report PHENOM_SH_TYPE_STANDARD
-                # Once they are fixed, just skip the calibration, and disable
-                # the optical microscope.
 
             # Look in the config file if the sample holder is known, or needs
             # first-time calibration, and otherwise update the metadata
