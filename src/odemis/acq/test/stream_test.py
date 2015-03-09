@@ -743,7 +743,7 @@ class SPARCTestCase(unittest.TestCase):
         self.assertTrue(first_date < dates[0] < dates[-1])
 
 
-#@skip("faster")
+# @skip("faster")
 class TestStaticStreams(unittest.TestCase):
     """
     Test static streams, which don't need any backend running
@@ -773,7 +773,7 @@ class TestStaticStreams(unittest.TestCase):
         md1 = dict(md)
         md1[model.MD_POS] = (1.5e-3, -30e-3)
         md1[model.MD_BASELINE] = 300 # AR background should take this into account
-        data1 = model.DataArray(6345 + numpy.zeros((512, 1024), dtype=numpy.uint16), md1)
+        data1 = model.DataArray(3345 + numpy.zeros((512, 1024), dtype=numpy.uint16), md1)
 
         logging.info("setting up stream")
         ars = stream.StaticARStream("test", [data0, data1])

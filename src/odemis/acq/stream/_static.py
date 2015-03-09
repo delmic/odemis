@@ -176,7 +176,6 @@ class StaticARStream(StaticStream):
         # SEM position displayed, (None, None) == no point selected
         self.point = model.VAEnumerated((None, None),
                      choices=frozenset([(None, None)] + list(self._sempos.keys())))
-        self.point.subscribe(self._onPoint)
 
         # The background data (typically, an acquisition without ebeam).
         # It is subtracted from the acquisition data.
@@ -184,9 +183,6 @@ class StaticARStream(StaticStream):
         self.background = model.VigilantAttribute(None,
                                                   setter=self._setBackground)
         self.background.subscribe(self._onBackground)
-
-        Stream.__init__(self, name, None, None, None,
-                        raw=list(self._sempos.values()))
 
         if self._sempos:
             # Pick one point, e.g., top-left
@@ -199,6 +195,12 @@ class StaticARStream(StaticStream):
                 except TypeError:
                     return float("inf") # for None, None
             self.point.value = min(self._sempos.keys(), key=dis_bbtl)
+
+        # no need for init=True, as Stream.__init__ will update the image
+        self.point.subscribe(self._onPoint)
+
+        Stream.__init__(self, name, None, None, None,
+                        raw=list(self._sempos.values()))
 
 
     def _getPolarProjection(self, pos):
@@ -621,6 +623,10 @@ class StaticSpectrumStream(StaticStream):
         if l < 1: # a line of just one pixel is considered not valid
             return None
 
+        # FIXME: if the data has a width of 1 (ie, just a line), and the
+        # requested width is an even number, the output is empty (because all
+        # the interpolated points are outside of the data.
+
         # Coordinates of each point: ndim of data (5-2), pos on line (Y), spectrum (X)
         # The line is scanned from the end till the start so that the spectra
         # closest to the origin of the line are at the bottom.
@@ -644,13 +650,13 @@ class StaticSpectrumStream(StaticStream):
         # Interpolate the values based on the data
         if width == 1:
             # simple version for the most usual case
-            spec1d = ndimage.map_coordinates(spec2d, coord[:, 0, :, :], order=2)
+            spec1d = ndimage.map_coordinates(spec2d, coord[:, 0, :, :], order=1)
         else:
             # FIXME: the mean should be dependent on how many pixels inside the
             # original data were pick on each line. Currently if some pixels fall
             # out of the original data, the outside pixels count as 0.
             # force the intermediate values to float, as mean() still needs to run
-            spec1d_w = ndimage.map_coordinates(spec2d, coord, output=numpy.float, order=2)
+            spec1d_w = ndimage.map_coordinates(spec2d, coord, output=numpy.float, order=1)
             spec1d = spec1d_w.mean(axis=0).astype(spec2d.dtype)
         assert spec1d.shape == (n, spec2d.shape[0])
 
