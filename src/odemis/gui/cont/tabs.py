@@ -657,8 +657,17 @@ class SparcAcquisitionTab(Tab):
 
         # Add the SEM stream to the focussed (only) view
         self.tab_data_model.streams.value.append(sem_stream)
-        mic_view = self.tab_data_model.views.value[1]
-        mic_view.addStream(sem_stream)
+
+        if self._ar_stream:
+            opt_mic_view = self.tab_data_model.views.value[0]
+            opt_mic_view.addStream(self._ar_stream)
+
+        self._stream_controller = streamcont.StreamController(
+            self.tab_data_model,
+            self.main_frame.pnl_sparc_streams
+        )
+
+        self._stream_controller.addStream(sem_stream, add_to_all_views=True)
 
         # needs to have the AR and Spectrum streams on the acquisition view
         self._settings_controller = settings.SparcSettingsController(
@@ -1973,8 +1982,8 @@ class MirrorAlignTab(Tab):
                 vpv
             )
             mic_view = self.tab_data_model.focussedView.value
-            mic_view.show_crosshair.value = False  #pylint: disable=E1103
-            mic_view.merge_ratio.value = 1  #pylint: disable=E1103
+            mic_view.show_crosshair.value = False
+            mic_view.merge_ratio.value = 1
 
             ccd_spe = self._stream_controller.addStream(ccd_stream)
             ccd_spe.flatten()
