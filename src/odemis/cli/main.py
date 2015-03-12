@@ -64,13 +64,21 @@ def scan(cls=None):
     Output like:
     Classname: 'Name of Device' init={arg: value, arg2: value2}
     """
+    # FIXME: need to work when /var/run/odemisd is not available:
+    # => fail to create the container.
+
     # only here, to avoid importing everything for other commands
     from odemis import driver
     num = 0
     cls_found = False
     # we scan by using every HwComponent class which has a .scan() method
     for module_name in driver.__all__:
-        module = importlib.import_module("." + module_name, "odemis.driver")
+        try:
+            module = importlib.import_module("." + module_name, "odemis.driver")
+        except ImportError:
+            logging.warning("Cannot try module %s, failed to load." % module_name)
+        except Exception:
+            logging.exception("Failed to load module %s" % module_name)
         for cls_name, clso in inspect.getmembers(module, inspect.isclass):
             if issubclass(clso, model.HwComponent) and hasattr(clso, "scan"):
                 if cls:
