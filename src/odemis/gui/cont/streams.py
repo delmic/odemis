@@ -523,9 +523,12 @@ class StreamController(object):
             else:
                 # Make sure that other streams are not updated (and it also
                 # provides feedback to the user about which stream is active)
-                for s in self._scheduler_subscriptions:
+                for s, cb in self._scheduler_subscriptions.items():
                     if s != stream:
+                        s.should_update.unsubscribe(cb) # don't inform us of that change
                         s.should_update.value = False
+                        s.should_update.subscribe(cb)
+
                 # activate this stream
                 # It's important it's last, to ensure hardware settings don't
                 # mess up with each other.

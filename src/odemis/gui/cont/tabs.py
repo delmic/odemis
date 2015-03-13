@@ -471,8 +471,7 @@ class SecomStreamsTab(Tab):
     # Listen to this event to just add (back) a stream if none is left when turning on?
     def onOpticalState(self, state):
         if state == guimod.STATE_ON:
-            # TODO: Use the last stream paused, and fallback here only if empty?
-            # TODO: just first opt stream?
+            # Pick the last optical stream that played (.streams is ordered)
             for s in self.tab_data_model.streams.value:
                 if isinstance(s, streammod.OpticalStream):
                     opts = s
@@ -489,7 +488,7 @@ class SecomStreamsTab(Tab):
 
     def onEMState(self, state):
         if state == guimod.STATE_ON:
-            # TODO: Use the last stream paused
+            # Use the last SEM stream played
             for s in self.tab_data_model.streams.value:
                 if isinstance(s, streammod.EMStream):
                     sems = s
