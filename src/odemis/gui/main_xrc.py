@@ -159,6 +159,16 @@ class xrcfr_main(wx.Frame):
         self.fp_ma_settings_spectrum = xrc.XRCCTRL(self, "fp_ma_settings_spectrum")
         self.pnl_tab_sparc_acqui = xrc.XRCCTRL(self, "pnl_tab_sparc_acqui")
         self.sparc_acq_toolbar = xrc.XRCCTRL(self, "sparc_acq_toolbar")
+        self.lbl_secom_view_all = xrc.XRCCTRL(self, "lbl_secom_view_all")
+        self.btn_secom_view_all = xrc.XRCCTRL(self, "btn_secom_view_all")
+        self.lbl_secom_view_tl = xrc.XRCCTRL(self, "lbl_secom_view_tl")
+        self.btn_secom_view_tl = xrc.XRCCTRL(self, "btn_secom_view_tl")
+        self.lbl_secom_view_tr = xrc.XRCCTRL(self, "lbl_secom_view_tr")
+        self.btn_secom_view_tr = xrc.XRCCTRL(self, "btn_secom_view_tr")
+        self.lbl_secom_view_bl = xrc.XRCCTRL(self, "lbl_secom_view_bl")
+        self.btn_secom_view_bl = xrc.XRCCTRL(self, "btn_secom_view_bl")
+        self.lbl_secom_view_br = xrc.XRCCTRL(self, "lbl_secom_view_br")
+        self.btn_secom_view_br = xrc.XRCCTRL(self, "btn_secom_view_br")
         self.vp_sparc_acq_view = xrc.XRCCTRL(self, "vp_sparc_acq_view")
         self.sparc_button_panel = xrc.XRCCTRL(self, "sparc_button_panel")
         self.acq_btn_spectrometer = xrc.XRCCTRL(self, "acq_btn_spectrometer")
@@ -253,7 +263,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource class="spacer" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -2760,6 +2770,163 @@ def __init_resources():
                     <option>1</option>
                     <flag>wxEXPAND</flag>
                   </object>
+                  <object class="sizeritem">
+                    <object class="wxBoxSizer">
+                      <object class="sizeritem">
+                        <object class="wxBoxSizer">
+                          <object class="sizeritem">
+                            <object class="wxStaticText" name="lbl_secom_view_all">
+                              <label>view</label>
+                              <fg>#BFBFBF</fg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <flag>wxBOTTOM</flag>
+                            <border>2</border>
+                          </object>
+                          <orient>wxVERTICAL</orient>
+                        </object>
+                        <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                        <border>18</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ViewButton" name="btn_secom_view_all">
+                          <bitmap>img_preview_block_png</bitmap>
+                          <hover>img_preview_block_a_png</hover>
+                          <selected>img_preview_block_a_png</selected>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
+                        <border>6</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxBoxSizer">
+                          <object class="sizeritem">
+                            <object class="wxStaticText" name="lbl_secom_view_tl">
+                              <label>view</label>
+                              <fg>#BFBFBF</fg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <flag>wxTOP|wxBOTTOM</flag>
+                            <border>2</border>
+                          </object>
+                          <orient>wxVERTICAL</orient>
+                        </object>
+                        <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                        <border>18</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ViewButton" name="btn_secom_view_tl">
+                          <bitmap>img_preview_block_png</bitmap>
+                          <hover>img_preview_block_a_png</hover>
+                          <selected>img_preview_block_a_png</selected>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
+                        <border>6</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxBoxSizer">
+                          <object class="sizeritem">
+                            <object class="wxStaticText" name="lbl_secom_view_tr">
+                              <label>view</label>
+                              <fg>#BFBFBF</fg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <flag>wxTOP|wxBOTTOM</flag>
+                            <border>2</border>
+                          </object>
+                          <orient>wxVERTICAL</orient>
+                        </object>
+                        <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                        <border>18</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ViewButton" name="btn_secom_view_tr">
+                          <bitmap>img_preview_block_png</bitmap>
+                          <hover>img_preview_block_a_png</hover>
+                          <selected>img_preview_block_a_png</selected>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
+                        <border>6</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxBoxSizer">
+                          <object class="sizeritem">
+                            <object class="wxStaticText" name="lbl_secom_view_bl">
+                              <label>view</label>
+                              <fg>#BFBFBF</fg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <flag>wxTOP|wxBOTTOM</flag>
+                            <border>2</border>
+                          </object>
+                          <orient>wxVERTICAL</orient>
+                        </object>
+                        <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                        <border>18</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ViewButton" name="btn_secom_view_bl">
+                          <bitmap>img_preview_block_png</bitmap>
+                          <hover>img_preview_block_a_png</hover>
+                          <selected>img_preview_block_a_png</selected>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
+                        <border>6</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxBoxSizer">
+                          <object class="sizeritem">
+                            <object class="wxStaticText" name="lbl_secom_view_br">
+                              <label>view</label>
+                              <fg>#BFBFBF</fg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <flag>wxTOP|wxBOTTOM</flag>
+                            <border>2</border>
+                          </object>
+                          <orient>wxVERTICAL</orient>
+                        </object>
+                        <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                        <border>18</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ViewButton" name="btn_secom_view_br">
+                          <bitmap>img_preview_block_png</bitmap>
+                          <hover>img_preview_block_a_png</hover>
+                          <selected>img_preview_block_a_png</selected>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxALIGN_RIGHT</flag>
+                      </object>
+                      <orient>wxVERTICAL</orient>
+                    </object>
+                    <option>1</option>
+                    <flag>wxBOTTOM|wxEXPAND</flag>
+                    <border>44</border>
+                  </object>
                 </object>
                 <size>200,-1</size>
                 <bg>#333333</bg>
@@ -2767,10 +2934,15 @@ def __init_resources():
               <flag>wxEXPAND</flag>
             </object>
             <object class="sizeritem">
-              <object class="SparcAcquisitionViewport" name="vp_sparc_acq_view">
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
+              <object class="ViewportGrid">
+                <object class="SparcAcquisitionViewport" name="vp_sparc_acq_view">
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
+                </object>
+                <object class="MicroscopeViewport"/>
+                <object class="MicroscopeViewport"/>
+                <object class="MicroscopeViewport"/>
               </object>
               <option>1</option>
               <flag>wxEXPAND</flag>
