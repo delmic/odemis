@@ -876,7 +876,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         self.roa_overlay = None
 
         self._dc_region = None  # The dcRegion VA of the SEM CL
-        self.dirftcor_overlay = None
+        self.driftcor_overlay = None
 
     def _on_tool(self, tool_mode):
         super(SparcAcquiCanvas, self)._on_tool(tool_mode)
@@ -893,9 +893,9 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
 
     def _set_dc_mode(self, tool_mode):
         if tool_mode == guimodel.TOOL_RO_ANCHOR:
-            self.dirftcor_overlay.activate()
-        elif self.dirftcor_overlay:
-            self.dirftcor_overlay.deactivate()
+            self.driftcor_overlay.activate()
+        elif self.driftcor_overlay:
+            self.driftcor_overlay.deactivate()
         self.Refresh(eraseBackground=False)
 
     def setView(self, microscope_view, tab_data):
@@ -928,9 +928,9 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         # Link drift correction region
 
         self._dc_region = sem_stream.dcRegion
-        self.dirftcor_overlay = world_overlay.RepetitionSelectOverlay(
+        self.driftcor_overlay = world_overlay.RepetitionSelectOverlay(
             self, self._dc_region, colour=gui.SELECTION_COLOUR_2ND)
-        self.add_world_overlay(self.dirftcor_overlay)
+        self.add_world_overlay(self.driftcor_overlay)
 
         # Regions depend on the magnification (=field of view)
 
@@ -964,7 +964,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         # that the user has forgotten to set the magnification before, so let's
         # pick solution 2.
         self.roa_overlay.on_roa(self._roa.value)
-        self.dirftcor_overlay.on_roa(self._dc_region.value)
+        self.driftcor_overlay.on_roa(self._dc_region.value)
 
     def _get_sem_rect(self):
         """

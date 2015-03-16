@@ -212,7 +212,45 @@ class ViewPortController(object):
                   "stream_classes": (EMStream, OpticalStream),
                   }),
             ])
+        # SPARC
+        elif (
+                self._main_data_model.ebeam and
+                self._main_data_model.spectrograph and
+                self._main_data_model.spectrometer and
+                len(self._viewports) == 4
+        ):
+            for vp in self._viewports[:4]:
+                assert(isinstance(vp, MicroscopeViewport))
 
+            logging.info("Creating Sparc Acquisition viewport layout")
+
+            vpv = collections.OrderedDict([
+                (self._viewports[0],
+                 {"name": "SEM",
+                  "cls": model.ContentView,
+                  "stage": self._main_data_model.stage,
+                  "focus": self._main_data_model.ebeam_focus,
+                  "stream_classes": EMStream,
+                  }),
+                (self._viewports[1],  # focused view
+                 {"name": "Optical",
+                  "stage": self._main_data_model.stage,
+                  "focus": self._main_data_model.focus,
+                  "stream_classes": SpectrumStream,
+                  }),
+                (self._viewports[2],
+                 {"name": "Combined 1",
+                  "stage": self._main_data_model.stage,
+                  "focus": self._main_data_model.focus,
+                  "stream_classes": (EMStream, OpticalStream),
+                  }),
+                (self._viewports[3],
+                 {"name": "Combined 2",
+                  "stage": self._main_data_model.stage,
+                  "focus": self._main_data_model.focus,
+                  "stream_classes": (EMStream, OpticalStream),
+                  }),
+            ])
         # If SEM only: all SEM
         # Works also for the Sparc, as there is no other emitter, and we don't
         # need to display anything else anyway
