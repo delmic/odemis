@@ -530,10 +530,10 @@ class SparcAcquisitionTab(Tab):
                 (None, self.main_frame.lbl_sparc_view_all)),
             (
                 self.main_frame.btn_sparc_view_tl,
-                (self.main_frame.vp_sparc_tl, self.main_frame.lbl_sparc_view_tl)),
+                (self.main_frame.vp_sparc_acq_view, self.main_frame.lbl_sparc_view_tl)),
             (
                 self.main_frame.btn_sparc_view_tr,
-                (self.main_frame.vp_sparc_acq_view, self.main_frame.lbl_sparc_view_tr)),
+                (self.main_frame.vp_sparc_tr, self.main_frame.lbl_sparc_view_tr)),
             (
                 self.main_frame.btn_sparc_view_bl,
                 (self.main_frame.vp_sparc_bl, self.main_frame.lbl_sparc_view_bl)),

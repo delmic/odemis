@@ -225,18 +225,18 @@ class ViewPortController(object):
             logging.info("Creating Sparc Acquisition viewport layout")
 
             vpv = collections.OrderedDict([
-                (self._viewports[0],  # focused view
-                 {"name": "Optical",
-                  "stage": self._main_data_model.stage,
-                  "focus": self._main_data_model.focus,
-                  "stream_classes": SpectrumStream,
-                  }),
-                (self._viewports[1],
+                (self._viewports[0],
                  {"name": "SEM",
                   "cls": model.ContentView,
                   "stage": self._main_data_model.stage,
                   "focus": self._main_data_model.ebeam_focus,
                   "stream_classes": EMStream,
+                  }),
+                (self._viewports[1],  # focused view
+                 {"name": "Optical",
+                  "stage": self._main_data_model.stage,
+                  "focus": self._main_data_model.focus,
+                  "stream_classes": SpectrumStream,
                   }),
                 (self._viewports[2],
                  {"name": "Combined 1",

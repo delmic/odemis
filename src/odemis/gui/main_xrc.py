@@ -170,8 +170,8 @@ class xrcfr_main(wx.Frame):
         self.lbl_sparc_view_br = xrc.XRCCTRL(self, "lbl_sparc_view_br")
         self.btn_sparc_view_br = xrc.XRCCTRL(self, "btn_sparc_view_br")
         self.pnl_sparc_grid = xrc.XRCCTRL(self, "pnl_sparc_grid")
-        self.vp_sparc_tl = xrc.XRCCTRL(self, "vp_sparc_tl")
         self.vp_sparc_acq_view = xrc.XRCCTRL(self, "vp_sparc_acq_view")
+        self.vp_sparc_tr = xrc.XRCCTRL(self, "vp_sparc_tr")
         self.vp_sparc_bl = xrc.XRCCTRL(self, "vp_sparc_bl")
         self.vp_sparc_br = xrc.XRCCTRL(self, "vp_sparc_br")
         self.sparc_button_panel = xrc.XRCCTRL(self, "sparc_button_panel")
@@ -2940,16 +2940,17 @@ def __init_resources():
             </object>
             <object class="sizeritem">
               <object class="ViewportGrid" name="pnl_sparc_grid">
-                <object class="MicroscopeViewport" name="vp_sparc_tl">
-                  <XRCED>
-                    <assign_var>1</assign_var>
-                  </XRCED>
-                </object>
                 <object class="SparcAcquisitionViewport" name="vp_sparc_acq_view">
                   <XRCED>
                     <assign_var>1</assign_var>
                   </XRCED>
                 </object>
+                <object class="MicroscopeViewport" name="vp_sparc_tr">
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
+                </object>
+                
                 <object class="MicroscopeViewport" name="vp_sparc_bl">
                   <XRCED>
                     <assign_var>1</assign_var>
