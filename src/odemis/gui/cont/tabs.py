@@ -471,8 +471,7 @@ class SecomStreamsTab(Tab):
     # Listen to this event to just add (back) a stream if none is left when turning on?
     def onOpticalState(self, state):
         if state == guimod.STATE_ON:
-            # TODO: Use the last stream paused, and fallback here only if empty?
-            # TODO: just first opt stream?
+            # Pick the last optical stream that played (.streams is ordered)
             for s in self.tab_data_model.streams.value:
                 if isinstance(s, streammod.OpticalStream):
                     opts = s
@@ -489,7 +488,7 @@ class SecomStreamsTab(Tab):
 
     def onEMState(self, state):
         if state == guimod.STATE_ON:
-            # TODO: Use the last stream paused
+            # Use the last SEM stream played
             for s in self.tab_data_model.streams.value:
                 if isinstance(s, streammod.EMStream):
                     sems = s
@@ -522,8 +521,25 @@ class SecomStreamsTab(Tab):
 class SparcAcquisitionTab(Tab):
     def __init__(self, name, button, panel, main_frame, main_data):
         tab_data = guimod.ScannedAcquisitionGUIData(main_data)
-        super(SparcAcquisitionTab, self).__init__(name, button, panel,
-                                                  main_frame, tab_data)
+        super(SparcAcquisitionTab, self).__init__(name, button, panel, main_frame, tab_data)
+
+        buttons = collections.OrderedDict([
+            (
+                self.main_frame.btn_sparc_view_all,
+                (None, self.main_frame.lbl_sparc_view_all)),
+            (
+                self.main_frame.btn_sparc_view_tl,
+                (self.main_frame.vp_sparc_acq_view, self.main_frame.lbl_sparc_view_tl)),
+            (
+                self.main_frame.btn_sparc_view_tr,
+                (self.main_frame.vp_sparc_tr, self.main_frame.lbl_sparc_view_tr)),
+            (
+                self.main_frame.btn_sparc_view_bl,
+                (self.main_frame.vp_sparc_bl, self.main_frame.lbl_sparc_view_bl)),
+            (
+                self.main_frame.btn_sparc_view_br,
+                (self.main_frame.vp_sparc_br, self.main_frame.lbl_sparc_view_br)),
+        ])
 
         # Toolbar
         self.tb = self.main_frame.sparc_acq_toolbar
@@ -626,14 +642,31 @@ class SparcAcquisitionTab(Tab):
         self.view_controller = viewcont.ViewPortController(
             self.tab_data_model,
             self.main_frame,
-            [self.main_frame.vp_sparc_acq_view]
+            self.main_frame.pnl_sparc_grid.viewports
         )
+
+        self._view_selector = viewcont.ViewButtonController(
+            self.tab_data_model,
+            self.main_frame,
+            buttons,
+            self.main_frame.pnl_sparc_grid.viewports
+        )
+
         self.tb.add_tool(tools.TOOL_ZOOM_FIT, self.view_controller.fitViewToContent)
 
         # Add the SEM stream to the focussed (only) view
         self.tab_data_model.streams.value.append(sem_stream)
-        mic_view = self.tab_data_model.focussedView.value
-        mic_view.addStream(sem_stream)
+
+        if self._ar_stream:
+            opt_mic_view = self.tab_data_model.views.value[0]
+            opt_mic_view.addStream(self._ar_stream)
+
+        self._stream_controller = streamcont.StreamController(
+            self.tab_data_model,
+            self.main_frame.pnl_sparc_streams
+        )
+
+        self._stream_controller.addStream(sem_stream, add_to_all_views=True)
 
         # needs to have the AR and Spectrum streams on the acquisition view
         self._settings_controller = settings.SparcSettingsController(
@@ -643,6 +676,7 @@ class SparcAcquisitionTab(Tab):
             spec_stream=self._spec_stream,
             ar_stream=self._ar_stream
         )
+
         # Bind the Spectrometer/Angle resolved buttons to add/remove the
         # streams. Both from the setting panels and the acquisition view.
         if self._ar_stream and self._spec_stream:
@@ -1947,8 +1981,8 @@ class MirrorAlignTab(Tab):
                 vpv
             )
             mic_view = self.tab_data_model.focussedView.value
-            mic_view.show_crosshair.value = False  #pylint: disable=E1103
-            mic_view.merge_ratio.value = 1  #pylint: disable=E1103
+            mic_view.show_crosshair.value = False
+            mic_view.merge_ratio.value = 1
 
             ccd_spe = self._stream_controller.addStream(ccd_stream)
             ccd_spe.flatten()

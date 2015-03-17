@@ -40,6 +40,8 @@ from odemis.model import NotApplicableError
 
 
 # Setting choice generators, used to create certain value choices for settings controls
+from odemis.util.units import si_scale_list, to_string_pretty, readable_str
+
 
 def resolution_from_range(comp, va, conf, init=None):
     """ Construct a list of resolutions depending on range values
@@ -81,7 +83,9 @@ def resolution_from_range_plus_point(comp, va, conf):
     return resolution_from_range(comp, va, conf, init={va.value, (1, 1)})
 
 
-MIN_RES = 200 * 200 # px, minimum amount of pixels to consider it acceptable
+MIN_RES = 200 * 200  # px, minimum amount of pixels to consider it acceptable
+
+
 def binning_1d_from_2d(comp, va, conf):
     """ Find simple binnings available in one dimension
 
@@ -169,7 +173,7 @@ def hfw_choices(comp, va, conf):
         while choices[-1] < ma:
             choices.append(mi * 10 ** step)
             step += 1
-
+        choices[-1] = ma
     return choices
 
 
@@ -340,6 +344,13 @@ def get_va_meta(comp, va, conf):
             choices.add(va.value)
         elif isinstance(choices, dict):
             choices[va.value] = unicode(va.value)
+        elif isinstance(choices, list):
+            # FIXME: The HFW choices are the only choices set provided as a list, and it's
+            # not necessary to add the current value to the choices. That's why, for now,
+            # the `list` type is ignored here. However, it would be better to either allow for
+            # the current value to be added to the HFW choices, or to disable the adding of it in
+            # some explicit way.
+            pass
         else:
             logging.warning("Don't know how to extend choices of type %s", type(choices))
 
