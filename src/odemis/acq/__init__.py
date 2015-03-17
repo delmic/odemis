@@ -260,12 +260,14 @@ class AcquisitionTask(object):
         # Update the pos/pxs/rot metadata from the fine overlay measure.
         # The correction metadata is in the metadata of the only raw data of
         # the OverlayStream.
-        cor_md = None
+        opt_cor_md = None
+        sem_cor_md = None
         for s, data in raw_data.items():
             if isinstance(s, OverlayStream):
-                if cor_md:
+                if opt_cor_md or sem_cor_md:
                     logging.warning("Multiple OverlayStreams found")
-                cor_md = data[0].metadata
+                opt_cor_md = data[0].metadata
+                sem_cor_md = data[1].metadata
                 del raw_data[s] # remove the stream from final raw data
 
         # Even if no overlay stream was present, it's worthy to update the
@@ -273,7 +275,10 @@ class AcquisitionTask(object):
         for s, data in raw_data.items():
             if isinstance(s, OpticalStream):
                 for d in data:
-                    img.mergeMetadata(d.metadata, cor_md)
+                    img.mergeMetadata(d.metadata, opt_cor_md)
+            elif isinstance(s, EMStream):
+                for d in data:
+                    img.mergeMetadata(d.metadata, sem_cor_md)
 
         # add the stream name to the image if nothing yet
         for s, data in raw_data.items():

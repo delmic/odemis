@@ -698,7 +698,7 @@ class FineAlignController(object):
     # TODO: make the max diff dependant on the optical FoV?
     OVRL_MAX_DIFF = 10e-06  # m, don't be too picky
     OVRL_REPETITION = (4, 4)  # Not too many, to keep it fast
-#     OVRL_REPETITION = (7, 7) # DEBUG (for compatibility with fake image)
+    # OVRL_REPETITION = (7, 7)  # DEBUG (for compatibility with fake image)
 
     def __init__(self, tab_data, main_frame, settings_controller):
         """
@@ -816,7 +816,8 @@ class FineAlignController(object):
                                      self.OVRL_MAX_DIFF,
                                      main_data.ebeam,
                                      main_data.ccd,
-                                     main_data.sed)
+                                     main_data.sed,
+                                     skew=True)
         logging.debug("Overlay procedure is running...")
         self._acq_future = f
         # Transform Fine alignment button into cancel
@@ -852,8 +853,13 @@ class FineAlignController(object):
         main_data = self._main_data_model
         try:
             trans_val, cor_md = future.result()
-            # The magic: save the correction metadata straight into the CCD
-            main_data.ccd.updateMetadata(cor_md)
+            opt_md, sem_md = cor_md
+
+            # Save the optical correction metadata straight into the CCD
+            main_data.ccd.updateMetadata(opt_md)
+
+            # The SEM correction metadata goes to the ebeam
+            main_data.ebeam.updateMetadata(sem_md)
         except CancelledError:
             self._main_frame.lbl_fine_align.Label = "Cancelled"
         except Exception:
@@ -864,17 +870,22 @@ class FineAlignController(object):
             self._main_frame.lbl_fine_align.Label = "Successful"
             self._main_frame.menu_item_reset_finealign.Enable(True)
             # Temporary info until the GUI can actually rotate the images
-            if model.MD_ROTATION_COR in cor_md:
-                rot = math.degrees(cor_md[model.MD_ROTATION_COR])
+            if (model.MD_ROTATION_COR in opt_md) and (model.MD_SHEAR_COR, model.MD_PIXEL_SIZE_COR in sem_md):
+                rot = math.degrees(opt_md[model.MD_ROTATION_COR])
+                shear = sem_md[model.MD_SHEAR_COR]
+                scaling_xy = sem_md[model.MD_PIXEL_SIZE_COR]
                 # the worse is the rotation, the longer it's displayed
                 timeout = max(2, min(abs(rot), 10))
                 Message.show_message(
                     self._main_frame,
-                    u"Rotation applied: %s" % (units.readable_str(rot, unit="°", sig=3)),
+                    u"Rotation applied: %s Shear applied: %s X/Y Scaling applied: %s"
+                    % (units.readable_str(rot, unit="°", sig=3), units.readable_str(shear, sig=3),
+                       units.readable_str(scaling_xy, sig=3)),
                     timeout=timeout
                 )
-                logging.warning("Fine alignment computed rotation needed of %f°",
-                                rot)
+                logging.warning("Fine alignment computed rotation needed of %f°\
+                                shear needed of %s X/Y scaling needed of %s",
+                                rot, shear, scaling_xy)
 
         # As the CCD image might have different pixel size, force to fit
         self._main_frame.vp_align_ccd.canvas.fit_view_to_next_image = True
