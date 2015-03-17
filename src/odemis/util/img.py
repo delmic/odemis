@@ -473,7 +473,7 @@ def mergeMetadata(current, correction=None):
         position = current.get(model.MD_POS, (0, 0))
 
         current[model.MD_POS] = (position[0] - position_cor[0],
-                                position[1] - position_cor[1])
+                                 position[1] - position_cor[1])
 
     if model.MD_SHEAR_COR in correction:
         # Default shear is 0 if not specified
@@ -492,7 +492,7 @@ def mergeMetadata(current, correction=None):
         logging.debug("Cannot correct pixel size of data with unknown pixel size")
 
     # remove correction metadata (to make it clear the correction has been applied)
-    for k in (model.MD_ROTATION_COR, model.MD_PIXEL_SIZE_COR, model.MD_POS_COR):
+    for k in (model.MD_ROTATION_COR, model.MD_PIXEL_SIZE_COR, model.MD_POS_COR, model.MD_SHEAR_COR):
         if k in current:
             del current[k]
 
