@@ -206,8 +206,8 @@ class WorldSelectOverlay(base.WorldOverlay, base.SelectionMixin):
             base.SelectionMixin._on_left_down(self, evt)
             self._view_to_world()
             self.cnvs.update_drawing()
-
-        base.WorldOverlay.on_left_down(self, evt)
+        else:
+            base.WorldOverlay.on_left_down(self, evt)
 
     def on_left_up(self, evt):
         """ End drag action if enabled, otherwise call super method so event will propagate """
@@ -215,8 +215,20 @@ class WorldSelectOverlay(base.WorldOverlay, base.SelectionMixin):
             base.SelectionMixin._on_left_up(self, evt)
             self._view_to_world()
             self.cnvs.update_drawing()
+        else:
+            base.WorldOverlay.on_left_up(self, evt)
 
-        base.WorldOverlay.on_left_up(self, evt)
+    def on_enter(self, evt):
+        if self.active:
+            self.cnvs.set_default_cursor(wx.CURSOR_CROSS)
+        else:
+            base.WorldOverlay.on_enter(self, evt)
+
+    def on_leave(self, evt):
+        if self.active:
+            self.cnvs.reset_default_cursor()
+        else:
+            base.WorldOverlay.on_leave(self, evt)
 
     def on_motion(self, evt):
         """ Process drag motion if enabled, otherwise call super method so event will propagate """

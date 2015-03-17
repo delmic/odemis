@@ -112,13 +112,15 @@ class VigilantAttribute(VigilantAttributeBase):
      * observable behaviour (anyone can ask to be notified when the value changes)
     """
 
-    def __init__(self, initval, readonly=False, setter=None, max_discard=100, *args, **kwargs):
+    def __init__(self, initval, readonly=False, setter=None, getter=None, max_discard=100, *args, **kwargs):
         """
         readonly (bool): if True, value setter will raise an exception. It's still
             possible to change the value by calling _set() and then notify()
         setter (callable value -> value): function that will be called whenever the value has to
             be changed and returns the new actual value (which might be different
             from what was given).
+        getter (callable value -> value): function that will be called whenever the value has to
+            be read and returns the current actual value.
         max_discard (int): amount of updates that can be discarded in a row if
                            a new one is already available. 0 to keep (notify)
                            all the messages (dangerous if callback is slower
@@ -131,6 +133,8 @@ class VigilantAttribute(VigilantAttributeBase):
             self._setter = self.__default_setter
         else:
             self._setter = WeakMethod(setter) # to avoid cycles
+        if getter is not None:
+            self._getter = WeakMethod(getter)  # to avoid cycles
 
         # different from ._listeners for notify() to do different things
         self._remote_listeners = set() # any unique string works
