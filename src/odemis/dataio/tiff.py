@@ -951,18 +951,14 @@ def _addImageElement(root, das, ifd, rois):
         ose = ET.SubElement(ime, "ObjectiveSettings",
                             attrib={"ID": "Objective:%d" % ifd})
 
-    if model.MD_ROTATION in globalMD:
-        rot = globalMD[model.MD_ROTATION]
+    if model.MD_ROTATION in globalMD or model.MD_SHEAR in globalMD:
+        # globalMD.get(model.MD_ROTATION, 0)
+        rot = globalMD.get(model.MD_ROTATION, 0)
         sinr, cosr = math.sin(rot), math.cos(rot)
+        she = globalMD.get(model.MD_SHEAR, 0)
         trane = ET.SubElement(ime, "Transform")
-        if model.MD_SHEAR in globalMD:
-            # If shear is available
-            she = globalMD[model.MD_SHEAR]
-            trans_mat = [[cosr + sinr * she, sinr, 0],
-                         [-sinr + cosr * she, cosr, 0]]
-        else:
-            trans_mat = [[cosr, sinr, 0],
-                         [-sinr, cosr, 0]]
+        trans_mat = [[cosr + sinr * she, sinr, 0],
+                     [-sinr + cosr * she, cosr, 0]]
         for i in range(2):
             for j in range(3):
                 trane.attrib["A%d%d" % (i, j)] = "%.15f" % trans_mat[i][j]
