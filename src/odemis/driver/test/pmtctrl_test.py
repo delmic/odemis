@@ -28,9 +28,9 @@ logging.getLogger().setLevel(logging.DEBUG)
 SN = "0E203C44"  # put the serial number written on the component to test
 
 CLASS = pmtctrl.PMTControl
-# KWARGS_SIM = dict(name="test", role="pmt_control", port="/dev/fake", axis="r", inverted=["r"])
+KWARGS_SIM = dict(name="test", role="pmt_control", port="/dev/fake")
 # KWARGS = KWARGS_SIM
-KWARGS = dict(name="test", role="pmt_control", sn=SN)
+KWARGS = dict(name="test", role="pmt_control", sn=SN, prot_time=0.0002, prot_curr=2.85)
 
 # @skip("simple")
 class TestStatic(unittest.TestCase):
@@ -86,7 +86,39 @@ class TestPMTControl(unittest.TestCase):
         self.dev.terminate()
 
     def test_send_cmd(self):
-        ans = self.dev.sendCommand("VOLT 3.2\n")
+        # Send proper command
+        ans = self.dev._sendCommand("VOLT 3.2\n")
+        self.assertEqual(ans, '\r')
+
+        # Send wrong command
+        with self.assertRaises(IOError):
+            self.dev._sendCommand("VOLT??\n")
+
+        # Set value out of range
+        with self.assertRaises(IOError):
+            self.dev._sendCommand("VOLT 8.4\n")
+
+        # Send proper set and get command
+        self.dev._sendCommand("VOLT 1.7\n")
+        ans = self.dev._sendCommand("VOLT?\n")
+        ans_f = float(ans)
+        self.assertAlmostEqual(ans_f, 1.7)
+
+    def test_pmtctrl_va(self):
+        # Test gain
+        gain = 0.6
+        self.dev.gain.value = gain
+        self.assertAlmostEqual(self.dev.gain.value, gain)
+
+        # Test powerSupply
+        powerSupply = True
+        self.dev.powerSupply.value = powerSupply
+        self.assertEqual(self.dev.powerSupply.value, powerSupply)
+
+        # Test protection
+        protection = True
+        self.dev.protection.value = protection
+        self.assertEqual(self.dev.protection.value, protection)
 
 if __name__ == "__main__":
     unittest.main()

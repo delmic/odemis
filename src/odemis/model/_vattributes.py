@@ -133,8 +133,11 @@ class VigilantAttribute(VigilantAttributeBase):
             self._setter = self.__default_setter
         else:
             self._setter = WeakMethod(setter) # to avoid cycles
+
         if getter is not None:
             self._getter = WeakMethod(getter)  # to avoid cycles
+        else:
+            self._getter = None
 
         # different from ._listeners for notify() to do different things
         self._remote_listeners = set() # any unique string works
@@ -164,7 +167,13 @@ class VigilantAttribute(VigilantAttributeBase):
 
     def _get_value(self):
         """The value of this VA"""
-        return self._value
+        if self._getter is None:
+            return self._value
+        else:
+            try:
+                return self._getter()
+            except WeakRefLostError:
+                return self._value
 
     # cannot be oneway because we need the exception in case of error
     def _set_value(self, value, must_notify=False):
