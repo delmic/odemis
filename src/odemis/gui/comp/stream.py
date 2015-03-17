@@ -1,30 +1,25 @@
 # -*- coding: utf-8 -*-
-
 """
-@author: Rinze de Laat
-
-Copyright © 2012 Rinze de Laat, Delmic
+:author: Rinze de Laat <laat@delmic.com>
+:copyright: © 2012 Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the
-terms of the GNU General Public License version 2 as published by the Free
-Software Foundation.
+.. license::
+    Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU
+    General Public License version 2 as published by the Free Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
-WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
-PARTICULAR PURPOSE. See the GNU General Public License for more details.
+    Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+    even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+    General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with
-Odemis. If not, see http://www.gnu.org/licenses/.
-
-
-
+    You should have received a copy of the GNU General Public License along with Odemis. If not,
+    see http://www.gnu.org/licenses/.
 
 This module contains classes needed to construct stream panels.
 
-Stream panels are custom, specialized controls that allow the user to view and
-manipulate various data streams coming from the microscope.
+Stream panels are custom, specialized controls that allow the user to view and manipulate various
+data streams coming from the microscope.
 
 """
 
@@ -80,47 +75,22 @@ CAPTION_PADDING_RIGHT = 5
 ICON_WIDTH, ICON_HEIGHT = 16, 16
 
 
-class Expander(wx.Control):
-    """ This class describes a clickable control responsible for showing and
-    hiding settings belonging to a specific stream.
+class StreamPanelHeader(wx.Control):
+    """ This class describes a clickable control responsible for expanding and collapsing the
+    StreamPanel to which it belongs.
 
-    It functions both as a header and a button that expands or collapses a
-    StreamPanel containing controls.
-
-    The default buttons present are:
-
-    * A remove button, which can be used to remove the StreamPanel
-    * A visibility button, indicating whether the stream data should be/is shown
-    * A play button, controlling whether or not 'live' data from the stream is
-        to be used.
-
-    Structure:
-
-        + Expander
-        |-- ImageButton: Removes the stream
-        |-- Label: Name of the stream
-        |-- ColourButton: Select tint of stream (optional)
-        |-- ImageToggleButton: show/hide button
-        |-- ImageToggleButton: update/pause button
-
-    The triangular fold icons are directly drawn on the background.
+    It can also contain various sub buttons that allow for stream manipulation.
 
     """
 
-    def __init__(self, parent, stream,
-                 wid=wx.ID_ANY,
-                 pos=wx.DefaultPosition,
-                 size=wx.DefaultSize,
+    def __init__(self, parent, stream, wid=wx.ID_ANY, pos=wx.DefaultPosition, size=wx.DefaultSize,
                  style=wx.NO_BORDER,
                  options=(OPT_BTN_REMOVE | OPT_BTN_VISIBLE | OPT_BTN_UPDATED | OPT_BTN_TINT)):
-
         assert(isinstance(parent, StreamPanel))
+        super(StreamPanelHeader, self).__init__(parent, wid, pos, size, style)
 
-        super(Expander, self).__init__(parent, wid, pos, size, style)
-
-        # This style *needs* to be set on MS Windows
-        # TODO: check if this still is the case with wxPython 3.0
-        self.SetBackgroundStyle(wx.BG_STYLE_CUSTOM)
+        # This style enables us to draw the background with our own paint event handler
+        self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
 
         # Stream details will be necessary in subclasses
         self._stream = stream
@@ -487,7 +457,7 @@ class StreamPanel(wx.Panel):
         if self._has_dye(stream) and not (stream.excitation.readonly or stream.emission.readonly):
             expand_opt |= OPT_NAME_EDIT
 
-        self._expander = Expander(self, self.stream, options=expand_opt)
+        self._expander = StreamPanelHeader(self, self.stream, options=expand_opt)
         self._expander.Bind(wx.EVT_LEFT_UP, self.on_toggle)
         self._expander.Bind(wx.EVT_PAINT, self.on_draw_expander)
 
@@ -1689,7 +1659,7 @@ class StreamBar(wx.Panel):
 
         p.Refresh()
 
-    # TODO maybe should be provided after init by the controller (like key of
+    # TODO: maybe should be provided after init by the controller (like key of
     # sorted()), to separate the GUI from the model ?
     def _get_stream_order(self, stream):
         """

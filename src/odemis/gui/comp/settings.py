@@ -1,4 +1,4 @@
-#-*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 .. codeauthor:: Rinze de Laat <laat@delmic.com>
 
