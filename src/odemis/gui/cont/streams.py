@@ -100,7 +100,7 @@ class StreamController(object):
         for d in data:
             # Hack for not displaying Anchor region data
             # TODO: store and use acquisition type with MD_ACQ_TYPE?
-            if d.metadata[model.MD_DESCRIPTION] == "Anchor region":
+            if d.metadata.get(model.MD_DESCRIPTION) == "Anchor region":
                 continue
 
             # Streams only support 2D data (e.g., no multiple channels like RGB)
