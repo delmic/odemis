@@ -1582,6 +1582,16 @@
                                 <assign_var>1</assign_var>
                               </XRCED>
                             </object>
+                            <object class="FoldPanelItem">
+                              <object class="StreamBar" name="pnl_secom_align_streams">
+                                <fg>#7F7F7F</fg>
+                                <bg>#333333</bg>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <nocaption>1</nocaption>
+                            </object>
                             <object class="FoldPanelItem" name="fp_lens_sem_settings">
                               <label>SEM SETTINGS</label>
                               <fg>#1A1A1A</fg>
@@ -1594,16 +1604,7 @@
                             <leftspacing>0</leftspacing>
                             <rightspacing>0</rightspacing>
                             <bg>#333333</bg>
-                            <object class="FoldPanelItem">
-                              <object class="StreamBar" name="pnl_secom_align_streams">
-                                <fg>#7F7F7F</fg>
-                                <bg>#333333</bg>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
-                              </object>
-                              <nocaption>1</nocaption>
-                            </object>
+                          
                           </object>
                           <flag>wxEXPAND</flag>
                         </object>
