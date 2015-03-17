@@ -93,9 +93,10 @@ class Message(wx.PopupTransientWindow):
         self.sizer.Fit(self)
         self.Layout()
 
+        ox, oy = self.Parent.GetPosition()
         pw, ph = self.Parent.GetSize()
         mw, mh = self.GetSize()
-        pos = (pw - mw) // 2, (ph - mh) // 2
+        pos = ox + (pw - mw) // 2, oy + (ph - mh) // 2
 
         self.Position(pos, (0, 0))
 
