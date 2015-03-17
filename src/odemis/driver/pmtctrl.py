@@ -35,6 +35,7 @@ import time
 MAX_GAIN = 6
 MIN_GAIN = 0
 
+
 class PMTControl(model.HwComponent):
     '''
     This represents the PMT control unit.
@@ -65,10 +66,12 @@ class PMTControl(model.HwComponent):
 
         try:
             # Get identification of the PMT control device
-            self._idn = self.sendCommand("*IDN?\n")
+            self._idn = self._sendCommand("*IDN?\n")
             # Set protection current and time
-            self.sendCommand("PCURR " + str(self._prot_curr) + "\n")
-            self.sendCommand("PTIME " + str(self._prot_time) + "\n")
+            if self._prot_curr is not None:
+                self._sendCommand("PCURR " + str(self._prot_curr) + "\n")
+            if self._prot_time is not None:
+                self._sendCommand("PTIME " + str(self._prot_time) + "\n")
         except IOError as e:
             logging.exception(str(e))
 
@@ -81,6 +84,7 @@ class PMTControl(model.HwComponent):
         self.powerSupply = model.BooleanVA(False, setter=self._setPowerSupply)
         self.powerSupply.value = False
         self.protection = model.BooleanVA(False, setter=self._setProtection, getter=self._getProtection)
+        self.protection.value = False
 
     def terminate(self):
         with self._ser_access:
@@ -90,7 +94,7 @@ class PMTControl(model.HwComponent):
 
     def _setGain(self, value):
         try:
-            self.sendCommand("VOLT " + str(value) + "\n")
+            self._sendCommand("VOLT " + str(value) + "\n")
         except IOError as e:
             logging.exception(str(e))
 
@@ -99,9 +103,9 @@ class PMTControl(model.HwComponent):
     def _setPowerSupply(self, value):
         try:
             if value:
-                self.sendCommand("PWR " + str(1) + "\n")
+                self._sendCommand("PWR " + str(1) + "\n")
             else:
-                self.sendCommand("PWR " + str(0) + "\n")
+                self._sendCommand("PWR " + str(0) + "\n")
         except IOError as e:
             logging.exception(str(e))
 
@@ -110,9 +114,9 @@ class PMTControl(model.HwComponent):
     def _setProtection(self, value):
         try:
             if value:
-                self.sendCommand("PROT " + str(1) + "\n")
+                self._sendCommand("PROT " + str(1) + "\n")
             else:
-                self.sendCommand("PROT " + str(0) + "\n")
+                self._sendCommand("PROT " + str(0) + "\n")
         except IOError as e:
             logging.exception(str(e))
 
@@ -120,8 +124,8 @@ class PMTControl(model.HwComponent):
 
     def _getProtection(self):
         try:
-            ans = self.sendCommand("PROT?\n")
-            if ans == 1:
+            ans = self._sendCommand("PROT?\n")
+            if ans == "1\r":
                 status = True
             else:
                 status = False
@@ -130,7 +134,7 @@ class PMTControl(model.HwComponent):
 
         return status
 
-    def sendCommand(self, cmd):
+    def _sendCommand(self, cmd):
         """
         cmd (str): command to be sent to PMT Control unit.
         returns 
@@ -160,8 +164,8 @@ class PMTControl(model.HwComponent):
         return (serial): the opened serial port
         """
         # For debugging purpose
-        # if port == "/dev/fake":
-        #    return MFF102Simulator(timeout=1)
+#         if port == "/dev/fake":
+#            return PMTControlSimulator()
 
         ser = serial.Serial(
             port=port,
