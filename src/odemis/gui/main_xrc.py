@@ -127,8 +127,8 @@ class xrcfr_main(wx.Frame):
         self.cmb_lens_align_presets = xrc.XRCCTRL(self, "cmb_lens_align_presets")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fp_lens_opt_settings = xrc.XRCCTRL(self, "fp_lens_opt_settings")
-        self.fp_lens_sem_settings = xrc.XRCCTRL(self, "fp_lens_sem_settings")
         self.pnl_secom_align_streams = xrc.XRCCTRL(self, "pnl_secom_align_streams")
+        self.fp_lens_sem_settings = xrc.XRCCTRL(self, "fp_lens_sem_settings")
         self.pnl_sem_toolbar = xrc.XRCCTRL(self, "pnl_sem_toolbar")
         self.lens_align_tb = xrc.XRCCTRL(self, "lens_align_tb")
         self.vp_align_sem = xrc.XRCCTRL(self, "vp_align_sem")
@@ -263,7 +263,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource class="spacer" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -1846,6 +1846,16 @@ def __init_resources():
                                 <assign_var>1</assign_var>
                               </XRCED>
                             </object>
+                            <object class="FoldPanelItem">
+                              <object class="StreamBar" name="pnl_secom_align_streams">
+                                <fg>#7F7F7F</fg>
+                                <bg>#333333</bg>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <nocaption>1</nocaption>
+                            </object>
                             <object class="FoldPanelItem" name="fp_lens_sem_settings">
                               <label>SEM SETTINGS</label>
                               <fg>#1A1A1A</fg>
@@ -1858,16 +1868,7 @@ def __init_resources():
                             <leftspacing>0</leftspacing>
                             <rightspacing>0</rightspacing>
                             <bg>#333333</bg>
-                            <object class="FoldPanelItem">
-                              <object class="StreamBar" name="pnl_secom_align_streams">
-                                <fg>#7F7F7F</fg>
-                                <bg>#333333</bg>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
-                              </object>
-                              <nocaption>1</nocaption>
-                            </object>
+                          
                           </object>
                           <flag>wxEXPAND</flag>
                         </object>
