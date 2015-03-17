@@ -310,7 +310,7 @@ def main(args):
         trans_md, skew_md = cor_md
         iscale = trans_md[model.MD_PIXEL_SIZE_COR]
         irot = -trans_md[model.MD_ROTATION_COR] % (2 * math.pi)
-        ishear = -skew_md[model.MD_SHEAR_COR]
+        ishear = skew_md[model.MD_SHEAR_COR]
         iscale_xy = skew_md[model.MD_PIXEL_SIZE_COR]
         logging.info("\n**Computed fine alignment parameters**\n scaling: %s \n rotation: %f \n", iscale, irot)
         # Update calibration file
