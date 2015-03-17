@@ -49,7 +49,7 @@ class Stream(object):
     # Minimum overhead time in seconds when acquiring an image
     SETUP_OVERHEAD = 0.1
 
-    def __init__(self, name, detector, dataflow, emitter, raw=None):
+    def __init__(self, name, detector, dataflow, emitter, raw=None, forcemd=None):
         """
         name (string): user-friendly name of this stream
         detector (Detector): the detector which has the dataflow
@@ -57,6 +57,8 @@ class Stream(object):
         emitter (Emitter): the emitter
         raw (None or list of DataArrays): raw data to be used at initialisation
          by default, it will contain no data.
+        forcemd (None or dict of MD_* -> value): force the metadata of the
+          .image DataArray to be overridden by this metadata.
         """
 
         self.name = model.StringVA(name)
@@ -81,6 +83,9 @@ class Stream(object):
             self.raw = []
         else:
             self.raw = raw
+
+        self._forcemd = forcemd
+
         # the most important attribute
         self.image = model.VigilantAttribute(None)
 
@@ -346,11 +351,16 @@ class Stream(object):
         except KeyError:
             date = time.time()
 
-        return {MD_PIXEL_SIZE: pxs,
-                MD_POS: pos,
-                MD_ROTATION: rot,
-                MD_SHEAR: she,
-                MD_ACQ_DATE: date}
+        md = {MD_PIXEL_SIZE: pxs,
+              MD_POS: pos,
+              MD_ROTATION: rot,
+              MD_SHEAR: she,
+              MD_ACQ_DATE: date}
+
+        if self._forcemd:
+            md.update(self._forcemd)
+
+        return md
 
     @limit_invocation(0.1) # Max 10 Hz
     def _updateImage(self, tint=(255, 255, 255)):
