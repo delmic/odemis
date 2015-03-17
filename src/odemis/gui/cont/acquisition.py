@@ -878,13 +878,14 @@ class FineAlignController(object):
                 timeout = max(2, min(abs(rot), 10))
                 Message.show_message(
                     self._main_frame,
-                    u"Rotation applied: %s Shear applied: %s X/Y Scaling applied: %s"
-                    % (units.readable_str(rot, unit="°", sig=3), units.readable_str(shear, sig=3),
+                    u"Rotation applied: %s\nShear applied: %s\nX/Y Scaling applied: %s"
+                    % (units.readable_str(rot, unit="°", sig=3),
+                       units.readable_str(shear, sig=3),
                        units.readable_str(scaling_xy, sig=3)),
                     timeout=timeout
                 )
-                logging.warning("Fine alignment computed rotation needed of %f°\
-                                shear needed of %s X/Y scaling needed of %s",
+                logging.warning("Fine alignment computed rotation needed of %f°, "
+                                "shear needed of %s, and X/Y scaling needed of %s.",
                                 rot, shear, scaling_xy)
 
         # As the CCD image might have different pixel size, force to fit
