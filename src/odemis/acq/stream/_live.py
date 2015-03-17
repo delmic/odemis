@@ -460,8 +460,8 @@ class CameraStream(Stream):
     Mostly used to share time estimation only.
     """
 
-    def __init__(self, name, detector, dataflow, emitter):
-        Stream.__init__(self, name, detector, dataflow, emitter)
+    def __init__(self, name, detector, dataflow, emitter, *args, **kwargs):
+        Stream.__init__(self, name, detector, dataflow, emitter, *args, **kwargs)
 
         # Create VAs for exposureTime and light power, based on the hardware VA,
         # that can be used, to override the hardware setting on a per stream basis
@@ -557,8 +557,8 @@ class CameraCountStream(CameraStream):
     The .image is a one dimension DataArray with the mean of the whole sensor
      data over time. The last acquired data is the last value in the array.
     """
-    def __init__(self, name, detector, dataflow, emitter):
-        CameraStream.__init__(self, name, detector, dataflow, emitter)
+    def __init__(self, *args, **kwargs):
+        CameraStream.__init__(self, *args, **kwargs)
         self._raw_date = [] # time of each raw acquisition (=count)
         self.image.value = model.DataArray([]) # start with an empty array
 
@@ -633,7 +633,7 @@ class FluoStream(CameraStream):
         detector (Detector): the detector which has the dataflow
         dataflow (Dataflow): the dataflow from which to get the data
         emitter (Light): the HwComponent to modify the light excitation
-        filter (Filter): the HwComponent to modify the emission light filtering
+        em_filter (Filter): the HwComponent to modify the emission light filtering
         """
         CameraStream.__init__(self, name, detector, dataflow, emitter)
         self._em_filter = em_filter
@@ -776,14 +776,14 @@ class RGBCameraStream(CameraStream):
     If a light is given, it will turn it on during acquisition.
     """
 
-    def __init__(self, name, detector, dataflow, emitter):
+    def __init__(self, name, detector, *args, **kwargs):
         """
         name (string): user-friendly name of this stream
         detector (Detector): the detector which has the dataflow
         dataflow (Dataflow): the dataflow from which to get the data
         emitter (Light or None): the HwComponent to turn on the light
         """
-        CameraStream.__init__(self, name, detector, dataflow, emitter)
+        CameraStream.__init__(self, name, detector, *args, **kwargs)
         if len(detector.shape) != 4:
             logging.warning("RGBCameraStream expects detector with shape of "
                             "length 4, but shape is %s", detector.shape)

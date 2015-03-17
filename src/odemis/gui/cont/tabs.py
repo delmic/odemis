@@ -1641,7 +1641,10 @@ class LensAlignTab(Tab):
         ccd_stream = streammod.CameraStream("Optical CL",
                                             main_data.ccd,
                                             main_data.ccd.data,
-                                            main_data.light)
+                                            main_data.light,
+                                            forcemd={model.MD_ROTATION: 0,
+                                                     model.MD_SHEAR: 0}
+                                            )
         self.tab_data_model.streams.value.insert(0, ccd_stream) # current stream
         self._ccd_stream = ccd_stream
         self._ccd_view = main_frame.vp_align_ccd.microscope_view
