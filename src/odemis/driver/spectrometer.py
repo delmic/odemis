@@ -20,7 +20,6 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
-from numpy.polynomial import polynomial
 from odemis import model
 from odemis.model import ComponentBase, DataFlowBase
 import logging
@@ -151,13 +150,6 @@ class CompositedSpectrometer(model.Detector):
         assert hasattr(self, "pixelSize")
         assert hasattr(self, "exposureTime")
 
-        # Update metadata of detector with wavelength conversion
-        # whenever the wavelength/grating axes moves.
-        try:
-            self._pn_phys = sp.getPolyToWavelength()
-        except AttributeError:
-            raise ValueError("Child spectrograph has no getPolyToWavelength() method")
-
         sp.position.subscribe(self._onPositionUpdate)
         self.resolution.subscribe(self._onResBinningUpdate)
         self.binning.subscribe(self._onResBinningUpdate, init=True)
@@ -180,51 +172,57 @@ class CompositedSpectrometer(model.Detector):
         Called when the wavelength position or grating (ie, groove density)
           of the spectrograph is changed.
         """
-        # Need to get new conversion polynomial and update metadata
-        self._pn_phys = self._spectrograph.getPolyToWavelength()
-        self._updateWavelengthPolynomial()
+        self._updateWavelengthList()
 
     def _onResBinningUpdate(self, value):
-        self._updateWavelengthPolynomial()
-
-    def _updateWavelengthPolynomial(self):
         """
-        Update the metadata with the wavelength conversion polynomial provided
-        by the spectrograph. Should be called every time ._pn_phys is updated,
-        or whenever the binning or resolution change
+        Called when the resolution or the binning changes
         """
-        # This polynomial is from m (distance from centre) to m (wavelength),
-        # but we need from px (pixel number on spectrum) to m (wavelength). So
-        # we need to convert by using the density and quantity of pixels
-        # wl = pn(x)
-        # x = a + bx' = pn1(x')
-        # wl = pn(pn1(x')) = pnc(x')
-        # => composition of polynomials
-        # with "a" the distance of the centre of the left-most pixel to the
-        # centre of the image, and b the density in meters per pixel.
+        self._updateWavelengthList()
 
-        mpp = self.pixelSize.value[0] * self._binning[0] # m/px
-        # distance from the pixel 0 to the centre (in m)
-        distance0 = -(self.resolution.value[0] / 2 - 0.5) * mpp
-        pnc = self.polycomp(self._pn_phys, [distance0, mpp])
+    def _updateWavelengthList(self):
+        wll = self._spectrograph.getPixelToWavelength()
+        md = {model.MD_WL_LIST: wll}
+        self._detector.updateMetadata(md)
 
-        md = {model.MD_WL_POLYNOMIAL: pnc}
-        self.updateMetadata(md)
-
-    @staticmethod
-    def polycomp(c1, c2):
-        """
-        Compose two polynomials : c1 o c2 = c1(c2(x))
-        The arguments are sequences of coefficients, from lowest order term to highest, e.g., [1,2,3] represents the polynomial 1 + 2*x + 3*x**2.
-        """
-        # TODO: Polynomial(Polynomial()) seems to do just that?
-        # using Horner's method to compute the result of a polynomial
-        cr = [c1[-1]]
-        for a in reversed(c1[:-1]):
-            # cr = cr * c2 + a
-            cr = polynomial.polyadd(polynomial.polymul(cr, c2), [a])
-
-        return cr
+#     def _updateWavelengthPolynomial(self):
+#         """
+#         Update the metadata with the wavelength conversion polynomial provided
+#         by the spectrograph. Should be called every time ._pn_phys is updated,
+#         or whenever the binning or resolution change
+#         """
+#         # This polynomial is from m (distance from centre) to m (wavelength),
+#         # but we need from px (pixel number on spectrum) to m (wavelength). So
+#         # we need to convert by using the density and quantity of pixels
+#         # wl = pn(x)
+#         # x = a + bx' = pn1(x')
+#         # wl = pn(pn1(x')) = pnc(x')
+#         # => composition of polynomials
+#         # with "a" the distance of the centre of the left-most pixel to the
+#         # centre of the image, and b the density in meters per pixel.
+#
+#         mpp = self.pixelSize.value[0] * self._binning[0] # m/px
+#         # distance from the pixel 0 to the centre (in m)
+#         distance0 = -(self.resolution.value[0] / 2 - 0.5) * mpp
+#         pnc = self.polycomp(self._pn_phys, [distance0, mpp])
+#
+#         md = {model.MD_WL_POLYNOMIAL: pnc}
+#         self.updateMetadata(md)
+#
+#     @staticmethod
+#     def polycomp(c1, c2):
+#         """
+#         Compose two polynomials : c1 o c2 = c1(c2(x))
+#         The arguments are sequences of coefficients, from lowest order term to highest, e.g., [1,2,3] represents the polynomial 1 + 2*x + 3*x**2.
+#         """
+#         # TODO: Polynomial(Polynomial()) seems to do just that?
+#         # using Horner's method to compute the result of a polynomial
+#         cr = [c1[-1]]
+#         for a in reversed(c1[:-1]):
+#             # cr = cr * c2 + a
+#             cr = polynomial.polyadd(polynomial.polymul(cr, c2), [a])
+#
+#         return cr
 
     def _setBinning(self, value):
         """

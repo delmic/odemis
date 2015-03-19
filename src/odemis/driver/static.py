@@ -22,6 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 from Pyro4.core import isasync
+from numpy.polynomial import polynomial
 from odemis import model
 import collections
 import odemis
@@ -130,20 +131,23 @@ class LightFilter(model.Actuator):
         return model.InstantaneousFuture()
 
 
-
 class Spectrograph(model.Actuator):
     """
-    A very simple spectrograph component for spectrographs which cannot be 
+    A very simple spectrograph component for spectrographs which cannot be
     controlled by software.
-    Just get a polynomial describing the light position on the CCD as init,
-    and an axis which  
+    Just provide the wavelength list describing the light position on the CCD
+    according to the center wavelength specified.
     """
     def __init__(self, name, role, wlp, **kwargs):
         """
-        wlp (list of floats): polynomial for conversion from distance from the 
-          center of the CCD to wavelength (in m). So, typically, a first order
+        wlp (list of floats): polynomial for conversion from distance from the
+          center of the CCD to wavelength (in m):
+          w = wlp[0] + wlp[1] * x + wlp[2] * x²... 
+          where w is the wavelength (in m), x is the position from the center
+          (in m, negative are to the left), and p is the polynomial
+          (in m, m^0, m^-1...). So, typically, a first order
           polynomial contains as first element the center wavelength, and as
-          second element the light dispersion (in m/m).
+          second element the light dispersion (in m/m)
         """
         if kwargs.get("inverted", None):
             raise ValueError("Axis of spectrograph cannot be inverted")
@@ -161,8 +165,7 @@ class Spectrograph(model.Actuator):
                                 **kwargs)
         self.position = model.VigilantAttribute(pos, unit="m", readonly=True)
 
-
-    # we simulate the axis, to give the same interface as a fully controllable
+    # We simulate the axis, to give the same interface as a fully controllable
     # spectrograph, but it has to actually reflect the state of the hardware.
     @isasync
     def moveRel(self, shift):
@@ -188,19 +191,45 @@ class Spectrograph(model.Actuator):
         # nothing to do
         pass
 
-    def getPolyToWavelength(self):
+    def getPixelToWavelength(self):
         """
-        Compute the right polynomial to convert from a position on the sensor to the
-          wavelength detected. It depends on the current grating, center 
-          wavelength (and focal length of the spectrometer). 
-        Note: It will return the polynomial given as init + the shift from the
-          original center wavelength.
-        returns (list of float): polynomial coefficients to apply to get the current
-          wavelength corresponding to a given distance from the center: 
-          w = p[0] + p[1] * x + p[2] * x²... 
-          where w is the wavelength (in m), x is the position from the center
-          (in m, negative are to the left), and p is the polynomial (in m, m^0, m^-1...).
+        return (list of floats): pixel number -> wavelength in m
         """
         pl = list(self._wlp)
         pl[0] = self.position.value["wavelength"]
-        return pl
+
+        # This polynomial is from m (distance from centre) to m (wavelength),
+        # but we need from px (pixel number on spectrum) to m (wavelength). So
+        # we need to convert by using the density and quantity of pixels
+        # wl = pn(x)
+        # x = a + bx' = pn1(x')
+        # wl = pn(pn1(x')) = pnc(x')
+        # => composition of polynomials
+        # with "a" the distance of the centre of the left-most pixel to the
+        # centre of the image, and b the density in meters per pixel.
+        ccd = self.parent
+        npixels = ccd.resolution.value[0]
+        mpp = ccd.pixelSize.value[0] * ccd.binning.value[0] # m/px
+        # distance from the pixel 0 to the centre (in m)
+        distance0 = -(npixels - 1) / 2 * mpp
+        pnc = self.polycomp(pl, [distance0, mpp])
+
+        npn = polynomial.Polynomial(pnc,  # pylint: disable=E1101
+                                    domain=[0, npixels - 1],
+                                    window=[0, npixels - 1])
+        return npn.linspace(npixels)[1]
+
+    @staticmethod
+    def polycomp(c1, c2):
+        """
+        Compose two polynomials : c1 o c2 = c1(c2(x))
+        The arguments are sequences of coefficients, from lowest order term to highest, e.g., [1,2,3] represents the polynomial 1 + 2*x + 3*x**2.
+        """
+        # TODO: Polynomial(Polynomial()) seems to do just that?
+        # using Horner's method to compute the result of a polynomial
+        cr = [c1[-1]]
+        for a in reversed(c1[:-1]):
+            # cr = cr * c2 + a
+            cr = polynomial.polyadd(polynomial.polymul(cr, c2), [a])
+
+        return cr
