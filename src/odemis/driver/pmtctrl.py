@@ -111,6 +111,18 @@ class PMTControl(model.HwComponent):
 
         return value
 
+    def _getPowerSupply(self):
+        try:
+            ans = self._sendCommand("PWR?\n")
+            if ans == "1\r":
+                status = True
+            else:
+                status = False
+        except IOError as e:
+            logging.exception(str(e))
+
+        return status
+
     def _setProtection(self, value):
         try:
             if value:
@@ -163,10 +175,6 @@ class PMTControl(model.HwComponent):
         port (string): the name of the serial port (e.g., /dev/ttyACM0)
         return (serial): the opened serial port
         """
-        # For debugging purpose
-#         if port == "/dev/fake":
-#            return PMTControlSimulator()
-
         ser = serial.Serial(
             port=port,
             baudrate=115200,
@@ -265,5 +273,188 @@ class PMTControl(model.HwComponent):
         else:
             # TODO: Windows version
             raise NotImplementedError("OS not yet supported")
+
+        return found
+    
+#Ranges similar to real PMT Control firmware
+MAX_VOLT = 6
+MIN_VOLT = 0
+MAX_PCURR = 3
+MIN_PCURR = 0
+MAX_PTIME = 100
+MIN_PTIME = 0.000001
+IDN = "Delmic Analog PMT simulator"
+SN = "F4K3"
+
+class PMTControlSimulator(model.HwComponent):
+    """
+    Simulates a PMTControl (+ serial port). Only used for testing.
+    Same interface as the serial port
+    """
+    def __init__(self, name, role, sn=None, port=None, prot_time=None, prot_curr=None, daemon=None, **kwargs):
+
+        model.HwComponent.__init__(self, name, role, daemon=daemon, **kwargs)
+        # get protection time (s) and current (A) properties
+        self._prot_time = prot_time
+        self._prot_curr = prot_curr
+
+        try:
+            # Get identification of the PMT control device
+            self._idn = self._sendCommand("*IDN?\n")
+            # Set protection current and time
+            if self._prot_curr is not None:
+                self._sendCommand("PCURR " + str(self._prot_curr) + "\n")
+            if self._prot_time is not None:
+                self._sendCommand("PTIME " + str(self._prot_time) + "\n")
+        except IOError as e:
+            logging.exception(str(e))
+        # gain, powerSupply and protection VAs
+        gain_rng = [MIN_GAIN, MAX_GAIN]
+        self._gain = 0
+        self._powerSupply = False
+        self._protection = False
+        self.gain = model.FloatContinuous(self._gain, gain_rng, unit="V", setter=self._setGain)
+        # To initialize the voltage in the PMT control unit
+        self.gain.value = 0  # Just start with no gain
+        self.powerSupply = model.BooleanVA(False, setter=self._setPowerSupply)
+        self.powerSupply.value = False
+        self.protection = model.BooleanVA(False, setter=self._setProtection, getter=self._getProtection)
+        self.protection.value = False
+
+    def _setGain(self, value):
+        try:
+            self._sendCommand("VOLT " + str(value) + "\n")
+        except IOError as e:
+            logging.exception(str(e))
+
+        return self._gain
+
+    def _setPowerSupply(self, value):
+        try:
+            if value:
+                self._sendCommand("PWR " + str(1) + "\n")
+            else:
+                self._sendCommand("PWR " + str(0) + "\n")
+        except IOError as e:
+            logging.exception(str(e))
+
+        return self._powerSupply
+
+    def _getPowerSupply(self):
+        try:
+            ans = self._sendCommand("PWR?\n")
+            if ans == "1\r":
+                status = True
+            else:
+                status = False
+        except IOError as e:
+            logging.exception(str(e))
+
+        return status
+
+    def _setProtection(self, value):
+        try:
+            if value:
+                self._sendCommand("PROT " + str(1) + "\n")
+            else:
+                self._sendCommand("PROT " + str(0) + "\n")
+        except IOError as e:
+            logging.exception(str(e))
+
+        return self._protection
+
+    def _getProtection(self):
+        try:
+            ans = self._sendCommand("PROT?\n")
+            if ans == "1\r":
+                status = True
+            else:
+                status = False
+        except IOError as e:
+            logging.exception(str(e))
+
+        return status
+
+    def _sendCommand(self, cmd):
+        """
+        cmd (str): command to be sent to PMT Control unit.
+        """
+        wspaces = cmd.count(' ')
+        qmarks = cmd.count('?')
+        tokens = cmd.split()
+        if ((wspaces > 0) and (qmarks > 0)) or (wspaces > 1) or (qmarks > 1):
+            raise IOError("Cannot parse this command")
+        elif wspaces:
+            value = float(tokens[1])
+            if tokens[0] == "PWR":
+                if (value != 0) and (value != 1):
+                    raise IOError("Out of range set value")
+                else:
+                    if value:
+                        self._powerSupply = True
+                    else:
+                        self._powerSupply = False
+                    return '\r'
+
+            elif tokens[0] == "PROT":
+                if (value != 0) and (value != 1):
+                    raise IOError("Out of range set value")
+                else:
+                    if value:
+                        self._protection = True
+                    else:
+                        self._protection = False
+                    return '\r'
+            elif tokens[0] == "VOLT":
+                if (value < MIN_VOLT) or (value > MAX_VOLT):
+                    raise IOError("Out of range set value")
+                else:
+                    self._gain = value
+                    return '\r'
+            elif tokens[0] == "PCURR":
+                if (value < MIN_PCURR) or (value > MAX_PCURR):
+                    raise IOError("Out of range set value")
+                else:
+                    self._prot_curr = value
+                    return '\r'
+            elif tokens[0] == "PTIME":
+                if (value < MIN_PTIME) or (value > MAX_PTIME):
+                    raise IOError("Out of range set value")
+                else:
+                    self._prot_time = value
+                    return '\r'
+            else:
+                raise IOError("Cannot parse this command")
+        elif qmarks:
+            if tokens[0] == "*IDN?":
+                return IDN + '\r'
+            elif tokens[0] == "PWR?":
+                if self._powerSupply:
+                    return "1" + '\r'
+                else:
+                    return "0" + '\r'
+            elif tokens[0] == "VOLT?":
+                return str(self._gain) + '\r'
+            elif tokens[0] == "PCURR?":
+                return str(self._prot_curr) + '\r'
+            elif tokens[0] == "PTIME?":
+                return str(self._prot_time) + '\r'
+            elif tokens[0] == "PROT?":
+                if self._protection:
+                    return "1" + '\r'
+                else:
+                    return "0" + '\r'
+            else:
+                raise IOError("Cannot parse this command")
+        else:
+            raise IOError("Cannot parse this command")
+
+    @classmethod
+    def scan(cls):
+        """
+        returns the fake device.
+        """
+        found = []
+        found.append({"sn": SN})
 
         return found

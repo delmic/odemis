@@ -27,22 +27,21 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 SN = "0E203C44"  # put the serial number written on the component to test
 
-CLASS = pmtctrl.PMTControl
-KWARGS_SIM = dict(name="test", role="pmt_control", port="/dev/fake")
-# KWARGS = KWARGS_SIM
+# Test using the hardware
+# CLASS = pmtctrl.PMTControl
+# Test using the simulator
+CLASS = pmtctrl.PMTControlSimulator
+
 KWARGS = dict(name="test", role="pmt_control", sn=SN, prot_time=0.0002, prot_curr=2.85)
 
-# @skip("simple")
 class TestStatic(unittest.TestCase):
     """
     Tests which don't need a component ready
     """
-    # @skip("simple")
     def test_scan(self):
         devices = CLASS.scan()
         self.assertGreater(len(devices), 0)
 
-    # @skip("simple")
     def test_creation(self):
         """
         Doesn't even try to do anything, just create and delete components
@@ -52,7 +51,6 @@ class TestStatic(unittest.TestCase):
         self.assertTrue(dev.selfTest(), "self test failed.")
         dev.terminate()
 
-    # @skip("simple")
     def test_wrong_serial(self):
         """
         Check it correctly fails if the device with the given serial number is
