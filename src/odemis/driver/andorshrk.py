@@ -37,16 +37,17 @@ class ShamrockError(Exception):
     def __str__(self):
         return self.args[1]
 
+
 class ShamrockDLL(CDLL):
     """
-    Subclass of CDLL specific to Andor Shamrock library, which handles error 
+    Subclass of CDLL specific to Andor Shamrock library, which handles error
     codes for all the functions automatically.
     It works by setting a default _FuncPtr.errcheck.
     """
 
     def __init__(self):
         if os.name == "nt":
-            #FIXME: might not fly if parent is not a WinDLL => use __new__()
+            # FIXME: might not fly if parent is not a WinDLL => use __new__()
             WinDLL.__init__(self, "libshamrockcif.dll") # TODO check it works
         else:
             # libandor.so must be loaded first. If there is a camera, that has
@@ -64,7 +65,7 @@ class ShamrockDLL(CDLL):
         Follows the ctypes.errcheck callback convention
         """
         # everything returns DRV_SUCCESS on correct usage, _except_ GetTemperature()
-        if not result in ShamrockDLL.ok_code:
+        if result not in ShamrockDLL.ok_code:
             if result in ShamrockDLL.err_code:
                 raise ShamrockError(result, "Call to %s failed with error code %d: %s" %
                                (str(func.__name__), result, ShamrockDLL.err_code[result]))
@@ -290,10 +291,10 @@ class Shamrock(model.Actuator):
         # Can take quite a lot of time due to the homing
         logging.debug("Initialising Andor Shamrock...") # ~20s
         self._dll.ShamrockInitialize(self._path)
-    
+
     def Close(self):
         self._dll.ShamrockClose()
-    
+
     def GetNumberDevices(self):
         """
         Returns (0<=int) the number of available Shamrocks
@@ -301,7 +302,7 @@ class Shamrock(model.Actuator):
         nodevices = c_int()
         self._dll.ShamrockGetNumberDevices(byref(nodevices))
         return nodevices.value
-        
+
     def GetSerialNumber(self):
         """
         Returns the device serial number
@@ -310,21 +311,21 @@ class Shamrock(model.Actuator):
         self._dll.ShamrockGetSerialNumber(self._device, serial)
         return serial.value
 
-    # Probably not needed, as ShamrockGetCalibration returns everything already 
-    # computed  
+    # Probably not needed, as ShamrockGetCalibration returns everything already
+    # computed
     def EepromGetOpticalParams(self):
         """
-        Returns (tuple of 3 floats): Focal Length (m), Angular Deviation (degree) and 
+        Returns (tuple of 3 floats): Focal Length (m), Angular Deviation (degree) and
            Focal Tilt (degree) from the Shamrock device.
         """
         FocalLength = c_float()
         AngularDeviation = c_float()
         FocalTilt = c_float()
-        self._dll.ShamrockEepromGetOpticalParams(self._device, 
+        self._dll.ShamrockEepromGetOpticalParams(self._device,
                  byref(FocalLength), byref(AngularDeviation), byref(FocalTilt))
-        
+
         return FocalLength.value, AngularDeviation.value, FocalTilt.value
-    
+
     def SetGrating(self, grating):
         """
         grating (0<int<=3)
@@ -347,7 +348,7 @@ class Shamrock(model.Actuator):
                     time.sleep(0.1 * retry)
                 else:
                     break
-    
+
     def GetGrating(self):
         """
         return (0<int<=3): current grating
@@ -356,7 +357,7 @@ class Shamrock(model.Actuator):
             grating = c_int()
             self._dll.ShamrockGetGrating(self._device, byref(grating))
         return grating.value
-        
+
     def GetNumberGratings(self):
         """
         return (0<int<=3): number of gratings present
@@ -364,7 +365,7 @@ class Shamrock(model.Actuator):
         noGratings = c_int()
         self._dll.ShamrockGetNumberGratings(self._device, byref(noGratings))
         return noGratings.value
-    
+
     def WavelengthReset(self):
         """
         Resets the wavelength to 0 nm.
@@ -372,7 +373,7 @@ class Shamrock(model.Actuator):
         # Same as ShamrockGotoZeroOrder()
         with self._hw_access:
             self._dll.ShamrockWavelengthReset(self._device)
-        
+
     #ShamrockAtZeroOrder(self._device, int *atZeroOrder);
 
     def GetGratingInfo(self, grating):
@@ -405,7 +406,7 @@ class Shamrock(model.Actuator):
         wavelength (0<=float): wavelength in m
         """
         assert 0 <= wavelength <= 50e-6
-        
+
         # Note: When connected via the I²C bus of the camera, it is not
         # possible to change the wavelength (or the grating) while the CCD
         # is acquiring. So this will fail with an exception, and that's
@@ -472,12 +473,12 @@ class Shamrock(model.Actuator):
 
     def GetCalibration(self, npixels):
         """
-        npixels (0<int): number of pixels on the sensor. It's actually the 
-        length of the list that is being returned.
+        npixels (0<int): number of pixels on the sensor. It's actually the
+           length of the list that is being returned.
         return (list of floats of length npixels): wavelength in m
         """
         assert(0 < npixels)
-        # TODO: this is pretty slow, and could be optimised either by using a 
+        # TODO: this is pretty slow, and could be optimised either by using a
         # numpy array or returning directly the C array. We could also just
         # allocate one array at the init, and reuse it.
         CalibrationValues = (c_float * npixels)()
@@ -565,7 +566,6 @@ class Shamrock(model.Actuator):
 
         return gchoices
 
-
     # high-level methods (interface)
     def _updatePosition(self):
         """
@@ -583,15 +583,15 @@ class Shamrock(model.Actuator):
 
     def getPixelToWavelength(self, npixels=None):
         """
-        npixels (None or int): number of pixels on the CCD (vertically)
+        npixels (None or int): number of pixels on the CCD (horizontally)
         return (list of floats): pixel number -> wavelength in m
         """
         # If wavelength is 0, report empty list to indicate it makes no sense
         if self.position.value["wavelength"] == 0:
             return []
 
+        ccd = self._camera
         if npixels is None:
-            ccd = self._camera
             npixels = ccd.resolution.value[0]
 
         self.SetNumberPixels(npixels)
@@ -599,7 +599,7 @@ class Shamrock(model.Actuator):
         # TODO: can GetCalibration() return several values identical? eg, 0's if
         # cw is near 0 nm? If so, something should be done, as GUI hates that...
         return self.GetCalibration(npixels)
-        
+
     @isasync
     def moveRel(self, shift):
         """
@@ -809,7 +809,7 @@ class FakeShamrockDLL(object):
         self._ccd = None
         if parent and hasattr(parent, "_detector"):
             self._ccd = parent._detector
-    
+
     def _check_hw_access(self):
         """
         Simulate hw connection failure if the CCD is acquiring, like the
@@ -820,17 +820,17 @@ class FakeShamrockDLL(object):
 
     def ShamrockInitialize(self, path):
         pass
-    
+
     def ShamrockClose(self):
         self._cw = None # should cause failure if calling anything else
-        
+
     def ShamrockGetNumberDevices(self, p_nodevices):
         nodevices = _deref(p_nodevices, c_int)
         nodevices.value = 1
-    
+
     def ShamrockGetSerialNumber(self, device, serial):
         serial.value = "SR303fake"
-        
+
 #    def ShamrockEepromGetOpticalParams(self, device,
 #                 byref(FocalLength), byref(AngularDeviation), byref(FocalTilt)):
 #        pass
@@ -855,34 +855,34 @@ class FakeShamrockDLL(object):
         time.sleep(abs(self._cw) / 1000)
         self._cw = 0
 
-    def ShamrockGetGratingInfo(self, device, grating, 
+    def ShamrockGetGratingInfo(self, device, grating,
                                p_lines, s_blaze, p_home, p_offset):
         lines = _deref(p_lines, c_float)
         home = _deref(p_home, c_int)
         offset = _deref(p_offset, c_int)
         info = self._gratings[_val(grating) - 1][0:4]
         lines.value, s_blaze.value, home.value, offset.value = info
-    
+
     def ShamrockSetWavelength(self, device, wavelength):
         self._check_hw_access()
         # TODO: raise if outside of the grating range
         new_wl = _val(wavelength)
         time.sleep(abs(self._cw - new_wl) / 1000)
         self._cw = new_wl
-    
+
     def ShamrockGetWavelength(self, device, p_wavelength):
         self._check_hw_access()
         wavelength = _deref(p_wavelength, c_float)
         wavelength.value = self._cw
-    
+
     def ShamrockGetWavelengthLimits(self, device, grating, p_min, p_max):
         minwl, maxwl = _deref(p_min, c_float), _deref(p_max, c_float)
         minwl.value, maxwl.value = self._gratings[_val(grating) - 1][4:6]
-    
+
     def ShamrockWavelengthIsPresent(self, device, p_present):
         present = _deref(p_present, c_int)
         present.value = 1 # yes!
-    
+
     def ShamrockGetCalibration(self, device, calibval, npixels):
         center = (self._np - 1) / 2 # pixel containing center wl
         px_wl = self._pw / 50 # in nm
@@ -890,10 +890,10 @@ class FakeShamrockDLL(object):
         for i in range(npixels):
             # return stupid values (that look slightly correct)
             calibval[i] = max(minwl, self._cw + (i - center) * px_wl)
-    
+
     def ShamrockSetPixelWidth(self, device, width):
         self._pw = _val(width)
-        
+
     def ShamrockSetNumberPixels(self, device, npixels):
         self._np = _val(npixels)
 
@@ -1049,7 +1049,7 @@ class AndorSpec(model.Detector):
 
     def _onPositionUpdate(self, pos):
         """
-        Called when the wavelength position or grating (ie, groove density) 
+        Called when the wavelength position or grating (ie, groove density)
           of the spectrograph is changed.
         """
         self._updateWavelengthList()
