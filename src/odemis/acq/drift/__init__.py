@@ -124,6 +124,11 @@ class AnchoredEstimator(object):
         data = self._semd.data.get(asap=False)
         if data.shape[::-1] != self._res:
             logging.warning("Shape of data is %s instead of %s", data.shape[::-1], self._res)
+
+        # TODO: allow to record just every Nth image, and separately record the
+        # drift after every measurement
+        # In the mean time, we only save the 1st, 2nd and last image
+        self.raw = self.raw[0:2]
         self.raw.append(data)
 
         # Restore SEM settings
