@@ -232,7 +232,7 @@ class AndorCam3(model.DigitalCamera):
                     raise HwError("Failed to find Andor camera %d, check that it "
                                   "is turned on and connected to the computer." %
                                   device)
-                elif exp.errno == 38: # DEVICEINUSE
+                elif exp.errno in (10, 38): # CONNECTION, DEVICEINUSE
                     raise HwError("Failed to initialise Andor camera %d, try to "
                                   "turning it off, waiting for 10 s and turning "
                                   "in on again." % device)
