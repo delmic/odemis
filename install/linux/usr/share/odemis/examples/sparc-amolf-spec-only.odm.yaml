@@ -26,10 +26,10 @@ SPARC-AMOLF: {
     role: e-beam,
     init: {
         channels: [0, 1],
-        limits: [[2.7, -2.7], [-3.7, 3.7]],  # V
-        park: [4, -4],  # V (higher voltage causes strong beam shift)
+        limits: [[1.9, -1.9], [-2.6, 2.6]],  # V
+        park: [3.5, -3.5],  # V (higher voltage causes strong beam shift)
         settle_time: 150.e-6, # s
-        hfw_nomag: 0.1067, # m
+        hfw_nomag: 0.06782, # m
     },
     properties: {
         scale: [8, 8], # (ratio) : start with a pretty fast scan
