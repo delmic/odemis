@@ -24,6 +24,7 @@ from __future__ import division
 import glob
 import logging
 from odemis import model
+from odemis.model import ComponentBase, DataFlowBase
 from odemis.model import HwError
 import os
 import serial
@@ -31,10 +32,131 @@ import sys
 import threading
 import time
 
+
+class PMT(model.Detector):
+    '''
+    A generic Detector which takes 2 children to create a PMT detector. It's
+    a wrapper to a Detector (PMT) and a PMT Control Unit to allow the
+    second one to control and ensure the safe operation of the first one and act 
+    with respect to its DataFlow.
+    '''
+    def __init__(self, name, role, children, **kwargs):
+        '''
+        children (dict string->model.HwComponent): the children
+            There must be exactly two children "pmt-control" and "detector".
+        Raise an ValueError exception if the children are not compatible
+        '''
+        # we will fill the set of children with Components later in ._children
+        model.Detector.__init__(self, name, role, **kwargs)
+
+        # Check the children
+        pmt = children["detector"]
+        if not isinstance(pmt, ComponentBase):
+            raise ValueError("Child detector is not a component.")
+        if not hasattr(pmt, "data") or not isinstance(pmt.data, DataFlowBase):
+            raise ValueError("Child detector is not a Detector component.")
+        self._pmt = pmt
+        self.children.value.add(pmt)
+
+        ctrl = children["pmt-control"]
+        if not isinstance(ctrl, ComponentBase):
+            raise ValueError("Child pmt-control is not a component.")
+        self._control = ctrl
+        self.children.value.add(ctrl)
+
+        self.data = PMTDataFlow(self, self._pmt)
+
+        # Duplicate control unit VAs
+        self._gain = ctrl.gain.range[0]
+        self.gain = model.FloatContinuous(self._gain, ctrl.gain.range, unit="V",
+                                          setter=self._setGain,
+                                          getter=self._getGain)
+        self._last_gain = self._gain
+        self.gain.value = self._gain  # Just start with no gain
+        self.powerSupply = model.BooleanVA(False, setter=self._setPowerSupply,
+                                           getter=self._getPowerSupply)
+        # Turn on the controller
+        self.powerSupply.value = True
+        self.protection = model.BooleanVA(False, setter=self._setProtection,
+                                          getter=self._getProtection)
+        self.protection.value = True
+
+    def terminate(self):
+        # Turn off the controller
+        self.powerSupply.value = False
+        self._pmt.terminate()
+        self._control.terminate()
+
+    def _setGain(self, value):
+        self._control.gain.value = value
+        # Reset protection if gain is decreased while dataflow is active
+        if value < self._last_gain and self.data.active:
+            self.protection.value = False
+
+        self._last_gain = value
+        return value
+
+    def _getGain(self):
+        value = self._control.gain.value
+
+        return value
+
+    def _setPowerSupply(self, value):
+        self._control.powerSupply.value = value
+
+        return value
+
+    def _getPowerSupply(self):
+        value = self._control.powerSupply.value
+
+        return value
+
+    def _setProtection(self, value):
+        self._control.protection.value = value
+
+        return value
+
+    def _getProtection(self):
+        value = self._control.protection.value
+
+        return value
+
+class PMTDataFlow(model.DataFlow):
+    def __init__(self, detector, pmt):
+        """
+        detector (semcomedi.Detector): the detector that the dataflow corresponds to
+        """
+        model.DataFlow.__init__(self)
+        self.component = detector
+        self._pmt = pmt
+        self.active = False
+
+    def start_generate(self):
+        # Reset protection first
+        self.component.protection.value = False
+
+        self._pmt.data.subscribe(self._newFrame)
+        self.active = True
+
+    def stop_generate(self):
+        self._pmt.data.unsubscribe(self._newFrame)
+
+        # Set protection after stopping
+        self.component.protection.value = True
+        self.active = False
+
+    def _newFrame(self, df, data):
+        """
+        Get the new frame from the detector
+        """
+        if self.component.protection.value:
+            logging.warning("PMT protection was triggered during acquisition.")
+        model.DataFlow.notify(self, data)
+
+
 # Min and Max gain values in V
 MAX_GAIN = 6
 MIN_GAIN = 0
-
 
 class PMTControl(model.HwComponent):
     '''
@@ -66,6 +188,7 @@ class PMTControl(model.HwComponent):
 
         try:
             # Get identification of the PMT control device
+            # TODO Use it to check that we connect to the right device
             self._idn = self._sendCommand("*IDN?\n")
             # Set protection current and time
             if self._prot_curr is not None:
@@ -77,13 +200,17 @@ class PMTControl(model.HwComponent):
 
         # gain, powerSupply and protection VAs
         gain_rng = [MIN_GAIN, MAX_GAIN]
-        self._gain = 0
-        self.gain = model.FloatContinuous(self._gain, gain_rng, unit="V", setter=self._setGain)
+        self._gain = MIN_GAIN
+        self.gain = model.FloatContinuous(self._gain, gain_rng, unit="V",
+                                          setter=self._setGain,
+                                          getter=self._getGain)
         # To initialize the voltage in the PMT control unit
         self.gain.value = self._gain  # Just start with no gain
-        self.powerSupply = model.BooleanVA(False, setter=self._setPowerSupply)
+        self.powerSupply = model.BooleanVA(False, setter=self._setPowerSupply,
+                                           getter=self._getPowerSupply)
         self.powerSupply.value = False
-        self.protection = model.BooleanVA(False, setter=self._setProtection, getter=self._getProtection)
+        self.protection = model.BooleanVA(False, setter=self._setProtection,
+                                          getter=self._getProtection)
         self.protection.value = False
 
     def terminate(self):
@@ -95,6 +222,15 @@ class PMTControl(model.HwComponent):
     def _setGain(self, value):
         try:
             self._sendCommand("VOLT " + str(value) + "\n")
+        except IOError as e:
+            logging.exception(str(e))
+
+        return value
+
+    def _getGain(self):
+        try:
+            ans = self._sendCommand("VOLT?\n")
+            value = float(ans)
         except IOError as e:
             logging.exception(str(e))
 
@@ -276,6 +412,7 @@ class PMTControl(model.HwComponent):
 
         return found
     
+
 #Ranges similar to real PMT Control firmware
 MAX_VOLT = 6
 MIN_VOLT = 0
