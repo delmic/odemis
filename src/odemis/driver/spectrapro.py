@@ -90,11 +90,30 @@ def hextof(s):
 # instantaneous). The documentation gives all the commands in uppercase, but
 # from experiments, only commands in lowercase work.
 #
+# Note that acquiring data directly gives you _uncalibrated_ data.
+# The calibration is typically done in Princeton Instruments's Winspec (old) or
+# LightField (new). The calibration of the centre wavelength _could_ be saved
+# in the spectrograph flash, but it's not currently what is done. In any case,
+# the CCD pixel -> wavelength calibration data must be exported from the
+# calibrating software. In the case of Winspec, the data is sorted in the
+# Windows registry, and currently it must be manually copy-pasted.
+#
 class SPError(IOError):
     """Error related to the hardware behaviour"""
     pass
 
 # TODO: all these values seem available from MONO-EESTATUS
+# Or maybe from:
+#  ?EECCD-CALIBRATED
+#  ?EECCD-OFFSETS
+#  ?EECCD-GADJUSTS
+#  ?EECCD-FOCALLENS
+#  ?EECCD-HALFANGLES
+#  ?EECCD-DETANGLES
+#  ?EELEFT-EDGES
+#  ?EECENTER-PIXELS
+#  ?EERIGHT-EDGE
+
 # From the specifications
 # string -> value : model name -> length (m)/angle (°)
 FOCAL_LENGTH_OFFICIAL = { # m
@@ -1015,16 +1034,16 @@ class SPSimulator(object):
         elif com == "?nm":
             out = "%.2f nm" % self._wavelength
         elif com == "model":
-            out = "SP-FAKE"
+            out = "SP-2-300i"
         elif com == "serial":
             out = "12345"
         elif com == "no-echo":
             out = "" # echo is always disabled anyway
         elif com == "?gratings":
-            out = (" 1 150 g/mm BLZ=  500NM \r\n" +
-                   ">2 600 g/mm BLZ=  1.6UM \r\n" +
-                   " 3 1200 g/mm BLZ= 700NM \r\n" +
-                   " 4 Not Installed    \r\n")
+            out = (" 1  150 g/mm BLZ=  500NM \r\n"
+                   "\x1a2  600 g/mm BLZ=  1.6UM \r\n"
+                   " 3 1200 g/mm BLZ= 700NM \r\n"
+                   " 4  Not Installed    \r\n")
         elif com.endswith("goto"):
             m = re.match("(\d+.\d+) goto", com)
             if m:
@@ -1044,6 +1063,22 @@ class SPSimulator(object):
                 self._grating = int(m.group(1))
                 out = ""
                 time.sleep(2) # simulate long move
+        elif com.endswith("mono-eestatus"):
+            out = ("\r\nSP-2-300i \r\nserial number 12345 \r\n"
+                   "turret  1 \r\ngrating 1 \r\ng/t     3 \r\n\r\n"
+                   " 1  150 g/mm BLZ=  500NM \r\n"
+                   "\x1a2  600 g/mm BLZ=  1.6UM \r\n"
+                   " 3 1200 g/mm BLZ=  700NM \r\n"
+                   " 4  Not Installed     \r\n"
+                   "\r\n           0       1       2       3       4       5       6       7       8\r\n"
+                   "offset       27 1536018 3072000       0 1536000 3072000       0 1536000 3072000\r\nadjust   979505  979820  980000  980000  980000  980000  980000  980000  980000\r\n"
+                   "delay 0 \r\nwavelength      0.000\r\nrate          100.000\r\ndouble 0 \r\nbacklash 25600 \r\noptions 0110310 \r\n"
+                   "focal length 300 \r\nhalf angle 15.20 \r\ndetector angle 1.38 \r\n"
+                   "date code 06/03/2008 \r\nboard serial number 085138715 \r\ngear 581632 25425 \r\n90 deg 1152000 \r\nmath sine\r\ngoto at 17000 pps \r\n25600 steps/rev\r\n"
+                   "                 on #2   on #3  off #1  off #2  off #3  off #4   on #1   mono\r\nchan                 8      10       2       2       2       2      12      14\r\nstop             10485   10485   10485   10485   10485   10485    5242     100\r\naccel                8       8       8       8       8       8       8       8\r\nlraf                 8       8       8       8       8       8       8       3\r\nhraf                 8       8       8       8       8       8       8      70\r\nmper                32      32      32      32      32      32      32      32\r\n                  on #2    on #3   off #1   off #2   off #3   off #4    on #1\r\nmotor app            22        0        0        0        0        0       51\r\nmotor min pos         0        0        0        0        0        0        1\r\nmotor max pos         1        0        0        0        0        0        6\r\nmotor speed         200      200      200      200      200      200      800\r\nmotor offset          0        0        0        0        0        0        0\r\nmotor s/rev         400      400      400      400      400      400     2800\r\nmotor positions \r\n        0             0        0        0        0        0        0        0\r\n        1           -70        0        0        0        0        0      467\r\n        2             0        0        0        0        0        0      933\r\n        3             0        0        0        0        0        0     1400\r\n        4             0        0        0        0        0        0     1867\r\n        5             0        0        0        0        0        0     2333\r\n        6             0        0        0        0        0        0        0\r\n        7             0        0        0        0        0        0        0\r\n        8             0        0        0        0        0        0        0\r\n        9             0        0        0        0        0        0        0\r\n\r\n           0           1           2           3           4           5           6           7           8\r\nleft edge \r\n       1.000       1.000       1.000       1.000       1.000       1.000       1.000       1.000       1.000\r\ncenter pixel \r\n       0.000       0.000       0.000       0.000       0.000       0.000       0.000       0.000       0.000\r\nright edge \r\n       1.000       1.000       1.000       1.000       1.000       1.000       1.000       1.000       1.000\r\nomega        0       0       0       0\r\nphi          0       0       0       0\r\namp          0       0       0       0\r\n"
+                   )
+        else:
+            logging.error("SIM: Unknown command %s", com)
 
         # add the response end
         if out is None:
