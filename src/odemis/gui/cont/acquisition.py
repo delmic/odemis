@@ -870,23 +870,22 @@ class FineAlignController(object):
             self._main_frame.lbl_fine_align.Label = "Successful"
             self._main_frame.menu_item_reset_finealign.Enable(True)
             # Temporary info until the GUI can actually rotate the images
-            if (model.MD_ROTATION_COR in opt_md) and (model.MD_SHEAR_COR, model.MD_PIXEL_SIZE_COR in sem_md):
-                rot = math.degrees(opt_md[model.MD_ROTATION_COR])
-                shear = sem_md[model.MD_SHEAR_COR]
-                scaling_xy = sem_md[model.MD_PIXEL_SIZE_COR]
-                # the worse is the rotation, the longer it's displayed
-                timeout = max(2, min(abs(rot), 10))
-                Message.show_message(
-                    self._main_frame,
-                    u"Rotation applied: %s\nShear applied: %s\nX/Y Scaling applied: %s"
-                    % (units.readable_str(rot, unit="°", sig=3),
-                       units.readable_str(shear, sig=3),
-                       units.readable_str(scaling_xy, sig=3)),
-                    timeout=timeout
-                )
-                logging.warning("Fine alignment computed rotation needed of %f°, "
-                                "shear needed of %s, and X/Y scaling needed of %s.",
-                                rot, shear, scaling_xy)
+            rot = math.degrees(opt_md.get(model.MD_ROTATION_COR, 0))
+            shear = sem_md.get(model.MD_SHEAR_COR, 0)
+            scaling_xy = sem_md.get(model.MD_PIXEL_SIZE_COR, (1, 1))
+            # the worse is the rotation, the longer it's displayed
+            timeout = max(2, min(abs(rot), 10))
+            Message.show_message(
+                self._main_frame,
+                u"Rotation applied: %s\nShear applied: %s\nX/Y Scaling applied: %s"
+                % (units.readable_str(rot, unit="°", sig=3),
+                   units.readable_str(shear, sig=3),
+                   units.readable_str(scaling_xy, sig=3)),
+                timeout=timeout
+            )
+            logging.warning("Fine alignment computed rotation needed of %f°, "
+                            "shear needed of %s, and X/Y scaling needed of %s.",
+                            rot, shear, scaling_xy)
 
         # As the CCD image might have different pixel size, force to fit
         self._main_frame.vp_align_ccd.canvas.fit_view_to_next_image = True
