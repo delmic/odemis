@@ -379,7 +379,10 @@ def _read_image_info(group):
         if rot[0] != 0 or rot[1] != 0:
             logging.info("Metadata contains rotation vector %s, which cannot be"
                          " fully reproduced in Odemis.", rot) 
+    except Exception:
+        pass
 
+    try:
         she = group["Shear"]
         md[model.MD_SHEAR] = float(she[0])
         if she[1] != 0:
