@@ -13,7 +13,7 @@ import sys
 
 
 # To be updated to the current version
-VERSION = "2.1.1"
+VERSION = "2.1.2"
 # We cannot use the git version because it's not (always) available when building
 # the debian package
 

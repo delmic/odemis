@@ -1,3 +1,19 @@
+odemis (2.1.2-1ubuntu1) precise; urgency=low
+
+  * New minor version: 2.1.2
+  * New feature:
+    - Allow for calibration data of PI Spec10 (SPARC)
+    - Improved display of the mean intensity value in mirror alignment (SPARC)
+    - Skew correction is also applied in the SECOM
+    - Allow to disable the shutter on the PI cameras (SPARC)
+  * Bug fixes:
+    - Shear metadata was not loaded if no rotation metadata was present
+    - In some cases two optical stream could play simultaneously (SECOM)
+    - Handle better hardware problems when initialising the Zyla USB
+    - Don't save all the anchor regions, because that could take too much memory (SPARC)
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Tue, 24 Mar 2015 16:06:01 +0100
+
 odemis (2.1.1-1ubuntu1) precise; urgency=low
 
   * New minor version: 2.1.1
