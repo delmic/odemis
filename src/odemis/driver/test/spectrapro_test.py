@@ -20,12 +20,13 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from concurrent import futures
-from odemis.driver import spectrapro
-from unittest.case import skip, skipIf
 import logging
+from odemis.driver import spectrapro, andorcam2
 import os
 import time
 import unittest
+from unittest.case import skip, skipIf
+
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -34,10 +35,31 @@ if os.name == "nt":
 else:
     PORT = "/dev/ttySP" #"/dev/ttyUSB0"
 
-CLASS = spectrapro.FakeSpectraPro # use FakeSpectraPro if no hardware present
-KWARGS = {"name": "test", "role": "spectrograph", "port": PORT}
+CCDCLASS = andorcam2.FakeAndorCam2 # can also use  pvcam.PVCam if real hardware is available
+CCDKWARGS = {"name": "spccd", "role": "sp-ccd", "device": 0,
+             "image": "sparc-spec-sim.h5"}
+ccd = CCDCLASS(**CCDKWARGS)
 
-#@unittest.skip("faster")
+CLASS = spectrapro.FakeSpectraPro # use FakeSpectraPro if no hardware present
+KWARGS = {"name": "test", "role": "spectrograph", "port": PORT,
+          "calib":
+            [ # gratings for the visible light (with CCD pixels of 20 µm)
+                [500, 1200, "56,0e,2d,b2,9d,57,40,c0", "ee,32,9b,7e,8b,79,16,bf",
+                 "33,33,33,33,33,c3,72,40", "cd,cc,cc,cc,cc,cc,3d,40", "29,5c,8f,c2,f5,28,06,c0"],
+                [500, 150, "18,95,d4,09,68,62,43,c0", "hex:00,a1,23,29,51,45,4d,3f",
+                 "66,66,66,66,66,96,72,40", "9a,99,99,99,99,79,40,40", "29,5c,8f,c2,f5,28,06,c0"],
+                [800, 150, "59,86,38,d6,c5,2d,3c,c0", "2f,34,74,3f,e9,3c,51,3f",
+                 "66,66,66,66,66,b6,72,40", "00,00,00,00,00,80,3e,40", "29,5c,8f,c2,f5,28,06,c0"],
+                # gratings for the IR (with CCD pixels of 25 µm)
+                [1600, 600, "96,b2,0c,71,ac,8b,14,40", "37,48,d2,7f,20,8a,33,3f",
+                 "33,33,33,33,33,a3,72,40", "66,66,66,66,66,66,3e,40", "29,5c,8f,c2,f5,28,06,c0"],
+                [2000, 150, "6e,34,80,b7,40,82,2e,40", "c1,f9,2d,6a,92,80,1a,3f",
+                 "9a,99,99,99,99,89,72,40", "33,33,33,33,33,13,40,40", "b8,1e,85,eb,51,b8,f6,bf"],
+            ],
+          "children": {"ccd": ccd}
+          }
+
+# @unittest.skip("faster")
 class TestStatic(unittest.TestCase):
     """
     Tests which don't need a component ready
@@ -49,7 +71,7 @@ class TestStatic(unittest.TestCase):
 
         for name, kwargs in devices:
             print "opening ", name
-            sem = CLASS(name, "spec", **kwargs)
+            sem = CLASS(name, "spec", children={"ccd": ccd}, **kwargs)
             self.assertTrue(sem.selfTest(), "self test failed.")
 
     def test_creation(self):

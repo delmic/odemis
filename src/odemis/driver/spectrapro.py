@@ -21,9 +21,11 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
+import collections
 import glob
 import logging
 import math
+import numbers
 from odemis import model
 import odemis
 from odemis.model import isasync, CancellableThreadPoolExecutor, HwError
@@ -31,8 +33,30 @@ from odemis.util import driver
 import os
 import re
 import serial
+import struct
 import threading
 import time
+
+
+def hextof(s):
+    """
+    Helper function to convert float coded in hexadecimal as in the Windows
+    registry into a standard float number.
+    s (str): comma separated values of 8 x 8 bit hexadecimals.
+      ex: 29,5c,8f,c2,f5,28,06,c0
+    return (float): value
+    raise ValueError: if not possible to convert
+    """
+    if len(s) != 23:
+        raise ValueError("Cannot convert %s to a float" % (s,))
+
+    d = b""
+    try:
+        for c in s.split(","):
+            d += chr(int(c, 16))
+        return struct.unpack("<d", d)[0]
+    except ValueError, struct.error:
+        raise ValueError("Cannot convert %s to a float" % (s,))
 
 
 # This module drives the Acton SpectraPro spectrograph devices. It is tested with
@@ -66,9 +90,29 @@ import time
 # instantaneous). The documentation gives all the commands in uppercase, but
 # from experiments, only commands in lowercase work.
 #
+# Note that acquiring data directly gives you _uncalibrated_ data.
+# The calibration is typically done in Princeton Instruments's Winspec (old) or
+# LightField (new). The calibration of the centre wavelength _could_ be saved
+# in the spectrograph flash, but it's not currently what is done. In any case,
+# the CCD pixel -> wavelength calibration data must be exported from the
+# calibrating software. In the case of Winspec, the data is sorted in the
+# Windows registry, and currently it must be manually copy-pasted.
+#
 class SPError(IOError):
     """Error related to the hardware behaviour"""
     pass
+
+# TODO: all these values seem available from MONO-EESTATUS
+# Or maybe from:
+#  ?EECCD-CALIBRATED
+#  ?EECCD-OFFSETS
+#  ?EECCD-GADJUSTS
+#  ?EECCD-FOCALLENS
+#  ?EECCD-HALFANGLES
+#  ?EECCD-DETANGLES
+#  ?EELEFT-EDGES
+#  ?EECENTER-PIXELS
+#  ?EERIGHT-EDGE
 
 # From the specifications
 # string -> value : model name -> length (m)/angle (°)
@@ -80,11 +124,11 @@ FOCAL_LENGTH_OFFICIAL = { # m
                          "SP-FAKE": 300e-3,
                          }
 INCLUSION_ANGLE_OFFICIAL = { # in degrees
-                         "SP-2-150i": 24.66,
-                         "SP-2-300i": 15.15,
-                         "SP-2-500i": 8.59,
-                         "SP-2-750i": 6.55,
-                         "SP-FAKE": 15.15,
+                         "SP-2-150i": 24.66 * 2,
+                         "SP-2-300i": 15.15 * 2,
+                         "SP-2-500i": 8.59 * 2,
+                         "SP-2-750i": 6.55 * 2,
+                         "SP-FAKE": 15.15 * 2,
                          }
 # maximum number of gratings per turret
 MAX_GRATINGS_NUM = { # gratings
@@ -96,12 +140,20 @@ MAX_GRATINGS_NUM = { # gratings
                      }
 
 class SpectraPro(model.Actuator):
-    def __init__(self, name, role, port, turret=None, _noinit=False, **kwargs):
+    def __init__(self, name, role, port, turret=None, calib=None,
+                 _noinit=False, children=None, **kwargs):
         """
         port (string): name of the serial port to connect to.
         turret (None or 1<=int<=3): turret number set-up. If None, consider that
           the current turret known by the device is correct.
+        calib (None or list of (int, int and 5 x (float or str))):
+          calibration data, as saved by Winspec. Data can be either in float
+          or as an hexadecimal value "hex:9a,99,99,99,99,79,40,40"
+           blaze in nm, groove gl/mm, center adjust, slope adjust,
+           focal length, inclusion angle, detector angle
         inverted (None): it is not allowed to invert the axes
+        children (dict str -> Component): "ccd" should be the CCD used to acquire
+         the spectrum.
         _noinit (boolean): for internal use only, don't try to initialise the device
         """
         if kwargs.get("inverted", None):
@@ -126,6 +178,11 @@ class SpectraPro(model.Actuator):
 
         self._initDevice()
         self._try_recover = True
+
+        try:
+            self._ccd = children["ccd"]
+        except (TypeError, KeyError):
+            raise ValueError("Spectrograph needs a child 'ccd'")
 
         # according to the model determine how many gratings per turret
         model_name = self.GetModel()
@@ -165,6 +222,58 @@ class SpectraPro(model.Actuator):
         # provides a ._axes
         model.Actuator.__init__(self, name, role, axes=axes, **kwargs)
 
+        # First step of parsing calib parmeter: convert to (int, int) -> ...
+        calib = calib or ()
+        if not isinstance(calib, collections.Iterable):
+            raise ValueError("calib parameter must be in the format "
+                             "[blz, gl, ca, sa, fl, ia, da], "
+                             "but got %s" % (calib))
+        dcalib = {}
+        for c in calib:
+            if not isinstance(c, collections.Iterable) or len(c) != 7:
+                raise ValueError("calib parameter must be in the format "
+                                 "[blz, gl, ca, sa, fl, ia, da], "
+                                 "but got %s" % (c,))
+            gt = (c[0], c[1])
+            if gt in dcalib:
+                raise ValueError("calib parameter contains twice calibration for "
+                                 "grating (%d nm, %d gl/mm)" % gt)
+            dcalib[gt] = c[2:]
+
+        # store calibration for pixel -> wavelength conversion and wavelength offset
+        # int (grating number 1 -> 9) -> center adjust, slope adjust,
+        #     focal length, inclusion angle/2, detector angle
+        self._calib = {}
+        # TODO: read the info from MONO-EESTATUS (but it's so
+        # huge that it's not fun to parse). There is also detector angle.
+        dfl = FOCAL_LENGTH_OFFICIAL[model_name] # m
+        dia = math.radians(INCLUSION_ANGLE_OFFICIAL[model_name]) # rad
+        for i in gchoices:
+            # put default values
+            self._calib[i] = (0, 0, dfl, dia, 0)
+            try:
+                blz = self._getBlaze(i) # m
+                gl = self._getGrooveDensity(i) # gl/m
+            except ValueError:
+                logging.warning("Failed to parse info of grating %d" % i, exc_info=True)
+                continue
+
+            # parse calib info
+            gt = (int(blz * 1e9), int(gl * 1e-3))
+            if gt in dcalib:
+                calgt = dcalib[gt]
+                ca = self._readCalibVal(calgt[0]) # ratio
+                sa = self._readCalibVal(calgt[1]) # ratio
+                fl = self._readCalibVal(calgt[2]) * 1e-3 # mm -> m
+                ia = math.radians(self._readCalibVal(calgt[3])) # ° -> rad
+                da = math.radians(self._readCalibVal(calgt[4])) # ° -> rad
+                self._calib[i] = ca, sa, fl, ia, da
+                logging.info("Calibration data for grating %d (%d nm, %d gl/mm) "
+                             "-> %s" % (i, gt[0], gt[1], self._calib[i]))
+            else:
+                logging.warning("No calibration data for grating %d "
+                                "(%d nm, %d gl/mm)" % (i, gt[0], gt[1]))
+
         # set HW and SW version
         self._swVersion = "%s (serial driver: %s)" % (odemis.__version__, driver.getSerialDriver(port))
         self._hwVersion = "%s (s/n: %s)" % (model_name, (self.GetSerialNumber() or "Unknown"))
@@ -172,18 +281,25 @@ class SpectraPro(model.Actuator):
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1) # one task at a time
 
-        pos = {"wavelength": self.GetWavelength(),
-               "grating": self.GetGrating()}
+        # for storing the latest calibrated wavelength value
+        self._wl = (None, None, None) # grating id, raw center wl, calibrated center wl
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
-        self.position = model.VigilantAttribute(pos, unit="m", readonly=True)
+        self.position = model.VigilantAttribute({}, unit="m", readonly=True)
+        self._updatePosition()
 
-        # store focal length and inclusion angle for the polynomial computation
-        try:
-            self._focal_length = FOCAL_LENGTH_OFFICIAL[model_name]
-            self._inclusion_angle = math.radians(INCLUSION_ANGLE_OFFICIAL[model_name])
-        except KeyError:
-            self._focal_length = None
-            self._inclusion_angle = None
+    def _readCalibVal(self, rawv):
+        """
+        rawv (str or number)
+        return (float)
+        """
+        if isinstance(rawv, basestring):
+            if rawv.startswith("hex:"):
+                rawv = rawv[4:]
+            return hextof(rawv)
+        elif isinstance(rawv, numbers.Real):
+            return rawv
+        else:
+            raise ValueError("Cannot convert %s to a number" % (rawv,))
 
     # Low-level methods: to access the hardware (should be called with the lock acquired)
 
@@ -213,9 +329,9 @@ class SpectraPro(model.Actuator):
         # command has been completed by returning the characters " ok" followed by
         # carriage return and line feed (hex ASCII sequence 20 6F 6B 0D 0A).
         # Examples of error answers:
-        #MODEL\r
+        # MODEL\r
         # \x00X\xf0~\x00X\xf0~MODEL ? \r\n
-        #?\r
+        # ?\r
         # \r\nAddress Error \r\nA=3F4F4445 PC=81444
 
         assert(len(com) > 1 and len(com) <= 100) # commands cannot be long
@@ -387,6 +503,24 @@ class SpectraPro(model.Actuator):
         density = float(m.group(1)) * 1e3 # l/m
         return density
 
+    RE_BLZ = re.compile("BLZ=\s+(?P<blz>[0-9.]+)\s*(?P<unit>[NU]M)")
+    def _getBlaze(self, gid):
+        """
+        Returns the blaze (=optimal center wavelength) of the given grating
+        gid (int): index of the grating
+        returns (float): blaze (in m)
+        raise
+           LookupError if the grating is not installed
+           ValueError: if the groove density cannot be found out
+        """
+        gstring = self.axes["grating"].choices[gid]
+        m = self.RE_BLZ.search(gstring)
+        if not m:
+            raise ValueError("Failed to find blaze in '%s'" % gstring)
+        blaze, unit = float(m.group("blz")), m.group("unit").upper()
+        blaze *= {"UM": 1e-6, "NM": 1e-9}[unit] # m
+        return blaze
+
     def GetGrating(self):
         """
         Retuns the current grating in use
@@ -397,7 +531,7 @@ class SpectraPro(model.Actuator):
 
         res = self._sendQuery("?grating")
         val = int(res)
-        if val < 1 or val > 9:
+        if not 1 <= val <= 9:
             raise SPError("Unexpected grating number '%s'" % res)
         return val
 
@@ -410,11 +544,11 @@ class SpectraPro(model.Actuator):
         Note: the grating is dependent on turret number (and the self.max_gratting)!
         Note: after changing the grating, the wavelength, might have changed
         """
-        #GRATING Places specified grating in position to the [current] wavelength
+        # GRATING Places specified grating in position to the [current] wavelength
         # Note: it always reports ok, and doesn't change the grating if not
         # installed or wrong value
 
-        assert(1 <= g and g <= (3 * self.max_gratings))
+        assert(1 <= g <= (3 * self.max_gratings))
         # TODO check that the grating is configured
 
         self._sendOrder("%d grating" % g, timeout=20)
@@ -452,7 +586,7 @@ class SpectraPro(model.Actuator):
         #  It shouldn't be needed for spectrometer
         # Out of bound values are silently ignored by going to the min or max.
 
-        assert(0 <= wl and wl <= 10e-6)
+        assert(0 <= wl <= 10e-6)
         # TODO: check that the value fit the grating configuration?
         self._sendOrder("%.3f goto" % (wl * 1e9), timeout=20)
 
@@ -478,6 +612,59 @@ class SpectraPro(model.Actuator):
 
     # TODO diverter (mirror) functions: no diverter on SP-2??0i anyway.
 
+    def _getCalibratedWavelength(self):
+        """
+        Read the center wavelength, and adapt it based on the calibration (if
+         it is available for the current grating)
+        return (float): wavelength in m
+        """
+        gid = self.GetGrating()
+        rawwl = self.GetWavelength()
+        # Do we already now the answer?
+        if (gid, rawwl) == self._wl[0:2]:
+            return self._wl[2]
+
+        ca, sa, fl, ia, da = self._calib[gid]
+
+        # It's pretty hard to reverse the formula, so we approximate a8 using
+        # rawwl (instead of wl), which usually doesn't bring error > 0.01 nm
+        gl = self._getGrooveDensity(gid)
+        psz = self._ccd.pixelSize.value[0] # m/px
+        a8 = (rawwl * gl / 2) / math.cos(ia / 2)
+        ga = math.asin(a8) # rad
+        dispersion = math.cos(ia / 2 + ga) / (gl * fl) # m/m
+        pixbw = psz * dispersion
+        wl = (rawwl - ca * pixbw) / (sa + 1)
+        wl = max(0, wl)
+        return wl
+
+    def _setCalibratedWavelength(self, wl):
+        """
+        wl (float): center wavelength in m
+        """
+        gid = self.GetGrating()
+        ca, sa, fl, ia, da = self._calib[gid]
+
+        # This is approximately what Winspec does, but it seems not exactly,
+        # because the values differ ± 0.1nm
+        gl = self._getGrooveDensity(gid)
+        psz = self._ccd.pixelSize.value[0] # m/px
+        a8 = (wl * gl / 2) / math.cos(ia / 2)
+        ga = math.asin(a8) # rad
+        dispersion = math.cos(ia / 2 + ga) / (gl * fl) # m/m
+        pixbw = psz * dispersion
+        offset = ca * pixbw + sa * wl
+        if abs(offset) > 50e-9:
+            # we normally don't expect offset more than 10 nm
+            logging.warning("Center wavelength offset computed of %g nm", offset * 1e9)
+        else:
+            logging.debug("Center wavelength offset computed of %g nm", offset * 1e9)
+        rawwl = max(0, wl + offset)
+        self.SetWavelength(rawwl)
+
+        # store the corresponding official wl value as it's hard to inverse the
+        # conversion (for displaying in .position)
+        self._wl = (gid, self.GetWavelength(), wl)
 
     # high-level methods (interface)
     def _updatePosition(self):
@@ -486,7 +673,7 @@ class SpectraPro(model.Actuator):
         Note: it should not be called while holding _ser_access
         """
         with self._ser_access:
-            pos = {"wavelength": self.GetWavelength(),
+            pos = {"wavelength": self._getCalibratedWavelength(),
                    "grating": self.GetGrating()
                   }
 
@@ -531,19 +718,18 @@ class SpectraPro(model.Actuator):
         else: # nothing to do
             return model.InstantaneousFuture()
 
-
     def _doSetWavelengthRel(self, shift):
         """
         Change the wavelength by a value
         """
         with self._ser_access:
-            pos = self.GetWavelength() + shift
+            pos = self.position.value["wavelength"] + shift
             # it's only now that we can check the absolute position is wrong
             minp, maxp = self.axes["wavelength"].range
             if not minp <= pos <= maxp:
                 raise ValueError("Position %f of axis '%s' not within range %f→%f" %
                                  (pos, "wavelength", minp, maxp))
-            self.SetWavelength(pos)
+            self._setCalibratedWavelength(pos)
         self._updatePosition()
 
     def _doSetWavelengthAbs(self, pos):
@@ -551,7 +737,7 @@ class SpectraPro(model.Actuator):
         Change the wavelength to a value
         """
         with self._ser_access:
-            self.SetWavelength(pos)
+            self._setCalibratedWavelength(pos)
         self._updatePosition()
 
     def _doSetGrating(self, g, wl=None):
@@ -568,7 +754,7 @@ class SpectraPro(model.Actuator):
                 if wl is None:
                     wl = self.position.value["wavelength"]
                 self.SetGrating(g)
-                self.SetWavelength(wl)
+                self._setCalibratedWavelength(wl)
         except Exception:
             logging.exception("Failed to change grating to %d", g)
             raise
@@ -593,68 +779,96 @@ class SpectraPro(model.Actuator):
             self._serial.close()
             self._serial = None
 
-    def getPolyToWavelength(self):
+    def getPixelToWavelength(self):
         """
-        Compute the right polynomial to convert from a position on the sensor to the
-          wavelength detected. It depends on the current grating, center
-          wavelength (and focal length of the spectrometer).
-        Note: It will always return some not-too-stupid values, but the only way
-          to get precise values is to have provided a calibration data file.
-          Without it, it will just base the calculations on the theoretical
-          perfect spectrometer.
-        returns (list of float): polynomial coefficients to apply to get the current
-          wavelength corresponding to a given distance from the center:
-          w = p[0] + p[1] * x + p[2] * x²...
-          where w is the wavelength (in m), x is the position from the center
-          (in m, negative are to the left), and p is the polynomial (in m, m^0, m^-1...).
+        return (list of floats): pixel number -> wavelength in m
         """
-        # FIXME: shall we report the error on the polynomial? At least say if it's
-        # using calibration or not.
-        # TODO: have a calibration procedure, a file format, and load it at init
-        # See fsc2, their calibration is like this for each grating:
-        # INCLUSION_ANGLE_1  =   30.3
-        # FOCAL_LENGTH_1     =   301.2 mm
-        # DETECTOR_ANGLE_1   =   0.324871
-        fl = self._focal_length # m
-        ia = self._inclusion_angle # rad
+        npixels = self._ccd.resolution.value[0]
+        centerpixel = (npixels - 1) / 2
+        psz = (self._ccd.pixelSize.value[0] * self._ccd.binning.value[0]) # m/px
         cw = self.position.value["wavelength"] # m
-        if not fl:
-            # "very very bad" calibration
-            return [cw]
+        gid = self.position.value["grating"]
+        gl = self._getGrooveDensity(gid)
+        ca, sa, fl, ia, da = self._calib[gid]
 
-        # When no calibration available, fallback to theoretical computation
-        # based on http://www.roperscientific.de/gratingcalcmaster.html
-        gl = self._getGrooveDensity(self.position.value["grating"]) # g/m
-        # fL = focal length (mm)
-        # wE = inclusion angle (°) = the angle between the incident and the reflected beam for the center wavelength of the grating
-        # gL = grating lines (l/mm)
-        # cW = center wavelength (nm)
-        #   Grating angle
-        #A8 = (cW/1000*gL/2000)/Math.cos(wE* Math.PI/180);
-        # E8 = Math.asin(A8)*180/Math.PI;
-        try:
-            a8 = (cw * gl/2) / math.cos(ia)
-            ga = math.asin(a8) # radians
-        except (ValueError, ZeroDivisionError):
-            logging.exception("Failed to compute polynomial for wavelength conversion")
-            return [cw]
-        # if (document.forms[0].E8.value == "NaN deg." || E8 > 40){document.forms[0].E8.value = "> 40 deg."; document.forms[0].E8.style.colour="red";
-        if 0.5 > math.degrees(ga) or math.degrees(ga) > 40:
-            logging.warning("Failed to compute polynomial for wavelength "
-                            "conversion, got grating angle = %g°", math.degrees(ga))
-            return [cw]
+        # Formula based on the Winspec documentation:
+        # "Equations used in WinSpec Wavelength Calibration", p. 257 of the manual
+        # ftp://ftp.piacton.com/Public/Manuals/Princeton%20Instruments/WinSpec%202.6%20Spectroscopy%20Software%20User%20Manual.pdf
+        # Converted to code by Benjamin Brenny
+        G = math.asin(cw / (math.cos(ia / 2) * 2 / gl))
 
-        # dispersion: wavelength(m)/distance(m)
-        # F8a = Math.cos(Math.PI/180*(wE*1 + E8))*(1000000)/(gL*fL); // nm/mm
-        # to convert from nm/mm -> m/m : *1e-6
-        dispersion = math.cos(ia + ga) / (gl*fl) # m/m
-        if 0 > dispersion or dispersion > 0.5e-3: # < 500 nm/mm
-            logging.warning("Computed dispersion is not within expected bounds: %f nm/mm",
-                            dispersion * 1e6)
-            return [cw]
+        wllist = []
+        for i in range(npixels):
+            pxd = psz * (i - centerpixel) # distance of pixel to sensor centre
+            E = math.atan((pxd * math.cos(da)) / (fl + pxd * math.sin(da)))
+            wl = (math.sin(G - ia / 2) + math.sin(G + ia / 2 + E)) / gl
+            wllist.append(wl)
 
-        # polynomial is cw + dispersion * x
-        return [cw, dispersion]
+        return wllist
+
+#     def getPolyToWavelength(self):
+#         """
+#         Compute the right polynomial to convert from a position on the sensor to the
+#           wavelength detected. It depends on the current grating, center
+#           wavelength (and focal length of the spectrometer).
+#         Note: It will always return some not-too-stupid values, but the only way
+#           to get precise values is to have provided a calibration data file.
+#           Without it, it will just base the calculations on the theoretical
+#           perfect spectrometer.
+#         returns (list of float): polynomial coefficients to apply to get the current
+#           wavelength corresponding to a given distance from the center:
+#           w = p[0] + p[1] * x + p[2] * x²...
+#           where w is the wavelength (in m), x is the position from the center
+#           (in m, negative are to the left), and p is the polynomial (in m, m^0, m^-1...).
+#         """
+#         # FIXME: shall we report the error on the polynomial? At least say if it's
+#         # using calibration or not.
+#         # TODO: have a calibration procedure, a file format, and load it at init
+#         # See fsc2, their calibration is like this for each grating:
+#         # INCLUSION_ANGLE_1  =   30.3
+#         # FOCAL_LENGTH_1     =   301.2 mm
+#         # DETECTOR_ANGLE_1   =   0.324871
+#         # TODO: use detector angle
+#         fl = self._focal_length # m
+#         ia = self._inclusion_angle # rad
+#         cw = self.position.value["wavelength"] # m
+#         if not fl:
+#             # "very very bad" calibration
+#             return [cw]
+#
+#         # When no calibration available, fallback to theoretical computation
+#         # based on http://www.roperscientific.de/gratingcalcmaster.html
+#         gl = self._getGrooveDensity(self.position.value["grating"]) # g/m
+#         # fL = focal length (mm)
+#         # wE = inclusion angle (°) = the angle between the incident and the reflected beam for the center wavelength of the grating
+#         # gL = grating lines (l/mm)
+#         # cW = center wavelength (nm)
+#         #   Grating angle
+#         # A8 = (cW/1000*gL/2000)/Math.cos(wE* Math.PI/180);
+#         # E8 = Math.asin(A8)*180/Math.PI;
+#         try:
+#             a8 = (cw * gl/2) / math.cos(ia)
+#             ga = math.asin(a8) # radians
+#         except (ValueError, ZeroDivisionError):
+#             logging.exception("Failed to compute polynomial for wavelength conversion")
+#             return [cw]
+#         # if (document.forms[0].E8.value == "NaN deg." || E8 > 40){document.forms[0].E8.value = "> 40 deg."; document.forms[0].E8.style.colour="red";
+#         if 0.5 > math.degrees(ga) or math.degrees(ga) > 40:
+#             logging.warning("Failed to compute polynomial for wavelength "
+#                             "conversion, got grating angle = %g°", math.degrees(ga))
+#             return [cw]
+#
+#         # dispersion: wavelength(m)/distance(m)
+#         # F8a = Math.cos(Math.PI/180*(wE*1 + E8))*(1000000)/(gL*fL); // nm/mm
+#         # to convert from nm/mm -> m/m : *1e-6
+#         dispersion = math.cos(ia + ga) / (gl*fl) # m/m
+#         if 0 > dispersion or dispersion > 0.5e-3: # < 500 nm/mm
+#             logging.warning("Computed dispersion is not within expected bounds: %f nm/mm",
+#                             dispersion * 1e6)
+#             return [cw]
+#
+#         # polynomial is cw + dispersion * x
+#         return [cw, dispersion]
 
     def selfTest(self):
         """
@@ -663,16 +877,16 @@ class SpectraPro(model.Actuator):
         """
         try:
             with self._ser_access:
-                model = self.GetModel()
-                if not model.startswith("SP-"):
+                modl = self.GetModel()
+                if not modl.startswith("SP-"):
                     # accept it anyway
-                    logging.warning("Device reports unexpected model '%s'", model)
+                    logging.warning("Device reports unexpected model '%s'", modl)
 
                 turret = self.GetTurret()
-                if not turret in (1,2,3):
+                if turret not in (1, 2, 3):
                     return False
                 return True
-        except:
+        except Exception:
             logging.exception("Selftest failed")
 
         return False
@@ -688,7 +902,7 @@ class SpectraPro(model.Actuator):
             ports = [port]
         else:
             if os.name == "nt":
-                ports = ["COM" + str(n) for n in range (0,8)]
+                ports = ["COM" + str(n) for n in range(8)]
             else:
                 ports = glob.glob('/dev/ttyS?*') + glob.glob('/dev/ttyUSB?*')
 
@@ -714,7 +928,6 @@ class SpectraPro(model.Actuator):
 
         return found
 
-
     @staticmethod
     def openSerialPort(port):
         """
@@ -725,12 +938,12 @@ class SpectraPro(model.Actuator):
         # according to doc:
         # "port set-up is 9600 baud, 8 data bits, 1 stop bit and no parity"
         ser = serial.Serial(
-            port = port,
-            baudrate = 9600,
-            bytesize = serial.EIGHTBITS,
-            parity = serial.PARITY_NONE,
-            stopbits = serial.STOPBITS_ONE,
-            timeout = 2 #s
+            port=port,
+            baudrate=9600,
+            bytesize=serial.EIGHTBITS,
+            parity=serial.PARITY_NONE,
+            stopbits=serial.STOPBITS_ONE,
+            timeout=2 # s
         )
 
         return ser
@@ -748,7 +961,7 @@ class FakeSpectraPro(SpectraPro):
     # Or just return the fake port only
     @staticmethod
     def scan(port=None):
-        return SpectraPro.scan(port) + [("fakesp", {"port":"fake"})]
+        return SpectraPro.scan(port) + [("fakesp", {"port": "fake"})]
 
     @staticmethod
     def openSerialPort(port):
@@ -760,12 +973,12 @@ class FakeSpectraPro(SpectraPro):
         # according to doc:
         # "port set-up is 9600 baud, 8 data bits, 1 stop bit and no parity"
         ser = SPSimulator(
-            port = port,
-            baudrate = 9600,
-            bytesize = serial.EIGHTBITS,
-            parity = serial.PARITY_NONE,
-            stopbits = serial.STOPBITS_ONE,
-            timeout = 2 #s
+            port=port,
+            baudrate=9600,
+            bytesize=serial.EIGHTBITS,
+            parity=serial.PARITY_NONE,
+            stopbits=serial.STOPBITS_ONE,
+            timeout=2 # s
         )
 
         return ser
@@ -821,16 +1034,16 @@ class SPSimulator(object):
         elif com == "?nm":
             out = "%.2f nm" % self._wavelength
         elif com == "model":
-            out = "SP-FAKE"
+            out = "SP-2-300i"
         elif com == "serial":
             out = "12345"
         elif com == "no-echo":
             out = "" # echo is always disabled anyway
         elif com == "?gratings":
-            out = (" 1 300 g/mm BLZ=  345NM \r\n" +
-                   ">2 600 g/mm BLZ=   89NM \r\n" +
-                   " 3 1200 g/mm BLZ= 700NM \r\n" +
-                   " 4 Not Installed    \r\n")
+            out = (" 1  150 g/mm BLZ=  500NM \r\n"
+                   "\x1a2  600 g/mm BLZ=  1.6UM \r\n"
+                   " 3 1200 g/mm BLZ= 700NM \r\n"
+                   " 4  Not Installed    \r\n")
         elif com.endswith("goto"):
             m = re.match("(\d+.\d+) goto", com)
             if m:
@@ -850,6 +1063,22 @@ class SPSimulator(object):
                 self._grating = int(m.group(1))
                 out = ""
                 time.sleep(2) # simulate long move
+        elif com.endswith("mono-eestatus"):
+            out = ("\r\nSP-2-300i \r\nserial number 12345 \r\n"
+                   "turret  1 \r\ngrating 1 \r\ng/t     3 \r\n\r\n"
+                   " 1  150 g/mm BLZ=  500NM \r\n"
+                   "\x1a2  600 g/mm BLZ=  1.6UM \r\n"
+                   " 3 1200 g/mm BLZ=  700NM \r\n"
+                   " 4  Not Installed     \r\n"
+                   "\r\n           0       1       2       3       4       5       6       7       8\r\n"
+                   "offset       27 1536018 3072000       0 1536000 3072000       0 1536000 3072000\r\nadjust   979505  979820  980000  980000  980000  980000  980000  980000  980000\r\n"
+                   "delay 0 \r\nwavelength      0.000\r\nrate          100.000\r\ndouble 0 \r\nbacklash 25600 \r\noptions 0110310 \r\n"
+                   "focal length 300 \r\nhalf angle 15.20 \r\ndetector angle 1.38 \r\n"
+                   "date code 06/03/2008 \r\nboard serial number 085138715 \r\ngear 581632 25425 \r\n90 deg 1152000 \r\nmath sine\r\ngoto at 17000 pps \r\n25600 steps/rev\r\n"
+                   "                 on #2   on #3  off #1  off #2  off #3  off #4   on #1   mono\r\nchan                 8      10       2       2       2       2      12      14\r\nstop             10485   10485   10485   10485   10485   10485    5242     100\r\naccel                8       8       8       8       8       8       8       8\r\nlraf                 8       8       8       8       8       8       8       3\r\nhraf                 8       8       8       8       8       8       8      70\r\nmper                32      32      32      32      32      32      32      32\r\n                  on #2    on #3   off #1   off #2   off #3   off #4    on #1\r\nmotor app            22        0        0        0        0        0       51\r\nmotor min pos         0        0        0        0        0        0        1\r\nmotor max pos         1        0        0        0        0        0        6\r\nmotor speed         200      200      200      200      200      200      800\r\nmotor offset          0        0        0        0        0        0        0\r\nmotor s/rev         400      400      400      400      400      400     2800\r\nmotor positions \r\n        0             0        0        0        0        0        0        0\r\n        1           -70        0        0        0        0        0      467\r\n        2             0        0        0        0        0        0      933\r\n        3             0        0        0        0        0        0     1400\r\n        4             0        0        0        0        0        0     1867\r\n        5             0        0        0        0        0        0     2333\r\n        6             0        0        0        0        0        0        0\r\n        7             0        0        0        0        0        0        0\r\n        8             0        0        0        0        0        0        0\r\n        9             0        0        0        0        0        0        0\r\n\r\n           0           1           2           3           4           5           6           7           8\r\nleft edge \r\n       1.000       1.000       1.000       1.000       1.000       1.000       1.000       1.000       1.000\r\ncenter pixel \r\n       0.000       0.000       0.000       0.000       0.000       0.000       0.000       0.000       0.000\r\nright edge \r\n       1.000       1.000       1.000       1.000       1.000       1.000       1.000       1.000       1.000\r\nomega        0       0       0       0\r\nphi          0       0       0       0\r\namp          0       0       0       0\r\n"
+                   )
+        else:
+            logging.error("SIM: Unknown command %s", com)
 
         # add the response end
         if out is None:

@@ -92,7 +92,7 @@ class PVCamDLL(CDLL):
 
     def pv_errcheck(self, result, func, args):
         """
-        Analyse the return value of a call and raise an exception in case of 
+        Analyse the return value of a call and raise an exception in case of
         error.
         Follows the ctypes.errcheck callback convention
         """
@@ -147,12 +147,12 @@ class PVCamDLL(CDLL):
         try:
             self.pl_pvcam_uninit()
         except:
-            logging.exception("Failed during PVCam uninitializion")
+            logging.exception("Failed during PVCam uninitialization")
             pass
 
 # all the values that say the acquisition is in progress
-STATUS_IN_PROGRESS = [pv.ACQUISITION_IN_PROGRESS, pv.EXPOSURE_IN_PROGRESS,
-                      pv.READOUT_IN_PROGRESS]
+STATUS_IN_PROGRESS = (pv.ACQUISITION_IN_PROGRESS, pv.EXPOSURE_IN_PROGRESS,
+                      pv.READOUT_IN_PROGRESS)
 
 # The only way I've found to detect the camera is not responding is to check for
 # weird camera temperature. However, it's pretty unreliable as depending on the
@@ -166,17 +166,17 @@ class PVCam(model.DigitalCamera):
     a CCD/CMOS camera.
     This implementation is for the Roper/PI/Photometrics PVCam library... or at
     least for the PI version.
-    
+
     This is tested on Linux with SDK 2.7, using the documentation found here:
     ftp://ftp.piacton.com/Public/Manuals/Princeton%20Instruments/PVCAM%202.7%20Software%20User%20Manual.pdf
 
-    Be aware that the library resets almost all the values to their default 
-    values after initialisation. The library doesn't call the dimensions 
+    Be aware that the library resets almost all the values to their default
+    values after initialisation. The library doesn't call the dimensions
     horizontal/vertical but serial/parallel (because the camera could be rotated).
     But we stick to: horizontal = serial (max = width - 1)
                      vertical = parallel (max = height - 1)
-    
-    Here are a few more non-obvious requirements given by the PI technical 
+
+    Here area few more non-obvious requirements given by the PI technical
     support:
     * PIXIS, must allocate an even number of frame buffers.
     * One must not turn off or disconnect the camera with the camera open.
@@ -187,16 +187,16 @@ class PVCam(model.DigitalCamera):
      sync (strobed mode) is enabled.
     * InGaAs camera cannot do hardware binning
 
-    It offers mostly a couple of VigilantAttributes to modify the settings, and a 
+    It offers mostly a couple of VigilantAttributes to modify the settings, and a
     DataFlow to get one or several images from the camera.
-    
+
     It also provides low-level methods corresponding to the SDK functions.
     """
 
     def __init__(self, name, role, device, **kwargs):
         """
         Initialises the device
-        device (int or string): number of the device to open, as defined in 
+        device (int or string): number of the device to open, as defined in
          pvcam, cf scan(), or the name of the device (as in /dev/).
         Raise an exception if the device cannot be opened.
         """
@@ -506,7 +506,7 @@ class PVCam(model.DigitalCamera):
     def get_param(self, param, value=pv.ATTR_CURRENT):
         """
         Read the current (or other) value of a parameter.
-        Note: for the enumerated parameters, this it the actual value, not the 
+        Note: for the enumerated parameters, this it the actual value, not the
         index.
         param (int): parameter ID (cf pv.PARAM_*)
         value (int from pv.ATTR_*): which value to read (current, default, min, max, increment)
@@ -546,7 +546,7 @@ class PVCam(model.DigitalCamera):
 
     def set_param(self, param, value):
         """
-        Write the current value of a parameter. 
+        Write the current value of a parameter.
         Note: for the enumerated parameter, this is the actual value to set, not
         the index.
         param (int): parameter ID (cf pv.PARAM_*)
@@ -874,7 +874,7 @@ class PVCam(model.DigitalCamera):
         """
         Check the size is correct (it should) and store it ready for SetImage
         size (2-tuple int): Width and height of the image. It will be centred
-         on the captor. It depends on the binning, so the same region has a size 
+         on the captor. It depends on the binning, so the same region has a size
          twice smaller if the binning is 2 instead of 1. It must be a allowed
          resolution.
         """
@@ -902,7 +902,7 @@ class PVCam(model.DigitalCamera):
     def resolutionFitter(self, size_req):
         """
         Finds a resolution allowed by the camera which fits best the requested
-          resolution. 
+          resolution.
         size_req (2-tuple of int): resolution requested
         returns (2-tuple of int): resolution which fits the camera. It is equal
          or bigger than the requested resolution
@@ -1001,12 +1001,12 @@ class PVCam(model.DigitalCamera):
         logging.debug("exposure = %f s, readout = %f s", readout_time, self._exposure_time)
         try:
             if tot_time < self._shutter_period:
-                logging.info("Disabling shutter because it would go at %g Hz", 
+                logging.info("Disabling shutter because it would go at %g Hz",
                              1 / tot_time)
                 self.set_param(pv.PARAM_SHTR_OPEN_MODE, pv.OPEN_PRE_SEQUENCE)
             elif readout_time < (self._exposure_time / 100):
                 logging.info("Disabling shutter because readout is %g times "
-                             "smaller than exposure", 
+                             "smaller than exposure",
                              self._exposure_time / readout_time)
                 self.set_param(pv.PARAM_SHTR_OPEN_MODE, pv.OPEN_PRE_SEQUENCE)
             else:
@@ -1014,7 +1014,7 @@ class PVCam(model.DigitalCamera):
                 logging.info("Shutter activated")
         except PVCamError:
             logging.debug("Failed to change shutter mode")
-            
+
         self._prev_settings = [new_image_settings, self._exposure_time,
                                self._readout_rate, self._gain, self._shutter_period]
 
@@ -1164,7 +1164,7 @@ class PVCam(model.DigitalCamera):
         except CancelledError:
             # received a must-stop event
             pass
-        except:
+        except Exception:
             logging.exception("Unexpected failure during image acquisition")
         else:
             # we know it finished fine, so stop imediately
@@ -1418,7 +1418,7 @@ class PVCamDataFlow(model.DataFlow):
         Synchronize the acquisition on the given event. Every time the event is
           triggered, the DataFlow will start a new acquisition.
         Behaviour is unspecified if the acquisition is already running.
-        event (model.Event or None): event to synchronize with. Use None to 
+        event (model.Event or None): event to synchronize with. Use None to
           disable synchronization.
         The DataFlow can be synchronize only with one Event at a time.
         """

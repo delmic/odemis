@@ -28,6 +28,7 @@ import shlex
 import signal
 import sys
 import time
+from odemis.model._components import ST_UNLOADED
 logging.getLogger().setLevel(logging.DEBUG)
 # The config file might contain additional paths for finding odemis, so we
 # need to parse it and override the path before loading the rest
@@ -121,10 +122,10 @@ class BackendStarter(object):
         self._backend_done = threading.Event()
 
         # For reacting to SIGNINT (only once)
-        self._main_thread = threading.current_thread()
+        # self._main_thread = threading.current_thread()
 
-    def _create_component_frame(self):
-        frame = wx.Dialog(None, title="Starting Odemis...", size=(800, 800),
+    def _create_component_frame(self, micname):
+        frame = wx.Dialog(None, title="Starting Odemis for %s..." % micname, size=(800, 800),
                           # No close button
                           style=wx.CAPTION | wx.RESIZE_BORDER)
         # TODO: use ListCtrl
@@ -250,7 +251,7 @@ class BackendStarter(object):
             raise IOError("Back-end failed to fully instantiate")
 
         # create a window with the list of the components
-        self._frame = self._create_component_frame()
+        self._frame = self._create_component_frame(self._mic.name)
 
 #         # In theory Python raise KeyboardInterrupt on SIGINT, which is what we
 #         # need. But that doesn't happen if in a wait(), and in addition, when
@@ -335,6 +336,7 @@ class BackendStarter(object):
         wx.CallAfter(self._frame.EndModal, ret)
 
     def _show_component(self, name, state):
+
         print "Component %s: %s" % (name, state)
 
         # It needs to run in the GUI thread
@@ -352,13 +354,22 @@ class BackendStarter(object):
             colour = "#DD3939"  # Red
         elif state == ST_RUNNING:
             colour = "#39DD39" # Green
+        elif state == ST_UNLOADED:
+            colour = "#808080" # Grey
         else:
             colour = "#000000" # Black
         item = self._list.GetItem(index)
         item.SetTextColour(colour)
         self._list.SetItem(item)
 
-        self._list.SetStringItem(index, 1, u"%s" % state)
+        # Most of the states can be directly displayed for the user, but
+        # "unloaded" is weird for a hardware component
+        if state == ST_UNLOADED:
+            txt_state = u"uninitialized"
+        else:
+            txt_state = u"%s" % state
+
+        self._list.SetStringItem(index, 1, txt_state)
 
     def _on_ghosts(self, ghosts):
         """

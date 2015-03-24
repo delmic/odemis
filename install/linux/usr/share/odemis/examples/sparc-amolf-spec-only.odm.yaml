@@ -3,44 +3,44 @@
 SPARC-AMOLF: {
     class: Microscope,
     role: sparc,
-    emitters: ["EBeam ExtXY"],
-    detectors: ["SED ExtXY", "Spec10"],
-    actuators: ["MirrorMover"],
+    emitters: ["SEM E-beam"],
+    detectors: ["SEM Detector", "Spec10"],
+    actuators: ["Mirror Actuators"],
 }
 
 # Quanta SEM driven via external X/Y connection, using a DAQ board
-"SEM ExtXY": {
+"SEM Scan Interface": {
     class: semcomedi.SEMComedi,
     role: none,
     init: {device: "/dev/comedi0"},
     # more detectors can be added, if necessary
-    children: {scanner: "EBeam ExtXY", detector0: "SED ExtXY"}
+    children: {scanner: "SEM E-beam", detector0: "SEM Detector"}
 }
 
 # Connect:
 # X -> AO 0
 # Y -> AO 1
 # Ground -> AO GND
-"EBeam ExtXY": {
+"SEM E-beam": {
     # Internal child of SEM ExtXY, so no class
     role: e-beam,
     init: {
         channels: [0, 1],
-        limits: [[2.7, -2.7], [-3.7, 3.7]],  # V
-        park: [4, -4],  # V (higher voltage causes strong beam shift)
+        limits: [[1.9, -1.9], [-2.6, 2.6]],  # V
+        park: [3.5, -3.5],  # V (higher voltage causes strong beam shift)
         settle_time: 150.e-6, # s
-        hfw_nomag: 0.1067, # m
+        hfw_nomag: 0.06782, # m
     },
     properties: {
         scale: [8, 8], # (ratio) : start with a pretty fast scan
         dwellTime: 10.e-6, # s
         magnification: 244, # (ratio)
     },
-    affects: ["SED ExtXY", SpecCam] # affects the CCD in case of cathodoluminescence
+    affects: ["SEM Detector", SpecCam] # affects the CCD in case of cathodoluminescence
 }
 
 # Must be connected on AI 0/AI GND
-"SED ExtXY": { # aka ETD
+"SEM Detector": { # aka ETD
     # Internal child of Quanta ExtXY, so no class
     role: se-detector,
     init: {
@@ -66,13 +66,32 @@ SP2300i: {
     class: spectrapro.SpectraPro,
     role: spectrograph,
     affects: [SpecCam],
+    children: {ccd: "SpecCam"},
     init: {
         port: "/dev/ttySP",
+        # Calibration can be found in Winspec Windows registry:
+        # HKEY_CURRENT_USER\Software\Roper Scientific\WinSpec/32\PISPEC
+        # For each grating:
+        #  blaze in nm, groove gl/mm, center adjust, slope adjust,
+        #  focal length, inclusion angle, detector angle
+        calib: [# gratings for the visible light (with CCD pixels of 20 µm)
+                [500, 1200, "56,0e,2d,b2,9d,57,40,c0", "ee,32,9b,7e,8b,79,16,bf",
+                 "33,33,33,33,33,c3,72,40", "cd,cc,cc,cc,cc,cc,3d,40", "29,5c,8f,c2,f5,28,06,c0"],
+                [500, 150, "18,95,d4,09,68,62,43,c0", "hex:00,a1,23,29,51,45,4d,3f",
+                 "66,66,66,66,66,96,72,40", "9a,99,99,99,99,79,40,40", "29,5c,8f,c2,f5,28,06,c0"],
+                [800, 150, "59,86,38,d6,c5,2d,3c,c0", "2f,34,74,3f,e9,3c,51,3f",
+                 "66,66,66,66,66,b6,72,40", "00,00,00,00,00,80,3e,40", "29,5c,8f,c2,f5,28,06,c0"],
+                # gratings for the IR (with CCD pixels of 25 µm)
+                [1600, 600, "96,b2,0c,71,ac,8b,14,40", "37,48,d2,7f,20,8a,33,3f",
+                 "33,33,33,33,33,a3,72,40", "66,66,66,66,66,66,3e,40", "29,5c,8f,c2,f5,28,06,c0"],
+                [2000, 150, "6e,34,80,b7,40,82,2e,40", "c1,f9,2d,6a,92,80,1a,3f",
+                 "9a,99,99,99,99,89,72,40", "33,33,33,33,33,13,40,40", "b8,1e,85,eb,51,b8,f6,bf"],
+               ],
     },
 }
 
 # We could put the real actuators, but they would not be so useful as there is no feedback to know if the move is correct
-MirrorMover: {
+"Mirror Actuators": {
     class: simulated.Stage,
     role: mirror,
     affects: [SpecCam],

@@ -92,7 +92,7 @@ class ATDLL(CDLL):
     # various defines from atcore.h
     HANDLE_SYSTEM = 1
     INFINITE = 0xFFFFFFFF # "infinite" time
-    
+
     # TODO: it'd be better here, but somehow it's never called (some references still holding it)
 #    def __del__(self):
 #        logging.debug("Finalizing library")
@@ -101,7 +101,7 @@ class ATDLL(CDLL):
     @staticmethod
     def at_errcheck(result, func, args):
         """
-        Analyse the return value of a call and raise an exception in case of 
+        Analyse the return value of a call and raise an exception in case of
         error.
         Follows the ctypes.errcheck callback convention
         """
@@ -122,7 +122,7 @@ class ATDLL(CDLL):
         func.__name__ = name
         func.errcheck = self.at_errcheck
         return func
-    
+
     err_code = {
 1: "AT_ERR_NONINITIALISED"
 " Function called with an uninitialised handle",
@@ -187,24 +187,24 @@ class ATDLL(CDLL):
 " to avoid the internal hardware buffer bursting.",
 }
 
-    
+
 class AndorCam3(model.DigitalCamera):
     """
     Represents one Andor camera and provides all the basic interfaces typical of
     a CCD/CMOS camera.
     This implementation is for the Andor SDK v3. The Neo and SimCam work with
     SDK 3.4+, but Zyla needs SDK 3.7+, and Zyla USB needs SDK 3.8+.
-    
-    It offers mostly a couple of VigilantAttributes to modify the settings, and a 
+
+    It offers mostly a couple of VigilantAttributes to modify the settings, and a
     DataFlow to get one or several images from the camera.
-    
+
     Note: for the bitflow driver to initialise (and detect cameras), you need
     to have the BITFLOW_INSTALL_DIRS environment variable set to a good location
     or to provide the location as parameter.
-    
+
     It also provides low-level methods corresponding to the SDK functions.
     """
-    
+
     def __init__(self, name, role, device=None, bitflow_install_dirs=None, **kwargs):
         """
         Initialises the device
@@ -232,7 +232,7 @@ class AndorCam3(model.DigitalCamera):
                     raise HwError("Failed to find Andor camera %d, check that it "
                                   "is turned on and connected to the computer." %
                                   device)
-                elif exp.errno == 38: # DEVICEINUSE
+                elif exp.errno in (10, 38): # CONNECTION, DEVICEINUSE
                     raise HwError("Failed to initialise Andor camera %d, try to "
                                   "turning it off, waiting for 10 s and turning "
                                   "in on again." % device)
@@ -241,19 +241,19 @@ class AndorCam3(model.DigitalCamera):
         if device is None:
             # nothing else to initialise
             return
-        
+
         logging.info("opened device %d successfully", device)
-        
+
         # Describe the camera
         # up-to-date metadata to be included in dataflow
         self._metadata[model.MD_HW_NAME] = self.getModelName()
-        
+
         # sdk + hardware versions
         self._swVersion = self.getSDKVersion()
         self._metadata[model.MD_SW_VERSION] = self._swVersion
         self._hwVersion = self.getHwVersion()
         self._metadata[model.MD_HW_VERSION] = self._hwVersion
-        
+
         resolution = self.getSensorResolution()
         self._metadata[model.MD_SENSOR_SIZE] = self._transposeSizeToUser(resolution)
 
@@ -262,7 +262,7 @@ class AndorCam3(model.DigitalCamera):
         # cache some info
         self._bin_to_resrng = self._getResolutionRangesPerBinning()
         self._gain_to_idx = {} # cached for _storeGain() float -> int
-        
+
         # put the detector pixelSize
         try:
             psize = (self.GetFloat(u"PixelWidth") * 1e-6,
@@ -275,7 +275,7 @@ class AndorCam3(model.DigitalCamera):
         self.pixelSize = model.VigilantAttribute(self._transposeSizeToUser(psize),
                                                  unit="m", readonly=True)
         self._metadata[model.MD_SENSOR_PIXEL_SIZE] = self.pixelSize.value
-        
+
         # Strong cooling for low (image) noise
         try:
             tmp_rng = self._getTargetTemperatureRange()
@@ -284,7 +284,7 @@ class AndorCam3(model.DigitalCamera):
             self.setTargetTemperature(self.targetTemperature.value)
         except NotImplementedError:
             pass
-        
+
         if self.isImplemented(u"FanSpeed"):
             # max speed
             self.fanSpeed = model.FloatContinuous(1.0, [0.0, 1.0], unit="",
@@ -301,12 +301,12 @@ class AndorCam3(model.DigitalCamera):
             min_res = resolution
         else:
             min_res = (1, 1)
-        # need to be before binning, as it is modified when changing binning         
+        # need to be before binning, as it is modified when changing binning
         self.resolution = model.ResolutionVA(self._transposeSizeToUser(resolution),
                               [self._transposeSizeToUser(min_res),
                                self._transposeSizeToUser(resolution)],
                                              setter=self._setResolution)
-        
+
         self.binning = model.ResolutionVA(self._transposeSizeToUser(self._binning),
                               [self._transposeSizeToUser((1, 1)),
                                self._transposeSizeToUser(self._getMaxBinnings())],
@@ -331,7 +331,7 @@ class AndorCam3(model.DigitalCamera):
         self._exp_time = max(range_exp[0], min(0.1, range_exp[1]))
         self.exposureTime = model.FloatContinuous(self._exp_time, range_exp,
                                           unit="s", setter=self.setExposureTime)
-        
+
         ror_choices = set(self.getReadoutRates())
         readout_rate = min(ror_choices) # default to slow acquisition (as it's usually fast enough)
         self.readoutRate = model.FloatEnumerated(readout_rate, ror_choices,
@@ -354,7 +354,7 @@ class AndorCam3(model.DigitalCamera):
         self.temp_timer = util.RepeatingTimer(10, self.updateTemperatureVA,
                                          "AndorCam3 temperature update")
         self.temp_timer.start()
-        
+
         self.acquisition_lock = threading.Lock()
         self.acquire_must_stop = threading.Event()
         self.acquire_thread = None
@@ -399,7 +399,7 @@ class AndorCam3(model.DigitalCamera):
             logging.info("Failed to set shutter mode to rolling")
 
         if self.isImplemented(u"MetadataEnable"):
-            # Ask for timestamp, to track precisely the acquisition time 
+            # Ask for timestamp, to track precisely the acquisition time
             self.SetBool(u"MetadataEnable", True)
             self.SetBool(u"MetadataTimestamp", True)
             self._clock_factor = 1 / self.GetInt(u"TimestampClockFrequency")
@@ -424,7 +424,7 @@ class AndorCam3(model.DigitalCamera):
             except ATError:
                 # Let's try to diagnose a bit the problem...
                 if self._bitflow_install_dirs is None:
-                    logging.warning("No bitflow_install_dirs value set, so " 
+                    logging.warning("No bitflow_install_dirs value set, so "
                                     "cameras connected via CameraLink will not "
                                     "be detected.")
                     raise
@@ -446,7 +446,7 @@ class AndorCam3(model.DigitalCamera):
     def Close(self):
         assert self.handle is not None
         self.atcore.AT_Close(self.handle)
-        
+
     def Command(self, command):
         self.atcore.AT_Command(self.handle, command)
 
@@ -455,7 +455,7 @@ class AndorCam3(model.DigitalCamera):
         cbuffer (ctypes.array): the buffer to queue
         """
         self.atcore.AT_QueueBuffer(self.handle, cbuffer, sizeof(cbuffer))
-    
+
     def WaitBuffer(self, timeout=None):
         """
         timeout (float or None): maximum time to wait in second (None for infinite)
@@ -467,14 +467,14 @@ class AndorCam3(model.DigitalCamera):
             timeout_ms = ATDLL.INFINITE
         else:
             timeout_ms = c_uint(int(round(timeout * 1e3))) # ms
-             
+
         self.atcore.AT_WaitBuffer(self.handle, byref(pbuffer),
                                   byref(buffersize), timeout_ms)
         return pbuffer, buffersize.value
-        
+
     def Flush(self):
         self.atcore.AT_Flush(self.handle)
-    
+
     def GetString(self, prop):
         """
         Return a unicode string corresponding to the given property
@@ -485,23 +485,23 @@ class AndorCam3(model.DigitalCamera):
         string = create_unicode_buffer(len_str.value)
         self.atcore.AT_GetString(self.handle, prop, string, len_str)
         return string.value
-    
+
     def SetInt(self, prop, value):
         assert(isinstance(prop, unicode))
         self.atcore.AT_SetInt(self.handle, prop, c_longlong(value))
-        
+
     def GetInt(self, prop):
         assert(isinstance(prop, unicode))
         result = c_longlong()
         self.atcore.AT_GetInt(self.handle, prop, byref(result))
         return int(result.value) # int => use int instead of long if possible
-    
+
     def GetEnumIndex(self, prop):
         assert(isinstance(prop, unicode))
         result = c_longlong()
         self.atcore.AT_GetEnumIndex(self.handle, prop, byref(result))
         return result.value
-    
+
     def GetIntMax(self, prop):
         """
         Return the max of an integer property.
@@ -511,7 +511,7 @@ class AndorCam3(model.DigitalCamera):
         result = c_longlong()
         self.atcore.AT_GetIntMax(self.handle, prop, byref(result))
         return result.value
-    
+
     def GetIntRanges(self, prop):
         """
         Return the (min, max) of an integer property.
@@ -522,17 +522,17 @@ class AndorCam3(model.DigitalCamera):
         self.atcore.AT_GetIntMin(self.handle, prop, byref(result[0]))
         self.atcore.AT_GetIntMax(self.handle, prop, byref(result[1]))
         return (result[0].value, result[1].value)
-    
+
     def SetFloat(self, prop, value):
         assert(isinstance(prop, unicode))
         self.atcore.AT_SetFloat(self.handle, prop, c_double(value))
-    
+
     def GetFloat(self, prop):
         assert(isinstance(prop, unicode))
         result = c_double()
         self.atcore.AT_GetFloat(self.handle, prop, byref(result))
         return result.value
-    
+
     def GetFloatRanges(self, prop):
         """
         Return the (min, max) of an float property.
@@ -543,7 +543,7 @@ class AndorCam3(model.DigitalCamera):
         self.atcore.AT_GetFloatMin(self.handle, prop, byref(result[0]))
         self.atcore.AT_GetFloatMax(self.handle, prop, byref(result[1]))
         return (result[0].value, result[1].value)
-    
+
     def SetBool(self, prop, value):
         assert(isinstance(prop, unicode))
         if value:
@@ -551,13 +551,13 @@ class AndorCam3(model.DigitalCamera):
         else:
             int_val = c_int(0)
         self.atcore.AT_SetBool(self.handle, prop, int_val)
-    
+
     def GetBool(self, prop):
         assert(isinstance(prop, unicode))
         result = c_int()
         self.atcore.AT_GetBool(self.handle, prop, byref(result))
         return (result.value != 0)
-    
+
     def isImplemented(self, prop):
         """
         return bool
@@ -575,7 +575,7 @@ class AndorCam3(model.DigitalCamera):
         writable = c_int()
         self.atcore.AT_IsWritable(self.handle, prop, byref(writable))
         return (writable.value != 0)
-    
+
     def isEnumIndexAvailable(self, prop, idx):
         """
         return bool
@@ -599,7 +599,7 @@ class AndorCam3(model.DigitalCamera):
         """
         assert(isinstance(prop, unicode))
         self.atcore.AT_SetEnumIndex(self.handle, prop, idx)
-    
+
     def GetEnumStringByIndex(self, prop, index):
         """
         Return a unicode string corresponding to the given property and index
@@ -608,7 +608,7 @@ class AndorCam3(model.DigitalCamera):
         string = create_unicode_buffer(128) # no way to know the max size
         self.atcore.AT_GetEnumStringByIndex(self.handle, prop, index, string, len(string))
         return string.value
-    
+
     def GetEnumStringAvailable(self, prop):
         """
         Return in a list the strings corresponding of each possible value of an enum
@@ -627,16 +627,16 @@ class AndorCam3(model.DigitalCamera):
                 result.append(self.GetEnumStringByIndex(prop, i))
             else:
                 result.append(None)
-            
+
         return result
-    
+
     # High level methods
     def getSensorResolution(self):
         """
         return (2-tuple int): size of the sensor (width, height) in pixel
         """
         return (self.GetInt(u"SensorWidth"), self.GetInt(u"SensorHeight"))
-    
+
     def _getTargetTemperatureRange(self):
         """
         return (tuple of 2 floats): min/max values for temperature
@@ -664,7 +664,7 @@ class AndorCam3(model.DigitalCamera):
         except (ValueError, ATError):
             logging.exception("Failed to read possible temperatures, disabling feature")
             raise NotImplementedError("Changing temperature not supported")
-    
+
     def setTargetTemperature(self, temp):
         """
         Change the targeted temperature of the CCD.
@@ -688,7 +688,7 @@ class AndorCam3(model.DigitalCamera):
             ranges = self.GetFloatRanges(u"TargetSensorTemperature")
             temp = sorted(ranges + (temp,))[1]
             self.SetFloat(u"TargetSensorTemperature", temp)
-        
+
         if temp >= 20:
             self.SetBool(u"SensorCooling", False)
         else:
@@ -704,7 +704,7 @@ class AndorCam3(model.DigitalCamera):
             # might happen if terminate() has just been called
             logging.info("No temperature update, camera is stopped")
             return
-        
+
         temp = self.GetFloat(u"SensorTemperature")
         self._metadata[model.MD_SENSOR_TEMP] = temp
         # it's read-only, so we change it only via special _value)
@@ -719,7 +719,7 @@ class AndorCam3(model.DigitalCamera):
         return actual speed set
         """
         assert((0 <= speed) and (speed <= 1))
-        
+
         if not self.isImplemented(u"FanSpeed"):
             return 0
 
@@ -730,7 +730,7 @@ class AndorCam3(model.DigitalCamera):
         speed_index = int(round(speed * (len(values) - 1)))
         self.SetEnumString(u"FanSpeed", values[speed_index])
         return speed_index / len(values)
-        
+
     def getReadoutRates(self):
         """
         Returns (list of 0<floats): possible readout rates in Hz
@@ -755,7 +755,7 @@ class AndorCam3(model.DigitalCamera):
         idx_rate = util.index_closest(frequency / 1e6, rates)
         self.SetEnumIndex(u"PixelReadoutRate", idx_rate)
         return rates[idx_rate] * 1e6
-    
+
     def getModelName(self):
         model_name = "Andor " + self.GetString(u"CameraModel")
         try:
@@ -797,7 +797,7 @@ class AndorCam3(model.DigitalCamera):
         except ATError:
             # Simcam has no firmware
             return "unknown"
-        
+
     def _storeBinning(self, binning):
         """
         binning (int 1, 2, 3, 4, or 8): how many pixels horizontally and vertically
@@ -815,16 +815,16 @@ class AndorCam3(model.DigitalCamera):
         else:
             if tuple(binning) != (1, 1):
                 raise NotImplementedError("Camera doesn't support binning")
-            
+
         return binning
-    
+
     def _getMaxBinnings(self):
         """
         returns (2-tuple int): maximum binning value (horizontal and vertical)
         """
         # Nicely the API is different depending on cameras...
         binning = [1, 1]
-        
+
         if self.isImplemented(u"AOIBinning"):
             # Typically for the Neo
             binnings = self.GetEnumStringAvailable(u"AOIBinning")
@@ -838,7 +838,7 @@ class AndorCam3(model.DigitalCamera):
             # Normally, only SimCam supports this, and it doesn't have binning
             if self.GetIntMax(u"AOIHBin") > 1 or self.GetIntMax(u"AOIVBin") > 1:
                 logging.warning("Camera supports binning but not via AOIBinning")
-                
+
         return tuple(binning)
 
     def _findBinning(self, binning):
@@ -863,26 +863,26 @@ class AndorCam3(model.DigitalCamera):
         """
         value = self._transposeSizeFromUser(value)
         prev_binning, self._binning = self._binning, self._findBinning(value)
-        
+
         # adapt resolution so that the AOI stays the same
         change = (prev_binning[0] / self._binning[0],
                   prev_binning[1] / self._binning[1])
         old_resolution = self._transposeSizeFromUser(self.resolution.value)
         new_res = (int(round(old_resolution[0] * change[0])),
                    int(round(old_resolution[1] * change[1])))
-        
+
         # fit
         max_res = self._transposeSizeFromUser(self.resolution.range[1])
         new_res = (min(new_res[0], max_res[0]),
                    min(new_res[1], max_res[1]))
         self.resolution.value = self._transposeSizeToUser(new_res)
         return self._transposeSizeToUser(self._binning)
-    
+
     def _setSize(self, size):
         """
         Change the acquired image size (and position)
         size (2-tuple int): Width and height of the image. It will be centred
-         on the captor. It depends on the binning, so the same region has a size 
+         on the captor. It depends on the binning, so the same region has a size
          twice smaller if the binning is 2 instead of 1. It must be a allowed
          resolution.
         """
@@ -892,15 +892,15 @@ class AndorCam3(model.DigitalCamera):
 
         # If the camera doesn't support Area of Interest, then it has to be the
         # size of the sensor
-        if (not self.isImplemented(u"AOIWidth") or 
+        if (not self.isImplemented(u"AOIWidth") or
             not self.isWritable(u"AOIWidth")):
-            max_size = (int(resolution[0] // self._binning[0]), 
+            max_size = (int(resolution[0] // self._binning[0]),
                         int(resolution[1] // self._binning[1]))
             if size != max_size:
                 logging.warning("requested size %s different from the only"
                                 " size available %s.", size, max_size)
             return
-        
+
         # AOI (ranges include the binning division)
         ranges = (self._bin_to_resrng[0][self._binning[0]],
                   self._bin_to_resrng[1][self._binning[1]])
@@ -919,7 +919,7 @@ class AndorCam3(model.DigitalCamera):
         self.SetInt(u"AOILeft", lt[0])
         self.SetInt(u"AOIHeight", size[1])
         self.SetInt(u"AOITop", lt[1])
-    
+
     def _getResolutionRangesPerBinning(self):
         """
         return rrng_width, rrng_height:
@@ -952,35 +952,35 @@ class AndorCam3(model.DigitalCamera):
             # no binning -> 1x1
             rrng_width[1] = self.GetIntRanges(u"AOIWidth")
             rrng_height[1] = self.GetIntRanges(u"AOIHeight")
-        
+
         return rrng_width, rrng_height
 
     def resolutionFitter(self, size_req):
         """
         Finds a resolution allowed by the camera which fits best the requested
-          resolution. 
+          resolution.
         size_req (2-tuple of int): resolution requested
         returns (2-tuple of int): resolution which fits the camera. It is equal
          or bigger than the requested resolution
         """
         resolution = self.getSensorResolution()
-        max_size = (int(resolution[0] // self._binning[0]), 
+        max_size = (int(resolution[0] // self._binning[0]),
                     int(resolution[1] // self._binning[1]))
 
-        if (not self.isImplemented(u"AOIWidth") or 
+        if (not self.isImplemented(u"AOIWidth") or
             not self.isWritable(u"AOIWidth")):
             return max_size
-        
+
         # smaller than the whole sensor
         size = (min(size_req[0], max_size[0]), min(size_req[1], max_size[1]))
         # Note: the current binning is taken into account for the ranges
         ranges = (self._bin_to_resrng[0][self._binning[0]],
                   self._bin_to_resrng[1][self._binning[1]])
         size = (max(ranges[0][0], size[0]), max(ranges[1][0], size[1]))
-        
+
         # TODO: Need to check for FullAOIControl. If false, fall-back to the
         # resolutions of the table p. 42.
-        
+
         return size
 
     def _setResolution(self, value):
@@ -1014,7 +1014,7 @@ class AndorCam3(model.DigitalCamera):
         Compute the translation in physical units (using the available metadata).
         Note: the convention is that in internal coordinates Y goes down, while
         in physical coordinates, Y goes up.
-        returns (tuple of 2 floats): physical position in meters 
+        returns (tuple of 2 floats): physical position in meters
         """
         try:
             pxs = self._metadata[model.MD_PIXEL_SIZE]
@@ -1024,7 +1024,7 @@ class AndorCam3(model.DigitalCamera):
         except KeyError:
             pxs = self._metadata[model.MD_SENSOR_PIXEL_SIZE]
 
-        trans = self.translation.value # use user transposed value, as it's external world 
+        trans = self.translation.value # use user transposed value, as it's external world
         # subtract 0.5 px if the resolution is a odd number
         shift = [t - (r % 2) / 2 for t, r in zip(trans, self._resolution)]
         phyt = (shift[0] * pxs[0], -shift[1] * pxs[1]) # - to invert Y
@@ -1047,11 +1047,11 @@ class AndorCam3(model.DigitalCamera):
         if act_exp != exp:
             logging.debug("adapted exposure time from %f to %f", exp, act_exp)
         return act_exp
-    
+
     def setExposureTime(self, value):
         self._exp_time = value
         return value
-    
+
     # The 16-bit gain is a special hardware feature which use the best value of
     # two gains. So it looks like x1, and just introduces a bit more noise. To
     # distinguish it from the normal x1, we put x1.1.
@@ -1219,9 +1219,9 @@ class AndorCam3(model.DigitalCamera):
         # cbuffer = numpy.ctypeslib.as_ctypes(ndbuffer)
         cbuffer = (c_byte * image_size)() # empty array
         assert(addressof(cbuffer) % 8 == 0) # the SDK wants it aligned
-        
+
         return cbuffer
-    
+
     def _buffer_as_array(self, cbuffer, size, metadata=None):
         """
         Converts the buffer allocated for the image as an ndarray. zero-copy
@@ -1234,12 +1234,12 @@ class AndorCam3(model.DigitalCamera):
         except ATError:
             # SimCam doesn't support stride
             stride = self.GetInt(u"AOIWidth") * 2
-            
+
         p = cast(cbuffer, POINTER(c_uint16))
         ndbuffer = numpy.ctypeslib.as_array(p, (size[1], stride // 2)) # numpy shape is H, W
         dataarray = model.DataArray(ndbuffer, metadata)
         # crop the array in case of stride (should not cause copy)
-        return dataarray[:,:size[0]]
+        return dataarray[:, :size[0]]
 
     LENGTH_FIELD_SIZE = 4
     CID_FIELD_SIZE = 4
@@ -1285,7 +1285,7 @@ class AndorCam3(model.DigitalCamera):
         """
         with self.acquisition_lock:
             assert not self.GetBool(u"CameraAcquiring")
-            
+
             self._update_settings()
             size = self._resolution
             exposure_time = self._exp_time
@@ -1294,17 +1294,17 @@ class AndorCam3(model.DigitalCamera):
             else: # for SimCam
                 readout_time = size[0] * size[1] / self.readoutRate.value # s
             metadata = dict(self._metadata) # duplicate
-            
+
             cbuffer = self._allocate_buffer(size)
             self.QueueBuffer(cbuffer)
-            
+
             # Acquire the image
             logging.info("acquiring one image of %d bytes", sizeof(cbuffer))
             self.Command(u"AcquisitionStart")
             metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
             pbuffer, buffersize = self.WaitBuffer(exposure_time + readout_time + 1)
-            
-            # Cannot directly use pbuffer because we'd lose the reference to the 
+
+            # Cannot directly use pbuffer because we'd lose the reference to the
             # memory allocation... and it'd get free'd at the end of the method
             # So rely on the assumption cbuffer is used as is
             assert(addressof(pbuffer.contents) == addressof(cbuffer))
@@ -1312,7 +1312,7 @@ class AndorCam3(model.DigitalCamera):
             self.Command(u"AcquisitionStop")
             self.Flush()
             return self._transposeDAToUser(array)
-    
+
     def start_flow(self, callback):
         """
         Set up the camera and acquire a flow of images at the best quality for the given
@@ -1324,7 +1324,7 @@ class AndorCam3(model.DigitalCamera):
         self.wait_stopped_flow() # no-op is the thread is not running
         self.acquisition_lock.acquire()
         assert not self.GetBool(u"CameraAcquiring")
-        
+
         # Set up thread
         self.acquire_thread = threading.Thread(target=self._acquire_thread_run,
                name="andorcam acquire flow thread",
@@ -1431,7 +1431,7 @@ class AndorCam3(model.DigitalCamera):
                         raise
                 else:
                     num_errors = 0
-    
+
                 # Cannot directly use pbuffer because we'd lose the reference to the
                 # memory allocation... and it'd get free'd at the end of the method
                 # So rely on the assumption cbuffer is used as is
@@ -1502,7 +1502,7 @@ class AndorCam3(model.DigitalCamera):
             gc.collect()
             logging.debug("Acquisition thread closed")
             self.acquire_must_stop.clear()
-    
+
     def _start_acquisition(self):
         """
         Triggers the start of the acquisition on the camera. If the DataFlow
@@ -1535,7 +1535,7 @@ class AndorCam3(model.DigitalCamera):
             self._ready_for_acq_start = False
 
         raise CancelledError()
-    
+
     @oneway
     def onEvent(self):
         """
@@ -1556,27 +1556,27 @@ class AndorCam3(model.DigitalCamera):
         """
         Stop the acquisition of a flow of images.
         sync (boolean): if True, wait that the acquisition is finished before returning.
-         Calling with this flag activated from the acquisition callback is not 
+         Calling with this flag activated from the acquisition callback is not
          permitted (it would cause a dead-lock).
         """
         assert not self.acquire_must_stop.is_set()
         self.acquire_must_stop.set()
         logging.debug("Asked acquisition thread to stop")
         # Warning: calling AcquisitionStop here cause the thread to go crazy
-        
+
     def wait_stopped_flow(self):
         """
         Waits until the end acquisition of a flow of images. Calling from the
          acquisition callback is not permitted (it would cause a dead-lock).
         """
-        # "if" is to not wait if it's already finished 
+        # "if" is to not wait if it's already finished
         if self.acquire_must_stop.is_set():
             self.acquire_thread.join(10) # 10s timeout for safety
             if self.acquire_thread.isAlive():
                 raise OSError("Failed to stop the acquisition thread")
             # ensure it's not set, even if the thread died prematurately
             self.acquire_must_stop.clear()
-    
+
     def terminate(self):
         """
         Must be called at the end of the usage
@@ -1593,7 +1593,7 @@ class AndorCam3(model.DigitalCamera):
                 self.wait_stopped_flow()
         except Exception:
             logging.exception("Failed to stop the active acquisition")
-            
+
         if self.handle is not None:
             self.Close()
             self.handle = None
@@ -1602,7 +1602,7 @@ class AndorCam3(model.DigitalCamera):
             logging.debug("Finalizing library")
             self.atcore.AT_FinaliseLibrary()
             self.atcore = None
-    
+
     def selfTest(self):
         """
         Check whether the connection to the camera works.
@@ -1613,7 +1613,7 @@ class AndorCam3(model.DigitalCamera):
         except Exception as err:
             logging.warning("Failed to read camera model: %s", str(err))
             return False
-    
+
         # Try to get an image with the default resolution
         try:
             # TODO if we managed to initialise, this should already work
@@ -1622,7 +1622,7 @@ class AndorCam3(model.DigitalCamera):
         except Exception as err:
             logging.warning("Failed to read camera resolution: " + str(err))
             return False
-        
+
         # TODO: should not do this if the acquisition is already going on
         prev_res = self.resolution.value
         prev_exp = self.exposureTime.value
@@ -1635,9 +1635,9 @@ class AndorCam3(model.DigitalCamera):
             return False
         self.resolution.value = prev_res
         self.exposureTime.value = prev_exp
-        
+
         return True
-        
+
     @staticmethod
     def scan():
         """
@@ -1648,10 +1648,10 @@ class AndorCam3(model.DigitalCamera):
         camera = AndorCam3("System", "bus")
         dc = camera.GetInt(u"Device Count")
         logging.debug("Found %d devices.", dc)
-        
+
         # Trick: we reuse the same object to avoid init/del all the time
         system_handle = camera.handle
-        
+
         cameras = []
         for i in range(dc):
             try:
@@ -1661,7 +1661,7 @@ class AndorCam3(model.DigitalCamera):
                 camera.Close()
             except Exception:
                 logging.exception("Failed to access device %d", i)
-            
+
         camera.handle = system_handle # for the terminate() to work fine
         return cameras
 
@@ -1675,7 +1675,7 @@ class AndorCam3DataFlow(model.DataFlow):
         self.component = weakref.ref(camera)
         self._sync_event = None # synchronization Event
         self._prev_max_discard = self._max_discard
-        
+
 #    def get(self):
 #        # TODO if camera is already acquiring, wait for the coming picture
 #        data = self.component.acquireOne()
@@ -1685,7 +1685,7 @@ class AndorCam3DataFlow(model.DataFlow):
 #            self.notify(data)
 #            self.component.start_flow(self.notify)
 #        return data
-#  
+#
 
     # start/stop_generate are _never_ called simultaneously (thread-safe)
     def start_generate(self):
@@ -1695,7 +1695,7 @@ class AndorCam3DataFlow(model.DataFlow):
             return
 
         comp.start_flow(self.notify)
-    
+
     def stop_generate(self):
         comp = self.component()
         if comp is None:
@@ -1708,7 +1708,7 @@ class AndorCam3DataFlow(model.DataFlow):
         Synchronize the acquisition on the given event. Every time the event is
           triggered, the DataFlow will start a new acquisition.
         Behaviour is unspecified if the acquisition is already running.
-        event (model.Event or None): event to synchronize with. Use None to 
+        event (model.Event or None): event to synchronize with. Use None to
           disable synchronization.
         The DataFlow can be synchronize only with one Event at a time.
         """
@@ -1742,5 +1742,5 @@ class AndorCam3DataFlow(model.DataFlow):
             self.max_discard = 0
             self._sync_event.subscribe(comp)
 
-            
+
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
