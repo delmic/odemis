@@ -1,10 +1,11 @@
 DELPHI: {
     class: Microscope,
     role: delphi,
-    emitters: ["Light Engine", "Optical Objective", "Optical Emission Filter", "EBeam Phenom"],
-    detectors: ["Camera", "BSED Phenom", "NavCam"],
-    actuators: ["Stage", "Objective Stage", "Optical Focus",
-                "SEM Chamber", "EBeam focus", "NavCam focus", "TwinStage", "AntiBacklash Stage", "AntiBacklash Focus"],
+    children: ["Light Engine", "Optical Objective", "Optical Emission Filter",
+               "EBeam Phenom", "Camera", "BSED Phenom", "NavCam", "Stage Phenom",
+               "Objective Stage", "Optical Focus", "Chamber Phenom", "EBeam focus",
+               "NavCam focus", "TwinStage", "AntiBacklash Stage",
+               "AntiBacklash Focus"],
 }
 
 "Light Engine": {
@@ -60,23 +61,13 @@ DELPHI: {
     role: ebeam-focus,
 }
 
-"Stage": {
+"Stage Phenom": {
     class: simulated.Stage,
     role: sem-stage,
     init: {axes: ["x", "y"]},
     properties: {
         speed: {"x": 0.01, "y": 0.01} # m/s
     }
-}
-
-# Allows to change pressure in the chamber (and load/unload the sample)
-"SEM Chamber": {
-    class: simulated.PhenomChamber,
-    role: chamber,
-    init: {
-        positions: ["vented", "overview", "vacuum"],
-        #has_pressure: False,
-    },
 }
 
 "NavCam": {
@@ -93,13 +84,23 @@ DELPHI: {
 "NavCam focus": {
     # child of NavCam
     role: overview-focus,
-    #affects: ["NavCam"],
+    affects: ["NavCam"],
+}
+
+# Allows to change pressure in the chamber (and load/unload the sample)
+"Chamber Phenom": {
+    class: simulated.PhenomChamber,
+    role: chamber,
+    init: {
+        positions: ["vented", "overview", "vacuum"],
+        #has_pressure: False,
+    },
 }
 
 "Optical Objective": {
     class: static.OpticalLens,
     role: lens,
-    init: {mag: 60.0}, # ratio
+    init: {mag: 40.0}, # ratio
     affects: ["Camera"]
 }
 
@@ -135,7 +136,7 @@ DELPHI: {
     role: stage,
     affects: ["EBeam Phenom", "Camera"],
     init: {},
-    children: {"master": "Stage", "slave": "AntiBacklash Stage"},
+    children: {"master": "Stage Phenom", "slave": "AntiBacklash Stage"},
 }
 
 "AntiBacklash Stage": {
