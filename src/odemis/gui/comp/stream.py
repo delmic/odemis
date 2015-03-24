@@ -367,44 +367,31 @@ class StreamPanel(wx.Panel):
 
         StreamPanel
             BoxSizer
-                Expander
+                StreamPanelHeader
                 Panel
                     BoxSizer
                         GridBagSizer
 
-    Additional controls can be added to the GridBagSizer in the 'finalize'
-    method.
+    Additional controls can be added to the GridBagSizer in the 'finalize' method.
 
-    Most of the component's construction is done in the finalize() method, so
-    we can allow for a delay. This is necessary when construction the component
-    through an XML handler.
+    The controls contained within a StreamPanel are typically connected to the VigilantAttribute
+    properties of the Stream it's representing.
 
-    The controls contained within a StreamPanel are typically connected to the
-    VigilantAttribute properties of the Stream it's representing.
     """
 
-    def __init__(self,
-                 parent,
-                 stream,
-                 tab_data,
-                 wid=wx.ID_ANY,
-                 pos=wx.DefaultPosition,
-                 size=wx.DefaultSize,
-                 style=wx.CP_DEFAULT_STYLE,
-                 agwStyle=0,
-                 validator=wx.DefaultValidator,
-                 name="StreamPanel",
-                 collapsed=False):
+    def __init__(self, parent, stream, tab_data,
+                 wid=wx.ID_ANY, pos=wx.DefaultPosition, size=wx.DefaultSize,
+                 style=wx.CP_DEFAULT_STYLE, name="StreamPanel", collapsed=False):
         """
         :param parent: (StreamBar) The parent widget.
         :param stream: (Stream) The stream data model to be displayed to and
             modified by the user.
         :param tab_data: (MicroscopyGUIData) The microscope data model,
-            TODO: This parameter and related property should be moved to the
-            stream controller!
-        """
-        assert(isinstance(parent, StreamBar))
+            TODO: This parameter and related property should be moved to the stream controller!
 
+        """
+
+        assert(isinstance(parent, StreamBar))
         wx.Panel.__init__(self, parent, wid, pos, size, style, name)
 
         # Data models
@@ -413,7 +400,7 @@ class StreamPanel(wx.Panel):
         self._vacs = []  # VAConnectors to keep reference of
 
         # Appearance
-        self._agwStyle = agwStyle | wx.CP_NO_TLW_RESIZE  # |wx.CP_GTK_EXPANDER
+        # self._agwStyle = agwStyle | wx.CP_NO_TLW_RESIZE  # |wx.CP_GTK_EXPANDER
         self.SetBackgroundColour(BG_COLOUR_STREAM)
         self.SetForegroundColour(FG_COLOUR_MAIN)
 
@@ -437,15 +424,15 @@ class StreamPanel(wx.Panel):
 
         # Event handling
         self.Bind(wx.EVT_SIZE, self.OnSize)
+        self.finalize()
 
     @property
     def collapsed(self):
         return self._collapsed
 
     def finalize(self):
-        """ Controls should be added to the panel using this method. This is
-        so timing issues will not rise when the panel is instantiated.
-        """
+        """ Controls should be added to the panel using this method. This is so timing issues
+        will not rise when the panel is instantiated. """
 
         # ====== Add an expander button
 
@@ -1736,8 +1723,6 @@ class StreamBar(wx.Panel):
         logging.debug("Inserting %s at position %s",
                       spanel.stream.__class__.__name__,
                       ins_pos)
-
-        spanel.finalize()
 
         self.stream_panels.insert(ins_pos, spanel)
 
