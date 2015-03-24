@@ -34,19 +34,14 @@ from wx.lib.pubsub import pub
 
 from odemis import acq
 from odemis.acq.stream import OpticalStream
-from odemis.gui import FG_COLOUR_EDIT, FG_COLOUR_MAIN, \
-    BG_COLOUR_MAIN, BG_COLOUR_STREAM, FG_COLOUR_DIS, \
-    FG_COLOUR_WARNING, FG_COLOUR_ERROR
-from odemis.gui.comp.checkbox import CheckBox
+from odemis.gui import FG_COLOUR_EDIT, FG_COLOUR_MAIN, BG_COLOUR_MAIN, BG_COLOUR_STREAM, \
+    FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR
 from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
-from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider,\
-    UnitIntegerSlider
-from odemis.gui.comp.text import SuggestTextCtrl, \
-    UnitFloatCtrl, FloatTextCtrl
+from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider, UnitIntegerSlider
+from odemis.gui.comp.text import SuggestTextCtrl, UnitFloatCtrl, FloatTextCtrl
 from odemis.gui.conf.data import HW_SETTINGS_CONFIG
-from odemis.gui.util import call_in_wx_main, wxlimit_invocation, dead_object_wrapper, \
-    ignore_dead
+from odemis.gui.util import call_in_wx_main, wxlimit_invocation, dead_object_wrapper, ignore_dead
 from odemis.gui.util.widgets import VigilantAttributeConnector
 from odemis.util import fluo
 from odemis.util.conversion import wave2rgb
@@ -57,7 +52,7 @@ import odemis.gui.model.dye as dye
 
 stream_remove_event, EVT_STREAM_REMOVE = wx.lib.newevent.NewEvent()
 
-BUTTON_BORDER = 8
+BUTTON_BORDER_SIZE = 8
 BUTTON_SIZE = (18, 18)
 
 # Expanders are the stream controls that are always visible. They allow for
@@ -67,8 +62,8 @@ BUTTON_SIZE = (18, 18)
 # Values to control which option is available
 OPT_NAME_EDIT = 1  # allow the renaming of the stream (for one time only)
 OPT_BTN_REMOVE = 2  # remove the stream entry
-OPT_BTN_VISIBLE = 4  # show/hide the stream image
-OPT_BTN_UPDATED = 8  # update/stop the stream acquisition
+OPT_BTN_SHOW = 4  # show/hide the stream image
+OPT_BTN_UPDATE = 8  # update/stop the stream acquisition
 OPT_BTN_TINT = 16  # tint of the stream (if the VA exists)
 
 CAPTION_PADDING_RIGHT = 5
@@ -83,258 +78,257 @@ class StreamPanelHeader(wx.Control):
 
     """
 
-    def __init__(self, parent, stream, wid=wx.ID_ANY, pos=wx.DefaultPosition, size=wx.DefaultSize,
+    def __init__(self, parent, wid=wx.ID_ANY, pos=wx.DefaultPosition, size=wx.DefaultSize,
                  style=wx.NO_BORDER,
-                 options=(OPT_BTN_REMOVE | OPT_BTN_VISIBLE | OPT_BTN_UPDATED | OPT_BTN_TINT)):
+                 options=(OPT_BTN_REMOVE | OPT_BTN_SHOW | OPT_BTN_UPDATE | OPT_BTN_TINT)):
         assert(isinstance(parent, StreamPanel))
         super(StreamPanelHeader, self).__init__(parent, wid, pos, size, style)
 
         # This style enables us to draw the background with our own paint event handler
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
 
-        # Stream details will be necessary in subclasses
-        self._stream = stream
-        self._label_ctrl = None
         self._options = options
+
         # Callback when the label changes: (string (text) -> None)
         self.label_change_callback = None
 
         # Create and add sizer and populate with controls
         self._sz = wx.BoxSizer(wx.HORIZONTAL)
 
-        # ===== Fold icons
-
+        # Fold indicator icon, drawn directly in the background in a fixed position
         self._foldIcons = wx.ImageList(16, 16)
         self._foldIcons.Add(img.getarr_down_sBitmap())
         self._foldIcons.Add(img.getarr_right_sBitmap())
 
-        # ===== Remove button
+        # Add the needed controls to the sizer
 
-        self.btn_rem = buttons.ImageButton(
-            self,
-            wx.ID_ANY,
-            img.getico_rem_strBitmap(),
-            (10, 8),
-            BUTTON_SIZE,
-            background_parent=parent
-        )
-        self.btn_rem.SetBitmaps(img.getico_rem_str_hBitmap())
-        self.btn_rem.SetToolTipString("Remove stream")
-        self._sz.Add(self.btn_rem, 0,
-                     (wx.ALL | wx.ALIGN_CENTRE_VERTICAL | wx.RESERVE_SPACE_EVEN_IF_HIDDEN),
-                     BUTTON_BORDER)
-
-        # ===== Label
-
-        # Put the name of the stream as label
+        self.btn_remove = self._add_remove_btn() if options & OPT_BTN_REMOVE else None
         if options & OPT_NAME_EDIT:
-            self._label_ctrl = SuggestTextCtrl(self, id=-1, value=stream.name.value)
-            self._label_ctrl.SetBackgroundColour(self.Parent.GetBackgroundColour())
-            self._label_ctrl.SetForegroundColour(FG_COLOUR_EDIT)
-            self._label_ctrl.Bind(wx.EVT_COMMAND_ENTER, self._on_label_change)
+            self.ctrl_label = self._add_suggest_ctrl()
         else:
-            # Static name
-            self._label_ctrl = wx.StaticText(self, -1, stream.name.value)
+            self.ctrl_label = self._add_label_ctrl()
+        self.btn_tint = self._add_tint_btn()
+        self.btn_show = self._add_visibility_btn() if options & OPT_BTN_SHOW else None
+        self.btn_update = self._add_update_btn() if options & OPT_BTN_UPDATE else None
 
-        self._sz.Add(
-            self._label_ctrl, 1,
-            (wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL | wx.RESERVE_SPACE_EVEN_IF_HIDDEN),
-            BUTTON_BORDER
-        )
-
-        # ===== Tint (if the stream has it)
-
-        if hasattr(stream, "tint"):
-            self._btn_tint = buttons.ColourButton(
-                self, -1,
-                bitmap=img.getemptyBitmap(),
-                size=(18, 18),
-                colour=stream.tint.value,
-                background_parent=parent,
-                use_hover=True
-            )
-            self._btn_tint.SetToolTipString("Select colour")
-            self._sz.Add(
-                self._btn_tint,
-                0,
-                (wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL | wx.RESERVE_SPACE_EVEN_IF_HIDDEN),
-                BUTTON_BORDER
-            )
-            self._btn_tint.Bind(wx.EVT_BUTTON, self._on_tint_click)
-            stream.tint.subscribe(self._on_tint_value)
-
-        # ===== Visibility button
-
-        self.btn_vis = buttons.ImageToggleButton(
-            self,
-            wx.ID_ANY,
-            img.getico_eye_closedBitmap(),
-            (10, 8),
-            BUTTON_SIZE,
-            background_parent=parent
-        )
-        self.btn_vis.SetBitmaps(
-            img.getico_eye_closed_hBitmap(),
-            img.getico_eye_openBitmap(),
-            img.getico_eye_open_hBitmap()
-        )
-        self.btn_vis.SetToolTipString("Show stream")
-
-        self._sz.Add(
-            self.btn_vis,
-            0,
-            (wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL | wx.RESERVE_SPACE_EVEN_IF_HIDDEN),
-            BUTTON_BORDER
-        )
-
-        # ===== Play button
-
-        self._btn_updated = buttons.ImageToggleButton(
-            self,
-            wx.ID_ANY,
-            img.getico_pauseBitmap(),
-            (10, 8),
-            BUTTON_SIZE,
-            background_parent=parent
-        )
-        self._btn_updated.SetBitmaps(
-            img.getico_pause_hBitmap(),
-            img.getico_playBitmap(),
-            img.getico_play_hBitmap()
-        )
-        self._btn_updated.SetToolTipString("Update stream")
-        self._vac_updated = VigilantAttributeConnector(
-            self._stream.should_update,
-            self._btn_updated,
-            self._btn_updated.SetToggle,
-            self._btn_updated.GetToggle,
-            events=wx.EVT_BUTTON
-        )
-        self._sz.Add(
-            self._btn_updated,
-            0,
-            (wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL | wx.RESERVE_SPACE_EVEN_IF_HIDDEN),
-            BUTTON_BORDER)
-
+        # The spacer is responsible for creating padding on the right side of the header panel
         self._sz.AddSpacer((64, 16))
 
         # Set the sizer of the Control
         self.SetSizerAndFit(self._sz)
 
-        # Hide buttons according to the options:
-        if not (options & OPT_BTN_REMOVE):
-            self.show_remove_btn(False)
-        if not (options & OPT_BTN_VISIBLE):
-            self.show_visible_btn(False)
-        if not (options & OPT_BTN_UPDATED):
-            self.show_updated_btn(False)
-        if not (options & OPT_BTN_TINT):
-            self.show_tint_btn(False)
-
-        self.Bind(wx.EVT_SIZE, self.OnSize)
-
+        self.Bind(wx.EVT_SIZE, self.on_size)
         self.Layout()
 
-    ###### Methods needed for layout and painting
+    # Control creation methods
 
-    # TODO: rename to GetBestSize(), or does it cause problems?
-    # GetBestSize cannot be overridden. See:
-    # http://wxpython.org/Phoenix/docs/html/Window.html?#Window.DoGetBestSize
+    def _add_remove_btn(self):
+        """ Add a button for stream removal """
+        btn_rem = buttons.ImageButton(
+            self,
+            wx.ID_ANY,
+            img.getico_rem_strBitmap(),
+            size=BUTTON_SIZE,
+            background_parent=self.Parent
+        )
+        btn_rem.SetBitmaps(img.getico_rem_str_hBitmap())
+        btn_rem.SetToolTipString("Remove stream")
+        self._add_ctrl(btn_rem)
+        return btn_rem
+
+    def _add_suggest_ctrl(self):
+        """ Add a suggest control to the header panel """
+        suggest_ctrl = SuggestTextCtrl(self, id=-1, value=self.Parent.stream.name.value)
+        suggest_ctrl.SetBackgroundColour(self.Parent.GetBackgroundColour())
+        suggest_ctrl.SetForegroundColour(FG_COLOUR_EDIT)
+        suggest_ctrl.Bind(wx.EVT_COMMAND_ENTER, self._on_label_change)
+
+        self._add_ctrl(suggest_ctrl, stretch=True)
+        return suggest_ctrl
+
+    def _add_label_ctrl(self):
+        """ Add a label control to the header panel """
+        label_ctrl = wx.StaticText(self, -1, self.Parent.stream.name.value)
+        self._add_ctrl(label_ctrl, stretch=True)
+        return label_ctrl
+
+    def _add_tint_btn(self):
+        """ Add a tint button to the stream header if the stream has a tint attribute """
+
+        if not hasattr(self.Parent.stream, "tint"):
+            return None
+
+        tint_btn = buttons.ColourButton(
+            self, -1,
+            bitmap=img.getemptyBitmap(),
+            size=BUTTON_SIZE,
+            colour=self.Parent.stream.tint.value,
+            background_parent=self.Parent,
+            use_hover=True
+        )
+        tint_btn.SetToolTipString("Select colour")
+
+        # Tint event handlers
+        tint_btn.Bind(wx.EVT_BUTTON, self._on_tint_click)
+        self.Parent.stream.tint.subscribe(self._on_tint_value)
+
+        self._add_ctrl(tint_btn)
+        return tint_btn
+
+    def _add_visibility_btn(self):
+        """ Add the visibility toggle button to the stream panel header """
+        visibility_btn = buttons.ImageToggleButton(
+            self, -1,
+            bitmap=img.getico_eye_closedBitmap(),
+            size=BUTTON_SIZE,
+            background_parent=self.Parent
+        )
+        visibility_btn.SetBitmaps(
+            img.getico_eye_closed_hBitmap(),
+            img.getico_eye_openBitmap(),
+            img.getico_eye_open_hBitmap()
+        )
+        visibility_btn.SetToolTipString("Show stream")
+        self._add_ctrl(visibility_btn)
+        return visibility_btn
+
+    def _add_update_btn(self):
+        """ Add a button for (de)activation of the stream """
+        update_btn = buttons.ImageToggleButton(
+            self, -1,
+            bitmap=img.getico_pauseBitmap(),
+            size=BUTTON_SIZE,
+            background_parent=self.Parent
+        )
+        update_btn.SetBitmaps(
+            img.getico_pause_hBitmap(),
+            img.getico_playBitmap(),
+            img.getico_play_hBitmap()
+        )
+        update_btn.SetToolTipString("Update stream")
+
+        self._vac_updated = VigilantAttributeConnector(
+            self.Parent.stream.should_update,
+            update_btn,
+            update_btn.SetToggle,
+            update_btn.GetToggle,
+            events=wx.EVT_BUTTON
+        )
+        self._add_ctrl(update_btn)
+        return update_btn
+
+    def _add_ctrl(self, ctrl, stretch=False):
+        """ Add the given control to the header panel
+
+        :param ctrl: (wx.Control) Control to add to the header panel
+        :param stretch: True if the control should expand to fill space
+
+        """
+
+        # Only the first element has a left border
+        border = wx.ALL if self._sz.IsEmpty() else wx.RIGHT
+
+        self._sz.Add(
+            ctrl,
+            proportion=1 if stretch else 0,
+            flag=(border | wx.ALIGN_CENTRE_VERTICAL | wx.RESERVE_SPACE_EVEN_IF_HIDDEN),
+            border=BUTTON_BORDER_SIZE
+        )
+
+    # END Control creation methods
+
+    # Layout and painting
+
     def DoGetBestSize(self, *args, **kwargs):
-        """ Return the best size, which is the width of the parent and the height or the content
-        (determined through the sizer).
+        """ Return the best size, which is the width of the parent and the height or the content """
+        return wx.Size(self.Parent.GetSize().x, self._sz.GetSize().y)
 
-        """
-        return wx.Size(self.Parent.GetSize()[0], self._sz.GetSize()[1])
-
-    def OnSize(self, event):
-        """ Handles the wx.EVT_SIZE event for the Expander class.
-
-        :param `event`: a `wx.SizeEvent` event to be processed.
-        """
-        width = self.Parent.GetSize().GetWidth()
-        self.SetSize((width, -1))
+    def on_size(self, event):
+        """ Handle the wx.EVT_SIZE event for the Expander class """
+        self.SetSize((self.Parent.GetSize().x, -1))
         self.Layout()
         self.Refresh()
         event.Skip()
 
     def on_draw_expander(self, dc):
-        """ This method draws the expand/collapse icons.
+        """ Draw the expand/collapse arrow icon
 
         It needs to be called from the parent's paint event handler.
         """
         win_rect = self.GetRect()
         x_pos = win_rect.GetRight() - ICON_WIDTH - CAPTION_PADDING_RIGHT
 
-        if self._foldIcons:
-            self._foldIcons.Draw(
-                1 if self.Parent.collapsed else 0,
-                dc,
-                x_pos,
-                (win_rect.GetHeight() - ICON_HEIGHT) // 2,
-                wx.IMAGELIST_DRAW_TRANSPARENT
-            )
+        self._foldIcons.Draw(
+            1 if self.Parent.collapsed else 0,
+            dc,
+            x_pos,
+            (win_rect.GetHeight() - ICON_HEIGHT) // 2,
+            wx.IMAGELIST_DRAW_TRANSPARENT
+        )
 
-    ###### Methods to show and hide the default buttons
+    # END Layout and painting
 
-    def _show_item(self, item, show):
-        self._sz.Show(item, show)
-        self._sz.Layout()
+    # Show/hide/disable controls
+
+    def _show_ctrl(self, ctrl, show):
+        """ Show or hide the given control """
+        if ctrl:
+            self._sz.Show(ctrl, show)
+            self._sz.Layout()
 
     def show_remove_btn(self, show):
-        """ This method show or hides the remove button """
-        self._show_item(self.btn_rem, show)
+        """ Show or hide the remove button """
+        self._show_ctrl(self.btn_remove, show)
 
     def show_updated_btn(self, show):
-        """ This method show or hides the play button """
-        self._show_item(self._btn_updated, show)
+        """ Show or hide the update button """
+        self._show_ctrl(self.btn_update, show)
 
-    def enable_updated_btn(self, enabled):
-        """ This method enable or disable the play button """
-        self._btn_updated.Enable(enabled)
-
-    def show_visible_btn(self, show):
-        """ This method show or hides the visible button """
-        self._show_item(self.btn_vis, show)
+    def show_show_btn(self, show):
+        """ Show or hide the show button """
+        self._show_ctrl(self.btn_show, show)
 
     def show_tint_btn(self, show):
-        """ This method show or hides the tint button """
-        if hasattr(self, "_btn_tint"):
-            self._show_item(self._btn_tint, show)
+        """ Show or hide the tint button """
+        self._show_ctrl(self.btn_tint, show)
+
+    def enable_updated_btn(self, enabled):
+        """ Enable or disable the update button """
+        self.btn_update.Enable(enabled)
 
     def to_static_mode(self):
-        """ This method hides or makes read-only any button or data that should
-        not be changed during acquisition.
-        """
+        """ Remove or disable the controls not needed for a static view of the stream """
         self.show_remove_btn(False)
         self.show_updated_btn(False)
-
-        # TODO: label readonly (if editable)? Or in to_locked_mode?
+        if isinstance(self.ctrl_label, SuggestTextCtrl):
+            self.ctrl_label.Disable()
 
     def to_locked_mode(self):
+        """ Remove or disable all controls """
         self.to_static_mode()
-        self.show_visible_btn(False)
+        self.show_show_btn(False)
 
-    # # VA subscriptions: reflect the changes on the stream to the GUI
-    # def _on_update_change(self, updated):
-    #     self._btn_updated.SetToggle(self._stream.should_update.value)
+    # END Show/hide/disable controls
 
     # GUI event handlers
+
     def _on_label_change(self, evt):
-        if self.label_change_callback:
-            self.label_change_callback(self._label_ctrl.GetValue())
+        """ Call the label change callback when the label value changes """
+
+        if isinstance(self.label_change_callback, callable):
+            self.label_change_callback(self.ctrl_label.GetValue())
 
     @call_in_wx_main
     def _on_tint_value(self, colour):
         """ Update the colour button to reflect the provided colour """
-        self._btn_tint.set_colour(colour)
-        logging.debug("Changing tint of button to %s", colour)
+        self.btn_tint.set_colour(colour)
 
     def _on_tint_click(self, evt):
+        """ Handle the mouse click event on the tint button """
         # Remove the hover effect
-        self._btn_tint.OnLeave(evt)
+        self.btn_tint.OnLeave(evt)
 
-        # set default colour to the current value
+        # Set default colour to the current value
         cldata = wx.ColourData()
         cldata.SetColour(wx.Colour(*self._stream.tint.value))
 
@@ -343,23 +337,27 @@ class StreamPanelHeader(wx.Control):
         if dlg.ShowModal() == wx.ID_OK:
             colour = dlg.ColourData.GetColour().Get()  # convert to a 3-tuple
             logging.debug("Colour %r selected", colour)
-            # this will automatically update the button's colour
+            # Setting the VA will automatically update the button's colour
             self._stream.tint.value = colour
 
+    # END GUI event handlers
+
     def set_label_choices(self, choices):
+        """ Assign a list of predefined labels to the suggest control form which the user may choose
+
+        :param choices: [str]
+
         """
-        Set a list of choices from which the user can pick a pre-defined name
-        choices (list of string)
-        """
-        self._label_ctrl.SetChoices(choices)
+        if isinstance(self.ctrl_label, SuggestTextCtrl):
+            self.ctrl_label.SetChoices(choices)
+        else:
+            raise TypeError("SuggestTextCtrl required!")
 
     def set_focus_on_label(self):
-        """
-        Set the focus on the label (and select the text if it's editable)
-        """
-        self._label_ctrl.SetFocus()
+        """ Set the focus on the label (and select the text if it's editable) """
+        self.ctrl_label.SetFocus()
         if self._options & OPT_NAME_EDIT:
-            self._label_ctrl.SelectAll()
+            self.ctrl_label.SelectAll()
 
 
 class StreamPanel(wx.Panel):
@@ -452,19 +450,19 @@ class StreamPanel(wx.Panel):
         # ====== Add an expander button
 
         stream = self.stream
-        expand_opt = (OPT_BTN_REMOVE | OPT_BTN_VISIBLE | OPT_BTN_UPDATED | OPT_BTN_TINT)
+        expand_opt = (OPT_BTN_REMOVE | OPT_BTN_SHOW | OPT_BTN_UPDATE | OPT_BTN_TINT)
 
         if self._has_dye(stream) and not (stream.excitation.readonly or stream.emission.readonly):
             expand_opt |= OPT_NAME_EDIT
 
-        self._expander = StreamPanelHeader(self, self.stream, options=expand_opt)
+        self._expander = StreamPanelHeader(self, options=expand_opt)
         self._expander.Bind(wx.EVT_LEFT_UP, self.on_toggle)
         self._expander.Bind(wx.EVT_PAINT, self.on_draw_expander)
 
         self.Bind(wx.EVT_BUTTON, self.on_button, self._expander)
 
-        self._expander.btn_rem.Bind(wx.EVT_BUTTON, self.on_remove_btn)
-        self._expander.btn_vis.Bind(wx.EVT_BUTTON, self.on_visibility_btn)
+        self._expander.btn_remove.Bind(wx.EVT_BUTTON, self.on_remove_btn)
+        self._expander.btn_show.Bind(wx.EVT_BUTTON, self.on_visibility_btn)
 
         if wx.Platform == "__WXMSW__":
             self._expander.Bind(wx.EVT_LEFT_DCLICK, self.on_button)
@@ -582,7 +580,7 @@ class StreamPanel(wx.Panel):
         """ Set the "visible" toggle button.
         Note: it does not add/remove it to the current view.
         """
-        self._expander.btn_vis.SetToggle(visible)
+        self._expander.btn_show.SetToggle(visible)
 
     def collapse(self, collapse=None):
         """ Collapses or expands the pane window.
@@ -616,7 +614,7 @@ class StreamPanel(wx.Panel):
         view = self._tab_data_model.focussedView.value
         if not view:
             return
-        if self._expander.btn_vis.GetToggle():
+        if self._expander.btn_show.GetToggle():
             logging.debug("Showing stream '%s'", self.stream.name.value)
             view.addStream(self.stream)
         else:
@@ -635,7 +633,7 @@ class StreamPanel(wx.Panel):
         self._expander.show_remove_btn(show)
 
     def show_visible_btn(self, show):
-        self._expander.show_visible_btn(show)
+        self._expander.show_show_btn(show)
 
     def OnSize(self, event):
         """ Handles the wx.EVT_SIZE event for StreamPanel
