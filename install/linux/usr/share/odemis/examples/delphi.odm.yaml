@@ -1,10 +1,11 @@
 DELPHI: {
     class: Microscope,
     role: delphi,
-    emitters: ["Light Engine", "Optical Objective", "Optical Emission Filter", "EBeam Phenom"],
-    detectors: ["Camera", "BSED Phenom", "NavCam"],
-    actuators: ["Stage Phenom", "Objective Stage", "Optical Focus",
-                "Chamber Phenom", "EBeam focus", "NavCam focus", "TwinStage", "AntiBacklash Stage", "AntiBacklash Focus"],
+    children: ["Light Engine", "Optical Objective", "Optical Emission Filter",
+               "EBeam Phenom", "Camera", "BSED Phenom", "NavCam", "Stage Phenom",
+               "Objective Stage", "Optical Focus", "Chamber Phenom", "EBeam focus",
+               "NavCam focus", "TwinStage", "AntiBacklash Stage",
+               "AntiBacklash Focus"],
 }
 
 "Light Engine": {
