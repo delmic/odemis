@@ -39,6 +39,7 @@ class PMT(model.Detector):
     a wrapper to a Detector (PMT) and a PMT Control Unit to allow the
     second one to control and ensure the safe operation of the first one and act 
     with respect to its DataFlow.
+    
     '''
     def __init__(self, name, role, children, **kwargs):
         '''
@@ -64,22 +65,17 @@ class PMT(model.Detector):
         self._control = ctrl
         self.children.value.add(ctrl)
 
-        self.data = PMTDataFlow(self, self._pmt)
+        self.data = PMTDataFlow(self, self._pmt, self._control)
 
         # Duplicate control unit VAs
         self._gain = ctrl.gain.range[0]
         self.gain = model.FloatContinuous(self._gain, ctrl.gain.range, unit="V",
-                                          setter=self._setGain,
-                                          getter=self._getGain)
+                                          setter=self._setGain)
         self._last_gain = self._gain
         self.gain.value = self._gain  # Just start with no gain
-        self.powerSupply = model.BooleanVA(False, setter=self._setPowerSupply,
-                                           getter=self._getPowerSupply)
+        self.powerSupply = ctrl.powerSupply
         # Turn on the controller
         self.powerSupply.value = True
-        self.protection = model.BooleanVA(False, setter=self._setProtection,
-                                          getter=self._getProtection)
-        self.protection.value = True
 
     def terminate(self):
         # Turn off the controller
@@ -91,49 +87,31 @@ class PMT(model.Detector):
         self._control.gain.value = value
         # Reset protection if gain is decreased while dataflow is active
         if value < self._last_gain and self.data.active:
-            self.protection.value = False
+            self._control.protection.value = False
 
         self._last_gain = value
-        return value
+        return self._getGain()
 
     def _getGain(self):
         value = self._control.gain.value
 
         return value
 
-    def _setPowerSupply(self, value):
-        self._control.powerSupply.value = value
-
-        return value
-
-    def _getPowerSupply(self):
-        value = self._control.powerSupply.value
-
-        return value
-
-    def _setProtection(self, value):
-        self._control.protection.value = value
-
-        return value
-
-    def _getProtection(self):
-        value = self._control.protection.value
-
-        return value
 
 class PMTDataFlow(model.DataFlow):
-    def __init__(self, detector, pmt):
+    def __init__(self, detector, pmt, control):
         """
         detector (semcomedi.Detector): the detector that the dataflow corresponds to
         """
         model.DataFlow.__init__(self)
         self.component = detector
         self._pmt = pmt
+        self._control = control
         self.active = False
 
     def start_generate(self):
         # Reset protection first
-        self.component.protection.value = False
+        self._control.protection.value = False
 
         self._pmt.data.subscribe(self._newFrame)
         self.active = True
@@ -142,14 +120,14 @@ class PMTDataFlow(model.DataFlow):
         self._pmt.data.unsubscribe(self._newFrame)
 
         # Set protection after stopping
-        self.component.protection.value = True
+        self._control.protection.value = True
         self.active = False
 
     def _newFrame(self, df, data):
         """
         Get the new frame from the detector
         """
-        if self.component.protection.value:
+        if self._control.protection.value:
             logging.warning("PMT protection was triggered during acquisition.")
         model.DataFlow.notify(self, data)
 
@@ -162,7 +140,7 @@ class PMTControl(model.HwComponent):
     '''
     This represents the PMT control unit.
     '''
-    def __init__(self, name, role, sn=None, port=None, prot_time=None, prot_curr=None, daemon=None, **kwargs):
+    def __init__(self, name, role, sn=None, port=None, prot_time=1e-3, prot_curr=3, **kwargs):
         '''
         sn (str): serial number (recommended)
         port (str): port name (only if sn is not specified)
@@ -170,7 +148,7 @@ class PMTControl(model.HwComponent):
         prot_curr (float): protection current threshold
         Raise an exception if the device cannot be opened
         '''
-        model.HwComponent.__init__(self, name, role, daemon=daemon, **kwargs)
+        model.HwComponent.__init__(self, name, role, **kwargs)
 
         # get protection time (s) and current (A) properties
         self._prot_time = prot_time
@@ -183,35 +161,29 @@ class PMTControl(model.HwComponent):
         else:
             self._port = port
 
+        # TODO: catch errors and convert to HwError
         self._serial = self._openSerialPort(self._port)
         self._ser_access = threading.Lock()
 
-        try:
-            # Get identification of the PMT control device
-            # TODO Use it to check that we connect to the right device
-            self._idn = self._sendCommand("*IDN?\n")
-            # Set protection current and time
-            if self._prot_curr is not None:
-                self._sendCommand("PCURR " + str(self._prot_curr) + "\n")
-            if self._prot_time is not None:
-                self._sendCommand("PTIME " + str(self._prot_time) + "\n")
-        except IOError as e:
-            logging.exception(str(e))
+        # Get identification of the PMT control device
+        # TODO Use it to check that we connect to the right device
+        self._idn = self._sendCommand("*IDN?")
+        # Set protection current and time
+        self._setProtectionCurrent(self._prot_curr)
+        self._setProtectionTime(self._prot_time)
 
         # gain, powerSupply and protection VAs
-        gain_rng = [MIN_GAIN, MAX_GAIN]
-        self._gain = MIN_GAIN
-        self.gain = model.FloatContinuous(self._gain, gain_rng, unit="V",
-                                          setter=self._setGain,
-                                          getter=self._getGain)
-        # To initialize the voltage in the PMT control unit
-        self.gain.value = self._gain  # Just start with no gain
-        self.powerSupply = model.BooleanVA(False, setter=self._setPowerSupply,
-                                           getter=self._getPowerSupply)
-        self.powerSupply.value = False
-        self.protection = model.BooleanVA(False, setter=self._setProtection,
+        self.protection = model.BooleanVA(True, setter=self._setProtection,
                                           getter=self._getProtection)
-        self.protection.value = False
+        self._setProtection(True)
+
+        gain_rng = [MIN_GAIN, MAX_GAIN]
+        gain = self._getGain()
+        self.gain = model.FloatContinuous(gain, gain_rng, unit="V",
+                                          setter=self._setGain)
+
+        self.powerSupply = model.BooleanVA(True, setter=self._setPowerSupply)
+        self._setPowerSupply(True)
 
     def terminate(self):
         with self._ser_access:
@@ -220,65 +192,56 @@ class PMTControl(model.HwComponent):
                 self._serial = None
 
     def _setGain(self, value):
-        try:
-            self._sendCommand("VOLT " + str(value) + "\n")
-        except IOError as e:
-            logging.exception(str(e))
+        self._sendCommand("VOLT %f" % (value,))
 
-        return value
+        return self._getGain()
+
+    def _setProtectionCurrent(self, value):
+        self._sendCommand("PCURR %f" % (value,))
+
+    def _setProtectionTime(self, value):
+        self._sendCommand("PTIME %f" % (value,))
 
     def _getGain(self):
+        ans = self._sendCommand("VOLT?")
         try:
-            ans = self._sendCommand("VOLT?\n")
             value = float(ans)
-        except IOError as e:
-            logging.exception(str(e))
+        except ValueError:
+            raise IOError("Gain value cannot be converted to float.")
 
         return value
 
     def _setPowerSupply(self, value):
-        try:
-            if value:
-                self._sendCommand("PWR " + str(1) + "\n")
-            else:
-                self._sendCommand("PWR " + str(0) + "\n")
-        except IOError as e:
-            logging.exception(str(e))
+        if value:
+            self._sendCommand("PWR 1")
+        else:
+            self._sendCommand("PWR 0")
 
         return value
 
     def _getPowerSupply(self):
-        try:
-            ans = self._sendCommand("PWR?\n")
-            if ans == "1\r":
-                status = True
-            else:
-                status = False
-        except IOError as e:
-            logging.exception(str(e))
+        ans = self._sendCommand("PWR?")
+        if ans == "1":
+            status = True
+        else:
+            status = False
 
         return status
 
     def _setProtection(self, value):
-        try:
-            if value:
-                self._sendCommand("PROT " + str(1) + "\n")
-            else:
-                self._sendCommand("PROT " + str(0) + "\n")
-        except IOError as e:
-            logging.exception(str(e))
+        if value:
+            self._sendCommand("PROT 1")
+        else:
+            self._sendCommand("PROT 0")
 
         return value
 
     def _getProtection(self):
-        try:
-            ans = self._sendCommand("PROT?\n")
-            if ans == "1\r":
-                status = True
-            else:
-                status = False
-        except IOError as e:
-            logging.exception(str(e))
+        ans = self._sendCommand("PROT?")
+        if ans == "1":
+            status = True
+        else:
+            status = False
 
         return status
 
@@ -290,19 +253,21 @@ class PMTControl(model.HwComponent):
         raises    
                 IOError: if an ERROR is returned by the PMT Control firmware.
         """
+        cmd = cmd + "\n"
         with self._ser_access:
             self._serial.write(cmd)
+
             ans = ''
-            # let's wait one second before reading output (let's give device time to answer)
             char = None
-            while (char != '\r'):
+            while (char != '\n'):
                 char = self._serial.read(1)
                 # Handle ERROR coming from PMT control unit firmware
-                if char == '\n':
-                    raise IOError(ans.split(' ', 1)[1])
                 ans += char
 
-            return ans
+            if ans.startswith("ERROR"):
+                raise PMTControlError(ans.split(' ', 1)[1])
+
+            return ans.rstrip()
 
     @staticmethod
     def _openSerialPort(port):
@@ -311,6 +276,10 @@ class PMTControl(model.HwComponent):
         port (string): the name of the serial port (e.g., /dev/ttyACM0)
         return (serial): the opened serial port
         """
+        # For debugging purpose
+        if port == "/dev/fake":
+           return PMTControlSimulator(timeout=1)
+
         ser = serial.Serial(
             port=port,
             baudrate=115200,
@@ -413,7 +382,14 @@ class PMTControl(model.HwComponent):
         return found
     
 
-#Ranges similar to real PMT Control firmware
+class PMTControlError(IOError):
+    """
+    Exception used to indicate a problem coming from the PMT Control Unit.
+    """
+    pass
+
+
+# Ranges similar to real PMT Control firmware
 MAX_VOLT = 6
 MIN_VOLT = 0
 MAX_PCURR = 3
@@ -421,177 +397,139 @@ MIN_PCURR = 0
 MAX_PTIME = 100
 MIN_PTIME = 0.000001
 IDN = "Delmic Analog PMT simulator"
-SN = "F4K3"
 
-class PMTControlSimulator(model.HwComponent):
+class PMTControlSimulator(object):
     """
     Simulates a PMTControl (+ serial port). Only used for testing.
     Same interface as the serial port
     """
-    def __init__(self, name, role, sn=None, port=None, prot_time=None, prot_curr=None, daemon=None, **kwargs):
+    def __init__(self, timeout=0, *args, **kwargs):
+        self.timeout = timeout
+        self._output_buf = ""  # what the PMT Control Unit sends back to the "host computer"
+        self._input_buf = ""  # what PMT Control Unit receives from the "host computer"
 
-        model.HwComponent.__init__(self, name, role, daemon=daemon, **kwargs)
-        # get protection time (s) and current (A) properties
-        self._prot_time = prot_time
-        self._prot_curr = prot_curr
-
-        try:
-            # Get identification of the PMT control device
-            self._idn = self._sendCommand("*IDN?\n")
-            # Set protection current and time
-            if self._prot_curr is not None:
-                self._sendCommand("PCURR " + str(self._prot_curr) + "\n")
-            if self._prot_time is not None:
-                self._sendCommand("PTIME " + str(self._prot_time) + "\n")
-        except IOError as e:
-            logging.exception(str(e))
-        # gain, powerSupply and protection VAs
-        gain_rng = [MIN_GAIN, MAX_GAIN]
-        self._gain = 0
+        # internal values
+        self._sn = 37000002
+        self._gain = MIN_VOLT
         self._powerSupply = False
         self._protection = False
-        self.gain = model.FloatContinuous(self._gain, gain_rng, unit="V", setter=self._setGain)
-        # To initialize the voltage in the PMT control unit
-        self.gain.value = 0  # Just start with no gain
-        self.powerSupply = model.BooleanVA(False, setter=self._setPowerSupply)
-        self.powerSupply.value = False
-        self.protection = model.BooleanVA(False, setter=self._setProtection, getter=self._getProtection)
-        self.protection.value = False
+        self._prot_curr = 3
+        self._prot_time = 0.001
 
-    def _setGain(self, value):
-        try:
-            self._sendCommand("VOLT " + str(value) + "\n")
-        except IOError as e:
-            logging.exception(str(e))
+    def write(self, data):
+        self._input_buf += data
 
-        return self._gain
+        self._parseMessages()  # will update _input_buf
 
-    def _setPowerSupply(self, value):
-        try:
-            if value:
-                self._sendCommand("PWR " + str(1) + "\n")
-            else:
-                self._sendCommand("PWR " + str(0) + "\n")
-        except IOError as e:
-            logging.exception(str(e))
+    def read(self, size=1):
+        ret = self._output_buf[:size]
+        self._output_buf = self._output_buf[len(ret):]
 
-        return self._powerSupply
+        if len(ret) < size:
+            # simulate timeout
+            time.sleep(self.timeout)
+        return ret
 
-    def _getPowerSupply(self):
-        try:
-            ans = self._sendCommand("PWR?\n")
-            if ans == "1\r":
-                status = True
-            else:
-                status = False
-        except IOError as e:
-            logging.exception(str(e))
+    def flush(self):
+        pass
 
-        return status
+    def flushInput(self):
+        self._output_buf = ""
 
-    def _setProtection(self, value):
-        try:
-            if value:
-                self._sendCommand("PROT " + str(1) + "\n")
-            else:
-                self._sendCommand("PROT " + str(0) + "\n")
-        except IOError as e:
-            logging.exception(str(e))
+    def close(self):
+        # using read or write will fail after that
+        del self._output_buf
+        del self._input_buf
 
-        return self._protection
-
-    def _getProtection(self):
-        try:
-            ans = self._sendCommand("PROT?\n")
-            if ans == "1\r":
-                status = True
-            else:
-                status = False
-        except IOError as e:
-            logging.exception(str(e))
-
-        return status
-
-    def _sendCommand(self, cmd):
+    def _parseMessages(self):
         """
-        cmd (str): command to be sent to PMT Control unit.
+        Parse as many messages available in the buffer
         """
-        wspaces = cmd.count(' ')
-        qmarks = cmd.count('?')
-        tokens = cmd.split()
+        while len(self._input_buf) >= 1:
+            # read until '\n'
+            sep = self._input_buf.index('\n')
+            msg = self._input_buf[0:sep + 1]
+
+            # remove the bytes we've just read
+            self._input_buf = self._input_buf[len(msg):]
+
+            self._processMessage(msg)
+
+    def _processMessage(self, msg):
+        """
+        process the msg, and put the result in the output buffer
+        msg (str): raw message (including header)
+        """
+        res = None
+        wspaces = msg.count(' ')
+        qmarks = msg.count('?')
+        tokens = msg.split()
         if ((wspaces > 0) and (qmarks > 0)) or (wspaces > 1) or (qmarks > 1):
-            raise IOError("Cannot parse this command")
+            res = "ERROR: Cannot parse this command\n"
         elif wspaces:
             value = float(tokens[1])
             if tokens[0] == "PWR":
                 if (value != 0) and (value != 1):
-                    raise IOError("Out of range set value")
+                    res = "ERROR: Out of range set value\n"
                 else:
                     if value:
                         self._powerSupply = True
                     else:
                         self._powerSupply = False
-                    return '\r'
-
+                    res = '\n'
             elif tokens[0] == "PROT":
                 if (value != 0) and (value != 1):
-                    raise IOError("Out of range set value")
+                    res = "ERROR: Out of range set value\n"
                 else:
                     if value:
                         self._protection = True
                     else:
                         self._protection = False
-                    return '\r'
+                    res = '\n'
             elif tokens[0] == "VOLT":
                 if (value < MIN_VOLT) or (value > MAX_VOLT):
-                    raise IOError("Out of range set value")
+                    res = "ERROR: Out of range set value\n"
                 else:
                     self._gain = value
-                    return '\r'
+                    res = '\n'
             elif tokens[0] == "PCURR":
                 if (value < MIN_PCURR) or (value > MAX_PCURR):
-                    raise IOError("Out of range set value")
+                    res = "ERROR: Out of range set value\n"
                 else:
                     self._prot_curr = value
-                    return '\r'
+                    res = '\n'
             elif tokens[0] == "PTIME":
                 if (value < MIN_PTIME) or (value > MAX_PTIME):
-                    raise IOError("Out of range set value")
+                    res = "ERROR: Out of range set value\n"
                 else:
                     self._prot_time = value
-                    return '\r'
+                    res = '\n'
             else:
-                raise IOError("Cannot parse this command")
+                res = "ERROR: Cannot parse this command\n"
         elif qmarks:
             if tokens[0] == "*IDN?":
-                return IDN + '\r'
+                res = IDN + '\n'
             elif tokens[0] == "PWR?":
                 if self._powerSupply:
-                    return "1" + '\r'
+                    res = "1" + '\n'
                 else:
-                    return "0" + '\r'
+                    res = "0" + '\n'
             elif tokens[0] == "VOLT?":
-                return str(self._gain) + '\r'
+                res = str(self._gain) + '\n'
             elif tokens[0] == "PCURR?":
-                return str(self._prot_curr) + '\r'
+                res = str(self._prot_curr) + '\n'
             elif tokens[0] == "PTIME?":
-                return str(self._prot_time) + '\r'
+                res = str(self._prot_time) + '\n'
             elif tokens[0] == "PROT?":
                 if self._protection:
-                    return "1" + '\r'
+                    res = "1" + '\n'
                 else:
-                    return "0" + '\r'
+                    res = "0" + '\n'
             else:
-                raise IOError("Cannot parse this command")
+                res = "ERROR: Cannot parse this command\n"
         else:
-            raise IOError("Cannot parse this command")
+            res = "ERROR: Cannot parse this command\n"
 
-    @classmethod
-    def scan(cls):
-        """
-        returns the fake device.
-        """
-        found = []
-        found.append({"sn": SN})
-
-        return found
+        # add the response end
+        if res is not None:
+            self._output_buf += res

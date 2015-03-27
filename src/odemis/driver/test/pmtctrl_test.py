@@ -32,10 +32,10 @@ logger = logging.getLogger().setLevel(logging.DEBUG)
 SN = "0E203C44"  # put the serial number written on the component to test
 
 # Test using the hardware
-# CLASS = pmtctrl.PMTControl
+CLASS = pmtctrl.PMTControl
+# KWARGS = dict(name="test", role="pmt_control", sn=SN, prot_time=0.0002, prot_curr=2.85)
 # Test using the simulator
-CLASS = pmtctrl.PMTControlSimulator
-KWARGS = dict(name="test", role="pmt_control", sn=SN, prot_time=0.0002, prot_curr=2.85)
+KWARGS = dict(name="test", role="pmt_control", port="/dev/fake", prot_time=0.0002, prot_curr=2.85)
 
 # Control unit used for PMT testing
 CLASS_CTRL = CLASS
@@ -104,20 +104,20 @@ class TestPMTControl(unittest.TestCase):
 
     def test_send_cmd(self):
         # Send proper command
-        ans = self.dev._sendCommand("VOLT 3.2\n")
-        self.assertEqual(ans, '\r')
+        ans = self.dev._sendCommand("VOLT 3.2")
+        self.assertEqual(ans, '')
 
         # Send wrong command
         with self.assertRaises(IOError):
-            self.dev._sendCommand("VOLT??\n")
+            self.dev._sendCommand("VOLT??")
 
         # Set value out of range
         with self.assertRaises(IOError):
-            self.dev._sendCommand("VOLT 8.4\n")
+            self.dev._sendCommand("VOLT 8.4")
 
         # Send proper set and get command
-        self.dev._sendCommand("VOLT 1.7\n")
-        ans = self.dev._sendCommand("VOLT?\n")
+        self.dev._sendCommand("VOLT 1.7")
+        ans = self.dev._sendCommand("VOLT?")
         ans_f = float(ans)
         self.assertAlmostEqual(ans_f, 1.7)
 
@@ -181,7 +181,6 @@ class TestPMT(unittest.TestCase):
         # save basic VA
         self._orig_gain = self.pmt.gain.value
         self._orig_powerSupply = self.pmt.powerSupply.value
-        self._orig_protection = self.pmt.protection.value
 
     def tearUp(self):
         pass
@@ -189,48 +188,48 @@ class TestPMT(unittest.TestCase):
     def test_simple_acquisition(self):
         self.is_received = threading.Event()
         # Protection should be on before start acquisition
-        self.assertEqual(self.pmt.protection.value, True)
+        self.assertEqual(self.control.protection.value, True)
         self.assertEqual(self.pmt.data.active, False)
         self.pmt.data.subscribe(self.receive_image)
         # Protection should be off upon acquisition start
-        self.assertEqual(self.pmt.protection.value, False)
+        self.assertEqual(self.control.protection.value, False)
         self.assertEqual(self.pmt.data.active, True)
         self.is_received.wait()
         # Protection should be reset after acquisition is done
-        self.assertEqual(self.pmt.protection.value, True)
+        self.assertEqual(self.control.protection.value, True)
 
     def test_wrong_acquisition(self):
         self.is_received = threading.Event()
         # Protection should be on before start acquisition
-        self.assertEqual(self.pmt.protection.value, True)
+        self.assertEqual(self.control.protection.value, True)
         self.assertEqual(self.pmt.data.active, False)
         h = self.handler
         self.pmt.data.subscribe(self.receive_image)
         self.assertEqual(self.pmt.data.active, True)
         # Turn protection on and catch the warning message
-        self.control._sendCommand("PROT 1\n")
+        self.control._sendCommand("PROT 1")
         self.is_received.wait()
         self.assertTrue(h.matches(message="PMT protection was triggered during acquisition."))
         # Protection should be reset after acquisition is done
-        self.assertEqual(self.pmt.protection.value, True)
+        self.assertEqual(self.control.protection.value, True)
 
     def test_gain_decrease_acquisition(self):
         self.is_received = threading.Event()
         self.pmt.gain.value = 2
         # Protection should be on before start acquisition
-        self.assertEqual(self.pmt.protection.value, True)
+        self.assertEqual(self.control.protection.value, True)
         self.assertEqual(self.pmt.data.active, False)
         h = self.handler
         self.pmt.data.subscribe(self.receive_image)
         self.assertEqual(self.pmt.data.active, True)
         # Turn protection on and then decrease the gain, so the protection is
         # expected to be reset
-        self.control._sendCommand("PROT 1\n")
+        self.control._sendCommand("PROT 1")
         self.pmt.gain.value = 1
         self.is_received.wait()
         self.assertFalse(h.matches(message="PMT protection was triggered during acquisition."))
         # Protection should be reset after acquisition is done
-        self.assertEqual(self.pmt.protection.value, True)
+        self.assertEqual(self.control.protection.value, True)
 
     def receive_image(self, dataflow, image):
         """
