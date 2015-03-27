@@ -145,6 +145,9 @@ class Stream(object):
         self.auto_bc.subscribe(self._onAutoBC)
         self.auto_bc_outliers.subscribe(self._onOutliers)
         self.intensityRange.subscribe(self._onIntensityRange)
+
+        # TODO: don't generate a thread if the raw data is static
+        # TODO: kill the thread when the stream is discarded
         self._ht_needs_recompute = threading.Event()
         self._hthread = threading.Thread(target=self._histogram_thread,
                                          name="Histogram computation")
