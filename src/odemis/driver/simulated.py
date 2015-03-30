@@ -297,8 +297,7 @@ class Chamber(model.Actuator):
         self._executor.cancel()
         logging.warning("Stopped pressure change")
 
-# FIXME: need to set the right value once known
-PHENOM_SH_TYPE_OPTICAL = 1
+PHENOM_SH_TYPE_OPTICAL = 200 # Official Delphi sample holder type ID
 PHENOM_SH_FAKE_ID = 1234567890
 
 class PhenomChamber(Chamber):
