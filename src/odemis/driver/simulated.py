@@ -268,12 +268,12 @@ class Chamber(model.Actuator):
         f = model.ProgressiveFuture(start=est_start,
                                     end=est_start + self._getDuration(new_pres))
 
-        return self._executor.submitf(f, self._changePressure, new_pres)
+        return self._executor.submitf(f, self._changePressure, f, new_pres)
 
     def _getDuration(self, pos):
         return abs(self._position - pos) / SPEED_PUMP
 
-    def _changePressure(self, p):
+    def _changePressure(self, f, p):
         """
         Synchronous change of the pressure
         p (float): target pressure
@@ -285,7 +285,10 @@ class Chamber(model.Actuator):
         self._time_goal = now + duration # s
         self._goal = p
 
-        time.sleep(duration)
+        time.sleep(duration / 2)
+        # DEBUG: for testing wrong time estimation
+        # f.set_progress(start=self._time_start, end=self._time_goal + 10)
+        time.sleep(duration / 2)
 
         self._position = p
         self._updatePosition()

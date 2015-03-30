@@ -273,43 +273,47 @@ class ProgressiveFutureConnector(object):
         now = time.time()
         past = now - self._start
         left = max(0, self._end - now)
-        self._prev_left, prev_left = left, self._prev_left
+        prev_left = self._prev_left
+
+        can_update = True
+        if prev_left is not None: # Avoid back and forth estimation
+            # Don't update gauge if ratio reduces (a bit)
+            try:
+                ratio = past / (past + left)
+                prev_ratio = self._bar.Value / self._bar.Range
+                if prev_ratio - 0.1 < ratio < prev_ratio:
+                    can_update = False
+            except ZeroDivisionError:
+                pass
+            # Or if the time left in absolute value slighty increases (< 5s)
+            if 0 < left - prev_left < 5:
+                can_update = False
+
+        if not can_update:
+            logging.debug("No updating progress as new estimation is %g s left "
+                          "vs old %g s, and current ratio %g vs old %g.",
+                          left, prev_left, ratio * 100, prev_ratio * 100)
+            return
 
         # progress bar: past / past+left
-        can_update = True
-        try:
-            ratio = past / (past + left)
-            # Don't update gauge if ratio reduces
-            prev_ratio = self._bar.Value / self._bar.Range
-            logging.debug("current ratio %g, old ratio %g", ratio * 100, prev_ratio * 100)
-            if prev_left is not None and prev_ratio - 0.1 < ratio < prev_ratio:
-                can_update = False
-        except ZeroDivisionError:
-            pass
-
-        if can_update:
-            logging.debug("updating the progress bar to %f/%f", past, past + left)
-            self._bar.Range = 100 * (past + left)
-            self._bar.Value = 100 * past
+        logging.debug("updating the progress bar to %f/%f", past, past + left)
+        self._bar.Range = 100 * (past + left)
+        self._bar.Value = 100 * past
 
         if self._future.done():
             # make really sure we don't update the text after the future is over
             return
 
-        # Time left
+        # Time left text
+        self._prev_left = left
         left = math.ceil(left) # pessimistic
-        # Avoid back and forth estimation => don't increase unless really huge (> 5s)
-        if prev_left is not None and 0 < left - prev_left < 5:
-            logging.debug("No updating progress bar as new estimation is %g s "
-                          "while the previous was only %g s",
-                          left, prev_left)
-            return
 
         if left > 2:
             lbl_txt = u"%s" % units.readable_time(left, full=self._full_text)
         else:
             # don't be too precise
             lbl_txt = u"a few seconds"
+
         if self._full_text:
             lbl_txt += u" left"
 
