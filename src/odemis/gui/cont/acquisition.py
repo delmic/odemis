@@ -487,7 +487,6 @@ class SparcAcquiController(object):
             self.filename.value = new_name
 
     @wxlimit_invocation(1) # max 1/s
-    @call_in_wx_main
     def update_acquisition_time(self):
 
         if self._roa.value == UNDEFINED_ROI:

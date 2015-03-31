@@ -20,11 +20,19 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 from __future__ import division
+
+import gc
+import logging
 from odemis import util
 from odemis.util import limit_invocation, TimeoutError
+from odemis.util import timeout
 import time
 import unittest
-from odemis.util import timeout
+import weakref
+
+
+logging.getLogger().setLevel(logging.DEBUG)
+
 
 class TestLimitInvocation(unittest.TestCase):
     def test_not_too_often(self):
@@ -44,6 +52,33 @@ class TestLimitInvocation(unittest.TestCase):
     def count_max_1s(self):
         # never called more than once per second
         self.count += 1
+        time.sleep(0.2)
+
+    def test_gc(self):
+        u = Useless()
+        wku = weakref.ref(u)
+        now = time.time()
+        end = now + 1.1 # a bit more than 1 s
+        while time.time() < end:
+            u.doit(time.time(), b=3)
+            time.sleep(0.01)
+
+        # Check the object u has nothing preventing it from being dereferenced
+        del u
+        time.sleep(1) # wait for the last potential calls to happen
+        self.assertIsNone(wku())
+
+
+class Useless(object):
+    """
+    Independent class for testing limit_invocation decorator
+    """
+    def __del__(self):
+        print "Useless %r is gone" % self
+
+    @limit_invocation(0.1)
+    def doit(self, a, b=None):
+        print "doing it %s, %s" % (a, b)
 
 
 class TestTimeout(unittest.TestCase):

@@ -145,6 +145,9 @@ class Stream(object):
         self.auto_bc.subscribe(self._onAutoBC)
         self.auto_bc_outliers.subscribe(self._onOutliers)
         self.intensityRange.subscribe(self._onIntensityRange)
+
+        # TODO: don't generate a thread if the raw data is static
+        # TODO: kill the thread when the stream is discarded
         self._ht_needs_recompute = threading.Event()
         self._hthread = threading.Thread(target=self._histogram_thread,
                                          name="Histogram computation")
@@ -366,6 +369,8 @@ class Stream(object):
 
         return md
 
+    # Note: if overriding this method, the decorator must be copied iff this
+    # parent method is _not_ called.
     @limit_invocation(0.1) # Max 10 Hz
     def _updateImage(self, tint=(255, 255, 255)):
         """ Recomputes the image with all the raw data available

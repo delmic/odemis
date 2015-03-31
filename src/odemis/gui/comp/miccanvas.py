@@ -435,8 +435,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self.update_thumbnail()
 
     @wxlimit_invocation(2)  # max 1/2 Hz
-    @call_in_wx_main  # needed as it accesses the DC
-    @ignore_dead
     def update_thumbnail(self):
         if self.IsEnabled():
             img = self._get_img_from_buffer()
@@ -799,8 +797,6 @@ class OverviewCanvas(DblMicroscopeCanvas):
         self.add_view_overlay(self.history_overlay)
 
     @wxlimit_invocation(2)  # max 1/2 Hz
-    @call_in_wx_main  # needed as it accesses the DC
-    @ignore_dead
     def update_thumbnail(self):
 
         if not self.IsEnabled() or self.ClientSize.x * self.ClientSize.y <= 0:
@@ -1239,7 +1235,6 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         self._tab_data_model = tab_data
 
     @wxlimit_invocation(2)  # max 1/2 Hz
-    @call_in_wx_main  # needed as it accesses the DC
     def update_thumbnail(self):
         if self.IsEnabled():
             if self._data is None:
@@ -1355,7 +1350,6 @@ class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
         self.markline_overlay.activate()
 
     @wxlimit_invocation(2)  # max 1/2 Hz
-    @call_in_wx_main  # needed as it accesses the DC
     def update_thumbnail(self):
         if self.IsEnabled():
             if self.images == [None]:
@@ -1444,8 +1438,6 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
             self.update_thumbnail()
 
     @wxlimit_invocation(2)  # max 1/2 Hz
-    @call_in_wx_main  # needed as it accesses the DC
-    @ignore_dead
     def update_thumbnail(self):
         if self.IsEnabled():
             img = self._get_img_from_buffer()

@@ -2,48 +2,64 @@
 # Stop the gui and back-end in any case
 
 . /etc/odemis.conf
+RUN_DIR="/var/run/odemisd"
 
 export PYTHONPATH
 
+# Clean up the run directory that contains pipes for connection between backend and clients
+clean_run_dir () {
+    if [ -e "$RUN_DIR" ]; then
+        # try only if there is something worthy to delete (ie, dir is not empty)
+        if ! find "$RUN_DIR" -maxdepth 0 -empty | read v; then
+            echo "Cleaning $RUN_DIR"
+            sudo rm -rf "$RUN_DIR"/*
+        fi
+    fi
+}
+
 # kill the GUI if it's already there
 if pgrep -f $GUI > /dev/null; then
+    echo "Stopping the GUI"
     pkill -f $GUI
 fi
 
 
 # Stop the backend
-BEP_PID=$(pgrep odemisd) # parent PID
-BE_PIDS=$(pgrep -f $BACKEND)
-if [ -n "$BE_PIDS" ]; then
+#BEP_PID=$(pgrep odemisd) # parent PID
+OLD_BE_PIDS=$(pgrep -f $BACKEND)
+if [ -n "$OLD_BE_PIDS" ]; then
     # try nicely
+    echo "Stopping the back-end"
     odemis-cli --kill
 
     sleep 3 # wait for the backend to finish peacefully
     # in case it's still there => kill
-    if pgrep -f $BACKEND > /dev/null; then
+    # Only kill the old processes, so that if the user has started a new
+    # instance in the mean time, it doesn't get killed
+    NOW_BE_PIDS=$(pgrep -f $BACKEND)
+    # pick PIDs which were seen at the beginning and still seen now
+    LEFT_BE_PIDS=$(sort <<< "$OLD_BE_PIDS"$'\n'"$NOW_BE_PIDS" | uniq -d | sed '/^ $/d')
+    #echo "Left = $LEFT_BE_PIDS"
+    if [ -n "$LEFT_BE_PIDS" ]; then
         echo "Back-end still running, killing it..."
         # TODO: only use sudo if the backend is running as root
-        # Only kill the old processes, so that if the user has started a new
-        # instance in the mean time, it doesn't get killed
-        # We use pkill so that it can be authorized by a sudoer command
-        #sudo /bin/kill $BE_PIDS
-        sudo pkill -P $BEP_PID,${BE_PIDS//$'\n'/,} -f $BACKEND
+        sudo /bin/kill $LEFT_BE_PIDS
+#        sudo /bin/kill $BEP_PID
 
         sleep 1
         # Try even harder
         if pgrep -f $BACKEND > /dev/null; then
-            sudo pkill -CONT -P $BEP_PID,${BE_PIDS//$'\n'/,} -f $BACKEND
-            sudo pkill -KILL -P $BEP_PID,${BE_PIDS//$'\n'/,} -f $BACKEND
+            echo "Back-end is apparently dead, trying harder to kill it..."
+#            sudo pkill -CONT -P $BEP_PID,${BE_PIDS//$'\n'/,} -f $BACKEND
+            sudo /bin/kill -CONT $LEFT_BE_PIDS # in case it was STOPPED
+            sudo /bin/kill -KILL $LEFT_BE_PIDS
+        fi
+        clean_run_dir
     fi
-    fi
+else
+    # No odemis backend found?
+    # The user probably asked for some reason, so at least clean up the run dir
+    clean_run_dir
 fi
 
-RUN_DIR="/var/run/odemisd"
 
-# clean up
-if [ -e "$RUN_DIR" ]; then
-	# try only if there is something worthy to delete (ie, dir is not empty)
-	if ! find "$RUN_DIR" -maxdepth 0 -empty | read v; then
-	    sudo rm -rf "$RUN_DIR"/*
-	fi
-fi

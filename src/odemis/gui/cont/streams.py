@@ -525,6 +525,7 @@ class StreamController(object):
                 # provides feedback to the user about which stream is active)
                 for s, cb in self._scheduler_subscriptions.items():
                     if s != stream:
+                        s.is_active.value = False
                         s.should_update.unsubscribe(cb) # don't inform us of that change
                         s.should_update.value = False
                         s.should_update.subscribe(cb)

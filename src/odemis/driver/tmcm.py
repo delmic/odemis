@@ -51,7 +51,7 @@ class TMCLError(Exception):
 
 # Status codes from replies which indicate everything went fine
 TMCL_OK_STATUS = {100, # successfully executed
-                  101, # commanded loaded in memory 
+                  101, # commanded loaded in memory
                  }
 # Status codes from replies which indicate an error
 TMCL_ERR_STATUS = {
@@ -175,7 +175,7 @@ class TMCM3110(model.Actuator):
             self.temperature = model.FloatVA(0, unit=u"°C", readonly=True)
             self.temperature1 = model.FloatVA(0, unit=u"°C", readonly=True)
             self._temp_timer = util.RepeatingTimer(10, self._updateTemperatureVA,
-                                                  "TMCM temperature update")
+                                                   "TMCM temperature update")
             self._updateTemperatureVA() # make sure the temperature is correct
             self._temp_timer.start()
 
@@ -193,7 +193,6 @@ class TMCM3110(model.Actuator):
             if self._serial:
                 self._serial.close()
                 self._serial = None
-
 
     def _init_axis(self, axis):
         """
@@ -364,9 +363,9 @@ class TMCM3110(model.Actuator):
                                         rt, self._target)
                     if rn != n:
                         logging.info("Skipping a message about instruction %d (waiting for %d)",
-                                      rn, n)
+                                     rn, n)
                         continue
-                    if not status in TMCL_OK_STATUS:
+                    if status not in TMCL_OK_STATUS:
                         raise TMCLError(status, rval, self._instr_to_str(msg))
                 else:
                     # TODO: investigate more why once in a while (~1/1000 msg)
@@ -757,7 +756,7 @@ class TMCM3110(model.Actuator):
         """
         Update the temperature VAs, assuming that the 2 analogue inputs are
         connected to a temperature sensor with mapping 10 mV <-> 1 °C. That's
-        conveniently what is in the Delphi. 
+        conveniently what is in the Delphi.
         """
         try:
             # The analogue port return 0..4095 -> 0..10 V
@@ -946,7 +945,7 @@ class TMCM3110(model.Actuator):
     def _cancelCurrentMove(self, future):
         """
         Cancels the current move (both absolute or relative). Non-blocking.
-        future (Future): the future to stop. Unused, only one future must be 
+        future (Future): the future to stop. Unused, only one future must be
          running at a time.
         return (bool): True if it successfully cancelled (stopped) the move.
         """
@@ -991,7 +990,7 @@ class TMCM3110(model.Actuator):
         """
         # TODO: use serial.tools.list_ports.comports() (but only availabe in pySerial 2.6)
         if os.name == "nt":
-            ports = ["COM" + str(n) for n in range (0, 8)]
+            ports = ["COM" + str(n) for n in range(8)]
         else:
             ports = glob.glob('/dev/ttyACM?*')
 
@@ -1051,9 +1050,9 @@ class TMCM3110Simulator(object):
         self._astates = [dict(orig_axis_state) for i in range(self._naxes)]
 #         self._ustepsize = [1e-6] * 3 # m/µstep
 
-        # (float, float, int) for each axis 
+        # (float, float, int) for each axis
         # start, end, start position of a move
-        self._axis_move = [(0,0,0)] * self._naxes
+        self._axis_move = [(0, 0, 0)] * self._naxes
 
     def _getCurrentPos(self, axis):
         """
@@ -1148,7 +1147,7 @@ class TMCM3110Simulator(object):
             if not 0 <= mot <= self._naxes:
                 self._sendReply(inst, status=4) # invalid value
                 return
-            if not typ in [0, 1, 2]:
+            if typ not in (0, 1, 2):
                 self._sendReply(inst, status=3) # wrong type
                 return
             pos = self._getCurrentPos(mot)

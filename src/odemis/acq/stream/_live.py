@@ -803,7 +803,7 @@ class RGBCameraStream(CameraStream):
         pass
 
     def onActive(self, active):
-        if not self._emitter is None:
+        if self._emitter is not None:
             if active:
                 # set the light to max
                 # TODO: allows to define the power via a VA on the stream
@@ -813,6 +813,7 @@ class RGBCameraStream(CameraStream):
                 self._emitter.power.value = self._emitter.power.range[0]
         Stream.onActive(self, active)
 
+    @limit_invocation(0.1)
     def _updateImage(self):
         # Just pass the RGB data on
         if not self.raw:
