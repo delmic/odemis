@@ -24,6 +24,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+import Queue
 import collections
 from decorator import decorator
 import errno
@@ -36,6 +37,7 @@ import os
 import signal
 import threading
 import time
+import weakref
 
 
 def find_closest(val, l):
@@ -153,8 +155,49 @@ def normalize_rect(rect):
     return type(rect)((l, t, r, b))
 
 
-class TimeoutError(Exception):
-    pass
+def _li_thread(delay, q):
+
+    try:
+        exect = time.time()
+        while True:
+            # read the latest arguments in the queue (if there are more)
+            t, f, args, kwargs = q.get() # first wait until there is something
+            if t is None:
+                return
+
+            # wait until it's time for it
+            next_t = (min(exect, t) + delay)
+            while True: # discard arguments if there is newer calls already queued
+                sleep_t = next_t - time.time()
+                if sleep_t > 0:
+                    # logging.debug("waiting %f s until executing call", sleep_t)
+                    # time.sleep(sleep_t)
+                    timeout = sleep_t
+                    block = True
+                else: # just check one last time
+                    block = False
+                    timeout = None
+
+                try:
+                    t, f, args, kwargs = q.get(block=block, timeout=timeout)
+                    if t is None: # Sign that we should stop (object is gone)
+                        return
+                    # logging.debug("Overriding call with call at %f", t)
+                except Queue.Empty:
+                    break
+
+            try:
+                exect = time.time()
+                # logging.debug("executing function %s with a delay of %f s", f.__name__, exect - t)
+                f(*args, **kwargs)
+            except Exception:
+                logging.exception("During limited invocation call")
+
+            # clean up early, to avoid possible cyclic dep on the instance
+            del f, args, kwargs
+
+    finally:
+        logging.debug("Ending li thread")
 
 
 def limit_invocation(delay_s):
@@ -175,44 +218,65 @@ def limit_invocation(delay_s):
         logging.warn("Warning! Long delay interval. Please consider using "
                      "an interval of 5 or less seconds")
 
-    def limit(f, self, *args, **kwargs):
-        if inspect.isclass(self):
-            raise ValueError("limit_invocation decorators should only be "
-                             "assigned to instance methods!")
-
-        now = time.time()
-
-        # The next statement was not useful in the sense that we cannot
-        # add attributes to bound methods.
-        # Get the bound version of the function
-        #bf = f.__get__(self)
+    def li_dec(f):
+        # Share a lock on the class (as it's not easy on the instance)
+        # Note: we can only do this at init, after it's impossible to add/set
+        # attribute on an method
+        f._li_lock = threading.Lock()
 
         # Hacky way to store value per instance and per methods
         last_call_name = '%s_lim_inv_last_call' % f.__name__
-        timer_name = '%s_lim_inv_timer' % f.__name__
+        queue_name = '%s_lim_inv_queue' % f.__name__
+        wr_name = '%s_lim_inv_wr' % f.__name__
 
-        # If the function was called later than 'delay_s' seconds ago...
-        if (hasattr(self, last_call_name) and
-            now - getattr(self, last_call_name) < delay_s):
-            #logging.debug('Delaying method call')
-            if now < getattr(self, last_call_name):
-                # this means a timer is already set, nothing else to do
-                return
+        @wraps(f)
+        def limit(self, *args, **kwargs):
+            if inspect.isclass(self):
+                raise ValueError("limit_invocation decorators should only be "
+                                 "assigned to instance methods!")
 
-            timer = threading.Timer(delay_s,
-                          f,
-                          args=[self] + list(args),
-                          kwargs=kwargs)
-            setattr(self, timer_name, timer)
-            setattr(self, last_call_name, now + delay_s)
-            timer.start()
-        else:
-            #execute method call now
-            setattr(self, last_call_name, now)
+            now = time.time()
+            with f._li_lock:
+                # If the function was called later than 'delay_s' seconds ago...
+                if (hasattr(self, last_call_name) and
+                    now - getattr(self, last_call_name) < delay_s):
+                    # logging.debug('Delaying method call')
+                    try:
+                        q = getattr(self, queue_name)
+                    except AttributeError:
+                        # Create everything need
+                        q = Queue.Queue()
+                        setattr(self, queue_name, q)
+
+                        # Detect when instance of self is dereferenced
+                        # and kill thread then
+                        def on_deref(obj):
+                            # logging.debug("object %r gone", obj)
+                            q.put((None, None, None, None)) # ask the thread to stop
+
+                        wref = weakref.ref(self, on_deref)
+                        setattr(self, wr_name, wref)
+
+                        t = threading.Thread(target=_li_thread,
+                                             name="li thread for %s" % f.__name__,
+                                             args=(delay_s, q))
+                        t.daemon = True
+                        t.start()
+
+                    q.put((now, f, (self,) + args, kwargs))
+                    setattr(self, last_call_name, now + delay_s)
+                    return
+                else:
+                    # execute method call now
+                    setattr(self, last_call_name, now)
+
             return f(self, *args, **kwargs)
+        return limit
+    return li_dec
 
-    return decorator(limit)
 
+class TimeoutError(Exception):
+    pass
 
 
 # TODO: only works on Unix, needs a fallback on windows (at least, don't complain)
