@@ -369,6 +369,8 @@ class Stream(object):
 
         return md
 
+    # Note: if overriding this method, the decorator must be copied iff this
+    # parent method is _not_ called.
     @limit_invocation(0.1) # Max 10 Hz
     def _updateImage(self, tint=(255, 255, 255)):
         """ Recomputes the image with all the raw data available
