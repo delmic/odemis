@@ -28,7 +28,6 @@ import shlex
 import signal
 import sys
 import time
-from odemis.model._components import ST_UNLOADED
 logging.getLogger().setLevel(logging.DEBUG)
 # The config file might contain additional paths for finding odemis, so we
 # need to parse it and override the path before loading the rest
@@ -96,7 +95,7 @@ import subprocess
 from Pyro4.errors import CommunicationError
 from odemis import model
 from odemis.util import driver
-from odemis.model import ST_RUNNING
+from odemis.model import ST_RUNNING, ST_UNLOADED
 import wx
 
 class BackendStarter(object):
