@@ -65,6 +65,7 @@ TMCL_ERR_STATUS = {
 
 REFPROC_2XFF = "2xFinalForward" # fast then slow, always finishing by forward move
 REFPROC_FAKE = "FakeReferencing" # assign the current position as the reference
+REFPROC_LS = "LeftSwitch" # Fast to left switch, then slowly go out and go again to left switch
 
 class TMCM3110(model.Actuator):
     """
@@ -168,13 +169,16 @@ class TMCM3110(model.Actuator):
             axes_ref = dict([(a, False) for a in axes])
             self.referenced = model.VigilantAttribute(axes_ref, readonly=True)
 
+        # Note: if multiple instances of the driver are running simultaneously,
+        # the temperature reading will cause mayhem even if one of the instances
+        # does nothing.
         if temp:
             # One sensor is at the top, one at the bottom of the sample holder.
             # The most interesting is the temperature difference, so just
             # report both.
             self.temperature = model.FloatVA(0, unit=u"°C", readonly=True)
             self.temperature1 = model.FloatVA(0, unit=u"°C", readonly=True)
-            self._temp_timer = util.RepeatingTimer(10, self._updateTemperatureVA,
+            self._temp_timer = util.RepeatingTimer(1, self._updateTemperatureVA,
                                                    "TMCM temperature update")
             self._updateTemperatureVA() # make sure the temperature is correct
             self._temp_timer.start()
@@ -187,6 +191,7 @@ class TMCM3110(model.Actuator):
 
         if hasattr(self, "_temp_timer"):
             self._temp_timer.cancel()
+            self._temp_timer.join(1)
             del self._temp_timer
 
         with self._ser_access:
@@ -349,6 +354,8 @@ class TMCM3110(model.Actuator):
             while True:
                 res = self._serial.read(9)
                 if len(res) < 9: # TODO: TimeoutError?
+                    logging.warning("Received only %d bytes after %s, will fail the instruction",
+                                    len(res), self._instr_to_str(msg))
                     raise IOError("Received only %d bytes after %s" %
                                   (len(res), self._instr_to_str(msg)))
                 logging.debug("Received %s", self._reply_to_str(res))
@@ -377,7 +384,7 @@ class TMCM3110(model.Actuator):
     # Low level functions
     def GetVersion(self):
         """
-        return (int, int, int): 
+        return (int, int, int):
              Controller ID: 3110 for the TMCM-3110
              Firmware major version number
              Firmware minor version number
@@ -706,6 +713,30 @@ class TMCM3110(model.Actuator):
             # Reset the absolute 0 (by setting current pos to 0)
             logging.debug("Changing referencing position by %d", self.GetAxisParam(axis, 1))
             self.SetAxisParam(axis, 1, 0)
+        elif self._refproc == REFPROC_LS: # left switch = negative direction
+            if not self._isFullyPowered():
+                raise IOError("Device is not powered, so motors cannot move")
+
+            # TODO: Untested code
+            self.SetAxisParam(axis, 194, 350) # ref search speed
+            self.SetAxisParam(axis, 195, 50) # ref switch speed (going back and forth again slowly)
+            self.SetAxisParam(axis, 149, 0) # soft stop disabled (will stop quicly when detecting the switch)
+            self.SetAxisParam(axis, 193, 1) # left switch referencing
+            self.GetAxisParam(axis, 11) # read current left switch value
+
+            self.StartRefSearch(axis)
+            # wait 10 s max
+            for i in range(1000):
+                time.sleep(0.01)
+                if not self.GetStatusRefSearch(axis):
+                    logging.debug("Referencing procedure sucessful")
+                    break
+            else:
+                self.StopRefSearch(axis)
+                logging.warning("Reference search failed to finish in time")
+
+            # Position 0 is automatically set to the left switch coordinate
+            # and the axis stops there.
         elif self._refproc == REFPROC_FAKE:
             logging.debug("Simulating referencing")
             self.MotorStop(axis)
