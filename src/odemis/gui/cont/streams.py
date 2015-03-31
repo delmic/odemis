@@ -21,18 +21,22 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 from __future__ import division
+
 import logging
+import wx
 from wx.lib.pubsub import pub
 
 import odemis.acq.stream as acqstream
-from odemis.acq.stream import OpticalStream
+from odemis.acq.stream import OpticalStream, Stream
+from odemis.acq.stream._live import CameraStream
+from odemis.gui.comp.stream import StreamPanel
+from odemis.gui.conf.data import HW_SETTINGS_CONFIG
 import odemis.gui.model as guimodel
 from odemis import model
-from odemis.gui import comp
+from odemis.gui.util.widgets import VigilantAttributeConnector
 
 
-# Stream scheduling policies: decides which streams which are with .should_update
-# get .is_active
+# Stream scheduling policies: decides which streams which are with .should_update get .is_active
 SCHED_LAST_ONE = 1  # Last stream which got added to the should_update set
 SCHED_ALL = 2  # All the streams which are in the should_update stream
 # Note: it seems users don't like ideas like round-robin, where the hardware
@@ -41,6 +45,37 @@ SCHED_ALL = 2  # All the streams which are in the should_update stream
 # TODO: SCHED_ALL_INDIE -> Schedule at the same time all the streams which
 # are independent (no emitter from a stream will affect any detector of another
 # stream).
+
+
+class SettingEntry(VigilantAttributeConnector):
+    """ An Entry linked to a Vigilant Attribute """
+
+    def __init__(self, name, va=None, stream=None, lbl_ctrl=None, value_ctrl=None,
+                 va_2_ctrl=None, ctrl_2_va=None, events=None):
+        """ See the super classes for parameter descriptions
+
+        :param name: (str): The name of the setting
+        :param name: (VigilantAttribute): The VA containing the setting value
+        :param hw_comp: (HardwareComponent): The component to which the setting belongs
+        :param lbl_ctrl: (wx.StaticText): The setting label
+        :param value_ctrl: (wx.Window): The widget containing the current value
+
+        """
+
+        self.name = name
+        self.stream = stream
+        self.lbl_ctrl = lbl_ctrl
+        self.value_ctrl = value_ctrl
+
+        VigilantAttributeConnector.__init__(self, va, value_ctrl, va_2_ctrl, ctrl_2_va, events)
+
+    def pause(self):
+        if self.stream_va:
+            super(SettingEntry, self).pause()
+
+    def resume(self):
+        if self.stream_va:
+            super(SettingEntry, self).resume()
 
 
 class StreamController(object):
@@ -62,8 +97,10 @@ class StreamController(object):
         self._main_data_model = tab_data.main
         self._stream_bar = stream_bar
 
-        self._scheduler_subscriptions = {} # stream -> callable
-        self._sched_policy = SCHED_LAST_ONE # works well in most cases
+        self.entries = []  # list of SettingEntries
+
+        self._scheduler_subscriptions = {}  # stream -> callable
+        self._sched_policy = SCHED_LAST_ONE  # works well in most cases
 
         if stream_bar.btn_add_stream:
             self._createAddStreamActions()
@@ -73,7 +110,7 @@ class StreamController(object):
 
         # TODO: uncomment if needed
         # if hasattr(tab_data, 'opticalState'):
-        #     tab_data.opticalState.subscribe(self.onOpticalState, init=True)
+        # tab_data.opticalState.subscribe(self.onOpticalState, init=True)
         #
         # if hasattr(tab_data, 'emState'):
         #     tab_data.emState.subscribe(self.onEMState, init=True)
@@ -112,9 +149,9 @@ class StreamController(object):
             for channel_data in channels_data:
                 # TODO: be more clever to detect the type of stream
                 if (
-                        model.MD_WL_LIST in channel_data.metadata or
-                        model.MD_WL_POLYNOMIAL in channel_data.metadata or
-                        (len(channel_data.shape) >= 5 and channel_data.shape[-5] > 1)
+                                    model.MD_WL_LIST in channel_data.metadata or
+                                    model.MD_WL_POLYNOMIAL in channel_data.metadata or
+                            (len(channel_data.shape) >= 5 and channel_data.shape[-5] > 1)
                 ):
                     name = channel_data.metadata.get(model.MD_DESCRIPTION, "Spectrum")
                     klass = acqstream.StaticSpectrumStream
@@ -123,9 +160,9 @@ class StreamController(object):
                     ar_data.append(channel_data)
                     continue
                 elif (
-                        (model.MD_IN_WL in channel_data.metadata and
-                         model.MD_OUT_WL in channel_data.metadata) or
-                        model.MD_USER_TINT in channel_data.metadata
+                            (model.MD_IN_WL in channel_data.metadata and
+                                     model.MD_OUT_WL in channel_data.metadata) or
+                                model.MD_USER_TINT in channel_data.metadata
                 ):
                     # No explicit way to distinguish between Brightfield and Fluo,
                     # so guess it's Brightfield iif:
@@ -133,8 +170,8 @@ class StreamController(object):
                     # * (and) Large band for excitation wl (> 100 nm)
                     in_wl = d.metadata[model.MD_IN_WL]
                     if (
-                            model.MD_USER_TINT in channel_data.metadata or
-                            in_wl[1] - in_wl[0] < 100e-9
+                                    model.MD_USER_TINT in channel_data.metadata or
+                                        in_wl[1] - in_wl[0] < 100e-9
                     ):
                         # Fluo
                         name = channel_data.metadata.get(model.MD_DESCRIPTION, "Filtered colour")
@@ -206,9 +243,9 @@ class StreamController(object):
 
         # First: Fluorescent stream (for dyes)
         if (
-                self._main_data_model.light and
-                self._main_data_model.light_filter and
-                self._main_data_model.ccd
+                        self._main_data_model.light and
+                        self._main_data_model.light_filter and
+                    self._main_data_model.ccd
         ):
             def fluor_capable():
                 # TODO: need better way to check, maybe opticalState == STATE_DISABLED?
@@ -219,12 +256,11 @@ class StreamController(object):
                 return enabled and compatible
 
             # TODO: how to know it's _fluorescent_ microscope?
-            #  => multiple source? filter?
+            # => multiple source? filter?
             self._stream_bar.add_action("Filtered colour", self._userAddFluo, fluor_capable)
 
         # Bright-field
         if self._main_data_model.brightlight and self._main_data_model.ccd:
-
             def brightfield_capable():
                 enabled = self._main_data_model.chamberState.value in {guimodel.CHAMBER_VACUUM,
                                                                        guimodel.CHAMBER_UNKNOWN}
@@ -451,17 +487,55 @@ class StreamController(object):
 
         """
 
-        sp = comp.stream.StreamPanel(self._stream_bar, stream, self._tab_data_model)
+        sp = StreamPanel(self._stream_bar, stream, self._tab_data_model)
 
         if isinstance(stream, OpticalStream):
             # If the stream is optical, add override controls if the proper VAs are present
 
-            exposure_time_va = stream.exposureTime if hasattr(stream, 'exposureTime') else None
-            light_power_va = stream.lightPower if hasattr(stream, 'lightPower') else None
+            has_exposure_time = hasattr(stream, 'exposureTime')
+            if has_exposure_time:
+                # Assertion mainly needed for dynamic attribute recognition (i.e. exposureTime)
+                assert(isinstance(stream, CameraStream))
+                et_config = HW_SETTINGS_CONFIG['ccd']['exposureTime']
 
-            sp.add_optical_controls(exposure_time_va, light_power_va)
+                conf = {
+                    'min_val': et_config["range"][0],
+                    'max_val': et_config["range"][1],
+                    'unit': stream.exposureTime.unit,
+                    'scale': et_config["scale"],
+                    'accuracy': et_config["accuracy"]
+                }
 
-        self._stream_bar.add_stream(sp, show)
+                lbl_ctrl, value_ctrl = sp.add_exposure_time_ctrl(stream.exposureTime.value, conf)
+
+                se = SettingEntry(name="exposureTime", va=stream.exposureTime, stream=stream,
+                                  lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl, events=wx.EVT_SLIDER)
+                self.entries.append(se)
+
+            has_light_power = hasattr(stream, 'lightPower')
+            if has_light_power:
+                # Assertion mainly needed for dynamic attribute recognition (i.e. lightPower)
+                assert(isinstance(stream, CameraStream))
+                et_config = HW_SETTINGS_CONFIG['light']['power']
+
+                conf = {
+                    'min_val': stream.lightPower.range[0],
+                    'max_val': stream.lightPower.range[1],
+                    'unit': stream.lightPower.unit,
+                    'scale': et_config["scale"],
+                    'accuracy': 4
+                }
+
+                lbl_ctrl, value_ctrl = sp.add_light_power_ctrl(stream.lightPower.value, conf)
+
+                se = SettingEntry(name="lightPower", va=stream.lightPower, stream=stream,
+                                  lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl, events=wx.EVT_SLIDER)
+                self.entries.append(se)
+
+            # if has_exposure_time or has_light_power:
+            #     sp.add_divider()
+
+        self._stream_bar.add_stream_panel(sp, show)
 
         if locked:
             sp.to_locked_mode()
@@ -510,8 +584,8 @@ class StreamController(object):
         # Ensure it's visible in the current view (if feasible)
         if updated:
             fv = self._tab_data_model.focussedView.value
-            if (isinstance(stream, fv.stream_classes) and # view is compatible
-                not stream in fv.getStreams()):
+            if (isinstance(stream, fv.stream_classes) and  # view is compatible
+                    not stream in fv.getStreams()):
                 # Add to the view
                 fv.addStream(stream)
                 # Update the graphical display
@@ -523,7 +597,7 @@ class StreamController(object):
         # * "should_update" streams are the streams to be scheduled
         # * a stream becomes "active" when it's currently acquiring
         # * when a stream is just set to be "should_update" (by the user) it
-        #   should be scheduled as soon as possible
+        # should be scheduled as soon as possible
 
         # Note we ensure that .streams is sorted with the new playing stream as
         # the first one in the list. This means that .streams is LRU sorted,
@@ -544,7 +618,7 @@ class StreamController(object):
                 for s, cb in self._scheduler_subscriptions.items():
                     if s != stream:
                         s.is_active.value = False
-                        s.should_update.unsubscribe(cb) # don't inform us of that change
+                        s.should_update.unsubscribe(cb)  # don't inform us of that change
                         s.should_update.value = False
                         s.should_update.subscribe(cb)
 
@@ -568,8 +642,8 @@ class StreamController(object):
                 logging.info("Stream %s is not in the stream list", stream.name)
                 return
             if i == 0:
-                return # fast path
-            l = [stream] + l[:i] + l[i + 1:] # new list reordered
+                return  # fast path
+            l = [stream] + l[:i] + l[i + 1:]  # new list reordered
             self._tab_data_model.streams.value = l
 
     def _scheduleStream(self, stream):
@@ -648,7 +722,7 @@ class StreamController(object):
 
         Returns (set of Stream): streams which were actually enabled/disabled
         """
-        streams = set() # stream changed
+        streams = set()  # stream changed
         for e in self._stream_bar.stream_panels:
             s = e.stream
             if isinstance(s, classes):
@@ -665,7 +739,7 @@ class StreamController(object):
 
         Returns (set of Stream): streams which were actually paused
         """
-        streams = set() # stream paused
+        streams = set()  # stream paused
         for s in self._tab_data_model.streams.value:
             if isinstance(s, classes):
                 if s.should_update.value:

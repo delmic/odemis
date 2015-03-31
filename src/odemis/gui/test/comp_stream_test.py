@@ -154,7 +154,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
         fake_sem_stream = FakeSEMStream("First Fixed Stream")
         stream_panel = stream_comp.StreamPanel(stream_bar, fake_sem_stream, tab_mod)
-        stream_bar.add_stream(stream_panel)
+        stream_bar.add_stream_panel(stream_panel)
         test.gui_loop()
 
         # REMOVE BUTTON TEST
@@ -244,7 +244,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
         fake_sem_stream = FakeSEMStream("First Fixed Stream")
         stream_panel = stream_comp.StreamPanel(stream_bar, fake_sem_stream, tab_mod)
-        stream_bar.add_stream(stream_panel)
+        stream_bar.add_stream_panel(stream_panel)
         test.gui_loop()
 
         self.assertEqual("First Fixed Stream",
@@ -266,11 +266,11 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
         fake_fluo_stream = FakeFluoStream("Fluo Stream")
         dye_panel = stream_comp.StreamPanel(stream_bar, fake_fluo_stream, tab_mod)
-        stream_bar.add_stream(dye_panel)
+        stream_bar.add_stream_panel(dye_panel)
 
         # print stream_panel._expander.GetSize()
         stream_panel = stream_comp.StreamPanel(stream_bar, fake_fluo_stream, tab_mod)
-        stream_bar.add_stream(stream_panel)
+        stream_bar.add_stream_panel(stream_panel)
         # print stream_panel._expander.GetSize()
         test.gui_loop()
 
@@ -353,7 +353,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
         fake_spec_stream = FakeSpectrumStream("First Fixed Stream")
         stream_panel = stream_comp.StreamPanel(stream_bar, fake_spec_stream, tab_mod)
-        stream_bar.add_stream(stream_panel)
+        stream_bar.add_stream_panel(stream_panel)
         test.gui_loop()
 
     def test_stream_interface(self):
@@ -379,7 +379,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         # Add an editable entry
         fake_cstream = FakeFluoStream("First Custom Stream")
         custom_entry = stream_comp.StreamPanel(stream_bar, fake_cstream, tab_mod)
-        stream_bar.add_stream(custom_entry)
+        stream_bar.add_stream_panel(custom_entry)
         test.gui_loop()
 
         self.assertEqual(stream_bar.get_size(), 1)
@@ -390,7 +390,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         # Add a fixed stream
         fake_fstream1 = FakeSEMStream("First Fixed Stream")
         fixed_entry = stream_comp.StreamPanel(stream_bar, fake_fstream1, tab_mod)
-        stream_bar.add_stream(fixed_entry)
+        stream_bar.add_stream_panel(fixed_entry)
         test.gui_loop()
 
         self.assertEqual(stream_bar.get_size(), 2)
@@ -404,7 +404,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         # Add a fixed stream
         fake_fstream2 = FakeSEMStream("Second Fixed Stream")
         fixed_entry2 = stream_comp.StreamPanel(stream_bar, fake_fstream2, tab_mod)
-        stream_bar.add_stream(fixed_entry2)
+        stream_bar.add_stream_panel(fixed_entry2)
         test.gui_loop()
 
         self.assertEqual(stream_bar.get_size(), 3)
@@ -453,7 +453,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         def brightfield_callback():
             fake_stream = FakeBrightfieldStream("Brightfield")
             fixed_entry = stream_comp.StreamPanel(stream_bar, fake_stream, tab_mod)
-            stream_bar.add_stream(fixed_entry)
+            stream_bar.add_stream_panel(fixed_entry)
 
         stream_bar.add_action("Brightfield", brightfield_callback)
 
@@ -466,7 +466,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         def sem_callback():
             fake_stream = FakeSEMStream("SEM:EDT")
             fixed_entry = stream_comp.StreamPanel(stream_bar, fake_stream, tab_mod)
-            stream_bar.add_stream(fixed_entry)
+            stream_bar.add_stream_panel(fixed_entry)
 
         stream_bar.add_action("SEM:EDT", sem_callback)
 
@@ -484,7 +484,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         def custom_callback():
             fake_stream = FakeFluoStream("Custom")
             custom_entry = stream_comp.StreamPanel(stream_bar, fake_stream, tab_mod)
-            stream_bar.add_stream(custom_entry)
+            stream_bar.add_stream_panel(custom_entry)
 
         stream_bar.add_action("Custom", custom_callback)
 
@@ -503,7 +503,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
         fake_sem_stream = FakeSEMStream("Flatten Test")
         stream_panel = stream_comp.StreamPanel(stream_bar, fake_sem_stream, tab_mod)
-        stream_bar.add_stream(stream_panel)
+        stream_bar.add_stream_panel(stream_panel)
         test.gui_loop()
 
         stream_panel.flatten()

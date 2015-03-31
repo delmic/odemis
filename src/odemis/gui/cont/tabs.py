@@ -1664,7 +1664,7 @@ class LensAlignTab(Tab):
         # create CCD stream panel entry
         stream_bar = self.main_frame.pnl_secom_align_streams
         ccd_spe = StreamPanel(stream_bar, ccd_stream, self.tab_data_model)
-        stream_bar.add_stream(ccd_spe, True)
+        stream_bar.add_stream_panel(ccd_spe, True)
         ccd_spe.flatten()  # removes the expander header
         # force this view to never follow the tool mode (just standard view)
         main_frame.vp_align_ccd.canvas.allowed_modes = set([guimod.TOOL_NONE])

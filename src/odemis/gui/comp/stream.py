@@ -32,12 +32,14 @@ import wx
 import wx.lib.newevent
 from wx.lib.pubsub import pub
 
+from decorator import decorator
+
 from odemis import acq
 from odemis.acq.stream import OpticalStream
 from odemis.gui import FG_COLOUR_EDIT, FG_COLOUR_MAIN, BG_COLOUR_MAIN, BG_COLOUR_STREAM, \
     FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR
 from odemis.gui.comp.combo import ComboBox
-from odemis.gui.comp.foldpanelbar import FoldPanelItem
+from odemis.gui.comp.foldpanelbar import FoldPanelItem, FoldPanelBar
 from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider, UnitIntegerSlider
 from odemis.gui.comp.text import SuggestTextCtrl, UnitFloatCtrl, FloatTextCtrl
 from odemis.gui.conf.data import HW_SETTINGS_CONFIG
@@ -68,6 +70,23 @@ OPT_BTN_TINT = 16  # tint of the stream (if the VA exists)
 
 CAPTION_PADDING_RIGHT = 5
 ICON_WIDTH, ICON_HEIGHT = 16, 16
+
+@decorator
+def control_bookkeeper(f, self, *args, **kwargs):
+    """ Clear the default message, if needed, and advance the row count """
+    result = f(self, *args, **kwargs)
+
+    # This makes the 2nd column's width variable
+    if not self.gb_sizer.IsColGrowable(1):
+        self.gb_sizer.AddGrowableCol(1)
+
+    # Redo FoldPanelBar layout
+    win = self
+    while not isinstance(win, FoldPanelBar):
+        win = win.Parent
+    win.Layout()
+    self.num_rows += 1
+    return result
 
 
 class StreamPanelHeader(wx.Control):
@@ -423,10 +442,10 @@ class StreamPanel(wx.Panel):
 
         self._prev_drange = None
 
-        self.control_gbsizer = wx.GridBagSizer()
+        self.gb_sizer = wx.GridBagSizer()
 
         # Counter that keeps track of the number of rows containing controls inside this panel
-        self.row_count = 0
+        self.num_rows = 0
 
         # Event handling
         self.Bind(wx.EVT_SIZE, self.OnSize)
@@ -468,7 +487,7 @@ class StreamPanel(wx.Panel):
 
         # Add a simple sizer so we can create padding for the panel
         border_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        border_sizer.Add(self.control_gbsizer, border=5, flag=wx.ALL | wx.EXPAND, proportion=1)
+        border_sizer.Add(self.gb_sizer, border=5, flag=wx.ALL | wx.EXPAND, proportion=1)
 
         self._panel.SetSizer(border_sizer)
 
@@ -480,17 +499,14 @@ class StreamPanel(wx.Panel):
         #     # If the stream is optical, add override controls if the proper VAs are present
         #     self.add_optical_controls()
 
-        if self._has_bc(self.stream):
-            self._add_bc_controls()
-
-        if self._has_dye(self.stream):
-            self._add_dye_controls()
-
-        if self._has_wl(self.stream):
-            self._add_wl_controls()
-
-        # FIXME: only add if some controls are available
-        # self.control_gbsizer.AddGrowableCol(1)  # This makes the 2nd column's width variable
+        # if self._has_bc(self.stream):
+        #     self._add_bc_controls()
+        #
+        # if self._has_dye(self.stream):
+        #     self._add_dye_controls()
+        #
+        # if self._has_wl(self.stream):
+        #     self._add_wl_controls()
 
         self.collapse()
 
@@ -786,9 +802,9 @@ class StreamPanel(wx.Panel):
         autobc_sz.Add(lbl_bc_outliers, 0, flag=wx.ALIGN_CENTRE_VERTICAL | wx.LEFT, border=5)
         autobc_sz.Add(self._sld_bc_outliers, 1,
                       flag=wx.ALIGN_CENTRE_VERTICAL | wx.LEFT | wx.EXPAND, border=5)
-        self.control_gbsizer.Add(autobc_sz, (self.row_count, 0), span=(1, 3),
+        self.gb_sizer.Add(autobc_sz, (self.num_rows, 0), span=(1, 3),
                                  flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
-        self.row_count += 1
+        self.num_rows += 1
 
         # ====== Second row, histogram
         hist_min = self.stream.intensityRange.range[0][0]
@@ -809,11 +825,11 @@ class StreamPanel(wx.Panel):
                                                     events=wx.EVT_SLIDER)
 
         # span is 2, because emission/excitation have 2 controls
-        self.control_gbsizer.Add(self._sld_hist, pos=(self.row_count, 0),
+        self.gb_sizer.Add(self._sld_hist, pos=(self.num_rows, 0),
                                  span=(1, 3),
                                  flag=wx.EXPAND | wx.TOP | wx.RIGHT | wx.LEFT,
                                  border=5)
-        self.row_count += 1
+        self.num_rows += 1
 
         # ====== Third row, text fields for intensity
         # Low/ High values are in raw data. So it's typically uint, but could
@@ -904,13 +920,13 @@ class StreamPanel(wx.Panel):
         lh_sz.Add(self._txt_highi, 1,
                   flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.RIGHT | wx.LEFT,
                   border=5)
-        self.control_gbsizer.Add(
-            lh_sz, (self.row_count, 0),
+        self.gb_sizer.Add(
+            lh_sz, (self.num_rows, 0),
             span=(1, 3),
             flag=wx.BOTTOM | wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND,
             border=5)
 
-        self.row_count += 1
+        self.num_rows += 1
 
         # Can only do that once all the controls are here
         self.stream.auto_bc.subscribe(self._onAutoBC, init=True)
@@ -954,81 +970,47 @@ class StreamPanel(wx.Panel):
 
     # ===== For separate Optical stream settings
 
-    def add_optical_controls(self, st_exposure_time_va=None, st_light_power_va=None):
-        """ Add controls so optical streams can have their own exposure and power settings """
+    def _add_side_label(self, label_text):
+        """ Add a text label to the control grid
 
-        if st_exposure_time_va:
-            self.lbl_exposure = wx.StaticText(self._panel, -1, "Exposure time")
-            self.control_gbsizer.Add(self.lbl_exposure, (self.row_count, 0), span=(1, 1),
-                                     flag=wx.ALIGN_CENTRE_VERTICAL | wx.ALL, border=5)
+        This method should only be called from other methods that add control to the control grid
 
-            et_config = HW_SETTINGS_CONFIG['ccd']['exposureTime']
+        :param label_text: (str)
+        :return: (wx.StaticText)
 
-            self._sld_exposure = UnitFloatSlider(
-                self._panel,
-                value=st_exposure_time_va.value,
-                min_val=et_config["range"][0],
-                max_val=et_config["range"][1],
-                unit=st_exposure_time_va.unit,
-                scale=et_config["scale"],
-                accuracy=et_config["accuracy"]
-            )
+        """
 
-            st_exposure_vac = VigilantAttributeConnector(
-                st_exposure_time_va,
-                self._sld_exposure,
-                events=wx.EVT_SLIDER
-            )
+        lbl_ctrl = wx.StaticText(self._panel, -1, label_text)
+        self.gb_sizer.Add(lbl_ctrl, (self.num_rows, 0),
+                          flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
+        return lbl_ctrl
 
-            self.control_gbsizer.Add(self._sld_exposure, (self.row_count, 1), span=(1, 2),
-                                     flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
+    # Setting Control Addition Methods
 
-            self.row_count += 1
+    @control_bookkeeper
+    def add_exposure_time_ctrl(self, value=None, conf=None):
+        lbl_ctrl = self._add_side_label("Exposure time")
+        value_ctrl = UnitFloatSlider(self._panel, value=value, **conf if conf else {})
+        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 2),
+                          flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
 
-        if st_light_power_va:
-            self.lbl_power = wx.StaticText(self._panel, -1, "Power")
-            self.control_gbsizer.Add(self.lbl_power, (self.row_count, 0), span=(1, 1),
-                                     flag=wx.ALIGN_CENTRE_VERTICAL | wx.ALL, border=5)
+        return lbl_ctrl, value_ctrl
 
-            power_config = HW_SETTINGS_CONFIG['light']['power']
+    @control_bookkeeper
+    def add_light_power_ctrl(self, value=None, conf=None):
+        lbl_ctrl = self._add_side_label("Power")
+        value_ctrl = UnitFloatSlider(self._panel, value=value, **conf if conf else {})
+        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 2),
+                          flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
+        return lbl_ctrl, value_ctrl
 
-            # Create Power control
-            self._sld_power = UnitFloatSlider(
-                self._panel,
-                value=st_light_power_va.value,
-                min_val=st_light_power_va.range[0],
-                max_val=st_light_power_va.range[1],
-                unit=st_light_power_va.unit,
-                scale=power_config["scale"],
-                accuracy=4
-            )
+    @control_bookkeeper
+    def add_divider(self):
+        line_ctrl = wx.StaticLine(self._panel, size=(-1, 1))
+        self.gb_sizer.Add(line_ctrl, (self.num_rows, 0), span=(1, 3),
+                          flag=wx.ALL | wx.EXPAND, border=5)
 
-            # Connect the stream exposure time, but immediately pause it, because we listen to the
-            # hardware values by default
-            st_power_vac = VigilantAttributeConnector(
-                st_light_power_va,
-                self._sld_power,
-                events=wx.EVT_SLIDER
-            )
-            st_power_vac.pause()
-
-            hw_power_vac = VigilantAttributeConnector(
-                st_light_power_va,
-                self._sld_power,
-                events=wx.EVT_SLIDER
-            )
-
-            self.control_gbsizer.Add(self._sld_power, (self.row_count, 1), span=(1, 2),
-                                     flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
-
-            self.row_count += 1
-
-        # End with a divider line
-        if st_exposure_time_va or st_light_power_va:
-            line_ctrl = wx.StaticLine(self._panel, size=(-1, 1))
-            self.control_gbsizer.Add(line_ctrl, (self.row_count, 0), span=(1, 3),
-                                     flag=wx.ALL | wx.EXPAND, border=5)
-            self.row_count += 1
+    # END Setting Control Addition Methods
 
     # ====== For the dyes
 
@@ -1092,11 +1074,11 @@ class StreamPanel(wx.Panel):
         """
         # Note: va.value is in m, but we present everything in nm
         lbl = wx.StaticText(self._panel, -1, name)
-        self.control_gbsizer.Add(lbl, (self.row_count, 0), flag=wx.ALL, border=5)
+        self.gb_sizer.Add(lbl, (self.num_rows, 0), flag=wx.ALL, border=5)
 
         # will contain both the combo box and the peak label
         exc_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        self.control_gbsizer.Add(exc_sizer, (self.row_count, 1), flag=wx.EXPAND)
+        self.gb_sizer.Add(exc_sizer, (self.num_rows, 1), flag=wx.EXPAND)
 
         band = va.value
 
@@ -1148,12 +1130,12 @@ class StreamPanel(wx.Panel):
                             bitmap=img.getemptyBitmap(),
                             colour=wave2rgb(center_wl),
                             background_parent=self._panel)
-        self.control_gbsizer.Add(btn_col,
-                                 (self.row_count, 2),
+        self.gb_sizer.Add(btn_col,
+                                 (self.num_rows, 2),
                                  flag=wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL | wx.ALIGN_RIGHT,
                                  border=5)
         self._update_peak_label_fit(lbl_peak, btn_col, None, band)
-        self.row_count += 1
+        self.num_rows += 1
 
         return lbl, hw_set, lbl_peak, btn_col
 
@@ -1368,11 +1350,11 @@ class StreamPanel(wx.Panel):
         self._btn_fit_rgb.SetBitmaps(bmp_h=img.getbtn_spectrum_hBitmap(),
                                      bmp_sel=img.getbtn_spectrum_aBitmap())
         self._btn_fit_rgb.SetForegroundColour("#000000")
-        self.control_gbsizer.Add(self._btn_fit_rgb,
-                                 (self.row_count, 0),
+        self.gb_sizer.Add(self._btn_fit_rgb,
+                                 (self.num_rows, 0),
                                  flag=wx.LEFT | wx.TOP,
                                  border=5)
-        self.row_count += 1
+        self.num_rows += 1
         self._vac_fit_rgb = VigilantAttributeConnector(
             self.stream.fitToRGB,
             self._btn_fit_rgb,
@@ -1398,12 +1380,12 @@ class StreamPanel(wx.Panel):
                                 events=wx.EVT_SLIDER)
 
         # span is 3, because emission/excitation have 2 controls
-        self.control_gbsizer.Add(self._sld_spec,
-                                 pos=(self.row_count, 0),
+        self.gb_sizer.Add(self._sld_spec,
+                                 pos=(self.num_rows, 0),
                                  span=(1, 3),
                                  flag=wx.EXPAND | wx.TOP | wx.LEFT | wx.RIGHT,
                                  border=5)
-        self.row_count += 1
+        self.num_rows += 1
 
         # ====== Third row, text fields for intensity (ratios)
         tooltip_txt = "Center wavelength of the spectrum"
@@ -1501,10 +1483,10 @@ class StreamPanel(wx.Panel):
         cb_wl_sz.Add(self._txt_sbw, 1,
                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.RIGHT | wx.LEFT,
                      border=5)
-        self.control_gbsizer.Add(cb_wl_sz, (self.row_count, 0), span=(1, 3),
+        self.gb_sizer.Add(cb_wl_sz, (self.num_rows, 0), span=(1, 3),
                                  flag=wx.BOTTOM | wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND,
                                  border=5)
-        self.row_count += 1
+        self.num_rows += 1
 
         # TODO: should the stream have a way to know when the raw data has changed? => just a
         # spectrum VA, like histogram VA
@@ -1527,15 +1509,15 @@ class StreamPanel(wx.Panel):
                                                                    self._sld_selection_width,
                                                                    events=wx.EVT_SLIDER)
 
-            self.control_gbsizer.Add(lbl_selection_width,
-                                     (self.row_count, 0),
+            self.gb_sizer.Add(lbl_selection_width,
+                                     (self.num_rows, 0),
                                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL,
                                      border=5)
-            self.control_gbsizer.Add(self._sld_selection_width,
-                                     (self.row_count, 1), span=(1, 2),
+            self.gb_sizer.Add(self._sld_selection_width,
+                                     (self.num_rows, 1), span=(1, 2),
                                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL,
                                      border=5)
-            self.row_count += 1
+            self.num_rows += 1
 
 
     @wxlimit_invocation(0.2)
@@ -1704,7 +1686,7 @@ class StreamBar(wx.Panel):
         """ Return the number of streams contained within the StreamBar """
         return len(self.stream_panels)
 
-    def add_stream(self, spanel, show=True):
+    def add_stream_panel(self, spanel, show=True):
         """
         This method adds a stream panel to the stream bar. The appropriate
         position is automatically determined.
@@ -1720,9 +1702,7 @@ class StreamBar(wx.Panel):
                 break
             ins_pos += 1
 
-        logging.debug("Inserting %s at position %s",
-                      spanel.stream.__class__.__name__,
-                      ins_pos)
+        logging.debug("Inserting %s at position %s", spanel.stream.__class__.__name__, ins_pos)
 
         self.stream_panels.insert(ins_pos, spanel)
 
