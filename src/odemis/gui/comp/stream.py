@@ -240,7 +240,12 @@ class StreamPanelHeader(wx.Control):
     # Layout and painting
 
     def DoGetBestSize(self, *args, **kwargs):
-        """ Return the best size, which is the width of the parent and the height or the content """
+        """ Return the best size, which is the width of the parent and the height or the content
+
+        TODO: check if this is still necessary, or a wxPython 2.6/7/8 legacy
+
+        """
+
         return wx.Size(self.Parent.GetSize().x, self._sz.GetSize().y)
 
     def on_size(self, event):
@@ -405,6 +410,7 @@ class StreamPanel(wx.Panel):
         self.SetForegroundColour(FG_COLOUR_MAIN)
 
         # State
+
         self._collapsed = collapsed
 
         # Child widgets
@@ -412,7 +418,7 @@ class StreamPanel(wx.Panel):
         self.main_sizer = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(self.main_sizer)
 
-        self._expander = None
+        self._header = None
         self._panel = None
 
         self._prev_drange = None
@@ -442,19 +448,19 @@ class StreamPanel(wx.Panel):
         if self._has_dye(stream) and not (stream.excitation.readonly or stream.emission.readonly):
             expand_opt |= OPT_NAME_EDIT
 
-        self._expander = StreamPanelHeader(self, options=expand_opt)
-        self._expander.Bind(wx.EVT_LEFT_UP, self.on_toggle)
-        self._expander.Bind(wx.EVT_PAINT, self.on_draw_expander)
+        self._header = StreamPanelHeader(self, options=expand_opt)
+        self._header.Bind(wx.EVT_LEFT_UP, self.on_toggle)
+        self._header.Bind(wx.EVT_PAINT, self.on_draw_expander)
 
-        self.Bind(wx.EVT_BUTTON, self.on_button, self._expander)
+        self.Bind(wx.EVT_BUTTON, self.on_button, self._header)
 
-        self._expander.btn_remove.Bind(wx.EVT_BUTTON, self.on_remove_btn)
-        self._expander.btn_show.Bind(wx.EVT_BUTTON, self.on_visibility_btn)
+        self._header.btn_remove.Bind(wx.EVT_BUTTON, self.on_remove_btn)
+        self._header.btn_show.Bind(wx.EVT_BUTTON, self.on_visibility_btn)
 
         if wx.Platform == "__WXMSW__":
-            self._expander.Bind(wx.EVT_LEFT_DCLICK, self.on_button)
+            self._header.Bind(wx.EVT_LEFT_DCLICK, self.on_button)
 
-        self.main_sizer.Add(self._expander, 0, wx.EXPAND)
+        self.main_sizer.Add(self._header, 0, wx.EXPAND)
 
         # ====== Add the control panel
 
@@ -470,9 +476,9 @@ class StreamPanel(wx.Panel):
         self._panel.SetForegroundColour(FG_COLOUR_MAIN)
         self._panel.SetFont(self.GetFont())
 
-        if isinstance(self.stream, OpticalStream):
-            # If the stream is optical, add override controls if the proper VAs are present
-            self._add_optical_controls()
+        # if isinstance(self.stream, OpticalStream):
+        #     # If the stream is optical, add override controls if the proper VAs are present
+        #     self.add_optical_controls()
 
         if self._has_bc(self.stream):
             self._add_bc_controls()
@@ -484,7 +490,7 @@ class StreamPanel(wx.Panel):
             self._add_wl_controls()
 
         # FIXME: only add if some controls are available
-        self.control_gbsizer.AddGrowableCol(1)  # This makes the 2nd column's width variable
+        # self.control_gbsizer.AddGrowableCol(1)  # This makes the 2nd column's width variable
 
         self.collapse()
 
@@ -494,28 +500,28 @@ class StreamPanel(wx.Panel):
         self.set_visible(vis)
 
     def flatten(self):
-        """ This method hides the expander header button and makes the controls
-        inside visible.
-        """
+        """ Unfold the stream panel and hide the header """
         self.collapse(False)
-        self._expander.Show(False)
+        self._header.Show(False)
 
     def set_focus_on_label(self):
-        self._expander.set_focus_on_label()
+        """ Focus the text label in the header """
+        self._header.set_focus_on_label()
 
     # API
 
     def Layout(self, *args, **kwargs):
         """ Layout the StreamPanel. """
 
-        if not self._expander or not self._panel or not self.main_sizer:
+        if not self._header or not self._panel or not self.main_sizer:
             return False  # we need to complete the creation first!
 
         oursz = self.GetSize()
 
         # move & resize the button and the static line
-        self.main_sizer.SetDimension(0, 0, oursz.GetWidth(),
-                              self.main_sizer.GetMinSize().GetHeight())
+        self.main_sizer.SetDimension(0, 0, oursz.GetWidth(), self.main_sizer.GetMinSize(
+
+        ).GetHeight())
         self.main_sizer.Layout()
 
         if not self._collapsed:
@@ -561,17 +567,18 @@ class StreamPanel(wx.Panel):
 
         fpb_item = self.Parent
         super(StreamPanel, self).Destroy(*args, **kwargs)
-        fpb_item._fit_streams()
+        fpb_item.fit_streams()
 
     def set_visible(self, visible):
-        """ Set the "visible" toggle button.
+        """ Set the "visible" toggle button
+
         Note: it does not add/remove it to the current view.
+
         """
-        self._expander.btn_show.SetToggle(visible)
+        self._header.btn_show.SetToggle(visible)
 
     def collapse(self, collapse=None):
-        """ Collapses or expands the pane window.
-        """
+        """ Collapses or expands the pane window """
 
         if collapse is not None and self._collapsed == collapse:
             return
@@ -582,7 +589,7 @@ class StreamPanel(wx.Panel):
         self._panel.Show(not collapse)
         self._collapsed = collapse
 
-        wx.CallAfter(self.Parent._fit_streams)
+        wx.CallAfter(self.Parent.fit_streams)
 
         self.Thaw()
 
@@ -601,7 +608,7 @@ class StreamPanel(wx.Panel):
         view = self._tab_data_model.focussedView.value
         if not view:
             return
-        if self._expander.btn_show.GetToggle():
+        if self._header.btn_show.GetToggle():
             logging.debug("Showing stream '%s'", self.stream.name.value)
             view.addStream(self.stream)
         else:
@@ -611,16 +618,16 @@ class StreamPanel(wx.Panel):
     # Manipulate expander buttons
 
     def show_updated_btn(self, show):
-        self._expander.show_updated_btn(show)
+        self._header.show_updated_btn(show)
 
     def enable_updated_btn(self, enabled):
-        self._expander.enable_updated_btn(enabled)
+        self._header.enable_updated_btn(enabled)
 
     def show_remove_btn(self, show):
-        self._expander.show_remove_btn(show)
+        self._header.show_remove_btn(show)
 
     def show_visible_btn(self, show):
-        self._expander.show_show_btn(show)
+        self._header.show_show_btn(show)
 
     def OnSize(self, event):
         """ Handles the wx.EVT_SIZE event for StreamPanel
@@ -642,7 +649,7 @@ class StreamPanel(wx.Panel):
         """ Handles the wx.EVT_BUTTON event for StreamPanel
         """
 
-        if event.GetEventObject() != self._expander:
+        if event.GetEventObject() != self._header:
             event.Skip()
             return
 
@@ -653,17 +660,17 @@ class StreamPanel(wx.Panel):
         :note: This is a drawing routine to paint the GTK-style expander.
         """
 
-        dc = wx.AutoBufferedPaintDC(self._expander)
+        dc = wx.AutoBufferedPaintDC(self._header)
         dc.SetBackground(wx.Brush(self.GetBackgroundColour()))
         dc.Clear()
 
-        self._expander.on_draw_expander(dc)
+        self._header.on_draw_expander(dc)
 
     def to_static_mode(self):
         """ This method hides or makes read-only any button or data that should
         not be changed during acquisition.
         """
-        self._expander.to_static_mode()
+        self._header.to_static_mode()
 
         # TODO: add when function implemented (and should be dependent on the Stream VAs)
         # # ====== Fourth row, accumulation label, text field and value
@@ -721,7 +728,7 @@ class StreamPanel(wx.Panel):
 
     def to_locked_mode(self):
         self.to_static_mode()
-        self._expander.to_locked_mode()
+        self._header.to_locked_mode()
 
     # ===== For brightness/contrast
 
@@ -947,15 +954,10 @@ class StreamPanel(wx.Panel):
 
     # ===== For separate Optical stream settings
 
-    def _add_optical_controls(self):
+    def add_optical_controls(self, st_exposure_time_va=None, st_light_power_va=None):
         """ Add controls so optical streams can have their own exposure and power settings """
 
-        st_exposure_time_va = None
-        st_light_power_va = None
-
-        if hasattr(self.stream, 'exposureTime'):
-            st_exposure_time_va = self.stream.exposureTime
-
+        if st_exposure_time_va:
             self.lbl_exposure = wx.StaticText(self._panel, -1, "Exposure time")
             self.control_gbsizer.Add(self.lbl_exposure, (self.row_count, 0), span=(1, 1),
                                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.ALL, border=5)
@@ -983,9 +985,7 @@ class StreamPanel(wx.Panel):
 
             self.row_count += 1
 
-        if hasattr(self.stream, 'lightPower'):
-            st_light_power_va = self.stream.lightPower
-
+        if st_light_power_va:
             self.lbl_power = wx.StaticText(self._panel, -1, "Power")
             self.control_gbsizer.Add(self.lbl_power, (self.row_count, 0), span=(1, 1),
                                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.ALL, border=5)
@@ -1053,8 +1053,8 @@ class StreamPanel(wx.Panel):
         if not self.stream.excitation.readonly:
             # TODO: mark dye incompatible with the hardware with a "disabled"
             # colour in the list. (Need a special version of the combobox?)
-            self._expander.set_label_choices(dye.DyeDatabase.keys())
-            self._expander.label_change_callback = self._on_new_dye_name
+            self._header.set_label_choices(dye.DyeDatabase.keys())
+            self._header.label_change_callback = self._on_new_dye_name
 
         # Peak excitation/emission wavelength of the selected dye, to be used
         # for peak text and wavelength colour
@@ -1627,9 +1627,9 @@ class StreamBar(wx.Panel):
 
             self.btn_add_stream.Bind(wx.EVT_BUTTON, self.on_add_stream)
 
-        self._fit_streams()
+        self.fit_streams()
 
-    def _fit_streams(self):
+    def fit_streams(self):
         h = self._sz.GetMinSize().GetHeight()
 
         self.SetSize((-1, h))
@@ -1690,12 +1690,12 @@ class StreamBar(wx.Panel):
     def show_add_button(self):
         if self.btn_add_stream:
             self.btn_add_stream.Show()
-            self._fit_streams()
+            self.fit_streams()
 
     def hide_add_button(self):
         if self.btn_add_stream:
             self.btn_add_stream.Hide()
-            self._fit_streams()
+            self.fit_streams()
 
     def is_empty(self):
         return len(self.stream_panels) == 0
@@ -1741,7 +1741,7 @@ class StreamBar(wx.Panel):
 
         # hide the stream if the current view is not compatible
         spanel.Show(show)
-        self._fit_streams()
+        self.fit_streams()
 
     def remove_stream_panel(self, spanel):
         """

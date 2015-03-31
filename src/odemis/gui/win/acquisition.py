@@ -184,7 +184,7 @@ class AcquisitionDialog(xrcfr_acq):
 
         # go through all the streams available in the interface model
         for s in self._tab_data_model.streams.value:
-            sp = self.stream_controller.addStreamForAcquisition(s)
+            self.stream_controller.add_acquisition_stream_panel(s)
 
     def remove_all_streams(self):
         """ Remove the streams we added to the view on creation """

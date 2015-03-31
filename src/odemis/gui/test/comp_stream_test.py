@@ -159,23 +159,23 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
         # REMOVE BUTTON TEST
 
-        old_label_pos = stream_panel._expander.ctrl_label.GetPosition()
+        old_label_pos = stream_panel._header.ctrl_label.GetPosition()
 
         stream_panel.show_remove_btn(False)
         test.gui_loop()
 
-        self.assertFalse(stream_panel._expander.btn_remove.IsShown())
+        self.assertFalse(stream_panel._header.btn_remove.IsShown())
 
-        new_label_pos = stream_panel._expander.ctrl_label.GetPosition()
+        new_label_pos = stream_panel._header.ctrl_label.GetPosition()
 
         self.assertEqual(old_label_pos, new_label_pos)
 
         stream_panel.show_remove_btn(True)
         test.gui_loop()
 
-        self.assertTrue(stream_panel._expander.btn_remove.IsShown())
+        self.assertTrue(stream_panel._header.btn_remove.IsShown())
 
-        new_label_pos = stream_panel._expander.ctrl_label.GetPosition()
+        new_label_pos = stream_panel._header.ctrl_label.GetPosition()
 
         self.assertEqual(old_label_pos, new_label_pos)
 
@@ -183,23 +183,23 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
         # VISIBILITY BUTTON TEST
 
-        old_pbtn_pos = stream_panel._expander.btn_update.GetPosition()
+        old_pbtn_pos = stream_panel._header.btn_update.GetPosition()
 
         stream_panel.show_visible_btn(False)
         test.gui_loop()
 
-        self.assertFalse(stream_panel._expander.btn_show.IsShown())
+        self.assertFalse(stream_panel._header.btn_show.IsShown())
 
-        new_pbtn_pos = stream_panel._expander.btn_update.GetPosition()
+        new_pbtn_pos = stream_panel._header.btn_update.GetPosition()
 
         self.assertEqual(old_pbtn_pos, new_pbtn_pos)
 
         stream_panel.show_visible_btn(True)
         test.gui_loop()
 
-        self.assertTrue(stream_panel._expander.btn_show.IsShown())
+        self.assertTrue(stream_panel._header.btn_show.IsShown())
 
-        new_pbtn_pos = stream_panel._expander.btn_update.GetPosition()
+        new_pbtn_pos = stream_panel._header.btn_update.GetPosition()
 
         self.assertEqual(old_pbtn_pos, new_pbtn_pos)
 
@@ -207,23 +207,23 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
         # PLAY BUTTON TEST
 
-        old_vbtn_pos = stream_panel._expander.btn_show.GetPosition()
+        old_vbtn_pos = stream_panel._header.btn_show.GetPosition()
 
         stream_panel.show_updated_btn(False)
         test.gui_loop()
 
-        self.assertFalse(stream_panel._expander.btn_update.IsShown())
+        self.assertFalse(stream_panel._header.btn_update.IsShown())
 
-        new_vbtn_pos = stream_panel._expander.btn_show.GetPosition()
+        new_vbtn_pos = stream_panel._header.btn_show.GetPosition()
 
         self.assertEqual(old_vbtn_pos, new_vbtn_pos)
 
         stream_panel.show_updated_btn(True)
         test.gui_loop()
 
-        self.assertTrue(stream_panel._expander.btn_update.IsShown())
+        self.assertTrue(stream_panel._header.btn_update.IsShown())
 
-        new_vbtn_pos = stream_panel._expander.btn_show.GetPosition()
+        new_vbtn_pos = stream_panel._header.btn_show.GetPosition()
 
         self.assertEqual(old_vbtn_pos, new_vbtn_pos)
 
@@ -248,7 +248,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         test.gui_loop()
 
         self.assertEqual("First Fixed Stream",
-                         stream_panel._expander.ctrl_label.GetLabel())
+                         stream_panel._header.ctrl_label.GetLabel())
         test.gui_loop()
 
         # Clear remaining streams

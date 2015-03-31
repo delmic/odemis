@@ -25,6 +25,7 @@ import logging
 from wx.lib.pubsub import pub
 
 import odemis.acq.stream as acqstream
+from odemis.acq.stream import OpticalStream
 import odemis.gui.model as guimodel
 from odemis import model
 from odemis.gui import comp
@@ -420,14 +421,8 @@ class StreamController(object):
         stream.should_update.value = play
 
         if visible:
-            spanel = comp.stream.StreamPanel(self._stream_bar, stream, self._tab_data_model)
-            show = isinstance(spanel.stream, self._tab_data_model.focussedView.value.stream_classes)
-            self._stream_bar.add_stream(spanel, show)
-
-            if self.locked_mode:
-                spanel.to_locked_mode()
-            elif self.static_mode:
-                spanel.to_static_mode()
+            show = isinstance(stream, self._tab_data_model.focussedView.value.stream_classes)
+            sp = self._add_stream_panel(stream, show, static=False)
 
             # TODO: make StreamTree a VA-like and remove this
             logging.debug("Sending stream.ctrl.added message")
@@ -436,19 +431,42 @@ class StreamController(object):
                             streams_visible=self._has_visible_streams(),
                             tab=self._tab_data_model)
 
-            return spanel
+            return sp
         else:
             return stream
 
-    def addStreamForAcquisition(self, stream):
-        """ Create a stream entry for the given existing stream, adapted to ac
+    def add_acquisition_stream_panel(self, stream):
+        """ Create a stream panel for the given existing stream, adapted to ac
 
-        :return StreamPanel:
+        :return: StreamPanel
 
         """
+
+        return self._add_stream_panel(stream, show=True, static=True)
+
+    def _add_stream_panel(self, stream, show=True, locked=False, static=False):
+        """ Create and add a stream panel for the given stream
+
+        :return: StreamPanel
+
+        """
+
         sp = comp.stream.StreamPanel(self._stream_bar, stream, self._tab_data_model)
-        self._stream_bar.add_stream(sp, True)
-        sp.to_static_mode()
+
+        if isinstance(stream, OpticalStream):
+            # If the stream is optical, add override controls if the proper VAs are present
+
+            exposure_time_va = stream.exposureTime if hasattr(stream, 'exposureTime') else None
+            light_power_va = stream.lightPower if hasattr(stream, 'lightPower') else None
+
+            sp.add_optical_controls(exposure_time_va, light_power_va)
+
+        self._stream_bar.add_stream(sp, show)
+
+        if locked:
+            sp.to_locked_mode()
+        elif static:
+            sp.to_static_mode()
 
         return sp
 
@@ -470,7 +488,7 @@ class StreamController(object):
         for e in self._stream_bar.stream_panels:
             e.Show(isinstance(e.stream, allowed_classes))
         # self.Refresh()
-        self._stream_bar._fit_streams()
+        self._stream_bar.fit_streams()
 
         # update the "visible" icon of each stream panel to match the list
         # of streams in the view
