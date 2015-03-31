@@ -133,19 +133,19 @@ class PMTDataFlow(model.DataFlow):
 
 
 # Min and Max gain values in V
-MAX_GAIN = 6
+MAX_GAIN = 1.1
 MIN_GAIN = 0
 
 class PMTControl(model.HwComponent):
     '''
     This represents the PMT control unit.
     '''
-    def __init__(self, name, role, sn=None, port=None, prot_time=1e-3, prot_curr=3, **kwargs):
+    def __init__(self, name, role, sn=None, port=None, prot_time=1e-3, prot_curr=50, **kwargs):
         '''
         sn (str): serial number (recommended)
         port (str): port name (only if sn is not specified)
         prot_time (float): protection trip time
-        prot_curr (float): protection current threshold
+        prot_curr (float): protection current threshold in microamperes
         Raise an exception if the device cannot be opened
         '''
         model.HwComponent.__init__(self, name, role, **kwargs)
@@ -390,9 +390,9 @@ class PMTControlError(IOError):
 
 
 # Ranges similar to real PMT Control firmware
-MAX_VOLT = 6
+MAX_VOLT = 1.1
 MIN_VOLT = 0
-MAX_PCURR = 3
+MAX_PCURR = 100
 MIN_PCURR = 0
 MAX_PTIME = 100
 MIN_PTIME = 0.000001
@@ -413,7 +413,7 @@ class PMTControlSimulator(object):
         self._gain = MIN_VOLT
         self._powerSupply = False
         self._protection = False
-        self._prot_curr = 3
+        self._prot_curr = 50
         self._prot_time = 0.001
 
     def write(self, data):

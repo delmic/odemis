@@ -33,9 +33,9 @@ SN = "0E203C44"  # put the serial number written on the component to test
 
 # Test using the hardware
 CLASS = pmtctrl.PMTControl
-# KWARGS = dict(name="test", role="pmt_control", sn=SN, prot_time=0.0002, prot_curr=2.85)
+# KWARGS = dict(name="test", role="pmt_control", sn=SN, prot_time=0.0002, prot_curr=50)
 # Test using the simulator
-KWARGS = dict(name="test", role="pmt_control", port="/dev/fake", prot_time=0.0002, prot_curr=2.85)
+KWARGS = dict(name="test", role="pmt_control", port="/dev/fake", prot_time=0.0002, prot_curr=50)
 
 # Control unit used for PMT testing
 CLASS_CTRL = CLASS
@@ -104,7 +104,7 @@ class TestPMTControl(unittest.TestCase):
 
     def test_send_cmd(self):
         # Send proper command
-        ans = self.dev._sendCommand("VOLT 3.2")
+        ans = self.dev._sendCommand("VOLT 0.7")
         self.assertEqual(ans, '')
 
         # Send wrong command
@@ -116,10 +116,10 @@ class TestPMTControl(unittest.TestCase):
             self.dev._sendCommand("VOLT 8.4")
 
         # Send proper set and get command
-        self.dev._sendCommand("VOLT 1.7")
+        self.dev._sendCommand("VOLT 0.3")
         ans = self.dev._sendCommand("VOLT?")
         ans_f = float(ans)
-        self.assertAlmostEqual(ans_f, 1.7)
+        self.assertAlmostEqual(ans_f, 0.3)
 
     def test_pmtctrl_va(self):
         # Test gain
@@ -215,7 +215,7 @@ class TestPMT(unittest.TestCase):
 
     def test_gain_decrease_acquisition(self):
         self.is_received = threading.Event()
-        self.pmt.gain.value = 2
+        self.pmt.gain.value = 1
         # Protection should be on before start acquisition
         self.assertEqual(self.control.protection.value, True)
         self.assertEqual(self.pmt.data.active, False)
@@ -225,7 +225,7 @@ class TestPMT(unittest.TestCase):
         # Turn protection on and then decrease the gain, so the protection is
         # expected to be reset
         self.control._sendCommand("PROT 1")
-        self.pmt.gain.value = 1
+        self.pmt.gain.value = 0.5
         self.is_received.wait()
         self.assertFalse(h.matches(message="PMT protection was triggered during acquisition."))
         # Protection should be reset after acquisition is done
