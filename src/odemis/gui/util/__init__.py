@@ -22,20 +22,22 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+import Queue
+from decorator import decorator
+from functools import wraps
 import inspect
 import logging
+from odemis import util
 import os.path
 import subprocess
 import sys
 import threading
 import time
+import weakref
 import wx
-
-from decorator import decorator
 
 
 # ============== Decorators
-
 @decorator
 def call_in_wx_main(f, self, *args, **kwargs):
     """ This method decorator makes sure the method is called from the main
@@ -44,12 +46,20 @@ def call_in_wx_main(f, self, *args, **kwargs):
     return wx.CallAfter(f, self, *args, **kwargs)
 
 
-# TODO: also do a call_after ?
+@decorator
+def ignore_dead(f, self, *args, **kwargs):
+    try:
+        return f(self, *args, **kwargs)
+    except (wx.PyDeadObjectError, RuntimeError):
+        logging.warn("Dead object ignored in %s", f.__name__)
+
+
 def wxlimit_invocation(delay_s):
     """ This decorator limits how often a method will be executed.
 
     Same as util.limit_invocation, but also avoid problems with wxPython dead
-    objects that can happen due to delaying a calling a method.
+    objects that can happen due to delaying a calling a method, and ensure it
+    runs in the main GUI thread.
 
     The first call will always immediately be executed. The last call will be
     delayed 'delay_s' seconds at the most. In between the first and last calls,
@@ -62,82 +72,35 @@ def wxlimit_invocation(delay_s):
     might need to decorate it by @call_in_wx_main to ensure it is called in the GUI
     thread.
     """
-    if delay_s > 5:
-        logging.warn("Warning! Long delay interval. Please consider using "
-                     "an interval of 5 or less seconds")
+    liwrapper = util.limit_invocation(delay_s)
 
-    def limit(f, self, *args, **kwargs):
-        if inspect.isclass(self):
-            raise ValueError("limit_invocation decorators should only be "
-                             "assigned to instance methods!")
-
-        now = time.time()
-
-        # Hacky way to store value per instance and per methods
-        last_call_name = '%s_lim_inv_last_call' % f.__name__
-        timer_name = '%s_lim_inv_timer' % f.__name__
-
-        force = kwargs.get('force', False)
-
-        # If the function was called later than 'delay_s' seconds ago...
-        if (
-                hasattr(self, last_call_name) and now - getattr(self, last_call_name) < delay_s
-                and not force
-        ):
-            # Test code that replaces the running timer with a new one
-            # if hasattr(self, timer_name):
-            #     timer = getattr(self, timer_name)
-            #     if timer.is_alive():
-            #         timer.cancel()
-
-            # logging.warn('Delaying method call')
-            if now < getattr(self, last_call_name):
-                # this means a timer is already set, nothing else to do
-                return
-
-            timer = threading.Timer(
-                delay_s,
-                dead_object_wrapper(f, self, *args, **kwargs),
-                args=[self] + list(args),
-                kwargs=kwargs
-            )
-
-            setattr(self, timer_name, timer)
-            setattr(self, last_call_name, now + delay_s)
-            timer.start()
-        else:
-            # execute method call now
-            setattr(self, last_call_name, now)
-            return f(self, *args, **kwargs)
-
-    return decorator(limit)
-
-
-@decorator
-def ignore_dead(f, self, *args, **kwargs):
-    try:
-        return f(self, *args, **kwargs)
-    except (wx.PyDeadObjectError, RuntimeError):
-        logging.warn("Dead object ignored in %s", f.__name__)
-
+    def wxwrapper(f):
+        # The order matters: dead protection must happen _after_ the call has
+        # been delayed
+        wf = dead_object_wrapper(f)
+        wf = call_in_wx_main_wrapper(wf)
+        return liwrapper(wf)
+    return wxwrapper
 
 # ============== END Decorators
 
 
 # ============== Wrappers
 
-def call_in_wx_main_wrapper(f, *args, **kwargs):
+def call_in_wx_main_wrapper(f):
+    @wraps(f)
     def call_after_wrapzor(*args, **kwargs):
         app = wx.GetApp()
         if app:
-            return wx.CallAfter(f, *args, **kwargs)
+            wx.CallAfter(f, *args, **kwargs)
     return call_after_wrapzor
 
 
-def dead_object_wrapper(f, *args, **kwargs):
+def dead_object_wrapper(f):
     """ This simple wrapper suppresses errors caused code trying to access
     wxPython widgets that have already been destroyed
     """
+    @wraps(f)
     def dead_object_wrapzor(*args, **kwargs):
         try:
             app = wx.GetApp()
