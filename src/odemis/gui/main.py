@@ -108,7 +108,8 @@ class OdemisGUIApp(wx.App):
                 microscope = None
 
         logging.info("\n\n************  Starting Odemis GUI  ************\n")
-        logging.info(wx.version())
+        logging.info("Odemis GUI v%s (from %s)", odemis.__version__, __file__)
+        logging.info("wxPython v%s", wx.version())
 
         # TODO: if microscope.ghost is not empty => wait and/or display a special
         # "hardware status" tab.
