@@ -273,7 +273,7 @@ class SecomStreamsTab(Tab):
             self.tab_data_model
         )
 
-        self._stream_controller = streamcont.StreamController(
+        self._stream_controller = streamcont.StreamBarController(
             self.tab_data_model,
             self.main_frame.pnl_secom_streams
         )
@@ -661,7 +661,7 @@ class SparcAcquisitionTab(Tab):
             opt_mic_view = self.tab_data_model.views.value[0]
             opt_mic_view.addStream(self._ar_stream)
 
-        self._stream_controller = streamcont.StreamController(
+        self._stream_controller = streamcont.StreamBarController(
             self.tab_data_model,
             self.main_frame.pnl_sparc_streams
         )
@@ -1132,7 +1132,7 @@ class AnalysisTab(Tab):
         # save the views to be able to reset them later
         self._def_views = list(tab_data.visible_views.value)
 
-        self._stream_controller = streamcont.StreamController(
+        self._stream_controller = streamcont.StreamBarController(
             self.tab_data_model,
             self.main_frame.pnl_inspection_streams,
             static=True
@@ -1961,7 +1961,7 @@ class MirrorAlignTab(Tab):
         super(MirrorAlignTab, self).__init__(name, button, panel,
                                              main_frame, tab_data)
 
-        self._stream_controller = streamcont.StreamController(
+        self._stream_controller = streamcont.StreamBarController(
             self.tab_data_model,
             self.main_frame.pnl_sparc_align_streams,
             locked=True

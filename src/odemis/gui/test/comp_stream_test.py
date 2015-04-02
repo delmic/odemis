@@ -28,7 +28,7 @@ import unittest
 import wx
 
 from odemis.acq.stream import Stream
-from odemis.gui.cont.streams import StreamController
+from odemis.gui.cont.streams import StreamBarController
 from odemis.util import conversion
 import odemis.acq.stream as stream_mod
 import odemis.gui.comp.stream as stream_comp
@@ -150,7 +150,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
         tab_mod = self.create_simple_tab_model()
         stream_bar = self.app.test_frame.stream_bar
-        _ = StreamController(tab_mod, stream_bar)
+        _ = StreamBarController(tab_mod, stream_bar)
 
         fake_sem_stream = FakeSEMStream("First Fixed Stream")
         stream_panel = stream_comp.StreamPanel(stream_bar, fake_sem_stream, tab_mod)
@@ -240,7 +240,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         tab_mod = self.create_simple_tab_model()
         stream_bar = self.app.test_frame.stream_bar
 
-        _ = StreamController(tab_mod, stream_bar)
+        _ = StreamBarController(tab_mod, stream_bar)
 
         fake_sem_stream = FakeSEMStream("First Fixed Stream")
         stream_panel = stream_comp.StreamPanel(stream_bar, fake_sem_stream, tab_mod)
@@ -259,32 +259,23 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
     def test_dyeexpander(self):
 
+        # Fake data to be used
         tab_mod = self.create_simple_tab_model()
         stream_bar = self.app.test_frame.stream_bar
-
-        _ = StreamController(tab_mod, stream_bar)
-
+        stream_cont = StreamBarController(tab_mod, stream_bar)
         fake_fluo_stream = FakeFluoStream("Fluo Stream")
-        dye_panel = stream_comp.StreamPanel(stream_bar, fake_fluo_stream, tab_mod)
-        stream_bar.add_stream_panel(dye_panel)
 
-        # print stream_panel._expander.GetSize()
-        stream_panel = stream_comp.StreamPanel(stream_bar, fake_fluo_stream, tab_mod)
-        stream_bar.add_stream_panel(stream_panel)
-        # print stream_panel._expander.GetSize()
+        # Add the same stream twice
+        stream_cont.addStream(fake_fluo_stream)
+        stream_cont.addStream(fake_fluo_stream)
+
         test.gui_loop()
-
-        # Clear remaining streams
-        # stream_bar.clear()
-        # test.gui_loop()
-        #
-        # self.assertEqual(stream_bar.get_size(), 0)
 
     def test_static_streams(self):
 
         tab_mod = self.create_simple_tab_model()
         stream_bar = self.app.test_frame.stream_bar
-        stream_cont = StreamController(tab_mod, stream_bar)
+        stream_cont = StreamBarController(tab_mod, stream_bar)
 
         fluomd = {
             model.MD_DESCRIPTION: "test",
@@ -349,7 +340,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         tab_mod = self.create_simple_tab_model()
         stream_bar = self.app.test_frame.stream_bar
 
-        _ = StreamController(tab_mod, stream_bar)
+        _ = StreamBarController(tab_mod, stream_bar)
 
         fake_spec_stream = FakeSpectrumStream("First Fixed Stream")
         stream_panel = stream_comp.StreamPanel(stream_bar, fake_spec_stream, tab_mod)
@@ -363,7 +354,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         tab_mod = self.create_simple_tab_model()
         stream_bar = self.app.test_frame.stream_bar
 
-        _ = StreamController(tab_mod, stream_bar)
+        _ = StreamBarController(tab_mod, stream_bar)
 
         # Hide the Stream add button
         self.assertEqual(stream_bar.btn_add_stream.IsShown(), True)
@@ -442,7 +433,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         tab_mod = self.create_simple_tab_model()
         stream_bar = self.app.test_frame.stream_bar
 
-        _ = StreamController(tab_mod, stream_bar)
+        _ = StreamBarController(tab_mod, stream_bar)
 
         self.assertEqual(stream_bar.btn_add_stream.IsShown(), True)
 
@@ -499,7 +490,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         tab_mod = self.create_simple_tab_model()
         stream_bar = self.app.test_frame.stream_bar
 
-        _ = StreamController(tab_mod, stream_bar)
+        _ = StreamBarController(tab_mod, stream_bar)
 
         fake_sem_stream = FakeSEMStream("Flatten Test")
         stream_panel = stream_comp.StreamPanel(stream_bar, fake_sem_stream, tab_mod)

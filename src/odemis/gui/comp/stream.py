@@ -42,7 +42,6 @@ from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.foldpanelbar import FoldPanelItem, FoldPanelBar
 from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider, UnitIntegerSlider
 from odemis.gui.comp.text import SuggestTextCtrl, UnitFloatCtrl, FloatTextCtrl
-from odemis.gui.conf.data import HW_SETTINGS_CONFIG
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation, dead_object_wrapper, ignore_dead
 from odemis.gui.util.widgets import VigilantAttributeConnector
 from odemis.util import fluo
@@ -70,6 +69,7 @@ OPT_BTN_TINT = 16  # tint of the stream (if the VA exists)
 
 CAPTION_PADDING_RIGHT = 5
 ICON_WIDTH, ICON_HEIGHT = 16, 16
+
 
 @decorator
 def control_bookkeeper(f, self, *args, **kwargs):
@@ -338,8 +338,7 @@ class StreamPanelHeader(wx.Control):
 
     def _on_label_change(self, evt):
         """ Call the label change callback when the label value changes """
-
-        if isinstance(self.label_change_callback, callable):
+        if callable(self.label_change_callback):
             self.label_change_callback(self.ctrl_label.GetValue())
 
     @call_in_wx_main
@@ -354,7 +353,7 @@ class StreamPanelHeader(wx.Control):
 
         # Set default colour to the current value
         cldata = wx.ColourData()
-        cldata.SetColour(wx.Colour(*self._stream.tint.value))
+        cldata.SetColour(wx.Colour(*self.Parent.stream.tint.value))
 
         dlg = wx.ColourDialog(self, cldata)
 
@@ -362,7 +361,7 @@ class StreamPanelHeader(wx.Control):
             colour = dlg.ColourData.GetColour().Get()  # convert to a 3-tuple
             logging.debug("Colour %r selected", colour)
             # Setting the VA will automatically update the button's colour
-            self._stream.tint.value = colour
+            self.Parent.stream.tint.value = colour
 
     # END GUI event handlers
 
@@ -419,9 +418,19 @@ class StreamPanel(wx.Panel):
         wx.Panel.__init__(self, parent, wid, pos, size, style, name)
 
         # Data models
+        # FIXME: Remove the stream attribute (it shoul only be contained in the controller)
         self.stream = stream
         self._tab_data_model = tab_data
         self._vacs = []  # VAConnectors to keep reference of
+
+        # Dye attributes
+
+        # Peak excitation/emission wavelength of the selected dye, to be used for peak text and
+        # wavelength colour
+        self._dye_xwl = None
+        self._dye_ewl = None
+        self._dye_prev_ewl_center = None  # ewl when tint was last changed
+        self._btn_excitation = None
 
         # Appearance
         # self._agwStyle = agwStyle | wx.CP_NO_TLW_RESIZE  # |wx.CP_GTK_EXPANDER
@@ -672,7 +681,7 @@ class StreamPanel(wx.Panel):
         self.collapse(not self._collapsed)
 
     def on_draw_expander(self, event):
-        """ Handles the ``wx.EVT_PAINT`` event for the stream panel.
+        """ Handle the ``wx.EVT_PAINT`` event for the stream panel
         :note: This is a drawing routine to paint the GTK-style expander.
         """
 
@@ -1010,10 +1019,99 @@ class StreamPanel(wx.Panel):
         self.gb_sizer.Add(line_ctrl, (self.num_rows, 0), span=(1, 3),
                           flag=wx.ALL | wx.EXPAND, border=5)
 
+    @control_bookkeeper
+    def add_dye_excitation_ctrl(self, excitation_va):
+        lbl_ctrl, value_ctrl, lbl_exc_peak, self._btn_excitation = self._add_filter_line(
+                                                                              "Excitation",
+                                                                              excitation_va)
+        return lbl_ctrl, value_ctrl, lbl_exc_peak
+
+    @control_bookkeeper
+    def add_dye_emission_ctrl(self, emission_va):
+        lbl_ctrl, value_ctrl, _, _ = self._add_filter_line("Emission", emission_va)
+        return lbl_ctrl, value_ctrl
+
+    def _add_filter_line(self, name, va, center_wl=0, va_2_ctrl=None, ctrl_2_va=None):
+        """ Create the controls for dye emission/excitation colour filter setting
+
+        :param name: (str): the label name
+        :param va: (VigilantAttribute) the VA for the emission/excitation (contains a band)
+        :param center_wl: (float) center wavelength of the current band of the VA
+
+        :return: (4 wx.Controls) the respective controls created
+
+        """
+
+        # Note: va.value is in m, but we present everything in nm
+        lbl_ctrl = self._add_side_label(name)
+
+        # will contain both the combo box and the peak label
+        exc_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        self.gb_sizer.Add(exc_sizer, (self.num_rows, 1), flag=wx.EXPAND)
+
+        band = va.value
+
+        if va.readonly or len(va.choices) <= 1:
+            hw_set = wx.TextCtrl(self._panel,
+                                 value=self._to_readable_band(band),
+                                 size=(-1, 16),
+                                 style=wx.BORDER_NONE | wx.TE_READONLY)
+            hw_set.SetBackgroundColour(self._panel.BackgroundColour)
+            hw_set.SetForegroundColour(FG_COLOUR_DIS)
+            exc_sizer.Add(hw_set, 1,
+                          flag=wx.LEFT | wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, border=5)
+        else:
+            hw_set = ComboBox(self._panel,
+                              value=self._to_readable_band(band),
+                              size=(-1, 16),
+                              style=wx.CB_READONLY | wx.BORDER_NONE)
+
+            ex_choices = sorted(va.choices, key=self._get_one_center)
+            for b in ex_choices:
+                hw_set.Append(self._to_readable_band(b), b)
+
+            # To avoid catching mouse wheels events when scrolling the panel
+            hw_set.Bind(wx.EVT_MOUSEWHEEL, lambda e: None)
+
+            # TODO: Implement in controller!!!
+            # vac = VigilantAttributeConnector(va,
+            #                                  hw_set,
+            #                                  va_2_ctrl,  # to convert to selection + update btn
+            #                                  ctrl_2_va,  # to convert from selection to VA
+            #                                  events=wx.EVT_COMBOBOX)
+            #
+            # self._vacs.append(vac)  # make sure it doesn't get dereferenced
+
+            exc_sizer.Add(hw_set, 1,
+                          flag=wx.ALL | wx.ALIGN_CENTRE_VERTICAL,
+                          border=5)
+
+        # Label for peak information
+        lbl_peak = wx.StaticText(self._panel)
+        exc_sizer.Add(lbl_peak, 1,
+                      flag=wx.ALL | wx.ALIGN_CENTRE_VERTICAL | wx.ALIGN_LEFT,
+                      border=5)
+
+        # A button, but not clickable, just to show the wavelength
+        # If a dye is selected, the colour of the peak is used, otherwise we
+        # use the hardware setting
+        btn_col = buttons.ColourButton(self._panel, -1,
+                                       bitmap=img.getemptyBitmap(),
+                                       colour=wave2rgb(center_wl),
+                                       background_parent=self._panel)
+        self.gb_sizer.Add(btn_col,
+                          (self.num_rows, 2),
+                          flag=wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL | wx.ALIGN_RIGHT,
+                          border=5)
+        self._update_peak_label_fit(lbl_peak, btn_col, None, band)
+
+        return lbl_ctrl, hw_set, lbl_peak, btn_col
+
     # END Setting Control Addition Methods
 
     # ====== For the dyes
 
+    # FIXME: Remove this method
     @staticmethod
     def _has_dye(stream):
         """
@@ -1038,13 +1136,6 @@ class StreamPanel(wx.Panel):
             self._header.set_label_choices(dye.DyeDatabase.keys())
             self._header.label_change_callback = self._on_new_dye_name
 
-        # Peak excitation/emission wavelength of the selected dye, to be used
-        # for peak text and wavelength colour
-        self._dye_xwl = None
-        self._dye_ewl = None
-
-        self._prev_ewl_center = None # ewl when tint was last changed
-
         # Excitation and emission are:
         # Label + wavelength combo box + peak label + a colour display
         ex_center = fluo.get_one_center_ex(self.stream.excitation.value,
@@ -1062,82 +1153,6 @@ class StreamPanel(wx.Panel):
                                   self._emission_2_ctrl,
                                   self._emission_2_va)
         (_, self._txt_emission, self._lbl_em_peak, self._btn_emission) = r
-
-    def _add_filter_line(self, name, va, center_wl, va_2_ctrl, ctrl_2_va):
-        """
-        Create the label, hw setting, peak info, and colour button for an
-        emission/excitation colour filter settings.
-        name (unicode): the label name
-        va (VigilantAttribute): the VA for the emission/excitation (contains a band)
-        center_wl (float): center wavelength of the current band of the VA
-        return (4 wx.Controls): the respective controls created
-        """
-        # Note: va.value is in m, but we present everything in nm
-        lbl = wx.StaticText(self._panel, -1, name)
-        self.gb_sizer.Add(lbl, (self.num_rows, 0), flag=wx.ALL, border=5)
-
-        # will contain both the combo box and the peak label
-        exc_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        self.gb_sizer.Add(exc_sizer, (self.num_rows, 1), flag=wx.EXPAND)
-
-        band = va.value
-
-        if va.readonly or len(va.choices) <= 1:
-            hw_set = wx.TextCtrl(self._panel,
-                       value=self._to_readable_band(band),
-                       size=(-1, 16),
-                       style=wx.BORDER_NONE | wx.TE_READONLY)
-            hw_set.SetBackgroundColour(self._panel.BackgroundColour)
-            hw_set.SetForegroundColour(FG_COLOUR_DIS)
-            exc_sizer.Add(hw_set, 1,
-                          flag=wx.LEFT | wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL,
-                          border=5)
-        else:
-            hw_set = ComboBox(self._panel,
-                              value=self._to_readable_band(band),
-                              size=(-1, 16),
-                              style=wx.CB_READONLY | wx.BORDER_NONE)
-
-            ex_choices = sorted(va.choices, key=self._get_one_center)
-            for b in ex_choices:
-                hw_set.Append(self._to_readable_band(b), b)
-
-            # To avoid catching mouse wheels events when scrolling the panel
-            hw_set.Bind(wx.EVT_MOUSEWHEEL, lambda e: None)
-
-            vac = VigilantAttributeConnector(va,
-                                             hw_set,
-                                             va_2_ctrl,  # to convert to selection + update btn
-                                             ctrl_2_va,  # to convert from selection to VA
-                                             events=wx.EVT_COMBOBOX)
-
-            self._vacs.append(vac)  # make sure it doesn't get dereferenced
-
-            exc_sizer.Add(hw_set, 1,
-                          flag=wx.ALL | wx.ALIGN_CENTRE_VERTICAL,
-                          border=5)
-
-        # Label for peak information
-        lbl_peak = wx.StaticText(self._panel)
-        exc_sizer.Add(lbl_peak, 1,
-                      flag=wx.ALL | wx.ALIGN_CENTRE_VERTICAL | wx.ALIGN_LEFT,
-                      border=5)
-
-        # A button, but not clickable, just to show the wavelength
-        # If a dye is selected, the colour of the peak is used, otherwise we
-        # use the hardware setting
-        btn_col = buttons.ColourButton(self._panel, -1,
-                            bitmap=img.getemptyBitmap(),
-                            colour=wave2rgb(center_wl),
-                            background_parent=self._panel)
-        self.gb_sizer.Add(btn_col,
-                                 (self.num_rows, 2),
-                                 flag=wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL | wx.ALIGN_RIGHT,
-                                 border=5)
-        self._update_peak_label_fit(lbl_peak, btn_col, None, band)
-        self.num_rows += 1
-
-        return lbl, hw_set, lbl_peak, btn_col
 
     def _to_readable_band(self, band):
         """
@@ -1160,7 +1175,7 @@ class StreamPanel(wx.Panel):
                 return u"%d/%d nm" % (center_nm, width_nm)
             else:
                 return u"%d nm" % center_nm
-        else: # multi-band
+        else:  # multi-band
             centers = []
             for c in fluo.get_center(band):
                 center_nm = int(round(c * 1e9))
@@ -1243,7 +1258,7 @@ class StreamPanel(wx.Panel):
             low, high = [int(round(b * 1e9)) for b in (band[0], band[-1])]
             lbl_ctrl.SetToolTipString(tooltip % (low, high))
 
-    def _sync_tint_on_emission(self, ewl, xwl):
+    def sync_tint_on_emission(self, ewl, xwl):
         """
         Set the tint to the same colour as emission, if no dye has been
          selected. If a dye is selected, it's dependent on the dye information.
@@ -1252,9 +1267,9 @@ class StreamPanel(wx.Panel):
         """
         if self._dye_ewl is None: # if dye is used, keep the peak wavelength
             ewl_center = fluo.get_one_center_em(ewl, xwl)
-            if self._prev_ewl_center == ewl_center:
+            if self._dye_prev_ewl_center == ewl_center:
                 return
-            self._prev_ewl_center = ewl_center
+            self._dye_prev_ewl_center = ewl_center
             colour = wave2rgb(ewl_center)
             logging.debug("Synchronising tint to %s", colour)
             self.stream.tint.value = colour
@@ -1265,7 +1280,7 @@ class StreamPanel(wx.Panel):
         returns a value to set for the VA
         """
         xwl = self._txt_excitation.GetClientData(self._txt_excitation.GetSelection())
-        self._sync_tint_on_emission(self.stream.emission.value, xwl)
+        self.sync_tint_on_emission(self.stream.emission.value, xwl)
         return xwl
 
     def _excitation_2_ctrl(self, value):
@@ -1300,7 +1315,7 @@ class StreamPanel(wx.Panel):
         returns a value to set for the VA
         """
         ewl = self._txt_emission.GetClientData(self._txt_emission.GetSelection())
-        self._sync_tint_on_emission(ewl, self.stream.excitation.value)
+        self.sync_tint_on_emission(ewl, self.stream.excitation.value)
         return ewl
 
     def _emission_2_ctrl(self, value):
