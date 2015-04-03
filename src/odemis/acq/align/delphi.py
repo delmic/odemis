@@ -707,7 +707,7 @@ def _discard_data(df, data):
     """
     pass
 
-def HoleDetection(detector, escan, sem_stage, ebeam_focus, known_focus=None):
+def HoleDetection(detector, escan, sem_stage, ebeam_focus, known_focus=None, manual=False):
     """
     Wrapper for DoHoleDetection. It provides the ability to check the 
     progress of the procedure.
@@ -716,6 +716,7 @@ def HoleDetection(detector, escan, sem_stage, ebeam_focus, known_focus=None):
     sem_stage (model.Actuator): The SEM stage
     ebeam_focus (model.Actuator): EBeam focus
     known_focus (float): Focus used for hole detection #m
+    manual (boolean): if True, will not apply autofocus before detection attempt
     returns (ProgressiveFuture): Progress DoHoleDetection
     """
     # Create ProgressiveFuture and update its state to RUNNING
@@ -733,12 +734,12 @@ def HoleDetection(detector, escan, sem_stage, ebeam_focus, known_focus=None):
     detection_thread = threading.Thread(target=executeTask,
                   name="Hole detection",
                   args=(f, _DoHoleDetection, f, detector, escan, sem_stage, ebeam_focus,
-                        known_focus))
+                        known_focus, manual))
 
     detection_thread.start()
     return f
 
-def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focus=None):
+def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focus=None, manual=False):
     """
     Moves to the expected positions of the holes on the sample holder and 
     determines the centers of the holes (acquiring SEM images) with respect to 
@@ -749,6 +750,7 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
     sem_stage (model.Actuator): The SEM stage
     ebeam_focus (model.Actuator): EBeam focus
     known_focus (float): Focus used for hole detection (m)
+    manual (boolean): if True, will not apply autofocus before detection attempt
     returns:
       first_hole (float, float): position (m,m)
       second_hole (float, float): position (m,m)
@@ -790,7 +792,7 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
                 f.result()
 
             # For the first hole apply autofocus anyway
-            if (pos == EXPECTED_HOLES[0]):
+            if (pos == EXPECTED_HOLES[0]) and (manual == False):
                 escan.horizontalFoV.value = 250e-06  # m
                 escan.scale.value = (2, 2)
                 f = autofocus.AutoFocus(detector, escan, ebeam_focus)
