@@ -424,13 +424,8 @@ class StreamPanel(wx.Panel):
         self._vacs = []  # VAConnectors to keep reference of
 
         # Dye attributes
-
-        # Peak excitation/emission wavelength of the selected dye, to be used for peak text and
-        # wavelength colour
-        self._dye_xwl = None
-        self._dye_ewl = None
-        self._dye_prev_ewl_center = None  # ewl when tint was last changed
         self._btn_excitation = None
+        self._btn_emission = None
 
         # Appearance
         # self._agwStyle = agwStyle | wx.CP_NO_TLW_RESIZE  # |wx.CP_GTK_EXPANDER
@@ -1021,15 +1016,15 @@ class StreamPanel(wx.Panel):
 
     @control_bookkeeper
     def add_dye_excitation_ctrl(self, excitation_va):
-        lbl_ctrl, value_ctrl, lbl_exc_peak, self._btn_excitation = self._add_filter_line(
+        lbl_ctrl, value_ctrl, lbl_exc_peak, btn_excitation = self._add_filter_line(
                                                                               "Excitation",
                                                                               excitation_va)
-        return lbl_ctrl, value_ctrl, lbl_exc_peak
+        return lbl_ctrl, value_ctrl, lbl_exc_peak, btn_excitation
 
     @control_bookkeeper
     def add_dye_emission_ctrl(self, emission_va):
-        lbl_ctrl, value_ctrl, _, _ = self._add_filter_line("Emission", emission_va)
-        return lbl_ctrl, value_ctrl
+        lbl_ctrl, value_ctrl, lbl_em_peak, btn_emission = self._add_filter_line("Emission", emission_va)
+        return lbl_ctrl, value_ctrl, lbl_em_peak, btn_emission
 
     def _add_filter_line(self, name, va, center_wl=0, va_2_ctrl=None, ctrl_2_va=None):
         """ Create the controls for dye emission/excitation colour filter setting
@@ -1103,7 +1098,7 @@ class StreamPanel(wx.Panel):
                           (self.num_rows, 2),
                           flag=wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL | wx.ALIGN_RIGHT,
                           border=5)
-        self._update_peak_label_fit(lbl_peak, btn_col, None, band)
+        self.update_peak_label_fit(lbl_peak, btn_col, None, band)
 
         return lbl_ctrl, hw_set, lbl_peak, btn_col
 
@@ -1218,12 +1213,12 @@ class StreamPanel(wx.Panel):
             self._dye_ewl = None
 
         # Either update the peak info, or clean up if nothing to display
-        self._update_peak_label_fit(self._lbl_exc_peak, self._btn_excitation,
+        self.update_peak_label_fit(self._lbl_exc_peak, self._btn_excitation,
                                     self._dye_xwl, self.stream.excitation.value)
-        self._update_peak_label_fit(self._lbl_em_peak, self._btn_emission,
+        self.update_peak_label_fit(self._lbl_em_peak, self._btn_emission,
                                     self._dye_ewl, self.stream.emission.value)
 
-    def _update_peak_label_fit(self, lbl_ctrl, col_ctrl, wl, band):
+    def update_peak_label_fit(self, lbl_ctrl, col_ctrl, wl, band):
         """
         Changes the colour & tooltip of the peak info label based on how well
         it fits to the given band setting.
@@ -1274,72 +1269,72 @@ class StreamPanel(wx.Panel):
             logging.debug("Synchronising tint to %s", colour)
             self.stream.tint.value = colour
 
-    def _excitation_2_va(self):
-        """
-        Called when the text is changed (by the user).
-        returns a value to set for the VA
-        """
-        xwl = self._txt_excitation.GetClientData(self._txt_excitation.GetSelection())
-        self.sync_tint_on_emission(self.stream.emission.value, xwl)
-        return xwl
-
-    def _excitation_2_ctrl(self, value):
-        """
-        Called to update the widgets (text + colour display) when the VA changes.
-        returns nothing
-        """
-        # The control can be a label or a combo-box, but we are connected only
-        # when it's a combo-box
-        for i in range(self._txt_excitation.Count):
-            if self._txt_excitation.GetClientData(i) == value:
-                self._txt_excitation.SetSelection(i)
-                break
-        else:
-            logging.error("No existing label found for value %s", value)
-
-        if self._dye_xwl is None: # no dye info => use hardware settings
-            colour = wave2rgb(fluo.get_one_center_ex(value, self.stream.emission.value))
-            self._btn_excitation.set_colour(colour)
-        else:
-            self._update_peak_label_fit(self._lbl_exc_peak, self._btn_excitation,
-                                        self._dye_xwl, value)
-        # also update emission colour as it's dependent on excitation when multiband
-        if self._dye_ewl is None:
-            colour = wave2rgb(fluo.get_one_center_em(self.stream.emission.value, value))
-            self._btn_emission.set_colour(colour)
-
-    def _emission_2_va(self):
-        """
-        Called when the text is changed (by the user).
-        Also updates the tint as a side-effect.
-        returns a value to set for the VA
-        """
-        ewl = self._txt_emission.GetClientData(self._txt_emission.GetSelection())
-        self.sync_tint_on_emission(ewl, self.stream.excitation.value)
-        return ewl
-
-    def _emission_2_ctrl(self, value):
-        """
-        Called to update the widgets (text + colour display) when the VA changes.
-        returns nothing
-        """
-        for i in range(self._txt_emission.Count):
-            if self._txt_emission.GetClientData(i) == value:
-                self._txt_emission.SetSelection(i)
-                break
-        else:
-            logging.error("No existing label found for value %s", value)
-
-        if self._dye_ewl is None: # no dye info => use hardware settings
-            colour = wave2rgb(fluo.get_one_center_em(value, self.stream.excitation.value))
-            self._btn_emission.set_colour(colour)
-        else:
-            self._update_peak_label_fit(self._lbl_em_peak, self._btn_emission,
-                                        self._dye_ewl, value)
-        # also update excitation colour as it's dependent on emission when multiband
-        if self._dye_xwl is None:
-            colour = wave2rgb(fluo.get_one_center_ex(self.stream.excitation.value, value))
-            self._btn_excitation.set_colour(colour)
+    # def _excitation_2_va(self):
+    #     """
+    #     Called when the text is changed (by the user).
+    #     returns a value to set for the VA
+    #     """
+    #     xwl = self._txt_excitation.GetClientData(self._txt_excitation.GetSelection())
+    #     self.sync_tint_on_emission(self.stream.emission.value, xwl)
+    #     return xwl
+    #
+    # def _excitation_2_ctrl(self, value):
+    #     """
+    #     Called to update the widgets (text + colour display) when the VA changes.
+    #     returns nothing
+    #     """
+    #     # The control can be a label or a combo-box, but we are connected only
+    #     # when it's a combo-box
+    #     for i in range(self._txt_excitation.Count):
+    #         if self._txt_excitation.GetClientData(i) == value:
+    #             self._txt_excitation.SetSelection(i)
+    #             break
+    #     else:
+    #         logging.error("No existing label found for value %s", value)
+    #
+    #     if self._dye_xwl is None: # no dye info => use hardware settings
+    #         colour = wave2rgb(fluo.get_one_center_ex(value, self.stream.emission.value))
+    #         self._btn_excitation.set_colour(colour)
+    #     else:
+    #         self.update_peak_label_fit(self._lbl_exc_peak, self._btn_excitation,
+    #                                     self._dye_xwl, value)
+    #     # also update emission colour as it's dependent on excitation when multiband
+    #     if self._dye_ewl is None:
+    #         colour = wave2rgb(fluo.get_one_center_em(self.stream.emission.value, value))
+    #         self._btn_emission.set_colour(colour)
+    #
+    # def _emission_2_va(self):
+    #     """
+    #     Called when the text is changed (by the user).
+    #     Also updates the tint as a side-effect.
+    #     returns a value to set for the VA
+    #     """
+    #     ewl = self._txt_emission.GetClientData(self._txt_emission.GetSelection())
+    #     self.sync_tint_on_emission(ewl, self.stream.excitation.value)
+    #     return ewl
+    #
+    # def _emission_2_ctrl(self, value):
+    #     """
+    #     Called to update the widgets (text + colour display) when the VA changes.
+    #     returns nothing
+    #     """
+    #     for i in range(self._txt_emission.Count):
+    #         if self._txt_emission.GetClientData(i) == value:
+    #             self._txt_emission.SetSelection(i)
+    #             break
+    #     else:
+    #         logging.error("No existing label found for value %s", value)
+    #
+    #     if self._dye_ewl is None: # no dye info => use hardware settings
+    #         colour = wave2rgb(fluo.get_one_center_em(value, self.stream.excitation.value))
+    #         self._btn_emission.set_colour(colour)
+    #     else:
+    #         self.update_peak_label_fit(self._lbl_em_peak, self._btn_emission,
+    #                                     self._dye_ewl, value)
+    #     # also update excitation colour as it's dependent on emission when multiband
+    #     if self._dye_xwl is None:
+    #         colour = wave2rgb(fluo.get_one_center_ex(self.stream.excitation.value, value))
+    #         self._btn_excitation.set_colour(colour)
 
     # ===== Wavelength bandwidth for SpectrumSettingsStream
 

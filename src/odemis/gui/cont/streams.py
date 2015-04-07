@@ -28,6 +28,7 @@ from wx.lib.pubsub import pub
 
 import odemis.acq.stream as acqstream
 from odemis.acq.stream import OpticalStream, CameraStream
+from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.stream import StreamPanel
 from odemis.gui.conf.data import HW_SETTINGS_CONFIG
 import odemis.gui.model as guimodel
@@ -91,6 +92,15 @@ class StreamController(object):
         self.stream_panel = StreamPanel(stream_bar, stream, tab_data_model)
         self.tab_data_model = tab_data_model
 
+        # Peak excitation/emission wavelength of the selected dye, to be used for peak text and
+        # wavelength colour
+        self._dye_xwl = None
+        self._dye_ewl = None
+        self._dye_prev_ewl_center = None  # ewl when tint was last changed
+
+        self._btn_excitation = None
+        self._btn_emission = None
+
         self.entries = []
 
         # Check if light and exposure controls are necessary
@@ -116,7 +126,24 @@ class StreamController(object):
 
     # END Panel state methods
 
-    # Control modification
+    def sync_tint_on_emission(self, emission_wl, exitation_wl):
+        """
+        Set the tint to the same colour as emission, if no dye has been
+         selected. If a dye is selected, it's dependent on the dye information.
+        ewl ((tuple of) tuple of floats): emission wavelength
+        wwl ((tuple of) tuple of floats): excitation wavelength
+        """
+        if self._dye_ewl is None:  # if dye is used, keep the peak wavelength
+            ewl_center = fluo.get_one_center_em(emission_wl, exitation_wl)
+            if self._dye_prev_ewl_center == ewl_center:
+                return
+            self._dye_prev_ewl_center = ewl_center
+            colour = wave2rgb(ewl_center)
+            logging.debug("Synchronising tint to %s", colour)
+            self.stream.tint.value = colour
+
+    # Control addition
+
     def _add_exposure_time_ctrl(self):
         """ Add exposute time controls to the stream panel"""
 
@@ -165,55 +192,97 @@ class StreamController(object):
 
     def _add_dye_ctrl(self):
         """ Add controls to the stream panel needed for dye emission and exitation """
-        lbl_ctrl, value_ctrl, lbl_exc_peak = self.stream_panel.add_dye_excitation_ctrl(self.stream.excitation)
+        r = self.stream_panel.add_dye_excitation_ctrl(self.stream.excitation)
+        lbl_ctrl, value_ctrl, lbl_exc_peak, self._btn_excitation = r
 
-        if self.stream.excitation.readonly:
-            return
+        if isinstance(value_ctrl, ComboBox):
+            def _excitation_2_va(value_ctrl=value_ctrl):
+                """
+                Called when the text is changed (by the user).
+                returns a value to set for the VA
+                """
+                excitation_wavelength = value_ctrl.GetClientData(value_ctrl.GetSelection())
+                self.sync_tint_on_emission(self.stream.emission.value, excitation_wavelength)
+                return excitation_wavelength
 
-        def _excitation_2_va():
-            """
-            Called when the text is changed (by the user).
-            returns a value to set for the VA
-            """
-            excitation_wavelength = value_ctrl.GetClientData(value_ctrl.GetSelection())
-            self.stream_panel.sync_tint_on_emission(self.stream.emission.value,
-                                                    excitation_wavelength)
-            return excitation_wavelength
+            def _excitation_2_ctrl(value, value_ctrl=value_ctrl):
+                """
+                Called to update the widgets (text + colour display) when the VA changes.
+                returns nothing
+                """
+                # The control can be a label or a combo-box, but we are connected only
+                # when it's a combo-box
+                for i in range(value_ctrl.Count):
+                    if value_ctrl.GetClientData(i) == value:
+                        value_ctrl.SetSelection(i)
+                        break
+                else:
+                    logging.error("No existing label found for value %s", value)
 
-        def _excitation_2_ctrl(value):
-            """
-            Called to update the widgets (text + colour display) when the VA changes.
-            returns nothing
-            """
-            # The control can be a label or a combo-box, but we are connected only
-            # when it's a combo-box
-            for i in range(value_ctrl.Count):
-                if value_ctrl.GetClientData(i) == value:
-                    value_ctrl.SetSelection(i)
-                    break
-            else:
-                logging.error("No existing label found for value %s", value)
+                if self._dye_xwl is None and self._btn_excitation:  # no dye info? use hardware settings
+                    colour = wave2rgb(fluo.get_one_center_ex(value, self.stream.emission.value))
+                    self._btn_excitation.set_colour(colour)
+                else:
+                    self.stream_panel.update_peak_label_fit(lbl_exc_peak, self._btn_excitation,
+                                                            self._dye_xwl, value)
 
-            if self.stream_panel._dye_xwl is None:  # no dye info => use hardware settings
-                colour = wave2rgb(fluo.get_one_center_ex(value, self.stream.emission.value))
-                self.stream_panel._btn_excitation.set_colour(colour)
-            else:
-                self.stream_panel._update_peak_label_fit(
-                    lbl_exc_peak, self.stream_panel._btn_excitation, self.stream_panel._dye_xwl,
-                    value)
-            # also update emission colour as it's dependent on excitation when multiband
-            if self.stream_panel._dye_ewl is None:
-                colour = wave2rgb(fluo.get_one_center_em(self.stream.emission.value, value))
-                self.stream_panel._btn_emission.set_colour(colour)
+                # also update emission colour as it's dependent on excitation when multiband
+                if self._dye_ewl is None and self._btn_emission:
+                    colour = wave2rgb(fluo.get_one_center_em(self.stream.emission.value, value))
+                    self._btn_emission.set_colour(colour)
 
-        se = SettingEntry(name="excitation", va=self.stream.excitation, stream=self.stream,
-                          lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl, events=wx.EVT_COMBOBOX,
-                          va_2_ctrl=_excitation_2_ctrl, ctrl_2_va=_excitation_2_va)
-        self.entries.append(se)
+            se = SettingEntry(name="excitation", va=self.stream.excitation, stream=self.stream,
+                              lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl, events=wx.EVT_COMBOBOX,
+                              va_2_ctrl=_excitation_2_ctrl, ctrl_2_va=_excitation_2_va)
 
-        lbl_ctrl, value_ctrl = self.stream_panel.add_dye_emission_ctrl(self.stream.emission)
+            self.entries.append(se)
 
-    # END Control modification
+        r = self.stream_panel.add_dye_emission_ctrl(self.stream.emission)
+        lbl_ctrl, value_ctrl, lbl_em_peak, self._btn_emission = r
+
+        if isinstance(self._btn_emission, ComboBox):
+
+            def _emission_2_va(value_ctrl=value_ctrl):
+                """
+                Called when the text is changed (by the user).
+                Also updates the tint as a side-effect.
+                returns a value to set for the VA
+                """
+                emission_wavelength = value_ctrl.GetClientData(value_ctrl.GetSelection())
+                self.sync_tint_on_emission(emission_wavelength, self.stream.excitation.value)
+                return emission_wavelength
+
+            def _emission_2_ctrl(value, value_ctrl=value_ctrl):
+                """
+                Called to update the widgets (text + colour display) when the VA changes.
+                returns nothing
+                """
+                for i in range(value_ctrl.Count):
+                    if value_ctrl.GetClientData(i) == value:
+                        value_ctrl.SetSelection(i)
+                        break
+                else:
+                    logging.error("No existing label found for value %s", value)
+
+                if self._dye_ewl is None:  # no dye info? use hardware settings
+                    colour = wave2rgb(fluo.get_one_center_em(value, self.stream.excitation.value))
+                    self._btn_emission.set_colour(colour)
+                else:
+                    self.stream_panel.update_peak_label_fit(lbl_em_peak, self._btn_emission,
+                                                            self._dye_ewl, value)
+                # also update excitation colour as it's dependent on emission when multiband
+                if self._dye_xwl is None:
+                    colour = wave2rgb(fluo.get_one_center_ex(self.stream.excitation.value, value))
+                    self._btn_excitation.set_colour(colour)
+
+            se = SettingEntry(name="emission", va=self.stream.emission, stream=self.stream,
+                              lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl, events=wx.EVT_COMBOBOX,
+                              va_2_ctrl=_emission_2_ctrl, ctrl_2_va=_emission_2_va)
+
+            self.entries.append(se)
+
+
+    # END Control addition
 
 
 class StreamBarController(object):
