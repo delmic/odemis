@@ -40,6 +40,22 @@ class PMT(model.Detector):
     second one to control and ensure the safe operation of the first one and act 
     with respect to its DataFlow.
     
+    It actually duplicates some of the children VAs that need to be included in
+    the user interface (connecting them to the original ones) and uses the rest 
+    of them in order to protect the PMT via the PMT Control Unit in case of trip
+    i.e. excess of a current threshold for a certain amount of time (see Control
+    Unit’s properties).
+
+    In particular, this module observes, uses and also sets the protection 
+    status provided by the control unit as below:
+        - Resets protection status (False) when gain is decreased or upon 
+        acquisition start.
+        - Sets protection status (True) when we stop the acquisition to force 
+        the gain provided to the PMT to 0.
+        - Checks the protection status once acquisition is finished and gives a 
+        warning if protection was active (True).
+        - Upon initialization it turns on the power supply and turns it off on 
+        termination.
     '''
     def __init__(self, name, role, children, **kwargs):
         '''

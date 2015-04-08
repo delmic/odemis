@@ -140,7 +140,7 @@ def main(args):
         raw_input(msg)
         logging.debug("Trying to detect the holes/markers of the sample holder...")
         hole_detectionf = aligndelphi.HoleDetection(detector, escan, sem_stage,
-                                                    ebeam_focus)
+                                                    ebeam_focus, known_focus=None, manual=True)
         first_hole, second_hole, hole_focus = hole_detectionf.result()
         logging.debug("First hole: %s (m,m) Second hole: %s (m,m)", first_hole, second_hole)
         hole_focus = ebeam_focus.position.value.get('z')
