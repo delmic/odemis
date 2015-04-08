@@ -273,7 +273,11 @@ def _convertToOMEMD(images):
 #      + Instrument (*)    # To describe the acquisition technical details for each
 #        + Microscope      # set of emitter/detector.
 #        + LightSource (*)
+#          . LightSourceID
 #        + Detector (*)
+#          . DetectorID
+#          . Power (?)
+#          . PowerUnit (?) # default is mW - new in 2015
 #        + Objective (*)
 #        + Filter (*)
 #      + Image (*)         # To describe a set of images by the same instrument
@@ -286,7 +290,14 @@ def _convertToOMEMD(images):
 #        + Transform       # Affine transform (to record the rotation...)
 #        + Pixels          # technical dimensions of the images (XYZ, T, C)
 #          + Channel (*)   # emitter settings for the given channel (light wavelength)
+#            . ExcitationWavelength
+#            . EmissionWavelength
 #            + DetectorSettings
+#              . DetectorID
+#              . Binning
+#            + LightSourceSettings
+#              . LightSourceID
+#              . Attenuation (?)
 #          + Plane (*)     # physical dimensions/position of each images
 #          + TiffData (*)  # where to find the data in the tiff file (IFD)
 #                          # we explicitly reference each DataArray to avoid
@@ -338,24 +349,26 @@ def _convertToOMEMD(images):
     # for each set of images from the same instrument, add them
     groups = _findImageGroups(images)
 
-    # Detectors
+    # Detectors, Objectives & LightSource: one per group of data with same metadata
     for ifd, g in groups.items():
         did = ifd # our convention: ID is the first IFD
         da0 = g[0]
         if model.MD_HW_NAME in da0.metadata:
-            detect = ET.SubElement(instr, "Detector", attrib={
-                                      "ID": "Detector:%d" % did,
-                                      "Model": da0.metadata[model.MD_HW_NAME]})
+            obj = ET.SubElement(instr, "Detector", attrib={
+                                "ID": "Detector:%d" % did,
+                                "Model": da0.metadata[model.MD_HW_NAME]})
 
-    # Objectives
-    for ifd, g in groups.items():
-        oid = ifd # our convention: ID is the first IFD
-        da0 = g[0]
+        if model.MD_LIGHT_POWER in da0.metadata:
+            pwr = da0.metadata[model.MD_LIGHT_POWER] * 1e3 # in mW
+            obj = ET.SubElement(instr, "LightSource", attrib={
+                                "ID": "LightSource:%d" % did,
+                                "Power": "%.15f" % pwr})
+
         if model.MD_LENS_MAG in da0.metadata:
+            mag = da0.metadata[model.MD_LENS_MAG]
             obj = ET.SubElement(instr, "Objective", attrib={
-                      "ID": "Objective:%d" % oid,
-                      "CalibratedMagnification": "%.15f" % da0.metadata[model.MD_LENS_MAG]
-                      })
+                                "ID": "Objective:%d" % did,
+                                "CalibratedMagnification": "%.15f" % mag})
             if model.MD_LENS_NAME in da0.metadata:
                 obj.attrib["Model"] = da0.metadata[model.MD_LENS_NAME]
 
@@ -528,6 +541,16 @@ def _updateMDFromOME(root, das, basename):
                 except (KeyError, ValueError):
                     pass
 
+            # Get light source info
+            ls_settings = che.find("LightSourceSettings")
+            if ls_settings is not None:
+                try:
+                    ls = _findElementByID(root, ls_settings.attrib["ID"], "LightSource")
+                    pwr = float(ls.attrib["Power"]) * 1e-3 # mW -> W
+                    mdc[model.MD_LIGHT_POWER] = pwr
+                except (KeyError, LookupError):
+                    logging.info("LightSourceSettings without LightSource")
+
             # update all the IFDs related to this channel
             for ifd in ctz_2_ifd[chan].flat:
                 if ifd == -1:
@@ -553,7 +576,6 @@ def _updateMDFromOME(root, das, basename):
                 if da is None:
                     continue
                 da.metadata.update({model.MD_WL_LIST: wl_list})
-
 
         # Plane (= one per CTZ -> IFD)
         for ple in pxe.findall("Plane"):
@@ -861,6 +883,7 @@ def _findImageGroups(das):
             or prev_da.metadata.get(model.MD_HW_NAME, None) != da.metadata.get(model.MD_HW_NAME, None)
             or prev_da.metadata.get(model.MD_HW_VERSION, None) != da.metadata.get(model.MD_HW_VERSION, None)
             or prev_da.metadata.get(model.MD_PIXEL_SIZE) != da.metadata.get(model.MD_PIXEL_SIZE)
+            or prev_da.metadata.get(model.MD_LIGHT_POWER) != da.metadata.get(model.MD_LIGHT_POWER)
             # or prev_da.metadata.get(model.MD_POS) != da.metadata.get(model.MD_POS)
             or prev_da.metadata.get(model.MD_ROTATION, 0) != da.metadata.get(model.MD_ROTATION, 0)
             or prev_da.metadata.get(model.MD_SHEAR, 0) != da.metadata.get(model.MD_SHEAR, 0)
@@ -1067,6 +1090,7 @@ def _addImageElement(root, das, ifd, rois):
                 else:
                     chan.attrib["AcquisitionMode"] = "SpectralImaging"
                     # It should be an int, but that looses too much precision
+                    # TODO: in 2015 schema, it's now PositiveFloat
                     chan.attrib["EmissionWavelength"] = "%.15f" % (wl_list[c] * 1e9)
 
             if model.MD_USER_TINT in da.metadata:
@@ -1077,7 +1101,6 @@ def _addImageElement(root, das, ifd, rois):
                     tint = tuple(tint) + (255,) # need alpha channel
                 hex_str = "".join("%.2x" % c for c in tint) # copy of conversion.rgb_to_hex()
                 chan.attrib["Color"] = "#%s" % hex_str
-
 
             # Add info on detector
             attrib = {}
@@ -1096,6 +1119,14 @@ def _addImageElement(root, das, ifd, rois):
                 # detector of the group has the same id as first IFD of the group
                 attrib["ID"] = "Detector:%d" % ifd
                 ds = ET.SubElement(chan, "DetectorSettings", attrib=attrib)
+
+            # Add info on the light source: same structure as Detector, but
+            # all the interesting info is already on the LightSource
+            attrib = {}
+            if model.MD_LIGHT_POWER in da.metadata:
+                attrib = {"ID": "LightSource:%d" % ifd}
+            if attrib:
+                ds = ET.SubElement(chan, "LightSourceSettings", attrib=attrib)
 
             subid += 1
 
@@ -1418,7 +1449,7 @@ def _ensure_fs_encoding(filename):
     else:
         return filename.encode(sys.getfilesystemencoding())
 
-def export(filename, data, thumbnail=None):
+def export(filename, data, thumbnail=None, compressed=True):
     '''
     Write a TIFF file with the given image and metadata
     filename (unicode): filename of the file to create (including path)
@@ -1432,14 +1463,15 @@ def export(filename, data, thumbnail=None):
       (reasonable) size. Must be either 2D array (greyscale) or 3D with last
       dimension of length 3 (RGB). If the exporter doesn't support it, it will
       be dropped silently.
+    compressed (boolean): whether the file is compressed or not.
     '''
     filename = _ensure_fs_encoding(filename)
     if isinstance(data, list):
-        _saveAsMultiTiffLT(filename, data, thumbnail)
+        _saveAsMultiTiffLT(filename, data, thumbnail, compressed)
     else:
         # TODO should probably not enforce it: respect duck typing
         assert(isinstance(data, model.DataArray))
-        _saveAsMultiTiffLT(filename, [data], thumbnail)
+        _saveAsMultiTiffLT(filename, [data], thumbnail, compressed)
 
 def read_data(filename):
     """
