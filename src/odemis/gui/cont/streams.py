@@ -34,6 +34,7 @@ from odemis.gui.conf.data import HW_SETTINGS_CONFIG
 import odemis.gui.model as guimodel
 from odemis import model
 from odemis.util import fluo
+from odemis.gui.model import dye
 from odemis.gui.util.widgets import VigilantAttributeConnector
 
 
@@ -101,6 +102,9 @@ class StreamController(object):
         self._btn_excitation = None
         self._btn_emission = None
 
+        self._lbl_exc_peak = None
+        self._lbl_em_peak = None
+
         self.entries = []
 
         # Check if light and exposure controls are necessary
@@ -115,6 +119,37 @@ class StreamController(object):
             self._add_dye_ctrl()
 
         stream_bar.add_stream_panel(self.stream_panel, show)
+
+    def _on_new_dye_name(self, txt):
+        # update the name of the stream
+        self.stream.name.value = txt
+
+        # update the excitation and emission wavelength
+        if txt in dye.DyeDatabase:
+            xwl, ewl = dye.DyeDatabase[txt]
+            self._dye_xwl = xwl
+            self._dye_ewl = ewl
+
+            self.stream.excitation.value = fluo.find_best_band_for_dye(
+                xwl, self.stream.excitation.choices)
+            self.stream.emission.value = fluo.find_best_band_for_dye(
+                ewl, self.stream.emission.choices)
+
+            # use peak values to pick the best tint and set the wavelength colour
+            xcol = wave2rgb(xwl)
+            self._btn_excitation.set_colour(xcol)
+            ecol = wave2rgb(ewl)
+            self._btn_emission.set_colour(ecol)
+            self.stream.tint.value = ecol
+        else:
+            self._dye_xwl = None
+            self._dye_ewl = None
+
+        # Either update the peak info, or clean up if nothing to display
+        self.stream_panel.update_peak_label_fit(self._lbl_exc_peak, self._btn_excitation,
+                                                self._dye_xwl, self.stream.excitation.value)
+        self.stream_panel.update_peak_label_fit(self._lbl_em_peak, self._btn_emission,
+                                                self._dye_ewl, self.stream.emission.value)
 
     # Panel state methods
 
@@ -192,8 +227,15 @@ class StreamController(object):
 
     def _add_dye_ctrl(self):
         """ Add controls to the stream panel needed for dye emission and exitation """
+
+        if not self.stream.excitation.readonly:
+            # TODO: mark dye incompatible with the hardware with a "disabled"
+            # colour in the list. (Need a special version of the combobox?)
+            self.stream_panel.set_header_choices(dye.DyeDatabase.keys())
+            self.header_change_callback = self._on_new_dye_name
+
         r = self.stream_panel.add_dye_excitation_ctrl(self.stream.excitation)
-        lbl_ctrl, value_ctrl, lbl_exc_peak, self._btn_excitation = r
+        lbl_ctrl, value_ctrl, self._lbl_exc_peak, self._btn_excitation = r
 
         if isinstance(value_ctrl, ComboBox):
             def _excitation_2_va(value_ctrl=value_ctrl):
@@ -223,7 +265,8 @@ class StreamController(object):
                     colour = wave2rgb(fluo.get_one_center_ex(value, self.stream.emission.value))
                     self._btn_excitation.set_colour(colour)
                 else:
-                    self.stream_panel.update_peak_label_fit(lbl_exc_peak, self._btn_excitation,
+                    self.stream_panel.update_peak_label_fit(self._lbl_exc_peak,
+                                                            self._btn_excitation,
                                                             self._dye_xwl, value)
 
                 # also update emission colour as it's dependent on excitation when multiband
@@ -238,7 +281,7 @@ class StreamController(object):
             self.entries.append(se)
 
         r = self.stream_panel.add_dye_emission_ctrl(self.stream.emission)
-        lbl_ctrl, value_ctrl, lbl_em_peak, self._btn_emission = r
+        lbl_ctrl, value_ctrl, self._lbl_em_peak, self._btn_emission = r
 
         if isinstance(self._btn_emission, ComboBox):
 
@@ -268,7 +311,8 @@ class StreamController(object):
                     colour = wave2rgb(fluo.get_one_center_em(value, self.stream.excitation.value))
                     self._btn_emission.set_colour(colour)
                 else:
-                    self.stream_panel.update_peak_label_fit(lbl_em_peak, self._btn_emission,
+                    self.stream_panel.update_peak_label_fit(self._lbl_em_peak,
+                                                            self._btn_emission,
                                                             self._dye_ewl, value)
                 # also update excitation colour as it's dependent on emission when multiband
                 if self._dye_xwl is None:
@@ -280,7 +324,6 @@ class StreamController(object):
                               va_2_ctrl=_emission_2_ctrl, ctrl_2_va=_emission_2_va)
 
             self.entries.append(se)
-
 
     # END Control addition
 

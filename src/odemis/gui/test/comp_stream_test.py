@@ -28,11 +28,13 @@ import unittest
 import wx
 
 from odemis.acq.stream import Stream
-from odemis.gui.cont.streams import StreamBarController
+from odemis.gui.comp.stream import StreamPanel
+from odemis.gui.cont.streams import StreamBarController, StreamController
 from odemis.util import conversion
 import odemis.acq.stream as stream_mod
 import odemis.gui.comp.stream as stream_comp
 import odemis.gui.model as guimodel
+import odemis.gui.model.dye as dye
 import odemis.gui.test as test
 import odemis.model as model
 
@@ -257,7 +259,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
         self.assertEqual(stream_bar.get_size(), 0)
 
-    def test_dyeexpander(self):
+    def test_dye_ctrls(self):
 
         # Fake data to be used
         tab_mod = self.create_simple_tab_model()
@@ -266,8 +268,17 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         fake_fluo_stream = FakeFluoStream("Fluo Stream")
 
         # Add the same stream twice
-        stream_cont.addStream(fake_fluo_stream)
-        stream_cont.addStream(fake_fluo_stream)
+        sp1 = stream_cont.addStream(fake_fluo_stream)
+        sp2 = stream_cont.addStream(fake_fluo_stream)
+
+        self.assertIsInstance(sp1, StreamController)
+        self.assertIsInstance(sp2, StreamController)
+
+        # Test dye choices
+        self.assertSequenceEqual(
+            sorted(dye.DyeDatabase.keys()),
+            sorted(sp1.stream_panel._header.ctrl_label.GetChoices())
+        )
 
         test.gui_loop()
 

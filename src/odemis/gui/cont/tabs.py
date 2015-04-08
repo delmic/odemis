@@ -457,8 +457,8 @@ class SecomStreamsTab(Tab):
             has_sem = any(isinstance(s, streammod.EMStream)
                           for s in self.tab_data_model.streams.value)
             if not has_sem:
-                sp = self._add_em_stream(add_to_all_views=True, play=False)
-                sp.show_remove_btn(False)
+                stream_cont = self._add_em_stream(add_to_all_views=True, play=False)
+                stream_cont.stream_panel.show_remove_btn(False)
 
     @call_in_wx_main
     def on_chamber_state(self, state):
