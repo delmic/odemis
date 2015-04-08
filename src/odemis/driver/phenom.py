@@ -156,16 +156,19 @@ class SEM(model.HwComponent):
         try:
             start = info.index("'Product Name'>") + len("'Product Name'>")
             end = info.index("</Property", start)
-            self._hwVersion = "%s" % (info[start:end])
-            self._metadata[model.MD_HW_NAME] = self._hwVersion
-
+            hwname = "%s" % (info[start:end])
+            self._metadata[model.MD_HW_NAME] = hwname
             # TODO: how to retrieve the edition information?
-            self._metadata[model.MD_HW_VERSION] = "G4"
+            hwver = "G4"
+            self._hwVersion = "%s %s" % (hwname, hwver)
+            self._metadata[model.MD_HW_VERSION] = self._hwVersion
 
             start = info.index("'Version'>") + len("'Version'>")
             end = info.index("</Property", start)
             self._swVersion = "%s" % (info[start:end])
             self._metadata[model.MD_SW_VERSION] = self._swVersion
+
+            logging.info("Connected to %s v%s", self._hwVersion, self._swVersion)
         except ValueError:
             logging.warning("Phenom version could not be retrieved")
 
