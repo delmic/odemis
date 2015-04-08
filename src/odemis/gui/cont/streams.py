@@ -659,7 +659,7 @@ class StreamBarController(object):
 
         if visible:
             show = isinstance(stream, self._tab_data_model.focussedView.value.stream_classes)
-            stream_panel = self._add_stream_panel(stream, show, static=False)
+            stream_panel = self._add_stream_cont(stream, show, static=False)
 
             # TODO: make StreamTree a VA-like and remove this
             logging.debug("Sending stream.ctrl.added message")
@@ -672,30 +672,30 @@ class StreamBarController(object):
         else:
             return stream
 
-    def add_acquisition_stream_panel(self, stream):
-        """ Create a stream panel for the given existing stream, adapted to ac
+    def add_acquisition_stream_cont(self, stream):
+        """ Create a stream controller for the given existing stream, adapted to acquisition
 
-        :return: StreamPanel
+        :return: StreamController
 
         """
 
-        return self._add_stream_panel(stream, show=True, static=True)
+        return self._add_stream_cont(stream, show=True, static=True)
 
-    def _add_stream_panel(self, stream, show=True, locked=False, static=False):
+    def _add_stream_cont(self, stream, show=True, locked=False, static=False):
         """ Create and add a stream controller for the given stream
 
         :return: (StreamController)
 
         """
 
-        stream_ctrl = StreamController(self._stream_bar, stream, self._tab_data_model, show)
+        stream_cont = StreamController(self._stream_bar, stream, self._tab_data_model, show)
 
         if locked:
-            stream_ctrl.to_locked_mode()
+            stream_cont.to_locked_mode()
         elif static:
-            stream_ctrl.to_static_mode()
+            stream_cont.to_static_mode()
 
-        return stream_ctrl
+        return stream_cont
 
     # === VA handlers
 
