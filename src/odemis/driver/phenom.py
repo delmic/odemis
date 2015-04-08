@@ -1122,7 +1122,10 @@ class PhenomFocus(model.Actuator):
 
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
         self.position = model.VigilantAttribute({}, unit="m", readonly=True)
-        self._updatePosition()
+        try:
+            self._updatePosition()
+        except suds.WebFault:
+            logging.debug("Working distance not available yet.")
 
         # Queue maintaining moves to be done
         self._moves_queue = collections.deque()
