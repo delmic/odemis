@@ -261,6 +261,28 @@ class PMTControl(model.HwComponent):
 
         return status
 
+    # These two methods are strictly used for the SPARC system in Monash. Use
+    # them to send a high/low signal via the PMT Control Unit to the relay, thus
+    # to pull/push the relay contact and control the power supply from the power
+    # board to the flippers and filter wheel.
+    def setContact(self, value):
+        # When True, the relay contact is connected
+        if value:
+            self._sendCommand("RELAY 0")
+        else:
+            self._sendCommand("RELAY 1")
+
+        return value
+
+    def getContact(self):
+        ans = self._sendCommand("RELAY?")
+        if ans == "0":
+            status = True
+        else:
+            status = False
+
+        return status
+
     def _sendCommand(self, cmd):
         """
         cmd (str): command to be sent to PMT Control unit.
@@ -430,6 +452,7 @@ class PMTControlSimulator(object):
         self._powerSupply = False
         self._protection = False
         self._prot_curr = 50
+        self._contact = True
         self._prot_time = 0.001
 
     def write(self, data):
@@ -520,6 +543,15 @@ class PMTControlSimulator(object):
                 else:
                     self._prot_time = value
                     res = '\n'
+            elif tokens[0] == "RELAY":
+                if (value != 0) and (value != 1):
+                    res = "ERROR: Out of range set value\n"
+                else:
+                    if value:
+                        self._contact = False
+                    else:
+                        self._contact = True
+                    res = '\n'
             else:
                 res = "ERROR: Cannot parse this command\n"
         elif qmarks:
@@ -541,6 +573,11 @@ class PMTControlSimulator(object):
                     res = "1" + '\n'
                 else:
                     res = "0" + '\n'
+            elif tokens[0] == "RELAY?":
+                if self._contact:
+                    res = "0" + '\n'
+                else:
+                    res = "1" + '\n'
             else:
                 res = "ERROR: Cannot parse this command\n"
         else:
