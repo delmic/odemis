@@ -14,6 +14,9 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+# Driver for the Omicron LuxX laser light engines
+# cf PhoxX_ LuxX_BrixX Programmers Guide V1.3.pdf for documentation.
+# It is currently only supported in rudimentary form.
 
 from __future__ import division
 
@@ -28,11 +31,17 @@ import re
 import serial
 
 
+class OXXError(Exception):
+    """
+    Error returned by the hardware
+    """
+    pass
+
+
 class DevxX(object):
     """
     Represent one PhoxX/LuxX/BrixX laser emitter
-    
-    cf PhoxX_ LuxX_BrixX Programmers Guide V1.3.pdf for documentation.
+
     Note: On USB, the device sends (by default) regularly "ad-hoc" messages,
       to indicate new values.
     """
@@ -45,15 +54,15 @@ class DevxX(object):
         self.port = port
         self._serial = self._openSerialPort(port)
         self._flushInput() # can have some \x00 bytes at the beginning
-        
+
         # As the devices do not have special USB vendor ID or product ID, it's
-        # quite possible that it's not a xX device actually at the other end of 
+        # quite possible that it's not a xX device actually at the other end of
         # the serial connection, so we first must make sure of that
         try:
             self.GetFirmware()
         except Exception:
             raise IOError("No xX device detected on port '%s'" % port)
-        
+
         # Fill in some info
         wl, power = self.GetSpecInfo()
         self.wavelength = wl
@@ -76,14 +85,14 @@ class DevxX(object):
         return (serial): the opened serial port
         """
         ser = serial.Serial(
-            port = port,
-            baudrate = 500000, # TODO: only correct for USB connections
-            bytesize = serial.EIGHTBITS,
-            parity = serial.PARITY_NONE,
-            stopbits = serial.STOPBITS_ONE,
-            timeout = 1 #s
+            port=port,
+            baudrate=500000, # TODO: only correct for USB connections
+            bytesize=serial.EIGHTBITS,
+            parity=serial.PARITY_NONE,
+            stopbits=serial.STOPBITS_ONE,
+            timeout=1  # s
         )
-        
+
         return ser
 
     def _flushInput(self):
@@ -94,7 +103,7 @@ class DevxX(object):
         self._serial.flushInput()
         while self._serial.read():
             pass
-    
+
     def _sendCommand(self, com):
         """
         Send a command which does not expect any report back
@@ -105,7 +114,7 @@ class DevxX(object):
         full_com = "?" + com + "\r"
         logging.debug("Sending: '%s'", full_com.encode('string_escape'))
         self._serial.write(full_com)
-        
+
         # ensure everything is received, before expecting an answer
         self._serial.flush()
 
@@ -119,7 +128,7 @@ class DevxX(object):
                 # This is a kludge to workaround that
                 if not line and char == "\x00":
                     char = ""
-                
+
                 # normal char
                 line += char
                 char = self._serial.read()
@@ -131,17 +140,21 @@ class DevxX(object):
 
             if line[0] != "$": # ad-hoc message => we don't care
                 break
+            else:
+                logging.debug("Skipping ad-hoc message '%s'", line.encode('string_escape'))
 
         if not line[0] == "!":
             raise IOError("Answer prefix (!) not found.")
         if line == "!Uk":
-            raise IOError("Unknown command.")
-        
+            raise OXXError("Unknown command (%s)." % com)
+        # TODO: if it's a set command, the answer should look like "com>", and
+        # if it's "comx", it means it failed (eg, out of range).
+
         return line[1:]
 
     # TODO: _readMessage()
     # Expects and read a $... message
-    
+
     # Wrappers from each command into a method
     def GetFirmware(self):
         """
@@ -157,7 +170,6 @@ class DevxX(object):
             raise ValueError("Failed to decode firmware answer '%s'" % ans.encode('string_escape'))
 
         return model, devid, fw
-
 
     def GetSpecInfo(self):
         """
@@ -190,7 +202,6 @@ class DevxX(object):
 
         return power
 
-    
     def SetLevelPower(self, power):
         """
         power (0<=float<=1): power value as a ratio between 0 and the maximum power
@@ -200,20 +211,18 @@ class DevxX(object):
         val = int(round(power * 0xFFF))
         ans = self._sendCommand("SLP%03X" % val)
         # TODO: ans should be "SLP>"
-        
-        
+
     def LaserOn(self):
         ans = self._sendCommand("LOn")
-    
+
     def LaserOff(self):
         ans = self._sendCommand("LOf")
-        
+
     def PowerOn(self):
         ans = self._sendCommand("POn")
-        
+
     def PowerOff(self):
         ans = self._sendCommand("POf")
-        
 
 
 class MultixX(model.Emitter):
@@ -221,7 +230,7 @@ class MultixX(model.Emitter):
     Represent a group of PhoxX/LuxX/BrixX laser emitters with different
     wavelengths
     """
-    
+
     def __init__(self, name, role, ports, **kwargs):
         """
         ports (string): pattern of the name of the serial ports to try to connect to
@@ -234,7 +243,7 @@ class MultixX(model.Emitter):
             raise HwError("No Omicron xX device found for ports '%s', check "
                           "they are turned on and connected to the computer."
                           % ports)
-        
+
         spectra = [] # list of tuples: 99% low, 25% low, centre, 25% high, 99% high in m
         max_power = [] # list of float (W)
         for d in self._devices:
@@ -252,19 +261,19 @@ class MultixX(model.Emitter):
 
         # ratio of power per device
         # => if some device don't support max power, clamped before 1
-        self.emissions = model.ListVA([0.] * len(self._devices), unit="", 
+        self.emissions = model.ListVA([0.] * len(self._devices), unit="",
                                       setter=self._setEmissions)
-        # info on what device is which wavelength 
+        # info on what device is which wavelength
         self.spectra = model.ListVA(spectra, unit="m", readonly=True)
-        
+
         # make sure everything is off
         self._updateIntensities(self.power.value, self.emissions.value)
-        
+
         # set HW and SW version
         driver_name = driver.getSerialDriver(self._devices[0].port)
         self._swVersion = "%s (serial driver: %s)" % (odemis.__version__, driver_name)
         self._hwVersion = "Omicron xX" # TODO: get version from GetFirmware()
-      
+
     def getMetadata(self):
         metadata = {}
         # MD_IN_WL expects just min/max => if multiple sources, we need to combine
@@ -276,13 +285,13 @@ class MultixX(model.Emitter):
                             max(wl_range[1], self.spectra.value[i][3]))
                 # FIXME: not sure how to combine
                 power += intens * self.power.value
-        
+
         if wl_range == (None, None):
             wl_range = (0, 0) # TODO: needed?
         metadata[model.MD_IN_WL] = wl_range
         metadata[model.MD_LIGHT_POWER] = power
         return metadata
-    
+
     def _updateIntensities(self, power, intensities):
         # set the actual values
         for d, intens in zip(self._devices, intensities):
@@ -292,7 +301,7 @@ class MultixX(model.Emitter):
                 d.SetLevelPower(p / d.max_power)
             else:
                 d.LaserOff()
-        
+
     def _updatePower(self, value):
         self._updateIntensities(value, self.emissions.value)
 
@@ -320,7 +329,7 @@ class MultixX(model.Emitter):
     def _getAvailableDevices(ports):
         if os.name == "nt":
             # TODO
-            #ports = ["COM" + str(n) for n in range (15)]
+            # ports = ["COM" + str(n) for n in range(15)]
             raise NotImplementedError("Windows not supported")
         else:
             names = glob.glob(ports)
