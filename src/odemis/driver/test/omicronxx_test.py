@@ -4,7 +4,7 @@ Created on 6 Nov 2013
 
 @author: Éric Piel
 
-Copyright © 2013 Éric Piel, Delmic
+Copyright © 2013, 2015 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -26,17 +26,15 @@ from unittest.case import skip
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-CLASS = omicronxx.MultixX
-
 if os.name == "nt":
-    PORT = "COM1"
+    MXXPORTS = "COM*"
+    HUBPORT = "COM*"
 else:
-    PORTS = "/dev/ttyOXX*" #"/dev/tty*"
+    MXXPORTS = "/dev/ttyFTDI*" # "/dev/ttyUSB*"
+    HUBPORT = "/dev/ttyFTDI*" # "/dev/ttyUSB*"
 
-class TestMultixX(unittest.TestCase):
-    def setUp(self):
-        self.dev = CLASS("test", "light", PORTS)
 
+class TestGenericxX(object):
     def tearDown(self):
         self.dev.terminate()
 
@@ -71,6 +69,16 @@ class TestMultixX(unittest.TestCase):
             em[i] = 0
             self.dev.emissions.value = em
             self.assertEqual(self.dev.emissions.value, em)
+
+
+class TestMultixX(TestGenericxX, unittest.TestCase):
+    def setUp(self):
+        self.dev = omicronxx.MultixX("test", "light", MXXPORTS)
+
+
+class TestHubxX(TestGenericxX, unittest.TestCase):
+    def setUp(self):
+        self.dev = omicronxx.HubxX("test", "light", HUBPORT)
 
 
 if __name__ == "__main__":

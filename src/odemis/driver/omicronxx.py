@@ -4,7 +4,7 @@ Created on 6 Nov 2013
 
 @author: Éric Piel
 
-Copyright © 2013 Éric Piel, Delmic
+Copyright © 2013, 2015 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -14,12 +14,22 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-# Driver for the Omicron LuxX laser light engines
-# cf PhoxX_ LuxX_BrixX Programmers Guide V1.3.pdf for documentation.
-# It is currently only supported in rudimentary form.
+# Driver for the Omicron LuxX laser light engines and LedHub
+# cf xX-Laser Series and LED Programmers Guide v1.9.pdf for documentation.
+# It is currently only supported in rudimentary form. Only USB connection is
+# supported.
+#
+# Note that the USB connection uses a standard FTDI device ID, so it's necessary
+# for the driver to communicate with the device to check it's really a Omicron
+# one.
+#
+# There are two kinds of devices: the one that contain just one source, and the
+# one which contain multiple source (ie, the LedHUB). In the second case, the
+# commands are indexed with the source number: [X].
 
 from __future__ import division
 
+from abc import ABCMeta
 import glob
 import logging
 from odemis import model
@@ -38,47 +48,34 @@ class OXXError(Exception):
     pass
 
 
-class DevxX(object):
-    """
-    Represent one PhoxX/LuxX/BrixX laser emitter
+OXX_DEVID = {
+    3: "PhoxX",
+    4: "LuxX",
+    18: "LuxX+",
+    100: "BrixX",
+    19: "LEDMOD2+",
+    20: "LedHUB",
+}
 
-    Note: On USB, the device sends (by default) regularly "ad-hoc" messages,
-      to indicate new values.
-    """
 
+class USBAccesser(object):
+    """
+    Represents the connection to a device via serial-over-USB
+    """
     def __init__(self, port):
         """
         port (string): serial port to use
-        raise IOError if no device answering or not a xX device
         """
         self.port = port
         self._serial = self._openSerialPort(port)
-        self._flushInput() # can have some \x00 bytes at the beginning
-
-        # As the devices do not have special USB vendor ID or product ID, it's
-        # quite possible that it's not a xX device actually at the other end of
-        # the serial connection, so we first must make sure of that
-        try:
-            self.GetFirmware()
-        except Exception:
-            raise IOError("No xX device detected on port '%s'" % port)
-
-        # Fill in some info
-        wl, power = self.GetSpecInfo()
-        self.wavelength = wl
-        self.max_power = self.GetMaxPower()
-
-        self.PowerOn()
-        self.LaserOff() # for safety
+        self.flushInput() # can have some \x00 bytes at the beginning
+        self.driver = driver.getSerialDriver(port)
 
     def terminate(self):
-        self.LaserOff()
-        self.PowerOff()
         self._serial.close()
         self._serial = None
 
-    @staticmethod
-    def _openSerialPort(port):
+    def _openSerialPort(self, port):
         """
         Opens the given serial port the right way for the Omicron xX devices.
         port (string): the name of the serial port (e.g., /dev/ttyUSB0)
@@ -95,22 +92,25 @@ class DevxX(object):
 
         return ser
 
-    def _flushInput(self):
+    def flushInput(self):
         """
         Ensure there is no more data queued to be read on the bus (=serial port)
         """
         self._serial.flush()
         self._serial.flushInput()
-        while self._serial.read():
-            pass
+        while True:
+            data = self._serial.read(100)
+            if len(data) < 100:
+                break
+            logging.debug("Flushing data %s", data.encode('string_escape'))
 
-    def _sendCommand(self, com):
+    def sendCommand(self, com):
         """
         Send a command which does not expect any report back
         com (string): command to send (not including the ? and the \r)
-        return (string): the report without prefix ("!") nor newline.
+        return (string): the report without prefix ("!") nor carriage return.
         """
-        assert(len(com) <= 100) # commands can be quite long (with floats)
+        assert(len(com) <= 50)
         full_com = "?" + com + "\r"
         logging.debug("Sending: '%s'", full_com.encode('string_escape'))
         self._serial.write(full_com)
@@ -120,116 +120,361 @@ class DevxX(object):
 
         # Read lines per line until it's an answer (!)
         while True:
-            line = b""
-            char = self._serial.read() # empty if timeout
-            while char and char != "\r":
-                # FIXME: it seems that flushing the input doesn't work. It's
-                # still possible to receives 0's at the beginning.
-                # This is a kludge to workaround that
-                if not line and char == "\x00":
-                    char = ""
-
-                # normal char
-                line += char
-                char = self._serial.read()
-            logging.debug("Received: '%s'", line.encode('string_escape'))
-
-            # Check it's a valid answer
-            if not char: # should always finish by a "\r"
-                raise IOError("Controller timeout.")
-
-            if line[0] != "$": # ad-hoc message => we don't care
-                break
-            else:
+            line = self.readMessage()
+            if line[0] == "$": # ad-hoc message => we don't care
                 logging.debug("Skipping ad-hoc message '%s'", line.encode('string_escape'))
+            else:
+                break
 
         if not line[0] == "!":
             raise IOError("Answer prefix (!) not found.")
-        if line == "!Uk":
+        if line.startswith("!UK"): # !UK or !UK[n]
             raise OXXError("Unknown command (%s)." % com)
-        # TODO: if it's a set command, the answer should look like "com>", and
-        # if it's "comx", it means it failed (eg, out of range).
 
         return line[1:]
 
-    # TODO: _readMessage()
-    # Expects and read a $... message
+    def readMessage(self):
+        """
+        Reads one message from the device (== any character until \r)
+        return bytes: the message (raw, without the ending \r)
+        raise: IOError in case of timeout
+        """
+        line = b""
+        char = self._serial.read() # empty if timeout
+        while char and char != "\r":
+            # FIXME: it seems that flushing the input doesn't work. It's
+            # still possible to receives 0's at the beginning.
+            # This is a kludge to workaround that
+            if not line and char == "\x00":
+                char = ""
+
+            # normal char
+            line += char
+            char = self._serial.read()
+        logging.debug("Received: '%s'", line.encode('string_escape'))
+
+        # Check it's a valid answer
+        if not char: # should always finish by a "\r"
+            raise IOError("Controller timeout.")
+
+        return line
+
+
+class DevxX(object):
+    """
+    Represent one PhoxX/LuxX/BrixX laser emitter or one light source of a
+    LightHub.
+    """
+#     Note: On USB, the device sends (by default) regularly "ad-hoc" messages,
+#       to indicate new values.
+
+    def __init__(self, acc, channel=None):
+        """
+        acc (USBAccesser): an opened connection
+        channel (None or 0 <= int): If None, will expect to drive directly a
+          device with a single source. If a number >= 1, then will expect to
+          drive the channel corresponding to the given number. If 0, will
+          expect to just get enough information on the channels provide by the
+          device (it will provide .channels with the available channel numbers).
+        raise IOError if no device answering or not a xX device
+        """
+        self.acc = acc
+        self._channel = channel
+        self._com_chan = ""
+
+        # As the devices do not have special USB vendor ID or product ID, it's
+        # quite possible that it's not a xX device actually at the other end of
+        # the serial connection, so we first must make sure of that
+        try:
+            modl, devid, fw = self.GetFirmware()
+        except IOError:
+            raise IOError("No xX device detected on port %s" % acc.port)
+
+        hwname = OXX_DEVID.get(devid, modl)
+        # Multi-channel devices have also a separate SN for each subdevice but
+        # we don't display it
+        sn = self.GetSerialNumber()
+        self.hwVersion = "%s v%s (s/n %s)" % (hwname, fw, sn)
+
+        # If there is error => reset
+        status = self.GetActualStatus()
+        logging.debug("Device (on port %s) status = %X", acc.port, status)
+        if status & 1:  # bit 0: error state
+            error = self.GetFailureByte()
+            logging.info("Device (on port %s) reports error %X, will reset it",
+                         acc.port, error)
+            self.ResetController()
+
+        # TODO: any way to detect that the manual shutter is active?
+
+        # Select the right command to change the level power
+        if devid in (19, 20):  # LEDMOD, LedHUB
+            # Not only it avoids writing in the memory, but it also works
+            self.setLightPower = self.SetTemporaryPower
+        else:
+            # old style
+            self.setLightPower = self.SetLevelPower
+
+        # Disable ad-hoc mode (on the master device)
+        # (alternatively, we could listen to the messages, and update info such
+        # as the temperature)
+        mode = self.GetOperatingMode()
+        mode &= ~(1 << 13) # bit 13 = Ad-hoc mode
+        self.SetOperatingMode(mode)
+
+        # Fill in some info
+        wl, power, subdev = self.GetSpecInfo()
+        if channel is None:
+            if subdev:
+                raise TypeError("Multi-channel device found but no channel selected")
+        elif channel == 0:
+            if not subdev:
+                raise TypeError("Single-channel device found while master device requested")
+            # Go out of stand-by
+            mode = self.GetOperatingMode()
+            mode |= (1 << 4) + (1 << 3) # bit 4 = operation release, bit 3 = bias release
+            self.SetOperatingMode(mode)
+            self.channels = subdev
+            # wl is always 0, and power is the total power
+            return
+        else:
+            if channel not in subdev:
+                raise HwError("No channel %d found in device on port %s" % acc.port)
+            self._com_chan = "[%d]" % channel
+            # Now we can ask again, to get the actual values
+            wl, _, _ = self.GetSpecInfo()
+
+        if channel is None:
+            devname = acc.port
+        else:
+            devname = "%d" % channel
+
+        self.wavelength = wl
+        self.max_power = self.GetMaxPower()
+
+        # Just for info
+        wh = self.GetWorkingHours()
+        logging.info("Device %s has %d working hours", devname, wh)
+
+        self.LightOff() # for safety
+        # TODO: open shutter
+        self.PowerOn()
+
+        # Go out of stand-by
+        mode = self.GetOperatingMode()
+        mode |= (1 << 4) + (1 << 3) # bit 4 = operation release, bit 3 = bias release
+        self.SetOperatingMode(mode)
+
+    def terminate(self):
+        self.LightOff()
+        self.PowerOff()
+
+    def _getValue(self, com):
+        """
+        Read a value (str)
+        com (str): 3 characters command
+        return (str): the value returned
+        raise:
+            IOError if problem decoding the answer or timeout
+            OXXError: if the device is unhappy (eg, unknown command)
+        """
+        fullcom = "%s%s" % (com, self._com_chan)
+        ans = self.acc.sendCommand(fullcom)
+        if not ans.startswith(fullcom):
+            raise IOError("Expected answer to start with %s but got %s" %
+                          (com, ans.encode('string_escape')))
+        return ans[len(fullcom):]
+
+    def _setValue(self, com, val=None):
+        """
+        Write a value (str)
+        com (str): 3 characters command
+        val (None or str): value to set
+        raise:
+            IOError if problem decoding the answer or timeout
+            OXXError: if the device is unhappy (eg, unknown command, out of range)
+        """
+        if val is None:
+            val = ""
+        ans = self.acc.sendCommand("%s%s%s" % (com, self._com_chan, val))
+        if not ans.startswith(com):
+            raise IOError("Expected answer to start with %s but got %s" %
+                          (com, ans.encode('string_escape')))
+        status = ans[len(com) + len(self._com_chan):]
+        if not status:
+            logging.warning("Answer too short after setting %s: %s",
+                            com, ans.encode('string_escape'))
+        elif status[0] == "x":
+            raise OXXError("Failed to set %s to %s" % (com, val))
+        elif status[0] == ">":
+            pass
+        else:
+            logging.warning("Unexpected answer after setting %s: %s",
+                            com, ans.encode('string_escape'))
 
     # Wrappers from each command into a method
     def GetFirmware(self):
         """
+        return (str, int, str): model name, device ID, firmware version
         raise ValueError if problem decoding the answer
         """
-        ans = self._sendCommand("GFw")
+        ans = self._getValue("GFw")
         # Expects something like:
         # GFw Model code § Device-ID § Firmware
         try:
-            m = re.match(r"GFw(?P<model>.*)\xa7(?P<devid>.*)\xa7(?P<fw>.*)", ans)
-            model, devid, fw = m.group("model"), m.group("devid"), m.group("fw")
+            m = re.match(r"(?P<model>.*)\xa7(?P<devid>.*)\xa7(?P<fw>.*)", ans)
+            modl, devid, fw = m.group("model"), int(m.group("devid")), m.group("fw")
         except Exception:
-            raise ValueError("Failed to decode firmware answer '%s'" % ans.encode('string_escape'))
+            raise IOError("Failed to decode firmware answer '%s'" % ans.encode('string_escape'))
 
-        return model, devid, fw
+        return modl, devid, fw
 
     def GetSpecInfo(self):
         """
-        Return (float, float): wavelength (m), theoretical maximum power (W)
+        Return:
+            wavelength (float): in meters
+            power (float): theoretical maximum power (W)
+            subdev (set of int): subdevices available
         """
-        ans = self._sendCommand("GSI")
+        ans = self._getValue("GSI")
         # Expects something like:
-        # GSi int (wl in nm) § int (power in mW)
+        # GSi [m63] (optional) int (wl in nm) § int (power in mW)
         try:
-            m = re.match(r"GSI(?P<wl>\d+)\xa7(?P<power>\d+)", ans)
+            m = re.match(r"(\[m(?P<mdev>\d+)])?(?P<wl>\d+)\xa7(?P<power>\d+)", ans)
+            mdev = m.group("mdev")
+            if mdev is None:
+                mdev = 0 # None if no mdev bitmask
+            else:
+                mdev = int(mdev)
             wl = int(m.group("wl")) * 1e-9 # m
             power = int(m.group("power")) * 1e-3 # W
         except Exception:
             raise ValueError("Failed to decode spec info answer '%s'" % ans.encode('string_escape'))
 
-        return wl, power
+        # Convert the bitmask into a set of int
+        subdev = set()
+        n = 1
+        while mdev:
+            if mdev & 0x1:
+                subdev.add(n)
+            n += 1
+            mdev >>= 1
+
+        return wl, power, subdev
+
+    def GetSerialNumber(self):
+        """
+        Return str: the serial number of the device
+        """
+        return self._getValue("GSN")
 
     def GetMaxPower(self):
         """
         Return (float) actual maximum power in W
         """
-        ans = self._sendCommand("GMP")
+        ans = self._getValue("GMP")
         # Expects something like:
         # GMP int (power in mW)
         try:
-            m = re.match(r"GMP(?P<power>\d+)", ans)
-            power = int(m.group("power")) * 1e-3 # W
+            power = int(ans) * 1e-3 # W
         except Exception:
-            raise ValueError("Failed to decode max power answer '%s'" % ans.encode('string_escape'))
+            raise IOError("Failed to decode max power answer '%s'" % ans.encode('string_escape'))
 
         return power
 
     def SetLevelPower(self, power):
         """
+        Set the power (and save in device memory)
         power (0<=float<=1): power value as a ratio between 0 and the maximum power
         """
+        # On the LedHub, this doesn't seem to always work => use TPP or SPP
+
         # value as a a ASCII HEX number ranging from 0x000 to 0xFFF representing 0% to 100%.
         assert(0 <= power <= 1)
         val = int(round(power * 0xFFF))
-        ans = self._sendCommand("SLP%03X" % val)
-        # TODO: ans should be "SLP>"
+        self._setValue("SLP", "%03X" % val)
 
-    def LaserOn(self):
-        ans = self._sendCommand("LOn")
+    # TODO: if supported, use Temporary Power (to avoid writing to memory all the times)
+    def SetTemporaryPower(self, power):
+        """
+        Set the power (avoid writing it in memory)
+        Note: only available on LEDMOD
+        power (0<=float<=1): power value as a ratio between 0 and the maximum power
+        """
+        assert(0 <= power <= 1)
+        val = power * 100 # in percentage
+        self._setValue("TPP", "%0.5f" % val)
 
-    def LaserOff(self):
-        ans = self._sendCommand("LOf")
+    def GetWorkingHours(self):
+        """
+        Get the actual operating status
+        return (int): number of hours that the light has been on (in hours)
+        """
+        ans = self._getValue("GWH")
+        return int(ans)
+
+    def GetActualStatus(self):
+        """
+        Get the actual operating status
+        return (int): bit mask of the status, cf documentation
+        """
+        ans = self._getValue("GAS")
+        return int(ans, 16)
+
+    def GetFailureByte(self):
+        """
+        Get the error info
+        return (int): bit mask of the error status, cf documentation
+          Note: it's a 16 bits integer
+        """
+        ans = self._getValue("GFB")
+        return int(ans, 16)
+
+    def GetOperatingMode(self):
+        """
+        Get the operating mode
+        return (int): bit mask of the mode, cf documentation
+        """
+        ans = self._getValue("GOM")
+        return int(ans, 16)
+
+    def SetOperatingMode(self, mode):
+        """
+        Set the operating mode
+        mode (int): bit mask of the mode, cf documentation on Get Operating Mode
+        """
+        assert(0 <= mode < 2 ** 16)
+        self._setValue("SOM", "%2X" % mode)
+
+    def ResetController(self):
+        self._setValue("RsC")
+        # TODO: discard potential garbage & wait for reset ready message $RsC>
+        while True: # TODO timeout
+            try:
+                msg = self.acc.readMessage()
+            except IOError:
+                continue
+            if "$RsC" in msg:
+                break
+
+    def LightOn(self):
+        """
+        Turns on the laser/led
+        """
+        self._setValue("LOn")
+
+    def LightOff(self):
+        self._setValue("LOf")
 
     def PowerOn(self):
-        ans = self._sendCommand("POn")
+        self._setValue("POn")
 
     def PowerOff(self):
-        ans = self._sendCommand("POf")
+        self._setValue("POf")
 
 
-class MultixX(model.Emitter):
-    """
-    Represent a group of PhoxX/LuxX/BrixX laser emitters with different
-    wavelengths
-    """
+class GenericxX(model.Emitter):
+    __metaclass__ = ABCMeta
 
     def __init__(self, name, role, ports, **kwargs):
         """
@@ -248,6 +493,7 @@ class MultixX(model.Emitter):
         max_power = [] # list of float (W)
         for d in self._devices:
             wl = d.wavelength
+            # TODO: move to DevxX (which knows if it's a laser or a led)
             # Lasers => spectrum is almost just one wl, but make it 2 nm wide
             # to avoid a bandwidth of exactly 0.
             spectra.append((wl - 1e-9, wl - 0.5e-9, wl, wl + 0.5e-9, wl + 1e-9))
@@ -269,10 +515,14 @@ class MultixX(model.Emitter):
         # make sure everything is off
         self._updateIntensities(self.power.value, self.emissions.value)
 
-        # set HW and SW version
-        driver_name = driver.getSerialDriver(self._devices[0].port)
+        # set SW version
+        driver_name = self._devices[0].acc.driver
         self._swVersion = "%s (serial driver: %s)" % (odemis.__version__, driver_name)
-        self._hwVersion = "Omicron xX" # TODO: get version from GetFirmware()
+
+    def terminate(self):
+        for d in self._devices:
+            d.terminate()
+        self._devices = []
 
     def getMetadata(self):
         metadata = {}
@@ -297,10 +547,10 @@ class MultixX(model.Emitter):
         for d, intens in zip(self._devices, intensities):
             p = min(power * intens, d.max_power)
             if p > 0:
-                d.LaserOn()
-                d.SetLevelPower(p / d.max_power)
+                d.LightOn()
+                d.setLightPower(p / d.max_power)
             else:
-                d.LaserOff()
+                d.LightOff()
 
     def _updatePower(self, value):
         self._updateIntensities(value, self.emissions.value)
@@ -318,15 +568,27 @@ class MultixX(model.Emitter):
             cl_intens.append(min(intens, d.max_power / self.power.range[1]))
 
         self._updateIntensities(self.power.value, cl_intens)
+
         return cl_intens
 
-    def terminate(self):
-        for d in self._devices:
-            d.terminate()
-        self._devices = []
 
-    @staticmethod
-    def _getAvailableDevices(ports):
+class MultixX(GenericxX):
+    """
+    Represent a group of PhoxX/LuxX/BrixX laser emitters with different
+    wavelengths
+    """
+
+    def __init__(self, name, role, ports, **kwargs):
+        """
+        ports (string): pattern of the name of the serial ports to try to connect to
+          find the devices. It can have a "glob", for example: "/dev/ttyUSB*"
+        """
+        super(MultixX, self).__init__(name, role, ports, **kwargs)
+        # Hw version is different if multi-channel
+        self._hwVersion = "Omicron %s" % ", ". join(d.hwVersion for d in self._devices[0])
+
+    @classmethod
+    def _getAvailableDevices(cls, ports):
         if os.name == "nt":
             # TODO
             # ports = ["COM" + str(n) for n in range(15)]
@@ -337,10 +599,11 @@ class MultixX(model.Emitter):
         devices = []
         for n in names:
             try:
-                d = DevxX(n)
+                acc = USBAccesser(n)
+                d = DevxX(acc)
                 devices.append(d)
-            except Exception:
-                logging.info("Port %s doesn't seem to have a xX device connected", n)
+            except (TypeError, IOError):
+                logging.info("Port %s doesn't seem to have a Omicron single-channel device connected", n)
 
         return devices
 
@@ -359,8 +622,79 @@ class MultixX(model.Emitter):
 
         devices = cls._getAvailableDevices(ports)
         if devices:
-            return [("OmicronxX", {"ports": ports})]
+            return [("Omicron LuxX", {"ports": ports})]
         else:
             return []
+
+
+class HubxX(GenericxX):
+    """
+    Represents one Omicron device with multiple sources (ie, wavelengths), such
+    as the LedHUB
+    """
+
+    def __init__(self, name, role, port, **kwargs):
+        """
+        port (string): name of the serial port to try to connect to
+          find the device. It can have a "glob", for example: "/dev/ttyUSB*", in
+          which case it will pick the first lighthub it finds.
+        """
+        super(HubxX, self).__init__(name, role, ports=port, **kwargs)
+        self._hwVersion = "Omicron %s" % self._devices[0].hwVersion
+
+    @classmethod
+    def _getMasterDevices(cls, ports):
+        if os.name == "nt":
+            raise NotImplementedError("Windows not supported")
+        else:
+            names = glob.glob(ports)
+
+        mdevs = []
+        for n in names:
+            # Get the "master" device
+            try:
+                acc = USBAccesser(n)
+                d = DevxX(acc, 0)
+                mdevs.append(d)
+            except (TypeError, IOError):
+                logging.info("Port %s doesn't seem to have a Omicron LightHub device connected", n)
+                continue
+
+        return mdevs
+
+    @classmethod
+    def _getAvailableDevices(cls, ports):
+        mdevs = cls._getMasterDevices(ports)
+
+        if len(mdevs) > 1:
+            logging.warning("Multiple Omicron devices found on ports %s, will "
+                            "only use port %s", ports, mdevs[0].acc.port)
+        elif not mdevs:
+            return
+        # Create a separate device for each channel
+        devices = []
+        md = mdevs[0]
+        for c in md.channels:
+            sd = DevxX(md.acc, c)
+            devices.append(sd)
+
+        return devices
+
+    @classmethod
+    def scan(cls, ports=None):
+        """
+        ports (string): name (or pattern) of the serial ports. If None, all the serial ports are tried
+        returns (list of 2 tuple): name, kwargs (ports)
+        Note: it's obviously not advised to call this function if a device is already under use
+        """
+        if ports is None:
+            if os.name == "nt":
+                ports = "COM*"
+            else:
+                ports = '/dev/ttyUSB?*'
+
+        ret = []
+        for d in cls._getMasterDevices(ports):
+            ret.append[("Omicron Hub", {"port": d.acc.port})]
 
 # TODO: simulator
