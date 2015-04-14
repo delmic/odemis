@@ -482,7 +482,7 @@ class SelectionMixin(DragMixin):
         # This attribute can be used to see if the canvas has shifted or scaled
         self._last_shiftscale = None
 
-        self.edges = {}
+        self.v_edges = {}
 
         # TODO: Move these to the super classes
         self.colour = conversion.hex_to_frgba(colour)
@@ -505,10 +505,7 @@ class SelectionMixin(DragMixin):
 
         """
 
-        if self.edit_mode == EDIT_MODE_BOX:
-            return util.normalize_rect(rect)
-
-        return rect
+        return util.normalize_rect(rect)
 
     # #### selection methods  #####
 
@@ -545,10 +542,11 @@ class SelectionMixin(DragMixin):
                 self.select_v_end_pos = tuple(self.select_v_end_pos)
                 logging.warn("'select_v_end_pos' is still set as a list somewhere!")
 
-            v_sel = self._normalize(self.select_v_start_pos + self.select_v_end_pos)
-
-            self.select_v_start_pos = v_sel[:2]
-            self.select_v_end_pos = v_sel[2:4]
+            # if self.selection_mode == EDIT_MODE_BOX:
+            #     v_sel = self._normalize(self.select_v_start_pos + self.select_v_end_pos)
+            #
+            #     self.select_v_start_pos = v_sel[:2]
+            #     self.select_v_end_pos = v_sel[2:4]
 
             self._calc_edges()
             self.selection_mode = SEL_MODE_NONE
@@ -565,7 +563,7 @@ class SelectionMixin(DragMixin):
         self.select_v_start_pos = None
         self.select_v_end_pos = None
 
-        self.edges = {}
+        self.v_edges = {}
 
     # #### END selection methods  #####
 
@@ -645,9 +643,14 @@ class SelectionMixin(DragMixin):
     def _calc_edges(self):
         """ Calculate the inner and outer edges of the selection according to the hover margin """
 
+        self.v_edges = {}
+
         if self.select_v_start_pos and self.select_v_end_pos:
-            rect = self._normalize(self.select_v_start_pos + self.select_v_end_pos)
-            i_l, i_t, i_r, i_b = rect
+            sx, sy = self.select_v_start_pos
+            ex, ey = self.select_v_end_pos
+
+            i_l, i_r = sorted([sx, ex])
+            i_t, i_b = sorted([sy, ey])
 
             width = i_r - i_l
 
@@ -676,7 +679,7 @@ class SelectionMixin(DragMixin):
             o_t = i_t - 2 * self.hover_margin
             o_b = i_b + 2 * self.hover_margin
 
-            self.edges = {
+            self.v_edges.update({
                 "i_l": i_l,
                 "o_r": o_r,
                 "i_t": i_t,
@@ -684,10 +687,87 @@ class SelectionMixin(DragMixin):
                 "o_l": o_l,
                 "i_r": i_r,
                 "o_t": o_t,
-                "i_b": i_b
-            }
+                "i_b": i_b,
+            })
+
+            if self.edit_mode == EDIT_MODE_POINT:
+                self.v_edges.update({
+                    "s_l": sx - self.hover_margin,
+                    "s_r": sx + self.hover_margin,
+                    "s_t": sy - self.hover_margin,
+                    "s_b": sy + self.hover_margin,
+                    "e_l": ex - self.hover_margin,
+                    "e_r": ex + self.hover_margin,
+                    "e_t": ey - self.hover_margin,
+                    "e_b": ey + self.hover_margin,
+                })
+
+    def inner_rect(self, convert_to_buffer=False):
+        """ Return the inner rectangle of the selection (x, y, w, h) """
+        return self._edges_to_rect(self.v_edges['i_l'], self.v_edges['i_t'],
+                                   self.v_edges['i_r'], self.v_edges['i_b'],
+                                   convert_to_buffer)
+
+    def outer_rect(self, convert_to_buffer=False):
+        """ Return the outer rectangle of the selection (x, y, w, h) """
+        return self._edges_to_rect(self.v_edges['o_l'], self.v_edges['o_t'],
+                                   self.v_edges['o_r'], self.v_edges['o_b'],
+                                   convert_to_buffer)
+
+    def start_rect(self, convert_to_buffer=False):
+        """ Return the rectangle of the start position (x, y, w, h) """
+        return self._edges_to_rect(self.v_edges['s_l'], self.v_edges['s_t'],
+                                   self.v_edges['s_r'], self.v_edges['s_b'],
+                                   convert_to_buffer)
+
+    def end_rect(self, convert_to_buffer=False):
+        """ Return the rectangle of the end position (x, y, w, h) """
+        return self._edges_to_rect(self.v_edges['e_l'], self.v_edges['e_t'],
+                                   self.v_edges['e_r'], self.v_edges['e_b'],
+                                   convert_to_buffer)
+
+    def _edges_to_rect(self, x1, y1, x2, y2, convert_to_buffer=False):
+        """ Return a rectangle of the form (x, y, w, h) """
+        if convert_to_buffer:
+            x1, y1 = self.cnvs.view_to_buffer((x1, y1))
+            x2, y2 = self.cnvs.view_to_buffer((x2, y2))
+            return self._points_to_rect(x1, y1, x2, y2)
         else:
-            self.edges = {}
+            return self._points_to_rect(x1, y1, x2, y2)
+
+    @staticmethod
+    def _points_to_rect(left, top, right, bottom):
+        """ Transform two (x, y) points into a (x, y, w, h) rectangle """
+        return left, top, right - left, bottom - top
+
+    def _debug_draw_edges(self, ctx, convert_to_buffer=False):
+
+        if self.v_edges and False:
+            inner_rect = self.inner_rect(convert_to_buffer)
+            outer_rect = self.outer_rect(convert_to_buffer)
+
+            ctx.set_line_width(0.5)
+            ctx.set_dash([])
+
+            ctx.set_source_rgba(1, 0, 0, 1)
+            ctx.rectangle(*inner_rect)
+            ctx.stroke()
+
+            ctx.set_source_rgba(0, 0, 1, 1)
+            ctx.rectangle(*outer_rect)
+            ctx.stroke()
+
+            if self.edit_mode == EDIT_MODE_POINT:
+                start_rect = self.start_rect(convert_to_buffer)
+                end_rect = self.end_rect(convert_to_buffer)
+
+                ctx.set_source_rgba(0.3, 1, 0.3, 1)
+                ctx.rectangle(*start_rect)
+                ctx.stroke()
+
+                ctx.set_source_rgba(0.6, 1, 0.6, 1)
+                ctx.rectangle(*end_rect)
+                ctx.stroke()
 
     def get_hover(self, vpos):
         """ Check if the given position is on/near a selection edge or inside the selection
@@ -696,54 +776,57 @@ class SelectionMixin(DragMixin):
 
         """
 
-        if self.edges:
+        if self.v_edges:
+            # If position outside outer box
+            if (
+                not self.v_edges["o_l"] < vpos[0] < self.v_edges["o_r"] or
+                not self.v_edges["o_t"] < vpos[1] < self.v_edges["o_b"]
+            ):
+                return gui.HOVER_NONE
+
             if self.edit_mode == EDIT_MODE_BOX:
-                # If position outside outer box
-                if (
-                    not self.edges["o_l"] < vpos[0] < self.edges["o_r"] or
-                    not self.edges["o_t"] < vpos[1] < self.edges["o_b"]
-                ):
-                    return gui.HOVER_NONE
                 # If position inside inner box
-                elif (
-                    self.edges["i_l"] < vpos[0] < self.edges["i_r"] and
-                    self.edges["i_t"] < vpos[1] < self.edges["i_b"]
+                if (
+                    self.v_edges["i_l"] < vpos[0] < self.v_edges["i_r"] and
+                    self.v_edges["i_t"] < vpos[1] < self.v_edges["i_b"]
                 ):
                     # logging.debug("Selection hover")
                     return gui.HOVER_SELECTION
                 else:
                     hover = gui.HOVER_NONE
 
-                    if vpos[0] < self.edges["i_l"]:
+                    if vpos[0] < self.v_edges["i_l"]:
                         # logging.debug("Left edge hover")
                         hover |= gui.HOVER_LEFT_EDGE
-                    elif vpos[0] > self.edges["i_r"]:
+                    elif vpos[0] > self.v_edges["i_r"]:
                         # logging.debug("Right edge hover")
                         hover |= gui.HOVER_RIGHT_EDGE
 
-                    if vpos[1] < self.edges["i_t"]:
+                    if vpos[1] < self.v_edges["i_t"]:
                         # logging.debug("Top edge hover")
                         hover |= gui.HOVER_TOP_EDGE
-                    elif vpos[1] > self.edges["i_b"]:
+                    elif vpos[1] > self.v_edges["i_b"]:
                         # logging.debug("Bottom edge hover")
                         hover |= gui.HOVER_BOTTOM_EDGE
 
                     return hover
 
             elif self.edit_mode == EDIT_MODE_POINT:
-                # In point edit mode, the 'rectangle' does not get normalized, so 'top/left' is
-                # always the start of the selection and 'bottom/right' the end of it.
+                sx, sy = self.select_v_start_pos
+                ex, ey = self.select_v_end_pos
 
                 if (
-                        self.edges["o_l"] < vpos[0] < self.edges["i_l"] and
-                        self.edges["o_t"] < vpos[1] < self.edges["i_t"]
+                        self.v_edges["s_l"] < vpos[0] < self.v_edges["s_r"] and
+                        self.v_edges["s_t"] < vpos[1] < self.v_edges["s_b"]
                 ):
                     return gui.HOVER_START
                 elif (
-                        self.edges["o_r"] > vpos[0] > self.edges["i_r"] and
-                        self.edges["o_b"] > vpos[1] > self.edges["i_b"]
+                        self.v_edges["e_l"] < vpos[0] < self.v_edges["e_r"] and
+                        self.v_edges["e_t"] < vpos[1] < self.v_edges["e_b"]
                 ):
                     return gui.HOVER_END
+
+                # FIXME: LINE HOVER HERE
 
         return gui.HOVER_NONE
 
