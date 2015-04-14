@@ -29,7 +29,7 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 
-from abc import ABCMeta
+from abc import ABCMeta, abstractmethod
 import glob
 import logging
 from odemis import model
@@ -276,6 +276,7 @@ class DevxX(object):
         self.SetOperatingMode(mode)
 
     def terminate(self):
+        # self.SetLevelPower(0) # To make sure at next start it's off
         self.LightOff()
         self.PowerOff()
 
@@ -492,7 +493,7 @@ class GenericxX(model.Emitter):
         """
         model.Emitter.__init__(self, name, role, **kwargs)
         self._ports = ports
-        self._devices = self._getAvailableDevices(ports)
+        self._master, self._devices = self._getAvailableDevices(ports)
         if not self._devices:
             raise HwError("No Omicron xX device found for ports '%s', check "
                           "they are turned on and connected to the computer."
@@ -517,17 +518,33 @@ class GenericxX(model.Emitter):
         # info on what device is which wavelength
         self.spectra = model.ListVA(spectra, unit="m", readonly=True)
 
-        # make sure everything is off
+        # Ensure the whole Hub is turned on
+        if self._master:
+            self._master.PowerOn()
+
+        # make sure everything is off (turning on the HUB will turn on the lights)
         self._updateIntensities(self.power.value, self.emissions.value)
 
         # set SW version
         driver_name = self._devices[0].acc.driver
         self._swVersion = "%s (serial driver: %s)" % (odemis.__version__, driver_name)
 
+    @classmethod
+    @abstractmethod
+    def _getAvailableDevices(cls, ports):
+        """
+        return:
+         master (None or DevxX): the master device (if any)
+         devices (list of DevxX): the actual devices to control
+        """
+        return None, []
+
     def terminate(self):
         for d in self._devices:
             d.terminate()
         self._devices = []
+        if self._master:
+            self._master.terminate()
 
     def getMetadata(self):
         metadata = {}
@@ -556,6 +573,9 @@ class GenericxX(model.Emitter):
                 d.setLightPower(p / d.max_power)
             else:
                 d.LightOff()
+                # TODO: also turn on/off the power?
+        # TODO: if all lights are off, and there is a master, also turn off the
+        # master? Or only do after a little while?
 
     def _updatePower(self, value):
         self._updateIntensities(value, self.emissions.value)
@@ -610,7 +630,7 @@ class MultixX(GenericxX):
             except (TypeError, IOError):
                 logging.info("Port %s doesn't seem to have a Omicron single-channel device connected", n)
 
-        return devices
+        return None, devices
 
     @classmethod
     def scan(cls, ports=None):
@@ -645,7 +665,7 @@ class HubxX(GenericxX):
           which case it will pick the first lighthub it finds.
         """
         super(HubxX, self).__init__(name, role, ports=port, **kwargs)
-        self._hwVersion = "Omicron %s" % self._devices[0].hwVersion
+        self._hwVersion = "Omicron %s" % self._master.hwVersion
 
     @classmethod
     def _getMasterDevices(cls, ports):
@@ -675,7 +695,8 @@ class HubxX(GenericxX):
             logging.warning("Multiple Omicron devices found on ports %s, will "
                             "only use port %s", ports, mdevs[0].acc.port)
         elif not mdevs:
-            return
+            return None, []
+
         # Create a separate device for each channel
         devices = []
         md = mdevs[0]
@@ -683,7 +704,7 @@ class HubxX(GenericxX):
             sd = DevxX(md.acc, c)
             devices.append(sd)
 
-        return devices
+        return md, devices
 
     @classmethod
     def scan(cls, ports=None):
