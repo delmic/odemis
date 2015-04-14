@@ -1,83 +1,93 @@
 SECOMv2: {
     class: Microscope,
     role: secom,
-    emitters: [Spectra, "Nikon Lens", "MultiBand Fixed Filter", "EBeam ExtXY"],
-    detectors: [Zyla, "SED ExtXY"],
-    actuators: ["Sample stage", "Optical stage", "Optical focus", "EBeam Focus"],
+    emitters: ["Light Engine", "Optical Objective", "Optical Emission Filter", "SEM E-beam"],
+    detectors: ["Camera", "SEM Detector"],
+    actuators: ["Sample Stage", "Objective Stage", "Optical Focus", "SEM Focus"],
 }
 
-Spectra: {
-    class: lle.FakeLLE,
+# "Light Engine": {
+#     class: lle.FakeLLE,
+#     role: light,
+#     init: {
+#         port: "/dev/ttyFTDI*",
+#         # source name -> 99% low, 25% low, centre, 25% high, 99% high wavelength in m
+#         # Values are from vendor: http://lumencor.com/products/filters-for-spectra-x-light-engines/
+#         sources: {"UV": [379.e-9, 384.e-9, 390.e-9, 396.e-9, 401.e-9], # 390/22
+#                   "cyan": [472.e-9, 479.e-9, 485.e-9, 491.e-9, 497.e-9], # 485/25
+#                   "green": [544.e-9, 552.e-9, 560.e-9, 568.e-9, 576.e-9], # 560/32
+#                   "red": [638.e-9, 643.e-9, 648.e-9, 653.e-9, 658.e-9], # 648/20
+#                  }
+#         },
+#         # The light is reflected via a Semrock FF410/504/582/669-DI01-25X36
+#     affects: ["Camera"],
+# }
+
+"Light Engine": {
+    class: omicronxx.HubxX,
     role: light,
     init: {
         port: "/dev/ttyFTDI*",
-        # source name -> 99% low, 25% low, centre, 25% high, 99% high wavelength in m
-        # Values are from vendor: http://lumencor.com/products/filters-for-spectra-x-light-engines/
-        sources: {"UV": [379.e-9, 384.e-9, 390.e-9, 396.e-9, 401.e-9], # 390/22
-                  "cyan": [472.e-9, 479.e-9, 485.e-9, 491.e-9, 497.e-9], # 485/25
-                  "green": [544.e-9, 552.e-9, 560.e-9, 568.e-9, 576.e-9], # 560/32
-                  "red": [638.e-9, 643.e-9, 648.e-9, 653.e-9, 658.e-9], # 648/20
-                 }
-        },
-        # The light is reflected via a Semrock FF410/504/582/669-DI01-25X36
-    affects: [Zyla],
+    },
+    # The light is reflected via a Semrock FF410/504/582/669-DI01-25X36
+    affects: ["Camera"],
 }
 
-"SEM ExtXY": {
+"SEM Scan Interface": {
     class: simsem.SimSEM,
     role: none,
     init: {
            image: "simsem-fake-output.h5", # any large 16 bit image is fine
            drift_period: 5, # s, comment out to disable drift
     },
-    children: {scanner: "EBeam ExtXY",
-               detector0: "SED ExtXY",
-               focus: "EBeam Focus",
+    children: {scanner: "SEM E-beam",
+               detector0: "SEM Detector",
+               focus: "SEM Focus",
     }
 }
 
-"EBeam ExtXY": {
+"SEM E-beam": {
     # Internal child of SimSEM, so no class
     role: e-beam,
     init: {},
     properties: {
         dwellTime: 10.e-6, # s
     },
-    affects: ["SED ExtXY", Zyla] # affects the CCD in case of cathodoluminescence
+    affects: ["SEM Detector", "Camera"] # affects the CCD in case of cathodoluminescence
 }
 
-"SED ExtXY": { # aka ETD
+"SEM Detector": { # aka ETD
     # Internal child of SimSEM, so no class
     role: se-detector,
     init: {},
 }
 
-"EBeam Focus": {
+"SEM Focus": {
     # Internal child of SimSEM, so no class
     role: ebeam-focus,
 }
 
-"Nikon Lens": {
+"Optical Objective": {
     class: static.OpticalLens,
     role: lens,
     init: {mag: 60.0}, # ratio (actually of the complete light path)
-    affects: [Zyla]
+    affects: ["Camera"]
 }
 
 # Semrock FF01-440/521/607/700
-"MultiBand Fixed Filter": {
+"Optical Emission Filter": {
     class: static.LightFilter,
     role: filter,
     init: {band: [[420.e-9, 460.e-9],
                   [510.e-9, 532.e-9],
                   [590.e-9, 624.e-9],
                   [677.e-9, 723.e-9]]}, # m,m
-    affects: [Zyla]
+    affects: ["Camera"]
 }
 
 # Axes: X is horizontal on screen (going left->right), physical: far->close when looking at the door
 #       Y is vertical on screen (going bottom->top), physical: left->right when looking at the door
-Zyla: {
+"Camera": {
     class: andorcam2.FakeAndorCam2,
     role: ccd,
     init: {
@@ -95,21 +105,21 @@ Zyla: {
 # Axes should be synchronized with the camera
 # Stage axes are moving the sample, so they should opposite direction than convention
 # (so the stage "position" is the current position observed)
-"Sample stage": {
+"Sample Stage": {
     class: actuator.MultiplexActuator,
     role: stage,
-    affects: [Zyla, "EBeam ExtXY"],
-    children: {"x": PIGCS, "y": PIGCS},
+    affects: ["Camera", "SEM E-beam"],
+    children: {"x": "Stage Actuators", "y": "Stage Actuators"},
     init: {
         axes_map: {"x": "sx", "y": "sy"},
     },
 }
 
-"Optical stage": {
+"Objective Stage": {
     class: actuator.MultiplexActuator,
     role: align,
-    affects: [Zyla],
-    children: {"x": PIGCS, "y": PIGCS},
+    affects: ["Camera"],
+    children: {"x": "Stage Actuators", "y": "Stage Actuators"},
     init: {
         axes_map: {"x": "ox", "y": "oy"},
     },
@@ -117,11 +127,11 @@ Zyla: {
 
 # Axis Z: (Physical) bottom->top when looking at the door
 #         (On screen) bottom->top (so distance to sample is smaller when going up)
-"Optical focus": {
+"Optical Focus": {
     class: actuator.MultiplexActuator,
     role: focus,
-    affects: [Zyla],
-    children: {"z": PIGCS},
+    affects: ["Camera"],
+    children: {"z": "Stage Actuators"},
     init: {
         axes_map: {"z": "oz"}
     },
@@ -136,7 +146,7 @@ Zyla: {
 # stage X = 4 (closed loop)
 # stage Y = 5 (closed loop)
 
-PIGCS: {
+"Stage Actuators": {
     class: pigcs.FakeBus,
     role: none,
     init: {

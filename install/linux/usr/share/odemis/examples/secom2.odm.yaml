@@ -3,58 +3,77 @@ SECOMv2: {
     role: secom,
     emitters: ["Light Engine", "Optical Objective", "Optical Emission Filter", "SEM E-beam"],
     detectors: ["Camera", "SEM Detector"],
-    actuators: ["Sample Stage", "Objective Stage", "Optical Focus", "SEM Focus"],
+    actuators: ["Sample Stage", "Objective Stage", "Optical Focus"],
 }
 
+# "Light Engine": {
+#     class: lle.LLE,
+#     role: light,
+#     init: {
+#         port: "/dev/ttyFTDI*",
+#         # source name -> 99% low, 25% low, centre, 25% high, 99% high wavelength in m
+#         # Values are from vendor: http://lumencor.com/products/filters-for-spectra-x-light-engines/
+#         sources: {"UV": [379.e-9, 384.e-9, 390.e-9, 396.e-9, 401.e-9], # 390/22
+#                   "cyan": [472.e-9, 479.e-9, 485.e-9, 491.e-9, 497.e-9], # 485/25
+#                   "green": [544.e-9, 552.e-9, 560.e-9, 568.e-9, 576.e-9], # 560/32
+#                   "red": [638.e-9, 643.e-9, 648.e-9, 653.e-9, 658.e-9], # 648/20
+#                  }
+#         },
+#         # The light is reflected via a Semrock FF410/504/582/669-DI01-25X36
+#     affects: ["Camera"],
+# }
+
 "Light Engine": {
-    class: lle.FakeLLE,
+    class: omicronxx.HubxX,
     role: light,
     init: {
         port: "/dev/ttyFTDI*",
-        # source name -> 99% low, 25% low, centre, 25% high, 99% high wavelength in m
-        # Values are from vendor: http://lumencor.com/products/filters-for-spectra-x-light-engines/
-        sources: {"UV": [379.e-9, 384.e-9, 390.e-9, 396.e-9, 401.e-9], # 390/22
-                  "cyan": [472.e-9, 479.e-9, 485.e-9, 491.e-9, 497.e-9], # 485/25
-                  "green": [544.e-9, 552.e-9, 560.e-9, 568.e-9, 576.e-9], # 560/32
-                  "red": [638.e-9, 643.e-9, 648.e-9, 653.e-9, 658.e-9], # 648/20
-                 }
-        },
-        # The light is reflected via a Semrock FF410/504/582/669-DI01-25X36
+    },
+    # The light is reflected via a Semrock FF410/504/582/669-DI01-25X36
     affects: ["Camera"],
 }
 
+# Quanta SEM driven via external X/Y connection, using a DAQ board
 "SEM Scan Interface": {
-    class: simsem.SimSEM,
+    class: semcomedi.SEMComedi,
     role: none,
-    init: {
-           image: "simsem-fake-output.h5", # any large 16 bit image is fine
-           drift_period: 5, # s, comment out to disable drift
-    },
-    children: {scanner: "SEM E-beam",
-               detector0: "SEM Detector",
-               focus: "SEM Focus",
-    }
+    init: {device: "/dev/comedi0"},
+    # more detectors can be added, if necessary
+    children: {scanner: "SEM E-beam", detector0: "SEM Detector"}
 }
 
+# Connect:
+# X -> AO 0
+# Y -> AO 1
+# Ground -> AO GND
 "SEM E-beam": {
-    # Internal child of SimSEM, so no class
+    # Internal child of SEM ExtXY, so no class
     role: e-beam,
-    init: {},
+    init: {
+        # Use channels and limits to ensure the image has the same orientation
+        # as in the SEM software.
+        channels: [0, 1],
+        limits: [[-3.1754, 3.1754], [-3.7, 3.7]],  # V
+        park: [-5, -5], # V
+        settle_time: 5.e-6, # s
+        hfw_nomag: 0.25, # m
+    },
     properties: {
+        scale: [8, 8], # (ratio), start with a pretty fast scan
         dwellTime: 10.e-6, # s
+        magnification: 100, # (ratio), start low for a big field of view
     },
     affects: ["SEM Detector", "Camera"] # affects the CCD in case of cathodoluminescence
 }
 
+# Must be connected on AI 0/AI GND
 "SEM Detector": { # aka ETD
-    # Internal child of SimSEM, so no class
+    # Internal child of Quanta ExtXY, so no class
     role: se-detector,
-    init: {},
-}
-
-"SEM Focus": {
-    # Internal child of SimSEM, so no class
-    role: ebeam-focus,
+    init: {
+        channel: 0,
+        limits: [-3, 3] # V (max values ever possible)
+    },
 }
 
 "Optical Objective": {

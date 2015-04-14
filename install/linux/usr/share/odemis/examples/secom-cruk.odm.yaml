@@ -155,7 +155,7 @@ Clara: { # Also works with iXon Ultra
     children: {"a": PIGCS, "b": PIGCS},
     init: {
         axes_map: {"a": "a", "b": "b"},
-#        inverted: ["a", "b"],
+        inverted: ["a"], # One additional mirror on the optical path compared to standard SECOM
     },
     properties: {
         speed: {'a': 0.001, 'b': 0.001} #m/s
