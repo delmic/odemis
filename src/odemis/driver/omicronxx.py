@@ -205,7 +205,9 @@ class DevxX(object):
                          acc.port, error)
             self.ResetController()
 
-        # TODO: any way to detect that the manual shutter is active?
+        if not (status & (1 << 6)):  # bit 6: "external" light enabler
+            logging.warning("Electronic shutter active, no light will be output "
+                            "until it's disabled.")
 
         # Select the right command to change the level power
         if devid in (19, 20):  # LEDMOD, LedHUB
@@ -249,7 +251,15 @@ class DevxX(object):
         else:
             devname = "%d" % channel
 
-        self.wavelength = wl
+        if devid in (19, 20):  # LEDMOD, LedHUB => led
+            # The wavelength range is not precisely provided by the hardware,
+            # but it's usually around 20 nm
+            self.wavelength = (wl - 20e-9, wl - 10e-9, wl, wl + 10e-9, wl + 20e-9)
+        else:
+            # Lasers => spectrum is almost just one wl, but make it 2 nm wide
+            # to avoid a bandwidth of exactly 0.
+            self.wavelength = (wl - 1e-9, wl - 0.5e-9, wl, wl + 0.5e-9, wl + 1e-9)
+
         self.max_power = self.GetMaxPower()
 
         # Just for info
@@ -394,7 +404,6 @@ class DevxX(object):
         val = int(round(power * 0xFFF))
         self._setValue("SLP", "%03X" % val)
 
-    # TODO: if supported, use Temporary Power (to avoid writing to memory all the times)
     def SetTemporaryPower(self, power):
         """
         Set the power (avoid writing it in memory)
@@ -492,11 +501,7 @@ class GenericxX(model.Emitter):
         spectra = [] # list of tuples: 99% low, 25% low, centre, 25% high, 99% high in m
         max_power = [] # list of float (W)
         for d in self._devices:
-            wl = d.wavelength
-            # TODO: move to DevxX (which knows if it's a laser or a led)
-            # Lasers => spectrum is almost just one wl, but make it 2 nm wide
-            # to avoid a bandwidth of exactly 0.
-            spectra.append((wl - 1e-9, wl - 0.5e-9, wl, wl + 0.5e-9, wl + 1e-9))
+            spectra.append(d.wavelength)
             max_power.append(d.max_power)
 
         self._shape = ()
