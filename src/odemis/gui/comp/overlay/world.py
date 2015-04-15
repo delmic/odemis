@@ -33,6 +33,8 @@ import odemis.gui as gui
 import odemis.gui.comp.overlay.base as base
 import odemis.gui.img.data as img
 from odemis.gui.util.raster import rasterize_line
+from odemis.util import clip_line
+
 import odemis.util.conversion as conversion
 import odemis.util.units as units
 
@@ -566,7 +568,10 @@ class LineSelectOverlay(WorldSelectOverlay):
             ctx.set_line_width(2)
             ctx.set_dash([3])
             ctx.set_line_join(cairo.LINE_JOIN_MITER)
-            ctx.set_source_rgba(*self.colour)
+            if self.hover == gui.HOVER_LINE and not self.dragging:
+                ctx.set_source_rgba(*self.highlight)
+            else:
+                ctx.set_source_rgba(*self.colour)
             ctx.move_to(*b_circle_con)
             ctx.line_to(*b_arrow_con)
             ctx.stroke()
@@ -578,7 +583,11 @@ class LineSelectOverlay(WorldSelectOverlay):
             ctx.arc(b_start[0], b_start[1], start_radius, 0, 2 * math.pi)
             ctx.stroke_preserve()
 
-            ctx.set_source_rgba(*self.colour)
+            if self.hover == gui.HOVER_START and not self.dragging:
+                ctx.set_source_rgba(*self.highlight)
+            else:
+                ctx.set_source_rgba(*self.colour)
+
             ctx.set_line_width(1.5)
             ctx.arc(b_start[0], b_start[1], start_radius, 0, 2*math.pi)
             ctx.stroke()
@@ -596,7 +605,10 @@ class LineSelectOverlay(WorldSelectOverlay):
             ctx.stroke_preserve()
 
             # Colour fill
-            ctx.set_source_rgba(*self.colour)
+            if self.hover == gui.HOVER_END and not self.dragging:
+                ctx.set_source_rgba(*self.highlight)
+            else:
+                ctx.set_source_rgba(*self.colour)
             ctx.fill()
 
             self._debug_draw_edges(ctx, True)
@@ -609,7 +621,7 @@ class LineSelectOverlay(WorldSelectOverlay):
             self._on_motion(evt)  # Call the SelectionMixin motion handler
 
             if not self.dragging:
-                if self.hover in (gui.HOVER_START, gui.HOVER_END):
+                if self.hover in (gui.HOVER_START, gui.HOVER_END, gui.HOVER_LINE):
                     self.cnvs.set_dynamic_cursor(wx.CURSOR_HAND)
                 else:
                     self.cnvs.set_dynamic_cursor(wx.CURSOR_PENCIL)
@@ -736,6 +748,18 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, base.PixelDataMixin):
         if self.active:
             self._snap_to_pixel()
             LineSelectOverlay.on_left_up(self, evt)
+
+            # Clip the line, so it will fit inside the pixel data
+            sx, sy, ex, ey = clip_line(0, self._data_resolution[1] - 1,
+                                       self._data_resolution[0] - 1, 0,
+                                       self.start_pixel[0], self.start_pixel[1],
+                                       self.end_pixel[0], self.end_pixel[1])
+            self.start_pixel = sx, sy
+            self.end_pixel = ex, ey
+
+            if self.start_pixel == self.end_pixel:
+                self.start_pixel = self.end_pixel = (None, None)
+
             self._selected_line_va.value = (self.start_pixel, self.end_pixel)
         else:
             LineSelectOverlay.on_left_up(self, evt)

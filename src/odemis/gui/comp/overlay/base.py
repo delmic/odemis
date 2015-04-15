@@ -486,26 +486,8 @@ class SelectionMixin(DragMixin):
 
         # TODO: Move these to the super classes
         self.colour = conversion.hex_to_frgba(colour)
+        self.highlight = conversion.hex_to_frgba(gui.FG_COLOUR_HIGHLIGHT)
         self.center = center
-
-    # @property
-    # def select_v_start_pos(self):
-    #     return self._select_v_start_pos
-    #
-    # @select_v_start_pos.setter
-    # def select_v_start_pos(self, pos):
-    #     import traceback
-    #     traceback.print_stack()
-    #     self._select_v_start_pos = pos
-
-    def _normalize(self, rect):
-        """ Normalize the given rectangle by making sure top/left etc. is actually top left
-
-        This method might be overridden.
-
-        """
-
-        return util.normalize_rect(rect)
 
     # #### selection methods  #####
 
@@ -541,12 +523,6 @@ class SelectionMixin(DragMixin):
             if isinstance(self.select_v_end_pos, list):
                 self.select_v_end_pos = tuple(self.select_v_end_pos)
                 logging.warn("'select_v_end_pos' is still set as a list somewhere!")
-
-            # if self.selection_mode == EDIT_MODE_BOX:
-            #     v_sel = self._normalize(self.select_v_start_pos + self.select_v_end_pos)
-            #
-            #     self.select_v_start_pos = v_sel[:2]
-            #     self.select_v_end_pos = v_sel[2:4]
 
             self._calc_edges()
             self.selection_mode = SEL_MODE_NONE
@@ -777,56 +753,64 @@ class SelectionMixin(DragMixin):
         """
 
         if self.v_edges:
+
+            vx, vy = vpos
+
             # If position outside outer box
             if (
-                not self.v_edges["o_l"] < vpos[0] < self.v_edges["o_r"] or
-                not self.v_edges["o_t"] < vpos[1] < self.v_edges["o_b"]
+                not self.v_edges["o_l"] < vx < self.v_edges["o_r"] or
+                not self.v_edges["o_t"] < vy < self.v_edges["o_b"]
             ):
                 return gui.HOVER_NONE
 
             if self.edit_mode == EDIT_MODE_BOX:
                 # If position inside inner box
                 if (
-                    self.v_edges["i_l"] < vpos[0] < self.v_edges["i_r"] and
-                    self.v_edges["i_t"] < vpos[1] < self.v_edges["i_b"]
+                    self.v_edges["i_l"] < vx < self.v_edges["i_r"] and
+                    self.v_edges["i_t"] < vy < self.v_edges["i_b"]
                 ):
                     # logging.debug("Selection hover")
                     return gui.HOVER_SELECTION
                 else:
                     hover = gui.HOVER_NONE
 
-                    if vpos[0] < self.v_edges["i_l"]:
+                    if vx < self.v_edges["i_l"]:
                         # logging.debug("Left edge hover")
                         hover |= gui.HOVER_LEFT_EDGE
-                    elif vpos[0] > self.v_edges["i_r"]:
+                    elif vx > self.v_edges["i_r"]:
                         # logging.debug("Right edge hover")
                         hover |= gui.HOVER_RIGHT_EDGE
 
-                    if vpos[1] < self.v_edges["i_t"]:
+                    if vy < self.v_edges["i_t"]:
                         # logging.debug("Top edge hover")
                         hover |= gui.HOVER_TOP_EDGE
-                    elif vpos[1] > self.v_edges["i_b"]:
+                    elif vy > self.v_edges["i_b"]:
                         # logging.debug("Bottom edge hover")
                         hover |= gui.HOVER_BOTTOM_EDGE
 
                     return hover
 
             elif self.edit_mode == EDIT_MODE_POINT:
-                sx, sy = self.select_v_start_pos
-                ex, ey = self.select_v_end_pos
-
                 if (
-                        self.v_edges["s_l"] < vpos[0] < self.v_edges["s_r"] and
-                        self.v_edges["s_t"] < vpos[1] < self.v_edges["s_b"]
+                        self.v_edges["s_l"] < vx < self.v_edges["s_r"] and
+                        self.v_edges["s_t"] < vy < self.v_edges["s_b"]
                 ):
                     return gui.HOVER_START
                 elif (
-                        self.v_edges["e_l"] < vpos[0] < self.v_edges["e_r"] and
-                        self.v_edges["e_t"] < vpos[1] < self.v_edges["e_b"]
+                        self.v_edges["e_l"] < vx < self.v_edges["e_r"] and
+                        self.v_edges["e_t"] < vy < self.v_edges["e_b"]
                 ):
                     return gui.HOVER_END
-
-                # FIXME: LINE HOVER HERE
+                elif (
+                    # If position inside inner box
+                    self.v_edges["i_l"] < vx < self.v_edges["i_r"] and
+                    self.v_edges["i_t"] < vy < self.v_edges["i_b"]
+                ):
+                    dist = util.perpendicular_distance(self.select_v_start_pos,
+                                                       self.select_v_end_pos,
+                                                       vpos)
+                    if dist < self.hover_margin:
+                        return gui.HOVER_LINE
 
         return gui.HOVER_NONE
 
@@ -857,12 +841,15 @@ class SelectionMixin(DragMixin):
         if self.left_dragging:
             hover = self.get_hover(self.drag_v_start_pos)
 
-            if not hover:  # Clicked outside selection
-                self.start_selection()  # Start dragging
-            elif hover != gui.HOVER_SELECTION:  # Clicked on edge
-                self.start_edit(hover)   # Start edit
-            elif hover == gui.HOVER_SELECTION:  # Clicked inside selection
-                self.start_drag()  # Start edit
+            if not hover:
+                # Clicked outside selection, so create new selection
+                self.start_selection()
+            elif hover in (gui.HOVER_SELECTION, gui.HOVER_LINE):
+                # Clicked inside selection or near line, so start dragging
+                self.start_drag()
+            else:
+                # Clicked on an edit point (e.g. an edge or start or end point), so edit
+                self.start_edit(hover)
 
     def _on_left_up(self, evt):
         """ Call this method from the 'on_left_up' method of super classes"""
