@@ -6,32 +6,33 @@ SECOMv2: {
     actuators: ["Sample Stage", "Objective Stage", "Optical Focus", "SEM Focus"],
 }
 
-# "Light Engine": {
-#     class: lle.FakeLLE,
-#     role: light,
-#     init: {
-#         port: "/dev/ttyFTDI*",
-#         # source name -> 99% low, 25% low, centre, 25% high, 99% high wavelength in m
-#         # Values are from vendor: http://lumencor.com/products/filters-for-spectra-x-light-engines/
-#         sources: {"UV": [379.e-9, 384.e-9, 390.e-9, 396.e-9, 401.e-9], # 390/22
-#                   "cyan": [472.e-9, 479.e-9, 485.e-9, 491.e-9, 497.e-9], # 485/25
-#                   "green": [544.e-9, 552.e-9, 560.e-9, 568.e-9, 576.e-9], # 560/32
-#                   "red": [638.e-9, 643.e-9, 648.e-9, 653.e-9, 658.e-9], # 648/20
-#                  }
-#         },
-#         # The light is reflected via a Semrock FF410/504/582/669-DI01-25X36
-#     affects: ["Camera"],
-# }
-
 "Light Engine": {
-    class: omicronxx.HubxX,
+    class: lle.FakeLLE,
     role: light,
     init: {
         port: "/dev/ttyFTDI*",
-    },
-    # The light is reflected via a Semrock FF410/504/582/669-DI01-25X36
+        # source name -> 99% low, 25% low, centre, 25% high, 99% high wavelength in m
+        # Values are from vendor: http://lumencor.com/products/filters-for-spectra-x-light-engines/
+        sources: {"UV": [379.e-9, 384.e-9, 390.e-9, 396.e-9, 401.e-9], # 390/22
+                  "cyan": [472.e-9, 479.e-9, 485.e-9, 491.e-9, 497.e-9], # 485/25
+                  "green": [544.e-9, 552.e-9, 560.e-9, 568.e-9, 576.e-9], # 560/32
+                  "red": [638.e-9, 643.e-9, 648.e-9, 653.e-9, 658.e-9], # 648/20
+                 }
+        },
+        # The light is reflected via a Semrock FF410/504/582/669-DI01-25X36
     affects: ["Camera"],
 }
+
+# TODO: use this component in simulator mode, once it's supported
+# "Light Engine": {
+#     class: omicronxx.HubxX,
+#     role: light,
+#     init: {
+#         port: "/dev/ttyFTDI*",
+#     },
+#     # The light is reflected via a Semrock FF410/504/582/669-DI01-25X36
+#     affects: ["Camera"],
+# }
 
 "SEM Scan Interface": {
     class: simsem.SimSEM,
