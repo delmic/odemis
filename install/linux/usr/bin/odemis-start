@@ -191,14 +191,14 @@ class BackendStarter(object):
 
         # odemisd likes to start as root to be able to create /var/run files, but then
         # drop its privileges to the odemis group
-        # use sudo background mode to be sure it won't be killed at the end
-        error = subprocess.call(["sudo", "-b", "odemisd", "--daemonize",
+        error = subprocess.call(["sudo", "odemisd", "--daemonize",
                                "--log-level", self._config["LOGLEVEL"],
                                "--log-target", self._config["LOGFILE"],
                                modelfile])
 
         # If it immediately fails, it's easy
         if error != 0:
+            # TODO: show a full fledge window, with the error message of odemisd
             self._notif.update("Odemis back-end failed to start",
                                "For more information type odemis-start in a terminal.",
                                "dialog-warning")
