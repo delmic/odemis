@@ -713,7 +713,7 @@ class TMCM3110(model.Actuator):
             # Reset the absolute 0 (by setting current pos to 0)
             logging.debug("Changing referencing position by %d", self.GetAxisParam(axis, 1))
             self.SetAxisParam(axis, 1, 0)
-        elif self._refproc == REFPROC_LS: # left switch = negative direction
+        elif self._refproc == REFPROC_LS: # left switch = low position value = start in negative direction
             if not self._isFullyPowered():
                 raise IOError("Device is not powered, so motors cannot move")
 
