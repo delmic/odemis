@@ -241,6 +241,12 @@ class AndorCam3(model.DigitalCamera):
         if device is None:
             # nothing else to initialise
             return
+        # TODO: if USB Zyla, check that it's connected via USB 3.
+        # => see "cat /sys/bus/usb/devices/*/version"
+        # and maybe GetInt(UsbProductId) GetInt(UsbDeviceId) or DeviceVideoIndex?
+        # + InterfaceType (=> "USB3")
+
+        # TODO: handle when the camera is turned off/on => use CameraPresent ?
 
         logging.info("opened device %d successfully", device)
 
