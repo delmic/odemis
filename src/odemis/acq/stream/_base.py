@@ -17,12 +17,17 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 
+import collections
+import functools
+import inspect
 import logging
 import math
 import numbers
 import numpy
 from odemis import model
-from odemis.model import MD_POS, MD_PIXEL_SIZE, MD_ROTATION, MD_ACQ_DATE, MD_SHEAR
+from odemis.model import (MD_POS, MD_PIXEL_SIZE, MD_ROTATION, MD_ACQ_DATE,
+                          MD_SHEAR, VigilantAttribute, VigilantAttributeBase)
+from odemis.model._vattributes import FloatContinuous
 from odemis.util import img, limit_invocation
 import threading
 import time
@@ -49,14 +54,19 @@ class Stream(object):
     # Minimum overhead time in seconds when acquiring an image
     SETUP_OVERHEAD = 0.1
 
-    def __init__(self, name, detector, dataflow, emitter, raw=None, forcemd=None):
+    def __init__(self, name, detector, dataflow, emitter,
+                 detvas=None, emtvas=None, raw=None, forcemd=None):
         """
         name (string): user-friendly name of this stream
         detector (Detector): the detector which has the dataflow
         dataflow (Dataflow): the dataflow from which to get the data
         emitter (Emitter): the emitter
+        detvas (None or set of str): names of all the detector VigilantAttributes
+          (VAs) to be duplicated on the stream. They will be named .detOriginalName
+        emtvas (None or set of str): names of all the emitter VAs to be
+          duplicated on the stream. They will be named .emtOriginalName
         raw (None or list of DataArrays): raw data to be used at initialisation
-         by default, it will contain no data.
+          by default, it will contain no data.
         forcemd (None or dict of MD_* -> value): force the metadata of the
           .image DataArray to be overridden by this metadata.
         """
@@ -98,7 +108,7 @@ class Stream(object):
         # indicate the user would like to have the stream updated (live)
         self.should_update = model.BooleanVA(False)
         # is_active set to True will keep the acquisition going on
-        self.is_active = model.BooleanVA(False)
+        self.is_active = model.BooleanVA(False, setter=self._is_active_setter)
         self.is_active.subscribe(self.onActive)
 
         # Region of interest as left, top, right, bottom (in ratio from the
@@ -117,6 +127,15 @@ class Stream(object):
         # cases (like flat histogram), you still loose only one value on each
         # side.
         self.auto_bc_outliers = model.FloatContinuous(100 / 256, range=(0, 40))
+
+        # TODO: move to "LiveStream" or "HwStream" subclass
+        # Duplicate VA if requested
+        self._hwvas = {} # str (name of the proxied VA) -> original Hw VA
+        self._hwvasetters = {} # str (name of the proxied VA) -> setter
+        self._lvaupdaters = {} # str (name of the proxied VA) -> listener
+
+        self._duplicateVAs(detector, "det", detvas or {})
+        self._duplicateVAs(emitter, "emt", emtvas or {})
 
         # Used if auto_bc is False
         # min/max ratio of the whole intensity level which are mapped to
@@ -174,6 +193,178 @@ class Stream(object):
     def __str__(self):
         return "%s %s" % (self.__class__.__name__, self.name.value)
 
+    def _duplicateVAs(self, comp, prefix, vas):
+        """
+        Duplicate all the given VAs of the given component and rename them with
+          the prefix.
+        comp (Component): the component on which to find the VAs
+        prefix (str): prefix to put before the name of each VA
+        vas (set of str): names of all the VAs
+        raise:
+            LookupError: if the component doesn't have a listed VA
+        """
+        for vaname in vas:
+            try:
+                va = getattr(comp, vaname)
+            except AttributeError:
+                raise LookupError("Component %s has not attribute %s" %
+                                  (comp, vaname))
+            if not isinstance(va, VigilantAttributeBase):
+                raise LookupError("Component %s attribute %s is not a VA" %
+                                  (comp, vaname))
+
+            # TODO: add a setter/listener that will automatically synchronise the VA value
+            # as long as the stream is active
+            vasetter = functools.partial(self._va_sync_setter, va)
+            dupva = self._duplicateVA(va, setter=vasetter)
+
+            # Convert from originalName to prfxOriginalName
+            newname = prefix + vaname[0].upper() + vaname[1:]
+            setattr(self, newname, dupva)
+
+            # Keep the link between the new VA and the original VA so they can be synchronised
+            self._hwvas[newname] = va
+            # Keep setters, mostly to not have them dereferenced
+            self._hwvasetters[newname] = vasetter
+
+    def _va_sync_setter(self, origva, v):
+        """
+        Setter for proxied VAs
+        origva (VA): the original va
+        v: the new value
+        return: the real new value (as accepted by the original VA)
+        """
+        if self.is_active.value: # only synchronised when the stream is active
+            logging.debug("updating va %r to %s", origva, v)
+            origva.value = v
+            return origva.value
+        else:
+            logging.debug("not updating va %r to %s", origva, v)
+            return v
+
+    def _va_sync_from_hw(self, lva, v):
+        """
+        Called when the Hw VA is modified, to update the local VA
+        lva (VA): the local VA
+        v: the new value
+        """
+        # Don't use the setter, directly put the value as-is. That avoids the
+        # setter to again set the Hw VA, and ensure we always accept the Hw
+        # value
+        logging.debug("updating %r to %s", lva, v)
+        if lva._value != v:
+            lva._value = v # TODO: works with ListVA?
+            lva.notify(v)
+
+    # TODO: move to odemis.util ?
+    def _duplicateVA(self, va, setter=None):
+        """
+        Create a new VA, with same behaviour as the given VA
+        va (VigilantAttribute): VA to duplicate
+        setter (None or callable): the setter of the VA
+        return (VigilantAttribute): new VA
+        """
+        # Find out the type of the VA (without using the exact class, to work
+        # even if it's proxied)
+        kwargs = {}
+        if isinstance(va, (model.ListVA, model.ListVAProxy)):
+            vacls = model.ListVA
+        elif hasattr(va, "choices") and isinstance(va.choices, collections.Iterable):
+            # Enumerated
+            vacls = model.VAEnumerated
+            kwargs["choices"] = va.choices
+        elif hasattr(va, "range") and isinstance(va.range, collections.Iterable):
+            # Continuous
+            # TODO: TupleContinuous vs FloatContinuous vs... use range type?
+            r0 = va.range[0]
+            if isinstance(r0, tuple):
+                vacls = model.TupleContinuous
+                # TODO: cls?
+            elif isinstance(r0, numbers.Real):
+                # TODO: distinguish model.IntContinuous, how?
+                vacls = model.FloatContinuous
+            else:
+                raise NotImplementedError("Doesn't know how to duplicate VA %s"
+                                          % (va,))
+            kwargs["range"] = va.range
+        else:
+            # TODO: FloatVA vs IntVA vs StringVA vs BooleanVA vs TupleVA based on value type? hard to do
+            vacls = VigilantAttribute
+
+        newva = vacls(va.value, readonly=va.readonly, unit=va.unit, setter=setter, **kwargs)
+
+        return newva
+
+    # Order in which VAs should be set to ensure the values are kept as-is.
+    # This should be the behaviour of the hardware component... but the driver
+    # might be buggy, so beware!
+    VA_ORDER = ("binning", "scale", "resolution", "translation", "rotation")
+    def _index_in_va_order(self, va_entry):
+        """
+        return the position of the VA name in VA_ORDER
+        va_entry (tuple): first element must be the name of the VA
+        return (int)
+        """
+        name = va_entry[0]
+        try:
+            return self.VA_ORDER.index(name)
+        except ValueError: # VA name is not listed => put last
+            return len(self.VA_ORDER) + 1
+
+    def _linkHwVAs(self):
+        """
+        Apply the current value of each duplicated hardware VAs from the stream
+          to the hardware component.
+          If the hardware value is not accepted as-is, the value of the local
+          VA will be set to the hardware value.
+        """
+        # Make sure the VAs are set in the right order to keep values
+        hwvas = self._hwvas.items() # must be a list
+        hwvas.sort(key=self._index_in_va_order)
+        for vaname, hwva in hwvas:
+            if hwva.readonly:
+                continue
+            lva = getattr(self, vaname)
+            try:
+                hwva.value = lva.value
+            except Exception:
+                logging.debug("Failed to set VA %s to value %s on hardware",
+                              vaname, lva.value)
+
+        # make sure the local VA value is synchronised
+        for vaname, hwva in self._hwvas.items():
+            if hwva.readonly:
+                continue
+            lva = getattr(self, vaname)
+            updater = functools.partial(self._va_sync_from_hw, lva)
+            self._lvaupdaters[vaname] = updater
+            hwva.subscribe(updater, init=True)
+
+    def _unlinkHwVAs(self):
+        for vaname, hwva in self._hwvas.items():
+            if hwva.readonly:
+                continue
+            updater = self._lvaupdaters[vaname]
+            hwva.unsubscribe(updater)
+
+    def _getEmitterVA(self, vaname):
+        """
+        Give the VA for controlling the setting of the emitter, either the local
+          one, or if it doesn't exist, directly the hardware one.
+        vaname (str): name of the VA as on the hardware
+        return (VigilantAttribute): the local VA or the Hw VA
+        raises
+            AttributeError: if VA doesn't exist
+        """
+        lname = "emt" + vaname[0].upper() + vaname[1:]
+        try:
+            return getattr(self, lname)
+        except AttributeError:
+            hwva = getattr(self._emitter, vaname)
+            if not isinstance(hwva, VigilantAttributeBase):
+                raise AttributeError("Emitter has not VA %s" % (vaname,))
+            return hwva
+
     def estimateAcquisitionTime(self):
         """ Estimate the time it will take to acquire one image with the current
         settings of the detector and emitter.
@@ -198,6 +389,21 @@ class Stream(object):
 
         self.status._value = (level, message)
         self.status.notify(self.status.value)
+
+    def _is_active_setter(self, active):
+        """
+        Called just before the Stream becomes active
+        """
+        if active:
+            # This is done in a setter to ensure that as soon as is_active is
+            # True, all the HwVAs are already synchronised, and this avoids
+            # the VA setter to catch again the change
+            self._linkHwVAs()
+
+            # TODO: merge onActive here?
+        else:
+            self._unlinkHwVAs()
+        return active
 
     def onActive(self, active):
         """ Called when the Stream is activated or deactivated by setting the
@@ -248,7 +454,7 @@ class Stream(object):
                 except (KeyError, ValueError):
                     try:
                         if (hasattr(self._detector, "bpp") and
-                            isinstance(self._detector.bpp, model.VigilantAttributeBase)):
+                            isinstance(self._detector.bpp, VigilantAttributeBase)):
                             depth = 2 ** self._detector.bpp.value
                         else:
                             depth = self._detector.shape[-1]
@@ -277,7 +483,7 @@ class Stream(object):
             try:
                 # If the detector has .bpp, use this info
                 if (hasattr(self._detector, "bpp") and
-                    isinstance(self._detector.bpp, model.VigilantAttributeBase)):
+                    isinstance(self._detector.bpp, VigilantAttributeBase)):
                     depth = 2 ** self._detector.bpp.value
                 else:
                     # The last element of the shape indicates the bit depth, which

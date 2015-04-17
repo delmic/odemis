@@ -39,8 +39,8 @@ class SEMStream(Stream):
 
     It basically knows how to activate the scanning electron and the detector.
     """
-    def __init__(self, name, detector, dataflow, emitter):
-        Stream.__init__(self, name, detector, dataflow, emitter)
+    def __init__(self, name, detector, dataflow, emitter, **kwargs):
+        Stream.__init__(self, name, detector, dataflow, emitter, **kwargs)
 
         # TODO: Anti-aliasing/Pixel fuzzing
         # .fuzzing: boolean
@@ -307,7 +307,7 @@ class AlignedSEMStream(SEMStream):
     by just updating the image position.
     """
     def __init__(self, name, detector, dataflow, emitter,
-                 ccd, stage, shiftebeam=MTD_MD_UPD):
+                 ccd, stage, shiftebeam=MTD_MD_UPD, **kwargs):
         """
         shiftebeam (MTD_*): if MTD_EBEAM_SHIFT, will correct the SEM position using beam shift
          (iow, using emitter.translation). If MTD_MD_UPD, it will just update the
@@ -316,7 +316,7 @@ class AlignedSEMStream(SEMStream):
          the correction metadata (note that if the stage has moved, the optical
          stream will need to be updated too).
         """
-        SEMStream.__init__(self, name, detector, dataflow, emitter)
+        SEMStream.__init__(self, name, detector, dataflow, emitter, **kwargs)
         self._ccd = ccd
         self._stage = stage
         self._shiftebeam = shiftebeam
@@ -627,7 +627,7 @@ class FluoStream(CameraStream):
     emission is the light emitted by the sample.
     """
 
-    def __init__(self, name, detector, dataflow, emitter, em_filter):
+    def __init__(self, name, detector, dataflow, emitter, em_filter, **kwargs):
         """
         name (string): user-friendly name of this stream
         detector (Detector): the detector which has the dataflow
@@ -635,7 +635,7 @@ class FluoStream(CameraStream):
         emitter (Light): the HwComponent to modify the light excitation
         em_filter (Filter): the HwComponent to modify the emission light filtering
         """
-        CameraStream.__init__(self, name, detector, dataflow, emitter)
+        CameraStream.__init__(self, name, detector, dataflow, emitter, **kwargs)
         self._em_filter = em_filter
 
         # Emission and excitation are based on the hardware capacities.
