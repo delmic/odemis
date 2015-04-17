@@ -57,6 +57,7 @@ HOVER_LEFT_EDGE = 8
 HOVER_SELECTION = 16
 HOVER_START = 32
 HOVER_END = 64
+HOVER_LINE = 128
 
 SELECTION_MINIMUM = 10  # Minimum dimensions for a selection, in pixels
 

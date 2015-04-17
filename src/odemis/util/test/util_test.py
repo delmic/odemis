@@ -7,19 +7,20 @@ Copyright © 2013 Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 from __future__ import division
+from decorator import partial
 
 import gc
 import logging
@@ -210,6 +211,52 @@ class CanvasTestCase(unittest.TestCase):
             b = (bb[0] - 1, bb[1] - 1, bb[2] + 1, bb[2] + 1)
             r = util.rect_intersect(b, bb)
             self.assertEqual(r, bb)
+
+    def test_line_clipping(self):
+        bounding_box = (0, 4, 4, 0)
+        clip = partial(util.clip_line, *bounding_box)
+
+        # Test lines within bounding box, i.e. no clipping should occur
+        internal = [
+            (0, 0, 0, 0),
+            (2, 2, 2, 2),
+            (0, 0, 4, 4),
+            (4, 4, 0, 0),
+            (0, 2, 2, 0),
+            (2, 0, 0, 2),
+        ]
+
+        for line in internal:
+            self.assertEqual(line, clip(*line))
+
+        # Test clipping for lines originating in the center of the bounding box and ending outside
+        # of it.
+        inner_to_outer = [
+            ((2, 2, 2, 6), (2, 2, 2, 4)),
+            ((2, 2, 6, 2), (2, 2, 4, 2)),
+            ((2, 2, 2, -2), (2, 2, 2, 0)),
+            ((2, 2, -2, 2), (2, 2, 0, 2)),
+            ((2, 2, 6, -2), (2, 2, 4, 0)),
+            ((2, 2, -2, -2), (2, 2, 0, 0)),
+            ((2, 2, -2, -2), (2, 2, 0, 0)),
+        ]
+
+        for orig, clipped in inner_to_outer:
+            self.assertEqual(clipped, clip(*orig))
+
+        outer_to_inner = [
+            ((2, 6, 2, 2), (2, 4, 2, 2)),
+            ((6, 2, 2, 2), (4, 2, 2, 2)),
+            ((2, -2, 2, 2), (2, 0, 2, 2)),
+            ((-2, 2, 2, 2), (0, 2, 2, 2)),
+            ((6, -2, 2, 2), (4, 0, 2, 2)),
+            ((-2, -2, 2, 2), (0, 0, 2, 2)),
+            ((-2, -2, 2, 2), (0, 0, 2, 2)),
+        ]
+
+        for orig, clipped in outer_to_inner:
+            self.assertEqual(clipped, clip(*orig))
+
 
 if __name__ == "__main__":
     unittest.main()
