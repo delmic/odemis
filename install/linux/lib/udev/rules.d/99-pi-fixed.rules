@@ -18,3 +18,8 @@ SUBSYSTEMS=="usb", ATTRS{idProduct}=="0121", ATTRS{idVendor}=="06cd", KERNEL=="t
 
 # just an off the shelf USB-serial port used for the Redstone
 #SUBSYSTEMS=="usb", ATTRS{idProduct}=="2303", ATTRS{idVendor}=="067b", KERNEL=="ttyUSB[0-9]*", SYMLINK="ttyPIRS", GROUP="odemis"
+
+# off the shelf USB-serial CDC port used for the PI Master controller
+# Not used normally, but useful for reconfiguration
+SUBSYSTEMS=="usb", ATTRS{idProduct}=="a4a7", ATTRS{idVendor}=="0525", KERNEL=="ttyUSB[0-9]*", SYMLINK="ttyPIM%n", GROUP="odemis"
+
