@@ -411,87 +411,120 @@ def update_metadata(comp_name, key_val_str):
         raise IOError("Failed to update metadata of %s to %s: %s" %
                       (comp_name, md, exc))
 
+def merge_moves(actions):
+    """
+    actions (list of tuples of 3 values): component, axis, distance/position
+    return (dict of str -> (dict of str -> str)): components -> (axis -> distance))
+    """
+    moves = {}
+    for c, a, d in actions:
+        if c not in moves:
+            moves[c] = {}
+        if a in moves[c]:
+            raise ValueError("Multiple moves requested for %s.%s" % (c, a))
+        moves[c][a] = d
+
+    return moves
+
 MAX_DISTANCE = 0.01 # m
-def move(comp_name, axis_name, str_distance):
+def move(comp_name, moves):
     """
     move (relatively) the axis of the given component by the specified amount of µm
+    comp_name (str): name of the component
+    moves (dict str -> str): axis -> distance (as text, and in µm for distances)
     """
     # for safety reason, we use µm instead of meters, as it's harder to type a
     # huge distance
     component = get_component(comp_name)
 
-    try:
-        if axis_name not in component.axes:
-            raise ValueError("Actuator %s has no axis '%s'" % (comp_name, axis_name))
-        ad = component.axes[axis_name]
-    except (TypeError, AttributeError):
-        raise ValueError("Component %s is not an actuator" % comp_name)
-
-    if ad.unit == "m":
+    act_mv = {} # axis -> value
+    for axis_name, str_distance in moves.items():
         try:
-            distance = float(str_distance) * 1e-6 # µm -> m
-        except ValueError:
-            raise ValueError("Distance '%s' cannot be converted to a number" %
-                             str_distance)
+            if axis_name not in component.axes:
+                raise ValueError("Actuator %s has no axis '%s'" % (comp_name, axis_name))
+            ad = component.axes[axis_name]
+        except (TypeError, AttributeError):
+            raise ValueError("Component %s is not an actuator" % comp_name)
 
-        if abs(distance) > MAX_DISTANCE:
-            raise IOError("Distance of %f m is too big (> %f m)" %
-                          (abs(distance), MAX_DISTANCE))
-    else:
-        distance = convertToObject(str_distance)
+        if ad.unit == "m":
+            try:
+                distance = float(str_distance) * 1e-6 # µm -> m
+            except ValueError:
+                raise ValueError("Distance '%s' cannot be converted to a number" %
+                                 str_distance)
 
-    try:
+            if abs(distance) > MAX_DISTANCE:
+                raise IOError("Distance of %f m is too big (> %f m)" %
+                              (abs(distance), MAX_DISTANCE))
+        else:
+            distance = convertToObject(str_distance)
+
+        act_mv[axis_name] = distance
         logging.info(u"Will move %s.%s by %s", comp_name, axis_name,
                      units.readable_str(distance, ad.unit, sig=3))
-    except Exception:
-        pass
 
     try:
-        m = component.moveRel({axis_name: distance})
+        m = component.moveRel(act_mv)
         m.result()
     except Exception as exc:
-        raise IOError("Failed to move axis %s of component %s: %s" %
-                      (axis_name, comp_name, exc))
+        raise IOError("Failed to move component %s by %s: %s" %
+                      (comp_name, act_mv, exc))
 
-def move_abs(comp_name, axis_name, str_position):
+    # Trick to make sure that not thread is still running
+    try:
+        if component._pyroFutureDaemon:
+            component._pyroFutureDaemon.shutdown()
+    except AttributeError:
+        pass
+
+def move_abs(comp_name, moves):
     """
-    move (in absolute) the axis of the given component to the specified position in µm
+    move (in absolute) the axis of the given component to the specified position
+    comp_name (str): name of the component
+    moves (dict str -> str): axis -> position (as text)
     """
     component = get_component(comp_name)
 
-    try:
-        if axis_name not in component.axes:
-            raise ValueError("Actuator %s has no axis '%s'" % (comp_name, axis_name))
-        ad = component.axes[axis_name]
-    except (TypeError, AttributeError):
-        raise ValueError("Component %s is not an actuator" % comp_name)
-
-    if ad.unit == "m":
+    act_mv = {} # axis -> value
+    for axis_name, str_position in moves.items():
         try:
-            position = float(str_position)
-        except ValueError:
-            raise ValueError("Position '%s' cannot be converted to a number" % str_position)
+            if axis_name not in component.axes:
+                raise ValueError("Actuator %s has no axis '%s'" % (comp_name, axis_name))
+            ad = component.axes[axis_name]
+        except (TypeError, AttributeError):
+            raise ValueError("Component %s is not an actuator" % comp_name)
 
-        # compare to the current position, to see if the new position sounds reasonable
-        cur_pos = component.position.value[axis_name]
-        if abs(cur_pos - position) > MAX_DISTANCE:
-            raise IOError("Distance of %f m is too big (> %f m)" %
-                           (abs(cur_pos - position), MAX_DISTANCE))
-    else:
-        position = convertToObject(str_position)
+        if ad.unit == "m":
+            try:
+                position = float(str_position)
+            except ValueError:
+                raise ValueError("Position '%s' cannot be converted to a number" % str_position)
 
-    try:
+            # compare to the current position, to see if the new position sounds reasonable
+            cur_pos = component.position.value[axis_name]
+            if abs(cur_pos - position) > MAX_DISTANCE:
+                raise IOError("Distance of %f m is too big (> %f m)" %
+                              (abs(cur_pos - position), MAX_DISTANCE))
+        else:
+            position = convertToObject(str_position)
+
+        act_mv[axis_name] = position
         logging.info(u"Will move %s.%s to %s", comp_name, axis_name,
                      units.readable_str(position, ad.unit, sig=3))
-    except Exception:
-        pass
 
     try:
-        m = component.moveAbs({axis_name: position})
+        m = component.moveAbs(act_mv)
         m.result()
     except Exception as exc:
-        raise IOError("Failed to move axis %s of component %s: %s" %
-                      (axis_name, comp_name, exc))
+        raise IOError("Failed to move component %s to %s: %s" %
+                      (comp_name, act_mv, exc))
+
+    # Trick to make sure that not thread is still running
+    try:
+        if component._pyroFutureDaemon:
+            component._pyroFutureDaemon.shutdown()
+    except AttributeError:
+        pass
 
 def reference(comp_name, axis_name):
     """
@@ -517,6 +550,13 @@ def reference(comp_name, axis_name):
     except Exception as exc:
         raise IOError("Failed to reference axis %s of component %s: %s" %
                       (axis_name, comp_name, exc))
+
+    # Trick to make sure that not thread is still running
+    try:
+        if component._pyroFutureDaemon:
+            component._pyroFutureDaemon.shutdown()
+    except AttributeError:
+        pass
 
 def stop_move():
     """
@@ -692,7 +732,7 @@ def main(args):
                         help="show program's version number and exit")
     opt_grp = parser.add_argument_group('Options')
     opt_grp.add_argument("--log-level", dest="loglev", metavar="<level>", type=int,
-                        default=0, help="set verbosity level (0-2, default = 0)")
+                         default=0, help="set verbosity level (0-2, default = 0)")
     opt_grp.add_argument("--machine", dest="machine", action="store_true", default=False,
                          help="display in a machine-friendly way (i.e., no pretty printing)")
     dm_grp = parser.add_argument_group('Microscope management')
@@ -768,6 +808,12 @@ def main(args):
     handler.setFormatter(logging.Formatter('%(asctime)s (%(module)s) %(levelname)s: %(message)s'))
     logging.getLogger().addHandler(handler)
 
+    if loglev >= logging.DEBUG:
+        # Activate also Pyro logging
+        # TODO: options.logtarget
+        pyrolog = logging.getLogger("Pyro4")
+        pyrolog.setLevel(min(pyrolog.getEffectiveLevel(), logging.INFO))
+
     # anything to do?
     if not any((options.check, options.kill, options.scan,
         options.list, options.stop, options.move,
@@ -835,15 +881,13 @@ def main(args):
             for c, a in options.reference:
                 reference(c, a)
         elif options.position is not None:
-            for c, a, d in options.position:
-                move_abs(c, a, d)
-#             time.sleep(0.5)
+            moves = merge_moves(options.position)
+            for c, m in moves.items():
+                move_abs(c, m)
         elif options.move is not None:
-            # TODO warn if same axis multiple times
-            # TODO move commands to the same actuator should be agglomerated
-            for c, a, d in options.move:
-                move(c, a, d)
-#             time.sleep(0.5) # wait a bit for the futures to close nicely
+            moves = merge_moves(options.move)
+            for c, m in moves.items():
+                move(c, m)
         elif options.stop:
             stop_move()
         elif options.acquire is not None:
