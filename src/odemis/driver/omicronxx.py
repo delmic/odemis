@@ -723,4 +723,6 @@ class HubxX(GenericxX):
         for d in cls._getMasterDevices(ports):
             ret.append[("Omicron Hub", {"port": d.acc.port})]
 
+        return ret
+
 # TODO: simulator
