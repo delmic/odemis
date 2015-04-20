@@ -489,7 +489,8 @@ class SelectionMixin(DragMixin):
         self.highlight = conversion.hex_to_frgba(gui.FG_COLOUR_HIGHLIGHT)
         self.center = center
 
-    def _normalize_rect(self, rect):
+    @staticmethod
+    def _normalize_rect(rect):
         """ Normalize the given rectangle by making sure top/left etc. is actually top left """
         return util.normalize_rect(rect)
 
