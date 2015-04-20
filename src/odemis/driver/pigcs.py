@@ -350,7 +350,6 @@ class Controller(object):
         return super(Controller, cls).__new__(subcls, busacc, address, axes,
                                               *args, **kwargs)
 
-
     def __init__(self, busacc, address=None, axes=None):
         """
         busacc: a BusAccesser
@@ -490,14 +489,14 @@ class Controller(object):
     # The following are function directly mapping to the controller commands.
     # In general it should not be need to use them directly from outside this class
     def GetIdentification(self):
-        #*IDN? (Get Device Identification):
-        #ex: 0 2 (c)2010 Physik Instrumente(PI) Karlsruhe,E-861 Version 7.2.0
+        # *IDN? (Get Device Identification):
+        # ex: 0 2 (c)2010 Physik Instrumente(PI) Karlsruhe,E-861 Version 7.2.0
         version = self._sendQueryCommand("*IDN?\n")
         return version
 
     def GetSyntaxVersion(self):
-        #CSV? (Get Current Syntax Version)
-        #GCS version, can be 1.0 (for GCS 1.0) or 2.0 (for GCS 2.0)
+        # CSV? (Get Current Syntax Version)
+        # GCS version, can be 1.0 (for GCS 1.0) or 2.0 (for GCS 2.0)
         return self._sendQueryCommand("CSV?\n")
 
     def GetStageName(self, axis):
@@ -506,22 +505,22 @@ class Controller(object):
         Note that the actual stage might be different.
         """
         # CST? does this as well
-        #parameter 0x3c
+        # parameter 0x3c
         return self.GetParameter(axis, 0x3C)
 
     def GetAxes(self):
         """
         returns (set of int): all the available axes
         """
-        #SAI? (Get List Of Current Axis Identifiers)
-        #SAI? ALL: list all axes (included disabled ones)
+        # SAI? (Get List Of Current Axis Identifiers)
+        # SAI? ALL: list all axes (included disabled ones)
         answer = self._sendQueryCommand("SAI? ALL\n")
         # TODO check it works with multiple axes
         axes = set([int(a) for a in answer.split(" ")])
         return axes
 
     def GetAvailableCommands(self):
-        #HLP? (Get List Of Available Commands)
+        # HLP? (Get List Of Available Commands)
         # first line starts with \x00
         lines = self._sendQueryCommand("HLP?\n")
         lines[0] = lines[0].lstrip("\x00")
@@ -533,7 +532,7 @@ class Controller(object):
         return (dict param -> list of strings): parameter number and strings 
          used to describe it (typically: 0, 1, FLOAT, description)
         """
-        #HPA? (Get List Of Available Parameters)
+        # HPA? (Get List Of Available Parameters)
         lines = self._sendQueryCommand("HPA?\n")
         lines[0] = lines[0].lstrip("\x00")
         params = {}
@@ -622,7 +621,7 @@ class Controller(object):
         axis (1<int<16): axis number
         returns (bool)
         """
-        #LIM? (Indicate Limit Switches)
+        # LIM? (Indicate Limit Switches)
         # 1 => True, 0 => False
         return self._readAxisValue("LIM?", axis) == 1
 
@@ -661,10 +660,10 @@ class Controller(object):
         return mv_axes
 
     def GetStatus(self):
-        #SRG? = "\x04" (Query Status Register Value)
-        #SRG? 1 1
-        #Check status
-        # hexadecimal number bitmap of which axis is moving => 0 if everything is stopped
+        # SRG? = "\x04" (Query Status Register Value)
+        # SRG? 1 1
+        # Check status
+        # hexadecimal number, a bitmap corresponding to status flags (cf documentation)
         # Ex: 0x9004
         bitmap = self._sendQueryCommand("\x04")
         assert(bitmap.startswith("0x"))
@@ -693,7 +692,7 @@ class Controller(object):
         axis (1<int<16): axis number
         returns (bool)
         """
-        #FRF? (Get Referencing Result)
+        # FRF? (Get Referencing Result)
         # 1 => True, 0 => False
         return self._readAxisValue("FRF?", axis) == 1
 
@@ -704,7 +703,7 @@ class Controller(object):
         axis (1<int<16): axis number
         returns (bool)
         """
-        #ONT? (Get On Target State)
+        # ONT? (Get On Target State)
         # 1 => True, 0 => False
         # cf parameters 0x3F (settle time), and 0x4D (algo), 0x406 (window size)
         # 0x407 (window off size)
@@ -715,7 +714,7 @@ class Controller(object):
         return (int): the error number (can be negative) of last error
         See p.192 of manual for the error codes
         """
-        #ERR? (Get Error Number): get error code of last error
+        # ERR? (Get Error Number): get error code of last error
         answer = self._sendQueryCommand("ERR?\n")
         error = int(answer)
         return error
@@ -740,8 +739,8 @@ class Controller(object):
           to change between modes
         axis (1<int<16): axis number
         """
-        #RNP (Relax PiezoWalk Piezos): reduce voltage when stopped to increase lifetime
-        #Also needed to change between nanostepping and analog
+        # RNP (Relax PiezoWalk Piezos): reduce voltage when stopped to increase lifetime
+        # Also needed to change between nanostepping and analog
         assert(axis in self._channels)
         self._sendOrderCommand("RNP %d 0\n" % axis)
 
@@ -751,7 +750,7 @@ class Controller(object):
         Note: see Stop
         axis (1<int<16): axis number, 
         """
-        #HLT (Stop All Axes): immediate stop (high deceleration != HLT)
+        # HLT (Stop All Axes): immediate stop (high deceleration != HLT)
         # set error code to 10
         if axis is None:
             self._sendOrderCommand("HLT\n")
@@ -770,7 +769,7 @@ class Controller(object):
         Stop immediately motion on all axes
         Note: it's not efficient enough with SMO commands
         """
-        #STP = "\x18" (Stop All Axes): immediate stop (high deceleration != HLT)
+        # STP = "\x18" (Stop All Axes): immediate stop (high deceleration != HLT)
         # set error code to 10
         self._sendOrderCommand("\x18")
 
@@ -786,11 +785,11 @@ class Controller(object):
         axis (1<int<16): axis number
         activated (boolean): True if the servo should be activated (closed-loop)
         """
-        #SVO (Set Servo State)
+        # SVO (Set Servo State)
         assert(axis in self._channels)
 
         if activated:
-            #assert(self._hasRefSwitch[axis])
+            # assert(self._hasRefSwitch[axis])
             state = 1
         else:
             state = 0
@@ -808,7 +807,7 @@ class Controller(object):
           If False only relative moves can be used, but only needs a sensor to
           be used.
         """
-        #RON (Set Reference Mode)
+        # RON (Set Reference Mode)
         assert(axis in self._channels)
 
         if absolute:
@@ -826,7 +825,7 @@ class Controller(object):
         steps (float): number of steps to do (can be a float). If negative, goes
           the opposite direction. 1 step is about 10µm.
         """
-        #OSM (Open-Loop Step Moving): move using nanostepping
+        # OSM (Open-Loop Step Moving): move using nanostepping
         assert(axis in self._channels)
         if steps == 0:
             return
@@ -840,7 +839,7 @@ class Controller(object):
         axis (1<int<16): axis number
         amplitude (0<=float<=55): voltage applied (the more the further)
         """
-        #SSA (Set Step Amplitude) : for nanostepping
+        # SSA (Set Step Amplitude) : for nanostepping
         assert(axis in self._channels)
         assert((0 <= amplitude) and (amplitude <= 55))
         self._sendOrderCommand("SSA %d %.5g\n" % (axis, amplitude))
@@ -852,7 +851,7 @@ class Controller(object):
         axis (1<int<16): axis number
         returns (0<=float<=55): voltage applied
         """
-        #SSA? (Get Step Amplitude), returns something like:
+        # SSA? (Get Step Amplitude), returns something like:
         # 1=10.0000
         assert(axis in self._channels)
         answer = self._sendQueryCommand("SSA? %d\n" % axis)
@@ -866,7 +865,7 @@ class Controller(object):
         amplitude (-55<=float<=55): Amplitude of the move. It's only a small move.
           55 is approximately 5 um.
         """
-        #OAD (Open-Loop Analog Driving): move using analog
+        # OAD (Open-Loop Analog Driving): move using analog
         assert(axis in self._channels)
         assert((-55 <= amplitude) and (amplitude <= 55))
         self._sendOrderCommand("OAD %d %.5g\n" % (axis, amplitude))
@@ -877,7 +876,7 @@ class Controller(object):
         axis (1<int<16): axis number
         velocity (0<float): velocity in step-cycles/s. Default is 200 (~ 0.002 m/s)
         """
-        #OVL (Set Open-Loop Velocity)
+        # OVL (Set Open-Loop Velocity)
         assert(axis in self._channels)
         assert(velocity > 0)
         self._sendOrderCommand("OVL %d %.5g\n" % (axis, velocity))
@@ -888,7 +887,7 @@ class Controller(object):
         axis (1<int<16): axis number
         value (0<float): acceleration in step-cycles/s². Default is 2000 
         """
-        #OAC (Set Open-Loop Acceleration)
+        # OAC (Set Open-Loop Acceleration)
         assert(axis in self._channels)
         assert(value > 0)
         self._sendOrderCommand("OAC %d %.5g\n" % (axis, value))
@@ -899,7 +898,7 @@ class Controller(object):
         axis (1<int<16): axis number
         value (0<float): deceleration in step-cycles/s². Default is 2000 
         """
-        #ODC (Set Open-Loop Deceleration)
+        # ODC (Set Open-Loop Deceleration)
         assert(axis in self._channels)
         assert(value > 0)
         self._sendOrderCommand("ODC %d %.5g\n" % (axis, value))
@@ -912,7 +911,7 @@ class Controller(object):
         axis (1<int<16): axis number
         pos (float): position in "user" unit
         """
-        #MOV (Set Target Position)
+        # MOV (Set Target Position)
         assert(axis in self._channels)
         self._sendOrderCommand("MOV %d %.5g\n" % (axis, pos))
 
@@ -923,7 +922,7 @@ class Controller(object):
         axis (1<int<16): axis number
         shift (float): change of position in "user" unit
         """
-        #MVR (Set Target Relative To Current Position)
+        # MVR (Set Target Relative To Current Position)
         assert(axis in self._channels)
         self._sendOrderCommand("MVR %d %.5g\n" % (axis, shift))
 
@@ -935,8 +934,8 @@ class Controller(object):
         axis (1<int<16): axis number
         lim (-1 or 1): -1 for negative limit and 1 for positive limit
         """
-        #FNL (Fast Reference Move To Negative Limit)
-        #FPL (Fast Reference Move To Positive Limit)
+        # FNL (Fast Reference Move To Negative Limit)
+        # FPL (Fast Reference Move To Positive Limit)
         assert(axis in self._channels)
         assert(lim in [-1, 1])
         if lim == 1:
@@ -951,7 +950,7 @@ class Controller(object):
         See IsReferenced()
         axis (1<int<16): axis number
         """
-        #FRF (Fast Reference Move To Reference Switch)
+        # FRF (Fast Reference Move To Reference Switch)
         assert(axis in self._channels)
         self._sendOrderCommand("FRF %d\n" % axis)
 
@@ -962,7 +961,7 @@ class Controller(object):
         return (float): pos can be negative
         Note: after referencing, a constant is added by the controller
         """
-        #POS? (GetRealPosition)
+        # POS? (GetRealPosition)
         return self._readAxisValue("POS?", axis)
 
     def SetPosition(self, axis, pos):
@@ -971,7 +970,7 @@ class Controller(object):
         axis (1<int<16): axis number
         pos (float): pos can be negative
         """
-        #POS (SetRealPosition)
+        # POS (SetRealPosition)
         return self._sendOrderCommand("POS %d %.5g\n" % (axis, pos))
 
     def GetMinPosition(self, axis):
@@ -980,7 +979,7 @@ class Controller(object):
         axis (1<int<16): axis number
         return (float): pos can be negative
         """
-        #TMN? (Get Minimum Commandable Position)
+        # TMN? (Get Minimum Commandable Position)
         return self._readAxisValue("TMN?", axis)
 
     def GetMaxPosition(self, axis):
@@ -989,7 +988,7 @@ class Controller(object):
         axis (1<int<16): axis number
         return (float): pos can be negative
         """
-        #TMX? (Get Maximum Commandable Position)
+        # TMX? (Get Maximum Commandable Position)
         assert(axis in self._channels)
         return self._readAxisValue("TMX?", axis)
 
@@ -1008,7 +1007,7 @@ class Controller(object):
         axis (1<int<16): axis number
         velocity (0<float): velocity in units/s
         """
-        #VEL (Set Closed-Loop Velocity)
+        # VEL (Set Closed-Loop Velocity)
         assert(axis in self._channels)
         assert(velocity > 0)
         self._sendOrderCommand("VEL %d %.5g\n" % (axis, velocity))
@@ -1028,7 +1027,7 @@ class Controller(object):
         axis (1<int<16): axis number
         value (0<float): acceleration in units/s² 
         """
-        #ACC (Set Closed-Loop Acceleration)
+        # ACC (Set Closed-Loop Acceleration)
         assert(axis in self._channels)
         assert(value > 0)
         self._sendOrderCommand("ACC %d %.5g\n" % (axis, value))
@@ -1039,7 +1038,7 @@ class Controller(object):
         axis (1<int<16): axis number
         value (0<float): deceleration in units/s² 
         """
-        #DEC (Set Closed-Loop Deceleration)
+        # DEC (Set Closed-Loop Deceleration)
         assert(axis in self._channels)
         assert(value > 0)
         self._sendOrderCommand("DEC %d %.5g\n" % (axis, value))
@@ -1047,8 +1046,8 @@ class Controller(object):
 
 # Different from OSM because they use the sensor and are defined in physical unit.
 # Servo must be off! => Probably useless... compared to MOV/MVR
-#OMR (Relative Open-Loop Motion)
-#OMA (Absolute Open-Loop Motion)
+# OMR (Relative Open-Loop Motion)
+# OMA (Absolute Open-Loop Motion)
 #
 
     # Below are methods for manipulating the controller
@@ -1116,7 +1115,7 @@ class Controller(object):
         if now > end_move:
             target = self._target.get(axis, self._position[axis])
             logging.debug("Interpolating move by reporting target position: %g",
-                           target)
+                          target)
             return target
         else:
             start = self._start_move[axis]
@@ -1204,6 +1203,8 @@ class Controller(object):
         else:
             assert axes.issubset(self._channels)
 
+        # Note that "isOnTarget" would also work (both for OL and CL), but it
+        # takes more characters and for CL, we need a more clever code anyway
         return not axes.isdisjoint(self.GetMotionStatus())
 
     def stopMotion(self):
@@ -1218,7 +1219,7 @@ class Controller(object):
         Note: there is a 5 s timeout
         axes (None or set of int): axes to check whether for move, or all if None
         """
-        timeout = 5 #s
+        timeout = 5 # s
         end = time.time() + timeout
         while self.isMoving(axes):
             if time.time() >= end:
@@ -1562,6 +1563,7 @@ class CLController(Controller):
         # (worst case the hardware will not go further)
         self.MoveRel(axis, distance * 1e3)
 
+        # TODO: E861 needs same trick as in OL?
         return distance
 
     def moveAbs(self, axis, position):
@@ -1582,7 +1584,7 @@ class CLController(Controller):
         else:
             self.MoveAbs(axis, position * 1e3)
 
-        # TODO: compute the time using accel/speed/decel => less optimistic == less timeouts
+        # TODO: E861 needs same trick as in OL?
         return distance
 
     def getPosition(self, axis):
@@ -1613,9 +1615,7 @@ class CLController(Controller):
             if not self.IsOnTarget(a):
                 return True
 
-        # TODO: if return false => turn off encoder (in a few seconds)
-        # Then, need to "ensure the encoder is ON" before any other meaningful command
-        # Encoder not needed anymore (until next move)
+        # Nothing is moving => turn off encoder (in a few seconds)
         for a in axes:
             self._releaseEncoder(a, 10) # release in 10 s (5x the cost to start)
         return False
@@ -1801,7 +1801,6 @@ class OLController(Controller):
         """
         See Controller.moveRel
         """
-        # TODO: also report expected time for the move?
         assert(axis in self._channels)
 
         self._updateSpeedAccel(axis)
@@ -1812,6 +1811,12 @@ class OLController(Controller):
 
         self.OLMoveStep(axis, steps)
         # TODO use OLAnalogDriving for very small moves (< 5µm)?
+
+        # Warning: this is not just what is looks like!
+        # The E861 over the network controller send (sometimes) garbage if
+        # several controllers get an OSM command without any query in between.
+        # This ensures there is one query after each command.
+        self.checkError()
 
         duration = abs(distance) / self._speed[axis]
         self._storeMove(axis, distance, duration)
@@ -2244,6 +2249,7 @@ class Bus(model.Actuator):
         pos (dict str -> float): axis name -> relative target position
         """
         with future._moving_lock:
+            # Prepare the encoder of all the axes first (non-blocking)
             for an, v in pos.items():
                 controller, channel = self._axis_to_cc[an]
                 if hasattr(controller, "prepareEncoder"):
@@ -2282,8 +2288,6 @@ class Bus(model.Actuator):
             for an, v in pos.items():
                 moving_axes.add(an)
                 controller, channel = self._axis_to_cc[an]
-                if hasattr(controller, "prepareEncoder"):
-                    controller.prepareEncoder(channel)
                 dist = controller.moveAbs(channel, v)
                 # compute expected end
                 dur = abs(v - old_pos[an]) / self.speed.value[an]
@@ -2693,8 +2697,11 @@ class SerialBusAccesser(object):
             # Flush buffer + give it some time to recover from whatever
             self.serial.flush()
             self.serial.flushInput()
-            while self.serial.read():
-                pass
+            while True:
+                data = self.serial.read(100)
+                if len(data) < 100:
+                    break
+                logging.debug("Flushing data %s", data.encode('string_escape'))
 
 
 class IPBusAccesser(object):
@@ -2738,8 +2745,8 @@ class IPBusAccesser(object):
         Send a command and return its report (raw)
         addr (None or 1<=int<=16): address of the controller
         com (string): the command to send (without address prefix but with \n)
-        return (string or list of strings): the report without prefix 
-           (e.g.,"0 1") nor newline. 
+        return (string or list of strings): the report without prefix
+           (e.g.,"0 1") nor newline.
            If answer is multiline: returns a list of each line
         raise:
            HwError: if error communicating with the hardware, probably due to
@@ -2796,6 +2803,7 @@ class IPBusAccesser(object):
         else:
             prefix = "0 %d " % addr
         if not ans.startswith(prefix):
+            logging.debug("Failed to decode answer '%s'", ans.encode('string_escape'))
             raise IOError("Report prefix unexpected after '%s': '%s'." % (com, ans))
         ans = ans[len(prefix):-1]
 
@@ -2824,6 +2832,7 @@ class IPBusAccesser(object):
             try:
                 while True:
                     data = self.socket.recv(4096)
+                    logging.debug("Flushing data '%s'", data.encode('string_escape'))
             except socket.timeout:
                 pass
             except Exception:

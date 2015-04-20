@@ -556,6 +556,9 @@ def main(args):
     parser.add_argument('--controller', dest="cont", type=int, required=True,
                         help="Controller address")
 
+    # TODO: allow to reconfigure the IP settings on the network controller via USB
+    # TODO: add way to turn on/off the error light (ex, send \x18 "STOP" and ERR?)
+
     options = parser.parse_args(args[1:])
 
     try:
