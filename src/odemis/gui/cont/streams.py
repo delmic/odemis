@@ -702,7 +702,7 @@ class StreamBarController(object):
 
         if visible:
             show = isinstance(stream, self._tab_data_model.focussedView.value.stream_classes)
-            stream_panel = self._add_stream_cont(stream, show, static=False)
+            stream_cont = self._add_stream_cont(stream, show, static=False)
 
             # TODO: make StreamTree a VA-like and remove this
             logging.debug("Sending stream.ctrl.added message")
@@ -711,7 +711,7 @@ class StreamBarController(object):
                             streams_visible=self._has_visible_streams(),
                             tab=self._tab_data_model)
 
-            return stream_panel
+            return stream_cont
         else:
             return stream
 

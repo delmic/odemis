@@ -2008,7 +2008,7 @@ class MirrorAlignTab(Tab):
             mic_view.merge_ratio.value = 1
 
             ccd_spe = self._stream_controller.addStream(ccd_stream)
-            ccd_spe.flatten()
+            ccd_spe.stream_panel.flatten()
             # TODO: use addStatic ?
             self._stream_controller.addStream(goal_stream, visible=False)
             ccd_stream.should_update.value = True
