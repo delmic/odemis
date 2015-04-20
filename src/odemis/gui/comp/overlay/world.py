@@ -667,16 +667,17 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, base.PixelDataMixin):
     def _on_selection(self, selected_line):
         """ Event handler that requests a redraw when the selected line changes """
 
-        if selected_line and (None, None) not in selected_line and self.active:
+        if selected_line and self.active:
             self.start_pixel, self.end_pixel = selected_line
 
-            v_pos = self.data_pixel_to_view(self.start_pixel)
-            self.drag_v_start_pos = self.select_v_start_pos = v_pos
+            if (None, None) not in selected_line:
+                v_pos = self.data_pixel_to_view(self.start_pixel)
+                self.drag_v_start_pos = self.select_v_start_pos = v_pos
 
-            v_pos = self.data_pixel_to_view(self.end_pixel)
-            self.drag_v_end_pos = self.select_v_end_pos = v_pos
+                v_pos = self.data_pixel_to_view(self.end_pixel)
+                self.drag_v_end_pos = self.select_v_end_pos = v_pos
 
-            self._view_to_world()
+                self._view_to_world()
 
             wx.CallAfter(self.cnvs.update_drawing)
 
@@ -708,7 +709,11 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, base.PixelDataMixin):
 
     def draw(self, ctx, shift=(0, 0), scale=1.0):
 
+        # If no valid selection is made, do nothing...
         if None in (self.w_start_pos, self.w_end_pos) or self.w_start_pos == self.w_end_pos:
+            return
+
+        if (None, None) in (self.start_pixel, self.end_pixel):
             return
 
         points = rasterize_line(self.start_pixel, self.end_pixel, self._selected_width_va.value)
@@ -759,6 +764,7 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, base.PixelDataMixin):
 
             if self.start_pixel == self.end_pixel:
                 self.start_pixel = self.end_pixel = (None, None)
+                self.clear_selection()
 
             self._selected_line_va.value = (self.start_pixel, self.end_pixel)
         else:
