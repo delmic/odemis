@@ -108,7 +108,7 @@ class WorldSelectOverlay(base.WorldOverlay, base.SelectionMixin):
         if self.w_start_pos and self.w_end_pos:
             p_pos = (self.cnvs.world_to_physical_pos(self.w_start_pos) +
                      self.cnvs.world_to_physical_pos(self.w_end_pos))
-            return self._normalize(p_pos)
+            return self._normalize_rect(p_pos)
         else:
             return None
 
@@ -124,7 +124,7 @@ class WorldSelectOverlay(base.WorldOverlay, base.SelectionMixin):
         else:
             w_pos = (self.cnvs.physical_to_world_pos(rect[:2]) +
                      self.cnvs.physical_to_world_pos(rect[2:4]))
-            w_pos = self._normalize(w_pos)
+            w_pos = self._normalize_rect(w_pos)
             self.w_start_pos = w_pos[:2]
             self.w_end_pos = w_pos[2:4]
             self._world_to_view()
@@ -140,7 +140,7 @@ class WorldSelectOverlay(base.WorldOverlay, base.SelectionMixin):
             offset = self.cnvs.get_half_buffer_size()
             b_pos = (self.cnvs.world_to_buffer(self.w_start_pos, offset) +
                      self.cnvs.world_to_buffer(self.w_end_pos, offset))
-            b_pos = self._normalize(b_pos)
+            b_pos = self._normalize_rect(b_pos)
             self.update_from_buffer(b_pos[:2], b_pos[2:4], shift + (scale,))
 
             # logging.warn("%s %s", shift, world_to_buffer_pos(shift))
@@ -327,7 +327,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
         # values may extend beyond the actual buffer when zoomed in.
         b_pos = (self.cnvs.world_to_buffer(self.w_start_pos, offset) +
                  self.cnvs.world_to_buffer(self.w_end_pos, offset))
-        b_pos = self._normalize(b_pos)
+        b_pos = self._normalize_rect(b_pos)
         # logging.debug("start and end buffer pos: %s", b_pos)
 
         # Calculate the width and height in buffer pixels. Again, this may
@@ -422,7 +422,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
         # values may extend beyond the actual buffer when zoomed in.
         b_pos = (self.cnvs.world_to_buffer(self.w_start_pos, offset) +
                  self.cnvs.world_to_buffer(self.w_end_pos, offset))
-        b_pos = self._normalize(b_pos)
+        b_pos = self._normalize_rect(b_pos)
         # logging.debug("start and end buffer pos: %s", b_pos)
 
         # Calculate the width and height in buffer pixels. Again, this may
