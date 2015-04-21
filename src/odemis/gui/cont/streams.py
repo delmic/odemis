@@ -95,6 +95,7 @@ class StreamController(object):
 
         # Peak excitation/emission wavelength of the selected dye, to be used for peak text and
         # wavelength colour
+        # FIXME: Move all dye related code to a separate subclass of StreamController?
         self._dye_xwl = None
         self._dye_ewl = None
         self._dye_prev_ewl_center = None  # ewl when tint was last changed
@@ -120,13 +121,14 @@ class StreamController(object):
 
         stream_bar.add_stream_panel(self.stream_panel, show)
 
-    def _on_new_dye_name(self, txt):
+    def _on_new_dye_name(self, dye_name):
+        """ Assign excitation and emission wavelengths if the given name matches a known dye """
         # update the name of the stream
-        self.stream.name.value = txt
+        self.stream.name.value = dye_name
 
         # update the excitation and emission wavelength
-        if txt in dye.DyeDatabase:
-            xwl, ewl = dye.DyeDatabase[txt]
+        if dye_name in dye.DyeDatabase:
+            xwl, ewl = dye.DyeDatabase[dye_name]
             self._dye_xwl = xwl
             self._dye_ewl = ewl
 
@@ -286,11 +288,11 @@ class StreamController(object):
         if isinstance(self._btn_emission, ComboBox):
 
             def _emission_2_va(value_ctrl=value_ctrl):
-                """
-                Called when the text is changed (by the user).
+                """ Called when the text is changed (by the user)
                 Also updates the tint as a side-effect.
-                returns a value to set for the VA
+
                 """
+
                 emission_wavelength = value_ctrl.GetClientData(value_ctrl.GetSelection())
                 self.sync_tint_on_emission(emission_wavelength, self.stream.excitation.value)
                 return emission_wavelength
