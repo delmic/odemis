@@ -65,8 +65,6 @@ class CrossHairOverlay(base.ViewOverlay):
     def draw(self, ctx):
         """ Draw a cross hair to the Cairo context """
 
-        ctx.save()
-
         tl = (self.center[0] - self.size, self.center[1] - self.size)
         br = (self.center[0] + self.size, self.center[1] + self.size)
 
@@ -88,8 +86,6 @@ class CrossHairOverlay(base.ViewOverlay):
         ctx.line_to(self.center[0] + 0.5, br[1] + 0.5)
         ctx.stroke()
 
-        ctx.restore()
-
 
 class SpotModeOverlay(base.ViewOverlay):
     """ Render the spot mode indicator in the center of the view """
@@ -97,33 +93,55 @@ class SpotModeOverlay(base.ViewOverlay):
     def __init__(self, cnvs):
         base.ViewOverlay.__init__(self, cnvs)
 
-        self.marker_bmp = img.getspot_markerBitmap()
-        marker_size = self.marker_bmp.GetSize()
-        self._marker_offset = (marker_size.GetWidth() // 2 - 1, marker_size.GetHeight() // 2 - 1)
         self.center = self.cnvs.get_half_view_size()
+        self.colour = conversion.hex_to_frgb(gui.FG_COLOUR_EDIT)
+        self.highlight = conversion.hex_to_frgb(gui.FG_COLOUR_HIGHLIGHT)
+
+        self._sect_count = 3
+        self._gap = 0.15
+        self._sect_width = 2.0 * math.pi / self._sect_count
+        self._spot_radius = 12
 
     def draw(self, ctx):
-        # TODO: Replace the wxPython code with the following Cairo code
-        # The problem with the code is that the fully transparent background of the image used
-        # is *not* fully transparent.
 
-        # from wx.lib import wxcairo
-        # img_surface = wxcairo.ImageSurfaceFromBitmap(self.marker_bmp)
-        #
-        # # ctx.set_source_rgba(0.0, 0.0, 0.0, 0.0) # transparent black
-        # ctx.translate(self.center[0] - self._marker_offset[0],
-        #               self.center[1] - self._marker_offset[1])
-        # ctx.set_source_surface(img_surface)
-        # # ctx.set_operator(cairo.OPERATOR_OVER)
-        # ctx.paint()
+        start = -0.5 * math.pi
 
-        view_dc = wx.PaintDC(self.cnvs)
-        view_dc.DrawBitmapPoint(
-            self.marker_bmp,
-            wx.Point(
-                self.center[0] - self._marker_offset[0],
-                self.center[1] - self._marker_offset[1]),
-            useMask=False)
+        r, g, b = self.highlight
+        x, y = self.center
+
+        width = self._spot_radius / 6.0
+
+        for i in range(self._sect_count):
+            ctx.set_line_width(width)
+
+            ctx.set_source_rgba(0, 0, 0, 0.6)
+            ctx.arc(x + 1, y + 1,
+                    self._spot_radius,
+                    start + self._gap,
+                    start + self._sect_width - self._gap)
+            ctx.stroke()
+
+            ctx.set_source_rgb(r, g, b)
+            ctx.arc(x, y,
+                    self._spot_radius,
+                    start + self._gap,
+                    start + self._sect_width - self._gap)
+            ctx.stroke()
+
+            start += self._sect_width
+
+        width = self._spot_radius / 3.5
+        radius = self._spot_radius * 0.6
+
+        ctx.set_line_width(width)
+
+        ctx.set_source_rgba(0, 0, 0, 0.6)
+        ctx.arc(x + 1, y + 1, radius, 0, 2 * math.pi)
+        ctx.stroke()
+
+        ctx.set_source_rgb(r, g, b)
+        ctx.arc(x, y, radius, 0, 2 * math.pi)
+        ctx.stroke()
 
 
 class StreamIconOverlay(base.ViewOverlay):

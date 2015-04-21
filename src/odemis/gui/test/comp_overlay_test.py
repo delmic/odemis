@@ -232,6 +232,7 @@ class OverlayTestCase(test.GuiTestCase):
 
     def test_spot_mode_overlay(self):
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
+        cnvs.background_brush = wx.BRUSHSTYLE_CROSS_HATCH
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
         sol = vol.SpotModeOverlay(cnvs)
@@ -673,18 +674,4 @@ class OverlayTestCase(test.GuiTestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
     suit = unittest.TestSuite()
-    # suit.addTest(OverlayTestCase("test_text_view_overlay_size"))
-    # suit.addTest(OverlayTestCase("test_text_view_overlay_align"))
-    # suit.addTest(OverlayTestCase("test_text_view_overlay_rotate"))
-    # suit.addTest(OverlayTestCase("test_polar_overlay"))
-    # suit.addTest(OverlayTestCase("test_points_select_overlay"))
-    # suit.addTest(OverlayTestCase("test_pixel_select_overlay"))
-    # suit.addTest(OverlayTestCase("test_view_select_overlay"))
-    # suit.addTest(OverlayTestCase("test_roa_select_overlay"))
-    # suit.addTest(OverlayTestCase("test_dichotomy_overlay"))
-    # suit.addTest(OverlayTestCase("test_spot_mode_overlay"))
-
-    # runner = unittest.TextTestRunner()
-    # runner.run(suit)

@@ -590,17 +590,22 @@ class BufferedCanvas(wx.Panel):
         """
 
         for vo in self.view_overlays:
+            ctx.save()
             vo.draw(ctx)
+            ctx.restore()
 
-    def _draw_world_overlays(self, ctx):
-        """ Draw all the world overlays
-
-        ctx (cairo context): the buffer context on which to draw
-
-        """
-
-        for wo in self.world_overlays:
-            wo.draw(ctx, self.w_buffer_center, self.scale)
+    # TODO: Remove if this turns out to be deprecated
+    # def _draw_world_overlays(self, ctx):
+    #     """ Draw all the world overlays
+    #
+    #     ctx (cairo context): the buffer context on which to draw
+    #
+    #     """
+    #
+    #     for wo in self.world_overlays:
+    #         ctx.save()
+    #         wo.draw(ctx, self.w_buffer_center, self.scale)
+    #         ctx.restore()
 
     # ########### Position conversion ############
 
@@ -867,8 +872,9 @@ class BitmapCanvas(BufferedCanvas):
         # overlays are drawn in the `on_paint` method where the buffer is blitted to the device
         # context.
         for o in self.world_overlays:
+            self.ctx.save()
             o.draw(self.ctx, self.w_buffer_center, self.scale)
-            self.ctx.identity_matrix()
+            self.ctx.restore()
 
     def _draw_merged_images(self, ctx):
         """ Draw the images on the DC buffer, centred around their _dc_center, with their own

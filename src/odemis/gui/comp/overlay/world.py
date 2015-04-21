@@ -133,8 +133,6 @@ class WorldSelectOverlay(base.WorldOverlay, base.SelectionMixin):
         """ Draw the selection as a rectangle """
 
         if self.w_start_pos and self.w_end_pos:
-            ctx.save()
-
             # Important: We need to use the world positions, in order to draw everything at the
             # right scale.
             offset = self.cnvs.get_half_buffer_size()
@@ -176,8 +174,6 @@ class WorldSelectOverlay(base.WorldOverlay, base.SelectionMixin):
                 self._write_labels(ctx)
 
             self._debug_draw_edges(ctx, True)
-
-            ctx.restore()
 
     # Event Handlers
 
@@ -482,14 +478,12 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
         mode_cache = self.selection_mode
 
         if self.w_start_pos and self.w_end_pos and 0 not in self.repetition:
-            ctx.save()
             if self.fill == self.FILL_POINT:
                 self._draw_points(ctx)
                 self.selection_mode = base.SEL_MODE_EDIT
             elif self.fill == self.FILL_GRID:
                 self._draw_grid(ctx)
                 self.selection_mode = base.SEL_MODE_EDIT
-            ctx.restore()
 
         WorldSelectOverlay.draw(self, ctx, shift, scale)
         self.selection_mode = mode_cache
@@ -514,8 +508,6 @@ class LineSelectOverlay(WorldSelectOverlay):
     def draw(self, ctx, shift=(0, 0), scale=1.0):
 
         if None not in (self.w_start_pos, self.w_end_pos) and self.w_start_pos != self.w_end_pos:
-            ctx.save()
-
             # Pixel radius of the start marker
             start_radius = 3
             arrow_size = 12
@@ -612,8 +604,6 @@ class LineSelectOverlay(WorldSelectOverlay):
             ctx.fill()
 
             self._debug_draw_edges(ctx, True)
-
-            ctx.restore()
 
     def on_motion(self, evt):
         """ Process drag motion if enabled, otherwise call super method so event will propagate """
