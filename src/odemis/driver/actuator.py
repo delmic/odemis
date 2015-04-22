@@ -151,7 +151,7 @@ class MultiplexActuator(model.Actuator):
         update the position VA
         """
         # it's read-only, so we change it via _value
-        pos = self._applyInversionRel(self._position)
+        pos = self._applyInversionAbs(self._position)
         logging.debug("reporting position %s", pos)
         self.position._value = pos
         self.position.notify(pos)
