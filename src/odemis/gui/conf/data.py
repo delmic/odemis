@@ -257,12 +257,12 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
             "accelVoltage":
             {
                 "control_type": odemis.gui.CONTROL_RADIO,
-                "choices": {4800, 5000, 7500, 10000},  # V
+                "choices": {4800, 5300, 7500, 10000},  # V
             },
             "spotSize":
             {
                 "control_type": odemis.gui.CONTROL_RADIO,
-                "choices": {2.1, 2.4, 2.7, 3, 3.3},  # some weird unit
+                "choices": {2.1, 2.7, 3.3},  # some weird unit
             },
             "resolution":  # Read-only (and not hidden) because it affects acq time
             {
