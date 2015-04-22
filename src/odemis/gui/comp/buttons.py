@@ -947,8 +947,7 @@ class ColourButton(ImageButton):
 
         brush = wx.Brush(self.colour)
         pen = wx.Pen(self.colour)
-        bmp = BMP_EMPTY.GetSubBitmap(
-                    wx.Rect(0, 0, BMP_EMPTY.GetWidth(), BMP_EMPTY.GetHeight()))
+        bmp = BMP_EMPTY.GetSubBitmap(wx.Rect(0, 0, BMP_EMPTY.GetWidth(), BMP_EMPTY.GetHeight()))
         mdc = wx.MemoryDC()
         mdc.SelectObject(bmp)
         mdc.SetBrush(brush)
@@ -979,6 +978,7 @@ class ColourButton(ImageButton):
         :rtype: (string) Hex colour value
         """
         return self.colour
+
 
 class PopupImageButton(ImageTextButton):
     """ This class describes a grahical button with an associated popup menu """

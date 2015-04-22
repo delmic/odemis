@@ -280,6 +280,42 @@ class FoldPanelBarTestCase(test.GuiTestCase):
             sorted(sp1.stream_panel._header.ctrl_label.GetChoices())
         )
 
+        # Get the excitation combo box (there should be only one)
+        excitation_combo = [e for e in sp1.entries if e.name == "excitation"]
+        self.assertEqual(len(excitation_combo), 1)
+        excitation_combo = excitation_combo[0]
+
+        # No real value testing, but at least making sure that changing the VA value, changes the
+        # GUI components
+        for choice in fake_fluo_stream.excitation.choices:
+            old_value = excitation_combo.value_ctrl.GetValue()
+            old_colour = sp1._btn_excitation.colour
+            changed = fake_fluo_stream.excitation.value != choice
+            # Skip if the current value is equal to choice
+            if changed:
+                fake_fluo_stream.excitation.value = choice
+                test.gui_loop(100)
+                self.assertNotEqual(old_value, excitation_combo.value_ctrl.GetValue())
+                self.assertNotEqual(old_colour, sp1._btn_excitation.colour)
+
+        # Get the emission combo box (there should be only one)
+        emission_combo = [e for e in sp1.entries if e.name == "emission"]
+        self.assertEqual(len(emission_combo), 1)
+        emission_combo = emission_combo[0]
+
+        # No real value testing, but at least making sure that changing the VA value, changes the
+        # GUI components
+        for choice in fake_fluo_stream.emission.choices:
+            old_value = emission_combo.value_ctrl.GetValue()
+            old_colour = sp2._btn_emission.colour
+            changed = fake_fluo_stream.emission.value != choice
+            # Skip if the current value is equal to choice
+            if changed:
+                fake_fluo_stream.emission.value = choice
+                test.gui_loop(100)
+                self.assertNotEqual(old_value, emission_combo.value_ctrl.GetValue())
+                self.assertNotEqual(old_colour, sp2._btn_emission.colour)
+
         test.gui_loop()
 
     def test_static_streams(self):

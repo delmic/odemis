@@ -285,14 +285,13 @@ class StreamController(object):
         r = self.stream_panel.add_dye_emission_ctrl(self.stream.emission)
         lbl_ctrl, value_ctrl, self._lbl_em_peak, self._btn_emission = r
 
-        if isinstance(self._btn_emission, ComboBox):
+        if isinstance(value_ctrl, ComboBox):
 
             def _emission_2_va(value_ctrl=value_ctrl):
                 """ Called when the text is changed (by the user)
                 Also updates the tint as a side-effect.
 
                 """
-
                 emission_wavelength = value_ctrl.GetClientData(value_ctrl.GetSelection())
                 self.sync_tint_on_emission(emission_wavelength, self.stream.excitation.value)
                 return emission_wavelength
