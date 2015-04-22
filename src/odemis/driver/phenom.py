@@ -109,7 +109,7 @@ TILT_BLANK = (-1, -1)  # tilt to imitate beam blanking
 # SEM ranges in order to allow scanner initialization even if Phenom is in
 # unloaded state
 HFW_RANGE = [2.5e-06, 0.0031]
-TENSION_RANGE = [4797.56, 20006.84]
+TENSION_RANGE = [4797.56, 10000.0]
 # REFERENCE_TENSION = 10e03 #Volt
 # BEAM_SHIFT_AT_REFERENCE = 19e-06  # Maximum beam shit at the reference tension #m
 SPOT_RANGE = [0.0, 5.73018379531] # TODO: what means a spot of 0? => small value like 1e-3?
@@ -338,7 +338,7 @@ class Scanner(model.Emitter):
         volt_range = TENSION_RANGE
         # Just the initialization of voltage. The actual value will be acquired
         # once we start the stream
-        volt = numpy.mean(TENSION_RANGE)
+        volt = 5000
         self.accelVoltage = model.FloatContinuous(volt, volt_range, unit="V")
         self.accelVoltage.subscribe(self._onVoltage)
 
@@ -412,7 +412,10 @@ class Scanner(model.Emitter):
         # last known source tilt
         current_tilt = self.parent._device.GetSEMSourceTilt()
         self.parent._device.SEMSetHighTension(-volt)
-        self.parent._device.SetSEMSourceTilt(current_tilt[0], current_tilt[1], False)
+        new_tilt = self.parent._device.GetSEMSourceTilt()
+        self.parent._detector._tilt_unblank = (new_tilt.aX, new_tilt.aY)
+        if ((current_tilt.aX, current_tilt.aY) == TILT_BLANK):
+            self.parent._device.SetSEMSourceTilt(current_tilt.aX, current_tilt.aY, False)
         # Brightness and contrast have to be adjusted just once
         # we set up the detector (see SEMACB())
         # TODO reset the beam shift so it is within boundaries
@@ -421,7 +424,12 @@ class Scanner(model.Emitter):
         # Set the corresponding spot size to Phenom SEM
         self._spotSize = value
         try:
+            current_tilt = self.parent._device.GetSEMSourceTilt()
             self.parent._device.SEMSetSpotSize(value)
+            new_tilt = self.parent._device.GetSEMSourceTilt()
+            self.parent._detector._tilt_unblank = (new_tilt.aX, new_tilt.aY)
+            if ((current_tilt.aX, current_tilt.aY) == TILT_BLANK):
+                self.parent._device.SetSEMSourceTilt(current_tilt.aX, current_tilt.aY, False)
             return self._spotSize
         except suds.WebFault:
             logging.debug("Cannot set Spot Size when the sample is not in SEM.")
