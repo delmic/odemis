@@ -19,7 +19,6 @@ from __future__ import division
 
 import collections
 import functools
-import inspect
 import logging
 import math
 import numbers
@@ -27,7 +26,6 @@ import numpy
 from odemis import model
 from odemis.model import (MD_POS, MD_PIXEL_SIZE, MD_ROTATION, MD_ACQ_DATE,
                           MD_SHEAR, VigilantAttribute, VigilantAttributeBase)
-from odemis.model._vattributes import FloatContinuous
 from odemis.util import img, limit_invocation
 import threading
 import time
@@ -363,6 +361,24 @@ class Stream(object):
             hwva = getattr(self._emitter, vaname)
             if not isinstance(hwva, VigilantAttributeBase):
                 raise AttributeError("Emitter has not VA %s" % (vaname,))
+            return hwva
+
+    def _getDetectorVA(self, vaname):
+        """
+        Give the VA for controlling the setting of the detector, either the local
+          one, or if it doesn't exist, directly the hardware one.
+        vaname (str): name of the VA as on the hardware
+        return (VigilantAttribute): the local VA or the Hw VA
+        raises
+            AttributeError: if VA doesn't exist
+        """
+        lname = "det" + vaname[0].upper() + vaname[1:]
+        try:
+            return getattr(self, lname)
+        except AttributeError:
+            hwva = getattr(self._detector, vaname)
+            if not isinstance(hwva, VigilantAttributeBase):
+                raise AttributeError("Detector has not VA %s" % (vaname,))
             return hwva
 
     def estimateAcquisitionTime(self):

@@ -546,8 +546,9 @@ class SECOMTestCase(unittest.TestCase):
 
         # Directly change HW VAs, and check the stream see the changes
         light.power.value = 0.1
-        self.assertEqual(light.power.value, fs.emtPower.value)
         ccd.exposureTime.value = 0.2
+        time.sleep(0.01) # updates are asynchonous so it can take a little time to receive them
+        self.assertEqual(light.power.value, fs.emtPower.value)
         self.assertEqual(ccd.exposureTime.value, fs.detExposureTime.value)
 
         # Change the local VAs while playing
@@ -562,6 +563,11 @@ class SECOMTestCase(unittest.TestCase):
         self.assertNotEqual(light.power.value, fs.emtPower.value)
         ccd.exposureTime.value = 0.2
         self.assertNotEqual(ccd.exposureTime.value, fs.detExposureTime.value)
+
+        # Check that the acquisition time uses the local settings
+        short_at = fs.estimateAcquisitionTime()
+        fs.detExposureTime.value *= 2
+        self.assertGreater(fs.estimateAcquisitionTime(), short_at)
 
 
 @skip("faster")
