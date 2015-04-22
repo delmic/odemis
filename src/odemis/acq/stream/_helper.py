@@ -42,9 +42,8 @@ class RepetitionStream(Stream):
         # Hardware Components
         self._detector = detector # the spectrometer
         self._emitter = emitter # the e-beam
-        # To acquire simultaneously other detector (ex: SEM secondary electrons)
-        # a separate stream must be used, and the acquisition manager will take
-        # care of doing both at the same time
+
+        # TODO: local settings from Stream
 
         # data-flow of the spectrometer
         self._dataflow = dataflow

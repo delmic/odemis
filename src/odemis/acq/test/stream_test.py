@@ -306,6 +306,85 @@ class StreamTestCase(unittest.TestCase):
         self.assertLessEqual(len(h), 1024)
         self.assertEqual((ir[0][0], ir[1][1]), (0, (2 ** 12) - 1))
 
+    def test_hwvas(self):
+        ebeam = FakeEBeam("ebeam")
+        se = FakeDetector("se")
+
+        # original VA name -> expected local setting VA name
+        hw_lsvas = {"dwellTime": "emtDwellTime",
+                    "resolution": "emtResolution",
+                    "scale": "emtScale",
+                    "translation": "emtTranslation",
+                    "magnification": "emtMagnification",
+                    "pixelSize": "emtPixelSize"}
+        emtvas = set(hw_lsvas.keys())
+        ss = stream.SEMStream("test", se, se.data, ebeam,
+                              detvas=None, emtvas=emtvas)
+
+        # Check all the VAs requested are on the stream
+        for lsvn in hw_lsvas.values():
+            va = getattr(ss, lsvn)
+            self.assertIsInstance(va, model.VigilantAttribute)
+
+        # Modify local VAs and check nothing happens on the hardware (while
+        # stream is paused)
+        self.assertEqual(ebeam.magnification.value, ss.emtMagnification.value)
+        ebeam.magnification.value = 10
+        ss.emtMagnification.value = 200
+        self.assertNotEqual(ebeam.magnification.value, ss.emtMagnification.value)
+
+        self.assertEqual(ebeam.scale.value, ss.emtScale.value)
+        ebeam.scale.value = (2, 2)
+        ss.emtScale.value = (5, 5)
+        self.assertNotEqual(ebeam.scale.value, ss.emtScale.value)
+
+        self.assertEqual(ebeam.resolution.value, ss.emtResolution.value)
+        ebeam.resolution.value = (128, 128) # normally automatically done
+        ss.emtResolution.value = (2048, 2048)
+        self.assertNotEqual(ebeam.resolution.value, ss.emtResolution.value)
+
+        # Activate stream, and check all the VAs are updated
+        ss.should_update.value = True
+        ss.is_active.value = True
+        # SEM stream will set the resolution to something fitting (2048 // 5)
+
+        self.assertEqual(ebeam.magnification.value, ss.emtMagnification.value)
+        self.assertEqual(ebeam.magnification.value, 200)
+        self.assertEqual(ebeam.scale.value, ss.emtScale.value)
+        self.assertEqual(ebeam.scale.value, (5, 5))
+        self.assertEqual(ebeam.resolution.value, ss.emtResolution.value)
+
+        # Directly change HW VAs, and check the stream see the changes
+        ebeam.magnification.value = 10
+        self.assertEqual(ebeam.magnification.value, ss.emtMagnification.value)
+
+        ebeam.scale.value = (2, 2)
+        self.assertEqual(ebeam.scale.value, ss.emtScale.value)
+
+        ebeam.resolution.value = (128, 128) # normally automatically done
+        self.assertEqual(ebeam.resolution.value, ss.emtResolution.value)
+
+        # Change the local VAs while playing
+        ss.emtMagnification.value = 200
+        self.assertEqual(ebeam.magnification.value, ss.emtMagnification.value)
+
+        ss.emtScale.value = (5, 5)
+        self.assertEqual(ebeam.scale.value, ss.emtScale.value)
+
+        ss.emtResolution.value = (2048, 2048)
+        self.assertEqual(ebeam.resolution.value, ss.emtResolution.value)
+
+        # Stop stream, and check VAs are not updated anymore
+        ss.is_active.value = False
+        ebeam.magnification.value = 10
+        self.assertNotEqual(ebeam.magnification.value, ss.emtMagnification.value)
+
+        ebeam.scale.value = (2, 2)
+        self.assertNotEqual(ebeam.scale.value, ss.emtScale.value)
+
+        ebeam.resolution.value = (128, 128) # normally automatically done
+        self.assertNotEqual(ebeam.resolution.value, ss.emtResolution.value)
+
 # @skip("faster")
 class SECOMTestCase(unittest.TestCase):
     """
@@ -423,8 +502,75 @@ class SECOMTestCase(unittest.TestCase):
     def _on_image(self, im):
         self._image = im
 
+    def test_hwvas(self):
+        ccd = self.ccd
+        light = self.light
 
-# @skip("faster")
+        # original VA name -> expected local setting VA name
+        det_lsvas = {"exposureTime": "detExposureTime"}
+        emt_lsvas = {"power": "emtPower"}
+        detvas = set(det_lsvas.keys())
+        emtvas = set(emt_lsvas.keys())
+        fs = stream.FluoStream("fluo", ccd, ccd.data, light, self.light_filter,
+                               detvas=detvas, emtvas=emtvas)
+
+        # Check all the VAs requested are on the stream
+        for lsvn in det_lsvas.values():
+            va = getattr(fs, lsvn)
+            self.assertIsInstance(va, model.VigilantAttribute)
+
+        for lsvn in emt_lsvas.values():
+            va = getattr(fs, lsvn)
+            self.assertIsInstance(va, model.VigilantAttribute)
+
+        # Modify local VAs and check nothing happens on the hardware (while
+        # stream is paused)
+        self.assertEqual(light.power.value, fs.emtPower.value)
+        light.power.value = 0.1
+        fs.emtPower.value = 0.4
+        self.assertNotEqual(light.power.value, fs.emtPower.value)
+
+        self.assertEqual(ccd.exposureTime.value, fs.detExposureTime.value)
+        ccd.exposureTime.value = 0.2
+        fs.detExposureTime.value = 0.5
+        self.assertNotEqual(ccd.exposureTime.value, fs.detExposureTime.value)
+
+        # Activate stream, and check all the VAs are updated
+        fs.should_update.value = True
+        fs.is_active.value = True
+
+        self.assertEqual(light.power.value, fs.emtPower.value)
+        self.assertEqual(light.power.value, 0.4)
+        self.assertEqual(ccd.exposureTime.value, fs.detExposureTime.value)
+        self.assertEqual(ccd.exposureTime.value, 0.5)
+
+        # Directly change HW VAs, and check the stream see the changes
+        light.power.value = 0.1
+        ccd.exposureTime.value = 0.2
+        time.sleep(0.01) # updates are asynchonous so it can take a little time to receive them
+        self.assertEqual(light.power.value, fs.emtPower.value)
+        self.assertEqual(ccd.exposureTime.value, fs.detExposureTime.value)
+
+        # Change the local VAs while playing
+        fs.emtPower.value = 0.4
+        self.assertEqual(light.power.value, fs.emtPower.value)
+        fs.detExposureTime.value = 0.5
+        self.assertEqual(ccd.exposureTime.value, fs.detExposureTime.value)
+
+        # Stop stream, and check VAs are not updated anymore
+        fs.is_active.value = False
+        light.power.value = 0.1
+        self.assertNotEqual(light.power.value, fs.emtPower.value)
+        ccd.exposureTime.value = 0.2
+        self.assertNotEqual(ccd.exposureTime.value, fs.detExposureTime.value)
+
+        # Check that the acquisition time uses the local settings
+        short_at = fs.estimateAcquisitionTime()
+        fs.detExposureTime.value *= 2
+        self.assertGreater(fs.estimateAcquisitionTime(), short_at)
+
+
+@skip("faster")
 class SPARCTestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) SPARC
@@ -743,7 +889,7 @@ class SPARCTestCase(unittest.TestCase):
         self.assertTrue(first_date < dates[0] < dates[-1])
 
 
-# @skip("faster")
+@skip("faster")
 class TestStaticStreams(unittest.TestCase):
     """
     Test static streams, which don't need any backend running

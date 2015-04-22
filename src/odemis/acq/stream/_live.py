@@ -39,8 +39,8 @@ class SEMStream(Stream):
 
     It basically knows how to activate the scanning electron and the detector.
     """
-    def __init__(self, name, detector, dataflow, emitter):
-        Stream.__init__(self, name, detector, dataflow, emitter)
+    def __init__(self, name, detector, dataflow, emitter, **kwargs):
+        Stream.__init__(self, name, detector, dataflow, emitter, **kwargs)
 
         # TODO: Anti-aliasing/Pixel fuzzing
         # .fuzzing: boolean
@@ -60,7 +60,7 @@ class SEMStream(Stream):
         # Spot mode: when set (and stream is active), it will drive the e-beam
         # do only the center of the scanning area. Image is not updated.
         # TODO: is this the right interface? Shall we just have a different
-        # stream type?
+        # stream type? => move to SEMSpotStream (+ position or translation VA)
         self.spot = model.BooleanVA(False)
 
         # used to reset the previous settings after spot mode
@@ -109,6 +109,8 @@ class SEMStream(Stream):
     def _applyROI(self):
         """
         Update the scanning area of the SEM according to the roi
+        Note: should only be called when active (because it directly modifies
+          the hardware settings)
         """
         res, trans = self._computeROISettings(self.roi.value)
 
@@ -179,6 +181,7 @@ class SEMStream(Stream):
             logging.debug("Starting spot mode while it was already active")
             return
 
+        # TODO: don't change local settings if there
         logging.debug("Activating spot mode")
         self._no_spot_settings = (self._emitter.dwellTime.value,
                                   self._emitter.resolution.value,
@@ -213,7 +216,7 @@ class SEMStream(Stream):
     def estimateAcquisitionTime(self):
 
         try:
-            res = list(self._emitter.resolution.value)
+            res = list(self._getEmitterVA("resolution").value)
             # Typically there is few more pixels inserted at the beginning of
             # each line for the settle time of the beam. We guesstimate by just
             # adding 1 pixel to each line
@@ -223,7 +226,7 @@ class SEMStream(Stream):
                 logging.warning(("Resolution of scanner is not 2 dimensional, "
                                  "time estimation might be wrong"))
             # Each pixel x the dwell time in seconds
-            duration = self._emitter.dwellTime.value * numpy.prod(res)
+            duration = self._getEmitterVA("dwellTime").value * numpy.prod(res)
             # Add the setup time
             duration += self.SETUP_OVERHEAD
 
@@ -265,6 +268,7 @@ class SEMStream(Stream):
         # and it takes ages to get back to a faster acquisition. Note: it only
         # works if we are the only subscriber (but that's very likely).
 
+        # Not using the local settings as it's only happening when active
         try:
             if not self.is_active.value:
                 # not acquiring => nothing to do
@@ -307,7 +311,7 @@ class AlignedSEMStream(SEMStream):
     by just updating the image position.
     """
     def __init__(self, name, detector, dataflow, emitter,
-                 ccd, stage, shiftebeam=MTD_MD_UPD):
+                 ccd, stage, shiftebeam=MTD_MD_UPD, **kwargs):
         """
         shiftebeam (MTD_*): if MTD_EBEAM_SHIFT, will correct the SEM position using beam shift
          (iow, using emitter.translation). If MTD_MD_UPD, it will just update the
@@ -316,7 +320,7 @@ class AlignedSEMStream(SEMStream):
          the correction metadata (note that if the stage has moved, the optical
          stream will need to be updated too).
         """
-        SEMStream.__init__(self, name, detector, dataflow, emitter)
+        SEMStream.__init__(self, name, detector, dataflow, emitter, **kwargs)
         self._ccd = ccd
         self._stage = stage
         self._shiftebeam = shiftebeam
@@ -460,38 +464,42 @@ class CameraStream(Stream):
     Mostly used to share time estimation only.
     """
 
-    def __init__(self, name, detector, dataflow, emitter, *args, **kwargs):
-        Stream.__init__(self, name, detector, dataflow, emitter, *args, **kwargs)
+    def __init__(self, name, detector, dataflow, emitter, emtvas=None, **kwargs):
+        # We use emission directly to control the emitter
+        if emtvas and "emission" in emtvas:
+            raise ValueError("emission VA cannot be made local")
 
-        # Create VAs for exposureTime and light power, based on the hardware VA,
-        # that can be used, to override the hardware setting on a per stream basis
-        if isinstance(detector.exposureTime, model.VigilantAttributeBase):
-            try:
-                self.exposureTime = model.FloatContinuous(
-                                                detector.exposureTime.value,
-                                                detector.exposureTime.range,
-                                                unit=detector.exposureTime.unit)
-            except (AttributeError, NotApplicableError):
-                pass # no exposureTime or no .range
+        Stream.__init__(self, name, detector, dataflow, emitter, emtvas=emtvas, **kwargs)
 
-        if (emitter is not None and
-            isinstance(emitter.power, model.VigilantAttributeBase)):
-            try:
-                self.lightPower = model.FloatContinuous(emitter.power.value,
-                                                        emitter.power.range,
-                                                        unit=emitter.power.unit)
-            except (AttributeError, NotApplicableError):
-                pass # no power or no .range
+        # exposure time and power have to be create by the creator
+#         # Create VAs for exposureTime and light power, based on the hardware VA,
+#         # that can be used, to override the hardware setting on a per stream basis
+#         if isinstance(detector.exposureTime, model.VigilantAttributeBase):
+#             try:
+#                 self.exposureTime = model.FloatContinuous(
+#                                                 detector.exposureTime.value,
+#                                                 detector.exposureTime.range,
+#                                                 unit=detector.exposureTime.unit)
+#             except (AttributeError, NotApplicableError):
+#                 pass # no exposureTime or no .range
+#
+#         if (emitter is not None and
+#             isinstance(emitter.power, model.VigilantAttributeBase)):
+#             try:
+#                 self.lightPower = model.FloatContinuous(emitter.power.value,
+#                                                         emitter.power.range,
+#                                                         unit=emitter.power.unit)
+#             except (AttributeError, NotApplicableError):
+#                 pass # no power or no .range
 
     def estimateAcquisitionTime(self):
         # exposure time + readout time * pixels (if CCD) + set-up time
         try:
-            exp = self._detector.exposureTime.value
-            res = self._detector.resolution.value
-            if isinstance(self._detector.readoutRate,
-                          model.VigilantAttributeBase):
-                readout = 1 / self._detector.readoutRate.value
-            else:
+            exp = self._getDetectorVA("exposureTime").value
+            res = self._getDetectorVA("resolution").value
+            try:
+                readout = 1 / self._getDetectorVA("readoutRate").value
+            except (AttributeError, ZeroDivisionError):
                 # let's assume it's super fast
                 readout = 0
 
@@ -508,6 +516,7 @@ class CameraStream(Stream):
         """
         if self._emitter is None:
             return
+
         # Just change the intensity of each wavelengths, so that the power is
         # recorded.
         emissions = [0.] * len(self._emitter.emissions.value)
@@ -627,7 +636,7 @@ class FluoStream(CameraStream):
     emission is the light emitted by the sample.
     """
 
-    def __init__(self, name, detector, dataflow, emitter, em_filter):
+    def __init__(self, name, detector, dataflow, emitter, em_filter, **kwargs):
         """
         name (string): user-friendly name of this stream
         detector (Detector): the detector which has the dataflow
@@ -635,7 +644,7 @@ class FluoStream(CameraStream):
         emitter (Light): the HwComponent to modify the light excitation
         em_filter (Filter): the HwComponent to modify the emission light filtering
         """
-        CameraStream.__init__(self, name, detector, dataflow, emitter)
+        CameraStream.__init__(self, name, detector, dataflow, emitter, **kwargs)
         self._em_filter = em_filter
 
         # Emission and excitation are based on the hardware capacities.

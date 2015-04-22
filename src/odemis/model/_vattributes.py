@@ -753,9 +753,6 @@ class Continuous(object):
     Mixin which adds the ability to a VA to specify a min and max.
     It has an attribute range (2-tuple) min, max
     It checks that any value set is min <= val <= max
-
-    TODO: 'restricted', 'confined' or 'limited' might be better names which more
-    concisely describe this mixin.
     """
 
     def __init__(self, range):
@@ -797,8 +794,8 @@ class Continuous(object):
             end = (end,)
 
         if any([mn > mx for mn, mx in zip(start, end)]):
-            raise TypeError("Range min %s should be smaller than max %s."
-                                   % (str(start), str(end)))
+            raise TypeError("Range min %s should be smaller than max %s." %
+                            (start, end))
 
         if hasattr(self, "value"):
             if not isinstance(self.value, collections.Iterable):
@@ -891,9 +888,9 @@ class Enumerated(object):
         self._set_choices(choices)
 
     def _check(self, value):
-        if not value in self._choices:
+        if value not in self._choices:
             raise IndexError("Value %s is not part of possible choices: %s." %
-                        (str(value), ", ".join([str(c) for c in self._choices])))
+                             (value, ", ".join([str(c) for c in self._choices])))
 
     def _get_choices(self):
         return self._choices
@@ -912,7 +909,7 @@ class Enumerated(object):
         if hasattr(self, "value"):
             if self.value not in new_choices:
                 raise IndexError("Current value %s is not part of possible choices: %s." %
-                            (self.value, ", ".join([str(c) for c in new_choices])))
+                                 (self.value, ", ".join([str(c) for c in new_choices])))
         self._choices = new_choices
 
     @choices.setter
