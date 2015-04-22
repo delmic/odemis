@@ -337,8 +337,8 @@ class Scanner(model.Emitter):
         # Range is according to min and max voltages accepted by Phenom API
         volt_range = TENSION_RANGE
         # Just the initialization of voltage. The actual value will be acquired
-        # once we start the stream
-        volt = 5000
+        # once the sample holder is in SEM position
+        volt = 5300
         self.accelVoltage = model.FloatContinuous(volt, volt_range, unit="V")
         self.accelVoltage.subscribe(self._onVoltage)
 
