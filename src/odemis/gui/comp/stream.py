@@ -48,13 +48,9 @@ from odemis.util import fluo
 from odemis.util.conversion import wave2rgb
 import odemis.gui.comp.buttons as buttons
 import odemis.gui.img.data as img
-import odemis.gui.model.dye as dye
 
 
 stream_remove_event, EVT_STREAM_REMOVE = wx.lib.newevent.NewEvent()
-
-BUTTON_BORDER_SIZE = 8
-BUTTON_SIZE = (18, 18)
 
 # Expanders are the stream controls that are always visible. They allow for
 # the showing and hiding of sub-controls and they might offer controls and
@@ -96,6 +92,9 @@ class StreamPanelHeader(wx.Control):
     It can also contain various sub buttons that allow for stream manipulation.
 
     """
+
+    BUTTON_SIZE = (18, 18)  # The pixel size of the button
+    BUTTON_BORDER_SIZE = 8  # Border space around the buttons
 
     def __init__(self, parent, wid=wx.ID_ANY, pos=wx.DefaultPosition, size=wx.DefaultSize,
                  style=wx.NO_BORDER,
@@ -147,7 +146,7 @@ class StreamPanelHeader(wx.Control):
             self,
             wx.ID_ANY,
             img.getico_rem_strBitmap(),
-            size=BUTTON_SIZE,
+            size=self.BUTTON_SIZE,
             background_parent=self.Parent
         )
         btn_rem.SetBitmaps(img.getico_rem_str_hBitmap())
@@ -180,7 +179,7 @@ class StreamPanelHeader(wx.Control):
         tint_btn = buttons.ColourButton(
             self, -1,
             bitmap=img.getemptyBitmap(),
-            size=BUTTON_SIZE,
+            size=self.BUTTON_SIZE,
             colour=self.Parent.stream.tint.value,
             background_parent=self.Parent,
             use_hover=True
@@ -199,7 +198,7 @@ class StreamPanelHeader(wx.Control):
         visibility_btn = buttons.ImageToggleButton(
             self, -1,
             bitmap=img.getico_eye_closedBitmap(),
-            size=BUTTON_SIZE,
+            size=self.BUTTON_SIZE,
             background_parent=self.Parent
         )
         visibility_btn.SetBitmaps(
@@ -216,7 +215,7 @@ class StreamPanelHeader(wx.Control):
         update_btn = buttons.ImageToggleButton(
             self, -1,
             bitmap=img.getico_pauseBitmap(),
-            size=BUTTON_SIZE,
+            size=self.BUTTON_SIZE,
             background_parent=self.Parent
         )
         update_btn.SetBitmaps(
@@ -251,21 +250,12 @@ class StreamPanelHeader(wx.Control):
             ctrl,
             proportion=1 if stretch else 0,
             flag=(border | wx.ALIGN_CENTRE_VERTICAL | wx.RESERVE_SPACE_EVEN_IF_HIDDEN),
-            border=BUTTON_BORDER_SIZE
+            border=self.BUTTON_BORDER_SIZE
         )
 
     # END Control creation methods
 
     # Layout and painting
-
-    def DoGetBestSize(self, *args, **kwargs):
-        """ Return the best size, which is the width of the parent and the height or the content
-
-        TODO: check if this is still necessary, or a wxPython 2.6/7/8 legacy
-
-        """
-
-        return wx.Size(self.Parent.GetSize().x, self._sz.GetSize().y)
 
     def on_size(self, event):
         """ Handle the wx.EVT_SIZE event for the Expander class """
@@ -371,10 +361,10 @@ class StreamPanelHeader(wx.Control):
         :param choices: [str]
 
         """
-        if isinstance(self.ctrl_label, SuggestTextCtrl):
+        try:
             self.ctrl_label.SetChoices(choices)
-        else:
-            raise TypeError("SuggestTextCtrl required!")
+        except AttributeError:
+            raise TypeError("SuggestTextCtrl required, %s found!!" % type(self.ctrl_label))
 
     def set_focus_on_label(self):
         """ Set the focus on the label (and select the text if it's editable) """
@@ -402,7 +392,7 @@ class StreamPanel(wx.Panel):
 
     """
 
-    def __init__(self, parent, stream, tab_data,
+    def __init__(self, parent, stream, options=0,
                  wid=wx.ID_ANY, pos=wx.DefaultPosition, size=wx.DefaultSize,
                  style=wx.CP_DEFAULT_STYLE, name="StreamPanel", collapsed=False):
         """
@@ -417,12 +407,7 @@ class StreamPanel(wx.Panel):
         assert(isinstance(parent, StreamBar))
         wx.Panel.__init__(self, parent, wid, pos, size, style, name)
 
-        # Data models
-        # FIXME: Remove the stream attribute (it shoul only be contained in the controller)
-        self.stream = stream
-        self._tab_data_model = tab_data
-        self._vacs = []  # VAConnectors to keep reference of
-
+        self.stream = stream  # FIXME: Should this also be moved to the StreamController?
         # Dye attributes
         self._btn_excitation = None
         self._btn_emission = None
@@ -453,33 +438,18 @@ class StreamPanel(wx.Panel):
 
         # Event handling
         self.Bind(wx.EVT_SIZE, self.OnSize)
-        self.finalize()
 
-    @property
-    def collapsed(self):
-        return self._collapsed
+        self._create_controls()
 
-    @property
-    def header_change_callback(self):
-        return self._header.label_change_callback
-
-    @header_change_callback.setter
-    def header_change_callback(self, f):
-        self._header.label_change_callback = f
-
-    def set_header_choices(self, choices):
-        self._header.set_label_choices(choices)
-
-    def finalize(self):
+    def _create_controls(self):
         """ Controls should be added to the panel using this method. This is so timing issues
         will not rise when the panel is instantiated. """
 
-        # ====== Add an expander button
+        # Create stream header
 
-        stream = self.stream
         expand_opt = (OPT_BTN_REMOVE | OPT_BTN_SHOW | OPT_BTN_UPDATE | OPT_BTN_TINT)
 
-        if self._has_dye(stream) and not (stream.excitation.readonly or stream.emission.readonly):
+        if self._has_dye(self.stream) and not (self.stream.excitation.readonly or self.stream.emission.readonly):
             expand_opt |= OPT_NAME_EDIT
 
         self._header = StreamPanelHeader(self, options=expand_opt)
@@ -496,7 +466,7 @@ class StreamPanel(wx.Panel):
 
         self.main_sizer.Add(self._header, 0, wx.EXPAND)
 
-        # ====== Add the control panel
+        # Create the control panel
 
         self._panel = wx.Panel(self, style=wx.TAB_TRAVERSAL | wx.NO_BORDER)
 
@@ -510,25 +480,24 @@ class StreamPanel(wx.Panel):
         self._panel.SetForegroundColour(FG_COLOUR_MAIN)
         self._panel.SetFont(self.GetFont())
 
-        # if isinstance(self.stream, OpticalStream):
-        #     # If the stream is optical, add override controls if the proper VAs are present
-        #     self.add_optical_controls()
-
-        # if self._has_bc(self.stream):
-        #     self._add_bc_controls()
-        #
-        # if self._has_dye(self.stream):
-        #     self._add_dye_controls()
-        #
-        # if self._has_wl(self.stream):
-        #     self._add_wl_controls()
-
         self.collapse()
 
         self.main_sizer.Add(self._panel, 0, wx.EXPAND)
 
-        vis = self.stream in self._tab_data_model.focussedView.value.getStreams()
-        self.set_visible(vis)
+    @property
+    def collapsed(self):
+        return self._collapsed
+
+    @property
+    def header_change_callback(self):
+        return self._header.label_change_callback
+
+    @header_change_callback.setter
+    def header_change_callback(self, f):
+        self._header.label_change_callback = f
+
+    def set_header_choices(self, choices):
+        self._header.set_label_choices(choices)
 
     def flatten(self):
         """ Unfold the stream panel and hide the header """
@@ -538,8 +507,6 @@ class StreamPanel(wx.Panel):
     def set_focus_on_label(self):
         """ Focus the text label in the header """
         self._header.set_focus_on_label()
-
-    # API
 
     def Layout(self, *args, **kwargs):
         """ Layout the StreamPanel. """
@@ -568,9 +535,13 @@ class StreamPanel(wx.Panel):
         return True
 
     def DoGetBestSize(self, *args, **kwargs):
-        """ Gets the size which best suits the window: for a control, it would
-        be the minimal size which doesn't truncate the control, for a panel -
+        """ Gets the size which best suits the window
+
+        For a control, it would be the minimal size which doesn't truncate the control, for a panel
         the same size as it would have after a call to `Fit()`.
+
+        TODO: This method seems deprecated. Test if it's really so.
+
         """
 
         # do not use GetSize() but rather GetMinSize() since it calculates
@@ -586,8 +557,11 @@ class StreamPanel(wx.Panel):
         return sz
 
     def Destroy(self, *args, **kwargs):
-        """
-        Delete the widget from the GUI
+        """ Delete the widget from the GUI
+
+        TODO: Is this method still necessary? If it's stull needed, it's content can probably still
+        be cleaned up.
+
         """
 
         # Avoid receiving data after the object is deleted
@@ -601,11 +575,7 @@ class StreamPanel(wx.Panel):
         fpb_item.fit_streams()
 
     def set_visible(self, visible):
-        """ Set the "visible" toggle button
-
-        Note: it does not add/remove it to the current view.
-
-        """
+        """ Set the "visible" toggle button of the stream panel """
         self._header.btn_show.SetToggle(visible)
 
     def collapse(self, collapse=None):
@@ -677,8 +647,7 @@ class StreamPanel(wx.Panel):
             evt.Skip()
 
     def on_button(self, event):
-        """ Handles the wx.EVT_BUTTON event for StreamPanel
-        """
+        """ Handles the wx.EVT_BUTTON event for StreamPanel """
 
         if event.GetEventObject() != self._header:
             event.Skip()
@@ -698,67 +667,12 @@ class StreamPanel(wx.Panel):
         self._header.on_draw_expander(dc)
 
     def to_static_mode(self):
-        """ This method hides or makes read-only any button or data that should
-        not be changed during acquisition.
-        """
+        """ Hide or make read-only any button or data that should not change during acquisition """
         self._header.to_static_mode()
 
-        # TODO: add when function implemented (and should be dependent on the Stream VAs)
-        # # ====== Fourth row, accumulation label, text field and value
-
-        # lbl_accum = wx.StaticText(self._panel, -1, "Accumulation")
-        # self._gbs.Add(lbl_accum, (self.row_count, 0),
-        #               flag=wx.ALL, border=5)
-
-        # self._txt_accum = IntegerTextCtrl(self._panel,
-        #                                   size=(-1, 14),
-        #                                   value=1,
-        #                                   min_val=1,
-        #                                   key_inc=True,
-        #                                   step=1,
-        #                                   style=wx.NO_BORDER)
-        # self._txt_accum.SetForegroundColour(odemis.gui.FG_COLOUR_EDIT)
-        # self._txt_accum.SetBackgroundColour(self._panel.GetBackgroundColour())
-
-        # self._gbs.Add(self._txt_accum, (self.row_count, 1),
-        #                                 flag=wx.EXPAND | wx.ALL,
-        #                                 border=5)
-
-        # self.row_count += 1
-
-        # # ====== Fifth row, interpolation label, text field and value
-
-        # lbl_interp = wx.StaticText(self._panel, -1, "Interpolation")
-        # self._gbs.Add(lbl_interp, (self.row_count, 0),
-        #               flag=wx.ALL, border=5)
-
-        # choices = ["None", "Linear", "Cubic"]
-        # self._cmb_interp = wx.combo.OwnerDrawnComboBox(self._panel,
-        #                                            - 1,
-        #                                            value=choices[0],
-        #                                            pos=(0, 0),
-        #                                            size=(100, 16),
-        #                                            style=wx.NO_BORDER |
-        #                                                  wx.CB_DROPDOWN |
-        #                                                  wx.TE_PROCESS_ENTER |
-        #                                                  wx.CB_READONLY |
-        #                                                  wx.EXPAND,
-        #                                             choices=choices)
-
-        # self._cmb_interp.SetForegroundColour(odemis.gui.FG_COLOUR_EDIT)
-        # self._cmb_interp.SetBackgroundColour(self._panel.GetBackgroundColour())
-        # self._cmb_interp.SetButtonBitmaps(img.getbtn_downBitmap(),
-        #                                   pushButtonBg=False)
-
-        # self._gbs.Add(self._cmb_interp, (self.row_count, 1),
-        #                                  flag=wx.EXPAND | wx.ALL,
-        #                                  border=5,
-        #                                  span=(1, 2))
-
-        # self.row_count += 1
-
     def to_locked_mode(self):
-        self.to_static_mode()
+        """ Hide or make read-only all buttons and data controls"""
+        self._header.to_static_mode()
         self._header.to_locked_mode()
 
     # ===== For brightness/contrast

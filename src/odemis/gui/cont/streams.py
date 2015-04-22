@@ -90,7 +90,7 @@ class StreamController(object):
 
         self.stream = stream
         self.stream_bar = stream_bar
-        self.stream_panel = StreamPanel(stream_bar, stream, tab_data_model)
+        self.stream_panel = StreamPanel(stream_bar, stream)
         self.tab_data_model = tab_data_model
 
         # Peak excitation/emission wavelength of the selected dye, to be used for peak text and
@@ -118,6 +118,10 @@ class StreamController(object):
         # Check if dye control is needed
         if hasattr(stream, "excitation") and hasattr(stream, "emission"):
             self._add_dye_ctrl()
+
+        # Set the visibility button on the stream panel
+        vis = stream in tab_data_model.focussedView.value.getStreams()
+        self.stream_panel.set_visible(vis)
 
         stream_bar.add_stream_panel(self.stream_panel, show)
 
