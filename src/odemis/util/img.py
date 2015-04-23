@@ -93,6 +93,7 @@ def findOptimalRange(hist, edges, outliers=0):
       bin of the histogram. To get an index, use edges = (0, len(hist)).
     outliers (0<float<0.5): ratio of outliers to discard (on both side). 0
       discards no value, 0.5 discards every value (and so returns the median).
+    return (tuple of 2 values): the range (min and max values)
     """
     if outliers == 0:
         # short-cut if no outliers: find first and last non null value
