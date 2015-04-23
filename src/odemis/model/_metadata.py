@@ -68,6 +68,10 @@ MD_WL_LIST = "Wavelength list" # m... (list of float), wavelength for each pixel
 # EM_SPACIAL, FLUO_SPACIAL, ANCHOR_REGION, SPECTRUM, ANGULAR_RESOLVED...
 
 MD_AR_POLE = "Angular resolved pole position" # px, px (tuple of float), position of pole (aka hole center) in raw acquisition of SPARC AR
+MD_AR_XMAX = "Polar xmax"  # m, the distance between the parabola origin and the cutoff position
+MD_AR_HOLE_DIAMETER = "Hole diameter"  # m, diameter the hole in the mirror
+MD_AR_FOCUS_DISTANCE = "Focus distance"  # m, the vertical mirror cutoff, iow the min distance between the mirror and the sample
+MD_AR_PARABOLA_F = "Parabola parameter"  # m, parabola_parameter=1/4f
 
 # The following tags are not to be filled at acquisition, but by the user interface
 MD_DESCRIPTION = "Description" # (string) User-friendly name that describes what this acquisition is
