@@ -119,6 +119,12 @@ class StreamController(object):
         if hasattr(stream, "excitation") and hasattr(stream, "emission"):
             self._add_dye_ctrl()
 
+        if hasattr(stream, "auto_bc") and hasattr(stream, "intensityRange"):
+            self._add_brightnesscontrast_ctrls()
+
+        # if self._has_wl(self.stream):
+        #     self._add_wl_controls()
+
         # Set the visibility button on the stream panel
         vis = stream in tab_data_model.focussedView.value.getStreams()
         self.stream_panel.set_visible(vis)
@@ -238,7 +244,7 @@ class StreamController(object):
             # TODO: mark dye incompatible with the hardware with a "disabled"
             # colour in the list. (Need a special version of the combobox?)
             self.stream_panel.set_header_choices(dye.DyeDatabase.keys())
-            self.header_change_callback = self._on_new_dye_name
+            self.stream_panel.header_change_callback = self._on_new_dye_name
 
         r = self.stream_panel.add_dye_excitation_ctrl(self.stream.excitation)
         lbl_ctrl, value_ctrl, self._lbl_exc_peak, self._btn_excitation = r
@@ -329,6 +335,9 @@ class StreamController(object):
                               va_2_ctrl=_emission_2_ctrl, ctrl_2_va=_emission_2_va)
 
             self.entries.append(se)
+
+    def _add_brightnesscontrast_ctrls(self):
+        self.stream_panel.add_brightnesscontrast_ctrls()
 
     # END Control addition
 

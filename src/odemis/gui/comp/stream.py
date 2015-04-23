@@ -679,11 +679,7 @@ class StreamPanel(wx.Panel):
 
     # ===== For brightness/contrast
 
-    # @staticmethod
-    # def _has_bc(stream):
-    #     return hasattr(stream, "auto_bc") and hasattr(stream, "intensityRange")
-
-    def _add_bc_controls(self):
+    def add_brightnesscontrast_ctrls(self):
         """ Add the widgets related to brightness/contrast
           ├ Toggle button (AutoBC)
           ├ StaticText (Outliers)
@@ -733,7 +729,7 @@ class StreamPanel(wx.Panel):
         autobc_sz.Add(lbl_bc_outliers, 0, flag=wx.ALIGN_CENTRE_VERTICAL | wx.LEFT, border=5)
         autobc_sz.Add(self._sld_bc_outliers, 1,
                       flag=wx.ALIGN_CENTRE_VERTICAL | wx.LEFT | wx.EXPAND, border=5)
-        self.gb_sizer.Add(autobc_sz, (self.num_rows, 0), span=(1, 3),
+        self.gb_sizer.Add(autobc_sz, (self.num_rows, 0), span=(1, 2),
                                  flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
         self.num_rows += 1
 
