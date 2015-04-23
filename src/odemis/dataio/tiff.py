@@ -29,12 +29,14 @@ import numpy
 from odemis import model, util
 import odemis
 from odemis.util import spectrum, img, fluo
+import operator
 import os
 import re
 import sys
 import time
+import uuid
 
-import libtiff.libtiff_ctypes as T # for the constant names
+import libtiff.libtiff_ctypes as T  # for the constant names
 import xml.etree.ElementTree as ET
 
 
@@ -250,12 +252,17 @@ def _indent(elem, level=0):
 
 _ROI_NS = "http://www.openmicroscopy.org/Schemas/ROI/2012-06"
 
-def _convertToOMEMD(images):
+def _convertToOMEMD(images, multiple_files=False, findex=None, fname=None, uuids=None):
     """
     Converts DataArray tags to OME-TIFF tags.
     images (list of DataArrays): the images that will be in the TIFF file, in order
       They should have 5 dimensions in this order: CTZYX, with the exception that
       all the first dimensions of size 1 can be skipped.
+    multiple_files (boolean): whether the data is distributed across multiple
+      files or not.
+    findex (int): index of this particular file.
+    fname (str or None): filename if data is distributed in multiple files
+    uuids (list of str): list that contains all the file uuids
     returns (string): the XML data as compatible with OME
     Note: the images will be considered from the same detectors only if they are
       consecutive (and the metadata confirms the detector is the same)
@@ -324,11 +331,19 @@ def _convertToOMEMD(images):
 
     # Note: pylibtiff has a small OME support, but it's so terrible that we are
     # much better ignoring it completely
-    root = ET.Element('OME', attrib={
-            "xmlns": "http://www.openmicroscopy.org/Schemas/OME/2012-06",
-            "xmlns:xsi": "http://www.w3.org/2001/XMLSchema-instance",
-            "xsi:schemaLocation": "http://www.openmicroscopy.org/Schemas/OME/2012-06 http://www.openmicroscopy.org/Schemas/OME/2012-06/ome.xsd",
-            })
+    if multiple_files:
+        root = ET.Element('OME', attrib={
+                "xmlns": "http://www.openmicroscopy.org/Schemas/OME/2012-06",
+                "xmlns:xsi": "http://www.w3.org/2001/XMLSchema-instance",
+                "UUID": "%s" % uuids[findex],
+                "xsi:schemaLocation": "http://www.openmicroscopy.org/Schemas/OME/2012-06 http://www.openmicroscopy.org/Schemas/OME/2012-06/ome.xsd",
+                })
+    else:
+        root = ET.Element('OME', attrib={
+                "xmlns": "http://www.openmicroscopy.org/Schemas/OME/2012-06",
+                "xmlns:xsi": "http://www.w3.org/2001/XMLSchema-instance",
+                "xsi:schemaLocation": "http://www.openmicroscopy.org/Schemas/OME/2012-06 http://www.openmicroscopy.org/Schemas/OME/2012-06/ome.xsd",
+                })
     com_txt = ("Warning: this comment is an OME-XML metadata block, which "
                "contains crucial dimensional parameters and other important "
                "metadata. Please edit cautiously (if at all), and back up the "
@@ -347,6 +362,8 @@ def _convertToOMEMD(images):
         micro.attrib["Model"] = model_name
 
     # for each set of images from the same instrument, add them
+    # In case of multiple files the ifd of the groups is used just for the
+    # hw components enumeration.
     groups = _findImageGroups(images)
 
     # Detectors, Objectives & LightSource: one per group of data with same metadata
@@ -375,8 +392,18 @@ def _convertToOMEMD(images):
     # TODO: filters (with TransmittanceRange)
 
     rois = {} # dict str->ET.Element (ROI ID -> ROI XML element)
+    fname_index = 0
     for ifd, g in groups.items():
-        _addImageElement(root, g, ifd, rois)
+        if multiple_files:
+            # Remove path from filename
+            drive, path = os.path.splitdrive(fname)
+            path, file = os.path.split(path)
+            tokens = file.split(".s.", 1)
+            part_fname = tokens[0] + "." + str(fname_index) + "." + tokens[1]
+            _addImageElement(root, g, ifd, rois, part_fname, uuids[fname_index])
+            fname_index += 1
+        else:
+            _addImageElement(root, g, ifd, rois)
 
     # ROIs have to come _after_ images, so add them only now
     root.extend(rois.values())
@@ -416,6 +443,10 @@ def _updateMDFromOME(root, das, basename):
     """
     # For each Image in the XML, gorge ourself from all the metadata we can
     # find, and then use it to update the metadata of each IFD referenced.
+    # In case of multiple files, add an offset to the ifd based on the number of
+    # images found in the files that are already accessed
+    ifd_offset = 0
+
     for ime in root.findall("Image"):
         md = {}
         try:
@@ -481,7 +512,8 @@ def _updateMDFromOME(root, das, basename):
         except (KeyError, ValueError):
             pass
 
-        ctz_2_ifd = _getIFDsFromOME(pxe, basename)
+        ctz_2_ifd = _getIFDsFromOME(pxe, basename, offset=ifd_offset)
+        ifd_offset += len(ctz_2_ifd)
 
         # Channels are a bit tricky, because apparently they are associated to
         # each C only by the order they are specified.
@@ -652,12 +684,14 @@ def _updateMDFromOME(root, das, basename):
                     # First apply the global MD, then per-channel
                     da.metadata.update(md)
 
-def _getIFDsFromOME(pixele, basename):
+def _getIFDsFromOME(pixele, basename, offset=0):
     """
     Return the IFD containing the 2D data for each high dimension of an array.
     Note: this doesn't take into account if the data is 3D.
     pixele (ElementTree): the element to Pixels of an image
     basename (unicode): the (base) name of the current file
+    offset (int): ifd offset based on the number of images found in the previous
+        files
     return (numpy.array of int): shape is the shape of the 3 high dimensions CTZ,
      the value is the IFD number of -1 if not specified.
     """
@@ -673,15 +707,13 @@ def _getIFDsFromOME(pixele, basename):
         # data from this specific file.
         # TODO: have an option to either drop these data, or load the other
         # file (if it exists). cf tiff series.
-
-        uuide = tfe.find("UUID") # zero or one
-        if uuide is not None:
-            fn = uuide.get("FileName", "")
-            if fn not in {basename, ""}:
-                logging.debug("Skipping metadata for file %s", fn)
-                continue
-
         ifd = int(tfe.get("IFD", "0"))
+
+        # check if it belongs to a different file. In this case add the offset.
+        uuide = tfe.find("UUID")  # zero or one
+        if uuide is not None:
+            ifd += offset
+
         pos = []
         for d in "CTZ": # that's our fixed order
             ds = int(tfe.get("First%s" % d, "0"))
@@ -771,6 +803,9 @@ def _foldArraysFromOME(root, das, basename):
     omedas = []
 
     n = 0 # just for logging
+    # In case of multiple files, add an offset to the ifd based on the number of
+    # images found in the files that are already accessed
+    ifd_offset = 0
     for ime in root.findall("Image"):
         n += 1
         pxe = ime.find("Pixels") # there must be only one per Image
@@ -784,7 +819,8 @@ def _foldArraysFromOME(root, das, basename):
         # and Plane refers to the C dimension.
 #        spp = int(pxe.get("Channel/SamplesPerPixel", "1"))
 
-        imsetn = _getIFDsFromOME(pxe, basename)
+        imsetn = _getIFDsFromOME(pxe, basename, offset=ifd_offset)
+        ifd_offset += len(imsetn)
         # For now we expect RGB as (SPP=3,) SizeC=3, PlaneCount=1, and 1 3D IFD,
         # or as (SPP=3,) SizeC=3, PlaneCount=3 and 3 2D IFDs.
 
@@ -800,7 +836,6 @@ def _foldArraysFromOME(root, das, basename):
             dshape.append(ds)
 
         # Check if the IFDs are 2D or 3D, based on the first one
-
         fim = das[fifd]
         if fim == None:
             continue # thumbnail
@@ -876,6 +911,7 @@ def _findImageGroups(das):
     groups = dict()
     current_ifd = 0
     prev_da = None
+
     for da in das:
         # check if it can be part of the current group (compare just to the previous DA)
         if (prev_da is None
@@ -928,7 +964,7 @@ def _dtype2OMEtype(dtype):
         raise NotImplementedError("data type %s is not support by OME" % dtype)
 
 
-def _addImageElement(root, das, ifd, rois):
+def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
     """
     Add the metadata of a list of DataArray to a OME-XML root element
     root (Element): the root element
@@ -937,6 +973,8 @@ def _addImageElement(root, das, ifd, rois):
     ifd (int): the IFD of the first DataArray
     rois (dict str -> ET element): all ROIs added so, and will be updated as
       needed.
+    fname (str or None): filename if data is distributed in multiple files
+    fuuid (str or None): uuid if data is distributed in multiple files
     Note: the images in das must be added in the final TIFF in the same order
      and contiguously
     """
@@ -1137,13 +1175,26 @@ def _addImageElement(root, das, ifd, rois):
     if is_rgb:
         rep_hdim[0] = 1
     for index in numpy.ndindex(*rep_hdim):
-        tde = ET.SubElement(pixels, "TiffData", attrib={
-                                "IFD": "%d" % (ifd + subid),
-                                "FirstC": "%d" % index[0],
-                                "FirstT": "%d" % index[1],
-                                "FirstZ": "%d" % index[2],
-                                "PlaneCount": "1"
-                                })
+        if fname is not None:
+            tde = ET.SubElement(pixels, "TiffData", attrib={
+                        # Since we have multiple files ifd is 0
+                        "IFD": "%d" % subid,
+                        "FirstC": "%d" % index[0],
+                        "FirstT": "%d" % index[1],
+                        "FirstZ": "%d" % index[2],
+                        "PlaneCount": "1"
+                        })
+            f_name = ET.SubElement(tde, "UUID", attrib={
+                                    "FileName": "%s" % fname})
+            f_name.text = fuuid
+        else:
+            tde = ET.SubElement(pixels, "TiffData", attrib={
+                                    "IFD": "%d" % (ifd + subid),
+                                    "FirstC": "%d" % index[0],
+                                    "FirstT": "%d" % index[1],
+                                    "FirstZ": "%d" % index[2],
+                                    "PlaneCount": "1"
+                                    })
         subid += 1
 
     # Plane Element
@@ -1231,15 +1282,25 @@ def _mergeCorrectionMetadata(da):
     img.mergeMetadata(md)
     return model.DataArray(da, md) # create a view
 
-def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
+def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_files=False, file_index=None, uuid_list=None):
     """
     Saves a list of DataArray as a multiple-page TIFF file.
     filename (string): name of the file to save
     ldata (list of DataArray): list of 2D data of int or float. Should have at least one array
     thumbnail (None or DataArray): see export
     compressed (boolean): whether the file is LZW compressed or not.
+    multiple_files (boolean): whether the data is distributed across multiple
+      files or not.
+    file_index (int): index of this particular file.
+    uuid_list (list of str): list that contains all the file uuids
     """
-    f = TIFF.open(filename, mode='w')
+    if multiple_files:
+        # Add index
+        tokens = filename.split(".s.", 1)
+        orig_filename = tokens[0] + "." + str(file_index) + "." + tokens[1]
+        f = TIFF.open(orig_filename, mode='w')
+    else:
+        f = TIFF.open(filename, mode='w')
 
     # According to this page: http://www.openmicroscopy.org/site/support/file-formats/ome-tiff/ome-tiff-data
     # LZW is a good trade-off between compatibility and small size (reduces file
@@ -1267,7 +1328,7 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
         alldata = ldata
 
     # TODO: reorder the data so that data from the same sensor are together
-    ometxt = _convertToOMEMD(alldata)
+    ometxt = _convertToOMEMD(alldata, multiple_files, findex=file_index, fname=filename, uuids=uuid_list)
 
     if thumbnail is not None:
         # save the thumbnail just as the first image
@@ -1276,7 +1337,6 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
         # full-resolution image." The main problem is that most thumbnailers
         # use the first image as thumbnail. Maybe we should provide our own
         # clever thumbnailer?
-
         f.SetField(T.TIFFTAG_IMAGEDESCRIPTION, ometxt)
         ometxt = None
         f.SetField(T.TIFFTAG_PAGENAME, "Composited image")
@@ -1333,6 +1393,12 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
 #
 #        //Write this sub-IFD:
 #        TIFFWriteDirectory(created_TIFF);
+
+    if multiple_files:
+        groups = _findImageGroups(alldata)
+        sorted_x = sorted(groups.items(), key=operator.itemgetter(0))
+        # Only get the corresponding data for this file
+        ldata = sorted_x[file_index][1]
 
     for data in ldata:
         # TODO: see if we need to set FILETYPE_PAGE + Page number for each image? data?
@@ -1429,9 +1495,62 @@ def _dataFromTIFF(filename):
     # Warning: we support what we write, not the whole OME-TIFF specification.
     f.SetDirectory(0)
     desc = f.GetField(T.TIFFTAG_IMAGEDESCRIPTION)
+
     if (desc and ((desc.startswith("<?xml") and "<ome " in desc.lower())
                   or desc[:4].lower() == '<ome')):
         try:
+            # take care of multiple file distribution
+            file_data = data
+            drive, path = os.path.splitdrive(filename)
+            path, orig_filename = os.path.split(path)
+            data = []
+            desc = re.sub('xmlns="http://www.openmicroscopy.org/Schemas/OME/....-.."',
+                         "", desc, count=1)
+            desc = re.sub('xmlns="http://www.openmicroscopy.org/Schemas/ROI/....-.."',
+                         "", desc)
+            root = ET.fromstring(desc)
+
+            # Keep track of the files that were already opened
+            file_read = []
+#             ifd_counter = 0
+            for tiff_data in root.findall("Image/Pixels/TiffData"):
+
+                uuid = tiff_data.find("UUID")
+                if uuid is None:
+                    # uuid attribute is only part of multiple files distribution
+                    continue
+                else:
+                    uuid_data = uuid.get("FileName")
+#                 tiff_data.set("IFD", ifd_counter)
+                ifd_data = tiff_data.get("IFD")
+#                 ifd_counter += 1
+                # attach to the right path
+                if path != "":
+                    path = path + "/"
+                uuid_path = path + uuid_data
+                if uuid_data in file_read:
+                    continue
+                # try to find and open the enlisted file
+                try:
+                    f_link = TIFF.open(uuid_path, mode='r')
+                except TypeError:
+                    logging.warning("File enlisted in the OME-XML header is missing.")
+                    continue
+                for image in f_link.iter_images():
+                    # If it's a thumbnail, skip it, but leave the space free to not mess with the IFD number
+                    if _isThumbnail(f_link):
+                        data.append(None)
+                        continue
+                    md = _readTiffTag(f_link)  # reads tag of the current image
+                    da = model.DataArray(image, metadata=md)
+                    data.append(da)
+                file_read.append(uuid_data)
+
+            # If this file was not enlisted in the xml data we assume it has
+            # been renamed. In this case we also include its data.
+            if orig_filename not in file_read:
+                data = data + file_data
+
             data = _reconstructFromOMETIFF(desc, data, os.path.basename(filename))
         except Exception:
             # fallback to pretend there was no OME XML
@@ -1449,7 +1568,7 @@ def _ensure_fs_encoding(filename):
     else:
         return filename.encode(sys.getfilesystemencoding())
 
-def export(filename, data, thumbnail=None, compressed=True):
+def export(filename, data, thumbnail=None, compressed=True, multiple_files=False):
     '''
     Write a TIFF file with the given image and metadata
     filename (unicode): filename of the file to create (including path)
@@ -1459,15 +1578,31 @@ def export(filename, data, thumbnail=None, compressed=True):
        Time, Z, Y, X. However, all the first dimensions of size 1 can be omitted
        (ex: an array of 111YX can be given just as YX, but RGB images are 311YX,
        so must always be 5 dimensions).
-    thumbnail (None or numpy.array): Image used as thumbnail for the file. Can be of any
-      (reasonable) size. Must be either 2D array (greyscale) or 3D with last
-      dimension of length 3 (RGB). If the exporter doesn't support it, it will
-      be dropped silently.
+    thumbnail (None or numpy.array): Image used as thumbnail 
+      for the file. Can be of any (reasonable) size. Must be either 2D array 
+      (greyscale) or 3D with last dimension of length 3 (RGB). If the exporter 
+      doesn't support it, it will be dropped silently.
     compressed (boolean): whether the file is compressed or not.
+    multiple_files (boolean): whether the data is distributed across multiple
+      files or not.
     '''
     filename = _ensure_fs_encoding(filename)
     if isinstance(data, list):
-        _saveAsMultiTiffLT(filename, data, thumbnail, compressed)
+        if multiple_files:
+            if thumbnail is not None:
+                logging.warning("Thumbnail is not supported for multiple files "
+                                "export and thus it is discarded.")
+            nfiles = len(_findImageGroups(data))
+            # Create the whole list of uuid's to pass it to each file
+            uuid_list = []
+            for i in xrange(nfiles):
+                uuid_list.append(uuid.uuid4().urn)
+            for i in xrange(nfiles):
+                # TODO: Take care of thumbnails
+                _saveAsMultiTiffLT(filename, data, None, compressed,
+                                   multiple_files, i, uuid_list)
+        else:
+            _saveAsMultiTiffLT(filename, data, thumbnail, compressed)
     else:
         # TODO should probably not enforce it: respect duck typing
         assert(isinstance(data, model.DataArray))

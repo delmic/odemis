@@ -57,6 +57,7 @@ def AngleResolved2Polar(data, output_size, hole=True, dtype=None):
     try:
         pixel_size = data.metadata[model.MD_PIXEL_SIZE]
         mirror_x, mirror_y = data.metadata[model.MD_AR_POLE]
+        parabola_f = data.metadata.get(model.MD_AR_PARABOLA_F, AR_PARABOLA_F)
     except KeyError:
         raise ValueError("Metadata required: MD_PIXEL_SIZE, MD_AR_POLE.")
 
@@ -77,8 +78,8 @@ def AngleResolved2Polar(data, output_size, hole=True, dtype=None):
     xpix = mirror_x - jj
 
     for i in xrange(image_x):
-        ypix = (i - mirror_y) + (2 * AR_PARABOLA_F) / pixel_size[1]
-        theta, phi, omega = _FindAngle(xpix, ypix, pixel_size)
+        ypix = (i - mirror_y) + (2 * parabola_f) / pixel_size[1]
+        theta, phi, omega = _FindAngle(data, xpix, ypix, pixel_size)
 
         theta_data[i, :] = theta
         phi_data[i, :] = phi
@@ -112,19 +113,21 @@ def AngleResolved2Polar(data, output_size, hole=True, dtype=None):
     return result
 
 
-def _FindAngle(xpix, ypix, pixel_size):
+def _FindAngle(data, xpix, ypix, pixel_size):
     """
     For given pixels, finds the angle of the corresponding ray 
+    data (model.DataArray): The DataArray with the image
     xpix (numpy.array): x coordinates of the pixels
     ypix (float): y coordinate of the pixel
     pixel_size (2 floats): CCD pixelsize (X/Y)
     returns (3 numpy.arrays): theta, phi (the corresponding spherical coordinates for each pixel in ccd) 
                               and omega (solid angle)
     """
+    parabola_f = data.metadata.get(model.MD_AR_PARABOLA_F, AR_PARABOLA_F)
     y = xpix * pixel_size[0]
     z = ypix * pixel_size[1]
     r2 = y ** 2 + z ** 2
-    xfocus = (1 / (4 * AR_PARABOLA_F)) * r2 - AR_PARABOLA_F
+    xfocus = (1 / (4 * parabola_f)) * r2 - parabola_f
     xfocus2plusr2 = xfocus ** 2 + r2
     sqrtxfocus2plusr2 = numpy.sqrt(xfocus2plusr2)
 
@@ -135,8 +138,8 @@ def _FindAngle(xpix, ypix, pixel_size):
     phi = numpy.arctan2(y, xfocus) % (2 * math.pi)
 
     # omega
-#    omega = (pixel_size[0] * pixel_size[1]) * ((1 / (2 * AR_PARABOLA_F)) * r2 - xfocus) / (sqrtxfocus2plusr2 * xfocus2plusr2)
-    omega = (pixel_size[0] * pixel_size[1]) * ((1 / (4 * AR_PARABOLA_F)) * r2 + AR_PARABOLA_F) / (sqrtxfocus2plusr2 * xfocus2plusr2)
+#    omega = (pixel_size[0] * pixel_size[1]) * ((1 / (2 * parabola_f)) * r2 - xfocus) / (sqrtxfocus2plusr2 * xfocus2plusr2)
+    omega = (pixel_size[0] * pixel_size[1]) * ((1 / (4 * parabola_f)) * r2 + parabola_f) / (sqrtxfocus2plusr2 * xfocus2plusr2)
 
     # Note: the latest version of this function at AMOLF provides a 4th value:
     # irp, the mirror reflectivity for different emission angles.
@@ -184,8 +187,8 @@ def ARBackgroundSubtract(data):
 
 def _CropHalfCircle(data, pixel_size, pole_pos, hole=True):
     """
-    Crops the image to half circle shape based on AR_FOCUS_DISTANCE, AR_XMAX,
-      AR_PARABOLA_F, and AR_HOLE_DIAMETER
+    Crops the image to half circle shape based on focus_distance, xmax,
+      parabola_f, and hole_diameter
     data (model.DataArray): The DataArray with the image
     pixel_size (float, float): effective pixel sie = sensor_pixel_size * binning / magnification
     pole_pos (float, float): x/y coordinates of the pole (MD_AR_POLE)
@@ -200,32 +203,36 @@ def _CropHalfCircle(data, pixel_size, pole_pos, hole=True):
 def _CreateMirrorMask(data, pixel_size, pole_pos, hole=True):
     """
     Creates half circle mask (i.e. True inside half circle, False outside it) based
-     AR_PARABOLA_F and AR_FOCUS_DISTANCE values.
+     parabola_f and focus_distance values.
     data (model.DataArray): The DataArray with the image
     pixel_size (float, float): effective pixel size = sensor_pixel_size * binning / magnification
     pole_pos (float, float): x/y coordinates of the pole (MD_AR_POLE)
     hole (boolean): Crop the area around the pole if True
     returns (boolean ndarray): Mask
     """
+    xmax = data.metadata.get(model.MD_AR_XMAX, AR_XMAX)
+    hole_diameter = data.metadata.get(model.MD_AR_HOLE_DIAMETER, AR_HOLE_DIAMETER)
+    focus_distance = data.metadata.get(model.MD_AR_FOCUS_DISTANCE, AR_FOCUS_DISTANCE)
+    parabola_f = data.metadata.get(model.MD_AR_PARABOLA_F, AR_PARABOLA_F)
     X, Y = data.shape
     pole_x, pole_y = pole_pos
 
     # Calculate the coordinates of the cutoff of half circle
     center_x = pole_x
-    lower_y = pole_y - ((2 * AR_PARABOLA_F - AR_FOCUS_DISTANCE) / pixel_size[1])
-    center_y = pole_y - ((2 * AR_PARABOLA_F) / pixel_size[1])
+    lower_y = pole_y - ((2 * parabola_f - focus_distance) / pixel_size[1])
+    center_y = pole_y - ((2 * parabola_f) / pixel_size[1])
 
     # Compute the radius
-    r = (2 * math.sqrt(AR_XMAX * AR_PARABOLA_F)) / pixel_size[1]
+    r = (2 * math.sqrt(xmax * parabola_f)) / pixel_size[1]
     y, x = numpy.ogrid[-center_y:X - center_y, -center_x:Y - center_x]
     circle_mask = x * x + y * y <= r * r
 
     # Create half circle mask
     circle_mask[:lower_y, :] = False
 
-    # Crop the pole making hole of AR_HOLE_DIAMETER
+    # Crop the pole making hole of hole_diameter
     if hole:
-        r = (AR_HOLE_DIAMETER / 2) / pixel_size[1]
+        r = (hole_diameter / 2) / pixel_size[1]
         y, x = numpy.ogrid[-pole_y:X - pole_y, -pole_x:Y - pole_x]
         circle_mask_hole = x * x + y * y <= r * r
         circle_mask = numpy.where(circle_mask_hole, 0, circle_mask)
