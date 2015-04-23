@@ -407,7 +407,7 @@ class StreamPanel(wx.Panel):
         assert(isinstance(parent, StreamBar))
         wx.Panel.__init__(self, parent, wid, pos, size, style, name)
 
-        self.stream = stream  # FIXME: Should this also be moved to the StreamController?
+        self.stream = stream  # TODO: Should this also be moved to the StreamController?
         # Dye attributes
         self._btn_excitation = None
         self._btn_emission = None
@@ -449,7 +449,10 @@ class StreamPanel(wx.Panel):
 
         expand_opt = (OPT_BTN_REMOVE | OPT_BTN_SHOW | OPT_BTN_UPDATE | OPT_BTN_TINT)
 
-        if self._has_dye(self.stream) and not (self.stream.excitation.readonly or self.stream.emission.readonly):
+        if (
+                self._has_dye(self.stream) and
+                not (self.stream.excitation.readonly or self.stream.emission.readonly)
+        ):
             expand_opt |= OPT_NAME_EDIT
 
         self._header = StreamPanelHeader(self, options=expand_opt)
@@ -517,9 +520,8 @@ class StreamPanel(wx.Panel):
         oursz = self.GetSize()
 
         # move & resize the button and the static line
-        self.main_sizer.SetDimension(0, 0, oursz.GetWidth(), self.main_sizer.GetMinSize(
-
-        ).GetHeight())
+        self.main_sizer.SetDimension(0, 0, oursz.GetWidth(),
+                                     self.main_sizer.GetMinSize().GetHeight())
         self.main_sizer.Layout()
 
         if not self._collapsed:
@@ -677,9 +679,9 @@ class StreamPanel(wx.Panel):
 
     # ===== For brightness/contrast
 
-    @staticmethod
-    def _has_bc(stream):
-        return hasattr(stream, "auto_bc") and hasattr(stream, "intensityRange")
+    # @staticmethod
+    # def _has_bc(stream):
+    #     return hasattr(stream, "auto_bc") and hasattr(stream, "intensityRange")
 
     def _add_bc_controls(self):
         """ Add the widgets related to brightness/contrast

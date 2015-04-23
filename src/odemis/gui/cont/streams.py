@@ -492,9 +492,9 @@ class StreamBarController(object):
 
         # First: Fluorescent stream (for dyes)
         if (
-                        self._main_data_model.light and
-                        self._main_data_model.light_filter and
-                    self._main_data_model.ccd
+                self._main_data_model.light and
+                self._main_data_model.light_filter and
+                self._main_data_model.ccd
         ):
             def fluor_capable():
                 # TODO: need better way to check, maybe opticalState == STATE_DISABLED?
@@ -534,12 +534,11 @@ class StreamBarController(object):
             self._stream_bar.add_action("Backscattered electrons", self.addSEMBSD, sem_capable)
 
     def _userAddFluo(self, **kwargs):
-        """
-        Called when the user request adding a Fluo stream
+        """ Called when the user request adding a Fluo stream
         Same as addFluo, but also changes the focus to the name text field
         """
         se = self.addFluo(**kwargs)
-        se.set_focus_on_label()
+        se.stream_panel.set_focus_on_label()
 
     def addFluo(self, **kwargs):
         """
@@ -673,7 +672,7 @@ class StreamBarController(object):
             stream but do not create any entry.
         play (None or boolean): If True, immediately start it, if False, let it
             stopped, and if None, only play if already a stream is playing
-        returns (StreamPanel or Stream): stream entry or stream (if visible
+        returns (StreamController or Stream): stream controller or stream (if visible
             is False) that was created
 
         """
