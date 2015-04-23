@@ -549,8 +549,6 @@ containers.
     Do not call directly. Use :py:func:`model.createNewContainer` to create a
     new container.
     
-    
-    
     .. py:method:: instantiate(klass, kwargs)
     
         Instantiate a Component and publish it
@@ -595,7 +593,7 @@ The following additional functions allow to manage containers.
     
 .. py:function:: model.getObject(container_name, object_name)
 
-    Returns an object in a container based on its name and  
+    Returns an object in a container based on its name and
     Only the name of the main back-end container is fixed: :py:data:`model.BACKEND_NAME`.
     In practice, most components are either in 
     the back-end container or in a separate container with the same name as the 

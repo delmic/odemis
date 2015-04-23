@@ -156,7 +156,7 @@ SECOMv2: {
         axes: {"ox": [1, 1, False], "oy": [2, 1, False],
                "oz": [3, 1, True],
                "sx": [4, 1, True], "sy": [5, 1, True]},
-        inverted: ["ox", "oy", "oz"], # sx is good, TODO: check stage Y
+        inverted: ["ox", "oy", "oz", "sy"], # sx is good
         #dist_to_steps: {"ox": 100000, "oy": 100000}, # step/m
     },
 }

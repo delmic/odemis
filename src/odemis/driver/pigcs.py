@@ -2148,9 +2148,13 @@ class Bus(model.Actuator):
     def _updatePosition(self, axes=None):
         """
         update the position VA
-        axes (None or set of str): the axes to update (None is everyone of them)
+        axes (None or set of str): the axes to update (None indicates all of them)
         """
-        pos = self.position.value.copy()
+        if axes is None:
+            pos = {}
+        else:
+            # uses the current values (converted to internal representation)
+            pos = self._applyInversionAbs(self.position.value)
 
         for a, (controller, channel) in self._axis_to_cc.items():
             if axes is None or a in axes:
