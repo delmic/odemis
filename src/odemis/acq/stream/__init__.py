@@ -4,7 +4,7 @@ Created on 25 Jun 2014
 
 @author: Rinze de Laat
 
-Copyright © 2013-2014 Rinze de Laat, Éric Piel, Delmic
+Copyright © 2013-2015 Rinze de Laat, Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -30,6 +30,7 @@ from ._sync import *
 
 from abc import ABCMeta
 
+
 # Generic cross-cut types
 class OpticalStream:
     __metaclass__ = ABCMeta
@@ -38,12 +39,15 @@ OpticalStream.register(CameraStream)
 OpticalStream.register(StaticFluoStream)
 OpticalStream.register(StaticBrightfieldStream)
 
+
 class EMStream:
     """All the stream types related to electron microscope"""
     __metaclass__ = ABCMeta
 
 EMStream.register(SEMStream)
+EMStream.register(SpotSEMStream)
 EMStream.register(StaticSEMStream)
+
 
 class SpectrumStream:
     __metaclass__ = ABCMeta
@@ -51,6 +55,7 @@ class SpectrumStream:
 SpectrumStream.register(SpectrumSettingsStream)
 SpectrumStream.register(StaticSpectrumStream)
 SpectrumStream.register(SEMSpectrumMDStream)
+
 
 class ARStream:
     __metaclass__ = ABCMeta

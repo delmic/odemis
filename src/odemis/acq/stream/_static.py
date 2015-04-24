@@ -4,7 +4,7 @@ Created on 25 Jun 2014
 
 @author: Éric Piel
 
-Copyright © 2014 Éric Piel, Delmic
+Copyright © 2014-2015 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -38,6 +38,41 @@ class StaticStream(Stream):
     Stream containing one static image.
     For testing and static images.
     """
+    def __init__(self, name, raw):
+        """
+        Note: parameters are different from the base class.
+        image (DataArray): static raw data.
+        raw (None or list of DataArrays): raw data to be used at initialisation
+          by default, it will contain no data.(None or list of DataArrays)
+        """
+        Stream.__init__(self, name, None, None, None, raw=raw)
+
+
+class RGBStream(StaticStream):
+    """
+    A static stream which gets as input the actual RGB image
+    """
+    def __init__(self, name, image):
+        """
+        Note: parameters are different from the base class.
+        image (DataArray of shape YX3): image to display.
+          The metadata should contain at least MD_POS and MD_PIXEL_SIZE.
+        """
+        # Check it's 2D
+        if not (len(image.shape) == 3 and image.shape[2] in [3, 4]):
+            raise ValueError("Data must be RGB(A)")
+
+        super(RGBStream, self).__init__(name, [image])
+        # TODO: use original image as raw, to allow changing the B/C/tint
+        # Need to distinguish between greyscale (possible) and colour (impossible)
+        self.image.value = image
+
+
+class Static2DStream(StaticStream):
+    """
+    Stream containing one static image.
+    For testing and static images.
+    """
     def __init__(self, name, image):
         """
         Note: parameters are different from the base class.
@@ -51,44 +86,24 @@ class StaticStream(Stream):
         if len(image.shape) > 2:
             image = img.ensure2DImage(image)
 
-        Stream.__init__(self, name, None, None, None, raw=[image])
+        super(Static2DStream, self).__init__(name, [image])
 
-    def onActive(self, active):
-        # don't do anything
-        pass
 
-class RGBStream(StaticStream):
-    """
-    A static stream which gets as input the actual RGB image
-    """
-    def __init__(self, name, image):
-        """
-        Note: parameters are different from the base class.
-        image (DataArray of shape YX3): image to display.
-          The metadata should contain at least MD_POS and MD_PIXEL_SIZE.
-        """
-        Stream.__init__(self, name, None, None, None)
-        # Check it's 2D
-        if not (len(image.shape) == 3 and image.shape[2] in [3, 4]):
-            raise ValueError("Data must be RGB(A)")
-
-        # TODO: use original image as raw, to allow changing the B/C/tint
-        # Need to distinguish between greyscale (possible) and colour (impossible)
-        self.image = VigilantAttribute(image)
-
-class StaticSEMStream(StaticStream):
+class StaticSEMStream(Static2DStream):
     """
     Same as a StaticStream, but considered a SEM stream
     """
     pass
 
-class StaticBrightfieldStream(StaticStream):
+
+class StaticBrightfieldStream(Static2DStream):
     """
     Same as a StaticStream, but considered a Brightfield stream
     """
     pass
 
-class StaticFluoStream(StaticStream):
+
+class StaticFluoStream(Static2DStream):
     """Static Stream containing images obtained via epifluorescence.
 
     It basically knows how to show the emission/filtered wavelengths,
@@ -199,11 +214,9 @@ class StaticARStream(StaticStream):
         # no need for init=True, as Stream.__init__ will update the image
         self.point.subscribe(self._onPoint)
 
-        Stream.__init__(self, name, None, None, None,
-                        raw=list(self._sempos.values()))
+        super(StaticARStream, self).__init__(name, list(self._sempos.values()))
 
-
-    def _getPolarProjection(self, pos):
+    def _project2Polar(self, pos):
         """
         Return the polar projection of the image at the given position.
         pos (tuple of 2 floats): position (must be part of the ._sempos
@@ -216,13 +229,13 @@ class StaticARStream(StaticStream):
             data = self._sempos[pos]
             try:
                 if numpy.prod(data.shape) > (1280 * 1080):
-                    # AR conversion fails one very large images due to too much
+                    # AR conversion fails with very large images due to too much
                     # memory consumed (> 2Gb). So, rescale + use a "degraded" type that
                     # uses less memory. As the display size is small (compared
                     # to the size of the input image, it shouldn't actually
                     # affect much the output.
                     logging.info("AR image is very large %s, will convert to "
-                                 "azymuthal projection in reduced precision.",
+                                 "azimuthal projection in reduced precision.",
                                  data.shape)
                     y, x = data.shape
                     if y > x:
@@ -254,10 +267,14 @@ class StaticARStream(StaticStream):
                 polard = polar.AngleResolved2Polar(data0, size, hole=False, dtype=dtype)
                 self._polar[pos] = polard
             except Exception:
-                logging.exception("Failed to convert to azymuthal projection")
+                logging.exception("Failed to convert to azimuthal projection")
                 return data # display it raw as fallback
 
         return polard
+
+    def _find_metadata(self, md):
+        # For polar view, no PIXEL_SIZE nor POS
+        return {}
 
     @limit_invocation(0.1) # Max 10 Hz
     def _updateImage(self):
@@ -272,7 +289,7 @@ class StaticARStream(StaticStream):
             if pos == (None, None):
                 self.image.value = None
             else:
-                polard = self._getPolarProjection(pos)
+                polard = self._project2Polar(pos)
                 # update the histrogram
                 # TODO: cache the histogram per image
                 # FIXME: histogram should not include the black pixels outside
@@ -281,13 +298,7 @@ class StaticARStream(StaticStream):
                 self._drange = None
                 self._updateDRange(polard)
                 self._updateHistogram(polard)
-                irange = self._getDisplayIRange()
-
-                # Convert to RGB
-                rgbim = img.DataArray2RGB(polard, irange)
-                rgbim.flags.writeable = False
-                # For polar view, no PIXEL_SIZE nor POS
-                self.image.value = model.DataArray(rgbim)
+                self.image.value = self._projectXY2RGB(polard)
         except Exception:
             logging.exception("Updating %s image", self.__class__.__name__)
 
@@ -340,6 +351,7 @@ class StaticARStream(StaticStream):
         # uncache all the polar images, and update the current image
         self._polar = {}
         self._updateImage()
+
 
 class StaticSpectrumStream(StaticStream):
     """
@@ -435,7 +447,7 @@ class StaticSpectrumStream(StaticStream):
         self.selectionWidth.subscribe(self._onSelectionWidth)
 
         self._calibrated = image # the raw data after calibration
-        Stream.__init__(self, name, None, None, None, raw=[image])
+        super(StaticSpectrumStream, self).__init__(name, [image])
 
     # The tricky part is we need to keep the raw data as .raw for things
     # like saving the stream or updating the calibration, but all the
@@ -493,7 +505,12 @@ class StaticSpectrumStream(StaticStream):
         assert low_px <= high_px
         return low_px, high_px
 
-    def _updateImageAverage(self, data):
+    def _projectSpec2XY(self, data):
+        """
+        Project a spectrum cube (CYX) to XY space in RGB, by averaging the
+          intensity over all the wavelengths (selected by the user)
+        return (DataArray): 3D DataArray
+        """
         irange = self._getDisplayIRange()
 
         # pick only the data inside the bandwidth
@@ -509,7 +526,8 @@ class StaticSpectrumStream(StaticStream):
             # Note: For now this method uses three independent bands. To give
             # a better sense of continuum, and be closer to reality when using
             # the visible light's band, we should take a weighted average of the
-            # whole spectrum for each band.
+            # whole spectrum for each band. But in practice, that would be less
+            # useful.
 
             # divide the range into 3 sub-ranges (BRG) of almost the same length
             len_rng = spec_range[1] - spec_range[0] + 1
@@ -535,7 +553,10 @@ class StaticSpectrumStream(StaticStream):
             rgbim[:, :, 2] = bim[:, :, 0]
 
         rgbim.flags.writeable = False
-        self.image.value = model.DataArray(rgbim, self._find_metadata(data.metadata))
+        md = self._find_metadata(data.metadata)
+        md[model.MD_DIMS] = "YXC" # RGB format
+
+        return model.DataArray(rgbim, md)
 
     def get_spectrum_range(self):
         """ Return the wavelength for each pixel of a (complete) spectrum
@@ -700,7 +721,7 @@ class StaticSpectrumStream(StaticStream):
             data = self._calibrated
             if data is None: # can happen during __init__
                 return
-            self._updateImageAverage(data)
+            self.image.value = self._projectSpec2XY(data)
         except Exception:
             logging.exception("Updating %s image", self.__class__.__name__)
 
@@ -727,8 +748,7 @@ class StaticSpectrumStream(StaticStream):
             raise ValueError("Spectrum data contains no wavelength information")
 
         # will raise an exception if incompatible
-        calibrated = calibration.compensate_spectrum_efficiency(
-                                                    data, bckg=bckg, coef=coef)
+        calibrated = calibration.compensate_spectrum_efficiency(data, bckg, coef)
         self._calibrated = calibrated
 
     def _setBackground(self, bckg):

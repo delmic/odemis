@@ -1619,14 +1619,23 @@ class LensAlignTab(Tab):
             vpv
         )
 
+        # TODO: put all the settings as local, so that they don't change when
+        # going to spot mode
         # No stream controller, because it does far too much (including hiding
         # the only stream entry when SEM view is focused)
         sem_stream = streammod.SEMStream("SEM", main_data.sed,
                                          main_data.sed.data, main_data.ebeam)
+        sem_stream.should_update.value = True
         self.tab_data_model.streams.value.append(sem_stream)
         self._sem_stream = sem_stream
         self._sem_view = main_frame.vp_align_sem.microscope_view
         self._sem_view.addStream(sem_stream)
+
+        spot_stream = streammod.SpotSEMStream("Spot", main_data.sed,
+                                              main_data.sed.data, main_data.ebeam)
+        self.tab_data_model.streams.value.append(spot_stream)
+        self._spot_stream = spot_stream
+
         # Adapt the zoom level of the SEM to fit exactly the SEM field of view.
         # No need to check for resize events, because the view has a fixed size.
         main_frame.vp_align_sem.canvas.abilities -= set([CAN_ZOOM])
@@ -1637,6 +1646,8 @@ class LensAlignTab(Tab):
         # Update the SEM area in dichotomic mode
         self.tab_data_model.dicho_seq.subscribe(self._onDichoSeq, init=True)
 
+        # TODO: when paused via the shortcut or menu, really pause it
+        #   => use a stream scheduler?
         # create CCD stream
         ccd_stream = streammod.CameraStream("Optical CL",
                                             main_data.ccd,
@@ -1645,6 +1656,7 @@ class LensAlignTab(Tab):
                                             forcemd={model.MD_ROTATION: 0,
                                                      model.MD_SHEAR: 0}
                                             )
+        ccd_stream.should_update.value = True
         self.tab_data_model.streams.value.insert(0, ccd_stream) # current stream
         self._ccd_stream = ccd_stream
         self._ccd_view = main_frame.vp_align_ccd.microscope_view
@@ -1712,8 +1724,10 @@ class LensAlignTab(Tab):
         # Turn on/off the streams as the tab is displayed.
         # Also directly modify is_active, as there is no stream scheduler
         for s in self.tab_data_model.streams.value:
-            s.should_update.value = show
-            s.is_active.value = show
+            if show:
+                s.is_active.value = s.should_update.value
+            else:
+                s.is_active.value = False
 
         # update the fine alignment dwell time when CCD settings change
         main_data = self.tab_data_model.main
@@ -1753,14 +1767,20 @@ class LensAlignTab(Tab):
             self.main_frame.pnl_align_tools.Show(True)
 
         if tool != guimod.TOOL_SPOT:
-            self._sem_stream.spot.value = False
+            self._spot_stream.should_update.value = False
+            self._spot_stream.is_active.value = False
+            self._sem_stream.should_update.value = True
+            self._sem_stream.is_active.value = True
 
         # Set new mode
         if tool == guimod.TOOL_DICHO:
             self.main_frame.pnl_move_to_center.Show(True)
             self.main_frame.pnl_align_tools.Show(False)
         elif tool == guimod.TOOL_SPOT:
-            self._sem_stream.spot.value = True
+            self._sem_stream.should_update.value = False
+            self._sem_stream.is_active.value = False
+            self._spot_stream.should_update.value = True
+            self._spot_stream.is_active.value = True
             # TODO: until the settings are directly connected to the hardware,
             # or part of the stream, we need to disable/freeze the SEM settings
             # in spot mode.
@@ -2017,14 +2037,13 @@ class MirrorAlignTab(Tab):
             self.main_frame.fp_settings_sparc_spectrum.Show(False)
 
         if main_data.ebeam:
-            # SEM, just for the spot mode
+            # Force a spot at the center of the FoV
             # Not via stream controller, so we can avoid the scheduler
-            sem_stream = streammod.SEMStream("SEM", main_data.sed,
-                                             main_data.sed.data, main_data.ebeam)
-            self._sem_stream = sem_stream
-            self._sem_stream.spot.value = True
+            spot_stream = streammod.SpotSEMStream("SpotSEM", main_data.sed,
+                                                  main_data.sed.data, main_data.ebeam)
+            self._spot_stream = spot_stream
         else:
-            self._sem_stream = None
+            self._spot_stream = None
 
         # Save the current filter
         if main_data.light_filter:
@@ -2133,8 +2152,8 @@ class MirrorAlignTab(Tab):
         # Turn on the camera and SEM only when displaying this tab
         if self._ccd_stream:
             self._ccd_stream.is_active.value = show
-        if self._sem_stream:
-            self._sem_stream.is_active.value = show
+        if self._spot_stream:
+            self._spot_stream.is_active.value = show
 
         if self._scount_stream:
             active = self._scount_stream.should_update.value and show
@@ -2178,8 +2197,8 @@ class MirrorAlignTab(Tab):
     def terminate(self):
         if self._ccd_stream:
             self._ccd_stream.is_active.value = False
-        if self._sem_stream:
-            self._sem_stream.is_active.value = False
+        if self._spot_stream:
+            self._spot_stream.is_active.value = False
 
 
 class TabBarController(object):

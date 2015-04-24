@@ -292,7 +292,8 @@ class AcquisitionTask(object):
         provide a better time estimation).
         """
         if self._current_future != f:
-            logging.warning("Progress update from not the current future: %s", f)
+            logging.warning("Progress update not from the current future: %s instead of %s",
+                            f, self._current_future)
             return
 
         total_end = end + sum(self._streamTimes[s] for s in self._streams_left)

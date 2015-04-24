@@ -198,7 +198,6 @@ class StreamTestCase(unittest.TestCase):
         self.assertEqual(old_roi, ss.roi.value)
         self._check_square_pixel(ss)
 
-
     def test_rgb_camera_stream(self):
         cam = RGBCAM_CLASS(**RGBCAM_KWARGS)
         rgbs = stream.RGBCameraStream("rgb", cam, cam.data, None) # no emitter
@@ -232,6 +231,8 @@ class StreamTestCase(unittest.TestCase):
         time.sleep(2 * dur)
         img2 = rgbs.image.value
         self.assertIs(img, img2)
+
+        cam.terminate()
 
     def test_histogram(self):
         """
@@ -476,7 +477,7 @@ class SECOMTestCase(unittest.TestCase):
         """
         s1 = stream.FluoStream("fluo1", self.ccd, self.ccd.data,
                                self.light, self.light_filter)
-        self.ccd.exposureTime = 1 # s, to avoid acquiring too many images
+        self.ccd.exposureTime.value = 1 # s, to avoid acquiring too many images
 
         # Check we manage to get at least one image
         self._image = None
@@ -570,7 +571,7 @@ class SECOMTestCase(unittest.TestCase):
         self.assertGreater(fs.estimateAcquisitionTime(), short_at)
 
 
-@skip("faster")
+# @skip("faster")
 class SPARCTestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) SPARC
@@ -889,8 +890,8 @@ class SPARCTestCase(unittest.TestCase):
         self.assertTrue(first_date < dates[0] < dates[-1])
 
 
-@skip("faster")
-class TestStaticStreams(unittest.TestCase):
+# @skip("faster")
+class StaticStreamsTestCase(unittest.TestCase):
     """
     Test static streams, which don't need any backend running
     """
@@ -1107,7 +1108,6 @@ class TestStaticStreams(unittest.TestCase):
         self.assertEqual(sp1d.dtype, numpy.uint8)
         self.assertEqual(wl1d.shape, (spec.shape[0],))
 
-
     def test_spec_calib(self):
         """Test StaticSpectrumStream calibration"""
         spec = self._create_spec_data()
@@ -1135,7 +1135,6 @@ class TestStaticStreams(unittest.TestCase):
         # Check it's a RGB DataArray
         self.assertEqual(im2d.shape, spec.shape[-2:] + (3,))
         self.assertTrue(numpy.any(im2d != prev_im2d))
-
 
 
 if __name__ == "__main__":

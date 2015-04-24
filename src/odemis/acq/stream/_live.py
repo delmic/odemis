@@ -4,7 +4,7 @@ Created on 25 Jun 2014
 
 @author: Éric Piel
 
-Copyright © 2014 Éric Piel, Delmic
+Copyright © 2014-2015 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -26,28 +26,148 @@ import numpy
 from odemis import model
 from odemis.acq import drift
 from odemis.acq.align import FindEbeamCenter
-from odemis.model import MD_POS, MD_POS_COR, MD_PIXEL_SIZE_COR, \
-    MD_ROTATION_COR, NotApplicableError
+from odemis.model import MD_POS_COR
 from odemis.util import img, limit_invocation, conversion, fluo
+import threading
 import time
 
 from ._base import Stream, UNDEFINED_ROI
 
 
-class SEMStream(Stream):
+class LiveStream(Stream):
+    """
+    Abstract class for any stream that can do continuous acquisition.
+    """
+
+    def __init__(self, name, detector, dataflow, emitter, forcemd=None, **kwargs):
+        """
+        forcemd (None or dict of MD_* -> value): force the metadata of the
+          .image DataArray to be overridden by this metadata.
+        """
+        Stream.__init__(self, name, detector, dataflow, emitter, **kwargs)
+
+        self._forcemd = forcemd
+
+        self.is_active.subscribe(self._onActive)
+
+        # Region of interest as left, top, right, bottom (in ratio from the
+        # whole area of the emitter => between 0 and 1)
+        self.roi = model.TupleContinuous((0, 0, 1, 1),
+                                         range=((0, 0, 0, 0), (1, 1, 1, 1)),
+                                         cls=(int, long, float))
+
+        # TODO: kill the thread when the stream is dereferenced
+        self._ht_needs_recompute = threading.Event()
+        self._hthread = threading.Thread(target=self._histogram_thread,
+                                         name="Histogram computation")
+        self._hthread.daemon = True
+        self._hthread.start()
+
+    def _find_metadata(self, md):
+        simpl_md = super(LiveStream, self)._find_metadata(md)
+
+        if self._forcemd:
+            simpl_md.update(self._forcemd)
+
+        return simpl_md
+
+    def _onActive(self, active):
+        """ Called when the Stream is activated or deactivated by setting the
+        is_active attribute
+        """
+        if active:
+            msg = "Subscribing to dataflow of component %s"
+            logging.debug(msg, self._detector.name)
+            if not self.should_update.value:
+                logging.warning("Trying to activate stream while it's not "
+                                "supposed to update")
+            self._dataflow.subscribe(self._onNewImage)
+        else:
+            msg = "Unsubscribing from dataflow of component %s"
+            logging.debug(msg, self._detector.name)
+            self._dataflow.unsubscribe(self._onNewImage)
+
+    def _shouldUpdateHistogram(self):
+        """
+        Ensures that the histogram VA will be updated in the "near future".
+        """
+        # If the previous request is still being processed, the event
+        # synchronization allows to delay it (without accumulation).
+        self._ht_needs_recompute.set()
+
+    def _histogram_thread(self):
+        """
+        Called as a separate thread, and recomputes the histogram whenever
+        it receives an event asking for it.
+        """
+        while True:
+            self._ht_needs_recompute.wait() # wait until a new image is available
+            tstart = time.time()
+            self._ht_needs_recompute.clear()
+            self._updateHistogram()
+            tend = time.time()
+
+#            # if histogram is different from previous one, update image
+#            if self.auto_bc.value:
+#                prev_irange = self.intensityRange.value
+#                irange = img.findOptimalRange(self.histogram._full_hist,
+#                              self.histogram._edges,
+#                              self.auto_bc_outliers.value / 100)
+#                # TODO: also skip it if the ranges are _almost_ identical
+#                inter_rng = (max(irange[0], prev_irange[0]),
+#                             min(irange[1], prev_irange[1]))
+#                inter_width = inter_rng[1] - inter_rng[0]
+#                irange_width = irange[1] - irange[0]
+#                prev_width = prev_irange[1] - prev_irange[0]
+#                if (irange != prev_irange and
+#                    (inter_width < 0)): #or (prev_width - inter_width / prev_width)
+#                    self.intensityRange.value = tuple(irange)
+#                    self._updateImage()
+
+            # sleep as much, to ensure we are not using too much CPU
+            tsleep = max(0.2, tend - tstart) # max 5 Hz
+            time.sleep(tsleep)
+
+            # If still nothing to do, update the RGB image with the new B/C.
+            if not self._ht_needs_recompute.is_set() and self.auto_bc.value:
+                # Note that this can cause the .image to be updated even after the
+                # stream is not active (but that can happen even without this).
+                self._updateImage()
+
+    def _onNewImage(self, dataflow, data):
+        old_drange = self._drange
+
+        if not self.raw:
+            self.raw.append(data)
+        else:
+            self.raw[0] = data
+
+        # Depth can change at each image (depends on hardware settings)
+        self._updateDRange(data)
+        if old_drange == self._drange:
+            # If different range, it will be immediately recomputed anyway
+            self._shouldUpdateHistogram()
+
+        self._updateImage()
+
+
+class SEMStream(LiveStream):
     """ Stream containing images obtained via Scanning electron microscope.
 
     It basically knows how to activate the scanning electron and the detector.
     """
     def __init__(self, name, detector, dataflow, emitter, **kwargs):
-        Stream.__init__(self, name, detector, dataflow, emitter, **kwargs)
+        super(SEMStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
 
         # TODO: Anti-aliasing/Pixel fuzzing
         # .fuzzing: boolean
         # Might be better to automatically activate it for Spectrum, and disable
         # it for AR (without asking the user)
 
+        # TODO: do the same for .resolution
+        # To restart directly acquisition if settings change
         try:
+            # Only happen when active => can directly use the use the emitter VA
             self._prevDwellTime = emitter.dwellTime.value
             emitter.dwellTime.subscribe(self.onDwellTime)
         except AttributeError:
@@ -57,17 +177,9 @@ class SEMStream(Stream):
         # Actually use the ROI
         self.roi.subscribe(self._onROI)
 
-        # Spot mode: when set (and stream is active), it will drive the e-beam
-        # do only the center of the scanning area. Image is not updated.
-        # TODO: is this the right interface? Shall we just have a different
-        # stream type? => move to SEMSpotStream (+ position or translation VA)
-        self.spot = model.BooleanVA(False)
-
-        # used to reset the previous settings after spot mode
-        self._no_spot_settings = (None, None, None) # dwell time, resolution, translation
-        self.spot.subscribe(self._onSpot)
-
         # drift correction VAs:
+        # Not currently supported by this standard stream, but some synchronised
+        #   streams do.
         # dcRegion defines the anchor region, drift correction will be disabled
         #   if it is set to UNDEFINED_ROI
         # dcDwellTime: dwell time used when acquiring anchor region
@@ -83,7 +195,7 @@ class SEMStream(Stream):
         self.dcDwellTime = model.FloatContinuous(emitter.dwellTime.range[0],
                                          range=emitter.dwellTime.range, unit="s")
         self.dcPeriod = model.FloatContinuous(10,  # s, default to "fairly frequent" to work hopefully in most cases
-                                              range=[0.1, 1e6], unit="s")
+                                              range=(0.1, 1e6), unit="s")
 
     def _computeROISettings(self, roi):
         """
@@ -122,10 +234,10 @@ class SEMStream(Stream):
         """
         Called when the roi VA is updated
         """
-        # only change hw settings if stream is active (and not spot mode)
-        # Note: we could also (un)subscribe whenever these changes, but it's
+        # only change hw settings if stream is active
+        # Note: we could also (un)subscribe whenever this changes, but it's
         # simple like this.
-        if self.is_active.value and not self.spot.value:
+        if self.is_active.value:
             self._applyROI()
 
     def _setDCRegion(self, roi):
@@ -136,8 +248,8 @@ class SEMStream(Stream):
         if roi == UNDEFINED_ROI:
             return roi # No need to discuss it
 
-        width = [roi[2] - roi[0], roi[3] - roi[1]]
-        center = [(roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2]
+        width = (roi[2] - roi[0], roi[3] - roi[1])
+        center = ((roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2)
 
         # Ensure the ROI is at least as big as the MIN_RESOLUTION
         # (knowing it always uses scale = 1)
@@ -160,58 +272,6 @@ class SEMStream(Stream):
                center[0] + width[0] / 2, center[1] + width[1] / 2)
 
         return roi
-
-    def _onSpot(self, spot):
-        if self.is_active.value:
-            # to be avoid potential weird scanning while changing values
-            self._dataflow.unsubscribe(self.onNewImage)
-
-            if spot:
-                self._startSpot()
-            else:
-                self._stopSpot()
-
-            self._dataflow.subscribe(self.onNewImage)
-
-    def _startSpot(self):
-        """
-        Start the spot mode. Can handle being called if it's already active
-        """
-        if self._no_spot_settings != (None, None, None):
-            logging.debug("Starting spot mode while it was already active")
-            return
-
-        # TODO: don't change local settings if there
-        logging.debug("Activating spot mode")
-        self._no_spot_settings = (self._emitter.dwellTime.value,
-                                  self._emitter.resolution.value,
-                                  self._emitter.translation.value)
-        logging.debug("Previous values : %s", self._no_spot_settings)
-
-        # resolution -> translation: order matters
-        self._emitter.resolution.value = (1, 1)
-        self._emitter.translation.value = (0, 0) # position of the spot (floats)
-
-        # put a not too short dwell time to avoid acquisition to keep repeating,
-        # and not too long to avoid using too much memory for acquiring one point.
-        self._emitter.dwellTime.value = 0.1 # s
-
-    def _stopSpot(self):
-        """
-        Stop the spot mode. Can handle being called if it's already inactive
-        """
-        if self._no_spot_settings == (None, None, None):
-            logging.debug("Stop spot mode while it was already inactive")
-            return
-
-        logging.debug("Disabling spot mode")
-        logging.debug("Restoring values : %s", self._no_spot_settings)
-
-        (self._emitter.dwellTime.value,
-         self._emitter.resolution.value,
-         self._emitter.translation.value) = self._no_spot_settings
-
-        self._no_spot_settings = (None, None, None)
 
     def estimateAcquisitionTime(self):
 
@@ -236,28 +296,18 @@ class SEMStream(Stream):
             logging.exception(msg, self.name.value)
             return Stream.estimateAcquisitionTime(self)
 
-    def onActive(self, active):
-        # handle spot mode
-        if self.spot.value:
-            if active:
-                self._startSpot()
-                super(SEMStream, self).onActive(active)
-            else:
-                # stop acquisition before changing the settings
-                super(SEMStream, self).onActive(active)
-                self._stopSpot()
-        else:
-            if active:
-                # TODO: if can blank => unblank, or done automatically by the driver?
+    def _onActive(self, active):
+        if active:
+            # Note: blank => unblank, is done automatically by the driver
 
-                # update hw settings to our own ROI
-                self._applyROI()
+            # update Hw settings to our own ROI
+            self._applyROI()
 
-                if self.dcRegion.value != UNDEFINED_ROI:
-                    raise NotImplementedError("SEM drift correction on simple SEM "
-                                              "acquisition not yet implemented")
+            if self.dcRegion.value != UNDEFINED_ROI:
+                raise NotImplementedError("SEM drift correction on simple SEM "
+                                          "acquisition not yet implemented")
 
-            super(SEMStream, self).onActive(active)
+        super(SEMStream, self)._onActive(active)
 
     def onDwellTime(self, value):
         # When the dwell time changes, the new value is only used on the next
@@ -284,25 +334,15 @@ class SEMStream(Stream):
 
             # TODO: do this on a rate-limited fashion (now, or ~1s)
             # unsubscribe, and re-subscribe immediately
-            self._dataflow.unsubscribe(self.onNewImage)
-            self._dataflow.subscribe(self.onNewImage)
+            self._dataflow.unsubscribe(self._onNewImage)
+            self._dataflow.subscribe(self._onNewImage)
 
         finally:
             self._prevDwellTime = value
 
-    def onNewImage(self, df, data):
-        """
-        received a new image from the hardware
-        """
-        # In spot mode, don't update the image.
-        # (still receives data as the e-beam needs an active detector to acquire)
-        if self.spot.value:
-            return
-        super(SEMStream, self).onNewImage(df, data)
-
 MTD_EBEAM_SHIFT = "Ebeam shift"
 MTD_MD_UPD = "Metadata update"
-MTD_STAGE_MOVE = "Stage move"
+# MTD_STAGE_MOVE = "Stage move"
 class AlignedSEMStream(SEMStream):
     """
     This is a special SEM stream which automatically first aligns with the
@@ -315,10 +355,7 @@ class AlignedSEMStream(SEMStream):
         """
         shiftebeam (MTD_*): if MTD_EBEAM_SHIFT, will correct the SEM position using beam shift
          (iow, using emitter.translation). If MTD_MD_UPD, it will just update the
-         position correction metadata on the SEM images. If MTD_STAGE_MOVE, it will
-         move the stage or beam (depending on how large is the move) and then update
-         the correction metadata (note that if the stage has moved, the optical
-         stream will need to be updated too).
+         position correction metadata on the SEM images.
         """
         SEMStream.__init__(self, name, detector, dataflow, emitter, **kwargs)
         self._ccd = ccd
@@ -389,9 +426,9 @@ class AlignedSEMStream(SEMStream):
         logging.debug("Update metadata for SEM image shift")
         self._detector.updateMetadata({MD_POS_COR: self._shift})
 
-    def onActive(self, active):
+    def _onActive(self, active):
         # Need to calibrate ?
-        if active and not self._calibrated and not self.spot.value:
+        if active and not self._calibrated:
             # store current settings
             no_spot_settings = (self._emitter.dwellTime.value,
                                 self._emitter.resolution.value)
@@ -416,15 +453,15 @@ class AlignedSEMStream(SEMStream):
                 self._cur_trans = (cur_trans[0] - self._last_shift[0],
                                    cur_trans[1] - self._last_shift[1])
 
-                if self._shiftebeam == MTD_STAGE_MOVE:
-                    for child in self._stage.children.value:
-                        if child.role == "sem-stage":
-                            f = child.moveRel({"x": shift[0], "y": shift[1]})
-                            f.result()
-
-                    shift = (0, 0) # just in case of failure
-                    shift = FindEbeamCenter(self._ccd, self._detector, self._emitter)
-                elif self._shiftebeam == MTD_EBEAM_SHIFT:
+#                 if self._shiftebeam == MTD_STAGE_MOVE:
+#                     for child in self._stage.children.value:
+#                         if child.role == "sem-stage":
+#                             f = child.moveRel({"x": shift[0], "y": shift[1]})
+#                             f.result()
+#
+#                     shift = (0, 0) # just in case of failure
+#                     shift = FindEbeamCenter(self._ccd, self._detector, self._emitter)
+                if self._shiftebeam == MTD_EBEAM_SHIFT:
                     # First align using translation
                     self._applyROI()
                     # Then by updating the metadata
@@ -452,10 +489,121 @@ class AlignedSEMStream(SEMStream):
             self._shift = shift
             self._compensateShift()
 
-        super(AlignedSEMStream, self).onActive(active)
+        super(AlignedSEMStream, self)._onActive(active)
 
 
-class CameraStream(Stream):
+class SpotSEMStream(LiveStream):
+    """
+    Stream which forces the SEM to be in spot mode when active.
+    """
+    def __init__(self, name, detector, dataflow, emitter, **kwargs):
+        """
+        detector: must be one of the SEM detector, to force beam unblanking
+        """
+        super(SpotSEMStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
+
+        # TODO: forbid emt VAs resolution, translation and dwelltime
+
+        # used to reset the previous settings after spot mode
+        self._no_spot_settings = (None, None, None) # dwell time, resolution, translation
+
+        # To indicate the position, use the ROI. We expect that the ROI has an
+        # "empty" area (ie, lt == rb)
+        self.roi.value = (0.5, 0.5, 0.5, 0.5)  # centre
+
+    def _applyROI(self):
+        """
+        Update the scanning area of the SEM according to the roi
+        Note: should only be called when active (because it directly modifies
+          the hardware settings)
+        """
+        roi = self.roi.value
+        if roi[0:2] != roi[2:4]:
+            logging.warning("SpotSEMStream got non empty ROI %s, will use center",
+                            roi)
+        pos = ((roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2)
+
+        # Convert pos (ratio of FoV) to trans (in pixels from the center)
+        shape = self._emitter.shape
+        trans = (shape[0] * (pos[0] - 0.5), shape[1] * (pos[1] - 0.5))
+
+        # always in this order
+        self._emitter.resolution.value = (1, 1)
+        self._emitter.translation.value = trans
+
+    def _onROI(self, roi):
+        """
+        Called when the roi VA is updated
+        """
+        # only change hw settings if stream is active
+        # Note: we could also (un)subscribe whenever this changes, but it's
+        # simple like this.
+        if self.is_active.value:
+            self._applyROI()
+
+    def _onActive(self, active):
+        # handle spot mode
+        if active:
+            self._startSpot()
+            super(SpotSEMStream, self)._onActive(active)
+        else:
+            # stop acquisition before changing the settings
+            super(SpotSEMStream, self)._onActive(active)
+            self._stopSpot()
+
+    def _startSpot(self):
+        """
+        Start the spot mode. Can handle being called if it's already active
+        """
+        if self._no_spot_settings != (None, None, None):
+            logging.warning("Starting spot mode while it was already active")
+            return
+
+        logging.debug("Activating spot mode")
+        self._no_spot_settings = (self._emitter.dwellTime.value,
+                                  self._emitter.resolution.value,
+                                  self._emitter.translation.value)
+        logging.debug("Previous values : %s", self._no_spot_settings)
+
+        self._applyROI()
+
+        # put a not too short dwell time to avoid acquisition to keep repeating,
+        # and not too long to avoid using too much memory for acquiring one point.
+        self._emitter.dwellTime.value = 0.1 # s
+
+    def _stopSpot(self):
+        """
+        Stop the spot mode. Can handle being called if it's already inactive
+        """
+        if self._no_spot_settings == (None, None, None):
+            logging.debug("Stop spot mode while it was already inactive")
+            return
+
+        logging.debug("Disabling spot mode")
+        logging.debug("Restoring values : %s", self._no_spot_settings)
+
+        (self._emitter.dwellTime.value,
+         self._emitter.resolution.value,
+         self._emitter.translation.value) = self._no_spot_settings
+
+        self._no_spot_settings = (None, None, None)
+
+    def estimateAcquisitionTime(self):
+        """
+        Pretty much meaning-less as it will not ever update the image
+        """
+        return 0.1
+
+    def _onNewImage(self, df, data):
+        """
+        received a new image from the hardware
+        """
+        # Don't update the image.
+        # (still receives data as the e-beam needs an active detector to acquire)
+        return
+
+
+class CameraStream(LiveStream):
     """ Abstract class representing streams which have a digital camera as a
     detector.
 
@@ -469,28 +617,7 @@ class CameraStream(Stream):
         if emtvas and "emission" in emtvas:
             raise ValueError("emission VA cannot be made local")
 
-        Stream.__init__(self, name, detector, dataflow, emitter, emtvas=emtvas, **kwargs)
-
-        # exposure time and power have to be create by the creator
-#         # Create VAs for exposureTime and light power, based on the hardware VA,
-#         # that can be used, to override the hardware setting on a per stream basis
-#         if isinstance(detector.exposureTime, model.VigilantAttributeBase):
-#             try:
-#                 self.exposureTime = model.FloatContinuous(
-#                                                 detector.exposureTime.value,
-#                                                 detector.exposureTime.range,
-#                                                 unit=detector.exposureTime.unit)
-#             except (AttributeError, NotApplicableError):
-#                 pass # no exposureTime or no .range
-#
-#         if (emitter is not None and
-#             isinstance(emitter.power, model.VigilantAttributeBase)):
-#             try:
-#                 self.lightPower = model.FloatContinuous(emitter.power.value,
-#                                                         emitter.power.range,
-#                                                         unit=emitter.power.unit)
-#             except (AttributeError, NotApplicableError):
-#                 pass # no power or no .range
+        LiveStream.__init__(self, name, detector, dataflow, emitter, emtvas=emtvas, **kwargs)
 
     def estimateAcquisitionTime(self):
         # exposure time + readout time * pixels (if CCD) + set-up time
@@ -510,6 +637,8 @@ class CameraStream(Stream):
             logging.exception(msg, self.name.value)
             return Stream.estimateAcquisitionTime(self)
 
+    # TODO: should all provide a _start_light() and _setup_optical_path()?
+
     def _stop_light(self):
         """
         Ensures the light is turned off (temporarily)
@@ -522,10 +651,13 @@ class CameraStream(Stream):
         emissions = [0.] * len(self._emitter.emissions.value)
         self._emitter.emissions.value = emissions
 
+        # TODO: if emitter has not .emissions => just turn off .power
+
         # TODO: might need to be more clever to avoid turning off and on the
         # light source when just switching between FluoStreams. => have a
         # global acquisition manager which takes care of switching on/off
         # the emitters which are used/unused.
+
 
 class BrightfieldStream(CameraStream):
     """ Stream containing images obtained via optical brightfield illumination.
@@ -533,16 +665,17 @@ class BrightfieldStream(CameraStream):
     It basically knows how to select white light and disable any filter.
     """
 
-    def onActive(self, active):
+    def _onActive(self, active):
         if active:
             self._setup_excitation()
             # TODO: do we need to have a special command to disable filter??
             # or should it be disabled automatically by the other streams not
             # using it?
             # self._setup_emission()
+            super(BrightfieldStream, self)._onActive(active)
         else:
+            super(BrightfieldStream, self)._onActive(active)
             self._stop_light()
-        Stream.onActive(self, active)
 
     # def _setup_emission(self):
     #     if not self._filter.band.readonly:
@@ -616,7 +749,8 @@ class CameraCountStream(CameraStream):
         im.metadata[model.MD_ACQ_DATE] = self._raw_date
         self.image.value = im
 
-    def onNewImage(self, dataflow, data):
+    def _onNewImage(self, dataflow, data):
+        # we absolutely need the acquisition time
         try:
             date = data.metadata[model.MD_ACQ_DATE]
         except KeyError:
@@ -704,16 +838,17 @@ class FluoStream(CameraStream):
         self.tint = model.ListVA(default_tint, unit="RGB") # 3-tuple R,G,B
         self.tint.subscribe(self.onTint)
 
-    def onActive(self, active):
+    def _onActive(self, active):
         if active:
             self._setup_excitation()
             self._setup_emission()
+            super(FluoStream, self)._onActive(active)
         else:
-            self._stop_light() # important if SEM image to be acquired
-        Stream.onActive(self, active)
+            super(FluoStream, self)._onActive(active)
+            self._stop_light()
 
     def _updateImage(self): # pylint: disable=W0221
-        Stream._updateImage(self, self.tint.value)
+        super(FluoStream, self)._updateImage(self.tint.value)
 
     def onExcitation(self, value):
         if self.is_active.value:
@@ -766,7 +901,7 @@ class FluoStream(CameraStream):
         emissions[i] = 1.
         self._emitter.emissions.value = emissions
 
-    def onNewImage(self, dataflow, data):
+    def _onNewImage(self, dataflow, data):
         # Add some metadata on the fluorescence
 
         # TODO: should be handled by the MD updater?
@@ -776,7 +911,7 @@ class FluoStream(CameraStream):
             data.metadata[model.MD_OUT_WL] = em_band
 
         data.metadata[model.MD_USER_TINT] = self.tint.value
-        super(FluoStream, self).onNewImage(dataflow, data)
+        super(FluoStream, self)._onNewImage(dataflow, data)
 
 
 class RGBCameraStream(CameraStream):
@@ -797,7 +932,6 @@ class RGBCameraStream(CameraStream):
             logging.warning("RGBCameraStream expects detector with shape of "
                             "length 4, but shape is %s", detector.shape)
 
-
     # TODO: handle brightness and contrast VAs
     def _onAutoBC(self, enabled):
         pass
@@ -805,26 +939,27 @@ class RGBCameraStream(CameraStream):
     def _onOutliers(self, outliers):
         pass
 
-    def _setIntensityRange(self, irange):
-        pass
-
     def _onIntensityRange(self, irange):
         pass
 
-    def onActive(self, active):
-        if self._emitter is not None:
-            if active:
-                # set the light to max
-                # TODO: allows to define the power via a VA on the stream
+    def _onActive(self, active):
+        # TODO: just use the standard CameraStream method
+        if active:
+            # set the light to max
+            # TODO: allows to define the power via a VA on the stream
+            if self._emitter:
                 self._emitter.power.value = self._emitter.power.range[1]
-            else:
-                # turn off the light
+            super(RGBCameraStream, self)._onActive(active)
+        else:
+            # turn off the light
+            super(RGBCameraStream, self)._onActive(active)
+            if self._emitter:
                 self._emitter.power.value = self._emitter.power.range[0]
-        Stream.onActive(self, active)
 
     @limit_invocation(0.1)
     def _updateImage(self):
         # Just pass the RGB data on
+
         if not self.raw:
             return
 
@@ -839,10 +974,12 @@ class RGBCameraStream(CameraStream):
         except Exception:
             logging.exception("Updating %s image", self.__class__.__name__)
 
-    def onNewImage(self, dataflow, data):
-        # simple version, without drange computation
-        if not self.raw:
-            self.raw.append(data)
-        else:
-            self.raw[0] = data
-        self._updateImage()
+    # TODO: any problem with drange computation?
+    # histogram doesn't like it?
+#     def _onNewImage(self, dataflow, data):
+#         # simple version, without drange computation
+#         if not self.raw:
+#             self.raw.append(data)
+#         else:
+#             self.raw[0] = data
+#         self._updateImage()

@@ -4,7 +4,7 @@ Created on 25 Jun 2014
 
 @author: Éric Piel
 
-Copyright © 2014 Éric Piel, Delmic
+Copyright © 2014-2015 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -28,6 +28,7 @@ from odemis import model
 from odemis.acq import align
 
 from ._base import Stream, UNDEFINED_ROI
+from functools import wraps
 
 
 class RepetitionStream(Stream):
@@ -36,19 +37,9 @@ class RepetitionStream(Stream):
     repeated over a grid.
     """
 
-    def __init__(self, name, detector, dataflow, emitter):
-        self.name = model.StringVA(name)
-
-        # Hardware Components
-        self._detector = detector # the spectrometer
-        self._emitter = emitter # the e-beam
-
-        # TODO: local settings from Stream
-
-        # data-flow of the spectrometer
-        self._dataflow = dataflow
-
-        self.raw = [] # to contain data during acquisition (from MD streams)
+    def __init__(self, name, detector, dataflow, emitter, **kwargs):
+        super(RepetitionStream, self).__init__(name, detector, dataflow, emitter,
+                                               **kwargs)
 
         # all the information needed to acquire an image (in addition to the
         # hardware component settings which can be directly set).
@@ -66,7 +57,7 @@ class RepetitionStream(Stream):
         # Region of interest as left, top, right, bottom (in ratio from the
         # whole area of the emitter => between 0 and 1)
         self.roi = model.TupleContinuous((0, 0, 1, 1),
-                                         range=[(0, 0, 0, 0), (1, 1, 1, 1)],
+                                         range=((0, 0, 0, 0), (1, 1, 1, 1)),
                                          cls=(int, long, float),
                                          setter=self._setROI)
         # the number of pixels acquired in each dimension
@@ -77,10 +68,10 @@ class RepetitionStream(Stream):
                                              emitter.resolution.range,
                                              setter=self._setRepetition)
 
-        # the size of the pixel, horizontally and vertically
+        # the size of the pixel, both horizontally and vertically
         # actual range is dynamic, as it changes with the magnification
         self.pixelSize = model.FloatContinuous(emitter.pixelSize.value[0],
-                           range=[0, 1], unit="m", setter=self._setPixelSize)
+                           range=(0, 1), unit="m", setter=self._setPixelSize)
 
         # exposure time of each pixel is the exposure time of the detector,
         # the dwell time of the emitter will be adapted before acquisition.
@@ -89,8 +80,12 @@ class RepetitionStream(Stream):
         # This allows to keep the ROI at the same place in the SEM FoV.
         # Note: this is to be done only if the user needs to manually update the
         # magnification.
-        self._prev_mag = emitter.magnification.value
-        emitter.magnification.subscribe(self._onMagnification)
+        try:
+            magva = self._getEmitterVA("magnification")
+            self._prev_mag = magva.value
+            magva.subscribe(self._onMagnification)
+        except AttributeError:
+            pass
 
     def _onMagnification(self, mag):
         """
@@ -314,6 +309,7 @@ class RepetitionStream(Stream):
             logging.exception(msg, self.name.value)
             return Stream.estimateAcquisitionTime(self)
 
+
 class SpectrumSettingsStream(RepetitionStream):
     """ A Spectrum stream.
 
@@ -325,6 +321,7 @@ class SpectrumSettingsStream(RepetitionStream):
         RepetitionStream.__init__(self, name, detector, dataflow, emitter)
         # For SPARC: typical user wants density a bit lower than SEM
         self.pixelSize.value *= 6
+
 
 class ARSettingsStream(RepetitionStream):
     """
@@ -338,8 +335,6 @@ class ARSettingsStream(RepetitionStream):
         RepetitionStream.__init__(self, name, detector, dataflow, emitter)
         # For SPARC: typical user wants density much lower than SEM
         self.pixelSize.value *= 30
-
-
 
 
 # Maximum allowed overlay difference in electron coordinates.
@@ -392,7 +387,7 @@ class OverlayStream(Stream):
         returns (float): approximate time in seconds that overlay will take
         """
         return align.find_overlay.estimateOverlayTime(self.dwellTime.value,
-                                                self.repetition.value)
+                                                      self.repetition.value)
 
     def acquire(self):
         """
@@ -402,37 +397,26 @@ class OverlayStream(Stream):
         """
         # Just calls the FindOverlay function and return its future
         ovrl_future = align.FindOverlay(self.repetition.value,
-                                                        self.dwellTime.value,
-                                                        OVRL_MAX_DIFF,
-                                                        self._emitter,
-                                                        self._ccd,
-                                                        self._detector,
-                                                        skew=True)
+                                        self.dwellTime.value,
+                                        OVRL_MAX_DIFF,
+                                        self._emitter,
+                                        self._ccd,
+                                        self._detector,
+                                        skew=True)
 
-        return _FutureOverlayWrapper(ovrl_future)
+        ovrl_future.result = self._result_wrapper(ovrl_future.result)
+        return ovrl_future
 
-class _FutureOverlayWrapper(object):
-    '''
-    Wrapper class to change the .result() return value of the Future provided
-    by the FindOverlay function.
-    '''
-    # First 2 methods are actually standard for any wrapper
-    def __init__(self, obj):
-        '''
-        Wrapper constructor.
-        @param obj: object to wrap
-        '''
-        # wrap the object
-        self._wrapped_obj = obj
+    def _result_wrapper(self, f):
+        """
+        Wraps the .result() return value of the Future provided
+          by the FindOverlay function to make it return DataArrays, as a normal
+          future from a Stream should do.
+        """
+        @wraps(f)
+        def result_as_da(timeout=None):
+            trans_val, (opt_md, sem_md) = f(timeout)
+            # Create an empty DataArray with trans_md as the metadata
+            return [model.DataArray([], opt_md), model.DataArray([], sem_md)]
 
-    def __getattr__(self, attr):
-        # see if this object has attr
-        if attr in self.__dict__:
-            return getattr(self, attr)
-        # proxy to the wrapped object
-        return getattr(self._wrapped_obj, attr)
-
-    def result(self, timeout=None):
-        trans_val, (opt_md, sem_md) = self._wrapped_obj.result(timeout)
-        # Create an empty DataArray with trans_md as the metadata
-        return [model.DataArray([], opt_md), model.DataArray([], sem_md)]
+        return result_as_da

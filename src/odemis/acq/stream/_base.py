@@ -4,7 +4,7 @@ Created on 25 Jun 2014
 
 @author: Éric Piel
 
-Copyright © 2014 Éric Piel, Delmic
+Copyright © 2014-2015 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -27,7 +27,6 @@ from odemis import model
 from odemis.model import (MD_POS, MD_PIXEL_SIZE, MD_ROTATION, MD_ACQ_DATE,
                           MD_SHEAR, VigilantAttribute, VigilantAttributeBase)
 from odemis.util import img, limit_invocation
-import threading
 import time
 
 
@@ -53,7 +52,7 @@ class Stream(object):
     SETUP_OVERHEAD = 0.1
 
     def __init__(self, name, detector, dataflow, emitter,
-                 detvas=None, emtvas=None, raw=None, forcemd=None):
+                 detvas=None, emtvas=None, raw=None):
         """
         name (string): user-friendly name of this stream
         detector (Detector): the detector which has the dataflow
@@ -65,10 +64,7 @@ class Stream(object):
           duplicated on the stream. They will be named .emtOriginalName
         raw (None or list of DataArrays): raw data to be used at initialisation
           by default, it will contain no data.
-        forcemd (None or dict of MD_* -> value): force the metadata of the
-          .image DataArray to be overridden by this metadata.
         """
-
         self.name = model.StringVA(name)
 
         # Hardware Components
@@ -92,8 +88,6 @@ class Stream(object):
         else:
             self.raw = raw
 
-        self._forcemd = forcemd
-
         # TODO: should better be based on a BufferedDataFlow: subscribing starts
         # acquisition and sends (raw) data to whoever is interested. .get()
         # returns the previous or next image acquired.
@@ -107,13 +101,14 @@ class Stream(object):
         self.should_update = model.BooleanVA(False)
         # is_active set to True will keep the acquisition going on
         self.is_active = model.BooleanVA(False, setter=self._is_active_setter)
-        self.is_active.subscribe(self.onActive)
 
-        # Region of interest as left, top, right, bottom (in ratio from the
-        # whole area of the emitter => between 0 and 1)
-        self.roi = model.TupleContinuous((0, 0, 1, 1),
-                                         range=((0, 0, 0, 0), (1, 1, 1, 1)),
-                                         cls=(int, long, float))
+        # Duplicate VA if requested
+        self._hwvas = {} # str (name of the proxied VA) -> original Hw VA
+        self._hwvasetters = {} # str (name of the proxied VA) -> setter
+        self._lvaupdaters = {} # str (name of the proxied VA) -> listener
+
+        self._duplicateVAs(detector, "det", detvas or {})
+        self._duplicateVAs(emitter, "emt", emtvas or {})
 
         self._drange = None # min/max data range, or None if unknown
 
@@ -125,15 +120,6 @@ class Stream(object):
         # cases (like flat histogram), you still loose only one value on each
         # side.
         self.auto_bc_outliers = model.FloatContinuous(100 / 256, range=(0, 40))
-
-        # TODO: move to "LiveStream" or "HwStream" subclass
-        # Duplicate VA if requested
-        self._hwvas = {} # str (name of the proxied VA) -> original Hw VA
-        self._hwvasetters = {} # str (name of the proxied VA) -> setter
-        self._lvaupdaters = {} # str (name of the proxied VA) -> listener
-
-        self._duplicateVAs(detector, "det", detvas or {})
-        self._duplicateVAs(emitter, "emt", emtvas or {})
 
         # Used if auto_bc is False
         # min/max ratio of the whole intensity level which are mapped to
@@ -163,22 +149,15 @@ class Stream(object):
         self.auto_bc_outliers.subscribe(self._onOutliers)
         self.intensityRange.subscribe(self._onIntensityRange)
 
-        # TODO: don't generate a thread if the raw data is static
-        # TODO: kill the thread when the stream is discarded
-        self._ht_needs_recompute = threading.Event()
-        self._hthread = threading.Thread(target=self._histogram_thread,
-                                         name="Histogram computation")
-        self._hthread.daemon = True
-        self._hthread.start()
-
-        # self.histogram.subscribe(self._onHistogram) # FIXME -> update outliers and then image
-
         # Tuple of (int, str) or (None, None): loglevel and message
         self.status = model.VigilantAttribute((None, None), readonly=True)
 
         # if there is already some data, update image with it
         if self.raw:
-            self.onNewImage(None, self.raw[-1])
+            self._onNewImage(None, self.raw[-1])
+
+    # No __del__: subscription should be automatically stopped when the object
+    # disappears, and the user should stop the update first anyway.
 
     @property
     def emitter(self):
@@ -206,10 +185,10 @@ class Stream(object):
                 va = getattr(comp, vaname)
             except AttributeError:
                 raise LookupError("Component %s has not attribute %s" %
-                                  (comp, vaname))
+                                  (comp.name, vaname))
             if not isinstance(va, VigilantAttributeBase):
-                raise LookupError("Component %s attribute %s is not a VA" %
-                                  (comp, vaname))
+                raise LookupError("Component %s attribute %s is not a VA: %s" %
+                                  (comp.name, vaname, va.__class__.__name__))
 
             # TODO: add a setter/listener that will automatically synchronise the VA value
             # as long as the stream is active
@@ -233,11 +212,11 @@ class Stream(object):
         return: the real new value (as accepted by the original VA)
         """
         if self.is_active.value: # only synchronised when the stream is active
-            logging.debug("updating va %r to %s", origva, v)
+            logging.debug("updating VA %s to %s", origva, v)
             origva.value = v
             return origva.value
         else:
-            logging.debug("not updating va %r to %s", origva, v)
+            logging.debug("not updating VA %s to %s", origva, v)
             return v
 
     def _va_sync_from_hw(self, lva, v):
@@ -249,7 +228,7 @@ class Stream(object):
         # Don't use the setter, directly put the value as-is. That avoids the
         # setter to again set the Hw VA, and ensure we always accept the Hw
         # value
-        logging.debug("updating %r to %s", lva, v)
+        logging.debug("updating VA %s to %s", lva, v)
         if lva._value != v:
             lva._value = v # TODO: works with ListVA?
             lva.notify(v)
@@ -416,29 +395,10 @@ class Stream(object):
             # the VA setter to catch again the change
             self._linkHwVAs()
 
-            # TODO: merge onActive here?
+            # TODO: merge _onActive here?
         else:
             self._unlinkHwVAs()
         return active
-
-    def onActive(self, active):
-        """ Called when the Stream is activated or deactivated by setting the
-        is_active attribute
-        """
-        if active:
-            msg = "Subscribing to dataflow of component %s"
-            logging.debug(msg, self._detector.name)
-            if not self.should_update.value:
-                logging.warning("Trying to activate stream while it's not "
-                                "supposed to update")
-            self._dataflow.subscribe(self.onNewImage)
-        else:
-            msg = "Unsubscribing from dataflow of component %s"
-            logging.debug(msg, self._detector.name)
-            self._dataflow.unsubscribe(self.onNewImage)
-
-    # No __del__: subscription should be automatically stopped when the object
-    # disappears, and the user should stop the update first anyway.
 
     def _updateDRange(self, data=None):
         """
@@ -469,10 +429,9 @@ class Stream(object):
                         drange = (0, depth - 1)
                 except (KeyError, ValueError):
                     try:
-                        if (hasattr(self._detector, "bpp") and
-                            isinstance(self._detector.bpp, VigilantAttributeBase)):
-                            depth = 2 ** self._detector.bpp.value
-                        else:
+                        try:
+                            depth = 2 ** self._getDetectorVA("bpp").value
+                        except AttributeError:
                             depth = self._detector.shape[-1]
 
                         if depth <= 1:
@@ -498,10 +457,9 @@ class Stream(object):
             # no data, assume it's uint
             try:
                 # If the detector has .bpp, use this info
-                if (hasattr(self._detector, "bpp") and
-                    isinstance(self._detector.bpp, VigilantAttributeBase)):
-                    depth = 2 ** self._detector.bpp.value
-                else:
+                try:
+                    depth = 2 ** self._getDetectorVA("bpp").value
+                except AttributeError:
                     # The last element of the shape indicates the bit depth, which
                     # is used for brightness/contrast adjustment.
                     depth = self._detector.shape[-1]
@@ -537,6 +495,7 @@ class Stream(object):
                                           self.auto_bc_outliers.value / 100)
             # clip is needed for some corner cases with floats
             irange = self.intensityRange.clip(irange)
+            logging.debug("setting irange value to %s", irange)
             self.intensityRange.value = irange
         else:
             # just use the values requested by the user
@@ -546,7 +505,8 @@ class Stream(object):
 
     def _find_metadata(self, md):
         """
-        Find the PIXEL_SIZE, POS, and ROTATION metadata from the given raw image
+        Find the useful metadata for a 2D spatial projection from the metadata
+          of a raw image
         return (dict MD_* -> value)
         """
         md = dict(md)  # duplicate to not modify the original metadata
@@ -586,10 +546,25 @@ class Stream(object):
               MD_SHEAR: she,
               MD_ACQ_DATE: date}
 
-        if self._forcemd:
-            md.update(self._forcemd)
-
         return md
+
+    def _projectXY2RGB(self, data, tint=(255, 255, 255)):
+        """
+        Project a 2D spatial DataArray into a RGB representation
+        data (DataArray): 2D DataArray
+        tint ((int, int, int)): colouration of the image, in RGB.
+        return (DataArray): 3D DataArray
+        """
+        irange = self._getDisplayIRange()
+        rgbim = img.DataArray2RGB(data, irange, tint)
+        rgbim.flags.writeable = False
+        # Commented to prevent log flooding
+        # if model.MD_ACQ_DATE in data.metadata:
+        #     logging.debug("Computed RGB projection %g s after acquisition",
+        #                    time.time() - data.metadata[model.MD_ACQ_DATE])
+        md = self._find_metadata(data.metadata)
+        md[model.MD_DIMS] = "YXC" # RGB format
+        return model.DataArray(rgbim, md)
 
     # Note: if overriding this method, the decorator must be copied iff this
     # parent method is _not_ called.
@@ -610,17 +585,7 @@ class Stream(object):
 
         try:
             self._running_upd_img = True
-            data = self.raw[0]
-            irange = self._getDisplayIRange()
-            rgbim = img.DataArray2RGB(data, irange, tint)
-            rgbim.flags.writeable = False
-            # # Commented to prevent log flooding
-            # if model.MD_ACQ_DATE in data.metadata:
-            #     logging.debug("Computed RGB projection %g s after acquisition",
-            #                    time.time() - data.metadata[model.MD_ACQ_DATE])
-            md = self._find_metadata(data.metadata)
-            md[model.MD_DIMS] = "YXC" # RGB format
-            self.image.value = model.DataArray(rgbim, md)
+            self.image.value = self._projectXY2RGB(self.raw[0], tint)
         except Exception:
             logging.exception("Updating %s image", self.__class__.__name__)
         finally:
@@ -650,14 +615,6 @@ class Stream(object):
         if not self.auto_bc.value:
             self._updateImage()
 
-    def _shouldUpdateHistogram(self):
-        """
-        Ensures that the histogram VA will be updated in the "near future".
-        """
-        # If the previous request is still being processed, the event
-        # synchronization allows to delay it (without accumulation).
-        self._ht_needs_recompute.set()
-
     def _updateHistogram(self, data=None):
         """
         data (DataArray): the raw data to use, default to .raw[0]
@@ -679,62 +636,22 @@ class Stream(object):
         self.histogram._value = chist
         self.histogram.notify(chist)
 
-    def _histogram_thread(self):
-        """
-        Called as a separate thread, and recomputes the histogram whenever
-        it receives an event asking for it.
-        """
-        while True:
-            self._ht_needs_recompute.wait() # wait until a new image is available
-            tstart = time.time()
-            self._ht_needs_recompute.clear()
-            self._updateHistogram()
-            tend = time.time()
-
-#            # if histogram is different from previous one, update image
-#            if self.auto_bc.value:
-#                prev_irange = self.intensityRange.value
-#                irange = img.findOptimalRange(self.histogram._full_hist,
-#                              self.histogram._edges,
-#                              self.auto_bc_outliers.value / 100)
-#                # TODO: also skip it if the ranges are _almost_ identical
-#                inter_rng = (max(irange[0], prev_irange[0]),
-#                             min(irange[1], prev_irange[1]))
-#                inter_width = inter_rng[1] - inter_rng[0]
-#                irange_width = irange[1] - irange[0]
-#                prev_width = prev_irange[1] - prev_irange[0]
-#                if (irange != prev_irange and
-#                    (inter_width < 0)): #or (prev_width - inter_width / prev_width)
-#                    self.intensityRange.value = tuple(irange)
-#                    self._updateImage()
-
-            # sleep at as much, to ensure we are not using too much CPU
-            tsleep = max(0.2, tend - tstart) # max 5 Hz
-            time.sleep(tsleep)
-
-    def onNewImage(self, dataflow, data):
+    def _onNewImage(self, dataflow, data):
         # For now, raw images are pretty simple: we only have one
         # (in the future, we could keep the old ones which are not fully
         # overlapped)
 
-#         if model.MD_ACQ_DATE in data.metadata:
-#             pass
-#             # Commented out to prevent log flooding
-#             logging.debug("Receive raw %g s after acquisition",
-#                           time.time() - data.metadata[model.MD_ACQ_DATE])
+        # Commented out to prevent log flooding
+        # if model.MD_ACQ_DATE in data.metadata:
+        #     logging.debug("Receive raw %g s after acquisition",
+        #                   time.time() - data.metadata[model.MD_ACQ_DATE])
 
-        old_drange = self._drange
         if not self.raw:
             self.raw.append(data)
         else:
             self.raw[0] = data
 
         # Depth can change at each image (depends on hardware settings)
-        self._updateDRange()
-        if old_drange == self._drange:
-            # If different range, it will be immediately recomputed
-            self._shouldUpdateHistogram()
+        self._updateDRange(data)
 
         self._updateImage()
-
-
