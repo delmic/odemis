@@ -19,31 +19,32 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 from __future__ import division
+
 from abc import ABCMeta
+from concurrent.futures._base import CancelledError, CANCELLED, FINISHED
 import logging
 import math
 import numpy
 from odemis import model
+from odemis.acq import _futures
 from odemis.acq import align, stream
+from odemis.acq._futures import executeTask
 from odemis.gui.conf import get_calib_conf
 from odemis.gui.model import STATE_ON, CHAMBER_PUMPING, CHAMBER_VENTING, \
     CHAMBER_VACUUM, CHAMBER_VENTED, CHAMBER_UNKNOWN, STATE_OFF
-from odemis.gui.util import call_in_wx_main, ignore_dead
+from odemis.gui.util import call_in_wx_main
+from odemis.gui.util.widgets import ProgressiveFutureConnector
 from odemis.gui.util.widgets import VigilantAttributeConnector
-from odemis.model import getVAs, VigilantAttributeBase
+from odemis.gui.win.delphi import CalibrationProgressDialog
+from odemis.model import getVAs, VigilantAttributeBase, InstantaneousFuture
+import threading
+import time
 import wx
+
 import odemis.gui.img.data as imgdata
 import odemis.gui.win.delphi as windelphi
 import odemis.util.units as units
-from odemis.gui.win.delphi import CalibrationProgressDialog
-import time
-from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
-    RUNNING
-from odemis.acq._futures import executeTask
-import threading
-from odemis.gui.util.widgets import ProgressiveFutureConnector
-from odemis.acq import _futures
-from odemis.model._futures import InstantaneousFuture
+
 
 # Sample holder types in the Delphi, as defined by Phenom World
 PHENOM_SH_TYPE_STANDARD = 1  # standard sample holder
@@ -280,10 +281,33 @@ class SecomStateController(MicroscopeStateController):
         self._prev_stream = None
         self._tab_data.streams.subscribe(self._subscribe_active_stream_status)
 
-        # Optical state is almost entirely handled by the streams, but for the
-        # light power we still handle it globally
-        if hasattr(tab_data, "opticalState"):
-            tab_data.opticalState.subscribe(self._onOpticalState)
+        # Turn off the light, but set the power to a nice default value
+        # TODO: once optical streams have local emtPower VA, just set the
+        # default value to 10% (or previous stream)
+        light = self._main_data.light
+        if light is not None:
+            # Turn off emissions
+            try:
+                emissions = [0.] * len(light.emissions.value)
+                light.emissions.value = emissions
+            except AttributeError:
+                # No emission ? => turn off the power as only way to stop light
+                light.power.value = 0
+            else:
+                # If power is above 0 already, it's probably the user who wants
+                # to force to a specific value, respect that.
+                if light.power.value == 0:
+                    # pick a nice value (= slightly more than 0)
+                    try:
+                        # if continuous: 10 %
+                        light.power.value = light.power.range[1] * 0.1
+                    except (AttributeError, model.NotApplicableError):
+                        try:
+                            # if enumerated: the second lowest
+                            light.power.value = sorted(light.power.choices)[1]
+                        except (AttributeError, model.NotApplicableError):
+                            logging.error("Unknown light power range, setting to 1 W")
+                            light.power.value = 1
 
         # Manage the chamber
         if self._main_data.chamber:
@@ -357,33 +381,6 @@ class SecomStateController(MicroscopeStateController):
         self._main_frame.pnl_load_status.Show(show_load)
         self._main_frame.pnl_stream_status.Show(show_status)
         self._main_frame.pnl_hw_info.Parent.Layout()
-
-    # TODO: move to acq.stream (because there is nothing we can do better here)
-    def _onOpticalState(self, state):
-        """ Event handler for when the state of the optical microscope changes
-        """
-        # In general, the streams are in charge of turning on/off the emitters
-        # However, as a "trick", for the light with .emissions they leave the
-        # power as-is so that the power is the same between all streams.
-        # So we need to turn it on the first time.
-        if state == STATE_ON:
-            light = self._main_data.light
-            # if power is above 0 already, it's probably the user who wants
-            # to force to a specific value, respect that.
-            if light is None or light.power.value != 0:
-                return
-
-            # pick a nice value (= slightly more than 0), if not already on
-            try:
-                # if continuous: 10 %
-                light.power.value = light.power.range[1] * 0.1
-            except (AttributeError, model.NotApplicableError):
-                try:
-                    # if enumerated: the second lowest
-                    light.power.value = sorted(light.power.choices)[1]
-                except (AttributeError, model.NotApplicableError):
-                    logging.error("Unknown light power range, setting to 1 W")
-                    light.power.value = 1
 
     def _set_ebeam_power(self, on):
         """ Set the ebeam power (if there is an ebeam that can be controlled)
