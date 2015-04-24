@@ -22,6 +22,7 @@ This file is part of Odemis.
 """
 
 from __future__ import division
+
 import math
 
 
@@ -66,10 +67,10 @@ def rasterize_line((x0, y0), (x1, y1), width=1):
             ny = py / plen
 
             # Corners
-            r1 = (int(round(x0 - nx * width / 2.0)), int(round(y0 - ny * width / 2.0)))
-            r2 = (int(round(x0 + nx * width / 2.0)), int(round(y0 + ny * width / 2.0)))
-            r3 = (int(round(x1 + nx * width / 2.0)), int(round(y1 + ny * width / 2.0)))
-            r4 = (int(round(x1 - nx * width / 2.0)), int(round(y1 - ny * width / 2.0)))
+            r1 = (int(round(x0 - nx * width / 2)), int(round(y0 - ny * width / 2)))
+            r2 = (int(round(x0 + nx * width / 2)), int(round(y0 + ny * width / 2)))
+            r3 = (int(round(x1 + nx * width / 2)), int(round(y1 + ny * width / 2)))
+            r4 = (int(round(x1 - nx * width / 2)), int(round(y1 - ny * width / 2)))
 
             points = rasterize_rectangle((r1, r2, r3, r4))
     else:
