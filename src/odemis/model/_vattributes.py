@@ -369,7 +369,7 @@ class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
         self._thread = None
 
     def _create_thread(self):
-        logging.debug("Creating thread")
+        logging.debug("Creating thread for VA %s", self._global_name)
         self._ctx = zmq.Context(1) # apparently 0MQ reuse contexts
         self._commands = self._ctx.socket(zmq.PAIR)
         self._commands.bind("inproc://" + self._global_name)
@@ -793,16 +793,11 @@ class Continuous(object):
             start = (start,)
             end = (end,)
 
-        if any([mn > mx for mn, mx in zip(start, end)]):
+        if any(mn > mx for mn, mx in zip(start, end)):
             raise TypeError("Range min %s should be smaller than max %s." %
                             (start, end))
 
         if hasattr(self, "value"):
-            if not isinstance(self.value, collections.Iterable):
-                value = (self.value,)
-            else:
-                value = self.value
-
             if self.clip_on_range:
                 # If the range is changed and the current value is outside of
                 # this new range, the value will be adjusted so it falls within
@@ -812,11 +807,13 @@ class Continuous(object):
                 self.value = self.clip(self.value)
                 return
             else:
-                if (
-                        any([v < mn for v, mn in zip(value, start)]) or
-                        any([v > mx for v, mx in zip(value, end)])
-                ):
-                    msg = "Current value '%s' is outside of the range %s→%s."
+                if not isinstance(self.value, collections.Iterable):
+                    value = (self.value,)
+                else:
+                    value = self.value
+
+                if not all(mn <= v <= mx for v, mn, mx in zip(value, start, end)):
+                    msg = "Current value '%s' is outside of the range %s->%s."
                     raise IndexError(msg % (value, start, end))
 
         self._range = tuple(new_range)
@@ -853,7 +850,6 @@ class Continuous(object):
         Raises:
             IndexError if the value is not within the authorised range
         """
-
         start, end = self.range
 
         if not isinstance(value, collections.Iterable):
@@ -864,10 +860,7 @@ class Continuous(object):
             msg = "Value '%s' is not a %d-tuple."
             raise TypeError(msg % (value, len(start)))
 
-        if (
-                any([v < mn for v, mn in zip(value, start)]) or
-                any([v > mx for v, mx in zip(value, end)])
-        ):
+        if not all(mn <= v <= mx for v, mn, mx in zip(value, start, end)):
             msg = "Trying to assign value '%s' outside of the range %s->%s."
             raise IndexError(msg % (value, start, end))
 
