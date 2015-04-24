@@ -52,7 +52,7 @@ class Camera(model.DigitalCamera):
         # change to this directory to ensure relative path is from this file
         os.chdir(os.path.dirname(unicode(__file__)))
         exporter = dataio.find_fittest_exporter(image)
-        self._img = exporter.read_data(image)[0] # can be RGB or greyscale          
+        self._img = exporter.read_data(image)[0] # can be RGB or greyscale
 
         # we will fill the set of children with Components later in ._children
         model.DigitalCamera.__init__(self, name, role, daemon=daemon, **kwargs)
@@ -81,7 +81,7 @@ class Camera(model.DigitalCamera):
         # TODO: handle non integer dtypes
         depth = 2 ** (self._img.dtype.itemsize * 8)
         self._shape += (depth,)
-        
+
         # TODO: don't provide range? or don't make it readonly?
         self.resolution = model.ResolutionVA(res, [res, res])# , readonly=True)
         # TODO: support (simulated) binning
@@ -96,7 +96,7 @@ class Camera(model.DigitalCamera):
         mag = self._img.metadata.get(model.MD_LENS_MAG, 1)
         spxs = tuple(s * mag for s in pxs)
         self.pixelSize = model.VigilantAttribute(spxs, unit="m", readonly=True)
-        
+
         self._metadata = {model.MD_HW_NAME: "FakeCam",
                           model.MD_SENSOR_PIXEL_SIZE: spxs}
 
@@ -136,7 +136,7 @@ class Camera(model.DigitalCamera):
         metadata[model.MD_ACQ_DATE] = time.time() - exp
         metadata[model.MD_EXP_TIME] = exp
 
-        logging.debug("Generating new fake image")
+        logging.debug("Generating new fake image of shape %s", self._img.shape)
         if self._focus:
             # apply the defocus
             pos = self._focus.position.value['z']
@@ -152,7 +152,8 @@ class Camera(model.DigitalCamera):
 
         # simulate exposure time
         self._generator.period = self.exposureTime.value
-    
+
+
 class CamFocus(model.Actuator):
     """
     Simulated focus component.
