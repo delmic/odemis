@@ -35,7 +35,7 @@ import unittest
 logging.getLogger().setLevel(logging.DEBUG)
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
-SECOM_LENS_CONFIG = CONFIG_PATH + "secom-sim-lens-align.odm.yaml" # 7x7
+SECOM_LENS_CONFIG = CONFIG_PATH + "secom-sim-lens-align.odm.yaml"
 
 class TestOverlayStream(unittest.TestCase):
     backend_was_running = False
@@ -76,7 +76,7 @@ class TestOverlayStream(unittest.TestCase):
         ovrl = stream.OverlayStream("test overlay", self.ccd, self.ebeam, self.sed)
 
         ovrl.dwellTime.value = 0.3
-        ovrl.repetition.value = (7, 7)
+        ovrl.repetition.value = (4, 4)
 
         f = ovrl.acquire()
         das = f.result()
@@ -112,7 +112,7 @@ class TestOverlayStream(unittest.TestCase):
 
         ovrl = stream.OverlayStream("overlay", self.ccd, self.ebeam, self.sed)
         ovrl.dwellTime.value = 0.3
-        ovrl.repetition.value = (7, 7)
+        ovrl.repetition.value = (4, 4)
 
         streams = [sems, fs1, fs2, ovrl]
         est_time = acq.estimateTime(streams)

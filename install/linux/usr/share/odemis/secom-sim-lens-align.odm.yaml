@@ -145,7 +145,7 @@ Spectra: {
     class: andorcam2.FakeAndorCam2,
     role: ccd,
     init: {device: 0,
-           image: "andorcam2-fake-spots-4x4.h5", # 7x7 grid
+           image: "andorcam2-fake-spots-4x4.h5", # 4x4 grid
     },
     properties: {
         targetTemperature: -75, # °C
