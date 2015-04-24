@@ -629,6 +629,10 @@ class LineSelectOverlay(WorldSelectOverlay):
 
 
 class SpectrumLineSelectOverlay(LineSelectOverlay, base.PixelDataMixin):
+    """
+    Selection overlay that allows for the selection of a line in world coordinates
+    and displays a specific point/circle over this line (if requested).
+    """
 
     def __init__(self, cnvs):
         LineSelectOverlay.__init__(self, cnvs)
@@ -690,8 +694,8 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, base.PixelDataMixin):
         w, h = self._data_resolution
         points = []
 
-        for px in range(max(0, x - int(radius)), min(x + int(radius) + 1, w)):
-            for py in range(max(0, y - int(radius)), min(y + int(radius) + 1, h)):
+        for px in range(max(0, int(x - radius)), min(int(x + radius) + 1, w)):
+            for py in range(max(0, int(y - radius)), min(int(y + radius) + 1, h)):
                 if math.hypot(x - px, y - py) <= radius:
                     points.append((px, py))
 
@@ -903,8 +907,8 @@ class PixelSelectOverlay(base.WorldOverlay, base.PixelDataMixin, base.DragMixin)
         w, h = self._data_resolution
         points = []
 
-        for px in range(max(0, x - int(radius)), min(x + int(radius) + 1, w)):
-            for py in range(max(0, y - int(radius)), min(y + int(radius) + 1, h)):
+        for px in range(max(0, int(x - radius)), min(int(x + radius) + 1, w)):
+            for py in range(max(0, int(y - radius)), min(int(y + radius) + 1, h)):
                 if math.hypot(x - px, y - py) <= radius:
                     points.append((px, py))
 

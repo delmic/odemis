@@ -204,7 +204,7 @@ def clip_line(xmin, ymax, xmax, ymin, x1, y1, x2, y2):
             x2, y2 = x, y
             k2 = _get_pos(x2, y2)
 
-    return round(x1), round(y1), round(x2), round(y2)
+    return int(round(x1)), int(round(y1)), int(round(x2)), int(round(y2))
 
 
 def intersect(ra, rb):

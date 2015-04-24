@@ -30,7 +30,6 @@ import cairo
 import wx
 
 import odemis.gui as gui
-import odemis.gui.img.data as img
 import odemis.model as model
 import odemis.gui.comp.overlay.base as base
 import odemis.util.conversion as conversion
@@ -458,6 +457,7 @@ class MarkingLineOverlay(base.ViewOverlay, base.DragMixin):
     def _store_event_pos(self, evt):
         """ Position the focus line at the position of the given mouse event """
         x, y = evt.GetPositionTuple()
+        # FIXME: why not heigh -1 too?
         self.v_pos.value = (max(min(self.view_width, x), 1), max(min(self.view_height, y), 1))
 
     def set_position(self, pos):

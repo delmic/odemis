@@ -141,7 +141,7 @@ class StaticFluoStream(Static2DStream):
         self.tint.subscribe(self.onTint)
 
         # Do it at the end, as it forces it the update of the image
-        StaticStream.__init__(self, name, image)
+        Static2DStream.__init__(self, name, image)
 
     def _updateImage(self): # pylint: disable=W0221
         Stream._updateImage(self, self.tint.value)
@@ -478,6 +478,9 @@ class StaticSpectrumStream(StaticStream):
             if not 0 <= p[0] < shape[0] or not 0 <= p[1] < shape[1]:
                 raise ValueError("selected_line must only contain coordinates "
                                  "within %s" % (shape,))
+            if not isinstance(p[0], int) or not isinstance(p[1], int):
+                raise ValueError("selected_line must only contain ints but is %s"
+                                 % (line,))
 
         return line
 
@@ -606,10 +609,10 @@ class StaticSpectrumStream(StaticStream):
         # TODO: use same cleverness as mean() for dtype?
         datasum = numpy.zeros(spec2d.shape[0], dtype=numpy.float64)
         # Scan the square around the point, and only pick the points in the circle
-        for px in range(max(0, x - int(radius)),
-                        min(x + int(radius) + 1, spec2d.shape[-1])):
-            for py in range(max(0, y - int(radius)),
-                            min(y + int(radius) + 1, spec2d.shape[-2])):
+        for px in range(max(0, int(x - radius)),
+                        min(int(x + radius) + 1, spec2d.shape[-1])):
+            for py in range(max(0, int(y - radius)),
+                            min(int(y + radius) + 1, spec2d.shape[-2])):
                 if math.hypot(x - px, y - py) <= radius:
                     n += 1
                     datasum += spec2d[:, py, px]
