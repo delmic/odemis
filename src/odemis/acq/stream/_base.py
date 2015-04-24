@@ -495,7 +495,6 @@ class Stream(object):
                                           self.auto_bc_outliers.value / 100)
             # clip is needed for some corner cases with floats
             irange = self.intensityRange.clip(irange)
-            logging.debug("setting irange value to %s", irange)
             self.intensityRange.value = irange
         else:
             # just use the values requested by the user
