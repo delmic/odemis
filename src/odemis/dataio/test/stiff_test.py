@@ -447,6 +447,10 @@ class TestTiffIO(unittest.TestCase):
                      model.MD_POS: (1.2e-3, -30e-3), # m
                      model.MD_EXP_TIME: 1.2, # s
                      model.MD_AR_POLE: (253.1, 65.1), # px
+                     model.MD_AR_XMAX: 12e-3,
+                     model.MD_AR_HOLE_DIAMETER: 0.6e-3,
+                     model.MD_AR_FOCUS_DISTANCE: 0.5e-3,
+                     model.MD_AR_PARABOLA_F: 2e-3,
                      model.MD_LENS_MAG: 60, # ratio
                     },
                     {model.MD_SW_VERSION: "1.0-test",
@@ -460,6 +464,10 @@ class TestTiffIO(unittest.TestCase):
                      model.MD_POS: (1e-3, -30e-3), # m
                      model.MD_EXP_TIME: 1.2, # s
                      model.MD_AR_POLE: (253.1, 65.1), # px
+                     model.MD_AR_XMAX: 12e-3,
+                     model.MD_AR_HOLE_DIAMETER: 0.6e-3,
+                     model.MD_AR_FOCUS_DISTANCE: 0.5e-3,
+                     model.MD_AR_PARABOLA_F: 2e-3,
                      model.MD_LENS_MAG: 60, # ratio
                     },
                     ]
@@ -500,6 +508,14 @@ class TestTiffIO(unittest.TestCase):
                 self.assertAlmostEqual(im.metadata[model.MD_ACQ_DATE], md[model.MD_ACQ_DATE], delta=1)
                 if model.MD_AR_POLE in md:
                     numpy.testing.assert_allclose(im.metadata[model.MD_AR_POLE], md[model.MD_AR_POLE])
+                if model.MD_AR_XMAX in md:
+                    self.assertAlmostEqual(im.metadata[model.MD_AR_XMAX], md[model.MD_AR_XMAX])
+                if model.MD_AR_HOLE_DIAMETER in md:
+                    self.assertAlmostEqual(im.metadata[model.MD_AR_HOLE_DIAMETER], md[model.MD_AR_HOLE_DIAMETER])
+                if model.MD_AR_FOCUS_DISTANCE in md:
+                    self.assertAlmostEqual(im.metadata[model.MD_AR_FOCUS_DISTANCE], md[model.MD_AR_FOCUS_DISTANCE])
+                if model.MD_AR_PARABOLA_F in md:
+                    self.assertAlmostEqual(im.metadata[model.MD_AR_PARABOLA_F], md[model.MD_AR_PARABOLA_F])
                 if model.MD_LENS_MAG in md:
                     self.assertAlmostEqual(im.metadata[model.MD_LENS_MAG], md[model.MD_LENS_MAG])
 

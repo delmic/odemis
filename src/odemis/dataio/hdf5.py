@@ -502,6 +502,46 @@ def _parse_physical_data(pdgroup, da):
         except (KeyError, IndexError, ValueError):
             pass
 
+        try:
+            ds = pdgroup["XMax"]
+            xm = float(ds[i])  # in m
+            state = _h5svi_get_state(ds)
+            if state and state[i] == ST_INVALID:
+                raise ValueError
+            md[model.MD_AR_XMAX] = xm
+        except (KeyError, IndexError, ValueError):
+            pass
+
+        try:
+            ds = pdgroup["HoleDiameter"]
+            hd = float(ds[i])  # in m
+            state = _h5svi_get_state(ds)
+            if state and state[i] == ST_INVALID:
+                raise ValueError
+            md[model.MD_AR_HOLE_DIAMETER] = hd
+        except (KeyError, IndexError, ValueError):
+            pass
+
+        try:
+            ds = pdgroup["FocusDistance"]
+            fd = float(ds[i])  # in m
+            state = _h5svi_get_state(ds)
+            if state and state[i] == ST_INVALID:
+                raise ValueError
+            md[model.MD_AR_FOCUS_DISTANCE] = fd
+        except (KeyError, IndexError, ValueError):
+            pass
+
+        try:
+            ds = pdgroup["ParabolaF"]
+            pf = float(ds[i])
+            state = _h5svi_get_state(ds)
+            if state and state[i] == ST_INVALID:
+                raise ValueError
+            md[model.MD_AR_PARABOLA_F] = pf
+        except (KeyError, IndexError, ValueError):
+            pass
+
     return das
 
 # Enums used in SVI HDF5
@@ -722,6 +762,18 @@ def _add_image_metadata(group, image, mds):
     # PolePosition: position (in floating px) of the pole in the image
     # (only meaningful for AR/SPARC)
     pp, st_pp = [], []
+    # XMax: distance (in meters) between the parabola origin and the cutoff position
+    # (only meaningful for AR/SPARC)
+    xm, st_xm = [], []
+    # HoleDiameter: diameter (in meters) the hole in the mirror
+    # (only meaningful for AR/SPARC)
+    hd, st_hd = [], []
+    # FocusDistance: min distance (in meters) between the mirror and the sample
+    # (only meaningful for AR/SPARC)
+    fd, st_fd = [], []
+    # ParabolaF: parabola_parameter=1/4f
+    # (only meaningful for AR/SPARC)
+    pf, st_pf = [], []
     for md in mds:
         if model.MD_AR_POLE in md:
             pp.append(md[model.MD_AR_POLE])
@@ -729,9 +781,45 @@ def _add_image_metadata(group, image, mds):
         else:
             pp.append((0, 0))
             st_pp.append(ST_INVALID)
+        if model.MD_AR_XMAX in md:
+            xm.append(md[model.MD_AR_XMAX])
+            st_xm.append(ST_REPORTED)
+        else:
+            xm.append(0)
+            st_xm.append(ST_INVALID)
+        if model.MD_AR_HOLE_DIAMETER in md:
+            hd.append(md[model.MD_AR_HOLE_DIAMETER])
+            st_hd.append(ST_REPORTED)
+        else:
+            hd.append(0)
+            st_hd.append(ST_INVALID)
+        if model.MD_AR_FOCUS_DISTANCE in md:
+            fd.append(md[model.MD_AR_FOCUS_DISTANCE])
+            st_fd.append(ST_REPORTED)
+        else:
+            fd.append(0)
+            st_fd.append(ST_INVALID)
+        if model.MD_AR_PARABOLA_F in md:
+            pf.append(md[model.MD_AR_PARABOLA_F])
+            st_pf.append(ST_REPORTED)
+        else:
+            pf.append(0)
+            st_pf.append(ST_INVALID)
     if not all(st == ST_INVALID for st in st_pp):
         gp["PolePosition"] = pp
         _h5svi_set_state(gp["PolePosition"], st_pp)
+    if not all(st == ST_INVALID for st in st_xm):
+        gp["XMax"] = xm
+        _h5svi_set_state(gp["XMax"], st_xm)
+    if not all(st == ST_INVALID for st in st_hd):
+        gp["HoleDiameter"] = hd
+        _h5svi_set_state(gp["HoleDiameter"], st_hd)
+    if not all(st == ST_INVALID for st in st_fd):
+        gp["FocusDistance"] = fd
+        _h5svi_set_state(gp["FocusDistance"], st_fd)
+    if not all(st == ST_INVALID for st in st_pf):
+        gp["ParabolaF"] = pf
+        _h5svi_set_state(gp["ParabolaF"], st_pf)
 
     # TODO: model.MD_EBEAM_VOLTAGE, model.MD_EBEAM_SPOT_DIAM
 

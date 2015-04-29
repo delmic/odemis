@@ -37,11 +37,35 @@ class TestPolarConversion(unittest.TestCase):
         data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = spxs
         data[0].metadata[model.MD_LENS_MAG] = mag
         data[0].metadata[model.MD_AR_POLE] = (141, 255 - 139.449038462)
+        data[0].metadata[model.MD_AR_XMAX] = 13.25e-3 
+        data[0].metadata[model.MD_AR_HOLE_DIAMETER] = 0.6e-3
+        data[0].metadata[model.MD_AR_FOCUS_DISTANCE] = 0.5e-3
+        data[0].metadata[model.MD_AR_PARABOLA_F] = 2.5e-3
         mag = data[0].metadata[model.MD_LENS_MAG]
         pxs = (spxs[0] * binning[0] / mag,
                spxs[1] * binning[1] / mag)
         data[0].metadata[model.MD_PIXEL_SIZE] = pxs
         self.data = data
+
+        # test also for different polar parameters
+        data_mini = hdf5.read_data("ar-example-minimirror-input.h5")
+        mag = 0.40
+        spxs = (20e-6, 20e-6)
+        binning = (1, 1)
+        # data_mini[0].metadata[model.MD_BASELINE] = 820
+        data_mini[0].metadata[model.MD_BINNING] = binning
+        data_mini[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = spxs
+        data_mini[0].metadata[model.MD_LENS_MAG] = mag
+        data_mini[0].metadata[model.MD_AR_POLE] = (128, 255 - 152)
+        data_mini[0].metadata[model.MD_AR_XMAX] = 10e-3
+        data_mini[0].metadata[model.MD_AR_HOLE_DIAMETER] = 0.6e-3
+        data_mini[0].metadata[model.MD_AR_FOCUS_DISTANCE] = 0.5e-3
+        data_mini[0].metadata[model.MD_AR_PARABOLA_F] = 0.8e-3
+        mag = data_mini[0].metadata[model.MD_LENS_MAG]
+        pxs = (spxs[0] * binning[0] / mag,
+               spxs[1] * binning[1] / mag)
+        data_mini[0].metadata[model.MD_PIXEL_SIZE] = pxs
+        self.data_mini = data_mini
 
         white_data_512 = model.DataArray(numpy.empty((512, 512), dtype="uint16"))
         white_data_512[...] = 255
@@ -49,6 +73,10 @@ class TestPolarConversion(unittest.TestCase):
         white_spxs_512 = (13e-6, 13e-6)
         white_binning_512 = (2, 2)
         white_data_512.metadata[model.MD_AR_POLE] = (283, 259)
+        white_data_512.metadata[model.MD_AR_XMAX] = 13.25e-3
+        white_data_512.metadata[model.MD_AR_HOLE_DIAMETER] = 0.6e-3
+        white_data_512.metadata[model.MD_AR_FOCUS_DISTANCE] = 0.5e-3
+        white_data_512.metadata[model.MD_AR_PARABOLA_F] = 2.5e-3
         white_pxs_512 = (white_spxs_512[0] * white_binning_512[0] / white_mag_512,
                white_spxs_512[1] * white_binning_512[1] / white_mag_512)
         white_data_512.metadata[model.MD_PIXEL_SIZE] = white_pxs_512
@@ -60,6 +88,10 @@ class TestPolarConversion(unittest.TestCase):
         white_spxs_1024 = (13e-6, 13e-6)
         white_binning_1024 = (2, 2)
         white_data_1024.metadata[model.MD_AR_POLE] = (283, 259)
+        white_data_1024.metadata[model.MD_AR_XMAX] = 13.25e-3
+        white_data_1024.metadata[model.MD_AR_HOLE_DIAMETER] = 0.6e-3
+        white_data_1024.metadata[model.MD_AR_FOCUS_DISTANCE] = 0.5e-3
+        white_data_1024.metadata[model.MD_AR_PARABOLA_F] = 2.5e-3
         white_pxs_1024 = (white_spxs_1024[0] * white_binning_1024[0] / white_mag_1024,
                white_spxs_1024[1] * white_binning_1024[1] / white_mag_1024)
         white_data_1024.metadata[model.MD_PIXEL_SIZE] = white_pxs_1024
@@ -71,6 +103,10 @@ class TestPolarConversion(unittest.TestCase):
         white_spxs_2500 = (13e-6, 13e-6)
         white_binning_2500 = (2, 2)
         white_data_2500.metadata[model.MD_AR_POLE] = (283, 259)
+        white_data_2500.metadata[model.MD_AR_XMAX] = 13.25e-3
+        white_data_2500.metadata[model.MD_AR_HOLE_DIAMETER] = 0.6e-3
+        white_data_2500.metadata[model.MD_AR_FOCUS_DISTANCE] = 0.5e-3
+        white_data_2500.metadata[model.MD_AR_PARABOLA_F] = 2.5e-3
         # These values makes the computation much harder:
 #         white_mag_2500 = 0.53
 #         white_spxs_2500 = (6.5e-6, 6.5e-6)
@@ -88,6 +124,18 @@ class TestPolarConversion(unittest.TestCase):
         result = polar.AngleResolved2Polar(data[0], 201)
 
         desired_output = hdf5.read_data("desired201x201image.h5")
+        C, T, Z, Y, X = desired_output[0].shape
+        desired_output[0].shape = Y, X
+
+        numpy.testing.assert_allclose(result, desired_output[0], rtol=1e-04)
+
+    def test_precomputed_mini(self):
+        data_mini = self.data_mini
+        C, T, Z, Y, X = data_mini[0].shape
+        data_mini[0].shape = Y, X
+        result = polar.AngleResolved2Polar(data_mini[0], 201)
+
+        desired_output = hdf5.read_data("desired201x201imagemini.h5")
         C, T, Z, Y, X = desired_output[0].shape
         desired_output[0].shape = Y, X
 

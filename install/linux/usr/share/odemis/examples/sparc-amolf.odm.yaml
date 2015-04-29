@@ -55,6 +55,10 @@ SPARC-AMOLF: {
     role: lens,
     init: {mag: 0.4917, # ratio
            pole_pos: [566, 506], # (px, px), position of the pole (aka the hole in the mirror) without binning
+           x_max: 13.25e-3,  # m, the distance between the parabola origin and the cutoff position
+           hole_diam: 0.6e-3,  # m, diameter the hole in the mirror
+           focus_dist: 0.5e-3,  # m, the vertical mirror cutoff, iow the min distance between the mirror and the sample
+           parabola_f: 2.5e-3,  # m, parabola_parameter=1/4f
           }, 
     affects: ["ARCam"]
 }

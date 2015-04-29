@@ -310,6 +310,7 @@ def _convertToOMEMD(images, multiple_files=False, findex=None, fname=None, uuids
 #                          # we explicitly reference each DataArray to avoid
 #                          # potential ordering problems of the "Image" elements
 #        + ROIRef (*)
+#        + ARData (*)
 #      + ROI (*)
 #        . ID
 #        . Name
@@ -649,6 +650,21 @@ def _updateMDFromOME(root, das, basename):
                 continue # might be a thumbnail, it's alright
             da.metadata.update(mdp)
 
+        # Mirror data
+        md = {}
+        ardata = ime.find("ARData")  # there must be only one per Image
+        try:
+            xma = float(ardata.attrib["XMax"])
+            hol = float(ardata.attrib["HoleDiameter"])
+            foc = float(ardata.attrib["FocusDistance"])
+            par = float(ardata.attrib["ParabolaF"])
+            md[model.MD_AR_XMAX] = xma
+            md[model.MD_AR_HOLE_DIAMETER] = hol
+            md[model.MD_AR_FOCUS_DISTANCE] = foc
+            md[model.MD_AR_PARABOLA_F] = par
+        except (AttributeError, KeyError, ValueError):
+            pass
+
         # ROIs (for now we only care about PolePosition)
         for roirfe in ime.findall("ROIRef"):
             try:
@@ -665,7 +681,7 @@ def _updateMDFromOME(root, das, basename):
                     pos = float(pointe.attrib["X"]), float(pointe.attrib["Y"])
                 except (AttributeError, KeyError, ValueError):
                     continue
-                md = {model.MD_AR_POLE: pos}
+                md[model.MD_AR_POLE] = pos
 
                 # In theory, the shape can specify CTZ, and when not, it's applied to
                 # all. Currently we only support (not) specifying C.
@@ -1237,6 +1253,20 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
                                   da.metadata[model.MD_AR_POLE],
                                   shp_attrib={"TheC": "%d" % chan})
             ET.SubElement(ime, "ROIRef", attrib={"xmlns": _ROI_NS, "ID": rid})
+    # Store mirror data if any
+    if any(rd in globalMD for rd in [model.MD_AR_XMAX,
+                                        model.MD_AR_HOLE_DIAMETER,
+                                        model.MD_AR_FOCUS_DISTANCE,
+                                        model.MD_AR_PARABOLA_F]):
+        ardata = ET.SubElement(ime, "ARData")
+        if model.MD_AR_XMAX in globalMD:
+            ardata.attrib["XMax"] = "%.15f" % globalMD[model.MD_AR_XMAX]
+        if model.MD_AR_HOLE_DIAMETER in globalMD:
+            ardata.attrib["HoleDiameter"] = "%.15f" % globalMD[model.MD_AR_HOLE_DIAMETER]
+        if model.MD_AR_FOCUS_DISTANCE in globalMD:
+            ardata.attrib["FocusDistance"] = "%.15f" % globalMD[model.MD_AR_FOCUS_DISTANCE]
+        if model.MD_AR_PARABOLA_F in globalMD:
+            ardata.attrib["ParabolaF"] = "%.15f" % globalMD[model.MD_AR_PARABOLA_F]
 
 def _createPointROI(rois, name, p, shp_attrib=None):
     """
