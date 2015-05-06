@@ -1871,10 +1871,8 @@ class ChamberPressure(model.Actuator):
                         except Exception:
                             logging.warning("Received event does not have the expected attribute or format")
                     elif (newEvent == eventID2):
-                        status = expected_event[0][0].SampleHolderStatusChanged.status
-                        if (status == "3"):  # Sample holder insertion status
-                            logging.debug("Sample holder insertion, about to update sample holder id if needed")
-                            self._updateSampleHolder()  # in case new sample holder was loaded
+                        logging.debug("Sample holder insertion, about to update sample holder id if needed")
+                        self._updateSampleHolder()  # in case new sample holder was loaded
                     else:
                         logging.warning("Unexpected event received")
         except Exception as e:
