@@ -40,13 +40,27 @@ class OpticalLens(model.HwComponent):
     A very simple class which just represent a lens with a given magnification.
     It should "affect" the detector on which it's in front of.
     """
-    def __init__(self, name, role, mag, pole_pos=None, **kwargs):
+    def __init__(self, name, role, mag, pole_pos=None, x_max=None, hole_diam=None,
+                 focus_dist=None, parabola_f=None, ** kwargs):
         """
         name (string): should be the name of the product (for metadata)
         mag (float > 0): magnification ratio
         pole_pos (2 floats > 0): position of the pole on the CCD (in px, without
           binning). Used for angular resolved imaging on SPARC (only).
           cf MD_AR_POLE
+        x_max (float): the distance between the parabola origin and the cutoff 
+          position (in meters). Used for angular resolved imaging on SPARC (only).
+          cf MD_AR_XMAX
+        hole_diam (float): diameter of the hole in the mirror (in meters). Used 
+          for angular resolved imaging on SPARC (only).
+          cf MD_AR_HOLE_DIAMETER
+        focus_dist (float): the vertical mirror cutoff, iow the min distance 
+          between the mirror and the sample (in meters). Used for angular 
+          resolved imaging on SPARC (only).
+          cf MD_AR_FOCUS_DISTANCE
+        parabola_f (float): parabola_parameter=1/4f. Used for angular 
+          resolved imaging on SPARC (only).
+          cf MD_AR_PARABOLA_F
         """
         assert (mag > 0)
         model.HwComponent.__init__(self, name, role, **kwargs)
@@ -63,6 +77,14 @@ class OpticalLens(model.HwComponent):
                 raise ValueError("pole_pos must be 2 positive values, got %s" % pole_pos)
             self.polePosition = model.ResolutionVA(tuple(pole_pos),
                                                    rng=[(0, 0), (1e6, 1e6)])
+        if x_max is not None:
+            self.xMax = model.FloatVA(x_max)
+        if hole_diam is not None:
+            self.holeDiameter = model.FloatVA(hole_diam)
+        if focus_dist is not None:
+            self.focusDistance = model.FloatVA(focus_dist)
+        if parabola_f is not None:
+            self.parabolaF = model.FloatVA(parabola_f)
 
 class LightFilter(model.Actuator):
     """

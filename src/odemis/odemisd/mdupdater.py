@@ -174,6 +174,20 @@ class MetadataUpdater(model.Component):
                 pass
             updatePolePos(None) # update it right now
 
+        # update AR data, if available
+        md_va_list = [("xMax", model.MD_AR_XMAX, lens.xMax),
+                      ("holeDiameter", model.MD_AR_HOLE_DIAMETER, lens.holeDiameter),
+                      ("focusDistance", model.MD_AR_FOCUS_DISTANCE, lens.focusDistance),
+                      ("parabolaF", model.MD_AR_PARABOLA_F, lens.parabolaF)]
+        for md_va in md_va_list:
+            if (hasattr(lens, md_va[0])):
+                def updateARData(unused, lens=lens, comp=comp):
+                    md = {md_va[1]: md_va[2].value}
+                    comp.updateMetadata(md)
+
+                md_va[2].subscribe(updateARData)
+                self._onTerminate.append((md_va[2].unsubscribe, (updateARData,)))
+                updateARData(None)  # update it right now
 
     def observeLight(self, light, comp):
 
