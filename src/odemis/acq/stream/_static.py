@@ -360,6 +360,9 @@ class StaticSpectrumStream(StaticStream):
     The metadata should have a MD_WL_POLYNOMIAL or MD_WL_LIST
     Note that the data received should be of the (numpy) shape CYX or C11YX.
     When saving, the data will be converted to CTZYX (where TZ is 11)
+
+    The histogram corresponds to the data after calibration, and selected via
+    the spectrumBandwidth VA.
     """
     def __init__(self, name, image):
         """
@@ -423,14 +426,13 @@ class StaticSpectrumStream(StaticStream):
         # which are applied to RGB
         self.fitToRGB = model.BooleanVA(False)
 
-        self._drange = None
-
         # This attribute is used to keep track of any selected pixel within the
         # data for the display of a spectrum
         self.selected_pixel = model.TupleVA((None, None))  # int, int
 
         # first point, second point in pixels. It must be 2 elements long.
-        self.selected_line = model.ListVA([(None, None), (None, None)], setter=self._setLine)
+        self.selected_line = model.ListVA([(None, None), (None, None)],
+                                          setter=self._setLine)
 
         # The thickness of a point or a line (shared).
         # A point of width W leads to the average value between all the pixels
@@ -459,7 +461,8 @@ class StaticSpectrumStream(StaticStream):
 
     def _updateHistogram(self, data=None):
         if data is None:
-            data = self._calibrated
+            spec_range = self._get_bandwidth_in_pixel()
+            data = self._calibrated[spec_range[0]:spec_range[1] + 1]
         super(StaticSpectrumStream, self)._updateHistogram(data)
 
     def _setLine(self, line):
@@ -512,9 +515,10 @@ class StaticSpectrumStream(StaticStream):
         """
         Project a spectrum cube (CYX) to XY space in RGB, by averaging the
           intensity over all the wavelengths (selected by the user)
+        data (DataArray)
         return (DataArray): 3D DataArray
         """
-        irange = self._getDisplayIRange()
+        irange = self._getDisplayIRange() # will update histogram if not yet present
 
         # pick only the data inside the bandwidth
         spec_range = self._get_bandwidth_in_pixel()
@@ -789,7 +793,6 @@ class StaticSpectrumStream(StaticStream):
         """
         called when the background or efficiency compensation is changed
         """
-
         # histogram will change as the pixel intensity is different
         self._updateDRange()
         self._updateHistogram()
@@ -815,4 +818,5 @@ class StaticSpectrumStream(StaticStream):
         """
         called when spectrumBandwidth is changed
         """
+        self._updateHistogram()
         self._updateImage()

@@ -47,6 +47,7 @@ import odemis.util.units as units
 
 
 # Sample holder types in the Delphi, as defined by Phenom World
+PHENOM_SH_TYPE_UNKNOWN = -1  # Reported when not yet registered
 PHENOM_SH_TYPE_STANDARD = 1  # standard sample holder
 PHENOM_SH_TYPE_OPTICAL = 200  # sample holder for the Delphi, containing a lens
 
@@ -786,7 +787,13 @@ class DelphiStateController(SecomStateController):
         """
         try:
             shid, sht = self._main_data.chamber.sampleHolder.value
-            logging.debug("Detected sample holder type %d, id %d", sht, shid)
+            if shid is None or sht is None:
+                # sample holder was just removed (or something went wrong)
+                logging.warning("Failed to read sample holder ID %s, aborting load",
+                                (shid, sht))
+                return False
+
+            logging.debug("Detected sample holder type %d, id %x", sht, shid)
 
             # ID number 0 typically indicates something went wrong and it
             # couldn't be read. So instead of asking the user to calibrate it,
@@ -804,14 +811,6 @@ class DelphiStateController(SecomStateController):
                 self._main_data.chamberState.value = CHAMBER_VENTING
                 return False
 
-            if sht != PHENOM_SH_TYPE_OPTICAL:
-                logging.info("Sample holder doesn't seem to be an optical one "
-                             "but will pretend it is...")
-                # FIXME: For now it's needed because some sample holders have
-                # not been correctly set and report PHENOM_SH_TYPE_STANDARD
-                # Once they are fixed, just skip the calibration, and disable
-                # the optical microscope.
-
             # TODO: just subscribe to the change of sample holder?
             if (
                     isinstance(self._main_data.chamber.registeredSampleHolder,
@@ -820,6 +819,15 @@ class DelphiStateController(SecomStateController):
             ):
                 self._request_holder_calib() # async
                 return False
+
+            # Note the sht is only defined after registration
+            if sht != PHENOM_SH_TYPE_OPTICAL:
+                logging.info("Sample holder doesn't seem to be an optical one "
+                             "but will pretend it is...")
+                # FIXME: For now it's needed because some sample holders have
+                # not been correctly set and report PHENOM_SH_TYPE_STANDARD
+                # Once they are fixed, just skip the calibration, and disable
+                # the optical microscope.
 
             # Look in the config file if the sample holder is known, or needs
             # first-time calibration, and otherwise update the metadata
@@ -847,11 +855,8 @@ class DelphiStateController(SecomStateController):
         logging.info("New sample holder %x inserted", shid)
         # Tell the user we need to do calibration, and it needs to have
         # the special sample => Eject (=Cancel) or Calibrate (=OK)
-        # TODO: the Phenom backend also requires a code to allow to
-        # insert a new sample holder => if sample is not registered, ask the
-        # user for it.
-        # How? A special VA .sampleRegistered + method .registerSample() on the
-        # chamber component? Eventually, it needs to call RegisterSampleHolder.
+        # Also allow to "register" the sample holder, if that's the first time
+        # it is inserted in the Phenom.
 
         if isinstance(self._main_data.chamber.registeredSampleHolder, VigilantAttributeBase):
             need_register = not self._main_data.chamber.registeredSampleHolder.value
