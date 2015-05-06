@@ -60,8 +60,8 @@ class SettingEntry(VigilantAttributeConnector):
         """ See the super classes for parameter descriptions
 
         :param name: (str): The name of the setting
-        :param name: (VigilantAttribute): The VA containing the setting value
-        :param hw_comp: (HardwareComponent): The component to which the setting belongs
+        :param va: (VigilantAttribute): The VA containing the setting value
+        :param stream: (Stream): The possible data stream associated with this entry
         :param lbl_ctrl: (wx.StaticText): The setting label
         :param value_ctrl: (wx.Window): The widget containing the current value
 
@@ -338,6 +338,7 @@ class StreamController(object):
 
     def _add_brightnesscontrast_ctrls(self):
         self.stream_panel.add_brightnesscontrast_ctrls()
+        self.stream_panel.Refresh()
 
     # END Control addition
 
@@ -558,7 +559,7 @@ class StreamBarController(object):
         names = [s.name.value for s in self._tab_data_model.streams.value]
         for i in range(1, 1000):
             name = "Filtered colour %d" % i
-            if not name in names:
+            if name not in names:
                 break
         else:
             logging.error("Failed to find a new unique name for stream")

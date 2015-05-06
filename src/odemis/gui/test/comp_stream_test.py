@@ -348,9 +348,11 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         self.assertIsInstance(fluo_panel.stream, stream_mod.StaticFluoStream)
 
         # White box testing: we expect that the excitation/emission information
-        # are simple text, and no combo boxes (as it's all static)
-        self.assertIsInstance(fluo_panel._txt_emission, wx.TextCtrl)
-        self.assertIsInstance(fluo_panel._txt_excitation, wx.TextCtrl)
+        # are simple text, so no reference to the value controls needs to be saved
+        value_ctrl = [e.value_ctrl for e in fluo_panel.entries if e.name == "emission"]
+        self.assertEqual(value_ctrl, [])
+        value_ctrl = [e.value_ctrl for e in fluo_panel.entries if e.name == "excitation"]
+        self.assertEqual(value_ctrl, [])
         test.gui_loop()
 
         semmd = {
@@ -374,7 +376,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         self.assertIsInstance(sem_panel.stream, stream_mod.StaticSEMStream)
 
         # White box testing: we expect autobc is available
-        self.assertIsInstance(sem_panel._btn_autobc, wx.Control)
+        self.assertIsInstance(sem_panel.stream_panel._btn_autobc, wx.Control)
 
         # Clear remaining streams
         stream_bar.clear()

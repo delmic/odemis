@@ -52,10 +52,6 @@ import odemis.gui.img.data as img
 
 stream_remove_event, EVT_STREAM_REMOVE = wx.lib.newevent.NewEvent()
 
-# Expanders are the stream controls that are always visible. They allow for
-# the showing and hiding of sub-controls and they might offer controls and
-# information themselves.
-
 # Values to control which option is available
 OPT_NAME_EDIT = 1  # allow the renaming of the stream (for one time only)
 OPT_BTN_REMOVE = 2  # remove the stream entry
@@ -442,8 +438,7 @@ class StreamPanel(wx.Panel):
         self._create_controls()
 
     def _create_controls(self):
-        """ Controls should be added to the panel using this method. This is so timing issues
-        will not rise when the panel is instantiated. """
+        """ Set up the basic structure for the controls that are going to be used """
 
         # Create stream header
 
@@ -729,8 +724,9 @@ class StreamPanel(wx.Panel):
         autobc_sz.Add(lbl_bc_outliers, 0, flag=wx.ALIGN_CENTRE_VERTICAL | wx.LEFT, border=5)
         autobc_sz.Add(self._sld_bc_outliers, 1,
                       flag=wx.ALIGN_CENTRE_VERTICAL | wx.LEFT | wx.EXPAND, border=5)
-        self.gb_sizer.Add(autobc_sz, (self.num_rows, 0), span=(1, 2),
-                                 flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
+        self.gb_sizer.Add(autobc_sz, (self.num_rows, 0), span=(1, 3),
+                          flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
+
         self.num_rows += 1
 
         # ====== Second row, histogram
@@ -918,7 +914,7 @@ class StreamPanel(wx.Panel):
     def add_exposure_time_ctrl(self, value=None, conf=None):
         lbl_ctrl = self._add_side_label("Exposure time")
         value_ctrl = UnitFloatSlider(self._panel, value=value, **conf if conf else {})
-        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 2),
+        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 3),
                           flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
 
         return lbl_ctrl, value_ctrl
@@ -927,7 +923,7 @@ class StreamPanel(wx.Panel):
     def add_light_power_ctrl(self, value=None, conf=None):
         lbl_ctrl = self._add_side_label("Power")
         value_ctrl = UnitFloatSlider(self._panel, value=value, **conf if conf else {})
-        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 2),
+        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 3),
                           flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
         return lbl_ctrl, value_ctrl
 
@@ -939,14 +935,14 @@ class StreamPanel(wx.Panel):
 
     @control_bookkeeper
     def add_dye_excitation_ctrl(self, excitation_va):
-        lbl_ctrl, value_ctrl, lbl_exc_peak, btn_excitation = self._add_filter_line(
-                                                                              "Excitation",
-                                                                              excitation_va)
+        lbl_ctrl, value_ctrl, lbl_exc_peak, btn_excitation = self._add_filter_line("Excitation",
+                                                                                   excitation_va)
         return lbl_ctrl, value_ctrl, lbl_exc_peak, btn_excitation
 
     @control_bookkeeper
     def add_dye_emission_ctrl(self, emission_va):
-        lbl_ctrl, value_ctrl, lbl_em_peak, btn_emission = self._add_filter_line("Emission", emission_va)
+        lbl_ctrl, value_ctrl, lbl_em_peak, btn_emission = self._add_filter_line("Emission",
+                                                                                emission_va)
         return lbl_ctrl, value_ctrl, lbl_em_peak, btn_emission
 
     def _add_filter_line(self, name, va, center_wl=0, va_2_ctrl=None, ctrl_2_va=None):
@@ -990,15 +986,6 @@ class StreamPanel(wx.Panel):
 
             # To avoid catching mouse wheels events when scrolling the panel
             hw_set.Bind(wx.EVT_MOUSEWHEEL, lambda e: None)
-
-            # TODO: Implement in controller!!!
-            # vac = VigilantAttributeConnector(va,
-            #                                  hw_set,
-            #                                  va_2_ctrl,  # to convert to selection + update btn
-            #                                  ctrl_2_va,  # to convert from selection to VA
-            #                                  events=wx.EVT_COMBOBOX)
-            #
-            # self._vacs.append(vac)  # make sure it doesn't get dereferenced
 
             exc_sizer.Add(hw_set, 1,
                           flag=wx.ALL | wx.ALIGN_CENTRE_VERTICAL,
