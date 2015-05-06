@@ -916,7 +916,7 @@ class SparcAcquisitionTab(Tab):
         for s in self.tab_data_model.acquisitionView.getStreams():
             if isinstance(s, streammod.SEMCCDMDStream):
                 # logging.debug("setting roi of %s to %s", s.name.value, roi)
-                s._ccd_stream.roi.value = roi
+                s._rep_stream.roi.value = roi
 
     def onSpecROI(self, roi):
         """
