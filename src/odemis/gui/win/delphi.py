@@ -376,6 +376,9 @@ def _DoDelphiCalibration(future, main_data, overview_pressure, vacuum_pressure,
                 trans_val, cor_md = f.result()
                 trans_md, skew_md = cor_md
                 iscale = trans_md[model.MD_PIXEL_SIZE_COR]
+                if any(s < 0 for s in iscale):
+                    raise IOError("Unexpected scaling values calculated during"
+                                  " Fine alignment: %s", iscale)
                 irot = -trans_md[model.MD_ROTATION_COR] % (2 * math.pi)
                 ishear = skew_md[model.MD_SHEAR_COR]
                 iscale_xy = skew_md[model.MD_PIXEL_SIZE_COR]
