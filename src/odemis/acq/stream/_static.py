@@ -63,9 +63,26 @@ class RGBStream(StaticStream):
             raise ValueError("Data must be RGB(A)")
 
         super(RGBStream, self).__init__(name, [image])
+
+    # Copy from RGBCameraStream
+    # no rate limitor as it's called only once any way
+    def _updateImage(self):
+        # Just pass the RGB data on
+
+        if not self.raw:
+            return
+
         # TODO: use original image as raw, to allow changing the B/C/tint
-        # Need to distinguish between greyscale (possible) and colour (impossible)
-        self.image.value = image
+        try:
+            data = self.raw[0]
+            rgbim = img.ensureYXC(data)
+            rgbim.flags.writeable = False
+            # merge and ensures all the needed metadata is there
+            rgbim.metadata = self._find_metadata(rgbim.metadata)
+            rgbim.metadata[model.MD_DIMS] = "YXC" # RGB format
+            self.image.value = rgbim
+        except Exception:
+            logging.exception("Updating %s image", self.__class__.__name__)
 
 
 class Static2DStream(StaticStream):

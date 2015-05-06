@@ -25,7 +25,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import numpy
 from odemis import model
 from odemis.gui import test
-from odemis.gui.comp.canvas import BufferedCanvas, BitmapCanvas
+from odemis.gui.comp.canvas import BufferedCanvas
 import unittest
 import wx
 
@@ -99,6 +99,7 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         im1[px1_cent] = [255, 0, 0]
         im1.metadata[model.MD_PIXEL_SIZE] = (mpp * 10, mpp * 10)
         im1.metadata[model.MD_POS] = (0, 0)
+        im1.metadata[model.MD_DIMS] = "YXC"
         stream1 = RGBStream("s1", im1)
 
         im2 = model.DataArray(numpy.zeros((201, 201, 3), dtype="uint8"))
@@ -109,6 +110,7 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         # (+0.5, -0.5) to make it really in the center of the pixel
         im2.metadata[model.MD_PIXEL_SIZE] = (mpp, mpp)
         im2.metadata[model.MD_POS] = (200.5 * mpp, 199.5 * mpp)
+        im2.metadata[model.MD_DIMS] = "YXC"
         stream2 = RGBStream("s2", im2)
 
         self.view.addStream(stream1)
@@ -169,6 +171,7 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         im1[px1_cent] = [255, 0, 0]
         im1.metadata[model.MD_PIXEL_SIZE] = (mpp * 10, mpp * 10)
         im1.metadata[model.MD_POS] = (0, 0)
+        im1.metadata[model.MD_DIMS] = "YXC"
         stream1 = RGBStream("s1", im1)
 
         im2 = model.DataArray(numpy.zeros((201, 201, 3), dtype="uint8"))
@@ -180,6 +183,7 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         # (+0.5, -0.5) to make it really in the center of the pixel
         im2.metadata[model.MD_PIXEL_SIZE] = (mpp, mpp)
         im2.metadata[model.MD_POS] = (200.5 * mpp, 199.5 * mpp)
+        im2.metadata[model.MD_DIMS] = "YXC"
         stream2 = RGBStream("s2", im2)
 
         self.view.addStream(stream1)
@@ -226,6 +230,7 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         im1[px1_cent] = [255, 0, 0]
         im1.metadata[model.MD_PIXEL_SIZE] = (mpp * 10, mpp * 10)
         im1.metadata[model.MD_POS] = (0, 0)
+        im1.metadata[model.MD_DIMS] = "YXC"
         stream1 = RGBStream("s1", im1)
 
         self.view.addStream(stream1)

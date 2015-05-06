@@ -2141,7 +2141,8 @@ class MirrorAlignTab(Tab):
         # Pxs = sensor pxs / lens mag
         mag = lens.magnification.value
         goal_md = {model.MD_PIXEL_SIZE: (scale * pxs[0] / mag, scale * pxs[1] / mag),  # m
-                   model.MD_POS: (0, 0)}
+                   model.MD_POS: (0, 0),
+                   model.MD_DIMS: "YXC", }
 
         goal_im.metadata = goal_md
         return goal_im
