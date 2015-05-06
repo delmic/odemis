@@ -18,7 +18,7 @@ import numpy
 import wx
 
 from odemis import model
-from odemis.gui import test, BLEND_SCREEN
+from odemis.gui import test
 from odemis.gui.test import generate_img_data
 from odemis.model import DataArray, FloatContinuous
 import odemis.gui.comp.miccanvas as miccanvas
@@ -124,6 +124,7 @@ class TestCanvas(test.GuiTestCase):
         # 100 pixels is 1e-4 meters
         img.metadata[model.MD_PIXEL_SIZE] = (1e-6, 1e-6)
         img.metadata[model.MD_POS] = (0, 0)
+        img.metadata[model.MD_DIMS] = "YXC"
         # im_scale = img.metadata[model.MD_PIXEL_SIZE][0] / cnvs.mpwu
 
         # self.assertEqual(im_scale, img.metadata[model.MD_PIXEL_SIZE][0])
@@ -183,6 +184,7 @@ class TestCanvas(test.GuiTestCase):
         # 100 pixels is 1e-4 meters
         img.metadata[model.MD_PIXEL_SIZE] = (1e-6, 1e-6)
         img.metadata[model.MD_POS] = im_pos = (0, 0)
+        img.metadata[model.MD_DIMS] = "YXC"
         im_scale = img.metadata[model.MD_PIXEL_SIZE][0]
 
         self.assertEqual(im_scale, img.metadata[model.MD_PIXEL_SIZE][0])
