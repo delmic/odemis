@@ -28,13 +28,18 @@ from odemis import model
 from odemis.acq import align
 
 from ._base import Stream, UNDEFINED_ROI
+from ._live import LiveStream
 from functools import wraps
 
 
-class RepetitionStream(Stream):
+class RepetitionStream(LiveStream):
     """
     Abstract class for streams which are actually a set multiple acquisition
     repeated over a grid.
+
+    Beware, these special streams are for settings only. So the image generated
+    when active is only for quick feedback of the settings. To actually perform
+    a full acquisition, the stream should be fed to a MultipleDetectorStream.
     """
 
     def __init__(self, name, detector, dataflow, emitter, **kwargs):
@@ -56,6 +61,7 @@ class RepetitionStream(Stream):
 
         # Region of interest as left, top, right, bottom (in ratio from the
         # whole area of the emitter => between 0 and 1)
+        # We overwrite the VA provided by LiveStream to define a setter.
         self.roi = model.TupleContinuous((0, 0, 1, 1),
                                          range=((0, 0, 0, 0), (1, 1, 1, 1)),
                                          cls=(int, long, float),
@@ -101,9 +107,14 @@ class RepetitionStream(Stream):
 
     def _updateROIAndPixelSize(self, roi, pxs):
         """
-        roi : ROI wanted (might be slightly changed)
+        Adapt a ROI and pixel size so that they are correct. It checks that they
+          are within bounds and if not, make them fit in the bounds by adapting
+          the repetition.
+        roi (4 floats): ROI wanted (might be slightly changed)
         pxs (float): new pixel size (must be within allowed range, always respected)
-        Returns new ROI and repetition
+        returns:
+          4 floats: new ROI
+          2 ints: new repetition
         """
         # If ROI is undefined => everything is fine
         if roi == UNDEFINED_ROI:
@@ -111,25 +122,25 @@ class RepetitionStream(Stream):
 
         epxs = self.emitter.pixelSize.value
         eshape = self.emitter.shape
-        phy_size = [epxs[0] * eshape[0], epxs[1] * eshape[1]] # max physical ROI
+        phy_size = (epxs[0] * eshape[0], epxs[1] * eshape[1]) # max physical ROI
 
         # maximum repetition: either depends on minimum pxs or maximum roi
-        roi_size = [roi[2] - roi[0], roi[3] - roi[1]]
-        max_rep = [max(1, min(int(eshape[0] * roi_size[0]), int(phy_size[0] / pxs))),
-                   max(1, min(int(eshape[1] * roi_size[1]), int(phy_size[1] / pxs)))]
+        roi_size = (roi[2] - roi[0], roi[3] - roi[1])
+        max_rep = (max(1, min(int(eshape[0] * roi_size[0]), int(phy_size[0] / pxs))),
+                   max(1, min(int(eshape[1] * roi_size[1]), int(phy_size[1] / pxs))))
 
         # compute the repetition (ints) that fits the ROI with the pixel size
-        rep = [round(phy_size[0] * roi_size[0] / pxs),
-               round(phy_size[1] * roi_size[1] / pxs)]
+        rep = (round(phy_size[0] * roi_size[0] / pxs),
+               round(phy_size[1] * roi_size[1] / pxs))
         rep = [int(max(1, min(rep[0], max_rep[0]))),
                int(max(1, min(rep[1], max_rep[1])))]
 
         # update the ROI so that it's _exactly_ pixel size * repetition,
         # while keeping its center fixed
-        roi_center = [(roi[0] + roi[2]) / 2,
-                      (roi[1] + roi[3]) / 2]
-        roi_size = [rep[0] * pxs / phy_size[0],
-                    rep[1] * pxs / phy_size[1]]
+        roi_center = ((roi[0] + roi[2]) / 2,
+                      (roi[1] + roi[3]) / 2)
+        roi_size = (rep[0] * pxs / phy_size[0],
+                    rep[1] * pxs / phy_size[1])
         roi = [roi_center[0] - roi_size[0] / 2,
                roi_center[1] - roi_size[1] / 2,
                roi_center[0] + roi_size[0] / 2,
@@ -225,41 +236,30 @@ class RepetitionStream(Stream):
         if roi == UNDEFINED_ROI:
             return repetition
 
+        # The basic principle is that the center and surface of the ROI stay.
+        # We only adjust the X/Y ratio and the pixel size based on the new
+        # repetition.
+
         prev_rep = self.repetition.value
+        prev_pxs = self.pixelSize.value
         epxs = self.emitter.pixelSize.value
         eshape = self.emitter.shape
+        phy_size = (epxs[0] * eshape[0], epxs[1] * eshape[1]) # max physical ROI
 
-        # The basic principle is that the ROI stays the same, and the pixel size
-        # is modified to fit the repetition. So it's basically an indirect way
-        # to change the pixel size.
+        # clamp repetition to be sure it's correct
+        repetition = (min(repetition[0], self.repetition.range[1][0]),
+                      min(repetition[1], self.repetition.range[1][1]))
 
-        # clamp horizontal repetition to be sure it's correct
-        roi_size = [roi[2] - roi[0], roi[3] - roi[1]]
-        max_rep = [max(1, math.ceil(eshape[0] * roi_size[0])),
-                   max(1, math.ceil(eshape[1] * roi_size[1]))]
-
-        repetition = [min(repetition[0], max_rep[0]),
-                      min(repetition[1], max_rep[1])]
-
-        # update the pixel size according to horizontal or vertical repetition,
-        # depending on what the user "asked" (changed)
-        if prev_rep[0] == repetition[0]:
-            # TODO: move the computations inside
-            pxs = (epxs[1] * eshape[1] * roi_size[1]) / repetition[1]
-        elif prev_rep[1] == repetition[1]:
-            pxs = (epxs[0] * eshape[0] * roi_size[0]) / repetition[0]
-        else:
-            # the whole repetition changed => keep area and adapt ROI
-            roi_center = [(roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2]
-            area_ratio = math.sqrt(numpy.prod(prev_rep) / numpy.prod(repetition))
-            rel_pxs = roi_size[0] / prev_rep[0] # , roi_size[1] / prev_rep[1])
-            roi_size = [area_ratio * rel_pxs * repetition[0],
-                        area_ratio * rel_pxs * repetition[1]]
-            roi = [roi_center[0] - roi_size[0] / 2,
-                   roi_center[1] - roi_size[1] / 2,
-                   roi_center[0] + roi_size[0] / 2,
-                   roi_center[1] + roi_size[1] / 2]
-            pxs = self.pixelSize.value * area_ratio
+        # the whole repetition changed => keep area and adapt ROI
+        roi_center = ((roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2)
+        roi_area = numpy.prod(prev_rep) * prev_pxs ** 2
+        pxs = math.sqrt(roi_area / numpy.prod(repetition))
+        roi_size = (pxs * repetition[0] / phy_size[0],
+                    pxs * repetition[1] / phy_size[1])
+        roi = (roi_center[0] - roi_size[0] / 2,
+               roi_center[1] - roi_size[1] / 2,
+               roi_center[0] + roi_size[0] / 2,
+               roi_center[1] + roi_size[1] / 2)
 
         roi, rep = self._updateROIAndPixelSize(roi, pxs)
         # update roi and pixel size without going through the checks
@@ -316,9 +316,11 @@ class SpectrumSettingsStream(RepetitionStream):
     Be aware that acquisition can be very long so should not be used for live
     view. So it has no .image (for now). See StaticSpectrumStream for displaying
     a stream.
+
+    The live view is just the raw spectrum
     """
-    def __init__(self, name, detector, dataflow, emitter):
-        RepetitionStream.__init__(self, name, detector, dataflow, emitter)
+    def __init__(self, name, detector, dataflow, emitter, **kwargs):
+        RepetitionStream.__init__(self, name, detector, dataflow, emitter, **kwargs)
         # For SPARC: typical user wants density a bit lower than SEM
         self.pixelSize.value *= 6
 
@@ -330,11 +332,28 @@ class ARSettingsStream(RepetitionStream):
     should not be used for live view. So it has no .image (for now).
     See StaticARStream for displaying a stream, and CameraStream for displaying
     just the current AR view.
+
+    The live view is just the raw CCD image.
     """
-    def __init__(self, name, detector, dataflow, emitter):
-        RepetitionStream.__init__(self, name, detector, dataflow, emitter)
+    def __init__(self, name, detector, dataflow, emitter, **kwargs):
+        RepetitionStream.__init__(self, name, detector, dataflow, emitter, **kwargs)
         # For SPARC: typical user wants density much lower than SEM
         self.pixelSize.value *= 30
+
+
+class CLSettingsStream(RepetitionStream):
+    """
+    A spatial cathodoluminecense stream, typically with a PMT as a detector.
+    It's physically very similar to the AR stream, but as the acquisition time
+    is many magnitudes shorter (ie, close to the SED), the live view is the
+    entire image.
+
+    Note: there is a trick to be able to acquire an image simultaneously to the
+    SED in live view. In live view, the ROI and dwellTime are not applied.
+    """
+    def __init__(self, name, detector, dataflow, emitter, **kwargs):
+        RepetitionStream.__init__(self, name, detector, dataflow, emitter, **kwargs)
+        # Don't change pixel size, as we keep the same as the SEM
 
 
 # Maximum allowed overlay difference in electron coordinates.
