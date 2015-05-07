@@ -762,7 +762,7 @@ class VisualRangeSlider(BaseSlider):
                 self.Refresh()
             else:
                 msg = "Illegal value order %s, should be (low, high)"
-                raise ValueError(msg % val)
+                raise ValueError(msg % str(val))
         else:
             msg = "Illegal value %s for range %s, %s"
             raise ValueError(msg % (val, self.min_value, self.max_value))

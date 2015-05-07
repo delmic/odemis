@@ -23,6 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import logging
+import numpy
 import wx
 from wx.lib.pubsub import pub
 
@@ -55,7 +56,7 @@ SCHED_ALL = 2  # All the streams which are in the should_update stream
 class SettingEntry(VigilantAttributeConnector):
     """ An Entry linked to a Vigilant Attribute """
 
-    def __init__(self, name, va=None, stream=None, lbl_ctrl=None, value_ctrl=None,
+    def __init__(self, name=None, va=None, stream=None, lbl_ctrl=None, value_ctrl=None,
                  va_2_ctrl=None, ctrl_2_va=None, events=None):
         """ See the super classes for parameter descriptions
 
@@ -121,6 +122,7 @@ class StreamController(object):
 
         if hasattr(stream, "auto_bc") and hasattr(stream, "intensityRange"):
             self._add_brightnesscontrast_ctrls()
+            self._add_outliers_ctrls()
 
         # if self._has_wl(self.stream):
         #     self._add_wl_controls()
@@ -337,8 +339,130 @@ class StreamController(object):
             self.entries.append(se)
 
     def _add_brightnesscontrast_ctrls(self):
-        self.stream_panel.add_brightnesscontrast_ctrls()
-        self.stream_panel.Refresh()
+        """ Add controls for manipulating the (auto) contrast of the stream image data """
+
+        btn_autobc, sld_outliers = self.stream_panel.add_autobc_ctrls()
+
+        # The following closures are used to link the state of the button to the availability of the
+        # slider
+        def _autobc_to_va():
+            enabled = btn_autobc.GetToggle()
+            sld_outliers.Enable(not enabled)
+            return enabled
+
+        def _va_to_autobc(enabled):
+            btn_autobc.SetToggle(enabled)
+            sld_outliers.Enable(not enabled)
+
+        # Store a setting entry for the auto brightness/contrast button
+        se = SettingEntry(name="autobc", va=self.stream.auto_bc, stream=self.stream,
+                          value_ctrl=btn_autobc, events=wx.EVT_BUTTON,
+                          va_2_ctrl=_va_to_autobc, ctrl_2_va=_autobc_to_va)
+        self.entries.append(se)
+
+        # Store a setting entry for the outliers slider
+        se = SettingEntry(name="outliers", va=self.stream.auto_bc_outliers, stream=self.stream,
+                          value_ctrl=sld_outliers, events=wx.EVT_SLIDER)
+        self.entries.append(se)
+
+    def _add_outliers_ctrls(self):
+        """ Add the controls for manipulation the outliers """
+
+        sld_hist, txt_low, txt_high = self.stream_panel.add_outliers_ctrls()
+
+        se = SettingEntry(name="intensity_range", va=self.stream.intensityRange, stream=self.stream,
+                          value_ctrl=sld_hist, events=wx.EVT_SLIDER)
+        self.entries.append(se)
+
+        if hasattr(self.stream, "auto_bc"):
+            # The outlier controls need to be disabled when auto brightness/contrast is active
+            def _enable_outliers(autobc_enabled):
+                """ En/disable the controls when the auto brightness and contrast are toggled """
+                sld_hist.Enable(not autobc_enabled)
+                txt_low.Enable(not autobc_enabled)
+                txt_high.Enable(not autobc_enabled)
+
+            # ctrl_2_va gets passed an identify function, to prevent the VA connector from looking
+            # for a linked value control (Which we don't really need in this case. This setting
+            # entry is only here so that a reference to `_enable_outliers` will be preserved).
+            se = SettingEntry(va=self.stream.auto_bc, stream=self.stream,
+                              va_2_ctrl=_enable_outliers, ctrl_2_va=lambda x: x)
+            self.entries.append(se)
+
+        def _get_lowi():
+            intensity_rng_va = self.stream.intensityRange
+            req_lv = txt_low.GetValue()
+            hiv = intensity_rng_va.value[1]
+            # clamp low range to max high range
+            lov = max(intensity_rng_va.range[0][0], min(req_lv, hiv, intensity_rng_va.range[1][0]))
+            if lov != req_lv:
+                txt_low.SetValue(lov)
+            return lov, hiv
+
+        se = SettingEntry(name="low_intensity", va=self.stream.intensityRange, stream=self.stream,
+                          value_ctrl=txt_low, events=wx.EVT_COMMAND_ENTER,
+                          va_2_ctrl=lambda r: txt_low.SetValue(r[0]), ctrl_2_va=_get_lowi)
+        self.entries.append(se)
+
+        def _get_highi():
+            intensity_rng_va = self.stream.intensityRange
+            lov = intensity_rng_va.value[0]
+            req_hv = txt_high.GetValue()
+            # clamp high range to at least low range
+            hiv = max(lov, intensity_rng_va.range[0][1], min(req_hv, intensity_rng_va.range[1][1]))
+            if hiv != req_hv:
+                txt_high.SetValue(hiv)
+            return lov, hiv
+
+        se = SettingEntry(name="high_intensity", va=self.stream.intensityRange, stream=self.stream,
+                          value_ctrl=txt_high, events=wx.EVT_COMMAND_ENTER,
+                          va_2_ctrl=lambda r: txt_high.SetValue(r[1]), ctrl_2_va=_get_highi)
+        self.entries.append(se)
+
+        def _on_histogram(hist):
+            """ Display the new histogram data in the histogram slider
+
+            This closure has an attribute assigned to it (`prev_drange`), to keep track of dynamic
+            range changes. This solution was chosen, because in this manner we can avoid adding an
+            extra (possibly unused) attribute to the stream controller. Since every instance of this
+            function belongs to at most 1 stream (panel), we don't need to worried about conflicts.
+
+            :param hist: ndArray of integers, the contents is a list a values in [0.0..1.0]
+
+            TODO: don't update when folded: it's useless => unsubscribe
+
+            """
+
+            intensity_rng_va = self.stream.intensityRange
+
+            if len(hist):
+                # a logarithmic histogram is easier to read
+                lhist = numpy.log1p(hist)
+                norm_hist = lhist / float(lhist.max())
+                # ndarrays work too, but slower to display
+                norm_hist = norm_hist.tolist()
+            else:
+                norm_hist = []
+
+            drange = (intensity_rng_va.range[0][0], intensity_rng_va.range[1][1])
+
+            if drange != _on_histogram.prev_drange:
+                _on_histogram.prev_drange = drange
+
+                sld_hist.SetRange(drange[0], drange[1])
+                # Setting the values should not be necessary as the value should have
+                # already been updated via the VA update
+                txt_low.SetValueRange(drange[0], drange[1])
+                txt_high.SetValueRange(drange[0], drange[1])
+
+            sld_hist.SetContent(norm_hist)
+        _on_histogram.prev_drange = (self.stream.intensityRange.range[0][0],
+                                     self.stream.intensityRange.range[1][1])
+
+        # Again, we use an entry to keep a reference of the closure around
+        se = SettingEntry(va=self.stream.histogram, stream=self.stream,
+                          va_2_ctrl=_on_histogram, ctrl_2_va=lambda x: x)
+        self.entries.append(se)
 
     # END Control addition
 

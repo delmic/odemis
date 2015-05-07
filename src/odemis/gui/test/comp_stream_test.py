@@ -18,9 +18,9 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
-#===============================================================================
+# ===============================================================================
 # Test module for Odemis' stream module in gui.comp
-#===============================================================================
+# ===============================================================================
 
 import numpy
 import time
@@ -316,7 +316,29 @@ class FoldPanelBarTestCase(test.GuiTestCase):
                 self.assertNotEqual(old_value, emission_combo.value_ctrl.GetValue())
                 self.assertNotEqual(old_colour, sp2._btn_emission.colour)
 
-        test.gui_loop()
+        # Test intensity control values by manipulating the VAs
+        # TODO: Move to separate test case
+
+        txt_lowi = [e for e in sp1.entries if e.name == "low_intensity"][0].value_ctrl
+        txt_highi = [e for e in sp1.entries if e.name == "high_intensity"][0].value_ctrl
+
+        for i in range(0, 11):
+            v = i / 10.0
+            fake_fluo_stream.intensityRange.value = (v, 1.0)
+            test.gui_loop(100)
+            self.assertEqual(v, txt_lowi.GetValue())
+
+        for i in range(0, 11):
+            v = i / 10.0
+            fake_fluo_stream.intensityRange.value = (0.0, v)
+            test.gui_loop(100)
+            self.assertEqual(v, txt_highi.GetValue())
+
+        # Test if the range gets updated when the histogram changes
+        fake_fluo_stream.intensityRange.range = ((0.25, 0.25), (0.75, 0.75))
+        fake_fluo_stream.histogram.notify(fake_fluo_stream.histogram.value)
+        test.gui_loop(100)
+        self.assertEqual((0.25, 0.75), txt_lowi.GetValueRange())
 
     def test_static_streams(self):
 
@@ -379,7 +401,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         self.assertIsInstance(sem_panel.stream_panel._btn_autobc, wx.Control)
 
         # Clear remaining streams
-        stream_bar.clear()
+        # stream_bar.clear()
         test.gui_loop()
 
         self.assertEqual(stream_bar.get_size(), 0)

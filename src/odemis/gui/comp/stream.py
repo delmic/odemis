@@ -27,7 +27,6 @@ from __future__ import division
 
 import collections
 import logging
-import numpy
 import wx
 import wx.lib.newevent
 from wx.lib.pubsub import pub
@@ -42,7 +41,7 @@ from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.foldpanelbar import FoldPanelItem, FoldPanelBar
 from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider, UnitIntegerSlider
 from odemis.gui.comp.text import SuggestTextCtrl, UnitFloatCtrl, FloatTextCtrl
-from odemis.gui.util import call_in_wx_main, wxlimit_invocation, dead_object_wrapper, ignore_dead
+from odemis.gui.util import call_in_wx_main, wxlimit_invocation, dead_object_wrapper
 from odemis.gui.util.widgets import VigilantAttributeConnector
 from odemis.util import fluo
 from odemis.util.conversion import wave2rgb
@@ -674,36 +673,22 @@ class StreamPanel(wx.Panel):
 
     # ===== For brightness/contrast
 
-    def add_brightnesscontrast_ctrls(self):
-        """ Add the widgets related to brightness/contrast
-          ├ Toggle button (AutoBC)
-          ├ StaticText (Outliers)
-          ├ UnitFloatSlider (AutoBC Outliers)
-          ├ BandwidthSlider (Histogram -> Low/High intensity)
-          ├ FloatTextCtrl (Low intensity)
-          ├ FloatTextCtrl (High intensity)
-        """
-        # ====== Top row, auto contrast toggle button
+    @control_bookkeeper
+    def add_autobc_ctrls(self):
+        """ Create and return controls needed for (auto) brightness and contrast manipulation """
 
-        self._btn_autobc = buttons.ImageTextToggleButton(self._panel, wx.ID_ANY,
-                                                         img.getbtn_contrastBitmap(),
-                                                         label="Auto",
-                                                         label_delta=1,
-                                                         style=wx.ALIGN_RIGHT)
+        btn_autobc = buttons.ImageTextToggleButton(self._panel, wx.ID_ANY,
+                                                   img.getbtn_contrastBitmap(),
+                                                   label="Auto", label_delta=1,
+                                                   style=wx.ALIGN_RIGHT)
 
-        tooltip = "Toggle auto brightness and contrast"
-        self._btn_autobc.SetToolTipString(tooltip)
-        self._btn_autobc.SetBitmaps(bmp_h=img.getbtn_contrast_hBitmap(),
-                                    bmp_sel=img.getbtn_contrast_aBitmap())
-        self._btn_autobc.SetForegroundColour("#000000")
-        self._vac_autobc = VigilantAttributeConnector(self.stream.auto_bc,
-                                                      self._btn_autobc,
-                                                      self._btn_autobc.SetToggle,
-                                                      self._btn_autobc.GetToggle,
-                                                      events=wx.EVT_BUTTON)
+        btn_autobc.SetToolTipString("Toggle auto brightness and contrast")
+        btn_autobc.SetBitmaps(bmp_h=img.getbtn_contrast_hBitmap(),
+                              bmp_sel=img.getbtn_contrast_aBitmap())
+        btn_autobc.SetForegroundColour("#000000")
 
         lbl_bc_outliers = wx.StaticText(self._panel, -1, "Outliers")
-        self._sld_bc_outliers = UnitFloatSlider(
+        sld_bc_outliers = UnitFloatSlider(
             self._panel,
             value=self.stream.auto_bc_outliers.value,
             min_val=self.stream.auto_bc_outliers.range[0],
@@ -713,48 +698,35 @@ class StreamPanel(wx.Panel):
             accuracy=2
         )
 
-        self._sld_bc_outliers.SetToolTipString("Percentage of values to ignore "
-                                               "in auto brightness and contrast")
-        self._vac_bc_outliers = VigilantAttributeConnector(self.stream.auto_bc_outliers,
-                                                           self._sld_bc_outliers,
-                                                           events=wx.EVT_SLIDER)
+        sld_bc_outliers.SetToolTipString("Percentage of values to ignore "
+                                         "in auto brightness and contrast")
 
         autobc_sz = wx.BoxSizer(wx.HORIZONTAL)
-        autobc_sz.Add(self._btn_autobc, 0, flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT, border=5)
+        autobc_sz.Add(btn_autobc, 0, flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT, border=5)
         autobc_sz.Add(lbl_bc_outliers, 0, flag=wx.ALIGN_CENTRE_VERTICAL | wx.LEFT, border=5)
-        autobc_sz.Add(self._sld_bc_outliers, 1,
+        autobc_sz.Add(sld_bc_outliers, 1,
                       flag=wx.ALIGN_CENTRE_VERTICAL | wx.LEFT | wx.EXPAND, border=5)
         self.gb_sizer.Add(autobc_sz, (self.num_rows, 0), span=(1, 3),
                           flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
 
-        self.num_rows += 1
+        return btn_autobc, sld_bc_outliers
 
-        # ====== Second row, histogram
+    @control_bookkeeper
+    def add_outliers_ctrls(self):
         hist_min = self.stream.intensityRange.range[0][0]
         hist_max = self.stream.intensityRange.range[1][1]
 
-        # ir_rng = (self.stream.intensityRange.range[0][0],
-        #           self.stream.intensityRange.range[1][1])
+        sld_hist = VisualRangeSlider(self._panel, size=(-1, 40),
+                                     value=self.stream.intensityRange.value,
+                                     min_val=hist_min, max_val=hist_max)
 
-        self._sld_hist = VisualRangeSlider(self._panel,
-                                           size=(-1, 40),
-                                           value=self.stream.intensityRange.value,
-                                           min_val=hist_min,
-                                           max_val=hist_max)
-
-        self._sld_hist.SetBackgroundColour("#000000")
-        self._vac_hist = VigilantAttributeConnector(self.stream.intensityRange,
-                                                    self._sld_hist,
-                                                    events=wx.EVT_SLIDER)
+        sld_hist.SetBackgroundColour("#000000")
 
         # span is 2, because emission/excitation have 2 controls
-        self.gb_sizer.Add(self._sld_hist, pos=(self.num_rows, 0),
-                                 span=(1, 3),
-                                 flag=wx.EXPAND | wx.TOP | wx.RIGHT | wx.LEFT,
-                                 border=5)
+        self.gb_sizer.Add(sld_hist, pos=(self.num_rows, 0), span=(1, 3), border=5,
+                          flag=wx.EXPAND | wx.TOP | wx.RIGHT | wx.LEFT)
         self.num_rows += 1
 
-        # ====== Third row, text fields for intensity
         # Low/ High values are in raw data. So it's typically uint, but could
         # be float for some weird cases. So we make them float, with high
         # accuracy to avoid rounding.
@@ -763,133 +735,39 @@ class StreamPanel(wx.Panel):
         tooltip_txt = "Value mapped to black"
         lbl_lowi.SetToolTipString(tooltip_txt)
 
-        self._txt_lowi = FloatTextCtrl(self._panel, -1,
-                                       self.stream.intensityRange.value[0],
-                                       style=wx.NO_BORDER,
-                                       size=(-1, 14),
-                                       min_val=hist_min,
-                                       max_val=hist_max,
-                                       step=1,
-                                       accuracy=6)
-        self._txt_lowi.SetBackgroundColour(BG_COLOUR_MAIN)
-        self._txt_lowi.SetForegroundColour(FG_COLOUR_EDIT)
-        self._txt_lowi.SetToolTipString(tooltip_txt)
-
-        def get_lowi(va=self.stream.intensityRange, ctrl=self._txt_lowi):
-            req_lv = ctrl.GetValue()
-            hv = va.value[1]
-            # clamp low range to max high range
-            lv = max(va.range[0][0], min(req_lv, hv, va.range[1][0]))
-            if lv != req_lv:
-                ctrl.SetValue(lv)
-            return lv, hv
-
-        self._vac_lowi = VigilantAttributeConnector(
-            self.stream.intensityRange,
-            self._txt_lowi,
-            va_2_ctrl=lambda r: self._txt_lowi.SetValue(r[0]),
-            ctrl_2_va=get_lowi,
-            events=wx.EVT_COMMAND_ENTER
-        )
+        txt_lowi = FloatTextCtrl(self._panel, -1,
+                                 self.stream.intensityRange.value[0],
+                                 style=wx.NO_BORDER, size=(-1, 14),
+                                 min_val=hist_min, max_val=hist_max,
+                                 step=1, accuracy=6)
+        txt_lowi.SetBackgroundColour(BG_COLOUR_MAIN)
+        txt_lowi.SetForegroundColour(FG_COLOUR_EDIT)
+        txt_lowi.SetToolTipString(tooltip_txt)
 
         lbl_highi = wx.StaticText(self._panel, -1, "High")
         tooltip_txt = "Value mapped to white"
         lbl_highi.SetToolTipString(tooltip_txt)
-        self._txt_highi = FloatTextCtrl(self._panel, -1,
-                                        self.stream.intensityRange.value[1],
-                                        style=wx.NO_BORDER,
-                                        size=(-1, 14),
-                                        min_val=hist_min,
-                                        max_val=hist_max,
-                                        step=1,
-                                        accuracy=6)
-        self._txt_highi.SetBackgroundColour(BG_COLOUR_MAIN)
-        self._txt_highi.SetForegroundColour(FG_COLOUR_EDIT)
-        self._txt_highi.SetToolTipString(tooltip_txt)
-
-        def get_highi(va=self.stream.intensityRange, ctrl=self._txt_highi):
-            lv = va.value[0]
-            req_hv = ctrl.GetValue()
-            # clamp high range to at least low range
-            hv = max(lv, va.range[0][1], min(req_hv, va.range[1][1]))
-            if hv != req_hv:
-                ctrl.SetValue(hv)
-            return lv, hv
-
-        self._vac_highi = VigilantAttributeConnector(
-            self.stream.intensityRange,
-            self._txt_highi,
-            va_2_ctrl=lambda r: self._txt_highi.SetValue(r[1]),
-            ctrl_2_va=get_highi,
-            events=wx.EVT_COMMAND_ENTER
-        )
-
-        self._prev_drange = (self.stream.intensityRange.range[0][0],
-                             self.stream.intensityRange.range[1][1])
-        self.stream.histogram.subscribe(self.on_histogram, init=True)
-        # self.stream.intensityRange.subscribe(update_range)
+        txt_highi = FloatTextCtrl(self._panel, -1,
+                                  self.stream.intensityRange.value[1],
+                                  style=wx.NO_BORDER, size=(-1, 14),
+                                  min_val=hist_min, max_val=hist_max,
+                                  step=1, accuracy=6)
+        txt_highi.SetBackgroundColour(BG_COLOUR_MAIN)
+        txt_highi.SetForegroundColour(FG_COLOUR_EDIT)
+        txt_highi.SetToolTipString(tooltip_txt)
 
         lh_sz = wx.BoxSizer(wx.HORIZONTAL)
 
-        lh_sz.Add(lbl_lowi, 0,
-                  flag=wx.ALIGN_CENTRE_VERTICAL | wx.LEFT,
-                  border=5)
-        lh_sz.Add(self._txt_lowi, 1,
-                  flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.RIGHT | wx.LEFT,
-                  border=5)
-        lh_sz.Add(lbl_highi, 0,
-                  flag=wx.ALIGN_CENTRE_VERTICAL | wx.LEFT,
-                  border=5)
-        lh_sz.Add(self._txt_highi, 1,
-                  flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.RIGHT | wx.LEFT,
-                  border=5)
-        self.gb_sizer.Add(
-            lh_sz, (self.num_rows, 0),
-            span=(1, 3),
-            flag=wx.BOTTOM | wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND,
-            border=5)
+        lh_sz.Add(lbl_lowi, 0, border=5, flag=wx.ALIGN_CENTRE_VERTICAL | wx.LEFT)
+        lh_sz.Add(txt_lowi, 1, border=5,
+                  flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.RIGHT | wx.LEFT)
+        lh_sz.Add(lbl_highi, 0, border=5, flag=wx.ALIGN_CENTRE_VERTICAL | wx.LEFT)
+        lh_sz.Add(txt_highi, 1, border=5,
+                  flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.RIGHT | wx.LEFT)
+        self.gb_sizer.Add(lh_sz, (self.num_rows, 0), span=(1, 3), border=5,
+                          flag=wx.BOTTOM | wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND)
 
-        self.num_rows += 1
-
-        # Can only do that once all the controls are here
-        self.stream.auto_bc.subscribe(self._onAutoBC, init=True)
-
-    @call_in_wx_main
-    def _onAutoBC(self, enabled):
-        # disable the manual controls if it's on
-        self._sld_bc_outliers.Enable(enabled)
-        self._sld_hist.Enable(not enabled)
-        self._txt_lowi.Enable(not enabled)
-        self._txt_highi.Enable(not enabled)
-
-    @call_in_wx_main
-    @ignore_dead
-    def _update_drange(self, drange):
-        self._sld_hist.SetRange(drange[0], drange[1])
-
-        # Setting the values should not be necessary as the value should have
-        # already been updated via the VA update
-        self._txt_lowi.SetValueRange(drange[0], drange[1])
-        self._txt_highi.SetValueRange(drange[0], drange[1])
-
-    def on_histogram(self, hist):
-        # TODO: don't update when folded: it's useless => unsubscribe
-        # hist is a ndarray of ints, content is a list of values between 0 and 1
-        if len(hist):
-            lhist = numpy.log1p(hist) # log histogram is easier to read
-            norm_hist = lhist / float(lhist.max())
-            # ndarrays work too, but slower to display
-            norm_hist = norm_hist.tolist()
-        else:
-            norm_hist = []
-
-        drange = (self.stream.intensityRange.range[0][0],
-                  self.stream.intensityRange.range[1][1])
-        if drange != self._prev_drange:
-            self._prev_drange = drange
-            self._update_drange(drange)
-
-        wx.CallAfter(dead_object_wrapper(self._sld_hist.SetContent), norm_hist)
+        return sld_hist, txt_lowi, txt_highi
 
     # ===== For separate Optical stream settings
 
@@ -1000,17 +878,17 @@ class StreamPanel(wx.Panel):
         # A button, but not clickable, just to show the wavelength
         # If a dye is selected, the colour of the peak is used, otherwise we
         # use the hardware setting
-        btn_col = buttons.ColourButton(self._panel, -1,
+        btn_color = buttons.ColourButton(self._panel, -1,
                                        bitmap=img.getemptyBitmap(),
                                        colour=wave2rgb(center_wl),
                                        background_parent=self._panel)
-        self.gb_sizer.Add(btn_col,
+        self.gb_sizer.Add(btn_color,
                           (self.num_rows, 2),
                           flag=wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL | wx.ALIGN_RIGHT,
                           border=5)
-        self.update_peak_label_fit(lbl_peak, btn_col, None, band)
+        self.update_peak_label_fit(lbl_peak, btn_color, None, band)
 
-        return lbl_ctrl, hw_set, lbl_peak, btn_col
+        return lbl_ctrl, hw_set, lbl_peak, btn_color
 
     # END Setting Control Addition Methods
 

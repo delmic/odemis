@@ -417,6 +417,9 @@ class NumberValidator(wx.PyValidator):
         self.min_val = minv
         self.max_val = maxv
 
+    def GetRange(self):
+        return self.min_val, self.max_val
+
     def _validate_choices(self):
 
         if self.choices:
@@ -709,10 +712,11 @@ class NumberTextCtrl(wx.TextCtrl):
         wx.TextCtrl.ChangeValue(self, val)
 
     def SetValueRange(self, minv, maxv):
-        """
-        Same as SetRange of a slider
-        """
+        """ Same as SetRange of a slider """
         self.GetValidator().SetRange(minv, maxv)
+
+    def GetValueRange(self):
+        return self.GetValidator().GetRange()
 
     def _processNewText(self, str_val):
         """ Called internally when a new text is entered by the user
