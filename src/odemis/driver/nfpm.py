@@ -880,7 +880,7 @@ class PM8742Simulator(object):
         if not self._output_buf:
             # simulate timeout
             time.sleep(self.timeout)
-            raise socket.timeout("No data after %g s", self.timeout)
+            raise socket.timeout("No data after %g s" % (self.timeout,))
 
         ret = self._output_buf[:size]
         self._output_buf = self._output_buf[len(ret):]
