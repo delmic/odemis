@@ -42,7 +42,7 @@ import weakref
 # execute the requests one at a time, which can cause deadlock when handling
 # callbacks.
 #Pyro4.config.SERVERTYPE = "multiplex"
-Pyro4.config.THREADPOOL_MINTHREADS = 48 # big, because it can block when increasing the pool
+Pyro4.config.THREADPOOL_MINTHREADS = 16 # TODO: still need 48, because it can block when increasing the pool?
 Pyro4.config.THREADPOOL_MAXTHREADS = 128
 # TODO make sure Pyro can now grow the pool: it used to allocate a huge static
 # number of threads. It seems also that when growing the pool it sometimes blocks
