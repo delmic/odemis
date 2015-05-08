@@ -470,12 +470,6 @@ def move(comp_name, moves):
         raise IOError("Failed to move component %s by %s: %s" %
                       (comp_name, act_mv, exc))
 
-    # Trick to make sure that not thread is still running
-    try:
-        if component._pyroFutureDaemon:
-            component._pyroFutureDaemon.shutdown()
-    except AttributeError:
-        pass
 
 def move_abs(comp_name, moves):
     """
@@ -519,12 +513,6 @@ def move_abs(comp_name, moves):
         raise IOError("Failed to move component %s to %s: %s" %
                       (comp_name, act_mv, exc))
 
-    # Trick to make sure that not thread is still running
-    try:
-        if component._pyroFutureDaemon:
-            component._pyroFutureDaemon.shutdown()
-    except AttributeError:
-        pass
 
 def reference(comp_name, axis_name):
     """
@@ -551,12 +539,6 @@ def reference(comp_name, axis_name):
         raise IOError("Failed to reference axis %s of component %s: %s" %
                       (axis_name, comp_name, exc))
 
-    # Trick to make sure that not thread is still running
-    try:
-        if component._pyroFutureDaemon:
-            component._pyroFutureDaemon.shutdown()
-    except AttributeError:
-        pass
 
 def stop_move():
     """
