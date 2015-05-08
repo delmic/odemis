@@ -87,7 +87,7 @@ SPARC-MONASH: {
     },
 }
 
-# TODO: sp-cl-detector
+# TODO: monochromator
 
 "Focus Lens": {
     class: static.OpticalLens,
