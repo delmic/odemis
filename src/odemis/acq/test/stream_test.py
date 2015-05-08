@@ -41,6 +41,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 SPARC_CONFIG = CONFIG_PATH + "sparc-sim.odm.yaml"
+FULLSPARC_CONFIG = CONFIG_PATH + "sparc-monash-sim.odm.yaml"
 SECOM_CONFIG = CONFIG_PATH + "secom-sim.odm.yaml"
 
 RGBCAM_CLASS = simcam.Camera
@@ -889,6 +890,113 @@ class SPARCTestCase(unittest.TestCase):
         dates = window.metadata[model.MD_ACQ_DATE]
         self.assertTrue(first_date < dates[0] < dates[-1])
 
+
+# @skip("faster")
+class SettingsStreamsTestCase(unittest.TestCase):
+    """
+    Tests of the *SettingsStreams, to be run with a (simulated) 4-detector SPARC
+    Mostly the creation of streams and live view.
+    """
+    backend_was_running = False
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            test.start_backend(FULLSPARC_CONFIG)
+        except LookupError:
+            logging.info("A running backend is already found, skipping tests")
+            cls.backend_was_running = True
+            return
+        except IOError as exp:
+            logging.error(str(exp))
+            raise
+
+        # Find CCD & SEM components
+        cls.ccd = model.getComponent(role="ccd")
+        cls.spec = model.getComponent(role="spectrometer")
+        #cls.mnchr = model.getComponent(role="monochromator")
+        cls.spgp = model.getComponent(role="spectrograph")
+        cls.mnchr = model.getComponent(role="cl-detector")  # Until we get a simulated counting PMT
+        cls.cl = model.getComponent(role="cl-detector")
+        cls.ebeam = model.getComponent(role="e-beam")
+        cls.sed = model.getComponent(role="se-detector")
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.backend_was_running:
+            return
+        test.stop_backend()
+
+    def setUp(self):
+        if self.backend_was_running:
+            self.skipTest("Running backend found")
+
+    def test_spec_ss(self):
+        """ Test SpectrumSettingsStream """
+        # Create the stream
+        specs = stream.SpectrumSettingsStream("test",
+                      self.spec, self.spec.data, self.ebeam,
+                      detvas=("exposureTime", "readoutRate", "binning", "resolution"))
+        self._image = None
+        specs.image.subscribe(self._on_image)
+
+        # shouldn't affect
+        specs.roi.value = (0.15, 0.6, 0.8, 0.8)
+        specs.repetition.value = (5, 6)
+
+        specs.detExposureTime.value = 0.3 # s
+
+        # Start acquisition
+        specs.should_update.value = True
+        specs.is_active.value = True
+
+        time.sleep(2)
+        specs.is_active.value = False
+
+        self.assertIsNotNone(self._image, "No spectrum received after 2s")
+        self.assertIsInstance(self._image, model.DataArray)
+        self.assertEqual(self._image.shape, specs.detResolution.value[::-1])
+        self.assertEqual(self._image.shape[0], 1)
+
+        # TODO
+        # change center wavelength and try again
+
+    def test_spec_mnchr(self):
+        """ Tests MonochromatorSettingsStream """
+        # Create the stream
+        mcs = stream.MonochromatorSettingsStream("test",
+                      self.mnchr, self.mnchr.data, self.ebeam, self.spgp,
+                      emtvas=("dwellTime", "scale", "resolution"))
+        self._image = None
+        mcs.image.subscribe(self._on_image)
+
+        # shouldn't affect
+        mcs.roi.value = (0.15, 0.6, 0.8, 0.8)
+        mcs.repetition.value = (5, 6)
+
+        mcs.emtResolution.value = (1, 1) # spot
+        mcs.emtDwellTime.value = 0.01 # s
+        mcs.windowPeriod.value = 10 # s
+
+        # Start acquisition
+        mcs.should_update.value = True
+        mcs.is_active.value = True
+
+        time.sleep(2)
+        mcs.is_active.value = False
+
+        self.assertIsNotNone(self._image, "No data received after 2s")
+        self.assertIsInstance(self._image, model.DataArray)
+        print self._image
+        self.assertEqual(self._image.ndim, 1)
+        self.assertGreater(self._image.shape[0], 50) # we could hope 200 samples
+
+        # TODO
+        # change center wavelength and try again
+
+
+    def _on_image(self, im):
+        self._image = im
 
 # @skip("faster")
 class StaticStreamsTestCase(unittest.TestCase):

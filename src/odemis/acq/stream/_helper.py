@@ -303,10 +303,10 @@ class CCDSettingsStream(RepetitionStream):
             # Each pixel x the exposure time (of the detector) + readout time +
             # 30ms overhead + 20% overhead
             try:
-                ro_rate = self._detector.readoutRate.value
+                ro_rate = self._getDetectorVA("readoutRate").value
             except Exception:
                 ro_rate = 100e6 # Hz
-            res = self._detector.resolution.value
+            res = self._getDetectorVA("resolution").value
             readout = numpy.prod(res) / ro_rate
 
             exp = self._getDetectorVA("exposureTime").value
@@ -326,9 +326,9 @@ class PMTSettingsStream(RepetitionStream):
 
     def estimateAcquisitionTime(self):
         try:
-            # Each pixel x the dwell time (of the detector) +
+            # Each pixel x the dwell time (of the emitter) +
             # 30ms overhead + 20% overhead
-            dt = self._getDetectorVA("dwellTime").value
+            dt = self._getEmitterVA("dwellTime").value
             dur_image = (dt + 0.03) * 1.20
             duration = numpy.prod(self.repetition.value) * dur_image
             # Add the setup time
@@ -353,6 +353,8 @@ class SpectrumSettingsStream(CCDSettingsStream):
 
         # Contains one spectrum (start with an empty array)
         self.image.value = model.DataArray([])
+
+        # TODO: grating/cw as VAs (from the spectrometer)
 
     # onActive: same as the standard LiveStream (ie, acquire from the dataflow)
 
@@ -386,6 +388,8 @@ class MonochromatorSettingsStream(PMTSettingsStream):
 
         self._raw_date = [] # time of each raw acquisition (=count)
         self.image.value = model.DataArray([]) # start with an empty array
+
+        # TODO: grating/cw as VAs (from the spectrograph)
 
         # time over which to accumulate the data. 0 indicates that only the last
         # value should be included
@@ -427,7 +431,17 @@ class MonochromatorSettingsStream(PMTSettingsStream):
             date = data.metadata[model.MD_ACQ_DATE]
         except KeyError:
             date = time.time()
-        self._append(data[0], date) # there is just one element in data
+
+        # Convert the data from counts to counts/s
+        dt = data.metadata[model.MD_DWELL_TIME]
+        if data.shape == (1, 1): # obtained during spot mode?
+            # Just convert to
+            d = data[0, 0] / dt
+        else: # obtained during a scan
+            # TODO: cut the data into subparts based on the dwell time
+            d = data.mean() / dt
+
+        self._append(d, date) # there is just one element in data
 
         self._updateImage()
 
@@ -464,7 +478,9 @@ class CLSettingsStream(PMTSettingsStream):
         RepetitionStream.__init__(self, name, detector, dataflow, emitter, **kwargs)
         # Don't change pixel size, as we keep the same as the SEM
 
-    # onActive: same as the standard LiveStream (ie, acquire from the dataflow)
+    # onActive & projection: same as the standard LiveStream
+
+    # TODO: onDwellTime/onResolution => reset live acquisition (as SEMStream)?
 
 
 # Maximum allowed overlay difference in electron coordinates.
