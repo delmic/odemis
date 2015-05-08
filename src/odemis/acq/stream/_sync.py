@@ -80,6 +80,10 @@ class MultipleDetectorStream(Stream):
         self.is_active = model.BooleanVA(False)
 
     @property
+    def streams(self):
+        return self._streams
+
+    @property
     def raw(self):
         # build the .raw from all the substreams
         r = []
