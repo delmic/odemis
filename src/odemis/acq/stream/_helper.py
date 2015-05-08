@@ -21,15 +21,18 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 
+from functools import wraps
 import logging
 import math
 import numpy
 from odemis import model
 from odemis.acq import align
+from odemis.util import limit_invocation
+import time
 
 from ._base import Stream, UNDEFINED_ROI
 from ._live import LiveStream
-from functools import wraps
+from abc import abstractmethod
 
 
 class RepetitionStream(LiveStream):
@@ -40,6 +43,8 @@ class RepetitionStream(LiveStream):
     Beware, these special streams are for settings only. So the image generated
     when active is only for quick feedback of the settings. To actually perform
     a full acquisition, the stream should be fed to a MultipleDetectorStream.
+    Note that .estimateAcquisitionTime() returns the time needed for the whole
+    acquisition.
     """
 
     def __init__(self, name, detector, dataflow, emitter, **kwargs):
@@ -286,6 +291,13 @@ class RepetitionStream(LiveStream):
         max_pxs = min(epxs[0] * shape[0], epxs[1] * shape[1])
         return (min_pxs, max_pxs)
 
+    @abstractmethod
+    def estimateAcquisitionTime(self):
+        return self.SETUP_OVERHEAD
+
+
+class CCDSettingsStream(RepetitionStream):
+
     def estimateAcquisitionTime(self):
         try:
             # Each pixel x the exposure time (of the detector) + readout time +
@@ -297,7 +309,7 @@ class RepetitionStream(LiveStream):
             res = self._detector.resolution.value
             readout = numpy.prod(res) / ro_rate
 
-            exp = self._detector.exposureTime.value
+            exp = self._getDetectorVA("exposureTime").value
             dur_image = (exp + readout + 0.03) * 1.20
             duration = numpy.prod(self.repetition.value) * dur_image
             # Add the setup time
@@ -310,50 +322,149 @@ class RepetitionStream(LiveStream):
             return Stream.estimateAcquisitionTime(self)
 
 
-class SpectrumSettingsStream(RepetitionStream):
+class PMTSettingsStream(RepetitionStream):
+
+    def estimateAcquisitionTime(self):
+        try:
+            # Each pixel x the dwell time (of the detector) +
+            # 30ms overhead + 20% overhead
+            dt = self._getDetectorVA("dwellTime").value
+            dur_image = (dt + 0.03) * 1.20
+            duration = numpy.prod(self.repetition.value) * dur_image
+            # Add the setup time
+            duration += self.SETUP_OVERHEAD
+
+            return duration
+        except Exception:
+            msg = "Exception while estimating acquisition time of %s"
+            logging.exception(msg, self.name.value)
+            return Stream.estimateAcquisitionTime(self)
+
+
+class SpectrumSettingsStream(CCDSettingsStream):
     """ A Spectrum stream.
 
-    Be aware that acquisition can be very long so should not be used for live
-    view. So it has no .image (for now). See StaticSpectrumStream for displaying
-    a stream.
-
-    The live view is just the raw spectrum
+    The live view is just the current raw spectrum (wherever the ebeam is).
     """
     def __init__(self, name, detector, dataflow, emitter, **kwargs):
         RepetitionStream.__init__(self, name, detector, dataflow, emitter, **kwargs)
         # For SPARC: typical user wants density a bit lower than SEM
         self.pixelSize.value *= 6
 
+        # Contains one spectrum (start with an empty array)
+        self.image.value = model.DataArray([])
 
-class ARSettingsStream(RepetitionStream):
+    # onActive: same as the standard LiveStream (ie, acquire from the dataflow)
+
+    @limit_invocation(0.1)
+    def _updateImage(self):
+        # Just copy the raw data into the image
+        self.image.value = self.raw[0]
+
+
+class MonochromatorSettingsStream(PMTSettingsStream):
+    """
+    A stream acquiring a count corresponding to the light at a given wavelength,
+    typically with a counting PMT as a detector via a spectrograph.
+    Currently, it's a bit ugly because the 'spectrometer' component controls
+    the grating and centre wavelength and also provides the CCD. For the
+    monochromator, we need to change the grating/cw via the (child)
+    'spectrograph' component. So both SpectrumSS and MonochromatorSS
+
+    The raw data is in count/s.
+
+    It's physically very similar to the Spectrum stream, but as the acquisition
+    time is a magnitude shorter (ie, close to the SED), and only one point, the
+    live view is different.
+
+    The live view shows the raw data over a period of time, which is the easiest
+    to allow configuring the settings correctly. Same as CameraCountStream.
+    """
+    def __init__(self, name, detector, dataflow, emitter, spectrograph, **kwargs):
+        RepetitionStream.__init__(self, name, detector, dataflow, emitter, **kwargs)
+        # Don't change pixel size, as we keep the same as the SEM
+
+        self._raw_date = [] # time of each raw acquisition (=count)
+        self.image.value = model.DataArray([]) # start with an empty array
+
+        # time over which to accumulate the data. 0 indicates that only the last
+        # value should be included
+        self.windowPeriod = model.FloatContinuous(30, range=[0, 1e6], unit="s")
+
+    # onActive: same as the standard LiveStream (ie, acquire from the dataflow)
+    # TODO: how to set up the dwell time? If the ebeam is already scanning
+    # => don't change. If spot mode, => put something useful?
+
+    def _append(self, count, date):
+        """
+        Adds a new count and updates the window
+        """
+        # delete all old data
+        oldest = date - self.windowPeriod.value
+        first = 0 # first element still part of the window
+        for i, d in enumerate(self._raw_date):
+            if d >= oldest:
+                first = i
+                break
+        self._raw_date = self._raw_date[first:]
+        self.raw = self.raw[first:]
+
+        self._raw_date.append(date)
+        self.raw.append(count)
+
+    @limit_invocation(0.1)
+    def _updateImage(self):
+        # convert the list into a DataArray
+        im = model.DataArray(self.raw)
+        # save the time of each point as ACQ_DATE, unorthodox but should not
+        # cause much problems as the data is so special anyway.
+        im.metadata[model.MD_ACQ_DATE] = self._raw_date
+        self.image.value = im
+
+    def _onNewImage(self, dataflow, data):
+        # we absolutely need the acquisition time
+        try:
+            date = data.metadata[model.MD_ACQ_DATE]
+        except KeyError:
+            date = time.time()
+        self._append(data[0], date) # there is just one element in data
+
+        self._updateImage()
+
+
+class ARSettingsStream(CCDSettingsStream):
     """
     An angular-resolved stream, for a set of points (on the SEM).
-    Be aware that acquisition can be very long so
-    should not be used for live view. So it has no .image (for now).
-    See StaticARStream for displaying a stream, and CameraStream for displaying
-    just the current AR view.
 
     The live view is just the raw CCD image.
+
+    See StaticARStream for displaying a stream with polar projection.
     """
     def __init__(self, name, detector, dataflow, emitter, **kwargs):
         RepetitionStream.__init__(self, name, detector, dataflow, emitter, **kwargs)
         # For SPARC: typical user wants density much lower than SEM
         self.pixelSize.value *= 30
 
+    # onActive & projection: same as the standard LiveStream
 
-class CLSettingsStream(RepetitionStream):
+
+class CLSettingsStream(PMTSettingsStream):
     """
-    A spatial cathodoluminecense stream, typically with a PMT as a detector.
+    A spatial cathodoluminescense stream, typically with a PMT as a detector.
     It's physically very similar to the AR stream, but as the acquisition time
     is many magnitudes shorter (ie, close to the SED), the live view is the
     entire image.
 
-    Note: there is a trick to be able to acquire an image simultaneously to the
-    SED in live view. In live view, the ROI and dwellTime are not applied.
+    In live view, the ROI is not applied.
+
+    Note: It should be possible to acquire an image simultaneously to the
+    SED in live view, but they would need to pick one dwell time.
     """
     def __init__(self, name, detector, dataflow, emitter, **kwargs):
         RepetitionStream.__init__(self, name, detector, dataflow, emitter, **kwargs)
         # Don't change pixel size, as we keep the same as the SEM
+
+    # onActive: same as the standard LiveStream (ie, acquire from the dataflow)
 
 
 # Maximum allowed overlay difference in electron coordinates.

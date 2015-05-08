@@ -488,7 +488,7 @@ def main(args):
     handler.setFormatter(logging.Formatter('%(asctime)s (%(module)s) %(levelname)s: %(message)s'))
     logging.getLogger().addHandler(handler)
 
-    if loglev >= logging.DEBUG:
+    if loglev <= logging.DEBUG:
         # Activate also Pyro logging
         # TODO: options.logtarget
         pyrolog = logging.getLogger("Pyro4")

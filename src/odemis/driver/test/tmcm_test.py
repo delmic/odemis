@@ -27,6 +27,10 @@ from unittest.case import skip
 
 logging.getLogger().setLevel(logging.DEBUG)
 
+# Export TEST_NOHW=1 to force using only the simulator and skipping test cases
+# needing real hardware
+TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0) # Default to Hw testing
+
 if os.name == "nt":
     PORT = "COM1"
 else:
@@ -42,7 +46,9 @@ KWARGS = dict(name="test", role="stage", port=PORT,
 KWARGS_SIM = dict(KWARGS)
 KWARGS_SIM["refproc"] = "FakeReferencing" # simulator doesn't support running program (=> fancy referencing)
 KWARGS_SIM["port"] = "/dev/fake"
-KWARGS = KWARGS_SIM # uncomment to force using only the simulator
+
+if TEST_NOHW:
+    KWARGS = KWARGS_SIM
 
 # @skip("faster")
 class TestStatic(unittest.TestCase):
@@ -54,6 +60,9 @@ class TestStatic(unittest.TestCase):
         Check that we can do a scan network. It can pass only if we are
         connected to at least one controller.
         """
+        if TEST_NOHW:
+            self.skipTest("TEST_NOHW set")
+
         devices = CLASS.scan()
         self.assertGreater(len(devices), 0)
 

@@ -590,7 +590,7 @@ class TMCM3110(model.Actuator):
         Run synchronously one reference search
         axis (int): axis number
         speed (int): speed in (funky) hw units for the move
-        return (bool): True if the search was done in the positive direction,
+        return (bool): True if the search was done in the negative direction,
           otherwise False
         raise:
             TimeoutError: if the search failed within a timeout (20s)
@@ -602,10 +602,10 @@ class TMCM3110(model.Actuator):
         # Set direction
         edge = self.GetIO(0, 1 + axis) # IN1 = bank 0, port 1->3
         logging.debug("Going to do reference search in dir %d", edge)
-        if edge == 1: # Edge is high, so we need to go positive dir
-            self.SetAxisParam(axis, 193, 7 + 128) # RFS with positive dir
-        else: # Edge is low => go negative dir
-            self.SetAxisParam(axis, 193, 8) # RFS with negative dir
+        if edge == 1: # Edge is high, so we need to go negative dir
+            self.SetAxisParam(axis, 193, 7 + 128) # RFS with negative dir
+        else: # Edge is low => go positive dir
+            self.SetAxisParam(axis, 193, 8) # RFS with positive dir
 
         gparam = 50 + axis
         self.SetGlobalParam(2, gparam, 0)
@@ -654,29 +654,28 @@ class TMCM3110(model.Actuator):
             # then goes towards the edge. If the movement was backward, then
             # it does the search a second time forward, to increase the
             # repeatability.
-            # All this is done twice, once a fast speed finishing with negative
+            # All this is done twice, once a fast speed finishing with positive
             # direction, then at slow speed to increase precision, finishing
-            # in positive direction. Note that as the fast speed finishes with
-            # negative direction, normally only one run (in positive direction)
+            # in negative direction. Note that as the fast speed finishes with
+            # positive direction, normally only one run (in negative direction)
             # is required on slow speed.
-            # Note also that the reference signal is IN1-3, instead of the
-            # official "left/home switches". It seems the reason is that it was
-            # because when connecting a left switch, a right switch must also
-            # be connected, but that's very probably false. Because of that,
-            # we need to set an interrupt to stop the RFS command when the edge
+            # Note also that the reference signal is IN1-3, the "home switch".
+            # Unfortunately the default referencing procedure only support home
+            # as a "spike" signal (contrarily to left/right switch. It seems the
+            # reason is that it was easier to connect them this way.
+            # Because of that, we need a homemade RFS command. That is
+            # done by setting an interrupt to stop the RFS command when the edge
             # changes. As interrupts only work when a program is running, we
             # have a small program that waits for the RFS and report the status.
             # In conclusion, RFS is used pretty much just to move at a constant
             # speed.
-            # Note also that it seem "negative/positive" direction of the RFS
-            # are opposite to the move relative negative/positive direction.
 
             try:
                 self._setInputInterrupt(axis)
 
                 # TODO: be able to cancel (=> set a flag + call RFS STOP)
-                pos_dir = self._doInputReference(axis, 350) # fast (~0.5 mm/s)
-                if pos_dir: # always finish first by negative direction
+                neg_dir = self._doInputReference(axis, 350) # fast (~0.5 mm/s)
+                if neg_dir: # always finish first by positive direction
                     self._doInputReference(axis, 350) # fast (~0.5 mm/s)
 
                 # Go back far enough that the slow referencing always need quite
@@ -691,14 +690,14 @@ class TMCM3110(model.Actuator):
                 else:
                     logging.warning("Relative move failed to finish in time")
 
-                pos_dir = self._doInputReference(axis, 50) # slow (~0.07 mm/s)
-                if not pos_dir: # if it was done in negative direction (unlikely), redo
-                    logging.debug("Doing one last reference move, in positive dir")
-                    # As it always wait for the edge to change, the second time
+                neg_dir = self._doInputReference(axis, 50) # slow (~0.07 mm/s)
+                if not neg_dir: # if it was done in positive direction (unlikely), redo
+                    logging.debug("Doing one last reference move, in negative dir")
+                    # As it always waits for the edge to change, the second time
                     # should be positive
-                    pos_dir = self._doInputReference(axis, 50)
-                    if not pos_dir:
-                        logging.warning("Second reference search was again in negative direction")
+                    neg_dir = self._doInputReference(axis, 50)
+                    if not neg_dir:
+                        logging.warning("Second reference search was again in positive direction")
             finally:
                 # Disable interrupt
                 intid = 40 + axis   # axis 0 = IN1 = 40
