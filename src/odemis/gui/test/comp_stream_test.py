@@ -281,46 +281,44 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         )
 
         # Get the excitation combo box (there should be only one)
-        excitation_combo = [e for e in sp1.entries if e.name == "excitation"]
-        self.assertEqual(len(excitation_combo), 1)
-        excitation_combo = excitation_combo[0]
+        self.assertIn("excitation", sp1.entries)
+        excitation_combo = sp1.entries["excitation"].value_ctrl
 
         # No real value testing, but at least making sure that changing the VA value, changes the
         # GUI components
         for choice in fake_fluo_stream.excitation.choices:
-            old_value = excitation_combo.value_ctrl.GetValue()
+            old_value = excitation_combo.GetValue()
             old_colour = sp1._btn_excitation.colour
             changed = fake_fluo_stream.excitation.value != choice
             # Skip if the current value is equal to choice
             if changed:
                 fake_fluo_stream.excitation.value = choice
                 test.gui_loop(100)
-                self.assertNotEqual(old_value, excitation_combo.value_ctrl.GetValue())
+                self.assertNotEqual(old_value, excitation_combo.GetValue())
                 self.assertNotEqual(old_colour, sp1._btn_excitation.colour)
 
         # Get the emission combo box (there should be only one)
-        emission_combo = [e for e in sp1.entries if e.name == "emission"]
-        self.assertEqual(len(emission_combo), 1)
-        emission_combo = emission_combo[0]
+        self.assertIn("emission", sp1.entries)
+        emission_combo = sp1.entries["emission"].value_ctrl
 
         # No real value testing, but at least making sure that changing the VA value, changes the
         # GUI components
         for choice in fake_fluo_stream.emission.choices:
-            old_value = emission_combo.value_ctrl.GetValue()
+            old_value = emission_combo.GetValue()
             old_colour = sp2._btn_emission.colour
             changed = fake_fluo_stream.emission.value != choice
             # Skip if the current value is equal to choice
             if changed:
                 fake_fluo_stream.emission.value = choice
                 test.gui_loop(100)
-                self.assertNotEqual(old_value, emission_combo.value_ctrl.GetValue())
+                self.assertNotEqual(old_value, emission_combo.GetValue())
                 self.assertNotEqual(old_colour, sp2._btn_emission.colour)
 
         # Test intensity control values by manipulating the VAs
         # TODO: Move to separate test case
 
-        txt_lowi = [e for e in sp1.entries if e.name == "low_intensity"][0].value_ctrl
-        txt_highi = [e for e in sp1.entries if e.name == "high_intensity"][0].value_ctrl
+        txt_lowi = sp1.entries["low_intensity"].value_ctrl
+        txt_highi = sp1.entries["high_intensity"].value_ctrl
 
         for i in range(0, 11):
             v = i / 10.0

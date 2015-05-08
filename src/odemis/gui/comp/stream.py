@@ -713,6 +713,8 @@ class StreamPanel(wx.Panel):
 
     @control_bookkeeper
     def add_outliers_ctrls(self):
+        """ Add controls for the manipulation of the outlier values """
+
         hist_min = self.stream.intensityRange.range[0][0]
         hist_max = self.stream.intensityRange.range[1][1]
 
@@ -769,8 +771,6 @@ class StreamPanel(wx.Panel):
 
         return sld_hist, txt_lowi, txt_highi
 
-    # ===== For separate Optical stream settings
-
     def _add_side_label(self, label_text):
         """ Add a text label to the control grid
 
@@ -823,7 +823,7 @@ class StreamPanel(wx.Panel):
                                                                                 emission_va)
         return lbl_ctrl, value_ctrl, lbl_em_peak, btn_emission
 
-    def _add_filter_line(self, name, va, center_wl=0, va_2_ctrl=None, ctrl_2_va=None):
+    def _add_filter_line(self, name, va, center_wl=0):
         """ Create the controls for dye emission/excitation colour filter setting
 
         :param name: (str): the label name
@@ -879,9 +879,9 @@ class StreamPanel(wx.Panel):
         # If a dye is selected, the colour of the peak is used, otherwise we
         # use the hardware setting
         btn_color = buttons.ColourButton(self._panel, -1,
-                                       bitmap=img.getemptyBitmap(),
-                                       colour=wave2rgb(center_wl),
-                                       background_parent=self._panel)
+                                         bitmap=img.getemptyBitmap(),
+                                         colour=wave2rgb(center_wl),
+                                         background_parent=self._panel)
         self.gb_sizer.Add(btn_color,
                           (self.num_rows, 2),
                           flag=wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL | wx.ALIGN_RIGHT,
@@ -933,9 +933,7 @@ class StreamPanel(wx.Panel):
 
     @staticmethod
     def _get_one_center(band):
-        """
-        Return the center of a band, and if it's a multi-band, return just one
-        of the centers.
+        """ Return the center of a band, and if it's a multi-band, return just one of the centers.
         return (float): wavelength in m
         """
         if isinstance(band[0], collections.Iterable):

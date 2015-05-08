@@ -21,6 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 from __future__ import division
+from collections import OrderedDict
 
 import logging
 import numpy
@@ -56,7 +57,7 @@ SCHED_ALL = 2  # All the streams which are in the should_update stream
 class SettingEntry(VigilantAttributeConnector):
     """ An Entry linked to a Vigilant Attribute """
 
-    def __init__(self, name=None, va=None, stream=None, lbl_ctrl=None, value_ctrl=None,
+    def __init__(self, name, va=None, stream=None, lbl_ctrl=None, value_ctrl=None,
                  va_2_ctrl=None, ctrl_2_va=None, events=None):
         """ See the super classes for parameter descriptions
 
@@ -107,7 +108,7 @@ class StreamController(object):
         self._lbl_exc_peak = None
         self._lbl_em_peak = None
 
-        self.entries = []
+        self.entries = OrderedDict()
 
         # Check if light and exposure controls are necessary
         if isinstance(stream, OpticalStream):
@@ -214,7 +215,7 @@ class StreamController(object):
 
         se = SettingEntry(name="exposureTime", va=self.stream.exposureTime, stream=self.stream,
                           lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl, events=wx.EVT_SLIDER)
-        self.entries.append(se)
+        self.entries[se.name] = se
 
     def _add_light_power_ctrl(self):
         """ Add light power controls to the stream panel """
@@ -237,7 +238,7 @@ class StreamController(object):
 
         se = SettingEntry(name="lightPower", va=self.stream.lightPower, stream=self.stream,
                           lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl, events=wx.EVT_SLIDER)
-        self.entries.append(se)
+        self.entries[se.name] = se
 
     def _add_dye_ctrl(self):
         """ Add controls to the stream panel needed for dye emission and exitation """
@@ -275,7 +276,8 @@ class StreamController(object):
                 else:
                     logging.error("No existing label found for value %s", value)
 
-                if self._dye_xwl is None and self._btn_excitation:  # no dye info? use hardware settings
+                if self._dye_xwl is None and self._btn_excitation:
+                    # no dye info? use hardware settings
                     colour = wave2rgb(fluo.get_one_center_ex(value, self.stream.emission.value))
                     self._btn_excitation.set_colour(colour)
                 else:
@@ -283,7 +285,7 @@ class StreamController(object):
                                                             self._btn_excitation,
                                                             self._dye_xwl, value)
 
-                # also update emission colour as it's dependent on excitation when multiband
+                # also update emission colour as it's dependent on excitation when multi-band
                 if self._dye_ewl is None and self._btn_emission:
                     colour = wave2rgb(fluo.get_one_center_em(self.stream.emission.value, value))
                     self._btn_emission.set_colour(colour)
@@ -292,7 +294,7 @@ class StreamController(object):
                               lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl, events=wx.EVT_COMBOBOX,
                               va_2_ctrl=_excitation_2_ctrl, ctrl_2_va=_excitation_2_va)
 
-            self.entries.append(se)
+            self.entries[se.name] = se
 
         r = self.stream_panel.add_dye_emission_ctrl(self.stream.emission)
         lbl_ctrl, value_ctrl, self._lbl_em_peak, self._btn_emission = r
@@ -336,7 +338,7 @@ class StreamController(object):
                               lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl, events=wx.EVT_COMBOBOX,
                               va_2_ctrl=_emission_2_ctrl, ctrl_2_va=_emission_2_va)
 
-            self.entries.append(se)
+            self.entries[se.name] = se
 
     def _add_brightnesscontrast_ctrls(self):
         """ Add controls for manipulating the (auto) contrast of the stream image data """
@@ -358,12 +360,12 @@ class StreamController(object):
         se = SettingEntry(name="autobc", va=self.stream.auto_bc, stream=self.stream,
                           value_ctrl=btn_autobc, events=wx.EVT_BUTTON,
                           va_2_ctrl=_va_to_autobc, ctrl_2_va=_autobc_to_va)
-        self.entries.append(se)
+        self.entries[se.name] = se
 
         # Store a setting entry for the outliers slider
         se = SettingEntry(name="outliers", va=self.stream.auto_bc_outliers, stream=self.stream,
                           value_ctrl=sld_outliers, events=wx.EVT_SLIDER)
-        self.entries.append(se)
+        self.entries[se.name] = se
 
     def _add_outliers_ctrls(self):
         """ Add the controls for manipulation the outliers """
@@ -372,7 +374,7 @@ class StreamController(object):
 
         se = SettingEntry(name="intensity_range", va=self.stream.intensityRange, stream=self.stream,
                           value_ctrl=sld_hist, events=wx.EVT_SLIDER)
-        self.entries.append(se)
+        self.entries[se.name] = se
 
         if hasattr(self.stream, "auto_bc"):
             # The outlier controls need to be disabled when auto brightness/contrast is active
@@ -385,9 +387,9 @@ class StreamController(object):
             # ctrl_2_va gets passed an identify function, to prevent the VA connector from looking
             # for a linked value control (Which we don't really need in this case. This setting
             # entry is only here so that a reference to `_enable_outliers` will be preserved).
-            se = SettingEntry(va=self.stream.auto_bc, stream=self.stream,
+            se = SettingEntry("_auto_bc_switch", va=self.stream.auto_bc, stream=self.stream,
                               va_2_ctrl=_enable_outliers, ctrl_2_va=lambda x: x)
-            self.entries.append(se)
+            self.entries[se.name] = se
 
         def _get_lowi():
             intensity_rng_va = self.stream.intensityRange
@@ -402,7 +404,7 @@ class StreamController(object):
         se = SettingEntry(name="low_intensity", va=self.stream.intensityRange, stream=self.stream,
                           value_ctrl=txt_low, events=wx.EVT_COMMAND_ENTER,
                           va_2_ctrl=lambda r: txt_low.SetValue(r[0]), ctrl_2_va=_get_lowi)
-        self.entries.append(se)
+        self.entries[se.name] = se
 
         def _get_highi():
             intensity_rng_va = self.stream.intensityRange
@@ -417,7 +419,7 @@ class StreamController(object):
         se = SettingEntry(name="high_intensity", va=self.stream.intensityRange, stream=self.stream,
                           value_ctrl=txt_high, events=wx.EVT_COMMAND_ENTER,
                           va_2_ctrl=lambda r: txt_high.SetValue(r[1]), ctrl_2_va=_get_highi)
-        self.entries.append(se)
+        self.entries[se.name] = se
 
         def _on_histogram(hist):
             """ Display the new histogram data in the histogram slider
@@ -460,9 +462,9 @@ class StreamController(object):
                                      self.stream.intensityRange.range[1][1])
 
         # Again, we use an entry to keep a reference of the closure around
-        se = SettingEntry(va=self.stream.histogram, stream=self.stream,
+        se = SettingEntry("_histogram_switch", va=self.stream.histogram, stream=self.stream,
                           va_2_ctrl=_on_histogram, ctrl_2_va=lambda x: x)
-        self.entries.append(se)
+        self.entries[se.name] = se
 
     # END Control addition
 
