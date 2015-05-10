@@ -51,6 +51,7 @@ from odemis.gui.conf import get_acqui_conf
 from odemis.gui.cont import settings, tools
 from odemis.gui.cont.actuators import ActuatorController
 from odemis.gui.cont.microscope import SecomStateController, DelphiStateController
+from odemis.gui.cont.streams import StreamController
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.img import scale_to_alpha
 from odemis.util import units
@@ -1663,9 +1664,8 @@ class LensAlignTab(Tab):
         self._ccd_view.addStream(ccd_stream)
         # create CCD stream panel entry
         stream_bar = self.main_frame.pnl_secom_align_streams
-        ccd_spe = StreamPanel(stream_bar, ccd_stream, self.tab_data_model)
-        stream_bar.add_stream_panel(ccd_spe, True)
-        ccd_spe.flatten()  # removes the expander header
+        ccd_spe = StreamController(stream_bar, ccd_stream, self.tab_data_model)
+        ccd_spe.stream_panel.flatten()  # removes the expander header
         # force this view to never follow the tool mode (just standard view)
         main_frame.vp_align_ccd.canvas.allowed_modes = set([guimod.TOOL_NONE])
 

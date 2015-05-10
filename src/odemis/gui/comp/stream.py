@@ -27,6 +27,7 @@ from __future__ import division
 
 import collections
 import logging
+import numpy
 import wx
 import wx.lib.newevent
 from wx.lib.pubsub import pub
