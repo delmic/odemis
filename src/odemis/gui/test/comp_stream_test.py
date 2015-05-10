@@ -28,7 +28,6 @@ import unittest
 import wx
 
 from odemis.acq.stream import Stream
-from odemis.gui.comp.stream import StreamPanel
 from odemis.gui.cont.streams import StreamBarController, StreamController
 from odemis.util import conversion
 import odemis.acq.stream as stream_mod
@@ -245,7 +244,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         _ = StreamBarController(tab_mod, stream_bar)
 
         fake_sem_stream = FakeSEMStream("First Fixed Stream")
-        stream_panel = stream_comp.StreamPanel(stream_bar, fake_sem_stream, tab_mod)
+        stream_panel = stream_comp.StreamPanel(stream_bar, fake_sem_stream)
         stream_bar.add_stream_panel(stream_panel)
         test.gui_loop()
 
@@ -369,10 +368,9 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
         # White box testing: we expect that the excitation/emission information
         # are simple text, so no reference to the value controls needs to be saved
-        value_ctrl = [e.value_ctrl for e in fluo_panel.entries if e.name == "emission"]
-        self.assertEqual(value_ctrl, [])
-        value_ctrl = [e.value_ctrl for e in fluo_panel.entries if e.name == "excitation"]
-        self.assertEqual(value_ctrl, [])
+        # Get the emission combo box (there should be only one)
+        self.assertNotIn("emission", fluo_panel.entries)
+        self.assertNotIn("excitation", fluo_panel.entries)
         test.gui_loop()
 
         semmd = {
@@ -388,18 +386,18 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         semd = model.DataArray(numpy.zeros((256, 256), dtype="uint16"), semmd)
         # Create the streams the same way as when opening a file, in
         # cont.tabs.AnalysisTab.display_new_data()
-        sem_panel = stream_cont.addStatic("SEM Stream", semd,
+        sem_cont = stream_cont.addStatic("SEM Stream", semd,
                                           cls=stream_mod.StaticSEMStream,
                                           add_to_all_views=True)
 
         # Check it indeed created a panel entry to a static fluo stream
-        self.assertIsInstance(sem_panel.stream, stream_mod.StaticSEMStream)
+        self.assertIsInstance(sem_cont.stream, stream_mod.StaticSEMStream)
 
         # White box testing: we expect autobc is available
-        self.assertIsInstance(sem_panel.stream_panel._btn_autobc, wx.Control)
+        self.assertIn("autobc", sem_cont.entries)
 
         # Clear remaining streams
-        # stream_bar.clear()
+        stream_bar.clear()
         test.gui_loop()
 
         self.assertEqual(stream_bar.get_size(), 0)

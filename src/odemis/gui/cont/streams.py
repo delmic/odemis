@@ -856,13 +856,12 @@ class StreamBarController(object):
         return self._addStream(s, **kwargs)
 
     def addStatic(self, name, image, cls=acqstream.StaticStream, **kwargs):
-        """
-        Creates a new static stream and panel in the stream bar
+        """ Creates a new static stream and stream controller
 
         :param name: (string)
         :param image: (DataArray)
         :param cls: (class of Stream)
-        :param returns: (StreamPanel): the panel created
+        :param returns: (StreamController): the controller created
 
         """
 
