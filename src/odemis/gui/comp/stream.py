@@ -30,13 +30,12 @@ import logging
 import wx
 import wx.lib.newevent
 from wx.lib.pubsub import pub
-
 from decorator import decorator
 
 from odemis import acq
 from odemis.acq.stream import OpticalStream
 from odemis.gui import FG_COLOUR_EDIT, FG_COLOUR_MAIN, BG_COLOUR_MAIN, BG_COLOUR_STREAM, \
-    FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR
+    FG_COLOUR_DIS
 from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.foldpanelbar import FoldPanelItem, FoldPanelBar
 from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider, UnitIntegerSlider
@@ -92,15 +91,12 @@ class StreamPanelHeader(wx.Control):
     BUTTON_BORDER_SIZE = 8  # Border space around the buttons
 
     def __init__(self, parent, wid=wx.ID_ANY, pos=wx.DefaultPosition, size=wx.DefaultSize,
-                 style=wx.NO_BORDER,
-                 options=(OPT_BTN_REMOVE | OPT_BTN_SHOW | OPT_BTN_UPDATE | OPT_BTN_TINT)):
+                 style=wx.NO_BORDER):
         assert(isinstance(parent, StreamPanel))
         super(StreamPanelHeader, self).__init__(parent, wid, pos, size, style)
 
         # This style enables us to draw the background with our own paint event handler
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
-
-        self._options = options
 
         # Callback when the label changes: (string (text) -> None)
         self.label_change_callback = None
@@ -115,14 +111,14 @@ class StreamPanelHeader(wx.Control):
 
         # Add the needed controls to the sizer
 
-        self.btn_remove = self._add_remove_btn() if options & OPT_BTN_REMOVE else None
-        if options & OPT_NAME_EDIT:
+        self.btn_remove = self._add_remove_btn() if self.Parent.options & OPT_BTN_REMOVE else None
+        if self.Parent.options & OPT_NAME_EDIT:
             self.ctrl_label = self._add_suggest_ctrl()
         else:
             self.ctrl_label = self._add_label_ctrl()
         self.btn_tint = self._add_tint_btn()
-        self.btn_show = self._add_visibility_btn() if options & OPT_BTN_SHOW else None
-        self.btn_update = self._add_update_btn() if options & OPT_BTN_UPDATE else None
+        self.btn_show = self._add_visibility_btn() if self.Parent.options & OPT_BTN_SHOW else None
+        self.btn_update = self._add_update_btn() if self.Parent.options & OPT_BTN_UPDATE else None
 
         # The spacer is responsible for creating padding on the right side of the header panel
         self._sz.AddSpacer((64, 16))
@@ -364,7 +360,7 @@ class StreamPanelHeader(wx.Control):
     def set_focus_on_label(self):
         """ Set the focus on the label (and select the text if it's editable) """
         self.ctrl_label.SetFocus()
-        if self._options & OPT_NAME_EDIT:
+        if self.Parent.options & OPT_NAME_EDIT:
             self.ctrl_label.SelectAll()
 
 
@@ -387,7 +383,7 @@ class StreamPanel(wx.Panel):
 
     """
 
-    def __init__(self, parent, stream, options=0,
+    def __init__(self, parent, stream, label_edit=False,
                  wid=wx.ID_ANY, pos=wx.DefaultPosition, size=wx.DefaultSize,
                  style=wx.CP_DEFAULT_STYLE, name="StreamPanel", collapsed=False):
         """
@@ -401,6 +397,9 @@ class StreamPanel(wx.Panel):
 
         assert(isinstance(parent, StreamBar))
         wx.Panel.__init__(self, parent, wid, pos, size, style, name)
+
+        self.options = (OPT_BTN_REMOVE | OPT_BTN_SHOW | OPT_BTN_UPDATE | OPT_BTN_TINT)
+        self.options |= OPT_NAME_EDIT if label_edit else 0
 
         self.stream = stream  # TODO: Should this also be moved to the StreamController?
         # Dye attributes
@@ -441,15 +440,7 @@ class StreamPanel(wx.Panel):
 
         # Create stream header
 
-        expand_opt = (OPT_BTN_REMOVE | OPT_BTN_SHOW | OPT_BTN_UPDATE | OPT_BTN_TINT)
-
-        if (
-                self._has_dye(self.stream) and
-                not (self.stream.excitation.readonly or self.stream.emission.readonly)
-        ):
-            expand_opt |= OPT_NAME_EDIT
-
-        self._header = StreamPanelHeader(self, options=expand_opt)
+        self._header = StreamPanelHeader(self)
         self._header.Bind(wx.EVT_LEFT_UP, self.on_toggle)
         self._header.Bind(wx.EVT_PAINT, self.on_draw_expander)
 

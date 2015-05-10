@@ -95,7 +95,18 @@ class StreamController(object):
 
         self.stream = stream
         self.stream_bar = stream_bar
-        self.stream_panel = StreamPanel(stream_bar, stream)
+
+        label_edit = False
+
+        # Make the name label non-static if dye names are involved.
+        # TODO: Make this more generic/clean
+        if (
+                hasattr(stream, "excitation") and hasattr(stream, "emission") and
+                not (self.stream.excitation.readonly or self.stream.emission.readonly)
+        ):
+            label_edit = True
+
+        self.stream_panel = StreamPanel(stream_bar, stream, label_edit)
         self.tab_data_model = tab_data_model
 
         # Peak excitation/emission wavelength of the selected dye, to be used for peak text and
@@ -529,7 +540,7 @@ class StreamController(object):
                 fluo.FIT_BAD: u"Some light might pass through the band %d→%d nm",
                 fluo.FIT_IMPOSSIBLE: u"The peak is too far from the band %d→%d nm"
             }[fit]
-            
+
             if isinstance(band[0], collections.Iterable):  # multi-band
                 band = fluo.find_best_band_for_dye(wl, band)
             low, high = [int(round(b * 1e9)) for b in (band[0], band[-1])]
