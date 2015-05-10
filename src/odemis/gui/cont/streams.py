@@ -22,6 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 from __future__ import division
 from collections import OrderedDict
+import collections
 
 import logging
 import numpy
@@ -30,6 +31,7 @@ from wx.lib.pubsub import pub
 
 import odemis.acq.stream as acqstream
 from odemis.acq.stream import OpticalStream, CameraStream
+from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR
 from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.stream import StreamPanel
 from odemis.gui.conf.data import HW_SETTINGS_CONFIG
@@ -42,6 +44,7 @@ from odemis.gui.util.widgets import VigilantAttributeConnector
 
 # Stream scheduling policies: decides which streams which are with .should_update get .is_active
 from odemis.util.conversion import wave2rgb
+from odemis.util.fluo import to_readable_band, get_one_center
 
 
 SCHED_LAST_ONE = 1  # Last stream which got added to the should_update set
@@ -249,10 +252,22 @@ class StreamController(object):
             self.stream_panel.set_header_choices(dye.DyeDatabase.keys())
             self.stream_panel.header_change_callback = self._on_new_dye_name
 
-        r = self.stream_panel.add_dye_excitation_ctrl(self.stream.excitation)
-        lbl_ctrl, value_ctrl, self._lbl_exc_peak, self._btn_excitation = r
+        center_wl = 0
+        center_wl_color = wave2rgb(center_wl)
 
-        if isinstance(value_ctrl, ComboBox):
+        band = to_readable_band(self.stream.excitation.value)
+        readonly = self.stream.excitation.readonly or len(self.stream.excitation.choices) <= 1
+
+        r = self.stream_panel.add_dye_excitation_ctrl(band, readonly, center_wl_color)
+        lbl_ctrl, value_ctrl, self._lbl_exc_peak, self._btn_excitation = r
+        self.update_peak_label_fit(self._lbl_exc_peak, self._btn_excitation, None, band)
+
+        if not readonly:
+
+            choices = sorted(self.stream.excitation.choices, key=get_one_center)
+            for b in choices:
+                value_ctrl.Append(to_readable_band(b), b)
+
             def _excitation_2_va(value_ctrl=value_ctrl):
                 """
                 Called when the text is changed (by the user).
@@ -296,10 +311,18 @@ class StreamController(object):
 
             self.entries[se.name] = se
 
-        r = self.stream_panel.add_dye_emission_ctrl(self.stream.emission)
-        lbl_ctrl, value_ctrl, self._lbl_em_peak, self._btn_emission = r
+        band = to_readable_band(self.stream.emission.value)
+        readonly = self.stream.emission.readonly or len(self.stream.emission.choices) <= 1
 
-        if isinstance(value_ctrl, ComboBox):
+        r = self.stream_panel.add_dye_emission_ctrl(band, readonly, center_wl_color)
+        lbl_ctrl, value_ctrl, self._lbl_em_peak, self._btn_emission = r
+        self.update_peak_label_fit(self._lbl_em_peak, self._btn_emission, None, band)
+
+        if not readonly:
+
+            choices = sorted(self.stream.emission.choices, key=get_one_center)
+            for b in choices:
+                value_ctrl.Append(to_readable_band(b), b)
 
             def _emission_2_va(value_ctrl=value_ctrl):
                 """ Called when the text is changed (by the user)
@@ -345,16 +368,16 @@ class StreamController(object):
 
         btn_autobc, sld_outliers = self.stream_panel.add_autobc_ctrls()
 
-        # The following closures are used to link the state of the button to the availability of the
-        # slider
+        # The following closures are used to link the state of the button to the availability of
+        # the slider
         def _autobc_to_va():
             enabled = btn_autobc.GetToggle()
-            sld_outliers.Enable(not enabled)
+            sld_outliers.Enable(enabled)
             return enabled
 
         def _va_to_autobc(enabled):
             btn_autobc.SetToggle(enabled)
-            sld_outliers.Enable(not enabled)
+            sld_outliers.Enable(enabled)
 
         # Store a setting entry for the auto brightness/contrast button
         se = SettingEntry(name="autobc", va=self.stream.auto_bc, stream=self.stream,
@@ -467,6 +490,50 @@ class StreamController(object):
         self.entries[se.name] = se
 
     # END Control addition
+
+    @staticmethod
+    def update_peak_label_fit(lbl_ctrl, col_ctrl, wl, band):
+        """ Changes the colour & tooltip of the peak label based on how well it fits to the given
+        band setting.
+
+        :param lbl_ctrl: (wx.StaticText) control to update the foreground colour
+        :param col_ctrl: (wx.ButtonColour) just to update the tooltip
+        :param wl: (None or float) the wavelength of peak of the dye or None if no dye
+        :param band: ((list of) tuple of 2 or 5 floats) the band of the hw setting
+
+        """
+
+        if None in (lbl_ctrl, col_ctrl):
+            return
+
+        if wl is None:
+            # No dye known => no peak information
+            lbl_ctrl.LabelText = u""
+            lbl_ctrl.SetToolTip(None)
+            col_ctrl.SetToolTipString(u"Centre wavelength colour")
+        else:
+            wl_nm = int(round(wl * 1e9))
+            lbl_ctrl.LabelText = u"Peak at %d nm" % wl_nm
+            col_ctrl.SetToolTipString(u"Peak wavelength colour")
+
+            fit = fluo.estimate_fit_to_dye(wl, band)
+            # Update colour
+            colour = {fluo.FIT_GOOD: FG_COLOUR_DIS,
+                      fluo.FIT_BAD: FG_COLOUR_WARNING,
+                      fluo.FIT_IMPOSSIBLE: FG_COLOUR_ERROR}[fit]
+            lbl_ctrl.SetForegroundColour(colour)
+
+            # Update tooltip string
+            tooltip = {
+                fluo.FIT_GOOD: u"The peak is inside the band %d→%d nm",
+                fluo.FIT_BAD: u"Some light might pass through the band %d→%d nm",
+                fluo.FIT_IMPOSSIBLE: u"The peak is too far from the band %d→%d nm"
+            }[fit]
+            
+            if isinstance(band[0], collections.Iterable):  # multi-band
+                band = fluo.find_best_band_for_dye(wl, band)
+            low, high = [int(round(b * 1e9)) for b in (band[0], band[-1])]
+            lbl_ctrl.SetToolTipString(tooltip % (low, high))
 
 
 class StreamBarController(object):

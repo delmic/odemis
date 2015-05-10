@@ -265,5 +265,3 @@ def readable_time(seconds, full=True):
         ret = u"minus " + ret
 
     return ret
-
-# vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

@@ -812,23 +812,33 @@ class StreamPanel(wx.Panel):
                           flag=wx.ALL | wx.EXPAND, border=5)
 
     @control_bookkeeper
-    def add_dye_excitation_ctrl(self, excitation_va):
+    def add_dye_excitation_ctrl(self, band, readonly, center_wl_color):
+        """
+        :param center_wl: (float) center wavelength of the current band of the VA
+        """
         lbl_ctrl, value_ctrl, lbl_exc_peak, btn_excitation = self._add_filter_line("Excitation",
-                                                                                   excitation_va)
+                                                                                   band,
+                                                                                   readonly,
+                                                                                   center_wl_color)
         return lbl_ctrl, value_ctrl, lbl_exc_peak, btn_excitation
 
     @control_bookkeeper
-    def add_dye_emission_ctrl(self, emission_va):
+    def add_dye_emission_ctrl(self, band, readonly, center_wl_color):
+        """
+        :param center_wl: (float) center wavelength of the current band of the VA
+        """
         lbl_ctrl, value_ctrl, lbl_em_peak, btn_emission = self._add_filter_line("Emission",
-                                                                                emission_va)
+                                                                                band,
+                                                                                readonly,
+                                                                                center_wl_color)
         return lbl_ctrl, value_ctrl, lbl_em_peak, btn_emission
 
-    def _add_filter_line(self, name, va, center_wl=0):
+    def _add_filter_line(self, name, band, readonly, center_wl_color):
         """ Create the controls for dye emission/excitation colour filter setting
 
         :param name: (str): the label name
-        :param va: (VigilantAttribute) the VA for the emission/excitation (contains a band)
-        :param center_wl: (float) center wavelength of the current band of the VA
+        :param readonly (bool) read-only when there's no or just one band value
+        :param center_wl_color: (r, g, b) center wavelength color of the current band of the VA
 
         :return: (4 wx.Controls) the respective controls created
 
@@ -841,52 +851,36 @@ class StreamPanel(wx.Panel):
         exc_sizer = wx.BoxSizer(wx.HORIZONTAL)
         self.gb_sizer.Add(exc_sizer, (self.num_rows, 1), flag=wx.EXPAND)
 
-        band = va.value
-
-        if va.readonly or len(va.choices) <= 1:
-            hw_set = wx.TextCtrl(self._panel,
-                                 value=self._to_readable_band(band),
-                                 size=(-1, 16),
+        if readonly:
+            hw_set = wx.TextCtrl(self._panel, value=band, size=(-1, 16),
                                  style=wx.BORDER_NONE | wx.TE_READONLY)
             hw_set.SetBackgroundColour(self._panel.BackgroundColour)
             hw_set.SetForegroundColour(FG_COLOUR_DIS)
-            exc_sizer.Add(hw_set, 1,
-                          flag=wx.LEFT | wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, border=5)
+            exc_sizer.Add(hw_set, 1, flag=wx.LEFT | wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL, border=5)
         else:
-            hw_set = ComboBox(self._panel,
-                              value=self._to_readable_band(band),
-                              size=(-1, 16),
+            hw_set = ComboBox(self._panel, value=band, size=(-1, 16),
                               style=wx.CB_READONLY | wx.BORDER_NONE)
-
-            ex_choices = sorted(va.choices, key=self._get_one_center)
-            for b in ex_choices:
-                hw_set.Append(self._to_readable_band(b), b)
 
             # To avoid catching mouse wheels events when scrolling the panel
             hw_set.Bind(wx.EVT_MOUSEWHEEL, lambda e: None)
 
-            exc_sizer.Add(hw_set, 1,
-                          flag=wx.ALL | wx.ALIGN_CENTRE_VERTICAL,
-                          border=5)
+            exc_sizer.Add(hw_set, 1, border=5, flag=wx.ALL | wx.ALIGN_CENTRE_VERTICAL)
 
         # Label for peak information
         lbl_peak = wx.StaticText(self._panel)
-        exc_sizer.Add(lbl_peak, 1,
-                      flag=wx.ALL | wx.ALIGN_CENTRE_VERTICAL | wx.ALIGN_LEFT,
-                      border=5)
+        exc_sizer.Add(lbl_peak, 1, border=5, flag=wx.ALL | wx.ALIGN_CENTRE_VERTICAL | wx.ALIGN_LEFT)
 
         # A button, but not clickable, just to show the wavelength
         # If a dye is selected, the colour of the peak is used, otherwise we
         # use the hardware setting
         btn_color = buttons.ColourButton(self._panel, -1,
                                          bitmap=img.getemptyBitmap(),
-                                         colour=wave2rgb(center_wl),
+                                         colour=center_wl_color,
                                          background_parent=self._panel)
         self.gb_sizer.Add(btn_color,
                           (self.num_rows, 2),
                           flag=wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL | wx.ALIGN_RIGHT,
                           border=5)
-        self.update_peak_label_fit(lbl_peak, btn_color, None, band)
 
         return lbl_ctrl, hw_set, lbl_peak, btn_color
 
@@ -901,86 +895,6 @@ class StreamPanel(wx.Panel):
         return True if the stream looks like a stream using dye.
         """
         return hasattr(stream, "excitation") and hasattr(stream, "emission")
-
-    @staticmethod
-    def _to_readable_band(band):
-        """
-        Convert a emission or excitation band into readable text
-        band ((list of) tuple of 2 or 5 floats): either the min/max
-          of the band or the -99%, -25%, middle, +25%, +99% of the band in m.
-        return (unicode): readable string.
-        """
-        # if one band => center/bandwidth nm (bandwidth not displayed if < 5nm)
-        #   ex: 453/19 nm
-        # if multi-band => center, center... nm
-        #   ex: 453, 568, 968 nm
-        if not isinstance(band[0], collections.Iterable):
-            b = band
-            center_nm = int(round(fluo.get_center(b) * 1e9))
-
-            width = b[-1] - b[0]
-            if width > 5e-9:
-                width_nm = int(round(width * 1e9))
-                return u"%d/%d nm" % (center_nm, width_nm)
-            else:
-                return u"%d nm" % center_nm
-        else:  # multi-band
-            centers = []
-            for c in fluo.get_center(band):
-                center_nm = int(round(c * 1e9))
-                centers.append(u"%d" % center_nm)
-            return u", ".join(centers) + " nm"
-
-    @staticmethod
-    def _get_one_center(band):
-        """ Return the center of a band, and if it's a multi-band, return just one of the centers.
-        return (float): wavelength in m
-        """
-        if isinstance(band[0], collections.Iterable):
-            return fluo.get_center(band[0])
-        else:
-            return fluo.get_center(band)
-
-    @staticmethod
-    def update_peak_label_fit(lbl_ctrl, col_ctrl, wl, band):
-        """ Changes the colour & tooltip of the peak label based on how well it fits to the given
-        band setting.
-
-        :param lbl_ctrl: (wx.StaticText) control to update the foreground colour
-        :param col_ctrl: (wx.ButtonColour) just to update the tooltip
-        :param wl: (None or float) the wavelength of peak of the dye or None if no dye
-        :param band: ((list of) tuple of 2 or 5 floats) the band of the hw setting
-
-        """
-
-        if None in (lbl_ctrl, col_ctrl):
-            return
-
-        if wl is None:
-            # No dye known => no peak information
-            lbl_ctrl.LabelText = u""
-            lbl_ctrl.SetToolTip(None)
-            col_ctrl.SetToolTipString(u"Centre wavelength colour")
-        else:
-            wl_nm = int(round(wl * 1e9))
-            lbl_ctrl.LabelText = u"Peak at %d nm" % wl_nm
-            col_ctrl.SetToolTipString(u"Peak wavelength colour")
-
-            fit = fluo.estimate_fit_to_dye(wl, band)
-            # Update colour
-            colour = {fluo.FIT_GOOD: FG_COLOUR_DIS,
-                      fluo.FIT_BAD: FG_COLOUR_WARNING,
-                      fluo.FIT_IMPOSSIBLE: FG_COLOUR_ERROR}[fit]
-            lbl_ctrl.SetForegroundColour(colour)
-
-            # Update tooltip string
-            tooltip = {fluo.FIT_GOOD: u"The peak is inside the band %d→%d nm",
-                       fluo.FIT_BAD: u"Some light might pass through the band %d→%d nm",
-                       fluo.FIT_IMPOSSIBLE: u"The peak is too far from the band %d→%d nm"}[fit]
-            if isinstance(band[0], collections.Iterable):  # multi-band
-                band = fluo.find_best_band_for_dye(wl, band)
-            low, high = [int(round(b * 1e9)) for b in (band[0], band[-1])]
-            lbl_ctrl.SetToolTipString(tooltip % (low, high))
 
     def sync_tint_on_emission(self, ewl, xwl):
         """
