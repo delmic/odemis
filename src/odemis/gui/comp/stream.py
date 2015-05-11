@@ -876,34 +876,24 @@ class StreamPanel(wx.Panel):
 
     # END Setting Control Addition Methods
 
-    def _add_wl_controls(self):
-        # ====== Top row, fit RGB toggle button
-
-        self._btn_fit_rgb = buttons.ImageTextToggleButton(
-                                                self._panel,
-                                                wx.ID_ANY,
-                                                img.getbtn_spectrumBitmap(),
-                                                label="RGB",
-                                                label_delta=1,
-                                                style=wx.ALIGN_RIGHT)
-        tooltip = "Toggle sub-bandwidths to Blue/Green/Red display"
-        self._btn_fit_rgb.SetToolTipString(tooltip)
-        self._btn_fit_rgb.SetBitmaps(bmp_h=img.getbtn_spectrum_hBitmap(),
-                                     bmp_sel=img.getbtn_spectrum_aBitmap())
-        self._btn_fit_rgb.SetForegroundColour("#000000")
-        self.gb_sizer.Add(self._btn_fit_rgb,
-                                 (self.num_rows, 0),
-                                 flag=wx.LEFT | wx.TOP,
-                                 border=5)
-        self.num_rows += 1
-        self._vac_fit_rgb = VigilantAttributeConnector(
-            self.stream.fitToRGB,
-            self._btn_fit_rgb,
-            self._btn_fit_rgb.SetToggle,
-            self._btn_fit_rgb.GetToggle,
-            events=wx.EVT_BUTTON
+    @control_bookkeeper
+    def _add_rgbfit_ctrl(self):
+        btn_fit_rgb = buttons.ImageTextToggleButton(
+            self._panel, wx.ID_ANY,
+            img.getbtn_spectrumBitmap(),
+            label="RGB", label_delta=1, style=wx.ALIGN_RIGHT
         )
+        tooltip = "Toggle sub-bandwidths to Blue/Green/Red display"
+        btn_fit_rgb.SetToolTipString(tooltip)
+        btn_fit_rgb.SetBitmaps(bmp_h=img.getbtn_spectrum_hBitmap(),
+                                     bmp_sel=img.getbtn_spectrum_aBitmap())
+        btn_fit_rgb.SetForegroundColour("#000000")
+        self.gb_sizer.Add(btn_fit_rgb, (self.num_rows, 0), flag=wx.LEFT | wx.TOP, border=5)
 
+        return btn_fit_rgb
+
+
+    def _add_blah(self):
         # ====== Second row, center label, slider and value
 
         wl = self.stream.spectrumBandwidth.value

@@ -139,8 +139,8 @@ class StreamController(object):
             self._add_brightnesscontrast_ctrls()
             self._add_outliers_ctrls()
 
-        # if hasattr(stream, "spectrumBandwidth"):
-        #     self._add_wl_controls()
+        if hasattr(stream, "spectrumBandwidth"):
+            self._add_wl_ctrls()
 
         # Set the visibility button on the stream panel
         vis = stream in tab_data_model.focussedView.value.getStreams()
@@ -207,6 +207,17 @@ class StreamController(object):
             self.stream.tint.value = colour
 
     # Control addition
+
+    def _add_wl_ctrls(self):
+        self.stream_panel._add_rgb_ctrl()
+
+        # self._vac_fit_rgb = VigilantAttributeConnector(
+        #     self.stream.fitToRGB,
+        #     self._btn_fit_rgb,
+        #     self._btn_fit_rgb.SetToggle,
+        #     self._btn_fit_rgb.GetToggle,
+        #     events=wx.EVT_BUTTON
+        # )
 
     def _add_exposure_time_ctrl(self):
         """ Add exposute time controls to the stream panel"""
