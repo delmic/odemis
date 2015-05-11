@@ -25,7 +25,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import numpy
 import time
 import unittest
-import wx
 
 from odemis.acq.stream import Stream
 from odemis.gui.cont.streams import StreamBarController, StreamController

@@ -37,6 +37,7 @@ from odemis.gui.comp.stream import StreamPanel
 from odemis.gui.conf.data import HW_SETTINGS_CONFIG
 import odemis.gui.model as guimodel
 from odemis import model
+from odemis.gui.util import wxlimit_invocation, dead_object_wrapper, call_in_wx_main_wrapper
 from odemis.util import fluo
 from odemis.gui.model import dye
 from odemis.gui.util.widgets import VigilantAttributeConnector
@@ -80,11 +81,11 @@ class SettingEntry(VigilantAttributeConnector):
         VigilantAttributeConnector.__init__(self, va, value_ctrl, va_2_ctrl, ctrl_2_va, events)
 
     def pause(self):
-        if self.stream_va:
+        if self.vigilattr:
             super(SettingEntry, self).pause()
 
     def resume(self):
-        if self.stream_va:
+        if self.vigilattr:
             super(SettingEntry, self).resume()
 
 
@@ -141,6 +142,8 @@ class StreamController(object):
 
         if hasattr(stream, "spectrumBandwidth"):
             self._add_wl_ctrls()
+            if hasattr(self.stream, "selectionWidth"):
+                self._add_selwidth_ctrl()
 
         # Set the visibility button on the stream panel
         vis = stream in tab_data_model.focussedView.value.getStreams()
@@ -191,12 +194,14 @@ class StreamController(object):
     # END Panel state methods
 
     def sync_tint_on_emission(self, emission_wl, exitation_wl):
+        """ Set the tint to the same colour as emission, if no dye has been selected. If a dye is
+        selected, it's dependent on the dye information.
+
+        :param emission_wl: ((tuple of) tuple of floats) emission wavelength
+        :param exitation_wl: ((tuple of) tuple of floats) excitation wavelength
+
         """
-        Set the tint to the same colour as emission, if no dye has been
-         selected. If a dye is selected, it's dependent on the dye information.
-        ewl ((tuple of) tuple of floats): emission wavelength
-        wwl ((tuple of) tuple of floats): excitation wavelength
-        """
+
         if self._dye_ewl is None:  # if dye is used, keep the peak wavelength
             ewl_center = fluo.get_one_center_em(emission_wl, exitation_wl)
             if self._dye_prev_ewl_center == ewl_center:
@@ -208,16 +213,111 @@ class StreamController(object):
 
     # Control addition
 
-    def _add_wl_ctrls(self):
-        self.stream_panel._add_rgb_ctrl()
+    def _add_selwidth_ctrl(self):
+        lbl_selection_width, sld_selection_width = self.stream_panel.add_specselwidth_ctrl()
 
-        # self._vac_fit_rgb = VigilantAttributeConnector(
-        #     self.stream.fitToRGB,
-        #     self._btn_fit_rgb,
-        #     self._btn_fit_rgb.SetToggle,
-        #     self._btn_fit_rgb.GetToggle,
-        #     events=wx.EVT_BUTTON
-        # )
+        se = SettingEntry(name="selectionwidth", va=self.stream.selectionWidth, stream=self.stream,
+                          lbl_ctrl=lbl_selection_width, value_ctrl=sld_selection_width,
+                          events=wx.EVT_SLIDER)
+        self.entries[se.name] = se
+
+    def _add_wl_ctrls(self):
+        btn_rgbfit = self.stream_panel.add_rgbfit_ctrl()
+
+        se = SettingEntry(name="rgbfit", va=self.stream.auto_bc, stream=self.stream,
+                          value_ctrl=btn_rgbfit, events=wx.EVT_BUTTON,
+                          va_2_ctrl=btn_rgbfit.SetToggle, ctrl_2_va=btn_rgbfit.GetToggle)
+        self.entries[se.name] = se
+
+        sld_spec, txt_spec_center, txt_spec_bw = self.stream_panel.add_specbw_ctrls()
+
+        se = SettingEntry(name="spectrum", va=self.stream.spectrumBandwidth, stream=self.stream,
+                          value_ctrl=sld_spec, events=wx.EVT_SLIDER)
+        self.entries[se.name] = se
+
+        def _get_center():
+            """ Return the low/high values for the bandwidth, from the requested center """
+
+            va = self.stream.spectrumBandwidth
+            ctrl = txt_spec_center
+
+            # ensure the low/high values are always within the allowed range
+            wl = va.value
+            wl_rng = (va.range[0][0], va.range[1][1])
+
+            width = wl[1] - wl[0]
+            ctr_rng = wl_rng[0] + width // 2, wl_rng[1] - width // 2
+            req_center = ctrl.GetValue()
+            new_center = min(max(ctr_rng[0], req_center), ctr_rng[1])
+
+            if req_center != new_center:
+                # VA might not change => update value ourselves
+                ctrl.SetValue(new_center)
+
+            return new_center - width // 2, new_center + width // 2
+
+        se = SettingEntry(name="spectrum_center", va=self.stream.spectrumBandwidth,
+                          stream=self.stream, value_ctrl=txt_spec_center, events=wx.EVT_COMMAND_ENTER,
+                          va_2_ctrl=lambda r: txt_spec_center.SetValue((r[0] + r[1]) / 2),
+                          ctrl_2_va=_get_center)
+        self.entries[se.name] = se
+
+        def _get_bandwidth():
+            """ Return the low/high values for the bandwidth, from the requested bandwidth """
+
+            va = self.stream.spectrumBandwidth
+            ctrl = txt_spec_bw
+
+            # ensure the low/high values are always within the allowed range
+            wl = va.value
+            wl_rng = (va.range[0][0], va.range[1][1])
+
+            center = (wl[0] + wl[1]) / 2
+            max_width = max(center - wl_rng[0], wl_rng[1] - center) * 2
+            req_width = ctrl.GetValue()
+            new_width = max(min(max_width, req_width), max_width // 1024)
+
+            if req_width != new_width:
+                # VA might not change => update value ourselves
+                ctrl.SetValue(new_width)
+
+            return center - new_width // 2, center + new_width // 2
+
+        se = SettingEntry(name="spectrum_bw", va=self.stream.spectrumBandwidth,
+                          stream=self.stream, value_ctrl=txt_spec_bw, events=wx.EVT_COMMAND_ENTER,
+                          va_2_ctrl=lambda r: txt_spec_bw.SetValue(r[1] - r[0]),
+                          ctrl_2_va=_get_bandwidth)
+        self.entries[se.name] = se
+
+        @wxlimit_invocation(0.2)
+        def _on_new_spec_data(_):
+            # Display the global spectrum in the visual range slider
+            gspec = self.stream.getMeanSpectrum()
+            if len(gspec) <= 1:
+                logging.warning("Strange spectrum of len %d", len(gspec))
+                return
+
+            # make it fit between 0 and 1
+            if len(gspec) >= 5:
+                # skip the 2 biggest peaks
+                s_values = numpy.sort(gspec)
+                mins, maxs = s_values[0], s_values[-3]
+            else:
+                mins, maxs = gspec.min(), gspec.max()
+
+            base = mins # for spectrum, 0 has little sense, just care of the min
+            try:
+                coef = 1 / (maxs - base)
+            except ZeroDivisionError:
+                coef = 1
+
+            gspec = (gspec - base) * coef
+            # TODO: use decorator for this (call_in_wx_main_wrapper), once this code is stable
+            wx.CallAfter(dead_object_wrapper(sld_spec.SetContent), gspec.tolist())
+
+        # TODO: should the stream have a way to know when the raw data has changed? => just a
+        # spectrum VA, like histogram VA
+        self.stream.image.subscribe(_on_new_spec_data, init=True)
 
     def _add_exposure_time_ctrl(self):
         """ Add exposute time controls to the stream panel"""

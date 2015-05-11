@@ -27,10 +27,10 @@ from __future__ import division
 
 import collections
 import logging
-import numpy
 import wx
 import wx.lib.newevent
 from wx.lib.pubsub import pub
+
 from decorator import decorator
 
 from odemis import acq
@@ -41,10 +41,8 @@ from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.foldpanelbar import FoldPanelItem, FoldPanelBar
 from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider, UnitIntegerSlider
 from odemis.gui.comp.text import SuggestTextCtrl, UnitFloatCtrl, FloatTextCtrl
-from odemis.gui.util import call_in_wx_main, wxlimit_invocation, dead_object_wrapper
+from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import VigilantAttributeConnector
-from odemis.util import fluo
-from odemis.util.conversion import wave2rgb
 import odemis.gui.comp.buttons as buttons
 import odemis.gui.img.data as img
 
@@ -665,7 +663,7 @@ class StreamPanel(wx.Panel):
 
     # Setting Control Addition Methods
 
-    def _add_side_label(self, label_text):
+    def _add_side_label(self, label_text, tooltip=None):
         """ Add a text label to the control grid
 
         This method should only be called from other methods that add control to the control grid
@@ -676,6 +674,9 @@ class StreamPanel(wx.Panel):
         """
 
         lbl_ctrl = wx.StaticText(self._panel, -1, label_text)
+        if tooltip:
+            lbl_ctrl.SetToolTipString(tooltip)
+
         self.gb_sizer.Add(lbl_ctrl, (self.num_rows, 0),
                           flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
         return lbl_ctrl
@@ -722,18 +723,17 @@ class StreamPanel(wx.Panel):
     def add_outliers_ctrls(self):
         """ Add controls for the manipulation of the outlier values """
 
+        # TODO: Move min/max to controller too?
         hist_min = self.stream.intensityRange.range[0][0]
         hist_max = self.stream.intensityRange.range[1][1]
 
         sld_hist = VisualRangeSlider(self._panel, size=(-1, 40),
                                      value=self.stream.intensityRange.value,
                                      min_val=hist_min, max_val=hist_max)
-
         sld_hist.SetBackgroundColour("#000000")
 
-        # span is 2, because emission/excitation have 2 controls
         self.gb_sizer.Add(sld_hist, pos=(self.num_rows, 0), span=(1, 3), border=5,
-                          flag=wx.EXPAND | wx.TOP | wx.RIGHT | wx.LEFT)
+                          flag=wx.EXPAND | wx.TOP | wx.LEFT | wx.RIGHT)
         self.num_rows += 1
 
         # Low/ High values are in raw data. So it's typically uint, but could
@@ -765,6 +765,7 @@ class StreamPanel(wx.Panel):
         txt_highi.SetForegroundColour(FG_COLOUR_EDIT)
         txt_highi.SetToolTipString(tooltip_txt)
 
+        # Add controls to sizer for spacing
         lh_sz = wx.BoxSizer(wx.HORIZONTAL)
 
         lh_sz.Add(lbl_lowi, 0, border=5, flag=wx.ALIGN_CENTRE_VERTICAL | wx.LEFT)
@@ -773,6 +774,8 @@ class StreamPanel(wx.Panel):
         lh_sz.Add(lbl_highi, 0, border=5, flag=wx.ALIGN_CENTRE_VERTICAL | wx.LEFT)
         lh_sz.Add(txt_highi, 1, border=5,
                   flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.RIGHT | wx.LEFT)
+
+        # Add spacing sizer to grid sizer
         self.gb_sizer.Add(lh_sz, (self.num_rows, 0), span=(1, 3), border=5,
                           flag=wx.BOTTOM | wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND)
 
@@ -877,7 +880,7 @@ class StreamPanel(wx.Panel):
     # END Setting Control Addition Methods
 
     @control_bookkeeper
-    def _add_rgbfit_ctrl(self):
+    def add_rgbfit_ctrl(self):
         btn_fit_rgb = buttons.ImageTextToggleButton(
             self._panel, wx.ID_ANY,
             img.getbtn_spectrumBitmap(),
@@ -886,195 +889,99 @@ class StreamPanel(wx.Panel):
         tooltip = "Toggle sub-bandwidths to Blue/Green/Red display"
         btn_fit_rgb.SetToolTipString(tooltip)
         btn_fit_rgb.SetBitmaps(bmp_h=img.getbtn_spectrum_hBitmap(),
-                                     bmp_sel=img.getbtn_spectrum_aBitmap())
+                               bmp_sel=img.getbtn_spectrum_aBitmap())
         btn_fit_rgb.SetForegroundColour("#000000")
-        self.gb_sizer.Add(btn_fit_rgb, (self.num_rows, 0), flag=wx.LEFT | wx.TOP, border=5)
+        self.gb_sizer.Add(btn_fit_rgb, (self.num_rows, 0), flag=wx.LEFT | wx.TOP | wx.BOTTOM,
+                          border=5)
 
         return btn_fit_rgb
 
+    @control_bookkeeper
+    def add_specbw_ctrls(self):
 
-    def _add_blah(self):
-        # ====== Second row, center label, slider and value
+        # 1st row, center label, slider and value
 
         wl = self.stream.spectrumBandwidth.value
+
+        # TODO: Move min/max to controller too?
         wl_rng = (self.stream.spectrumBandwidth.range[0][0],
                   self.stream.spectrumBandwidth.range[1][1])
-        self._sld_spec = VisualRangeSlider(self._panel,
-                                           size=(-1, 40),
-                                           value=wl,
-                                           min_val=wl_rng[0],
-                                           max_val=wl_rng[1])
-        self._sld_spec.SetBackgroundColour("#000000")
-        self._vac_center = VigilantAttributeConnector(
-                                self.stream.spectrumBandwidth,
-                                self._sld_spec,
-                                events=wx.EVT_SLIDER)
 
-        # span is 3, because emission/excitation have 2 controls
-        self.gb_sizer.Add(self._sld_spec,
-                                 pos=(self.num_rows, 0),
-                                 span=(1, 3),
-                                 flag=wx.EXPAND | wx.TOP | wx.LEFT | wx.RIGHT,
-                                 border=5)
+        sld_spec = VisualRangeSlider(self._panel, size=(-1, 40),
+                                     value=wl, min_val=wl_rng[0], max_val=wl_rng[1])
+        sld_spec.SetBackgroundColour("#000000")
+
+        self.gb_sizer.Add(sld_spec, pos=(self.num_rows, 0), span=(1, 3), border=5,
+                          flag=wx.EXPAND | wx.TOP | wx.LEFT | wx.RIGHT)
         self.num_rows += 1
 
-        # ====== Third row, text fields for intensity (ratios)
+        # 2nd row, text fields for intensity (ratios)
+
         tooltip_txt = "Center wavelength of the spectrum"
+
         lbl_scenter = wx.StaticText(self._panel, -1, "Center")
         lbl_scenter.SetToolTipString(tooltip_txt)
-        self._txt_scenter = UnitFloatCtrl(self._panel, -1,
-                                          (wl[0] + wl[1]) / 2,
-                                          style=wx.NO_BORDER,
-                                          size=(-1, 14),
-                                          min_val=wl_rng[0],
-                                          max_val=wl_rng[1],
-                                          unit=self.stream.spectrumBandwidth.unit)  # m or px
-        self._txt_scenter.SetBackgroundColour(BG_COLOUR_MAIN)
-        self._txt_scenter.SetForegroundColour(FG_COLOUR_EDIT)
-        self._txt_scenter.SetToolTipString(tooltip_txt)
 
-        def get_center(va=self.stream.spectrumBandwidth, ctrl=self._txt_scenter):
-            """
-            Return the low/high values for the bandwidth, from the requested center
-            """
-            # ensure the low/high values are always within the allowed range
-            wl = va.value
-            wl_rng = (va.range[0][0], va.range[1][1])
+        txt_scenter = UnitFloatCtrl(self._panel, -1, (wl[0] + wl[1]) / 2,
+                                    style=wx.NO_BORDER, size=(-1, 14),
+                                    min_val=wl_rng[0], max_val=wl_rng[1],
+                                    unit=self.stream.spectrumBandwidth.unit)  # m or px
 
-            width = wl[1] - wl[0]
-            ctr_rng = wl_rng[0] + width // 2, wl_rng[1] - width // 2
-            req_center = ctrl.GetValue()
-            new_center = min(max(ctr_rng[0], req_center), ctr_rng[1])
-
-            if req_center != new_center:
-                # VA might not change => update value ourselves
-                ctrl.SetValue(new_center)
-
-            return (new_center - width // 2, new_center + width // 2)
-
-        self._vac_scenter = VigilantAttributeConnector(
-            self.stream.spectrumBandwidth,
-            self._txt_scenter,
-            lambda r: self._txt_scenter.SetValue((r[0] + r[1]) / 2),
-            get_center,
-            events=wx.EVT_COMMAND_ENTER
-        )
+        txt_scenter.SetBackgroundColour(BG_COLOUR_MAIN)
+        txt_scenter.SetForegroundColour(FG_COLOUR_EDIT)
+        txt_scenter.SetToolTipString(tooltip_txt)
 
         tooltip_txt = "Bandwidth of the spectrum"
         lbl_sbw = wx.StaticText(self._panel, -1, "Bandwidth")
         lbl_sbw.SetToolTipString(tooltip_txt)
-        self._txt_sbw = UnitFloatCtrl(self._panel, -1,
-                                      (wl[1] - wl[0]),
-                                      style=wx.NO_BORDER,
-                                      size=(-1, 14),
-                                      min_val=0,
-                                      max_val=(wl_rng[1] - wl_rng[0]),
-                                      unit=self.stream.spectrumBandwidth.unit)
-        self._txt_sbw.SetBackgroundColour(BG_COLOUR_MAIN)
-        self._txt_sbw.SetForegroundColour(FG_COLOUR_EDIT)
-        self._txt_sbw.SetToolTipString(tooltip_txt)
 
-        def get_bandwidth(va=self.stream.spectrumBandwidth, ctrl=self._txt_sbw):
-            """
-            Return the low/high values for the bandwidth, from the requested bandwidth
-            """
-            # ensure the low/high values are always within the allowed range
-            wl = va.value
-            wl_rng = (va.range[0][0], va.range[1][1])
-
-            center = (wl[0] + wl[1]) / 2
-            max_width = max(center - wl_rng[0], wl_rng[1] - center) * 2
-            req_width = ctrl.GetValue()
-            new_width = max(min(max_width, req_width), max_width // 1024)
-
-            if req_width != new_width:
-                # VA might not change => update value ourselves
-                ctrl.SetValue(new_width)
-
-            return (center - new_width // 2, center + new_width // 2)
-
-        self._vac_sbw = VigilantAttributeConnector(
-            self.stream.spectrumBandwidth,
-            self._txt_sbw,
-            lambda r: self._txt_sbw.SetValue(r[1] - r[0]),
-            get_bandwidth,
-            events=wx.EVT_COMMAND_ENTER
-        )
+        txt_sbw = UnitFloatCtrl(self._panel, -1, (wl[1] - wl[0]),
+                                style=wx.NO_BORDER, size=(-1, 14),
+                                min_val=0, max_val=(wl_rng[1] - wl_rng[0]),
+                                unit=self.stream.spectrumBandwidth.unit)
+        txt_sbw.SetBackgroundColour(BG_COLOUR_MAIN)
+        txt_sbw.SetForegroundColour(FG_COLOUR_EDIT)
+        txt_sbw.SetToolTipString(tooltip_txt)
 
         cb_wl_sz = wx.BoxSizer(wx.HORIZONTAL)
         cb_wl_sz.Add(lbl_scenter, 0,
                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.LEFT,
                      border=5)
-        cb_wl_sz.Add(self._txt_scenter, 1,
+        cb_wl_sz.Add(txt_scenter, 1,
                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.RIGHT | wx.LEFT,
                      border=5)
         cb_wl_sz.Add(lbl_sbw, 0,
                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.LEFT,
                      border=5)
-        cb_wl_sz.Add(self._txt_sbw, 1,
+        cb_wl_sz.Add(txt_sbw, 1,
                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.RIGHT | wx.LEFT,
                      border=5)
-        self.gb_sizer.Add(cb_wl_sz, (self.num_rows, 0), span=(1, 3),
-                                 flag=wx.BOTTOM | wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND,
-                                 border=5)
-        self.num_rows += 1
+        self.gb_sizer.Add(cb_wl_sz, (self.num_rows, 0), span=(1, 3), border=5,
+                          flag=wx.BOTTOM | wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND)
 
-        # TODO: should the stream have a way to know when the raw data has changed? => just a
-        # spectrum VA, like histogram VA
-        self.stream.image.subscribe(self.on_new_spec_data, init=True)
+        return sld_spec, txt_scenter, txt_sbw
+
+    @control_bookkeeper
+    def add_specselwidth_ctrl(self):
 
         # Add the selectionWidth VA
-        if hasattr(self.stream, "selectionWidth"):
-            lbl_selection_width = wx.StaticText(self._panel, -1, "Width")
-            self._sld_selection_width = UnitIntegerSlider(
-                self._panel,
-                value=self.stream.selectionWidth.value,
-                min_val=self.stream.selectionWidth.range[0],
-                max_val=self.stream.selectionWidth.range[1],
-                unit="px",
-            )
-            tooltip_txt = "Width of the point or line selected"
-            lbl_selection_width.SetToolTipString(tooltip_txt)
-            self._sld_selection_width.SetToolTipString(tooltip_txt)
-            self._vac_selection_width = VigilantAttributeConnector(self.stream.selectionWidth,
-                                                                   self._sld_selection_width,
-                                                                   events=wx.EVT_SLIDER)
+        tooltip_txt = "Width of the point or line selected"
 
-            self.gb_sizer.Add(lbl_selection_width,
-                                     (self.num_rows, 0),
-                                     flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL,
-                                     border=5)
-            self.gb_sizer.Add(self._sld_selection_width,
-                                     (self.num_rows, 1), span=(1, 2),
-                                     flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL,
-                                     border=5)
-            self.num_rows += 1
+        lbl_selection_width = self._add_side_label("Width", tooltip_txt)
 
+        sld_selection_width = UnitIntegerSlider(
+            self._panel,
+            value=self.stream.selectionWidth.value,
+            min_val=self.stream.selectionWidth.range[0],
+            max_val=self.stream.selectionWidth.range[1],
+            unit="px",
+        )
+        sld_selection_width.SetToolTipString(tooltip_txt)
 
-    @wxlimit_invocation(0.2)
-    def on_new_spec_data(self, _):
-        # Display the global spectrum in the visual range slider
-        gspec = self.stream.getMeanSpectrum()
-        if len(gspec) <= 1:
-            logging.warning("Strange spectrum of len %d", len(gspec))
-            return
+        self.gb_sizer.Add(sld_selection_width, (self.num_rows, 1), span=(1, 2), border=5,
+                          flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL)
 
-        # make it fit between 0 and 1
-        if len(gspec) >= 5:
-            # skip the 2 biggest peaks
-            s_values = numpy.sort(gspec)
-            mins, maxs = s_values[0], s_values[-3]
-        else:
-            mins, maxs = gspec.min(), gspec.max()
-
-        base = mins # for spectrum, 0 has little sense, just care of the min
-        try:
-            coef = 1 / (maxs - base)
-        except ZeroDivisionError:
-            coef = 1
-
-        gspec = (gspec - base) * coef
-        wx.CallAfter(dead_object_wrapper(self._sld_spec.SetContent), gspec.tolist())
+        return lbl_selection_width, sld_selection_width
 
 
 class StreamBar(wx.Panel):
