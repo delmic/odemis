@@ -809,9 +809,6 @@ class OverviewCanvas(DblMicroscopeCanvas):
         # Create an image from the bitmap buffer
         image = wx.ImageFromBitmap(self._bmp_buffer)
         scaled_img = img.wxImageScaleKeepRatio(image, gui.VIEW_BTN_SIZE, wx.IMAGE_QUALITY_HIGH)
-
-        # In case the scaled version is not the same ratio as the canvas,
-        # the center of the image has been shifted to keep it centered.
         ratio = min(gui.VIEW_BTN_SIZE[0] / image.Width,
                     gui.VIEW_BTN_SIZE[1] / image.Height)
         shift = ((gui.VIEW_BTN_SIZE[0] - self.ClientSize.x * ratio) / 2,
