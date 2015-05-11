@@ -783,6 +783,15 @@ class StreamPanel(wx.Panel):
 
     @control_bookkeeper
     def add_exposure_time_ctrl(self, value=None, conf=None):
+        """ Add exposure time controls to the stream panel
+
+        :param value: (float) Current value of the exposure time
+        :param conf: (dict) Configuration options for the UnitFloatSlider
+
+        :return: (wx.StaticText, UnitFloatSlider)
+
+        """
+
         lbl_ctrl = self._add_side_label("Exposure time")
         value_ctrl = UnitFloatSlider(self._panel, value=value, **conf if conf else {})
         self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 3),
@@ -792,6 +801,15 @@ class StreamPanel(wx.Panel):
 
     @control_bookkeeper
     def add_light_power_ctrl(self, value=None, conf=None):
+        """ Add controls to adjust the light power for the stream
+
+        :param value: (float) The current value of the light wattage
+        :param conf: (dict) Configurtion values for the UnitFloatSlider
+
+        :return: :return: (wx.StaticText, UnitFloatSlider)
+
+        """
+
         lbl_ctrl = self._add_side_label("Power")
         value_ctrl = UnitFloatSlider(self._panel, value=value, **conf if conf else {})
         self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 3),
@@ -800,6 +818,7 @@ class StreamPanel(wx.Panel):
 
     @control_bookkeeper
     def add_divider(self):
+        """ Add a divigin line to the stream panel """
         line_ctrl = wx.StaticLine(self._panel, size=(-1, 1))
         self.gb_sizer.Add(line_ctrl, (self.num_rows, 0), span=(1, 3),
                           flag=wx.ALL | wx.EXPAND, border=5)
@@ -881,6 +900,12 @@ class StreamPanel(wx.Panel):
 
     @control_bookkeeper
     def add_rgbfit_ctrl(self):
+        """ Add an 'rgb fit' button to the stream panel
+
+        :return: (ImageTextToggleButton)
+
+        """
+
         btn_fit_rgb = buttons.ImageTextToggleButton(
             self._panel, wx.ID_ANY,
             img.getbtn_spectrumBitmap(),
@@ -898,6 +923,11 @@ class StreamPanel(wx.Panel):
 
     @control_bookkeeper
     def add_specbw_ctrls(self):
+        """ Add controls  to manipulate the spectrum data bandwidth
+
+        :return: VisualRangeSlider, wx.StaticText, wx.StaticText
+
+        """
 
         # 1st row, center label, slider and value
 
@@ -963,6 +993,11 @@ class StreamPanel(wx.Panel):
 
     @control_bookkeeper
     def add_specselwidth_ctrl(self):
+        """ Add a control to manipulate the spectrum selection width
+
+        :return: wx.StaticText, UnitIntegerSlider
+
+        """
 
         # Add the selectionWidth VA
         tooltip_txt = "Width of the point or line selected"
