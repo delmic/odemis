@@ -1192,11 +1192,13 @@ class HistoryOverlay(base.ViewOverlay):
     def _on_history_update(self, _):
         self.cnvs.update_drawing()
 
-    def draw(self, ctx, scaled_size=None):
+    def draw(self, ctx, scale=None, shift=None):
         """
-        scaled_size (int, int): size in pixel of the drawing area. That's a trick
-          to allow drawing both on the standard view and directly onto the thumbnail
-
+        scale (0<float): ratio between the canvas pixel size and the pixel size
+          of the drawing area. That's a trick to allow drawing both on the
+          standard view and directly onto the thumbnail.
+        shift (float, float): offset to add for positioning the drawing, when
+          it is scaled
         """
 
         ctx.set_line_width(1)
@@ -1206,9 +1208,9 @@ class HistoryOverlay(base.ViewOverlay):
             alpha = (i + 1) * (0.8 / len(self.history.value)) + 0.2 if self.fade else 1.0
             v_center = self.cnvs.world_to_view(self.cnvs.physical_to_world_pos(p_center), offset)
 
-            if scaled_size:
-                v_center = (v_center[0] * (scaled_size[0] / self.cnvs.ClientSize.x),
-                            v_center[1] * (scaled_size[1] / self.cnvs.ClientSize.y))
+            if scale:
+                v_center = (shift[0] + v_center[0] * scale,
+                            shift[1] + v_center[1] * scale)
                 marker_size = (2, 2)
             elif p_size:
                 marker_size = (int(p_size[0] * self.cnvs.scale),

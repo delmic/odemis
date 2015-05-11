@@ -24,18 +24,17 @@ from __future__ import division
 
 import collections
 import logging
-import wx
-
+from odemis.acq.stream import OpticalStream, EMStream, SpectrumStream, ARStream
 from odemis.acq.stream import RGBCameraStream, BrightfieldStream
 from odemis.gui import model
 from odemis.gui.comp.grid import ViewportGrid
 from odemis.gui.comp.viewport import MicroscopeViewport, AngularResolvedViewport, PlotViewport, \
     SpatialSpectrumViewport
 from odemis.gui.cont import tools
-from odemis.acq.stream import OpticalStream, EMStream, SpectrumStream, ARStream
-from odemis.gui.util import call_in_wx_main
-from odemis.model import VigilantAttributeBase
+from odemis.gui.util import call_in_wx_main, img
 from odemis.model import MD_PIXEL_SIZE
+from odemis.model import VigilantAttributeBase
+import wx
 
 
 class ViewPortController(object):
@@ -671,20 +670,7 @@ class ViewButtonController(object):
             im = vp.microscope_view.thumbnail.value
 
             if im:
-                # im doesn't have the same aspect ratio as the actual thumbnail
-                # => rescale and crop on the center
-                # Rescale to have the smallest axis as big as the thumbnail
-                rsize = list(size_sub)
-                if (size_sub[0] / im.Width) < (size_sub[1] / im.Height):
-                    rsize[1] = max(1, int(im.Height * (size_sub[0] / im.Width)))
-                else:
-                    rsize[0] = max(1, int(im.Width * (size_sub[1] / im.Height)))
-                sim = im.Scale(*rsize, quality=wx.IMAGE_QUALITY_HIGH)
-
-                # crop to the right shape
-                lt = ((size_sub[0] - sim.Width) // 2,
-                      (size_sub[1] - sim.Height) // 2)
-                sim.Resize(size_sub, lt, 0, 0, 0)
+                sim = img.wxImageScaleKeepRatio(im, size_sub, wx.IMAGE_QUALITY_HIGH)
             else:
                 # Create an empty black image, if no image is set
                 sim = wx.EmptyImage(*size_sub)

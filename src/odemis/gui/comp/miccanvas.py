@@ -23,31 +23,31 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+import cairo
+from decorator import decorator
 import logging
 import numpy
-import time
-import weakref
-import cairo
-import wx
-from wx.lib.imageutils import stepColour
-import wx.lib.wxcairo as wxcairo
-from decorator import decorator
-
 from odemis import util, model
 from odemis.acq import stream
+from odemis.acq.stream import UNDEFINED_ROI
 from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
 from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS, BitmapCanvas
 from odemis.gui.comp.overlay.view import HistoryOverlay, PointSelectOverlay, MarkingLineOverlay
-from odemis.gui.util import wxlimit_invocation, call_in_wx_main, ignore_dead
+from odemis.gui.util import wxlimit_invocation, ignore_dead, img
 from odemis.gui.util.img import format_rgba_darray
 from odemis.model import VigilantAttributeBase
 from odemis.util import units
-from odemis.acq.stream import UNDEFINED_ROI
+import time
+import weakref
+import wx
+from wx.lib.imageutils import stepColour
+
 import odemis.gui as gui
 import odemis.gui.comp.canvas as canvas
 import odemis.gui.comp.overlay.view as view_overlay
 import odemis.gui.comp.overlay.world as world_overlay
 import odemis.gui.model as guimodel
+import wx.lib.wxcairo as wxcairo
 
 
 SECOM_MODES = (guimodel.TOOL_ZOOM, guimodel.TOOL_ROI)
@@ -802,39 +802,31 @@ class OverviewCanvas(DblMicroscopeCanvas):
         if not self.IsEnabled() or self.ClientSize.x * self.ClientSize.y <= 0:
             return  # nothing to update
 
-        # We need to scale the thumbnail ourselves, instead of letting the button handle it, because
-        # we need to be able to draw the history overlay without it being rescaled afterwards
+        # We need to scale the thumbnail ourselves, instead of letting the
+        # button handle it, because we need to be able to draw the history
+        # overlay without it being rescaled afterwards
 
         # Create an image from the bitmap buffer
         image = wx.ImageFromBitmap(self._bmp_buffer)
+        scaled_img = img.wxImageScaleKeepRatio(image, gui.VIEW_BTN_SIZE, wx.IMAGE_QUALITY_HIGH)
 
-        # Rescale. This is the same algorithm as is used by the OverviewButton
-        thumbnail_size = wx.Size(*gui.VIEW_BTN_SIZE)
-        rsize = wx.Size(*gui.VIEW_BTN_SIZE)
-
-        if (thumbnail_size.x / image.Width) < (thumbnail_size.y / image.Height):
-            rsize[1] = int(image.Height * (thumbnail_size.x / image.Width))
-        else:
-            rsize[0] = int(image.Width * (thumbnail_size.y / image.Height))
-
-        scaled_img = image.Scale(*rsize, quality=wx.IMAGE_QUALITY_HIGH)
+        # In case the scaled version is not the same ratio as the canvas,
+        # the center of the image has been shifted to keep it centered.
+        ratio = min(gui.VIEW_BTN_SIZE[0] / image.Width,
+                    gui.VIEW_BTN_SIZE[1] / image.Height)
+        shift = ((gui.VIEW_BTN_SIZE[0] - self.ClientSize.x * ratio) / 2,
+                 (gui.VIEW_BTN_SIZE[1] - self.ClientSize.y * ratio) / 2)
 
         dc = wx.MemoryDC()
         bitmap = wx.BitmapFromImage(scaled_img)
         dc.SelectObject(bitmap)
 
         ctx = wxcairo.ContextFromDC(dc)
-        self.history_overlay.draw(ctx, rsize)
-
-        # Resize crops or adds a border, without scaling the image data
-        lt = ((thumbnail_size.x - scaled_img.Width) // 2,
-              (thumbnail_size.y - scaled_img.Height) // 2)
-
-        scaled_img.Resize(thumbnail_size, lt, 0, 0, 0)
-
-        del dc
+        self.history_overlay.draw(ctx, ratio, shift)
 
         # close the DC, to be sure the bitmap can be used safely
+        del dc
+
         scaled_img = wx.ImageFromBitmap(bitmap)
         self.microscope_view.thumbnail.value = scaled_img
 

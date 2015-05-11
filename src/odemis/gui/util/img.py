@@ -155,7 +155,6 @@ def NDImage2wxBitmap(image):
     return bim
 
 
-
 def wxImage2NDImage(image, keep_alpha=True):
     """
     Converts a wx.Image into a numpy array.
@@ -171,3 +170,26 @@ def wxImage2NDImage(image, keep_alpha=True):
         shape = image.Height, image.Width, 3
 
     return numpy.ndarray(buffer=image.DataBuffer, shape=shape, dtype=numpy.uint8)
+
+
+def wxImageScaleKeepRatio(im, size, quality=wx.IMAGE_QUALITY_NORMAL):
+    """
+    Scales (down) an image so that if fits within a given bounding-box without
+      changing the aspect ratio, and filling up with black bands
+    im (wxImage): the image to scale
+    size (int, int): the size (width, height) of the bounding box
+    quality (int): scaling quality, same as image.Scale()
+    return (wxImage): an image scaled to fit the size within at least one
+      dimension. The other dimension will be of the requested size, but with
+      only a subset containing the data.
+    """
+    ratio = min(size[0] / im.Width, size[1] / im.Height)
+    rw = max(1, int(im.Width * ratio))
+    rh = max(1, int(im.Height * ratio))
+    sim = im.Scale(rw, rh, quality)
+
+    # Add a (black) border on the small dimension
+    lt = ((size[0] - rw) // 2, (size[1] - rh) // 2)
+    sim.Resize(size, lt, 0, 0, 0)
+
+    return sim

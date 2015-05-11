@@ -28,14 +28,15 @@
 # in XRCED's plugin directory.
 
 from __future__ import division
-import logging
 
+import logging
+from odemis.gui import FG_COLOUR_HIGHLIGHT
+from odemis.gui.util import img
+import wx
 from wx.lib.buttons import GenBitmapButton, GenBitmapToggleButton, GenBitmapTextToggleButton, \
     GenBitmapTextButton
-import wx
 
-from odemis.gui import FG_COLOUR_HIGHLIGHT
-import odemis.gui.img.data as img
+import odemis.gui.img.data as imgdata
 
 
 def resize_bmp(btn_size, bmp):
@@ -810,21 +811,7 @@ class ViewButton(ImageTextToggleButton):
         if image:
             # image doesn't have the same aspect ratio as the actual thumbnail
             # => rescale and crop on the center
-
-            # Rescale to have the smallest axis as big as the thumbnail
-            rsize = wx.Size(*self.thumbnail_size)
-            if (self.thumbnail_size.x / image.Width) < (self.thumbnail_size.y / image.Height):
-                rsize[1] = max(1, int(image.Height * (self.thumbnail_size.x / image.Width)))
-            else:
-                rsize[0] = max(1, int(image.Width * (self.thumbnail_size.y / image.Height)))
-
-            scaled_img = image.Scale(*rsize, quality=wx.IMAGE_QUALITY_HIGH)
-
-            # Resize crops or adds a border, without scaling the image data
-            lt = ((self.thumbnail_size.x - scaled_img.Width) // 2,
-                  (self.thumbnail_size.y - scaled_img.Height) // 2)
-
-            scaled_img.Resize(self.thumbnail_size, lt, 0, 0, 0)
+            scaled_img = img.wxImageScaleKeepRatio(image, self.thumbnail_size, wx.IMAGE_QUALITY_HIGH)
         else:
             # black image
             scaled_img = wx.EmptyImage(*self.thumbnail_size)
@@ -956,7 +943,7 @@ class ColourButton(ImageButton):
         if colour:
             self.colour = colour
 
-        BMP_EMPTY = img.getemptyBitmap()
+        BMP_EMPTY = imgdata.getemptyBitmap()
 
         brush = wx.Brush(self.colour)
         pen = wx.Pen(self.colour)
@@ -972,7 +959,7 @@ class ColourButton(ImageButton):
         self.SetBitmapLabel(bmp)
 
         if self.use_hover:
-            BMP_EMPTY_H = img.getempty_hBitmap()
+            BMP_EMPTY_H = imgdata.getempty_hBitmap()
             bmp = BMP_EMPTY_H.GetSubBitmap(
                     wx.Rect(0, 0, BMP_EMPTY.GetWidth(), BMP_EMPTY.GetHeight()))
             mdc = wx.MemoryDC()
