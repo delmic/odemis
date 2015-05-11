@@ -256,7 +256,10 @@ class Stream(object):
             r0 = va.range[0]
             if isinstance(r0, tuple):
                 vacls = model.TupleContinuous
-                # TODO: cls?
+                if isinstance(r0[0], numbers.Real):
+                    kwargs["cls"] = numbers.Real # accept _any_ number
+                # otherwise, the VA will just pick the class from the value
+
             elif isinstance(r0, numbers.Real):
                 # TODO: distinguish model.IntContinuous, how?
                 vacls = model.FloatContinuous
