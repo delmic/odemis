@@ -663,7 +663,22 @@ class StreamPanel(wx.Panel):
         self._header.to_static_mode()
         self._header.to_locked_mode()
 
-    # ===== For brightness/contrast
+    # Setting Control Addition Methods
+
+    def _add_side_label(self, label_text):
+        """ Add a text label to the control grid
+
+        This method should only be called from other methods that add control to the control grid
+
+        :param label_text: (str)
+        :return: (wx.StaticText)
+
+        """
+
+        lbl_ctrl = wx.StaticText(self._panel, -1, label_text)
+        self.gb_sizer.Add(lbl_ctrl, (self.num_rows, 0),
+                          flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
+        return lbl_ctrl
 
     @control_bookkeeper
     def add_autobc_ctrls(self):
@@ -763,23 +778,6 @@ class StreamPanel(wx.Panel):
 
         return sld_hist, txt_lowi, txt_highi
 
-    def _add_side_label(self, label_text):
-        """ Add a text label to the control grid
-
-        This method should only be called from other methods that add control to the control grid
-
-        :param label_text: (str)
-        :return: (wx.StaticText)
-
-        """
-
-        lbl_ctrl = wx.StaticText(self._panel, -1, label_text)
-        self.gb_sizer.Add(lbl_ctrl, (self.num_rows, 0),
-                          flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
-        return lbl_ctrl
-
-    # Setting Control Addition Methods
-
     @control_bookkeeper
     def add_exposure_time_ctrl(self, value=None, conf=None):
         lbl_ctrl = self._add_side_label("Exposure time")
@@ -877,41 +875,6 @@ class StreamPanel(wx.Panel):
         return lbl_ctrl, hw_set, lbl_peak, btn_color
 
     # END Setting Control Addition Methods
-
-    # ====== For the dyes
-
-    # FIXME: Remove this method
-    @staticmethod
-    def _has_dye(stream):
-        """
-        return True if the stream looks like a stream using dye.
-        """
-        return hasattr(stream, "excitation") and hasattr(stream, "emission")
-
-    def sync_tint_on_emission(self, ewl, xwl):
-        """
-        Set the tint to the same colour as emission, if no dye has been
-         selected. If a dye is selected, it's dependent on the dye information.
-        ewl ((tuple of) tuple of floats): emission wavelength
-        wwl ((tuple of) tuple of floats): excitation wavelength
-        """
-        if self._dye_ewl is None: # if dye is used, keep the peak wavelength
-            ewl_center = fluo.get_one_center_em(ewl, xwl)
-            if self._dye_prev_ewl_center == ewl_center:
-                return
-            self._dye_prev_ewl_center = ewl_center
-            colour = wave2rgb(ewl_center)
-            logging.debug("Synchronising tint to %s", colour)
-            self.stream.tint.value = colour
-
-    # ===== Wavelength bandwidth for SpectrumSettingsStream
-
-    def _has_wl(self, stream):
-        """
-        return True if the stream looks like a stream with wavelength
-        """
-        return hasattr(stream, "spectrumBandwidth")
-                #and hasattr(stream, "fitToRGB")
 
     def _add_wl_controls(self):
         # ====== Top row, fit RGB toggle button

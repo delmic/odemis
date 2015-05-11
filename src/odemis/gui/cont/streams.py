@@ -139,7 +139,7 @@ class StreamController(object):
             self._add_brightnesscontrast_ctrls()
             self._add_outliers_ctrls()
 
-        # if self._has_wl(self.stream):
+        # if hasattr(stream, "spectrumBandwidth"):
         #     self._add_wl_controls()
 
         # Set the visibility button on the stream panel
