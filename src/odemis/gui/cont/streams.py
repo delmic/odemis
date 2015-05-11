@@ -23,7 +23,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 from collections import OrderedDict
 import collections
-
 import logging
 import numpy
 import wx
@@ -32,15 +31,15 @@ from wx.lib.pubsub import pub
 import odemis.acq.stream as acqstream
 from odemis.acq.stream import OpticalStream, CameraStream
 from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR
-from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.stream import StreamPanel
 from odemis.gui.conf.data import HW_SETTINGS_CONFIG
 import odemis.gui.model as guimodel
 from odemis import model
-from odemis.gui.util import wxlimit_invocation, dead_object_wrapper, call_in_wx_main_wrapper
+from odemis.gui.util import wxlimit_invocation, dead_object_wrapper
 from odemis.util import fluo
 from odemis.gui.model import dye
 from odemis.gui.util.widgets import VigilantAttributeConnector
+
 
 
 # Stream scheduling policies: decides which streams which are with .should_update get .is_active
@@ -178,10 +177,10 @@ class StreamController(object):
             self._dye_ewl = None
 
         # Either update the peak info, or clean up if nothing to display
-        self.stream_panel.update_peak_label_fit(self._lbl_exc_peak, self._btn_excitation,
-                                                self._dye_xwl, self.stream.excitation.value)
-        self.stream_panel.update_peak_label_fit(self._lbl_em_peak, self._btn_emission,
-                                                self._dye_ewl, self.stream.emission.value)
+        self.update_peak_label_fit(self._lbl_exc_peak, self._btn_excitation,
+                                   self._dye_xwl, self.stream.excitation.value)
+        self.update_peak_label_fit(self._lbl_em_peak, self._btn_emission,
+                                   self._dye_ewl, self.stream.emission.value)
 
     # Panel state methods
 
@@ -418,9 +417,8 @@ class StreamController(object):
                     colour = wave2rgb(fluo.get_one_center_ex(value, self.stream.emission.value))
                     self._btn_excitation.set_colour(colour)
                 else:
-                    self.stream_panel.update_peak_label_fit(self._lbl_exc_peak,
-                                                            self._btn_excitation,
-                                                            self._dye_xwl, value)
+                    self.update_peak_label_fit(self._lbl_exc_peak, self._btn_excitation,
+                                               self._dye_xwl, value)
 
                 # also update emission colour as it's dependent on excitation when multi-band
                 if self._dye_ewl is None and self._btn_emission:
@@ -471,7 +469,7 @@ class StreamController(object):
                     colour = wave2rgb(fluo.get_one_center_em(value, self.stream.excitation.value))
                     self._btn_emission.set_colour(colour)
                 else:
-                    self.stream_panel.update_peak_label_fit(self._lbl_em_peak,
+                    self.update_peak_label_fit(self._lbl_em_peak,
                                                             self._btn_emission,
                                                             self._dye_ewl, value)
                 # also update excitation colour as it's dependent on emission when multiband
@@ -591,20 +589,20 @@ class StreamController(object):
             else:
                 norm_hist = []
 
-            drange = (intensity_rng_va.range[0][0], intensity_rng_va.range[1][1])
+            data_range = (intensity_rng_va.range[0][0], intensity_rng_va.range[1][1])
 
-            if drange != _on_histogram.prev_drange:
-                _on_histogram.prev_drange = drange
+            if data_range != _on_histogram.prev_data_range:
+                _on_histogram.prev_data_range = data_range
 
-                sld_hist.SetRange(drange[0], drange[1])
+                sld_hist.SetRange(data_range[0], data_range[1])
                 # Setting the values should not be necessary as the value should have
                 # already been updated via the VA update
-                txt_low.SetValueRange(drange[0], drange[1])
-                txt_high.SetValueRange(drange[0], drange[1])
+                txt_low.SetValueRange(data_range[0], data_range[1])
+                txt_high.SetValueRange(data_range[0], data_range[1])
 
             sld_hist.SetContent(norm_hist)
-        _on_histogram.prev_drange = (self.stream.intensityRange.range[0][0],
-                                     self.stream.intensityRange.range[1][1])
+        _on_histogram.prev_data_range = (self.stream.intensityRange.range[0][0],
+                                         self.stream.intensityRange.range[1][1])
 
         # Again, we use an entry to keep a reference of the closure around
         se = SettingEntry("_histogram_switch", va=self.stream.histogram, stream=self.stream,
