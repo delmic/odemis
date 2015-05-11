@@ -58,7 +58,7 @@ class VigilantAttributeConnector(object):
         events (None or wx.EVT_* or tuple of wx.EVT_*): events to bind to update
             the value of the VA
         """
-        self.stream_va = va
+        self.vigilattr = va
         self.value_ctrl = value_ctrl
 
         self.paused = False
@@ -88,26 +88,26 @@ class VigilantAttributeConnector(object):
         try:
             value = self.ctrl_2_va()
             logging.debug("Assign value %s to vigilant attribute", value)
-            self.stream_va.value = value
+            self.vigilattr.value = value
         except (ValueError, TypeError, IndexError), exc:
             logging.warn("Illegal value: %s", exc)
-            self.va_2_ctrl(self.stream_va.value)
+            self.va_2_ctrl(self.vigilattr.value)
         finally:
             evt.Skip()
 
     def pause(self):
         """ Temporarily prevent VAs from updating controls and controls from updating VAs """
         self.paused = True
-        self.stream_va.unsubscribe(self.va_2_ctrl)
+        self.vigilattr.unsubscribe(self.va_2_ctrl)
 
     def resume(self):
         """ Resume updating controls and VAs """
         self.paused = False
-        self.stream_va.subscribe(self.va_2_ctrl, init=True)
+        self.vigilattr.subscribe(self.va_2_ctrl, init=True)
 
     def _connect(self, init):
         logging.debug("Connecting VigilantAttributeConnector")
-        self.stream_va.subscribe(self.va_2_ctrl, init)
+        self.vigilattr.subscribe(self.va_2_ctrl, init)
         for event in self.change_events:
             self.value_ctrl.Bind(event, self._on_value_change)
 
@@ -115,7 +115,7 @@ class VigilantAttributeConnector(object):
         logging.debug("Disconnecting VigilantAttributeConnector")
         for event in self.change_events:
             self.value_ctrl.Unbind(event, handler=self._on_value_change)
-        self.stream_va.unsubscribe(self.va_2_ctrl)
+        self.vigilattr.unsubscribe(self.va_2_ctrl)
 
 
 class AxisConnector(object):
