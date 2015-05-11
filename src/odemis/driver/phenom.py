@@ -128,8 +128,9 @@ class SEM(model.HwComponent):
         Raise an exception if the device cannot be opened
         '''
 
-        # Avoid unnecessary logging from suds
-        logging.getLogger("suds").setLevel(logging.INFO)
+        if logging.getLogger().getEffectiveLevel() <= logging.DEBUG:
+            # Avoid unnecessary logging from suds
+            logging.getLogger("suds").setLevel(logging.INFO)
 
         # we will fill the set of children with Components later in ._children
         model.HwComponent.__init__(self, name, role, daemon=daemon, **kwargs)
