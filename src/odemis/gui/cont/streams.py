@@ -224,7 +224,7 @@ class StreamController(object):
     def _add_wl_ctrls(self):
         btn_rgbfit = self.stream_panel.add_rgbfit_ctrl()
 
-        se = SettingEntry(name="rgbfit", va=self.stream.auto_bc, stream=self.stream,
+        se = SettingEntry(name="rgbfit", va=self.stream.fitToRGB, stream=self.stream,
                           value_ctrl=btn_rgbfit, events=wx.EVT_BUTTON,
                           va_2_ctrl=btn_rgbfit.SetToggle, ctrl_2_va=btn_rgbfit.GetToggle)
         self.entries[se.name] = se
