@@ -337,7 +337,7 @@ class StreamTestCase(unittest.TestCase):
 
         self.assertEqual(ebeam.scale.value, ss.emtScale.value)
         ebeam.scale.value = (2, 2)
-        ss.emtScale.value = (5, 5)
+        ss.emtScale.value = (5.3, 5.3)
         self.assertNotEqual(ebeam.scale.value, ss.emtScale.value)
 
         self.assertEqual(ebeam.resolution.value, ss.emtResolution.value)
@@ -353,7 +353,7 @@ class StreamTestCase(unittest.TestCase):
         self.assertEqual(ebeam.magnification.value, ss.emtMagnification.value)
         self.assertEqual(ebeam.magnification.value, 200)
         self.assertEqual(ebeam.scale.value, ss.emtScale.value)
-        self.assertEqual(ebeam.scale.value, (5, 5))
+        self.assertEqual(ebeam.scale.value, (5.3, 5.3))
         self.assertEqual(ebeam.resolution.value, ss.emtResolution.value)
 
         # Directly change HW VAs, and check the stream see the changes
@@ -961,20 +961,26 @@ class SettingsStreamsTestCase(unittest.TestCase):
         # TODO
         # change center wavelength and try again
 
-    def test_spec_mnchr(self):
+    def test_mnchr_ss(self):
         """ Tests MonochromatorSettingsStream """
-        # Create the stream
+        # Create the stream and a SpotStream (to drive the ebeam)
         mcs = stream.MonochromatorSettingsStream("test",
                       self.mnchr, self.mnchr.data, self.ebeam, self.spgp,
-                      emtvas=("dwellTime", "scale", "resolution"))
+                      emtvas=("dwellTime",))# , "scale", "resolution"
+        spots = stream.SpotSEMStream("spot", self.sed, self.sed.data, self.ebeam)
+
         self._image = None
         mcs.image.subscribe(self._on_image)
+
+        # start spot mode
+        spots.should_update.value = True
+        spots.is_active.value = True
 
         # shouldn't affect
         mcs.roi.value = (0.15, 0.6, 0.8, 0.8)
         mcs.repetition.value = (5, 6)
 
-        mcs.emtResolution.value = (1, 1) # spot
+#        mcs.emtResolution.value = (1, 1) # spot
         mcs.emtDwellTime.value = 0.01 # s
         mcs.windowPeriod.value = 10 # s
 
@@ -987,12 +993,87 @@ class SettingsStreamsTestCase(unittest.TestCase):
 
         self.assertIsNotNone(self._image, "No data received after 2s")
         self.assertIsInstance(self._image, model.DataArray)
-        print self._image
         self.assertEqual(self._image.ndim, 1)
         self.assertGreater(self._image.shape[0], 50) # we could hope 200 samples
 
+        # TODO: run a SpotStream and try again
+        spots.is_active.value = False
+
         # TODO
         # change center wavelength and try again
+
+    def test_ar_ss(self):
+        """ Test ARSettingsStream """
+        # Create the stream
+        ars = stream.ARSettingsStream("test",
+                      self.ccd, self.ccd.data, self.ebeam,
+                      detvas=("exposureTime", "readoutRate", "binning", "resolution"))
+        self._image = None
+        ars.image.subscribe(self._on_image)
+
+        # shouldn't affect
+        ars.roi.value = (0.15, 0.6, 0.8, 0.8)
+        ars.repetition.value = (5, 6)
+
+        ars.detExposureTime.value = 0.3 # s
+
+        # Start acquisition
+        ars.should_update.value = True
+        ars.is_active.value = True
+
+        time.sleep(2)
+        ars.is_active.value = False
+
+        self.assertIsNotNone(self._image, "No AR image received after 2s")
+        self.assertIsInstance(self._image, model.DataArray)
+        exp_shape = ars.detResolution.value[::-1] + (3,)
+        self.assertEqual(self._image.shape, exp_shape)
+
+        # Try changing the binning in the mean time
+        ars.should_update.value = True
+        ars.is_active.value = True
+        time.sleep(0.2)
+        ars.detBinning.value = (2, 2)
+
+        time.sleep(2)
+        ars.is_active.value = False
+
+        self.assertIsNotNone(self._image, "No AR image received after 2s")
+        self.assertIsInstance(self._image, model.DataArray)
+        exp_shape = ars.detResolution.value[::-1] + (3,)
+        self.assertEqual(self._image.shape, exp_shape)
+
+    def test_cl_ss(self):
+        """ Test CLSettingsStream """
+        # Create the stream
+        cls = stream.CLSettingsStream("test",
+                      self.cl, self.cl.data, self.ebeam,
+                      emtvas=("dwellTime", "scale", "resolution"))
+        self._image = None
+        cls.image.subscribe(self._on_image)
+
+        # shouldn't affect
+        cls.roi.value = (0.15, 0.6, 0.8, 0.8)
+        cls.repetition.value = (5, 6)
+
+        cls.emtDwellTime.value = 10e-6 # s
+        cls.emtScale.value = (8.5, 8.5) # ratio
+
+        # Start acquisition
+        cls.should_update.value = True
+        cls.is_active.value = True
+
+        # resolution is only updated after starting acquisition
+        exp_time = cls.emtDwellTime.value * numpy.prod(cls.emtResolution.value)
+        st = exp_time * 1.5 + 0.1
+        logging.info("Will wait for the acquisition for %f s", st)
+        time.sleep(st)
+        cls.is_active.value = False
+
+        self.assertIsNotNone(self._image, "No CL image received after 2s")
+        self.assertIsInstance(self._image, model.DataArray)
+        exp_shape = cls.emtResolution.value[::-1] + (3,)
+        self.assertEqual(self._image.shape, exp_shape)
 
 
     def _on_image(self, im):

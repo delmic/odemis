@@ -399,6 +399,8 @@ class MonochromatorSettingsStream(PMTSettingsStream):
     # TODO: how to set up the dwell time? If the ebeam is already scanning
     # => don't change. If spot mode, => put something useful?
 
+    # TODO: don't set the dwellTime (if local VA)?
+
     def _append(self, count, date):
         """
         Adds a new count and updates the window
