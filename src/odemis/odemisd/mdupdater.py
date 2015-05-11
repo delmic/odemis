@@ -32,10 +32,10 @@ class MetadataUpdater(model.Component):
     '''
     Takes care of updating the metadata of detectors, based on the physical
     attributes of other components in the system.
-    This implementation is specific to microscopes. 
+    This implementation is specific to microscopes.
     '''
-    # This is kept in a separate module from the main backend because it has to 
-    # know the business semantic. 
+    # This is kept in a separate module from the main backend because it has to
+    # know the business semantic.
 
     def __init__(self, name, microscope, **kwargs):
         '''
@@ -61,7 +61,7 @@ class MetadataUpdater(model.Component):
         Called when alive is changed => some component started or died
         """
         # For each component
-        # For each component it affects 
+        # For each component it affects
         # Subscribe to the changes of the attributes that matter
         for a in components:
             for dn in a.affects.value:
@@ -103,14 +103,14 @@ class MetadataUpdater(model.Component):
         # we need to keep the information on the detector to update
         def updateStagePos(pos, comp=comp):
             # We need axes X and Y
-            if not "x" in pos or not "y" in pos:
+            if "x" not in pos or "y" not in pos:
                 logging.warning("Stage position doesn't contain X/Y axes")
             # if unknown, just assume a fixed position
             x = pos.get("x", 0)
             y = pos.get("y", 0)
             md = {model.MD_POS: (x, y)}
             logging.debug("Updating position for component %s, to %f, %f",
-                          comp.name, x , y)
+                          comp.name, x, y)
             comp.updateMetadata(md)
 
         stage.position.subscribe(updateStagePos)
@@ -148,12 +148,12 @@ class MetadataUpdater(model.Component):
             comp.binning.subscribe(updatePixelDensity)
             self._onTerminate.append((comp.binning.unsubscribe, (updatePixelDensity,)))
         except AttributeError:
-            pass            
+            pass
         updatePixelDensity(None) # update it right now
 
         # update pole position, if available
         if (hasattr(lens, "polePosition")
-            and isinstance(lens.polePosition.value, collections.Iterable)):
+            and isinstance(lens.polePosition, model.VigilantAttributeBase)):
             def updatePolePos(unused, lens=lens, comp=comp):
                 # the formula is: Pole = Pole_no_binning / binning
                 try:
@@ -198,7 +198,7 @@ class MetadataUpdater(model.Component):
             em_on = [i for i, e in enumerate(emissions) if e > 0]
             if not em_on: # No light
                 wl = (0, 0)
-            elif len(em_on) == 1: # just one light 
+            elif len(em_on) == 1: # just one light
                 wl = light.spectra.value[em_on[0]]
             else: # multiple wavelengths
                 # compute the min/max from the emissions which are not 0
@@ -217,14 +217,13 @@ class MetadataUpdater(model.Component):
         def updateLightPower(power, light=light, comp=comp):
             p = power * numpy.sum(light.emissions.value)
             md = {model.MD_LIGHT_POWER: p}
-            comp.updateMetadata(md)     
+            comp.updateMetadata(md)
 
         light.power.subscribe(updateLightPower, init=True)
         self._onTerminate.append((light.power.unsubscribe, (updateLightPower,)))
 
         light.emissions.subscribe(updateInputWL, init=True)
         self._onTerminate.append((light.emissions.unsubscribe, (updateInputWL,)))
-
 
     def terminate(self):
         # call all the unsubscribes
