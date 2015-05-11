@@ -676,9 +676,9 @@ class ViewButtonController(object):
                 # Rescale to have the smallest axis as big as the thumbnail
                 rsize = list(size_sub)
                 if (size_sub[0] / im.Width) < (size_sub[1] / im.Height):
-                    rsize[1] = int(im.Height * (size_sub[0] / im.Width))
+                    rsize[1] = max(1, int(im.Height * (size_sub[0] / im.Width)))
                 else:
-                    rsize[0] = int(im.Width * (size_sub[1] / im.Height))
+                    rsize[0] = max(1, int(im.Width * (size_sub[1] / im.Height)))
                 sim = im.Scale(*rsize, quality=wx.IMAGE_QUALITY_HIGH)
 
                 # crop to the right shape
