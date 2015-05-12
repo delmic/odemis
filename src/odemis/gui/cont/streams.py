@@ -31,7 +31,7 @@ from wx.lib.pubsub import pub
 import odemis.acq.stream as acqstream
 from odemis.acq.stream import OpticalStream, CameraStream
 from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR
-from odemis.gui.comp.stream import StreamPanel
+from odemis.gui.comp.stream import StreamPanel, EVT_STREAM_VISIBLE
 from odemis.gui.conf.data import HW_SETTINGS_CONFIG
 import odemis.gui.model as guimodel
 from odemis import model
@@ -39,13 +39,11 @@ from odemis.gui.util import wxlimit_invocation, dead_object_wrapper
 from odemis.util import fluo
 from odemis.gui.model import dye
 from odemis.gui.util.widgets import VigilantAttributeConnector
-
-
-
-# Stream scheduling policies: decides which streams which are with .should_update get .is_active
 from odemis.util.conversion import wave2rgb
 from odemis.util.fluo import to_readable_band, get_one_center
 
+
+# Stream scheduling policies: decides which streams which are with .should_update get .is_active
 
 SCHED_LAST_ONE = 1  # Last stream which got added to the should_update set
 SCHED_ALL = 2  # All the streams which are in the should_update stream
@@ -126,9 +124,9 @@ class StreamController(object):
 
         # Check if light and exposure controls are necessary
         if isinstance(stream, OpticalStream):
-            if hasattr(stream, 'exposureTime'):
+            if hasattr(stream, 'detExposureTime'):
                 self._add_exposure_time_ctrl()
-            if hasattr(stream, 'lightPower'):
+            if hasattr(stream, 'emtPower'):
                 self._add_light_power_ctrl()
 
         # Check if dye control is needed
@@ -147,8 +145,23 @@ class StreamController(object):
         # Set the visibility button on the stream panel
         vis = stream in tab_data_model.focussedView.value.getStreams()
         self.stream_panel.set_visible(vis)
+        self.stream_panel.Bind(EVT_STREAM_VISIBLE, self._on_stream_visible)
 
         stream_bar.add_stream_panel(self.stream_panel, show)
+
+    def _on_stream_visible(self, evt):
+        """ Show or hide a stream in the focussed view if the visibility button is clicked """
+        view = self.tab_data_model.focussedView.value
+
+        if not view:
+            return
+
+        if evt.visible:
+            logging.debug("Showing stream '%s'", self.stream.name.value)
+            view.addStream(self.stream)
+        else:
+            logging.debug("Hiding stream '%s'", self.stream.name.value)
+            view.removeStream(self.stream)
 
     def _on_new_dye_name(self, dye_name):
         """ Assign excitation and emission wavelengths if the given name matches a known dye """
@@ -328,39 +341,40 @@ class StreamController(object):
         conf = {
             'min_val': et_config["range"][0],
             'max_val': et_config["range"][1],
-            'unit': self.stream.exposureTime.unit,
+            'unit': self.stream.detExposureTime.unit,
             'scale': et_config["scale"],
             'accuracy': et_config["accuracy"],
             }
 
         lbl_ctrl, value_ctrl = self.stream_panel.add_exposure_time_ctrl(
-            self.stream.exposureTime.value, conf
+            self.stream.detExposureTime.value, conf
         )
 
-        se = SettingEntry(name="exposureTime", va=self.stream.exposureTime, stream=self.stream,
+        se = SettingEntry(name="exposureTime", va=self.stream.detExposureTime, stream=self.stream,
                           lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl, events=wx.EVT_SLIDER)
         self.entries[se.name] = se
 
     def _add_light_power_ctrl(self):
         """ Add light power controls to the stream panel """
 
-        # Assertion mainly needed for dynamic attribute recognition (i.e. lightPower)
+        # Assertion mainly needed for dynamic attribute recognition (i.e. emtPower)
         assert(isinstance(self.stream, CameraStream))
+
         et_config = HW_SETTINGS_CONFIG['light']['power']
 
         conf = {
-            'min_val': self.stream.lightPower.range[0],
-            'max_val': self.stream.lightPower.range[1],
-            'unit': self.stream.lightPower.unit,
+            'min_val': self.stream.emtPower.range[0],
+            'max_val': self.stream.emtPower.range[1],
+            'unit': self.stream.emtPower.unit,
             'scale': et_config["scale"],
             'accuracy': 4
         }
 
         lbl_ctrl, value_ctrl = self.stream_panel.add_light_power_ctrl(
-            self.stream.lightPower.value, conf
+            self.stream.emtPower.value, conf
         )
 
-        se = SettingEntry(name="lightPower", va=self.stream.lightPower, stream=self.stream,
+        se = SettingEntry(name="lightPower", va=self.stream.emtPower, stream=self.stream,
                           lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl, events=wx.EVT_SLIDER)
         self.entries[se.name] = se
 
@@ -883,7 +897,9 @@ class StreamBarController(object):
             self._main_data_model.ccd,
             self._main_data_model.ccd.data,
             self._main_data_model.light,
-            self._main_data_model.light_filter
+            self._main_data_model.light_filter,
+            detvas={"exposureTime"},
+            emtvas={"power"}
         )
 
         # TODO: automatically pick a good set of excitation/emission which is
@@ -902,7 +918,9 @@ class StreamBarController(object):
             "Bright-field",
             self._main_data_model.ccd,
             self._main_data_model.ccd.data,
-            self._main_data_model.brightlight
+            self._main_data_model.brightlight,
+            detvas={"exposureTime"},
+            emtvas={"power"}
         )
         return self._addStream(s, **kwargs)
 

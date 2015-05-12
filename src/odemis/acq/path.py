@@ -31,36 +31,36 @@ from odemis.acq import stream
 # Dict includes all the modes available and the corresponding component axis or 
 # VA values
 # {Mode: (detector_needed, {role: {axis/VA: value}})}
-MODES = {'AR':("ccd",
-               {'lens-switch':{'rx':math.radians(90)}, 'ar-det-selector':{'rx':0},
-               'ar-spec-selector':{'rx':0}}),
-         'Spectral':("spectrometer",
-                {'lens-switch':{'rx':math.radians(90)}, 'ar-det-selector':{'rx':0},
-               'ar-spec-selector':{'rx':math.radians(90)}, 'spectrograph':{'spec-det-selector':0}}),
-         'Alignment':("ccd",
-                {'lens-switch':{'rx':0}, 'ar-det-selector':{'rx':0},
-               'ar-spec-selector':{'rx':0}}),
-         'PMT CLi':("cl-detector",
-                {'lens-switch':{'rx':math.radians(90)}, 'ar-det-selector':{'rx':math.radians(90)}}),
-         'PMT monochromator':("monochromator", 
-                {'lens-switch':{'rx':math.radians(90)}, 'ar-det-selector':{'rx':0},
-               'ar-spec-selector':{'rx':math.radians(90)}, 'spectrograph':{'spec-det-selector':math.radians(90)}})}
+MODES = {'ar': ("ccd",
+               {'lens-switch': {'rx': math.radians(90)}, 'ar-det-selector': {'rx': 0},
+               'ar-spec-selector': {'rx': 0}}),
+         'spectral': ("spectrometer",
+                {'lens-switch': {'rx': math.radians(90)}, 'ar-det-selector': {'rx': 0},
+               'ar-spec-selector': {'rx': math.radians(90)}, 'spectrograph': {'spec-det-selector': 0}}),
+         'mirror-align': ("ccd",
+                {'lens-switch': {'rx': 0}, 'ar-det-selector': {'rx': 0},
+               'ar-spec-selector': {'rx': 0}}),
+         'cli': ("cl-detector",  # cli
+                {'lens-switch': {'rx': math.radians(90)}, 'ar-det-selector': {'rx': math.radians(90)}}),
+         'monochromator': ("monochromator",
+                {'lens-switch': {'rx': math.radians(90)}, 'ar-det-selector': {'rx': 0},
+               'ar-spec-selector': {'rx': math.radians(90)}, 'spectrograph': {'spec-det-selector': math.radians(90)}})}
 # Use subset for modes guessed
 subset = MODES.keys()
-subset.remove('Alignment')
+subset.remove('mirror-align')
 GUESS_MODES = dict([(i, MODES[i]) for i in subset if i in MODES])
 
 
 class OpticalPathManager(object):
     """
-    The purpose of this module is setting the physical components contained in 
-    the optical path of a SPARC system to the right position/configuration with 
+    The purpose of this module is setting the physical components contained in
+    the optical path of a SPARC system to the right position/configuration with
     respect to the mode given.
     """
     def __init__(self, microscope):
         """
-        microscope (Microscope): the whole microscope component, thus it can 
-            handle all the components needed 
+        microscope (Microscope): the whole microscope component, thus it can
+            handle all the components needed
         """
         self.microscope = microscope
         self.known_comps = dict()  # keep list of already accessed components
@@ -75,8 +75,8 @@ class OpticalPathManager(object):
 
     def setPath(self, mode):
         """
-        Given a particular mode it sets all the necessary components of the 
-        optical path (found through the microscope component) to the 
+        Given a particular mode it sets all the necessary components of the
+        optical path (found through the microscope component) to the
         corresponding positions.
         mode (str): The optical path mode
         raises:
@@ -85,7 +85,7 @@ class OpticalPathManager(object):
         """
         if mode not in self._modes:
             raise ValueError("Mode given does not exist")
- 
+
         modeconf = self._modes[mode][1]
         fmoves = []  # moves in progress
         for comp_role, conf in modeconf.items():
@@ -113,10 +113,9 @@ class OpticalPathManager(object):
         for f in fmoves:
             f.result()
 
-        
     def guessMode(self, guess_stream):
         """
-        Given a stream and by checking its components (e.g. role of detectors) 
+        Given a stream and by checking its components (e.g. role of detectors)
         guesses and returns the corresponding optical path mode.
         guess_stream (object): The given optical stream
         returns (str): Mode estimated
@@ -139,4 +138,3 @@ class OpticalPathManager(object):
             raise ValueError("No mode can be inferred for the given stream")
         else:
             raise IOError("Given object is not a stream")
-    

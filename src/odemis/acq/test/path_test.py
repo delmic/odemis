@@ -39,6 +39,7 @@ SPARC_CONFIG = CONFIG_PATH + "sparc-sim.odm.yaml"
 MONASH_CONFIG = CONFIG_PATH + "sparc-monash-sim.odm.yaml"
 SPEC_CONFIG = CONFIG_PATH + "sparc-sim-spec.odm.yaml"
 
+
 # @skip("faster")
 class SimPathTestCase(unittest.TestCase):
     """
@@ -89,56 +90,56 @@ class SimPathTestCase(unittest.TestCase):
 #    @skip("simple")
     def test_set_path(self):
         """
-        Test setting modes that do exist. We expect AR, Spectral and Alignment 
-        modes to be available 
+        Test setting modes that do exist. We expect ar, spectral and mirror-align
+        modes to be available
         """
-        # setting AR
-        self.optmngr.setPath("AR")
+        # setting ar
+        self.optmngr.setPath("ar")
         # Assert that actuator was moved according to mode given
-        self.assertEqual(self.lenswitch.position.value, path.MODES["AR"][1]["lens-switch"])
+        self.assertEqual(self.lenswitch.position.value, path.MODES["ar"][1]["lens-switch"])
 
-        # setting Spectral
-        self.optmngr.setPath("Spectral")
+        # setting spectral
+        self.optmngr.setPath("spectral")
         # Assert that actuator was moved according to mode given
-        self.assertEqual(self.lenswitch.position.value, path.MODES["Spectral"][1]["lens-switch"])
+        self.assertEqual(self.lenswitch.position.value, path.MODES["spectral"][1]["lens-switch"])
 
-        # setting Alignment
-        self.optmngr.setPath("Alignment")
+        # setting mirror-align
+        self.optmngr.setPath("mirror-align")
         # Assert that actuator was moved according to mode given
-        self.assertEqual(self.lenswitch.position.value, path.MODES["Alignment"][1]["lens-switch"])
+        self.assertEqual(self.lenswitch.position.value, path.MODES["mirror-align"][1]["lens-switch"])
 
-        # setting PMT CLi
+        # setting cli
         with self.assertRaises(ValueError):
-            self.optmngr.setPath("PMT CLi")
+            self.optmngr.setPath("cli")
 
-        # setting PMT monochromator
+        # setting monochromator
         with self.assertRaises(ValueError):
-            self.optmngr.setPath("PMT monochromator")
+            self.optmngr.setPath("monochromator")
 
 #     @skip("simple")
     def test_guess_mode(self):
-        # test guess mode for AR
+        # test guess mode for ar
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam)
         sas = stream.SEMARMDStream("test sem-ar", sems, ars)
 
         guess = self.optmngr.guessMode(ars)
-        self.assertEqual(guess, "AR")
+        self.assertEqual(guess, "ar")
 
         guess = self.optmngr.guessMode(sas)
-        self.assertEqual(guess, "AR")
+        self.assertEqual(guess, "ar")
 
-        #test guess mode for Spectral
+        # test guess mode for spectral
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data, self.ebeam)
         sps = stream.SEMSpectrumMDStream("test sem-spec", sems, specs)
 
         guess = self.optmngr.guessMode(specs)
-        self.assertEqual(guess, "Spectral")
+        self.assertEqual(guess, "spectral")
 
         guess = self.optmngr.guessMode(sps)
-        self.assertEqual(guess, "Spectral")
-        
+        self.assertEqual(guess, "spectral")
+
 
 # @skip("faster")
 class MonashPathTestCase(unittest.TestCase):
@@ -191,67 +192,68 @@ class MonashPathTestCase(unittest.TestCase):
 #    @skip("simple")
     def test_set_path(self):
         """
-        Test setting modes that do exist. We expect all modes to be available 
+        Test setting modes that do exist. We expect all modes to be available
         """
-        # setting AR
-        self.optmngr.setPath("AR")
+        # setting ar
+        self.optmngr.setPath("ar")
         # Assert that actuator was moved according to mode given
-        self.assertEqual(self.lenswitch.position.value, path.MODES["AR"][1]["lens-switch"])
+        self.assertEqual(self.lenswitch.position.value, path.MODES["ar"][1]["lens-switch"])
 
-        # setting Spectral
-        self.optmngr.setPath("Spectral")
+        # setting spectral
+        self.optmngr.setPath("spectral")
         # Assert that actuator was moved according to mode given
-        self.assertEqual(self.lenswitch.position.value, path.MODES["Spectral"][1]["lens-switch"])
+        self.assertEqual(self.lenswitch.position.value, path.MODES["spectral"][1]["lens-switch"])
 
-        # setting Alignment
-        self.optmngr.setPath("Alignment")
+        # setting mirror-align
+        self.optmngr.setPath("mirror-align")
         # Assert that actuator was moved according to mode given
-        self.assertEqual(self.lenswitch.position.value, path.MODES["Alignment"][1]["lens-switch"])
+        self.assertEqual(self.lenswitch.position.value, path.MODES["mirror-align"][1]["lens-switch"])
 
-        # setting PMT CLi
-        self.optmngr.setPath("PMT CLi")
+        # setting cli
+        self.optmngr.setPath("cli")
         # Assert that actuator was moved according to mode given
-        self.assertEqual(self.lenswitch.position.value, path.MODES["PMT CLi"][1]["lens-switch"])
+        self.assertEqual(self.lenswitch.position.value, path.MODES["cli"][1]["lens-switch"])
 
-        # setting PMT monochromator
+        # setting monochromator
         # TODO supposed to work once monochromator is added
         with self.assertRaises(ValueError):
-            self.optmngr.setPath("PMT monochromator")
+            self.optmngr.setPath("monochromator")
 
 #     @skip("simple")
     def test_guess_mode(self):
-        # test guess mode for AR
+        # test guess mode for ar
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam)
         sas = stream.SEMARMDStream("test sem-ar", sems, ars)
 
         guess = self.optmngr.guessMode(ars)
-        self.assertEqual(guess, "AR")
+        self.assertEqual(guess, "ar")
 
         guess = self.optmngr.guessMode(sas)
-        self.assertEqual(guess, "AR")
+        self.assertEqual(guess, "ar")
 
-        # test guess mode for Spectral
+        # test guess mode for spectral
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data, self.ebeam)
         sps = stream.SEMSpectrumMDStream("test sem-spec", sems, specs)
 
         guess = self.optmngr.guessMode(specs)
-        self.assertEqual(guess, "Spectral")
+        self.assertEqual(guess, "spectral")
 
         guess = self.optmngr.guessMode(sps)
-        self.assertEqual(guess, "Spectral")
+        self.assertEqual(guess, "spectral")
 
-        # test guess mode for PMT CLi
+        # test guess mode for cli
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         cls = stream.SpectrumSettingsStream("test cl", self.cld, self.cld.data, self.ebeam)
         sls = stream.SEMSpectrumMDStream("test sem-cl", sems, cls)
 
         guess = self.optmngr.guessMode(cls)
-        self.assertEqual(guess, "PMT CLi")
+        self.assertEqual(guess, "cli")
 
         guess = self.optmngr.guessMode(sls)
-        self.assertEqual(guess, "PMT CLi")
+        self.assertEqual(guess, "cli")
+
 
 # @skip("faster")
 class SpecPathTestCase(unittest.TestCase):
@@ -301,39 +303,39 @@ class SpecPathTestCase(unittest.TestCase):
 #    @skip("simple")
     def test_set_path(self):
         """
-        Test setting modes that do exist. We expect only Spectral mode to be
-        available 
+        Test setting modes that do exist. We expect only spectral mode to be
+        available
         """
-        # setting AR
+        # setting ar
         with self.assertRaises(ValueError):
-            self.optmngr.setPath("AR")
+            self.optmngr.setPath("ar")
 
-        # setting Spectral
-        self.optmngr.setPath("Spectral")
+        # setting spectral
+        self.optmngr.setPath("spectral")
 
-        # setting Alignment
+        # setting mirror-align
         with self.assertRaises(ValueError):
-            self.optmngr.setPath("Alignment")
+            self.optmngr.setPath("mirror-align")
 
-        # setting PMT CLi
+        # setting cli
         with self.assertRaises(ValueError):
-            self.optmngr.setPath("PMT CLi")
+            self.optmngr.setPath("cli")
 
-        # setting PMT monochromator
+        # setting monochromator
         with self.assertRaises(ValueError):
-            self.optmngr.setPath("PMT monochromator")
+            self.optmngr.setPath("monochromator")
 
 #     @skip("simple")
     def test_guess_mode(self):
-        # test guess mode for Spectral
+        # test guess mode for spectral
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data, self.ebeam)
         sps = stream.SEMSpectrumMDStream("test sem-spec", sems, specs)
 
         guess = self.optmngr.guessMode(specs)
-        self.assertEqual(guess, "Spectral")
+        self.assertEqual(guess, "spectral")
 
         guess = self.optmngr.guessMode(sps)
-        self.assertEqual(guess, "Spectral")
+        self.assertEqual(guess, "spectral")
 if __name__ == "__main__":
     unittest.main()

@@ -103,14 +103,14 @@ class Stream(object):
         self.is_active = model.BooleanVA(False, setter=self._is_active_setter)
 
         # Duplicate VA if requested
-        self._hwvas = {} # str (name of the proxied VA) -> original Hw VA
-        self._hwvasetters = {} # str (name of the proxied VA) -> setter
-        self._lvaupdaters = {} # str (name of the proxied VA) -> listener
+        self._hwvas = {}  # str (name of the proxied VA) -> original Hw VA
+        self._hwvasetters = {}  # str (name of the proxied VA) -> setter
+        self._lvaupdaters = {}  # str (name of the proxied VA) -> listener
 
-        self._duplicateVAs(detector, "det", detvas or {})
-        self._duplicateVAs(emitter, "emt", emtvas or {})
+        self._duplicateVAs(detector, "det", detvas or set())
+        self._duplicateVAs(emitter, "emt", emtvas or set())
 
-        self._drange = None # min/max data range, or None if unknown
+        self._drange = None  # min/max data range, or None if unknown
 
         # TODO: move to a "Projection" class, layer between Stream and GUI.
         # whether to use auto brightness & contrast
@@ -171,15 +171,19 @@ class Stream(object):
         return "%s %s" % (self.__class__.__name__, self.name.value)
 
     def _duplicateVAs(self, comp, prefix, vas):
-        """
-        Duplicate all the given VAs of the given component and rename them with
-          the prefix.
-        comp (Component): the component on which to find the VAs
-        prefix (str): prefix to put before the name of each VA
-        vas (set of str): names of all the VAs
-        raise:
+        """ Duplicate all the given VAs of the given component and rename them with the prefix
+
+        :param comp: (Component) the component on which to find the VAs
+        :param prefix: (str) prefix to put before the name of each VA
+        :param vas: (set of str) names of all the VAs
+
+        :raise:
             LookupError: if the component doesn't have a listed VA
+
         """
+
+        assert(isinstance(vas, set))
+
         for vaname in vas:
             try:
                 va = getattr(comp, vaname)
@@ -195,7 +199,7 @@ class Stream(object):
             vasetter = functools.partial(self._va_sync_setter, va)
             dupva = self._duplicateVA(va, setter=vasetter)
 
-            # Convert from originalName to prfxOriginalName
+            # Convert from originalName to prefixOriginalName
             newname = prefix + vaname[0].upper() + vaname[1:]
             setattr(self, newname, dupva)
 
