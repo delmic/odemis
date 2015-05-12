@@ -164,18 +164,23 @@ class PMTControl(model.HwComponent):
     '''
     This represents the PMT control unit.
     '''
-    def __init__(self, name, role, sn=None, port=None, prot_time=1e-3, prot_curr=50, **kwargs):
+    def __init__(self, name, role, sn=None, port=None,
+                 prot_time=1e-3, prot_curr=50e-6, **kwargs):
         '''
         sn (str): serial number (recommended)
-        port (str): port name (only if sn is not specified)
-        prot_time (float): protection trip time
-        prot_curr (float): protection current threshold in microamperes
+        port (str or None): port name (only if sn is not specified)
+        prot_time (float): protection trip time (in s)
+        prot_curr (float): protection current threshold (in Amperes)
         Raise an exception if the device cannot be opened
         '''
         model.HwComponent.__init__(self, name, role, **kwargs)
 
         # get protection time (s) and current (A) properties
+        if not 0 <= prot_time < 1e3:
+            raise ValueError("prot_time should be a time (in s) but got %s" % (prot_time,))
         self._prot_time = prot_time
+        if not 0 <= prot_curr <= 100e-6:
+            raise ValueError("prot_curr (%s A) is not between 0 and 100.e-6" % (prot_curr,))
         self._prot_curr = prot_curr
 
         if (sn is None and port is None) or (sn is not None and port is not None):
@@ -221,7 +226,7 @@ class PMTControl(model.HwComponent):
         return self._getGain()
 
     def _setProtectionCurrent(self, value):
-        self._sendCommand("PCURR %f" % (value,))
+        self._sendCommand("PCURR %f" % (value * 1e6,))  # in µA
 
     def _setProtectionTime(self, value):
         self._sendCommand("PTIME %f" % (value,))
@@ -294,10 +299,9 @@ class PMTControl(model.HwComponent):
     def _sendCommand(self, cmd):
         """
         cmd (str): command to be sent to PMT Control unit.
-        returns 
-                ans (str): answer received from the PMT Control unit
-        raises    
-                IOError: if an ERROR is returned by the PMT Control firmware.
+        returns (str): answer received from the PMT Control unit
+        raises:
+            IOError: if an ERROR is returned by the PMT Control firmware.
         """
         cmd = cmd + "\n"
         with self._ser_access:
@@ -324,7 +328,7 @@ class PMTControl(model.HwComponent):
         """
         # For debugging purpose
         if port == "/dev/fake":
-           return PMTControlSimulator(timeout=1)
+            return PMTControlSimulator(timeout=1)
 
         ser = serial.Serial(
             port=port,
@@ -426,7 +430,7 @@ class PMTControl(model.HwComponent):
             raise NotImplementedError("OS not yet supported")
 
         return found
-    
+
 
 class PMTControlError(IOError):
     """
