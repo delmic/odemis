@@ -5,7 +5,7 @@ SPARC-MONASH: {
     children: ["SEM E-beam", "Focus Lens", "Optical Emission Filter",
     "SEM Detector", "Angular Camera", "Spectrometer", "Fiber Flipper",
     "Mirror Actuators", "Focus Lens Flipper", "AR CCD-PMT Flipper",
-    "Fiber Actuators", "CL PMT"],
+    "Fiber Actuators", "CL Detector"],
 }
 
 
@@ -21,8 +21,9 @@ SPARC-MONASH: {
     children: {
        scanner: "SEM E-beam",
        detector0: "SEM Detector",
-       detector1: "CL PMT Detector",
-       #counter0: "Spectrum PMT Detector",
+       detector1: "CL PMT",
+       detector2: "Monochromator PMT",
+       #counter0: "Monochromator PMT",
     }
 }
 
@@ -61,7 +62,7 @@ SPARC-MONASH: {
 # CL PMT: composed of the control unit + the PMT output connected to the DAQ board
 
 # Must be connected on AI 1/AI GND
-"CL PMT Detector": { # the raw detector of the PMT
+"CL PMT": { # the raw detector of the PMT
     # Internal child of SEM Scan Interface, so no class but instead a creator
     creator: "SEM Scan Interface",
     role: null,
@@ -71,26 +72,56 @@ SPARC-MONASH: {
     },
 }
 
-"CL PMT Control unit": {
+"CL PMT control unit": {
     class: pmtctrl.PMTControl,
     role: null,
     init: {
         port: "/dev/fake", # for simulator
         prot_time: 0.0002,  # s
-        prot_curr: 50,  # A
+        prot_curr: 50.e-6,  # A
     }
 }
 
-"CL PMT": {
+"CL Detector": {
     class: pmtctrl.PMT,
     role: cl-detector,
     children: {
-       "detector": "CL PMT Detector",
-       "pmt-control": "CL PMT Control unit",
+       "detector": "CL PMT",
+       "pmt-control": "CL PMT control unit",
     },
 }
 
-# TODO: monochromator
+# TODO: put correct info once fully implemented
+# Must be connected on AI ?/AI GND
+"Monochromator PMT": { # the raw detector of the counting PMT for monochromator
+    # Internal child of SEM Scan Interface, so no class but instead a creator
+    creator: "SEM Scan Interface",
+    role: null,
+    init: {
+        channel: 2,
+        limits: [0, 5] # V
+    },
+}
+
+"Monochromator PMT control unit": {
+    class: pmtctrl.PMTControl,
+    role: null,
+    init: {
+        port: "/dev/fake", # for simulator
+        prot_time: 0.0002,  # s
+        prot_curr: 50.e-6,  # A
+    }
+}
+
+"Monochromator": {
+    class: pmtctrl.PMT,
+    role: monochromator,
+    children: {
+       "detector": "Monochromator PMT",
+       "pmt-control": "Monochromator PMT control unit",
+    },
+}
+
 "Focus Lens": {
     class: static.OpticalLens,
     role: lens,
@@ -213,6 +244,7 @@ SPARC-MONASH: {
 "Spectrograph": {
     # no class, as it's instantiated by AndorSpec
     role: spectrograph,
+    affects: ["Monochromator PMT", "Spectral Camera"],
     init: {
         device: "fake",
     },
