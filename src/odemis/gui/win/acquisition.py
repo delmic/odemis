@@ -30,7 +30,7 @@ from odemis.acq import stream
 from odemis.gui.acqmng import presets, preset_as_is, apply_preset
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.cont.settings import SecomSettingsController
-from odemis.gui.cont.streams import StreamController
+from odemis.gui.cont.streams import StreamBarController
 from odemis.gui.main_xrc import xrcfr_acq
 from odemis.gui.util import call_in_wx_main, formats_to_wildcards
 from odemis.gui.util.widgets import ProgressiveFutureConnector
@@ -94,7 +94,7 @@ class AcquisitionDialog(xrcfr_acq):
         orig_view = orig_tab_data.focussedView.value
         view = self._tab_data_model.focussedView.value
 
-        self.stream_controller = StreamController(self._tab_data_model,
+        self.stream_controller = StreamBarController(self._tab_data_model,
                                                   self.pnl_secom_streams)
         # The streams currently displayed are the one visible
         self.add_all_streams(orig_view.getStreams())
@@ -184,7 +184,7 @@ class AcquisitionDialog(xrcfr_acq):
 
         # go through all the streams available in the interface model
         for s in self._tab_data_model.streams.value:
-            sp = self.stream_controller.addStreamForAcquisition(s)
+            self.stream_controller.add_acquisition_stream_cont(s)
 
     def remove_all_streams(self):
         """ Remove the streams we added to the view on creation """

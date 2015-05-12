@@ -85,9 +85,8 @@ class StreamPanelXmlHandler(xrc.XmlResourceHandler):
         # These two things should be done in either case:
         # Set standard window attributes
         self.SetupWindow(panel)
-        panel.finalize()
 
-        parent_window.add_stream(panel)
+        parent_window.add_stream_panel(panel)
         # Create any child windows of this node
         # deprecated: all children are hard-coded
         #self.CreateChildren(panel.get_panel())

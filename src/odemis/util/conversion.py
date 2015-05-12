@@ -270,6 +270,7 @@ def change_brightness(colour, weight):
 
     return new_fcol + (_alpha,) if _alpha is not None else new_fcol
 
+
 def convertToObject(s):
     """
     Tries to convert a string to a (simple) object.

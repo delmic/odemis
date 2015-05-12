@@ -18,21 +18,21 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
-#===============================================================================
+# ===============================================================================
 # Test module for Odemis' stream module in gui.comp
-#===============================================================================
+# ===============================================================================
 
 import numpy
 import time
 import unittest
-import wx
 
 from odemis.acq.stream import Stream
-from odemis.gui.cont.streams import StreamController
+from odemis.gui.cont.streams import StreamBarController, StreamController
 from odemis.util import conversion
 import odemis.acq.stream as stream_mod
 import odemis.gui.comp.stream as stream_comp
 import odemis.gui.model as guimodel
+import odemis.gui.model.dye as dye
 import odemis.gui.test as test
 import odemis.model as model
 
@@ -126,7 +126,7 @@ class FakeFluoStream(stream_mod.FluoStream):
         self.emission = model.VAEnumerated(
             (500e-9, 520e-9),
             # one (fixed) multi-band
-            choices={((100e-9, 150e-9), (500e-9, 520e-9), (600e-9, 650e-9))},
+            choices={(100e-9, 150e-9), (500e-9, 520e-9), (600e-9, 650e-9)},
             unit="m")
         default_tint = conversion.wave2rgb(488e-9)
         self.tint = model.VigilantAttribute(default_tint, unit="RGB")
@@ -150,32 +150,32 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
         tab_mod = self.create_simple_tab_model()
         stream_bar = self.app.test_frame.stream_bar
-        _ = StreamController(tab_mod, stream_bar)
+        _ = StreamBarController(tab_mod, stream_bar)
 
         fake_sem_stream = FakeSEMStream("First Fixed Stream")
         stream_panel = stream_comp.StreamPanel(stream_bar, fake_sem_stream, tab_mod)
-        stream_bar.add_stream(stream_panel)
+        stream_bar.add_stream_panel(stream_panel)
         test.gui_loop()
 
         # REMOVE BUTTON TEST
 
-        old_label_pos = stream_panel._expander._label_ctrl.GetPosition()
+        old_label_pos = stream_panel._header.ctrl_label.GetPosition()
 
         stream_panel.show_remove_btn(False)
         test.gui_loop()
 
-        self.assertFalse(stream_panel._expander.btn_rem.IsShown())
+        self.assertFalse(stream_panel._header.btn_remove.IsShown())
 
-        new_label_pos = stream_panel._expander._label_ctrl.GetPosition()
+        new_label_pos = stream_panel._header.ctrl_label.GetPosition()
 
         self.assertEqual(old_label_pos, new_label_pos)
 
         stream_panel.show_remove_btn(True)
         test.gui_loop()
 
-        self.assertTrue(stream_panel._expander.btn_rem.IsShown())
+        self.assertTrue(stream_panel._header.btn_remove.IsShown())
 
-        new_label_pos = stream_panel._expander._label_ctrl.GetPosition()
+        new_label_pos = stream_panel._header.ctrl_label.GetPosition()
 
         self.assertEqual(old_label_pos, new_label_pos)
 
@@ -183,23 +183,23 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
         # VISIBILITY BUTTON TEST
 
-        old_pbtn_pos = stream_panel._expander._btn_updated.GetPosition()
+        old_pbtn_pos = stream_panel._header.btn_update.GetPosition()
 
         stream_panel.show_visible_btn(False)
         test.gui_loop()
 
-        self.assertFalse(stream_panel._expander.btn_vis.IsShown())
+        self.assertFalse(stream_panel._header.btn_show.IsShown())
 
-        new_pbtn_pos = stream_panel._expander._btn_updated.GetPosition()
+        new_pbtn_pos = stream_panel._header.btn_update.GetPosition()
 
         self.assertEqual(old_pbtn_pos, new_pbtn_pos)
 
         stream_panel.show_visible_btn(True)
         test.gui_loop()
 
-        self.assertTrue(stream_panel._expander.btn_vis.IsShown())
+        self.assertTrue(stream_panel._header.btn_show.IsShown())
 
-        new_pbtn_pos = stream_panel._expander._btn_updated.GetPosition()
+        new_pbtn_pos = stream_panel._header.btn_update.GetPosition()
 
         self.assertEqual(old_pbtn_pos, new_pbtn_pos)
 
@@ -207,23 +207,23 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
         # PLAY BUTTON TEST
 
-        old_vbtn_pos = stream_panel._expander.btn_vis.GetPosition()
+        old_vbtn_pos = stream_panel._header.btn_show.GetPosition()
 
         stream_panel.show_updated_btn(False)
         test.gui_loop()
 
-        self.assertFalse(stream_panel._expander._btn_updated.IsShown())
+        self.assertFalse(stream_panel._header.btn_update.IsShown())
 
-        new_vbtn_pos = stream_panel._expander.btn_vis.GetPosition()
+        new_vbtn_pos = stream_panel._header.btn_show.GetPosition()
 
         self.assertEqual(old_vbtn_pos, new_vbtn_pos)
 
         stream_panel.show_updated_btn(True)
         test.gui_loop()
 
-        self.assertTrue(stream_panel._expander._btn_updated.IsShown())
+        self.assertTrue(stream_panel._header.btn_update.IsShown())
 
-        new_vbtn_pos = stream_panel._expander.btn_vis.GetPosition()
+        new_vbtn_pos = stream_panel._header.btn_show.GetPosition()
 
         self.assertEqual(old_vbtn_pos, new_vbtn_pos)
 
@@ -240,15 +240,15 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         tab_mod = self.create_simple_tab_model()
         stream_bar = self.app.test_frame.stream_bar
 
-        _ = StreamController(tab_mod, stream_bar)
+        _ = StreamBarController(tab_mod, stream_bar)
 
         fake_sem_stream = FakeSEMStream("First Fixed Stream")
-        stream_panel = stream_comp.StreamPanel(stream_bar, fake_sem_stream, tab_mod)
-        stream_bar.add_stream(stream_panel)
+        stream_panel = stream_comp.StreamPanel(stream_bar, fake_sem_stream)
+        stream_bar.add_stream_panel(stream_panel)
         test.gui_loop()
 
         self.assertEqual("First Fixed Stream",
-                         stream_panel._expander._label_ctrl.GetLabel())
+                         stream_panel._header.ctrl_label.GetLabel())
         test.gui_loop()
 
         # Clear remaining streams
@@ -257,34 +257,90 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
         self.assertEqual(stream_bar.get_size(), 0)
 
-    def test_dyeexpander(self):
+    def test_dye_ctrls(self):
 
+        # Fake data to be used
         tab_mod = self.create_simple_tab_model()
         stream_bar = self.app.test_frame.stream_bar
-
-        _ = StreamController(tab_mod, stream_bar)
-
+        stream_cont = StreamBarController(tab_mod, stream_bar)
         fake_fluo_stream = FakeFluoStream("Fluo Stream")
-        dye_panel = stream_comp.StreamPanel(stream_bar, fake_fluo_stream, tab_mod)
-        stream_bar.add_stream(dye_panel)
 
-        # print stream_panel._expander.GetSize()
-        stream_panel = stream_comp.StreamPanel(stream_bar, fake_fluo_stream, tab_mod)
-        stream_bar.add_stream(stream_panel)
-        # print stream_panel._expander.GetSize()
-        test.gui_loop()
+        # Add the same stream twice
+        sp1 = stream_cont.addStream(fake_fluo_stream)
+        sp2 = stream_cont.addStream(fake_fluo_stream)
 
-        # Clear remaining streams
-        # stream_bar.clear()
-        # test.gui_loop()
-        #
-        # self.assertEqual(stream_bar.get_size(), 0)
+        self.assertIsInstance(sp1, StreamController)
+        self.assertIsInstance(sp2, StreamController)
+
+        # Test dye choices
+        self.assertSequenceEqual(
+            sorted(dye.DyeDatabase.keys()),
+            sorted(sp1.stream_panel._header.ctrl_label.GetChoices())
+        )
+
+        # Get the excitation combo box (there should be only one)
+        self.assertIn("excitation", sp1.entries)
+        excitation_combo = sp1.entries["excitation"].value_ctrl
+
+        # No real value testing, but at least making sure that changing the VA value, changes the
+        # GUI components
+        for choice in fake_fluo_stream.excitation.choices:
+            old_value = excitation_combo.GetValue()
+            old_colour = sp1._btn_excitation.colour
+            changed = fake_fluo_stream.excitation.value != choice
+            # Skip if the current value is equal to choice
+            if changed:
+                fake_fluo_stream.excitation.value = choice
+                test.gui_loop(100)
+                self.assertNotEqual(old_value, excitation_combo.GetValue())
+                self.assertNotEqual(old_colour, sp1._btn_excitation.colour)
+
+        # Get the emission combo box (there should be only one)
+        self.assertIn("emission", sp1.entries)
+        emission_combo = sp1.entries["emission"].value_ctrl
+
+        # No real value testing, but at least making sure that changing the VA value, changes the
+        # GUI components
+        for choice in fake_fluo_stream.emission.choices:
+            old_value = emission_combo.GetValue()
+            old_colour = sp2._btn_emission.colour
+            changed = fake_fluo_stream.emission.value != choice
+            # Skip if the current value is equal to choice
+            if changed:
+                fake_fluo_stream.emission.value = choice
+                test.gui_loop(100)
+                self.assertNotEqual(old_value, emission_combo.GetValue())
+                self.assertNotEqual(old_colour, sp2._btn_emission.colour)
+
+        # Test intensity control values by manipulating the VAs
+        # TODO: Move to separate test case
+
+        txt_lowi = sp1.entries["low_intensity"].value_ctrl
+        txt_highi = sp1.entries["high_intensity"].value_ctrl
+
+        for i in range(0, 11):
+            v = i / 10.0
+            fake_fluo_stream.intensityRange.value = (v, 1.0)
+            test.gui_loop(100)
+            self.assertEqual(v, txt_lowi.GetValue())
+
+        for i in range(0, 11):
+            v = i / 10.0
+            fake_fluo_stream.intensityRange.value = (0.0, v)
+            test.gui_loop(100)
+            self.assertEqual(v, txt_highi.GetValue())
+
+        # Test if the range gets updated when the histogram changes
+        fake_fluo_stream.intensityRange.range = ((0.25, 0.25), (0.75, 0.75))
+        fake_fluo_stream.histogram.notify(fake_fluo_stream.histogram.value)
+        test.gui_loop(100)
+        self.assertEqual((0.25, 0.75), txt_lowi.GetValueRange())
 
     def test_static_streams(self):
 
         tab_mod = self.create_simple_tab_model()
         stream_bar = self.app.test_frame.stream_bar
-        stream_cont = StreamController(tab_mod, stream_bar)
+        stream_cont = StreamBarController(tab_mod, stream_bar)
 
         fluomd = {
             model.MD_DESCRIPTION: "test",
@@ -310,9 +366,10 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         self.assertIsInstance(fluo_panel.stream, stream_mod.StaticFluoStream)
 
         # White box testing: we expect that the excitation/emission information
-        # are simple text, and no combo boxes (as it's all static)
-        self.assertIsInstance(fluo_panel._txt_emission, wx.TextCtrl)
-        self.assertIsInstance(fluo_panel._txt_excitation, wx.TextCtrl)
+        # are simple text, so no reference to the value controls needs to be saved
+        # Get the emission combo box (there should be only one)
+        self.assertNotIn("emission", fluo_panel.entries)
+        self.assertNotIn("excitation", fluo_panel.entries)
         test.gui_loop()
 
         semmd = {
@@ -328,15 +385,15 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         semd = model.DataArray(numpy.zeros((256, 256), dtype="uint16"), semmd)
         # Create the streams the same way as when opening a file, in
         # cont.tabs.AnalysisTab.display_new_data()
-        sem_panel = stream_cont.addStatic("SEM Stream", semd,
+        sem_cont = stream_cont.addStatic("SEM Stream", semd,
                                           cls=stream_mod.StaticSEMStream,
                                           add_to_all_views=True)
 
         # Check it indeed created a panel entry to a static fluo stream
-        self.assertIsInstance(sem_panel.stream, stream_mod.StaticSEMStream)
+        self.assertIsInstance(sem_cont.stream, stream_mod.StaticSEMStream)
 
         # White box testing: we expect autobc is available
-        self.assertIsInstance(sem_panel._btn_autobc, wx.Control)
+        self.assertIn("autobc", sem_cont.entries)
 
         # Clear remaining streams
         stream_bar.clear()
@@ -349,11 +406,11 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         tab_mod = self.create_simple_tab_model()
         stream_bar = self.app.test_frame.stream_bar
 
-        _ = StreamController(tab_mod, stream_bar)
+        _ = StreamBarController(tab_mod, stream_bar)
 
         fake_spec_stream = FakeSpectrumStream("First Fixed Stream")
         stream_panel = stream_comp.StreamPanel(stream_bar, fake_spec_stream, tab_mod)
-        stream_bar.add_stream(stream_panel)
+        stream_bar.add_stream_panel(stream_panel)
         test.gui_loop()
 
     def test_stream_interface(self):
@@ -363,7 +420,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         tab_mod = self.create_simple_tab_model()
         stream_bar = self.app.test_frame.stream_bar
 
-        _ = StreamController(tab_mod, stream_bar)
+        _ = StreamBarController(tab_mod, stream_bar)
 
         # Hide the Stream add button
         self.assertEqual(stream_bar.btn_add_stream.IsShown(), True)
@@ -379,7 +436,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         # Add an editable entry
         fake_cstream = FakeFluoStream("First Custom Stream")
         custom_entry = stream_comp.StreamPanel(stream_bar, fake_cstream, tab_mod)
-        stream_bar.add_stream(custom_entry)
+        stream_bar.add_stream_panel(custom_entry)
         test.gui_loop()
 
         self.assertEqual(stream_bar.get_size(), 1)
@@ -390,7 +447,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         # Add a fixed stream
         fake_fstream1 = FakeSEMStream("First Fixed Stream")
         fixed_entry = stream_comp.StreamPanel(stream_bar, fake_fstream1, tab_mod)
-        stream_bar.add_stream(fixed_entry)
+        stream_bar.add_stream_panel(fixed_entry)
         test.gui_loop()
 
         self.assertEqual(stream_bar.get_size(), 2)
@@ -404,7 +461,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         # Add a fixed stream
         fake_fstream2 = FakeSEMStream("Second Fixed Stream")
         fixed_entry2 = stream_comp.StreamPanel(stream_bar, fake_fstream2, tab_mod)
-        stream_bar.add_stream(fixed_entry2)
+        stream_bar.add_stream_panel(fixed_entry2)
         test.gui_loop()
 
         self.assertEqual(stream_bar.get_size(), 3)
@@ -442,7 +499,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         tab_mod = self.create_simple_tab_model()
         stream_bar = self.app.test_frame.stream_bar
 
-        _ = StreamController(tab_mod, stream_bar)
+        _ = StreamBarController(tab_mod, stream_bar)
 
         self.assertEqual(stream_bar.btn_add_stream.IsShown(), True)
 
@@ -453,7 +510,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         def brightfield_callback():
             fake_stream = FakeBrightfieldStream("Brightfield")
             fixed_entry = stream_comp.StreamPanel(stream_bar, fake_stream, tab_mod)
-            stream_bar.add_stream(fixed_entry)
+            stream_bar.add_stream_panel(fixed_entry)
 
         stream_bar.add_action("Brightfield", brightfield_callback)
 
@@ -466,7 +523,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         def sem_callback():
             fake_stream = FakeSEMStream("SEM:EDT")
             fixed_entry = stream_comp.StreamPanel(stream_bar, fake_stream, tab_mod)
-            stream_bar.add_stream(fixed_entry)
+            stream_bar.add_stream_panel(fixed_entry)
 
         stream_bar.add_action("SEM:EDT", sem_callback)
 
@@ -484,7 +541,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         def custom_callback():
             fake_stream = FakeFluoStream("Custom")
             custom_entry = stream_comp.StreamPanel(stream_bar, fake_stream, tab_mod)
-            stream_bar.add_stream(custom_entry)
+            stream_bar.add_stream_panel(custom_entry)
 
         stream_bar.add_action("Custom", custom_callback)
 
@@ -499,11 +556,11 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         tab_mod = self.create_simple_tab_model()
         stream_bar = self.app.test_frame.stream_bar
 
-        _ = StreamController(tab_mod, stream_bar)
+        _ = StreamBarController(tab_mod, stream_bar)
 
         fake_sem_stream = FakeSEMStream("Flatten Test")
         stream_panel = stream_comp.StreamPanel(stream_bar, fake_sem_stream, tab_mod)
-        stream_bar.add_stream(stream_panel)
+        stream_bar.add_stream_panel(stream_panel)
         test.gui_loop()
 
         stream_panel.flatten()

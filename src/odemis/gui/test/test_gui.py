@@ -307,16 +307,20 @@ def __init_resources():
             <object class="sizeritem">
               <object class="FoldPanelBar" name="fpb">
                 <object class="FoldPanelItem">
-                  <label>STREAMS</label>
-                  <XRCED>
-                    <assign_var>1</assign_var>
-                  </XRCED>
                   <object class="StreamBar" name="stream_bar">
                     <add_button>1</add_button>
+                    <fg>#7F7F7F</fg>
+                    <bg>#333333</bg>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
                   </object>
+                  <label>STREAMS</label>
+                  <fg>#1A1A1A</fg>
+                  <bg>#555555</bg>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
                 </object>
                 <spacing>0</spacing>
                 <leftspacing>0</leftspacing>

@@ -51,6 +51,7 @@ from odemis.gui.conf import get_acqui_conf
 from odemis.gui.cont import settings, tools
 from odemis.gui.cont.actuators import ActuatorController
 from odemis.gui.cont.microscope import SecomStateController, DelphiStateController
+from odemis.gui.cont.streams import StreamController
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.img import scale_to_alpha
 from odemis.util import units
@@ -273,7 +274,7 @@ class SecomStreamsTab(Tab):
             self.tab_data_model
         )
 
-        self._stream_controller = streamcont.StreamController(
+        self._stream_controller = streamcont.StreamBarController(
             self.tab_data_model,
             self.main_frame.pnl_secom_streams
         )
@@ -457,8 +458,8 @@ class SecomStreamsTab(Tab):
             has_sem = any(isinstance(s, streammod.EMStream)
                           for s in self.tab_data_model.streams.value)
             if not has_sem:
-                sp = self._add_em_stream(add_to_all_views=True, play=False)
-                sp.show_remove_btn(False)
+                stream_cont = self._add_em_stream(add_to_all_views=True, play=False)
+                stream_cont.stream_panel.show_remove_btn(False)
 
     @call_in_wx_main
     def on_chamber_state(self, state):
@@ -661,7 +662,7 @@ class SparcAcquisitionTab(Tab):
             opt_mic_view = self.tab_data_model.views.value[0]
             opt_mic_view.addStream(self._ar_stream)
 
-        self._stream_controller = streamcont.StreamController(
+        self._stream_controller = streamcont.StreamBarController(
             self.tab_data_model,
             self.main_frame.pnl_sparc_streams
         )
@@ -1132,7 +1133,7 @@ class AnalysisTab(Tab):
         # save the views to be able to reset them later
         self._def_views = list(tab_data.visible_views.value)
 
-        self._stream_controller = streamcont.StreamController(
+        self._stream_controller = streamcont.StreamBarController(
             self.tab_data_model,
             self.main_frame.pnl_inspection_streams,
             static=True
@@ -1663,9 +1664,8 @@ class LensAlignTab(Tab):
         self._ccd_view.addStream(ccd_stream)
         # create CCD stream panel entry
         stream_bar = self.main_frame.pnl_secom_align_streams
-        ccd_spe = StreamPanel(stream_bar, ccd_stream, self.tab_data_model)
-        stream_bar.add_stream(ccd_spe, True)
-        ccd_spe.flatten()  # removes the expander header
+        ccd_spe = StreamController(stream_bar, ccd_stream, self.tab_data_model)
+        ccd_spe.stream_panel.flatten()  # removes the expander header
         # force this view to never follow the tool mode (just standard view)
         main_frame.vp_align_ccd.canvas.allowed_modes = set([guimod.TOOL_NONE])
 
@@ -1961,7 +1961,7 @@ class MirrorAlignTab(Tab):
         super(MirrorAlignTab, self).__init__(name, button, panel,
                                              main_frame, tab_data)
 
-        self._stream_controller = streamcont.StreamController(
+        self._stream_controller = streamcont.StreamBarController(
             self.tab_data_model,
             self.main_frame.pnl_sparc_align_streams,
             locked=True
@@ -2008,7 +2008,7 @@ class MirrorAlignTab(Tab):
             mic_view.merge_ratio.value = 1
 
             ccd_spe = self._stream_controller.addStream(ccd_stream)
-            ccd_spe.flatten()
+            ccd_spe.stream_panel.flatten()
             # TODO: use addStatic ?
             self._stream_controller.addStream(goal_stream, visible=False)
             ccd_stream.should_update.value = True

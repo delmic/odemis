@@ -27,6 +27,7 @@ FIT_GOOD = 2 # Should be fine
 FIT_BAD = 1 # Might work, but not at its best
 FIT_IMPOSSIBLE = 0 # Unlikely to work
 
+
 def get_center(band):
     """
     Return the center wavelength(es) of a emission/excitation band
@@ -42,6 +43,7 @@ def get_center(band):
     else:
         center = band[len(band) // 2]
     return center
+
 
 def get_one_band_em(band, ex_band):
     """
@@ -72,6 +74,7 @@ def get_one_band_em(band, ex_band):
     else:
         return band
 
+
 def get_one_center_em(band, ex_band):
     """
     Return the center of an emission band, and if it's a multi-band, return just
@@ -81,6 +84,7 @@ def get_one_center_em(band, ex_band):
     return (float): wavelength in m
     """
     return get_center(get_one_band_em(band, ex_band))
+
 
 def get_one_center_ex(band, em_band):
     """
@@ -134,6 +138,7 @@ def estimate_fit_to_dye(wl, band):
     else: # unlikely to fit
         return FIT_IMPOSSIBLE
 
+
 def quantify_fit_to_dye(wl, band):
     """
     Quantifies how well the given wavelength matches the given
@@ -161,6 +166,7 @@ def quantify_fit_to_dye(wl, band):
         # No match
         return 0
 
+
 def find_best_band_for_dye(wl, bands):
     """
     Pick the best band for the given dye emission or excitation.
@@ -171,3 +177,47 @@ def find_best_band_for_dye(wl, bands):
     """
     # The most fitting band: narrowest band centered around the wavelength
     return max([b for b in bands], key=lambda x: quantify_fit_to_dye(wl, x))
+
+
+def to_readable_band(band):
+    """ Convert a emission or excitation band into readable text
+
+    :param band: ((list of) tuple of 2 or 5 floats): either the min/max of the band or the
+        -99%, -25%, middle, +25%, +99% of the band in m.
+    :return: (unicode) human readable string
+
+    """
+
+    # if one band => center/bandwidth nm (bandwidth not displayed if < 5nm)
+    #   ex: 453/19 nm
+    # if multi-band => center, center... nm
+    #   ex: 453, 568, 968 nm
+    if not isinstance(band[0], collections.Iterable):
+        b = band
+        center_nm = int(round(get_center(b) * 1e9))
+
+        width = b[-1] - b[0]
+        if width > 5e-9:
+            width_nm = int(round(width * 1e9))
+            return u"%d/%d nm" % (center_nm, width_nm)
+        else:
+            return u"%d nm" % center_nm
+    else:  # multi-band
+        centers = []
+        for c in get_center(band):
+            center_nm = int(round(c * 1e9))
+            centers.append(u"%d" % center_nm)
+        return u", ".join(centers) + " nm"
+
+
+def get_one_center(band):
+    """ Return the center of a band, and if it's a multi-band, return just one of the centers.
+
+    :return: (float) wavelength in m
+
+    """
+
+    if isinstance(band[0], collections.Iterable):
+        return get_center(band[0])
+    else:
+        return get_center(band)
