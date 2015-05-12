@@ -291,6 +291,8 @@ class RepetitionStream(LiveStream):
         max_pxs = min(epxs[0] * shape[0], epxs[1] * shape[1])
         return (min_pxs, max_pxs)
 
+    # TODO: only return the time needed for the live view? And for the real
+    # acquisition, use the MDStream method?
     @abstractmethod
     def estimateAcquisitionTime(self):
         return self.SETUP_OVERHEAD
@@ -383,6 +385,10 @@ class MonochromatorSettingsStream(PMTSettingsStream):
     to allow configuring the settings correctly. Same as CameraCountStream.
     """
     def __init__(self, name, detector, dataflow, emitter, spectrograph, **kwargs):
+        """
+        emtvas: don't put resolution or scale, if it will be used with a
+          concurrent SEM stream
+        """
         RepetitionStream.__init__(self, name, detector, dataflow, emitter, **kwargs)
         # Don't change pixel size, as we keep the same as the SEM
 
@@ -471,19 +477,63 @@ class CLSettingsStream(PMTSettingsStream):
     is many magnitudes shorter (ie, close to the SED), the live view is the
     entire image.
 
-    In live view, the ROI is not applied.
+    In live view, the ROI is not applied, but the pixelSize is. S
 
-    Note: It should be possible to acquire an image simultaneously to the
-    SED in live view, but they would need to pick one dwell time.
+    Note: It could be possible to acquire an image simultaneously to the
+      SED in live view, but they would need to pick one dwell time/resolution.
+      That would be tricky to handle when starting/stopping one of the streams.
     """
     def __init__(self, name, detector, dataflow, emitter, **kwargs):
+        """
+        emtvas: don't put resolution or scale
+        """
         RepetitionStream.__init__(self, name, detector, dataflow, emitter, **kwargs)
         # Don't change pixel size, as we keep the same as the SEM
 
-    # onActive & projection: same as the standard LiveStream
+        # For the live view, we need a way to define the scale and resolution,
+        # but not changing any hardware setting would mean we rely on another
+        # stream (bad), requiring local resolution/scale would cause conflicts
+        # with repetition/pixelSize, so instead, we just use pixelSize (and the
+        # current SEM pixelSize/mag/FoV) to define the scale. The ROI is always
+        # full FoV (which is fine for live view).
+        self.pixelSize.subscribe(self._onPixelSize)
 
-    # TODO: onDwellTime/onResolution => reset live acquisition (as SEMStream)?
+        try:
+            self._getEmitterVA("dwellTime").subscribe(self._onDwellTime)
+        except AttributeError:
+            # if emitter has no dwell time -> no problem
+            pass
+        try:
+            self._getEmitterVA("resolution").subscribe(self._onResolution)
+        except AttributeError:
+            pass
 
+    # projection: same as the standard LiveStream
+
+    def _applyScale(self):
+        """
+        Update the hardware scale setting based on the pixelSize
+        """
+        hwpxs = self._emitter.pixelSize.value[0]
+        scale = self.pixelSize.value / hwpxs
+        logging.debug("Setting scale to %f, based on pxs = %f m", scale, self.pixelSize.value)
+        self._emitter.scale.value = (scale, scale)
+
+    def _onPixelSize(self, pxs):
+        if self.is_active.value:
+            self._applyScale()
+
+    def _onActive(self, active):
+        if active:
+            self._applyScale()
+
+        super(CLSettingsStream, self)._onActive(active)
+
+    def _onDwellTime(self, value):
+        self._restartLongAcquisition()
+
+    def _onResolution(self, value):
+        self._restartLongAcquisition()
 
 # Maximum allowed overlay difference in electron coordinates.
 # Above this, the find overlay procedure will consider an error occurred and

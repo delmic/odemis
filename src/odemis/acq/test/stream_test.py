@@ -1048,23 +1048,24 @@ class SettingsStreamsTestCase(unittest.TestCase):
         # Create the stream
         cls = stream.CLSettingsStream("test",
                       self.cl, self.cl.data, self.ebeam,
-                      emtvas=("dwellTime", "scale", "resolution"))
+                      emtvas=("dwellTime",))  # note: not "scale", "resolution"
         self._image = None
         cls.image.subscribe(self._on_image)
 
         # shouldn't affect
         cls.roi.value = (0.15, 0.6, 0.8, 0.8)
-        cls.repetition.value = (5, 6)
+        # cls.repetition.value = (5, 6) # changes the pixelSize
 
         cls.emtDwellTime.value = 10e-6 # s
-        cls.emtScale.value = (8.5, 8.5) # ratio
+        cls.pixelSize.value *= 10
 
         # Start acquisition
         cls.should_update.value = True
         cls.is_active.value = True
 
         # resolution is only updated after starting acquisition
-        exp_time = cls.emtDwellTime.value * numpy.prod(cls.emtResolution.value)
+        res = self.ebeam.resolution.value
+        exp_time = cls.emtDwellTime.value * numpy.prod(res)
         st = exp_time * 1.5 + 0.1
         logging.info("Will wait for the acquisition for %f s", st)
         time.sleep(st)
@@ -1072,8 +1073,18 @@ class SettingsStreamsTestCase(unittest.TestCase):
 
         self.assertIsNotNone(self._image, "No CL image received after 2s")
         self.assertIsInstance(self._image, model.DataArray)
-        exp_shape = cls.emtResolution.value[::-1] + (3,)
+        exp_shape = res[::-1] + (3,)
         self.assertEqual(self._image.shape, exp_shape)
+
+        # Check the scale of the ebeam is correctly updated when changing pixelSize
+        cls.is_active.value = True
+        old_scale = self.ebeam.scale.value[0]
+        ratio = 2.08  # almost random value
+        cls.pixelSize.value *= ratio
+        time.sleep(0.1)
+        new_scale = self.ebeam.scale.value[0]
+        cls.is_active.value = False
+        self.assertAlmostEqual(new_scale / old_scale, ratio)
 
 
     def _on_image(self, im):

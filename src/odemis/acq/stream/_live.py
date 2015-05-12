@@ -63,6 +63,8 @@ class LiveStream(Stream):
         self._hthread.daemon = True
         self._hthread.start()
 
+        self._prev_dur = None
+
     def _find_metadata(self, md):
         simpl_md = super(LiveStream, self)._find_metadata(md)
 
@@ -86,6 +88,37 @@ class LiveStream(Stream):
             msg = "Unsubscribing from dataflow of component %s"
             logging.debug(msg, self._detector.name)
             self._dataflow.unsubscribe(self._onNewImage)
+
+    def _restartLongAcquisition(self):
+        """
+        Restart the acquisition if it is a long one.
+        Used in live view after some settings are changed to quickly bring a
+        new image with the new settings in place.
+        """
+        # When the dwell time changes, the new value is only used on the next
+        # acquisition. Assuming the change comes from the user (very likely),
+        # then if the current acquisition would take a long time, cancel it, and
+        # restart acquisition so that the new value is directly used. The main
+        # goal is to avoid cases where user mistakenly put a 10+ s acquisition,
+        # and it takes ages to get back to a faster acquisition. Note: it only
+        # works if we are the only subscriber (but that's very likely).
+
+        prev_dur = self._prev_dur
+        self._prev_dur = self.estimateAcquisitionTime()
+
+        if not self.is_active.value:
+            # not acquiring => nothing to do
+            return
+        # TODO: check if it will finish within 1s
+        if prev_dur is None or prev_dur < 1:
+            # very short anyway, not worthy
+            return
+
+        # TODO: do this on a rate-limited fashion (now, or ~1s)
+        # unsubscribe, and re-subscribe immediately
+        logging.debug("Restarting acquisition because it lasts %f s", prev_dur)
+        self._dataflow.unsubscribe(self._onNewImage)
+        self._dataflow.subscribe(self._onNewImage)
 
     def _shouldUpdateHistogram(self):
         """
@@ -167,11 +200,13 @@ class SEMStream(LiveStream):
         # TODO: do the same for .resolution
         # To restart directly acquisition if settings change
         try:
-            # Only happen when active => can directly use the use the emitter VA
-            self._prevDwellTime = emitter.dwellTime.value
-            emitter.dwellTime.subscribe(self.onDwellTime)
+            self._getEmitterVA("dwellTime").subscribe(self._onDwellTime)
         except AttributeError:
             # if emitter has no dwell time -> no problem
+            pass
+        try:
+            self._getEmitterVA("resolution").subscribe(self._onResolution)
+        except AttributeError:
             pass
 
         # Actually use the ROI
@@ -309,36 +344,33 @@ class SEMStream(LiveStream):
 
         super(SEMStream, self)._onActive(active)
 
-    def onDwellTime(self, value):
-        # When the dwell time changes, the new value is only used on the next
-        # acquisition. Assuming the change comes from the user (very likely),
-        # then if the current acquisition would take a long time, cancel it, and
-        # restart acquisition so that the new value is directly used. The main
-        # goal is to avoid cases where user mistakenly put a 10+ s acquisition,
-        # and it takes ages to get back to a faster acquisition. Note: it only
-        # works if we are the only subscriber (but that's very likely).
+    def _onDwellTime(self, value):
+        self._restartLongAcquisition()
 
-        # Not using the local settings as it's only happening when active
-        try:
-            if not self.is_active.value:
-                # not acquiring => nothing to do
-                return
+    def _onResolution(self, value):
+        self._restartLongAcquisition()
 
-            # approximate time for the current image acquisition
-            res = self._emitter.resolution.value
-            prevDuration = self._prevDwellTime * numpy.prod(res)
-
-            if prevDuration < 1:
-                # very short anyway, not worthy
-                return
-
-            # TODO: do this on a rate-limited fashion (now, or ~1s)
-            # unsubscribe, and re-subscribe immediately
-            self._dataflow.unsubscribe(self._onNewImage)
-            self._dataflow.subscribe(self._onNewImage)
-
-        finally:
-            self._prevDwellTime = value
+#         # Not using the local settings as it's only happening when active
+#         try:
+#             if not self.is_active.value:
+#                 # not acquiring => nothing to do
+#                 return
+#
+#             # approximate time for the current image acquisition
+#             res = self._emitter.resolution.value
+#             prevDuration = self._prevDwellTime * numpy.prod(res)
+#
+#             if prevDuration < 1:
+#                 # very short anyway, not worthy
+#                 return
+#
+#             # TODO: do this on a rate-limited fashion (now, or ~1s)
+#             # unsubscribe, and re-subscribe immediately
+#             self._dataflow.unsubscribe(self._onNewImage)
+#             self._dataflow.subscribe(self._onNewImage)
+#
+#         finally:
+#             self._prevDwellTime = value
 
 MTD_EBEAM_SHIFT = "Ebeam shift"
 MTD_MD_UPD = "Metadata update"
@@ -433,7 +465,7 @@ class AlignedSEMStream(SEMStream):
             no_spot_settings = (self._emitter.dwellTime.value,
                                 self._emitter.resolution.value)
             # Don't mess up with un/subscribing while doing the calibration
-            self.emitter.dwellTime.unsubscribe(self.onDwellTime)
+            self.emitter.dwellTime.unsubscribe(self._onDwellTime)
 
             shift = (0, 0)
             self._beamshift = None
@@ -484,7 +516,7 @@ class AlignedSEMStream(SEMStream):
                 # restore hw settings
                 (self._emitter.dwellTime.value,
                  self._emitter.resolution.value) = no_spot_settings
-                self._emitter.dwellTime.subscribe(self.onDwellTime)
+                self._emitter.dwellTime.subscribe(self._onDwellTime)
 
             self._shift = shift
             self._compensateShift()
