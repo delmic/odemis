@@ -116,11 +116,13 @@ def get_best_dtype_for_acc(idtype, count):
 
     return adtype
 
+
 class CancelledError(Exception):
     """
     Raised when trying to access the result of a task which was cancelled
     """
     pass
+
 
 class SEMComedi(model.HwComponent):
     '''
@@ -320,7 +322,7 @@ class SEMComedi(model.HwComponent):
 
     def getHwName(self):
         """
-        Returns (string): displayable string showing whatever can be found out 
+        Returns (string): displayable string showing whatever can be found out
           about the actual hardware.
         """
         return comedi.get_board_name(self._device)
@@ -459,7 +461,7 @@ class SEMComedi(model.HwComponent):
                           subdevice, channel, range)
             maxdata = comedi.get_maxdata(self._device, subdevice, channel)
             range_info = comedi.get_range(self._device, subdevice,
-                                                 channel, range)
+                                          channel, range)
             # using default parameter to copy values into local-scope
             if direction == comedi.TO_PHYSICAL:
                 return lambda d, r = range_info, m = maxdata: comedi.to_phys(d, r, m)
@@ -497,7 +499,7 @@ class SEMComedi(model.HwComponent):
 
     def _to_phys(self, subdevice, channel, range, value):
         """
-        Converts a raw value to the physical value, using the best converter 
+        Converts a raw value to the physical value, using the best converter
           available.
         subdevice (int): the subdevice index
         channel (int): the channel index
@@ -515,7 +517,7 @@ class SEMComedi(model.HwComponent):
         channel (int): the channel index
         range (int): the range index
         value (float): the value to convert
-        return (int): value in raw data 
+        return (int): value in raw data
         """
         converter = self._get_converter(subdevice, channel, range, comedi.FROM_PHYSICAL)
         return converter(value)
@@ -524,7 +526,7 @@ class SEMComedi(model.HwComponent):
         """
         Converts an array containing raw values to physical
         subdevice (int): the subdevice index
-        channel (list of int): the channel index for each value of the last dim 
+        channel (list of int): the channel index for each value of the last dim
         ranges (list of int): the range index for each value of the last dim
         data (numpy.ndarray): the array to convert, its last dimension must be the
           same as the channels and ranges. dtype should be uint (of any size)
@@ -644,8 +646,8 @@ class SEMComedi(model.HwComponent):
     def find_best_oversampling_rate(self, period, max_osr=2 ** 24):
         """
         Returns the closest dwell time _longer_ than the given time compatible
-          with the output device and the highest over-sampling rate compatible 
-          with the input device. If the period is longer than what can be 
+          with the output device and the highest over-sampling rate compatible
+          with the input device. If the period is longer than what can be
         period (float): dwell time requested (in s)
         max_osr (1<=int): maximum over-sampling rate returned
         returns (2-tuple: period (0<float), osr (1<=int)):
@@ -665,11 +667,11 @@ class SEMComedi(model.HwComponent):
         # Typically, on our hardware the periods can be any multiple of 50 ns,
         # and must be > 500 ns (write) or 800 ns (read).
         # For long write periods (large OSR), increasing the read period could
-        # increase a lot the write period, so it's better to slightly increase 
+        # increase a lot the write period, so it's better to slightly increase
         # the write period.
-        # For short write periods (small OSR), increasing it to a multiple of 
+        # For short write periods (small OSR), increasing it to a multiple of
         # the smallest read period can have proportionally a large effect, so
-        # it's better to increase the read period. 
+        # it's better to increase the read period.
 
         # TODO: min dwell time should be just for one input channel, and adapt if
         # more than one channel is read simultaneously => pass nrchans?
@@ -691,7 +693,7 @@ class SEMComedi(model.HwComponent):
             wcmd.scan_begin_arg = period_ns # + ((-period_ns) % 800) # TEST
         else:
             comedi.get_cmd_generic_timed(self._device, self._ao_subdevice,
-                                                  wcmd, nwchans, period_ns)
+                                         wcmd, nwchans, period_ns)
         period_ns = wcmd.scan_begin_arg
         min_rperiod_ns = int(self._min_ai_periods[nrchans] * 1e9)
 
@@ -745,7 +747,7 @@ class SEMComedi(model.HwComponent):
         if best_found:
             wperiod_ns, osr = best_found
             logging.debug("Found duplication & over-sampling rates: %g ns x %d x %d = %g ns",
-                           wperiod_ns / osr, osr, dpr, dpr * wperiod_ns)
+                          wperiod_ns / osr, osr, dpr, dpr * wperiod_ns)
             # FIXME: if osr * itemsize > _max_bufsz, increase dpr and retry
             return dpr * wperiod_ns / 1e9, osr, dpr
 
@@ -815,7 +817,7 @@ class SEMComedi(model.HwComponent):
                                period, margin, osr, dpr, data):
         """
         write data on the given analog output channels and read synchronously on
-         the given analog input channels and convert back to 2d array 
+         the given analog input channels and convert back to 2d array
         wchannels (list of int): channels to write (in same the order as data)
         wranges (list of int): ranges of each write channel
         rchannels (list of int): channels to read (in same the order as data)
@@ -980,7 +982,7 @@ class SEMComedi(model.HwComponent):
         return buf
 
     def _write_read_2d_subpixel(self, wchannels, wranges, rchannels, rranges,
-                            period, margin, osr, dpr, data):
+                                period, margin, osr, dpr, data):
         """
         Implementation of write_read_2d_data_raw by reading the input data one 
          part of a pixel at a time.
@@ -1124,12 +1126,12 @@ class SEMComedi(model.HwComponent):
         rranges (list of int): ranges of each read channel
         period (float): sampling period in s (time between two writes on the same
          channel)
-        osr: over-sampling rate, how many input samples should be acquired per 
-          output sample 
+        osr: over-sampling rate, how many input samples should be acquired per
+          output sample
         data (2D numpy.ndarray of int): array to write (raw values)
           first dimension is along the time, second is along the channels
-        settling_samples (int): number of first write samples used for the 
-          settling of the beam, and so don't need to trigger newPosition 
+        settling_samples (int): number of first write samples used for the
+          settling of the beam, and so don't need to trigger newPosition
         rest (boolean): if True, will add one more write to set to rest position
         return (2D numpy.array with dtype=device type)
             the raw data read (first dimension is data.shape[0] * osr) for each
@@ -1145,7 +1147,7 @@ class SEMComedi(model.HwComponent):
             data = numpy.append(data, [rd], axis=0)
         # We write at the given period, and read osr samples for each pixel
         nwscans = data.shape[0]
-        nwchans = data.shape[1]
+        # nwchans = data.shape[1]
         nrscans = nwscans * osr
         nrchans = len(rchannels)
         # TODO: the period could be so long that floating points will lose precision => keep everything in ns
@@ -1243,7 +1245,7 @@ class SEMComedi(model.HwComponent):
             # don't even try: that's the time it'd take to have just one loop
             # doing nothing
             logging.error("Cannot generate newPosition events at such a "
-                              "small period of %s µs", period * 1e6)
+                          "small period of %s µs", period * 1e6)
             return
 
         self._new_position_thread_pipe = []
@@ -1281,7 +1283,6 @@ class SEMComedi(model.HwComponent):
     def _cancel_new_position_notifier(self):
         logging.debug("cancelling npnotifier")
         self._new_position_thread_pipe.append(True) # means it has to stop
-
 
     def start_acquire(self, detector, callback):
         """
@@ -1504,9 +1505,9 @@ class SEMComedi(model.HwComponent):
                 # Should have at least one analog input and an analog output with 2 channels
                 try:
                     ai_subdevice = comedi.find_subdevice_by_type(device,
-                                                    comedi.SUBD_AI, 0)
+                                                                 comedi.SUBD_AI, 0)
                     ao_subdevice = comedi.find_subdevice_by_type(device,
-                                                    comedi.SUBD_AO, 0)
+                                                                 comedi.SUBD_AO, 0)
                 except comedi.ComediError:
                     continue
 
@@ -1519,7 +1520,7 @@ class SEMComedi(model.HwComponent):
                 # create the args for one detector
                 range_info = comedi.get_range(device, ai_subdevice, 0, 0)
                 limits = [range_info.min, range_info.max]
-                kwargs_d0 = {"name": "detector0", "role":"detector",
+                kwargs_d0 = {"name": "detector0", "role": "detector",
                              "channel": 0, "limits": limits}
 
                 # create the args for the scanner
@@ -1543,7 +1544,7 @@ class SEMComedi(model.HwComponent):
 #                    continue # no timer => impossible to use the device
                 min_ao_period = cmd.scan_begin_arg / 1e9
 
-                kwargs_s = {"name": "scanner", "role":"ebeam",
+                kwargs_s = {"name": "scanner", "role": "e-beam",
                             "limits": limits, "channels": wchannels,
                             "settle_time": min_ao_period, "hfw_nomag": 0.25}
 
@@ -1556,7 +1557,6 @@ class SEMComedi(model.HwComponent):
                 comedi.close(device)
 
         return found
-
 
 
 class Accesser(object):
@@ -1604,6 +1604,7 @@ class Accesser(object):
 
     def cancel(self):
         pass
+
 
 class Reader(Accesser):
     """
@@ -1724,6 +1725,7 @@ class Reader(Accesser):
             if self.thread.isAlive():
                 logging.warning("failed to cancel fully the reading thread")
 
+
 class MMapReader(Reader):
     """
     MMap based reader. It might introduce a very little bit of latency to detect
@@ -1841,6 +1843,7 @@ class MMapReader(Reader):
         if self.thread.isAlive():
             logging.warning("Failed to stop the reading thread")
 
+
 class Writer(Accesser):
     def __init__(self, parent):
         Accesser.__init__(self, parent)
@@ -1919,8 +1922,8 @@ class Writer(Accesser):
             self.thread.join(timeout)
 
         # Wait until the buffer is fully emptied to state the output is over
-        while (comedi.get_subdevice_flags(self._device, self._subdevice)
-               & comedi.SDF_RUNNING):
+        while (comedi.get_subdevice_flags(self._device, self._subdevice) &
+               comedi.SDF_RUNNING):
             # sleep longer if the end is far away
             left = self._expected_end - time.time()
             if left > 0.01:
@@ -1997,6 +2000,7 @@ class FakeWriter(Accesser):
 
     def cancel(self):
         self._must_stop.set()
+
 
 class Scanner(model.Emitter):
     """
@@ -2242,7 +2246,7 @@ class Scanner(model.Emitter):
 
     def _setResolution(self, value):
         """
-        value (0<int, 0<int): defines the size of the resolution. If the 
+        value (0<int, 0<int): defines the size of the resolution. If the
          resolution is not possible, it will pick the most fitting one. It will
          recenter the translation if otherwise it would be out of the whole
          scanned area.
@@ -2299,7 +2303,8 @@ class Scanner(model.Emitter):
         for i, channel in enumerate(self._channels):
             best_range = comedi.find_range(self.parent._device,
                                            self.parent._ao_subdevice,
-                              channel, comedi.UNIT_volt, pos[i], pos[i])
+                                           channel, comedi.UNIT_volt,
+                                           pos[i], pos[i])
             ranges.append(best_range)
 
         # computes the position in raw values
@@ -2475,7 +2480,7 @@ class Scanner(model.Emitter):
 class Detector(model.Detector):
     """
     Represents a detector activated by the e-beam. E.g., secondary electron 
-    detector, backscatter detector.  
+    detector, backscatter detector.
     """
     def __init__(self, name, role, parent, channel, limits, **kwargs):
         """
@@ -2506,7 +2511,7 @@ class Detector(model.Detector):
 
         # The closest to the actual precision of the device
         maxdata = comedi.get_maxdata(parent._device, parent._ai_subdevice,
-                                           channel)
+                                     channel)
         self._shape = (maxdata + 1,) # only one point
         self.data = SEMDataFlow(self, parent)
 
@@ -2520,6 +2525,7 @@ class Detector(model.Detector):
 
     def updateMetadata(self, md):
         self.parent.updateMetadata(md)
+
 
 class SEMDataFlow(model.DataFlow):
     def __init__(self, detector, sem):
