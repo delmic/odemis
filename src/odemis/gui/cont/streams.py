@@ -31,7 +31,7 @@ from wx.lib.pubsub import pub
 import odemis.acq.stream as acqstream
 from odemis.acq.stream import OpticalStream, CameraStream
 from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR
-from odemis.gui.comp.stream import StreamPanel
+from odemis.gui.comp.stream import StreamPanel, EVT_STREAM_VISIBLE
 from odemis.gui.conf.data import HW_SETTINGS_CONFIG
 import odemis.gui.model as guimodel
 from odemis import model
@@ -147,8 +147,23 @@ class StreamController(object):
         # Set the visibility button on the stream panel
         vis = stream in tab_data_model.focussedView.value.getStreams()
         self.stream_panel.set_visible(vis)
+        self.stream_panel.Bind(EVT_STREAM_VISIBLE, self._on_stream_visible)
 
         stream_bar.add_stream_panel(self.stream_panel, show)
+
+    def _on_stream_visible(self, evt):
+        """ Show or hide a stream in the focussed view if the visibility button is clicked """
+        view = self.tab_data_model.focussedView.value
+
+        if not view:
+            return
+
+        if evt.visible:
+            logging.debug("Showing stream '%s'", self.stream.name.value)
+            view.addStream(self.stream)
+        else:
+            logging.debug("Hiding stream '%s'", self.stream.name.value)
+            view.removeStream(self.stream)
 
     def _on_new_dye_name(self, dye_name):
         """ Assign excitation and emission wavelengths if the given name matches a known dye """

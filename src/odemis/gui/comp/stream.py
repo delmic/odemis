@@ -48,6 +48,7 @@ import odemis.gui.img.data as img
 
 
 stream_remove_event, EVT_STREAM_REMOVE = wx.lib.newevent.NewEvent()
+stream_visible_event, EVT_STREAM_VISIBLE = wx.lib.newevent.NewEvent()
 
 # Values to control which option is available
 OPT_NAME_EDIT = 1  # allow the renaming of the stream (for one time only)
@@ -590,17 +591,9 @@ class StreamPanel(wx.Panel):
         wx.PostEvent(self, event)
 
     def on_visibility_btn(self, evt):
-        # TODO: Move to controller. Screen widget should not need to know about
-        # microscopes and focused views.
-        view = self._tab_data_model.focussedView.value
-        if not view:
-            return
-        if self._header.btn_show.GetToggle():
-            logging.debug("Showing stream '%s'", self.stream.name.value)
-            view.addStream(self.stream)
-        else:
-            logging.debug("Hiding stream '%s'", self.stream.name.value)
-            view.removeStream(self.stream)
+        # generate EVT_STREAM_VISIBLE
+        event = stream_visible_event(visible=self._header.btn_show.GetToggle())
+        wx.PostEvent(self, event)
 
     # Manipulate expander buttons
 
@@ -1125,8 +1118,8 @@ class StreamBar(wx.Panel):
         # TODO: call the action of the menu
         if "Filtered colour" in self.menu_actions:
             evt.Skip()
-            #action = self.menu_actions["Filtered colour"]
-            #action()
+            # action = self.menu_actions["Filtered colour"]
+            # action()
         else:
             logging.info("Don't know how to add a stream, need to implement a real menu")
         # evt_obj = evt.GetEventObject()
