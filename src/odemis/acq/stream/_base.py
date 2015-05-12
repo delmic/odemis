@@ -302,6 +302,9 @@ class Stream(object):
           If the hardware value is not accepted as-is, the value of the local
           VA will be set to the hardware value.
         """
+        if self._lvaupdaters:
+            logging.warning("Going to link Hw VAs, while already linked")
+
         # Make sure the VAs are set in the right order to keep values
         hwvas = self._hwvas.items() # must be a list
         hwvas.sort(key=self._index_in_va_order)
@@ -394,17 +397,19 @@ class Stream(object):
 
     def _is_active_setter(self, active):
         """
-        Called just before the Stream becomes active
+        Called just before the Stream becomes (in)active
         """
-        if active:
-            # This is done in a setter to ensure that as soon as is_active is
-            # True, all the HwVAs are already synchronised, and this avoids
-            # the VA setter to catch again the change
-            self._linkHwVAs()
+        # Note: the setter can be called even if the value don't change
+        if self.is_active.value != active:
+            if active:
+                # This is done in a setter to ensure that as soon as is_active is
+                # True, all the HwVAs are already synchronised, and this avoids
+                # the VA setter to catch again the change
+                self._linkHwVAs()
 
-            # TODO: merge _onActive here?
-        else:
-            self._unlinkHwVAs()
+                # TODO: merge _onActive here?
+            else:
+                self._unlinkHwVAs()
         return active
 
     def _updateDRange(self, data=None):
