@@ -95,9 +95,9 @@ class AcquisitionDialog(xrcfr_acq):
         view = self._tab_data_model.focussedView.value
 
         self.stream_controller = StreamBarController(self._tab_data_model,
-                                                  self.pnl_secom_streams)
+                                                     self.pnl_secom_streams)
         # The streams currently displayed are the one visible
-        self.add_all_streams(orig_view.getStreams())
+        self.add_all_streams()
 
         # If it could be possible to do fine alignment, allow the user to choose
         if self._can_fine_align(self._tab_data_model.streams.value):
@@ -169,21 +169,17 @@ class AcquisitionDialog(xrcfr_acq):
 
         return new
 
-    def add_all_streams(self, visible_streams):
+    def add_all_streams(self):
         """
         Add all the streams present in the interface model to the stream panel.
-        visible_streams (list of streams): the streams that should be visible
         """
         # the order the streams are added should not matter on the display, so
         # it's ok to not duplicate the streamTree literally
         view = self._tab_data_model.focussedView.value
 
-        # Add stream to view first, so that the "visible" button is correct
-        for s in visible_streams:
-            view.addStream(s)
-
         # go through all the streams available in the interface model
         for s in self._tab_data_model.streams.value:
+            view.addStream(s)  # Add first to the view, so "visible" button is correct
             self.stream_controller.add_acquisition_stream_cont(s)
 
     def remove_all_streams(self):
@@ -220,12 +216,6 @@ class AcquisitionDialog(xrcfr_acq):
         streams (iterable of Stream)
         return (bool): True if at least a SEM and an optical stream are present
         """
-        # FIXME: the phenom currently doesn't support fine overlay (because
-        # 4x4 scanning doesn't work). Once fine overlay works, this can be
-        # removed.
-        if self._tab_data_model.main.role == "delphi":
-            return False
-
         # check for a SEM stream
         for s in streams:
             if isinstance(s, EMStream):
