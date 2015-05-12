@@ -37,24 +37,24 @@ class PMT(model.Detector):
     '''
     A generic Detector which takes 2 children to create a PMT detector. It's
     a wrapper to a Detector (PMT) and a PMT Control Unit to allow the
-    second one to control and ensure the safe operation of the first one and act 
+    second one to control and ensure the safe operation of the first one and act
     with respect to its DataFlow.
-    
+
     It actually duplicates some of the children VAs that need to be included in
-    the user interface (connecting them to the original ones) and uses the rest 
+    the user interface (connecting them to the original ones) and uses the rest
     of them in order to protect the PMT via the PMT Control Unit in case of trip
     i.e. excess of a current threshold for a certain amount of time (see Control
     Unit’s properties).
 
-    In particular, this module observes, uses and also sets the protection 
+    In particular, this module observes, uses and also sets the protection
     status provided by the control unit as below:
-        - Resets protection status (False) when gain is decreased or upon 
+        - Resets protection status (False) when gain is decreased or upon
         acquisition start.
-        - Sets protection status (True) when we stop the acquisition to force 
+        - Sets protection status (True) when we stop the acquisition to force
         the gain provided to the PMT to 0.
-        - Checks the protection status once acquisition is finished and gives a 
+        - Checks the protection status once acquisition is finished and gives a
         warning if protection was active (True).
-        - Upon initialization it turns on the power supply and turns it off on 
+        - Upon initialization it turns on the power supply and turns it off on
         termination.
     '''
     def __init__(self, name, role, children, **kwargs):
@@ -74,6 +74,8 @@ class PMT(model.Detector):
             raise ValueError("Child detector is not a Detector component.")
         self._pmt = pmt
         self.children.value.add(pmt)
+        self._shape = pmt.shape
+        # TODO: copy all the VAs from the PMT to here (but .state and .children).
 
         ctrl = children["pmt-control"]
         if not isinstance(ctrl, ComponentBase):
@@ -98,6 +100,12 @@ class PMT(model.Detector):
         self.powerSupply.value = False
         self._pmt.terminate()
         self._control.terminate()
+
+    def updateMetadata(self, md):
+        self._pmt.updateMetadata(md)
+
+    def getMetadata(self):
+        return self._pmt.getMetadata()
 
     def _setGain(self, value):
         self._control.gain.value = value
