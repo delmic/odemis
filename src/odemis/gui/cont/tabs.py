@@ -1759,6 +1759,8 @@ class LensAlignTab(Tab):
         """
         Called when the tool (mode) is changed
         """
+        shown = self.IsShown() # to make sure we don't play streams in the background
+
         # Reset previous mode
         if tool != guimod.TOOL_DICHO:
             # reset the sequence
@@ -1770,7 +1772,7 @@ class LensAlignTab(Tab):
             self._spot_stream.should_update.value = False
             self._spot_stream.is_active.value = False
             self._sem_stream.should_update.value = True
-            self._sem_stream.is_active.value = True
+            self._sem_stream.is_active.value = True and shown
 
         # Set new mode
         if tool == guimod.TOOL_DICHO:
@@ -1780,7 +1782,7 @@ class LensAlignTab(Tab):
             self._sem_stream.should_update.value = False
             self._sem_stream.is_active.value = False
             self._spot_stream.should_update.value = True
-            self._spot_stream.is_active.value = True
+            self._spot_stream.is_active.value = True and shown
             # TODO: until the settings are directly connected to the hardware,
             # or part of the stream, we need to disable/freeze the SEM settings
             # in spot mode.
