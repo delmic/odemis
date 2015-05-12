@@ -350,27 +350,6 @@ class SEMStream(LiveStream):
     def _onResolution(self, value):
         self._restartLongAcquisition()
 
-#         # Not using the local settings as it's only happening when active
-#         try:
-#             if not self.is_active.value:
-#                 # not acquiring => nothing to do
-#                 return
-#
-#             # approximate time for the current image acquisition
-#             res = self._emitter.resolution.value
-#             prevDuration = self._prevDwellTime * numpy.prod(res)
-#
-#             if prevDuration < 1:
-#                 # very short anyway, not worthy
-#                 return
-#
-#             # TODO: do this on a rate-limited fashion (now, or ~1s)
-#             # unsubscribe, and re-subscribe immediately
-#             self._dataflow.unsubscribe(self._onNewImage)
-#             self._dataflow.subscribe(self._onNewImage)
-#
-#         finally:
-#             self._prevDwellTime = value
 
 MTD_EBEAM_SHIFT = "Ebeam shift"
 MTD_MD_UPD = "Metadata update"
@@ -465,7 +444,8 @@ class AlignedSEMStream(SEMStream):
             no_spot_settings = (self._emitter.dwellTime.value,
                                 self._emitter.resolution.value)
             # Don't mess up with un/subscribing while doing the calibration
-            self.emitter.dwellTime.unsubscribe(self._onDwellTime)
+            self._getEmitterVA("dwellTime").unsubscribe(self._onDwellTime)
+            self._getEmitterVA("resolution").unsubscribe(self._onResolution)
 
             shift = (0, 0)
             self._beamshift = None
@@ -516,7 +496,8 @@ class AlignedSEMStream(SEMStream):
                 # restore hw settings
                 (self._emitter.dwellTime.value,
                  self._emitter.resolution.value) = no_spot_settings
-                self._emitter.dwellTime.subscribe(self._onDwellTime)
+                self._getEmitterVA("dwellTime").subscribe(self._onDwellTime)
+                self._getEmitterVA("resolution").subscribe(self._onResolution)
 
             self._shift = shift
             self._compensateShift()
