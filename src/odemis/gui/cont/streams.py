@@ -918,7 +918,9 @@ class StreamBarController(object):
             "Bright-field",
             self._main_data_model.ccd,
             self._main_data_model.ccd.data,
-            self._main_data_model.brightlight
+            self._main_data_model.brightlight,
+            detvas={"exposureTime"},
+            emtvas={"power"}
         )
         return self._addStream(s, **kwargs)
 
