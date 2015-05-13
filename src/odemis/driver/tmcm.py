@@ -166,7 +166,7 @@ class TMCM3110(model.Actuator):
 
         if refproc is not None:
             # str -> boolean. Indicates whether an axis has already been referenced
-            axes_ref = dict([(a, False) for a in axes])
+            axes_ref = dict((a, False) for a in axes)
             self.referenced = model.VigilantAttribute(axes_ref, readonly=True)
 
         # Note: if multiple instances of the driver are running simultaneously,
@@ -846,6 +846,10 @@ class TMCM3110(model.Actuator):
             return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
         pos = self._applyInversionAbs(pos)
+
+        for a, p in pos.items():
+            if not self.referenced.value[a] and p != self.position.value[a]:
+                logging.warning("Absolute move on axis '%s' which has not be referenced", a)
 
         f = self._createFuture()
         f = self._executor.submitf(f, self._doMoveAbs, f, pos)
