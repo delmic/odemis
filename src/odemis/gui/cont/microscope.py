@@ -512,7 +512,7 @@ class SecomStateController(MicroscopeStateController):
         # sample have probably nothing in common with this new sample
         self._tab_data.stage_history.value = []
 
-    def _on_vacuum(self, _):
+    def _on_vacuum(self, future):
         pass
 
     def _start_chamber_venting(self):
@@ -704,6 +704,25 @@ class DelphiStateController(SecomStateController):
     @call_in_wx_main
     def _on_vacuum(self, future):
         """ Called when the vacuum is reached (ie, the future ended) """
+        try:
+            future.result()  # just to raise exception if failed
+        except Exception as exp:
+            # something went wrong => just eject the sample holder
+            logging.exception("Loading the sample holder failed")
+            dlg = wx.MessageDialog(self._main_frame,
+                                   "The loading of the sample holder failed.\n"
+                                   "Error: %s\n\n"
+                                   "If the problem persists, contact the support service.\n"
+                                   "The sample holder will now be ejected." %
+                                   (exp,),
+                                   "Sample holder loading failed",
+                                   wx.OK | wx.ICON_WARNING)
+            dlg.ShowModal()
+            dlg.Destroy()
+            # Eject the sample holder
+            self._main_data.chamberState.value = CHAMBER_VENTING
+            return False
+
         super(DelphiStateController, self)._on_vacuum(future)
         self._show_progress_indicators(False, True)
 
@@ -802,7 +821,8 @@ class DelphiStateController(SecomStateController):
                 dlg = wx.MessageDialog(self._main_frame,
                                        "The connection with the sample holder failed.\n\n"
                                        "Make sure the pins are clean and try re-inserting it.\n"
-                                       "If the problem persists, contact the support service.",
+                                       "If the problem persists, contact the support service.\n"
+                                       "The sample holder will now be ejected.\n",
                                        "Sample holder connection failed",
                                        wx.OK | wx.ICON_WARNING)
                 dlg.ShowModal()
@@ -953,57 +973,55 @@ class DelphiStateController(SecomStateController):
         try:
             if future._delphi_load_state == CANCELLED:
                 return
+            # _on_overview_position() will take care of going further
+            future._actions_time.pop(0)
+            pf = self._main_data.chamber.moveAbs({"pressure": self._overview_pressure})
+            future._delphi_load_state = pf
+            pf.add_update_callback(self._update_load_time)
+            pf.result()
 
-            try:
-                # _on_overview_position() will take care of going further
-                future._actions_time.pop(0)
-                pf = self._main_data.chamber.moveAbs({"pressure": self._overview_pressure})
-                future._delphi_load_state = pf
-                pf.add_update_callback(self._update_load_time)
-                pf.result()
+            if future._delphi_load_state == CANCELLED:
+                return
+            # Reference the (optical) stage
+            future._actions_time.pop(0)
+            f = self._main_data.stage.reference({"x", "y"})
+            future._delphi_load_state = f
+            f.result()
 
-                # TODO: check whether the loading was cancelled and stop if so.
-                if future._delphi_load_state == CANCELLED:
-                    return
-                # Move to stage to center to be at a good position in overview
-                future._actions_time.pop(0)
-                f = self._main_data.stage.moveAbs(DELPHI_OVERVIEW_POS)
-                future._delphi_load_state = f
-                f.result()  # to be sure referencing doesn't cancel the move
+            if future._delphi_load_state == CANCELLED:
+                return
+            # Load calibration values (and move the slave stage to wherever
+            # the master stage is :-/ )
+            future._actions_time.pop(0)
+            self._load_holder_calib()
 
-                if future._delphi_load_state == CANCELLED:
-                    return
-                future._actions_time.pop(0)
-                self._load_holder_calib()
+            if future._delphi_load_state == CANCELLED:
+                return
+            # Move stage to center to be at a good position in overview
+            # (actually, we only care about the SEM stage)
+            future._actions_time.pop(0)
+            f = self._main_data.stage.moveAbs(DELPHI_OVERVIEW_POS)
+            future._delphi_load_state = f
+            f.result()  # to be sure referencing doesn't cancel the move
 
-                if future._delphi_load_state == CANCELLED:
-                    return
-                # Reference the (optical) stage
-                future._actions_time.pop(0)
-                f = self._main_data.stage.reference({"x", "y"})
-                future._delphi_load_state = f
-                f.result()
+            if future._delphi_load_state == CANCELLED:
+                return
+            # now acquire one image
+            future._actions_time.pop(0)
+            ovs = self._get_overview_stream()
+            f = _futures.wrapSimpleStreamIntoFuture(ovs)
+            future._delphi_load_state = f
+            f.result()
 
-                if future._delphi_load_state == CANCELLED:
-                    return
-                # now acquire one image
-                future._actions_time.pop(0)
-                ovs = self._get_overview_stream()
-                f = _futures.wrapSimpleStreamIntoFuture(ovs)
-                future._delphi_load_state = f
-                f.result()
+            if future._delphi_load_state == CANCELLED:
+                return
+            # move further to fully under vacuum (should do nothing if already there)
+            future._actions_time.pop(0)
+            pf = self._main_data.chamber.moveAbs({"pressure": self._vacuum_pressure})
+            future._delphi_load_state = pf
+            pf.add_update_callback(self._update_load_time)
+            pf.result()
 
-                if future._delphi_load_state == CANCELLED:
-                    return
-                # move further to fully under vacuum (should do nothing if already there)
-                future._actions_time.pop(0)
-                pf = self._main_data.chamber.moveAbs({"pressure": self._vacuum_pressure})
-                future._delphi_load_state = pf
-                pf.add_update_callback(self._update_load_time)
-                pf.result()
-
-            except Exception:
-                raise IOError("Delphi loading failed.")
         finally:
             with future._delphi_load_lock:
                 if future._delphi_load_state == CANCELLED:
