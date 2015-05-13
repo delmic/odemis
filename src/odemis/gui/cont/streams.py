@@ -105,6 +105,8 @@ class StreamController(object):
             label_edit = True
 
         self.stream_panel = StreamPanel(stream_bar, stream, label_edit)
+        self.stream_panel.Bind(wx.EVT_WINDOW_DESTROY, self._on_stream_panel_destroy)
+
         self.tab_data_model = tab_data_model
 
         # Peak excitation/emission wavelength of the selected dye, to be used for peak text and
@@ -148,6 +150,25 @@ class StreamController(object):
         self.stream_panel.Bind(EVT_STREAM_VISIBLE, self._on_stream_visible)
 
         stream_bar.add_stream_panel(self.stream_panel, show)
+
+    def _on_stream_panel_destroy(self, _):
+        """ Remove all references to setting entries and the possible VAs they might contain
+
+        TODO: Make stream panel creation and destruction cleaner by having the StreamBarController
+        being the main class respobsible for it.
+
+        """
+
+        # Destroy references to this controller in even handlers
+        # (More references are present, see getrefcount 
+        self.stream_panel.Unbind(wx.EVT_WINDOW_DESTROY)
+        self.stream_panel.header_change_callback = None
+        self.stream_panel.Unbind(EVT_STREAM_VISIBLE)
+
+        self.entries = None
+
+        # import sys, gc
+        # print sys.getrefcount(self), "\n".join([str(s) for s in gc.get_referrers(self)])
 
     def _on_stream_visible(self, evt):
         """ Show or hide a stream in the focussed view if the visibility button is clicked """
@@ -589,6 +610,7 @@ class StreamController(object):
             :param hist: ndArray of integers, the contents is a list a values in [0.0..1.0]
 
             TODO: don't update when folded: it's useless => unsubscribe
+            FIXME: Make sure this works as intended, see sandbox
 
             """
 
@@ -735,9 +757,9 @@ class StreamBarController(object):
             for channel_data in channels_data:
                 # TODO: be more clever to detect the type of stream
                 if (
-                                    model.MD_WL_LIST in channel_data.metadata or
-                                    model.MD_WL_POLYNOMIAL in channel_data.metadata or
-                            (len(channel_data.shape) >= 5 and channel_data.shape[-5] > 1)
+                    model.MD_WL_LIST in channel_data.metadata or
+                    model.MD_WL_POLYNOMIAL in channel_data.metadata or
+                    (len(channel_data.shape) >= 5 and channel_data.shape[-5] > 1)
                 ):
                     name = channel_data.metadata.get(model.MD_DESCRIPTION, "Spectrum")
                     klass = acqstream.StaticSpectrumStream
@@ -746,19 +768,17 @@ class StreamBarController(object):
                     ar_data.append(channel_data)
                     continue
                 elif (
-                            (model.MD_IN_WL in channel_data.metadata and
-                                     model.MD_OUT_WL in channel_data.metadata) or
-                                model.MD_USER_TINT in channel_data.metadata
+                        (model.MD_IN_WL in channel_data.metadata and
+                         model.MD_OUT_WL in channel_data.metadata) or
+                        model.MD_USER_TINT in channel_data.metadata
                 ):
                     # No explicit way to distinguish between Brightfield and Fluo,
                     # so guess it's Brightfield iif:
                     # * No tint
                     # * (and) Large band for excitation wl (> 100 nm)
                     in_wl = d.metadata[model.MD_IN_WL]
-                    if (
-                                    model.MD_USER_TINT in channel_data.metadata or
-                                        in_wl[1] - in_wl[0] < 100e-9
-                    ):
+                elif model.MD_IN_WL in channel_data.metadata:  # no MD_OUT_WL
+                    if model.MD_USER_TINT in channel_data.metadata or in_wl[1] - in_wl[0] < 100e-9:
                         # Fluo
                         name = channel_data.metadata.get(model.MD_DESCRIPTION, "Filtered colour")
                         klass = acqstream.StaticFluoStream
@@ -766,7 +786,6 @@ class StreamBarController(object):
                         # Brightfield
                         name = channel_data.metadata.get(model.MD_DESCRIPTION, "Brightfield")
                         klass = acqstream.StaticBrightfieldStream
-                elif model.MD_IN_WL in channel_data.metadata:  # no MD_OUT_WL
                     name = channel_data.metadata.get(model.MD_DESCRIPTION, "Brightfield")
                     klass = acqstream.StaticBrightfieldStream
                 else:
@@ -1094,9 +1113,6 @@ class StreamBarController(object):
         if not view:
             return
 
-        # import sys
-        # print sys.getrefcount(self)
-
         # hide/show the stream panels which are compatible with the view
         allowed_classes = view.stream_classes
         for e in self._stream_bar.stream_panels:
@@ -1111,11 +1127,11 @@ class StreamBarController(object):
         for e in self._stream_bar.stream_panels:
             e.set_visible(e.stream in visible_streams)
 
-        logging.debug("Sending stream.ctrl message")
-        pub.sendMessage('stream.ctrl',
-                        streams_present=True,
-                        streams_visible=self._has_visible_streams(),
-                        tab=self._tab_data_model)
+        # logging.debug("Sending stream.ctrl message")
+        # pub.sendMessage('stream.ctrl',
+        #                 streams_present=True,
+        #                 streams_visible=self._has_visible_streams(),
+        #                 tab=self._tab_data_model)
 
     def _onStreamUpdate(self, stream, updated):
         """
@@ -1319,11 +1335,11 @@ class StreamBarController(object):
         except ValueError:
             logging.warn("Stream not found, so not removed")
 
-        logging.debug("Sending stream.ctrl.removed message")
-        pub.sendMessage('stream.ctrl.removed',
-                        streams_present=self._has_streams(),
-                        streams_visible=self._has_visible_streams(),
-                        tab=self._tab_data_model)
+        # logging.debug("Sending stream.ctrl.removed message")
+        # pub.sendMessage('stream.ctrl.removed',
+        #                 streams_present=self._has_streams(),
+        #                 streams_visible=self._has_visible_streams(),
+        #                 tab=self._tab_data_model)
 
     def clear(self):
         """
@@ -1351,11 +1367,11 @@ class StreamBarController(object):
         if self._has_streams() or self._has_visible_streams():
             logging.warning("Failed to remove all streams")
 
-        logging.debug("Sending stream.ctrl.removed message")
-        pub.sendMessage('stream.ctrl.removed',
-                        streams_present=False,
-                        streams_visible=False,
-                        tab=self._tab_data_model)
+        # logging.debug("Sending stream.ctrl.removed message")
+        # pub.sendMessage('stream.ctrl.removed',
+        #                 streams_present=False,
+        #                 streams_visible=False,
+        #                 tab=self._tab_data_model)
 
     def _has_streams(self):
         return len(self._stream_bar.stream_panels) > 0

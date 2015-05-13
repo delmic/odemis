@@ -107,7 +107,7 @@ def dead_object_wrapper(f):
             if app:
                 return f(*args, **kwargs)
         except (wx.PyDeadObjectError, RuntimeError):
-            logging.warn("Dead object ignored in %s", f.__name__)
+            logging.error("Dead object ignored in %s", f.__name__)
     return dead_object_wrapzor
 
 # ============== ENDWrappers

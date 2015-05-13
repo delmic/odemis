@@ -94,8 +94,8 @@ class AcquisitionDialog(xrcfr_acq):
         orig_view = orig_tab_data.focussedView.value
         view = self._tab_data_model.focussedView.value
 
-        self.stream_controller = StreamBarController(self._tab_data_model,
-                                                     self.pnl_secom_streams)
+        self.streambar_controller = StreamBarController(self._tab_data_model,
+                                                        self.pnl_secom_streams)
         # The streams currently displayed are the one visible
         self.add_all_streams()
 
@@ -180,7 +180,7 @@ class AcquisitionDialog(xrcfr_acq):
         # go through all the streams available in the interface model
         for s in self._tab_data_model.streams.value:
             view.addStream(s)  # Add first to the view, so "visible" button is correct
-            self.stream_controller.add_acquisition_stream_cont(s)
+            self.streambar_controller.add_acquisition_stream_cont(s)
 
     def remove_all_streams(self):
         """ Remove the streams we added to the view on creation """

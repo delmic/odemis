@@ -195,10 +195,30 @@ class MainWindow(wx.Frame):
         # cpd = CalibrationProgressDialog(self, 1, 1, 1, 1, 1, 1)
         # cpd.ShowModal()
 
-app = wx.App(False)
-win = MainWindow(None)
-app.MainLoop()
+# app = wx.App(False)
+# win = MainWindow(None)
+# app.MainLoop()
 
 # END THREAD RENDER TEST
 
 #=============================================================================
+
+fs = []
+
+for i in range(4):
+    def grr():
+        def t():
+            res = "%s %s" % (id(t), t.x)
+            t.x += 1
+            return res
+        t.x = i
+        return t
+    fs.append(grr())
+
+    # def t():
+    #     t.x = i + 0
+    #     return "%s %s %s" % (id(t), t.x, id(t.x))
+    # fs.append(t)
+
+print [f() for f in fs]
+print [f() for f in fs]
