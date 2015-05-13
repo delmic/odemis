@@ -353,7 +353,6 @@ class SEMStream(LiveStream):
 
 MTD_EBEAM_SHIFT = "Ebeam shift"
 MTD_MD_UPD = "Metadata update"
-MTD_STAGE_MOVE = "Stage move"
 class AlignedSEMStream(SEMStream):
     """
     This is a special SEM stream which automatically first aligns with the
@@ -366,10 +365,7 @@ class AlignedSEMStream(SEMStream):
         """
         shiftebeam (MTD_*): if MTD_EBEAM_SHIFT, will correct the SEM position using beam shift
          (iow, using emitter.shift). If MTD_MD_UPD, it will just update the
-         position correction metadata on the SEM images. If MTD_STAGE_MOVE, it will
-         move the stage or beam (depending on how large is the move) and then update
-         the correction metadata (note that if the stage has moved, the optical
-         stream will need to be updated too).
+         position correction metadata on the SEM images.
         """
         SEMStream.__init__(self, name, detector, dataflow, emitter, **kwargs)
         self._ccd = ccd
@@ -474,15 +470,7 @@ class AlignedSEMStream(SEMStream):
                 self._cur_trans = (cur_trans[0] + self._last_shift[0],
                                    cur_trans[1] + self._last_shift[1])
 
-                if self._shiftebeam == MTD_STAGE_MOVE:
-                    for child in self._stage.children.value:
-                        if child.role == "sem-stage":
-                            f = child.moveRel({"x": shift[0], "y": shift[1]})
-                            f.result()
-
-                    shift = (0, 0) # just in case of failure
-                    shift = FindEbeamCenter(self._ccd, self._detector, self._emitter)
-                elif self._shiftebeam == MTD_EBEAM_SHIFT:
+                if self._shiftebeam == MTD_EBEAM_SHIFT:
                     # First align using shift
                     self._applyROI()
                     # Then by updating the metadata
@@ -510,7 +498,7 @@ class AlignedSEMStream(SEMStream):
 
             self._shift = shift
             self._compensateShift()
-        elif not active and not self._calibrated and not self.spot.value:
+        elif not active and not self._calibrated:
             # SEM stream just got paused _and_ the stage has moved
             self._compensateWithStage()
 
