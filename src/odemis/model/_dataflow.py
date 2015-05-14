@@ -667,7 +667,8 @@ class Event(EventBase):
         # => if object is on the same container as us, use the direct connection
         # if possible to find lower latency communication channel => create a proxy
         # object and use it.
-
+        # To do all that clever shortcut, we need the actual object, that is why
+        # listener is not directly a callback.
         # TODO: listener could be directly a callable, and if it is a bound method,
         # get the object and the method name, and reconstruct it with the direct
         # object
