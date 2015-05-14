@@ -192,7 +192,6 @@ received).
 
 .. py:class:: model.DataFlow()
 
-    Initialise the DataFlow.
     This is an abstract class which actual dataflows should inherit from.
 
     .. py:method:: subscribe(callback):
@@ -222,7 +221,6 @@ received).
         If None is passed, no synchronization is taking place.
         See :py:class:`Event` for more information on synchronization.
 
-	
     .. py:attribute:: parent
 
         The component which owns this data-flow.
@@ -247,35 +245,38 @@ received).
 Event
 =====
 
-Object used to indicate that a specific event has happened. It allows to wait for an event before doing an action. For example a scanning emitter moving to the next position (pixel), the end of a complete line scan. There is only one owner (generator) of the event, but there might be multiple listeners. Each listener has a separate queue, which ensures it will never miss the fact an event has happened.
+Object used to indicate that a specific event has happened.
+It allows to wait for an event before doing an action. For example a scanning
+emitter moving to the next position (pixel), the end of a complete line scan.
+There is only one owner (generator) of the event, but there might be multiple listeners.
+Each listener has a separate queue, which ensures it will never miss the fact an event has happened.
 
 
 .. py:class:: model.Event()
 
-    Initialise the Event.
-
-    .. py:method:: wait(object, timeout=None)
-
-        wait for the event to happen. Returns either True (the event has happened) or False (timeout, or the the object is no more synchronised on this event). It automatically remove from the listener queue the fact the event has happened.
-
-    .. py:method:: clear(object)
-
-        empties the queue of events.
+    An object that can emit simple synchronisation events.
 
     .. py:method:: subscribe(object)
 
-        add the object as listener to the events. 
+        add the object as listener to the events.
+        It must have a :py:func:`onEvent` method, which will be called every
+        time the event is triggered.
         
-    .. TODO: allow to give a callback function, in which case it will just call the function, instead of having to do a wait? It should allow to avoid the scheduling latency (~1ms). Or maybe just a callback function, (and declare it as @oneway), then it's still extensible later to use the queue mechanism if object is not callable (e.g, just self).
+        This is typically called by the :py:meth:`DataFlow.synchronisedOn` method.
 
     .. py:method:: unsubscribe(object)
 
         remove the object as listener.
 
-    .. py:method:: trigger()
+    .. py:method:: notify()
 
         Indicates an event has just occurred. Only to be done by the owner of the event.
 
+.. TODO    .. py:method:: wait(object, timeout=None)
+        wait for the event to happen. Returns either True (the event has happened) or False (timeout, or the the object is no more synchronised on this event). It automatically remove from the listener queue the fact the event has happened.
+
+     .. py:method:: clear(object)
+        empties the queue of events.
 Future
 ======
 
@@ -299,10 +300,10 @@ function specifically.
 
     .. py:method:: cancel()
 
-    Attempt to cancel the task. If the task has finished executing, it will fail
-    and return False. If the task is being executed, it will be done in best 
-    effort manner. If possible, the execution will be stopped immediately, and
-    the work done so far *might or might not* be undone.
+       Attempt to cancel the task. If the task has finished executing, it will fail
+       and return False. If the task is being executed, it will be done in best 
+       effort manner. If possible, the execution will be stopped immediately, and
+       the work done so far *might or might not* be undone.
 
     .. py:method:: cancelled()
 
@@ -370,34 +371,34 @@ function specifically.
 .. py:class:: model.ProgressiveFuture()
 
     A Future which provides also information about the execution progress.
-    
-    
+
     .. py:method:: add_update_callback(fn)
 
         Adds a callback *fn* that will receive progress updates whenever a new one is
         available. 
         The callback is always called at least once, when the task is finished.
-        
+
         :param fn: The callback.
-            *past* is the number of seconds elapsed since the beginning of the task.
-            *left* is the estimated number of seconds until the end of the
-            task.
-            If the task is not yet started, past can be negative, indicating
-            the estimated time before the task starts. If the task is finished (or
-            cancelled) the time left is 0 and the time past is the duration of the
-            task. 
-        :type fn: callable: (Future, float past, float left) → None
+            *start* is the (estimated) time of the beginning of the task.
+            *end* is the estimated time at the end of the task.
+            If the task is finished (or cancelled) the end time is the time the task was completed or cancelled.
 
+        :type fn: callable: (Future, float start, float end) → None
 
-    The following two methods are only to be used by the executor, to provide 
-    the update information.
+    .. py:method:: get_progress()
     
-    .. py:method:: set_start_time(t)
+	Read the last known progress information.
+
+        :return (float start, float end): time at which the task started (or will be starting),
+                time at which the task ended (or will be ending)
+
+    .. py:method:: set_progress(start, end)
     
-        :param float t: The time in seconds since epoch that the task (will be) started.
-    
-    
-    .. py:method:: set_stop_time(t)
+	Update the start and end times of the task.
+	To be used by executors only, to provide the update information.
+
+        :param float start: time at which the task started (or will be starting)
+        :param float end: time at which the task ended (or will be ending)
 
 
 VigilantAttribute
