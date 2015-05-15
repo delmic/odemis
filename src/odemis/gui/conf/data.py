@@ -134,15 +134,14 @@ HW_SETTINGS_CONFIG = {
                 "choices": util.resolution_from_range,
                 "accuracy": None, # never simplify the numbers
             }),
-            ("shift", {
-                "control_type": odemis.gui.CONTROL_NONE,
-            }),
-
             # what we don't want to display:
             ("power", {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
             ("translation", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("shift", {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
             # TODO: might be useful if it's not read-only
