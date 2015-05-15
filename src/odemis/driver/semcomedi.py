@@ -4,19 +4,19 @@ Created on 15 Oct 2012
 
 @author: Éric Piel
 
-Copyright © 2012 Éric Piel, Delmic
+Copyright © 2012-2015 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
@@ -207,19 +207,6 @@ class SEMComedi(model.HwComponent):
         self._acquisition_thread = None
         self._acquisitions = set()  # detectors currently active
 
-        # create the scanner child "scanner"
-        try:
-            kwargs = children["scanner"]
-        except (KeyError, TypeError):
-            raise KeyError("SEMComedi device '%s' was not given a 'scanner' child" % device)
-        # init detector with the right length for find_closest_dwell_time
-        self._detectors = dict([(n, None) for n in children if n.startswith("detector")])
-        self._scanner = Scanner(parent=self, daemon=daemon, **kwargs)
-        self.children.value.add(self._scanner)
-        # for scanner.newPosition
-        self._new_position_thread = None
-        self._new_position_thread_pipe = [] # list to communicate with the current thread
-
         # create the detector children "detectorN"
         self._detectors = {} # string (name) -> component
         for name, kwargs in children.items():
@@ -229,9 +216,25 @@ class SEMComedi(model.HwComponent):
 
         if not self._detectors:
             raise KeyError("SEMComedi device '%s' was not given any 'detectorN' child" % device)
-        rchannels = set([d.channel for d in self._detectors.values()])
+        rchannels = set(d.channel for d in self._detectors.values())
         if len(rchannels) != len(self._detectors):
             raise ValueError("SEMComedi device '%s' was given multiple detectors with the same channel" % device)
+
+        # Pre-compute the minimum dwell time for each number of detectors
+        self._min_dt_config = []
+        for i in range(len(self._detectors)):
+            self._min_dt_config.append(self.find_best_oversampling_rate(0, i + 1))
+
+        # create the scanner child "scanner" (must be _after_ the detectors)
+        try:
+            kwargs = children["scanner"]
+        except (KeyError, TypeError):
+            raise KeyError("SEMComedi device '%s' was not given a 'scanner' child" % device)
+        self._scanner = Scanner(parent=self, daemon=daemon, **kwargs)
+        self.children.value.add(self._scanner)
+        # for scanner.newPosition
+        self._new_position_thread = None
+        self._new_position_thread_pipe = [] # list to communicate with the current thread
 
         self.set_to_resting_position()
 
@@ -335,7 +338,7 @@ class SEMComedi(model.HwComponent):
         Read the minimum scan periods for the AI and AO subdevices
         return (2-tuple (list of float, list of float)): AI period for each number
          of channel, and AO period for each number of channels (times are in
-         seconds). 
+         seconds).
         """
         # we request a timed command with a very short period (1 ns) and see
         # what period we actually get back.
@@ -580,7 +583,7 @@ class SEMComedi(model.HwComponent):
         """
         Converts an array containing physical values to raw
         subdevice (int): the subdevice index
-        channel (list of int): the channel index for each value of the last dim 
+        channel (list of int): the channel index for each value of the last dim
         ranges (list of int): the range index for each value of the last dim
         data (numpy.ndarray): the array to convert, its last dimension must be the
           same as the channels and ranges
@@ -646,21 +649,19 @@ class SEMComedi(model.HwComponent):
             if rc != 0:
                 raise IOError("failed to prepare command (%d)" % rc)
 
-    def find_best_oversampling_rate(self, period, max_osr=2 ** 24):
+    def find_best_oversampling_rate(self, period, nrchans=None):
         """
         Returns the closest dwell time _longer_ than the given time compatible
           with the output device and the highest over-sampling rate compatible
           with the input device. If the period is longer than what can be
         period (float): dwell time requested (in s)
-        max_osr (1<=int): maximum over-sampling rate returned
+        nrchans (1<=int or None): number of input channels (aka detectors)
         returns (2-tuple: period (0<float), osr (1<=int)):
          period: a value slightly smaller, or larger than the period (in s)
          osr: a ratio indicating how many times faster runs the input clock
          dpr: how many times the acquisition should be duplicated
         raises:
             ValueError if no compatible dwell time can be found
-        Note: the dwell time is computed assuming all the detectors are active
-           simultaneously.
         """
         # We have to find a write period as close as possible from the requested
         # period, and multiple of a read period as small as possible.
@@ -676,11 +677,10 @@ class SEMComedi(model.HwComponent):
         # the smallest read period can have proportionally a large effect, so
         # it's better to increase the read period.
 
-        # TODO: min dwell time should be just for one input channel, and adapt if
-        # more than one channel is read simultaneously => pass nrchans?
-        assert(max_osr >= 1)
+        max_osr = 2 ** 24  # maximum over-sampling rate returned
         nwchans = 2 # always
-        nrchans = len(self._detectors) # one channel per detector
+        if nrchans is None:
+            nrchans = len(self._detectors)  # be conservative
         period_ns = int(period * 1e9)  # in nanoseconds
 
         # If impossible to do a write so long, do multiple acquisitions
@@ -950,7 +950,7 @@ class SEMComedi(model.HwComponent):
     def _write_read_2d_pixel(self, wchannels, wranges, rchannels, rranges,
                              period, margin, osr, dpr, data):
         """
-        Implementation of write_read_2d_data_raw by reading the input data one 
+        Implementation of write_read_2d_data_raw by reading the input data one
           pixel at a time.
         """
         rshape = (data.shape[0], data.shape[1] - margin)
@@ -987,7 +987,7 @@ class SEMComedi(model.HwComponent):
     def _write_read_2d_subpixel(self, wchannels, wranges, rchannels, rranges,
                                 period, margin, osr, dpr, data):
         """
-        Implementation of write_read_2d_data_raw by reading the input data one 
+        Implementation of write_read_2d_data_raw by reading the input data one
          part of a pixel at a time.
         """
         nrchans = len(rchannels)
@@ -1231,7 +1231,7 @@ class SEMComedi(model.HwComponent):
         n (0 <= int): number of event notifications
         start (float): time for the first event (should be in the future)
         period (float): period between two events
-        Note: this is used to emulate an actual ebeam change of position when 
+        Note: this is used to emulate an actual ebeam change of position when
          the hardware is requested to move the ebeam at multiple positions in a
          row. Do not expect a precision better than 10us.
         Note 2: this method returns immediately (and the emulation is run in a
@@ -1392,6 +1392,11 @@ class SEMComedi(model.HwComponent):
 
                 rchannels = tuple(d.channel for d in detectors)
                 rranges = tuple(d._range for d in detectors)
+
+                # Increase the dwell time if it cannot support so many detectors
+                min_dt = self._min_dt_config[len(detectors) - 1][0]
+                if self._scanner.dwellTime.value < min_dt:
+                    self._scanner.dwellTime.value = min_dt
 
                 # get the scan values (automatically updated to the latest needs)
                 (scan, period, shape, margin,
@@ -1578,7 +1583,7 @@ class SEMComedi(model.HwComponent):
 class Accesser(object):
     """
     Abstract class to access the device either for input or output
-    Each acquisition should be done by calling in order prepare(), run(), and wait() 
+    Each acquisition should be done by calling in order prepare(), run(), and wait()
     """
 
     def __init__(self, parent):
@@ -1625,9 +1630,9 @@ class Accesser(object):
 class Reader(Accesser):
     """
     Classical version of the reader, using a... read() (aka fromfile()). It's
-    supposed to avoid latency as the read will return as soon as all the data 
+    supposed to avoid latency as the read will return as soon as all the data
     is received. But in the current behaviour of comedi, the cancel() is really
-    complicated and unstable, as a new empty command must be sent (reported 
+    complicated and unstable, as a new empty command must be sent (reported
     upstream and a fix was published on 2013-07-08).
     """
     def __init__(self, parent):
@@ -1910,7 +1915,7 @@ class Writer(Accesser):
 
     def _thread(self):
         """
-        Ends once the output is fully over 
+        Ends once the output is fully over
         """
         if self.cancelled:
             return
@@ -1968,7 +1973,7 @@ class Writer(Accesser):
 
     def cancel(self):
         """
-        Warning: it's not possible to cancel a thread which has not already been 
+        Warning: it's not possible to cancel a thread which has not already been
          prepared.
         """
         if self.cancelled:
@@ -2032,7 +2037,7 @@ class Scanner(model.Emitter):
                  hfw_nomag, park=None, fastpark=False, max_res=None, **kwargs):
         """
         channels (2-tuple of (0<=int)): output channels for X/Y to drive. X is
-          the fast scanned axis, Y is the slow scanned axis. 
+          the fast scanned axis, Y is the slow scanned axis.
         limits (2x2 array of float): lower/upper bounds of the scan area in V.
           first dim is the X/Y, second dim is min/max. Ex: limits[0][1] is the
           voltage for the max value of X.
@@ -2173,7 +2178,7 @@ class Scanner(model.Emitter):
                                               readonly=True)
 
         # max dwell time is purely arbitrary
-        min_dt, self._osr, self._dpr = parent.find_best_oversampling_rate(0)
+        min_dt, self._osr, self._dpr = parent._min_dt_config[0]
         range_dwell = (min_dt, 1000) # s
         self.dwellTime = model.FloatContinuous(min_dt, range_dwell,
                                                unit="s", setter=self._setDwellTime)
@@ -2205,7 +2210,7 @@ class Scanner(model.Emitter):
         Note: the convention is that in internal coordinates Y goes down, while
         in physical coordinates, Y goes up.
         px_pos (tuple of 2 floats): position in internal coordinates (pixels)
-        returns (tuple of 2 floats): physical position in meters 
+        returns (tuple of 2 floats): physical position in meters
         """
         pxs = self.pixelSize.value # m/px
         phy_pos = (px_pos[0] * pxs[0], -px_pos[1] * pxs[1]) # - to invert Y
@@ -2235,7 +2240,8 @@ class Scanner(model.Emitter):
         self.parent._metadata[model.MD_PIXEL_SIZE] = pxs_scaled
 
     def _setDwellTime(self, value):
-        dt, self._osr, self._dpr = self.parent.find_best_oversampling_rate(value)
+        nrchans = max(1, len(self.parent._acquisitions))  # current number of detectors
+        dt, self._osr, self._dpr = self.parent.find_best_oversampling_rate(value, nrchans)
         return dt
 
     def _setScale(self, value):
@@ -2341,7 +2347,7 @@ class Scanner(model.Emitter):
 
     def get_scan_data(self):
         """
-        Returns all the data as it has to be written the device to generate a 
+        Returns all the data as it has to be written the device to generate a
           scan.
         returns: array (3D numpy.ndarray), period (0<=float), shape (2-tuple int),
                  margin (0<=int), channels (list of int), ranges (list of int)
@@ -2359,7 +2365,7 @@ class Scanner(model.Emitter):
         Note: it only recomputes the scanning array if the settings have changed
         Note: it's not thread-safe, you must ensure no simultaneous calls.
         """
-        dwell_time = self.dwellTime.value
+        dwell_time, osr, dpr = self.dwellTime.value, self._osr, self._dpr
         resolution = self.resolution.value
         scale = self.scale.value
         translation = self.translation.value
@@ -2379,7 +2385,7 @@ class Scanner(model.Emitter):
             self._prev_settings = new_settings
 
         return (self._scan_array, dwell_time, resolution[::-1],
-                margin, self._channels, self._ranges, self._osr, self._dpr)
+                margin, self._channels, self._ranges, osr, dpr)
 
     def _update_raw_scan_array(self, shape, scale, translation, margin):
         """
@@ -2459,14 +2465,14 @@ class Scanner(model.Emitter):
     def _generate_scan_array(shape, limits, margin):
         """
         Generate an array of the values to send to scan a 2D area, using linear
-        interpolation between the limits. It's basically a saw-tooth curve on 
+        interpolation between the limits. It's basically a saw-tooth curve on
         the W dimension and a linear increase on the H dimension.
         shape (list of 2 int): H/W of the scanning area (slow, fast axis)
         limits (2x2 ndarray): the min/max limits of W/H
         margin (0<=int): number of additional pixels to add at the begginning of
             each scanned line
         returns (3D ndarray of shape[0] x (shape[1] + margin) x 2): the H/W
-            values for each points of the array, with W scanned fast, and H 
+            values for each points of the array, with W scanned fast, and H
             slowly. The type is the same one as the limits.
         """
         # prepare an array of the right type
@@ -2495,7 +2501,7 @@ class Scanner(model.Emitter):
 
 class Detector(model.Detector):
     """
-    Represents a detector activated by the e-beam. E.g., secondary electron 
+    Represents a detector activated by the e-beam. E.g., secondary electron
     detector, backscatter detector.
     """
     def __init__(self, name, role, parent, channel, limits, **kwargs):
@@ -2511,7 +2517,6 @@ class Detector(model.Detector):
         if nchan < channel:
             raise ValueError("Requested channel %d on device '%s' which has only %d input channels"
                              % (channel, parent._device_name, nchan))
-        self._scanner = parent._scanner
 
         # TODO allow limits to be None, meaning take the biggest range available
         self._limits = limits
