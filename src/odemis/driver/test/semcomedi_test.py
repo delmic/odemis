@@ -632,6 +632,41 @@ class TestSEM2(unittest.TestCase):
         self.assertEqual(len(common_dates), 3, "Dates not all common between %r and %r" %
                          (self.acq_dates[0], self.acq_dates[1]))
 
+    def test_acquire_two_sync_flows_fast(self):
+        """
+        Acquire with two dataflows, with one synchronised, only at the beginning.
+        So that after the init, acquisition doesn't wait for the software trigger.
+        """
+        expected_duration = self.compute_expected_duration()
+
+        # set softwareTrigger on the first detector to be subscribed
+        self.sed.data.synchronizedOn(self.sed.softwareTrigger)
+
+        self.left = 3
+        self.sed.data.subscribe(self.receive_image)
+
+        time.sleep(expected_duration)  # make sure it would have time to start
+        self.left2 = 3
+        self.bsd.data.subscribe(self.receive_image2)
+
+        # trigger and immediately remove synchronisation
+        self.sed.softwareTrigger.notify()
+        self.sed.data.synchronizedOn(None)
+
+        for i in range(3):
+            # end early if it's already finished
+            if self.left == 0 and self.left2 == 0:
+                break
+            time.sleep(2 + expected_duration * 1.1)  # 2s per image should be more than enough in any case
+
+        self.assertEqual(len(self.acq_dates[0]), 3)
+        self.assertEqual(len(self.acq_dates[1]), 3)
+
+        # check all images were acquired simultaneously
+        common_dates = self.acq_dates[0] & self.acq_dates[1]
+        self.assertEqual(len(common_dates), 3, "Dates not all common between %r and %r" %
+                         (self.acq_dates[0], self.acq_dates[1]))
+
     def receive_image(self, dataflow, image):
         """
         callback for df of test_acquire_flow()
