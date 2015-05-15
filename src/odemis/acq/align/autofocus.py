@@ -32,6 +32,7 @@ from scipy import ndimage
 import threading
 import time
 from odemis.util.img import Subtract
+import cv2
 
 INIT_THRES_FACTOR = 4e-3  # initial autofocus threshold factor
 
@@ -39,7 +40,30 @@ MAX_STEPS_NUMBER = 30  # Max steps to perform autofocus
 MAX_BS_NUMBER = 1  # Maximum number of applying binary search with a smaller max_step
 
 
-def MeasureFocus(image):
+def MeasureSpotFocus(image):
+    """
+    Given a CL spot image, focus measure is calculated using the number of
+    circles detected. The lower the number of circles detected the more focused
+    is the image considered to be.
+    image (model.DataArray): Optical image
+    returns (float):    The focus level of the optical image
+    """
+    nd = numpy.array(image, dtype=numpy.uint8)
+    nda = model.DataArray(nd, metadata=image.metadata)
+    img = cv2.medianBlur(nda, 5)
+    circles = cv2.HoughCircles(img, cv2.cv.CV_HOUGH_GRADIENT, dp=1, minDist=20, param1=50,
+                               param2=15, minRadius=0, maxRadius=100)
+    if circles is None:
+        level = 0
+    else:
+        # Focus level is inverse to the number of circles detected. We also
+        # multiply by a factor to make it more distinct.
+        level = (1 / circles.shape[1]) * 1e03
+
+    return level
+
+
+def MeasureImageFocus(image):
     """
     Given an image, focus measure is calculated using the standard deviation of
     the raw data.
@@ -56,7 +80,8 @@ def MeasureFocus(image):
         gray += b
     else:
         gray = image
-    return ndimage.standard_deviation(image)
+
+    return ndimage.standard_deviation(gray)
 
 
 def AcquireNoBackground(ccd, dfbkg=None):
@@ -82,11 +107,13 @@ def AcquireNoBackground(ccd, dfbkg=None):
         image = ccd.data.get(asap=False)
         return image
 
+
 def _discard_data(df, data):
     """
     Does nothing, just discard the SEM data received (for spot mode)
     """
     pass
+
 
 def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, dfbkg):
     """
@@ -110,6 +137,11 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, dfbkg):
 
     try:
         rng = focus.axes["z"].range
+        # Pick measurement method
+        if detector.role == "ccd" and focus.role == "ebeam-focus":
+            Measure = MeasureSpotFocus
+        else:
+            Measure = MeasureImageFocus
 
         for trial in range(MAX_BS_NUMBER):
             # Keep the initial focus position
@@ -118,13 +150,14 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, dfbkg):
             step = max_step / 2
             cur_pos = focus.position.value.get('z')
             image = AcquireNoBackground(detector, dfbkg)
-            fm_cur = MeasureFocus(image)
+            fm_cur = Measure(image)
             init_fm = fm_cur
             best_fm = init_fm
+
             #Clip within range
             new_pos = _ClippedMove(rng, focus, step)
             image = AcquireNoBackground(detector, dfbkg)
-            fm_test = MeasureFocus(image)
+            fm_test = Measure(image)
             if fm_test > best_fm:
                 best_pos = new_pos
                 best_fm = fm_test
@@ -157,7 +190,7 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, dfbkg):
                     shift = cur_pos - pos
                     new_pos = _ClippedMove(rng, focus, shift)
                     image = AcquireNoBackground(detector, dfbkg)
-                    fm_new = MeasureFocus(image)
+                    fm_new = Measure(image)
                     if fm_new > best_fm:
                         best_pos = new_pos
                         best_fm = fm_new
@@ -166,13 +199,13 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, dfbkg):
                     steps += 1
 
                 image = AcquireNoBackground(detector, dfbkg)
-                fm_cur = MeasureFocus(image)
+                fm_cur = Measure(image)
                 if fm_cur > best_fm:
                     best_pos = new_pos
                     best_fm = fm_cur
                 new_pos = _ClippedMove(rng, focus, step)
                 image = AcquireNoBackground(detector, dfbkg)
-                fm_test = MeasureFocus(image)
+                fm_test = Measure(image)
                 if fm_test > best_fm:
                     best_pos = new_pos
                     best_fm = fm_test
@@ -207,7 +240,8 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, dfbkg):
                 if before_move == after_move:
                     sign = -sign
                 image = AcquireNoBackground(detector, dfbkg)
-                fm_new = MeasureFocus(image)
+                fm_new = Measure(image)
+                logging.debug("Focus level at %f is %f", focus.position.value.get('z'), fm_new)
                 if fm_new > best_fm:
                     best_pos = new_pos
                     best_fm = fm_new
@@ -237,13 +271,14 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, dfbkg):
                 raise CancelledError()
             future._autofocus_state = FINISHED
 
+
 def _ClippedMove(rng, focus, shift):
     """
     Clips the focus move requested within the range
     """
     cur_pos = focus.position.value.get('z')
     test_pos = cur_pos + shift
-    if rng[0] >= test_pos :
+    if rng[0] >= test_pos:
         diff = rng[0] - cur_pos
         f = focus.moveRel({"z": diff})
         f.result()
@@ -255,6 +290,7 @@ def _ClippedMove(rng, focus, shift):
         f = focus.moveRel({"z": shift})
         f.result()
     return test_pos
+
 
 def _CancelAutoFocus(future):
     """
@@ -270,11 +306,13 @@ def _CancelAutoFocus(future):
 
     return True
 
+
 def estimateAutoFocusTime(exposure_time, steps=MAX_STEPS_NUMBER):
     """
     Estimates overlay procedure duration
     """
     return steps * exposure_time
+
 
 def AutoFocus(detector, scanner, focus, dfbkg=None):
     """
@@ -312,8 +350,12 @@ def AutoFocus(detector, scanner, focus, dfbkg=None):
     elif role == "overview-focus":  # NAVCAM
         max_stp_sz = 100 * detector.pixelSize.value[0]
     elif role == "ebeam-focus":  # SEM
-        thres_factor = 5 * thres_factor
-        max_stp_sz = 5.5e03 * scanner.pixelSize.value[0]
+        if detector.role == "ccd":
+            max_stp_sz = 7e04 * scanner.pixelSize.value[0]
+            thres_factor = 10 * thres_factor
+        else:
+            max_stp_sz = 5.5e03 * scanner.pixelSize.value[0]
+            thres_factor = 5 * thres_factor
     else:
         logging.warning("Unknown focus %s, will try autofocus anyway.", role)
         max_stp_sz = 3 * detector.pixelSize.value[0]
@@ -326,9 +368,9 @@ def AutoFocus(detector, scanner, focus, dfbkg=None):
 
     # Run in separate thread
     autofocus_thread = threading.Thread(target=executeTask,
-                  name="Autofocus",
-                  args=(f, _DoAutoFocus, f, detector, max_stp_sz, thres_factor,
-                        et, focus, dfbkg))
+                                        name="Autofocus",
+                                        args=(f, _DoAutoFocus, f, detector, max_stp_sz, thres_factor,
+                                              et, focus, dfbkg))
 
     autofocus_thread.start()
     return f
