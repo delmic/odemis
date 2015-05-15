@@ -56,12 +56,12 @@ SEM_KNOWN_FOCUS = 0.006386  # Fallback sem focus position for the first insertio
 
 def UpdateConversion(ccd, detector, escan, sem_stage, opt_stage, ebeam_focus,
                      focus, combined_stage, first_insertion, known_first_hole=None,
-                    known_second_hole=None, known_focus=SEM_KNOWN_FOCUS, known_offset=None,
-                    known_rotation=None, known_scaling=None, sem_position=EXPECTED_OFFSET,
-                    known_resolution_slope=None, known_resolution_intercept=None,
-                    known_hfw_slope=None, known_spot_shift=None):
+                     known_second_hole=None, known_focus=SEM_KNOWN_FOCUS, known_offset=None,
+                     known_rotation=None, known_scaling=None, sem_position=EXPECTED_OFFSET,
+                     known_resolution_slope=None, known_resolution_intercept=None,
+                     known_hfw_slope=None, known_spot_shift=None):
     """
-    Wrapper for DoUpdateConversion. It provides the ability to check the progress 
+    Wrapper for DoUpdateConversion. It provides the ability to check the progress
     of conversion update procedure or even cancel it.
     ccd (model.DigitalCamera): The ccd
     detector (model.Detector): The se-detector
@@ -76,26 +76,26 @@ def UpdateConversion(ccd, detector, escan, sem_stage, opt_stage, ebeam_focus,
     known_first_hole (tuple of floats): Hole coordinates found in the calibration file
     known_second_hole (tuple of floats): Hole coordinates found in the calibration file
     known_focus (float): Focus used for hole detection #m
-    known_offset (tuple of floats): Offset of sample holder found in the calibration file #m,m 
+    known_offset (tuple of floats): Offset of sample holder found in the calibration file #m,m
     known_rotation (float): Rotation of sample holder found in the calibration file #radians
-    known_scaling (tuple of floats): Scaling of sample holder found in the calibration file 
+    known_scaling (tuple of floats): Scaling of sample holder found in the calibration file
     sem_position (tuple of floats): SEM position for rough alignment
     known_resolution_slope (tuple of floats): slope of linear fit (resolution shift)
     known_resolution_intercept (tuple of floats): intercept of linear fit (resolution shift)
-    known_hfw_slope (tuple of floats): slope of linear fit (hfw shift) 
-    known_spot_shift (tuple of floats): spot shift percentage 
+    known_hfw_slope (tuple of floats): slope of linear fit (hfw shift)
+    known_spot_shift (tuple of floats): spot shift percentage
     returns (model.ProgressiveFuture):    Progress of DoAlignSpot,
                                          whose result() will return:
             returns first_hole (tuple of floats): Coordinates of first hole
                     second_hole (tuple of floats): Coordinates of second hole
                     hole_focus (float): Focus used for hole detection
-                    (tuple of floats):    offset #m,m 
+                    (tuple of floats):    offset #m,m
                     (float):    rotation #radians
                     (tuple of floats):    scaling
                     (tuple of floats): slope of linear fit (resolution shift)
                     (tuple of floats): intercept of linear fit (resolution shift)
                     (tuple of floats): slope of linear fit (hfw shift)
-                    (tuple of floats): spot shift percentage 
+                    (tuple of floats): spot shift percentage
     """
     # Create ProgressiveFuture and update its state to RUNNING
     est_start = time.time() + 0.1
@@ -118,27 +118,28 @@ def UpdateConversion(ccd, detector, escan, sem_stage, opt_stage, ebeam_focus,
 
     # Run in separate thread
     conversion_thread = threading.Thread(target=executeTask,
-                  name="Conversion update",
-                  args=(f, _DoUpdateConversion, f, ccd, detector, escan, sem_stage,
-                        opt_stage, ebeam_focus, focus, combined_stage, first_insertion,
-                        known_first_hole, known_second_hole, known_focus, known_offset,
-                        known_rotation, known_scaling, sem_position, known_resolution_slope,
-                        known_resolution_intercept, known_hfw_slope, known_spot_shift))
+                                         name="Conversion update",
+                                         args=(f, _DoUpdateConversion, f, ccd, detector, escan, sem_stage,
+                                               opt_stage, ebeam_focus, focus, combined_stage, first_insertion,
+                                               known_first_hole, known_second_hole, known_focus, known_offset,
+                                               known_rotation, known_scaling, sem_position, known_resolution_slope,
+                                               known_resolution_intercept, known_hfw_slope, known_spot_shift))
 
     conversion_thread.start()
     return f
 
+
 def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebeam_focus,
-                     focus, combined_stage, first_insertion, known_first_hole=None,
-                    known_second_hole=None, known_focus=SEM_KNOWN_FOCUS, known_offset=None,
-                    known_rotation=None, known_scaling=None, sem_position=EXPECTED_OFFSET,
-                    known_resolution_slope=None, known_resolution_intercept=None,
-                    known_hfw_slope=None, known_spot_shift=None):
+                        focus, combined_stage, first_insertion, known_first_hole=None,
+                        known_second_hole=None, known_focus=SEM_KNOWN_FOCUS, known_offset=None,
+                        known_rotation=None, known_scaling=None, sem_position=EXPECTED_OFFSET,
+                        known_resolution_slope=None, known_resolution_intercept=None,
+                        known_hfw_slope=None, known_spot_shift=None):
     """
-    First calls the HoleDetection to find the hole centers. Then if the current 
-    sample holder is inserted for the first time, calls AlignAndOffset, 
-    RotationAndScaling and enters the data to the calibration file. Otherwise 
-    given the holes coordinates of the original calibration and the current 
+    First calls the HoleDetection to find the hole centers. Then if the current
+    sample holder is inserted for the first time, calls AlignAndOffset,
+    RotationAndScaling and enters the data to the calibration file. Otherwise
+    given the holes coordinates of the original calibration and the current
     holes coordinates, update the offset, rotation and scaling to be used by the
      Combined Stage. It also calculates the parameters for the Phenom shift
     calibration.
@@ -156,26 +157,26 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
     known_first_hole (tuple of floats): Hole coordinates found in the calibration file
     known_second_hole (tuple of floats): Hole coordinates found in the calibration file
     known_focus (float): Focus used for hole detection #m
-    known_offset (tuple of floats): Offset of sample holder found in the calibration file #m,m 
+    known_offset (tuple of floats): Offset of sample holder found in the calibration file #m,m
     known_rotation (float): Rotation of sample holder found in the calibration file #radians
-    known_scaling (tuple of floats): Scaling of sample holder found in the calibration file 
-    sem_position (tuple of floats): SEM position for rough alignment 
+    known_scaling (tuple of floats): Scaling of sample holder found in the calibration file
+    sem_position (tuple of floats): SEM position for rough alignment
     known_resolution_slope (tuple of floats): slope of linear fit (resolution shift)
     known_resolution_intercept (tuple of floats): intercept of linear fit (resolution shift)
-    known_hfw_slope (tuple of floats): slope of linear fit (hfw shift) 
-    known_spot_shift (tuple of floats): spot shift percentage 
-    returns 
+    known_hfw_slope (tuple of floats): slope of linear fit (hfw shift)
+    known_spot_shift (tuple of floats): spot shift percentage
+    returns
             first_hole (tuple of floats): Coordinates of first hole
             second_hole (tuple of floats): Coordinates of second hole
             hole_focus (float): Focus used for hole detection
-            (tuple of floats): offset  
+            (tuple of floats): offset
             (float): rotation #radians
             (tuple of floats): scaling
             (tuple of floats): slope of linear fit (resolution shift)
             (tuple of floats): intercept of linear fit (resolution shift)
             (tuple of floats): slope of linear fit (hfw shift)
-            (tuple of floats): spot shift percentage 
-    raises:    
+            (tuple of floats): spot shift percentage
+    raises:
             CancelledError() if cancelled
             IOError
     """
@@ -194,15 +195,15 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
         except Exception:
             raise IOError("Conversion update failed to find sample holder holes.")
         # Check if the sample holder is inserted for the first time
-        if first_insertion == True:
+        if first_insertion is True:
             if future._conversion_update_state == CANCELLED:
                 raise CancelledError()
 
             # Update progress of the future
             future.set_end_time(time.time() +
-                estimateConversionTime(first_insertion) * (3 / 4))
+                                estimateConversionTime(first_insertion) * (3 / 4))
             logging.debug("Move SEM stage to expected offset...")
-            f = sem_stage.moveAbs({"x":sem_position[0], "y":sem_position[1]})
+            f = sem_stage.moveAbs({"x": sem_position[0], "y": sem_position[1]})
             f.result()
             # Due to stage lack of precision we have to double check that we
             # reached the desired position
@@ -212,14 +213,14 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
             logging.debug("Distance from required position after lens alignment: %f", dist)
             if dist >= 10e-06:
                 logging.debug("Retry to reach position..")
-                f = sem_stage.moveAbs({"x":sem_position[0], "y":sem_position[1]})
+                f = sem_stage.moveAbs({"x": sem_position[0], "y": sem_position[1]})
                 f.result()
                 reached_pos = (sem_stage.position.value["x"], sem_stage.position.value["y"])
                 vector = [a - b for a, b in zip(reached_pos, sem_position)]
                 dist = math.hypot(*vector)
                 logging.debug("New distance from required position: %f", dist)
             logging.debug("Move objective stage to (0,0)...")
-            f = opt_stage.moveAbs({"x":0, "y":0})
+            f = opt_stage.moveAbs({"x": 0, "y": 0})
             f.result()
             # Set min fov
             # We want to be as close as possible to the center when we are zoomed in
@@ -238,7 +239,7 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
                 raise CancelledError()
             # Update progress of the future
             future.set_end_time(time.time() +
-                estimateConversionTime(first_insertion) * (2 / 4))
+                                estimateConversionTime(first_insertion) * (2 / 4))
             logging.debug("Calculate rotation and scaling...")
             try:
                 future._rotation_scalingf = RotationAndScaling(ccd, detector, escan, sem_stage,
@@ -249,7 +250,7 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
 
             # Update progress of the future
             future.set_end_time(time.time() +
-                estimateConversionTime(first_insertion) * (1 / 4))
+                                estimateConversionTime(first_insertion) * (1 / 4))
             logging.debug("Calculate shift parameters...")
             try:
                 # Compute spot shift percentage
@@ -274,9 +275,9 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
             offset = ((acc_offset[0] / scaling[0]), (acc_offset[1] / scaling[1]))
 
             # Return to the center so fine overlay can be executed just after calibration
-            f = sem_stage.moveAbs({"x":-pure_offset[0], "y":-pure_offset[1]})
+            f = sem_stage.moveAbs({"x":pure_offset[0], "y":pure_offset[1]})
             f.result()
-            f = opt_stage.moveAbs({"x":0, "y":0})
+            f = opt_stage.moveAbs({"x": 0, "y": 0})
             f.result()
             f = focus.moveAbs({"z": center_focus})
             f.result()
@@ -295,6 +296,11 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
             det_dataflow = detector.data
             f = autofocus.AutoFocus(ccd, escan, ebeam_focus, dfbkg=det_dataflow)
             f.result()
+            # Re-apply optical autofocus to be safe in case of inaccuracy
+            ccd.binning.value = (8, 8)
+            f = autofocus.AutoFocus(ccd, escan, focus, dfbkg=det_dataflow)
+            f.result()
+            ccd.binning.value = (1, 1)
 
             # TODO also calculate and return Phenom shift parameters
             # Data returned needs to be filled in the calibration file
@@ -307,12 +313,12 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
             future.set_end_time(time.time() + 1)
             logging.debug("Calculate extra offset and rotation...")
             updated_offset, updated_rotation = UpdateOffsetAndRotation(first_hole,
-                                                                    second_hole,
-                                                                    known_first_hole,
-                                                                    known_second_hole,
-                                                                    known_offset,
-                                                                    known_rotation,
-                                                                    known_scaling)
+                                                                       second_hole,
+                                                                       known_first_hole,
+                                                                       known_second_hole,
+                                                                       known_offset,
+                                                                       known_rotation,
+                                                                       known_scaling)
 
             # Update combined stage conversion metadata
             logging.debug("Update combined stage conversion metadata...")
@@ -330,6 +336,7 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
             if future._conversion_update_state == CANCELLED:
                 raise CancelledError()
             future._conversion_update_state = FINISHED
+
 
 def _CancelUpdateConversion(future):
     """
@@ -353,20 +360,22 @@ def _CancelUpdateConversion(future):
     future._done.wait(10)
     return True
 
+
 def estimateConversionTime(first_insertion):
     """
     Estimates conversion procedure duration
     returns (float):  process estimated time #s
     """
     # Rough approximation
-    if first_insertion == True:
+    if first_insertion is True:
         return 4 * 60
     else:
         return 60
 
+
 def AlignAndOffset(ccd, detector, escan, sem_stage, opt_stage, focus):
     """
-    Wrapper for DoAlignAndOffset. It provides the ability to check the progress 
+    Wrapper for DoAlignAndOffset. It provides the ability to check the progress
     of the procedure.
     ccd (model.DigitalCamera): The ccd
     escan (model.Emitter): The e-beam scanner
@@ -390,19 +399,20 @@ def AlignAndOffset(ccd, detector, escan, sem_stage, opt_stage, focus):
 
     # Run in separate thread
     offset_thread = threading.Thread(target=executeTask,
-                  name="Align and offset",
-                  args=(f, _DoAlignAndOffset, f, ccd, detector, escan, sem_stage, opt_stage,
-                        focus))
+                                     name="Align and offset",
+                                     args=(f, _DoAlignAndOffset, f, ccd, detector, escan, sem_stage, opt_stage,
+                                           focus))
 
     offset_thread.start()
     return f
 
+
 def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus):
     """
-    Write one CL spot and align it, 
-    moving both SEM stage and e-beam (spot alignment). Calculate the offset 
-    based on the final position plus the offset of the hole from the expected 
-    position. 
+    Write one CL spot and align it,
+    moving both SEM stage and e-beam (spot alignment). Calculate the offset
+    based on the final position plus the offset of the hole from the expected
+    position.
     Note: The optical stage should be referenced before calling this function.
     The SEM stage should be positioned at an origin position.
     future (model.ProgressiveFuture): Progressive future provided by the wrapper
@@ -412,7 +422,7 @@ def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus)
     opt_stage (model.Actuator): The objective stage
     focus (model.Actuator): Focus of objective lens
     returns (tuple of floats): offset #m,m
-    raises:    
+    raises:
         CancelledError() if cancelled
         IOError if CL spot not found
     """
@@ -497,6 +507,7 @@ def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus)
                 raise CancelledError()
             future._align_offset_state = FINISHED
 
+
 def _CancelAlignAndOffset(future):
     """
     Canceller of _DoAlignAndOffset task.
@@ -512,6 +523,7 @@ def _CancelAlignAndOffset(future):
 
     return True
 
+
 def estimateOffsetTime(et, dist=None):
     """
     Estimates alignment and offset calculation procedure duration
@@ -525,9 +537,10 @@ def estimateOffsetTime(et, dist=None):
         steps = min(steps, MAX_STEPS)
     return steps * (et + 2)  # s
 
+
 def RotationAndScaling(ccd, detector, escan, sem_stage, opt_stage, focus, offset, manual=False):
     """
-    Wrapper for DoRotationAndScaling. It provides the ability to check the 
+    Wrapper for DoRotationAndScaling. It provides the ability to check the
     progress of the procedure.
     ccd (model.DigitalCamera): The ccd
     escan (model.Emitter): The e-beam scanner
@@ -549,12 +562,13 @@ def RotationAndScaling(ccd, detector, escan, sem_stage, opt_stage, focus, offset
 
     # Run in separate thread
     rotation_thread = threading.Thread(target=executeTask,
-                  name="Rotation and scaling",
-                  args=(f, _DoRotationAndScaling, f, ccd, detector, escan, sem_stage, opt_stage,
-                        focus, offset, manual))
+                                       name="Rotation and scaling",
+                                       args=(f, _DoRotationAndScaling, f, ccd, detector, escan, sem_stage, opt_stage,
+                                             focus, offset, manual))
 
     rotation_thread.start()
     return f
+
 
 def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, focus,
                           offset, manual):
@@ -654,7 +668,7 @@ def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, fo
                 steps += 1
                 # Update progress of the future
                 future.set_end_time(time.time() +
-                    estimateRotationAndScalingTime(ccd.exposureTime.value, dist))
+                                    estimateRotationAndScalingTime(ccd.exposureTime.value, dist))
 
             # Save Phenom sample stage position and Delmic optical stage position
             sem_spots.append((sem_stage.position.value["x"] - vector[0],
@@ -664,7 +678,7 @@ def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, fo
 
         # From the sets of 4 positions calculate rotation and scaling matrices
         acc_offset, scaling, rotation = transform.CalculateTransform(opt_spots,
-                                                                 sem_spots)
+                                                                     sem_spots)
         # Take care of negative rotation
         cor_rot = rotation % (2 * math.pi)
         # Since we inversed the master and slave of the TwinStage, we also
@@ -678,6 +692,7 @@ def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, fo
             if future._rotation_scaling_state == CANCELLED:
                 raise CancelledError()
             future._rotation_scaling_state = FINISHED
+
 
 def _CancelRotationAndScaling(future):
     """
@@ -693,6 +708,7 @@ def _CancelRotationAndScaling(future):
 
     return True
 
+
 def estimateRotationAndScalingTime(et, dist=None):
     """
     Estimates rotation and scaling calculation procedure duration
@@ -706,15 +722,17 @@ def estimateRotationAndScalingTime(et, dist=None):
         steps = min(steps, MAX_STEPS)
     return steps * (et + 2)  # s
 
+
 def _discard_data(df, data):
     """
     Does nothing, just discard the SEM data received (for spot mode)
     """
     pass
 
+
 def HoleDetection(detector, escan, sem_stage, ebeam_focus, known_focus=None, manual=False):
     """
-    Wrapper for DoHoleDetection. It provides the ability to check the 
+    Wrapper for DoHoleDetection. It provides the ability to check the
     progress of the procedure.
     detector (model.Detector): The se-detector
     escan (model.Emitter): The e-beam scanner
@@ -737,17 +755,18 @@ def HoleDetection(detector, escan, sem_stage, ebeam_focus, known_focus=None, man
 
     # Run in separate thread
     detection_thread = threading.Thread(target=executeTask,
-                  name="Hole detection",
-                  args=(f, _DoHoleDetection, f, detector, escan, sem_stage, ebeam_focus,
-                        known_focus, manual))
+                                        name="Hole detection",
+                                        args=(f, _DoHoleDetection, f, detector, escan, sem_stage, ebeam_focus,
+                                              known_focus, manual))
 
     detection_thread.start()
     return f
 
+
 def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focus=None, manual=False):
     """
-    Moves to the expected positions of the holes on the sample holder and 
-    determines the centers of the holes (acquiring SEM images) with respect to 
+    Moves to the expected positions of the holes on the sample holder and
+    determines the centers of the holes (acquiring SEM images) with respect to
     the center of the SEM.
     future (model.ProgressiveFuture): Progressive future provided by the wrapper
     detector (model.Detector): The se-detector
@@ -775,7 +794,7 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
         hole_focus = known_focus
 
         detector.data.subscribe(_discard_data)  # unblank the beam
-        escan.accelVoltage.value = 5.6e03  # to ensure that features are visible
+        escan.accelVoltage.value = 5.3e03  # to ensure that features are visible
         detector.data.unsubscribe(_discard_data)
 
         for pos in EXPECTED_HOLES:
@@ -798,7 +817,7 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
                 f.result()
 
             # For the first hole apply autofocus anyway
-            if (pos == EXPECTED_HOLES[0]) and (manual == False):
+            if (pos == EXPECTED_HOLES[0]) and (manual is False):
                 escan.horizontalFoV.value = 250e-06  # m
                 escan.scale.value = (2, 2)
                 f = autofocus.AutoFocus(detector, escan, ebeam_focus)
@@ -850,6 +869,7 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
                 raise CancelledError()
             future._hole_detection_state = FINISHED
 
+
 def _CancelHoleDetection(future):
     """
     Canceller of _DoHoleDetection task.
@@ -864,6 +884,7 @@ def _CancelHoleDetection(future):
 
     return True
 
+
 def estimateHoleDetectionTime(et, dist=None):
     """
     Estimates hole detection procedure duration
@@ -876,6 +897,7 @@ def estimateHoleDetectionTime(et, dist=None):
         steps = math.log(dist / err_mrg) / math.log(2)
         steps = min(steps, MAX_STEPS)
     return steps * (et + 2)  # s
+
 
 def FindCircleCenter(image, radius, max_diff):
     """
@@ -910,6 +932,7 @@ def FindCircleCenter(image, radius, max_diff):
 
     return cntr
 
+
 def UpdateOffsetAndRotation(new_first_hole, new_second_hole, expected_first_hole,
                             expected_second_hole, offset, rotation, scaling):
     """
@@ -918,7 +941,7 @@ def UpdateOffsetAndRotation(new_first_hole, new_second_hole, expected_first_hole
     new_first_hole (tuple of floats): New coordinates of the holes
     new_second_hole (tuple of floats)
     expected_first_hole (tuple of floats): expected coordinates
-    expected_second_hole (tuple of floats) 
+    expected_second_hole (tuple of floats)
     offset (tuple of floats): #m,m
     rotation (float): #radians
     scaling (tuple of floats)
@@ -935,11 +958,12 @@ def UpdateOffsetAndRotation(new_first_hole, new_second_hole, expected_first_hole
     updated_rotation = rotation - e_rotation
     return updated_offset, updated_rotation
 
+
 # LensAlignment is called by the GUI after the objective stage is referenced and
 # SEM stage to (0,0).
 def LensAlignment(navcam, sem_stage):
     """
-    Wrapper for DoLensAlignment. It provides the ability to check the progress 
+    Wrapper for DoLensAlignment. It provides the ability to check the progress
     of the procedure.
     navcam (model.DigitalCamera): The NavCam
     sem_stage (model.Actuator): The SEM stage
@@ -957,11 +981,12 @@ def LensAlignment(navcam, sem_stage):
 
     # Run in separate thread
     lens_thread = threading.Thread(target=executeTask,
-                  name="Lens alignment",
-                  args=(f, _DoLensAlignment, f, navcam, sem_stage))
+                                   name="Lens alignment",
+                                   args=(f, _DoLensAlignment, f, navcam, sem_stage))
 
     lens_thread.start()
     return f
+
 
 def _DoLensAlignment(future, navcam, sem_stage):
     """
@@ -970,8 +995,8 @@ def _DoLensAlignment(future, navcam, sem_stage):
     future (model.ProgressiveFuture): Progressive future provided by the wrapper
     navcam (model.DigitalCamera): The NavCam
     sem_stage (model.Actuator): The SEM stage
-    returns sem_position (tuple of floats): SEM stage position #m,m 
-    raises:    
+    returns sem_position (tuple of floats): SEM stage position #m,m
+    raises:
         CancelledError() if cancelled
         IOError If objective lens not found
     """
@@ -997,6 +1022,7 @@ def _DoLensAlignment(future, navcam, sem_stage):
                 raise CancelledError()
             future._lens_alignment_state = FINISHED
 
+
 def _CancelLensAlignment(future):
     """
     Canceller of _DoLensAlignment task.
@@ -1011,12 +1037,14 @@ def _CancelLensAlignment(future):
 
     return True
 
+
 def estimateLensAlignmentTime():
     """
     Estimates lens alignment procedure duration
     returns (float):  process estimated time #s
     """
     return 1  # s
+
 
 def HFWShiftFactor(detector, escan, sem_stage, ebeam_focus, known_focus=SEM_KNOWN_FOCUS):
     """
@@ -1042,21 +1070,22 @@ def HFWShiftFactor(detector, escan, sem_stage, ebeam_focus, known_focus=SEM_KNOW
 
     # Run in separate thread
     hfw_shift_thread = threading.Thread(target=executeTask,
-                  name="HFW Shift Factor",
-                  args=(f, _DoHFWShiftFactor, f, detector, escan, sem_stage, ebeam_focus,
-                        known_focus))
+                                        name="HFW Shift Factor",
+                                        args=(f, _DoHFWShiftFactor, f, detector, escan, sem_stage, ebeam_focus,
+                                              known_focus))
 
     hfw_shift_thread.start()
     return f
 
+
 def _DoHFWShiftFactor(future, detector, escan, sem_stage, ebeam_focus, known_focus=SEM_KNOWN_FOCUS):
     """
-    Acquires SEM images of several HFW values (from smallest to largest) and 
-    detects the shift between them using phase correlation. To this end, it has 
-    to crop the corresponding FoV of each larger image and resample it to smaller 
-    one’s resolution in order to feed it to the phase correlation. Then it 
-    calculates the cummulative sum of shift between each image and the smallest 
-    one and does linear fit for these shift values. From the linear fit we just 
+    Acquires SEM images of several HFW values (from smallest to largest) and
+    detects the shift between them using phase correlation. To this end, it has
+    to crop the corresponding FoV of each larger image and resample it to smaller
+    one’s resolution in order to feed it to the phase correlation. Then it
+    calculates the cummulative sum of shift between each image and the smallest
+    one and does linear fit for these shift values. From the linear fit we just
     return the slope of the line as the intercept is expected to be 0.
     future (model.ProgressiveFuture): Progressive future provided by the wrapper
     detector (model.Detector): The se-detector
@@ -1064,8 +1093,8 @@ def _DoHFWShiftFactor(future, detector, escan, sem_stage, ebeam_focus, known_foc
     sem_stage (model.Actuator): The SEM stage
     ebeam_focus (model.Actuator): EBeam focus
     known_focus (float): Focus for shift calibration, output from hole detection #m
-    returns (tuple of floats): slope of linear fit 
-    raises:    
+    returns (tuple of floats): slope of linear fit
+    raises:
         CancelledError() if cancelled
         IOError if shift cannot be estimated
     """
@@ -1090,7 +1119,7 @@ def _DoHFWShiftFactor(future, detector, escan, sem_stage, ebeam_focus, known_foc
         zoom_f = 2  # zoom factor
 
         detector.data.subscribe(_discard_data)  # unblank the beam
-        escan.accelVoltage.value = 5.6e03  # to ensure that features are visible
+        escan.accelVoltage.value = 5.3e03  # to ensure that features are visible
         f = detector.applyAutoContrast()
         f.result()
         detector.data.unsubscribe(_discard_data)
@@ -1149,6 +1178,7 @@ def _DoHFWShiftFactor(future, detector, escan, sem_stage, ebeam_focus, known_foc
                 raise CancelledError()
             future._hfw_shift_state = FINISHED
 
+
 def _CancelHFWShiftFactor(future):
     """
     Canceller of _DoHFWShiftFactor task.
@@ -1163,6 +1193,7 @@ def _CancelHFWShiftFactor(future):
 
     return True
 
+
 def estimateHFWShiftFactorTime(et):
     """
     Estimates HFW-related shift calculation procedure duration
@@ -1172,9 +1203,10 @@ def estimateHFWShiftFactorTime(et):
     dur = 6 * et + 1
     return dur  # s
 
+
 def ResolutionShiftFactor(detector, escan, sem_stage, ebeam_focus, known_focus=SEM_KNOWN_FOCUS):
     """
-    Wrapper for DoResolutionShiftFactor. It provides the ability to check the 
+    Wrapper for DoResolutionShiftFactor. It provides the ability to check the
     progress of the procedure.
     detector (model.Detector): The se-detector
     escan (model.Emitter): The e-beam scanner
@@ -1196,20 +1228,22 @@ def ResolutionShiftFactor(detector, escan, sem_stage, ebeam_focus, known_focus=S
 
     # Run in separate thread
     resolution_shift_thread = threading.Thread(target=executeTask,
-                  name="Resolution Shift Factor",
-                  args=(f, _DoResolutionShiftFactor, f, detector, escan, sem_stage, ebeam_focus,
-                        known_focus))
+                                               name="Resolution Shift Factor",
+                                               args=(f, _DoResolutionShiftFactor,
+                                                     f, detector, escan, sem_stage,
+                                                     ebeam_focus, known_focus))
 
     resolution_shift_thread.start()
     return f
 
+
 def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus, known_focus=SEM_KNOWN_FOCUS):
     """
-    Acquires SEM images of several resolution values (from largest to smallest) 
-    and detects the shift between each image and the largest one using phase 
-    correlation. To this end, it has to resample the smaller resolution image to 
-    larger’s image resolution in order to feed it to the phase correlation. Then 
-    it does linear fit for these shift values. From the linear fit we just return 
+    Acquires SEM images of several resolution values (from largest to smallest)
+    and detects the shift between each image and the largest one using phase
+    correlation. To this end, it has to resample the smaller resolution image to
+    larger’s image resolution in order to feed it to the phase correlation. Then
+    it does linear fit for these shift values. From the linear fit we just return
     both the slope and the intercept of the line.
     future (model.ProgressiveFuture): Progressive future provided by the wrapper
     detector (model.Detector): The se-detector
@@ -1217,9 +1251,9 @@ def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus, kn
     sem_stage (model.Actuator): The SEM stage
     ebeam_focus (model.Actuator): EBeam focus
     known_focus (float): Focus for shift calibration, output from hole detection #m
-    returns (tuple of floats): slope of linear fit 
-            (tuple of floats): intercept of linear fit 
-    raises:    
+    returns (tuple of floats): slope of linear fit
+            (tuple of floats): intercept of linear fit
+    raises:
         CancelledError() if cancelled
         IOError if shift cannot be estimated
     """
@@ -1243,13 +1277,13 @@ def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus, kn
         resolution_values = []
 
         detector.data.subscribe(_discard_data)  # unblank the beam
-        escan.accelVoltage.value = 5.6e03  # to ensure that features are visible
+        escan.accelVoltage.value = 5.3e03  # to ensure that features are visible
         f = detector.applyAutoContrast()
         f.result()
         detector.data.unsubscribe(_discard_data)
 
         # Apply the given sem focus value for a good focus level
-        f = ebeam_focus.moveAbs({"z":known_focus})
+        f = ebeam_focus.moveAbs({"z": known_focus})
         f.result()
 
         smaller_image = None
@@ -1305,6 +1339,7 @@ def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus, kn
                 raise CancelledError()
             future._resolution_shift_state = FINISHED
 
+
 def _CancelResolutionShiftFactor(future):
     """
     Canceller of _DoResolutionShiftFactor task.
@@ -1319,6 +1354,7 @@ def _CancelResolutionShiftFactor(future):
 
     return True
 
+
 def estimateResolutionShiftFactorTime(et):
     """
     Estimates Resolution-related shift calculation procedure duration
@@ -1326,11 +1362,12 @@ def estimateResolutionShiftFactorTime(et):
     """
     # Approximately 28 acquisitions
     dur = 28 * et + 1
-    return  dur  # s
+    return dur  # s
+
 
 def SpotShiftFactor(ccd, detector, escan, focus):
     """
-    Wrapper for DoSpotShiftFactor. It provides the ability to check the 
+    Wrapper for DoSpotShiftFactor. It provides the ability to check the
     progress of the procedure.
     ccd (model.DigitalCamera): The ccd
     escan (model.Emitter): The e-beam scanner
@@ -1349,27 +1386,28 @@ def SpotShiftFactor(ccd, detector, escan, focus):
 
     # Run in separate thread
     spot_shift_thread = threading.Thread(target=executeTask,
-                  name="Spot Shift Factor",
-                  args=(f, _DoSpotShiftFactor, f, ccd, detector, escan, focus))
+                                         name="Spot Shift Factor",
+                                         args=(f, _DoSpotShiftFactor, f, ccd, detector, escan, focus))
 
     spot_shift_thread.start()
     return f
 
+
 def _DoSpotShiftFactor(future, ccd, detector, escan, focus):
     """
-    We assume that the stages are already aligned and the CL spot is within the 
-    CCD FoV. It first acquires an optical image with the current rotation applied 
-    and detects the spot position. Then, it rotates by 180 degrees, acquires an 
-    image and detects the new spot position. The distance between the two positions 
-    is calculated and the average is returned as the offset from the center of 
-    the SEM image (it is also divided by the current HFW in order to get a 
-    percentage). 
+    We assume that the stages are already aligned and the CL spot is within the
+    CCD FoV. It first acquires an optical image with the current rotation applied
+    and detects the spot position. Then, it rotates by 180 degrees, acquires an
+    image and detects the new spot position. The distance between the two positions
+    is calculated and the average is returned as the offset from the center of
+    the SEM image (it is also divided by the current HFW in order to get a
+    percentage).
     future (model.ProgressiveFuture): Progressive future provided by the wrapper
     ccd (model.DigitalCamera): The ccd
     escan (model.Emitter): The e-beam scanner
     focus (model.Actuator): Focus of objective lens
     returns (tuple of floats): shift percentage
-    raises:    
+    raises:
         CancelledError() if cancelled
         IOError if CL spot not found
     """
@@ -1437,6 +1475,7 @@ def _DoSpotShiftFactor(future, ccd, detector, escan, focus):
                 raise CancelledError()
             future._spot_shift_state = FINISHED
 
+
 def _CancelSpotShiftFactor(future):
     """
     Canceller of _DoSpotShiftFactor task.
@@ -1450,6 +1489,7 @@ def _CancelSpotShiftFactor(future):
         logging.debug("Spot shift calculation cancelled.")
 
     return True
+
 
 def estimateSpotShiftFactor(et):
     """

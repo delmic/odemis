@@ -170,14 +170,14 @@ def main(args):
         raw_input(msg)
         detector.data.unsubscribe(_discard_data)
         align_offsetf = aligndelphi.AlignAndOffset(ccd, detector, escan, sem_stage,
-                                               opt_stage, focus)
+                                                   opt_stage, focus)
         offset = align_offsetf.result()
         center_focus = focus.position.value.get('z')
 
         logging.debug("Calculating rotation and scaling...")
         try:
             rotation_scalingf = aligndelphi.RotationAndScaling(ccd, detector, escan, sem_stage,
-                                                           opt_stage, focus, offset, manual=True)
+                                                               opt_stage, focus, offset, manual=True)
             acc_offset, rotation, scaling = rotation_scalingf.result()
         except Exception:
             # Configure CCD and e-beam to write CL spots
@@ -194,7 +194,7 @@ def main(args):
             raw_input(msg)
             detector.data.unsubscribe(_discard_data)
             rotation_scalingf = aligndelphi.RotationAndScaling(ccd, detector, escan, sem_stage,
-                                                           opt_stage, focus, offset, manual=True)
+                                                               opt_stage, focus, offset, manual=True)
             acc_offset, rotation, scaling = rotation_scalingf.result()
 
         # Offset is divided by scaling, since Convert Stage applies scaling
@@ -237,7 +237,7 @@ def main(args):
         logging.info("\n**Computed SEM shift parameters**\n resa: %s \n resb: %s \n hfwa: %s \n spotshift: %s \n", resa, resb, hfwa, spotshift)
 
         # Return to the center so fine alignment can be executed just after calibration
-        f = sem_stage.moveAbs({"x":-pure_offset[0], "y":-pure_offset[1]})
+        f = sem_stage.moveAbs({"x":pure_offset[0], "y":pure_offset[1]})
         f.result()
         f = opt_stage.moveAbs({"x": 0, "y": 0})
         f.result()
@@ -287,7 +287,8 @@ def main(args):
                                   escan,
                                   ccd,
                                   detector,
-                                  skew=True)
+                                  skew=True,
+                                  bgsub=True)
             trans_val, cor_md = f.result()
         except Exception:
             # Configure CCD and e-beam to write CL spots
@@ -305,12 +306,13 @@ def main(args):
             detector.data.unsubscribe(_discard_data)
             escan.horizontalFoV.value = 80e-06
             f = align.FindOverlay((4, 4),
-                      0.5,  # s, dwell time
-                      10e-06,  # m, maximum difference allowed
-                      escan,
-                      ccd,
-                      detector,
-                      skew=True)
+                                  0.5,  # s, dwell time
+                                  10e-06,  # m, maximum difference allowed
+                                  escan,
+                                  ccd,
+                                  detector,
+                                  skew=True,
+                                  bgsub=True)
             trans_val, cor_md = f.result()
 
         trans_md, skew_md = cor_md
@@ -323,8 +325,8 @@ def main(args):
         calibconf = get_calib_conf()
         shid, sht = chamber.sampleHolder.value
         calibconf.set_sh_calib(shid, first_hole, second_hole, hole_focus, offset,
-                             scaling, rotation, iscale, irot, iscale_xy, ishear,
-                             resa, resb, hfwa, spotshift)
+                               scaling, rotation, iscale, irot, iscale_xy, ishear,
+                               resa, resb, hfwa, spotshift)
     except:
         logging.exception("Unexpected error while performing action.")
         return 127
@@ -334,6 +336,7 @@ def main(args):
         f.result()
 
     return 0
+
 
 def _discard_data(df, data):
     """

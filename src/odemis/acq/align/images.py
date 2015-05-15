@@ -33,17 +33,22 @@ from odemis.util import img
 import threading
 import math
 import copy
+from odemis.util.img import Subtract
 
 # Approximate size of a (big) CL spot. If the distance between spots is smaller
 # than this, one image per spot will be taken.
 SPOT_SIZE = 1.5e-6 # m
+
+
 class GridScanner(object):
-    def __init__(self, repetitions, dwell_time, escan, ccd, detector):
+    def __init__(self, repetitions, dwell_time, escan, ccd, detector, bgsub=False):
         self.repetitions = repetitions
         self.dwell_time = dwell_time
         self.escan = escan
         self.ccd = ccd
         self.detector = detector
+        self.bgsub = bgsub
+        self.bg_image = None
 
         self._acq_state = FINISHED
         self._acq_lock = threading.Lock()
@@ -88,7 +93,10 @@ class GridScanner(object):
         """
         Receives the CCD data
         """
-        self._optical_image = data
+        if self.bgsub:
+            self._optical_image = Subtract(data, self.bg_image)
+        else:
+            self._optical_image = data
         self._ccd_done.set()
         logging.debug("Got CCD image!")
 
@@ -105,11 +113,11 @@ class GridScanner(object):
         Perform acquisition spot per spot.
         Slow, but works even if SEM FoV is small
         """
+        # TODO support background substraction also in spot per spot scanning
         escan = self.escan
         ccd = self.ccd
         detector = self.detector
         dwell_time = self.dwell_time
-        
         escan.scale.value = (1, 1)
         escan.resolution.value = (1, 1)
 
@@ -133,7 +141,6 @@ class GridScanner(object):
         ccd.exposureTime.value = et  # s
         readout = numpy.prod(ccd.resolution.value) / ccd.readoutRate.value
         tot_time = et + readout + 0.05
-        
         logging.debug("Scanning spot grid with image per spot procedure...")
 
         self._spot_images = []
@@ -162,17 +169,17 @@ class GridScanner(object):
             self._acq_state = FINISHED
 
         return self._spot_images, electron_coordinates, scale
-    
+
     def _doWholeAcquisition(self, electron_coordinates, scale):
         """
-        Perform acquisition with one optical image for all the spots. 
+        Perform acquisition with one optical image for all the spots.
         It's faster, but it's harder to separate the spots.
         """
         escan = self.escan
         ccd = self.ccd
         detector = self.detector
         dwell_time = self.dwell_time
-        
+
         # order matters
         escan.scale.value = scale
         escan.resolution.value = self.repetitions
@@ -185,7 +192,7 @@ class GridScanner(object):
         if dwell_time < 2 * sem_dt:
             dwell_time = 2 * sem_dt
             logging.info("Increasing dwell time to %g s to avoid synchronization problems",
-                          dwell_time)
+                         dwell_time)
 
         # CCD setup
         ccd.binning.value = (1, 1)
@@ -199,6 +206,8 @@ class GridScanner(object):
             if self._acq_state == CANCELLED:
                 raise CancelledError()
 
+            if self.bgsub:
+                self.bg_image = ccd.data.get(asap=False)
             detector.data.subscribe(self._discard_data)
             ccd.data.subscribe(self._onCCDImage)
             logging.debug("Scanning spot grid...")
@@ -220,15 +229,15 @@ class GridScanner(object):
 
     def DoAcquisition(self):
         """
-        Uses the e-beam to scan the rectangular grid consisted of the given number 
+        Uses the e-beam to scan the rectangular grid consisted of the given number
         of spots and acquires the corresponding CCD image
         repetitions (tuple of ints): The number of CL spots are used
         dwell_time (float): Time to scan each spot #s
         escan (model.Emitter): The e-beam scanner
         ccd (model.DigitalCamera): The CCD
         detector (model.Detector): The electron detector
-        returns (DataArray or list of DataArrays): 2D array containing the 
-                     the spotted optical image, or a list of 2D images 
+        returns (DataArray or list of DataArrays): 2D array containing the
+                     the spotted optical image, or a list of 2D images
                      containing the optical image for each spot.
                 (List of tuples):  Coordinates of spots in electron image
                 (Tuple of floats): Scaling of electron image (in optical px)
@@ -252,7 +261,7 @@ class GridScanner(object):
         req_area = ccd_area * 0.8
         if sem_area > req_area:
             ratio = math.sqrt(req_area / sem_area)
-        
+
         scale = [(escan.resolution.range[1][0]) / rep[0],
                  (escan.resolution.range[1][1]) / rep[1]]
         # Apply ratio
@@ -261,7 +270,7 @@ class GridScanner(object):
             scale = (1, 1)
             logging.warning("SEM field of view is too big. Scale set to %s.",
                             scale)
-            
+
         electron_coordinates = []
         bound = (((rep[0] - 1) * scale[0]) / 2,
                  ((rep[1] - 1) * scale[1]) / 2)
@@ -306,7 +315,7 @@ class GridScanner(object):
             self._acq_state = CANCELLED
             self._ccd_done.set()
             logging.debug("Scan cancelled.")
-    
+
         return True
 
     def get_sem_fov(self):
@@ -402,7 +411,7 @@ class GridScanner(object):
         """
         Convert the ROI in physical coordinates into a CCD ROI (in pixels)
         roi (4 floats): ltrb positions in m
-        return (4 ints or None): ltrb positions in pixels, or None if no intersection 
+        return (4 ints or None): ltrb positions in pixels, or None if no intersection
         """
         ccd_rect = self.get_ccd_fov()
         logging.debug("CCD FoV = %s", ccd_rect)
@@ -458,6 +467,5 @@ class GridScanner(object):
         self.ccd.resolution.value = res
 
         logging.info("CCD res = %s, binning = %s",
-                      self.ccd.resolution.value,
-                      self.ccd.binning.value)
-
+                     self.ccd.resolution.value,
+                     self.ccd.binning.value)

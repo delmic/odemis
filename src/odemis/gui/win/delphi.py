@@ -27,6 +27,7 @@ from odemis.acq._futures import executeTask
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
     RUNNING
 import odemis.acq.align.delphi as aligndelphi
+from odemis.acq.align import autofocus
 import threading
 import time
 import math
@@ -34,6 +35,7 @@ import os
 from odemis.acq import align
 
 DELPHI_OPT_GOOD_FOCUS = 0.03826  # somehow possibly not too bad focus position
+
 
 # code based on the wxPython demo TestDialog class
 class FirstCalibrationDialog(wx.Dialog):
@@ -100,6 +102,7 @@ class FirstCalibrationDialog(wx.Dialog):
         else:
             return None
 
+
 class CalibrationProgressDialog(xrcprogress_dialog):
     """ Wrapper class responsible for the connection between delphi calibration
     future and the xrcprogress_dialog.
@@ -124,8 +127,8 @@ class CalibrationProgressDialog(xrcprogress_dialog):
         self.calib_future = DelphiCalibration(main_data, overview_pressure, vacuum_pressure,
                                               vented_pressure)
         self._calib_future_connector = ProgressiveFutureConnector(self.calib_future,
-                                                                 self.gauge,
-                                                                 self.time_txt)
+                                                                  self.gauge,
+                                                                  self.time_txt)
         self.calib_future.add_done_callback(self.on_calib_done)
 #         self.calib_future.add_update_callback(self.on_calib_update)
 
@@ -198,6 +201,7 @@ class CalibrationProgressDialog(xrcprogress_dialog):
 #         """ Callback called when the calibration time is updated (either successfully or cancelled) """
 #         self.update_calibration_time(left)
 
+
 def DelphiCalibration(main_data, overview_pressure, vacuum_pressure, vented_pressure,
                       first_insertion=True, known_first_hole_f=None, known_second_hole_f=None,
                       known_focus_f=None, known_offset_f=None, known_rotation_f=None,
@@ -231,14 +235,15 @@ def DelphiCalibration(main_data, overview_pressure, vacuum_pressure, vented_pres
 
     # Run in separate thread
     delphi_calib_thread = threading.Thread(target=executeTask,
-                  name="Delphi Calibration",
-                  args=(f, _DoDelphiCalibration, f, main_data, overview_pressure,
-                        vacuum_pressure, vented_pressure, first_insertion,
-                        known_first_hole_f, known_second_hole_f, known_focus_f,
-                        known_offset_f, known_rotation_f, known_scaling_f))
+                                           name="Delphi Calibration",
+                                           args=(f, _DoDelphiCalibration, f, main_data, overview_pressure,
+                                                 vacuum_pressure, vented_pressure, first_insertion,
+                                                 known_first_hole_f, known_second_hole_f, known_focus_f,
+                                                 known_offset_f, known_rotation_f, known_scaling_f))
 
     delphi_calib_thread.start()
     return f
+
 
 def _DoDelphiCalibration(future, main_data, overview_pressure, vacuum_pressure,
                          vented_pressure, first_insertion=True, known_first_hole_f=None,
@@ -299,7 +304,7 @@ def _DoDelphiCalibration(future, main_data, overview_pressure, vacuum_pressure,
                 raise KeyError("Failed to find SEM and optical stages")
 
             # Initial calibration
-            if first_insertion == True:
+            if first_insertion is True:
                 # Move to the overview position first
                 f = main_data.chamber.moveAbs({"pressure": overview_pressure})
                 f.result()
@@ -315,7 +320,7 @@ def _DoDelphiCalibration(future, main_data, overview_pressure, vacuum_pressure,
 
                 # SEM stage to (0,0)
                 logging.debug("Move to the center of SEM stage...")
-                f = sem_stage.moveAbs({"x":0, "y":0})
+                f = sem_stage.moveAbs({"x": 0, "y": 0})
                 f.result()
 
                 # Calculate offset approximation
@@ -366,14 +371,42 @@ def _DoDelphiCalibration(future, main_data, overview_pressure, vacuum_pressure,
 
                 # Run the optical fine alignment
                 # TODO: reuse the exposure time
-                f = align.FindOverlay((4, 4),
-                                      0.5,  # s, dwell time
-                                      10e-06,  # m, maximum difference allowed
-                                      main_data.ebeam,
-                                      main_data.ccd,
-                                      main_data.bsd,
-                                      skew=True)
-                trans_val, cor_md = f.result()
+                try:
+                    f = align.FindOverlay((4, 4),
+                                          0.5,  # s, dwell time
+                                          10e-06,  # m, maximum difference allowed
+                                          main_data.ebeam,
+                                          main_data.ccd,
+                                          main_data.bsd,
+                                          skew=True,
+                                          bgsub=True)
+                    trans_val, cor_md = f.result()
+                except Exception:
+                    logging.debug("Fine alignment failed. Retrying to focus...")
+                    main_data.ccd.binning.value = (1, 1)
+                    main_data.ccd.resolution.value = main_data.ccd.resolution.range[1]
+                    main_data.ccd.exposureTime.value = 900e-03
+                    main_data.ebeam.horizontalFoV.value = main_data.ebeam.horizontalFoV.range[0]
+                    main_data.ebeam.scale.value = (1, 1)
+                    main_data.ebeam.resolution.value = (1, 1)
+                    main_data.ebeam.translation.value = (0, 0)
+                    main_data.ebeam.dwellTime.value = 5e-06
+                    det_dataflow = main_data.bsd.data
+                    f = autofocus.AutoFocus(main_data.ccd, main_data.ebeam, main_data.ebeam_focus, dfbkg=det_dataflow)
+                    f.result()
+                    main_data.ccd.binning.value = (8, 8)
+                    f = autofocus.AutoFocus(main_data.ccd, main_data.ebeam, main_data.focus, dfbkg=det_dataflow)
+                    f.result()
+                    main_data.ccd.binning.value = (1, 1)
+                    f = align.FindOverlay((4, 4),
+                                          0.5,  # s, dwell time
+                                          10e-06,  # m, maximum difference allowed
+                                          main_data.ebeam,
+                                          main_data.ccd,
+                                          main_data.bsd,
+                                          skew=True,
+                                          bgsub=True)
+                    trans_val, cor_md = f.result()
                 trans_md, skew_md = cor_md
                 iscale = trans_md[model.MD_PIXEL_SIZE_COR]
                 if any(s < 0 for s in iscale):
@@ -421,6 +454,7 @@ def _DoDelphiCalibration(future, main_data, overview_pressure, vacuum_pressure,
                 raise CancelledError()
             future._delphi_calib_state = FINISHED
 
+
 def _CancelDelphiCalibration(future):
     """
     Canceller of _DoDelphiCalibration task.
@@ -434,6 +468,7 @@ def _CancelDelphiCalibration(future):
         logging.debug("Delphi calibration cancelled.")
 
     return True
+
 
 def estimateDelphiCalibration():
     """

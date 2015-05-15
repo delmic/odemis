@@ -40,9 +40,10 @@ from . import coordinates, transform
 
 MAX_TRIALS_NUMBER = 2  # Maximum number of scan grid repetitions
 
-def FindOverlay(repetitions, dwell_time, max_allowed_diff, escan, ccd, detector, skew=False):
+
+def FindOverlay(repetitions, dwell_time, max_allowed_diff, escan, ccd, detector, skew=False, bgsub=False):
     """
-    Wrapper for DoFindOverlay. It provides the ability to check the progress of overlay procedure 
+    Wrapper for DoFindOverlay. It provides the ability to check the progress of overlay procedure
     or even cancel it.
     repetitions (tuple of ints): The number of CL spots are used
     dwell_time (float): Time to scan each spot #s
@@ -51,6 +52,7 @@ def FindOverlay(repetitions, dwell_time, max_allowed_diff, escan, ccd, detector,
     ccd (model.DigitalCamera): The CCD
     detector (model.Detector): The electron detector
     skew (boolean): If True, also compute skew
+    bgsub (boolean): If True, apply background substraction in grid scanning
     returns (model.ProgressiveFuture): Progress of DoFindOverlay, whose result() will return:
             tuple: Transformation parameters
                 translation (Tuple of 2 floats)
@@ -61,7 +63,8 @@ def FindOverlay(repetitions, dwell_time, max_allowed_diff, escan, ccd, detector,
     # Create ProgressiveFuture and update its state to RUNNING
     est_start = time.time() + 0.1
     f = model.ProgressiveFuture(start=est_start,
-                                end=est_start + estimateOverlayTime(dwell_time, repetitions))
+                                end=est_start + estimateOverlayTime(dwell_time,
+                                                                    repetitions))
     f._find_overlay_state = RUNNING
 
     # Task to run
@@ -70,25 +73,28 @@ def FindOverlay(repetitions, dwell_time, max_allowed_diff, escan, ccd, detector,
     f._done = threading.Event()
 
     # Create scanner for scan grid
-    f._scanner = GridScanner(repetitions, dwell_time, escan, ccd, detector)
+    f._scanner = GridScanner(repetitions, dwell_time, escan, ccd, detector, bgsub)
 
     # Run in separate thread
     overlay_thread = threading.Thread(target=executeTask,
-                  name="SEM/CCD overlay",
-                  args=(f, _DoFindOverlay, f, repetitions, dwell_time, max_allowed_diff, escan, ccd, detector, skew))
+                                      name="SEM/CCD overlay",
+                                      args=(f, _DoFindOverlay, f, repetitions,
+                                            dwell_time, max_allowed_diff, escan,
+                                            ccd, detector, skew))
 
     overlay_thread.start()
     return f
 
+
 def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan,
                    ccd, detector, skew=False):
     """
-    Scans a spots grid using the e-beam and captures the CCD image, isolates the 
-    spots in the CCD image and finds the coordinates of their centers, matches the 
-    coordinates of the spots in the CCD image to those of SEM image and calculates 
+    Scans a spots grid using the e-beam and captures the CCD image, isolates the
+    spots in the CCD image and finds the coordinates of their centers, matches the
+    coordinates of the spots in the CCD image to those of SEM image and calculates
     the transformation values from optical to electron image (i.e. ScanGrid->
     DivideInNeighborhoods->FindCenterCoordinates-> ReconstructCoordinates->MatchCoordinates->
-    CalculateTransform). In case matching the coordinates is infeasible, it automatically 
+    CalculateTransform). In case matching the coordinates is infeasible, it automatically
     repeats grid scan -and thus all steps until matching- with different parameters.
     future (model.ProgressiveFuture): Progressive future provided by the wrapper
     repetitions (tuple of ints): The number of CL spots are used
@@ -103,9 +109,9 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan,
                 scaling (Float)
                 rotation (Float)
             dict : Transformation metadata
-    raises:    
+    raises:
             CancelledError if cancelled
-            ValueError if procedure failed 
+            ValueError if procedure failed
     """
     logging.debug("Starting Overlay...")
 
@@ -178,7 +184,7 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan,
 
             # TODO: Make function for scale calculation
             # Estimate the scale by measuring the distance between the first
-            # two spots in optical and electron coordinates. 
+            # two spots in optical and electron coordinates.
             #  * For electrons, it's easy as we've placed them.
             #  * For optical, we pick one spot, and measure the distance to the
             #    closest spot. Should be more precise than previous estimation.
@@ -198,9 +204,9 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan,
 
             logging.debug("Matching coordinates...")
             known_ec, known_oc = coordinates.MatchCoordinates(optical_coordinates,
-                                                         electron_coordinates,
-                                                         scale,
-                                                         max_allowed_diff_px)
+                                                              electron_coordinates,
+                                                              scale,
+                                                              max_allowed_diff_px)
             if known_ec:
                 break
             else:
@@ -211,7 +217,6 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan,
             # Make failure report
             _MakeReport(optical_image, repetitions, escan.magnification.value, escan.pixelSize.value, dwell_time, electron_coordinates)
             raise ValueError("Overlay failure")
-
 
         # Calculate transformation parameters
         if future._find_overlay_state == CANCELLED:
@@ -249,6 +254,7 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan,
                 raise CancelledError()
             future._find_overlay_state = FINISHED
 
+
 def _CancelFindOverlay(future):
     """
     Canceller of _DoFindOverlay task.
@@ -266,10 +272,11 @@ def _CancelFindOverlay(future):
     future._done.wait(10)
     return True
 
+
 def _computeGridRatio(coord, shape):
     """
     coord (list of tuple of 2 floats): coordinates
-    shape (2 ints): X and Y number of coordinates 
+    shape (2 ints): X and Y number of coordinates
     return (float): ratio X/Y
     """
     x_cors = [i[0] for i in coord]
@@ -282,29 +289,31 @@ def _computeGridRatio(coord, shape):
     y_scale = y_max_cors - y_min_cors
     return x_scale / y_scale
 
+
 def estimateOverlayTime(dwell_time, repetitions):
     """
     Estimates overlay procedure duration
     """
     return 6 + dwell_time * numpy.prod(repetitions)  # s
 
+
 def _transformMetadata(optical_image, transformation_values, escan, ccd, skew=False):
     """
-    Returns the transform metadata for the optical image based on the 
+    Returns the transform metadata for the optical image based on the
     transformation values
     """
     escan_pxs = escan.pixelSize.value
     logging.debug("Ebeam pixel size: %g ", escan_pxs[0])
     if skew is False:
         ((calc_translation_x, calc_translation_y),
-                 (calc_scaling_x, calc_scaling_y),
-                                    calc_rotation) = transformation_values
+         (calc_scaling_x, calc_scaling_y),
+         calc_rotation) = transformation_values
     else:
         ((calc_translation_x, calc_translation_y),
-                 (calc_scaling_x, calc_scaling_y),
-                                    calc_rotation,
-                                    calc_scaling_xy,
-                                    calc_shear) = transformation_values
+         (calc_scaling_x, calc_scaling_y),
+         calc_rotation,
+         calc_scaling_xy,
+         calc_shear) = transformation_values
 
     # Update scaling
     scale = (escan_pxs[0] * calc_scaling_x,
@@ -334,7 +343,7 @@ def _transformMetadata(optical_image, transformation_values, escan, ccd, skew=Fa
 
     # Also return skew related metadata dictionary if available
     if skew is True:
-        skew_md = {model.MD_SHEAR_COR:calc_shear}
+        skew_md = {model.MD_SHEAR_COR: calc_shear}
         scaling_xy = ((1 - calc_scaling_xy), (1 + calc_scaling_xy))
         skew_md[model.MD_PIXEL_SIZE_COR] = scaling_xy
         return (transform_md, skew_md)
