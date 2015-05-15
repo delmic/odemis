@@ -20,23 +20,27 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
-from numpy.core import umath
-from odemis import model
-from odemis.model import roattribute
+
+import Queue
 import gc
 import glob
 import logging
 import math
 import mmap
 import numpy
+from numpy.core import umath
+from odemis import model
 import odemis
-import odemis.driver.comedi_simple as comedi
+from odemis.model import roattribute, oneway
 import os
 import threading
 import time
 import weakref
-#pylint: disable=E1101
 
+import odemis.driver.comedi_simple as comedi
+
+
+#pylint: disable=E1101
 # This is a module to drive a FEI Scanning electron microscope via the so-called
 # "external X/Y" line. It uses a DA-conversion and acquisition (DAQ) card on the
 # computer side to control the X/Y position of the electron beam (e-beam), while
@@ -93,7 +97,6 @@ import weakref
 # merely an optimisation). Next to it, a high-level component should decide the
 # scanning area, period and channels, and interface with the rest of Odemis.
 # Communication between both component is only via queues.
-
 NI_TRIG_AI_START1 = 18 # Trigger number for AI Start1 (= beginning of a command)
 
 # helper functions
@@ -202,7 +205,7 @@ class SEMComedi(model.HwComponent):
         self._acquisition_init_lock = threading.Lock()
         self._acquisition_must_stop = threading.Event()
         self._acquisition_thread = None
-        self._acquisitions = {} # detector -> callable (callback)
+        self._acquisitions = set()  # detectors currently active
 
         # create the scanner child "scanner"
         try:
@@ -1284,11 +1287,10 @@ class SEMComedi(model.HwComponent):
         logging.debug("cancelling npnotifier")
         self._new_position_thread_pipe.append(True) # means it has to stop
 
-    def start_acquire(self, detector, callback):
+    def start_acquire(self, detector):
         """
         Start acquiring images on the given detector (i.e., input channel).
         detector (Detector): detector from which to acquire an image
-        callback (callable): function to callback with every acquired image
         Note: The acquisition parameters are defined by the scanner. Acquisition
         might already be going on for another detector, in which case the detector
         will be added on the next acquisition.
@@ -1298,17 +1300,17 @@ class SEMComedi(model.HwComponent):
         with self._acquisition_data_lock:
             if detector in self._acquisitions:
                 raise KeyError("Channel %d already set up for acquisition." % detector.channel)
-
-            self._acquisitions[detector] = callback
+            self._acquisitions.add(detector)
 
         # the thread uses acquisition_data_lock, so we should never wait for
         # the thread to stop with this lock acquired.
         with self._acquisition_mng_lock:
             self._wait_acquisition_stopped() # only wait if acquisition thread is stopping
-            # Set up thread
-            self._acquisition_thread = threading.Thread(target=self._acquisition_run,
-                                             name="SEM acquisition thread")
-            self._acquisition_thread.start()
+            # Set up thread if not already running (for another detector)
+            if not self._acquisition_thread or not self._acquisition_thread.isAlive():
+                self._acquisition_thread = threading.Thread(target=self._acquisition_run,
+                                                            name="SEM acquisition thread")
+                self._acquisition_thread.start()
 
     def stop_acquire(self, detector):
         """
@@ -1317,7 +1319,7 @@ class SEMComedi(model.HwComponent):
         Note: acquisition might still go on on other channels
         """
         with self._acquisition_data_lock:
-            del self._acquisitions[detector]
+            self._acquisitions.discard(detector)
             if self._acquisitions:
                 # Still something to acquire => keep the thread running
                 return
@@ -1352,6 +1354,28 @@ class SEMComedi(model.HwComponent):
             # ensure it's not set, even if the thread died prematurely
             self._acquisition_must_stop.clear()
 
+    def _acq_wait_detectors_ready(self):
+        """
+        Block until all the detectors to acquire are ready (ie, received
+          synchronisation event, or not synchronized)
+        returns (set of Detectors): the detectors to acquire from
+        """
+        detectors = self._acquisitions.copy()
+        det_not_ready = detectors.copy()
+        det_ready = set()
+        while det_not_ready:
+            # Wait for all the DataFlows to have received a sync event
+            for d in det_not_ready:
+                d.data._waitSync()
+                det_ready.add(d)
+
+            # Check if new detectors were added (or removed) in the mean time
+            with self._acquisition_data_lock:
+                detectors = self._acquisitions.copy()
+            det_not_ready = detectors - det_ready
+
+        return detectors
+
     def _acquisition_run(self):
         """
         Acquire images until asked to stop. Sends the raw acquired data to the
@@ -1362,24 +1386,22 @@ class SEMComedi(model.HwComponent):
         nfailures = 0
         try:
             while not self._acquisition_must_stop.is_set():
-                # get the channels to acquire
-                with self._acquisition_data_lock:
-                    detectors = self._acquisitions.keys()
-                if not detectors:
-                    # another way to quit
+                detectors = tuple(self._acq_wait_detectors_ready())  # ordered
+                if not detectors:  # can happen if must_stop not yet set
                     break
 
-                rchannels = [d.channel for d in detectors]
-                rranges = [d._range for d in detectors]
+                rchannels = tuple(d.channel for d in detectors)
+                rranges = tuple(d._range for d in detectors)
 
                 # get the scan values (automatically updated to the latest needs)
                 (scan, period, shape, margin,
                  wchannels, wranges, osr, dpr) = self._scanner.get_scan_data()
 
-                metadata = dict(self._metadata) # duplicate
+                metadata = self._metadata.copy()
                 metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
                 metadata[model.MD_DWELL_TIME] = period
                 metadata[model.MD_SAMPLES_PER_PIXEL] = osr * dpr
+                # TODO: allow different metadata on each detector -> metadata[i].update(detector.getMetadata())
 
                 # add scanner translation to the center
                 center = metadata.get(model.MD_POS, (0, 0))
@@ -1411,22 +1433,16 @@ class SEMComedi(model.HwComponent):
                     continue
 
                 nfailures = 0
-                #logging.debug("Converting raw data to physical: %s", rbuf)
+                # logging.debug("Converting raw data to physical: %s", rbuf)
                 # TODO decimate/convert the data while reading, to save time, or do not convert at all
+                # TODO: fast way to convert to physical values (and if possible keep
+                # integers as output
+                # converting to physical value would look a bit like this:
+                # the ranges could be save in the metadata.
+        #        parray = self._array_to_phys(self_sem._ai_subdevice,
+        #                                       [self.component.channel], [rranges], data)
 
-                # the channels to acquire might have changed, only send to the one
-                # still interested
-                with self._acquisition_data_lock:
-                    acq = dict(self._acquisitions) # duplicate
-                for i, c in enumerate(rchannels):
-                    callback = None
-                    for d, cb in acq.items():
-                        if d.channel == c:
-                            callback = cb
-                            break
-                    if callback is None: # unsubscribed
-                        continue
-
+                for i, d in enumerate(detectors):
                     # Convert to a nice 2D DataArray
                     parray = rbuf[i]
                     darray = model.DataArray(parray, metadata)
@@ -1436,7 +1452,7 @@ class SEMComedi(model.HwComponent):
                     # synchronization, otherwise, quite a lot ~ 20?)
                     # This should avoid the scan to spend a lot of time at the
                     # last point.
-                    callback(darray)
+                    d.data.notify(darray)
 
                 # force the GC to non-used buffers, for some reason, without this
                 # the GC runs only after we've managed to fill up the memory
@@ -2515,10 +2531,14 @@ class Detector(model.Detector):
         self._shape = (maxdata + 1,) # only one point
         self.data = SEMDataFlow(self, parent)
 
+        # Special event to request software unblocking on the scan
+        self.softwareTrigger = model.Event()
+
     @roattribute
     def channel(self):
         return self._channel
 
+    # TODO: do not share, so that it's possible to have different metadata on different detectors
     # we share metadata with our parent
     def getMetadata(self):
         return self.parent.getMetadata()
@@ -2537,6 +2557,10 @@ class SEMDataFlow(model.DataFlow):
         self.component = weakref.ref(detector)
         self._sem = weakref.proxy(sem)
 
+        self._sync_event = None  # event to be synchronised on, or None
+        self._evtq = None  # a Queue to store received events (= float, time of the event)
+        self._prev_max_discard = self._max_discard
+
     # start/stop_generate are _never_ called simultaneously (thread-safe)
     def start_generate(self):
         comp = self.component()
@@ -2545,9 +2569,7 @@ class SEMDataFlow(model.DataFlow):
             return
 
         try:
-            # TODO specify if phys or raw, or maybe always raw and notify is
-            # in charge of converting if we want phys
-            self._sem.start_acquire(comp, self.notify)
+            self._sem.start_acquire(comp)
         except ReferenceError:
             # sem/component has been deleted, it's all fine, we'll be GC'd soon
             pass
@@ -2560,16 +2582,54 @@ class SEMDataFlow(model.DataFlow):
 
         try:
             self._sem.stop_acquire(comp)
+            if self._sync_event:
+                self._evtq.put(None)  # in case it was waiting for an event
         except ReferenceError:
             # sem/component has been deleted, it's all fine, we'll be GC'd soon
             pass
 
-    def notify(self, data):
-        # TODO: fast way to convert to physical values (and if possible keep
-        # integers as output
-        # converting to physical value would look a bit like this:
-        # the ranges could be save in the metadata.
-#        parray = self._array_to_phys(self_sem._ai_subdevice,
-#                                       [self.component.channel], [rranges], data)
-        # For now, the data seems linear enough that we don't care.
-        model.DataFlow.notify(self, data)
+    def synchronizedOn(self, event):
+        """
+        Synchronize the acquisition on the given event. Every time the event is
+          triggered, the scanner will start a new acquisition/scan.
+          The DataFlow can be synchronized only with one Event at a time.
+          However each DataFlow can be synchronized, separately. The scan will
+          only start once each active DataFlow has received an event.
+        event (model.Event or None): event to synchronize with. Use None to
+          disable synchronization.
+        """
+        if self._sync_event == event:
+            return
+
+        if self._sync_event:
+            self._sync_event.unsubscribe(self)
+            self.max_discard = self._prev_max_discard
+
+        self._sync_event = event
+        if self._sync_event:
+            # if the df is synchronized, the subscribers probably don't want to
+            # skip some data
+            self._evtq = Queue.Queue()  # to be sure it's empty
+            self._prev_max_discard = self._max_discard
+            self.max_discard = 0
+            self._sync_event.subscribe(self)
+
+    @oneway
+    def onEvent(self):
+        """
+        Called by the Event when it is triggered
+        """
+        if not self._evtq.empty():
+            logging.warning("Received synchronization event but already %d queued",
+                            self._evtq.qsize())
+
+        self._evtq.put(time.time())
+
+    def _waitSync(self):
+        """
+        Block until the Event on which the dataflow is synchronised has been
+          received. If the DataFlow is not synchronised on any event, this
+          method immediatly returns
+        """
+        if self._sync_event:
+            self._evtq.get()

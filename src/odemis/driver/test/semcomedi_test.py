@@ -192,7 +192,7 @@ class TestSEM(unittest.TestCase):
         size = self.scanner.resolution.value
         return size[0] * size[1] * dwell + size[1] * settle
 
-    @unittest.skip("simple")
+#     @unittest.skip("simple")
     def test_acquire(self):
         self.scanner.dwellTime.value = 10e-6 # s
         expected_duration = self.compute_expected_duration()
@@ -276,7 +276,7 @@ class TestSEM(unittest.TestCase):
         self.assertTupleAlmostEqual(im.metadata[model.MD_POS], exp_pos)
 
 
-    @unittest.skip("simple")
+#     @unittest.skip("simple")
     def test_osr(self):
         """
         Checks that find_best_oversampling_rate always finds something appropriate
@@ -306,7 +306,7 @@ class TestSEM(unittest.TestCase):
             else:
                 self.assertGreater(dpr, 1)
 
-    @unittest.skip("too long")
+#     @unittest.skip("too long")
     def test_acquire_high_osr(self):
         """
         small resolution, but large osr, to force acquisition not by whole array
@@ -361,7 +361,7 @@ class TestSEM(unittest.TestCase):
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
 
 
-    @unittest.skip("too long")
+#     @unittest.skip("too long")
     def test_acquire_long_short(self):
         """
         test being able to cancel image acquisition if dwell time is too long
@@ -390,7 +390,7 @@ class TestSEM(unittest.TestCase):
         self.assertGreaterEqual(duration, expected_duration_s, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration_s))
         self.assertLess(duration, expected_duration_l, "Execution took %f s, as much as the long exposure time %d." % (duration, expected_duration_l))
 
-    @unittest.skip("simple")
+#     @unittest.skip("simple")
     def test_acquire_flow(self):
         expected_duration = self.compute_expected_duration()
 
@@ -402,7 +402,7 @@ class TestSEM(unittest.TestCase):
 
         self.assertEqual(self.left, 0)
 
-    @unittest.skip("simple")
+#     @unittest.skip("simple")
     def test_acquire_with_va(self):
         """
         Change some settings before and while acquiring
@@ -428,7 +428,7 @@ class TestSEM(unittest.TestCase):
         self.sed.data.unsubscribe(self.receive_image) # just in case it failed
         self.assertEqual(self.left, 0)
 
-    @unittest.skip("simple")
+#     @unittest.skip("simple")
     def test_df_fast_sub_unsub(self):
         """
         Test the dataflow on a very fast cycle subscribing/unsubscribing
@@ -452,7 +452,7 @@ class TestSEM(unittest.TestCase):
 
         self.assertLessEqual(self.left, 10000 - 1)
 
-    @unittest.skip("simple")
+#     @unittest.skip("simple")
     def test_df_alternate_sub_unsub(self):
         """
         Test the dataflow on a quick cycle subscribing/unsubscribing
@@ -472,7 +472,7 @@ class TestSEM(unittest.TestCase):
         # if it has acquired a least 5 pictures we are already happy
         self.assertLessEqual(self.left, 10000)
 
-    @unittest.skip("simple")
+#     @unittest.skip("simple")
     def test_new_position_event(self):
         """
         check the new position works at least when the frequency is not too high
@@ -526,7 +526,7 @@ class TestSEM(unittest.TestCase):
             self.acq_done.set()
 
 
-@unittest.skip("simple")
+# @unittest.skip("simple")
 class TestSEM2(unittest.TestCase):
     """
     Tests which can share one SEM device with 2 detectors
@@ -565,6 +565,10 @@ class TestSEM2(unittest.TestCase):
 
 #    @unittest.skip("simple")
     def test_acquire_two_flows(self):
+        """
+        Simple acquisition with two dataflows acquiring (more or less)
+        simultaneously
+        """
         expected_duration = self.compute_expected_duration()
         number, number2 = 3, 5
 
@@ -588,6 +592,45 @@ class TestSEM2(unittest.TestCase):
 
         self.assertEqual(self.left, 0)
         self.assertEqual(self.left2, 0)
+
+    def test_acquire_two_sync_flows(self):
+        """
+        Acquire with two dataflows, with one synchronised, so that the scanning
+        is software triggered, and each pair of acquisition correspond to the
+        same scan.
+        """
+        expected_duration = self.compute_expected_duration()
+
+        # set softwareTrigger on the first detector to be subscribed
+        self.sed.data.synchronizedOn(self.sed.softwareTrigger)
+
+        self.left = 10  # just for safety
+        self.sed.data.subscribe(self.receive_image)
+
+        time.sleep(expected_duration)  # make sure it would have time to start
+        self.left2 = 10
+        self.bsd.data.subscribe(self.receive_image2)
+
+        for i in range(3):
+            self.sed.softwareTrigger.notify()
+            # end early if it's already finished
+            if self.left == 0 and self.left2 == 0:
+                self.fail("One detector already received too many acquisitions")
+            time.sleep(2 + expected_duration * 1.1)  # 2s per image should be more than enough in any case
+
+        self.bsd.data.unsubscribe(self.receive_image2)
+        self.sed.data.unsubscribe(self.receive_image)  # synchronized DF last
+
+        # remove synchronisation
+        self.sed.data.synchronizedOn(None)
+
+        self.assertEqual(len(self.acq_dates[0]), 3)
+        self.assertEqual(len(self.acq_dates[1]), 3)
+
+        # check all images were acquired simultaneously
+        common_dates = self.acq_dates[0] & self.acq_dates[1]
+        self.assertEqual(len(common_dates), 3, "Dates not all common between %r and %r" %
+                         (self.acq_dates[0], self.acq_dates[1]))
 
     def receive_image(self, dataflow, image):
         """
