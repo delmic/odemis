@@ -146,11 +146,12 @@ class SerializerTest(unittest.TestCase):
         dump = pickle.dumps(sem, pickle.HIGHEST_PROTOCOL)
 #        print "dump size is", len(dump)
         sem_unpickled = pickle.loads(dump)
-        # Cannot check children because it's (now) a VA, which requires the
-        # daemon to be actually running
-        # self.assertEqual(len(sem_unpickled.children.value), 2)
+        # Warning, we cannot check inside children because it's (now) a VA,
+        # which requires the daemon to be actually running
+        self.assertIsInstance(sem_unpickled.children, model.VigilantAttributeBase)
         self.assertEqual(sem_unpickled.name, "sem")
         sem.terminate()
+        daemon.shutdown()
 
 
 # @unittest.skip("simple")

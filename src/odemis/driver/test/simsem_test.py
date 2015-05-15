@@ -88,13 +88,14 @@ class TestSEMStatic(unittest.TestCase):
         daemon = Pyro4.Daemon(unixsocket="test")
         
         sem = simsem.SimSEM(daemon=daemon, **CONFIG_SEM)
-                
+
         dump = pickle.dumps(sem, pickle.HIGHEST_PROTOCOL)
 #        print "dump size is", len(dump)
         sem_unpickled = pickle.loads(dump)
-        self.assertEqual(len(sem_unpickled.children.value), 2)
+        self.assertIsInstance(sem_unpickled.children, model.VigilantAttributeBase)
+        self.assertEqual(sem_unpickled.name, sem.name)
         sem.terminate()
-    
+        daemon.shutdown()
 
 class TestSEM(unittest.TestCase):
     """

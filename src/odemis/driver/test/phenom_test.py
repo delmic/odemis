@@ -32,6 +32,8 @@ import unittest
 from unittest.case import skip
 from odemis.model import HwError
 
+# If no hardware, we pretty much cannot test anything :-(
+TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 
 # logging.getLogger().setLevel(logging.DEBUG)
 # arguments used for the creation of basic components
@@ -44,14 +46,14 @@ CONFIG_STAGE = {"name": "stage", "role": "stage"}
 CONFIG_NAVCAM = {"name": "camera", "role": "overview-ccd"}
 CONFIG_PRESSURE = {"name": "pressure", "role": "chamber"}
 CONFIG_SEM = {"name": "sem", "role": "sem", "host": "http://Phenom-MVE0215801135.local:8888",
-              "username": "Delmic", "password" : "4XE1947GKP9B",
+              "username": "Delmic", "password": "4XE1947GKP9B",
               "children": {"detector": CONFIG_SED, "scanner": CONFIG_SCANNER,
                            "stage": CONFIG_STAGE, "focus": CONFIG_FOCUS,
                            "navcam": CONFIG_NAVCAM, "navcam-focus": CONFIG_NC_FOCUS,
                            "pressure": CONFIG_PRESSURE}
               }
 
-@skip("skip")
+# @skip("skip")
 class TestSEMStatic(unittest.TestCase):
     """
     Tests which don't need a SEM component ready
@@ -60,6 +62,9 @@ class TestSEMStatic(unittest.TestCase):
         """
         Doesn't even try to acquire an image, just create and delete components
         """
+        if TEST_NOHW:
+            self.skipTest("TEST_NOHW set, cannot test Phenom")
+
         sem = phenom.SEM(**CONFIG_SEM)
         self.assertEqual(len(sem.children.value), 7)
 
@@ -83,6 +88,26 @@ class TestSEMStatic(unittest.TestCase):
         wrong_config["host"] = "http://Phenom-MVE0123456789.local:8888"
         self.assertRaises(HwError, phenom.SEM, **wrong_config)
 
+    def test_pickle(self):
+        if TEST_NOHW:
+            self.skipTest("TEST_NOHW set, cannot test Phenom")
+
+        try:
+            os.remove("test")
+        except OSError:
+            pass
+        daemon = Pyro4.Daemon(unixsocket="test")
+
+        sem = phenom.SEM(daemon=daemon, **CONFIG_SEM)
+
+        dump = pickle.dumps(sem, pickle.HIGHEST_PROTOCOL)
+#        print "dump size is", len(dump)
+        sem_unpickled = pickle.loads(dump)
+        self.assertIsInstance(sem_unpickled.children, model.VigilantAttributeBase)
+        self.assertEqual(sem_unpickled.name, sem.name)
+        sem.terminate()
+        daemon.shutdown()
+
 
 # @skip("skip")
 class TestSEM(unittest.TestCase):
@@ -91,6 +116,8 @@ class TestSEM(unittest.TestCase):
     """
     @classmethod
     def setUpClass(cls):
+        if TEST_NOHW:
+            return
         cls.sem = phenom.SEM(**CONFIG_SEM)
 
         for child in cls.sem.children.value:
@@ -115,6 +142,9 @@ class TestSEM(unittest.TestCase):
         time.sleep(3)
 
     def setUp(self):
+        if TEST_NOHW:
+            self.skipTest("TEST_NOHW set, cannot test Phenom")
+
         # reset resolution and dwellTime
         self.scanner.scale.value = (1, 1)
         self.scanner.resolution.value = (512, 256)
@@ -140,7 +170,7 @@ class TestSEM(unittest.TestCase):
         settle = 5.e-4
         size = self.scanner.resolution.value
         return size[0] * size[1] * dwell + size[1] * settle
-    @skip("skip")
+#     @skip("skip")
     def test_acquire(self):
         self.scanner.dwellTime.value = 10e-6  # s
         expected_duration = self.compute_expected_duration()
@@ -151,14 +181,14 @@ class TestSEM(unittest.TestCase):
         self.assertEqual(im.shape, self.size[::-1])
         self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
-    @skip("skip")
+#     @skip("skip")
     def test_hfv(self):
         orig_pxs = self.scanner.pixelSize.value
         orig_hfv = self.scanner.horizontalFoV.value
         self.scanner.horizontalFoV.value = orig_hfv / 2
 
         self.assertAlmostEqual(orig_pxs[0] / 2, self.scanner.pixelSize.value[0])
-    @skip("skip")
+#     @skip("skip")
     def test_roi(self):
         """
         check that .translation and .scale work
@@ -194,7 +224,7 @@ class TestSEM(unittest.TestCase):
         im = self.sed.data.get()
         self.assertEqual(im.shape, self.scanner.resolution.value[-1::-1])
 
-    @skip("faster")
+#     @skip("faster")
     def test_acquire_high_osr(self):
         """
         small resolution, but large osr, to force acquisition not by whole array
@@ -211,7 +241,7 @@ class TestSEM(unittest.TestCase):
         self.assertEqual(im.shape, self.size[-1:-3:-1])
         self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
-    @skip("skip")
+#     @skip("skip")
     def test_long_dwell_time(self):
         """
         one pixel only, but long dwell time (> 4s), which means it uses 
@@ -229,7 +259,7 @@ class TestSEM(unittest.TestCase):
         self.assertEqual(im.shape, self.size[::-1])
         self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
 
-    @skip("skip")
+#     @skip("skip")
     def test_acquire_long_short(self):
         """
         test being able to cancel image acquisition if dwell time is too long
@@ -257,7 +287,7 @@ class TestSEM(unittest.TestCase):
         self.assertTrue(self.acq_done.is_set())
         self.assertGreaterEqual(duration, expected_duration_s, "Error execution took %f s, less than exposure time %f." % (duration, expected_duration_s))
         self.assertLess(duration, expected_duration_l, "Execution took %f s, as much as the long exposure time %f." % (duration, expected_duration_l))
-    @skip("skip")
+#     @skip("skip")
     def test_acquire_flow(self):
         expected_duration = self.compute_expected_duration()
 
@@ -268,7 +298,7 @@ class TestSEM(unittest.TestCase):
         self.acq_done.wait(number * (2 + expected_duration * 1.1))  # 2s per image should be more than enough in any case
 
         self.assertEqual(self.left, 0)
-    @skip("skip")
+#     @skip("skip")
     def test_acquire_with_va(self):
         """
         Change some settings before and while acquiring
@@ -295,7 +325,7 @@ class TestSEM(unittest.TestCase):
 
         self.sed.data.unsubscribe(self.receive_image)  # just in case it failed
         self.assertEqual(self.left, 0)
-    @skip("skip")
+#     @skip("skip")
     def test_df_fast_sub_unsub(self):
         """
         Test the dataflow on a very fast cycle subscribing/unsubscribing
@@ -318,7 +348,7 @@ class TestSEM(unittest.TestCase):
         self.sed.data.unsubscribe(self.receive_image)
 
         self.assertLessEqual(self.left, 10000 - 1)
-    @skip("skip")
+#     @skip("skip")
     def test_df_alternate_sub_unsub(self):
         """
         Test the dataflow on a quick cycle subscribing/unsubscribing
@@ -359,7 +389,7 @@ class TestSEM(unittest.TestCase):
         """
         pass
 
-    @skip("skip")
+#     @skip("skip")
     def test_focus(self):
         """
         Check it's possible to change the focus
@@ -380,7 +410,7 @@ class TestSEM(unittest.TestCase):
         f.result()
         self.assertAlmostEqual(self.focus.position.value["z"], pos["z"], 5)
 
-    @skip("skip")
+#     @skip("skip")
     def test_move(self):
         """
         Check it's possible to move the stage
@@ -394,7 +424,7 @@ class TestSEM(unittest.TestCase):
         f.result()
         self.assertTupleAlmostEqual(self.stage.position.value, pos)
 
-    @skip("skip")
+#     @skip("skip")
     def test_navcam(self):
         """
         Check it's possible to move the stage
@@ -406,7 +436,7 @@ class TestSEM(unittest.TestCase):
         duration = time.time() - start
         self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
 
-    @skip("skip")
+#     @skip("skip")
     def test_navcam_focus(self):
         """
         Check it's possible to change the overview focus
@@ -422,7 +452,7 @@ class TestSEM(unittest.TestCase):
         f.result()
         self.assertAlmostEqual(self.navcam_focus.position.value, pos)
 
-    @skip("skip")
+#     @skip("skip")
     def test_pressure(self):
         """
         Check it's possible to change the pressure state
@@ -440,7 +470,7 @@ class TestSEM(unittest.TestCase):
         new_pos = self.pressure.position.value["pressure"]
         self.assertEqual(1e04, new_pos)
 
-    @skip("skip")
+#     @skip("skip")
     def test_grid_scanning(self):
         self.scanner.dwellTime.value = 10e-6  # s
         last_res = self.scanner.resolution.value
@@ -457,7 +487,7 @@ class TestSEM(unittest.TestCase):
         self.scanner.resolution.value = last_res
         self.size = last_size
 
-    @skip("skip")
+#     @skip("skip")
     def test_sample_holder(self):
         """
         Check it's possible to read the current sample holder ID
@@ -468,7 +498,7 @@ class TestSEM(unittest.TestCase):
         # Try to register holder with wrong code
         self.assertRaises(ValueError, self.pressure.registerSampleHolder, "wrongCode")
 
-    @skip("skip")
+#     @skip("skip")
     def test_auto_contrast(self):
         """
         Check it's possible to apply AutoContrast

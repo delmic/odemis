@@ -53,7 +53,7 @@ CONFIG_SEM = {"name": "sem", "role": "sem",
               }
 
 
-@skip("skip")
+# @skip("skip")
 class TestSEMStatic(unittest.TestCase):
     """
     Tests which don't need a SEM component ready
@@ -84,28 +84,30 @@ class TestSEMStatic(unittest.TestCase):
         
         self.assertTrue(sem.selfTest(), "SEM self test failed.")
         sem.terminate()
-    
+
     def test_error(self):
         wrong_config = copy.deepcopy(CONFIG_SEM)
         wrong_config["children"]["scanner"]["channels"] = [1, 1]
         self.assertRaises(Exception, tescan_sem.TescanSEM, **wrong_config)
-    
+
     def test_pickle(self):
         try:
             os.remove("test")
         except OSError:
             pass
         daemon = Pyro4.Daemon(unixsocket="test")
-        
+
         sem = tescan_sem.TescanSEM(daemon=daemon, **CONFIG_SEM)
-                
+
         dump = pickle.dumps(sem, pickle.HIGHEST_PROTOCOL)
 #        print "dump size is", len(dump)
         sem_unpickled = pickle.loads(dump)
-        self.assertEqual(len(sem_unpickled.children.value), 6)
+        self.assertIsInstance(sem_unpickled.children, model.VigilantAttributeBase)
+        self.assertEqual(sem_unpickled.name, sem.name)
         sem.terminate()
-    
-@skip("skip")
+        daemon.shutdown()
+
+# @skip("skip")
 class TestSEM(unittest.TestCase):
     """
     Tests which can share one SEM device

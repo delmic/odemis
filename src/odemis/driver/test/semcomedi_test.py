@@ -118,8 +118,11 @@ class TestSEMStatic(unittest.TestCase):
         dump = pickle.dumps(sem, pickle.HIGHEST_PROTOCOL)
 #        print "dump size is", len(dump)
         sem_unpickled = pickle.loads(dump)
-        self.assertEqual(len(sem_unpickled.children.value), 2)
+        self.assertIsInstance(sem_unpickled.children, model.VigilantAttributeBase)
+        self.assertEqual(sem_unpickled.name, sem.name)
+        # self.assertEqual(len(sem_unpickled.children.value), 2)
         sem.terminate()
+        daemon.shutdown()
 
     def test_generate_scan(self):
         """
