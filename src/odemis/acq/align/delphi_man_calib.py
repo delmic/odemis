@@ -237,7 +237,7 @@ def main(args):
         logging.info("\n**Computed SEM shift parameters**\n resa: %s \n resb: %s \n hfwa: %s \n spotshift: %s \n", resa, resb, hfwa, spotshift)
 
         # Return to the center so fine alignment can be executed just after calibration
-        f = sem_stage.moveAbs({"x":-pure_offset[0], "y":-pure_offset[1]})
+        f = sem_stage.moveAbs({"x":pure_offset[0], "y":pure_offset[1]})
         f.result()
         f = opt_stage.moveAbs({"x": 0, "y": 0})
         f.result()

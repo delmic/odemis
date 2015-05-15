@@ -275,7 +275,7 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
             offset = ((acc_offset[0] / scaling[0]), (acc_offset[1] / scaling[1]))
 
             # Return to the center so fine overlay can be executed just after calibration
-            f = sem_stage.moveAbs({"x":-pure_offset[0], "y":-pure_offset[1]})
+            f = sem_stage.moveAbs({"x":pure_offset[0], "y":pure_offset[1]})
             f.result()
             f = opt_stage.moveAbs({"x": 0, "y": 0})
             f.result()
