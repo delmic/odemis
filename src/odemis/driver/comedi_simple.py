@@ -19,12 +19,12 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-"""
-A wrapper to the comedi wrapper to make it more python like.
-The main adjustments are:
- * functions and constants don't start with comedi_/COMEDI_
- * functions raise a ComediError exception on error 
-"""
+
+# A wrapper to the comedi wrapper to make it more python like.
+# The main adjustments are:
+#  * functions and constants don't start with comedi_/COMEDI_
+#  * functions raise a ComediError exception on error
+
 
 # first, add everything from comedi as is
 import comedi as _comedi
@@ -73,22 +73,13 @@ def _data_read_wrapper(comedi_f):
 
     return f
 
-def _void_wrapper(comedi_f):
-    """
-    calls a comedi function which returns nothing (=> not possible to check error)
-    """
-    # in Python, returning nothing is like return None, so we need a special
-    # wrapper to differentiate the cases
-    return comedi_f
-
-    
 # str -> callable: function name -> wrapper (function, *args)
 # callable == None will result in no wrapper
 _function_wrappers = {
                      "data_read": _data_read_wrapper,
                      "data_read_delayed": _data_read_wrapper,
-                     "cleanup_calibration": _void_wrapper,
-                     "perror": _void_wrapper,
+                     "cleanup_calibration": None,
+                     "perror": None,
                      }
 def _wrap():
     # With comedi >= 0.10.2, the functions already have comedi_ removed and are
@@ -99,7 +90,7 @@ def _wrap():
         mwrapped = _comedi
 
     global_dict = globals()
-    
+
     for name in dir(mwrapped):
         if name.startswith("_"):
             continue
@@ -111,14 +102,14 @@ def _wrap():
             global_dict[name] = value
         else:
             logging.warning("comedi has already %s", name)
-        
+
         # wrap every function starting with "comedi_"
         if name.startswith('comedi_'):
             shortname = name[7:]
 #             if shortname in global_dict:
 #                 logging.warning("comedi has already both %s and %s", name, shortname)
 #                 continue
-            
+
             if inspect.isclass(value):
                 # if it's a struct, no wrapper
                 global_dict[shortname] = value
@@ -131,7 +122,7 @@ def _wrap():
                 global_dict[shortname] = fwrapped
             else:
                 logging.warning("%s is not callable, but starts with comedi_", name)
-                
+
         # duplicate every constant starting with "COMEDI_"
         elif name.startswith('COMEDI_'):
             shortname = name[7:]
