@@ -290,6 +290,7 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
             escan.scale.value = (1, 1)
             escan.resolution.value = (1, 1)
             escan.translation.value = (0, 0)
+            escan.shift.value = (0, 0)
             escan.dwellTime.value = 5e-06
             det_dataflow = detector.data
             f = autofocus.AutoFocus(ccd, escan, ebeam_focus, dfbkg=det_dataflow)
@@ -424,6 +425,7 @@ def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus)
     escan.scale.value = (1, 1)
     escan.resolution.value = (1, 1)
     escan.translation.value = (0, 0)
+    escan.shift.value = (0, 0)
     escan.dwellTime.value = 5e-06
 
     try:
@@ -584,6 +586,7 @@ def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, fo
     escan.scale.value = (1, 1)
     escan.resolution.value = (1, 1)
     escan.translation.value = (0, 0)
+    escan.shift.value = (0, 0)
     escan.dwellTime.value = 5e-06
     # detector.data.subscribe(_discard_data)
     det_dataflow = detector.data
@@ -663,8 +666,10 @@ def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, fo
         acc_offset, scaling, rotation = transform.CalculateTransform(opt_spots,
                                                                  sem_spots)
         # Take care of negative rotation
-        cor_rot = -rotation % (2 * math.pi)
-        return acc_offset, cor_rot, scaling
+        cor_rot = rotation % (2 * math.pi)
+        # Since we inversed the master and slave of the TwinStage, we also
+        # have to inverse these values
+        return (-acc_offset[0], -acc_offset[1]), cor_rot, (1 / scaling[0], 1 / scaling[1])
 
     finally:
         escan.resolution.value = (512, 512)
@@ -764,6 +769,7 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
         escan.scale.value = (1, 1)
         escan.resolution.value = escan.resolution.range[1]
         escan.translation.value = (0, 0)
+        escan.shift.value = (0, 0)
         escan.dwellTime.value = 5.2e-06  # good enough for clear SEM image
         holes_found = []
         hole_focus = known_focus
@@ -1068,6 +1074,7 @@ def _DoHFWShiftFactor(future, detector, escan, sem_stage, ebeam_focus, known_foc
         escan.scale.value = (1, 1)
         escan.resolution.value = escan.resolution.range[1]
         escan.translation.value = (0, 0)
+        escan.shift.value = (0, 0)
         escan.dwellTime.value = 7.5e-07  # s
 
         # Move Phenom sample stage to the first expected hole position
@@ -1221,6 +1228,7 @@ def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus, kn
         escan.scale.value = (1, 1)
         escan.horizontalFoV.value = 1200e-06  # m
         escan.translation.value = (0, 0)
+        escan.shift.value = (0, 0)
         et = 7.5e-07 * numpy.prod(escan.resolution.range[1])
 
         # Move Phenom sample stage to the first expected hole position
@@ -1375,6 +1383,7 @@ def _DoSpotShiftFactor(future, ccd, detector, escan, focus):
     escan.horizontalFoV.value = 150e-06  # m
     escan.resolution.value = (1, 1)
     escan.translation.value = (0, 0)
+    escan.shift.value = (0, 0)
     escan.dwellTime.value = 5e-06
     det_dataflow = detector.data
 

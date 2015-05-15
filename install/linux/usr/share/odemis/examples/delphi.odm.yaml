@@ -135,7 +135,7 @@ DELPHI: {
     role: stage,
     affects: ["EBeam Phenom", "Camera"],
     init: {},
-    children: {"master": "Stage Phenom", "slave": "AntiBacklash Stage"},
+    children: {"master": "AntiBacklash Stage", "slave": "Stage Phenom"},
 }
 
 "AntiBacklash Stage": {
