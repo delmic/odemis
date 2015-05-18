@@ -160,12 +160,12 @@ class StreamController(object):
         """
 
         # Destroy references to this controller in even handlers
-        # (More references are present, see getrefcount 
+        # (More references are present, see getrefcount
         self.stream_panel.Unbind(wx.EVT_WINDOW_DESTROY)
         self.stream_panel.header_change_callback = None
         self.stream_panel.Unbind(EVT_STREAM_VISIBLE)
 
-        self.entries = None
+        self.entries = OrderedDict()
 
         # import sys, gc
         # print sys.getrefcount(self), "\n".join([str(s) for s in gc.get_referrers(self)])
