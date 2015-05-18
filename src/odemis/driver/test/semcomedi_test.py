@@ -487,7 +487,7 @@ class TestSEM(unittest.TestCase):
         self.sed.softwareTrigger.notify()  # start acquiring
         self.sed.softwareTrigger.notify()  # should be queued up for next acquisition
 
-        # wait enough for the 2 acqusitions
+        # wait enough for the 2 acquisitions
         time.sleep(2 * (2 + expected_duration * 1.1))  # 2s per image should be more than enough in any case
 
         self.assertEqual(self.left, 1)
