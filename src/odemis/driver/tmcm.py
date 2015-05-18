@@ -738,6 +738,9 @@ class TMCM3110(model.Actuator):
             # and the axis stops there.
         elif self._refproc == REFPROC_FAKE:
             logging.debug("Simulating referencing")
+            # For testing referencing failure, uncomment these lines
+#             time.sleep(1)
+#             raise IOError("timeout")
             self.MotorStop(axis)
             self.SetAxisParam(axis, 1, 0)
         else:
@@ -961,20 +964,27 @@ class TMCM3110(model.Actuator):
         Actually runs the referencing code
         axes (set of str)
         """
-        # do the referencing for each axis
+        # Reset reference so that if it fails, it states the axes are not
+        # referenced (anymore)
         for a in axes:
-            aid = self._axes_names.index(a)
-            self._startReferencing(aid)
+            self.referenced._value[a] = False
 
-        # TODO: handle cancellation
-        # If not cancelled and successful, update .referenced
-        # We only notify after updating the position so that when a listener
-        # receives updates both values are already updated.
-        for a in axes:
-            self.referenced._value[a] = True
-        self._updatePosition(axes) # all the referenced axes should be back to 0
-        # read-only so manually notify
-        self.referenced.notify(self.referenced.value)
+        try:
+            # do the referencing for each axis
+            for a in axes:
+                aid = self._axes_names.index(a)
+                self._startReferencing(aid)
+
+            # TODO: handle cancellation
+            # If not cancelled and successful, update .referenced
+            # We only notify after updating the position so that when a listener
+            # receives updates both values are already updated.
+            for a in axes:
+                self.referenced._value[a] = True
+        finally:
+            self._updatePosition(axes)  # all the referenced axes should be back to 0
+            # read-only so manually notify
+            self.referenced.notify(self.referenced.value)
 
     def _cancelCurrentMove(self, future):
         """
