@@ -2609,6 +2609,8 @@ class SEMDataFlow(model.DataFlow):
         if self._sync_event:
             self._sync_event.unsubscribe(self)
             self.max_discard = self._prev_max_discard
+            if not event:
+                self._evtq.put(None)  # in case it was waiting for this event
 
         self._sync_event = event
         if self._sync_event:
