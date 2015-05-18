@@ -21,6 +21,7 @@ from __future__ import division
 
 import collections
 
+
 # constants to indicate how well a emission/excitation setting fits a dye
 # emission/excitation (peak)
 FIT_GOOD = 2 # Should be fine
@@ -35,6 +36,9 @@ def get_center(band):
       of the band or the -99%, -25%, middle, +25%, +99% of the band in m.
     return ((tuple of) float): wavelength in m or list of wavelength for each band
     """
+    if isinstance(band, basestring):
+        raise TypeError("Band must be a list or a tuple")
+
     if isinstance(band[0], collections.Iterable):
         return tuple(get_center(b) for b in band)
 
