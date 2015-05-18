@@ -472,6 +472,34 @@ class TestSEM(unittest.TestCase):
         # if it has acquired a least 5 pictures we are already happy
         self.assertLessEqual(self.left, 10000)
 
+    def test_sync_flow(self):
+        """
+        Acquire a dataflow with a softwareTrigger
+        """
+        expected_duration = self.compute_expected_duration()
+
+        # set softwareTrigger on the first detector to be subscribed
+        self.sed.data.synchronizedOn(self.sed.softwareTrigger)
+
+        self.left = 3
+        self.sed.data.subscribe(self.receive_image)
+
+        self.sed.softwareTrigger.notify()  # start acquiring
+        self.sed.softwareTrigger.notify()  # should be queued up for next acquisition
+
+        # wait enough for the 2 acquisitions
+        time.sleep(2 * (2 + expected_duration * 1.1))  # 2s per image should be more than enough in any case
+
+        self.assertEqual(self.left, 1)
+
+        # remove synchronisation
+        self.sed.data.synchronizedOn(None)  # => should immediately start another acquisition
+
+        # wait for last acq
+        self.acq_done.wait(2 + expected_duration * 1.1)
+
+        self.assertEqual(self.left, 0)
+
 #     @unittest.skip("simple")
     def test_new_position_event(self):
         """
@@ -510,6 +538,9 @@ class TestSEM(unittest.TestCase):
         self.assertEqual(self.events, numbert)
 
     def onEvent(self):
+        """
+        Called by the SEM when a new position happens
+        """
         self.events += 1
 
     def receive_image(self, dataflow, image):

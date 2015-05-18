@@ -1716,7 +1716,7 @@ class AndorCam3DataFlow(model.DataFlow):
         Behaviour is unspecified if the acquisition is already running.
         event (model.Event or None): event to synchronize with. Use None to
           disable synchronization.
-        The DataFlow can be synchronize only with one Event at a time.
+        The DataFlow can be synchronized only with one Event at a time.
         """
         if self._sync_event == event:
             return

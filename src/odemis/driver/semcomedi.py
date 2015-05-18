@@ -1392,6 +1392,7 @@ class SEMComedi(model.HwComponent):
 
                 rchannels = tuple(d.channel for d in detectors)
                 rranges = tuple(d._range for d in detectors)
+                dmd = tuple(d.getMetadata() for d in detectors)
 
                 # Increase the dwell time if it cannot support so many detectors
                 min_dt = self._min_dt_config[len(detectors) - 1][0]
@@ -1450,7 +1451,10 @@ class SEMComedi(model.HwComponent):
                 for i, d in enumerate(detectors):
                     # Convert to a nice 2D DataArray
                     parray = rbuf[i]
-                    darray = model.DataArray(parray, metadata)
+                    # metadata is the merge of the scanner MD + detector MD
+                    md = metadata.copy()
+                    md.update(dmd[i])
+                    darray = model.DataArray(parray, md)
                     # TODO: call the callback in a thread => just add data to a
                     # synchronizing queue and let a thread just call callback.
                     # (need to be clever on the size of the queue: max 2 if no
@@ -2543,14 +2547,6 @@ class Detector(model.Detector):
     def channel(self):
         return self._channel
 
-    # TODO: do not share, so that it's possible to have different metadata on different detectors
-    # we share metadata with our parent
-    def getMetadata(self):
-        return self.parent.getMetadata()
-
-    def updateMetadata(self, md):
-        self.parent.updateMetadata(md)
-
 
 class SEMDataFlow(model.DataFlow):
     def __init__(self, detector, sem):
@@ -2609,6 +2605,8 @@ class SEMDataFlow(model.DataFlow):
         if self._sync_event:
             self._sync_event.unsubscribe(self)
             self.max_discard = self._prev_max_discard
+            if not event:
+                self._evtq.put(None)  # in case it was waiting for this event
 
         self._sync_event = event
         if self._sync_event:
