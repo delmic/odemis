@@ -684,17 +684,19 @@ class SparcAcquisitionTab(Tab):
             # TODO: probably cleaner to listen to arState and specState VAs +
             # instantiate a MicroscopeStateController?
             # Or get rid of the MicroscopeStateController?
-            main_frame.acq_btn_spectrometer.Bind(wx.EVT_BUTTON, self.onToggleSpec)
-            main_frame.acq_btn_angular.Bind(wx.EVT_BUTTON, self.onToggleAR)
+
+            # main_frame.acq_btn_spectrometer.Bind(wx.EVT_BUTTON, self.onToggleSpec)
+            # main_frame.acq_btn_angular.Bind(wx.EVT_BUTTON, self.onToggleAR)
+
             if main_data.ar_spec_sel:
                 # use the current position to select the default instrument
                 # TODO: or just don't select anything, as if the GUI was closed
                 # in the alignment tab, it will always end up in AR.
                 if main_data.ar_spec_sel.position.value["rx"] == 0:  # AR on
-                    self.main_frame.acq_btn_angular.SetToggle(True)
+                    # self.main_frame.acq_btn_angular.SetToggle(True)
                     self._show_spec(False)
                 else:  # Spec on
-                    self.main_frame.acq_btn_spectrometer.SetToggle(True)
+                    # self.main_frame.acq_btn_spectrometer.SetToggle(True)
                     self._scount_stream.should_update.value = True
                     self._show_ar(False)
                     # Show() will take care of setting the lenses
@@ -747,8 +749,8 @@ class SparcAcquisitionTab(Tab):
 
         # Connect the spectrograph count stream to the graph
         if self._scount_stream:
-            self._spec_graph = self._settings_controller.spec_graph
-            self._txt_mean = self._settings_controller.txt_mean
+            # self._spec_graph = self._settings_controller.spec_graph
+            # self._txt_mean = self._settings_controller.txt_mean
             self._scount_stream.image.subscribe(self._on_spec_count, init=True)
 
     @call_in_wx_main
@@ -787,7 +789,7 @@ class SparcAcquisitionTab(Tab):
                 disp = numpy.concatenate([numpy.zeros(nb0s), disp])
         else:
             disp = []
-        self._spec_graph.SetContent(disp)
+        # self._spec_graph.SetContent(disp)
 
     def _on_sem_update(self, update):
         # very simple version of a stream scheduler
@@ -811,8 +813,9 @@ class SparcAcquisitionTab(Tab):
             self._sem_cl_stream.dcDwellTime.subscribe(self._copyDwellTimeToAnchor)
 
         # Make sure nothing can be modified during acquisition
-        self.main_frame.acq_btn_spectrometer.Enable(not is_acquiring)
-        self.main_frame.acq_btn_angular.Enable(not is_acquiring)
+        # self.main_frame.acq_btn_spectrometer.Enable(not is_acquiring)
+        # self.main_frame.acq_btn_angular.Enable(not is_acquiring)
+
         self.tb.enable(not is_acquiring)
         self.main_frame.vp_sparc_acq_view.Enable(not is_acquiring)
         self.main_frame.btn_sparc_change_file.Enable(not is_acquiring)
@@ -966,16 +969,18 @@ class SparcAcquisitionTab(Tab):
             self.tab_data_model.main.ar_spec_sel.moveAbs({"rx": ar_spec_pos})
 
     def _show_spec(self, show=True):
-        """
-        Show (or hide) the widgets for spectrum acquisition settings
+        """ Show (or hide) the widgets for spectrum acquisition settings
+
         It is fine to call it multiple times with the same value, or even if
         no spectrum acquisition can be done (in which case nothing will happen)
         show (bool)
+
         """
+
         if not self._sem_spec_stream:
             return
 
-        self.main_frame.fp_settings_sparc_spectrum.Show(show)
+        # self.main_frame.fp_settings_sparc_spectrum.Show(show)
         acq_view = self.tab_data_model.acquisitionView
         if show:
             acq_view.addStream(self._sem_spec_stream)
@@ -1000,7 +1005,7 @@ class SparcAcquisitionTab(Tab):
         if not self._sem_ar_stream:
             return
 
-        self.main_frame.fp_settings_sparc_angular.Show(show)
+        # self.main_frame.fp_settings_sparc_angular.Show(show)
         acq_view = self.tab_data_model.acquisitionView
         if show:
             acq_view.addStream(self._sem_ar_stream)
@@ -1012,28 +1017,24 @@ class SparcAcquisitionTab(Tab):
             # don't put switches back when hiding, to avoid unnecessary moves
 
     def onToggleSpec(self, evt):
-        """
-        called when the Spectrometer button is toggled
-        """
+        """ Called when the Spectrometer button is toggled """
         btn = evt.GetEventObject()
         show = btn.GetToggle()
         # TODO: only remove AR if hardware to switch between optical path
         # is not available (but for now, it's never available)
         self._show_ar(False)
-        self.main_frame.acq_btn_angular.SetToggle(False)
+        # self.main_frame.acq_btn_angular.SetToggle(False)
 
         self._show_spec(show)
         if show:
             self._spec_stream.roi.value = self._sem_cl_stream.roi.value
 
     def onToggleAR(self, evt):
-        """
-        called when the AR button is toggled
-        """
+        """ called when the AR button is toggled """
         btn = evt.GetEventObject()
         show = btn.GetToggle()
         self._show_spec(False)
-        self.main_frame.acq_btn_spectrometer.SetToggle(False)
+        # self.main_frame.acq_btn_spectrometer.SetToggle(False)
 
         self._show_ar(show)
         if show:

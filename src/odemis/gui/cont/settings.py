@@ -894,20 +894,23 @@ class SettingsBarController(object):
     def add_stream(self, stream):
         pass
 
-    def add_spec_chronograph(self, ctrl, ftsize=None):
+    def add_spec_chronograph(self, setting_cont, ftsize=None):
         """
-        ctrl (SettingsController)
-        ftsize (int or None): font size for the value
+
+        :param setting_cont: (SettingsController)
+        :param ftsize: (int or None) font size for the value
+
         """
+
         # Add a intensity/time graph
-        self.spec_graph = hist.Histogram(ctrl.panel, size=(-1, 40))
+        self.spec_graph = hist.Histogram(setting_cont.panel, size=(-1, 40))
         self.spec_graph.SetBackgroundColour("#000000")
-        ctrl.add_widgets(self.spec_graph)
+        setting_cont.add_widgets(self.spec_graph)
         # the "Mean" value bellow the graph
-        lbl_mean = wx.StaticText(ctrl.panel, label="Mean")
+        lbl_mean = wx.StaticText(setting_cont.panel, label="Mean")
         tooltip_txt = "Average intensity value of the last image"
         lbl_mean.SetToolTipString(tooltip_txt)
-        self.txt_mean = wx.TextCtrl(ctrl.panel,
+        self.txt_mean = wx.TextCtrl(setting_cont.panel,
                                     style=wx.BORDER_NONE | wx.TE_READONLY)
         if ftsize is not None:
             f = self.txt_mean.GetFont()
@@ -916,7 +919,7 @@ class SettingsBarController(object):
         self.txt_mean.SetForegroundColour(odemis.gui.FG_COLOUR_MAIN)
         self.txt_mean.SetBackgroundColour(odemis.gui.BG_COLOUR_MAIN)
         self.txt_mean.SetToolTipString(tooltip_txt)
-        ctrl.add_widgets(lbl_mean, self.txt_mean)
+        setting_cont.add_widgets(lbl_mean, self.txt_mean)
 
 
 class SecomSettingsController(SettingsBarController):
@@ -993,109 +996,109 @@ class SparcSettingsController(SettingsBarController):
         super(SparcSettingsController, self).__init__(tab_data)
         main_data = tab_data.main
 
-        self._sem_panel = SemSettingsController(
-            parent_frame.fp_settings_sparc_sem,
-            "No SEM found",
-            highlight_change
-        )
-        self._angular_panel = AngularSettingsController(
-            parent_frame.fp_settings_sparc_angular,
-            "No angular camera found",
-            highlight_change
-        )
-        self._spectrum_panel = SpectrumSettingsController(
-            parent_frame.fp_settings_sparc_spectrum,
-            "No spectrometer found",
-            highlight_change
-        )
+        # self._sem_panel = SemSettingsController(
+        #     parent_frame.fp_settings_sparc_sem,
+        #     "No SEM found",
+        #     highlight_change
+        # )
+        # self._angular_panel = AngularSettingsController(
+        #     parent_frame.fp_settings_sparc_angular,
+        #     "No angular camera found",
+        #     highlight_change
+        # )
+        # self._spectrum_panel = SpectrumSettingsController(
+        #     parent_frame.fp_settings_sparc_spectrum,
+        #     "No spectrometer found",
+        #     highlight_change
+        # )
 
         # Somewhat of a hack to get direct references to a couple of controls
         self.angular_rep_ent = None
         self.spectro_rep_ent = None
         self.spec_pxs_ent = None
 
-        if main_data.ebeam:
-            self.add_hw_component(main_data.ebeam, self._sem_panel)
-
-            if sem_stream:
-                self.sem_dcperiod_ent = self._sem_panel.add_setting_entry(
-                    "dcPeriod",
-                    sem_stream.dcPeriod,
-                    None,  # component
-                    self._va_config["streamsem"]["dcPeriod"]
-                )
+        # if main_data.ebeam:
+        #     self.add_hw_component(main_data.ebeam, self._sem_panel)
+        #
+        #     if sem_stream:
+        #         self.sem_dcperiod_ent = self._sem_panel.add_setting_entry(
+        #             "dcPeriod",
+        #             sem_stream.dcPeriod,
+        #             None,  # component
+        #             self._va_config["streamsem"]["dcPeriod"]
+        #         )
 
         if main_data.spectrometer:
-            self.add_hw_component(main_data.spectrometer, self._spectrum_panel)
+            # self.add_hw_component(main_data.spectrometer, self._spectrum_panel)
 
             # If available, add filter selection
             # TODO: have the control in a (common) separate panel?
             # TODO: also add it to the Mirror alignment tab?
-            if main_data.light_filter:
-                self._spectrum_panel.add_axis("band", main_data.light_filter,
-                                              self._va_config["filter"]["band"])
+            # if main_data.light_filter:
+            #     self._spectrum_panel.add_axis("band", main_data.light_filter,
+            #                                   self._va_config["filter"]["band"])
 
-            self._spectrum_panel.panel.add_divider()
+            # self._spectrum_panel.panel.add_divider()
             if spec_stream:
-                self.spectro_rep_ent = self._spectrum_panel.add_setting_entry(
-                    "repetition",
-                    spec_stream.repetition,
-                    None,  # component
-                    self._va_config["streamspec"]["repetition"]
-                )
+                # self.spectro_rep_ent = self._spectrum_panel.add_setting_entry(
+                #     "repetition",
+                #     spec_stream.repetition,
+                #     None,  # component
+                #     self._va_config["streamspec"]["repetition"]
+                # )
                 spec_stream.repetition.subscribe(self.on_spec_rep)
 
-                self.spec_pxs_ent = self._spectrum_panel.add_setting_entry(
-                    "pixelSize",
-                    spec_stream.pixelSize,
-                    None,  # component
-                    self._va_config["streamspec"]["pixelSize"]
-                )
+                # self.spec_pxs_ent = self._spectrum_panel.add_setting_entry(
+                #     "pixelSize",
+                #     spec_stream.pixelSize,
+                #     None,  # component
+                #     self._va_config["streamspec"]["pixelSize"]
+                # )
             else:
                 logging.warning("Spectrometer available, but no spectrum "
                                 "stream provided")
 
-            # Add spectrograph control if available
-            if main_data.spectrograph:
-                # Without the "wavelength" axis, it's boring
-                if "wavelength" in main_data.spectrograph.axes:
-                    self._spectrum_panel.add_axis(
-                        "wavelength",
-                        main_data.spectrograph,
-                        self._va_config["spectrograph"]["wavelength"])
-                if "grating" in main_data.spectrograph.axes:
-                    self._spectrum_panel.add_axis(
-                        "grating",
-                        main_data.spectrograph,
-                        self._va_config["spectrograph"]["grating"])
+            # # Add spectrograph control if available
+            # if main_data.spectrograph:
+            #     # Without the "wavelength" axis, it's boring
+            #     if "wavelength" in main_data.spectrograph.axes:
+            #         self._spectrum_panel.add_axis(
+            #             "wavelength",
+            #             main_data.spectrograph,
+            #             self._va_config["spectrograph"]["wavelength"])
+            #     if "grating" in main_data.spectrograph.axes:
+            #         self._spectrum_panel.add_axis(
+            #             "grating",
+            #             main_data.spectrograph,
+            #             self._va_config["spectrograph"]["grating"])
 
-            self.add_spec_chronograph(self._spectrum_panel)
+            # self.add_spec_chronograph(self._spectrum_panel)
         else:
             parent_frame.fp_settings_sparc_spectrum.Hide()
 
-        if main_data.ccd:
-            self.add_hw_component(main_data.ccd, self._angular_panel)
-
-            if main_data.light_filter:
-                self._angular_panel.add_axis("band", main_data.light_filter,
-                                             self._va_config["filter"]["band"])
-
-            self._angular_panel.panel.add_divider()
-            if ar_stream is not None:
-                self.angular_rep_ent = self._angular_panel.add_setting_entry(
-                    "repetition",
-                    ar_stream.repetition,
-                    None,  # component
-                    self._va_config["streamar"]["repetition"]
-                )
-
-                ar_stream.repetition.subscribe(self.on_ar_rep)
-
-            else:
-                logging.warning("AR camera available, but no AR stream provided")
-
-        else:
-            parent_frame.fp_settings_sparc_angular.Hide()
+        # if main_data.ccd:
+        #     self.add_hw_component(main_data.ccd, self._angular_panel)
+        #
+        #     if main_data.light_filter:
+        #         self._angular_panel.add_axis("band", main_data.light_filter,
+        #                                      self._va_config["filter"]["band"])
+        #
+        #     self._angular_panel.panel.add_divider()
+        #     if ar_stream is not None:
+        #         self.angular_rep_ent = self._angular_panel.add_setting_entry(
+        #             "repetition",
+        #             ar_stream.repetition,
+        #             None,  # component
+        #             self._va_config["streamar"]["repetition"]
+        #         )
+        #
+        #         ar_stream.repetition.subscribe(self.on_ar_rep)
+        #
+        #     else:
+        #         logging.warning("AR camera available, but no AR stream provided")
+        #
+        # else:
+        #     parent_frame.fp_settings_sparc_angular.Hide()
 
     def on_spec_rep(self, rep):
         self._on_rep(rep, self.spectro_rep_ent.vigilattr, self.spectro_rep_ent.value_ctrl)
@@ -1333,15 +1336,17 @@ class SparcAlignSettingsController(SettingsBarController):
         super(SparcAlignSettingsController, self).__init__(tab_data)
         main_data = tab_data.main
 
-        self._ar_panel = AngularSettingsController(parent_frame.fp_ma_settings_ar,
-                                                   "No angle-resolved camera found")
-        self._spectrum_panel = SpectrumSettingsController(parent_frame.fp_ma_settings_spectrum,
-                                                          "No spectrometer found")
+        self._ar_setting_cont = AngularSettingsController(parent_frame.fp_ma_settings_ar,
+                                                          "No angle-resolved camera found")
+        self._spect_setting_cont = SpectrumSettingsController(parent_frame.fp_ma_settings_spectrum,
+                                                              "No spectrometer found")
 
         if main_data.ccd:
-            self.add_hw_component(main_data.ccd, self._ar_panel)
+            self.add_hw_component(main_data.ccd, self._ar_setting_cont)
 
         if main_data.spectrometer:
-            self.add_hw_component(main_data.spectrometer, self._spectrum_panel)
+            self.add_hw_component(main_data.spectrometer, self._spect_setting_cont)
             # increase a bit the font size for easy reading from far
-            self.add_spec_chronograph(self._spectrum_panel, 12)
+
+            # This need to be added to a stream
+            self.add_spec_chronograph(self._spect_setting_cont, 9)
