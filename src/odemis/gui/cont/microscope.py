@@ -728,8 +728,14 @@ class DelphiStateController(SecomStateController):
 
     def _start_chamber_venting(self):
         # On the DELPHI, we also move the optical stage to 0,0 (= reference
-        # position), so that referencing will be faster on next load
-        self._main_data.aligner.moveAbs({"x": 0, "y": 0})
+        # position), so that referencing will be faster on next load.
+        # We just need to be careful that the axis is referenced
+        referenced = self._main_data.aligner.referenced.value
+        pos = {"x": 0, "y": 0}
+        for a in pos.keys():
+            if not referenced.get(a, False):
+                del pos[a]
+        self._main_data.aligner.moveAbs(pos)
 
         super(DelphiStateController, self)._start_chamber_venting()
         self._show_progress_indicators(True, True)
