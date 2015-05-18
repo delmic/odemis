@@ -382,10 +382,10 @@ class CoupledStage(model.Actuator):
                     rotation=self._metadata.get(MD_ROTATION_COR, 0),
                     translation=self._metadata.get(MD_POS_COR, (0, 0)))
         
-        if set(self._metadata.keys()) & {MD_PIXEL_SIZE_COR, MD_ROTATION_COR, MD_POS_COR}:
-            # Schedule a null relative move, just to ensure the stages are
-            # synchronised again (if some metadata is provided)
-            self._executor.submit(self._doMoveRel, {})
+#         if set(self._metadata.keys()) & {MD_PIXEL_SIZE_COR, MD_ROTATION_COR, MD_POS_COR}:
+#             # Schedule a null relative move, just to ensure the stages are
+#             # synchronised again (if some metadata is provided)
+#             self._executor.submit(self._doMoveRel, {})
 
     def _updatePosition(self):
         """
@@ -456,7 +456,7 @@ class CoupledStage(model.Actuator):
     @isasync
     def moveRel(self, shift):
         if not shift:
-            return model.InstantaneousFuture()
+            shift = {"x": 0, "y": 0}
         self._checkMoveRel(shift)
 
         shift = self._applyInversionRel(shift)
@@ -465,7 +465,7 @@ class CoupledStage(model.Actuator):
     @isasync
     def moveAbs(self, pos):
         if not pos:
-            return model.InstantaneousFuture()
+            pos = self.position.value
         self._checkMoveAbs(pos)
         pos = self._applyInversionAbs(pos)
 

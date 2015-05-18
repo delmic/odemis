@@ -393,32 +393,9 @@ class AlignedSEMStream(SEMStream):
             return
         self._last_pos = pos
 
-        # Once the user moves with the SEM disabled, change the alignment
-        # correction from beamshift + metadata to (rough) mechanical correction.
-        if not self.is_active.value:
-            self._compensateWithStage()
-
         if self.is_active.value:
             self._setStatus(logging.WARNING, u"SEM stream is not aligned")
         self._calibrated = False
-
-    def _compensateWithStage(self):
-        # Note that in theory, beamshift and metadata should be reset here, but
-        # that is not necessary because it will happen anyway next time the
-        # stream is activated.
-        md_stage = self._stage.getMetadata()
-        trans = md_stage.get(model.MD_POS_COR, (0, 0))
-        # TODO We initialize cur_trans to None just to force this condition to
-        # fail before spot alignment is performed. Instead we should be able
-        # to update with the correct cur_trans even spot alignment is not
-        # performed yet. => only apply if MD_POS_COR has not changed since we
-        # measured _cur_trans?
-        if self._cur_trans is not None and self._cur_trans != trans:
-            logging.debug("Current stage translation %s m,m", trans)
-            self._stage.updateMetadata({
-                model.MD_POS_COR: self._cur_trans
-            })
-            logging.debug("Compensated stage translation %s m,m", self._cur_trans)
 
     # need to override it to support beam shift
     def _applyROI(self):
@@ -469,7 +446,10 @@ class AlignedSEMStream(SEMStream):
                 cur_trans = self._stage.getMetadata().get(model.MD_POS_COR, (0, 0))
                 self._cur_trans = (cur_trans[0] - self._last_shift[0],
                                    cur_trans[1] - self._last_shift[1])
-
+                self._stage.updateMetadata({
+                    model.MD_POS_COR: self._cur_trans
+                })
+                logging.debug("Compensated stage translation %s m,m", self._cur_trans)
                 if self._shiftebeam == MTD_EBEAM_SHIFT:
                     # First align using shift
                     self._applyROI()
@@ -498,9 +478,6 @@ class AlignedSEMStream(SEMStream):
 
             self._shift = shift
             self._compensateShift()
-        elif not active and not self._calibrated:
-            # SEM stream just got paused _and_ the stage has moved
-            self._compensateWithStage()
 
         super(AlignedSEMStream, self)._onActive(active)
 
