@@ -413,7 +413,8 @@ class ScannedAcquisitionGUIData(MicroscopyGUIData):
             TOOL_ROA,
             TOOL_RO_ANCHOR,
             TOOL_POINT,
-            TOOL_LINE
+            TOOL_LINE,
+            TOOL_SPOT,
         }
 
         self.tool = IntEnumerated(TOOL_NONE, choices=tools)
