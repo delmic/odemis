@@ -2669,7 +2669,7 @@ def __init_resources():
                         <object class="sizeritem">
                           <object class="FoldPanelBar">
                             <object class="FoldPanelItem" name="fp_ma_settings_ar">
-                              <label>ANGLE RESOLVED</label>
+                              <label>ANGLE-RESOLVED</label>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
                               <XRCED>

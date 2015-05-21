@@ -195,7 +195,6 @@ class MainGUIData(object):
                     if child.role == "spectrograph":
                         self.spectrograph = child
 
-
             # Check that the components that can be expected to be present on an actual microscope
             # have been correctly detected.
 

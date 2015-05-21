@@ -154,7 +154,7 @@ class ViewPortController(object):
                   "stream_classes": (EMStream, OpticalStream, SpectrumStream),
                   }),
                 (self._viewports[4],
-                 {"name": "Angle resolved",
+                 {"name": "Angle-resolved",
                   "stream_classes": ARStream,
                   }),
                 (self._viewports[5],

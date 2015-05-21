@@ -877,20 +877,55 @@ class StreamBarController(object):
 
             self._stream_bar.add_action("Bright-field", self.addBrightfield, brightfield_capable)
 
-        def sem_capable():
-            enabled = self._main_data_model.chamberState.value in {guimodel.CHAMBER_VACUUM,
-                                                                   guimodel.CHAMBER_UNKNOWN}
-            view = self._tab_data_model.focussedView.value
-            compatible = view.is_compatible(acqstream.SEMStream)
-            return enabled and compatible
+        # SED
+        if self._main_data_model.ebeam and self._main_data_model.sed:
+            if self._main_data_model.spectrograph and self._main_data_model.spectrometer:
+                # Sparc
 
-        # SED (Ignore the SED if this is a SPARC
-        if (
-            self._main_data_model.ebeam and self._main_data_model.sed and
-            not (self._main_data_model.spectrograph or self._main_data_model.spectrometer)
-        ):
-            self._stream_bar.add_action("Secondary electrons", self.addSEMSED, sem_capable)
+                def angle_resolved_capable():
+                    view = self._tab_data_model.focussedView.value
+                    return view.is_compatible(acqstream.CameraStream)
 
+                self._stream_bar.add_action("Angle-resolved",
+                                            self.on_add_angle_resolved,
+                                            angle_resolved_capable)
+
+                def cl_intensity_capable():
+                    # FIXME: check if the right class is used
+                    view = self._tab_data_model.focussedView.value
+                    return view.is_compatible(acqstream.CLSettingsStream)
+
+                self._stream_bar.add_action("CL intensity",
+                                            self.on_add_cl_intensity,
+                                            cl_intensity_capable)
+
+                def spectrum_capable():
+                    # FIXME: check if the right class is used
+                    view = self._tab_data_model.focussedView.value
+                    return view.is_compatible(acqstream.SpectrumSettingsStream)
+
+                self._stream_bar.add_action("Spectrum",
+                                            self.on_add_spectrum,
+                                            spectrum_capable)
+
+                def monochromator_capable():
+                    view = self._tab_data_model.focussedView.value
+                    return view.is_compatible(acqstream.MonochromatorSettingsStream)
+
+                self._stream_bar.add_action("Monochromator",
+                                            self.on_add_monochromator,
+                                            monochromator_capable)
+            else:
+                # Not a Sparc
+                def sem_capable():
+                    """ Check if focussed view is compatible with a SEM stream """
+                    enabled = self._main_data_model.chamberState.value in {guimodel.CHAMBER_VACUUM,
+                                                                           guimodel.CHAMBER_UNKNOWN}
+                    view = self._tab_data_model.focussedView.value
+                    compatible = view.is_compatible(acqstream.SEMStream)
+                    return enabled and compatible
+
+                self._stream_bar.add_action("Secondary electrons", self.addSEMSED, sem_capable)
         # BSED
         if self._main_data_model.ebeam and self._main_data_model.bsd:
             self._stream_bar.add_action("Backscattered electrons", self.addSEMBSD, sem_capable)
@@ -901,6 +936,45 @@ class StreamBarController(object):
         """
         se = self.addFluo(**kwargs)
         se.stream_panel.set_focus_on_label()
+
+    def on_add_angle_resolved(self):
+        ccd_stream = acqstream.CameraStream(
+            "Angle-resolved",
+            self._main_data_model.ccd,
+            self._main_data_model.ccd.data,
+            self._main_data_model.ebeam
+        )
+        return self._addStream(ccd_stream)
+
+    def on_add_cl_intensity(self):
+        # FIXME: Determine the right Stream class and parameters
+        cli_stream = acqstream.CLSettingsStream(
+            "CL intensity",
+            self._main_data_model.ccd,
+            self._main_data_model.ccd.data,
+            self._main_data_model.ebeam
+        )
+        return self._addStream(cli_stream)
+
+    def on_add_spectrum(self):
+        # FIXME: Determine the right Stream class and parameters
+        spec_stream = acqstream.SpectrumSettingsStream(
+            "Spectrum",
+            self._main_data_model.ccd,
+            self._main_data_model.ccd.data,
+            self._main_data_model.ebeam
+        )
+        return self._addStream(spec_stream)
+
+    def on_add_monochromator(self):
+        # FIXME: Determine the right Stream class and parameters
+        monoch_stream = acqstream.MonochromatorSettingsStream(
+            "Spectrum",
+            self._main_data_model.ccd,
+            self._main_data_model.ccd.data,
+            self._main_data_model.ebeam
+        )
+        return self._addStream(monoch_stream)
 
     def addFluo(self, **kwargs):
         """
@@ -950,10 +1024,12 @@ class StreamBarController(object):
         return self._addStream(s, **kwargs)
 
     def addSEMSED(self, **kwargs):
+        """ Creates a new SED stream and panel in the stream bar
+
+        :return: (StreamController) The controller created for the SED stream
+
         """
-        Creates a new SED stream and panel in the stream bar
-        returns (StreamPanel): the panel created
-        """
+
         if self._main_data_model.role == "delphi":
             # For the Delphi, the SEM stream needs to be more "clever" because
             # it needs to run a simple spot alignment every time the stage has
