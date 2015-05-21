@@ -836,10 +836,12 @@ class StreamBarController(object):
         self._sched_policy = policy
 
     def _createAddStreamActions(self):
-        """ Create the compatible "add stream" actions according to the current
-        microscope.
+        """ Create the compatible "add stream" actions according to the current microscope.
+
         To be executed only once, at initialisation.
+
         """
+
         # Basically one action per type of stream
 
         # TODO: always display the action (if it's compatible), but update
@@ -882,9 +884,13 @@ class StreamBarController(object):
             compatible = view.is_compatible(acqstream.SEMStream)
             return enabled and compatible
 
-        # SED
-        if self._main_data_model.ebeam and self._main_data_model.sed:
+        # SED (Ignore the SED if this is a SPARC
+        if (
+            self._main_data_model.ebeam and self._main_data_model.sed and
+            not (self._main_data_model.spectrograph or self._main_data_model.spectrometer)
+        ):
             self._stream_bar.add_action("Secondary electrons", self.addSEMSED, sem_capable)
+
         # BSED
         if self._main_data_model.ebeam and self._main_data_model.bsd:
             self._stream_bar.add_action("Backscattered electrons", self.addSEMBSD, sem_capable)

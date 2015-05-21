@@ -1115,15 +1115,7 @@ class StreamBar(wx.Panel):
     # === Event Handlers
 
     def on_add_stream(self, evt):
-        # TODO: call the action of the menu
-        if "Filtered colour" in self.menu_actions:
-            evt.Skip()
-            # action = self.menu_actions["Filtered colour"]
-            # action()
-        else:
-            logging.info("Don't know how to add a stream, need to implement a real menu")
-        # evt_obj = evt.GetEventObject()
-        # stream_name = evt_obj.GetStringSelection()
+        evt.Skip()
 
     def on_stream_remove(self, evt):
         logging.debug("StreamBar received remove event %r", evt)
@@ -1221,12 +1213,15 @@ class StreamBar(wx.Panel):
     #  * if there can be only one stream of this type, and it's already present
     #    => disabled
     def add_action(self, title, callback, check_enabled=None):
+        """ Add an action to the stream menu
+
+        It's added at the end of the list. If an action with the same title exists, it is replaced.
+
+        :param title: (string) Text displayed in the menu
+        :param callback: (callable) function to call when the action is selected
+
         """
-        Add an action to the menu. It's added at the end of the list. If an
-        action with the same title exists, it is replaced.
-        title (string): Text displayed in the menu
-        callback (callable): function to call when the action is selected
-        """
+
         if self.btn_add_stream is None:
             logging.error("No add button present!")
         else:
