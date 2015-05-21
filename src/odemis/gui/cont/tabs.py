@@ -669,6 +669,7 @@ class SparcAcquisitionTab(Tab):
         )
 
         str_cont = self._streambar_controller.addStream(sem_stream, add_to_all_views=True)
+        str_cont.stream_panel.show_remove_btn(False)
 
         # needs to have the AR and Spectrum streams on the acquisition view
         self._settings_controller = settings.SparcSettingsController(
