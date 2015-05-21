@@ -569,7 +569,7 @@ class SparcAcquisitionTab(Tab):
 
         acq_view = self.tab_data_model.acquisitionView
         sem_stream = streammod.SEMStream(
-            "SEM survey",
+            "Secondary electrons",
             main_data.sed,
             main_data.sed.data,
             main_data.ebeam)
@@ -663,12 +663,12 @@ class SparcAcquisitionTab(Tab):
             opt_mic_view = self.tab_data_model.views.value[0]
             opt_mic_view.addStream(self._ar_stream)
 
-        self._stream_controller = streamcont.StreamBarController(
+        self._streambar_controller = streamcont.StreamBarController(
             self.tab_data_model,
             self.main_frame.pnl_sparc_streams
         )
 
-        self._stream_controller.addStream(sem_stream, add_to_all_views=True)
+        str_cont = self._streambar_controller.addStream(sem_stream, add_to_all_views=True)
 
         # needs to have the AR and Spectrum streams on the acquisition view
         self._settings_controller = settings.SparcSettingsController(
