@@ -530,7 +530,7 @@ class SparcAcquisitionTab(Tab):
                 (None, self.main_frame.lbl_sparc_view_all)),
             (
                 self.main_frame.btn_sparc_view_tl,
-                (self.main_frame.vp_sparc_acq_view, self.main_frame.lbl_sparc_view_tl)),
+                (self.main_frame.vp_sparc_acq, self.main_frame.lbl_sparc_view_tl)),
             (
                 self.main_frame.btn_sparc_view_tr,
                 (self.main_frame.vp_sparc_tr, self.main_frame.lbl_sparc_view_tr)),
@@ -568,6 +568,7 @@ class SparcAcquisitionTab(Tab):
         self._scount_stream = None
 
         acq_view = self.tab_data_model.acquisitionView
+
         sem_stream = streammod.SEMStream(
             "Secondary electrons",
             main_data.sed,
@@ -819,7 +820,7 @@ class SparcAcquisitionTab(Tab):
         # self.main_frame.acq_btn_angular.Enable(not is_acquiring)
 
         self.tb.enable(not is_acquiring)
-        self.main_frame.vp_sparc_acq_view.Enable(not is_acquiring)
+        self.main_frame.vp_sparc_acq.Enable(not is_acquiring)
         self.main_frame.btn_sparc_change_file.Enable(not is_acquiring)
 
     def _copyDwellTimeToAnchor(self, dt):
@@ -844,7 +845,7 @@ class SparcAcquisitionTab(Tab):
             stream = None
 
         # Convert stream to right display
-        cvs = self.main_frame.vp_sparc_acq_view.canvas
+        cvs = self.main_frame.vp_sparc_acq.canvas
         if stream is None:
             cvs.show_repetition(None)
         else:

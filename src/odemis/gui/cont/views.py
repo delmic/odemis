@@ -26,6 +26,8 @@ import collections
 import logging
 from odemis.acq.stream import OpticalStream, EMStream, SpectrumStream, ARStream
 from odemis.acq.stream import RGBCameraStream, BrightfieldStream
+from odemis.acq.stream._helper import CLSettingsStream
+from odemis.acq.stream._live import SEMStream
 from odemis.gui import model
 from odemis.gui.comp.grid import ViewportGrid
 from odemis.gui.comp.viewport import MicroscopeViewport, AngularResolvedViewport, PlotViewport, \
@@ -229,7 +231,7 @@ class ViewPortController(object):
                   "cls": model.ContentView,
                   "stage": self._main_data_model.stage,
                   "focus": self._main_data_model.ebeam_focus,
-                  "stream_classes": EMStream,
+                  "stream_classes": (EMStream, CLSettingsStream),
                   }),
                 (self._viewports[1],  # focused view
                  {"name": "Optical",

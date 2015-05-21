@@ -2671,7 +2671,7 @@
             </object>
             <object class="sizeritem">
               <object class="ViewportGrid" name="pnl_sparc_grid">
-                <object class="SparcAcquisitionViewport" name="vp_sparc_acq_view">
+                <object class="SparcAcquisitionViewport" name="vp_sparc_acq">
                   <XRCED>
                     <assign_var>1</assign_var>
                   </XRCED>
