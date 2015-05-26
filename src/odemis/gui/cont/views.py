@@ -241,13 +241,11 @@ class ViewPortController(object):
                 (self._viewports[2],
                  {"name": "Spectrum",
                   "stage": self._main_data_model.stage,
-                  "focus": self._main_data_model.focus,
                   "stream_classes": SpectrumStream,
                   }),
                 (self._viewports[3],
                  {"name": "Monochromator",
                   "stage": self._main_data_model.stage,
-                  "focus": self._main_data_model.focus,
                   "stream_classes": MonochromatorSettingsStream,
                   }),
             ])

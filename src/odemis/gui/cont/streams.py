@@ -882,39 +882,12 @@ class StreamBarController(object):
             if self._main_data_model.spectrograph and self._main_data_model.spectrometer:
                 # Sparc
 
-                def angle_resolved_capable():
-                    view = self._tab_data_model.focussedView.value
-                    return view.is_compatible(acqstream.CameraStream)
-
-                self._stream_bar.add_action("Angle-resolved",
-                                            self.on_add_angle_resolved,
-                                            angle_resolved_capable)
-
-                def cl_intensity_capable():
-                    # FIXME: check if the right class is used
-                    view = self._tab_data_model.focussedView.value
-                    return view.is_compatible(acqstream.CLSettingsStream)
-
-                self._stream_bar.add_action("CL intensity",
-                                            self.on_add_cl_intensity,
-                                            cl_intensity_capable)
-
-                def spectrum_capable():
-                    # FIXME: check if the right class is used
-                    view = self._tab_data_model.focussedView.value
-                    return view.is_compatible(acqstream.SpectrumSettingsStream)
-
-                self._stream_bar.add_action("Spectrum",
-                                            self.on_add_spectrum,
-                                            spectrum_capable)
-
-                def monochromator_capable():
-                    view = self._tab_data_model.focussedView.value
-                    return view.is_compatible(acqstream.MonochromatorSettingsStream)
-
-                self._stream_bar.add_action("Monochromator",
-                                            self.on_add_monochromator,
-                                            monochromator_capable)
+                # In the Sparc interface, all stream types can be added, regardless what viewport
+                # has the focus.
+                self._stream_bar.add_action("Angle-resolved", self.on_add_angle_resolved)
+                self._stream_bar.add_action("CL intensity", self.on_add_cl_intensity)
+                self._stream_bar.add_action("Spectrum", self.on_add_spectrum)
+                self._stream_bar.add_action("Monochromator", self.on_add_monochromator)
             else:
                 # Not a Sparc
                 def sem_capable():
