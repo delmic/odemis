@@ -666,7 +666,8 @@ class SparcAcquisitionTab(Tab):
 
         self._streambar_controller = streamcont.StreamBarController(
             self.tab_data_model,
-            self.main_frame.pnl_sparc_streams
+            self.main_frame.pnl_sparc_streams,
+            ignore_view=True
         )
 
         str_cont = self._streambar_controller.addStream(sem_stream, add_to_all_views=True)

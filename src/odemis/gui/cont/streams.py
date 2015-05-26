@@ -695,13 +695,16 @@ class StreamController(object):
 class StreamBarController(object):
     """  Manages the streams and their corresponding stream panels in the stream bar """
 
-    def __init__(self, tab_data, stream_bar, static=False, locked=False):
+    def __init__(self, tab_data, stream_bar, static=False, locked=False, ignore_view=False):
         """
-        tab_data (MicroscopyGUIData): the representation of the microscope Model
-        stream_bar (StreamBar): an empty stream panel
-        static (Boolean): Treat streams as static
-        locked (Boolean): Don't allow to add/remove/hide/show streams
+        :param tab_data: (MicroscopyGUIData) the representation of the microscope Model
+        :param stream_bar: (StreamBar) an empty stream bar
+        :param static: (bool) Treat streams as static
+        :param locked: (bool) Don't allow to add/remove/hide/show streams
+        :param ignore_view: (bool) don't change the visible panels on focussed view change
+
         """
+
         self._tab_data_model = tab_data
         self._main_data_model = tab_data.main
 
@@ -712,6 +715,9 @@ class StreamBarController(object):
 
         if stream_bar.btn_add_stream:
             self._createAddStreamActions()
+
+        # Don't hide or show stream panel when the focussed view changes
+        self.ignore_view = ignore_view
 
         self._tab_data_model.focussedView.subscribe(self._onView, init=True)
         pub.subscribe(self.removeStream, 'stream.remove')
@@ -911,6 +917,7 @@ class StreamBarController(object):
         se.stream_panel.set_focus_on_label()
 
     def on_add_angle_resolved(self):
+        # FIXME: This function must find the correct view to add the stream to
         ccd_stream = acqstream.CameraStream(
             "Angle-resolved",
             self._main_data_model.ccd,
@@ -920,7 +927,7 @@ class StreamBarController(object):
         return self._addStream(ccd_stream)
 
     def on_add_cl_intensity(self):
-        # FIXME: Determine the right Stream class and parameters
+        # FIXME: This function must find the correct view to add the stream to
         cli_stream = acqstream.CLSettingsStream(
             "CL intensity",
             self._main_data_model.ccd,
@@ -930,7 +937,7 @@ class StreamBarController(object):
         return self._addStream(cli_stream)
 
     def on_add_spectrum(self):
-        # FIXME: Determine the right Stream class and parameters
+        # FIXME: This function must find the correct view to add the stream to
         spec_stream = acqstream.SpectrumSettingsStream(
             "Spectrum",
             self._main_data_model.ccd,
@@ -940,7 +947,7 @@ class StreamBarController(object):
         return self._addStream(spec_stream)
 
     def on_add_monochromator(self):
-        # FIXME: Determine the right Stream class and parameters
+        # FIXME: This function must find the correct view to add the stream to
         monoch_stream = acqstream.MonochromatorSettingsStream(
             "Spectrum",
             self._main_data_model.ccd,
@@ -1165,7 +1172,7 @@ class StreamBarController(object):
         Called when the current view changes
         """
 
-        if not view:
+        if not view or self.ignore_view:
             return
 
         # hide/show the stream panels which are compatible with the view
