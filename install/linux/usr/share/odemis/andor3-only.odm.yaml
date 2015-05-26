@@ -4,9 +4,9 @@
 Optical: {
     class: Microscope,
     role: optical,
-    emitters: [Light, "Nikon Super Duper", "MultiBand Fixed Filter"],
+    emitters: [Light, "Optical Objective", "Optical Emission Filter"],
     detectors: [Cam],
-    actuators: ["FakeStage", "SEM-Optical Alignment", "OpticalZ actuator"],
+    actuators: ["FakeStage", "Objective Stage", "Optical Focus"],
 }
 
 Light: {
@@ -17,14 +17,14 @@ Light: {
         power: 100 # W
     }
 }
-"Nikon Super Duper": {
+"Optical Objective": {
     class: static.OpticalLens,
     role: lens,
     init: {mag: 10.0}, # ratio
     affects: [Cam]
 }
 
-"MultiBand Fixed Filter": {
+"Optical Emission Filter": {
     class: static.LightFilter,
     role: filter,
     init: {band: [[430.e-9, 480.e-9], [520.e-9, 600.e-9]]}, # m,m
@@ -56,7 +56,7 @@ Cam: {
 }
 
 # Use 2 MultiplexActuators to separate the axes of the PIGCS over different roles
-"SEM-Optical Alignment": {
+"Objective Stage": {
     class: actuator.MultiplexActuator,
     role: align,
     affects: [Cam],
@@ -70,7 +70,7 @@ Cam: {
     }
 }
 
-"OpticalZ actuator": {
+"Optical Focus": {
     class: actuator.MultiplexActuator,
     role: focus,
     affects: [Cam],

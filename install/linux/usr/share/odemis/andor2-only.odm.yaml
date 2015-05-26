@@ -1,34 +1,34 @@
 Optical: {
     class: Microscope,
     role: optical,
-    emitters: [Light, "Nikon Super Duper", "MultiBand Fixed Filter"],
-    detectors: [Clara],
-    actuators: ["FakeRedStoneStage", "SEM-Optical Alignment", "OpticalZ actuator"],
+    emitters: [Light, "Optical Objective", "Optical Emission Filter"],
+    detectors: ["Camera"],
+    actuators: ["FakeRedStoneStage", "Objective Stage", "Optical Focus"],
 }
 
 Light: {
     class: simulated.Light,
     role: light,
-    affects: [Clara],
+    affects: ["Camera"],
     properties: {
         power: 100 # W
     }
 }
-"Nikon Super Duper": {
+"Optical Objective": {
     class: static.OpticalLens,
     role: lens,
     init: {mag: 10.0}, # ratio
-    affects: [Clara]
+    affects: ["Camera"]
 }
 
-"MultiBand Fixed Filter": {
+"Optical Emission Filter": {
     class: static.LightFilter,
     role: filter,
     init: {band: [[430.e-9, 480.e-9], [520.e-9, 600.e-9]]}, # m,m
-    affects: [Clara]
+    affects: ["Camera"]
 }
 
-Clara: {
+"Camera": {
     class: andorcam2.AndorCam2,
     role: ccd,
     init: {device: 0} # 0 is almost always correct
@@ -38,17 +38,17 @@ Clara: {
     class: simulated.Stage,
     role: stage,
     init: {axes: ["x", "y"]},
-    affects: [Clara],
+    affects: ["Camera"],
     properties: {
         speed: {'x':0.1, 'y':0.1} #m/s
     }
 }
 
 # Use 2 MultiplexActuators to separate the axes of the PIGCS over different roles
-"SEM-Optical Alignment": {
+"Objective Stage": {
     class: actuator.MultiplexActuator,
     role: align,
-    affects: [Clara],
+    affects: ["Camera"],
     children: {"a": FakePIGCS, "b": FakePIGCS},
     init: {
         axes_map: {"a": "a", "b": "b"},
@@ -59,10 +59,10 @@ Clara: {
     }
 }
 
-"OpticalZ actuator": {
+"Optical Focus": {
     class: actuator.MultiplexActuator,
     role: focus,
-    affects: [Clara],
+    affects: ["Camera"],
     children: {"z": FakePIGCS},
     init: {
         axes_map: {"z": "z"}
