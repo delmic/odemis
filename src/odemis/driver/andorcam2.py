@@ -150,6 +150,13 @@ class AndorCapabilities(Structure):
     CAMERATYPE_NEO = 20
     CAMERATYPE_IXONULTRA = 21
     CAMERATYPE_VOLMOS = 22
+    CAMERATYPE_IVAC_CCD = 23
+    CAMERATYPE_ASPEN = 24
+    CAMERATYPE_ASCENT = 25
+    CAMERATYPE_ALTA = 26
+    CAMERATYPE_ALTAF = 27
+    CAMERATYPE_IKONXL = 28
+    CAMERATYPE_RES1 = 29
 
     # only put here the cameras confirmed to work with this driver
     CameraTypes = {
@@ -158,6 +165,7 @@ class AndorCapabilities(Structure):
         CAMERATYPE_IXONULTRA: "iXon Utlra",
         CAMERATYPE_IXON: "iXon",
         CAMERATYPE_IDUS: "iDus",
+        CAMERATYPE_IVAC_CCD: "iVac CCD",
         }
 
 class AndorV2DLL(CDLL):
