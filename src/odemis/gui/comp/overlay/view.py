@@ -101,6 +101,9 @@ class SpotModeOverlay(base.ViewOverlay):
         self._sect_width = 2.0 * math.pi / self._sect_count
         self._spot_radius = 12
 
+    def on_size(self, _):
+        self.center = self.cnvs.get_half_view_size()
+
     def draw(self, ctx):
 
         start = -0.5 * math.pi
