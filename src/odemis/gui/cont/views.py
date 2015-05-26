@@ -25,9 +25,8 @@ from __future__ import division
 import collections
 import logging
 from odemis.acq.stream import OpticalStream, EMStream, SpectrumStream, ARStream
-from odemis.acq.stream import RGBCameraStream, BrightfieldStream
-from odemis.acq.stream._helper import CLSettingsStream
-from odemis.acq.stream._live import SEMStream
+from odemis.acq.stream import RGBCameraStream, BrightfieldStream, CameraStream, \
+    CLSettingsStream, MonochromatorSettingsStream
 from odemis.gui import model
 from odemis.gui.comp.grid import ViewportGrid
 from odemis.gui.comp.viewport import MicroscopeViewport, AngularResolvedViewport, PlotViewport, \
@@ -237,19 +236,19 @@ class ViewPortController(object):
                  {"name": "Angle-resolved",
                   "stage": self._main_data_model.stage,
                   "focus": self._main_data_model.focus,
-                  "stream_classes": SpectrumStream,
+                  "stream_classes": CameraStream,
                   }),
                 (self._viewports[2],
                  {"name": "Spectrum",
                   "stage": self._main_data_model.stage,
                   "focus": self._main_data_model.focus,
-                  "stream_classes": (EMStream, OpticalStream),
+                  "stream_classes": SpectrumStream,
                   }),
                 (self._viewports[3],
                  {"name": "Monochromator",
                   "stage": self._main_data_model.stage,
                   "focus": self._main_data_model.focus,
-                  "stream_classes": (EMStream, OpticalStream),
+                  "stream_classes": MonochromatorSettingsStream,
                   }),
             ])
         # If SEM only: all SEM
