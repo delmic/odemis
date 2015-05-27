@@ -776,8 +776,7 @@ class StreamBarController(object):
                     # so guess it's Brightfield iif:
                     # * No tint
                     # * (and) Large band for excitation wl (> 100 nm)
-                    in_wl = d.metadata[model.MD_IN_WL]
-                elif model.MD_IN_WL in channel_data.metadata:  # no MD_OUT_WL
+                    in_wl = d.metadata.get(model.MD_IN_WL, (0, 0))
                     if model.MD_USER_TINT in channel_data.metadata or in_wl[1] - in_wl[0] < 100e-9:
                         # Fluo
                         name = channel_data.metadata.get(model.MD_DESCRIPTION, "Filtered colour")
@@ -786,6 +785,7 @@ class StreamBarController(object):
                         # Brightfield
                         name = channel_data.metadata.get(model.MD_DESCRIPTION, "Brightfield")
                         klass = acqstream.StaticBrightfieldStream
+                elif model.MD_IN_WL in channel_data.metadata:  # no MD_OUT_WL
                     name = channel_data.metadata.get(model.MD_DESCRIPTION, "Brightfield")
                     klass = acqstream.StaticBrightfieldStream
                 else:
