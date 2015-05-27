@@ -89,7 +89,7 @@ class SettingEntry(VigilantAttributeConnector):
 class StreamController(object):
     """ Manage a stream and it's accompanying stream panel """
 
-    def __init__(self, stream_bar, stream, tab_data_model, show=True):
+    def __init__(self, stream_bar, stream, tab_data_model, show_panel=True):
 
         self.stream = stream
         self.stream_bar = stream_bar
@@ -149,7 +149,7 @@ class StreamController(object):
         self.stream_panel.set_visible(vis)
         self.stream_panel.Bind(EVT_STREAM_VISIBLE, self._on_stream_visible)
 
-        stream_bar.add_stream_panel(self.stream_panel, show)
+        stream_bar.add_stream_panel(self.stream_panel, show_panel)
 
     def _on_stream_panel_destroy(self, _):
         """ Remove all references to setting entries and the possible VAs they might contain
@@ -716,7 +716,7 @@ class StreamBarController(object):
         if stream_bar.btn_add_stream:
             self._createAddStreamActions()
 
-        # Don't hide or show stream panel when the focussed view changes
+        # Don't hide or show stream panel when the focused view changes
         self.ignore_view = ignore_view
 
         self._tab_data_model.focussedView.subscribe(self._onView, init=True)
@@ -1147,8 +1147,12 @@ class StreamBarController(object):
         stream.should_update.value = play
 
         if visible:
-            show = isinstance(stream, self._tab_data_model.focussedView.value.stream_classes)
-            stream_cont = self._add_stream_cont(stream, show, static=False)
+            # Hide the stream panel if the stream doesn't match the focused view and the view should
+            # not be ignored.
+            show_panel = isinstance(stream, self._tab_data_model.focussedView.value.stream_classes)
+            show_panel |= self.ignore_view
+
+            stream_cont = self._add_stream_cont(stream, show_panel, static=False)
 
             # TODO: make StreamTree a VA-like and remove this
             logging.debug("Sending stream.ctrl.added message")
@@ -1168,16 +1172,16 @@ class StreamBarController(object):
 
         """
 
-        return self._add_stream_cont(stream, show=True, static=True)
+        return self._add_stream_cont(stream, show_panel=True, static=True)
 
-    def _add_stream_cont(self, stream, show=True, locked=False, static=False):
+    def _add_stream_cont(self, stream, show_panel=True, locked=False, static=False):
         """ Create and add a stream controller for the given stream
 
         :return: (StreamController)
 
         """
 
-        stream_cont = StreamController(self._stream_bar, stream, self._tab_data_model, show)
+        stream_cont = StreamController(self._stream_bar, stream, self._tab_data_model, show_panel)
 
         if locked:
             stream_cont.to_locked_mode()
