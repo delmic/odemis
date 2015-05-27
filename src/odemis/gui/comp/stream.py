@@ -1095,11 +1095,16 @@ class StreamBar(wx.Panel):
     # TODO: maybe should be provided after init by the controller (like key of
     # sorted()), to separate the GUI from the model ?
     def _get_stream_order(self, stream):
+        """ Gives the "order" of the given stream, as defined in STREAM_ORDER.
+
+        Args:
+            stream (Stream): a stream
+
+        Returns:
+            (int >= 0): the order
+
         """
-        Gives the "order" of the given stream, as defined in STREAM_ORDER.
-        stream (Stream): a stream
-        returns (0<= int): the order
-        """
+
         for i, c in enumerate(self.STREAM_ORDER):
             if isinstance(stream, c):
                 return i

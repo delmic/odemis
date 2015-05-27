@@ -859,14 +859,12 @@ class StreamView(View):
 
         # check if the stream is already present
         if stream in self.stream_tree.getStreams():
+            logging.warning("Aborting the addition of a duplicate stream")
             return
 
         if not isinstance(stream, self.stream_classes):
             msg = "Adding incompatible stream '%s' to view '%s'. %s needed"
-            logging.warning(msg,
-                            stream.name.value,
-                            self.name.value,
-                            self.stream_classes)
+            logging.warning(msg, stream.name.value, self.name.value, self.stream_classes)
 
         # Find out where the stream should go in the streamTree
         # FIXME: manage sub-trees, with different merge operations

@@ -567,6 +567,7 @@ class SparcAcquisitionTab(Tab):
         self._sem_ar_stream = None
         self._scount_stream = None
 
+        # Separate view, solely used for acquisition
         acq_view = self.tab_data_model.acquisitionView
 
         sem_stream = streammod.SEMStream(
@@ -670,8 +671,9 @@ class SparcAcquisitionTab(Tab):
             ignore_view=True
         )
 
-        str_cont = self._streambar_controller.addStream(sem_stream, add_to_all_views=True)
-        str_cont.stream_panel.show_remove_btn(False)
+        sem_stream_cont = self._streambar_controller.addStream(sem_stream, add_to_all_views=True)
+        sem_stream_cont.stream_panel.show_remove_btn(False)
+        sem_stream_cont.stream_panel.show_visible_btn(False)
 
         # needs to have the AR and Spectrum streams on the acquisition view
         self._settings_controller = settings.SparcSettingsController(

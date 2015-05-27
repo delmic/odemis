@@ -25,7 +25,7 @@ from __future__ import division
 import collections
 import logging
 from odemis.acq.stream import OpticalStream, EMStream, SpectrumStream, ARStream
-from odemis.acq.stream import RGBCameraStream, BrightfieldStream, CameraStream, \
+from odemis.acq.stream import RGBCameraStream, BrightfieldStream, ARSettingsStream, \
     CLSettingsStream, MonochromatorSettingsStream
 from odemis.gui import model
 from odemis.gui.comp.grid import ViewportGrid
@@ -236,7 +236,7 @@ class ViewPortController(object):
                  {"name": "Angle-resolved",
                   "stage": self._main_data_model.stage,
                   "focus": self._main_data_model.focus,
-                  "stream_classes": CameraStream,
+                  "stream_classes": ARSettingsStream,
                   }),
                 (self._viewports[2],
                  {"name": "Spectrum",

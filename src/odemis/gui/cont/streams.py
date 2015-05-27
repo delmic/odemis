@@ -917,44 +917,60 @@ class StreamBarController(object):
         se.stream_panel.set_focus_on_label()
 
     def on_add_angle_resolved(self):
-        # FIXME: This function must find the correct view to add the stream to
-        ccd_stream = acqstream.CameraStream(
+        """ Create a camera stream and add to to all compatible viewports """
+
+        ar_stream = acqstream.ARSettingsStream(
             "Angle-resolved",
             self._main_data_model.ccd,
             self._main_data_model.ccd.data,
             self._main_data_model.ebeam
         )
-        return self._addStream(ccd_stream)
+
+        stream_cont = self._add_stream(ar_stream, add_to_all_views=True)
+        stream_cont.stream_panel.show_visible_btn(False)
+        return stream_cont
 
     def on_add_cl_intensity(self):
-        # FIXME: This function must find the correct view to add the stream to
+        """ Create a CLi stream and add to to all compatible viewports """
+
         cli_stream = acqstream.CLSettingsStream(
             "CL intensity",
-            self._main_data_model.ccd,
-            self._main_data_model.ccd.data,
+            self._main_data_model.sed,
+            self._main_data_model.sed.data,
             self._main_data_model.ebeam
         )
-        return self._addStream(cli_stream)
+
+        stream_cont = self._add_stream(cli_stream, add_to_all_views=True)
+        stream_cont.stream_panel.show_visible_btn(False)
+        return stream_cont
 
     def on_add_spectrum(self):
-        # FIXME: This function must find the correct view to add the stream to
+        """ Create a Spectrum stream and add to to all compatible viewports """
+
         spec_stream = acqstream.SpectrumSettingsStream(
             "Spectrum",
-            self._main_data_model.ccd,
-            self._main_data_model.ccd.data,
+            self._main_data_model.spectrometer,
+            self._main_data_model.spectrometer.data,
             self._main_data_model.ebeam
         )
-        return self._addStream(spec_stream)
+
+        stream_cont = self._add_stream(spec_stream, add_to_all_views=True)
+        stream_cont.stream_panel.show_visible_btn(False)
+        return stream_cont
 
     def on_add_monochromator(self):
-        # FIXME: This function must find the correct view to add the stream to
+        """ Create a Monochromator stream and add to to all compatible viewports """
+
         monoch_stream = acqstream.MonochromatorSettingsStream(
             "Spectrum",
             self._main_data_model.ccd,
             self._main_data_model.ccd.data,
             self._main_data_model.ebeam
         )
-        return self._addStream(monoch_stream)
+
+        stream_cont = self._add_stream(monoch_stream, add_to_all_views=True)
+        stream_cont.stream_panel.show_visible_btn(False)
+        return stream_cont
 
     def addFluo(self, **kwargs):
         """
@@ -986,7 +1002,7 @@ class StreamBarController(object):
         # deleted?) Or is it better to just use the values fitting the current
         # hardware settings as it is now?
 
-        return self._addStream(s, **kwargs)
+        return self._add_stream(s, **kwargs)
 
     def addBrightfield(self, **kwargs):
         """
@@ -1001,7 +1017,7 @@ class StreamBarController(object):
             detvas={"exposureTime"},
             emtvas={"power"}
         )
-        return self._addStream(s, **kwargs)
+        return self._add_stream(s, **kwargs)
 
     def addSEMSED(self, **kwargs):
         """ Creates a new SED stream and panel in the stream bar
@@ -1032,7 +1048,7 @@ class StreamBarController(object):
                 self._main_data_model.sed.data,
                 self._main_data_model.ebeam
             )
-        return self._addStream(s, **kwargs)
+        return self._add_stream(s, **kwargs)
 
     def addSEMBSD(self, **kwargs):
         """
@@ -1061,7 +1077,7 @@ class StreamBarController(object):
                 self._main_data_model.bsd.data,
                 self._main_data_model.ebeam
             )
-        return self._addStream(s, **kwargs)
+        return self._add_stream(s, **kwargs)
 
     def addStatic(self, name, image, cls=acqstream.StaticStream, **kwargs):
         """ Creates a new static stream and stream controller
@@ -1081,20 +1097,25 @@ class StreamBarController(object):
 
         :return StreamPanel: the panel created for the stream
         """
-        return self._addStream(stream, **kwargs)
+        return self._add_stream(stream, **kwargs)
 
-    def _addStream(self, stream, add_to_all_views=False, visible=True, play=None):
+    def _add_stream(self, stream, add_to_all_views=False, visible=True, play=None):
         """ Add the given stream to the tab data model and appropriate views
 
-        stream (stream.Stream): the new stream to add
-        add_to_all_views (boolean): if True, add the stream to all the
-            compatible views, otherwise add only to the current view.
-        visible (boolean): If True, create a stream entry, otherwise adds the
-            stream but do not create any entry.
-        play (None or boolean): If True, immediately start it, if False, let it
-            stopped, and if None, only play if already a stream is playing
-        returns (StreamController or Stream): stream controller or stream (if visible
-            is False) that was created
+        Args:
+            stream (Stream): the new stream to add
+
+        Kwargs:
+            add_to_all_views (boolean): if True, add the stream to all the compatible views,
+                otherwise add only to the current view.
+            visible (boolean): If True, create a stream entry, otherwise adds the stream but do not
+                create any entry.
+            play (None or boolean): If True, immediately start it, if False, let it stopped, and if
+                None, only play if already a stream is playing.
+
+        Returns:
+            (StreamController or Stream): the stream controller or stream (if visible is False) that
+                was created
 
         """
 
