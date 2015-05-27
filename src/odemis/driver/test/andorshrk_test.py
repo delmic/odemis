@@ -4,7 +4,7 @@ Created on 21 Feb 2014
 
 @author: Éric Piel
 
-Copyright © 2014 Éric Piel, Delmic
+Copyright © 2014-2015 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -21,14 +21,18 @@ from concurrent import futures
 import logging
 from odemis import model
 from odemis.driver import andorshrk
+import os
 import time
 import unittest
 from unittest.case import skip
 
+
 logging.getLogger().setLevel(logging.DEBUG)
 
+# Export TEST_NOHW=1 to force using only the simulator and skipping test cases
+# needing real hardware
+TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 
-#CLASS_SPG = andorshrk.Shamrock
 KWARGS_SPG = dict(name="sr303", role="spectrograph", device=0)
 KWARGS_SPG_SIM = dict(name="sr303", role="spectrograph", device="fake")
 #CLASS_CAM = andorshrk.AndorSpec
@@ -40,7 +44,15 @@ KWARGS_SIM = dict(name="spectrometer", role="ccd",
               children={"shamrock": KWARGS_SPG_SIM, "andorcam2": KWARGS_CAM_SIM})
 KWARGS = dict(name="spectrometer", role="ccd",
               children={"shamrock": KWARGS_SPG, "andorcam2": KWARGS_CAM})
-KWARGS = KWARGS_SIM # uncomment to use the simulator
+
+# For testing the Shamrock with direct connection to the PC
+CLASS_SHRK = andorshrk.Shamrock
+KWARGS_SHRK = dict(name="sr193", role="spectrograph", device=0)
+KWARGS_SHRK_SIM = dict(name="sr193", role="spectrograph", device="fake")
+
+if TEST_NOHW:
+    KWARGS = KWARGS_SIM
+    KWARGS_SHRK = KWARGS_SHRK_SIM
 
 #@skip("simple")
 class TestShamrockStatic(unittest.TestCase):
@@ -62,65 +74,25 @@ class TestShamrockStatic(unittest.TestCase):
         self.assertTrue(sp.selfTest(), "self test failed.")
         dev.terminate()
 
-class TestShamrock(unittest.TestCase):
-    """
-    Test the Shamrock + AndorSpec class
-    """
-
-    @classmethod
-    def setUpClass(cls):
-        cls.spectrometer = CLASS(**KWARGS)
-        for c in cls.spectrometer.children.value:
-            if c.role == "spectrograph":
-                cls.spectrograph = c
-                break
-        else:
-            cls.fail("Couldn't find spectrograph child")
-
-        #save position
-        cls._orig_pos = cls.spectrograph.position.value
-
-    @classmethod
-    def tearDownClass(cls):
-        # restore position
-        f = cls.spectrograph.moveAbs(cls._orig_pos)
-        f.result() # wait for the move to finish
-
-        cls.spectrometer.terminate()
-
-    def setUp(self):
-        # save basic VA
-        self._orig_binning = self.spectrometer.binning.value
-        self._orig_res = self.spectrometer.resolution.value
+class TestSpectrograph(object):
 
     def tearDown(self):
-        self.spectrometer.data.unsubscribe(self.count_data)
-        # put back VAs
+        # restore position
         f = self.spectrograph.moveAbs(self._orig_pos)
-        self.spectrometer.binning.value = self._orig_binning
-        self.spectrometer.resolution.value = self._orig_res
-        f.result() # wait for the move to finish
+        f.result()  # wait for the move to finish
 
-
-
-#    @skip("simple")
     def test_simple(self):
         """
         Just ensures that the device has all the VA it should
         """
-        self.assertTrue(isinstance(self.spectrometer.binning.value, tuple))
-        self.assertEqual(self.spectrometer.resolution.value[1], 1)
-        self.assertEqual(len(self.spectrometer.shape), 3)
-        self.assertGreaterEqual(self.spectrometer.shape[0], self.spectrometer.shape[1])
-        self.assertGreater(self.spectrometer.exposureTime.value, 0)
         self.assertIn("wavelength", self.spectrograph.axes)
 
 #    @skip("simple")
     def test_moverel(self):
         orig_wl = self.spectrograph.position.value["wavelength"]
-        move = {'wavelength': 1e-9} # +1nm => should be fast
+        move = {'wavelength': 1e-9}  # +1nm => should be fast
         f = self.spectrograph.moveRel(move)
-        f.result() # wait for the move to finish
+        f.result()  # wait for the move to finish
         self.assertGreater(self.spectrograph.position.value["wavelength"], orig_wl)
 
 #    @skip("simple")
@@ -128,12 +100,12 @@ class TestShamrock(unittest.TestCase):
         orig_wl = self.spectrograph.position.value["wavelength"]
         new_wl = orig_wl + 1e-9  # 1nm => should be fast
         f = self.spectrograph.moveAbs({'wavelength': new_wl})
-        f.result() # wait for the move to finish
+        f.result()  # wait for the move to finish
         self.assertAlmostEqual(self.spectrograph.position.value["wavelength"], new_wl)
 
         new_wl += 100e-9  # 100nm
         f = self.spectrograph.moveAbs({'wavelength': new_wl})
-        f.result() # wait for the move to finish
+        f.result()  # wait for the move to finish
         self.assertAlmostEqual(self.spectrograph.position.value["wavelength"], new_wl)
 
 
@@ -159,20 +131,20 @@ class TestShamrock(unittest.TestCase):
         with self.assertRaises(ValueError):
             pos = {"wavelength":-(sp.axes["wavelength"].range[1] + 1e-9)}
             f = sp.moveRel(pos)
-            f.result() # wait for the move to finish
+            f.result()  # wait for the move to finish
 
         # small relative (harder)
         # move very close from the edge
         pos = {"wavelength": sp.axes["wavelength"].range[1] - 1e-9}
-        f = sp.moveAbs(pos) # don't even wait for it to be done
+        f = sp.moveAbs(pos)  # don't even wait for it to be done
         with self.assertRaises(ValueError):
-            pos = {"wavelength": 5e-9} # a bit after the edge
+            pos = {"wavelength": 5e-9}  # a bit after the edge
             f = sp.moveRel(pos)
-            f.result() # will fail here normally
+            f.result()  # will fail here normally
 
         # wrong grating
         with self.assertRaises(ValueError):
-            pos = {"grating":-1} # normally no grating is ever named -1
+            pos = {"grating":-1}  # normally no grating is ever named -1
             f = sp.moveAbs(pos)  # will fail here normally
             f.result()
 
@@ -198,7 +170,7 @@ class TestShamrock(unittest.TestCase):
 
         # Go back to the original grating, and change wavelength, to test both
         # changes simultaneously
-        new_wl = cw + 10e-9 # +10nm
+        new_wl = cw + 10e-9  # +10nm
         f = self.spectrograph.moveAbs({"grating": cg, "wavelength": new_wl})
         f.result()
         self.assertEqual(self.spectrograph.position.value["grating"], cg)
@@ -208,7 +180,7 @@ class TestShamrock(unittest.TestCase):
     def test_sync(self):
         sp = self.spectrograph
         # For moves big enough, sync should always take more time than async
-        delta = 0.0001 # s
+        delta = 0.0001  # s
 
         # two big separate positions that should be always acceptable
         pos_1 = {'wavelength':300e-9}
@@ -246,7 +218,7 @@ class TestShamrock(unittest.TestCase):
         f.result()
         f = sp.moveAbs(pos_2)
         sp.stop()
-        self.assertTrue(f.done() or f.cancelled()) # the current task cannot be cancelled on this hardware
+        self.assertTrue(f.done() or f.cancelled())  # the current task cannot be cancelled on this hardware
 
 #    @skip("simple")
     def test_queue(self):
@@ -264,7 +236,7 @@ class TestShamrock(unittest.TestCase):
         f = sp.moveAbs(pos_2)
         dur = time.time() - start
 
-        expected_time = (4 * dur) * 0.9 # a bit less (90%) to take care of randomness
+        expected_time = (4 * dur) * 0.9  # a bit less (90%) to take care of randomness
         start = time.time()
         f0 = sp.moveAbs(pos_1)
         f1 = sp.moveAbs(pos_2)
@@ -296,7 +268,7 @@ class TestShamrock(unittest.TestCase):
         f2 = sp.moveAbs(pos_1)
         f2.cancel()
         self.assertFalse(f1.done())
-        time.sleep(0.02) # make sure the command is started
+        time.sleep(0.02)  # make sure the command is started
         self.assertTrue(f1.running())
         self.assertTrue(f2.cancelled())
         self.assertTrue(f2.done())
@@ -308,6 +280,77 @@ class TestShamrock(unittest.TestCase):
 
         f1.result()
 
+
+class TestShamrock(TestSpectrograph, unittest.TestCase):
+    """
+    Test the Shamrock alone
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.spectrograph = CLASS_SHRK(**KWARGS_SHRK)
+
+        # save position
+        cls._orig_pos = cls.spectrograph.position.value
+
+    @classmethod
+    def tearDownClass(cls):
+        # restore position
+        f = cls.spectrograph.moveAbs(cls._orig_pos)
+        f.result()  # wait for the move to finish
+
+        cls.spectrograph.terminate()
+
+
+class TestShamrockAndCCD(TestSpectrograph, unittest.TestCase):
+    """
+    Test the Shamrock + AndorSpec class
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.spectrometer = CLASS(**KWARGS)
+        for c in cls.spectrometer.children.value:
+            if c.role == "spectrograph":
+                cls.spectrograph = c
+                break
+        else:
+            cls.fail("Couldn't find spectrograph child")
+
+        #save position
+        cls._orig_pos = cls.spectrograph.position.value
+
+    @classmethod
+    def tearDownClass(cls):
+        # restore position
+        f = cls.spectrograph.moveAbs(cls._orig_pos)
+        f.result() # wait for the move to finish
+
+        cls.spectrometer.terminate()
+
+    def setUp(self):
+        # save basic VA
+        self._orig_binning = self.spectrometer.binning.value
+        self._orig_res = self.spectrometer.resolution.value
+
+    def tearDown(self):
+        self.spectrometer.data.unsubscribe(self.count_data)
+        # put back VAs
+        self.spectrometer.binning.value = self._orig_binning
+        self.spectrometer.resolution.value = self._orig_res
+        super(TestShamrockAndCCD, self).tearDown()
+
+#    @skip("simple")
+    def test_simple(self):
+        """
+        Just ensures that the device has all the VA it should
+        """
+        self.assertTrue(isinstance(self.spectrometer.binning.value, tuple))
+        self.assertEqual(self.spectrometer.resolution.value[1], 1)
+        self.assertEqual(len(self.spectrometer.shape), 3)
+        self.assertGreaterEqual(self.spectrometer.shape[0], self.spectrometer.shape[1])
+        self.assertGreater(self.spectrometer.exposureTime.value, 0)
+        self.assertIn("wavelength", self.spectrograph.axes)
 
 #    @skip("simple")
     def test_acquisition(self):

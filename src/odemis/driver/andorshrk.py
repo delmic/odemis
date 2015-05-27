@@ -4,7 +4,7 @@ Created on 17 Feb 2014
 
 @author: Éric Piel
 
-Copyright © 2014 Éric Piel, Delmic
+Copyright © 2014-2015 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -87,7 +87,6 @@ class ShamrockDLL(CDLL):
     ok_code = {
 20202: "SHAMROCK_SUCCESS",
 }
-    # Not all of them are actual error code, but having them is not a problem
     err_code = {
 20201: "SHAMROCK_COMMUNICATION_ERROR",
 20266: "SHAMROCK_P1INVALID",
@@ -116,23 +115,23 @@ SLITWIDTHMAX = 2500
 # SHAMROCK_GRAT_OFFSET_MIN -20000
 # SHAMROCK_GRAT_OFFSET_MAX 20000
 
-# SHAMROCK_SLIT_INDEX_MIN    1
-# SHAMROCK_SLIT_INDEX_MAX    4
+SLIT_INDEX_MIN = 1
+SLIT_INDEX_MAX = 4
 
 INPUT_SLIT_SIDE = 1
 INPUT_SLIT_DIRECT = 2
 OUTPUT_SLIT_SIDE = 3
 OUTPUT_SLIT_DIRECT = 4
 
-# SHAMROCK_FLIPPER_INDEX_MIN    1
-# SHAMROCK_FLIPPER_INDEX_MAX    2
-# SHAMROCK_PORTMIN 0
-# SHAMROCK_PORTMAX 1
+FLIPPER_INDEX_MIN = 1
+FLIPPER_INDEX_MAX = 2
+PORTMIN = 0
+PORTMAX = 1
 
-# SHAMROCK_INPUT_FLIPPER   1
-# SHAMROCK_OUTPUT_FLIPPER  2
-# SHAMROCK_DIRECT_PORT  0
-# SHAMROCK_SIDE_PORT    1
+INPUT_FLIPPER = 1
+OUTPUT_FLIPPER = 2
+DIRECT_PORT = 0
+SIDE_PORT = 1
 
 # SHAMROCK_ERRORLENGTH 64
 
@@ -159,12 +158,21 @@ class HwAccessMgr(object):
         self._ccd.request_hw.pop() # hw no more needed
         self._ccd.hw_lock.release()
 
+# The two values exported by the Odemis API for the flipper positions
+FLIPPER_OFF = 0
+FLIPPER_ON = math.radians(90)
+
+FLIPPER_TO_PORT = {FLIPPER_OFF: DIRECT_PORT,
+                   FLIPPER_ON: SIDE_PORT}
+
 class Shamrock(model.Actuator):
     """
     Component representing the spectrograph part of the Andor Shamrock
     spectrometers.
-    On Linux, only the SR303i (2.97+) and SR193i (2.99+) are supported.
-    The SR303i must be connected via the I²C cable on the iDus.
+    On Linux, the SR303i is supported since SDK 2.97, and the other ones,
+    including the SR193i since SDK 2.99.
+    The SR303i must be connected via the I²C cable on the iDus. With SDK 2.100+,
+    it should also work via the direct USB connection.
     Note: we don't handle changing turret.
     """
     def __init__(self, name, role, device, path=None, camera=None, **kwargs):
@@ -172,8 +180,8 @@ class Shamrock(model.Actuator):
         device (0<=int or "fake"): device number
         path (None or string): initialisation path of the Andorcam2 SDK or None
           if independent of a camera.
-        camera (None or AndorCam2): Required if the path is set, a parent should also
-          be passed, which is a DigitalCamera component.
+        camera (None or AndorCam2): Needed if the connection is done via the
+          I²C connector of the camera. In such case, path should also be set.
         inverted (None): it is not allowed to invert the axes
         """
         # From the documentation:
@@ -195,6 +203,7 @@ class Shamrock(model.Actuator):
         if (path is None) != (camera is None):
             raise ValueError("Shamrock needs both path and parent (a camera) or none of them")
 
+        # TODO: just use the attribute from the camera?
         self._path = path or ""
         self._camera = camera
 
@@ -239,10 +248,10 @@ class Shamrock(model.Actuator):
                 wl_range = min(wl_range[0], wmin), max(wl_range[1], wmax)
 
             # Slit (we only actually care about the input side slit for now)
-            slits = {"input side": 1,
-                     "input direct": 2,
-                     "output side": 3,
-                     "output direct": 4,
+            slits = {"input side": INPUT_SLIT_SIDE,
+                     "input direct": INPUT_SLIT_DIRECT,
+                     "output side": OUTPUT_SLIT_SIDE,
+                     "output direct": OUTPUT_SLIT_DIRECT,
                      }
             for slitn, i in slits.items():
                 logging.info("Slit %s is %spresent", slitn,
@@ -264,6 +273,17 @@ class Shamrock(model.Actuator):
                                           )
             else:
                 self._slit = None
+
+            # TODO: allow to define the name of the axis? or anyway, we can use
+            # MultiplexActuator to rename the axis?
+            if self.FlipperMirrorIsPresent(OUTPUT_FLIPPER):
+                # The position values are arbitrary, but these are the one we
+                # typically use in Odemis for switchin between two positions
+                axes["flip-out"] = model.Axis(unit="rad",
+                                              choices={FLIPPER_OFF, FLIPPER_ON}
+                                              )
+            else:
+                logging.info("Out mirror flipper is not present")
 
             # provides a ._axes
             model.Actuator.__init__(self, name, role, axes=axes, **kwargs)
@@ -546,6 +566,32 @@ class Shamrock(model.Actuator):
         self._dll.ShamrockAutoSlitIsPresent(self._device, index, byref(present))
         return (present.value != 0)
 
+# Mirror flipper management
+    def SetFlipperMirror(self, flipper, port):
+        assert(1 <= flipper <= 2)
+        assert(0 <= port <= 1)
+
+        with self._hw_access:
+            self._dll.ShamrockSetFlipperMirror(self._device, flipper, port)
+
+    def GetFlipperMirror(self, flipper):
+        assert(1 <= flipper <= 2)
+        port = c_int()
+
+        with self._hw_access:
+            self._dll.ShamrockGetFlipperMirror(self._device, flipper, byref(port))
+        return port.value
+
+# def ShamrockFlipperMirrorReset(int device, int flipper);
+
+    def FlipperMirrorIsPresent(self, flipper):
+        assert(1 <= flipper <= 2)
+        present = c_int()
+        self._dll.ShamrockFlipperMirrorIsPresent(self._device, flipper, byref(present))
+        return (present.value != 0)
+
+# def ShamrockGetCCDLimits(int device, int port, float *Low, float *High);
+
     # Helper functions
     def _getGratingChoices(self):
         """
@@ -574,8 +620,16 @@ class Shamrock(model.Actuator):
         pos = {"wavelength": self.GetWavelength(),
                "grating": self.GetGrating()
               }
+
         if self._slit:
             pos["slit"] = self.GetAutoSlitWidth(self._slit)
+
+        if "flip-out" in self.axes:
+            v = self.GetFlipperMirror(OUTPUT_FLIPPER)
+            for userv, port in FLIPPER_TO_PORT:
+                if v == port:
+                    pos["flip-out"] = userv
+                    break
 
         # it's read-only, so we change it via _value
         self.position._value = pos
@@ -647,9 +701,13 @@ class Shamrock(model.Actuator):
             wl = pos["wavelength"]
             fs.append(self._executor.submit(self._doSetWavelengthAbs, wl))
 
+        # TODO: handle correctly more than one future
         if "slit" in pos:
             width = pos["slit"]
             fs.append(self._executor.submit(self._doSetSlitAbs, width))
+
+        if "flip-out" in pos:
+            fs.append(self._executor.submit(self._doSetFlipper, OUTPUT_FLIPPER, pos["flip-out"]))
 
         return fs[-1]
 
@@ -721,6 +779,14 @@ class Shamrock(model.Actuator):
         Change the slit width to a value
         """
         self.SetAutoSlitWidth(self._slit, width)
+        self._updatePosition()
+
+    def _doSetFlipper(self, flipper, pos):
+        """
+        Change the flipper position to one of the two positions
+        """
+        v = FLIPPER_TO_PORT[pos]
+        self.SetAutoSlitWidth(flipper, v)
         self._updatePosition()
 
     def stop(self, axes=None):
@@ -804,6 +870,8 @@ class FakeShamrockDLL(object):
         self._cg = 1 # current grating (1->3)
         self._pw = 0 # pixel width
         self._np = 0 # number of pixels
+
+        # TODO: simulate slit and mirror flipper
 
         # just for simulating the limitation of the iDus
         self._ccd = None
@@ -900,6 +968,11 @@ class FakeShamrockDLL(object):
     def ShamrockAutoSlitIsPresent(self, device, index, p_present):
         present = _deref(p_present, c_int)
         present.value = 0 # no!
+
+    def ShamrockFlipperMirrorIsPresent(self, device, flipper, p_present):
+        present = _deref(p_present, c_int)
+        present.value = 0  # no!
+
 
 class AndorSpec(model.Detector):
     """
