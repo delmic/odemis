@@ -226,8 +226,12 @@ class BackendStarter(object):
             try:
                 backend = model.getContainer(model.BACKEND_NAME, validate=False)
                 self._mic = backend.getRoot()
-            except (IOError, CommunicationError):
+            except (IOError, CommunicationError) as exp:
+                if (isinstance(exp, CommunicationError) and
+                    "Permission denied" in str(exp)):
+                    raise  # No hope
                 if time.time() > end_time:
+                    logging.exception("Timeout waiting for back-end to start")
                     self._notif.update("Odemis back-end failed to start",
                            "For more information look at the log messages in %s "
                            "or type odemis-start in a terminal."
