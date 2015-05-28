@@ -113,8 +113,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.dicho_overlay = None
 
         # play/pause icon
-        self.icon_overlay = view_overlay.StreamIconOverlay(self)
-        self.add_view_overlay(self.icon_overlay)
+        self.play_overlay = view_overlay.PlayIconOverlay(self)
+        self.add_view_overlay(self.play_overlay)
 
         # Unused at the moment
         self.zoom_overlay = None

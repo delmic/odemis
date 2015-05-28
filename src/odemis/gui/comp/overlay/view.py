@@ -146,7 +146,7 @@ class SpotModeOverlay(base.ViewOverlay):
         ctx.stroke()
 
 
-class StreamIconOverlay(base.ViewOverlay):
+class PlayIconOverlay(base.ViewOverlay):
     """ Render Stream (play/pause) icons to the view """
 
     opacity = 0.8
@@ -166,16 +166,17 @@ class StreamIconOverlay(base.ViewOverlay):
         wx.CallAfter(self.cnvs.Refresh)
 
     def draw(self, ctx):
-        if self.pause:
-            self._draw_pause(ctx)
-        elif self.play:
-            self._draw_play(ctx)
-            if self.play > 0:
-                self.play -= 0.1  # a tenth less
-                # Force a refresh (without erase background), to cause a new draw
-                wx.CallLater(50, self.cnvs.Refresh, False)  # in 0.05 s
-            else:
-                self.play = 0
+        if self.show:
+            if self.pause:
+                self._draw_pause(ctx)
+            elif self.play:
+                self._draw_play(ctx)
+                if self.play > 0:
+                    self.play -= 0.1  # a tenth less
+                    # Force a refresh (without erase background), to cause a new draw
+                    wx.CallLater(50, self.cnvs.Refresh, False)  # in 0.05 s
+                else:
+                    self.play = 0
 
     def _get_dimensions(self):
 
