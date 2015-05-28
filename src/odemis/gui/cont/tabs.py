@@ -710,9 +710,6 @@ class SparcAcquisitionTab(Tab):
                 # disable everything
                 self._show_ar(False)
                 self._show_spec(False)
-        else:
-            # only one detector => hide completely the buttons
-            main_frame.sparc_button_panel.Hide()
 
         main_data.is_acquiring.subscribe(self.on_acquisition)
 
@@ -761,11 +758,14 @@ class SparcAcquisitionTab(Tab):
 
     @call_in_wx_main
     def _on_spec_count(self, scount):
+        """ Called when a new spectrometer data comes in (and so the whole intensity window data is
+        updated)
+
+        Args:
+            scount (DataArray)
+
         """
-        Called when a new spectrometer data comes in (and so the whole intensity
-        window data is updated)
-        scount (DataArray)
-        """
+
         if len(scount) > 0:
             # Indicate the raw value
             v = scount[-1]
@@ -773,7 +773,7 @@ class SparcAcquisitionTab(Tab):
                 txt = units.readable_str(float(scount[-1]), sig=6)
             else:
                 txt = "%d" % round(v)  # to make it clear what is small/big
-            self._txt_mean.SetValue(txt)
+            # self._txt_mean.SetValue(txt)
 
             # fit min/max between 0 and 1
             ndcount = scount.view(numpy.ndarray)  # standard NDArray to get scalars
