@@ -69,7 +69,7 @@ class ShamrockDLL(CDLL):
             if result in ShamrockDLL.err_code:
                 raise ShamrockError(result, "Call to %s failed with error code %d: %s" %
                                (str(func.__name__), result, ShamrockDLL.err_code[result]))
-                # TODO: Use ShamrockGetFunctionReturnDescription()
+                # TODO: Use ShamrockGetFunctionReturnDescription(result, )
             else:
                 raise ShamrockError(result, "Call to %s failed with unknown error code %d" %
                                (str(func.__name__), result))
@@ -175,15 +175,20 @@ class Shamrock(model.Actuator):
     it should also work via the direct USB connection.
     Note: we don't handle changing turret.
     """
-    def __init__(self, name, role, device, path=None, camera=None, **kwargs):
+    def __init__(self, name, role, device, camera=None, children=None, **kwargs):
         """
         device (0<=int or "fake"): device number
-        path (None or string): initialisation path of the Andorcam2 SDK or None
-          if independent of a camera.
         camera (None or AndorCam2): Needed if the connection is done via the
-          I²C connector of the camera. In such case, path should also be set.
+          I²C connector of the camera. In such case, no children should be
+          provided.
+        children (dict str -> Components): "ccd" should be the CCD used to acquire
+          the spectrum, if the connection is directly via USB.
         inverted (None): it is not allowed to invert the axes
         """
+        # TODO: allow to set the TTL high, when a led (might be) is on, which
+        # happens when the slits move. cf ShamrockSetAccessory
+
+
         # From the documentation:
         # If controlling the shamrock through i2c it is important that both the
         # camera and spectrograph are being controlled through the same calling
@@ -200,12 +205,17 @@ class Shamrock(model.Actuator):
             self._dll = ShamrockDLL()
         self._device = device
 
-        if (path is None) != (camera is None):
-            raise ValueError("Shamrock needs both path and parent (a camera) or none of them")
-
-        # TODO: just use the attribute from the camera?
-        self._path = path or ""
-        self._camera = camera
+        try:
+            self._camera = children["ccd"]
+        except (TypeError, KeyError):  # no "ccd" child => camera?
+            if camera is None:
+                raise ValueError("Spectrograph needs a child 'ccd' or a camera")
+            self._camera = camera
+            self._is_via_camera = True
+            self._hw_access = HwAccessMgr(camera)
+        else:
+            self._is_via_camera = False
+            self._hw_access = HwAccessMgr(None)
 
         try:
             self.Initialize()
@@ -215,14 +225,8 @@ class Shamrock(model.Actuator):
         try:
             nd = self.GetNumberDevices()
             if device >= nd:
-                raise IOError("Failed to find Andor Shamrock (%s) as device %d" %
+                raise HwError("Failed to find Andor Shamrock (%s) as device %d" %
                               (name, device))
-
-            ccd = None
-            if (camera and hasattr(camera, "_detector") and
-                isinstance(camera._detector, andorcam2.AndorCam2)):
-                ccd = camera._detector
-            self._hw_access = HwAccessMgr(ccd)
 
             # for now, it's fixed (and it's unlikely to be useful to allow less than the max)
             max_speed = 1000e-9 / 5 # about 1000 nm takes 5s => max speed in m/s
@@ -310,7 +314,11 @@ class Shamrock(model.Actuator):
         """
         # Can take quite a lot of time due to the homing
         logging.debug("Initialising Andor Shamrock...") # ~20s
-        self._dll.ShamrockInitialize(self._path)
+        if self._is_via_camera:
+            path = self._camera._initpath
+        else:
+            path = ""
+        self._dll.ShamrockInitialize(path)
 
     def Close(self):
         self._dll.ShamrockClose()
@@ -592,6 +600,25 @@ class Shamrock(model.Actuator):
 
 # def ShamrockGetCCDLimits(int device, int port, float *Low, float *High);
 
+    # "Accessory" port control (= 2 TTL lines)
+    def SetAccessory(self, line, val):
+        """
+        line (1 <= int <= 2): line number
+        val (boolean): True = On, False = Off
+        """
+        if val:
+            state = 1
+        else:
+            state = 0
+
+        self._dll.ShamrockSetAccessory(self._device, line, state)
+
+    # def ShamrockGetAccessoryState(int device,int Accessory, int *state);
+    def AccessoryIsPresent(self):
+        present = c_int()
+        self._dll.ShamrockAccessoryIsPresent(self._device, byref(present))
+        return (present.value != 0)
+
     # Helper functions
     def _getGratingChoices(self):
         """
@@ -626,7 +653,7 @@ class Shamrock(model.Actuator):
 
         if "flip-out" in self.axes:
             v = self.GetFlipperMirror(OUTPUT_FLIPPER)
-            for userv, port in FLIPPER_TO_PORT:
+            for userv, port in FLIPPER_TO_PORT.items():
                 if v == port:
                     pos["flip-out"] = userv
                     break
@@ -635,21 +662,18 @@ class Shamrock(model.Actuator):
         self.position._value = pos
         self.position.notify(self.position.value)
 
-    def getPixelToWavelength(self, npixels=None):
+    def getPixelToWavelength(self):
         """
-        npixels (None or int): number of pixels on the CCD (horizontally)
         return (list of floats): pixel number -> wavelength in m
         """
         # If wavelength is 0, report empty list to indicate it makes no sense
         if self.position.value["wavelength"] == 0:
             return []
 
-        ccd = self._camera
-        if npixels is None:
-            npixels = ccd.resolution.value[0]
+        npixels = self._camera.resolution.value[0]
 
         self.SetNumberPixels(npixels)
-        self.SetPixelWidth(ccd.pixelSize.value[0] * ccd.binning.value[0])
+        self.SetPixelWidth(self._camera.pixelSize.value[0] * self._camera.binning.value[0])
         # TODO: can GetCalibration() return several values identical? eg, 0's if
         # cw is near 0 nm? If so, something should be done, as GUI hates that...
         return self.GetCalibration(npixels)
@@ -786,7 +810,7 @@ class Shamrock(model.Actuator):
         Change the flipper position to one of the two positions
         """
         v = FLIPPER_TO_PORT[pos]
-        self.SetAutoSlitWidth(flipper, v)
+        self.SetFlipperMirror(flipper, v)
         self._updatePosition()
 
     def stop(self, axes=None):
@@ -860,7 +884,7 @@ class FakeShamrockDLL(object):
     Fake ShamrockDLL. It basically simulates a spectrograph connected.
     """
 
-    def __init__(self, parent=None):
+    def __init__(self, ccd=None):
         # gratings: l/mm, blaze, home, offset, min wl, max wl
         self._gratings = [(299.9, "300.0", 1000, -200, 0.0, 5003.6),
                           (601.02, "500.0", 10000, 26, 0.0, 1578.95),
@@ -874,9 +898,7 @@ class FakeShamrockDLL(object):
         # TODO: simulate slit and mirror flipper
 
         # just for simulating the limitation of the iDus
-        self._ccd = None
-        if parent and hasattr(parent, "_detector"):
-            self._ccd = parent._detector
+        self._ccd = ccd
 
     def _check_hw_access(self):
         """
@@ -973,6 +995,10 @@ class FakeShamrockDLL(object):
         present = _deref(p_present, c_int)
         present.value = 0  # no!
 
+    def ShamrockAccessoryIsPresent(self, device, p_present):
+        present = _deref(p_present, c_int)
+        present.value = 0  # no!
+
 
 class AndorSpec(model.Detector):
     """
@@ -1063,7 +1089,6 @@ class AndorSpec(model.Detector):
             raise ValueError("AndorSpec excepts one child named 'shamrock'")
 
         self._spectrograph = Shamrock(parent=self, camera=self._detector,
-                                      path=self._detector._initpath,
                                       daemon=daemon, **sp_kwargs)
         self.children.value.add(self._spectrograph)
 
