@@ -644,6 +644,7 @@ class Shamrock(model.Actuator):
         """
         update the position VA
         """
+        # TODO: support "axes" to limit the axes to update
         pos = {"wavelength": self.GetWavelength(),
                "grating": self.GetGrating()
               }
@@ -689,20 +690,23 @@ class Shamrock(model.Actuator):
             return model.InstantaneousFuture()
         self._checkMoveRel(shift)
 
-        fs = []
-        for axis in shift:
+        # cannot convert it directly to an absolute move, because
+        # several in a row must mean they accumulate. So we queue a
+        # special task. That also means the range check is delayed until
+        # the actual position is known.
+        actions = []
+        for axis in ("wavelength", "slit"):
+            try:
+                v = shift[axis]
+            except KeyError:
+                continue
             if axis == "wavelength":
-                # cannot convert it directly to an absolute move, because
-                # several in a row must mean they accumulate. So we queue a
-                # special task. That also means the range check is delayed until
-                # the actual position is known.
-                f = self._executor.submit(self._doSetWavelengthRel, shift[axis])
-                fs.append(f)
+                actions.append((self._doSetWavelengthRel, v))
             elif axis == "slit":
-                f = self._executor.submit(self._doSetSlitRel, shift[axis])
-                fs.append(f)
-        # TODO: handle correctly when more than one future
-        return fs[-1]
+                actions.append((self._doSetSlitRel, v))
+
+        f = self._executor.submit(self._doMultipleActions, actions)
+        return f
 
     @isasync
     def moveAbs(self, pos):
@@ -716,24 +720,33 @@ class Shamrock(model.Actuator):
         self._checkMoveAbs(pos)
 
         # If grating needs to be changed, change it first, then the wavelength
-        fs = []
-        if "grating" in pos:
-            g = pos["grating"]
-            wl = pos.get("wavelength")
-            fs.append(self._executor.submit(self._doSetGrating, g, wl))
-        elif "wavelength" in pos:
-            wl = pos["wavelength"]
-            fs.append(self._executor.submit(self._doSetWavelengthAbs, wl))
+        actions = []
+        for axis in ("grating", "wavelength", "slit", "flip-out"):
+            try:
+                v = pos[axis]
+            except KeyError:
+                continue
+            if axis == "grating":
+                actions.append((self._doSetGrating, v))
+            elif axis == "wavelength":
+                actions.append((self._doSetWavelengthAbs, v))
+            elif axis == "slit":
+                actions.append((self._doSetSlitAbs, v))
+            elif axis == "flip-out":
+                actions.append((self._doSetFlipper, OUTPUT_FLIPPER, v))
 
-        # TODO: handle correctly more than one future
-        if "slit" in pos:
-            width = pos["slit"]
-            fs.append(self._executor.submit(self._doSetSlitAbs, width))
+        f = self._executor.submit(self._doMultipleActions, actions)
+        return f
 
-        if "flip-out" in pos:
-            fs.append(self._executor.submit(self._doSetFlipper, OUTPUT_FLIPPER, pos["flip-out"]))
-
-        return fs[-1]
+    def _doMultipleActions(self, actions):
+        """
+        Run multiple actions sequentially (as long as they don't raise exceptions
+        actions (tuple of tuple(callable, *args)): ordered actions defined by the
+          callable and the arguments
+        """
+        for a in actions:
+            func, args = a[0], a[1:]
+            func(*args)
 
     def _doSetWavelengthRel(self, shift):
         """
@@ -764,23 +777,15 @@ class Shamrock(model.Actuator):
         self.SetWavelength(pos)
         self._updatePosition()
 
-    def _doSetGrating(self, g, wl=None):
+    def _doSetGrating(self, g):
         """
         Setter for the grating VA.
+        It will try to put the same wavelength as before the change of grating.
+        Synchronous until the grating is finished (up to 20s)
         g (1<=int<=3): the new grating
-        wl (None or float): wavelength to set afterwards. If None, will try to 
-          put the same wavelength as before the change of grating.
-        returns the actual new grating
-        Warning: synchronous until the grating is finished (up to 20s)
         """
-        try:
-            self.SetGrating(g)
-            # By default the Shamrock library keeps the same wavelength
-            if wl is not None:
-                self.SetWavelength(wl)
-        except Exception:
-            logging.exception("Failed to change grating to %d", g)
-            raise
+        self.SetGrating(g)
+        # By default the Shamrock library keeps the same wavelength
 
         self._updatePosition()
 
