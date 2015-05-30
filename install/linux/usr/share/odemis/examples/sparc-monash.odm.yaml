@@ -219,7 +219,7 @@ SPARC-MONASH: {
            transpose: [1, -2], # if mirrored on X axis (due to a Odemis bug, it's the second dim which has the -)
     },
     properties: {
-        #targetTemperature: -60, # °C
+        targetTemperature: -60, # °C
     },
 }
 
@@ -230,6 +230,9 @@ SPARC-MONASH: {
     children: {"ccd": "Spectral Camera"},
     init: {
         device: 0,
+        slits: {1: "slit-in", # INPUT_SIDE
+                3: "slit-monochromator", # OUTPUT_SIDE
+        }
     },
 }
 
