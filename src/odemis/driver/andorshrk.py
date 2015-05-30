@@ -105,6 +105,7 @@ class ShamrockDLL(CDLL):
 # SHAMROCK_TURRETMIN 1
 # SHAMROCK_TURRETMAX 3
 # SHAMROCK_GRATINGMIN 1
+# Note: the documentation mentions the width is in mm, but it's actually µm.
 SLITWIDTHMIN = 10
 SLITWIDTHMAX = 2500
 # SHAMROCK_I24SLITWIDTHMAX 24000
@@ -136,6 +137,10 @@ SIDE_PORT = 1
 # SHAMROCK_ERRORLENGTH 64
 
 class HwAccessMgr(object):
+    """
+    Context manager that ensures that the CCD is not doing any acquisition
+    while within the context.
+    """
     def __init__(self, ccd):
         """
         ccd (AndorCam2 or None)
@@ -158,12 +163,52 @@ class HwAccessMgr(object):
         self._ccd.request_hw.pop() # hw no more needed
         self._ccd.hw_lock.release()
 
-# The two values exported by the Odemis API for the flipper positions
-FLIPPER_OFF = 0
-FLIPPER_ON = math.radians(90)
 
-FLIPPER_TO_PORT = {FLIPPER_OFF: DIRECT_PORT,
-                   FLIPPER_ON: SIDE_PORT}
+class LedActiveMgr(object):
+    """
+    Context manager that signal that the leds (might) be on. The signal
+    is a _low_ level on the TTL accessory output. When the leds are for sure
+    off, the TTL level is set to _high_.
+    This typically happens when the slits move, and can cause damage to some
+    detectors.
+    """
+    def __init__(self, spec, line):
+        """
+        spec (Shamrock): spectrograph component
+        line (1<=int<=2 or None): Accessory line number or None if nothing
+         needs to be done.
+        """
+        self._spec = spec
+        self._line = line
+        self.__exit__(None, None, None)  # start by indicating the leds are off
+
+    def __enter__(self):
+        if self._line is None:
+            return
+        logging.debug("Indicating leds are on")
+        self._spec.SetAccessory(self._line, 0)
+        time.sleep(1e-3)  # wait 1 ms to make sure all the detectors are stopped
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        """
+        returns True if the exception is to be suppressed (never)
+        """
+        if self._line is None:
+            return
+        logging.debug("Indicating leds are off")
+        self._spec.SetAccessory(self._line, 1)
+
+
+# default names for the slits
+SLIT_NAMES = {INPUT_SLIT_SIDE: "slit-in-side",  # Note: previously it was called "slit"
+              INPUT_SLIT_DIRECT: "slit-in-direct",
+              OUTPUT_SLIT_SIDE: "slit-out-side",
+              OUTPUT_SLIT_DIRECT: "slit-out-direct",
+             }
+
+# The two values exported by the Odemis API for the flipper positions
+FLIPPER_TO_PORT = {0: DIRECT_PORT,
+                   math.radians(90): SIDE_PORT}
 
 class Shamrock(model.Actuator):
     """
@@ -175,7 +220,8 @@ class Shamrock(model.Actuator):
     it should also work via the direct USB connection.
     Note: we don't handle changing turret.
     """
-    def __init__(self, name, role, device, camera=None, children=None, **kwargs):
+    def __init__(self, name, role, device, camera=None, accessory=None,
+                 slits=None, children=None, **kwargs):
         """
         device (0<=int or "fake"): device number
         camera (None or AndorCam2): Needed if the connection is done via the
@@ -184,11 +230,11 @@ class Shamrock(model.Actuator):
         children (dict str -> Components): "ccd" should be the CCD used to acquire
           the spectrum, if the connection is directly via USB.
         inverted (None): it is not allowed to invert the axes
+        accessory (str or None): if "slitleds", then a TTL signal will be set to
+          high on line 1 whenever one of the slit leds might be turned on.
+        slits (None or dict int -> str): names of each slit,
+          for 1 to 4: in-side, in-direct, out-side, out-direct
         """
-        # TODO: allow to set the TTL high, when a led (might be) is on, which
-        # happens when the slits move. cf ShamrockSetAccessory
-
-
         # From the documentation:
         # If controlling the shamrock through i2c it is important that both the
         # camera and spectrograph are being controlled through the same calling
@@ -217,6 +263,13 @@ class Shamrock(model.Actuator):
             self._is_via_camera = False
             self._hw_access = HwAccessMgr(None)
 
+        slits = slits or {}
+        for i in slits:
+            if not SLIT_INDEX_MIN <= i <= SLIT_INDEX_MAX:
+                raise ValueError("Slit number must be between 1 and 4, but got %s" % (i,))
+        self._slit_names = SLIT_NAMES.copy()
+        self._slit_names.update(slits)
+
         try:
             self.Initialize()
         except ShamrockError:
@@ -227,6 +280,19 @@ class Shamrock(model.Actuator):
             if device >= nd:
                 raise HwError("Failed to find Andor Shamrock (%s) as device %d" %
                               (name, device))
+
+            # set HW and SW version
+            self._swVersion = "%s" % (odemis.__version__)
+            # TODO: EEPROM contains name of the device, but there doesn't seem to be any function for getting it?!
+            self._hwVersion = "%s (s/n: %s)" % ("Andor Shamrock", self.GetSerialNumber())
+
+            if accessory is not None and not self.AccessoryIsPresent():
+                raise ValueError("Accessory set to '%s', but no accessory connected"
+                                 % (accessory,))
+            if accessory == "slitleds":
+                self._led_access = LedActiveMgr(self, 1)
+            else:
+                self._led_access = LedActiveMgr(None, None)
 
             # for now, it's fixed (and it's unlikely to be useful to allow less than the max)
             max_speed = 1000e-9 / 5 # about 1000 nm takes 5s => max speed in m/s
@@ -251,51 +317,33 @@ class Shamrock(model.Actuator):
                     continue
                 wl_range = min(wl_range[0], wmin), max(wl_range[1], wmax)
 
-            # Slit (we only actually care about the input side slit for now)
-            slits = {"input side": INPUT_SLIT_SIDE,
-                     "input direct": INPUT_SLIT_DIRECT,
-                     "output side": OUTPUT_SLIT_SIDE,
-                     "output direct": OUTPUT_SLIT_DIRECT,
-                     }
-            for slitn, i in slits.items():
-                logging.info("Slit %s is %spresent", slitn,
-                             "" if self.AutoSlitIsPresent(i) else "not ")
-
             axes = {"wavelength": model.Axis(unit="m", range=wl_range,
                                              speed=(max_speed, max_speed)),
                     "grating": model.Axis(choices=gchoices)
                     }
 
-            # add slit input direct if available
-            # Note: the documentation mentions the width is in mm,
-            # but it's probably actually µm (10 is the minimum).
-            if self.AutoSlitIsPresent(INPUT_SLIT_SIDE):
-                self._slit = INPUT_SLIT_SIDE
-                axes["slit"] = model.Axis(unit="m",
-                                          range=[SLITWIDTHMIN * 1e-6,
-                                                 SLITWIDTHMAX * 1e-6]
-                                          )
-            else:
-                self._slit = None
+            # add slits which are available
+            for i, name in self._slit_names.items():
+                if self.AutoSlitIsPresent(i):
+                    axes[name] = model.Axis(unit="m",
+                                            range=[SLITWIDTHMIN * 1e-6, SLITWIDTHMAX * 1e-6]
+                                            )
+                else:
+                    logging.info("Slit %s is not present", name)
 
             # TODO: allow to define the name of the axis? or anyway, we can use
             # MultiplexActuator to rename the axis?
             if self.FlipperMirrorIsPresent(OUTPUT_FLIPPER):
                 # The position values are arbitrary, but these are the one we
-                # typically use in Odemis for switchin between two positions
+                # typically use in Odemis for switching between two positions
                 axes["flip-out"] = model.Axis(unit="rad",
-                                              choices={FLIPPER_OFF, FLIPPER_ON}
+                                              choices=set(FLIPPER_TO_PORT.keys())
                                               )
             else:
                 logging.info("Out mirror flipper is not present")
 
             # provides a ._axes
             model.Actuator.__init__(self, name, role, axes=axes, **kwargs)
-
-            # set HW and SW version
-            self._swVersion = "%s" % (odemis.__version__)
-            # TODO: EEPROM contains name of the device, but there doesn't seem to be any function for getting it?!
-            self._hwVersion = "%s (s/n: %s)" % ("Andor Shamrock", self.GetSerialNumber())
 
             # will take care of executing axis move asynchronously
             self._executor = CancellableThreadPoolExecutor(max_workers=1) # one task at a time
@@ -538,18 +586,19 @@ class Shamrock(model.Actuator):
         index (1<=int<=4): Slit number
         width (0<float): slit opening width in m
         """
-        assert(1 <= index <= 4)
+        assert(SLIT_INDEX_MIN <= index <= SLIT_INDEX_MAX)
         width_um = c_float(width * 1e6)
 
         with self._hw_access:
-            self._dll.ShamrockSetAutoSlitWidth(self._device, index, width_um)
+            with self._led_access:
+                self._dll.ShamrockSetAutoSlitWidth(self._device, index, width_um)
 
     def GetAutoSlitWidth(self, index):
         """
         index (1<=int<=4): Slit number
         return (0<float): slit opening width in m
         """
-        assert(1 <= index <= 4)
+        assert(SLIT_INDEX_MIN <= index <= SLIT_INDEX_MAX)
         width_um = c_float()
         with self._hw_access:
             self._dll.ShamrockGetAutoSlitWidth(self._device, index, byref(width_um))
@@ -559,9 +608,10 @@ class Shamrock(model.Actuator):
         """
         index (1<=int<=4): Slit number
         """
-        assert(1 <= index <= 4)
+        assert(SLIT_INDEX_MIN <= index <= SLIT_INDEX_MAX)
         with self._hw_access:
-            self._dll.ShamrockAutoSlitReset(self._device, index)
+            with self._led_access:
+                self._dll.ShamrockAutoSlitReset(self._device, index)
 
     def AutoSlitIsPresent(self, index):
         """
@@ -569,7 +619,7 @@ class Shamrock(model.Actuator):
         index (1<=int<=4): Slit number
         return (bool): True if slit is present
         """
-        assert(1 <= index <= 4)
+        assert(SLIT_INDEX_MIN <= index <= SLIT_INDEX_MAX)
         present = c_int()
         self._dll.ShamrockAutoSlitIsPresent(self._device, index, byref(present))
         return (present.value != 0)
@@ -649,15 +699,14 @@ class Shamrock(model.Actuator):
                "grating": self.GetGrating()
               }
 
-        if self._slit:
-            pos["slit"] = self.GetAutoSlitWidth(self._slit)
+        for i, name in self._slit_names.items():
+            if name in self.axes:
+                pos[name] = self.GetAutoSlitWidth(i)
 
         if "flip-out" in self.axes:
-            v = self.GetFlipperMirror(OUTPUT_FLIPPER)
-            for userv, port in FLIPPER_TO_PORT.items():
-                if v == port:
-                    pos["flip-out"] = userv
-                    break
+            val = self.GetFlipperMirror(OUTPUT_FLIPPER)
+            userv = [k for k, v in FLIPPER_TO_PORT.items() if v == val][0]
+            pos["flip-out"] = userv
 
         # it's read-only, so we change it via _value
         self.position._value = pos
@@ -694,16 +743,18 @@ class Shamrock(model.Actuator):
         # several in a row must mean they accumulate. So we queue a
         # special task. That also means the range check is delayed until
         # the actual position is known.
+        ordered_axes = ("wavelength",) + tuple(self._slit_names.values())
         actions = []
-        for axis in ("wavelength", "slit"):
+        for axis in ordered_axes:
             try:
-                v = shift[axis]
+                s = shift[axis]
             except KeyError:
                 continue
             if axis == "wavelength":
-                actions.append((self._doSetWavelengthRel, v))
-            elif axis == "slit":
-                actions.append((self._doSetSlitRel, v))
+                actions.append((self._doSetWavelengthRel, s))
+            elif axis == self._slit_names.values():
+                sid = [k for k, v in self._slit_names.items() if v == axis][0]
+                actions.append((self._doSetSlitRel, sid, s))
 
         f = self._executor.submit(self._doMultipleActions, actions)
         return f
@@ -720,20 +771,22 @@ class Shamrock(model.Actuator):
         self._checkMoveAbs(pos)
 
         # If grating needs to be changed, change it first, then the wavelength
+        ordered_axes = ("grating", "wavelength", "flip-out") + tuple(self._slit_names.values())
         actions = []
-        for axis in ("grating", "wavelength", "slit", "flip-out"):
+        for axis in ordered_axes:
             try:
-                v = pos[axis]
+                p = pos[axis]
             except KeyError:
                 continue
             if axis == "grating":
-                actions.append((self._doSetGrating, v))
+                actions.append((self._doSetGrating, p))
             elif axis == "wavelength":
-                actions.append((self._doSetWavelengthAbs, v))
-            elif axis == "slit":
-                actions.append((self._doSetSlitAbs, v))
+                actions.append((self._doSetWavelengthAbs, p))
             elif axis == "flip-out":
-                actions.append((self._doSetFlipper, OUTPUT_FLIPPER, v))
+                actions.append((self._doSetFlipper, OUTPUT_FLIPPER, p))
+            elif axis in self._slit_names.values():
+                sid = [k for k, v in self._slit_names.items() if v == axis][0]
+                actions.append((self._doSetSlitAbs, sid, p))
 
         f = self._executor.submit(self._doMultipleActions, actions)
         return f
@@ -789,25 +842,29 @@ class Shamrock(model.Actuator):
 
         self._updatePosition()
 
-    def _doSetSlitRel(self, shift):
+    def _doSetSlitRel(self, sid, shift):
         """
         Change the slit width by a value
+        sid (int): slit ID
+        shift (float): change in opening size in m
         """
-        width = self.GetAutoSlitWidth(self._slit) + shift
+        width = self.GetAutoSlitWidth(sid) + shift
         # it's only now that we can check the absolute position is wrong
-        minp, maxp = self.axes["slit"].range
+        minp, maxp = SLITWIDTHMIN * 1e-6, SLITWIDTHMAX * 1e-6
         if not minp <= width <= maxp:
-            raise ValueError("Position %f of axis '%s' not within range %f→%f" %
-                             (width, "slit", minp, maxp))
+            raise ValueError(u"Position %f of axis '%s' not within range %f→%f" %
+                             (width, self._slit_names[sid], minp, maxp))
 
-        self.SetAutoSlitWidth(self._slit, width)
+        self.SetAutoSlitWidth(sid, width)
         self._updatePosition()
 
-    def _doSetSlitAbs(self, width):
+    def _doSetSlitAbs(self, sid, width):
         """
         Change the slit width to a value
+        sid (int): slit ID
+        width (float): new position in m
         """
-        self.SetAutoSlitWidth(self._slit, width)
+        self.SetAutoSlitWidth(sid, width)
         self._updatePosition()
 
     def _doSetFlipper(self, flipper, pos):
@@ -901,6 +958,10 @@ class FakeShamrockDLL(object):
         self._np = 0 # number of pixels
 
         # TODO: simulate slit and mirror flipper
+        # slits: int (id) -> float (position in µm)
+        self._slits = {1: 10.3,
+                       3: 1000,
+                      }
 
         # just for simulating the limitation of the iDus
         self._ccd = ccd
@@ -994,7 +1055,21 @@ class FakeShamrockDLL(object):
 
     def ShamrockAutoSlitIsPresent(self, device, index, p_present):
         present = _deref(p_present, c_int)
-        present.value = 0 # no!
+        if index in self._slits:
+            present.value = 1
+        else:
+            present.value = 0
+
+    def ShamrockGetAutoSlitWidth(self, device, index, p_width):
+        width = _deref(p_width, c_float)
+        width.value = self._slits[index]
+
+    def ShamrockSetAutoSlitWidth(self, device, index, width):
+        w = _val(width)
+        if SLITWIDTHMIN <= w <= SLITWIDTHMAX:
+            self._slits[index] = w
+        else:
+            raise ShamrockError(20268, "out of bound")
 
     def ShamrockFlipperMirrorIsPresent(self, device, flipper, p_present):
         present = _deref(p_present, c_int)
