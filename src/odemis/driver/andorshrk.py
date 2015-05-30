@@ -279,11 +279,6 @@ class Shamrock(model.Actuator):
                 raise HwError("Failed to find Andor Shamrock (%s) as device %d" %
                               (name, device))
 
-            # set HW and SW version
-            self._swVersion = "%s" % (odemis.__version__)
-            # TODO: EEPROM contains name of the device, but there doesn't seem to be any function for getting it?!
-            self._hwVersion = "%s (s/n: %s)" % ("Andor Shamrock", self.GetSerialNumber())
-
             if accessory is not None and not self.AccessoryIsPresent():
                 raise ValueError("Accessory set to '%s', but no accessory connected"
                                  % (accessory,))
@@ -321,13 +316,13 @@ class Shamrock(model.Actuator):
                     }
 
             # add slits which are available
-            for i, name in self._slit_names.items():
+            for i, slitn in self._slit_names.items():
                 if self.AutoSlitIsPresent(i):
-                    axes[name] = model.Axis(unit="m",
+                    axes[slitn] = model.Axis(unit="m",
                                             range=[SLITWIDTHMIN * 1e-6, SLITWIDTHMAX * 1e-6]
                                             )
                 else:
-                    logging.info("Slit %s is not present", name)
+                    logging.info("Slit %s is not present", slitn)
 
             # TODO: allow to define the name of the axis? or anyway, we can use
             # MultiplexActuator to rename the axis?
@@ -342,6 +337,11 @@ class Shamrock(model.Actuator):
 
             # provides a ._axes
             model.Actuator.__init__(self, name, role, axes=axes, **kwargs)
+
+            # set HW and SW version
+            self._swVersion = "%s" % (odemis.__version__)
+            # TODO: EEPROM contains name of the device, but there doesn't seem to be any function for getting it?!
+            self._hwVersion = "%s (s/n: %s)" % ("Andor Shamrock", self.GetSerialNumber())
 
             # will take care of executing axis move asynchronously
             self._executor = CancellableThreadPoolExecutor(max_workers=1) # one task at a time
@@ -955,14 +955,12 @@ class FakeShamrockDLL(object):
         self._pw = 0 # pixel width
         self._np = 0 # number of pixels
 
-        # TODO: simulate slit and mirror flipper
         # slits: int (id) -> float (position in µm)
         self._slits = {1: 10.3,
                        3: 1000,
                       }
         # flippers: int (id) -> int (port number, 0 or 1)
         self._flippers = {2: 0}
-
 
         # just for simulating the limitation of the iDus
         self._ccd = ccd
@@ -1070,7 +1068,7 @@ class FakeShamrockDLL(object):
         if SLITWIDTHMIN <= w <= SLITWIDTHMAX:
             self._slits[_val(index)] = w
         else:
-            raise ShamrockError(20268, "out of bound")
+            raise ShamrockError(20268, ShamrockDLL.err_code[20268])
 
     def ShamrockFlipperMirrorIsPresent(self, device, flipper, p_present):
         present = _deref(p_present, c_int)
@@ -1084,7 +1082,7 @@ class FakeShamrockDLL(object):
         if PORTMIN <= p <= PORTMAX:
             self._flippers[_val(flipper)] = port
         else:
-            raise ShamrockError(20268, "out of bound")
+            raise ShamrockError(20268, ShamrockDLL.err_code[20268])
 
     def ShamrockGetFlipperMirror(self, device, flipper, p_port):
         port = _deref(p_port, c_int)
