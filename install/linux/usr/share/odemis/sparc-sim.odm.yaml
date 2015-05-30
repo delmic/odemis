@@ -199,6 +199,9 @@ SimSPARC: {
     role: spectrograph,
     init: {
         device: "fake",
+        slits: {
+            1: "slit-in", # used to be called "slit"
+        }
     },
 }
 

@@ -144,6 +144,9 @@ SPARC: {
     role: spectrograph,
     init: {
         device: 0,
+        slits: {
+            1: "slit-in", # used to be called "slit"
+        }
     },
 }
 
