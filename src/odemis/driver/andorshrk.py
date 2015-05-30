@@ -27,77 +27,7 @@ from odemis.model import isasync, CancellableThreadPoolExecutor, HwError
 import os
 import time
 
-
-class ShamrockError(Exception):
-    def __init__(self, errno, strerror):
-        self.args = (errno, strerror)
-        self.errno = errno
-        self.strerror = strerror
-
-    def __str__(self):
-        return self.args[1]
-
-
-class ShamrockDLL(CDLL):
-    """
-    Subclass of CDLL specific to Andor Shamrock library, which handles error
-    codes for all the functions automatically.
-    It works by setting a default _FuncPtr.errcheck.
-    """
-
-    def __init__(self):
-        if os.name == "nt":
-            # FIXME: might not fly if parent is not a WinDLL => use __new__()
-            WinDLL.__init__(self, "libshamrockcif.dll") # TODO check it works
-        else:
-            # libandor.so must be loaded first. If there is a camera, that has
-            # already been done, but if not, we need to do it here. It's not a
-            # problem to do it multiple times.
-            self._dllandor = CDLL("libandor.so.2", RTLD_GLOBAL)
-            # Global so that its sub-libraries can access it
-            CDLL.__init__(self, "libshamrockcif.so.2", RTLD_GLOBAL)
-
-    @staticmethod
-    def at_errcheck(result, func, args):
-        """
-        Analyse the return value of a call and raise an exception in case of 
-        error.
-        Follows the ctypes.errcheck callback convention
-        """
-        # everything returns DRV_SUCCESS on correct usage, _except_ GetTemperature()
-        if result not in ShamrockDLL.ok_code:
-            if result in ShamrockDLL.err_code:
-                raise ShamrockError(result, "Call to %s failed with error code %d: %s" %
-                               (str(func.__name__), result, ShamrockDLL.err_code[result]))
-                # TODO: Use ShamrockGetFunctionReturnDescription(result, )
-            else:
-                raise ShamrockError(result, "Call to %s failed with unknown error code %d" %
-                               (str(func.__name__), result))
-        return result
-
-    def __getitem__(self, name):
-        try:
-            func = super(ShamrockDLL, self).__getitem__(name)
-        except Exception:
-            raise AttributeError("Failed to find %s" % (name,))
-        func.__name__ = name
-        func.errcheck = self.at_errcheck
-        return func
-
-    ok_code = {
-20202: "SHAMROCK_SUCCESS",
-}
-    err_code = {
-20201: "SHAMROCK_COMMUNICATION_ERROR",
-20266: "SHAMROCK_P1INVALID",
-20267: "SHAMROCK_P2INVALID",
-20268: "SHAMROCK_P3INVALID",
-20269: "SHAMROCK_P4INVALID",
-20275: "SHAMROCK_NOT_INITIALIZED",
-20292: "SHAMROCK_NOT_AVAILABLE",
-}
-
-# Other constants
+# Constants from ShamrockCIF.h
 # SHAMROCK_ACCESSORYMIN 1
 # SHAMROCK_ACCESSORYMAX 2
 # SHAMROCK_FILTERMIN 1
@@ -134,7 +64,75 @@ OUTPUT_FLIPPER = 2
 DIRECT_PORT = 0
 SIDE_PORT = 1
 
-# SHAMROCK_ERRORLENGTH 64
+ERRORLENGTH = 64
+
+
+class ShamrockError(Exception):
+    def __init__(self, errno, strerror):
+        self.args = (errno, strerror)
+        self.errno = errno
+        self.strerror = strerror
+
+    def __str__(self):
+        return self.args[1]
+
+
+class ShamrockDLL(CDLL):
+    """
+    Subclass of CDLL specific to Andor Shamrock library, which handles error
+    codes for all the functions automatically.
+    It works by setting a default _FuncPtr.errcheck.
+    """
+
+    def __init__(self):
+        if os.name == "nt":
+            # FIXME: might not fly if parent is not a WinDLL => use __new__()
+            WinDLL.__init__(self, "libshamrockcif.dll") # TODO check it works
+        else:
+            # libandor.so must be loaded first. If there is a camera, that has
+            # already been done, but if not, we need to do it here. It's not a
+            # problem to do it multiple times.
+            self._dllandor = CDLL("libandor.so.2", RTLD_GLOBAL)
+            # Global so that its sub-libraries can access it
+            CDLL.__init__(self, "libshamrockcif.so.2", RTLD_GLOBAL)
+
+    def at_errcheck(self, result, func, args):
+        """
+        Analyse the return value of a call and raise an exception in case of
+        error.
+        Follows the ctypes.errcheck callback convention
+        """
+        # everything returns DRV_SUCCESS on correct usage, _except_ GetTemperature()
+        if result not in ShamrockDLL.ok_code:
+            errmsg = create_string_buffer(ERRORLENGTH)
+            self.ShamrockGetFunctionReturnDescription(result, errmsg, len(errmsg))
+            raise ShamrockError(result,
+                                "Call to %s failed with unknown error %d: %s" %
+                                (func.__name__, result, errmsg.value))
+        return result
+
+    def __getitem__(self, name):
+        try:
+            func = super(ShamrockDLL, self).__getitem__(name)
+        except Exception:
+            raise AttributeError("Failed to find %s" % (name,))
+        func.__name__ = name
+        func.errcheck = self.at_errcheck
+        return func
+
+    ok_code = {
+20202: "SHAMROCK_SUCCESS",
+}
+    err_code = {
+20201: "SHAMROCK_COMMUNICATION_ERROR",
+20266: "SHAMROCK_P1INVALID",
+20267: "SHAMROCK_P2INVALID",
+20268: "SHAMROCK_P3INVALID",
+20269: "SHAMROCK_P4INVALID",
+20275: "SHAMROCK_NOT_INITIALIZED",
+20292: "SHAMROCK_NOT_AVAILABLE",
+}
+
 
 class HwAccessMgr(object):
     """
@@ -561,6 +559,8 @@ class Shamrock(model.Actuator):
         self._dll.ShamrockGetCalibration(self._device, CalibrationValues, npixels)
         return [v * 1e-9 for v in CalibrationValues]
 
+# def ShamrockGetCCDLimits(int device, int port, float *Low, float *High);
+
     def SetPixelWidth(self, width):
         """
         Defines the size of each pixel (horizontally).
@@ -647,8 +647,6 @@ class Shamrock(model.Actuator):
         present = c_int()
         self._dll.ShamrockFlipperMirrorIsPresent(self._device, flipper, byref(present))
         return (present.value != 0)
-
-# def ShamrockGetCCDLimits(int device, int port, float *Low, float *High);
 
     # "Accessory" port control (= 2 TTL lines)
     def SetAccessory(self, line, val):
@@ -962,6 +960,9 @@ class FakeShamrockDLL(object):
         self._slits = {1: 10.3,
                        3: 1000,
                       }
+        # flippers: int (id) -> int (port number, 0 or 1)
+        self._flippers = {2: 0}
+
 
         # just for simulating the limitation of the iDus
         self._ccd = ccd
@@ -1055,25 +1056,39 @@ class FakeShamrockDLL(object):
 
     def ShamrockAutoSlitIsPresent(self, device, index, p_present):
         present = _deref(p_present, c_int)
-        if index in self._slits:
+        if _val(index) in self._slits:
             present.value = 1
         else:
             present.value = 0
 
     def ShamrockGetAutoSlitWidth(self, device, index, p_width):
         width = _deref(p_width, c_float)
-        width.value = self._slits[index]
+        width.value = self._slits[_val(index)]
 
     def ShamrockSetAutoSlitWidth(self, device, index, width):
         w = _val(width)
         if SLITWIDTHMIN <= w <= SLITWIDTHMAX:
-            self._slits[index] = w
+            self._slits[_val(index)] = w
         else:
             raise ShamrockError(20268, "out of bound")
 
     def ShamrockFlipperMirrorIsPresent(self, device, flipper, p_present):
         present = _deref(p_present, c_int)
-        present.value = 0  # no!
+        if _val(flipper) in self._flippers:
+            present.value = 1
+        else:
+            present.value = 0
+
+    def ShamrockSetFlipperMirror(self, device, flipper, port):
+        p = _val(port)
+        if PORTMIN <= p <= PORTMAX:
+            self._flippers[_val(flipper)] = port
+        else:
+            raise ShamrockError(20268, "out of bound")
+
+    def ShamrockGetFlipperMirror(self, device, flipper, p_port):
+        port = _deref(p_port, c_int)
+        port.value = self._flippers[_val(flipper)]
 
     def ShamrockAccessoryIsPresent(self, device, p_present):
         present = _deref(p_present, c_int)
