@@ -1066,6 +1066,8 @@ class FakeShamrockDLL(object):
     def ShamrockSetAutoSlitWidth(self, device, index, width):
         w = _val(width)
         if SLITWIDTHMIN <= w <= SLITWIDTHMAX:
+            oldwidth = self._slits[_val(index)]
+            time.sleep(abs(oldwidth - w) / 500)
             self._slits[_val(index)] = w
         else:
             raise ShamrockError(20268, ShamrockDLL.err_code[20268])
@@ -1079,8 +1081,11 @@ class FakeShamrockDLL(object):
 
     def ShamrockSetFlipperMirror(self, device, flipper, port):
         p = _val(port)
+        f = _val(flipper)
         if PORTMIN <= p <= PORTMAX:
-            self._flippers[_val(flipper)] = port
+            oldport = self._flippers[f]
+            time.sleep(abs(oldport - p))
+            self._flippers[f] = p
         else:
             raise ShamrockError(20268, ShamrockDLL.err_code[20268])
 
