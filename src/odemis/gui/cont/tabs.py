@@ -550,6 +550,8 @@ class SparcAcquisitionTab(Tab):
         #self.tb.add_tool(tools.TOOL_POINT, self.tab_data_model.tool)
         #self.tb.add_tool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
 
+        self.tab_data_model.tool.subscribe(self.on_tool_change)
+
         # Create the streams:
         # * SEM (survey): live stream displaying the current SEM view (full FoV)
         # * SEM CL: SEM stream used to store SEM settings for final acquisition
@@ -569,6 +571,7 @@ class SparcAcquisitionTab(Tab):
         # Separate view, solely used for acquisition
         acq_view = self.tab_data_model.acquisitionView
 
+        # This stream is used both for rendering and acquisition
         sem_stream = acqstream.SEMStream(
             "Secondary electrons",
             main_data.sed,
@@ -746,6 +749,11 @@ class SparcAcquisitionTab(Tab):
             # self._spec_graph = self._settings_controller.spec_graph
             # self._txt_mean = self._settings_controller.txt_mean
             self._scount_stream.image.subscribe(self._on_spec_count, init=True)
+
+    def on_tool_change(self, tool):
+        # FIXME: Resolve the confusion between tools and tool modes and their name
+        if tool == guimod.TOOL_SPOT:
+            self._sem_live_stream.should_update.value = False
 
     def on_add_angle_resolved(self):
         """ Create a camera stream and add to to all compatible viewports """
@@ -1527,7 +1535,6 @@ class AnalysisTab(Tab):
             raise ValueError("File '%s' not suitable" % fn)
 
         return fn
-
 
     @guiutil.call_in_wx_main
     def _onTool(self, tool):
