@@ -28,9 +28,11 @@ from odemis import model
 from odemis.acq import stream
 
 
-# Dict includes all the modes available and the corresponding component axis or 
+# Dict includes all the modes available and the corresponding component axis or
 # VA values
 # {Mode: (detector_needed, {role: {axis/VA: value}})}
+# TODO: how about the filter? 'mirror-align' should force it to "pass-through" (and then put it back to what it was?)
+# TODO: another mode fo specfib-align?
 MODES = {'ar': ("ccd",
                {'lens-switch': {'rx': math.radians(90)}, 'ar-det-selector': {'rx': 0},
                'ar-spec-selector': {'rx': 0}}),
@@ -45,10 +47,11 @@ MODES = {'ar': ("ccd",
          'monochromator': ("monochromator",
                 {'lens-switch': {'rx': math.radians(90)}, 'ar-det-selector': {'rx': 0},
                'ar-spec-selector': {'rx': math.radians(90)}, 'spectrograph': {'spec-det-selector': math.radians(90)}})}
+
 # Use subset for modes guessed
-subset = MODES.keys()
-subset.remove('mirror-align')
-GUESS_MODES = dict([(i, MODES[i]) for i in subset if i in MODES])
+GUESS_MODES = MODES.copy()
+del GUESS_MODES['mirror-align']  # No stream should ever imply alignment mode
+
 
 
 class OpticalPathManager(object):
@@ -98,7 +101,7 @@ class OpticalPathManager(object):
                     comp = model.getComponent(role=comp_role)
                     self.known_comps[comp_role] = comp
             except LookupError:
-                logging.debug("Failed to access component %s", comp_role, exc_info=True)
+                logging.debug("Failed to find component %s, skipping it", comp_role)
                 continue
 
             mv = {}
@@ -127,12 +130,12 @@ class OpticalPathManager(object):
         if isinstance(guess_stream, stream.Stream):
             if isinstance(guess_stream, stream.MultipleDetectorStream):
                 for st in guess_stream.streams:
-                    for mode in GUESS_MODES:
-                        if GUESS_MODES[mode][0] == st.detector.role:
+                    for mode, conf in GUESS_MODES.items():
+                        if conf[0] == st.detector.role:
                             return mode
             else:
-                for mode in GUESS_MODES:
-                    if GUESS_MODES[mode][0] == guess_stream.detector.role:
+                for mode, conf in GUESS_MODES.items():
+                    if conf[0] == guess_stream.detector.role:
                         return mode
             # In case no mode was found yet
             raise ValueError("No mode can be inferred for the given stream")

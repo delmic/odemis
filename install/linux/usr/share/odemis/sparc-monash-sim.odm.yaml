@@ -15,7 +15,7 @@ SPARC-MONASH: {
 # sudo comedi_config /dev/comedi0 comedi_test 1000000,1000000
 "SEM Scan Interface": {
     class: semcomedi.SEMComedi,
-    role: null,
+    role: none,
     init: {device: "/dev/comedi0"},
     # more detectors can be added, if necessary
     children: {
@@ -217,36 +217,38 @@ SPARC-MONASH: {
     affects: ["Angular Camera", "Spectrometer"]  
 }
 
-# Andor iDus 406 + Shamrock SR303i
+# Spectrometer = Andor iVac 316 + Shamrock SR303i (connected via USB)
 "Spectrometer": {
-    class: andorshrk.AndorSpec, # Instantiates an Andorcam2 + Shamrock
+    class: spectrometer.CompositedSpectrometer,
     role: spectrometer,
-    children: {andorcam2: "Spectral Camera", shamrock: "Spectrograph"},
-    init: {},
+    children: {detector: "Spectral Camera", spectrograph: "Spectrograph"},
     properties: {
         #binning: [4, 256],
     },
 }
 
 "Spectral Camera": {
-    # no class, as it's instantiated by AndorSpec
+    class: andorcam2.AndorCam2,
     role: sp-ccd,
     init: {
            device: "fake",
-           image: "andorcam2-fake-clara.tiff", # only for simulator
-           #transpose: [-1, 2], # mirrored on X axis if camera is upside-down
+           transpose: [1, -2], # if mirrored on X axis (due to a Odemis bug, it's the second dim which has the -)
     },
     properties: {
-        #targetTemperature: -55, # °C
+        #targetTemperature: -60, # °C
     },
 }
 
 "Spectrograph": {
-    # no class, as it's instantiated by AndorSpec
+    class: andorshrk.Shamrock,
     role: spectrograph,
     affects: ["Monochromator PMT", "Spectral Camera"],
+    children: {"ccd": "Spectral Camera"},
     init: {
         device: "fake",
+        slits: {1: "slit-in", # INPUT_SIDE
+                3: "slit-monochromator", # OUTPUT_SIDE
+        }
     },
 }
 

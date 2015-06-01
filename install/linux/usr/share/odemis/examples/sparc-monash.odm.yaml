@@ -11,7 +11,7 @@ SPARC-MONASH: {
 # FEI SEM driven via external X/Y connection, using a DAQ board
 "SEM Scan Interface": {
     class: semcomedi.SEMComedi,
-    role: null,
+    role: none,
     init: {device: "/dev/comedi0"},
     # more detectors can be added, if necessary
     children: {
@@ -158,7 +158,7 @@ SPARC-MONASH: {
     affects: ["Angular Camera", "Spectrometer"]
 }
 
-# Andor Neo
+# Andor Zyla
 "Angular Camera": {
     class: andorcam3.AndorCam3,
     role: ccd,
@@ -168,7 +168,7 @@ SPARC-MONASH: {
         transpose: [1, -2], # mirrored on Y axis
     },
     properties: {
-        fanSpeed: 0.0, # 0 = Off, 0.5= half speed, 1 = max speed
+    #    fanSpeed: 0.0, # 0 = Off, 0.5= half speed, 1 = max speed
     }
 }
 
@@ -201,37 +201,51 @@ SPARC-MONASH: {
     affects: ["Angular Camera", "Spectrometer"]  
 }
 
-# Andor iDus 406 + Shamrock SR303i
+# Spectrometer = Andor iVac 316 + Shamrock SR303i (connected via USB)
 "Spectrometer": {
-    class: andorshrk.AndorSpec, # Instantiates an Andorcam2 + Shamrock
+    class: spectrometer.CompositedSpectrometer,
     role: spectrometer,
-    children: {andorcam2: "Spectral Camera", shamrock: "Spectrograph"},
-    init: {},
+    children: {detector: "Spectral Camera", spectrograph: "Spectrograph"},
     properties: {
         #binning: [4, 256],
     },
 }
 
 "Spectral Camera": {
-    # no class, as it's instantiated by AndorSpec
+    class: andorcam2.AndorCam2,
     role: sp-ccd,
     init: {
            device: 0, # 0 = first and only Andor SDK 2 camera
-           #transpose: [-1, 2], # mirrored on X axis if camera is upside-down
+           transpose: [1, -2], # if mirrored on X axis (due to a Odemis bug, it's the second dim which has the -)
     },
     properties: {
-        targetTemperature: -55, # °C
+        targetTemperature: -60, # °C
     },
 }
 
 "Spectrograph": {
-    # no class, as it's instantiated by AndorSpec
+    class: andorshrk.Shamrock,
     role: spectrograph,
     affects: ["Monochromator PMT", "Spectral Camera"],
+    children: {"ccd": "Spectral Camera"},
     init: {
         device: 0,
+        slits: {1: "slit-in", # INPUT_SIDE
+                3: "slit-monochromator", # OUTPUT_SIDE
+        }
     },
 }
+
+# # Provide the mirror of the spectrograph as a separate component 
+# "Spec CCD-PMT Flipper": {
+#     class: actuator.MultiplexActuator,
+#     role: spec-det-selector,
+#     affects: ["Monochromator PMT", "Spectral Camera"],
+#     children: {"rx": "Spectrograph"},
+#     init: {
+#         axes_map: {"rx": "flip-out"},
+#     },
+# }
 
 # PI E-861 jumpers (. = off):
 # X          = 1234.6..

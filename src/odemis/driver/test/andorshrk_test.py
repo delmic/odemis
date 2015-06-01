@@ -20,7 +20,7 @@ from __future__ import division
 from concurrent import futures
 import logging
 from odemis import model
-from odemis.driver import andorshrk
+from odemis.driver import andorshrk, andorcam2
 import os
 import time
 import unittest
@@ -35,7 +35,7 @@ TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 
 KWARGS_SPG = dict(name="sr303", role="spectrograph", device=0)
 KWARGS_SPG_SIM = dict(name="sr303", role="spectrograph", device="fake")
-#CLASS_CAM = andorshrk.AndorSpec
+CLASS_CAM = andorcam2.AndorCam2
 KWARGS_CAM = dict(name="idus", role="ccd", device=0, transpose=[-1, 2])
 KWARGS_CAM_SIM = dict(name="idus", role="ccd", device="fake", transpose=[-1, 2])
 
@@ -48,10 +48,12 @@ KWARGS = dict(name="spectrometer", role="ccd",
 # For testing the Shamrock with direct connection to the PC
 CLASS_SHRK = andorshrk.Shamrock
 KWARGS_SHRK = dict(name="sr193", role="spectrograph", device=0)
-KWARGS_SHRK_SIM = dict(name="sr193", role="spectrograph", device="fake")
+KWARGS_SHRK_SIM = dict(name="sr193", role="spectrograph", device="fake",
+                       slits={1: "slit-in", 3: "slit-monochromator"})
 
 if TEST_NOHW:
     KWARGS = KWARGS_SIM
+    KWARGS_CAM = KWARGS_CAM_SIM
     KWARGS_SHRK = KWARGS_SHRK_SIM
 
 #@skip("simple")
@@ -288,7 +290,8 @@ class TestShamrock(TestSpectrograph, unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.spectrograph = CLASS_SHRK(**KWARGS_SHRK)
+        cls.ccd = CLASS_CAM(**KWARGS_CAM)
+        cls.spectrograph = CLASS_SHRK(children={"ccd": cls.ccd}, **KWARGS_SHRK)
 
         # save position
         cls._orig_pos = cls.spectrograph.position.value

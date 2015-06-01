@@ -43,7 +43,7 @@ SPEC_CONFIG = CONFIG_PATH + "sparc-sim-spec.odm.yaml"
 # @skip("faster")
 class SimPathTestCase(unittest.TestCase):
     """
-    Tests to be run with a (simulated) SPARC
+    Tests to be run with a (simulated) simple SPARC (like in Chalmers)
     """
     backend_was_running = False
 
@@ -144,7 +144,7 @@ class SimPathTestCase(unittest.TestCase):
 # @skip("faster")
 class MonashPathTestCase(unittest.TestCase):
     """
-    Tests to be run with a (simulated) Monash SPARC
+    Tests to be run with a (simulated) full SPARC (like in Monash)
     """
     backend_was_running = False
 
@@ -215,9 +215,7 @@ class MonashPathTestCase(unittest.TestCase):
         self.assertEqual(self.lenswitch.position.value, path.MODES["cli"][1]["lens-switch"])
 
         # setting monochromator
-        # TODO supposed to work once monochromator is added
-        with self.assertRaises(ValueError):
-            self.optmngr.setPath("monochromator")
+        self.optmngr.setPath("monochromator")
 
 #     @skip("simple")
     def test_guess_mode(self):
@@ -258,7 +256,7 @@ class MonashPathTestCase(unittest.TestCase):
 # @skip("faster")
 class SpecPathTestCase(unittest.TestCase):
     """
-    Tests to be run with a (simulated) AMOLF SPARC
+    Tests to be run with a (simulated) SPARC with just a spectrometer (like in AMOLF)
     """
     backend_was_running = False
 
