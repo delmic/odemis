@@ -49,6 +49,18 @@ EMStream.register(SpotSEMStream)
 EMStream.register(StaticSEMStream)
 
 
+class CLStream:
+    """
+    All the stream types related to cathodoluminescence with one C dimension
+    (otherwise, it's a SpectrumStream)
+    """
+    __metaclass__ = ABCMeta
+
+CLStream.register(CLSettingsStream)
+CLStream.register(StaticCLStream)
+# TODO, also include MonochromatorSettingsStream and SEMMDStream?
+
+
 class SpectrumStream:
     __metaclass__ = ABCMeta
 
