@@ -927,7 +927,6 @@ class StreamBarController(object):
 
                 # In the Sparc interface, all stream types can be added, regardless what viewport
                 # has the focus.
-                self.add_action("CL intensity", self.on_add_cl_intensity)
                 self.add_action("Spectrum", self.on_add_spectrum)
                 self.add_action("Monochromator", self.on_add_monochromator)
             else:
@@ -951,20 +950,6 @@ class StreamBarController(object):
         """
         se = self.addFluo(**kwargs)
         se.stream_panel.set_focus_on_label()
-
-    def on_add_cl_intensity(self):
-        """ Create a CLi stream and add to to all compatible viewports """
-
-        cli_stream = acqstream.CLSettingsStream(
-            "CL intensity",
-            self._main_data_model.sed,
-            self._main_data_model.sed.data,
-            self._main_data_model.ebeam
-        )
-
-        stream_cont = self._add_stream(cli_stream, add_to_all_views=True)
-        stream_cont.stream_panel.show_visible_btn(False)
-        return stream_cont
 
     def on_add_spectrum(self):
         """ Create a Spectrum stream and add to to all compatible viewports """

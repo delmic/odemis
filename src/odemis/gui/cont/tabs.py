@@ -558,6 +558,7 @@ class SparcAcquisitionTab(Tab):
         # * Spectrum: Repetition stream used to store settings for spectrum
         # * SEM/Spec: MD stream composed of the SEM CL+Spectrum streams
         # * AR: Repetition stream used to store settings for AR
+        # * CLi: Cathode Luminescence stream
         # * SEM/AR: MD stream composed of the SEM CL+AR streams
         # * SpecCount: Count stream for the live intensity of the spectrometer
         # On acquisition, only the SEM and SEM/Spec (or SEM/AR) are explicitly
@@ -565,6 +566,7 @@ class SparcAcquisitionTab(Tab):
         self._spec_stream = None
         self._sem_spec_stream = None
         self._ar_stream = None
+        self._cli_stream = None
         self._sem_ar_stream = None
         self._scount_stream = None
 
@@ -668,6 +670,7 @@ class SparcAcquisitionTab(Tab):
 
         if main_data.ccd:
             self._streambar_controller.add_action("Angle-resolved", self.on_add_angle_resolved)
+            self._streambar_controller.add_action("CL intensity", self.on_add_cl_intensity)
 
         # needs to have the AR and Spectrum streams on the acquisition view
         self._settings_controller = settings.SparcSettingsController(
@@ -751,9 +754,12 @@ class SparcAcquisitionTab(Tab):
             self._scount_stream.image.subscribe(self._on_spec_count, init=True)
 
     def on_tool_change(self, tool):
+        """ Pause the SE and CLI streams when the Spot mode tool is activated """
         # FIXME: Resolve the confusion between tools and tool modes and their name
         if tool == guimod.TOOL_SPOT:
             self._sem_live_stream.should_update.value = False
+            self._cli_stream.should_update.value = False
+            # TODO: re-activate stream when spot mode tool is turned off
 
     def on_add_angle_resolved(self):
         """ Create a camera stream and add to to all compatible viewports """
@@ -773,6 +779,22 @@ class SparcAcquisitionTab(Tab):
         # acq_view.addStream(self._sem_ar_stream)
 
         stream_cont = self._streambar_controller._add_stream(self._ar_stream,
+                                                             add_to_all_views=True)
+        stream_cont.stream_panel.show_visible_btn(False)
+        return stream_cont
+
+    def on_add_cl_intensity(self):
+        """ Create a CLi stream and add to to all compatible viewports """
+
+        # FIXME NOW: Does the other CL stream need to be removed?
+        self._cli_stream = acqstream.CLSettingsStream(
+            "CL intensity",
+            self.tab_data_model.main.sed,
+            self.tab_data_model.main.sed.data,
+            self.tab_data_model.main.ebeam
+        )
+
+        stream_cont = self._streambar_controller._add_stream(self._cli_stream,
                                                              add_to_all_views=True)
         stream_cont.stream_panel.show_visible_btn(False)
         return stream_cont
