@@ -758,8 +758,17 @@ class SparcAcquisitionTab(Tab):
         # FIXME: Resolve the confusion between tools and tool modes and their name
         if tool == guimod.TOOL_SPOT:
             self._sem_live_stream.should_update.value = False
-            self._cli_stream.should_update.value = False
+            self._sem_live_stream.should_update.subscribe(self._cancel_spot_mode)
+            if self._cli_stream:
+                self._cli_stream.should_update.value = False
+                self._cli_stream.should_update.subscribe(self._cancel_spot_mode)
             # TODO: re-activate stream when spot mode tool is turned off
+
+    def _cancel_spot_mode(self, should_update):
+        """ Cancel spot mode if SEM stream start playing """
+        # print  should_update , self.tab_data_model.tool.value
+        if should_update and self.tab_data_model.tool.value == guimod.TOOL_SPOT:
+            self.tab_data_model.tool.value = guimod.TOOL_NONE
 
     def on_add_angle_resolved(self):
         """ Create a camera stream and add to to all compatible viewports """
