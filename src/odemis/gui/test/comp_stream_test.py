@@ -499,12 +499,12 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         tab_mod = self.create_simple_tab_model()
         stream_bar = self.app.test_frame.stream_bar
 
-        _ = StreamBarController(tab_mod, stream_bar)
+        streambar_cont = StreamBarController(tab_mod, stream_bar)
 
         self.assertEqual(stream_bar.btn_add_stream.IsShown(), True)
 
         # No actions should be linked to the add stream button
-        self.assertEqual(len(stream_bar.get_actions()), 0)
+        self.assertEqual(len(streambar_cont.get_actions()), 0)
 
         # Add a callback/name combo to the add button
         def brightfield_callback():
@@ -512,11 +512,11 @@ class FoldPanelBarTestCase(test.GuiTestCase):
             fixed_entry = stream_comp.StreamPanel(stream_bar, fake_stream, tab_mod)
             stream_bar.add_stream_panel(fixed_entry)
 
-        stream_bar.add_action("Brightfield", brightfield_callback)
+        streambar_cont.add_action("Brightfield", brightfield_callback)
 
         brightfield_callback()
         test.gui_loop()
-        self.assertEqual(len(stream_bar.get_actions()), 1)
+        self.assertEqual(len(streambar_cont.get_actions()), 1)
         self.assertEqual(stream_bar.get_size(), 1)
 
         # Add another callback/name combo to the add button
@@ -525,17 +525,17 @@ class FoldPanelBarTestCase(test.GuiTestCase):
             fixed_entry = stream_comp.StreamPanel(stream_bar, fake_stream, tab_mod)
             stream_bar.add_stream_panel(fixed_entry)
 
-        stream_bar.add_action("SEM:EDT", sem_callback)
+        streambar_cont.add_action("SEM:EDT", sem_callback)
 
         sem_callback()
         test.gui_loop()
-        self.assertEqual(len(stream_bar.get_actions()), 2)
+        self.assertEqual(len(streambar_cont.get_actions()), 2)
         self.assertEqual(stream_bar.get_size(), 2)
 
         # Remove the Brightfield stream
-        stream_bar.remove_action("Brightfield")
+        streambar_cont.remove_action("Brightfield")
         test.gui_loop()
-        self.assertEqual(len(stream_bar.get_actions()), 1)
+        self.assertEqual(len(streambar_cont.get_actions()), 1)
 
         # Add another callback/name combo to the add button
         def custom_callback():
@@ -543,7 +543,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
             custom_entry = stream_comp.StreamPanel(stream_bar, fake_stream, tab_mod)
             stream_bar.add_stream_panel(custom_entry)
 
-        stream_bar.add_action("Custom", custom_callback)
+        streambar_cont.add_action("Custom", custom_callback)
 
         # Clear remaining streams
         stream_bar.clear()

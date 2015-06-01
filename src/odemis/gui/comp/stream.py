@@ -1046,7 +1046,6 @@ class StreamBar(wx.Panel):
         wx.Panel.__init__(self, *args, **kwargs)
 
         self.stream_panels = []
-        self.menu_actions = collections.OrderedDict()  # title => callback
 
         self._sz = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(self._sz)
@@ -1208,39 +1207,3 @@ class StreamBar(wx.Panel):
         """
         if self.txt_no_stream is not None:
             self.txt_no_stream.Show(self.is_empty())
-
-    def get_actions(self):
-        return self.menu_actions
-
-    # TODO need to have actions enabled/disabled depending on the context:
-    #  * if microscope is off/pause => disabled
-    #  * if focused view is not about this type of stream => disabled
-    #  * if there can be only one stream of this type, and it's already present
-    #    => disabled
-    def add_action(self, title, callback, check_enabled=None):
-        """ Add an action to the stream menu
-
-        It's added at the end of the list. If an action with the same title exists, it is replaced.
-
-        :param title: (string) Text displayed in the menu
-        :param callback: (callable) function to call when the action is selected
-
-        """
-
-        if self.btn_add_stream is None:
-            logging.error("No add button present!")
-        else:
-            logging.debug("Adding %s action to stream panel", title)
-            self.menu_actions[title] = callback
-            self.btn_add_stream.add_choice(title, callback, check_enabled)
-
-    def remove_action(self, title):
-        """
-        Remove the given action, if it exists. Otherwise does nothing
-        title (string): name of the action to remove
-        """
-        if title in self.menu_actions:
-            logging.debug("Removing %s action from stream panel", title)
-            del self.menu_actions[title]
-            self.btn_add_stream.set_choices(self.menu_actions)
-

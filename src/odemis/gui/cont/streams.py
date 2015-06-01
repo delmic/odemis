@@ -710,6 +710,8 @@ class StreamBarController(object):
 
         self._stream_bar = stream_bar
 
+        self.menu_actions = collections.OrderedDict()  # title => callback
+
         self._scheduler_subscriptions = {}  # stream -> callable
         self._sched_policy = SCHED_LAST_ONE  # works well in most cases
 
@@ -734,6 +736,41 @@ class StreamBarController(object):
         self.static_mode = static
         # Disable all controls
         self.locked_mode = locked
+
+    def get_actions(self):
+        return self.menu_actions
+
+    # TODO need to have actions enabled/disabled depending on the context:
+    #  * if microscope is off/pause => disabled
+    #  * if focused view is not about this type of stream => disabled
+    #  * if there can be only one stream of this type, and it's already present
+    #    => disabled
+    def add_action(self, title, callback, check_enabled=None):
+        """ Add an action to the stream menu
+
+        It's added at the end of the list. If an action with the same title exists, it is replaced.
+
+        :param title: (string) Text displayed in the menu
+        :param callback: (callable) function to call when the action is selected
+
+        """
+
+        if self._stream_bar.btn_add_stream is None:
+            logging.error("No add button present!")
+        else:
+            logging.debug("Adding %s action to stream panel", title)
+            self.menu_actions[title] = callback
+            self._stream_bar.btn_add_stream.add_choice(title, callback, check_enabled)
+
+    def remove_action(self, title):
+        """
+        Remove the given action, if it exists. Otherwise does nothing
+        title (string): name of the action to remove
+        """
+        if title in self.menu_actions:
+            logging.debug("Removing %s action from stream panel", title)
+            del self.menu_actions[title]
+            self._stream_bar.btn_add_stream.set_choices(self.menu_actions)
 
     @classmethod
     def data_to_static_streams(cls, data):
@@ -870,7 +907,7 @@ class StreamBarController(object):
 
             # TODO: how to know it's _fluorescent_ microscope?
             # => multiple source? filter?
-            self._stream_bar.add_action("Filtered colour", self._userAddFluo, fluor_capable)
+            self.add_action("Filtered colour", self._userAddFluo, fluor_capable)
 
         # Bright-field
         if self._main_data_model.brightlight and self._main_data_model.ccd:
@@ -881,7 +918,7 @@ class StreamBarController(object):
                 compatible = view.is_compatible(acqstream.BrightfieldStream)
                 return enabled and compatible
 
-            self._stream_bar.add_action("Bright-field", self.addBrightfield, brightfield_capable)
+            self.add_action("Bright-field", self.addBrightfield, brightfield_capable)
 
         # SED
         if self._main_data_model.ebeam and self._main_data_model.sed:
@@ -890,10 +927,9 @@ class StreamBarController(object):
 
                 # In the Sparc interface, all stream types can be added, regardless what viewport
                 # has the focus.
-                self._stream_bar.add_action("Angle-resolved", self.on_add_angle_resolved)
-                self._stream_bar.add_action("CL intensity", self.on_add_cl_intensity)
-                self._stream_bar.add_action("Spectrum", self.on_add_spectrum)
-                self._stream_bar.add_action("Monochromator", self.on_add_monochromator)
+                self.add_action("CL intensity", self.on_add_cl_intensity)
+                self.add_action("Spectrum", self.on_add_spectrum)
+                self.add_action("Monochromator", self.on_add_monochromator)
             else:
                 # Not a Sparc
                 def sem_capable():
@@ -904,10 +940,10 @@ class StreamBarController(object):
                     compatible = view.is_compatible(acqstream.SEMStream)
                     return enabled and compatible
 
-                self._stream_bar.add_action("Secondary electrons", self.addSEMSED, sem_capable)
+                self.add_action("Secondary electrons", self.addSEMSED, sem_capable)
         # BSED
         if self._main_data_model.ebeam and self._main_data_model.bsd:
-            self._stream_bar.add_action("Backscattered electrons", self.addSEMBSD, sem_capable)
+            self.add_action("Backscattered electrons", self.addSEMBSD, sem_capable)
 
     def _userAddFluo(self, **kwargs):
         """ Called when the user request adding a Fluo stream
@@ -915,20 +951,6 @@ class StreamBarController(object):
         """
         se = self.addFluo(**kwargs)
         se.stream_panel.set_focus_on_label()
-
-    def on_add_angle_resolved(self):
-        """ Create a camera stream and add to to all compatible viewports """
-
-        ar_stream = acqstream.ARSettingsStream(
-            "Angle-resolved",
-            self._main_data_model.ccd,
-            self._main_data_model.ccd.data,
-            self._main_data_model.ebeam
-        )
-
-        stream_cont = self._add_stream(ar_stream, add_to_all_views=True)
-        stream_cont.stream_panel.show_visible_btn(False)
-        return stream_cont
 
     def on_add_cl_intensity(self):
         """ Create a CLi stream and add to to all compatible viewports """
