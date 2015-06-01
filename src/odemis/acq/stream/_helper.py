@@ -82,7 +82,10 @@ class RepetitionStream(LiveStream):
         # the size of the pixel, both horizontally and vertically
         # actual range is dynamic, as it changes with the magnification
         self.pixelSize = model.FloatContinuous(emitter.pixelSize.value[0],
-                           range=(0, 1), unit="m", setter=self._setPixelSize)
+                                               range=(0, 1), unit="m", setter=self._setPixelSize)
+
+        # True if we apply fuzzy scanning
+        self.fuzzing = model.BooleanVA(False)
 
         # exposure time of each pixel is the exposure time of the detector,
         # the dwell time of the emitter will be adapted before acquisition.
@@ -569,7 +572,7 @@ class OverlayStream(Stream):
         # 0.1s is a bit small, but the algorithm will automaticaly try with
         # longer dwell times if no spot is visible first.
         self.dwellTime = model.FloatContinuous(0.1,
-                                               range=emitter.dwellTime.range,
+                                               range=[1e-9, 100],
                                                unit="s")
         # The number of points in the grid
         self.repetition = model.ResolutionVA((4, 4),  # good default

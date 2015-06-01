@@ -125,7 +125,7 @@ class GridScanner(object):
         # image (just to discard it) and start a second scan which would
         # cost in time.
         sem_dt = 2 * dwell_time
-        escan.dwellTime.value = sem_dt
+        escan.dwellTime.value = escan.dwellTime.clip(sem_dt)
 
         # CCD setup
         sem_shape = escan.shape[0:2]

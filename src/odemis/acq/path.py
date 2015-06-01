@@ -34,24 +34,38 @@ from odemis.acq import stream
 # TODO: how about the filter? 'mirror-align' should force it to "pass-through" (and then put it back to what it was?)
 # TODO: another mode fo specfib-align?
 MODES = {'ar': ("ccd",
-               {'lens-switch': {'rx': math.radians(90)}, 'ar-det-selector': {'rx': 0},
-               'ar-spec-selector': {'rx': 0}}),
+               {'lens-switch': {'rx': math.radians(90)},
+                'ar-det-selector': {'rx': 0},
+                'ar-spec-selector': {'rx': 0}}),
          'spectral': ("spectrometer",
-                {'lens-switch': {'rx': math.radians(90)}, 'ar-det-selector': {'rx': 0},
-               'ar-spec-selector': {'rx': math.radians(90)}, 'spectrograph': {'spec-det-selector': 0}}),
+                {'lens-switch': {'rx': math.radians(90)},
+                 'ar-det-selector': {'rx': 0},
+                 'ar-spec-selector': {'rx': math.radians(90)},
+                 'spectrograph': {'spec-det-selector': 0}}),
          'mirror-align': ("ccd",
-                {'lens-switch': {'rx': 0}, 'ar-det-selector': {'rx': 0},
-               'ar-spec-selector': {'rx': 0}}),
+                {'lens-switch': {'rx': 0},
+                 'ar-det-selector': {'rx': 0},
+                 'ar-spec-selector': {'rx': 0},
+                 'filter': {'band': 'pass-through'}}),
+         'fiber-align': ("spectrometer",
+                {'lens-switch': {'rx': 0},
+                 'spec-det-selector': {'rx': 0},
+                 'ar-spec-selector': {'rx': math.radians(90)},
+                 'spectrograph': {'slit-in': 500e-6, 'wavelength': 0},
+                 'filter': {'band': 'pass-through'}}),
          'cli': ("cl-detector",  # cli
-                {'lens-switch': {'rx': math.radians(90)}, 'ar-det-selector': {'rx': math.radians(90)}}),
+                {'lens-switch': {'rx': math.radians(90)},
+                 'ar-det-selector': {'rx': math.radians(90)}}),
          'monochromator': ("monochromator",
-                {'lens-switch': {'rx': math.radians(90)}, 'ar-det-selector': {'rx': 0},
-               'ar-spec-selector': {'rx': math.radians(90)}, 'spectrograph': {'spec-det-selector': math.radians(90)}})}
+                {'lens-switch': {'rx': math.radians(90)},
+                 'ar-det-selector': {'rx': 0},
+                 'ar-spec-selector': {'rx': math.radians(90)},
+                 'spectrograph': {'spec-det-selector': math.radians(90)}})}
 
 # Use subset for modes guessed
 GUESS_MODES = MODES.copy()
 del GUESS_MODES['mirror-align']  # No stream should ever imply alignment mode
-
+del GUESS_MODES['fiber-align']
 
 
 class OpticalPathManager(object):
@@ -67,6 +81,8 @@ class OpticalPathManager(object):
         """
         self.microscope = microscope
         self.known_comps = dict()  # keep list of already accessed components
+        self._stored_band = None
+        self._last_mode = None
         # Removes modes which are not supported by the current microscope
         self._modes = MODES.copy()
         for m, (det, conf) in self._modes.items():
@@ -107,11 +123,39 @@ class OpticalPathManager(object):
             mv = {}
             for axis, pos in conf.items():
                 if axis in comp.axes:
+                    if axis == "band":
+                        # Handle the filter wheel in a special way. Search
+                        # for the key that corresponds to the value, most probably
+                        # to the 'pass-through'
+                        choices = comp.axes[axis].choices
+                        for key, value in choices.items():
+                            if value == pos:
+                                pos = key
+                                # Just to store current band in order to restore
+                                # it once we leave this mode
+                                if self._last_mode not in {'mirror-align', 'fiber-align'}:
+                                    self._stored_band = comp.position.value[axis]
+                                break
+                        else:
+                            logging.debug("Choice %s is not present in %s axis", pos, axis)
+                            continue
                     mv[axis] = pos
                 else:
                     logging.debug("Not moving axis %s.%s as it is not present", comp_role, axis)
 
             fmoves.append(comp.moveAbs(mv))
+
+        # If we are about to leave mirror-align or fiber-align restore band value
+        try:
+            filter = model.getComponent(role="filter")
+            if (self._last_mode in {'mirror-align', 'fiber-align'}) and (mode not in {'mirror-align', 'fiber-align'}):
+                fmoves.append(filter.moveAbs({"band": self._stored_band}))
+        except LookupError:
+            logging.debug("No filter component available")
+
+        # Save last mode
+        self._last_mode = mode
+
         # wait for all the moves to be completed
         for f in fmoves:
             f.result()

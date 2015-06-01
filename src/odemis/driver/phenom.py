@@ -299,12 +299,16 @@ class Scanner(model.Emitter):
                                               setter=self._setShift)
         self.shift.subscribe(self._onShift, init=True)
 
-        # (float, float) in px => Supposed to move center of acquisition by this
-        # amount independent of scale and rotation. In this case does nothing.
+        # (-0.5<=float<=0.5, -0.5<=float<=0.5) translation in ratio of the SEM
+        # image shape
+        self.tran_roi = (0, 0)
+        # (float, float) in m => moves center of acquisition by this amount
+        # independent of scale and rotation.
         tran_rng = [(-self._shape[0] / 2, -self._shape[1] / 2),
                     (self._shape[0] / 2, self._shape[1] / 2)]
         self.translation = model.TupleContinuous((0, 0), tran_rng,
-                                              cls=(int, long, float), unit="px")
+                                                 cls=(int, long, float), unit="px",
+                                                 setter=self._setTranslation)
 
         # .resolution is the number of pixels actually scanned. If it's less than
         # the whole possible area, it's centered.
@@ -420,7 +424,9 @@ class Scanner(model.Emitter):
         current_tilt = self.parent._device.GetSEMSourceTilt()
         self.parent._device.SEMSetHighTension(-volt)
         new_tilt = self.parent._device.GetSEMSourceTilt()
-        self.parent._detector._tilt_unblank = (new_tilt.aX, new_tilt.aY)
+        # This should never happen
+        if ((new_tilt.aX, new_tilt.aY) != TILT_BLANK):
+            self.parent._detector._tilt_unblank = (new_tilt.aX, new_tilt.aY)
         if ((current_tilt.aX, current_tilt.aY) == TILT_BLANK):
             self.parent._device.SetSEMSourceTilt(current_tilt.aX, current_tilt.aY, False)
         # Brightness and contrast have to be adjusted just once
@@ -434,7 +440,9 @@ class Scanner(model.Emitter):
             current_tilt = self.parent._device.GetSEMSourceTilt()
             self.parent._device.SEMSetSpotSize(value)
             new_tilt = self.parent._device.GetSEMSourceTilt()
-            self.parent._detector._tilt_unblank = (new_tilt.aX, new_tilt.aY)
+            # This should never happen
+            if ((new_tilt.aX, new_tilt.aY) != TILT_BLANK):
+                self.parent._detector._tilt_unblank = (new_tilt.aX, new_tilt.aY)
             if ((current_tilt.aX, current_tilt.aY) == TILT_BLANK):
                 self.parent._device.SetSEMSourceTilt(current_tilt.aX, current_tilt.aY, False)
             return self._spotSize
@@ -512,6 +520,16 @@ class Scanner(model.Emitter):
         self._resolution = size
 
         return size
+
+    def _setTranslation(self, value):
+        """
+        value (float, float): shift from the center in pixels. It will always ensure that
+          the whole ROI fits the screen.
+        returns actual shift accepted
+        """
+        # translation to roi
+        self.tran_roi = (value[0] / self._shape[0], value[1] / self._shape[1])
+        return value
 
     def _onShift(self, shift):
         beamShift = self.parent._objects.create('ns0:position')
@@ -700,8 +718,8 @@ class Detector(model.Detector):
                     # Also compensate for spot_shift
                     md_bsd = self.getMetadata()
                     spot_shift = md_bsd.get(model.MD_SPOT_SHIFT, (0, 0))
-                    self._scan_params_view.center.x = shift_pos[0] + spot_shift[0]
-                    self._scan_params_view.center.y = shift_pos[1] + spot_shift[1]
+                    self._scan_params_view.center.x = self.parent._scanner.tran_roi[0] + shift_pos[0] + spot_shift[0]
+                    self._scan_params_view.center.y = self.parent._scanner.tran_roi[1] + shift_pos[1] + spot_shift[1]
                     try:
                         self._grid_device.SetSEMViewingMode(self._scan_params_view, 'SEM-SCAN-MODE-IMAGING')
                     except suds.WebFault:
@@ -819,8 +837,8 @@ class Detector(model.Detector):
             # SEM spot shift correction parameters
             spot_shift = md_bsd.get(model.MD_SPOT_SHIFT, (0, 0))
             resolution = self.parent._scanner.resolution.value
-            self._scanParams.center.x = -(1 / (2 * math.pi) * numpy.arctan(-AX / (resolution[0] + BX)) + CX / 100)
-            self._scanParams.center.y = -(1 / (2 * math.pi) * numpy.arctan(-AY / (resolution[1] + BY)) + CY / 100)
+            self._scanParams.center.x = self.parent._scanner.tran_roi[0] - (1 / (2 * math.pi) * numpy.arctan(-AX / (resolution[0] + BX)) + CX / 100)
+            self._scanParams.center.y = self.parent._scanner.tran_roi[1] - (1 / (2 * math.pi) * numpy.arctan(-AY / (resolution[1] + BY)) + CY / 100)
 
             # update changed metadata
             metadata = dict(self.parent._metadata)
@@ -842,8 +860,8 @@ class Detector(model.Detector):
                     # Wait grid scanner to stop
                     with self._grid_lock:
                         # Move back to the center
-                        self._scan_params_view.center.x = spot_shift[0]
-                        self._scan_params_view.center.y = spot_shift[1]
+                        self._scan_params_view.center.x = self.parent._scanner.tran_roi[0] + spot_shift[0]
+                        self._scan_params_view.center.y = self.parent._scanner.tran_roi[1] + spot_shift[1]
                         try:
                             self._acq_device.SetSEMViewingMode(self._scan_params_view, 'SEM-SCAN-MODE-IMAGING')
                         except suds.WebFault:
@@ -854,8 +872,8 @@ class Detector(model.Detector):
                 # even if the current HFW is the maximum
                 if self._scan_params_view.scale != 0:
                     self._scan_params_view.scale = 0
-                    self._scan_params_view.center.x = spot_shift[0]
-                    self._scan_params_view.center.y = spot_shift[1]
+                    self._scan_params_view.center.x = self.parent._scanner.tran_roi[0] + spot_shift[0]
+                    self._scan_params_view.center.y = self.parent._scanner.tran_roi[1] + spot_shift[1]
                     self._acq_device.SetSEMViewingMode(self._scan_params_view, 'SEM-SCAN-MODE-IMAGING')
                 time.sleep(0.1)
                 # MD_POS is hopefully set via updateMetadata

@@ -114,6 +114,8 @@ class AcquisitionDialog(xrcfr_acq):
                     opt_det = s.detector
             self._ovrl_stream = stream.OverlayStream("Fine alignment",
                                                      opt_det, em_emt, em_det)
+            if self._tab_data_model.main.role == "delphi":
+                self._tab_data_model.main.fineAlignDwellTime.value = 0.5
             self._ovrl_stream.dwellTime.value = self._tab_data_model.main.fineAlignDwellTime.value
         else:
             self.chkbox_fine_align.Show(False)
