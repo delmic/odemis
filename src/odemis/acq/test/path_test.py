@@ -40,7 +40,7 @@ MONASH_CONFIG = CONFIG_PATH + "sparc-monash-sim.odm.yaml"
 SPEC_CONFIG = CONFIG_PATH + "sparc-sim-spec.odm.yaml"
 
 
-# @skip("faster")
+@skip("faster")
 class SimPathTestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) simple SPARC (like in Chalmers)
@@ -165,10 +165,12 @@ class MonashPathTestCase(unittest.TestCase):
         # Find CCD & SEM components
         cls.ccd = model.getComponent(role="ccd")
         cls.spec = model.getComponent(role="spectrometer")
+        cls.specgraph = model.getComponent(role="spectrograph")
         cls.cld = model.getComponent(role="cl-detector")
         cls.ebeam = model.getComponent(role="e-beam")
         cls.sed = model.getComponent(role="se-detector")
         cls.lenswitch = model.getComponent(role="lens-switch")
+        cls.filter = model.getComponent(role="filter")
         cls.optmngr = path.OpticalPathManager(cls.microscope)
 
     @classmethod
@@ -208,6 +210,17 @@ class MonashPathTestCase(unittest.TestCase):
         self.optmngr.setPath("mirror-align")
         # Assert that actuator was moved according to mode given
         self.assertEqual(self.lenswitch.position.value, path.MODES["mirror-align"][1]["lens-switch"])
+        # Special assertion for filter wheel
+        self.assertEqual(self.filter.position.value, {path.MODES["mirror-align"][1]["filter"].keys()[0] : 6})
+
+        # setting fiber-align
+        self.optmngr.setPath("fiber-align")
+        # Assert that actuator was moved according to mode given
+        self.assertEqual(self.lenswitch.position.value, path.MODES["fiber-align"][1]["lens-switch"])
+        # Special assertion for filter wheel and spectrograph
+        self.assertEqual(self.filter.position.value, {path.MODES["fiber-align"][1]["filter"].keys()[0] : 6})
+        self.assertEqual(self.specgraph.position.value['slit-in'], path.MODES["fiber-align"][1]["spectrograph"]['slit-in'])
+        self.assertEqual(self.specgraph.position.value['wavelength'], path.MODES["fiber-align"][1]["spectrograph"]['wavelength'])
 
         # setting cli
         self.optmngr.setPath("cli")
@@ -253,7 +266,7 @@ class MonashPathTestCase(unittest.TestCase):
         self.assertEqual(guess, "cli")
 
 
-# @skip("faster")
+@skip("faster")
 class SpecPathTestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) SPARC with just a spectrometer (like in AMOLF)
