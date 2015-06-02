@@ -5,7 +5,7 @@ SPARC-MONASH: {
     children: ["SEM E-beam", "Focus Lens", "Optical Emission Filter",
     "SEM Detector", "Angular Camera", "Spectrometer", "Fiber Flipper",
     "Mirror Actuators", "Focus Lens Flipper", "AR CCD-PMT Flipper",
-    "Fiber Actuators", "CL Detector"],
+    "Spec CCD-PMT Flipper", "Fiber Actuators", "CL Detector"],
 }
 
 # FEI SEM driven via external X/Y connection, using a DAQ board
@@ -194,7 +194,7 @@ SPARC-MONASH: {
            axis: "rx",
            # inverted: ["rx"],
     },
-    affects: ["Angular Camera"]  
+    affects: ["Angular Camera", "CL Detector"]
 }
 
 
@@ -248,16 +248,17 @@ SPARC-MONASH: {
     },
 }
 
-# # Provide the mirror of the spectrograph as a separate component 
-# "Spec CCD-PMT Flipper": {
-#     class: actuator.MultiplexActuator,
-#     role: spec-det-selector,
-#     affects: ["Monochromator PMT", "Spectral Camera"],
-#     children: {"rx": "Spectrograph"},
-#     init: {
-#         axes_map: {"rx": "flip-out"},
-#     },
-# }
+# Provide the mirror of the spectrograph as a separate component
+"Spec CCD-PMT Flipper": {
+    class: actuator.MultiplexActuator,
+    role: spec-det-selector,
+    affects: ["Monochromator PMT", "Spectral Camera"],
+    children: {"rx": "Spectrograph"},
+    init: {
+        axes_map: {"rx": "flip-out"},
+    },
+    affects: ["Spectrometer", "Monochromator"],
+}
 
 # PI E-861 over IP (can be static IP, or via DCHP)
 "Mirror Actuators": {

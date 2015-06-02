@@ -5,7 +5,7 @@ SPARC-MONASH: {
     children: ["SEM E-beam", "Focus Lens", "Optical Emission Filter",
     "SEM Detector", "Angular Camera", "Spectrometer", "Fiber Flipper",
     "Mirror Actuators", "Focus Lens Flipper", "AR CCD-PMT Flipper",
-    "Fiber Actuators", "CL Detector"],
+    "Spec CCD-PMT Flipper", "Fiber Actuators", "CL Detector"],
 }
 
 
@@ -208,7 +208,7 @@ SPARC-MONASH: {
            axis: "rx",
            # inverted: ["rx"],
     },
-    affects: ["Angular Camera"]  
+    affects: ["Angular Camera", "CL Detector"]
 }
 
 
@@ -241,11 +241,11 @@ SPARC-MONASH: {
     class: andorcam2.AndorCam2,
     role: sp-ccd,
     init: {
-           device: "fake",
-           transpose: [1, -2], # if mirrored on X axis (due to a Odemis bug, it's the second dim which has the -)
+       device: "fake",
+       transpose: [1, -2], # if mirrored on X axis (due to a Odemis bug, it's the second dim which has the -)
     },
     properties: {
-        #targetTemperature: -60, # °C
+        targetTemperature: -60, # °C
     },
 }
 
@@ -261,6 +261,18 @@ SPARC-MONASH: {
         },
         # accessory: "slitleds",
     },
+}
+
+# Provide the mirror of the spectrograph as a separate component
+"Spec CCD-PMT Flipper": {
+    class: actuator.MultiplexActuator,
+    role: spec-det-selector,
+    affects: ["Monochromator PMT", "Spectral Camera"],
+    children: {"rx": "Spectrograph"},
+    init: {
+        axes_map: {"rx": "flip-out"},
+    },
+    affects: ["Spectrometer", "Monochromator"],
 }
 
 # PI E-861 over IP (can be static IP, or via DCHP)
