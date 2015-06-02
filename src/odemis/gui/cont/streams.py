@@ -1170,9 +1170,7 @@ class StreamBarController(object):
     # === VA handlers
 
     def _onView(self, view):
-        """
-        Called when the current view changes
-        """
+        """ Handle the changing of the focused view """
 
         if not view or self.ignore_view:
             return
@@ -1380,12 +1378,18 @@ class StreamBarController(object):
             # it will be activated by the stream scheduler
 
     def removeStream(self, stream):
+        """ Removes the given stream
+
+        Args:
+            stream (Stream): the stream to remove
+
+        Note:
+            The stream panel is to be destroyed separately via the stream_bar.
+
+        It's ok to call if the stream has already been removed.
+
         """
-        Removes the given stream.
-        stream (Stream): the stream to remove
-        Note: the stream panel is to be destroyed separately via the stream_bar
-        It's ok to call if the stream has already been removed
-        """
+
         # don't schedule any more
         self._unscheduleStream(stream)
 
@@ -1398,12 +1402,6 @@ class StreamBarController(object):
             self._tab_data_model.streams.value.remove(stream)
         except ValueError:
             logging.warn("Stream not found, so not removed")
-
-        # logging.debug("Sending stream.ctrl.removed message")
-        # pub.sendMessage('stream.ctrl.removed',
-        #                 streams_present=self._has_streams(),
-        #                 streams_visible=self._has_visible_streams(),
-        #                 tab=self._tab_data_model)
 
     def clear(self):
         """

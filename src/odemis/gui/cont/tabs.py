@@ -42,6 +42,7 @@ from wx import html
 
 from odemis import dataio, model
 from odemis.acq import calibration
+from odemis.acq.stream._sync import MultipleDetectorStream
 from odemis.gui.comp import overlay
 from odemis.gui.comp.canvas import CAN_ZOOM
 from odemis.gui.comp.popup import Message
@@ -572,9 +573,6 @@ class SparcAcquisitionTab(Tab):
         self._scount_stream = None
         self._monoch_stream = None
 
-        # Separate view, solely used for acquisition
-        acq_view = self.tab_data_model.acquisitionView
-
         # This stream is used both for rendering and acquisition
         sem_stream = acqstream.SEMStream(
             "Secondary electrons",
@@ -584,7 +582,7 @@ class SparcAcquisitionTab(Tab):
         self._sem_live_stream = sem_stream
         sem_stream.should_update.value = True
         sem_stream.should_update.subscribe(self._on_sem_update)
-        acq_view.addStream(sem_stream)  # it should also be saved
+        self.tab_data_model.acquisitionView.addStream(sem_stream)  # it should also be saved
 
         # the SEM acquisition simultaneous to the CCDs
         semcl_stream = acqstream.SEMStream(
@@ -708,8 +706,8 @@ class SparcAcquisitionTab(Tab):
         # Repetition visualisation
         self._hover_stream = None  # stream for which the repetition must be displayed
 
-        # Grab the repetition entries, so we can use it to hook extra event
-        # handlers to it.
+        # Grab the repetition entries, so we can use it to hook extra event handlers to it.
+
         self.spec_rep = self._settings_controller.spectro_rep_ent
         if self.spec_rep:
             self.spec_rep.vigilattr.subscribe(self.on_rep_change)
@@ -717,6 +715,7 @@ class SparcAcquisitionTab(Tab):
             self.spec_rep.value_ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
             self.spec_rep.value_ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_spec_rep_enter)
             self.spec_rep.value_ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_spec_rep_leave)
+
         self.spec_pxs = self._settings_controller.spec_pxs_ent
         if self.spec_pxs:
             self.spec_pxs.vigilattr.subscribe(self.on_rep_change)
@@ -724,6 +723,7 @@ class SparcAcquisitionTab(Tab):
             self.spec_pxs.value_ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
             self.spec_pxs.value_ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_spec_rep_enter)
             self.spec_pxs.value_ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_spec_rep_leave)
+
         self.angu_rep = self._settings_controller.angular_rep_ent
         if self.angu_rep:
             self.angu_rep.vigilattr.subscribe(self.on_rep_change)
@@ -732,12 +732,6 @@ class SparcAcquisitionTab(Tab):
             self.angu_rep.value_ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_ar_rep_enter)
             self.angu_rep.value_ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_ar_rep_leave)
         # AR settings don't have pixel size
-
-        # Connect the spectrograph count stream to the graph
-        if self._scount_stream:
-            # self._spec_graph = self._settings_controller.spec_graph
-            # self._txt_mean = self._settings_controller.txt_mean
-            self._scount_stream.image.subscribe(self._on_spec_count, init=True)
 
     def on_tool_change(self, tool):
         """ Pause the SE and CLI streams when the Spot mode tool is activated """
@@ -769,20 +763,48 @@ class SparcAcquisitionTab(Tab):
             self.tab_data_model.main.ccd.data,
             self.tab_data_model.main.ebeam
         )
+
+        # import sys
+        # print sys.getrefcount(self._ar_stream)
+
         self._ar_stream.roi.subscribe(self.onARROI)
         # FIXME NOW: Make the acquisition controller aware of this VA in a different way
         # vas_settings.append(self._ar_stream.repetition)
+
+        stream_cont = self._streambar_controller._add_stream(self._ar_stream,
+                                                             add_to_all_views=True)
+        stream_cont.stream_panel.show_visible_btn(False)
 
         self._sem_ar_stream = acqstream.SEMARMDStream("SEM AR",
                                                       self._sem_cl_stream,
                                                       self._ar_stream)
         # FIXME NOW: Update the acq view on acquisition (i.e. button click)
-        # acq_view.addStream(self._sem_ar_stream)
+        self.tab_data_model.acquisitionView.addStream(self._sem_ar_stream)
 
-        stream_cont = self._streambar_controller._add_stream(self._ar_stream,
-                                                             add_to_all_views=True)
-        stream_cont.stream_panel.show_visible_btn(False)
+        self.tab_data_model.streams.subscribe(self._clean_acqview)
+
         return stream_cont
+
+    def _clean_acqview(self, streams):
+        """ Remove MD streams from the acquisition view that have one or more sub streams missing
+
+        Args:
+            streams [stream]: The streams currently used in this tab
+
+        """
+
+        # The acquisition streams
+        acq_streams = self.tab_data_model.acquisitionView.stream_tree
+
+        # For all MD streams in the acquisition view...
+        for mds in [s for s in acq_streams if isinstance(s, MultipleDetectorStream)]:
+            # Are all the sub streams of the MDStreams still there?
+            for ss in mds.streams:
+                # If not, remove the MD stream
+                if ss not in streams:
+                    logging.debug("Removing acquisition stream %s", ss)
+                    self.tab_data_model.acquisitionView.stream_tree.remove_stream(mds)
+                    break
 
     def on_add_cl_intensity(self):
         """ Create a CLi stream and add to to all compatible viewports """
@@ -817,7 +839,7 @@ class SparcAcquisitionTab(Tab):
                                                               self._sem_cl_stream,
                                                               self._spec_stream)
         # FIXME NOW: Update the acq view on acquisition (i.e. button click)
-        # acq_view.addStream(self._sem_spec_stream)
+        self.tab_data_model.acquisitionView.addStream(self._sem_spec_stream)
 
         self._scount_stream = acqstream.CameraCountStream(
             "Spectrum count",
@@ -827,6 +849,10 @@ class SparcAcquisitionTab(Tab):
         )
         self._scount_stream.should_update.value = True
         self._scount_stream.windowPeriod.value = 30  # s
+
+        # self._spec_graph = self._settings_controller.spec_graph
+        # self._txt_mean = self._settings_controller.txt_mean
+        self._scount_stream.image.subscribe(self._on_spec_count, init=True)
 
         stream_cont = self._streambar_controller._add_stream(self._spec_stream,
                                                              add_to_all_views=True)

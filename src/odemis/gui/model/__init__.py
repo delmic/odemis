@@ -676,7 +676,8 @@ class StreamView(View):
             self._focus_queue = Queue.Queue()
             self._focus_thread = threading.Thread(target=self._moveFocus,
                                                   name="Focus mover view %s" % name)
-            # TODO: way to detect the view is not used and so we need to stop the thread? (cf __del__?)
+            # TODO: way to detect the view is not used and so we need to stop the thread?
+            # (cf __del__?)
             self._focus_thread.daemon = True
             self._focus_thread.start()
 
@@ -895,7 +896,7 @@ class StreamView(View):
 
         with self._streams_lock:
             # check if the stream is already removed
-            if not stream in self.stream_tree.getStreams():
+            if stream not in self.stream_tree.getStreams():
                 return
 
             # remove stream from the StreamTree()
