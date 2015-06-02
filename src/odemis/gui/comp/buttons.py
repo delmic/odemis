@@ -1029,7 +1029,6 @@ class PopupImageButton(ImageTextButton):
 
     def show_menu(self, evt):
         """ Show the popup menu, when there are choices available. """
-
         logging.debug("Showing PopupImageButton menu")
 
         for menu_item, _, check_enabled in self.choices.values():

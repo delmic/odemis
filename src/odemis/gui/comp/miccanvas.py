@@ -29,7 +29,8 @@ import logging
 import numpy
 from odemis import util, model
 from odemis.acq import stream
-from odemis.acq.stream import UNDEFINED_ROI
+from odemis.acq.stream import UNDEFINED_ROI, EMStream
+from odemis.acq.stream._live import SEMStream
 from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
 from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS, BitmapCanvas
 from odemis.gui.comp.overlay.view import HistoryOverlay, PointSelectOverlay, MarkingLineOverlay
@@ -112,8 +113,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.dicho_overlay = None
 
         # play/pause icon
-        self.icon_overlay = view_overlay.StreamIconOverlay(self)
-        self.add_view_overlay(self.icon_overlay)
+        self.play_overlay = view_overlay.PlayIconOverlay(self)
+        self.add_view_overlay(self.play_overlay)
 
         # Unused at the moment
         self.zoom_overlay = None
@@ -240,6 +241,10 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.Refresh(eraseBackground=False)
 
     def _set_spot_mode(self, tool_mode):
+
+        if not any([isinstance(s, EMStream) for s in self.microscope_view.stream_tree]):
+            return
+
         is_activated = tool_mode == guimodel.TOOL_SPOT
 
         if is_activated:

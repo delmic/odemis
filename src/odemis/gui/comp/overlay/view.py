@@ -87,7 +87,13 @@ class CrossHairOverlay(base.ViewOverlay):
 
 
 class SpotModeOverlay(base.ViewOverlay):
-    """ Render the spot mode indicator in the center of the view """
+    """ Render the spot mode indicator in the center of the view
+
+    If a position is provided, the spot will be drawn there.
+
+    If the overlay is activated, the user can use the mouse cursor to select a position
+
+    """
 
     def __init__(self, cnvs):
         base.ViewOverlay.__init__(self, cnvs)
@@ -96,17 +102,24 @@ class SpotModeOverlay(base.ViewOverlay):
         self.colour = conversion.hex_to_frgb(gui.FG_COLOUR_EDIT)
         self.highlight = conversion.hex_to_frgb(gui.FG_COLOUR_HIGHLIGHT)
 
+        # Rendering attributes
         self._sect_count = 3
         self._gap = 0.15
         self._sect_width = 2.0 * math.pi / self._sect_count
         self._spot_radius = 12
+
+        # Spot position as a percentage (x, y) where x and y [0..1]
+        self.position = None
+
+    def on_size(self, _):
+        self.center = self.cnvs.get_half_view_size()
 
     def draw(self, ctx):
 
         start = -0.5 * math.pi
 
         r, g, b = self.highlight
-        x, y = self.center
+        x, y = self._perc_to_pos() if self.position else self.center
 
         width = self._spot_radius / 6.0
 
@@ -142,8 +155,40 @@ class SpotModeOverlay(base.ViewOverlay):
         ctx.arc(x, y, radius, 0, 2 * math.pi)
         ctx.stroke()
 
+    def _pos_to_perc(self, pos):
+        """ Convert and store the given x, y absolute view position into a relative position """
+        self.position = (pos[0] / float(self.cnvs.view_width),
+                         pos[1] / float(self.cnvs.view_height))
 
-class StreamIconOverlay(base.ViewOverlay):
+    def _perc_to_pos(self):
+        """ Convert and store the given x, y absolute view position into a relative position """
+        return self.position[0] * self.cnvs.view_width, self.position[1] * self.cnvs.view_height
+
+    def on_left_down(self, evt):
+        if not self.active:
+            base.ViewOverlay.on_left_down(self, evt)
+
+    def on_left_up(self, evt):
+        if self.active:
+            self._pos_to_perc(evt.GetPositionTuple())
+            self.cnvs.Refresh()
+        else:
+            base.ViewOverlay.on_left_up(self, evt)
+
+    def on_enter(self, evt):
+        if self.active:
+            self.cnvs.set_default_cursor(wx.CROSS_CURSOR)
+        else:
+            base.ViewOverlay.on_enter(self, evt)
+
+    def on_leave(self, evt):
+        if self.active:
+            self.cnvs.reset_default_cursor()
+        else:
+            base.ViewOverlay.on_leave(self, evt)
+
+
+class PlayIconOverlay(base.ViewOverlay):
     """ Render Stream (play/pause) icons to the view """
 
     opacity = 0.8
@@ -163,16 +208,17 @@ class StreamIconOverlay(base.ViewOverlay):
         wx.CallAfter(self.cnvs.Refresh)
 
     def draw(self, ctx):
-        if self.pause:
-            self._draw_pause(ctx)
-        elif self.play:
-            self._draw_play(ctx)
-            if self.play > 0:
-                self.play -= 0.1  # a tenth less
-                # Force a refresh (without erase background), to cause a new draw
-                wx.CallLater(50, self.cnvs.Refresh, False)  # in 0.05 s
-            else:
-                self.play = 0
+        if self.show:
+            if self.pause:
+                self._draw_pause(ctx)
+            elif self.play:
+                self._draw_play(ctx)
+                if self.play > 0:
+                    self.play -= 0.1  # a tenth less
+                    # Force a refresh (without erase background), to cause a new draw
+                    wx.CallLater(50, self.cnvs.Refresh, False)  # in 0.05 s
+                else:
+                    self.play = 0
 
     def _get_dimensions(self):
 

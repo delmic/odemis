@@ -39,8 +39,7 @@ class FoldPanelBar(wx.Panel):
     """ This window can be be used as a vertical side bar which may contain foldable sub panels
     created using the FoldPanelItem class.
 
-    For proper scrolling, this window should be placed inside a Sizer inside a
-    wx.ScrolledWindow.
+    For proper scrolling, this window should be placed inside a Sizer inside a wx.ScrolledWindow.
 
     """
 
@@ -325,17 +324,19 @@ class CaptionBar(wx.Window):
 
         dc.DrawText(self._caption, CAPTION_PADDING_LEFT, y_pos)
 
-        # draw small icon, either collapsed or expanded
-        # based on the state of the bar.
-        index = self._collapsed
+        # Only draw the icon if it's part of a FoldPanelItem
+        if isinstance(self.Parent, FoldPanelItem):
+            # draw small icon, either collapsed or expanded
+            # based on the state of the bar.
+            index = self._collapsed
 
-        x_pos = (self.Parent.Size.x - self._icon_size.x - CAPTION_PADDING_RIGHT)
+            x_pos = (self.Parent.Size.x - self._icon_size.x - CAPTION_PADDING_RIGHT)
 
-        self._foldIcons.Draw(
-            index, dc, x_pos,
-            (win_rect.GetHeight() - self._icon_size.y) // 2,
-            wx.IMAGELIST_DRAW_TRANSPARENT
-        )
+            self._foldIcons.Draw(
+                index, dc, x_pos,
+                (win_rect.GetHeight() - self._icon_size.y) // 2,
+                wx.IMAGELIST_DRAW_TRANSPARENT
+            )
 
     def _draw_gradient(self, dc, rect):
         """ Draw a vertical gradient background, using the background colour as a starting point

@@ -141,6 +141,9 @@ class Overlay(object):
         # active.
         self.active = False
 
+        # This attribute can be used to determine if the overlay needs to be drawn or not
+        self.show = True
+
         # Binding mouse events in this class will allow us to intercept them if we don't want them
         # to reach the
         self.cnvs.Bind(wx.EVT_LEFT_DOWN, self.on_left_down)

@@ -31,7 +31,7 @@ import threading
 import time
 
 from odemis import model
-from odemis.acq.stream import Stream, StreamTree
+from odemis.acq.stream import Stream, SEMStream, CLSettingsStream, StreamTree
 from odemis.gui.conf import get_general_conf
 from odemis.model import (FloatContinuous, VigilantAttribute, IntEnumerated, StringVA, BooleanVA,
                           MD_POS, InstantaneousFuture)
@@ -194,7 +194,6 @@ class MainGUIData(object):
                 for child in self.spectrometer.children.value:
                     if child.role == "spectrograph":
                         self.spectrograph = child
-
 
             # Check that the components that can be expected to be present on an actual microscope
             # have been correctly detected.
@@ -413,7 +412,8 @@ class ScannedAcquisitionGUIData(MicroscopyGUIData):
             TOOL_ROA,
             TOOL_RO_ANCHOR,
             TOOL_POINT,
-            TOOL_LINE
+            TOOL_LINE,
+            TOOL_SPOT,
         }
 
         self.tool = IntEnumerated(TOOL_NONE, choices=tools)
@@ -676,7 +676,8 @@ class StreamView(View):
             self._focus_queue = Queue.Queue()
             self._focus_thread = threading.Thread(target=self._moveFocus,
                                                   name="Focus mover view %s" % name)
-            # TODO: way to detect the view is not used and so we need to stop the thread? (cf __del__?)
+            # TODO: way to detect the view is not used and so we need to stop the thread?
+            # (cf __del__?)
             self._focus_thread.daemon = True
             self._focus_thread.start()
 
@@ -859,14 +860,12 @@ class StreamView(View):
 
         # check if the stream is already present
         if stream in self.stream_tree.getStreams():
+            logging.warning("Aborting the addition of a duplicate stream")
             return
 
         if not isinstance(stream, self.stream_classes):
             msg = "Adding incompatible stream '%s' to view '%s'. %s needed"
-            logging.warning(msg,
-                            stream.name.value,
-                            self.name.value,
-                            self.stream_classes)
+            logging.warning(msg, stream.name.value, self.name.value, self.stream_classes)
 
         # Find out where the stream should go in the streamTree
         # FIXME: manage sub-trees, with different merge operations
@@ -897,7 +896,7 @@ class StreamView(View):
 
         with self._streams_lock:
             # check if the stream is already removed
-            if not stream in self.stream_tree.getStreams():
+            if stream not in self.stream_tree.getStreams():
                 return
 
             # remove stream from the StreamTree()

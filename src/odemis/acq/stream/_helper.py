@@ -350,7 +350,9 @@ class SpectrumSettingsStream(CCDSettingsStream):
     """ A Spectrum stream.
 
     The live view is just the current raw spectrum (wherever the ebeam is).
+
     """
+
     def __init__(self, name, detector, dataflow, emitter, **kwargs):
         RepetitionStream.__init__(self, name, detector, dataflow, emitter, **kwargs)
         # For SPARC: typical user wants density a bit lower than SEM
@@ -485,7 +487,9 @@ class CLSettingsStream(PMTSettingsStream):
     Note: It could be possible to acquire an image simultaneously to the
       SED in live view, but they would need to pick one dwell time/resolution.
       That would be tricky to handle when starting/stopping one of the streams.
+
     """
+
     def __init__(self, name, detector, dataflow, emitter, **kwargs):
         """
         emtvas: don't put resolution or scale

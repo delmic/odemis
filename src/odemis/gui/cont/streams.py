@@ -89,7 +89,7 @@ class SettingEntry(VigilantAttributeConnector):
 class StreamController(object):
     """ Manage a stream and it's accompanying stream panel """
 
-    def __init__(self, stream_bar, stream, tab_data_model, show=True):
+    def __init__(self, stream_bar, stream, tab_data_model, show_panel=True):
 
         self.stream = stream
         self.stream_bar = stream_bar
@@ -149,7 +149,7 @@ class StreamController(object):
         self.stream_panel.set_visible(vis)
         self.stream_panel.Bind(EVT_STREAM_VISIBLE, self._on_stream_visible)
 
-        stream_bar.add_stream_panel(self.stream_panel, show)
+        stream_bar.add_stream_panel(self.stream_panel, show_panel)
 
     def _on_stream_panel_destroy(self, _):
         """ Remove all references to setting entries and the possible VAs they might contain
@@ -353,7 +353,7 @@ class StreamController(object):
         self.stream.image.subscribe(_on_new_spec_data, init=True)
 
     def _add_exposure_time_ctrl(self):
-        """ Add exposute time controls to the stream panel"""
+        """ Add exposure time controls to the stream panel"""
 
         # Assertion mainly needed for dynamic attribute recognition (i.e. exposureTime)
         assert(isinstance(self.stream, CameraStream))
@@ -365,7 +365,7 @@ class StreamController(object):
             'unit': self.stream.detExposureTime.unit,
             'scale': et_config["scale"],
             'accuracy': et_config["accuracy"],
-            }
+        }
 
         lbl_ctrl, value_ctrl = self.stream_panel.add_exposure_time_ctrl(
             self.stream.detExposureTime.value, conf
@@ -695,23 +695,31 @@ class StreamController(object):
 class StreamBarController(object):
     """  Manages the streams and their corresponding stream panels in the stream bar """
 
-    def __init__(self, tab_data, stream_bar, static=False, locked=False):
+    def __init__(self, tab_data, stream_bar, static=False, locked=False, ignore_view=False):
         """
-        tab_data (MicroscopyGUIData): the representation of the microscope Model
-        stream_bar (StreamBar): an empty stream panel
-        static (Boolean): Treat streams as static
-        locked (Boolean): Don't allow to add/remove/hide/show streams
+        :param tab_data: (MicroscopyGUIData) the representation of the microscope Model
+        :param stream_bar: (StreamBar) an empty stream bar
+        :param static: (bool) Treat streams as static
+        :param locked: (bool) Don't allow to add/remove/hide/show streams
+        :param ignore_view: (bool) don't change the visible panels on focussed view change
+
         """
+
         self._tab_data_model = tab_data
         self._main_data_model = tab_data.main
 
         self._stream_bar = stream_bar
+
+        self.menu_actions = collections.OrderedDict()  # title => callback
 
         self._scheduler_subscriptions = {}  # stream -> callable
         self._sched_policy = SCHED_LAST_ONE  # works well in most cases
 
         if stream_bar.btn_add_stream:
             self._createAddStreamActions()
+
+        # Don't hide or show stream panel when the focused view changes
+        self.ignore_view = ignore_view
 
         self._tab_data_model.focussedView.subscribe(self._onView, init=True)
         pub.subscribe(self.removeStream, 'stream.remove')
@@ -728,6 +736,41 @@ class StreamBarController(object):
         self.static_mode = static
         # Disable all controls
         self.locked_mode = locked
+
+    def get_actions(self):
+        return self.menu_actions
+
+    # TODO need to have actions enabled/disabled depending on the context:
+    #  * if microscope is off/pause => disabled
+    #  * if focused view is not about this type of stream => disabled
+    #  * if there can be only one stream of this type, and it's already present
+    #    => disabled
+    def add_action(self, title, callback, check_enabled=None):
+        """ Add an action to the stream menu
+
+        It's added at the end of the list. If an action with the same title exists, it is replaced.
+
+        :param title: (string) Text displayed in the menu
+        :param callback: (callable) function to call when the action is selected
+
+        """
+
+        if self._stream_bar.btn_add_stream is None:
+            logging.error("No add button present!")
+        else:
+            logging.debug("Adding %s action to stream panel", title)
+            self.menu_actions[title] = callback
+            self._stream_bar.btn_add_stream.add_choice(title, callback, check_enabled)
+
+    def remove_action(self, title):
+        """
+        Remove the given action, if it exists. Otherwise does nothing
+        title (string): name of the action to remove
+        """
+        if title in self.menu_actions:
+            logging.debug("Removing %s action from stream panel", title)
+            del self.menu_actions[title]
+            self._stream_bar.btn_add_stream.set_choices(self.menu_actions)
 
     @classmethod
     def data_to_static_streams(cls, data):
@@ -836,10 +879,12 @@ class StreamBarController(object):
         self._sched_policy = policy
 
     def _createAddStreamActions(self):
-        """ Create the compatible "add stream" actions according to the current
-        microscope.
+        """ Create the compatible "add stream" actions according to the current microscope.
+
         To be executed only once, at initialisation.
+
         """
+
         # Basically one action per type of stream
 
         # TODO: always display the action (if it's compatible), but update
@@ -862,7 +907,7 @@ class StreamBarController(object):
 
             # TODO: how to know it's _fluorescent_ microscope?
             # => multiple source? filter?
-            self._stream_bar.add_action("Filtered colour", self._userAddFluo, fluor_capable)
+            self.add_action("Filtered colour", self._userAddFluo, fluor_capable)
 
         # Bright-field
         if self._main_data_model.brightlight and self._main_data_model.ccd:
@@ -873,21 +918,29 @@ class StreamBarController(object):
                 compatible = view.is_compatible(acqstream.BrightfieldStream)
                 return enabled and compatible
 
-            self._stream_bar.add_action("Bright-field", self.addBrightfield, brightfield_capable)
-
-        def sem_capable():
-            enabled = self._main_data_model.chamberState.value in {guimodel.CHAMBER_VACUUM,
-                                                                   guimodel.CHAMBER_UNKNOWN}
-            view = self._tab_data_model.focussedView.value
-            compatible = view.is_compatible(acqstream.SEMStream)
-            return enabled and compatible
+            self.add_action("Bright-field", self.addBrightfield, brightfield_capable)
 
         # SED
         if self._main_data_model.ebeam and self._main_data_model.sed:
-            self._stream_bar.add_action("Secondary electrons", self.addSEMSED, sem_capable)
+            if self._main_data_model.spectrograph and self._main_data_model.spectrometer:
+                # Sparc
+
+                # Action creation is handled by the Sparc Acquisition Tab
+                pass
+            else:
+                # Not a Sparc
+                def sem_capable():
+                    """ Check if focussed view is compatible with a SEM stream """
+                    enabled = self._main_data_model.chamberState.value in {guimodel.CHAMBER_VACUUM,
+                                                                           guimodel.CHAMBER_UNKNOWN}
+                    view = self._tab_data_model.focussedView.value
+                    compatible = view.is_compatible(acqstream.SEMStream)
+                    return enabled and compatible
+
+                self.add_action("Secondary electrons", self.addSEMSED, sem_capable)
         # BSED
         if self._main_data_model.ebeam and self._main_data_model.bsd:
-            self._stream_bar.add_action("Backscattered electrons", self.addSEMBSD, sem_capable)
+            self.add_action("Backscattered electrons", self.addSEMBSD, sem_capable)
 
     def _userAddFluo(self, **kwargs):
         """ Called when the user request adding a Fluo stream
@@ -926,7 +979,7 @@ class StreamBarController(object):
         # deleted?) Or is it better to just use the values fitting the current
         # hardware settings as it is now?
 
-        return self._addStream(s, **kwargs)
+        return self._add_stream(s, **kwargs)
 
     def addBrightfield(self, **kwargs):
         """
@@ -941,13 +994,15 @@ class StreamBarController(object):
             detvas={"exposureTime"},
             emtvas={"power"}
         )
-        return self._addStream(s, **kwargs)
+        return self._add_stream(s, **kwargs)
 
     def addSEMSED(self, **kwargs):
+        """ Creates a new SED stream and panel in the stream bar
+
+        :return: (StreamController) The controller created for the SED stream
+
         """
-        Creates a new SED stream and panel in the stream bar
-        returns (StreamPanel): the panel created
-        """
+
         if self._main_data_model.role == "delphi":
             # For the Delphi, the SEM stream needs to be more "clever" because
             # it needs to run a simple spot alignment every time the stage has
@@ -970,7 +1025,7 @@ class StreamBarController(object):
                 self._main_data_model.sed.data,
                 self._main_data_model.ebeam
             )
-        return self._addStream(s, **kwargs)
+        return self._add_stream(s, **kwargs)
 
     def addSEMBSD(self, **kwargs):
         """
@@ -999,7 +1054,7 @@ class StreamBarController(object):
                 self._main_data_model.bsd.data,
                 self._main_data_model.ebeam
             )
-        return self._addStream(s, **kwargs)
+        return self._add_stream(s, **kwargs)
 
     def addStatic(self, name, image, cls=acqstream.StaticStream, **kwargs):
         """ Creates a new static stream and stream controller
@@ -1019,20 +1074,25 @@ class StreamBarController(object):
 
         :return StreamPanel: the panel created for the stream
         """
-        return self._addStream(stream, **kwargs)
+        return self._add_stream(stream, **kwargs)
 
-    def _addStream(self, stream, add_to_all_views=False, visible=True, play=None):
+    def _add_stream(self, stream, add_to_all_views=False, visible=True, play=None):
         """ Add the given stream to the tab data model and appropriate views
 
-        stream (stream.Stream): the new stream to add
-        add_to_all_views (boolean): if True, add the stream to all the
-            compatible views, otherwise add only to the current view.
-        visible (boolean): If True, create a stream entry, otherwise adds the
-            stream but do not create any entry.
-        play (None or boolean): If True, immediately start it, if False, let it
-            stopped, and if None, only play if already a stream is playing
-        returns (StreamController or Stream): stream controller or stream (if visible
-            is False) that was created
+        Args:
+            stream (Stream): the new stream to add
+
+        Kwargs:
+            add_to_all_views (boolean): if True, add the stream to all the compatible views,
+                otherwise add only to the current view.
+            visible (boolean): If True, create a stream entry, otherwise adds the stream but do not
+                create any entry.
+            play (None or boolean): If True, immediately start it, if False, let it stopped, and if
+                None, only play if already a stream is playing.
+
+        Returns:
+            (StreamController or Stream): the stream controller or stream (if visible is False) that
+                was created
 
         """
 
@@ -1064,8 +1124,12 @@ class StreamBarController(object):
         stream.should_update.value = play
 
         if visible:
-            show = isinstance(stream, self._tab_data_model.focussedView.value.stream_classes)
-            stream_cont = self._add_stream_cont(stream, show, static=False)
+            # Hide the stream panel if the stream doesn't match the focused view and the view should
+            # not be ignored.
+            show_panel = isinstance(stream, self._tab_data_model.focussedView.value.stream_classes)
+            show_panel |= self.ignore_view
+
+            stream_cont = self._add_stream_cont(stream, show_panel, static=False)
 
             # TODO: make StreamTree a VA-like and remove this
             logging.debug("Sending stream.ctrl.added message")
@@ -1085,16 +1149,16 @@ class StreamBarController(object):
 
         """
 
-        return self._add_stream_cont(stream, show=True, static=True)
+        return self._add_stream_cont(stream, show_panel=True, static=True)
 
-    def _add_stream_cont(self, stream, show=True, locked=False, static=False):
+    def _add_stream_cont(self, stream, show_panel=True, locked=False, static=False):
         """ Create and add a stream controller for the given stream
 
         :return: (StreamController)
 
         """
 
-        stream_cont = StreamController(self._stream_bar, stream, self._tab_data_model, show)
+        stream_cont = StreamController(self._stream_bar, stream, self._tab_data_model, show_panel)
 
         if locked:
             stream_cont.to_locked_mode()
@@ -1106,11 +1170,9 @@ class StreamBarController(object):
     # === VA handlers
 
     def _onView(self, view):
-        """
-        Called when the current view changes
-        """
+        """ Handle the changing of the focused view """
 
-        if not view:
+        if not view or self.ignore_view:
             return
 
         # hide/show the stream panels which are compatible with the view
@@ -1316,12 +1378,18 @@ class StreamBarController(object):
             # it will be activated by the stream scheduler
 
     def removeStream(self, stream):
+        """ Removes the given stream
+
+        Args:
+            stream (Stream): the stream to remove
+
+        Note:
+            The stream panel is to be destroyed separately via the stream_bar.
+
+        It's ok to call if the stream has already been removed.
+
         """
-        Removes the given stream.
-        stream (Stream): the stream to remove
-        Note: the stream panel is to be destroyed separately via the stream_bar
-        It's ok to call if the stream has already been removed
-        """
+
         # don't schedule any more
         self._unscheduleStream(stream)
 
@@ -1334,12 +1402,6 @@ class StreamBarController(object):
             self._tab_data_model.streams.value.remove(stream)
         except ValueError:
             logging.warn("Stream not found, so not removed")
-
-        # logging.debug("Sending stream.ctrl.removed message")
-        # pub.sendMessage('stream.ctrl.removed',
-        #                 streams_present=self._has_streams(),
-        #                 streams_visible=self._has_visible_streams(),
-        #                 tab=self._tab_data_model)
 
     def clear(self):
         """
