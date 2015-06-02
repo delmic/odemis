@@ -925,10 +925,8 @@ class StreamBarController(object):
             if self._main_data_model.spectrograph and self._main_data_model.spectrometer:
                 # Sparc
 
-                # In the Sparc interface, all stream types can be added, regardless what viewport
-                # has the focus.
-                self.add_action("Spectrum", self.on_add_spectrum)
-                self.add_action("Monochromator", self.on_add_monochromator)
+                # Action creation is handled by the Sparc Acquisition Tab
+                pass
             else:
                 # Not a Sparc
                 def sem_capable():
@@ -950,34 +948,6 @@ class StreamBarController(object):
         """
         se = self.addFluo(**kwargs)
         se.stream_panel.set_focus_on_label()
-
-    def on_add_spectrum(self):
-        """ Create a Spectrum stream and add to to all compatible viewports """
-
-        spec_stream = acqstream.SpectrumSettingsStream(
-            "Spectrum",
-            self._main_data_model.spectrometer,
-            self._main_data_model.spectrometer.data,
-            self._main_data_model.ebeam
-        )
-
-        stream_cont = self._add_stream(spec_stream, add_to_all_views=True)
-        stream_cont.stream_panel.show_visible_btn(False)
-        return stream_cont
-
-    def on_add_monochromator(self):
-        """ Create a Monochromator stream and add to to all compatible viewports """
-
-        monoch_stream = acqstream.MonochromatorSettingsStream(
-            "Spectrum",
-            self._main_data_model.ccd,
-            self._main_data_model.ccd.data,
-            self._main_data_model.ebeam
-        )
-
-        stream_cont = self._add_stream(monoch_stream, add_to_all_views=True)
-        stream_cont.stream_panel.show_visible_btn(False)
-        return stream_cont
 
     def addFluo(self, **kwargs):
         """

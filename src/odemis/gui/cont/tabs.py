@@ -561,6 +561,7 @@ class SparcAcquisitionTab(Tab):
         # * CLi: Cathode Luminescence stream
         # * SEM/AR: MD stream composed of the SEM CL+AR streams
         # * SpecCount: Count stream for the live intensity of the spectrometer
+        # * Monochromator: photon counter for a narrow wavelength of light
         # On acquisition, only the SEM and SEM/Spec (or SEM/AR) are explicitly
         # used.
         self._spec_stream = None
@@ -569,6 +570,7 @@ class SparcAcquisitionTab(Tab):
         self._cli_stream = None
         self._sem_ar_stream = None
         self._scount_stream = None
+        self._monoch_stream = None
 
         # Separate view, solely used for acquisition
         acq_view = self.tab_data_model.acquisitionView
@@ -595,27 +597,6 @@ class SparcAcquisitionTab(Tab):
         self.tab_data_model.semStream = semcl_stream
 
         vas_settings = []  # VAs that can affect the acquisition time
-
-        if main_data.spectrometer:
-            spec_stream = acqstream.SpectrumSettingsStream(
-                "Spectrum",
-                main_data.spectrometer,
-                main_data.spectrometer.data,
-                main_data.ebeam)
-            spec_stream.roi.subscribe(self.onSpecROI)
-            vas_settings.append(spec_stream.repetition)
-            self._spec_stream = spec_stream
-            self._sem_spec_stream = acqstream.SEMSpectrumMDStream("SEM Spectrum",
-                                                                  semcl_stream,
-                                                                  spec_stream)
-            acq_view.addStream(self._sem_spec_stream)
-
-            self._scount_stream = acqstream.CameraCountStream("Spectrum count",
-                                                              main_data.spectrometer,
-                                                              main_data.spectrometer.data,
-                                                              main_data.ebeam)
-            self._scount_stream.should_update.value = True
-            self._scount_stream.windowPeriod.value = 30  # s
 
         # indicate ROI must still be defined by the user
         semcl_stream.roi.value = acqstream.UNDEFINED_ROI
@@ -670,7 +651,12 @@ class SparcAcquisitionTab(Tab):
 
         if main_data.ccd:
             self._streambar_controller.add_action("Angle-resolved", self.on_add_angle_resolved)
+            # FIXME NOW: Filter this action addition on the presence of the correct component
+            self._streambar_controller.add_action("Monochromator", self.on_add_monochromator)
+        if main_data.sed:
             self._streambar_controller.add_action("CL intensity", self.on_add_cl_intensity)
+        if main_data.spectrometer:
+            self._streambar_controller.add_action("Spectrum", self.on_add_spectrum)
 
         # needs to have the AR and Spectrum streams on the acquisition view
         self._settings_controller = settings.SparcSettingsController(
@@ -783,8 +769,10 @@ class SparcAcquisitionTab(Tab):
         # FIXME NOW: Make the acquisition controller aware of this VA in a different way
         # vas_settings.append(self._ar_stream.repetition)
 
+        self._sem_ar_stream = acqstream.SEMARMDStream("SEM AR",
+                                                      self._sem_cl_stream,
+                                                      self._ar_stream)
         # FIXME NOW: Update the acq view on acquisition (i.e. button click)
-        # self._sem_ar_stream = acqstream.SEMARMDStream("SEM AR", semcl_stream, ar_stream)
         # acq_view.addStream(self._sem_ar_stream)
 
         stream_cont = self._streambar_controller._add_stream(self._ar_stream,
@@ -804,6 +792,56 @@ class SparcAcquisitionTab(Tab):
         )
 
         stream_cont = self._streambar_controller._add_stream(self._cli_stream,
+                                                             add_to_all_views=True)
+        stream_cont.stream_panel.show_visible_btn(False)
+        return stream_cont
+
+    def on_add_spectrum(self):
+        """ Create a Spectrum stream and add to to all compatible viewports """
+
+        self._spec_stream = acqstream.SpectrumSettingsStream(
+            "Spectrum",
+            self.tab_data_model.main.spectrometer,
+            self.tab_data_model.main.spectrometer.data,
+            self.tab_data_model.main.ebeam
+        )
+        self._spec_stream.roi.subscribe(self.onSpecROI)
+        # FIXME NOW: Make the acquisition controller aware of this VA in a different way
+        # vas_settings.append(spec_stream.repetition)
+
+        self._sem_spec_stream = acqstream.SEMSpectrumMDStream("SEM Spectrum",
+                                                              self._sem_cl_stream,
+                                                              self._spec_stream)
+        # FIXME NOW: Update the acq view on acquisition (i.e. button click)
+        # acq_view.addStream(self._sem_spec_stream)
+
+        self._scount_stream = acqstream.CameraCountStream(
+            "Spectrum count",
+            self.tab_data_model.main.spectrometer,
+            self.tab_data_model.main.spectrometer.data,
+            self.tab_data_model.main.ebeam
+        )
+        self._scount_stream.should_update.value = True
+        self._scount_stream.windowPeriod.value = 30  # s
+
+        stream_cont = self._streambar_controller._add_stream(self._spec_stream,
+                                                             add_to_all_views=True)
+        stream_cont.stream_panel.show_visible_btn(False)
+        return stream_cont
+
+    def on_add_monochromator(self):
+        """ Create a Monochromator stream and add to to all compatible viewports """
+
+        # FIXME NOW: Select right components
+        self._monoch_stream = acqstream.MonochromatorSettingsStream(
+            "Monochromator",
+            self.tab_data_model.main.ccd,
+            self.tab_data_model.main.ccd.data,
+            self.tab_data_model.main.ebeam,
+            self.tab_data_model.main.spectrograph
+        )
+
+        stream_cont = self._streambar_controller._add_stream(self._monoch_stream,
                                                              add_to_all_views=True)
         stream_cont.stream_panel.show_visible_btn(False)
         return stream_cont
