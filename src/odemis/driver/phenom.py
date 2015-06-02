@@ -371,6 +371,8 @@ class Scanner(model.Emitter):
         Reads again the hardware setting and update the VA
         """
         fov = self.parent._device.GetSEMHFW()
+        # take care of small deviations
+        fov = numpy.clip(fov, HFW_RANGE[0], HFW_RANGE[1])
 
         # we don't set it explicitly, to avoid calling .SetSEMHFW()
         self.horizontalFoV._value = fov
@@ -737,6 +739,8 @@ class Detector(model.Detector):
         # Update all the Scanner VAs upon stream start
         # Get current field of view and compute magnification
         fov = self._acq_device.GetSEMHFW()
+        # take care of small deviations
+        fov = numpy.clip(fov, HFW_RANGE[0], HFW_RANGE[1])
         self.parent._scanner.horizontalFoV.value = fov
 
         rotation = self._acq_device.GetSEMRotation()
