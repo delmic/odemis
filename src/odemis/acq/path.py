@@ -31,36 +31,41 @@ from odemis.acq import stream
 # Dict includes all the modes available and the corresponding component axis or
 # VA values
 # {Mode: (detector_needed, {role: {axis/VA: value}})}
-# TODO: how about the filter? 'mirror-align' should force it to "pass-through" (and then put it back to what it was?)
-# TODO: another mode fo specfib-align?
 MODES = {'ar': ("ccd",
-               {'lens-switch': {'rx': math.radians(90)},
-                'ar-det-selector': {'rx': 0},
-                'ar-spec-selector': {'rx': 0}}),
-         'spectral': ("spectrometer",
                 {'lens-switch': {'rx': math.radians(90)},
-                 'ar-det-selector': {'rx': 0},
-                 'ar-spec-selector': {'rx': math.radians(90)},
-                 'spectrograph': {'spec-det-selector': 0}}),
-         'mirror-align': ("ccd",
-                {'lens-switch': {'rx': 0},
-                 'ar-det-selector': {'rx': 0},
                  'ar-spec-selector': {'rx': 0},
-                 'filter': {'band': 'pass-through'}}),
-         'fiber-align': ("spectrometer",
-                {'lens-switch': {'rx': 0},
-                 'spec-det-selector': {'rx': 0},
-                 'ar-spec-selector': {'rx': math.radians(90)},
-                 'spectrograph': {'slit-in': 500e-6, 'wavelength': 0},
-                 'filter': {'band': 'pass-through'}}),
+                 'ar-det-selector': {'rx': 0},
+                }),
          'cli': ("cl-detector",  # cli
                 {'lens-switch': {'rx': math.radians(90)},
-                 'ar-det-selector': {'rx': math.radians(90)}}),
+                 'ar-spec-selector': {'rx': 0},
+                 'ar-det-selector': {'rx': math.radians(90)},
+                }),
+         'spectral': ("spectrometer",
+                {'lens-switch': {'rx': math.radians(90)},
+                 'ar-spec-selector': {'rx': math.radians(90)},
+                 'spec-det-selector': {'rx': 0},
+                }),
          'monochromator': ("monochromator",
                 {'lens-switch': {'rx': math.radians(90)},
-                 'ar-det-selector': {'rx': 0},
                  'ar-spec-selector': {'rx': math.radians(90)},
-                 'spectrograph': {'spec-det-selector': math.radians(90)}})}
+                 'spec-det-selector': {'rx': math.radians(90)},
+                }),
+         'mirror-align': ("ccd",
+                {'lens-switch': {'rx': 0},
+                 'filter': {'band': 'pass-through'},
+                 'ar-spec-selector': {'rx': 0},
+                 'ar-det-selector': {'rx': 0},
+                }),
+         'fiber-align': ("spectrometer",
+                {'lens-switch': {'rx': 0},
+                 'filter': {'band': 'pass-through'},
+                 'ar-spec-selector': {'rx': math.radians(90)},
+                 'spec-det-selector': {'rx': 0},
+                 # TODO: these values should be restored after leaving this mode
+                 'spectrograph': {'slit-in': 500e-6, 'wavelength': 0},
+                }),
+         }
 
 # Use subset for modes guessed
 GUESS_MODES = MODES.copy()
@@ -103,7 +108,7 @@ class OpticalPathManager(object):
                 IOError if a detector is missing
         """
         if mode not in self._modes:
-            raise ValueError("Mode given does not exist")
+            raise ValueError("Mode '%s' does not exist" % (mode,))
 
         modeconf = self._modes[mode][1]
         fmoves = []  # moves in progress

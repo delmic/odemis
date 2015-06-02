@@ -40,7 +40,7 @@ MONASH_CONFIG = CONFIG_PATH + "sparc-monash-sim.odm.yaml"
 SPEC_CONFIG = CONFIG_PATH + "sparc-sim-spec.odm.yaml"
 
 
-@skip("faster")
+# @skip("faster")
 class SimPathTestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) simple SPARC (like in Chalmers)
@@ -171,6 +171,7 @@ class MonashPathTestCase(unittest.TestCase):
         cls.sed = model.getComponent(role="se-detector")
         cls.lenswitch = model.getComponent(role="lens-switch")
         cls.filter = model.getComponent(role="filter")
+        cls.spec_det_sel = model.getComponent(role="spec-det-selector")
         cls.optmngr = path.OpticalPathManager(cls.microscope)
 
     @classmethod
@@ -229,6 +230,8 @@ class MonashPathTestCase(unittest.TestCase):
 
         # setting monochromator
         self.optmngr.setPath("monochromator")
+        self.assertEqual(self.spec_det_sel.position.value,
+                         path.MODES["monochromator"][1]["spec-det-selector"])
 
 #     @skip("simple")
     def test_guess_mode(self):
@@ -266,7 +269,7 @@ class MonashPathTestCase(unittest.TestCase):
         self.assertEqual(guess, "cli")
 
 
-@skip("faster")
+# @skip("faster")
 class SpecPathTestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) SPARC with just a spectrometer (like in AMOLF)
