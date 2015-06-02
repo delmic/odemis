@@ -1604,7 +1604,6 @@
                             <leftspacing>0</leftspacing>
                             <rightspacing>0</rightspacing>
                             <bg>#333333</bg>
-                          
                           </object>
                           <flag>wxEXPAND</flag>
                         </object>
@@ -2407,7 +2406,7 @@
                         <object class="sizeritem">
                           <object class="FoldPanelBar">
                             <object class="FoldPanelItem" name="fp_ma_settings_ar">
-                              <label>ANGLE RESOLVED</label>
+                              <label>ANGLE-RESOLVED</label>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
                               <XRCED>
@@ -2672,17 +2671,16 @@
             </object>
             <object class="sizeritem">
               <object class="ViewportGrid" name="pnl_sparc_grid">
-                <object class="SparcAcquisitionViewport" name="vp_sparc_acq_view">
+                <object class="SparcAcquisitionViewport" name="vp_sparc_acq">
                   <XRCED>
                     <assign_var>1</assign_var>
                   </XRCED>
                 </object>
-                <object class="MicroscopeViewport" name="vp_sparc_tr">
+                <object class="SparcAcquisitionViewport" name="vp_sparc_tr">
                   <XRCED>
                     <assign_var>1</assign_var>
                   </XRCED>
                 </object>
-                
                 <object class="MicroscopeViewport" name="vp_sparc_bl">
                   <XRCED>
                     <assign_var>1</assign_var>
@@ -2704,106 +2702,11 @@
               <object class="wxPanel">
                 <object class="wxBoxSizer">
                   <object class="sizeritem">
-                    <object class="wxPanel" name="sparc_button_panel">
-                      <object class="wxBoxSizer">
-                        <orient>wxHORIZONTAL</orient>
-                        <object class="sizeritem">
-                          <object class="ImageTextToggleButton" name="acq_btn_spectrometer">
-                            <label>SPECTROMETER</label>
-                            <delta>1</delta>
-                            <bitmap>img/button/btn_spec.png</bitmap>
-                            <hover>img/button/btn_spec_h.png</hover>
-                            <selected>img/button/btn_spec_green_a.png</selected>
-                            <fg>#1A1A1A</fg>
-                            <font>
-                              <size>11</size>
-                              <style>normal</style>
-                              <weight>normal</weight>
-                              <underlined>0</underlined>
-                              <face>Ubuntu</face>
-                              <encoding>UTF-8</encoding>
-                            </font>
-                            <style>wxALIGN_RIGHT</style>
-                            <XRCED>
-                              <assign_var>1</assign_var>
-                            </XRCED>
-                          </object>
-                          <flag>wxTOP|wxBOTTOM|wxLEFT</flag>
-                          <border>10</border>
-                        </object>
-                        <object class="sizeritem">
-                          <object class="ImageTextToggleButton" name="acq_btn_angular">
-                            <label>      ANGULAR</label>
-                            <delta>1</delta>
-                            <bitmap>img/button/btn_ang.png</bitmap>
-                            <hover>img/button/btn_ang_h.png</hover>
-                            <selected>img/button/btn_ang_green_a.png</selected>
-                            <fg>#1A1A1A</fg>
-                            <font>
-                              <size>11</size>
-                              <style>normal</style>
-                              <weight>normal</weight>
-                              <underlined>0</underlined>
-                              <face>Ubuntu</face>
-                              <encoding>UTF-8</encoding>
-                            </font>
-                            <style>wxALIGN_CENTRE</style>
-                            <XRCED>
-                              <assign_var>1</assign_var>
-                            </XRCED>
-                          </object>
-                          <flag>wxTOP|wxBOTTOM|wxLEFT</flag>
-                          <border>10</border>
-                        </object>
-                        <object class="spacer">
-                          <option>1</option>
-                        </object>
-                      </object>
-                      <size>400,-1</size>
-                      <bg>#4D4D4D</bg>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <flag>wxEXPAND</flag>
-                  </object>
-                  <object class="sizeritem">
                     <object class="wxScrolledWindow" name="scr_win_right">
                       <object class="wxBoxSizer">
                         <orient>wxVERTICAL</orient>
                         <object class="sizeritem">
                           <object class="FoldPanelBar" name="fpb_settings">
-                            <object class="FoldPanelItem" name="fp_settings_sparc_sem">
-                              <label>SEM</label>
-                              <fg>#1A1A1A</fg>
-                              <bg>#555555</bg>
-                              <XRCED>
-                                <assign_var>1</assign_var>
-                              </XRCED>
-                            </object>
-                            <object class="FoldPanelItem" name="fp_settings_sparc_angular">
-                              <label>ANGLE RESOLVED</label>
-                              <fg>#1A1A1A</fg>
-                              <bg>#555555</bg>
-                              <XRCED>
-                                <assign_var>1</assign_var>
-                              </XRCED>
-                            </object>
-                            <spacing>0</spacing>
-                            <leftspacing>0</leftspacing>
-                            <rightspacing>0</rightspacing>
-                            <bg>#333333</bg>
-                            <XRCED>
-                              <assign_var>1</assign_var>
-                            </XRCED>
-                            <object class="FoldPanelItem" name="fp_settings_sparc_spectrum">
-                              <label>SPECTROMETER</label>
-                              <fg>#1A1A1A</fg>
-                              <bg>#555555</bg>
-                              <XRCED>
-                                <assign_var>1</assign_var>
-                              </XRCED>
-                            </object>
                             <object class="FoldPanelItem">
                               <object class="StreamBar" name="pnl_sparc_streams">
                                 <size>300,-1</size>
@@ -2818,6 +2721,13 @@
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
                             </object>
+                            <spacing>0</spacing>
+                            <leftspacing>0</leftspacing>
+                            <rightspacing>0</rightspacing>
+                            <bg>#333333</bg>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
                           </object>
                           <flag>wxEXPAND</flag>
                         </object>

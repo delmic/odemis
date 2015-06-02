@@ -25,7 +25,8 @@ from __future__ import division
 import collections
 import logging
 from odemis.acq.stream import OpticalStream, EMStream, SpectrumStream, ARStream
-from odemis.acq.stream import RGBCameraStream, BrightfieldStream
+from odemis.acq.stream import RGBCameraStream, BrightfieldStream, ARSettingsStream, \
+    CLSettingsStream, MonochromatorSettingsStream
 from odemis.gui import model
 from odemis.gui.comp.grid import ViewportGrid
 from odemis.gui.comp.viewport import MicroscopeViewport, AngularResolvedViewport, PlotViewport, \
@@ -154,7 +155,7 @@ class ViewPortController(object):
                   "stream_classes": (EMStream, OpticalStream, SpectrumStream),
                   }),
                 (self._viewports[4],
-                 {"name": "Angle resolved",
+                 {"name": "Angle-resolved",
                   "stream_classes": ARStream,
                   }),
                 (self._viewports[5],
@@ -229,25 +230,23 @@ class ViewPortController(object):
                   "cls": model.ContentView,
                   "stage": self._main_data_model.stage,
                   "focus": self._main_data_model.ebeam_focus,
-                  "stream_classes": EMStream,
+                  "stream_classes": (EMStream, CLSettingsStream),
                   }),
                 (self._viewports[1],  # focused view
-                 {"name": "Optical",
+                 {"name": "Angle-resolved",
                   "stage": self._main_data_model.stage,
                   "focus": self._main_data_model.focus,
-                  "stream_classes": SpectrumStream,
+                  "stream_classes": ARSettingsStream,
                   }),
                 (self._viewports[2],
-                 {"name": "Combined 1",
+                 {"name": "Spectrum",
                   "stage": self._main_data_model.stage,
-                  "focus": self._main_data_model.focus,
-                  "stream_classes": (EMStream, OpticalStream),
+                  "stream_classes": SpectrumStream,
                   }),
                 (self._viewports[3],
-                 {"name": "Combined 2",
+                 {"name": "Monochromator",
                   "stage": self._main_data_model.stage,
-                  "focus": self._main_data_model.focus,
-                  "stream_classes": (EMStream, OpticalStream),
+                  "stream_classes": MonochromatorSettingsStream,
                   }),
             ])
         # If SEM only: all SEM

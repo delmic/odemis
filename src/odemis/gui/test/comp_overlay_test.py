@@ -237,6 +237,7 @@ class OverlayTestCase(test.GuiTestCase):
 
         sol = vol.SpotModeOverlay(cnvs)
         cnvs.add_view_overlay(sol)
+        sol.activate()
 
         test.gui_loop()
 
@@ -244,7 +245,7 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
-        sol = vol.StreamIconOverlay(cnvs)
+        sol = vol.PlayIconOverlay(cnvs)
         cnvs.add_view_overlay(sol)
         test.gui_loop(100)
         sol.hide_pause(False)

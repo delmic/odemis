@@ -535,7 +535,7 @@ class SecomViewport(MicroscopeViewport):
         self._microscope_view.stream_tree.should_update.subscribe(self.hide_pause, init=True)
 
     def hide_pause(self, is_playing):
-        self.canvas.icon_overlay.hide_pause(is_playing)
+        self.canvas.play_overlay.hide_pause(is_playing)
         if self._microscope_view.has_stage():
             # disable/enable move and focus change
             if is_playing:
@@ -550,6 +550,19 @@ class SparcAcquisitionViewport(MicroscopeViewport):
 
     def __init__(self, *args, **kwargs):
         super(SparcAcquisitionViewport, self).__init__(*args, **kwargs)
+
+    def setView(self, microscope_view, tab_data):
+        super(SparcAcquisitionViewport, self).setView(microscope_view, tab_data)
+        self._microscope_view.stream_tree.should_update.subscribe(self.on_streamtree_change,
+                                                                  init=True)
+
+    def on_streamtree_change(self, is_playing):
+        """ Show or hide the indicator icon that shows if a stream is playing in the viewport """
+        if len(self._microscope_view.stream_tree):
+            self.canvas.play_overlay.show = True
+            self.canvas.play_overlay.hide_pause(is_playing)
+        else:
+            self.canvas.play_overlay.show = False
 
 
 class SparcAlignViewport(MicroscopeViewport):

@@ -38,7 +38,7 @@ def start_backend(config):
         LookupError: if a backend is already running
         IOError: if backend failed to start
     """
-    if driver.get_backend_status() == driver.BACKEND_RUNNING:
+    if driver.get_backend_status() in (driver.BACKEND_RUNNING, driver.BACKEND_STARTING):
         raise LookupError("A running backend is already found")
 
     logging.info("Starting backend with config file '%s'", config)
@@ -50,7 +50,10 @@ def start_backend(config):
     if ret != 0:
         raise IOError("Failed starting backend with '%s' (returned %d)" % (cmd, ret))
 
-    end = time.time() + 15 # s timeout
+    time.sleep(3)  # give some time to the backend to start a little bit
+
+    timeout = 30  # s timeout
+    end = time.time() + timeout
     while time.time() < end:
         status = driver.get_backend_status()
         if status == driver.BACKEND_STARTING:
@@ -59,7 +62,7 @@ def start_backend(config):
         else:
             break
     else:
-        raise IOError("Backend still starting after 15 s")
+        raise IOError("Backend still starting after %d s" % (timeout,))
 
     if status != driver.BACKEND_RUNNING:
         raise IOError("Backend failed to start, now %s" % status)

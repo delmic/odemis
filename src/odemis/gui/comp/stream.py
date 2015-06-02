@@ -1046,7 +1046,6 @@ class StreamBar(wx.Panel):
         wx.Panel.__init__(self, *args, **kwargs)
 
         self.stream_panels = []
-        self.menu_actions = collections.OrderedDict()  # title => callback
 
         self._sz = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(self._sz)
@@ -1095,11 +1094,16 @@ class StreamBar(wx.Panel):
     # TODO: maybe should be provided after init by the controller (like key of
     # sorted()), to separate the GUI from the model ?
     def _get_stream_order(self, stream):
+        """ Gives the "order" of the given stream, as defined in STREAM_ORDER.
+
+        Args:
+            stream (Stream): a stream
+
+        Returns:
+            (int >= 0): the order
+
         """
-        Gives the "order" of the given stream, as defined in STREAM_ORDER.
-        stream (Stream): a stream
-        returns (0<= int): the order
-        """
+
         for i, c in enumerate(self.STREAM_ORDER):
             if isinstance(stream, c):
                 return i
@@ -1115,15 +1119,7 @@ class StreamBar(wx.Panel):
     # === Event Handlers
 
     def on_add_stream(self, evt):
-        # TODO: call the action of the menu
-        if "Filtered colour" in self.menu_actions:
-            evt.Skip()
-            # action = self.menu_actions["Filtered colour"]
-            # action()
-        else:
-            logging.info("Don't know how to add a stream, need to implement a real menu")
-        # evt_obj = evt.GetEventObject()
-        # stream_name = evt_obj.GetStringSelection()
+        evt.Skip()
 
     def on_stream_remove(self, evt):
         logging.debug("StreamBar received remove event %r", evt)
@@ -1211,36 +1207,3 @@ class StreamBar(wx.Panel):
         """
         if self.txt_no_stream is not None:
             self.txt_no_stream.Show(self.is_empty())
-
-    def get_actions(self):
-        return self.menu_actions
-
-    # TODO need to have actions enabled/disabled depending on the context:
-    #  * if microscope is off/pause => disabled
-    #  * if focused view is not about this type of stream => disabled
-    #  * if there can be only one stream of this type, and it's already present
-    #    => disabled
-    def add_action(self, title, callback, check_enabled=None):
-        """
-        Add an action to the menu. It's added at the end of the list. If an
-        action with the same title exists, it is replaced.
-        title (string): Text displayed in the menu
-        callback (callable): function to call when the action is selected
-        """
-        if self.btn_add_stream is None:
-            logging.error("No add button present!")
-        else:
-            logging.debug("Adding %s action to stream panel", title)
-            self.menu_actions[title] = callback
-            self.btn_add_stream.add_choice(title, callback, check_enabled)
-
-    def remove_action(self, title):
-        """
-        Remove the given action, if it exists. Otherwise does nothing
-        title (string): name of the action to remove
-        """
-        if title in self.menu_actions:
-            logging.debug("Removing %s action from stream panel", title)
-            del self.menu_actions[title]
-            self.btn_add_stream.set_choices(self.menu_actions)
-

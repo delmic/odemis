@@ -181,7 +181,8 @@ class Stream(object):
             LookupError: if the component doesn't have a listed VA
 
         """
-        # assert(isinstance(vas, set))
+        if not isinstance(vas, set):
+            raise ValueError("vas should be a set but got %s" % (vas,))
 
         for vaname in vas:
             try:

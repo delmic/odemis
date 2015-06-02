@@ -42,11 +42,11 @@ from wx import html
 
 from odemis import dataio, model
 from odemis.acq import calibration
+from odemis.acq.stream._sync import MultipleDetectorStream
 from odemis.gui.comp import overlay
 from odemis.gui.comp.canvas import CAN_ZOOM
 from odemis.gui.comp.popup import Message
 from odemis.gui.comp.scalewindow import ScaleWindow
-from odemis.gui.comp.stream import StreamPanel
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.cont import settings, tools
 from odemis.gui.cont.actuators import ActuatorController
@@ -55,7 +55,7 @@ from odemis.gui.cont.streams import StreamController
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.img import scale_to_alpha
 from odemis.util import units
-import odemis.acq.stream as streammod
+import odemis.acq.stream as acqstream
 import odemis.gui.cont.acquisition as acqcont
 import odemis.gui.cont.streams as streamcont
 import odemis.gui.cont.views as viewcont
@@ -258,10 +258,10 @@ class SecomStreamsTab(Tab):
         if main_data.overview_ccd:
             # Overview camera can be RGB => in that case len(shape) == 4
             if len(main_data.overview_ccd.shape) == 4:
-                overview_stream = streammod.RGBCameraStream("Overview", main_data.overview_ccd,
+                overview_stream = acqstream.RGBCameraStream("Overview", main_data.overview_ccd,
                                                             main_data.overview_ccd.data, None)
             else:
-                overview_stream = streammod.BrightfieldStream("Overview", main_data.overview_ccd,
+                overview_stream = acqstream.BrightfieldStream("Overview", main_data.overview_ccd,
                                                               main_data.overview_ccd.data, None)
 
             ovv.addStream(overview_stream)
@@ -447,7 +447,7 @@ class SecomStreamsTab(Tab):
         Make sure there is at least one optical and one SEM stream present
         """
         if hasattr(self.tab_data_model, 'opticalState'):
-            has_opt = any(isinstance(s, streammod.OpticalStream)
+            has_opt = any(isinstance(s, acqstream.OpticalStream)
                           for s in self.tab_data_model.streams.value)
             if not has_opt:
                 self._stream_controller.addFluo(add_to_all_views=True, play=False)
@@ -455,7 +455,7 @@ class SecomStreamsTab(Tab):
                 # remove than change all the values
 
         if hasattr(self.tab_data_model, 'emState'):
-            has_sem = any(isinstance(s, streammod.EMStream)
+            has_sem = any(isinstance(s, acqstream.EMStream)
                           for s in self.tab_data_model.streams.value)
             if not has_sem:
                 stream_cont = self._add_em_stream(add_to_all_views=True, play=False)
@@ -474,7 +474,7 @@ class SecomStreamsTab(Tab):
         if state == guimod.STATE_ON:
             # Pick the last optical stream that played (.streams is ordered)
             for s in self.tab_data_model.streams.value:
-                if isinstance(s, streammod.OpticalStream):
+                if isinstance(s, acqstream.OpticalStream):
                     opts = s
                     break
             else: # Could happen if the user has deleted all the optical streams
@@ -485,13 +485,13 @@ class SecomStreamsTab(Tab):
             # focus the view
             self.view_controller.focusViewWithStream(opts)
         else:
-            self._stream_controller.pauseStreams(streammod.OpticalStream)
+            self._stream_controller.pauseStreams(acqstream.OpticalStream)
 
     def onEMState(self, state):
         if state == guimod.STATE_ON:
             # Use the last SEM stream played
             for s in self.tab_data_model.streams.value:
-                if isinstance(s, streammod.EMStream):
+                if isinstance(s, acqstream.EMStream):
                     sems = s
                     break
             else: # Could happen if the user has deleted all the optical streams
@@ -503,7 +503,7 @@ class SecomStreamsTab(Tab):
             # focus the view
             self.view_controller.focusViewWithStream(sems)
         else:
-            self._stream_controller.pauseStreams(streammod.EMStream)
+            self._stream_controller.pauseStreams(acqstream.EMStream)
 
     def Show(self, show=True):
         assert (show != self.IsShown()) # we assume it's only called when changed
@@ -530,7 +530,7 @@ class SparcAcquisitionTab(Tab):
                 (None, self.main_frame.lbl_sparc_view_all)),
             (
                 self.main_frame.btn_sparc_view_tl,
-                (self.main_frame.vp_sparc_acq_view, self.main_frame.lbl_sparc_view_tl)),
+                (self.main_frame.vp_sparc_acq, self.main_frame.lbl_sparc_view_tl)),
             (
                 self.main_frame.btn_sparc_view_tr,
                 (self.main_frame.vp_sparc_tr, self.main_frame.lbl_sparc_view_tr)),
@@ -546,9 +546,12 @@ class SparcAcquisitionTab(Tab):
         self.tb = self.main_frame.sparc_acq_toolbar
         self.tb.add_tool(tools.TOOL_ROA, self.tab_data_model.tool)
         self.tb.add_tool(tools.TOOL_RO_ANCHOR, self.tab_data_model.tool)
+        self.tb.add_tool(tools.TOOL_SPOT, self.tab_data_model.tool)
         # TODO: Add the buttons when the functionality is there
         #self.tb.add_tool(tools.TOOL_POINT, self.tab_data_model.tool)
         #self.tb.add_tool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
+
+        self.tab_data_model.tool.subscribe(self.on_tool_change)
 
         # Create the streams:
         # * SEM (survey): live stream displaying the current SEM view (full FoV)
@@ -556,29 +559,33 @@ class SparcAcquisitionTab(Tab):
         # * Spectrum: Repetition stream used to store settings for spectrum
         # * SEM/Spec: MD stream composed of the SEM CL+Spectrum streams
         # * AR: Repetition stream used to store settings for AR
+        # * CLi: Cathode Luminescence stream
         # * SEM/AR: MD stream composed of the SEM CL+AR streams
         # * SpecCount: Count stream for the live intensity of the spectrometer
+        # * Monochromator: photon counter for a narrow wavelength of light
         # On acquisition, only the SEM and SEM/Spec (or SEM/AR) are explicitly
         # used.
         self._spec_stream = None
         self._sem_spec_stream = None
         self._ar_stream = None
+        self._cli_stream = None
         self._sem_ar_stream = None
         self._scount_stream = None
+        self._monoch_stream = None
 
-        acq_view = self.tab_data_model.acquisitionView
-        sem_stream = streammod.SEMStream(
-            "SEM survey",
+        # This stream is used both for rendering and acquisition
+        sem_stream = acqstream.SEMStream(
+            "Secondary electrons",
             main_data.sed,
             main_data.sed.data,
             main_data.ebeam)
         self._sem_live_stream = sem_stream
         sem_stream.should_update.value = True
         sem_stream.should_update.subscribe(self._on_sem_update)
-        acq_view.addStream(sem_stream)  # it should also be saved
+        self.tab_data_model.acquisitionView.addStream(sem_stream)  # it should also be saved
 
         # the SEM acquisition simultaneous to the CCDs
-        semcl_stream = streammod.SEMStream(
+        semcl_stream = acqstream.SEMStream(
             "SEM CL",  # name matters, used to find the stream for the ROI
             main_data.sed,
             main_data.sed.data,
@@ -589,43 +596,8 @@ class SparcAcquisitionTab(Tab):
 
         vas_settings = []  # VAs that can affect the acquisition time
 
-        if main_data.spectrometer:
-            spec_stream = streammod.SpectrumSettingsStream(
-                "Spectrum",
-                main_data.spectrometer,
-                main_data.spectrometer.data,
-                main_data.ebeam)
-            spec_stream.roi.subscribe(self.onSpecROI)
-            vas_settings.append(spec_stream.repetition)
-            self._spec_stream = spec_stream
-            self._sem_spec_stream = streammod.SEMSpectrumMDStream("SEM Spectrum",
-                                                                  semcl_stream,
-                                                                  spec_stream)
-            acq_view.addStream(self._sem_spec_stream)
-
-            self._scount_stream = streammod.CameraCountStream("Spectrum count",
-                                                              main_data.spectrometer,
-                                                              main_data.spectrometer.data,
-                                                              main_data.ebeam)
-            self._scount_stream.should_update.value = True
-            self._scount_stream.windowPeriod.value = 30  # s
-
-        if main_data.ccd:
-            ar_stream = streammod.ARSettingsStream(
-                "Angular",
-                main_data.ccd,
-                main_data.ccd.data,
-                main_data.ebeam)
-            ar_stream.roi.subscribe(self.onARROI)
-            vas_settings.append(ar_stream.repetition)
-            self._ar_stream = ar_stream
-            self._sem_ar_stream = streammod.SEMARMDStream("SEM AR",
-                                                          semcl_stream,
-                                                          ar_stream)
-            acq_view.addStream(self._sem_ar_stream)
-
         # indicate ROI must still be defined by the user
-        semcl_stream.roi.value = streammod.UNDEFINED_ROI
+        semcl_stream.roi.value = acqstream.UNDEFINED_ROI
         semcl_stream.roi.subscribe(self.onROI)
         # TODO: try to see if it works better:
         # provide our own ROA VA, with setter actually setting either spec or ar
@@ -633,7 +605,7 @@ class SparcAcquisitionTab(Tab):
         # setter of the ROI VA.
 
         # drift correction is disabled until a roi is selected
-        semcl_stream.dcRegion.value = streammod.UNDEFINED_ROI
+        semcl_stream.dcRegion.value = acqstream.UNDEFINED_ROI
         vas_settings.append(semcl_stream.dcRegion)
         vas_settings.append(semcl_stream.dcPeriod)
         # Set anchor region dwell time to the same value as the SEM survey
@@ -662,12 +634,27 @@ class SparcAcquisitionTab(Tab):
             opt_mic_view = self.tab_data_model.views.value[0]
             opt_mic_view.addStream(self._ar_stream)
 
-        self._stream_controller = streamcont.StreamBarController(
+        # Create Stream Bar Controller
+
+        self._streambar_controller = streamcont.StreamBarController(
             self.tab_data_model,
-            self.main_frame.pnl_sparc_streams
+            self.main_frame.pnl_sparc_streams,
+            ignore_view=True  # Show all stream panels, independent of any selected viewport
         )
 
-        self._stream_controller.addStream(sem_stream, add_to_all_views=True)
+        # The sem stream is always visible, so add it by default
+        sem_stream_cont = self._streambar_controller.addStream(sem_stream, add_to_all_views=True)
+        sem_stream_cont.stream_panel.show_remove_btn(False)
+        sem_stream_cont.stream_panel.show_visible_btn(False)
+
+        if main_data.ccd:
+            self._streambar_controller.add_action("Angle-resolved", self.on_add_angle_resolved)
+            # FIXME NOW: Filter this action addition on the presence of the correct component
+            self._streambar_controller.add_action("Monochromator", self.on_add_monochromator)
+        if main_data.sed:
+            self._streambar_controller.add_action("CL intensity", self.on_add_cl_intensity)
+        if main_data.spectrometer:
+            self._streambar_controller.add_action("Spectrum", self.on_add_spectrum)
 
         # needs to have the AR and Spectrum streams on the acquisition view
         self._settings_controller = settings.SparcSettingsController(
@@ -684,17 +671,19 @@ class SparcAcquisitionTab(Tab):
             # TODO: probably cleaner to listen to arState and specState VAs +
             # instantiate a MicroscopeStateController?
             # Or get rid of the MicroscopeStateController?
-            main_frame.acq_btn_spectrometer.Bind(wx.EVT_BUTTON, self.onToggleSpec)
-            main_frame.acq_btn_angular.Bind(wx.EVT_BUTTON, self.onToggleAR)
+
+            # main_frame.acq_btn_spectrometer.Bind(wx.EVT_BUTTON, self.onToggleSpec)
+            # main_frame.acq_btn_angular.Bind(wx.EVT_BUTTON, self.onToggleAR)
+
             if main_data.ar_spec_sel:
                 # use the current position to select the default instrument
                 # TODO: or just don't select anything, as if the GUI was closed
                 # in the alignment tab, it will always end up in AR.
                 if main_data.ar_spec_sel.position.value["rx"] == 0:  # AR on
-                    self.main_frame.acq_btn_angular.SetToggle(True)
+                    # self.main_frame.acq_btn_angular.SetToggle(True)
                     self._show_spec(False)
                 else:  # Spec on
-                    self.main_frame.acq_btn_spectrometer.SetToggle(True)
+                    # self.main_frame.acq_btn_spectrometer.SetToggle(True)
                     self._scount_stream.should_update.value = True
                     self._show_ar(False)
                     # Show() will take care of setting the lenses
@@ -702,9 +691,6 @@ class SparcAcquisitionTab(Tab):
                 # disable everything
                 self._show_ar(False)
                 self._show_spec(False)
-        else:
-            # only one detector => hide completely the buttons
-            main_frame.sparc_button_panel.Hide()
 
         main_data.is_acquiring.subscribe(self.on_acquisition)
 
@@ -720,8 +706,8 @@ class SparcAcquisitionTab(Tab):
         # Repetition visualisation
         self._hover_stream = None  # stream for which the repetition must be displayed
 
-        # Grab the repetition entries, so we can use it to hook extra event
-        # handlers to it.
+        # Grab the repetition entries, so we can use it to hook extra event handlers to it.
+
         self.spec_rep = self._settings_controller.spectro_rep_ent
         if self.spec_rep:
             self.spec_rep.vigilattr.subscribe(self.on_rep_change)
@@ -729,6 +715,7 @@ class SparcAcquisitionTab(Tab):
             self.spec_rep.value_ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
             self.spec_rep.value_ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_spec_rep_enter)
             self.spec_rep.value_ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_spec_rep_leave)
+
         self.spec_pxs = self._settings_controller.spec_pxs_ent
         if self.spec_pxs:
             self.spec_pxs.vigilattr.subscribe(self.on_rep_change)
@@ -736,6 +723,7 @@ class SparcAcquisitionTab(Tab):
             self.spec_pxs.value_ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
             self.spec_pxs.value_ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_spec_rep_enter)
             self.spec_pxs.value_ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_spec_rep_leave)
+
         self.angu_rep = self._settings_controller.angular_rep_ent
         if self.angu_rep:
             self.angu_rep.vigilattr.subscribe(self.on_rep_change)
@@ -745,19 +733,159 @@ class SparcAcquisitionTab(Tab):
             self.angu_rep.value_ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_ar_rep_leave)
         # AR settings don't have pixel size
 
-        # Connect the spectrograph count stream to the graph
-        if self._scount_stream:
-            self._spec_graph = self._settings_controller.spec_graph
-            self._txt_mean = self._settings_controller.txt_mean
-            self._scount_stream.image.subscribe(self._on_spec_count, init=True)
+    def on_tool_change(self, tool):
+        """ Pause the SE and CLI streams when the Spot mode tool is activated """
+        # FIXME: Resolve the confusion between tools and tool modes and their name
+        if tool == guimod.TOOL_SPOT:
+
+            # TODO: Make activating the spot mode overlay (i.e. making the spot movable) less ugly
+            self.main_frame.vp_sparc_acq.canvas._spotmode_ol.activate()
+
+            self._sem_live_stream.should_update.value = False
+            self._sem_live_stream.should_update.subscribe(self._cancel_spot_mode)
+            if self._cli_stream:
+                self._cli_stream.should_update.value = False
+                self._cli_stream.should_update.subscribe(self._cancel_spot_mode)
+            # TODO: re-activate stream when spot mode tool is turned off
+
+    def _cancel_spot_mode(self, should_update):
+        """ Cancel spot mode if SEM stream start playing """
+        # print  should_update , self.tab_data_model.tool.value
+        if should_update and self.tab_data_model.tool.value == guimod.TOOL_SPOT:
+            self.tab_data_model.tool.value = guimod.TOOL_NONE
+
+    def on_add_angle_resolved(self):
+        """ Create a camera stream and add to to all compatible viewports """
+
+        self._ar_stream = acqstream.ARSettingsStream(
+            "Angle-resolved",
+            self.tab_data_model.main.ccd,
+            self.tab_data_model.main.ccd.data,
+            self.tab_data_model.main.ebeam
+        )
+
+        # import sys
+        # print sys.getrefcount(self._ar_stream)
+
+        self._ar_stream.roi.subscribe(self.onARROI)
+        # FIXME NOW: Make the acquisition controller aware of this VA in a different way
+        # vas_settings.append(self._ar_stream.repetition)
+
+        stream_cont = self._streambar_controller._add_stream(self._ar_stream,
+                                                             add_to_all_views=True)
+        stream_cont.stream_panel.show_visible_btn(False)
+
+        self._sem_ar_stream = acqstream.SEMARMDStream("SEM AR",
+                                                      self._sem_cl_stream,
+                                                      self._ar_stream)
+        # FIXME NOW: Update the acq view on acquisition (i.e. button click)
+        self.tab_data_model.acquisitionView.addStream(self._sem_ar_stream)
+
+        self.tab_data_model.streams.subscribe(self._clean_acqview)
+
+        return stream_cont
+
+    def _clean_acqview(self, streams):
+        """ Remove MD streams from the acquisition view that have one or more sub streams missing
+
+        Args:
+            streams [stream]: The streams currently used in this tab
+
+        """
+
+        # The acquisition streams
+        acq_streams = self.tab_data_model.acquisitionView.stream_tree
+
+        # For all MD streams in the acquisition view...
+        for mds in [s for s in acq_streams if isinstance(s, MultipleDetectorStream)]:
+            # Are all the sub streams of the MDStreams still there?
+            for ss in mds.streams:
+                # If not, remove the MD stream
+                if ss not in streams:
+                    logging.debug("Removing acquisition stream %s", ss)
+                    self.tab_data_model.acquisitionView.stream_tree.remove_stream(mds)
+                    break
+
+    def on_add_cl_intensity(self):
+        """ Create a CLi stream and add to to all compatible viewports """
+
+        # FIXME NOW: Does the other CL stream need to be removed?
+        self._cli_stream = acqstream.CLSettingsStream(
+            "CL intensity",
+            self.tab_data_model.main.sed,
+            self.tab_data_model.main.sed.data,
+            self.tab_data_model.main.ebeam
+        )
+
+        stream_cont = self._streambar_controller._add_stream(self._cli_stream,
+                                                             add_to_all_views=True)
+        stream_cont.stream_panel.show_visible_btn(False)
+        return stream_cont
+
+    def on_add_spectrum(self):
+        """ Create a Spectrum stream and add to to all compatible viewports """
+
+        self._spec_stream = acqstream.SpectrumSettingsStream(
+            "Spectrum",
+            self.tab_data_model.main.spectrometer,
+            self.tab_data_model.main.spectrometer.data,
+            self.tab_data_model.main.ebeam
+        )
+        self._spec_stream.roi.subscribe(self.onSpecROI)
+        # FIXME NOW: Make the acquisition controller aware of this VA in a different way
+        # vas_settings.append(spec_stream.repetition)
+
+        self._sem_spec_stream = acqstream.SEMSpectrumMDStream("SEM Spectrum",
+                                                              self._sem_cl_stream,
+                                                              self._spec_stream)
+        # FIXME NOW: Update the acq view on acquisition (i.e. button click)
+        self.tab_data_model.acquisitionView.addStream(self._sem_spec_stream)
+
+        self._scount_stream = acqstream.CameraCountStream(
+            "Spectrum count",
+            self.tab_data_model.main.spectrometer,
+            self.tab_data_model.main.spectrometer.data,
+            self.tab_data_model.main.ebeam
+        )
+        self._scount_stream.should_update.value = True
+        self._scount_stream.windowPeriod.value = 30  # s
+
+        # self._spec_graph = self._settings_controller.spec_graph
+        # self._txt_mean = self._settings_controller.txt_mean
+        self._scount_stream.image.subscribe(self._on_spec_count, init=True)
+
+        stream_cont = self._streambar_controller._add_stream(self._spec_stream,
+                                                             add_to_all_views=True)
+        stream_cont.stream_panel.show_visible_btn(False)
+        return stream_cont
+
+    def on_add_monochromator(self):
+        """ Create a Monochromator stream and add to to all compatible viewports """
+
+        # FIXME NOW: Select right components
+        self._monoch_stream = acqstream.MonochromatorSettingsStream(
+            "Monochromator",
+            self.tab_data_model.main.ccd,
+            self.tab_data_model.main.ccd.data,
+            self.tab_data_model.main.ebeam,
+            self.tab_data_model.main.spectrograph
+        )
+
+        stream_cont = self._streambar_controller._add_stream(self._monoch_stream,
+                                                             add_to_all_views=True)
+        stream_cont.stream_panel.show_visible_btn(False)
+        return stream_cont
 
     @call_in_wx_main
     def _on_spec_count(self, scount):
+        """ Called when a new spectrometer data comes in (and so the whole intensity window data is
+        updated)
+
+        Args:
+            scount (DataArray)
+
         """
-        Called when a new spectrometer data comes in (and so the whole intensity
-        window data is updated)
-        scount (DataArray)
-        """
+
         if len(scount) > 0:
             # Indicate the raw value
             v = scount[-1]
@@ -765,7 +893,7 @@ class SparcAcquisitionTab(Tab):
                 txt = units.readable_str(float(scount[-1]), sig=6)
             else:
                 txt = "%d" % round(v)  # to make it clear what is small/big
-            self._txt_mean.SetValue(txt)
+            # self._txt_mean.SetValue(txt)
 
             # fit min/max between 0 and 1
             ndcount = scount.view(numpy.ndarray)  # standard NDArray to get scalars
@@ -787,7 +915,7 @@ class SparcAcquisitionTab(Tab):
                 disp = numpy.concatenate([numpy.zeros(nb0s), disp])
         else:
             disp = []
-        self._spec_graph.SetContent(disp)
+        # self._spec_graph.SetContent(disp)
 
     def _on_sem_update(self, update):
         # very simple version of a stream scheduler
@@ -811,10 +939,11 @@ class SparcAcquisitionTab(Tab):
             self._sem_cl_stream.dcDwellTime.subscribe(self._copyDwellTimeToAnchor)
 
         # Make sure nothing can be modified during acquisition
-        self.main_frame.acq_btn_spectrometer.Enable(not is_acquiring)
-        self.main_frame.acq_btn_angular.Enable(not is_acquiring)
+        # self.main_frame.acq_btn_spectrometer.Enable(not is_acquiring)
+        # self.main_frame.acq_btn_angular.Enable(not is_acquiring)
+
         self.tb.enable(not is_acquiring)
-        self.main_frame.vp_sparc_acq_view.Enable(not is_acquiring)
+        self.main_frame.vp_sparc_acq.Enable(not is_acquiring)
         self.main_frame.btn_sparc_change_file.Enable(not is_acquiring)
 
     def _copyDwellTimeToAnchor(self, dt):
@@ -839,12 +968,12 @@ class SparcAcquisitionTab(Tab):
             stream = None
 
         # Convert stream to right display
-        cvs = self.main_frame.vp_sparc_acq_view.canvas
+        cvs = self.main_frame.vp_sparc_acq.canvas
         if stream is None:
             cvs.show_repetition(None)
         else:
             rep = stream.repetition.value
-            if isinstance(stream, streammod.ARStream):
+            if isinstance(stream, acqstream.ARStream):
                 style = overlay.world.RepetitionSelectOverlay.FILL_POINT
             else:
                 style = overlay.world.RepetitionSelectOverlay.FILL_GRID
@@ -915,7 +1044,7 @@ class SparcAcquisitionTab(Tab):
         # converge, but we must absolutely ensure it will never cause infinite
         # loops.
         for s in self.tab_data_model.acquisitionView.getStreams():
-            if isinstance(s, streammod.SEMCCDMDStream):
+            if isinstance(s, acqstream.SEMCCDMDStream):
                 # logging.debug("setting roi of %s to %s", s.name.value, roi)
                 s._rep_stream.roi.value = roi
 
@@ -966,16 +1095,18 @@ class SparcAcquisitionTab(Tab):
             self.tab_data_model.main.ar_spec_sel.moveAbs({"rx": ar_spec_pos})
 
     def _show_spec(self, show=True):
-        """
-        Show (or hide) the widgets for spectrum acquisition settings
+        """ Show (or hide) the widgets for spectrum acquisition settings
+
         It is fine to call it multiple times with the same value, or even if
         no spectrum acquisition can be done (in which case nothing will happen)
         show (bool)
+
         """
+
         if not self._sem_spec_stream:
             return
 
-        self.main_frame.fp_settings_sparc_spectrum.Show(show)
+        # self.main_frame.fp_settings_sparc_spectrum.Show(show)
         acq_view = self.tab_data_model.acquisitionView
         if show:
             acq_view.addStream(self._sem_spec_stream)
@@ -1000,7 +1131,7 @@ class SparcAcquisitionTab(Tab):
         if not self._sem_ar_stream:
             return
 
-        self.main_frame.fp_settings_sparc_angular.Show(show)
+        # self.main_frame.fp_settings_sparc_angular.Show(show)
         acq_view = self.tab_data_model.acquisitionView
         if show:
             acq_view.addStream(self._sem_ar_stream)
@@ -1012,28 +1143,24 @@ class SparcAcquisitionTab(Tab):
             # don't put switches back when hiding, to avoid unnecessary moves
 
     def onToggleSpec(self, evt):
-        """
-        called when the Spectrometer button is toggled
-        """
+        """ Called when the Spectrometer button is toggled """
         btn = evt.GetEventObject()
         show = btn.GetToggle()
         # TODO: only remove AR if hardware to switch between optical path
         # is not available (but for now, it's never available)
         self._show_ar(False)
-        self.main_frame.acq_btn_angular.SetToggle(False)
+        # self.main_frame.acq_btn_angular.SetToggle(False)
 
         self._show_spec(show)
         if show:
             self._spec_stream.roi.value = self._sem_cl_stream.roi.value
 
     def onToggleAR(self, evt):
-        """
-        called when the AR button is toggled
-        """
+        """ called when the AR button is toggled """
         btn = evt.GetEventObject()
         show = btn.GetToggle()
         self._show_spec(False)
-        self.main_frame.acq_btn_spectrometer.SetToggle(False)
+        # self.main_frame.acq_btn_spectrometer.SetToggle(False)
 
         self._show_ar(show)
         if show:
@@ -1279,8 +1406,8 @@ class AnalysisTab(Tab):
         streams = self._stream_controller.data_to_static_streams(data)
 
         # Spectrum and AR streams are, for now, considered mutually exclusive
-        spec_streams = [s for s in streams if isinstance(s, streammod.SpectrumStream)]
-        ar_streams = [s for s in streams if isinstance(s, streammod.ARStream)]
+        spec_streams = [s for s in streams if isinstance(s, acqstream.SpectrumStream)]
+        ar_streams = [s for s in streams if isinstance(s, acqstream.ARStream)]
 
         # TODO: Move viewport related code to ViewPortController
         if spec_streams:
@@ -1416,7 +1543,7 @@ class AnalysisTab(Tab):
 
             # Apply data to the relevant streams
             ar_strms = [s for s in self.tab_data_model.streams.value
-                        if isinstance(s, streammod.ARStream)]
+                        if isinstance(s, acqstream.ARStream)]
 
             # This might raise more exceptions if calibration is not compatible
             # with the data.
@@ -1454,7 +1581,7 @@ class AnalysisTab(Tab):
                 cdata = calibration.get_spectrum_data(data) # FIXME
 
             spec_strms = [s for s in self.tab_data_model.streams.value
-                          if isinstance(s, streammod.SpectrumStream)]
+                          if isinstance(s, acqstream.SpectrumStream)]
 
             for strm in spec_strms:
                 strm.background.value = cdata
@@ -1490,7 +1617,7 @@ class AnalysisTab(Tab):
                 cdata = calibration.get_spectrum_efficiency(data)
 
             spec_strms = [s for s in self.tab_data_model.streams.value
-                          if isinstance(s, streammod.SpectrumStream)]
+                          if isinstance(s, acqstream.SpectrumStream)]
 
             for strm in spec_strms:
                 strm.efficiencyCompensation.value = cdata
@@ -1507,7 +1634,6 @@ class AnalysisTab(Tab):
             raise ValueError("File '%s' not suitable" % fn)
 
         return fn
-
 
     @guiutil.call_in_wx_main
     def _onTool(self, tool):
@@ -1601,7 +1727,7 @@ class LensAlignTab(Tab):
                     "cls": guimod.ContentView,
                     "stage": self._aligner_xy,
                     "focus": main_data.focus,
-                    "stream_classes": streammod.CameraStream,
+                    "stream_classes": acqstream.CameraStream,
                 }
             ),
             (
@@ -1609,7 +1735,7 @@ class LensAlignTab(Tab):
                 {
                     "name": "SEM",
                     "stage": main_data.stage,
-                    "stream_classes": streammod.EMStream,
+                    "stream_classes": acqstream.EMStream,
                 },
             )
         ])
@@ -1624,7 +1750,7 @@ class LensAlignTab(Tab):
         # going to spot mode
         # No stream controller, because it does far too much (including hiding
         # the only stream entry when SEM view is focused)
-        sem_stream = streammod.SEMStream("SEM", main_data.sed,
+        sem_stream = acqstream.SEMStream("SEM", main_data.sed,
                                          main_data.sed.data, main_data.ebeam)
         sem_stream.should_update.value = True
         self.tab_data_model.streams.value.append(sem_stream)
@@ -1632,7 +1758,7 @@ class LensAlignTab(Tab):
         self._sem_view = main_frame.vp_align_sem.microscope_view
         self._sem_view.addStream(sem_stream)
 
-        spot_stream = streammod.SpotSEMStream("Spot", main_data.sed,
+        spot_stream = acqstream.SpotSEMStream("Spot", main_data.sed,
                                               main_data.sed.data, main_data.ebeam)
         self.tab_data_model.streams.value.append(spot_stream)
         self._spot_stream = spot_stream
@@ -1650,7 +1776,7 @@ class LensAlignTab(Tab):
         # TODO: when paused via the shortcut or menu, really pause it
         #   => use a stream scheduler?
         # create CCD stream
-        ccd_stream = streammod.CameraStream("Optical CL",
+        ccd_stream = acqstream.CameraStream("Optical CL",
                                             main_data.ccd,
                                             main_data.ccd.data,
                                             main_data.light,
@@ -1978,7 +2104,7 @@ class MirrorAlignTab(Tab):
 
         # create the stream to the AR image + goal image
         if main_data.ccd:
-            ccd_stream = streammod.CameraStream(
+            ccd_stream = acqstream.CameraStream(
                 "Angle-resolved sensor",
                 main_data.ccd,
                 main_data.ccd.data,
@@ -1988,7 +2114,7 @@ class MirrorAlignTab(Tab):
             # The mirror center (with the lens set) is defined as pole position
             # in the microscope configuration file.
             goal_im = self._getGoalImage(main_data)
-            goal_stream = streammod.RGBStream("Goal", goal_im)
+            goal_stream = acqstream.RGBStream("Goal", goal_im)
 
             # create a view on the microscope model
             vpv = collections.OrderedDict([
@@ -2025,7 +2151,7 @@ class MirrorAlignTab(Tab):
         # spectrometer.
         if main_data.spectrometer:
             # Only add the average count stream
-            self._scount_stream = streammod.CameraCountStream("Spectrum count",
+            self._scount_stream = acqstream.CameraCountStream("Spectrum count",
                                                               main_data.spectrometer,
                                                               main_data.spectrometer.data,
                                                               main_data.ebeam)
@@ -2041,7 +2167,7 @@ class MirrorAlignTab(Tab):
         if main_data.ebeam:
             # Force a spot at the center of the FoV
             # Not via stream controller, so we can avoid the scheduler
-            spot_stream = streammod.SpotSEMStream("SpotSEM", main_data.sed,
+            spot_stream = acqstream.SpotSEMStream("SpotSEM", main_data.sed,
                                                   main_data.sed.data, main_data.ebeam)
             self._spot_stream = spot_stream
         else:
