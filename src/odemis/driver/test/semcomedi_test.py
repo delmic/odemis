@@ -3,7 +3,7 @@
 '''
 Created on 6 Nov 2012
 
-Copyright © 2012 Éric Piel, Delmic
+Copyright © 2012-2015 Éric Piel, Delmic
 
 This file is part of Odemis.
 

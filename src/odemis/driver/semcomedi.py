@@ -75,7 +75,8 @@ import odemis.driver.comedi_simple as comedi
 # There are two available bindings for comedi in Python: python-comedilib
 # (provided with comedi) and pycomedi.  python-comedilib provides just a direct
 # mapping of the C functions. It's quite verbose because every name starts with
-# comedi_, and not object oriented. You can directly use the C documentation. The
+# comedi_ (not anymore in the latest version), and not object oriented.
+# You can directly use the C documentation. The
 # only thing to know is that parameters which are a simple type and used as output
 # (e.g., int *, double *) are not passed as parameters but directly returned as
 # output. However structures must be first allocated and then given as input
@@ -97,7 +98,6 @@ import odemis.driver.comedi_simple as comedi
 # merely an optimisation). Next to it, a high-level component should decide the
 # scanning area, period and channels, and interface with the rest of Odemis.
 # Communication between both component is only via queues.
-NI_TRIG_AI_START1 = 18 # Trigger number for AI Start1 (= beginning of a command)
 
 # helper functions
 def get_best_dtype_for_acc(idtype, count):
@@ -801,6 +801,7 @@ class SEMComedi(model.HwComponent):
         for i in range(nchans):
             clist[i] = comedi.cr_pack(channels[i], ranges[i], comedi.AREF_GROUND)
         cmd.chanlist = clist
+        cmd.chanlist_len = nchans
         cmd.start_src = start_src
         cmd.start_arg = start_arg
         cmd.stop_src = stop_src
@@ -1169,8 +1170,8 @@ class SEMComedi(model.HwComponent):
             logging.debug("Generating new write and read commands for %d scans on "
                           "channels %r/%r", nwscans, wchannels, rchannels)
             # create a command for reading, with a period osr times smaller than the write
-            self.setup_timed_command(self._ai_subdevice, rchannels, rranges, rperiod_ns,
-                        stop_arg=nrscans)
+            self.setup_timed_command(self._ai_subdevice, rchannels, rranges,
+                                     rperiod_ns, stop_arg=nrscans)
             # prepare to read
             self._reader.prepare(nrscans * nrchans, expected_time)
 
@@ -1186,7 +1187,7 @@ class SEMComedi(model.HwComponent):
             else:
                 self.setup_timed_command(self._ao_subdevice, wchannels, wranges, period_ns,
                             start_src=comedi.TRIG_EXT, # from PyComedi docs: should improve synchronisation
-                            start_arg=NI_TRIG_AI_START1, # when the AI starts reading
+                            start_arg=comedi.NI_CDIO_SCAN_BEGIN_SRC_AI_START,  # when the AI starts reading
                             stop_arg=nwscans)
                 # prepare to write the flattened buffer
                 self._writer.prepare(data.ravel(), expected_time)
@@ -1635,9 +1636,7 @@ class Reader(Accesser):
     """
     Classical version of the reader, using a... read() (aka fromfile()). It's
     supposed to avoid latency as the read will return as soon as all the data
-    is received. But in the current behaviour of comedi, the cancel() is really
-    complicated and unstable, as a new empty command must be sent (reported
-    upstream and a fix was published on 2013-07-08).
+    is received.
     """
     def __init__(self, parent):
         Accesser.__init__(self, parent)
@@ -1727,7 +1726,8 @@ class Reader(Accesser):
 
             # Currently, after cancelling a comedi command, the read doesn't
             # unblock. A trick to manage to stop a current read, is to give a
-            # new command of few reads (e.g., 1 read), on any channel
+            # new command of few reads (e.g., 1 read), on any channel.
+            # (This has been reported, and later fixed on 2013-07-08.)
             logging.debug("Seems the read didn't end, will force it")
             try:
                 cmd = comedi.cmd_struct()
@@ -1735,6 +1735,7 @@ class Reader(Accesser):
                 clist = comedi.chanlist(1)
                 clist[0] = comedi.cr_pack(0, 0, comedi.AREF_GROUND)
                 cmd.chanlist = clist
+                cmd.chanlist_len = 1
                 cmd.stop_src = comedi.TRIG_COUNT
                 cmd.stop_arg = 1
                 comedi.command(self._device, cmd)
@@ -2512,7 +2513,6 @@ class Detector(model.Detector):
         """
         channel (0<= int): input channel from which to read
         limits (2-tuple of number): min/max voltage to acquire (in V)
-        Note: parent should have a child "scanner" alredy initialised
         """
         # It will set up ._shape and .parent
         model.Detector.__init__(self, name, role, parent=parent, **kwargs)
@@ -2530,14 +2530,128 @@ class Detector(model.Detector):
                                            channel, comedi.UNIT_volt,
                                            limits[0], limits[1])
         except comedi.ComediError:
-                raise ValueError("Data range between %g and %g V is too high for hardware." %
-                                 (limits[0], limits[1]))
+            raise ValueError("Data range between %g and %g V is too high for hardware." %
+                             (limits[0], limits[1]))
         self._range = best_range
 
         # The closest to the actual precision of the device
         maxdata = comedi.get_maxdata(parent._device, parent._ai_subdevice,
                                      channel)
         self._shape = (maxdata + 1,) # only one point
+        self.data = SEMDataFlow(self, parent)
+
+        # Special event to request software unblocking on the scan
+        self.softwareTrigger = model.Event()
+
+    @roattribute
+    def channel(self):
+        return self._channel
+
+
+class CountingDetector(Detector):
+    """
+    Represents a detector which generates a pulsed signal. Typically, the higher
+    the pulse frequency, the stronger the original signal is. E.g., a counting
+    PMT.
+    Note: only NI devices are supported.
+    """
+    def __init__(self, name, role, parent, channel, limits, **kwargs):
+        """
+        channel (0<= int): input channel from which to read
+        limits (2-tuple of number): min/max voltage to acquire (in V)
+        """
+        # Counters and pulse generators are fairly different in terms of
+        # functionallity, but they correspond to similar devices seen as input
+        # or output. When generalising, these devices are both refered to as
+        # "counters".
+        # A counter is made of the following basic elements:
+        # * Input source: the signal measured or the clock of the pulse generation
+        # * Gate: controls when the counting (or sampling) occurs
+        # * Register: holds the current count
+        # * Out: for the output counters (pulse generators), the output signal
+
+        # On the NI board, the counters are defined by:
+        # There are different ways to count (eg, counting up or down, on
+        # the edge rising or lowering).
+        # We use up countining on edge rising. In comedi,
+        # this is specified via the comedi_set_counter_mode(). The "source"
+        # is the input signal which is observed. The standard input for the first
+        # counter is PFI 8, and for the second counter is PFI 3. This can be
+        # changed using comedi_set_clock_source(...NI_GPCT_PFI_CLOCK_SRC_BITS(N), 0)
+        # (note, it is called "clock" because for pulse generators this input
+        # signal is what defines the
+        # Typically, it has an initial value (which we set at 0), and after
+        # being "armed" (which we only do via software with comedi_arm(),
+        # TODO or via the AI start signal?), the value is increased every time an edge is detected.
+        # When it is buffered, after each rising edge of the "sample clock", the
+        # current value is copied into memory (TODO: how is this done? NI docs
+        # seems to indicate for buffered counting the gate is used to carry the
+        # sampling clock).
+        # Note that the counter can overflow (after maxdata).
+        # In buffer mode, it is cummulative by default, and can be reset by setting
+        # the mode to NI_GPCT_LOADING_ON_GATE_BIT.
+        # In buffered counting, the sampling clock is the (first) gate.
+        # Note that in direct counting, the gate is used to "pause". The counter
+        # only increases when the "gate" input is high.
+        # Selection of the signal for the sampling clock is therefore done via
+        # comedi_set_gate_source(), where in practice only the first gate (0) is
+        # used.
+
+        # Also, note that the comedi subdevice provides 3 channels. Pretty much
+        # only channel 0 is used. Channels 1 and 2 are only meaningful to write
+        # data, which corresponds to load A and B registers, which are not used
+        # in edge counting.
+
+        # "Routing" allows to configure which signal corresponds to a PFI.
+        # It's a bit confusing, because it seems you can route a PFI to many
+        # different output or input, but at the same time, the board has some
+        # physical connections called PFIx (and P1/2.x).
+        # This is done via comedi_set_routing()
+        # set_routing: channel == PFI number
+        #              source == NI_PFI_OUTPUT*
+        #              subdevice: the special PFI DIO subdevice (== 7)
+        # this means (for output): source S (signal) goes to channel T (terminal)
+        # Note that if you also need to configure the PFI pin correctly with the
+        # special PFI DIO subdevice (7) and comedi_dio_config(...PFI number, COMEDI_OUTPUT)
+        #
+        # The NI 660x documentation explains:
+        # "You can export the CtrNSource signal to the I/O connector’s default PFI
+        # input for each CtrNSource. For example, you can export the Ctr0Source
+        # signal to the PFI 39/CTR 0 SRC pin, even if another PFI is inputting
+        # the Ctr0Source signal."
+        # NI's naming is confusing because they use the same name for the
+        # _terminals_ (ie, physical input or output pins) and for the _signal_
+        # (ie, the logical information that controls/indicates a specific behaviour).
+        # Moreover, the routing idea consists in connecting 2 terminals, but
+        # usually one of the terminals is implied (from the name).
+
+
+        # TODO: define the signal info.
+
+        # It will set up ._shape and .parent
+        model.Detector.__init__(self, name, role, parent=parent, **kwargs)
+        self._channel = channel
+        nchan = comedi.get_n_channels(parent._device, parent._ai_subdevice)
+        if nchan < channel:
+            raise ValueError("Requested channel %d on device '%s' which has only %d input channels"
+                             % (channel, parent._device_name, nchan))
+
+        # TODO allow limits to be None, meaning take the biggest range available
+        self._limits = limits
+        # find the range
+        try:
+            best_range = comedi.find_range(parent._device, parent._ai_subdevice,
+                                           channel, comedi.UNIT_volt,
+                                           limits[0], limits[1])
+        except comedi.ComediError:
+            raise ValueError("Data range between %g and %g V is too high for hardware." %
+                             (limits[0], limits[1]))
+        self._range = best_range
+
+        # The closest to the actual precision of the device
+        maxdata = comedi.get_maxdata(parent._device, parent._ai_subdevice,
+                                     channel)
+        self._shape = (maxdata + 1,)  # only one point
         self.data = SEMDataFlow(self, parent)
 
         # Special event to request software unblocking on the scan

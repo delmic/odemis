@@ -113,6 +113,29 @@ class StaticSEMStream(Static2DStream):
     pass
 
 
+class StaticCLStream(Static2DStream):
+    """
+    Same as a StaticStream, but has a emission wavelength
+    """
+    def __init__(self, name, image):
+        """
+        Note: parameters are different from the base class.
+        image (DataArray of shape (111)YX): raw data. The metadata should
+          contain at least MD_POS and MD_PIXEL_SIZE. It should also contain
+          MD_OUT_WL.
+        """
+        try:
+            em_range = image.metadata[model.MD_OUT_WL]
+            self.emission = VigilantAttribute(em_range, unit="m",
+                                              readonly=True)
+
+        except KeyError:
+            logging.warning("No emission wavelength for CL stream")
+
+        # Do it at the end, as it forces it the update of the image
+        Static2DStream.__init__(self, name, image)
+
+
 class StaticBrightfieldStream(Static2DStream):
     """
     Same as a StaticStream, but considered a Brightfield stream
@@ -123,7 +146,7 @@ class StaticBrightfieldStream(Static2DStream):
 class StaticFluoStream(Static2DStream):
     """Static Stream containing images obtained via epifluorescence.
 
-    It basically knows how to show the emission/filtered wavelengths,
+    It basically knows how to show the excitation/emission wavelengths,
     and how to taint the image.
     """
 
