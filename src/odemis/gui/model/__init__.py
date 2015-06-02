@@ -26,15 +26,16 @@ from abc import ABCMeta
 import collections
 import logging
 import math
-import os
-import threading
-import time
-
 from odemis import model
+from odemis.acq import path
 from odemis.acq.stream import Stream, SEMStream, CLSettingsStream, StreamTree
 from odemis.gui.conf import get_general_conf
 from odemis.model import (FloatContinuous, VigilantAttribute, IntEnumerated, StringVA, BooleanVA,
                           MD_POS, InstantaneousFuture)
+from odemis.model._vattributes import StringEnumerated
+import os
+import threading
+import time
 
 
 # The different states of a microscope
@@ -228,6 +229,12 @@ class MainGUIData(object):
         # MicroscopyGUIData would be better in theory, but is less convenient
         # do directly access additional GUI information.
         self.tab = model.VAEnumerated(None, choices={None: ""})
+
+        # Optical path manager (for now, only used on the SPARC)
+        # Used to control the actuators so that the ligth goes to the right
+        # detector (in the right way).
+        if microscope.role == "sparc":
+            self.opm = path.OpticalPathManager(microscope)
 
     def stopMotion(self):
         """
@@ -529,8 +536,13 @@ class ActuatorGUIData(MicroscopyGUIData):
         tools = {TOOL_NONE, TOOL_DICHO, TOOL_SPOT}
         self.tool = IntEnumerated(TOOL_NONE, choices=tools)
 
-        # For dichotomic mode
+        # For dichotomic mode (SECOM)
         self.dicho_seq = model.ListVA()  # list of 4 enumerated for each corner
+
+        # For the SPARC, the current alignment mode. Same values than the modes
+        # of the OpticalPathManager
+        # TODO: move to subclass
+        self.align_mode = StringEnumerated("mirror-align", choices={"mirror-align", "fiber-align"})
 
     def step(self, actuator, axis, factor, sync=False):
         """

@@ -2173,10 +2173,17 @@ class MirrorAlignTab(Tab):
         else:
             self._spot_stream = None
 
-        # Save the current filter
-        if main_data.light_filter:
-            self._prev_filter = main_data.light_filter.position.value["band"]
-            self._move_filter_f = model.InstantaneousFuture()  # "fake" move
+        # Switch between alignment modes
+        # * mirror-align: move x, y, yaw, and pitch with AR feedback
+        # * fiber-align: move yaw, pitch and x/Y of fiber with scount feedback
+        if main_data.ccd is None or main_data.spectrometer is None:
+            # Only one mode possible => hide the buttons
+            # TODO (once the buttons exist)
+            if main_data.ccd is None:
+                # No AR => use only fiber alignment as mirror alignment is impossible
+                tab_data.align_mode.value = "fiber-align"
+
+        tab_data.align_mode.subscribe(self._onAlignMode, init=True)
 
         self._actuator_controller = ActuatorController(self.tab_data_model,
                                                        main_frame,
@@ -2184,6 +2191,24 @@ class MirrorAlignTab(Tab):
 
         # Bind keys
         self._actuator_controller.bind_keyboard(main_frame.pnl_tab_sparc_align)
+
+    def _onAlignMode(self, mode):
+        """
+        Called when the align_mode changes (because the user selected a new one)
+        mode (str): the new alignment mode
+        """
+        # Ensure the toggle buttons are correctly set
+        # TODO
+
+        # Disable controls which are useless (to guide the user)
+        if mode == "mirror-align":
+            self.main_frame.pnl_sparc_trans.Enable(True)
+            self.main_frame.pnl_sparc_fib.Enable(False)
+        else:
+            self.main_frame.pnl_sparc_trans.Enable(False)
+            self.main_frame.pnl_sparc_fib.Enable(True)
+
+        self.tab_data_model.main.opm.setPath(mode)
 
     # TODO: factorize with SparcAcquisitionTab
     @call_in_wx_main
@@ -2289,45 +2314,19 @@ class MirrorAlignTab(Tab):
             self._scount_stream.is_active.value = active
 
         # If there is an actuator, disable the lens
-        main_data = self.tab_data_model.main
         if show:
-            if main_data.lens_switch:
-                # convention is: 0 rad == off (no lens)
-                main_data.lens_switch.moveAbs({"rx": 0})
-            if main_data.ar_spec_sel:
-                # convention is: 0 rad == off (no mirror) == AR
-                main_data.ar_spec_sel.moveAbs({"rx": 0})
-
-            # pick a filter which is pass-through (=empty)
-            if main_data.light_filter:
-                fltr = main_data.light_filter
-                # find the right filter
-                for p, d in fltr.axes["band"].choices.items():
-                    if d == "pass-through":
-                        if self._move_filter_f.done():
-                            # Don't save if it's not yet in the previous value
-                            # (can happen when quickly switching between tabs)
-                            self._prev_filter = fltr.position.value["band"]
-                        else:
-                            self._move_filter_f.cancel()
-                        fltr.moveAbs({"band": p})
-                        break
-                else:
-                    logging.info("Failed to find pass-through filter")
-        else:
-            # don't put it back lenses when hiding, to avoid unnessary moves
-            if main_data.light_filter:
-                # If the user has just started to change the filter it won't be
-                # recorded... not sure how to avoid it easily, so for now we'll
-                # accept this little drawback.
-                f = main_data.light_filter.moveAbs({"band": self._prev_filter})
-                self._move_filter_f = f
+            main_data = self.tab_data_model.main
+            main_data.opm.setPath(self.tab_data_model.align_mode.value)
+        # when hidden, the new tab shown is in charge to request the right
+        # optical path mode, if needed.
 
     def terminate(self):
         if self._ccd_stream:
             self._ccd_stream.is_active.value = False
         if self._spot_stream:
             self._spot_stream.is_active.value = False
+        if self._scount_stream:
+            self._scount_stream.is_active.value = False
 
 
 class TabBarController(object):
