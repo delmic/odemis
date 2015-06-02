@@ -237,6 +237,7 @@ class OverlayTestCase(test.GuiTestCase):
 
         sol = vol.SpotModeOverlay(cnvs)
         cnvs.add_view_overlay(sol)
+        sol.activate()
 
         test.gui_loop()
 

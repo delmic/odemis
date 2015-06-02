@@ -353,7 +353,7 @@ class StreamController(object):
         self.stream.image.subscribe(_on_new_spec_data, init=True)
 
     def _add_exposure_time_ctrl(self):
-        """ Add exposute time controls to the stream panel"""
+        """ Add exposure time controls to the stream panel"""
 
         # Assertion mainly needed for dynamic attribute recognition (i.e. exposureTime)
         assert(isinstance(self.stream, CameraStream))
@@ -365,7 +365,7 @@ class StreamController(object):
             'unit': self.stream.detExposureTime.unit,
             'scale': et_config["scale"],
             'accuracy': et_config["accuracy"],
-            }
+        }
 
         lbl_ctrl, value_ctrl = self.stream_panel.add_exposure_time_ctrl(
             self.stream.detExposureTime.value, conf
