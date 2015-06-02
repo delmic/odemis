@@ -125,13 +125,24 @@ SPARC-MONASH: {
 "Focus Lens": {
     class: static.OpticalLens,
     role: lens,
-    init: {mag: 0.4917, # ratio
-           pole_pos: [1280, 1080], # (px, px), position of the pole (aka the hole in the mirror)
-           x_max: 10e-3,  # m, the distance between the parabola origin and the cutoff position
-           hole_diam: 0.6e-3,  # m, diameter the hole in the mirror
-           focus_dist: 0.5e-3,  # m, the vertical mirror cutoff, iow the min distance between the mirror and the sample
-           parabola_f: 0.8e-3,  # m, parabola_parameter=1/4f
-          }, 
+    # Big mirror config
+    init: {
+       mag: 0.4917, # ratio
+       pole_pos: [458, 519], # (px, px), position of the pole (aka the hole in the mirror)
+       x_max: 13.25e-3,  # m, the distance between the parabola origin and the cutoff position
+       hole_diam: 0.6e-3,  # m, diameter the hole in the mirror
+       focus_dist: 0.5e-3,  # m, the vertical mirror cutoff, iow the min distance between the mirror and the sample
+       parabola_f: 2.5e-3,  # m, parabola_parameter=1/4f
+    },
+    # Small mirror config
+    #init: {
+    #   mag: 0.4917, # ratio
+    #   pole_pos: [1280, 1080], # (px, px), position of the pole (aka the hole in the mirror)
+    #   x_max: 10e-3,  # m, the distance between the parabola origin and the cutoff position
+    #   hole_diam: 0.6e-3,  # m, diameter the hole in the mirror
+    #   focus_dist: 0.5e-3,  # m, the vertical mirror cutoff, iow the min distance between the mirror and the sample
+    #   parabola_f: 0.8e-3,  # m, parabola_parameter=1/4f
+    #},
     affects: ["Angular Camera"]
 }
 
@@ -143,7 +154,7 @@ SPARC-MONASH: {
     class: tlaptmf.MFF,
     role: lens-switch,
     init: {port: "/dev/fake", # for simulator
-           #sn: "37857191",
+           #sn: "37857195",
            axis: "rx",
            # inverted: ["rx"],
     },
@@ -156,20 +167,19 @@ SPARC-MONASH: {
     role: filter,
     init: {port: "/dev/ttyFTDI*", # will automatically find the right port
            bands: {1: [420.e-9, 460.e-9], # pos -> m,m
-                   2: [500.e-9, 550.e-9], 
+                   2: [500.e-9, 550.e-9],
                    3: "polariser",
                    6: "pass-through"},
            },
-    affects: ["Angular Camera", "Spectrometer"]
+    affects: ["Angular Camera", "Spectrometer", "CL Detector", "Monochromator"]
 }
 
-# Andor Neo
+# Andor Zyla
 #"Angular Camera": {
 #    class: andorcam3.AndorCam3,
 #    role: ccd,
 #    init: {
 #        device: 0,  # if a real camera is plugged in, it's usually 0
-#        bitflow_install_dirs: "/usr/share/bitflow/", # Put the path where Bitflow data is installed
 #        transpose: [1, -2], # mirrored on Y axis
 #    },
 #    properties: {
@@ -194,7 +204,7 @@ SPARC-MONASH: {
     class: tlaptmf.MFF,
     role: ar-det-selector,
     init: {port: "/dev/fake", # for simulator
-           #sn: "37857195",
+           #sn: "37857191",
            axis: "rx",
            # inverted: ["rx"],
     },
@@ -248,15 +258,12 @@ SPARC-MONASH: {
         device: "fake",
         slits: {1: "slit-in", # INPUT_SIDE
                 3: "slit-monochromator", # OUTPUT_SIDE
-        }
+        },
+        # accessory: "slitleds",
     },
 }
 
-# PI E-861 jumpers (. = off):
-# X          = 1234.6..
-# Y          = 123..6..
-# RZ (yaw)   = 12.4.6..
-# RY (pitch) = 12...6..
+# PI E-861 over IP (can be static IP, or via DCHP)
 "Mirror Actuators": {
     class: pigcs.FakeBus,
     role: mirror,
@@ -266,8 +273,8 @@ SPARC-MONASH: {
         # yaw/pitch are axes according to Mirror's orientation
         # rz = yaw, ry = pitch (from Mirror's point of view)
         # axis -> controller, channel, closed-loop?
-        axes: {"y":  [1, 1, False],
-               "x":  [2, 1, False],
+        axes: {"x":  [1, 1, False],
+               "y":  [2, 1, False],
                "ry": [3, 1, False],
                "rz": [4, 1, False]},
         # inverted: ["y", "ry"],
