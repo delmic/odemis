@@ -27,7 +27,6 @@ import multiprocessing
 import os
 import threading
 import urllib
-import weakref
 
 
 # Pyro4.config.COMMTIMEOUT = 30.0 # a bit of timeout
@@ -386,67 +385,3 @@ def _manageContainer(name, isready=None):
     container.run()
     container.close()
 
-# Special functions and class to manage method/function with weakref
-# wxpython.pubsub has something similar
-
-class WeakRefLostError(Exception):
-    pass
-
-class WeakMethodBound(object):
-    def __init__(self, f):
-        self.f = f.__func__
-        self.c = weakref.ref(f.__self__)
-        # cache the hash so that it's the same after deref'd
-        self.hash = hash(f.__func__) + hash(f.__self__)
-
-    def __call__(self, *arg, **kwargs):
-        ins = self.c()
-        if ins == None:
-            raise WeakRefLostError('Method called on dead object')
-        return self.f(ins, *arg, **kwargs)
-
-    def __hash__(self):
-        return self.hash
-
-    def __eq__(self, other):
-        try:
-            return (type(self) is type(other) and self.f == other.f
-                    and self.c() == other.c())
-        except:
-            return False
-
-    # def __ne__(self, other):
-    #     return not self == other
-
-class WeakMethodFree(object):
-    def __init__(self, f):
-        self.f = weakref.ref(f)
-        # cache the hash so that it's the same after deref'd
-        self.hash = hash(f)
-
-    def __call__(self, *arg, **kwargs):
-        fun = self.f()
-        if fun == None:
-            raise WeakRefLostError('Function no longer exist')
-        return fun(*arg, **kwargs)
-
-    def __hash__(self):
-        return self.hash
-
-    def __eq__(self, other):
-        try:
-            return type(self) is type(other) and self.f() == other.f()
-        except:
-            return False
-
-    # def __ne__(self, other):
-    #    return not self == other
-
-def WeakMethod(f):
-    try:
-        # Check if the paramater has a function object, which is the case
-        # if it's a bound function (ie.e a method)
-        f.__func__
-    except AttributeError:
-        return WeakMethodFree(f)
-    return WeakMethodBound(f)

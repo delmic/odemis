@@ -20,6 +20,7 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 from __future__ import division
+
 import Pyro4
 from Pyro4.core import oneway
 import collections
@@ -27,12 +28,14 @@ import inspect
 import logging
 import numbers
 import numpy
+from odemis import util
 import threading
 from types import NoneType
 import zmq
 
+from odemis.util.weak import WeakMethod, WeakRefLostError
+
 from . import _core
-from ._core import WeakMethod, WeakRefLostError
 
 
 class NotSettableError(AttributeError):
@@ -984,7 +987,16 @@ class FloatEnumerated(FloatVA, Enumerated):
         Enumerated._check(self, value)
         FloatVA._check(self, value)
 
-    # TODO: _set_value should allow some room for floating point error
+# TODO: needed? For now, there is just something similar in the CLI
+#     def _set_value(self, value, must_notify=False):
+#         if value not in self._choices:
+#             # allow some room for floating point error
+#             closest = util.find_closest(value, self._choices)
+#             if util.almost_equal(value, closest):
+#                 logging.info("Changing requested value %g to closest choice %g",
+#                              value, closest)
+#                 value = closest
+#         super(FloatEnumerated, self)._set_value(value, must_notify)
 
 
 class IntEnumerated(IntVA, Enumerated):

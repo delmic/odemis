@@ -25,6 +25,7 @@ losslessly and with metadata attached (see _metadata for the conventional ones).
 '''
 
 from __future__ import division
+
 import Pyro4
 import inspect
 import logging
@@ -34,8 +35,9 @@ import threading
 import time
 import zmq
 
+from odemis.util.weak import WeakMethod, WeakRefLostError
+
 from . import _core
-from ._core import WeakMethod, WeakRefLostError
 
 
 class DataArray(numpy.ndarray):

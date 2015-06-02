@@ -22,7 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Various helper functions that have a generic usefulness
 # Warning: do not put anything that has dependencies on non default python modules
 
-from __future__ import division
+from __future__ import division, absolute_import
 
 import Queue
 import collections
@@ -32,13 +32,12 @@ from functools import wraps
 import inspect
 import logging
 import math
-from odemis import model
 import os
 import signal
 import threading
 import time
+from . import weak
 import weakref
-
 
 def find_closest(val, l):
     """
@@ -408,7 +407,7 @@ class RepeatingTimer(threading.Thread):
         name (str): fancy name to give to the thread
         """
         threading.Thread.__init__(self, name=name)
-        self.callback = model.WeakMethod(callback)
+        self.callback = weak.WeakMethod(callback)
         self.period = period
         self.daemon = True
         self._must_stop = threading.Event()
@@ -419,7 +418,7 @@ class RepeatingTimer(threading.Thread):
             while not self._must_stop.wait(self.period):
                 try:
                     self.callback()
-                except model.WeakRefLostError:
+                except weak.WeakRefLostError:
                     # it's gone, it's over
                     return
         except Exception:
