@@ -1005,7 +1005,7 @@ class SettingsStreamsTestCase(unittest.TestCase):
         # Create the stream
         specs = stream.SpectrumSettingsStream("test",
                       self.spec, self.spec.data, self.ebeam,
-                      detvas=("exposureTime", "readoutRate", "binning", "resolution"))
+                      detvas={"exposureTime", "readoutRate", "binning", "resolution"})
         self._image = None
         specs.image.subscribe(self._on_image)
 
@@ -1035,7 +1035,7 @@ class SettingsStreamsTestCase(unittest.TestCase):
         # Create the stream and a SpotStream (to drive the ebeam)
         mcs = stream.MonochromatorSettingsStream("test",
                       self.mnchr, self.mnchr.data, self.ebeam, self.spgp,
-                      emtvas=("dwellTime",))# , "scale", "resolution"
+                      emtvas={"dwellTime", })  # , "scale", "resolution"
         spots = stream.SpotSEMStream("spot", self.sed, self.sed.data, self.ebeam)
 
         self._image = None
@@ -1079,7 +1079,7 @@ class SettingsStreamsTestCase(unittest.TestCase):
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         mcs = stream.MonochromatorSettingsStream("test",
                       self.mnchr, self.mnchr.data, self.ebeam, self.spgp,
-                      emtvas=("dwellTime",))  # , "scale", "resolution"
+                      emtvas={"dwellTime", })  # , "scale", "resolution"
         sms = stream.SEMMDStream("test sem-md", sems, mcs)
 
         mcs.roi.value = (0.2, 0.2, 0.5, 0.6)
@@ -1135,7 +1135,7 @@ class SettingsStreamsTestCase(unittest.TestCase):
         # Create the stream
         ars = stream.ARSettingsStream("test",
                       self.ccd, self.ccd.data, self.ebeam,
-                      detvas=("exposureTime", "readoutRate", "binning", "resolution"))
+                      detvas={"exposureTime", "readoutRate", "binning", "resolution"})
         self._image = None
         ars.image.subscribe(self._on_image)
 
@@ -1176,7 +1176,7 @@ class SettingsStreamsTestCase(unittest.TestCase):
         # Create the stream
         cls = stream.CLSettingsStream("test",
                       self.cl, self.cl.data, self.ebeam,
-                      emtvas=("dwellTime",))  # note: not "scale", "resolution"
+                      emtvas={"dwellTime", })  # note: not "scale", "resolution"
         self._image = None
         cls.image.subscribe(self._on_image)
 
