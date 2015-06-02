@@ -502,6 +502,16 @@ def move_abs(comp_name, moves):
         else:
             position = convertToObject(str_position)
 
+        # If only a couple of positions are possible, and asking for a float,
+        # avoid the rounding error by looking for the closest possible
+        if (hasattr(ad, "choices") and
+            isinstance(ad.choices, collections.Iterable) and
+            position not in ad.choices):
+            closest = util.find_closest(position, ad.choices)
+            if util.almost_equal(closest, position, rtol=1e-3):
+                logging.debug("Adjusting value %.15g to %.15g", position, closest)
+                position = closest
+
         act_mv[axis_name] = position
         logging.info(u"Will move %s.%s to %s", comp_name, axis_name,
                      units.readable_str(position, ad.unit, sig=3))
