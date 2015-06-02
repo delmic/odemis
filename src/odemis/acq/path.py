@@ -31,6 +31,7 @@ from odemis.acq import stream
 # Dict includes all the modes available and the corresponding component axis or
 # VA values
 # {Mode: (detector_needed, {role: {axis/VA: value}})}
+# TODO: have one config per microscope model
 MODES = {'ar': ("ccd",
                 {'lens-switch': {'rx': math.radians(90)},
                  'ar-spec-selector': {'rx': 0},
@@ -85,17 +86,34 @@ class OpticalPathManager(object):
             handle all the components needed
         """
         self.microscope = microscope
-        self.known_comps = dict()  # keep list of already accessed components
-        self._stored_band = None
-        self._last_mode = None
+        # keep list of already accessed components, to avoid creating new proxys
+        # every time the mode changes
+        self._known_comps = dict()  # str (role) -> component
+        # TODO: need to generalise (to any axis)
+        self._stored_band = None  # last band of the filter (when not in alignment mode)
+        self._last_mode = None  # previous mode that was set
         # Removes modes which are not supported by the current microscope
         self._modes = MODES.copy()
         for m, (det, conf) in self._modes.items():
             try:
-                comp = model.getComponent(role=det)
+                comp = self._getComponent(det)
             except LookupError:
                 logging.debug("Removing mode %s, which is not supported", m)
                 del self._modes[m]
+
+    def _getComponent(self, role):
+        """
+        same as model.getComponent, but optimised by caching the result
+        return Component
+        raise LookupError: if no component found
+        """
+        try:
+            comp = self._known_comps[role]
+        except LookupError:
+            comp = model.getComponent(role=role)
+            self._known_comps[role] = comp
+
+        return comp
 
     def setPath(self, mode):
         """
@@ -115,12 +133,7 @@ class OpticalPathManager(object):
         for comp_role, conf in modeconf.items():
             # Try to access the component needed
             try:
-                if comp_role in self.known_comps:
-                    # Reuse component to avoid extensive thread usage
-                    comp = self.known_comps[comp_role]
-                else:
-                    comp = model.getComponent(role=comp_role)
-                    self.known_comps[comp_role] = comp
+                comp = self._getComponent(comp_role)
             except LookupError:
                 logging.debug("Failed to find component %s, skipping it", comp_role)
                 continue
