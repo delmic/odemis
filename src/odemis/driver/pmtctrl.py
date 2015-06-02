@@ -75,7 +75,13 @@ class PMT(model.Detector):
         self._pmt = pmt
         self.children.value.add(pmt)
         self._shape = pmt.shape
-        # TODO: copy all the VAs from the PMT to here (but .state and .children).
+        # copy all the VAs and Events from the PMT to here (but .state and .children).
+        pmtVAs = model.getVAs(pmt)
+        for key, value in pmtVAs.items():
+            setattr(self, key, value)
+        pmtEvents = model.getEvents(pmt)
+        for key, value in pmtEvents.items():
+            setattr(self, key, value)
 
         ctrl = children["pmt-control"]
         if not isinstance(ctrl, ComponentBase):
@@ -136,7 +142,6 @@ class PMTDataFlow(model.DataFlow):
     def start_generate(self):
         # Reset protection first
         self._control.protection.value = False
-
         self._pmt.data.subscribe(self._newFrame)
         self.active = True
 
@@ -146,6 +151,9 @@ class PMTDataFlow(model.DataFlow):
         # Set protection after stopping
         self._control.protection.value = True
         self.active = False
+
+    def synchronizedOn(self, event):
+        self._pmt.data.synchronizedOn(event)
 
     def _newFrame(self, df, data):
         """
