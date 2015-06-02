@@ -181,8 +181,7 @@ class Stream(object):
             LookupError: if the component doesn't have a listed VA
 
         """
-
-        assert(isinstance(vas, set))
+        # assert(isinstance(vas, set))
 
         for vaname in vas:
             try:

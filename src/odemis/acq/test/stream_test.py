@@ -849,6 +849,75 @@ class SPARCTestCase(unittest.TestCase):
         self.assertAlmostEqual(sem_md[model.MD_POS], spec_md[model.MD_POS])
         self.assertAlmostEqual(sem_md[model.MD_PIXEL_SIZE], spec_md[model.MD_PIXEL_SIZE])
 
+#     @skip("simple")
+    def test_acq_fuz(self):
+        """
+        Test short & long acquisition for Spectrometer
+        """
+        # Create the stream
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+        specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data, self.ebeam)
+        sps = stream.SEMSpectrumMDStream("test sem-spec", sems, specs)
+        specs.fuzzing.value = True
+
+        specs.roi.value = (0.15, 0.6, 0.8, 0.8)
+
+        # Long acquisition (small rep to avoid being too long) > 0.1s
+        self.spec.exposureTime.value = 0.3  # s
+        specs.repetition.value = (5, 6)
+        exp_shape = specs.repetition.value[::-1]
+
+        # Start acquisition
+        timeout = 1 + 1.5 * sps.estimateAcquisitionTime()
+        start = time.time()
+        f = sps.acquire()
+
+        # wait until it's over
+        data = f.result(timeout)
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(f.done())
+        self.assertEqual(len(data), len(sems.raw) + len(specs.raw))
+        self.assertEqual(len(sems.raw), 1)
+        self.assertEqual(sems.raw[0].shape, (exp_shape[0] * stream.TILE_SHAPE[0], exp_shape[1] * stream.TILE_SHAPE[1]))
+        self.assertEqual(len(specs.raw), 1)
+        sshape = specs.raw[0].shape
+        self.assertEqual(len(sshape), 5)
+        self.assertGreater(sshape[0], 1)  # should have at least 2 wavelengths
+        sem_md = sems.raw[0].metadata
+        spec_md = specs.raw[0].metadata
+        self.assertAlmostEqual(sem_md[model.MD_POS], spec_md[model.MD_POS])
+        self.assertAlmostEqual(sem_md[model.MD_PIXEL_SIZE],
+                               (spec_md[model.MD_PIXEL_SIZE][0] / stream.TILE_SHAPE[0], spec_md[model.MD_PIXEL_SIZE][1] / stream.TILE_SHAPE[1]))
+
+        # Short acquisition (< 0.1s)
+        self.spec.exposureTime.value = 0.01  # s
+        specs.repetition.value = (25, 60)
+        exp_shape = specs.repetition.value[::-1]
+
+        # Start acquisition
+        timeout = 1 + 1.5 * sps.estimateAcquisitionTime()
+        start = time.time()
+        f = sps.acquire()
+
+        # wait until it's over
+        data = f.result(timeout)
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(f.done())
+        self.assertEqual(len(data), len(sems.raw) + len(specs.raw))
+        self.assertEqual(len(sems.raw), 1)
+        self.assertEqual(sems.raw[0].shape, (exp_shape[0] * stream.TILE_SHAPE[0], exp_shape[1] * stream.TILE_SHAPE[1]))
+        self.assertEqual(len(specs.raw), 1)
+        sshape = specs.raw[0].shape
+        self.assertEqual(len(sshape), 5)
+        self.assertGreater(sshape[0], 1)  # should have at least 2 wavelengths
+        sem_md = sems.raw[0].metadata
+        spec_md = specs.raw[0].metadata
+        self.assertAlmostEqual(sem_md[model.MD_POS], spec_md[model.MD_POS])
+        self.assertAlmostEqual(sem_md[model.MD_PIXEL_SIZE],
+                               (spec_md[model.MD_PIXEL_SIZE][0] / stream.TILE_SHAPE[0], spec_md[model.MD_PIXEL_SIZE][1] / stream.TILE_SHAPE[1]))
+
     def test_count(self):
         cs = stream.CameraCountStream("test count", self.spec, self.spec.data, self.ebeam)
         self.spec.exposureTime.value = 0.1
@@ -1001,6 +1070,65 @@ class SettingsStreamsTestCase(unittest.TestCase):
 
         # TODO
         # change center wavelength and try again
+
+    def test_sem_md(self):
+        """
+        Test short & long acquisition for SEM MD
+        """
+        # Create the stream
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+        mcs = stream.MonochromatorSettingsStream("test",
+                      self.mnchr, self.mnchr.data, self.ebeam, self.spgp,
+                      emtvas=("dwellTime",))  # , "scale", "resolution"
+        sms = stream.SEMMDStream("test sem-md", sems, mcs)
+
+        mcs.roi.value = (0.2, 0.2, 0.5, 0.6)
+        sems.dcPeriod.value = 100
+        sems.dcRegion.value = (0.525, 0.525, 0.6, 0.6)
+        sems.dcDwellTime.value = 1e-06
+
+        mcs.repetition.value = (5, 6)
+        exp_shape = mcs.repetition.value[::-1]
+        num_ar = numpy.prod(mcs.repetition.value)
+
+        # Start acquisition
+        start = time.time()
+        f = sms.acquire()
+
+        # wait until it's over
+        data = f.result()
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(f.done())
+        self.assertEqual(len(sems.raw), 1)
+        self.assertEqual(numpy.prod(data[0].shape), num_ar)
+        self.assertEqual(sems.raw[0].shape, exp_shape)
+        md = mcs.raw[0].metadata
+        self.assertIn(model.MD_POS, md)
+
+        mcs.roi.value = (0.1, 0.1, 0.8, 0.8)
+        sems.dcPeriod.value = 5
+        sems.dcRegion.value = (0.525, 0.525, 0.6, 0.6)
+        sems.dcDwellTime.value = 1e-06
+
+        mcs.repetition.value = (25, 30)
+        exp_shape = mcs.repetition.value[::-1]
+        num_ar = numpy.prod(mcs.repetition.value)
+
+        # Start acquisition
+        start = time.time()
+        f = sms.acquire()
+
+        # wait until it's over
+        data = f.result()
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(f.done())
+        self.assertEqual(len(sems.raw), 1)
+        self.assertEqual(numpy.prod(data[0].shape), num_ar)
+        self.assertEqual(sems.raw[0].shape, exp_shape)
+        md = mcs.raw[0].metadata
+        self.assertIn(model.MD_POS, md)
 
     def test_ar_ss(self):
         """ Test ARSettingsStream """
