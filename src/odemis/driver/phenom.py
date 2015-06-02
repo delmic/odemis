@@ -793,10 +793,15 @@ class Detector(model.Detector):
         with self._acquisition_lock:
             with self._acquisition_init_lock:
                 self._acquisition_must_stop.set()
+                # Cancel possible grid scanning
+                if self._is_scanning:
+                    self._spot_scanner.cancel()
+                    self._is_scanning = False
                 try:
                     self._acq_device.SEMAbortImageAcquisition()
                 except suds.WebFault:
                     logging.debug("No acquisition in progress to be aborted.")
+
                 # "Blank" the beam
                 self.beam_blank(True)
 
@@ -887,7 +892,7 @@ class Detector(model.Detector):
                 # Compute the exact spot coordinates within the current fov
                 # and scan spot by spot
                 # Start scanning
-                if not self._is_scanning:
+                if (not self._is_scanning) and (not self._acquisition_must_stop.is_set()):
                     fov = (1.0 - (1.0 / res[0]), 1.0 - (1.0 / res[1]))
                     spot_dist = (fov[0] / (res[0] - 1),
                                  fov[1] / (res[1] - 1))
