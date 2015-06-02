@@ -319,10 +319,11 @@ class Shamrock(model.Actuator):
             for i, slitn in self._slit_names.items():
                 if self.AutoSlitIsPresent(i):
                     axes[slitn] = model.Axis(unit="m",
-                                            range=[SLITWIDTHMIN * 1e-6, SLITWIDTHMAX * 1e-6]
-                                            )
+                                             range=(SLITWIDTHMIN * 1e-6, SLITWIDTHMAX * 1e-6)
+                                             )
+                    logging.info("Adding slit %d added as %s", i, slitn)
                 else:
-                    logging.info("Slit %s is not present", slitn)
+                    logging.info("Slit %d (%s) is not present", i, slitn)
 
             # TODO: allow to define the name of the axis? or anyway, we can use
             # MultiplexActuator to rename the axis?
@@ -332,6 +333,7 @@ class Shamrock(model.Actuator):
                 axes["flip-out"] = model.Axis(unit="rad",
                                               choices=set(FLIPPER_TO_PORT.keys())
                                               )
+                logging.info("Adding out mirror flipper as flip-out")
             else:
                 logging.info("Out mirror flipper is not present")
 
