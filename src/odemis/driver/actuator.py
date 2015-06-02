@@ -43,7 +43,7 @@ class MultiplexActuator(model.Actuator):
         """
         name (string)
         role (string)
-        children (dict str -> actuator): axis name -> actuator to be used for this axis
+        children (dict str -> actuator): axis name (in this actuator) -> actuator to be used for this axis
         axes_map (dict str -> str): axis name in this actuator -> axis name in the child actuator
         """
         if not children:
@@ -72,14 +72,13 @@ class MultiplexActuator(model.Actuator):
             axes[axis] = child.axes[axes_map[axis]]
             self._position[axis] = child.position.value[axes_map[axis]]
             if (hasattr(child, "speed") and
-                isinstance(child.speed, model.VigilantAttributeBase)):
+                isinstance(child.speed, model.VigilantAttributeBase) and
+                axis in child.speed.value):
                 self._speed[axis] = child.speed.value[axes_map[axis]]
             if (hasattr(child, "referenced") and
-                isinstance(child.referenced, model.VigilantAttributeBase)):
-                try:
-                    self._referenced[axis] = child.referenced.value[axes_map[axis]]
-                except KeyError:
-                    pass # the axis is not referencable => fine
+                isinstance(child.referenced, model.VigilantAttributeBase) and
+                axis in child.referenced.value):
+                self._referenced[axis] = child.referenced.value[axes_map[axis]]
 
         # TODO: test/finish conversion to Axis
         # this set ._axes and ._children
@@ -115,10 +114,8 @@ class MultiplexActuator(model.Actuator):
 
         # TODO: change the speed range to a dict of speed ranges
         self.speed = model.MultiSpeedVA(self._speed, [0., 10.], setter=self._setSpeed)
-        for c, ax in children_axes.items():
-            if not (hasattr(child, "speed") and
-                    isinstance(c.speed, model.VigilantAttributeBase)):
-                continue
+        for axis in self._speed.keys():
+            child, ax = self._axis_to_child[axis]
             def update_speed_per_child(value, ax=ax):
                 for a in ax:
                     try:
@@ -131,10 +128,8 @@ class MultiplexActuator(model.Actuator):
 
         # whether the axes are referenced
         self.referenced = model.VigilantAttribute(self._referenced, readonly=True)
-        for c, ax in children_axes.items():
-            if not (hasattr(child, "referenced") and
-                    isinstance(c.referenced, model.VigilantAttributeBase)):
-                continue
+        for axis in self._referenced.keys():
+            child, ax = self._axis_to_child[axis]
             def update_ref_per_child(value, ax=ax):
                 for a in ax:
                     try:
