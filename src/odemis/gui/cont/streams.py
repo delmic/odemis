@@ -920,27 +920,22 @@ class StreamBarController(object):
 
             self.add_action("Bright-field", self.addBrightfield, brightfield_capable)
 
-        # SED
-        if self._main_data_model.ebeam and self._main_data_model.sed:
-            if self._main_data_model.spectrograph and self._main_data_model.spectrometer:
-                # Sparc
+        def sem_capable():
+            """ Check if focussed view is compatible with a SEM stream """
+            enabled = self._main_data_model.chamberState.value in {guimodel.CHAMBER_VACUUM,
+                                                                   guimodel.CHAMBER_UNKNOWN}
+            view = self._tab_data_model.focussedView.value
+            compatible = view.is_compatible(acqstream.SEMStream)
+            return enabled and compatible
 
-                # Action creation is handled by the Sparc Acquisition Tab
-                pass
-            else:
-                # Not a Sparc
-                def sem_capable():
-                    """ Check if focussed view is compatible with a SEM stream """
-                    enabled = self._main_data_model.chamberState.value in {guimodel.CHAMBER_VACUUM,
-                                                                           guimodel.CHAMBER_UNKNOWN}
-                    view = self._tab_data_model.focussedView.value
-                    compatible = view.is_compatible(acqstream.SEMStream)
-                    return enabled and compatible
-
+        if self._main_data_model.role != "sparc":
+            # For SPARC: action creation is handled by the Sparc Acquisition Tab
+            # SED
+            if self._main_data_model.ebeam and self._main_data_model.sed:
                 self.add_action("Secondary electrons", self.addSEMSED, sem_capable)
-        # BSED
-        if self._main_data_model.ebeam and self._main_data_model.bsd:
-            self.add_action("Backscattered electrons", self.addSEMBSD, sem_capable)
+            # BSED
+            if self._main_data_model.ebeam and self._main_data_model.bsd:
+                self.add_action("Backscattered electrons", self.addSEMBSD, sem_capable)
 
     def _userAddFluo(self, **kwargs):
         """ Called when the user request adding a Fluo stream
