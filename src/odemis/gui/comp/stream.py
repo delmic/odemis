@@ -25,7 +25,6 @@ data streams coming from the microscope.
 
 from __future__ import division
 
-import collections
 import logging
 import wx
 import wx.lib.newevent
@@ -34,7 +33,6 @@ from wx.lib.pubsub import pub
 from decorator import decorator
 
 from odemis import acq
-from odemis.acq.stream import OpticalStream
 from odemis.gui import FG_COLOUR_EDIT, FG_COLOUR_MAIN, BG_COLOUR_MAIN, BG_COLOUR_STREAM, \
     FG_COLOUR_DIS
 from odemis.gui.comp.combo import ComboBox
@@ -1035,8 +1033,10 @@ class StreamBar(wx.Panel):
         acq.stream.BrightfieldStream,
         acq.stream.StaticStream,
         acq.stream.FluoStream,
+        acq.stream.CLStream,
         acq.stream.SpectrumSettingsStream,
         acq.stream.ARSettingsStream,
+        acq.stream.MonochromatorSettingsStream,
     )
 
     def __init__(self, *args, **kwargs):
