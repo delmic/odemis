@@ -30,7 +30,6 @@ import numpy
 from odemis import util, model
 from odemis.acq import stream
 from odemis.acq.stream import UNDEFINED_ROI, EMStream
-from odemis.acq.stream._live import SEMStream
 from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
 from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS, BitmapCanvas
 from odemis.gui.comp.overlay.view import HistoryOverlay, PointSelectOverlay, MarkingLineOverlay
@@ -360,7 +359,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             # merging without decreasing the intensity.
             if isinstance(s, stream.OpticalStream):
                 images_opt.append((s.image.value, BLEND_SCREEN, s.name.value))
-            elif isinstance(s, stream.SpectrumStream):
+            elif isinstance(s, (stream.SpectrumStream, stream.CLStream)):
                 images_spc.append((s.image.value, BLEND_DEFAULT, s.name.value))
             else:
                 images_std.append((s.image.value, BLEND_DEFAULT, s.name.value))
@@ -384,12 +383,10 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         currently expects.
 
         """
-
         images = self._get_ordered_images()
 
         # add the images in order
         ims = []
-
         for rgbim, blend_mode, name in images:
             # TODO: convert to RGBA later, in canvas and/or cache the conversion
             # On large images it costs 100 ms (per image and per canvas)
@@ -402,16 +399,16 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             rot = rgbim.metadata.get(model.MD_ROTATION, 0)
             shear = rgbim.metadata.get(model.MD_SHEAR, 0)
 
-            ims.append([rgba_im, pos, scale, keepalpha, rot, shear, blend_mode, name])
+            ims.append((rgba_im, pos, scale, keepalpha, rot, shear, blend_mode, name))
 
         # TODO: Canvas needs to accept the NDArray (+ specific attributes recorded separately).
         self.set_images(ims)
 
         # For debug only:
-        if images:
-            self._lastest_datetime = max(im[0].metadata.get(model.MD_ACQ_DATE, 0) for im in images)
-        else:
-            self._lastest_datetime = 0
+        # if images:
+        #     self._lastest_datetime = max(im[0].metadata.get(model.MD_ACQ_DATE, 0) for im in images)
+        # else:
+        #     self._lastest_datetime = 0
 
         # if self._lastest_datetime > 0:
         #     logging.debug("Updated canvas list %g s after acquisition",
