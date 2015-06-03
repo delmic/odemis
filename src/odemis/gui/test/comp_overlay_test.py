@@ -235,10 +235,11 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.background_brush = wx.BRUSHSTYLE_CROSS_HATCH
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
-        sol = vol.SpotModeOverlay(cnvs)
-        cnvs.add_view_overlay(sol)
-        sol.activate()
-
+        sol = wol.SpotModeOverlay(cnvs)
+        cnvs.add_world_overlay(sol)
+        # sol.activate()
+        cnvs.update_drawing()
+        
         test.gui_loop()
 
     def test_streamicon_overlay(self):

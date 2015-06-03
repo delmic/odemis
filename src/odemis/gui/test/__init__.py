@@ -193,7 +193,7 @@ class GuiTestCase(unittest.TestCase):
         cls.sizer.Layout()
 
     def create_simple_tab_model(self):
-        main = gmodel.MainGUIData(None) # no microscope backend
+        main = gmodel.MainGUIData(None)  # no microscope backend
         tab = gmodel.MicroscopyGUIData(main)
 
         # Add one view

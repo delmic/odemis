@@ -184,6 +184,7 @@ class LedActiveMgr(object):
         if self._line is None:
             return
         logging.debug("Indicating leds are on")
+        # Force the protection independently of the protection VA state
         self._spec.SetAccessory(self._line, 0)
         time.sleep(1e-3)  # wait 1 ms to make sure all the detectors are stopped
 
@@ -194,7 +195,9 @@ class LedActiveMgr(object):
         if self._line is None:
             return
         logging.debug("Indicating leds are off")
-        self._spec.SetAccessory(self._line, 1)
+        # Unprotect iff the protection VA also allows it
+        if not self._spec.protection.value:
+            self._spec.SetAccessory(self._line, 1)
 
 
 # default names for the slits
@@ -283,6 +286,8 @@ class Shamrock(model.Actuator):
                 raise ValueError("Accessory set to '%s', but no accessory connected"
                                  % (accessory,))
             if accessory == "slitleds":
+                # To control the ttl signal from outside the component
+                self.protection = model.BooleanVA(True, setter=self._setProtection)
                 self._led_access = LedActiveMgr(self, 1)
             else:
                 self._led_access = LedActiveMgr(None, None)
@@ -355,6 +360,15 @@ class Shamrock(model.Actuator):
         except Exception:
             self.Close()
             raise
+
+    def _setProtection(self, value):
+        line = 1  # just a fixed line
+        if value:
+            self.SetAccessory(line, 0)
+        else:
+            self.SetAccessory(line, 1)
+
+        return value
 
     def Initialize(self):
         """
