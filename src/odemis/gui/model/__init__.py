@@ -97,6 +97,32 @@ class MainGUIData(object):
     the sub-components directly.
 
     """
+    # Mapping between the component role and the attribute name on the MainGUIData
+    _ROLE_TO_ATTR = {
+        "ccd": "ccd",
+        "se-detector": "sed",
+        "bs-detector": "bsd",
+        "spectrometer": "spectrometer",
+        "chamber-ccd": "chamber_ccd",
+        "overview-ccd": "overview_ccd",
+        "stage": "stage",
+        "focus": "focus",
+        "ebeam-focus": "ebeam_focus",
+        "overview-focus": "overview_focus",
+        "mirror": "mirror",
+        "align": "aligner",
+        "fiber-aligner": "fibaligner",
+        "lens-switch": "lens_switch",
+        "ar-spec-selector": "ar_spec_sel",
+        "chamber": "chamber",
+        "light": "light",
+        "brightlight": "brightlight",
+        "filter": "light_filter",
+        "lens": "lens",
+        "e-beam": "ebeam",
+        "chamber-light": "chamber_light",
+        "overview-light": "overview_light",
+    }
 
     def __init__(self, microscope):
         """
@@ -124,8 +150,10 @@ class MainGUIData(object):
         self.ebeam_focus = None  # change the e-beam focus
         self.sed = None  # secondary electron detector
         self.bsd = None  # backscattered electron detector
-        self.spectrometer = None  # spectrometer
+        self.spectrometer = None  # 1D detector that returns a spectrum
         self.spectrograph = None  # actuator to change the wavelength
+        self.monochromator = None  # 0D detector behind the spectrograph
+        # TODO: the next two should not be needed anymore
         self.ar_spec_sel = None  # actuator to select AR/Spectrometer (SPARC)
         self.lens_switch = None  # actuator to (de)activate the lens (SPARC)
         self.chamber = None  # actuator to control the chamber (has vacuum, pumping etc.)
@@ -143,54 +171,13 @@ class MainGUIData(object):
             self.role = microscope.role
 
             for c in microscope.children.value:
-                if c.role == "ccd":
-                    self.ccd = c
-                elif c.role == "se-detector":
-                    self.sed = c
-                elif c.role == "bs-detector":
-                    self.bsd = c
-                elif c.role == "spectrometer":
-                    self.spectrometer = c
-                elif c.role == "chamber-ccd":
-                    self.chamber_ccd = c
-                elif c.role == "overview-ccd":
-                    self.overview_ccd = c
-                elif c.role == "stage":
-                    self.stage = c # most views move this actuator when moving
-                elif c.role == "focus":
-                    self.focus = c
-                elif c.role == "ebeam-focus":
-                    self.ebeam_focus = c
-                elif c.role == "overview-focus":
-                    self.overview_focus = c
-                elif c.role == "mirror":
-                    self.mirror = c
-                elif c.role == "align":
-                    self.aligner = c
-                elif c.role == "fiber-aligner":
-                    self.fibaligner = c
-                elif c.role == "lens-switch":
-                    self.lens_switch = c
-                elif c.role == "ar-spec-selector":
-                    self.ar_spec_sel = c
-                elif c.role == "chamber":
-                    self.chamber = c
-                elif c.role == "light":
-                    self.light = c
-                elif c.role == "brightlight":
-                    self.brightlight = c
-                elif c.role == "filter":
-                    self.light_filter = c
-                elif c.role == "lens":
-                    self.lens = c
-                elif c.role == "e-beam":
-                    self.ebeam = c
-                elif c.role == "chamber-light":
-                    self.chamber_light = c
-                elif c.role == "overview-light":
-                    self.overview_light = c
+                try:
+                    attrname = self._ROLE_TO_ATTR[c.role]
+                    setattr(self, attrname, c)
+                except KeyError:
+                    pass  # not interested by this component
 
-            # Spectrograph is not directly an actuator, but a sub-comp of spectrometer
+            # Spectrograph is not directly a child, but a sub-comp of spectrometer
             if self.spectrometer:
                 for child in self.spectrometer.children.value:
                     if child.role == "spectrograph":
