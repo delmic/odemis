@@ -267,7 +267,7 @@
             <object class="sizeritem">
               <object class="TabButton" name="btn_tab_sparc_align">
                 <size>160,30</size>
-                <label>MIRROR ALIGNMENT</label>
+                <label>ALIGNMENT</label>
                 <bitmap>img/tab_inactive.png</bitmap>
                 <hover>img/tab_hover.png</hover>
                 <selected>img/tab_active.png</selected>
