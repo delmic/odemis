@@ -43,6 +43,7 @@ def call_in_wx_main(f, self, *args, **kwargs):
     """ This method decorator makes sure the method is called from the main
     (GUI) thread.
     """
+    # TODO: if already in the main thread, immediately run the command
     return wx.CallAfter(f, self, *args, **kwargs)
 
 

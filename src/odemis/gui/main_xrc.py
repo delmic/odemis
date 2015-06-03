@@ -134,6 +134,8 @@ class xrcfr_main(wx.Frame):
         self.vp_align_sem = xrc.XRCCTRL(self, "vp_align_sem")
         self.pnl_tab_sparc_align = xrc.XRCCTRL(self, "pnl_tab_sparc_align")
         self.pnl_alignment_btns = xrc.XRCCTRL(self, "pnl_alignment_btns")
+        self.btn_align_mirror = xrc.XRCCTRL(self, "btn_align_mirror")
+        self.btn_align_fiber = xrc.XRCCTRL(self, "btn_align_fiber")
         self.pnl_sparc_trans = xrc.XRCCTRL(self, "pnl_sparc_trans")
         self.mirror_align_slider_mirror_x = xrc.XRCCTRL(self, "mirror_align_slider_mirror_x")
         self.mirror_align_slider_mirror_y = xrc.XRCCTRL(self, "mirror_align_slider_mirror_y")
@@ -1965,6 +1967,9 @@ def __init_resources():
                               <encoding>UTF-8</encoding>
                             </font>
                             <style>wxALIGN_CENTRE</style>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
                           </object>
                           <flag>wxALL</flag>
                           <border>10</border>
@@ -1986,6 +1991,9 @@ def __init_resources():
                               <encoding>UTF-8</encoding>
                             </font>
                             <style>wxALIGN_CENTRE</style>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
                           </object>
                           <flag>wxALL</flag>
                           <border>10</border>

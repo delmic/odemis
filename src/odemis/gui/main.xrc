@@ -1701,6 +1701,9 @@
                               <encoding>UTF-8</encoding>
                             </font>
                             <style>wxALIGN_CENTRE</style>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
                           </object>
                           <flag>wxALL</flag>
                           <border>10</border>
@@ -1722,6 +1725,9 @@
                               <encoding>UTF-8</encoding>
                             </font>
                             <style>wxALIGN_CENTRE</style>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
                           </object>
                           <flag>wxALL</flag>
                           <border>10</border>
