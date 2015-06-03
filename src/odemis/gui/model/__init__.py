@@ -205,6 +205,12 @@ class MainGUIData(object):
             if not self.light and not self.ebeam:
                 raise KeyError("No emitter found in the microscope")
 
+            # Optical path manager (for now, only used on the SPARC)
+            # Used to control the actuators so that the ligth goes to the right
+            # detector (in the right way).
+            if microscope.role == "sparc":
+                self.opm = path.OpticalPathManager(microscope)
+
         # Chamber is complex so we provide a "simplified state"
         # It's managed by the ChamberController. Setting to PUMPING or VENTING
         # state will request a pressure change.
@@ -229,12 +235,6 @@ class MainGUIData(object):
         # MicroscopyGUIData would be better in theory, but is less convenient
         # do directly access additional GUI information.
         self.tab = model.VAEnumerated(None, choices={None: ""})
-
-        # Optical path manager (for now, only used on the SPARC)
-        # Used to control the actuators so that the ligth goes to the right
-        # detector (in the right way).
-        if microscope.role == "sparc":
-            self.opm = path.OpticalPathManager(microscope)
 
     def stopMotion(self):
         """
