@@ -1680,7 +1680,62 @@
             <object class="sizeritem">
               <object class="wxPanel">
                 <object class="wxBoxSizer">
-                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="wxPanel" name="pnl_alignment_btns">
+                      <object class="wxBoxSizer">
+                        <orient>wxHORIZONTAL</orient>
+                        <object class="sizeritem">
+                          <object class="GraphicRadioButton" name="btn_align_mirror">
+                            <label>MIRROR</label>
+                            <delta>1</delta>
+                            <bitmap>img/button/btn_128x48.png</bitmap>
+                            <hover>img/button/btn_128x48_h.png</hover>
+                            <selected>img/button/btn_128x48_a.png</selected>
+                            <fg>#1A1A1A</fg>
+                            <font>
+                              <size>11</size>
+                              <style>normal</style>
+                              <weight>normal</weight>
+                              <underlined>0</underlined>
+                              <face>Ubuntu</face>
+                              <encoding>UTF-8</encoding>
+                            </font>
+                            <style>wxALIGN_CENTRE</style>
+                          </object>
+                          <flag>wxALL</flag>
+                          <border>10</border>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="GraphicRadioButton" name="btn_align_fiber">
+                            <label>OPTICAL FIBER</label>
+                            <delta>1</delta>
+                            <bitmap>img/button/btn_128x48.png</bitmap>
+                            <hover>img/button/btn_128x48_h.png</hover>
+                            <selected>img/button/btn_128x48_a.png</selected>
+                            <fg>#1A1A1A</fg>
+                            <font>
+                              <size>11</size>
+                              <style>normal</style>
+                              <weight>normal</weight>
+                              <underlined>0</underlined>
+                              <face>Ubuntu</face>
+                              <encoding>UTF-8</encoding>
+                            </font>
+                            <style>wxALIGN_CENTRE</style>
+                          </object>
+                          <flag>wxALL</flag>
+                          <border>10</border>
+                        </object>
+                      </object>
+                      <fg>#E5E5E5</fg>
+                      <bg>#444444</bg>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxBOTTOM|wxEXPAND</flag>
+                    <border>5</border>
+                  </object>
                   <object class="sizeritem">
                     <object class="wxPanel" name="pnl_sparc_trans">
                       <object class="wxBoxSizer">
@@ -2379,6 +2434,7 @@
                     </object>
                     <flag>wxEXPAND</flag>
                   </object>
+                  <orient>wxVERTICAL</orient>
                 </object>
                 <fg>#E5E5E5</fg>
                 <bg>#333333</bg>
