@@ -79,12 +79,16 @@ class RepetitionStream(LiveStream):
                                              emitter.resolution.range,
                                              setter=self._setRepetition)
 
-        # the size of the pixel, both horizontally and vertically
+        # the size of the pixel, used both horizontally and vertically
+        epxs = emitter.pixelSize.value
+        eshape = emitter.shape
+        phy_size_x = epxs[0] * eshape[0]  # one dim is enough
+        pxs = phy_size_x / self.repetition.value[0]
         # actual range is dynamic, as it changes with the magnification
-        self.pixelSize = model.FloatContinuous(emitter.pixelSize.value[0],
-                                               range=(0, 1), unit="m", setter=self._setPixelSize)
+        self.pixelSize = model.FloatContinuous(pxs, range=(0, 1), unit="m",
+                                               setter=self._setPixelSize)
 
-        # True if we apply fuzzy scanning
+        # fuzzy scanning avoids aliasing by sub-scanning each region of a pixel
         self.fuzzing = model.BooleanVA(False)
 
         # exposure time of each pixel is the exposure time of the detector,
@@ -331,13 +335,12 @@ class PMTSettingsStream(RepetitionStream):
 
     def estimateAcquisitionTime(self):
         try:
-            # Each pixel x the dwell time (of the emitter) +
-            # 30ms overhead + 20% overhead
+            # Each pixel x the dwell time (of the emitter) + 20% overhead
             dt = self._getEmitterVA("dwellTime").value
-            dur_image = (dt + 0.03) * 1.20
-            duration = numpy.prod(self.repetition.value) * dur_image
+            duration = numpy.prod(self.repetition.value) * dt * 1.20
             # Add the setup time
             duration += self.SETUP_OVERHEAD
+            logging.debug("duration = %f", duration)
 
             return duration
         except Exception:
@@ -537,10 +540,12 @@ class CLSettingsStream(PMTSettingsStream):
         super(CLSettingsStream, self)._onActive(active)
 
     def _onDwellTime(self, value):
-        self._restartLongAcquisition()
+        # TODO: this tend to be too pesmistic as to when to restart as it uses
+        # the ROI to compute the acqusition time, while we are actually full ROI.
+        self._updateAcquisitionTime()
 
     def _onResolution(self, value):
-        self._restartLongAcquisition()
+        self._updateAcquisitionTime()
 
 # Maximum allowed overlay difference in electron coordinates.
 # Above this, the find overlay procedure will consider an error occurred and
