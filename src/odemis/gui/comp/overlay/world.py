@@ -237,7 +237,7 @@ class WorldSelectOverlay(base.WorldOverlay, base.SelectionMixin):
     # END Event Handlers
 
 
-class SpotModeOverlay(base.WorldOverlay):
+class SpotModeOverlay(base.WorldOverlay, base.DragMixin):
     """ Render the spot mode indicator in the center of the view
 
     If a position is provided, the spot will be drawn there.
@@ -248,6 +248,8 @@ class SpotModeOverlay(base.WorldOverlay):
 
     def __init__(self, cnvs):
         base.WorldOverlay.__init__(self, cnvs)
+        base.DragMixin.__init__(self)
+
         self.b_center = self.cnvs.get_half_buffer_size()
         self.colour = conversion.hex_to_frgb(gui.FG_COLOUR_EDIT)
         self.highlight = conversion.hex_to_frgb(gui.FG_COLOUR_HIGHLIGHT)
@@ -312,11 +314,21 @@ class SpotModeOverlay(base.WorldOverlay):
         ctx.stroke()
 
     def on_left_down(self, evt):
-        if not self.active:
+        if self.active:
+            base.DragMixin._on_left_down(self, evt)
+        else:
             base.WorldOverlay.on_left_down(self, evt)
 
     def on_left_up(self, evt):
         if self.active:
+            base.DragMixin._on_left_up(self, evt)
+            self.w_position = self.cnvs.view_to_world(evt.GetPositionTuple(), self.b_center)
+            self.cnvs.update_drawing()
+        else:
+            base.WorldOverlay.on_left_up(self, evt)
+
+    def on_motion(self, evt):
+        if self.active and self.dragging:
             self.w_position = self.cnvs.view_to_world(evt.GetPositionTuple(), self.b_center)
             self.cnvs.update_drawing()
         else:
