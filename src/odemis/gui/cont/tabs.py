@@ -28,21 +28,12 @@ import collections
 import logging
 import math
 import numpy
-import os.path
-import scipy.misc
-import weakref
-
-import pkg_resources
-import wx
-
-# IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
-# file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
-# This is not related to any particular wxPython version and is most likely permanent.
-from wx import html
-
 from odemis import dataio, model
 from odemis.acq import calibration
+from odemis.acq import stream
+from odemis.acq.align import AutoFocus
 from odemis.acq.stream._sync import MultipleDetectorStream
+from odemis.driver.actuator import ConvertStage
 from odemis.gui.comp import overlay
 from odemis.gui.comp.canvas import CAN_ZOOM
 from odemis.gui.comp.popup import Message
@@ -55,6 +46,17 @@ from odemis.gui.cont.streams import StreamController
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.img import scale_to_alpha
 from odemis.util import units
+import os.path
+import pkg_resources
+import scipy.misc
+import threading
+import weakref
+# IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
+# file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
+# This is not related to any particular wxPython version and is most likely permanent.
+import wx.html
+import wx
+
 import odemis.acq.stream as acqstream
 import odemis.gui.cont.acquisition as acqcont
 import odemis.gui.cont.streams as streamcont
@@ -62,9 +64,6 @@ import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
 import odemis.gui.util.align as align
-from odemis.driver.actuator import ConvertStage
-from odemis.acq.align import AutoFocus
-from odemis.acq import stream
 
 
 class Tab(object):
@@ -2178,10 +2177,13 @@ class MirrorAlignTab(Tab):
         # * fiber-align: move yaw, pitch and x/Y of fiber with scount feedback
         if main_data.ccd is None or main_data.spectrometer is None:
             # Only one mode possible => hide the buttons
-            # TODO (once the buttons exist)
+            main_frame.pnl_alignment_btns.Show(False)
             if main_data.ccd is None:
                 # No AR => use only fiber alignment as mirror alignment is impossible
                 tab_data.align_mode.value = "fiber-align"
+        else:
+            main_frame.btn_align_mirror.Bind(wx.EVT_BUTTON, self._onClickAlignButton)
+            main_frame.btn_align_fiber.Bind(wx.EVT_BUTTON, self._onClickAlignButton)
 
         tab_data.align_mode.subscribe(self._onAlignMode, init=True)
 
@@ -2192,13 +2194,36 @@ class MirrorAlignTab(Tab):
         # Bind keys
         self._actuator_controller.bind_keyboard(main_frame.pnl_tab_sparc_align)
 
+    def _onClickAlignButton(self, evt):
+        """
+        Called when one of the Mirror/Optical fiber button is pushed
+        Note: in practice they can never be unpushed by the user, so this happens
+          only when the button is toggled on.
+        """
+        btn = evt.GetEventObject()
+        if not btn.GetToggle():
+            logging.warning("Got event from button being untoggled")
+            return
+
+        if btn == self.main_frame.btn_align_mirror:
+            mode = "mirror-align"
+        elif btn == self.main_frame.btn_align_fiber:
+            mode = "fiber-align"
+        else:
+            logging.warning("Unknown button %s pressed", btn)
+            return
+        # untoggling the other button will be done when the VA is updated
+        self.tab_data_model.align_mode.value = mode
+
+    @call_in_wx_main
     def _onAlignMode(self, mode):
         """
         Called when the align_mode changes (because the user selected a new one)
         mode (str): the new alignment mode
         """
         # Ensure the toggle buttons are correctly set
-        # TODO
+        self.main_frame.btn_align_mirror.SetToggle(mode == "mirror-align")
+        self.main_frame.btn_align_fiber.SetToggle(mode == "fiber-align")
 
         # Disable controls which are useless (to guide the user)
         if mode == "mirror-align":
@@ -2208,7 +2233,11 @@ class MirrorAlignTab(Tab):
             self.main_frame.pnl_sparc_trans.Enable(False)
             self.main_frame.pnl_sparc_fib.Enable(True)
 
-        self.tab_data_model.main.opm.setPath(mode)
+        # This is blocking on the hardware => run in a separate thread
+        # TODO: Probably better is that setPath returns a future (and cancel it
+        # when hiding the panel)
+        threading.Thread(target=self.tab_data_model.main.opm.setPath,
+                         args=(mode,)).start()
 
     # TODO: factorize with SparcAcquisitionTab
     @call_in_wx_main
@@ -2315,18 +2344,15 @@ class MirrorAlignTab(Tab):
 
         # If there is an actuator, disable the lens
         if show:
-            main_data = self.tab_data_model.main
-            main_data.opm.setPath(self.tab_data_model.align_mode.value)
+            mode = self.tab_data_model.align_mode.value
+            threading.Thread(target=self.tab_data_model.main.opm.setPath,
+                             args=(mode,)).start()
         # when hidden, the new tab shown is in charge to request the right
         # optical path mode, if needed.
 
     def terminate(self):
-        if self._ccd_stream:
-            self._ccd_stream.is_active.value = False
-        if self._spot_stream:
-            self._spot_stream.is_active.value = False
-        if self._scount_stream:
-            self._scount_stream.is_active.value = False
+        for s in (self._ccd_stream, self._scount_stream, self._spot_stream):
+            s.is_active.value = False
 
 
 class TabBarController(object):
