@@ -77,16 +77,14 @@ class GraphicalRadioButtonControl(wx.Panel):
         self.SetSizer(sizer)
 
     def _reset_buttons(self, btn=None):
-        for button in [b for b in self.buttons if b != btn]:
-            button.SetToggle(False)
+        for button in self.buttons:
+            if button != btn:
+                button.SetToggle(False)
 
     def SetValue(self, value):
         logging.debug("Set radio button control to %s", value)
-        self._reset_buttons()
-
-        for i, btn in enumerate(self.buttons):
-            if btn.value == value:
-                self.buttons[i].SetToggle(True)
+        for btn in self.buttons:
+            btn.SetToggle(btn.value == value)
 
     def GetValue(self):
         for btn in self.buttons:
