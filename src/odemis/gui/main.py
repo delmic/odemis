@@ -159,7 +159,7 @@ class OdemisGUIApp(wx.App):
                 ),
                 (
                     ("sparc",),
-                    ("MIRROR ALIGNMENT",),
+                    ("ALIGNMENT",),
                     "sparc_align",
                     tabs.MirrorAlignTab,
                     self.main_frame.btn_tab_sparc_align,
