@@ -90,6 +90,9 @@ class MetadataUpdater(model.Component):
                 elif a.role == "light":
                     # update the emitted light wavelength
                     self.observeLight(a, d)
+                elif a.role == "spectrograph":
+                    # update the output wavelength range
+                    self.observeSpectrograph(a, d)
                 else:
                     logging.debug("not observing %s which affects %s", a.name, d.name)
                     continue
@@ -224,6 +227,22 @@ class MetadataUpdater(model.Component):
 
         light.emissions.subscribe(updateInputWL, init=True)
         self._onTerminate.append((light.emissions.unsubscribe, (updateInputWL,)))
+
+    def observeSpectrograph(self, spectrograph, comp):
+        if comp.role != "monochromator":
+            logging.warning("Does not know what to do with a spectrograph affecting a %s", comp.role)
+            return
+
+        # calculate monochromator wavelength based on center wavelength
+        # and slit-monochromator opening
+        spec_wl = spectrograph.position.value['wavelength']
+        slit_pos = spectrograph.position.value['slit-monochromator']
+        # TODO Need actual formula to calculate wavelength
+        wl = (spec_wl - 20e-9, spec_wl + 20e-9)  # dummy
+        # clip negative values
+        wl = (max(0, wl[0]), max(0, wl[1]))
+        md = {model.MD_OUT_WL: wl}
+        comp.updateMetadata(md)
 
     def terminate(self):
         # call all the unsubscribes

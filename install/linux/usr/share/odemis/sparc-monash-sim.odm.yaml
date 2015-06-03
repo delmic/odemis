@@ -252,7 +252,7 @@ SPARC-MONASH: {
 "Spectrograph": {
     class: andorshrk.Shamrock,
     role: spectrograph,
-    affects: ["Monochromator PMT", "Spectral Camera"],
+    affects: ["Monochromator", "Spectral Camera"],
     children: {"ccd": "Spectral Camera"},
     init: {
         device: "fake",
@@ -267,7 +267,7 @@ SPARC-MONASH: {
 "Spec CCD-PMT Flipper": {
     class: actuator.MultiplexActuator,
     role: spec-det-selector,
-    affects: ["Monochromator PMT", "Spectral Camera"],
+    affects: ["Monochromator", "Spectral Camera"],
     children: {"rx": "Spectrograph"},
     init: {
         axes_map: {"rx": "flip-out"},
