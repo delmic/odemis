@@ -739,7 +739,7 @@ class SparcAcquisitionTab(Tab):
         if tool == guimod.TOOL_SPOT:
 
             # TODO: Make activating the spot mode overlay (i.e. making the spot movable) less ugly
-            self.main_frame.vp_sparc_acq.canvas._spotmode_ol.activate()
+            # self.main_frame.vp_sparc_acq.canvas._spotmode_ol.activate()
 
             self._sem_live_stream.should_update.value = False
             self._sem_live_stream.should_update.subscribe(self._cancel_spot_mode)

@@ -1239,14 +1239,10 @@ class BitmapCanvas(BufferedCanvas):
             offset)
 
     def view_to_buffer(self, pos):
-        return super(BitmapCanvas, self).view_to_buffer_pos(
-            pos,
-            self.margins)
+        return super(BitmapCanvas, self).view_to_buffer_pos(pos, self.margins)
 
     def buffer_to_view(self, pos):
-        return super(BitmapCanvas, self).buffer_to_view_pos(
-            pos,
-            self.margins)
+        return super(BitmapCanvas, self).buffer_to_view_pos(pos, self.margins)
 
     # END Position conversion
 

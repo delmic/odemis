@@ -34,7 +34,6 @@ import odemis.gui.comp.overlay.base as base
 import odemis.gui.img.data as img
 from odemis.gui.util.raster import rasterize_line
 from odemis.util import clip_line
-
 import odemis.util.conversion as conversion
 import odemis.util.units as units
 
@@ -236,6 +235,104 @@ class WorldSelectOverlay(base.WorldOverlay, base.SelectionMixin):
             base.WorldOverlay.on_motion(self, evt)
 
     # END Event Handlers
+
+
+class SpotModeOverlay(base.WorldOverlay):
+    """ Render the spot mode indicator in the center of the view
+
+    If a position is provided, the spot will be drawn there.
+
+    If the overlay is activated, the user can use the mouse cursor to select a position
+
+    """
+
+    def __init__(self, cnvs):
+        base.WorldOverlay.__init__(self, cnvs)
+        self.b_center = self.cnvs.get_half_buffer_size()
+        self.colour = conversion.hex_to_frgb(gui.FG_COLOUR_EDIT)
+        self.highlight = conversion.hex_to_frgb(gui.FG_COLOUR_HIGHLIGHT)
+
+        # Rendering attributes
+        self._sect_count = 3
+        self._gap = 0.15
+        self._sect_width = 2.0 * math.pi / self._sect_count
+        self._spot_radius = 12
+
+        # Spot position as a percentage (x, y) where x and y [0..1]
+        self.w_position = None
+
+    def on_size(self, _):
+        self.b_center = self.cnvs.get_half_buffer_size()
+
+    def draw(self, ctx, shift=(0, 0), scale=1.0):
+
+        start = -0.5 * math.pi
+
+        r, g, b = self.highlight
+
+        if self.w_position:
+            b_pos = self.cnvs.world_to_buffer(self.w_position, self.b_center)
+        else:
+            b_pos = self.b_center
+
+        x, y = b_pos
+
+        width = self._spot_radius / 6.0
+
+        for i in range(self._sect_count):
+            ctx.set_line_width(width)
+
+            ctx.set_source_rgba(0, 0, 0, 0.6)
+            ctx.arc(x + 1, y + 1,
+                    self._spot_radius,
+                    start + self._gap,
+                    start + self._sect_width - self._gap)
+            ctx.stroke()
+
+            ctx.set_source_rgb(r, g, b)
+            ctx.arc(x, y,
+                    self._spot_radius,
+                    start + self._gap,
+                    start + self._sect_width - self._gap)
+            ctx.stroke()
+
+            start += self._sect_width
+
+        width = self._spot_radius / 3.5
+        radius = self._spot_radius * 0.6
+
+        ctx.set_line_width(width)
+
+        ctx.set_source_rgba(0, 0, 0, 0.6)
+        ctx.arc(x + 1, y + 1, radius, 0, 2 * math.pi)
+        ctx.stroke()
+
+        ctx.set_source_rgb(r, g, b)
+        ctx.arc(x, y, radius, 0, 2 * math.pi)
+        ctx.stroke()
+
+    def on_left_down(self, evt):
+        if not self.active:
+            base.WorldOverlay.on_left_down(self, evt)
+
+    def on_left_up(self, evt):
+        if self.active:
+            self.w_position = self.cnvs.view_to_world(evt.GetPositionTuple(), self.b_center)
+            self.cnvs.update_drawing()
+        else:
+            base.WorldOverlay.on_left_up(self, evt)
+
+    def on_enter(self, evt):
+        if self.active:
+            self.cnvs.set_default_cursor(wx.CROSS_CURSOR)
+        else:
+            base.WorldOverlay.on_enter(self, evt)
+
+    def on_leave(self, evt):
+        if self.active:
+            self.cnvs.reset_default_cursor()
+        else:
+            base.WorldOverlay.on_leave(self, evt)
 
 
 class RepetitionSelectOverlay(WorldSelectOverlay):
