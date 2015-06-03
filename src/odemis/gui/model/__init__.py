@@ -421,17 +421,8 @@ class ScannedAcquisitionGUIData(MicroscopyGUIData):
         # It will be set at start up by the tab controller
         self.semStream = None
 
-        # TODO: unused for now => get rid of them? cf tab controller
-        # It'd better to actually use them, and move some of the code to its own
-        # controller
-        # # Handle turning on/off the instruments
-        # hw_states = {STATE_OFF, STATE_ON}
-        #
-        # if self.main.ccd:
-        #     self.arState = model.IntEnumerated(STATE_OFF, choices=hw_states)
-        #
-        # if self.main.spectrometer:
-        #     self.specState = model.IntEnumerated(STATE_OFF, choices=hw_states)
+        # The position of the spot. Two floats 0->1. (None, None) if undefined.
+        self.spotPosition = model.TupleVA((None, None))
 
 
 class AnalysisGUIData(MicroscopyGUIData):
