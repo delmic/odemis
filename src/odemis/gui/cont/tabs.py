@@ -617,6 +617,7 @@ class SparcAcquisitionTab(Tab):
             self.main_frame.pnl_sparc_grid.viewports
         )
 
+
         self._view_selector = viewcont.ViewButtonController(
             self.tab_data_model,
             self.main_frame,

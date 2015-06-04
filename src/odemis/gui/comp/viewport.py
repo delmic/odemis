@@ -587,7 +587,7 @@ class SparcAcquisitionViewport(MicroscopeViewport):
 
 class SparcAcquisitionARViewport(SparcAcquisitionViewport):
 
-    canvas_class = miccanvas.SparcAcquiCanvas
+    canvas_class = miccanvas.DblMicroscopeCanvas
     bottom_legend_class = None
 
     def __init__(self, *args, **kwargs):
