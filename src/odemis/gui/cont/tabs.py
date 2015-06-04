@@ -529,7 +529,7 @@ class SparcAcquisitionTab(Tab):
                 (None, self.main_frame.lbl_sparc_view_all)),
             (
                 self.main_frame.btn_sparc_view_tl,
-                (self.main_frame.vp_sparc_acq, self.main_frame.lbl_sparc_view_tl)),
+                (self.main_frame.vp_sparc_tl, self.main_frame.lbl_sparc_view_tl)),
             (
                 self.main_frame.btn_sparc_view_tr,
                 (self.main_frame.vp_sparc_tr, self.main_frame.lbl_sparc_view_tr)),
@@ -738,7 +738,7 @@ class SparcAcquisitionTab(Tab):
         if tool == guimod.TOOL_SPOT:
 
             # TODO: Make activating the spot mode overlay (i.e. making the spot movable) less ugly
-            # self.main_frame.vp_sparc_acq.canvas._spotmode_ol.activate()
+            # self.main_frame.vp_sparc_tl.canvas._spotmode_ol.activate()
 
             self._sem_live_stream.should_update.value = False
             self._sem_live_stream.should_update.subscribe(self._cancel_spot_mode)
@@ -780,6 +780,7 @@ class SparcAcquisitionTab(Tab):
         # FIXME NOW: Update the acq view on acquisition (i.e. button click)
         self.tab_data_model.acquisitionView.addStream(self._sem_ar_stream)
 
+        # Clean the acquisition view when streams get removed
         self.tab_data_model.streams.subscribe(self._clean_acqview)
 
         return stream_cont
@@ -942,7 +943,7 @@ class SparcAcquisitionTab(Tab):
         # self.main_frame.acq_btn_angular.Enable(not is_acquiring)
 
         self.tb.enable(not is_acquiring)
-        self.main_frame.vp_sparc_acq.Enable(not is_acquiring)
+        self.main_frame.vp_sparc_tl.Enable(not is_acquiring)
         self.main_frame.btn_sparc_change_file.Enable(not is_acquiring)
 
     def _copyDwellTimeToAnchor(self, dt):
@@ -967,7 +968,7 @@ class SparcAcquisitionTab(Tab):
             stream = None
 
         # Convert stream to right display
-        cvs = self.main_frame.vp_sparc_acq.canvas
+        cvs = self.main_frame.vp_sparc_tl.canvas
         if stream is None:
             cvs.show_repetition(None)
         else:

@@ -220,7 +220,7 @@ class ViewPortController(object):
                 len(self._viewports) == 4
         ):
             for vp in self._viewports[:4]:
-                assert(isinstance(vp, MicroscopeViewport))
+                assert(isinstance(vp, MicroscopeViewport) or isinstance(vp, PlotViewport))
 
             logging.info("Creating Sparc Acquisition viewport layout")
 

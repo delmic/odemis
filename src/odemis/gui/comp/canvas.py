@@ -1351,6 +1351,12 @@ class DraggableCanvas(BitmapCanvas):
     def enable_drag(self):
         self.abilities.add(CAN_DRAG)
 
+    def disable_zoom(self):
+        self.abilities.remove(CAN_ZOOM)
+
+    def enable_zoom(self):
+        self.abilities.add(CAN_ZOOM)
+
     def disable_focus(self):
         self.abilities.remove(CAN_FOCUS)
 

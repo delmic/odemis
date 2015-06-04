@@ -54,6 +54,10 @@ class ViewPort(wx.Panel):
         """Note: The MicroscopeViewport is not fully initialised until setView()
         has been called.
         """
+
+        hide_bottom_legend = kwargs.pop('hide_bottom_legend', False)
+        hide_left_legend = kwargs.pop('hide_left_legend', False)
+
         wx.Panel.__init__(self, *args, **kwargs)
 
         self._microscope_view = None  # model.MicroscopeView
@@ -78,8 +82,10 @@ class ViewPort(wx.Panel):
         self.left_legend = None
 
         main_sizer = wx.BoxSizer(wx.VERTICAL)
-
-        if self.bottom_legend_class and self.left_legend_class:
+        if (
+                self.bottom_legend_class and not hide_bottom_legend and
+                self.left_legend_class and not hide_left_legend
+        ):
             self.bottom_legend = self.bottom_legend_class(self)
             self.left_legend = self.left_legend_class(self, orientation=wx.VERTICAL)
 
@@ -101,7 +107,7 @@ class ViewPort(wx.Panel):
             self.left_legend.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
 
             main_sizer.Add(grid_sizer, 1, border=2, flag=wx.EXPAND | wx.ALL)
-        elif self.bottom_legend_class:
+        elif self.bottom_legend_class and not hide_bottom_legend:
             main_sizer.Add(self.canvas, proportion=1, border=2,
                            flag=wx.EXPAND | wx.TOP | wx.LEFT | wx.RIGHT)
             # It's made of multiple controls positioned via sizers
@@ -217,9 +223,10 @@ class MicroscopeViewport(ViewPort):
         # Call parent constructor at the end, because it needs the legend panel
         super(MicroscopeViewport, self).__init__(*args, **kwargs)
 
-        # Bind on EVT_SLIDER to update even while the user is moving
-        self.bottom_legend.Bind(wx.EVT_LEFT_UP, self.OnSlider)
-        self.bottom_legend.Bind(wx.EVT_SLIDER, self.OnSlider)
+        if self.bottom_legend:
+            # Bind on EVT_SLIDER to update even while the user is moving
+            self.bottom_legend.Bind(wx.EVT_LEFT_UP, self.OnSlider)
+            self.bottom_legend.Bind(wx.EVT_SLIDER, self.OnSlider)
 
         # Find out screen pixel density for "magnification" value. This works
         # only with monitors/OS which report correct values. It's unlikely to
@@ -270,13 +277,14 @@ class MicroscopeViewport(ViewPort):
 
     def ShowMergeSlider(self, show):
         """ Show or hide the merge slider """
-        self.bottom_legend.bmp_slider_left.Show(show)
-        self.bottom_legend.merge_slider.Show(show)
-        self.bottom_legend.bmp_slider_right.Show(show)
+        if self.bottom_legend:
+            self.bottom_legend.bmp_slider_left.Show(show)
+            self.bottom_legend.merge_slider.Show(show)
+            self.bottom_legend.bmp_slider_right.Show(show)
 
     def UpdateHFWLabel(self):
         """ Physical width of the display"""
-        if not self._microscope_view:
+        if not self._microscope_view or not self.bottom_legend:
             return
         hfw = self._microscope_view.mpp.value * self.GetClientSize()[0]
         hfw = units.round_significant(hfw, 4)
@@ -304,7 +312,8 @@ class MicroscopeViewport(ViewPort):
             mag_dig = mpp_im / self._microscope_view.mpp.value
             label += u" (Digital: × %s)" % units.readable_str(units.round_significant(mag_dig, 2))
 
-        self.bottom_legend.set_mag_label(label)
+        if self.bottom_legend:
+            self.bottom_legend.set_mag_label(label)
 
     ################################################
     #  VA handling
@@ -314,25 +323,32 @@ class MicroscopeViewport(ViewPort):
     def _onMergeRatio(self, val):
         # round is important because int can cause unstable value
         # int(0.58*100) = 57
-        self.bottom_legend.merge_slider.SetValue(round(val * 100))
+        if self.bottom_legend:
+            self.bottom_legend.merge_slider.SetValue(round(val * 100))
 
     @call_in_wx_main
     def _onMPP(self, mpp):
-        self.bottom_legend.scale_win.SetMPP(mpp)
-        self.UpdateHFWLabel()
-        self.UpdateMagnification()
-        # the MicroscopeView will send an event that the view has to be redrawn
+        if self.bottom_legend:
+            self.bottom_legend.scale_win.SetMPP(mpp)
+            self.UpdateHFWLabel()
+            self.UpdateMagnification()
+            # the MicroscopeView will send an event that the view has to be redrawn
 
     def _checkMergeSliderDisplay(self):
         """
         Update the MergeSlider display and icons depending on the state
         """
+
+        if not self.bottom_legend:
+            return
+
         # MergeSlider is displayed if:
         # * Root operator of StreamTree accepts merge argument
         # * (and) Root operator of StreamTree has >= 2 images
-        if ("merge" in self._microscope_view.stream_tree.kwargs
-                and len(self._microscope_view.stream_tree) >= 2):
-
+        if (
+                "merge" in self._microscope_view.stream_tree.kwargs
+                and len(self._microscope_view.stream_tree) >= 2
+        ):
             streams = self._microscope_view.getStreams()
             all_opt = all(isinstance(s, OpticalStream) for s in streams)
 
@@ -347,12 +363,16 @@ class MicroscopeViewport(ViewPort):
                 # the EM image as "right" (ie, it's drawn last).
                 # If there is SEM and Spectrum, the spectrum image is always
                 # set as "right" (ie, it's drawn last).
-                if (any(isinstance(s, EMStream) for s in streams)
-                    and any(isinstance(s, OpticalStream) for s in streams)):
+                if (
+                        any(isinstance(s, EMStream) for s in streams)
+                        and any(isinstance(s, OpticalStream) for s in streams)
+                ):
                     self.bottom_legend.set_stream_type(wx.LEFT, OpticalStream)
                     self.bottom_legend.set_stream_type(wx.RIGHT, EMStream)
-                elif (any(isinstance(s, EMStream) for s in streams)
-                      and any(isinstance(s, SpectrumStream) for s in streams)):
+                elif (
+                        any(isinstance(s, EMStream) for s in streams)
+                        and any(isinstance(s, SpectrumStream) for s in streams)
+                ):
                     self.bottom_legend.set_stream_type(wx.LEFT, EMStream)
                     self.bottom_legend.set_stream_type(wx.RIGHT, SpectrumStream)
                 else:
@@ -381,7 +401,7 @@ class MicroscopeViewport(ViewPort):
         """
         Merge ratio slider
         """
-        if self._microscope_view is None:
+        if self._microscope_view is None or not self.bottom_legend:
             return
 
         val = self.bottom_legend.merge_slider.GetValue() / 100
@@ -395,7 +415,7 @@ class MicroscopeViewport(ViewPort):
     def OnSliderIconClick(self, evt):
         evt.Skip()
 
-        if self._microscope_view is None:
+        if self._microscope_view is None or not self.bottom_legend:
             return
 
         if evt.GetEventObject() == self.bottom_legend.bmp_slider_left:
@@ -563,6 +583,17 @@ class SparcAcquisitionViewport(MicroscopeViewport):
             self.canvas.play_overlay.hide_pause(is_playing)
         else:
             self.canvas.play_overlay.show = False
+
+
+class SparcAcquisitionARViewport(SparcAcquisitionViewport):
+
+    canvas_class = miccanvas.SparcAcquiCanvas
+    bottom_legend_class = None
+
+    def __init__(self, *args, **kwargs):
+        super(SparcAcquisitionARViewport, self).__init__(*args, **kwargs)
+        self.canvas.disable_zoom()
+        self.canvas.disable_drag()
 
 
 class SparcAlignViewport(MicroscopeViewport):

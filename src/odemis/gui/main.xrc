@@ -2733,17 +2733,17 @@
             </object>
             <object class="sizeritem">
               <object class="ViewportGrid" name="pnl_sparc_grid">
-                <object class="SparcAcquisitionViewport" name="vp_sparc_acq">
+                <object class="SparcAcquisitionViewport" name="vp_sparc_tl">
                   <XRCED>
                     <assign_var>1</assign_var>
                   </XRCED>
                 </object>
-                <object class="SparcAcquisitionViewport" name="vp_sparc_tr">
+                <object class="SparcAcquisitionARViewport" name="vp_sparc_tr">
                   <XRCED>
                     <assign_var>1</assign_var>
                   </XRCED>
                 </object>
-                <object class="MicroscopeViewport" name="vp_sparc_bl">
+                <object class="PlotViewport" name="vp_sparc_bl">
                   <XRCED>
                     <assign_var>1</assign_var>
                   </XRCED>
