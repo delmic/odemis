@@ -3009,7 +3009,7 @@ def __init_resources():
                     <assign_var>1</assign_var>
                   </XRCED>
                 </object>
-                <object class="PlotViewport" name="vp_sparc_bl">
+                <object class="SparcAcquisitionPlotViewport" name="vp_sparc_bl">
                   <XRCED>
                     <assign_var>1</assign_var>
                   </XRCED>

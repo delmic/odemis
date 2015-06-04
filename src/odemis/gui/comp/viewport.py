@@ -738,6 +738,25 @@ class PlotViewport(ViewPort):
         microscope_view.lastUpdate.subscribe(self.connect_stream)
 
 
+class SparcAcquisitionPlotViewport(PlotViewport):
+
+    def __init__(self, *args, **kwargs):
+        super(SparcAcquisitionPlotViewport, self).__init__(*args, **kwargs)
+
+    def setView(self, microscope_view, tab_data):
+        super(SparcAcquisitionPlotViewport, self).setView(microscope_view, tab_data)
+        self._microscope_view.stream_tree.should_update.subscribe(self.on_streamtree_change,
+                                                                  init=True)
+
+    def on_streamtree_change(self, is_playing):
+        """ Show or hide the indicator icon that shows if a stream is playing in the viewport """
+        if len(self._microscope_view.stream_tree):
+            self.canvas.play_overlay.show = True
+            self.canvas.play_overlay.hide_pause(is_playing)
+        else:
+            self.canvas.play_overlay.show = False
+
+
 class AngularResolvedViewport(ViewPort):
 
     # Default class

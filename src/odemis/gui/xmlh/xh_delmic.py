@@ -779,6 +779,15 @@ class SparcAcquisitionARViewportXmlHandler(MicroscopeViewportXmlHandler):
 HANDLER_CLASS_LIST.append(SparcAcquisitionARViewportXmlHandler)
 
 
+class SparcAcquisitionPlotViewportXmlHandler(MicroscopeViewportXmlHandler):
+
+    klass = vport.SparcAcquisitionPlotViewport
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, "SparcAcquisitionPlotViewport")
+HANDLER_CLASS_LIST.append(SparcAcquisitionPlotViewportXmlHandler)
+
+
 class SparcAlignViewportXmlHandler(MicroscopeViewportXmlHandler):
 
     klass = vport.SparcAlignViewport
