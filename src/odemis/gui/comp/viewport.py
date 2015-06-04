@@ -638,9 +638,10 @@ class PlotViewport(ViewPort):
         return self._microscope_view
 
     def connect_stream(self, _=None):
-        """ This method will connect this ViewPort to the Spectrum Stream so it
-        it can react to spectrum pixel selection.
+        """ This method will connect this ViewPort to the Spectrum Stream so it it can react to
+        spectrum pixel selection.
         """
+
         ss = self.microscope_view.stream_tree.spectrum_streams
         if self.spectrum_stream in ss:
             logging.debug("not reconnecting to stream as it's already connected")
@@ -657,7 +658,28 @@ class PlotViewport(ViewPort):
             logging.warning("Found %d spectrum streams, will pick one randomly", len(ss))
 
         self.spectrum_stream = ss[0]
-        self.spectrum_stream.selected_pixel.subscribe(self._on_pixel_select, init=True)
+
+        if hasattr(self.spectrum_stream, 'selected_pixel'):
+            self.spectrum_stream.selected_pixel.subscribe(self._on_pixel_select, init=True)
+        elif hasattr(self.spectrum_stream, 'image'):
+            self.spectrum_stream.image.subscribe(self._on_new_data, init=True)
+
+    def _on_new_data(self, data):
+        # spectrum_range = self.spectrum_stream.get_spectrum_range()
+        # unit_x = self.spectrum_stream.spectrumBandwidth.unit
+        if data.size:
+            unit_x = 'nm'
+            self.canvas.set_1d_data(range(len(data[0])), data[0], unit_x)
+
+            self.bottom_legend.unit = unit_x
+            self.bottom_legend.range = self.canvas.range_x
+            self.bottom_legend.tooltip = "Wavelength"
+            self.left_legend.range = self.canvas.range_y
+            self.left_legend.tooltip = "Intensity"
+
+        else:
+            self.clear()
+        self.Refresh()
 
     def _on_pixel_select(self, pixel):
         """ Pixel selection event handler """
