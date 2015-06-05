@@ -449,11 +449,18 @@ class MonochromatorSettingsStream(PMTSettingsStream):
             date = time.time()
 
         # Convert the data from counts to counts/s
-        dt = data.metadata[model.MD_DWELL_TIME]
+        try:
+            dt = data.metadata[model.MD_DWELL_TIME]
+        except KeyError:
+            dt = data.metadata.get(model.MD_EXP_TIME, self.emitter.dwellTime.value)
+            logging.warning("No dwell time metadata found in the monochromator data, "
+                            "will use %f s", dt)
+
         if data.shape == (1, 1): # obtained during spot mode?
             # Just convert to
             d = data[0, 0] / dt
         else: # obtained during a scan
+            logging.debug("Monochromator got %s points instead of 1", data.shape)
             # TODO: cut the data into subparts based on the dwell time
             d = data.mean() / dt
 
