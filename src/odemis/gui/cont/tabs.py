@@ -649,12 +649,12 @@ class SparcAcquisitionTab(Tab):
 
         if main_data.ccd:
             self._streambar_controller.add_action("Angle-resolved", self.on_add_angle_resolved)
-            # FIXME NOW: Filter this action addition on the presence of the correct component
-            self._streambar_controller.add_action("Monochromator", self.on_add_monochromator)
-        if main_data.sed:
+        if main_data.cld:
             self._streambar_controller.add_action("CL intensity", self.on_add_cl_intensity)
         if main_data.spectrometer:
             self._streambar_controller.add_action("Spectrum", self.on_add_spectrum)
+        if main_data.monochromator:
+            self._streambar_controller.add_action("Monochromator", self.on_add_monochromator)
 
         # needs to have the AR and Spectrum streams on the acquisition view
         self._settings_controller = settings.SparcSettingsController(
@@ -754,43 +754,11 @@ class SparcAcquisitionTab(Tab):
         if should_update and self.tab_data_model.tool.value == guimod.TOOL_SPOT:
             self.tab_data_model.tool.value = guimod.TOOL_NONE
 
-    def on_add_angle_resolved(self):
-        """ Create a camera stream and add to to all compatible viewports """
-
-        self._ar_stream = acqstream.ARSettingsStream(
-            "Angle-resolved",
-            self.tab_data_model.main.ccd,
-            self.tab_data_model.main.ccd.data,
-            self.tab_data_model.main.ebeam
-        )
-
-        # import sys
-        # print sys.getrefcount(self._ar_stream)
-
-        self._ar_stream.roi.subscribe(self.onARROI)
-        # FIXME NOW: Make the acquisition controller aware of this VA in a different way
-        # vas_settings.append(self._ar_stream.repetition)
-
-        stream_cont = self._streambar_controller._add_stream(self._ar_stream,
-                                                             add_to_all_views=True)
-        stream_cont.stream_panel.show_visible_btn(False)
-
-        self._sem_ar_stream = acqstream.SEMARMDStream("SEM AR",
-                                                      self._sem_cl_stream,
-                                                      self._ar_stream)
-        # FIXME NOW: Update the acq view on acquisition (i.e. button click)
-        self.tab_data_model.acquisitionView.addStream(self._sem_ar_stream)
-
-        # Clean the acquisition view when streams get removed
-        self.tab_data_model.streams.subscribe(self._clean_acqview)
-
-        return stream_cont
-
     def _clean_acqview(self, streams):
         """ Remove MD streams from the acquisition view that have one or more sub streams missing
 
         Args:
-            streams [stream]: The streams currently used in this tab
+            streams (list of streams): The streams currently used in this tab
 
         """
 
@@ -807,18 +775,48 @@ class SparcAcquisitionTab(Tab):
                     self.tab_data_model.acquisitionView.stream_tree.remove_stream(mds)
                     break
 
-    def on_add_cl_intensity(self):
-        """ Create a CLi stream and add to to all compatible viewports """
+    def on_add_angle_resolved(self):
+        """ Create a camera stream and add to to all compatible viewports """
 
-        # FIXME NOW: Does the other CL stream need to be removed?
-        self._cli_stream = acqstream.CLSettingsStream(
-            "CL intensity",
-            self.tab_data_model.main.sed,
-            self.tab_data_model.main.sed.data,
+        ar_stream = acqstream.ARSettingsStream(
+            "Angle-resolved",
+            self.tab_data_model.main.ccd,
+            self.tab_data_model.main.ccd.data,
             self.tab_data_model.main.ebeam
         )
 
-        stream_cont = self._streambar_controller._add_stream(self._cli_stream,
+        ar_stream.roi.subscribe(self.onARROI)
+        # FIXME NOW: Make the acquisition controller aware of this VA in a different way
+        # vas_settings.append(self._ar_stream.repetition)
+
+        stream_cont = self._streambar_controller._add_stream(ar_stream,
+                                                             add_to_all_views=True)
+        stream_cont.stream_panel.show_visible_btn(False)
+
+        # TODO: directly create the equivalent MDStream, so that the acquisition
+        # time can be correctly computed?
+#         self._sem_ar_stream = acqstream.SEMARMDStream("SEM AR",
+#                                                       self._sem_cl_stream,
+#                                                       self._ar_stream)
+#         # FIXME NOW: Update the acq view on acquisition (i.e. button click)
+#         self.tab_data_model.acquisitionView.addStream(self._sem_ar_stream)
+
+        # Clean the acquisition view when streams get removed
+        self.tab_data_model.streams.subscribe(self._clean_acqview)
+
+        return stream_cont
+
+    def on_add_cl_intensity(self):
+        """ Create a CLi stream and add to to all compatible viewports """
+
+        cli_stream = acqstream.CLSettingsStream(
+            "CL intensity",
+            self.tab_data_model.main.cld,
+            self.tab_data_model.main.cld.data,
+            self.tab_data_model.main.ebeam
+        )
+
+        stream_cont = self._streambar_controller._add_stream(cli_stream,
                                                              add_to_all_views=True)
         stream_cont.stream_panel.show_visible_btn(False)
         return stream_cont
@@ -826,97 +824,83 @@ class SparcAcquisitionTab(Tab):
     def on_add_spectrum(self):
         """ Create a Spectrum stream and add to to all compatible viewports """
 
-        self._spec_stream = acqstream.SpectrumSettingsStream(
+        spec_stream = acqstream.SpectrumSettingsStream(
             "Spectrum",
             self.tab_data_model.main.spectrometer,
             self.tab_data_model.main.spectrometer.data,
             self.tab_data_model.main.ebeam
         )
-        self._spec_stream.roi.subscribe(self.onSpecROI)
+        spec_stream.roi.subscribe(self.onSpecROI)
         # FIXME NOW: Make the acquisition controller aware of this VA in a different way
         # vas_settings.append(spec_stream.repetition)
-
-        self._sem_spec_stream = acqstream.SEMSpectrumMDStream("SEM Spectrum",
-                                                              self._sem_cl_stream,
-                                                              self._spec_stream)
-        # FIXME NOW: Update the acq view on acquisition (i.e. button click)
-        self.tab_data_model.acquisitionView.addStream(self._sem_spec_stream)
-
-        self._scount_stream = acqstream.CameraCountStream(
-            "Spectrum count",
-            self.tab_data_model.main.spectrometer,
-            self.tab_data_model.main.spectrometer.data,
-            self.tab_data_model.main.ebeam
-        )
-        self._scount_stream.should_update.value = True
-        self._scount_stream.windowPeriod.value = 30  # s
-
-        # self._spec_graph = self._settings_controller.spec_graph
-        # self._txt_mean = self._settings_controller.txt_mean
-        self._scount_stream.image.subscribe(self._on_spec_count, init=True)
-
-        stream_cont = self._streambar_controller._add_stream(self._spec_stream,
+        stream_cont = self._streambar_controller._add_stream(spec_stream,
                                                              add_to_all_views=True)
         stream_cont.stream_panel.show_visible_btn(False)
+
+#         self._sem_spec_stream = acqstream.SEMSpectrumMDStream("SEM Spectrum",
+#                                                               self._sem_cl_stream,
+#                                                               self._spec_stream)
+#         # FIXME NOW: Update the acq view on acquisition (i.e. button click)
+#         self.tab_data_model.acquisitionView.addStream(self._sem_spec_stream)
+
         return stream_cont
 
     def on_add_monochromator(self):
         """ Create a Monochromator stream and add to to all compatible viewports """
 
-        # FIXME NOW: Select right components
-        self._monoch_stream = acqstream.MonochromatorSettingsStream(
+        monoch_stream = acqstream.MonochromatorSettingsStream(
             "Monochromator",
-            self.tab_data_model.main.ccd,
-            self.tab_data_model.main.ccd.data,
+            self.tab_data_model.main.monochromator,
+            self.tab_data_model.main.monochromator.data,
             self.tab_data_model.main.ebeam,
             self.tab_data_model.main.spectrograph
         )
 
-        stream_cont = self._streambar_controller._add_stream(self._monoch_stream,
+        stream_cont = self._streambar_controller._add_stream(monoch_stream,
                                                              add_to_all_views=True)
         stream_cont.stream_panel.show_visible_btn(False)
         return stream_cont
 
-    @call_in_wx_main
-    def _on_spec_count(self, scount):
-        """ Called when a new spectrometer data comes in (and so the whole intensity window data is
-        updated)
-
-        Args:
-            scount (DataArray)
-
-        """
-
-        if len(scount) > 0:
-            # Indicate the raw value
-            v = scount[-1]
-            if v < 1:
-                txt = units.readable_str(float(scount[-1]), sig=6)
-            else:
-                txt = "%d" % round(v)  # to make it clear what is small/big
-            # self._txt_mean.SetValue(txt)
-
-            # fit min/max between 0 and 1
-            ndcount = scount.view(numpy.ndarray)  # standard NDArray to get scalars
-            vmin, vmax = ndcount.min(), ndcount.max()
-            b = vmax - vmin
-            if b == 0:
-                b = 1
-            disp = (scount - vmin) / b
-
-            # insert 0s at the beginning if the window is not (yet) full
-            dates = scount.metadata[model.MD_ACQ_DATE]
-            dur = dates[-1] - dates[0]
-            if dur == 0:  # only one tick?
-                dur = 1  # => make it 1s large
-            exp_dur = self._scount_stream.windowPeriod.value
-            missing_dur = exp_dur - dur
-            nb0s = int(missing_dur * len(scount) / dur)
-            if nb0s > 0:
-                disp = numpy.concatenate([numpy.zeros(nb0s), disp])
-        else:
-            disp = []
-        # self._spec_graph.SetContent(disp)
+#     @call_in_wx_main
+#     def _on_spec_count(self, scount):
+#         """ Called when a new spectrometer data comes in (and so the whole intensity window data is
+#         updated)
+#
+#         Args:
+#             scount (DataArray)
+#
+#         """
+#
+#         if len(scount) > 0:
+#             # Indicate the raw value
+#             v = scount[-1]
+#             if v < 1:
+#                 txt = units.readable_str(float(scount[-1]), sig=6)
+#             else:
+#                 txt = "%d" % round(v)  # to make it clear what is small/big
+#             # self._txt_mean.SetValue(txt)
+#
+#             # fit min/max between 0 and 1
+#             ndcount = scount.view(numpy.ndarray)  # standard NDArray to get scalars
+#             vmin, vmax = ndcount.min(), ndcount.max()
+#             b = vmax - vmin
+#             if b == 0:
+#                 b = 1
+#             disp = (scount - vmin) / b
+#
+#             # insert 0s at the beginning if the window is not (yet) full
+#             dates = scount.metadata[model.MD_ACQ_DATE]
+#             dur = dates[-1] - dates[0]
+#             if dur == 0:  # only one tick?
+#                 dur = 1  # => make it 1s large
+#             exp_dur = self._scount_stream.windowPeriod.value
+#             missing_dur = exp_dur - dur
+#             nb0s = int(missing_dur * len(scount) / dur)
+#             if nb0s > 0:
+#                 disp = numpy.concatenate([numpy.zeros(nb0s), disp])
+#         else:
+#             disp = []
+#         # self._spec_graph.SetContent(disp)
 
     def _on_sem_update(self, update):
         # very simple version of a stream scheduler
@@ -2241,7 +2225,6 @@ class MirrorAlignTab(Tab):
         threading.Thread(target=self.tab_data_model.main.opm.setPath,
                          args=(mode,)).start()
 
-    # TODO: factorize with SparcAcquisitionTab
     @call_in_wx_main
     def _on_spec_count(self, scount):
         """

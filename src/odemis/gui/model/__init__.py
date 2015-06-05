@@ -102,7 +102,10 @@ class MainGUIData(object):
         "ccd": "ccd",
         "se-detector": "sed",
         "bs-detector": "bsd",
+        "cl-detector": "cld",
         "spectrometer": "spectrometer",
+        # spectrograph is special: it's a child of spectrometer
+        "monochromator": "monochromator",
         "chamber-ccd": "chamber_ccd",
         "overview-ccd": "overview_ccd",
         "stage": "stage",
@@ -139,17 +142,18 @@ class MainGUIData(object):
         self.ccd = None
         self.stage = None
         self.focus = None  # actuator to change the camera focus
-        self.aligner = None  # actuator to align ebeam/ccd
-        self.mirror = None  # actuator to change the mirror position (on SPARC)
-        self.fibaligner = None # actuator to move/calibrate the fiber (on the SPARC)
-        self.light = None  # epi-fluorescence light
-        self.brightlight = None  # brightlight
+        self.aligner = None  # actuator to align ebeam/ccd (SECOM)
+        self.mirror = None  # actuator to change the mirror position (SPARC)
+        self.fibaligner = None  # actuator to move/calibrate the fiber (SPARC)
+        self.light = None  # epi-fluorescence light (SECOM/DELPHI)
+        self.brightlight = None  # brightlight (no hardware has this yet)
         self.light_filter = None  # emission light filter for SECOM/output filter for SPARC
-        self.lens = None
+        self.lens = None  # Optical lens for SECOM/focus lens for the SPARC
         self.ebeam = None
         self.ebeam_focus = None  # change the e-beam focus
         self.sed = None  # secondary electron detector
         self.bsd = None  # backscattered electron detector
+        self.cld = None  # cathodoluminescnence detector (aka analog PMT)
         self.spectrometer = None  # 1D detector that returns a spectrum
         self.spectrograph = None  # actuator to change the wavelength
         self.monochromator = None  # 0D detector behind the spectrograph
