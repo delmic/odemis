@@ -692,7 +692,6 @@ class SEMMDStream(MultipleDetectorStream):
           Exceptions if error
         """
         try:
-            exp = self._emitter.dwellTime.value * numpy.prod(self._emitter.resolution.value)
             spot_pos = self._getSpotPositions()
             rep = self._rep_stream.repetition.value
             trans_list = []
@@ -745,8 +744,6 @@ class SEMMDStream(MultipleDetectorStream):
                     # Scan the whole image at once
                     self._emitter.scale.value = scale
                     self._emitter.resolution.value = rep
-                    # Just to be sure it will at least scan once
-                    self._emitter.dwellTime.value = (exp / numpy.prod(rep)) / 2
                 else:
                     # Move the beam to the center of the frame
                     cur_dc_period = numpy.clip(cur_dc_period, 0, (tot_num - spots_sum))
@@ -758,7 +755,6 @@ class SEMMDStream(MultipleDetectorStream):
                     n_y = numpy.clip(cur_dc_period // rep[0], 1, rep[1])
                     self._emitter.scale.value = scale
                     self._emitter.resolution.value = (n_x, n_y)
-                    self._emitter.dwellTime.value = (exp / cur_dc_period) / 2
                 spots_sum += cur_dc_period
 
                 # and now the acquisition
@@ -770,13 +766,13 @@ class SEMMDStream(MultipleDetectorStream):
                 self._rep_df.subscribe(self._ssOnRepetitionImage)
                 self._main_df.subscribe(self._ssOnMainImage)
                 trigger.notify()
-                if not self._acq_rep_complete.wait(exp * 2 + 5):
-                    raise TimeoutError("Acquisition of repetition stream for frame %s timed out after %g s"
-                                       % (self._emitter.translation.value, exp * 2 + 5))
-                if self._acq_state == CANCELLED:
-                    raise CancelledError()
                 # Time to scan a frame
                 frame_time = self._emitter.dwellTime.value * cur_dc_period
+                if not self._acq_rep_complete.wait(frame_time * 2 + 5):
+                    raise TimeoutError("Acquisition of repetition stream for frame %s timed out after %g s"
+                                       % (self._emitter.translation.value, frame_time * 2 + 5))
+                if self._acq_state == CANCELLED:
+                    raise CancelledError()
                 if not self._acq_main_complete.wait(frame_time * 1.5 + 1):
                     raise TimeoutError("Acquisition of SEM frame %s timed out after %g s"
                                        % (self._emitter.translation.value, frame_time * 1.5 + 1))

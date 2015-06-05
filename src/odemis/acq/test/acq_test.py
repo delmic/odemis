@@ -31,12 +31,13 @@ import unittest
 from unittest.case import skip
 
 import odemis.acq.stream as stream
+import odemis.acq.path as path
 
 
 logging.getLogger().setLevel(logging.DEBUG)
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
-SPARC_CONFIG = CONFIG_PATH + "sparc-sim.odm.yaml"
+SPARC_CONFIG = CONFIG_PATH + "sparc-monash-sim.odm.yaml"
 SECOM_CONFIG = CONFIG_PATH + "secom-sim.odm.yaml"
 
 class TestNoBackend(unittest.TestCase):
@@ -45,7 +46,7 @@ class TestNoBackend(unittest.TestCase):
     # TODO
     pass
 
-#@skip("simple")
+# @skip("simple")
 class SECOMTestCase(unittest.TestCase):
     # We don't need the whole GUI, but still a working backend is nice
 
@@ -193,6 +194,9 @@ class SPARCTestCase(unittest.TestCase):
         cls.spec = model.getComponent(role="spectrometer")
         cls.ebeam = model.getComponent(role="e-beam")
         cls.sed = model.getComponent(role="se-detector")
+        cls.lenswitch = model.getComponent(role="lens-switch")
+        cls.spec_det_sel = model.getComponent(role="spec-det-selector")
+        cls.ar_spec_sel = model.getComponent(role="ar-spec-selector")
 
     @classmethod
     def tearDownClass(cls):
@@ -255,6 +259,68 @@ class SPARCTestCase(unittest.TestCase):
         self.assertLessEqual(self.end, time.time())
         self.assertEqual(self.done, 1)
         self.assertTrue(not f.cancelled())
+
+    def test_sync_path_guess(self):
+        """
+        try synchronized acquisition using the Optical Path Manager
+        """
+        # Create the streams and streamTree
+        semsur = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+        sems = stream.SEMStream("test sem cl", self.sed, self.sed.data, self.ebeam)
+        ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam)
+        semars = stream.SEMARMDStream("test SEM/AR", sems, ars)
+        specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data, self.ebeam)
+        sps = stream.SEMSpectrumMDStream("test sem-spec", sems, specs)
+        st = stream.StreamTree(streams=[semsur, semars, sps])
+
+        # SEM survey settings are via the current hardware settings
+        self.ebeam.dwellTime.value = self.ebeam.dwellTime.range[0]
+
+        # SEM/AR/SPEC settings are via the AR stream
+        ars.roi.value = (0.1, 0.1, 0.8, 0.8)
+        specs.roi.value = (0.2, 0.2, 0.7, 0.7)
+        mx_brng = self.ccd.binning.range[1]
+        binning = tuple(min(4, mx) for mx in mx_brng) # try binning 4x4
+        self.ccd.binning.value = binning
+        self.ccd.exposureTime.value = 1 # s
+        ars.repetition.value = (2, 3)
+        specs.repetition.value = (3, 2)
+        num_ar = numpy.prod(ars.repetition.value)
+
+        est_time = acq.estimateTime(st.getStreams())
+
+        # prepare callbacks
+        self.start = None
+        self.end = None
+        self.updates = 0
+        self.done = 0
+
+        # Run acquisition
+        start = time.time()
+        opmngr = path.OpticalPathManager(self.microscope)
+        f = acq.acquire(st.getStreams(), opm=opmngr)
+        f.add_update_callback(self.on_progress_update)
+        f.add_done_callback(self.on_done)
+
+        data, e = f.result()
+        dur = time.time() - start
+        self.assertGreaterEqual(dur, est_time / 2) # Estimated time shouldn't be too small
+        self.assertIsInstance(data[0], model.DataArray)
+        self.assertIsNone(e)
+        self.assertEqual(len(data), num_ar + 4)
+
+        thumb = acq.computeThumbnail(st, f)
+        self.assertIsInstance(thumb, model.DataArray)
+
+        self.assertGreaterEqual(self.updates, 1) # at least one update at end
+        self.assertLessEqual(self.end, time.time())
+        self.assertEqual(self.done, 1)
+        self.assertTrue(not f.cancelled())
+        
+        # assert optical path configuration
+        self.assertEqual(self.lenswitch.position.value, path.MODES["spectral"][1]["lens-switch"])
+        self.assertEqual(self.spec_det_sel.position.value, path.MODES["spectral"][1]["spec-det-selector"])
+        self.assertEqual(self.ar_spec_sel.position.value, path.MODES["spectral"][1]["ar-spec-selector"])
 
     def on_done(self, future):
         self.done += 1
