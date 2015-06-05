@@ -122,7 +122,7 @@ class PM8742(model.Actuator):
                 raise HwError("Controller failed to detect motor %d, check the "
                               "actuator is connected to the controller" %
                               (i,))
-            max_stp_s = {MT_STANDARD: 2000, MT_TINY:1750}[mt]
+            max_stp_s = {MT_STANDARD: 2000, MT_TINY: 1750}[mt]
             srng = (0, self._speedToMS(i, max_stp_s))
             speed[n] = self._speedToMS(i, self.GetVelocity(i))
 
@@ -278,7 +278,7 @@ class PM8742(model.Actuator):
             raise IOError("Failed to decode answer about motion '%s'" %
                           resp.encode('string_escape'))
 
-    def AbortMotion(self, axis):
+    def AbortMotion(self):
         """
         Stop immediately the motion on all the axes
         """
