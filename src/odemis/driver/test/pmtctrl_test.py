@@ -33,9 +33,9 @@ SN = "0E203C44"  # put the serial number written on the component to test
 
 # Test using the hardware
 CLASS = pmtctrl.PMTControl
-# KWARGS = dict(name="test", role="pmt_control", sn=SN, prot_time=0.0002, prot_curr=50)
+# KWARGS = dict(name="test", role="pmt_control", sn=SN)
 # Test using the simulator
-KWARGS = dict(name="test", role="pmt_control", port="/dev/fake", prot_time=0.0002, prot_curr=50)
+KWARGS = dict(name="test", role="pmt_control", port="/dev/fake")
 
 # Control unit used for PMT testing
 CLASS_CTRL = CLASS
@@ -91,6 +91,7 @@ class TestStatic(unittest.TestCase):
         with self.assertRaises(ValueError):
             dev = CLASS(**kwargsw)
 
+
 class TestPMTControl(unittest.TestCase):
     """
     Tests which need a component ready
@@ -136,6 +137,7 @@ class TestPMTControl(unittest.TestCase):
         protection = True
         self.dev.protection.value = protection
         self.assertEqual(self.dev.protection.value, protection)
+
 
 class TestPMT(unittest.TestCase):
     """
