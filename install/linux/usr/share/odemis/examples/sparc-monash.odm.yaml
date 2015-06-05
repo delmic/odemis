@@ -3,15 +3,16 @@ SPARC-MONASH: {
     class: Microscope,
     role: sparc,
     children: ["SEM E-beam", "Focus Lens", "Optical Emission Filter",
-    "SEM Detector", "Angular Camera", "Spectrometer", "Fiber Flipper",
-    "Mirror Actuators", "Focus Lens Flipper", "AR CCD-PMT Flipper",
-    "Spec CCD-PMT Flipper", "Fiber Actuators", "CL Detector"],
+    "SEM Detector", "Angular Camera", "Spectrometer", "Monochromator",
+    "Fiber Flipper", "Mirror Actuators", "Focus Lens Flipper", 
+    "AR CCD-PMT Flipper", "Spec CCD-PMT Flipper", "Fiber Actuators", 
+    "CL Detector", ],
 }
 
 # FEI SEM driven via external X/Y connection, using a DAQ board
 "SEM Scan Interface": {
     class: semcomedi.SEMComedi,
-    role: none,
+    role: null,
     init: {device: "/dev/comedi0"},
     # more detectors can be added, if necessary
     children: {
@@ -237,7 +238,7 @@ SPARC-MONASH: {
 "Spectrograph": {
     class: andorshrk.Shamrock,
     role: spectrograph,
-    affects: ["Monochromator PMT", "Spectral Camera"],
+    affects: ["Monochromator", "Spectral Camera"],
     children: {"ccd": "Spectral Camera"},
     init: {
         device: 0,
@@ -252,7 +253,7 @@ SPARC-MONASH: {
 "Spec CCD-PMT Flipper": {
     class: actuator.MultiplexActuator,
     role: spec-det-selector,
-    affects: ["Monochromator PMT", "Spectral Camera"],
+    affects: ["Monochromator", "Spectral Camera"],
     children: {"rx": "Spectrograph"},
     init: {
         axes_map: {"rx": "flip-out"},

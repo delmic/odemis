@@ -51,6 +51,17 @@ class InfoLegend(wx.Panel):
         style = style | wx.NO_BORDER
         super(InfoLegend, self).__init__(parent, wid, pos, size, style)
 
+        # Cannot be a constant because loading bitmaps only works after wx.App
+        # has been created.
+        self._stream_to_icon = (
+            (stream.ARStream, imgdata.getico_blending_angBitmap()),
+            (stream.SpectrumStream, imgdata.getico_blending_specBitmap()),
+            (stream.OpticalStream, imgdata.getico_blending_optBitmap()),
+            (stream.CLStream, imgdata.getico_blending_optBitmap()),  # same as optical
+            (stream.EMStream, imgdata.getico_blending_semBitmap()),
+            (stream.RGBStream, imgdata.getico_blending_goalBitmap()),
+        )
+
         self.SetBackgroundColour(parent.GetBackgroundColour())
         self.SetForegroundColour(parent.GetForegroundColour())
 
@@ -191,15 +202,7 @@ class InfoLegend(wx.Panel):
         :param stream_class: (Stream (sub)class): the class of the stream
         """
 
-        stream_to_icon = [
-            (stream.ARStream, imgdata.getico_blending_angBitmap()),
-            (stream.SpectrumStream, imgdata.getico_blending_specBitmap()),
-            (stream.OpticalStream, imgdata.getico_blending_optBitmap()),
-            (stream.EMStream, imgdata.getico_blending_semBitmap()),
-            (stream.RGBStream, imgdata.getico_blending_goalBitmap()),
-        ]
-
-        for group_of_classes, class_icon in stream_to_icon:
+        for group_of_classes, class_icon in self._stream_to_icon:
             if issubclass(stream_class, group_of_classes):
                 icon = class_icon
                 break

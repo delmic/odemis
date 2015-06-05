@@ -749,8 +749,6 @@ class MicroscopeViewportXmlHandler(xrc.XmlResourceHandler):
         # Create any child windows of this node
         self.CreateChildren(panel)
         return panel
-
-
 HANDLER_CLASS_LIST.append(MicroscopeViewportXmlHandler)
 
 
@@ -770,6 +768,24 @@ class SparcAcquisitionViewportXmlHandler(MicroscopeViewportXmlHandler):
     def CanHandle(self, node):
         return self.IsOfClass(node, "SparcAcquisitionViewport")
 HANDLER_CLASS_LIST.append(SparcAcquisitionViewportXmlHandler)
+
+
+class SparcAcquisitionARViewportXmlHandler(MicroscopeViewportXmlHandler):
+
+    klass = vport.SparcAcquisitionARViewport
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, "SparcAcquisitionARViewport")
+HANDLER_CLASS_LIST.append(SparcAcquisitionARViewportXmlHandler)
+
+
+class SparcAcquisitionPlotViewportXmlHandler(MicroscopeViewportXmlHandler):
+
+    klass = vport.SparcAcquisitionPlotViewport
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, "SparcAcquisitionPlotViewport")
+HANDLER_CLASS_LIST.append(SparcAcquisitionPlotViewportXmlHandler)
 
 
 class SparcAlignViewportXmlHandler(MicroscopeViewportXmlHandler):

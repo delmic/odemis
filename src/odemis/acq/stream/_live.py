@@ -89,9 +89,10 @@ class LiveStream(Stream):
             logging.debug(msg, self._detector.name)
             self._dataflow.unsubscribe(self._onNewImage)
 
-    def _restartLongAcquisition(self):
+    def _updateAcquisitionTime(self):
         """
-        Restart the acquisition if it is a long one.
+        Update the known acquisition time and restart the acquisition if it is a
+        long one.
         Used in live view after some settings are changed to quickly bring a
         new image with the new settings in place.
         """
@@ -345,10 +346,10 @@ class SEMStream(LiveStream):
         super(SEMStream, self)._onActive(active)
 
     def _onDwellTime(self, value):
-        self._restartLongAcquisition()
+        self._updateAcquisitionTime()
 
     def _onResolution(self, value):
-        self._restartLongAcquisition()
+        self._updateAcquisitionTime()
 
 
 MTD_EBEAM_SHIFT = "Ebeam shift"

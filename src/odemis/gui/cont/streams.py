@@ -1391,12 +1391,14 @@ class StreamBarController(object):
         # Remove from the views
         for v in self._tab_data_model.views.value:
             if hasattr(v, "removeStream"):
+                # logging.warn("> %s > %s", v, stream)
                 v.removeStream(stream)
 
         try:
             self._tab_data_model.streams.value.remove(stream)
+            logging.debug("%s Stream removed", stream)
         except ValueError:
-            logging.warn("Stream not found, so not removed")
+            logging.warn("%s Stream not found, so not removed", stream)
 
     def clear(self):
         """

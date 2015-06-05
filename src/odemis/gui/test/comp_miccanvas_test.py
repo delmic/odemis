@@ -212,7 +212,7 @@ class PlotCanvasTestCase(test.GuiTestCase):
         self.add_control(vwp, wx.EXPAND, proportion=1)
 
         for horz, vert in PLOTS:
-            vwp.canvas.set_1d_data( horz, vert)
+            vwp.canvas.set_1d_data(horz, vert)
             vwp.Refresh()
             test.gui_loop(500)
 

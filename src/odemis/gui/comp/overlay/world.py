@@ -328,8 +328,9 @@ class SpotModeOverlay(base.WorldOverlay, base.DragMixin):
             base.WorldOverlay.on_left_up(self, evt)
 
     def on_motion(self, evt):
-        if self.active and self.dragging:
-            self.w_position = self.cnvs.view_to_world(evt.GetPositionTuple(), self.b_center)
+        if self.active and self.left_dragging:
+            v_pos = evt.GetPositionTuple()
+            self.w_position = self.cnvs.view_to_world(v_pos, self.b_center)
             self.cnvs.update_drawing()
         else:
             base.WorldOverlay.on_left_up(self, evt)
