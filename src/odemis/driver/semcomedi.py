@@ -1395,14 +1395,9 @@ class SEMComedi(model.HwComponent):
                 rranges = tuple(d._range for d in detectors)
                 dmd = tuple(d.getMetadata() for d in detectors)
 
-                # Increase the dwell time if it cannot support so many detectors
-                min_dt = self._min_dt_config[len(detectors) - 1][0]
-                if self._scanner.dwellTime.value < min_dt:
-                    self._scanner.dwellTime.value = min_dt
-
                 # get the scan values (automatically updated to the latest needs)
                 (scan, period, shape, margin,
-                 wchannels, wranges, osr, dpr) = self._scanner.get_scan_data()
+                 wchannels, wranges, osr, dpr) = self._scanner.get_scan_data(len(detectors))
 
                 metadata = self._metadata.copy()
                 metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
@@ -2182,8 +2177,9 @@ class Scanner(model.Emitter):
         self.rotation = model.FloatContinuous(0, [0, 2 * math.pi], unit="rad",
                                               readonly=True)
 
-        # max dwell time is purely arbitrary
         min_dt, self._osr, self._dpr = parent._min_dt_config[0]
+        self._nrchans = 1  # _osr and _dpr are only valid for this number of read channels
+        # max dwell time is purely arbitrary
         range_dwell = (min_dt, 1000) # s
         self.dwellTime = model.FloatContinuous(min_dt, range_dwell,
                                                unit="s", setter=self._setDwellTime)
@@ -2247,6 +2243,7 @@ class Scanner(model.Emitter):
     def _setDwellTime(self, value):
         nrchans = max(1, len(self.parent._acquisitions))  # current number of detectors
         dt, self._osr, self._dpr = self.parent.find_best_oversampling_rate(value, nrchans)
+        self._nrchans = nrchans
         return dt
 
     def _setScale(self, value):
@@ -2350,10 +2347,11 @@ class Scanner(model.Emitter):
         """
         return self._resting_data
 
-    def get_scan_data(self):
+    def get_scan_data(self, nrchans):
         """
         Returns all the data as it has to be written the device to generate a
           scan.
+        nrchans (1 <= int): number of read channels
         returns: array (3D numpy.ndarray), period (0<=float), shape (2-tuple int),
                  margin (0<=int), channels (list of int), ranges (list of int)
                  osr (1<=int):
@@ -2367,9 +2365,14 @@ class Scanner(model.Emitter):
           ranges: the range index of each output channel
           osr: over-sampling rate, how many input samples should be acquired by pixel
           dpr: duplication rate, how many times each pixel should be re-acquired
+        Note: it can update the dwell time, if nrchans changed since previous time
         Note: it only recomputes the scanning array if the settings have changed
         Note: it's not thread-safe, you must ensure no simultaneous calls.
         """
+        if nrchans != self._nrchans:
+            # force updating the dwell time for this new number of read channels
+            self.dwellTime.value = self.dwellTime.value
+            assert nrchans == self._nrchans
         dwell_time, osr, dpr = self.dwellTime.value, self._osr, self._dpr
         resolution = self.resolution.value
         scale = self.scale.value
