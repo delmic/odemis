@@ -1214,15 +1214,40 @@ class SettingsStreamsTestCase(unittest.TestCase):
         cls.is_active.value = False
         self.assertAlmostEqual(new_scale / old_scale, ratio)
 
-
     def _on_image(self, im):
         self._image = im
+
 
 # @skip("faster")
 class StaticStreamsTestCase(unittest.TestCase):
     """
     Test static streams, which don't need any backend running
     """
+
+    def test_cl(self):
+        """Test StaticCLStream"""
+        # AR background data
+        md = {
+            model.MD_SW_VERSION: "2.1",
+            model.MD_HW_NAME: "pmt",
+            model.MD_DESCRIPTION: "CL",
+            model.MD_ACQ_DATE: time.time(),
+            model.MD_BPP: 16,
+            model.MD_BINNING: (1, 1),  # px, px
+            model.MD_PIXEL_SIZE: (2e-5, 2e-5),  # m/px
+            model.MD_POS: (1.2e-3, -30e-3),  # m
+            model.MD_EXP_TIME: 1.2,  # s
+            model.MD_OUT_WL: (658e-9, 845e-9),  # m
+        }
+
+        # CL DataArray
+        da = model.DataArray(1500 + numpy.zeros((512, 1024), dtype=numpy.uint16), md)
+
+        cls = stream.StaticCLStream("test", da)
+
+        self.assertEqual(cls.emission.value, md[model.MD_OUT_WL])
+        self.assertEqual(cls.image.value.shape, (512, 1024, 3))
+
 
 #     @skip("simple")
     def test_ar(self):
