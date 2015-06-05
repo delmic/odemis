@@ -1154,6 +1154,10 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
 
         super(ZeroDimensionalPlotCanvas, self).__init__(*args, **kwargs)
 
+        # play/pause icon
+        self.play_overlay = view_overlay.PlayIconOverlay(self)
+        self.add_view_overlay(self.play_overlay)
+
         self.drag_init_pos = None
 
         self.SetBackgroundColour(stepColour(self.Parent.BackgroundColour, 50))

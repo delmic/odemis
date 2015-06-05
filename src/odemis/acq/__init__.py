@@ -53,7 +53,7 @@ import time
 # returns a special "ProgressiveFuture" which is a Future object that can be
 # stopped while already running, and reports from time to time progress on its
 # execution.
-def acquire(streams):
+def acquire(streams, opm=None):
     """ Start an acquisition task for the given streams.
 
     It will decide in which order the stream must be acquired.
@@ -62,6 +62,7 @@ def acquire(streams):
         It is highly recommended to not have any other acquisition going on.
 
     :param streams: [Stream] the streams to acquire
+            opm: [OpticalPathManager] if given, used to set the optical path
     :return: (ProgressiveFuture) an object that represents the task, allow to
         know how much time before it is over and to cancel it. It also permits
         to receive the result of the task, which is a tuple:
@@ -73,7 +74,7 @@ def acquire(streams):
     future = model.ProgressiveFuture()
 
     # create a task
-    task = AcquisitionTask(streams, future)
+    task = AcquisitionTask(streams, future, opm)
     future.task_canceller = task.cancel # let the future cancel the task
 
     # run executeTask in a thread
@@ -170,8 +171,9 @@ def _weight_stream(stream):
 
 class AcquisitionTask(object):
 
-    def __init__(self, streams, future):
+    def __init__(self, streams, future, opm=None):
         self._future = future
+        self._opm = opm
 
         # order the streams for optimal acquisition
         self._streams = sorted(streams, key=_weight_stream, reverse=True)
@@ -205,6 +207,17 @@ class AcquisitionTask(object):
         raw_images = {} # stream -> list of raw images
         try:
             for s in self._streams:
+                # if an optical path manager is given, try to guess and set the
+                # path according to the streams given
+                if self._opm is not None:
+                    try:
+                        guess_mode = self._opm.guessMode(s)
+                        self._opm.setPath(guess_mode)
+                    except ValueError:
+                        logging.info("No mode can be inferred for the given stream")
+                    except IOError:
+                        logging.warning("Given object is not a stream")
+
                 # Get the future of the acquisition, depending on the Stream type
                 if hasattr(s, "acquire"):
                     f = s.acquire()
