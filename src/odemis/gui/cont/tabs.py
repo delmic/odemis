@@ -32,7 +32,7 @@ from odemis import dataio, model
 from odemis.acq import calibration
 from odemis.acq import stream
 from odemis.acq.align import AutoFocus
-from odemis.acq.stream._sync import MultipleDetectorStream
+from odemis.acq.stream import MultipleDetectorStream
 from odemis.driver.actuator import ConvertStage
 from odemis.gui.comp import overlay
 from odemis.gui.comp.canvas import CAN_ZOOM
@@ -45,6 +45,7 @@ from odemis.gui.cont.microscope import SecomStateController, DelphiStateControll
 from odemis.gui.cont.streams import StreamController
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.img import scale_to_alpha
+from odemis.model import  VigilantAttributeBase
 from odemis.util import units
 import os.path
 import pkg_resources
@@ -577,8 +578,14 @@ class SparcAcquisitionTab(Tab):
             "Secondary electrons",
             main_data.sed,
             main_data.sed.data,
-            main_data.ebeam)
+            main_data.ebeam,
+            emtvas={"dwellTime"})
         self._sem_live_stream = sem_stream
+
+        # for attr, value in main_data.ebeam.__dict__.iteritems():
+        #     if isinstance(value, VigilantAttributeBase):
+        #         print attr
+
         sem_stream.should_update.value = True
         sem_stream.should_update.subscribe(self._on_sem_update)
         self.tab_data_model.acquisitionView.addStream(sem_stream)  # it should also be saved
@@ -616,7 +623,6 @@ class SparcAcquisitionTab(Tab):
             self.main_frame,
             self.main_frame.pnl_sparc_grid.viewports
         )
-
 
         self._view_selector = viewcont.ViewButtonController(
             self.tab_data_model,

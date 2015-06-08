@@ -109,7 +109,8 @@ class SettingEntry(VigilantAttributeConnector, Entry):
         if None not in (va, value_ctrl):
             VigilantAttributeConnector.__init__(self, va, value_ctrl, va_2_ctrl, ctrl_2_va, events)
         elif any((va_2_ctrl, ctrl_2_va, events)):
-            raise ValueError("Cannot create VigilantAttributeConnector but got corresponding parameters.")
+            raise ValueError("Cannot create VigilantAttributeConnector but got "
+                             "corresponding parameters.")
         else:
             logging.debug("Creating empty SettingEntry without VigilantAttributeConnector")
 
@@ -1054,9 +1055,6 @@ class SparcSettingsController(SettingsBarController):
                 #     None,  # component
                 #     self._va_config["streamspec"]["pixelSize"]
                 # )
-            else:
-                logging.warning("Spectrometer available, but no spectrum "
-                                "stream provided")
 
             # # Add spectrograph control if available
             # if main_data.spectrograph:
