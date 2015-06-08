@@ -795,14 +795,16 @@ class SparcAcquisitionTab(Tab):
 
         # TODO: directly create the equivalent MDStream, so that the acquisition
         # time can be correctly computed?
-#         self._sem_ar_stream = acqstream.SEMARMDStream("SEM AR",
-#                                                       self._sem_cl_stream,
-#                                                       self._ar_stream)
-#         # FIXME NOW: Update the acq view on acquisition (i.e. button click)
-#         self.tab_data_model.acquisitionView.addStream(self._sem_ar_stream)
+        # self._sem_ar_stream = acqstream.SEMARMDStream("SEM AR",
+        #                                               self._sem_cl_stream,
+        #                                               self._ar_stream)
+        # # FIXME NOW: Update the acq view on acquisition (i.e. button click)
+        # self.tab_data_model.acquisitionView.addStream(self._sem_ar_stream)
 
         # Clean the acquisition view when streams get removed
         self.tab_data_model.streams.subscribe(self._clean_acqview)
+
+        self.tab_data_model.focussedView.value = self.main_frame.vp_sparc_tr.microscope_view
 
         return stream_cont
 
@@ -819,6 +821,9 @@ class SparcAcquisitionTab(Tab):
         stream_cont = self._streambar_controller._add_stream(cli_stream,
                                                              add_to_all_views=True)
         stream_cont.stream_panel.show_visible_btn(False)
+
+        self.tab_data_model.focussedView.value = self.main_frame.vp_sparc_tl.microscope_view
+
         return stream_cont
 
     def on_add_spectrum(self):
@@ -837,11 +842,13 @@ class SparcAcquisitionTab(Tab):
                                                              add_to_all_views=True)
         stream_cont.stream_panel.show_visible_btn(False)
 
-#         self._sem_spec_stream = acqstream.SEMSpectrumMDStream("SEM Spectrum",
-#                                                               self._sem_cl_stream,
-#                                                               self._spec_stream)
-#         # FIXME NOW: Update the acq view on acquisition (i.e. button click)
-#         self.tab_data_model.acquisitionView.addStream(self._sem_spec_stream)
+        self.tab_data_model.focussedView.value = self.main_frame.vp_sparc_bl.microscope_view
+
+        # self._sem_spec_stream = acqstream.SEMSpectrumMDStream("SEM Spectrum",
+        #                                                       self._sem_cl_stream,
+        #                                                       self._spec_stream)
+        # # FIXME NOW: Update the acq view on acquisition (i.e. button click)
+        # self.tab_data_model.acquisitionView.addStream(self._sem_spec_stream)
 
         return stream_cont
 
@@ -859,48 +866,51 @@ class SparcAcquisitionTab(Tab):
         stream_cont = self._streambar_controller._add_stream(monoch_stream,
                                                              add_to_all_views=True)
         stream_cont.stream_panel.show_visible_btn(False)
+
+        self.tab_data_model.focussedView.value = self.main_frame.vp_sparc_br.microscope_view
+
         return stream_cont
 
-#     @call_in_wx_main
-#     def _on_spec_count(self, scount):
-#         """ Called when a new spectrometer data comes in (and so the whole intensity window data is
-#         updated)
-#
-#         Args:
-#             scount (DataArray)
-#
-#         """
-#
-#         if len(scount) > 0:
-#             # Indicate the raw value
-#             v = scount[-1]
-#             if v < 1:
-#                 txt = units.readable_str(float(scount[-1]), sig=6)
-#             else:
-#                 txt = "%d" % round(v)  # to make it clear what is small/big
-#             # self._txt_mean.SetValue(txt)
-#
-#             # fit min/max between 0 and 1
-#             ndcount = scount.view(numpy.ndarray)  # standard NDArray to get scalars
-#             vmin, vmax = ndcount.min(), ndcount.max()
-#             b = vmax - vmin
-#             if b == 0:
-#                 b = 1
-#             disp = (scount - vmin) / b
-#
-#             # insert 0s at the beginning if the window is not (yet) full
-#             dates = scount.metadata[model.MD_ACQ_DATE]
-#             dur = dates[-1] - dates[0]
-#             if dur == 0:  # only one tick?
-#                 dur = 1  # => make it 1s large
-#             exp_dur = self._scount_stream.windowPeriod.value
-#             missing_dur = exp_dur - dur
-#             nb0s = int(missing_dur * len(scount) / dur)
-#             if nb0s > 0:
-#                 disp = numpy.concatenate([numpy.zeros(nb0s), disp])
-#         else:
-#             disp = []
-#         # self._spec_graph.SetContent(disp)
+    # @call_in_wx_main
+    # def _on_spec_count(self, scount):
+    #     """ Called when a new spectrometer data comes in (and so the whole intensity window data is
+    #     updated)
+    #
+    #     Args:
+    #         scount (DataArray)
+    #
+    #     """
+    #
+    #     if len(scount) > 0:
+    #         # Indicate the raw value
+    #         v = scount[-1]
+    #         if v < 1:
+    #             txt = units.readable_str(float(scount[-1]), sig=6)
+    #         else:
+    #             txt = "%d" % round(v)  # to make it clear what is small/big
+    #         # self._txt_mean.SetValue(txt)
+    #
+    #         # fit min/max between 0 and 1
+    #         ndcount = scount.view(numpy.ndarray)  # standard NDArray to get scalars
+    #         vmin, vmax = ndcount.min(), ndcount.max()
+    #         b = vmax - vmin
+    #         if b == 0:
+    #             b = 1
+    #         disp = (scount - vmin) / b
+    #
+    #         # insert 0s at the beginning if the window is not (yet) full
+    #         dates = scount.metadata[model.MD_ACQ_DATE]
+    #         dur = dates[-1] - dates[0]
+    #         if dur == 0:  # only one tick?
+    #             dur = 1  # => make it 1s large
+    #         exp_dur = self._scount_stream.windowPeriod.value
+    #         missing_dur = exp_dur - dur
+    #         nb0s = int(missing_dur * len(scount) / dur)
+    #         if nb0s > 0:
+    #             disp = numpy.concatenate([numpy.zeros(nb0s), disp])
+    #     else:
+    #         disp = []
+    #     # self._spec_graph.SetContent(disp)
 
     def _on_sem_update(self, update):
         # very simple version of a stream scheduler
