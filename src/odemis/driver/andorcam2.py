@@ -1485,6 +1485,7 @@ class AndorCam2(model.DigitalCamera):
         """
         has_hw_lock = False # status of the lock
         need_reinit = True
+        failures = 0
         try:
             while not self.acquire_must_stop.is_set():
                 if self.request_hw:
@@ -1554,21 +1555,24 @@ class AndorCam2(model.DigitalCamera):
                     # one image. In this case we discard all but the last one.
                     self.atcore.GetMostRecentImage16(cbuffer, c_uint32(size[0] * size[1]))
                 except AndorV2Error as (errno, strerr):
-                    # Note: with SDK 2.93 it will happen after a few image grabbed, and
-                    # there is no way to recover
-                    if errno == 20024: # DRV_NO_NEW_DATA
-                        self.atcore.CancelWait()
-                        # -999°C means the camera is gone
-                        if self.GetTemperature() == -999:
-                            logging.error("Camera seems to have disappeared, will try to reinitialise it")
-                            self.Reinitialize()
-                        else:
-                            time.sleep(0.1)
-                            logging.warning("trying again to acquire image after error %s", strerr)
-                        need_reinit = True
-                        continue
-                    else:
+                    # try again up to 5 times
+                    failures += 1
+                    if failures >= 5:
                         raise
+                    # This sometimes happen with 20024 (DRV_NO_NEW_DATA) or
+                    # 20067 (DRV_P2INVALID) on GetMostRecentImage16()
+                    self.atcore.CancelWait()
+                    # -999°C means the camera is gone
+                    if self.GetTemperature() == -999:
+                        logging.error("Camera seems to have disappeared, will try to reinitialise it")
+                        self.Reinitialize()
+                    else:
+                        time.sleep(0.1)
+                        logging.warning("trying again to acquire image after error %s", strerr)
+                    need_reinit = True
+                    continue
+                else:
+                    failures = 0
 
                 logging.debug("image acquired successfully after %g s", time.time() - tstart)
                 callback(self._transposeDAToUser(array))
@@ -1615,6 +1619,7 @@ class AndorCam2(model.DigitalCamera):
         # so the andorshrk might be able to communicate after a couple of retries
         self._ready_for_acq_start = False
         need_reinit = True
+        failures = 0
         try:
             while not self.acquire_must_stop.is_set():
                 # need to stop acquisition to update settings
@@ -1683,21 +1688,24 @@ class AndorCam2(model.DigitalCamera):
                     # one image. In this case we discard all but the last one.
                     self.atcore.GetMostRecentImage16(cbuffer, c_uint32(size[0] * size[1]))
                 except AndorV2Error as (errno, strerr):
-                    # Note: with SDK 2.93 it will happen after a few image grabbed, and
-                    # there is no way to recover
-                    if errno == 20024: # DRV_NO_NEW_DATA
-                        self.atcore.CancelWait()
-                        # -999°C means the camera is gone
-                        if self.GetTemperature() == -999:
-                            logging.error("Camera seems to have disappeared, will try to reinitialise it")
-                            self.Reinitialize()
-                        else:
-                            time.sleep(0.1)
-                            logging.warning("trying again to acquire image after error %s", strerr)
-                        need_reinit = True
-                        continue
-                    else:
+                    # try again up to 5 times
+                    failures += 1
+                    if failures >= 5:
                         raise
+                    # This sometimes happen with 20024 (DRV_NO_NEW_DATA) or
+                    # 20067 (DRV_P2INVALID) on GetMostRecentImage16()
+                    self.atcore.CancelWait()
+                    # -999°C means the camera is gone
+                    if self.GetTemperature() == -999:
+                        logging.error("Camera seems to have disappeared, will try to reinitialise it")
+                        self.Reinitialize()
+                    else:
+                        time.sleep(0.1)
+                        logging.warning("trying again to acquire image after error %s", strerr)
+                    need_reinit = True
+                    continue
+                else:
+                    failures = 0
 
                 logging.debug("image acquired successfully after %g s", time.time() - tstart)
                 callback(self._transposeDAToUser(array))
