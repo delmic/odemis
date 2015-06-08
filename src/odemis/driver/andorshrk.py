@@ -288,6 +288,7 @@ class Shamrock(model.Actuator):
             if accessory == "slitleds":
                 # To control the ttl signal from outside the component
                 self.protection = model.BooleanVA(True, setter=self._setProtection)
+                self._setProtection(True)
                 self._led_access = LedActiveMgr(self, 0)
             else:
                 self._led_access = LedActiveMgr(None, None)
@@ -363,10 +364,10 @@ class Shamrock(model.Actuator):
 
     def _setProtection(self, value):
         """
-        value (bool)
+        value (bool): True = TTL signal down (off), False = TTL signal up (on)
         """
         line = 0  # just a fixed line
-        self.SetAccessory(line, value)
+        self.SetAccessory(line, not value)
 
         return value
 
@@ -676,6 +677,11 @@ class Shamrock(model.Actuator):
         else:
             state = 0
         self._dll.ShamrockSetAccessory(self._device, line, state)
+
+        # HACK: the Andor driver has a problem and sets the spectrograph in a
+        # bad state after setting the accessory to True. This puts it back in a
+        # good state.
+        self.GetGrating()
 
     # def ShamrockGetAccessoryState(int device,int Accessory, int *state);
     def GetAccessoryState(self, line):
