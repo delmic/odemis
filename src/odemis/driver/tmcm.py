@@ -735,7 +735,8 @@ class TMCM3110(model.Actuator):
                 logging.warning("Reference search failed to finish in time")
 
             # Position 0 is automatically set to the left switch coordinate
-            # and the axis stops there.
+            # and the axis stops there. Axis param 197 contains position in the
+            # old coordinates.
         elif self._refproc == REFPROC_FAKE:
             logging.debug("Simulating referencing")
             # For testing referencing failure, uncomment these lines
