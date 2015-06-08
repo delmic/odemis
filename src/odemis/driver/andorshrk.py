@@ -28,8 +28,8 @@ import os
 import time
 
 # Constants from ShamrockCIF.h
-# SHAMROCK_ACCESSORYMIN 1
-# SHAMROCK_ACCESSORYMAX 2
+ACCESSORYMIN = 0  # changed in the latest version (from 1->2)
+ACCESSORYMAX = 1
 # SHAMROCK_FILTERMIN 1
 # SHAMROCK_FILTERMAX 6
 # SHAMROCK_TURRETMIN 1
@@ -185,7 +185,7 @@ class LedActiveMgr(object):
             return
         logging.debug("Indicating leds are on")
         # Force the protection independently of the protection VA state
-        self._spec.SetAccessory(self._line, 0)
+        self._spec.SetAccessory(self._line, False)
         time.sleep(1e-3)  # wait 1 ms to make sure all the detectors are stopped
 
     def __exit__(self, exc_type, exc_value, traceback):
@@ -197,7 +197,7 @@ class LedActiveMgr(object):
         logging.debug("Indicating leds are off")
         # Unprotect iff the protection VA also allows it
         if not self._spec.protection.value:
-            self._spec.SetAccessory(self._line, 1)
+            self._spec.SetAccessory(self._line, True)
 
 
 # default names for the slits
@@ -288,7 +288,7 @@ class Shamrock(model.Actuator):
             if accessory == "slitleds":
                 # To control the ttl signal from outside the component
                 self.protection = model.BooleanVA(True, setter=self._setProtection)
-                self._led_access = LedActiveMgr(self, 1)
+                self._led_access = LedActiveMgr(self, 0)
             else:
                 self._led_access = LedActiveMgr(None, None)
 
@@ -362,11 +362,11 @@ class Shamrock(model.Actuator):
             raise
 
     def _setProtection(self, value):
-        line = 1  # just a fixed line
-        if value:
-            self.SetAccessory(line, 0)
-        else:
-            self.SetAccessory(line, 1)
+        """
+        value (bool)
+        """
+        line = 0  # just a fixed line
+        self.SetAccessory(line, value)
 
         return value
 
@@ -642,14 +642,14 @@ class Shamrock(model.Actuator):
 
 # Mirror flipper management
     def SetFlipperMirror(self, flipper, port):
-        assert(1 <= flipper <= 2)
+        assert(FLIPPER_INDEX_MIN <= flipper <= FLIPPER_INDEX_MAX)
         assert(0 <= port <= 1)
 
         with self._hw_access:
             self._dll.ShamrockSetFlipperMirror(self._device, flipper, port)
 
     def GetFlipperMirror(self, flipper):
-        assert(1 <= flipper <= 2)
+        assert(FLIPPER_INDEX_MIN <= flipper <= FLIPPER_INDEX_MAX)
         port = c_int()
 
         with self._hw_access:
@@ -659,7 +659,7 @@ class Shamrock(model.Actuator):
 # def ShamrockFlipperMirrorReset(int device, int flipper);
 
     def FlipperMirrorIsPresent(self, flipper):
-        assert(1 <= flipper <= 2)
+        assert(FLIPPER_INDEX_MIN <= flipper <= FLIPPER_INDEX_MAX)
         present = c_int()
         self._dll.ShamrockFlipperMirrorIsPresent(self._device, flipper, byref(present))
         return (present.value != 0)
@@ -667,17 +667,27 @@ class Shamrock(model.Actuator):
     # "Accessory" port control (= 2 TTL lines)
     def SetAccessory(self, line, val):
         """
-        line (1 <= int <= 2): line number
+        line (0 <= int <= 1): line number
         val (boolean): True = On, False = Off
         """
+        assert(ACCESSORYMIN <= line <= ACCESSORYMAX)
         if val:
             state = 1
         else:
             state = 0
-
         self._dll.ShamrockSetAccessory(self._device, line, state)
 
     # def ShamrockGetAccessoryState(int device,int Accessory, int *state);
+    def GetAccessoryState(self, line):
+        """
+        line (0 <= int <= 1): line number
+        return (boolean): True = On, False = Off
+        """
+        assert(ACCESSORYMIN <= line <= ACCESSORYMAX)
+        state = c_int()
+        self._dll.ShamrockGetAccessoryState(self._device, line, byref(state))
+        return (state.value != 0)
+
     def AccessoryIsPresent(self):
         present = c_int()
         self._dll.ShamrockAccessoryIsPresent(self._device, byref(present))
@@ -978,6 +988,9 @@ class FakeShamrockDLL(object):
         # flippers: int (id) -> int (port number, 0 or 1)
         self._flippers = {2: 0}
 
+        # accessory: 2 lines -> int (0 or 1)
+        self._accessory = [0, 0]
+
         # just for simulating the limitation of the iDus
         self._ccd = ccd
 
@@ -1111,7 +1124,15 @@ class FakeShamrockDLL(object):
 
     def ShamrockAccessoryIsPresent(self, device, p_present):
         present = _deref(p_present, c_int)
-        present.value = 0  # no!
+        present.value = 1  # yes!
+
+    def ShamrockSetAccessory(self, device, line, state):
+        l = _val(line)
+        s = _val(state)
+        if ACCESSORYMIN <= l <= ACCESSORYMAX:
+            self._accessory[l] = s
+        else:
+            raise ShamrockError(20268, ShamrockDLL.err_code[20268])
 
 
 class AndorSpec(model.Detector):
