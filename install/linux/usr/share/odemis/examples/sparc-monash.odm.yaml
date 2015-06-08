@@ -153,7 +153,7 @@ SPARC-MONASH: {
     role: lens-switch,
     init: {sn: "37857195",
            axis: "rx",
-           # inverted: ["rx"],
+           inverted: ["rx"],
     },
     affects: ["Focus Lens", "Angular Camera", "Spectrometer"]  
 }
