@@ -509,8 +509,8 @@ class SECOMTestCase(unittest.TestCase):
         light = self.light
 
         # original VA name -> expected local setting VA name
-        det_lsvas = {"exposureTime": "detExposureTime"}
-        emt_lsvas = {"power": "emtPower"}
+        det_lsvas = {"exposureTime": "det_ExposureTime"}
+        emt_lsvas = {"power": "emt_Power"}
         detvas = set(det_lsvas.keys())
         emtvas = set(emt_lsvas.keys())
         fs = stream.FluoStream("fluo", ccd, ccd.data, light, self.light_filter,

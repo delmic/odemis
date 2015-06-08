@@ -33,6 +33,7 @@ from odemis.acq.stream import OpticalStream, CameraStream
 from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR
 from odemis.gui.comp.stream import StreamPanel, EVT_STREAM_VISIBLE
 from odemis.gui.conf.data import HW_SETTINGS_CONFIG
+from odemis.gui.conf.util import label_to_human
 import odemis.gui.model as guimodel
 from odemis import model
 from odemis.gui.util import wxlimit_invocation, dead_object_wrapper
@@ -124,12 +125,8 @@ class StreamController(object):
 
         self.entries = OrderedDict()
 
-        # Check if light and exposure controls are necessary
-        if isinstance(stream, OpticalStream):
-            if hasattr(stream, 'detExposureTime'):
-                self._add_exposure_time_ctrl()
-            if hasattr(stream, 'emtPower'):
-                self._add_light_power_ctrl()
+        # Add local hardware settings to the stream panel
+        self._add_hw_setting_controls()
 
         # Check if dye control is needed
         if hasattr(stream, "excitation") and hasattr(stream, "emission"):
@@ -150,6 +147,32 @@ class StreamController(object):
         self.stream_panel.Bind(EVT_STREAM_VISIBLE, self._on_stream_visible)
 
         stream_bar.add_stream_panel(self.stream_panel, show_panel)
+
+    def _add_hw_setting_controls(self):
+        """ Add local version of linked hardware setting VAs
+
+        TODO: Some settings are still hardcoded, but should probably also be handled in a generic
+            way.
+
+        """
+
+        all_vas = self.stream.det_vas.copy()
+        all_vas.update(self.stream.emt_vas)
+
+        # Add hardware detectors
+        for name, va in all_vas.items():
+            human_name = label_to_human(name)
+            if name == "exposureTime":
+                self._add_exposure_time_ctrl()
+            elif name == "power":
+                self._add_light_power_ctrl()
+            else:
+                # Catchall
+                lbl_ctrl, value_ctrl = self.stream_panel.add_hw_setting_ctrl(human_name, va.value)
+                se = SettingEntry(name=human_name, va=va, stream=self.stream,
+                                  lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
+                                  va_2_ctrl=lambda v: value_ctrl.SetValue(unicode(v)))
+                self.entries[se.name] = se
 
     def _on_stream_panel_destroy(self, _):
         """ Remove all references to setting entries and the possible VAs they might contain

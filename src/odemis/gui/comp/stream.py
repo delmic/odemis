@@ -41,6 +41,7 @@ from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider, UnitInteg
 from odemis.gui.comp.text import SuggestTextCtrl, UnitFloatCtrl, FloatTextCtrl
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import VigilantAttributeConnector
+import odemis.gui as gui
 import odemis.gui.comp.buttons as buttons
 import odemis.gui.img.data as img
 
@@ -771,6 +772,21 @@ class StreamPanel(wx.Panel):
                           flag=wx.BOTTOM | wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND)
 
         return sld_hist, txt_lowi, txt_highi
+
+    @control_bookkeeper
+    def add_hw_setting_ctrl(self, name, value=None):
+        """ Generic method for adding hardware setting controls to the panel """
+
+        lbl_ctrl = self._add_side_label(name)
+        value_ctrl = wx.TextCtrl(self._panel, wx.ID_ANY, unicode(value or u""), style=wx.NO_BORDER)
+
+        value_ctrl.SetForegroundColour(gui.FG_COLOUR_EDIT)
+        value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
+
+        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 3),
+                          flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
+
+        return lbl_ctrl, value_ctrl
 
     @control_bookkeeper
     def add_exposure_time_ctrl(self, value=None, conf=None):
