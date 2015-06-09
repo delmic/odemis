@@ -834,7 +834,6 @@ class IntegerValidator(NumberValidator):
         """ Constructor """
         NumberValidator.__init__(self, min_val, max_val, choices)
 
-
     def Clone(self):    #pylint: disable=W0221
         """ Required method """
         return IntegerValidator(self.min_val, self.max_val, self.choices)

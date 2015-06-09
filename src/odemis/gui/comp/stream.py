@@ -775,10 +775,31 @@ class StreamPanel(wx.Panel):
 
     @control_bookkeeper
     def add_hw_setting_ctrl(self, name, value=None):
-        """ Generic method for adding hardware setting controls to the panel """
+        """ Add a generic number control to manipulate a hardware setting """
 
         lbl_ctrl = self._add_side_label(name)
-        value_ctrl = wx.TextCtrl(self._panel, wx.ID_ANY, unicode(value or u""), style=wx.NO_BORDER)
+        value_ctrl = FloatTextCtrl(self._panel, -1, value or 0.0, style=wx.NO_BORDER)
+
+        value_ctrl.SetForegroundColour(gui.FG_COLOUR_EDIT)
+        value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
+
+        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 3),
+                          flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
+
+        return lbl_ctrl, value_ctrl
+
+    @control_bookkeeper
+    def add_slider_ctrl(self, name, value=None, conf=None):
+        """ Add a generic number control to manipulate a hardware setting """
+
+        lbl_ctrl = self._add_side_label(name)
+
+        value_ctrl = UnitFloatSlider(self._panel, value=value, **conf if conf else {})
+        #
+        # if "type" in conf:
+        #
+        #
+        # value_ctrl = FloatTextCtrl(self._panel, -1, value or 0.0, style=wx.NO_BORDER)
 
         value_ctrl.SetForegroundColour(gui.FG_COLOUR_EDIT)
         value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)

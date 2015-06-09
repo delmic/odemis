@@ -30,10 +30,10 @@ from wx.lib.pubsub import pub
 
 import odemis.acq.stream as acqstream
 from odemis.acq.stream import CameraStream
-from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR
+from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR, CONTROL_SLIDER
 from odemis.gui.comp.stream import StreamPanel, EVT_STREAM_VISIBLE
 from odemis.gui.conf.data import HW_SETTINGS_CONFIG
-from odemis.gui.conf.util import label_to_human
+from odemis.gui.conf.util import label_to_human, get_va_meta
 import odemis.gui.model as guimodel
 from odemis import model
 from odemis.gui.util import wxlimit_invocation, dead_object_wrapper
@@ -42,6 +42,7 @@ from odemis.gui.model import dye
 from odemis.gui.util.widgets import VigilantAttributeConnector
 from odemis.util.conversion import wave2rgb
 from odemis.util.fluo import to_readable_band, get_one_center
+
 
 
 # Stream scheduling policies: decides which streams which are with .should_update get .is_active
@@ -157,26 +158,74 @@ class StreamController(object):
 
         TODO: Some settings are still hardcoded, but should probably also be handled in a generic
             way.
+        TODO: Control selection code is very similar to the code used for hardware settings. See if
+            and how this can be combined.
 
         """
 
         all_vas = self.stream.det_vas.copy()
         all_vas.update(self.stream.emt_vas)
 
-        # Add hardware detectors
         for name, va in all_vas.items():
             human_name = label_to_human(name)
+
+            # 'Hard coded' hardware controls (these might be removed)
             if name == "exposureTime":
                 self._add_exposure_time_ctrl()
             elif name == "power":
                 self._add_light_power_ctrl()
             else:
-                # Catchall
-                lbl_ctrl, value_ctrl = self.stream_panel.add_hw_setting_ctrl(human_name, va.value)
-                se = SettingEntry(name=human_name, va=va, stream=self.stream,
-                                  lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
-                                  va_2_ctrl=lambda v: value_ctrl.SetValue(unicode(v)))
-                self.entries[se.name] = se
+                hw_conf = {}
+
+                if (
+                                self.stream.emitter.role in HW_SETTINGS_CONFIG and
+                                name in HW_SETTINGS_CONFIG[self.stream.emitter.role]
+                ):
+                    logging.warn("%s emitter configuration found for %s", name,
+                                 self.stream.emitter.role)
+                    hw_conf = HW_SETTINGS_CONFIG[self.stream.emitter.role][name]
+                    comp = self.stream.emitter.role
+                elif (
+                                self.stream.detector.role in HW_SETTINGS_CONFIG and
+                                name in HW_SETTINGS_CONFIG[self.stream.detector.role]
+                ):
+                    logging.warn("%s detector configuration found for %s", name,
+                                 self.stream.emitter.role)
+                    hw_conf = HW_SETTINGS_CONFIG[self.stream.detector.role][name]
+                    comp = self.stream.detector.role
+
+                if hw_conf:
+                    control_type = hw_conf.get('control_type', None)
+                    min_val, max_val, choices, unit = get_va_meta(comp, va, hw_conf)
+
+                    if control_type == CONTROL_SLIDER:
+
+                        conf = {
+                            'min_val': min_val,  # hw_conf["range"][0],
+                            'max_val': max_val,  # hw_conf["range"][1],
+                            'unit': unit,
+                            'scale': hw_conf["scale"],
+                            'accuracy': hw_conf["accuracy"],
+                        }
+
+                        lbl_ctrl, value_ctrl = self.stream_panel.add_slider_ctrl(human_name,
+                                                                                 va.value,
+                                                                                 conf)
+
+                        se = SettingEntry(name=human_name, va=va, stream=self.stream,
+                                          lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
+                                          events=hw_conf["event"])
+                        self.entries[se.name] = se
+
+                else:
+                    # Default catchall control if no configuration was found
+                    lbl_ctrl, value_ctrl = self.stream_panel.add_hw_setting_ctrl(human_name,
+                                                                                 va.value)
+
+                    se = SettingEntry(name=human_name, va=va, stream=self.stream,
+                                      lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
+                                      events=wx.EVT_COMMAND_ENTER)
+                    self.entries[se.name] = se
 
     def _on_stream_panel_destroy(self, _):
         """ Remove all references to setting entries and the possible VAs they might contain

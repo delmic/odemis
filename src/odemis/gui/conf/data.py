@@ -132,7 +132,7 @@ HW_SETTINGS_CONFIG = {
             ("resolution", {
                 "control_type": odemis.gui.CONTROL_COMBO,
                 "choices": util.resolution_from_range,
-                "accuracy": None, # never simplify the numbers
+                "accuracy": None,  # never simplify the numbers
             }),
             # what we don't want to display:
             ("power", {
