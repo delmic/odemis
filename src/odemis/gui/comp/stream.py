@@ -832,9 +832,6 @@ class StreamPanel(wx.Panel):
 
     @control_bookkeeper
     def add_dye_excitation_ctrl(self, band, readonly, center_wl_color):
-        """
-        :param center_wl: (float) center wavelength of the current band of the VA
-        """
         lbl_ctrl, value_ctrl, lbl_exc_peak, btn_excitation = self._add_filter_line("Excitation",
                                                                                    band,
                                                                                    readonly,
@@ -843,9 +840,6 @@ class StreamPanel(wx.Panel):
 
     @control_bookkeeper
     def add_dye_emission_ctrl(self, band, readonly, center_wl_color):
-        """
-        :param center_wl: (float) center wavelength of the current band of the VA
-        """
         lbl_ctrl, value_ctrl, lbl_em_peak, btn_emission = self._add_filter_line("Emission",
                                                                                 band,
                                                                                 readonly,
@@ -856,6 +850,7 @@ class StreamPanel(wx.Panel):
         """ Create the controls for dye emission/excitation colour filter setting
 
         :param name: (str): the label name
+        :param band (2+ floats): the current wavelength band
         :param readonly (bool) read-only when there's no or just one band value
         :param center_wl_color: (r, g, b) center wavelength color of the current band of the VA
 

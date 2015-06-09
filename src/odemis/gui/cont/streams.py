@@ -423,17 +423,19 @@ class StreamController(object):
         self.entries[se.name] = se
 
     def _add_dye_ctrl(self):
-        """ Add controls to the stream panel needed for dye emission and exitation """
+        """
+        Add controls to the stream panel needed for dye emission and excitation
+        """
 
+        # Excitation
         if not self.stream.excitation.readonly:
             # TODO: mark dye incompatible with the hardware with a "disabled"
             # colour in the list. (Need a special version of the combobox?)
             self.stream_panel.set_header_choices(dye.DyeDatabase.keys())
             self.stream_panel.header_change_callback = self._on_new_dye_name
 
-        center_wl = 0
+        center_wl = fluo.get_one_center_ex(self.stream.excitation.value, self.stream.emission.value)
         center_wl_color = wave2rgb(center_wl)
-
         band = to_readable_band(self.stream.excitation.value)
         readonly = self.stream.excitation.readonly or len(self.stream.excitation.choices) <= 1
 
@@ -489,6 +491,9 @@ class StreamController(object):
 
             self.entries[se.name] = se
 
+        # Emission
+        center_wl = fluo.get_one_center_em(self.stream.emission.value, self.stream.excitation.value)
+        center_wl_color = wave2rgb(center_wl)
         band = to_readable_band(self.stream.emission.value)
         readonly = self.stream.emission.readonly or len(self.stream.emission.choices) <= 1
 
