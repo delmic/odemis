@@ -790,22 +790,34 @@ class StreamPanel(wx.Panel):
 
     @control_bookkeeper
     def add_slider_ctrl(self, name, value=None, conf=None):
-        """ Add a generic number control to manipulate a hardware setting """
+        """ Add a slider control to manipulate a hardware setting """
 
         lbl_ctrl = self._add_side_label(name)
 
         value_ctrl = UnitFloatSlider(self._panel, value=value, **conf if conf else {})
-        #
-        # if "type" in conf:
-        #
-        #
-        # value_ctrl = FloatTextCtrl(self._panel, -1, value or 0.0, style=wx.NO_BORDER)
 
         value_ctrl.SetForegroundColour(gui.FG_COLOUR_EDIT)
         value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
 
         self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 3),
                           flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
+
+        return lbl_ctrl, value_ctrl
+
+    @control_bookkeeper
+    def add_combobox_ctrl(self, name, value=None, conf=None):
+        """ Add a combobox control to manipulate a hardware setting """
+
+        lbl_ctrl = self._add_side_label(name)
+
+        value_ctrl = ComboBox(self, wx.ID_ANY, pos=(0, 0), size=(-1, 16),
+                              style=wx.NO_BORDER | wx.TE_PROCESS_ENTER, **conf)
+
+        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 3),
+                          flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
+
+        if value:
+            value_ctrl.SetValue(unicode(value))
 
         return lbl_ctrl, value_ctrl
 

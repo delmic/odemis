@@ -30,7 +30,6 @@ from __future__ import division
 from abc import ABCMeta
 import collections
 from collections import OrderedDict
-from functools import partial
 import logging
 import numbers
 import time
@@ -62,10 +61,11 @@ import odemis.util.units as utun
 class Entry(object):
     """ Describes a setting entry in the settings panel """
 
-    def __init__(self, name, hw_comp, lbl_ctrl, value_ctrl):
+    def __init__(self, name, hw_comp, stream, lbl_ctrl, value_ctrl):
         """
         :param name: (str): The name of the setting
         :param hw_comp: (HardwareComponent): The component to which the setting belongs
+        :param stream: (Stream) The stream with which the Entry is associated
         :param lbl_ctrl: (wx.StaticText): The setting label
         :param value_ctrl: (wx.Window): The widget containing the current value
 
@@ -73,6 +73,7 @@ class Entry(object):
 
         self.name = name
         self.hw_comp = hw_comp
+        self.stream = stream
         self.lbl_ctrl = lbl_ctrl
         self.value_ctrl = value_ctrl
 
@@ -98,19 +99,19 @@ class Entry(object):
 class SettingEntry(VigilantAttributeConnector, Entry):
     """ An Entry linked to a Vigilant Attribute """
 
-    def __init__(self, name, va=None, hw_comp=None, lbl_ctrl=None, value_ctrl=None,
+    def __init__(self, name, va=None, hw_comp=None, stream=None, lbl_ctrl=None, value_ctrl=None,
                  va_2_ctrl=None, ctrl_2_va=None, events=None):
         """ See the super classes for parameter descriptions """
 
         self.vigilattr = None  # This attribute is needed, even if there's not VAC to provide it
 
-        Entry.__init__(self, name, hw_comp, lbl_ctrl, value_ctrl)
+        Entry.__init__(self, name, hw_comp, stream, lbl_ctrl, value_ctrl)
 
-        if None not in (va, value_ctrl):
+        if va and (value_ctrl or va_2_ctrl):
             VigilantAttributeConnector.__init__(self, va, value_ctrl, va_2_ctrl, ctrl_2_va, events)
         elif any((va_2_ctrl, ctrl_2_va, events)):
-            raise ValueError("Cannot create VigilantAttributeConnector but got "
-                             "corresponding parameters.")
+            raise ValueError("Cannot create VigilantAttributeConnector for %s, while also "
+                             "receiving value getting and setting parameters!" % name)
         else:
             logging.debug("Creating empty SettingEntry without VigilantAttributeConnector")
 
@@ -126,7 +127,7 @@ class SettingEntry(VigilantAttributeConnector, Entry):
 class AxisSettingEntry(AxisConnector, Entry):
     """ An Axis setting linked to a Vigilant Attribute """
 
-    def __init__(self, name, hw_comp, lbl_ctrl=None, value_ctrl=None,
+    def __init__(self, name, hw_comp, stream=None, lbl_ctrl=None, value_ctrl=None,
                  pos_2_ctrl=None, ctrl_2_pos=None, events=None):
         """
         :param name: (str): The name of the setting
@@ -138,7 +139,7 @@ class AxisSettingEntry(AxisConnector, Entry):
 
         """
 
-        Entry.__init__(self, name, hw_comp, lbl_ctrl, value_ctrl)
+        Entry.__init__(self, name, hw_comp, stream, lbl_ctrl, value_ctrl)
 
         if None not in (name, value_ctrl):
             AxisConnector.__init__(self, name, hw_comp, value_ctrl, pos_2_ctrl, ctrl_2_pos, events)

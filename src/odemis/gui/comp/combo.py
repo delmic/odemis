@@ -74,6 +74,19 @@ class ComboBox(wx.combo.OwnerDrawnComboBox):
         for label, choice in zip(labels, choices):
             self.Append(label, choice)
 
+        def _eat_event(evt):
+            """ Quick and dirty empty function used to 'eat' mouse wheel events """
+
+            # TODO: This solution only makes sure that the control's value
+            # doesn't accidentally get altered when it gets hit by a mouse
+            # wheel event. However, it also stop the event from propagating
+            # so the containing scrolled window will not scroll either.
+            # (If the event is skipped, the control will change value again)
+            # No easy fix found in wxPython 3.0.
+            pass
+
+        self.Bind(wx.EVT_MOUSEWHEEL, _eat_event)
+
     def on_paint(self, evt):
         """ Handle the paint event
 

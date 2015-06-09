@@ -30,19 +30,19 @@ from wx.lib.pubsub import pub
 
 import odemis.acq.stream as acqstream
 from odemis.acq.stream import CameraStream
-from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR, CONTROL_SLIDER
+from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR, CONTROL_SLIDER, \
+    CONTROL_COMBO
 from odemis.gui.comp.stream import StreamPanel, EVT_STREAM_VISIBLE
 from odemis.gui.conf.data import HW_SETTINGS_CONFIG
 from odemis.gui.conf.util import label_to_human, get_va_meta
+from odemis.gui.cont.settings import SettingEntry
 import odemis.gui.model as guimodel
 from odemis import model
 from odemis.gui.util import wxlimit_invocation, dead_object_wrapper
 from odemis.util import fluo
 from odemis.gui.model import dye
-from odemis.gui.util.widgets import VigilantAttributeConnector
 from odemis.util.conversion import wave2rgb
 from odemis.util.fluo import to_readable_band, get_one_center
-
 
 
 # Stream scheduling policies: decides which streams which are with .should_update get .is_active
@@ -55,37 +55,6 @@ SCHED_ALL = 2  # All the streams which are in the should_update stream
 # TODO: SCHED_ALL_INDIE -> Schedule at the same time all the streams which
 # are independent (no emitter from a stream will affect any detector of another
 # stream).
-
-
-class SettingEntry(VigilantAttributeConnector):
-    """ An Entry linked to a Vigilant Attribute """
-
-    def __init__(self, name, va=None, stream=None, lbl_ctrl=None, value_ctrl=None,
-                 va_2_ctrl=None, ctrl_2_va=None, events=None):
-        """ See the super classes for parameter descriptions
-
-        :param name: (str): The name of the setting
-        :param va: (VigilantAttribute): The VA containing the setting value
-        :param stream: (Stream): The possible data stream associated with this entry
-        :param lbl_ctrl: (wx.StaticText): The setting label
-        :param value_ctrl: (wx.Window): The widget containing the current value
-
-        """
-
-        self.name = name
-        self.stream = stream
-        self.lbl_ctrl = lbl_ctrl
-        self.value_ctrl = value_ctrl
-
-        VigilantAttributeConnector.__init__(self, va, value_ctrl, va_2_ctrl, ctrl_2_va, events)
-
-    def pause(self):
-        if self.vigilattr:
-            super(SettingEntry, self).pause()
-
-    def resume(self):
-        if self.vigilattr:
-            super(SettingEntry, self).resume()
 
 
 class StreamController(object):
@@ -217,6 +186,24 @@ class StreamController(object):
                                           events=hw_conf["event"])
                         self.entries[se.name] = se
 
+                    elif control_type == CONTROL_COMBO:
+                        pass
+                        # conf = {
+                        #     'min_val': min_val,  # hw_conf["range"][0],
+                        #     'max_val': max_val,  # hw_conf["range"][1],
+                        #     'unit': unit,
+                        #     'scale': hw_conf["scale"],
+                        #     'accuracy': hw_conf["accuracy"],
+                        # }
+                        #
+                        # lbl_ctrl, value_ctrl = self.stream_panel.add_slider_ctrl(human_name,
+                        #                                                          va.value,
+                        #                                                          conf)
+                        #
+                        # se = SettingEntry(name=human_name, va=va, stream=self.stream,
+                        #                   lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
+                        #                   events=hw_conf["event"])
+                        # self.entries[se.name] = se
                 else:
                     # Default catchall control if no configuration was found
                     lbl_ctrl, value_ctrl = self.stream_panel.add_hw_setting_ctrl(human_name,

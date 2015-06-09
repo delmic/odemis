@@ -306,20 +306,6 @@ class SettingsPanel(wx.Panel):
         self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
                           flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
 
-        # TODO: move this to ComboBox?
-        def _eat_event(evt):
-            """ Quick and dirty empty function used to 'eat' mouse wheel events """
-
-            # TODO: This solution only makes sure that the control's value
-            # doesn't accidentally get altered when it gets hit by a mouse
-            # wheel event. However, it also stop the event from propagating
-            # so the containing scrolled window will not scroll either.
-            # (If the event is skipped, the control will change value again)
-            # No easy fix found in wxPython 3.0.
-            pass
-
-        value_ctrl.Bind(wx.EVT_MOUSEWHEEL, _eat_event)
-
         if value:
             value_ctrl.SetValue(unicode(value))
 

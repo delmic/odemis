@@ -579,12 +579,13 @@ class SparcAcquisitionTab(Tab):
             main_data.sed,
             main_data.sed.data,
             main_data.ebeam,
-            emtvas={"dwellTime"})
+            emtvas={"dwellTime", "resolution"}
+        )
         self._sem_live_stream = sem_stream
 
-        # for attr, value in main_data.ebeam.__dict__.iteritems():
-        #     if isinstance(value, VigilantAttributeBase):
-        #         print attr
+        for attr, value in main_data.ebeam.__dict__.iteritems():
+            if isinstance(value, VigilantAttributeBase):
+                print attr
 
         sem_stream.should_update.value = True
         sem_stream.should_update.subscribe(self._on_sem_update)
