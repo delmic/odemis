@@ -24,7 +24,8 @@ from __future__ import division
 
 import collections
 import logging
-from odemis.acq.stream import OpticalStream, EMStream, SpectrumStream, ARStream
+from odemis.acq.stream import OpticalStream, EMStream, SpectrumStream, ARStream, \
+    CLStream
 from odemis.acq.stream import RGBCameraStream, BrightfieldStream, ARSettingsStream, \
     CLSettingsStream, MonochromatorSettingsStream
 from odemis.gui import model
@@ -140,7 +141,7 @@ class ViewPortController(object):
             vpv = collections.OrderedDict([
                 (self._viewports[0],  # focused view
                  {"name": "Optical",
-                  "stream_classes": (OpticalStream, SpectrumStream),
+                  "stream_classes": (OpticalStream, SpectrumStream, CLStream),
                   }),
                 (self._viewports[1],
                  {"name": "SEM",
@@ -148,11 +149,11 @@ class ViewPortController(object):
                   }),
                 (self._viewports[2],
                  {"name": "Combined 1",
-                  "stream_classes": (EMStream, OpticalStream, SpectrumStream),
+                  "stream_classes": (EMStream, OpticalStream, SpectrumStream, CLStream),
                   }),
                 (self._viewports[3],
                  {"name": "Combined 2",  # Was SEM CL for Sparc
-                  "stream_classes": (EMStream, OpticalStream, SpectrumStream),
+                  "stream_classes": (EMStream, OpticalStream, SpectrumStream, CLStream),
                   }),
                 (self._viewports[4],
                  {"name": "Angle-resolved",
@@ -164,7 +165,7 @@ class ViewPortController(object):
                   }),
                 (self._viewports[6],
                  {"name": "Spatial spectrum",
-                  "stream_classes": SpectrumStream,
+                  "stream_classes": (SpectrumStream, CLStream),
                   }),
             ])
             self._create_views_fixed(vpv)
