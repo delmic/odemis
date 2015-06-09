@@ -120,6 +120,21 @@ def get_one_center_ex(band, em_band):
         return get_center(band)
 
 
+def get_one_center(band):
+    """
+    Return the center of a band, and if it's a multi-band, return just one of the centers.
+    If possible use get_one_center_ex() or get_one_center_em() to get more
+    likely value.
+
+    :return: (float) wavelength in m
+    """
+
+    if isinstance(band[0], collections.Iterable):
+        return get_center(band[0])
+    else:
+        return get_center(band)
+
+
 def estimate_fit_to_dye(wl, band):
     """
     Estimate how well the light settings of the hardware fit for a given dye
@@ -213,15 +228,3 @@ def to_readable_band(band):
             centers.append(u"%d" % center_nm)
         return u", ".join(centers) + " nm"
 
-
-def get_one_center(band):
-    """ Return the center of a band, and if it's a multi-band, return just one of the centers.
-
-    :return: (float) wavelength in m
-
-    """
-
-    if isinstance(band[0], collections.Iterable):
-        return get_center(band[0])
-    else:
-        return get_center(band)

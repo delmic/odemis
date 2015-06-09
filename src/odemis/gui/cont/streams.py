@@ -29,7 +29,7 @@ import wx
 from wx.lib.pubsub import pub
 
 import odemis.acq.stream as acqstream
-from odemis.acq.stream import OpticalStream, CameraStream
+from odemis.acq.stream import CameraStream
 from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR
 from odemis.gui.comp.stream import StreamPanel, EVT_STREAM_VISIBLE
 from odemis.gui.conf.data import HW_SETTINGS_CONFIG
@@ -131,6 +131,10 @@ class StreamController(object):
         # Check if dye control is needed
         if hasattr(stream, "excitation") and hasattr(stream, "emission"):
             self._add_dye_ctrl()
+        elif hasattr(stream, "excitation"):  # only excitation
+            self._add_excitation_ctrl()
+        elif hasattr(stream, "emission"):  # only emission
+            self._add_emission_ctrl()
 
         if hasattr(stream, "auto_bc") and hasattr(stream, "intensityRange"):
             self._add_brightnesscontrast_ctrls()
@@ -425,8 +429,9 @@ class StreamController(object):
     def _add_dye_ctrl(self):
         """
         Add controls to the stream panel needed for dye emission and excitation
+        Specifically used when both emission and excitation are present (because
+         together, more information can be extracted/presented).
         """
-
         # Excitation
         if not self.stream.excitation.readonly:
             # TODO: mark dye incompatible with the hardware with a "disabled"
@@ -435,7 +440,22 @@ class StreamController(object):
             self.stream_panel.header_change_callback = self._on_new_dye_name
 
         center_wl = fluo.get_one_center_ex(self.stream.excitation.value, self.stream.emission.value)
-        center_wl_color = wave2rgb(center_wl)
+        self._add_excitation_ctrl(wave2rgb(center_wl))
+
+        # Emission
+        center_wl = fluo.get_one_center_em(self.stream.emission.value, self.stream.excitation.value)
+        self._add_emission_ctrl(wave2rgb(center_wl))
+
+    def _add_excitation_ctrl(self, center_wl_color=None):
+        """
+        Add excitation ctrl
+        center_wl_color (None or 3 0<= int <= 255): RGB colour. If None, it
+          will be guessed.
+        """
+        if center_wl_color is None:
+            center_wl = fluo.get_one_center(self.stream.excitation.value)
+            center_wl_color = wave2rgb(center_wl)
+
         band = to_readable_band(self.stream.excitation.value)
         readonly = self.stream.excitation.readonly or len(self.stream.excitation.choices) <= 1
 
@@ -477,7 +497,8 @@ class StreamController(object):
                     colour = wave2rgb(fluo.get_one_center_ex(value, self.stream.emission.value))
                     self._btn_excitation.set_colour(colour)
                 else:
-                    self.update_peak_label_fit(self._lbl_exc_peak, self._btn_excitation,
+                    self.update_peak_label_fit(self._lbl_exc_peak,
+                                               self._btn_excitation,
                                                self._dye_xwl, value)
 
                 # also update emission colour as it's dependent on excitation when multi-band
@@ -491,9 +512,16 @@ class StreamController(object):
 
             self.entries[se.name] = se
 
-        # Emission
-        center_wl = fluo.get_one_center_em(self.stream.emission.value, self.stream.excitation.value)
-        center_wl_color = wave2rgb(center_wl)
+    def _add_emission_ctrl(self, center_wl_color=None):
+        """
+        Add emission ctrl
+        center_wl_color (None or 3 0<= int <= 255): RGB colour. If None, it
+          will be guessed.
+        """
+        if center_wl_color is None:
+            center_wl = fluo.get_one_center(self.stream.emission.value)
+            center_wl_color = wave2rgb(center_wl)
+
         band = to_readable_band(self.stream.emission.value)
         readonly = self.stream.emission.readonly or len(self.stream.emission.choices) <= 1
 
@@ -533,8 +561,8 @@ class StreamController(object):
                     self._btn_emission.set_colour(colour)
                 else:
                     self.update_peak_label_fit(self._lbl_em_peak,
-                                                            self._btn_emission,
-                                                            self._dye_ewl, value)
+                                               self._btn_emission,
+                                               self._dye_ewl, value)
                 # also update excitation colour as it's dependent on emission when multiband
                 if self._dye_xwl is None:
                     colour = wave2rgb(fluo.get_one_center_ex(self.stream.excitation.value, value))
