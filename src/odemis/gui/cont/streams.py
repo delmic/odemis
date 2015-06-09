@@ -851,9 +851,12 @@ class StreamBarController(object):
                         # Brightfield
                         name = channel_data.metadata.get(model.MD_DESCRIPTION, "Brightfield")
                         klass = acqstream.StaticBrightfieldStream
-                elif model.MD_IN_WL in channel_data.metadata:  # no MD_OUT_WL
+                elif model.MD_IN_WL in channel_data.metadata:  # only MD_IN_WL
                     name = channel_data.metadata.get(model.MD_DESCRIPTION, "Brightfield")
                     klass = acqstream.StaticBrightfieldStream
+                elif model.MD_OUT_WL in channel_data.metadata:  # only MD_OUT_WL
+                    name = channel_data.metadata.get(model.MD_DESCRIPTION, "Cathodoluminescence")
+                    klass = acqstream.StaticCLStream
                 else:
                     name = channel_data.metadata.get(model.MD_DESCRIPTION, "Secondary electrons")
                     klass = acqstream.StaticSEMStream
