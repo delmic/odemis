@@ -37,7 +37,7 @@ from odemis.gui import FG_COLOUR_EDIT, FG_COLOUR_MAIN, BG_COLOUR_MAIN, BG_COLOUR
     FG_COLOUR_DIS
 from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.foldpanelbar import FoldPanelItem, FoldPanelBar
-from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider, UnitIntegerSlider
+from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider, UnitIntegerSlider, Slider
 from odemis.gui.comp.text import SuggestTextCtrl, UnitFloatCtrl, FloatTextCtrl
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import VigilantAttributeConnector
@@ -788,30 +788,57 @@ class StreamPanel(wx.Panel):
 
         return lbl_ctrl, value_ctrl
 
-    @control_bookkeeper
-    def add_slider_ctrl(self, name, value=None, conf=None):
-        """ Add a slider control to manipulate a hardware setting """
+    def _add_slider(self, klass, label_text, value, conf):
+        """ Add a slider of type 'klass' to the settings panel """
 
-        lbl_ctrl = self._add_side_label(name)
-
-        value_ctrl = UnitFloatSlider(self._panel, value=value, **conf if conf else {})
-
-        value_ctrl.SetForegroundColour(gui.FG_COLOUR_EDIT)
-        value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
-
+        lbl_ctrl = self._add_side_label(label_text)
+        value_ctrl = klass(self._panel, value=value, **conf)
         self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 3),
                           flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
 
         return lbl_ctrl, value_ctrl
 
     @control_bookkeeper
-    def add_combobox_ctrl(self, name, value=None, conf=None):
+    def add_slider(self, label_text, value=None, conf=None):
+        """ Add an integer value slider to the settings panel
+
+        :param label_text: (str) Label text to display
+        :param value: (None or int) Value to display
+        :param conf: (None or dict) Dictionary containing parameters for the control
+
+        """
+        return self._add_slider(Slider, label_text, value, conf)
+
+    @control_bookkeeper
+    def add_integer_slider(self, label_text, value=None, conf=None):
+        """ Add an integer value slider to the settings panel
+
+        :param label_text: (str) Label text to display
+        :param value: (None or int) Value to display
+        :param conf: (None or dict) Dictionary containing parameters for the control
+
+        """
+        return self._add_slider(UnitIntegerSlider, label_text, value, conf)
+
+    @control_bookkeeper
+    def add_float_slider(self, label_text, value=None, conf=None):
+        """ Add a float value slider to the settings panel
+
+        :param label_text: (str) Label text to display
+        :param value: (None or float) Value to display
+        :param conf: (None or dict) Dictionary containing parameters for the control
+
+        """
+        return self._add_slider(UnitFloatSlider, label_text, value, conf)
+
+    @control_bookkeeper
+    def add_combobox_control(self, label_text, value=None, conf=None):
         """ Add a combobox control to manipulate a hardware setting """
 
-        lbl_ctrl = self._add_side_label(name)
+        lbl_ctrl = self._add_side_label(label_text)
 
-        value_ctrl = ComboBox(self, wx.ID_ANY, pos=(0, 0), size=(-1, 16),
-                              style=wx.NO_BORDER | wx.TE_PROCESS_ENTER, **conf)
+        value_ctrl = ComboBox(self._panel, wx.ID_ANY, pos=(0, 0), size=(-1, 16),
+                              style=wx.NO_BORDER | wx.TE_PROCESS_ENTER, **conf if conf else {})
 
         self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 3),
                           flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)

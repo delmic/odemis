@@ -30,11 +30,10 @@ from wx.lib.pubsub import pub
 
 import odemis.acq.stream as acqstream
 from odemis.acq.stream import CameraStream
-from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR, CONTROL_SLIDER, \
-    CONTROL_COMBO
+from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR
 from odemis.gui.comp.stream import StreamPanel, EVT_STREAM_VISIBLE
 from odemis.gui.conf.data import HW_SETTINGS_CONFIG
-from odemis.gui.conf.util import label_to_human, process_setting_metadata, SettingEntry
+from odemis.gui.conf.util import label_to_human, create_setting_entry
 from odemis.gui.cont.settings import SettingEntry
 import odemis.gui.model as guimodel
 from odemis import model
@@ -43,6 +42,7 @@ from odemis.util import fluo
 from odemis.gui.model import dye
 from odemis.util.conversion import wave2rgb
 from odemis.util.fluo import to_readable_band, get_one_center
+
 
 
 
@@ -137,7 +137,7 @@ class StreamController(object):
         all_vas.update(self.stream.emt_vas)
 
         for name, va in all_vas.items():
-            human_name = label_to_human(name)
+            # human_name = label_to_human(name)
 
             # 'Hard coded' hardware controls (these might be removed)
             if name == "exposureTime":
@@ -148,72 +148,77 @@ class StreamController(object):
                 hw_conf = {}
 
                 if (
-                                self.stream.emitter.role in HW_SETTINGS_CONFIG and
-                                name in HW_SETTINGS_CONFIG[self.stream.emitter.role]
+                        self.stream.emitter.role in HW_SETTINGS_CONFIG and
+                        name in HW_SETTINGS_CONFIG[self.stream.emitter.role]
                 ):
                     logging.warn("%s emitter configuration found for %s", name,
                                  self.stream.emitter.role)
                     hw_conf = HW_SETTINGS_CONFIG[self.stream.emitter.role][name]
-                    comp = self.stream.emitter.role
+                    hw_comp = self.stream.emitter.role
                 elif (
-                                self.stream.detector.role in HW_SETTINGS_CONFIG and
-                                name in HW_SETTINGS_CONFIG[self.stream.detector.role]
+                        self.stream.detector.role in HW_SETTINGS_CONFIG and
+                        name in HW_SETTINGS_CONFIG[self.stream.detector.role]
                 ):
                     logging.warn("%s detector configuration found for %s", name,
                                  self.stream.emitter.role)
                     hw_conf = HW_SETTINGS_CONFIG[self.stream.detector.role][name]
-                    comp = self.stream.detector.role
+                    hw_comp = self.stream.detector.role
 
-                if hw_conf:
-                    control_type = hw_conf.get('control_type', None)
-                    min_val, max_val, choices, unit = process_setting_metadata(comp, va, hw_conf)
-
-                    if control_type == CONTROL_SLIDER:
-
-                        conf = {
-                            'min_val': min_val,  # hw_conf["range"][0],
-                            'max_val': max_val,  # hw_conf["range"][1],
-                            'unit': unit,
-                            'scale': hw_conf["scale"],
-                            'accuracy': hw_conf["accuracy"],
-                        }
-
-                        lbl_ctrl, value_ctrl = self.stream_panel.add_slider_ctrl(human_name,
-                                                                                 va.value,
-                                                                                 conf)
-
-                        se = SettingEntry(name=human_name, va=va, stream=self.stream,
-                                          lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
-                                          events=hw_conf["event"])
-                        self.entries[se.name] = se
-
-                    elif control_type == CONTROL_COMBO:
-                        pass
-                        # conf = {
-                        #     'min_val': min_val,  # hw_conf["range"][0],
-                        #     'max_val': max_val,  # hw_conf["range"][1],
-                        #     'unit': unit,
-                        #     'scale': hw_conf["scale"],
-                        #     'accuracy': hw_conf["accuracy"],
-                        # }
-                        #
-                        # lbl_ctrl, value_ctrl = self.stream_panel.add_slider_ctrl(human_name,
-                        #                                                          va.value,
-                        #                                                          conf)
-                        #
-                        # se = SettingEntry(name=human_name, va=va, stream=self.stream,
-                        #                   lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
-                        #                   events=hw_conf["event"])
-                        # self.entries[se.name] = se
-                else:
-                    # Default catchall control if no configuration was found
-                    lbl_ctrl, value_ctrl = self.stream_panel.add_hw_setting_ctrl(human_name,
-                                                                                 va.value)
-
-                    se = SettingEntry(name=human_name, va=va, stream=self.stream,
-                                      lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
-                                      events=wx.EVT_COMMAND_ENTER)
+                try:
+                    se = create_setting_entry(self.stream_panel, name, va, hw_comp, hw_conf)
                     self.entries[se.name] = se
+                except AttributeError:
+                    logging.exception("Unsupported control type for %s!", name)
+
+                # if hw_conf:
+                #     control_type = hw_conf.get('control_type', None)
+                #     min_val, max_val, choices, unit = process_setting_metadata(comp, va, hw_conf)
+                #
+                #     if control_type == CONTROL_SLIDER:
+                #
+                #         conf = {
+                #             'min_val': min_val,  # hw_conf["range"][0],
+                #             'max_val': max_val,  # hw_conf["range"][1],
+                #             'unit': unit,
+                #             'scale': hw_conf["scale"],
+                #             'accuracy': hw_conf["accuracy"],
+                #         }
+                #
+                #         lbl_ctrl, value_ctrl = self.stream_panel.add_slider_ctrl(human_name,
+                #                                                                  va.value,
+                #                                                                  conf)
+                #
+                #         se = SettingEntry(name=human_name, va=va, stream=self.stream,
+                #                           lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
+                #                           events=hw_conf["event"])
+                #         self.entries[se.name] = se
+                #
+                #     elif control_type == CONTROL_COMBO:
+                #         conf = {
+                #             'min_val': min_val,  # hw_conf["range"][0],
+                #             'max_val': max_val,  # hw_conf["range"][1],
+                #             'unit': unit,
+                #             'scale': hw_conf["scale"],
+                #             'accuracy': hw_conf["accuracy"],
+                #         }
+                #
+                #         lbl_ctrl, value_ctrl = self.stream_panel.add_slider_ctrl(human_name,
+                #                                                                  va.value,
+                #                                                                  conf)
+                #
+                #         se = SettingEntry(name=human_name, va=va, stream=self.stream,
+                #                           lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
+                #                           events=hw_conf["event"])
+                #         self.entries[se.name] = se
+                # else:
+                #     # Default catchall control if no configuration was found
+                #     lbl_ctrl, value_ctrl = self.stream_panel.add_hw_setting_ctrl(human_name,
+                #                                                                  va.value)
+                #
+                #     se = SettingEntry(name=human_name, va=va, stream=self.stream,
+                #                       lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
+                #                       events=wx.EVT_COMMAND_ENTER)
+                #     self.entries[se.name] = se
 
     def _on_stream_panel_destroy(self, _):
         """ Remove all references to setting entries and the possible VAs they might contain
