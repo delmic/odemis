@@ -38,12 +38,12 @@ import odemis.gui.conf.util as util
 #       vigilant attribute name
 #           label
 #           tooltip
-#           control_type * (CONTROL_NONE to hide it)
-#           range *
-#           choices *
+#           control_type *  : Type of control to use (CONTROL_NONE to hide it)
+#           range *         : Tuple of min and max values
+#           choices *       : Iterable containing the legal values
+#           format          : Boolean indicating whether choices need to be formatted (True by def.)
 #           scale
 #           type
-#           format
 #           accuracy
 #           event (The wx.Event type that will trigger a value update)
 #

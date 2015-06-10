@@ -34,7 +34,7 @@ from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR, CONTRO
     CONTROL_COMBO
 from odemis.gui.comp.stream import StreamPanel, EVT_STREAM_VISIBLE
 from odemis.gui.conf.data import HW_SETTINGS_CONFIG
-from odemis.gui.conf.util import label_to_human, get_va_meta
+from odemis.gui.conf.util import label_to_human, process_setting_metadata, SettingEntry
 from odemis.gui.cont.settings import SettingEntry
 import odemis.gui.model as guimodel
 from odemis import model
@@ -43,6 +43,7 @@ from odemis.util import fluo
 from odemis.gui.model import dye
 from odemis.util.conversion import wave2rgb
 from odemis.util.fluo import to_readable_band, get_one_center
+
 
 
 # Stream scheduling policies: decides which streams which are with .should_update get .is_active
@@ -165,7 +166,7 @@ class StreamController(object):
 
                 if hw_conf:
                     control_type = hw_conf.get('control_type', None)
-                    min_val, max_val, choices, unit = get_va_meta(comp, va, hw_conf)
+                    min_val, max_val, choices, unit = process_setting_metadata(comp, va, hw_conf)
 
                     if control_type == CONTROL_SLIDER:
 
