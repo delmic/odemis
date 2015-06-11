@@ -99,6 +99,11 @@ import odemis.driver.comedi_simple as comedi
 # scanning area, period and channels, and interface with the rest of Odemis.
 # Communication between both component is only via queues.
 
+NI_TRIG_AI_START1 = 18  # Trigger number for AI Start1 (= beginning of a command)
+# TODO Probably should be named the following:
+NI_AO_TRIG_AI_START2 = 18  # Trigger number for AI Start2 (= beginning of a scan)
+NI_AO_TRIG_AI_START1 = 19  # Trigger number for AI Start1 (= beginning of a command)
+
 # helper functions
 def get_best_dtype_for_acc(idtype, count):
     """
@@ -153,6 +158,7 @@ class SEMComedi(model.HwComponent):
         except comedi.ComediError:
             raise ValueError("Failed to open DAQ device '%s'" % device)
 
+        # Look for the analog subdevices
         try:
             self._ai_subdevice = comedi.find_subdevice_by_type(self._device,
                                             comedi.SUBD_AI, 0)
@@ -168,6 +174,36 @@ class SEMComedi(model.HwComponent):
                 raise IOError("DAQ device '%s' has only %d output channels" % nchan)
         except comedi.ComediError:
             raise ValueError("Failed to find both input and output on DAQ device '%s'" % device)
+
+        # Look for all the counter subdevices
+        self._cnt_subdevices = []
+        subd = 0
+        while True:
+            try:
+                subd = comedi.find_subdevice_by_type(self._device,
+                                                     comedi.SUBD_COUNTER, subd)
+            except comedi.ComediError:
+                break  # no more counter subdevice
+            self._cnt_subdevices.append(subd)
+        logging.info("Found %d counter subdevices", len(self._cnt_subdevices))
+
+        # Find the PFI control subdevice (only on NI DAQ board)
+        # There doesn't seem to an official way to find it, but it seems to
+        # always be first DIO with SDF_INTERNAL (second is RTSI)
+        self._pfi_subdevice = None
+        subd = 0
+        while True:
+            try:
+                subd = comedi.find_subdevice_by_type(self._device,
+                                                     comedi.SUBD_DIO, subd)
+            except comedi.ComediError:
+                logging.info("No PFI control subdevice found")
+                break
+            flags = comedi.get_subdevice_flags(self._device, subd)
+            if flags & comedi.SDF_INTERNAL:
+                self._pfi_subdevice = subd
+                logging.debug("PFI control subdevice = %d", subd)
+                break
 
         self._reader = Reader(self)
         self._writer = Writer(self)
@@ -189,11 +225,14 @@ class SEMComedi(model.HwComponent):
         self._convert_from_phys = {}
 
         # TODO only look for 2 output channels and len(detectors) input channels
-        self._min_ai_periods, self._min_ao_periods = self._get_min_periods()
         # On the NI-6251, according to the doc:
         # AI is 1MHz (aggregate) (or 1.25MHz with only one channel)
         # AO is 2.86/2.0 MHz for one/two channels
         # => that's more or less what we get from comedi :-)
+        self._min_ai_periods, self._min_ao_periods = self._get_min_periods()
+        # Longest time possible for one write. For the reads, we always try to
+        # make them as fast as possible, so it doesn't matter.
+        # On the NI-6251, we get about 0.8 s.
         self._max_ao_period_ns = self._get_max_ao_period_ns()
         # maximum number of samples that can be acquired by one command
         self._max_bufsz = self._get_max_buffer_size()
@@ -207,30 +246,41 @@ class SEMComedi(model.HwComponent):
         self._acquisition_thread = None
         self._acquisitions = set()  # detectors currently active
 
-        # create the detector children "detectorN"
-        self._detectors = {} # string (name) -> component
-        for name, kwargs in children.items():
-            if name.startswith("detector"):
-                self._detectors[name] = Detector(parent=self, daemon=daemon, **kwargs)
-                self.children.value.add(self._detectors[name])
+        # create the detector children "detectorN" and "counterN"
+        self._detectors = {}  # str (name) -> component
+        self._counters = {}  # str (name) -> component
 
-        if not self._detectors:
-            raise KeyError("SEMComedi device '%s' was not given any 'detectorN' child" % device)
+        for name, ckwargs in children.items():
+            if name.startswith("detector"):
+                self._detectors[name] = AnalogDetector(parent=self, daemon=daemon, **ckwargs)
+                self.children.value.add(self._detectors[name])
+            elif name.startswith("counter"):
+                ctrn = len(self._counters)  # just assign the counter subdevice in order
+                self._counters[name] = CountingDetector(parent=self, counter=ctrn,
+                                                        daemon=daemon, **ckwargs)
+                self.children.value.add(self._counters[name])
+
         rchannels = set(d.channel for d in self._detectors.values())
         if len(rchannels) != len(self._detectors):
             raise ValueError("SEMComedi device '%s' was given multiple detectors with the same channel" % device)
+        csources = set(c.source for c in self._counters.values())
+        if len(csources) != len(self._counters):
+            raise ValueError("SEMComedi device '%s' was given multiple counters with the same source" % device)
 
         # Pre-compute the minimum dwell time for each number of detectors
         self._min_dt_config = []
         for i in range(len(self._detectors)):
             self._min_dt_config.append(self.find_best_oversampling_rate(0, i + 1))
 
+        if not self._detectors and not self._counters:
+            raise KeyError("SEMComedi device '%s' was not given any 'detectorN' or 'counterN' child" % device)
+
         # create the scanner child "scanner" (must be _after_ the detectors)
         try:
-            kwargs = children["scanner"]
+            ckwargs = children["scanner"]
         except (KeyError, TypeError):
             raise KeyError("SEMComedi device '%s' was not given a 'scanner' child" % device)
-        self._scanner = Scanner(parent=self, daemon=daemon, **kwargs)
+        self._scanner = Scanner(parent=self, daemon=daemon, **ckwargs)
         self.children.value.add(self._scanner)
         # for scanner.newPosition
         self._new_position_thread = None
@@ -676,6 +726,9 @@ class SEMComedi(model.HwComponent):
         # For short write periods (small OSR), increasing it to a multiple of
         # the smallest read period can have proportionally a large effect, so
         # it's better to increase the read period.
+        # In addition, there is maximum length for the write period. Above this
+        # the same write data should be duplicated and the period divided
+        # accordingly.
 
         max_osr = 2 ** 24  # maximum over-sampling rate returned
         nwchans = 2 # always
@@ -1166,7 +1219,6 @@ class SEMComedi(model.HwComponent):
             if self._acquisition_must_stop.is_set():
                 raise CancelledError("Acquisition cancelled during preparation")
 
-            # create a command for writing
             logging.debug("Generating new write and read commands for %d scans on "
                           "channels %r/%r", nwscans, wchannels, rchannels)
             # create a command for reading, with a period osr times smaller than the write
@@ -1175,6 +1227,7 @@ class SEMComedi(model.HwComponent):
             # prepare to read
             self._reader.prepare(nrscans * nrchans, expected_time)
 
+            # create a command for writing
             # HACK WARNING:
             # There is a bug (in the NI driver?) that prevents writes of 1 scan
             # never stop. We used to work around that by cancelling the command,
@@ -1187,7 +1240,7 @@ class SEMComedi(model.HwComponent):
             else:
                 self.setup_timed_command(self._ao_subdevice, wchannels, wranges, period_ns,
                             start_src=comedi.TRIG_EXT, # from PyComedi docs: should improve synchronisation
-                            start_arg=comedi.NI_CDIO_SCAN_BEGIN_SRC_AI_START,  # when the AI starts reading
+                            start_arg=NI_TRIG_AI_START1,  # when the AI starts reading
                             stop_arg=nwscans)
                 # prepare to write the flattened buffer
                 self._writer.prepare(data.ravel(), expected_time)
@@ -1224,6 +1277,76 @@ class SEMComedi(model.HwComponent):
         rbuf.shape = (nrscans, nrchans)
         if rest:
             rbuf = rbuf[:-osr, :] # remove data read during rest positioning
+        return rbuf
+
+    def _write_count_raw_one_cmd(self, wchannels, wranges, counter,
+                                 period, wdata):
+        """
+        write data on the given analog output channels and read synchronously
+          on the given analog input channels in one command
+        wchannels (list of int): channels to write (in same the order as data)
+        wranges (list of int): ranges of each write channel
+        counter (CountingDetector)
+        wdate (int): number of samples to read/write
+        period (float): sampling period in s
+        """
+
+        # TODO: move to write data preparation function
+        # 1 if period < max_period
+        dpr = int(math.ceil(period / (self._max_ao_period_ns * 1e9)))
+        wperiod = period / dpr
+
+        # The counter sampling clock is the AO scan, which happens at the beginning
+        # of each scan. As we want to get the value by the end of the scan, we
+        # need one additional write scan at the end just to do the last sampling
+        # clock tick (with not too crazy data, ie, the last write data), and
+        # then we can discard the very first bin count.
+        # This first count corresponds to the time between running the counter
+        # command and starting the write.
+        # TODO: either get directly an array with one additional value at the end
+        # or have a special way to ask the writer to write twice the last value.
+        wdata = numpy.append(wdata, wdata[-1:], axis=0)
+
+        nwscans = wdata.shape[0]
+        period_ns = int(round(period * 1e9))  # in nanoseconds
+        expected_time = nwscans * period  # s
+
+        with self._acquisition_init_lock:
+            # Check if the acquisition has already been cancelled
+            # After this block (i.e., reader and writer prepared), the .cancel()
+            # methods will have enough effect to stop the acquisition
+            if self._acquisition_must_stop.is_set():
+                raise CancelledError("Acquisition cancelled during preparation")
+
+            logging.debug("Generating new write and count commands for %d scans on "
+                          "%s/%d", nwscans, wchannels, counter.source)
+            counter.setup_count_command()
+            self.reader.prepare(nwscans)
+
+            # create a command for writing
+            # Note: we don't have the problem with write buffers of 1 sample,
+            # because we always do at least 2 scans.
+            self.setup_timed_command(self._ao_subdevice, wchannels, wranges, period_ns,
+                                     stop_arg=nwscans)
+
+            self.writer.prepare(wdata.ravel(), expected_time)
+
+        # run the commands
+        comedi.internal_trigger(self._device, self._ao_subdevice, 0)
+        start = time.time()
+        self._writer.run()
+        counter.reader.run()
+
+        timeout = expected_time * 1.10 + 0.1  # s   == expected time + 10% + 0.1s
+        logging.debug("Waiting %g s for the acquisition to finish", timeout)
+        rbuf = counter.reader.wait(timeout)
+        rbuf = rbuf[1:]  # discard first data
+
+        # there should be almost no wait as input is already done. At maximum,
+        # just for the last scan.
+        self._writer.wait(1 + period)
+
+        logging.info("Counter sync read %f s", time.time() - start)
         return rbuf
 
     def _start_new_position_notifier(self, n, start, period):
@@ -1537,7 +1660,6 @@ class SEMComedi(model.HwComponent):
                 if comedi.get_n_channels(device, ao_subdevice) < 2:
                     continue
 
-
                 # create the args for one detector
                 range_info = comedi.get_range(device, ai_subdevice, 0, 0)
                 limits = [range_info.min, range_info.max]
@@ -1564,6 +1686,8 @@ class SEMComedi(model.HwComponent):
 #                if cmd.scan_begin_src != comedi.TRIG_TIMER:
 #                    continue # no timer => impossible to use the device
                 min_ao_period = cmd.scan_begin_arg / 1e9
+
+                # TODO: detect counters
 
                 kwargs_s = {"name": "scanner", "role": "e-beam",
                             "limits": limits, "channels": wchannels,
@@ -1746,6 +1870,35 @@ class Reader(Accesser):
             if self.thread.isAlive():
                 logging.warning("failed to cancel fully the reading thread")
 
+
+class CounterReader(Reader):
+    """
+    Reader for a counter device.
+    """
+    def __init__(self, parent):
+        """
+        parent (CounterDetector)
+        """
+        Accesser.__init__(self, parent)
+        self._subdevice = parent._subdevice
+
+        self.dtype = parent.parent._get_dtype(self._subdevice)
+        self.buf = None
+        self.count = None
+        self._lock = threading.Lock()
+
+    def wait(self, timeout=None):
+        """
+        timeout (float): maximum number of seconds to wait for the read to finish
+        """
+        buf = super(self, CounterReader)(timeout)
+        # same as normal reader, excepted that the counter never ends by itself,
+        # so we stop it explicitly
+        try:
+            comedi.cancel(self._device, self._subdevice)
+        except comedi.ComediError:
+            logging.debug("Failed to cancel read")
+        return buf
 
 class MMapReader(Reader):
     """
@@ -2507,10 +2660,10 @@ class Scanner(model.Emitter):
         return scan
 
 
-class Detector(model.Detector):
+class AnalogDetector(model.Detector):
     """
-    Represents a detector activated by the e-beam. E.g., secondary electron
-    detector, backscatter detector.
+    Represents an analog detector activated by energy caused by the e-beam.
+    E.g., secondary electron detector, backscatter detector, analog PMT.
     """
     def __init__(self, name, role, parent, channel, limits, **kwargs):
         """
@@ -2551,18 +2704,27 @@ class Detector(model.Detector):
         return self._channel
 
 
-class CountingDetector(Detector):
+class CountingDetector(model.Detector):
     """
     Represents a detector which generates a pulsed signal. Typically, the higher
     the pulse frequency, the stronger the original signal is. E.g., a counting
     PMT.
     Note: only NI devices are supported.
+    PFI(10 + counter number) are used internally (to connect the AO scan signal
+    to the sampling clock)
+
+    There are currently some restrictions:
+    * Dwell time should be > 100µs. Below that, there is a "Gate_Error" problem
+      in the kernel driver. It's recommended to have dwell time > 1 ms.
+    * It's not possible to simultaneously acquire analog input. (just because
+      the code hasn't been written yet)
     """
-    def __init__(self, name, role, parent, channel, limits, **kwargs):
+    def __init__(self, name, role, parent, counter, source, **kwargs):
         """
-        channel (0<= int): input channel from which to read
-        limits (2-tuple of number): min/max voltage to acquire (in V)
+        counter (0 <= int): hardware counter number
+        source (0 <= int): PFI number, the input pin on which the signal is received
         """
+
         # Counters and pulse generators are fairly different in terms of
         # functionallity, but they correspond to similar devices seen as input
         # or output. When generalising, these devices are both refered to as
@@ -2609,15 +2771,29 @@ class CountingDetector(Detector):
         # It's a bit confusing, because it seems you can route a PFI to many
         # different output or input, but at the same time, the board has some
         # physical connections called PFIx (and P1/2.x).
-        # This is done via comedi_set_routing()
+        # You can either use a PFI as input and route it to be used as a
+        # specific internal signal. For instance you can ask AI scan signal/event
+        # (AI_START2) to be driven by the signal received on pin PFI2. This is
+        # called "input" routing.
+        # You can also ask a specific PFI to "export" an internal signal/event.
+        # For instance you can ask to have the AO scan signal to be sent to pin
+        # PFI4. This is called "output" routing.
+        # It's also possible to do both simultaneously on a same PFI pin. In that
+        # case you can connect two internal signals together (and also export)
+        # the signals to a pin. For instance, you can output AO scan signal to
+        # PFI4, and use PFI4 for AI scan signal, in which case AI scan will be
+        # driven by the AO scan signal.
+        # Output routing is done via comedi_set_routing()
         # set_routing: channel == PFI number
         #              source == NI_PFI_OUTPUT*
         #              subdevice: the special PFI DIO subdevice (== 7)
         # this means (for output): source S (signal) goes to channel T (terminal)
         # Note that if you also need to configure the PFI pin correctly with the
         # special PFI DIO subdevice (7) and comedi_dio_config(...PFI number, COMEDI_OUTPUT)
+        # For input routing, it's fairly implicit, by using a PFI when selecting
+        # an signal (for instance, in set_clock_source() with NI_GPCT_PFI_CLOCK_SRC_BITS())
         #
-        # The NI 660x documentation explains:
+        # The NI 660x documentation adds:
         # "You can export the CtrNSource signal to the I/O connector’s default PFI
         # input for each CtrNSource. For example, you can export the Ctr0Source
         # signal to the PFI 39/CTR 0 SRC pin, even if another PFI is inputting
@@ -2628,47 +2804,180 @@ class CountingDetector(Detector):
         # Moreover, the routing idea consists in connecting 2 terminals, but
         # usually one of the terminals is implied (from the name).
 
+        # more complex tricks:
+        # The hardware triggers a "data stale" if no pulse between two
+        # clock sampling signal (aka gate). However, it's only in noncummulative
+        # mode, it doesn't happen in cummulative mode.
+        #
+        # TC: stands for terminal counter, and it's a signal set when the counter
+        # rolls over (in order to detect it, and maybe increment another counter).
+        #
+        # Description of the GPCT constants can be found in the DAQ-STC doc p303
+        # under other (but similar) names.
+        # Trigger_Mode_For_Edge_Gate = 3 => NI_GPCT_EDGE_GATE_NO_STARTS_NO_STOPS_BITS
+        # only valid if Gating_Mode != 0 (gating disabled, other modes being
+        # level or edge triggered). They recommand a gate source with CR_EDGE
+        # (but not clear if necessary).
+        # Constants can also be found in the NI DDK: tMSeries.* and tTIO.*.
 
-        # TODO: define the signal info.
+        # TODO:
+        # * setup routing + counter at init
+        # * special reader
+        # * function to create a command which is synchronised with AO on each scan
+        #  (1 AO scan = 2 AO converts = 1 counter sampling = 1 counter gate pulse)
 
         # It will set up ._shape and .parent
         model.Detector.__init__(self, name, role, parent=parent, **kwargs)
-        self._channel = channel
-        nchan = comedi.get_n_channels(parent._device, parent._ai_subdevice)
-        if nchan < channel:
-            raise ValueError("Requested channel %d on device '%s' which has only %d input channels"
-                             % (channel, parent._device_name, nchan))
 
-        # TODO allow limits to be None, meaning take the biggest range available
-        self._limits = limits
-        # find the range
+        # Get the subdevice / device
+        # Typical values:
+        # counter: 0
+        # subdevice: 11
+        # device_name = "/dev/comedi0_sub11"
+        # device: pointer of "/dev/comedi0_sub11" opened by comedi
+        # fileno: file ID of "/dev/comedi0_sub11"
         try:
-            best_range = comedi.find_range(parent._device, parent._ai_subdevice,
-                                           channel, comedi.UNIT_volt,
-                                           limits[0], limits[1])
-        except comedi.ComediError:
-            raise ValueError("Data range between %g and %g V is too high for hardware." %
-                             (limits[0], limits[1]))
-        self._range = best_range
+            # sub
+            self._subdevice = parent._cnt_subdevices[counter]
+        except IndexError:
+            raise ValueError("Counter %d does not exist on the board (only has %d)"
+                             % (counter, len(parent._cnt_subdevices)))
+        self.counter = counter
+        self.source = source
 
-        # The closest to the actual precision of the device
-        maxdata = comedi.get_maxdata(parent._device, parent._ai_subdevice,
-                                     channel)
+        # We need to use the subdevice file instead of parent._device for the
+        # read to get the right data.
+        self._device_name = "%s_subd%d" % (parent._device_name, self._subdevice)
+        self._device = comedi.open(self._device_name)
+        self._fileno = comedi.fileno(self._device)
+
+        self._init_counter()
+
+        maxdata = comedi.get_maxdata(self._device, self._subdevice, 0)
         self._shape = (maxdata + 1,)  # only one point
         self.data = SEMDataFlow(self, parent)
 
         # Special event to request software unblocking on the scan
         self.softwareTrigger = model.Event()
 
-    @roattribute
-    def channel(self):
-        return self._channel
+        self.reader = CounterReader(self)
+
+    def _init_counter(self):
+        """Configure the counter"""
+
+        # stop and reset the subdevice
+        comedi.reset(self._device, self._subdevice)
+
+        # set source (=signal)
+        # TODO: indicate a period? Does it help with the buffer? 100 ns? => doesn't seem to
+        # But there is different behaviour based on 0, < 25 ns (40 MHz) and >= 25 ns
+        # CR_EDGE helps as we are supposed to count pulses (= edges)
+        # Warning: if using CR_INVERT, use 1<<31 or very latest comedi
+        comedi.set_clock_source(self._device, self._subdevice, 0,
+                comedi.NI_GPCT_PFI_CLOCK_SRC_BITS(self.source) | comedi.CR_EDGE,
+                0)
+
+        subd_pfi = self.parent._pfi_subdevice
+        # set routing for gate => AO scan  (for now, just the output of the other counter)
+        # First route AO scan to a PFI, and then use this PFI as input for the gate?
+        gate_pfi = 10 + self._source  # just a convention
+        # AO_START1 = start of the whole command
+        comedi.set_routing(self._device, subd_pfi, gate_pfi,
+                           comedi.NI_PFI_OUTPUT_AO_UPDATE_N)
+        comedi.dio_config(self._device, subd_pfi, gate_pfi,
+                          comedi.OUTPUT)
+        # set 1st gate (=sampling clock) to the output of other ctr (==ctr1)
+        # Not sure how much edge vs level trigger has effect on the gate, but some
+        # hw config changes. It seems that when it's in level and cummulative,
+        # the count is divided by two (because it keeps being reset half of the time, when it's up?)
+        comedi.set_gate_source(self._device, self._subdevice, 0, 0,
+                     comedi.NI_GPCT_PFI_GATE_SELECT(gate_pfi) | comedi.CR_EDGE)
+
+        # 2nd gate should be disabled, which is normally the case
+
+        initial_count = 0  # also used as value to reset the counter
+
+        # This is also called (non) "duplicate count prevention". These synchronises
+        # the gate on the internal clock, instead of the counter source, so
+        # that even if there is no signal on the source, it reads and saves the
+        # counter. Seems to also prevent "stale data" errors.
+        counter_mode = comedi.NI_GPCT_COUNTING_MODE_SYNC_SOURCE_BITS
+        # output pulse on terminal count (doesn't really matter)
+        # counter_mode |= comedi.NI_GPCT_OUTPUT_TC_PULSE_BITS
+        # Don't alternate the reload source between the load a and load b registers
+        counter_mode |= comedi.NI_GPCT_RELOAD_SOURCE_FIXED_BITS
+        # Reload counter on gate.  Do not set if you want to do cumulative buffered counting
+        # non-cummulative has the advantage to not cause "stale error"... but it
+        # blocks if there is no signal.
+        # (but need to check that if the counter is at 0, and nothing comes it doesn't generate it)
+        counter_mode |= comedi.NI_GPCT_LOADING_ON_GATE_BIT
+        # Make gate start/stop counting
+        # Gi_Trigger_Mode_For_Edge_Gate: Gate should not stop the counting
+        counter_mode |= comedi.NI_GPCT_EDGE_GATE_NO_STARTS_NO_STOPS_BITS
+        # count up
+        counter_mode |= comedi.NI_GPCT_COUNTING_DIRECTION_UP_BITS
+        # Gi_Stop_Mode -> don't stop on terminal count (= keep going)
+        counter_mode |= comedi.NI_GPCT_STOP_ON_GATE_BITS
+        # don't disarm on terminal count or gate signal
+        counter_mode |= comedi.NI_GPCT_NO_HARDWARE_DISARM_BITS
+        comedi.set_counter_mode(self._device, self._subdevice, 0, counter_mode)
+
+        # Set initial counter value by writing to channel 0
+        comedi.data_write(self._device, self._subdevice, 0, 0, 0, initial_count)
+        # Set value of "load a" register by writing to channel 1 (only useful if load on gate)
+        comedi.data_write(self._device, self._subdevice, 1, 0, 0, initial_count)
+
+    def prepare_counting_cmd(self):
+        """
+        create a command to read counts from buffered counting
+        return cmd
+        """
+        nchans = 1
+        cmd = comedi.cmd_struct()
+
+        cmd.subdev = self._subdevice
+        cmd.flags = 0
+        # Wake up at the end of every scan, reduces latency for slow data streams
+        # Turn off for more efficient throughput.
+        # TODO: if disabled, it very oftens breaks after getting ni_tio_handle_interrupt: Gi_Gate_Error detected. == DMA not working?
+        cmd.flags |= comedi.TRIG_WAKE_EOS
+        # TODO: trigger on AO start. Not so important if sampling clock is AO
+        # scan, as it will not save the counter register until the AO starts.
+        # So we just end up with one first value to discard.
+        cmd.start_src = comedi.TRIG_NOW
+        cmd.start_arg = 0
+        # cmd.start_src = comedi.TRIG_EXT
+        # cmd.start_arg = NI_TRIG_AI_START1
+        # TRIG_OTHER will use the already configured gate source to latch counts.
+        # Can also use TRIG_EXT and specify the gate source as the scan_begin_arg
+        cmd.scan_begin_src = comedi.TRIG_OTHER
+        cmd.scan_begin_arg = 0
+        cmd.convert_src = comedi.TRIG_NOW
+        cmd.convert_arg = 0
+        cmd.scan_end_src = comedi.TRIG_COUNT
+        cmd.scan_end_arg = nchans
+        # We cannot indicate how many we want. We just stop reading when enough
+        # data has been received.
+        cmd.stop_src = comedi.TRIG_NONE
+        cmd.stop_arg = 0
+
+        clist = comedi.chanlist(nchans)
+        for i in range(nchans):
+            clist[i] = 0
+        cmd.chanlist = clist
+        cmd.chanlist_len = nchans
+
+        rc = comedi.command_test(self._device, cmd)
+        if rc != 0:
+            raise IOError("command_test for counter failed with %d" % rc)
+
+        return cmd
 
 
 class SEMDataFlow(model.DataFlow):
     def __init__(self, detector, sem):
         """
-        detector (semcomedi.Detector): the detector that the dataflow corresponds to
+        detector (semcomedi.AnalogDetector): the detector that the dataflow corresponds to
         sem (semcomedi.SEMComedi): the SEM
         """
         model.DataFlow.__init__(self)
