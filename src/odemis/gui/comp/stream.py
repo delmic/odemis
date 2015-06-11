@@ -37,6 +37,7 @@ from odemis.gui import FG_COLOUR_EDIT, FG_COLOUR_MAIN, BG_COLOUR_MAIN, BG_COLOUR
     FG_COLOUR_DIS
 from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.foldpanelbar import FoldPanelItem, FoldPanelBar
+from odemis.gui.comp.radio import GraphicalRadioButtonControl
 from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider, UnitIntegerSlider, Slider
 from odemis.gui.comp.text import SuggestTextCtrl, UnitFloatCtrl, FloatTextCtrl
 from odemis.gui.util import call_in_wx_main
@@ -843,8 +844,29 @@ class StreamPanel(wx.Panel):
         self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 3),
                           flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
 
-        if value:
+        if value is not None:
             value_ctrl.SetValue(unicode(value))
+
+        return lbl_ctrl, value_ctrl
+
+    @control_bookkeeper
+    def add_radio_control(self, label_text, value=None, conf=None):
+        """ Add a series of radio buttons to the settings panel
+
+        :param label_text: (str) Label text to display
+        :param value: (None or float) Value to display
+        :param conf: (None or dict) Dictionary containing parameters for the control
+
+        """
+
+        lbl_ctrl = self._add_side_label(label_text)
+        value_ctrl = GraphicalRadioButtonControl(self._panel, -1, style=wx.NO_BORDER,
+                                                 **conf if conf else {})
+        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
+                          flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
+
+        if value is not None:
+            value_ctrl.SetValue(value)
 
         return lbl_ctrl, value_ctrl
 

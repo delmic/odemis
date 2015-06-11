@@ -86,7 +86,7 @@ def resolution_from_range_plus_point(comp, va, conf):
 MIN_RES = 200 * 200  # px, minimum amount of pixels to consider it acceptable
 
 
-def binning_1d_from_2d(comp, va, conf):
+def binning_1d_from_2d(comp, va, _):
     """ Find simple binnings available in one dimension
 
     We assume pixels are always square. The binning provided by a camera is normally a 2-tuple of
@@ -98,7 +98,7 @@ def binning_1d_from_2d(comp, va, conf):
         logging.warning("Got a binning not of length 2: %s, will try anyway", cur_val)
 
     try:
-        nbpx_full = comp.shape[0] * comp.shape[1] # res at binning 1
+        nbpx_full = comp.shape[0] * comp.shape[1]  # res at binning 1
         choices = {cur_val[0]}
         minbin = max(va.range[0])
         maxbin = min(va.range[1])
