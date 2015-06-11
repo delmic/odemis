@@ -52,6 +52,9 @@ import odemis.gui.conf.util as util
 
 # This is the default global settings, with ordered dict, to specify the order
 # on which they are displayed.
+from odemis.util import recursive_dict_update
+
+
 HW_SETTINGS_CONFIG = {
     "ccd":
         OrderedDict((
@@ -290,3 +293,19 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
         },
     },
 }
+
+def get_hw_settings_config(role=None):
+    """ Return a copy of the HW_SETTINGS_CONFIG dictionary
+
+    If role is given and found in the HW_SETTINGS_CONFIG_PER_ROLE dictionary, the values of the
+    returned dictionary will be updated.
+
+    Args:
+        role (str): The role of the microscope system
+
+    """
+
+    hw_settings = HW_SETTINGS_CONFIG.copy()
+    if role in HW_SETTINGS_CONFIG_PER_ROLE:
+        recursive_dict_update(hw_settings, HW_SETTINGS_CONFIG_PER_ROLE[role])
+    return hw_settings

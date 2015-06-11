@@ -35,13 +35,13 @@ import time
 import wx
 from wx.lib.pubsub import pub
 
-from odemis import model, util
+from odemis import model
 import odemis.dataio
 from odemis.gui.comp.buttons import ImageTextToggleButton
 from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.file import EVT_FILE_SELECT
 from odemis.gui.comp.slider import UnitFloatSlider
-from odemis.gui.conf.data import HW_SETTINGS_CONFIG, HW_SETTINGS_CONFIG_PER_ROLE
+from odemis.gui.conf.data import get_hw_settings_config
 from odemis.gui.conf.util import choice_to_str, bind_setting_context_menu, label_to_human, \
     create_setting_entry, SettingEntry, AxisSettingEntry
 import odemis.gui.img.data as img
@@ -467,9 +467,7 @@ class SettingsBarController(object):
         # and it avoids pausing the settings controllers from other tabs.
 
         # build the default config value based on the global one + the role
-        self._va_config = HW_SETTINGS_CONFIG.copy()
-        if tab_data.main.role in HW_SETTINGS_CONFIG_PER_ROLE:
-            util.rec_update(self._va_config, HW_SETTINGS_CONFIG_PER_ROLE[tab_data.main.role])
+        self._va_config = get_hw_settings_config(tab_data.main.role)
 
     def pause(self):
         """ Pause SettingEntry related control updates """
