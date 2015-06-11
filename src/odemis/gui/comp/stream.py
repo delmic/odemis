@@ -39,7 +39,7 @@ from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.foldpanelbar import FoldPanelItem, FoldPanelBar
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
 from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider, UnitIntegerSlider, Slider
-from odemis.gui.comp.text import SuggestTextCtrl, UnitFloatCtrl, FloatTextCtrl
+from odemis.gui.comp.text import SuggestTextCtrl, UnitFloatCtrl, FloatTextCtrl, UnitIntegerCtrl
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import VigilantAttributeConnector
 import odemis.gui as gui
@@ -831,6 +831,41 @@ class StreamPanel(wx.Panel):
 
         """
         return self._add_slider(UnitFloatSlider, label_text, value, conf)
+
+    @control_bookkeeper
+    def add_int_field(self, label_text, value=None, conf=None):
+        """ Add an integer value field to the settings panel
+
+        :param label_text: (str) Label text to display
+        :param value: (None or int) Value to display
+        :param conf: (None or dict) Dictionary containing parameters for the control
+
+        """
+
+        return self._add_num_field(UnitIntegerCtrl, label_text, value, conf)
+
+    @control_bookkeeper
+    def add_float_field(self, label_text, value=None, conf=None):
+        """ Add a float value field to the settings panel
+
+        :param label_text: (str) Label text to display
+        :param value: (None or float) Value to display
+        :param conf: (None or dict) Dictionary containing parameters for the control
+
+        """
+
+        return self._add_num_field(UnitFloatCtrl, label_text, value, conf)
+
+    def _add_num_field(self, klass, label_text, value, conf):
+
+        lbl_ctrl = self._add_side_label(label_text)
+        value_ctrl = klass(self._panel, value=value, style=wx.NO_BORDER, **conf)
+        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
+                          flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
+        value_ctrl.SetForegroundColour(gui.FG_COLOUR_EDIT)
+        value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
+
+        return lbl_ctrl, value_ctrl
 
     @control_bookkeeper
     def add_combobox_control(self, label_text, value=None, conf=None):

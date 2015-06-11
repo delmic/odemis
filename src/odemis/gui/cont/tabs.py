@@ -573,7 +573,7 @@ class SparcAcquisitionTab(Tab):
         self._scount_stream = None
         self._monoch_stream = None
 
-        for attr, value in main_data.ebeam.__dict__.iteritems():
+        for attr, value in main_data.sed.__dict__.iteritems():
             if isinstance(value, VigilantAttributeBase):
                 print attr
 
@@ -583,10 +583,11 @@ class SparcAcquisitionTab(Tab):
             main_data.sed,
             main_data.sed.data,
             main_data.ebeam,
-            emtvas={"dwellTime", "resolution", "scale"},
+            emtvas={"dwellTime", "resolution", "scale", "magnification"},
             detvas={},
         )
         self._sem_live_stream = sem_stream
+        print sem_stream.detector.role
 
         sem_stream.should_update.value = True
         sem_stream.should_update.subscribe(self._on_sem_update)
