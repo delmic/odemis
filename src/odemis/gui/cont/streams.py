@@ -32,8 +32,8 @@ import odemis.acq.stream as acqstream
 from odemis.acq.stream import CameraStream
 from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR
 from odemis.gui.comp.stream import StreamPanel, EVT_STREAM_VISIBLE
-from odemis.gui.conf.data import HW_SETTINGS_CONFIG
-from odemis.gui.conf.util import label_to_human, create_setting_entry
+from odemis.gui.conf.data import get_hw_settings_config
+from odemis.gui.conf.util import create_setting_entry
 from odemis.gui.cont.settings import SettingEntry
 import odemis.gui.model as guimodel
 from odemis import model
@@ -42,6 +42,7 @@ from odemis.util import fluo
 from odemis.gui.model import dye
 from odemis.util.conversion import wave2rgb
 from odemis.util.fluo import to_readable_band, get_one_center
+
 
 
 
@@ -65,6 +66,8 @@ class StreamController(object):
 
         self.stream = stream
         self.stream_bar = stream_bar
+
+        self.hw_settings_config = get_hw_settings_config()
 
         label_edit = False
 
@@ -128,8 +131,6 @@ class StreamController(object):
 
         TODO: Some settings are still hardcoded, but should probably also be handled in a generic
             way.
-        TODO: Control selection code is very similar to the code used for hardware settings. See if
-            and how this can be combined.
 
         """
 
@@ -148,20 +149,20 @@ class StreamController(object):
                 hw_conf = {}
 
                 if (
-                        self.stream.emitter.role in HW_SETTINGS_CONFIG and
-                        name in HW_SETTINGS_CONFIG[self.stream.emitter.role]
+                        self.stream.emitter.role in self.hw_settings_config and
+                        name in self.hw_settings_config[self.stream.emitter.role]
                 ):
                     logging.warn("%s emitter configuration found for %s", name,
                                  self.stream.emitter.role)
-                    hw_conf = HW_SETTINGS_CONFIG[self.stream.emitter.role][name]
+                    hw_conf = self.hw_settings_config[self.stream.emitter.role][name]
                     hw_comp = self.stream.emitter
                 elif (
-                        self.stream.detector.role in HW_SETTINGS_CONFIG and
-                        name in HW_SETTINGS_CONFIG[self.stream.detector.role]
+                        self.stream.detector.role in self.hw_settings_config and
+                        name in self.hw_settings_config[self.stream.detector.role]
                 ):
                     logging.warn("%s detector configuration found for %s", name,
                                  self.stream.emitter.role)
-                    hw_conf = HW_SETTINGS_CONFIG[self.stream.detector.role][name]
+                    hw_conf = self.hw_settings_config[self.stream.detector.role][name]
                     hw_comp = self.stream.detector
 
                 try:
@@ -376,7 +377,7 @@ class StreamController(object):
 
         # Assertion mainly needed for dynamic attribute recognition (i.e. exposureTime)
         assert(isinstance(self.stream, CameraStream))
-        et_config = HW_SETTINGS_CONFIG['ccd']['exposureTime']
+        et_config = self.hw_settings_config['ccd']['exposureTime']
 
         conf = {
             'min_val': et_config["range"][0],
@@ -400,7 +401,7 @@ class StreamController(object):
         # Assertion mainly needed for dynamic attribute recognition (i.e. emtPower)
         assert(isinstance(self.stream, CameraStream))
 
-        et_config = HW_SETTINGS_CONFIG['light']['power']
+        et_config = self.hw_settings_config['light']['power']
 
         conf = {
             'min_val': self.stream.emtPower.range[0],
