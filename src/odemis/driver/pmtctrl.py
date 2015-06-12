@@ -31,6 +31,7 @@ import serial
 import sys
 import threading
 import time
+import re
 
 
 class PMT(model.Detector):
@@ -172,11 +173,9 @@ class PMTControl(model.HwComponent):
     '''
     This represents the PMT control unit.
     '''
-    def __init__(self, name, role, sn=None, port=None,
-                 prot_time=1e-3, prot_curr=50e-6, **kwargs):
+    def __init__(self, name, role, port, prot_time=1e-3, prot_curr=50e-6, **kwargs):
         '''
-        sn (str): serial number (recommended)
-        port (str or None): port name (only if sn is not specified)
+        port (str): port name
         prot_time (float): protection trip time (in s)
         prot_curr (float): protection current threshold (in Amperes)
         Raise an exception if the device cannot be opened
@@ -191,15 +190,10 @@ class PMTControl(model.HwComponent):
             raise ValueError("prot_curr (%s A) is not between 0 and 100.e-6" % (prot_curr,))
         self._prot_curr = prot_curr
 
-        if (sn is None and port is None) or (sn is not None and port is not None):
-            raise ValueError("sn or port argument must be specified (but not both)")
-        if sn is not None:
-            self._port = self._getSerialPort(sn)
-        else:
-            self._port = port
+        self._port = self._findDevice(port)
+        logging.info("Found PMT Control device on port %s", self._port)
 
         # TODO: catch errors and convert to HwError
-        self._serial = self._openSerialPort(self._port)
         self._ser_access = threading.Lock()
 
         # Get identification of the PMT control device
@@ -334,10 +328,6 @@ class PMTControl(model.HwComponent):
         port (string): the name of the serial port (e.g., /dev/ttyACM0)
         return (serial): the opened serial port
         """
-        # For debugging purpose
-        if port == "/dev/fake":
-            return PMTControlSimulator(timeout=1)
-
         ser = serial.Serial(
             port=port,
             baudrate=115200,
@@ -355,43 +345,37 @@ class PMTControl(model.HwComponent):
 
         return ser
 
-    def _getSerialPort(self, sn):
+    def _findDevice(self, ports):
         """
-        sn (str): serial number of the device
-        return (str): serial port name (eg: "/dev/ttyACM0" on Linux)
+        Look for a compatible device
+        ports (str): pattern for the port name
+        return (str): the name of the port used
+        It also sets ._serial and ._idn to contain the opened serial port, and
+        the identification string.
+        raises:
+            IOError: if no device are found
         """
-        if sys.platform.startswith('linux'):
-            # Look for each USB device, if the serial number is good
-            sn_paths = glob.glob('/sys/bus/usb/devices/*/serial')
-            for p in sn_paths:
-                try:
-                    f = open(p)
-                    snp = f.read().strip()
-                except IOError:
-                    logging.debug("Failed to read %s, skipping device", p)
-                if snp == sn:
-                    break
-            else:
-                raise HwError("No ACM device with S/N %s. "
-                              "Check that the PMT control device is "
-                              "connected to the host computer." % sn)
-
-            # Deduce the tty:
-            # .../3-1.2/serial => .../3-1.2/3-1.2:1.0/ttyUSB1
-            sys_path = os.path.dirname(p)
-            usb_num = os.path.basename(sys_path)
-            tty_paths = glob.glob("%s/%s/tty/ttyACM?*" % (sys_path, usb_num + ":1.0"))
-            if not tty_paths:
-                raise ValueError("Failed to find tty for device with S/N %s" % sn)
-            tty = os.path.basename(tty_paths[0])
-
-            # Convert to /dev
-            # Note: that works because udev rules create a dev with the same name
-            # otherwise, we would need to check the char numbers
-            return "/dev/%s" % (tty,)
+        if os.name == "nt":
+            raise NotImplementedError("Windows not supported")
         else:
-            # TODO: Windows version
-            raise NotImplementedError("OS not yet supported")
+            names = glob.glob(ports)
+
+        # For debugging purpose
+        if ports == "/dev/fake":
+            self._serial = PMTControlSimulator(timeout=1)
+            return ports
+
+        for n in names:
+            try:
+                self._serial = self._openSerialPort(n)
+                return n
+            except serial.SerialException:
+                # not possible to use this port? next one!
+                continue
+        else:
+            raise HwError("Failed to find a PMT Control device on ports '%s'. "
+                          "Check that the device is turned on and connected to "
+                          "the computer." % (ports,))
 
     @classmethod
     def scan(cls):

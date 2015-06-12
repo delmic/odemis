@@ -39,6 +39,7 @@ from odemis.gui.comp.canvas import CAN_ZOOM
 from odemis.gui.comp.popup import Message
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.conf import get_acqui_conf
+from odemis.gui.conf.util import dump_emitter_and_detector_vas
 from odemis.gui.cont import settings, tools
 from odemis.gui.cont.actuators import ActuatorController
 from odemis.gui.cont.microscope import SecomStateController, DelphiStateController
@@ -573,10 +574,6 @@ class SparcAcquisitionTab(Tab):
         self._scount_stream = None
         self._monoch_stream = None
 
-        for attr, value in main_data.sed.__dict__.iteritems():
-            if isinstance(value, VigilantAttributeBase):
-                print attr
-
         # This stream is used both for rendering and acquisition
         sem_stream = acqstream.SEMStream(
             "Secondary electrons",
@@ -587,7 +584,6 @@ class SparcAcquisitionTab(Tab):
             detvas={},
         )
         self._sem_live_stream = sem_stream
-        print sem_stream.detector.role
 
         sem_stream.should_update.value = True
         sem_stream.should_update.subscribe(self._on_sem_update)
@@ -791,8 +787,14 @@ class SparcAcquisitionTab(Tab):
             "Angle-resolved",
             self.tab_data_model.main.ccd,
             self.tab_data_model.main.ccd.data,
-            self.tab_data_model.main.ebeam
+            self.tab_data_model.main.ebeam,
+            emtvas={"dwellTime"},
+            detvas={"exposureTime", "binning", "resolution", "gain", "readoutRate"},
         )
+
+        dump_emitter_and_detector_vas(ar_stream)
+
+        # print ar_stream.emitter, ar_stream.detector
 
         ar_stream.roi.subscribe(self.onARROI)
         # FIXME NOW: Make the acquisition controller aware of this VA in a different way

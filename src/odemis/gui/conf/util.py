@@ -37,6 +37,7 @@ from wx.lib.pubsub import pub
 from odemis import model
 import odemis.gui
 from odemis.gui.util.widgets import VigilantAttributeConnector, AxisConnector
+from odemis.model import VigilantAttributeBase
 import odemis.util.units as utun
 from odemis.model import NotApplicableError
 from odemis.util.driver import reproduceTypedValue
@@ -816,3 +817,17 @@ class AxisSettingEntry(AxisConnector, Entry):
             logging.error("Cannot create AxisConnector")
         else:
             logging.debug("Cannot create AxisConnector")
+
+def dump_emitter_and_detector_vas(stream):
+    """ Log emitter and detector VAs of the given stream. For debugging purposes only """
+    logging.warn("Emitter:")
+
+    for attr, value in stream.emitter.__dict__.iteritems():
+        if isinstance(value, VigilantAttributeBase):
+            logging.warn("* %s", attr)
+
+    logging.warn("Detector:")
+
+    for attr, value in stream.detector.__dict__.iteritems():
+        if isinstance(value, VigilantAttributeBase):
+            logging.warn("* %s", attr)
