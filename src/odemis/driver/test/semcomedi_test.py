@@ -774,6 +774,7 @@ class TestSEMCounter(unittest.TestCase):
 
 #     @unittest.skip("simple")
     def test_acquire_cnt(self):
+        self.scanner.dwellTime.value = 100e-3
         expected_duration = self.compute_expected_duration()
 
         start = time.time()
@@ -839,7 +840,7 @@ class TestSEMCounter(unittest.TestCase):
         self.assertEqual(image.shape, self.size[-1:-3:-1])
         self.assertIn(model.MD_DWELL_TIME, image.metadata)
         self.acq_dates[1].add(image.metadata[model.MD_ACQ_DATE])
-#        print "Received an image"
+        #print "Received an image %s" % (image,)
         self.left2 -= 1
         if self.left2 <= 0:
             dataflow.unsubscribe(self.receive_image2)

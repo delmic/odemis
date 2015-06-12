@@ -177,11 +177,11 @@ class SEMComedi(model.HwComponent):
 
         # Look for all the counter subdevices
         self._cnt_subdevices = []
-        subd = 0
+        subd = -1
         while True:
             try:
                 subd = comedi.find_subdevice_by_type(self._device,
-                                                     comedi.SUBD_COUNTER, subd)
+                                                     comedi.SUBD_COUNTER, subd + 1)
             except comedi.ComediError:
                 break  # no more counter subdevice
             self._cnt_subdevices.append(subd)
@@ -191,11 +191,11 @@ class SEMComedi(model.HwComponent):
         # There doesn't seem to an official way to find it, but it seems to
         # always be first DIO with SDF_INTERNAL (second is RTSI)
         self._pfi_subdevice = None
-        subd = 0
+        subd = -1
         while True:
             try:
                 subd = comedi.find_subdevice_by_type(self._device,
-                                                     comedi.SUBD_DIO, subd)
+                                                     comedi.SUBD_DIO, subd + 1)
             except comedi.ComediError:
                 logging.info("No PFI control subdevice found")
                 break
@@ -744,6 +744,8 @@ class SEMComedi(model.HwComponent):
             dpr = 1
 
         if nrchans == 0:  # easy
+            logging.debug("Found duplication & over-sampling rates: %g ns x %d x %d = %g ns",
+                          period_ns, dpr, 1, dpr * period_ns)
             return dpr * period_ns / 1e9, 1, dpr
 
         # let's find a compatible minimum dwell time for the output device
@@ -806,7 +808,7 @@ class SEMComedi(model.HwComponent):
         if best_found:
             wperiod_ns, osr = best_found
             logging.debug("Found duplication & over-sampling rates: %g ns x %d x %d = %g ns",
-                          wperiod_ns / osr, osr, dpr, dpr * wperiod_ns)
+                          wperiod_ns / osr, dpr, osr, dpr * wperiod_ns)
             # FIXME: if osr * itemsize > _max_bufsz, increase dpr and retry
             return dpr * wperiod_ns / 1e9, osr, dpr
 
@@ -1324,6 +1326,7 @@ class SEMComedi(model.HwComponent):
         Implementation of write_count_2d_data_raw by reading the input data n
           lines at a time.
         """
+        maxlines = min(wdata.shape[0], maxlines)
         logging.debug("Reading %d lines at a time: %d samples/counter every %g µs",
                       maxlines, maxlines * wdata.shape[1] * dpr,
                       period * 1e6)
@@ -1337,7 +1340,7 @@ class SEMComedi(model.HwComponent):
 
         # allocate one buffer for the write data with duplication
         # TODO: not needed if dpr == 1
-        ldata = numpy.empty((maxlines, dpr, wdata.shape[2]), dtype=wdata.dtype)
+        ldata = numpy.empty((maxlines, wdata.shape[1], dpr, wdata.shape[2]), dtype=wdata.dtype)
 
         # read "maxlines" lines at a time
         x = 0
@@ -1346,7 +1349,7 @@ class SEMComedi(model.HwComponent):
             logging.debug("Going to read %d lines", lines)
             # copy the right couple of lines in the buffer
             for i in range(dpr):  # TODO: use numpy reshape to avoid the loop
-                ldata[:, i, :] = wdata[x:x + lines, :, :]
+                ldata[:, :, i, :] = wdata[x:x + lines, :, :]
             ldata = ldata.reshape(-1, wdata.shape[2])  # flatten X/Y
             rbuf = self._write_count_raw_one_cmd(wchannels, wranges, counter,
                                                  period / dpr, ldata)
@@ -1421,7 +1424,7 @@ class SEMComedi(model.HwComponent):
             logging.debug("Generating new write and count commands for %d scans on "
                           "%s/%d", nwscans, wchannels, counter.source)
             counter.setup_count_command()
-            self.reader.prepare(nwscans)
+            counter.reader.prepare(nwscans, expected_time)
 
             # create a command for writing
             # Note: we don't have the problem with write buffers of 1 sample,
@@ -1429,7 +1432,7 @@ class SEMComedi(model.HwComponent):
             self.setup_timed_command(self._ao_subdevice, wchannels, wranges, period_ns,
                                      stop_arg=nwscans)
 
-            self.writer.prepare(wdata.ravel(), expected_time)
+            self._writer.prepare(wdata.ravel(), expected_time)
 
         # run the commands
         comedi.internal_trigger(self._device, self._ao_subdevice, 0)
@@ -1771,11 +1774,11 @@ class SEMComedi(model.HwComponent):
 
         # Transform raw data + metadata into a 2D DataArray
         rdas = []
-        for i, d in enumerate(rbuf):
+        for i, d in enumerate(detectors):
             if i == ic:
                 b = rbuf[0]
             else:
-                b = []  # empty array
+                b = numpy.empty((0,), dtype = self._reader.dtype)  # empty array
             rdas.append(model.DataArray(b, md[i]))
 
         return rdas
@@ -3070,7 +3073,7 @@ class CountingDetector(model.Detector):
         subd_pfi = self.parent._pfi_subdevice
         # set routing for gate => AO scan  (for now, just the output of the other counter)
         # First route AO scan to a PFI, and then use this PFI as input for the gate?
-        gate_pfi = 10 + self._source  # just a convention
+        gate_pfi = 10 + self.counter  # just a convention
         # AO_START1 = start of the whole command
         comedi.set_routing(self._device, subd_pfi, gate_pfi,
                            comedi.NI_PFI_OUTPUT_AO_UPDATE_N)
