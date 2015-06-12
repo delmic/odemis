@@ -705,7 +705,7 @@ class SEMComedi(model.HwComponent):
           with the output device and the highest over-sampling rate compatible
           with the input device. If the period is longer than what can be
         period (float): dwell time requested (in s)
-        nrchans (1<=int or None): number of input channels (aka detectors)
+        nrchans (0<=int or None): number of input channels (aka detectors)
         returns (2-tuple: period (0<float), osr (1<=int)):
          period: a value slightly smaller, or larger than the period (in s)
          osr: a ratio indicating how many times faster runs the input clock
@@ -742,6 +742,9 @@ class SEMComedi(model.HwComponent):
             period_ns = int(period_ns / dpr)
         else:
             dpr = 1
+
+        if nrchans == 0:  # easy
+            return dpr * period_ns / 1e9, 1, dpr
 
         # let's find a compatible minimum dwell time for the output device
         wcmd = comedi.cmd_struct()
@@ -915,9 +918,10 @@ class SEMComedi(model.HwComponent):
         if dpr <= max_dpr:
             pixelsz = nrchans * osr * dpr * self._reader.dtype.itemsize
             if pixelsz > self._max_bufsz:
-                # probably going to fail, but let's try...
-                logging.warning("Going to try to read very large buffer of %g MB.",
-                                pixelsz / 2 ** 20)
+                # We should have gone to subpixel then
+                logging.error("Going to try to read very large buffer of %g MB, "
+                              "while it could have used subpixel because dpr %d "
+                              "<= %d", pixelsz / 2 ** 20, dpr, max_dpr)
 
             return self._write_read_2d_pixel(wchannels, wranges, rchannels, rranges,
                                              period, margin, osr, dpr, data)
@@ -926,12 +930,12 @@ class SEMComedi(model.HwComponent):
         pixelsz = nrchans * osr * self._reader.dtype.itemsize
         if pixelsz > self._max_bufsz:
             # probably going to fail, but let's try...
-            logging.warning("Going to try to read very large buffer of %g MB.",
-                            pixelsz / 2 ** 20)
+            logging.error("Going to try to read very large buffer of %g MB, "
+                          " with osr = %d and dpr = %d.",
+                          pixelsz / 2 ** 20, osr, dpr)
 
         return self._write_read_2d_subpixel(wchannels, wranges, rchannels, rranges,
                                             period, margin, osr, dpr, data)
-
 
     def _write_read_2d_lines(self, wchannels, wranges, rchannels, rranges,
                              period, margin, osr, maxlines, data):
@@ -953,8 +957,9 @@ class SEMComedi(model.HwComponent):
         buf = []
         for c in rchannels:
             buf.append(numpy.empty(rshape, dtype=self._reader.dtype))
+        # TODO: this is pessimistic if max_data of device < dtype.max, so
+        # better use the max_data of the device directly.
         adtype = get_best_dtype_for_acc(self._reader.dtype, osr)
-
 
         # read "maxlines" lines at a time
         x = 0
@@ -970,7 +975,8 @@ class SEMComedi(model.HwComponent):
 
             # decimate into each buffer
             for i, b in enumerate(buf):
-                self._scan_raw_to_lines(rshape, margin, osr, x, rbuf[..., i], b[x:x + lines, ...], adtype)
+                self._scan_raw_to_lines(rshape, margin, osr, x,
+                                        rbuf[..., i], b[x:x + lines, ...], adtype)
 
             x += lines
 
@@ -991,7 +997,7 @@ class SEMComedi(model.HwComponent):
         # reshape to a 3D array with margin and sub-samples
         rectangle = data.reshape((-1, shape[1] + margin, osr))
         # trim margin
-        tr_rect = rectangle[:, margin:]
+        tr_rect = rectangle[:, margin:, :]
         if osr == 1:
             # only one sample per pixel => copy
             oarray[...] = tr_rect[:, :, 0]
@@ -1279,6 +1285,102 @@ class SEMComedi(model.HwComponent):
             rbuf = rbuf[:-osr, :] # remove data read during rest positioning
         return rbuf
 
+    def write_count_2d_data_raw(self, wchannels, wranges, counter,
+                                period, margin, dpr, wdata):
+        """
+        write data on the given analog output channels and read synchronously on
+         the given analog input channels and convert back to 2d array
+        wchannels (list of int): channels to write (in same the order as data)
+        wranges (list of int): ranges of each write channel
+        rchannels (list of int): channels to read (in same the order as data)
+        rranges (list of int): ranges of each read channel
+        period (float): sampling period in s (time between two pixels on the same
+         channel)
+        margin (0 <= int): number of additional pixels at the begginning of each line
+        dpr: duplication rate, how many times each pixel should be duplicated
+        wdata (3D numpy.ndarray of int): array to write (raw values)
+          first dimension is along the slow axis, second is along the fast axis,
+          third is along the channels
+        return (list of 2D numpy.array with shape=(data.shape[0], data.shape[1]-margin)
+         and dtype=device type): the data read (raw) after bin merge (in case of
+         dpr > 1)
+        """
+        # The hardware buffer on the NI is pretty big, and as we don't have any
+        # OSR for the counter, it's very unlikely to require pixel per pixel scan
+        linesz = wdata.shape[1] * dpr * counter.reader.dtype.itemsize
+        if linesz > self._max_bufsz:
+            # TODO: such cases
+            # probably going to fail, but let's try...
+            logging.warning("Going to try to read very large buffer of %g MB.",
+                            linesz / 2 ** 20)
+
+        lines = self._max_bufsz // linesz
+        return self._write_count_2d_lines(wchannels, wranges, counter,
+                                          period, margin, dpr, lines, wdata)
+
+    def _write_count_2d_lines(self, wchannels, wranges, counter,
+                              period, margin, dpr, maxlines, wdata):
+        """
+        Implementation of write_count_2d_data_raw by reading the input data n
+          lines at a time.
+        """
+        logging.debug("Reading %d lines at a time: %d samples/counter every %g µs",
+                      maxlines, maxlines * wdata.shape[1] * dpr,
+                      period * 1e6)
+        rshape = (wdata.shape[0], wdata.shape[1] - margin)
+
+        # allocate one full buffer
+        buf = numpy.empty(rshape, dtype=counter.reader.dtype)
+        # TODO: use the dtype from get_best_dtype_for_acc(buf.dtype, dpr)
+        # Although, that means in practice that any dpr > 1 will cause uint64,
+        # which is probably overkill
+
+        # allocate one buffer for the write data with duplication
+        # TODO: not needed if dpr == 1
+        ldata = numpy.empty((maxlines, dpr, wdata.shape[2]), dtype=wdata.dtype)
+
+        # read "maxlines" lines at a time
+        x = 0
+        while x < wdata.shape[0]:
+            lines = min(wdata.shape[0] - x, maxlines)
+            logging.debug("Going to read %d lines", lines)
+            # copy the right couple of lines in the buffer
+            for i in range(dpr):  # TODO: use numpy reshape to avoid the loop
+                ldata[:, i, :] = wdata[x:x + lines, :, :]
+            ldata = ldata.reshape(-1, wdata.shape[2])  # flatten X/Y
+            rbuf = self._write_count_raw_one_cmd(wchannels, wranges, counter,
+                                                 period / dpr, ldata)
+
+            # place at the right position of the final buffer (end sum each sub-bin)
+            self._scan_raw_count_to_lines(rshape, margin, dpr, x,
+                                          rbuf, buf[x:x + lines, ...])
+
+            x += lines
+
+        return [buf]
+
+    @staticmethod
+    def _scan_raw_count_to_lines(shape, margin, dpr, x, data, oarray):
+        """
+        Converts a linear array resulting from a scan with oversampling to a 2D array
+        shape (2-tuple int): H,W dimension of the scanned image (margin not included)
+        margin (int): amount of useless pixels at the beginning of each line
+        osr (int): over-sampling rate
+        x (int): x position of the line in the output array
+        data (1D ndarray): the raw linear array (including duplication), of one counter
+        oarray (2D ndarray): the output array, already allocated, of shape self.shape
+        adtype (dtype): intermediary type to use for the accumulator
+        """
+        # reshape to a 3D array with margin and sub-samples
+        rectangle = data.reshape((-1, shape[1] + margin, dpr))
+        # trim margin
+        tr_rect = rectangle[:, margin:, :]
+        if dpr == 1:
+            # only one sample per pixel => copy
+            oarray[...] = tr_rect[:, :, 0]
+        else:
+            numpy.sum(tr_rect, axis=2, out=oarray)
+
     def _write_count_raw_one_cmd(self, wchannels, wranges, counter,
                                  period, wdata):
         """
@@ -1290,11 +1392,9 @@ class SEMComedi(model.HwComponent):
         wdate (int): number of samples to read/write
         period (float): sampling period in s
         """
-
-        # TODO: move to write data preparation function
-        # 1 if period < max_period
-        dpr = int(math.ceil(period / (self._max_ao_period_ns * 1e9)))
-        wperiod = period / dpr
+        # TODO support rest and position notifier
+        # TODO: support reading simultaneously to AI
+        # => merge into _write_read_raw_one_cmd() ?
 
         # The counter sampling clock is the AO scan, which happens at the beginning
         # of each scan. As we want to get the value by the end of the scan, we
@@ -1346,7 +1446,7 @@ class SEMComedi(model.HwComponent):
         # just for the last scan.
         self._writer.wait(1 + period)
 
-        logging.info("Counter sync read %f s", time.time() - start)
+        logging.debug("Counter sync read after %g s", time.time() - start)
         return rbuf
 
     def _start_new_position_notifier(self, n, start, period):
@@ -1514,30 +1614,12 @@ class SEMComedi(model.HwComponent):
                 if not detectors:  # can happen if must_stop not yet set
                     break
 
-                rchannels = tuple(d.channel for d in detectors)
-                rranges = tuple(d._range for d in detectors)
-                dmd = tuple(d.getMetadata() for d in detectors)
-
-                # get the scan values (automatically updated to the latest needs)
-                (scan, period, shape, margin,
-                 wchannels, wranges, osr, dpr) = self._scanner.get_scan_data(len(detectors))
-
-                metadata = self._metadata.copy()
-                metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
-                metadata[model.MD_DWELL_TIME] = period
-                metadata[model.MD_SAMPLES_PER_PIXEL] = osr * dpr
-                # TODO: allow different metadata on each detector -> metadata[i].update(detector.getMetadata())
-
-                # add scanner translation to the center
-                center = metadata.get(model.MD_POS, (0, 0))
-                trans = self._scanner.pixelToPhy(self._scanner.translation.value)
-                metadata[model.MD_POS] = (center[0] + trans[0],
-                                          center[1] + trans[1])
-
                 # write and read the raw data
                 try:
-                    rbuf = self.write_read_2d_data_raw(wchannels, wranges, rchannels,
-                                        rranges, period, margin, osr, dpr, scan)
+                    if any(isinstance(d, CountingDetector) for d in detectors):
+                        rdas = self._acquire_counting_detector(detectors)
+                    else:
+                        rdas = self._acquire_analog_detectors(detectors)
                 except (IOError, comedi.ComediError):
                     # could be genuine or just due to cancellation
                     if self._acquisition_must_stop.is_set():
@@ -1558,29 +1640,9 @@ class SEMComedi(model.HwComponent):
                     continue
 
                 nfailures = 0
-                # logging.debug("Converting raw data to physical: %s", rbuf)
-                # TODO decimate/convert the data while reading, to save time, or do not convert at all
-                # TODO: fast way to convert to physical values (and if possible keep
-                # integers as output
-                # converting to physical value would look a bit like this:
-                # the ranges could be save in the metadata.
-        #        parray = self._array_to_phys(self_sem._ai_subdevice,
-        #                                       [self.component.channel], [rranges], data)
 
-                for i, d in enumerate(detectors):
-                    # Convert to a nice 2D DataArray
-                    parray = rbuf[i]
-                    # metadata is the merge of the scanner MD + detector MD
-                    md = metadata.copy()
-                    md.update(dmd[i])
-                    darray = model.DataArray(parray, md)
-                    # TODO: call the callback in a thread => just add data to a
-                    # synchronizing queue and let a thread just call callback.
-                    # (need to be clever on the size of the queue: max 2 if no
-                    # synchronization, otherwise, quite a lot ~ 20?)
-                    # This should avoid the scan to spend a lot of time at the
-                    # last point.
-                    d.data.notify(darray)
+                for d, da in zip(detectors, rdas):
+                    d.data.notify(da)
 
                 # force the GC to non-used buffers, for some reason, without this
                 # the GC runs only after we've managed to fill up the memory
@@ -1599,6 +1661,124 @@ class SEMComedi(model.HwComponent):
             logging.debug("Acquisition thread closed")
             self._acquisition_must_stop.clear()
             gc.collect()
+
+    def _acquire_analog_detectors(self, detectors):
+        """
+        Run the acquisition for multiple analog detectors (and no counters)
+        detectors (AnalogDetectors)
+        return (list of DataArrays): acquisition for each detector in order
+        """
+        rchannels = tuple(d.channel for d in detectors)
+        rranges = tuple(d._range for d in detectors)
+        dmd = tuple(d.getMetadata() for d in detectors)
+
+        # get the scan values (automatically updated to the latest needs)
+        (scan, period, shape, margin,
+         wchannels, wranges, osr, dpr) = self._scanner.get_scan_data(len(detectors))
+
+        metadata = self._metadata.copy()
+        metadata[model.MD_ACQ_DATE] = time.time()  # time at the beginning
+        metadata[model.MD_DWELL_TIME] = period
+        metadata[model.MD_SAMPLES_PER_PIXEL] = osr * dpr
+
+        # add scanner translation to the center
+        center = metadata.get(model.MD_POS, (0, 0))
+        trans = self._scanner.pixelToPhy(self._scanner.translation.value)
+        metadata[model.MD_POS] = (center[0] + trans[0],
+                                  center[1] + trans[1])
+
+        # metadata is the merge of the scanner MD + detector MD
+        md = tuple(metadata.copy() for d in detectors)
+        for dmdi, mdi in zip(dmd, md):
+            mdi.update(dmdi)
+
+        # write and read the raw data
+        rbuf = self.write_read_2d_data_raw(wchannels, wranges, rchannels,
+                            rranges, period, margin, osr, dpr, scan)
+
+        # logging.debug("Converting raw data to physical: %s", rbuf)
+        # TODO decimate/convert the data while reading, to save time, or do not convert at all
+        # TODO: fast way to convert to physical values (and if possible keep
+        # integers as output
+        # converting to physical value would look a bit like this:
+        # the ranges could be save in the metadata.
+        # parray = self._array_to_phys(self_sem._ai_subdevice,
+        #                              [self.component.channel], [rranges], data)
+
+        # Transform raw data + metadata into a 2D DataArray
+        rdas = []
+        for i, b in enumerate(rbuf):
+            rdas.append(model.DataArray(b, md[i]))
+
+        return rdas
+
+    def _acquire_counting_detector(self, detectors):
+        """
+        Run the acquisition for one counting detector (and the other detectors
+         are not used!)
+        detectors (Detectors)
+        return (list of DataArrays): acquisition of each detector, only the one
+          for the first counting detector is real
+        """
+        # find the counting detector we'll use
+        for i, d in enumerate(detectors):
+            if isinstance(d, CountingDetector):
+                ic = i
+                counter = d
+                break
+        else:
+            raise ValueError("No counting detector found")
+
+        if len(detectors) > 1:
+            logging.warning("Simultaneous acquisition from analog and counting "
+                            "detector not supported. Only going to acquire from "
+                            "counting detector!")
+        # TODO: remove once the bug is fixed
+        if self._scanner.dwellTime.value < 100e-6:
+            # Actually only >= 1ms really works reliably
+            self._scanner.dwellTime.value = 100e-6
+            logging.warning(u"Counter acquisition not working with dwell time < "
+                            u"100 µs. Automatically increasing the dwell time to "
+                            u"%g s", self._scanner.dwellTime.value)
+
+        dmd = tuple(d.getMetadata() for d in detectors)
+
+        # get the scan values (automatically updated to the latest needs)
+        (scan, period, shape, margin,
+         wchannels, wranges, osr, dpr) = self._scanner.get_scan_data(0)
+        if osr != 1:
+            logging.warning("osr = %d, while using counting detector", osr)
+
+        metadata = self._metadata.copy()
+        metadata[model.MD_ACQ_DATE] = time.time()  # time at the beginning
+        metadata[model.MD_DWELL_TIME] = period
+        metadata[model.MD_SAMPLES_PER_PIXEL] = osr * dpr
+
+        # add scanner translation to the center
+        center = metadata.get(model.MD_POS, (0, 0))
+        trans = self._scanner.pixelToPhy(self._scanner.translation.value)
+        metadata[model.MD_POS] = (center[0] + trans[0],
+                                  center[1] + trans[1])
+
+        # metadata is the merge of the scanner MD + detector MD
+        md = tuple(metadata.copy() for d in detectors)
+        for dmdi, mdi in zip(dmd, md):
+            mdi.update(dmdi)
+
+        # write and read the raw data
+        rbuf = self.write_count_2d_data_raw(wchannels, wranges, counter,
+                                            period, margin, dpr, scan)
+
+        # Transform raw data + metadata into a 2D DataArray
+        rdas = []
+        for i, d in enumerate(rbuf):
+            if i == ic:
+                b = rbuf[0]
+            else:
+                b = []  # empty array
+            rdas.append(model.DataArray(b, md[i]))
+
+        return rdas
 
     def terminate(self):
         """
@@ -1877,7 +2057,7 @@ class CounterReader(Reader):
     """
     def __init__(self, parent):
         """
-        parent (CounterDetector)
+        parent (CountingDetector)
         """
         Accesser.__init__(self, parent)
         self._subdevice = parent._subdevice
@@ -1891,7 +2071,11 @@ class CounterReader(Reader):
         """
         timeout (float): maximum number of seconds to wait for the read to finish
         """
-        buf = super(self, CounterReader)(timeout)
+        buf = super(CounterReader, self).wait(timeout)
+        # TODO: if buf.size < self.count, still return the data received
+        # This can happen when the kernel driver failed to handle the interrupt
+        # in time and gives up.
+
         # same as normal reader, excepted that the counter never ends by itself,
         # so we stop it explicitly
         try:
@@ -1899,6 +2083,7 @@ class CounterReader(Reader):
         except comedi.ComediError:
             logging.debug("Failed to cancel read")
         return buf
+
 
 class MMapReader(Reader):
     """
@@ -2394,7 +2579,12 @@ class Scanner(model.Emitter):
         self.parent._metadata[model.MD_PIXEL_SIZE] = pxs_scaled
 
     def _setDwellTime(self, value):
-        nrchans = max(1, len(self.parent._acquisitions))  # current number of detectors
+        detectors = self.parent._acquisitions  # current number of detectors
+        if any(isinstance(d, CountingDetector) for d in detectors):
+            # TODO: remove/modify once it's possible to acquire analog and counting
+            nrchans = 0
+        else:
+            nrchans = max(1, len(self.parent._acquisitions))
         dt, self._osr, self._dpr = self.parent.find_best_oversampling_rate(value, nrchans)
         self._nrchans = nrchans
         return dt
@@ -2504,7 +2694,7 @@ class Scanner(model.Emitter):
         """
         Returns all the data as it has to be written the device to generate a
           scan.
-        nrchans (1 <= int): number of read channels
+        nrchans (0 <= int): number of read channels
         returns: array (3D numpy.ndarray), period (0<=float), shape (2-tuple int),
                  margin (0<=int), channels (list of int), ranges (list of int)
                  osr (1<=int):
@@ -2927,10 +3117,9 @@ class CountingDetector(model.Detector):
         # Set value of "load a" register by writing to channel 1 (only useful if load on gate)
         comedi.data_write(self._device, self._subdevice, 1, 0, 0, initial_count)
 
-    def prepare_counting_cmd(self):
+    def setup_count_command(self):
         """
-        create a command to read counts from buffered counting
-        return cmd
+        create a command to read counts from buffered counting and send it
         """
         nchans = 1
         cmd = comedi.cmd_struct()
@@ -2971,7 +3160,8 @@ class CountingDetector(model.Detector):
         if rc != 0:
             raise IOError("command_test for counter failed with %d" % rc)
 
-        return cmd
+        # send the command
+        comedi.command(self._device, cmd)
 
 
 class SEMDataFlow(model.DataFlow):
