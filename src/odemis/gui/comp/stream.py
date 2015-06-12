@@ -577,6 +577,7 @@ class StreamPanel(wx.Panel):
         self._panel.Show(not collapse)
         self._collapsed = collapse
 
+        # Call after is used, so the fit will occur after everything has been hidden or shown
         wx.CallAfter(self.Parent.fit_streams)
 
         self.Thaw()
@@ -881,6 +882,37 @@ class StreamPanel(wx.Panel):
 
         if value is not None:
             value_ctrl.SetValue(unicode(value))
+
+        return lbl_ctrl, value_ctrl
+
+    @control_bookkeeper
+    def add_readonly_field(self, label_text, value=None, selectable=True):
+        """ Adds a value to the control panel that cannot directly be changed by the user
+
+        :param label_text: (str) Label text to display
+        :param value: (None or object) Value to display next to the label
+        :param selectable: (boolean) whether the value can be selected for copying by the user
+
+        :return: (Ctrl, Ctrl or None) Label and value control
+
+        """
+
+        lbl_ctrl = self._add_side_label(label_text)
+
+        if value:
+            if selectable:
+                value_ctrl = wx.TextCtrl(self._panel, value=unicode(value),
+                                         style=wx.BORDER_NONE | wx.TE_READONLY)
+                value_ctrl.SetForegroundColour(gui.FG_COLOUR_DIS)
+                value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
+                self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
+                                  flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
+            else:
+                value_ctrl = wx.StaticText(self._panel, label=unicode(value))
+                value_ctrl.SetForegroundColour(gui.FG_COLOUR_DIS)
+                self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), flag=wx.ALL, border=5)
+        else:
+            value_ctrl = None
 
         return lbl_ctrl, value_ctrl
 

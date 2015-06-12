@@ -127,49 +127,70 @@ class StreamController(object):
         stream_bar.add_stream_panel(self.stream_panel, show_panel)
 
     def _add_hw_setting_controls(self):
-        """ Add local version of linked hardware setting VAs
+        """ Add local version of linked hardware setting VAs """
 
-        TODO: Some settings are still hardcoded, but should probably also be handled in a generic
-            way.
+        emitter_conf = {}
+        detector_conf = {}
 
-        """
+        # Get the emitter and detector configurations if they exist
 
-        all_vas = self.stream.det_vas.copy()
-        all_vas.update(self.stream.emt_vas)
+        if self.stream.emitter.role in self.hw_settings_config:
+            emitter_conf = self.hw_settings_config[self.stream.emitter.role]
 
-        for name, va in all_vas.items():
-            # human_name = label_to_human(name)
+        if self.stream.detector.role in self.hw_settings_config:
+            detector_conf = self.hw_settings_config[self.stream.detector.role]
 
-            # 'Hard coded' hardware controls (these might be removed)
-            if name == "exposureTime":
-                self._add_exposure_time_ctrl()
-            elif name == "power":
-                self._add_light_power_ctrl()
-            else:
-                hw_conf = {}
+        # Process the emitter vas first
 
-                if (
-                        self.stream.emitter.role in self.hw_settings_config and
-                        name in self.hw_settings_config[self.stream.emitter.role]
-                ):
-                    logging.warn("%s emitter configuration found for %s", name,
-                                 self.stream.emitter.role)
-                    hw_conf = self.hw_settings_config[self.stream.emitter.role][name]
-                    hw_comp = self.stream.emitter
-                elif (
-                        self.stream.detector.role in self.hw_settings_config and
-                        name in self.hw_settings_config[self.stream.detector.role]
-                ):
-                    logging.warn("%s detector configuration found for %s", name,
-                                 self.stream.emitter.role)
-                    hw_conf = self.hw_settings_config[self.stream.detector.role][name]
-                    hw_comp = self.stream.detector
+        add_divider = False
 
-                try:
-                    se = create_setting_entry(self.stream_panel, name, va, hw_comp, hw_conf)
-                    self.entries[se.name] = se
-                except AttributeError:
-                    logging.exception("Unsupported control type for %s!", name)
+        for name, va in self.stream.emt_vas.items():
+            setting_conf = {}
+
+            if emitter_conf and name in emitter_conf:
+                logging.debug("%s emitter configuration found for %s", name,
+                              self.stream.emitter.role)
+                setting_conf = self.hw_settings_config[self.stream.emitter.role][name]
+            elif detector_conf and name in detector_conf:
+                logging.error("Detector %s setting va added to emitter group!", name)
+                continue
+
+            try:
+                se = create_setting_entry(self.stream_panel, name, va, self.stream.emitter,
+                                          setting_conf)
+                self.entries[se.name] = se
+                add_divider = True
+            except AttributeError:
+                logging.exception("Unsupported control type for %s!", name)
+
+        if add_divider:
+            self.stream_panel.add_divider()
+
+        # Then process the detector
+
+        add_divider = False
+
+        for name, va in self.stream.det_vas.items():
+            setting_conf = {}
+
+            if detector_conf and name in detector_conf:
+                logging.debug("%s detector configuration found for %s", name,
+                              self.stream.detector.role)
+                setting_conf = self.hw_settings_config[self.stream.detector.role][name]
+            elif emitter_conf and name in emitter_conf:
+                logging.error("Emitter %s setting va added to detector group!", name)
+                continue
+
+            try:
+                se = create_setting_entry(self.stream_panel, name, va, self.stream.emitter,
+                                          setting_conf)
+                self.entries[se.name] = se
+                add_divider = True
+            except AttributeError:
+                logging.exception("Unsupported control type for %s!", name)
+
+        if add_divider:
+            self.stream_panel.add_divider()
 
     def _on_stream_panel_destroy(self, _):
         """ Remove all references to setting entries and the possible VAs they might contain
@@ -371,53 +392,6 @@ class StreamController(object):
         # TODO: should the stream have a way to know when the raw data has changed? => just a
         # spectrum VA, like histogram VA
         self.stream.image.subscribe(_on_new_spec_data, init=True)
-
-    def _add_exposure_time_ctrl(self):
-        """ Add exposure time controls to the stream panel"""
-
-        # Assertion mainly needed for dynamic attribute recognition (i.e. exposureTime)
-        assert(isinstance(self.stream, CameraStream))
-        et_config = self.hw_settings_config['ccd']['exposureTime']
-
-        conf = {
-            'min_val': et_config["range"][0],
-            'max_val': et_config["range"][1],
-            'unit': self.stream.detExposureTime.unit,
-            'scale': et_config["scale"],
-            'accuracy': et_config["accuracy"],
-        }
-
-        lbl_ctrl, value_ctrl = self.stream_panel.add_exposure_time_ctrl(
-            self.stream.detExposureTime.value, conf
-        )
-
-        se = SettingEntry(name="exposureTime", va=self.stream.detExposureTime, stream=self.stream,
-                          lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl, events=wx.EVT_SLIDER)
-        self.entries[se.name] = se
-
-    def _add_light_power_ctrl(self):
-        """ Add light power controls to the stream panel """
-
-        # Assertion mainly needed for dynamic attribute recognition (i.e. emtPower)
-        assert(isinstance(self.stream, CameraStream))
-
-        et_config = self.hw_settings_config['light']['power']
-
-        conf = {
-            'min_val': self.stream.emtPower.range[0],
-            'max_val': self.stream.emtPower.range[1],
-            'unit': self.stream.emtPower.unit,
-            'scale': et_config["scale"],
-            'accuracy': 4
-        }
-
-        lbl_ctrl, value_ctrl = self.stream_panel.add_light_power_ctrl(
-            self.stream.emtPower.value, conf
-        )
-
-        se = SettingEntry(name="lightPower", va=self.stream.emtPower, stream=self.stream,
-                          lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl, events=wx.EVT_SLIDER)
-        self.entries[se.name] = se
 
     def _add_dye_ctrl(self):
         """
