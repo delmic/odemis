@@ -36,11 +36,12 @@ from wx.lib.pubsub import pub
 
 from odemis import model
 import odemis.gui
+from odemis.gui.util.widgets import VigilantAttributeConnector, AxisConnector
+from odemis.model import VigilantAttributeBase
+import odemis.util.units as utun
 from odemis.model import NotApplicableError
-
-
-# Setting choice generators, used to create certain value choices for settings controls
-from odemis.util.units import si_scale_list, to_string_pretty, readable_str
+from odemis.util.driver import reproduceTypedValue
+from odemis.util.units import readable_str
 
 
 def resolution_from_range(comp, va, conf, init=None):
@@ -86,7 +87,7 @@ def resolution_from_range_plus_point(comp, va, conf):
 MIN_RES = 200 * 200  # px, minimum amount of pixels to consider it acceptable
 
 
-def binning_1d_from_2d(comp, va, conf):
+def binning_1d_from_2d(comp, va, _):
     """ Find simple binnings available in one dimension
 
     We assume pixels are always square. The binning provided by a camera is normally a 2-tuple of
@@ -98,7 +99,7 @@ def binning_1d_from_2d(comp, va, conf):
         logging.warning("Got a binning not of length 2: %s, will try anyway", cur_val)
 
     try:
-        nbpx_full = comp.shape[0] * comp.shape[1] # res at binning 1
+        nbpx_full = comp.shape[0] * comp.shape[1]  # res at binning 1
         choices = {cur_val[0]}
         minbin = max(va.range[0])
         maxbin = min(va.range[1])
@@ -254,6 +255,41 @@ def determine_default_control(va):
         return odemis.gui.CONTROL_TEXT
 
 
+def determine_control_type(hw_comp, va, choices_formatted, conf):
+    """ Determine the control type for the given VA """
+
+    # Get the defined type of control or assign a default one
+    try:
+        control_type = conf['control_type']
+
+        if callable(control_type):
+            control_type = control_type(hw_comp, va, conf)
+
+        # Change radio type to fitting type depending on its content
+        if control_type == odemis.gui.CONTROL_RADIO:
+            if len(choices_formatted) <= 1:  # only one choice => force label
+                control_type = odemis.gui.CONTROL_READONLY
+                logging.warn("Radio control changed to read only because of lack of choices!")
+            elif len(choices_formatted) > 10:  # too many choices => combo
+                control_type = odemis.gui.CONTROL_COMBO
+                logging.warn("Radio control changed to combo box because of number of choices!")
+            else:
+                # choices names too long => combo
+                max_len = max([len(f) for _, f in choices_formatted])
+                if max_len > 6:
+                    control_type = odemis.gui.CONTROL_COMBO
+                    logging.warn("Radio control changed to combo box because of max value length!")
+
+        # read-only takes precedence (unless it was requested to hide it)
+        if va.readonly and control_type != odemis.gui.CONTROL_NONE:
+            control_type = odemis.gui.CONTROL_READONLY
+
+    except KeyError:
+        control_type = determine_default_control(va)
+
+    return control_type
+
+
 def bind_setting_context_menu(settings_entry):
     """ Add a context menu to the settings entry to reset it to its original value
 
@@ -289,31 +325,47 @@ def bind_setting_context_menu(settings_entry):
     settings_entry.lbl_ctrl.Bind(wx.EVT_CONTEXT_MENU, show_reset_menu)
 
 
-def get_va_meta(comp, va, conf):
-    """ Retrieve the range and choices values from the vigilant attribute or override them
-    with the values provided in the configuration.
+def process_setting_metadata(hw_comp, setting_va, conf):
+    """ Process and return metadata belonging to the given VA
+
+    Values will be built from the value of the VA, its properties and the provided configuration.
+
+    Args:
+        hw_comp (Component): Hardware component to which the VA belongs
+        setting_va (VigilantAttribute): The VA containing the value of the setting
+        conf (dict): A dictionary containing various configuration values for the setting
+
+    Returns:
+        (minimum value, maximum value, choices, unit)
+
+        Where min and max values are numerical, choices is an iterable (list, dict or set) or None
+        and unit is a string.
+
 
     """
 
+    # Range might be a value tuple or a callable that calculates the range
     r = conf.get("range", (None, None))
     minv, maxv = (None, None)
 
     try:
+        # Calculate the range of the VA
         if callable(r):
-            minv, maxv = r(comp, va, conf)
+            minv, maxv = r(hw_comp, setting_va, conf)
+        # Get the range directly from the va itself, if it's not configured
         elif r == (None, None):
-            minv, maxv = va.range
+            minv, maxv = setting_va.range
+        # Combine the configured range with the range from the VA itself
         else:
-            # Intersect the two ranges
             # TODO: handle iterables
             minv, maxv = r
-            minv, maxv = max(minv, va.range[0]), min(maxv, va.range[1])
+            minv, maxv = max(minv, setting_va.range[0]), min(maxv, setting_va.range[1])
     except (AttributeError, NotApplicableError):
         pass
 
     # Ensure the range encompasses the current value
     if None not in (minv, maxv):
-        val = va.value
+        val = setting_va.value
         if isinstance(val, numbers.Real):
             minv, maxv = min(minv, val), max(maxv, val)
 
@@ -321,31 +373,31 @@ def get_va_meta(comp, va, conf):
 
     try:
         if callable(choices):
-            choices = choices(comp, va, conf)
+            choices = choices(hw_comp, setting_va, conf)
         elif choices is None:
-            choices = va.choices
-        elif hasattr(va, "choices") and isinstance(va.choices, set):
+            choices = setting_va.choices
+        elif hasattr(setting_va, "choices") and isinstance(setting_va.choices, set):
             # Intersect the two choice sets
-            choices &= va.choices
-        elif hasattr(va, "choices") and isinstance(va.choices, collections.Mapping):  # dicts
+            choices &= setting_va.choices
+        elif hasattr(setting_va, "choices") and isinstance(setting_va.choices, collections.Mapping):  # dicts
             # Only keep the items of va.choices which are also choices
-            choices = {x: va.choices[x] for x in va.choices if x in choices}
-        elif hasattr(va, "range") and isinstance(va.range, collections.Iterable):
+            choices = {x: setting_va.choices[x] for x in setting_va.choices if x in choices}
+        elif hasattr(setting_va, "range") and isinstance(setting_va.range, collections.Iterable):
             # Ensure that each choice is within the range
-            rng = va.range
+            rng = setting_va.range
             choices = set(c for c in choices if rng[0] <= c <= rng[1])
     except (AttributeError, NotApplicableError):
         pass
 
     # Ensure the choices contain the current value
-    if choices is not None and va.value not in choices:
-        logging.info("Current value %s not in choices %s", va.value, choices)
+    if choices is not None and setting_va.value not in choices:
+        logging.info("Current value %s not in choices %s", setting_va.value, choices)
         if isinstance(choices, set):
-            choices.add(va.value)
+            choices.add(setting_va.value)
         elif isinstance(choices, dict):
-            choices[va.value] = unicode(va.value)
+            choices[setting_va.value] = unicode(setting_va.value)
         elif isinstance(choices, list):
-            # FIXME: The HFW choices are the only choices set provided as a list, and it's
+            # FIXME: The HFW choices are the only choices provided as a Python list, and it's
             # not necessary to add the current value to the choices. That's why, for now,
             # the `list` type is ignored here. However, it would be better to either allow for
             # the current value to be added to the HFW choices, or to disable the adding of it in
@@ -355,9 +407,84 @@ def get_va_meta(comp, va, conf):
             logging.warning("Don't know how to extend choices of type %s", type(choices))
 
     # Get unit from config, vigilant attribute or use an empty one
-    unit = conf.get('unit', va.unit or "")
+    unit = conf.get('unit', setting_va.unit or "")
 
     return minv, maxv, choices, unit
+
+
+def format_choices(choices, uniformat=True):
+    """ Transform the given choices into an ordered list of (value, formatted value) tuples
+
+    Args:
+        choices (Iterable): The choices to be formatted or None
+        uniformat (bool): If True, all the values will be formatted using the same si unit
+
+    Returns:
+        ([(value, formatted value)], si prefix) or (None, None)
+
+    """
+
+    if choices:
+        choices_si_prefix = None
+
+        # choice_fmt is an iterable of tuples: (choice, formatted choice)
+        if isinstance(choices, dict):
+            # In this case we assume that the values are already formatted
+            choices_formatted = choices.items()
+        elif (
+                uniformat and len(choices) > 1 and
+                all([isinstance(c, numbers.Real) for c in choices])
+        ):
+            # Try to share the same unit prefix, if the range is not too big
+            choices_abs = set(abs(c) for c in choices)
+            # 0 doesn't affect the unit prefix but is annoying for divisions
+            choices_abs.discard(0)
+            mn, mx = min(choices_abs), max(choices_abs)
+            if mx / mn > 1000:
+                # TODO: use readable_str(c, unit, sig=3)? is it more readable?
+                # => need to not add prefix+units from the combo box
+                # (but still handle differently for radio)
+                choices_formatted = [(c, choice_to_str(c)) for c in choices]
+            else:
+                fmt, choices_si_prefix = utun.si_scale_list(choices)
+                choices_formatted = zip(choices, [u"%g" % c for c in fmt])
+        else:
+            choices_formatted = [(c, choice_to_str(c)) for c in choices]
+
+        if not isinstance(choices, OrderedDict):
+            choices_formatted = sorted(choices_formatted)
+
+        return choices_formatted, choices_si_prefix
+
+    else:
+        return None, None
+
+
+def create_formatted_setter(value_ctrl, val, val_unit, sig=3):
+    """ Create a setting function for the given value control that also formats its value
+
+    Args:
+        value_ctrl (wx.Window): A text control
+        val: The current value of the value control
+        val_unit: The unit of the value
+        sig: The number of significant digits
+
+    """
+
+    value_formatter = None
+
+    if (
+            isinstance(val, (int, long, float)) or
+            (
+                isinstance(val, collections.Iterable) and
+                len(val) > 0 and
+                isinstance(val[0], (int, long, float))
+            )
+    ):
+        def value_formatter(value, unit=val_unit):
+            value_ctrl.SetValue(readable_str(value, unit, sig=sig))
+
+    return value_formatter
 
 
 def choice_to_str(choice):
@@ -372,3 +499,335 @@ def label_to_human(camel_label):
     # Add space after each upper case, then make the first letter uppercase and all the other ones
     # lowercase
     return re.sub(r"([A-Z])", r" \1", camel_label).capitalize()
+
+
+def create_setting_entry(container, name, va, hw_comp, conf, change_callback=None):
+    """ Determin what type on control to use for a setting and have the container create it
+
+    Args:
+        container (SettingsController or StreamController): Controller in charge of the settings
+        name (str): Name of the setting
+        va (VigilantAttribute): The va containing the value of the setting
+        hw_comp (Component): The hardware component to which the setting belongs
+        conf ({} or None): The optional configuration options for the control
+        change_callback (callable): Callable to bind to the control's change event
+
+    Returns:
+        SettingEntry
+
+    """
+
+    value_ctrl = lbl_ctrl = setting_entry = None
+
+    # If no conf provided, set it to an empty dictionary
+    conf = conf or {}
+
+    # Get the range and choices
+    min_val, max_val, choices, unit = process_setting_metadata(hw_comp, va, conf)
+    # Format the provided choices
+    choices_formatted, choices_si_prefix = format_choices(choices)
+    # Determine the control type to use, either from config or some 'smart' default
+    control_type = determine_control_type(hw_comp, va, choices_formatted, conf)
+
+    # Special case, early stop
+    if control_type == odemis.gui.CONTROL_NONE:
+        # No value, not even a label, just an empty entry, so that the settings are saved
+        # during acquisition
+        return SettingEntry(name=name, va=va, hw_comp=hw_comp)
+
+    # Format label
+    label_text = conf.get('label', label_to_human(name))
+    tooltip = conf.get('tooltip', "")
+
+    logging.debug("Adding VA %s", label_text)
+    # Create the needed wxPython controls
+    if control_type == odemis.gui.CONTROL_READONLY:
+        val = va.value  # only format if it's a number
+        accuracy = conf.get('accuracy', 3)
+        lbl_ctrl, value_ctrl = container.add_readonly_field(label_text, val)
+        value_formatter = create_formatted_setter(value_ctrl, val, unit, accuracy)
+        setting_entry = SettingEntry(name=name, va=va, hw_comp=hw_comp,
+                                     lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
+                                     va_2_ctrl=value_formatter)
+
+    elif control_type == odemis.gui.CONTROL_TEXT:
+        val = va.value  # only format if it's a number
+        accuracy = conf.get('accuracy', 3)
+        lbl_ctrl, value_ctrl = container.add_text_field(label_text, val)
+        value_formatter = create_formatted_setter(value_ctrl, val, unit, accuracy)
+        setting_entry = SettingEntry(name=name, va=va, hw_comp=hw_comp,
+                                     lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
+                                     va_2_ctrl=value_formatter)
+
+    elif control_type == odemis.gui.CONTROL_SLIDER:
+        # The slider is accompanied by an extra number text field
+
+        if "type" in conf:
+            if conf["type"] == "integer":
+                # add_integer_slider
+                factory = container.add_integer_slider
+            elif conf["type"] == "slider":
+                factory = container.add_slider
+            else:
+                factory = container.add_float_slider
+        else:
+            # guess from value(s)
+            known_values = [va.value, min_val, max_val]
+            if choices is not None:
+                known_values.extend(list(choices))
+            if any(isinstance(v, float) for v in known_values):
+                factory = container.add_float_slider
+            else:
+                factory = container.add_integer_slider
+
+        # The event configuration determines what event will signal that the
+        # setting entry has changed value.
+        update_event = conf.get("event", wx.EVT_SLIDER)
+        if update_event not in (wx.EVT_SCROLL_CHANGED, wx.EVT_SLIDER):
+            raise ValueError("Illegal event type %d for Slider setting entry!" % (update_event,))
+
+        ctrl_conf = {
+            'min_val': min_val,
+            'max_val': max_val,
+            'scale': conf.get('scale', None),
+            'unit': unit,
+            'accuracy': conf.get('accuracy', 4),
+        }
+
+        lbl_ctrl, value_ctrl = factory(label_text, va.value, ctrl_conf)
+        setting_entry = SettingEntry(name=name, va=va, hw_comp=hw_comp,
+                                     lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
+                                     events=update_event)
+
+        if change_callback:
+            value_ctrl.Bind(wx.EVT_SLIDER, change_callback)
+
+    elif control_type == odemis.gui.CONTROL_INT:
+        if unit == "":  # don't display unit prefix if no unit
+            unit = None
+
+        ctrl_conf = {
+            'min_val': min_val,
+            'max_val': max_val,
+            'unit': unit,
+            'choices': choices,
+        }
+
+        lbl_ctrl, value_ctrl = container.add_int_field(label_text, conf=ctrl_conf)
+
+        setting_entry = SettingEntry(name=name, va=va, hw_comp=hw_comp,
+                                     lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
+                                     events=wx.EVT_COMMAND_ENTER)
+
+        if change_callback:
+            value_ctrl.Bind(wx.EVT_COMMAND_ENTER, change_callback)
+
+    elif control_type == odemis.gui.CONTROL_FLT:
+        if unit == "":  # don't display unit prefix if no unit
+            unit = None
+
+        ctrl_conf = {
+            'min_val': min_val,
+            'max_val': max_val,
+            'unit': unit,
+            'choices': choices,
+            'accuracy': conf.get('accuracy', 5),
+        }
+
+        lbl_ctrl, value_ctrl = container.add_float_field(label_text, conf=ctrl_conf)
+
+        setting_entry = SettingEntry(name=name, va=va, hw_comp=hw_comp,
+                                     lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
+                                     events=wx.EVT_COMMAND_ENTER)
+
+        if change_callback:
+            value_ctrl.Bind(wx.EVT_COMMAND_ENTER, change_callback)
+
+    elif control_type == odemis.gui.CONTROL_RADIO:
+        unit_fmt = (choices_si_prefix or "") + (unit or "")
+
+        ctrl_conf = {
+            'size': (-1, 16),
+            'units': unit_fmt,
+            'choices': [v for v, _ in choices_formatted],
+            'labels': [l for _, l in choices_formatted],
+        }
+
+        lbl_ctrl, value_ctrl = container.add_radio_control(label_text, conf=ctrl_conf)
+
+        setting_entry = SettingEntry(name=name, va=va, hw_comp=hw_comp,
+                                     lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
+                                     events=wx.EVT_BUTTON)
+
+        if change_callback:
+            value_ctrl.Bind(wx.EVT_BUTTON, change_callback)
+
+    elif control_type == odemis.gui.CONTROL_COMBO:
+
+        # TODO: Might need size=(100, 16)!!
+        lbl_ctrl, value_ctrl = container.add_combobox_control(label_text)
+
+        # Set choices
+        for choice, formatted in choices_formatted:
+            value_ctrl.Append(u"%s %s" % (formatted, (choices_si_prefix or "") + unit), choice)
+
+        # A small wrapper function makes sure that the value can
+        # be set by passing the actual value (As opposed to the text label)
+        def cb_set(value, ctrl=value_ctrl, u=unit):
+            for i in range(ctrl.Count):
+                if ctrl.GetClientData(i) == value:
+                    logging.debug("Setting ComboBox value to %s", ctrl.Items[i])
+                    ctrl.SetSelection(i)
+                    break
+            else:
+                logging.debug("No existing label found for value %s", value)
+                # entering value as free text
+                txt = readable_str(value, u, sig=3)
+                return ctrl.SetValue(txt)
+
+        # equivalent wrapper function to retrieve the actual value
+        def cb_get(ctrl=value_ctrl, va=va):
+            value = ctrl.GetValue()
+            # Try to use the predefined value if it's available
+            i = ctrl.GetSelection()
+
+            # Warning: if the text contains an unknown value, GetSelection will
+            # not return wx.NOT_FOUND (as expected), but the last selection value
+            if i != wx.NOT_FOUND and ctrl.Items[i] == value:
+                logging.debug("Getting CB value %s", ctrl.GetClientData(i))
+                return ctrl.GetClientData(i)
+            else:
+                logging.debug("Trying to parse CB free value %s", value)
+                cur_val = va.value
+                # Try to find a good corresponding value inside the string
+                new_val = reproduceTypedValue(cur_val, value)
+                if isinstance(new_val, collections.Iterable):
+                    # be less picky, by shortening the number of values if it's too many
+                    new_val = new_val[:len(cur_val)]
+
+                # if it ends up being the same value as before the CB will
+                # not update, so force it now
+                if cur_val == new_val:
+                    cb_set(cur_val)
+                return new_val
+
+        setting_entry = SettingEntry(name=name, va=va, hw_comp=hw_comp,
+                                     lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
+                                     va_2_ctrl=cb_set, ctrl_2_va=cb_get,
+                                     events=(wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER))
+        if change_callback:
+            value_ctrl.Bind(wx.EVT_COMBOBOX, change_callback)
+            value_ctrl.Bind(wx.EVT_TEXT_ENTER, change_callback)
+
+    else:
+        logging.error("Unknown control type %s", control_type)
+
+    value_ctrl.SetToolTipString(tooltip)
+    lbl_ctrl.SetToolTipString(tooltip)
+
+    return setting_entry
+
+
+class Entry(object):
+    """ Describes a setting entry in the settings panel """
+
+    def __init__(self, name, hw_comp, stream, lbl_ctrl, value_ctrl):
+        """
+        :param name: (str): The name of the setting
+        :param hw_comp: (Component): The component to which the setting belongs
+        :param stream: (Stream) The stream with which the Entry is associated
+        :param lbl_ctrl: (wx.StaticText): The setting label
+        :param value_ctrl: (wx.Window): The widget containing the current value
+
+        """
+
+        self.name = name
+        self.hw_comp = hw_comp
+        self.stream = stream
+        self.lbl_ctrl = lbl_ctrl
+        self.value_ctrl = value_ctrl
+
+    def __repr__(self):
+        return "Label: %s" % self.lbl_ctrl.GetLabel() if self.lbl_ctrl else None
+
+    def highlight(self, active=True):
+        """ Highlight the setting entry by adjusting its colour
+
+        :param active: (boolean) whether it should be highlighted or not
+
+        """
+
+        if not self.lbl_ctrl:
+            return
+
+        if active:
+            self.lbl_ctrl.SetForegroundColour(odemis.gui.FG_COLOUR_HIGHLIGHT)
+        else:
+            self.lbl_ctrl.SetForegroundColour(odemis.gui.FG_COLOUR_MAIN)
+
+
+class SettingEntry(VigilantAttributeConnector, Entry):
+    """ An Entry linked to a Vigilant Attribute """
+
+    def __init__(self, name, va=None, hw_comp=None, stream=None, lbl_ctrl=None, value_ctrl=None,
+                 va_2_ctrl=None, ctrl_2_va=None, events=None):
+        """ See the super classes for parameter descriptions """
+
+        self.vigilattr = None  # This attribute is needed, even if there's not VAC to provide it
+
+        Entry.__init__(self, name, hw_comp, stream, lbl_ctrl, value_ctrl)
+
+        if va and (value_ctrl or va_2_ctrl):
+            VigilantAttributeConnector.__init__(self, va, value_ctrl, va_2_ctrl, ctrl_2_va, events)
+        elif any((va_2_ctrl, ctrl_2_va, events)):
+            raise ValueError("Cannot create VigilantAttributeConnector for %s, while also "
+                             "receiving value getting and setting parameters!" % name)
+        else:
+            logging.debug("Creating empty SettingEntry without VigilantAttributeConnector")
+
+    def pause(self):
+        if self.vigilattr:
+            super(SettingEntry, self).pause()
+
+    def resume(self):
+        if self.vigilattr:
+            super(SettingEntry, self).resume()
+
+
+class AxisSettingEntry(AxisConnector, Entry):
+    """ An Axis setting linked to a Vigilant Attribute """
+
+    def __init__(self, name, hw_comp, stream=None, lbl_ctrl=None, value_ctrl=None,
+                 pos_2_ctrl=None, ctrl_2_pos=None, events=None):
+        """
+        :param name: (str): The name of the setting
+        :param hw_comp: (HardwareComponent): The component to which the setting belongs
+        :param lbl_ctrl: (wx.StaticText): The setting label
+        :param value_ctrl: (wx.Window): The widget containing the current value
+
+        See the AxisConnector class for a description of the other parameters.
+
+        """
+
+        Entry.__init__(self, name, hw_comp, stream, lbl_ctrl, value_ctrl)
+
+        if None not in (name, value_ctrl):
+            AxisConnector.__init__(self, name, hw_comp, value_ctrl, pos_2_ctrl, ctrl_2_pos, events)
+        elif any([pos_2_ctrl, ctrl_2_pos, events]):
+            logging.error("Cannot create AxisConnector")
+        else:
+            logging.debug("Cannot create AxisConnector")
+
+def dump_emitter_and_detector_vas(stream):
+    """ Log emitter and detector VAs of the given stream. For debugging purposes only """
+    logging.warn("Emitter:")
+
+    for attr, value in stream.emitter.__dict__.iteritems():
+        if isinstance(value, VigilantAttributeBase):
+            logging.warn("* %s", attr)
+
+    logging.warn("Detector:")
+
+    for attr, value in stream.detector.__dict__.iteritems():
+        if isinstance(value, VigilantAttributeBase):
+            logging.warn("* %s", attr)

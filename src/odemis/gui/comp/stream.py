@@ -37,10 +37,12 @@ from odemis.gui import FG_COLOUR_EDIT, FG_COLOUR_MAIN, BG_COLOUR_MAIN, BG_COLOUR
     FG_COLOUR_DIS
 from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.foldpanelbar import FoldPanelItem, FoldPanelBar
-from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider, UnitIntegerSlider
-from odemis.gui.comp.text import SuggestTextCtrl, UnitFloatCtrl, FloatTextCtrl
+from odemis.gui.comp.radio import GraphicalRadioButtonControl
+from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider, UnitIntegerSlider, Slider
+from odemis.gui.comp.text import SuggestTextCtrl, UnitFloatCtrl, FloatTextCtrl, UnitIntegerCtrl
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import VigilantAttributeConnector
+import odemis.gui as gui
 import odemis.gui.comp.buttons as buttons
 import odemis.gui.img.data as img
 
@@ -575,6 +577,7 @@ class StreamPanel(wx.Panel):
         self._panel.Show(not collapse)
         self._collapsed = collapse
 
+        # Call after is used, so the fit will occur after everything has been hidden or shown
         wx.CallAfter(self.Parent.fit_streams)
 
         self.Thaw()
@@ -773,6 +776,168 @@ class StreamPanel(wx.Panel):
         return sld_hist, txt_lowi, txt_highi
 
     @control_bookkeeper
+    def add_hw_setting_ctrl(self, name, value=None):
+        """ Add a generic number control to manipulate a hardware setting """
+
+        lbl_ctrl = self._add_side_label(name)
+        value_ctrl = FloatTextCtrl(self._panel, -1, value or 0.0, style=wx.NO_BORDER)
+
+        value_ctrl.SetForegroundColour(gui.FG_COLOUR_EDIT)
+        value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
+
+        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 3),
+                          flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
+
+        return lbl_ctrl, value_ctrl
+
+    def _add_slider(self, klass, label_text, value, conf):
+        """ Add a slider of type 'klass' to the settings panel """
+
+        lbl_ctrl = self._add_side_label(label_text)
+        value_ctrl = klass(self._panel, value=value, **conf)
+        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 3),
+                          flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
+
+        return lbl_ctrl, value_ctrl
+
+    @control_bookkeeper
+    def add_slider(self, label_text, value=None, conf=None):
+        """ Add an integer value slider to the settings panel
+
+        :param label_text: (str) Label text to display
+        :param value: (None or int) Value to display
+        :param conf: (None or dict) Dictionary containing parameters for the control
+
+        """
+        return self._add_slider(Slider, label_text, value, conf)
+
+    @control_bookkeeper
+    def add_integer_slider(self, label_text, value=None, conf=None):
+        """ Add an integer value slider to the settings panel
+
+        :param label_text: (str) Label text to display
+        :param value: (None or int) Value to display
+        :param conf: (None or dict) Dictionary containing parameters for the control
+
+        """
+        return self._add_slider(UnitIntegerSlider, label_text, value, conf)
+
+    @control_bookkeeper
+    def add_float_slider(self, label_text, value=None, conf=None):
+        """ Add a float value slider to the settings panel
+
+        :param label_text: (str) Label text to display
+        :param value: (None or float) Value to display
+        :param conf: (None or dict) Dictionary containing parameters for the control
+
+        """
+        return self._add_slider(UnitFloatSlider, label_text, value, conf)
+
+    @control_bookkeeper
+    def add_int_field(self, label_text, value=None, conf=None):
+        """ Add an integer value field to the settings panel
+
+        :param label_text: (str) Label text to display
+        :param value: (None or int) Value to display
+        :param conf: (None or dict) Dictionary containing parameters for the control
+
+        """
+
+        return self._add_num_field(UnitIntegerCtrl, label_text, value, conf)
+
+    @control_bookkeeper
+    def add_float_field(self, label_text, value=None, conf=None):
+        """ Add a float value field to the settings panel
+
+        :param label_text: (str) Label text to display
+        :param value: (None or float) Value to display
+        :param conf: (None or dict) Dictionary containing parameters for the control
+
+        """
+
+        return self._add_num_field(UnitFloatCtrl, label_text, value, conf)
+
+    def _add_num_field(self, klass, label_text, value, conf):
+
+        lbl_ctrl = self._add_side_label(label_text)
+        value_ctrl = klass(self._panel, value=value, style=wx.NO_BORDER, **conf)
+        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
+                          flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
+        value_ctrl.SetForegroundColour(gui.FG_COLOUR_EDIT)
+        value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
+
+        return lbl_ctrl, value_ctrl
+
+    @control_bookkeeper
+    def add_combobox_control(self, label_text, value=None, conf=None):
+        """ Add a combobox control to manipulate a hardware setting """
+
+        lbl_ctrl = self._add_side_label(label_text)
+
+        value_ctrl = ComboBox(self._panel, wx.ID_ANY, pos=(0, 0), size=(-1, 16),
+                              style=wx.NO_BORDER | wx.TE_PROCESS_ENTER, **conf if conf else {})
+
+        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 3),
+                          flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
+
+        if value is not None:
+            value_ctrl.SetValue(unicode(value))
+
+        return lbl_ctrl, value_ctrl
+
+    @control_bookkeeper
+    def add_readonly_field(self, label_text, value=None, selectable=True):
+        """ Adds a value to the control panel that cannot directly be changed by the user
+
+        :param label_text: (str) Label text to display
+        :param value: (None or object) Value to display next to the label
+        :param selectable: (boolean) whether the value can be selected for copying by the user
+
+        :return: (Ctrl, Ctrl or None) Label and value control
+
+        """
+
+        lbl_ctrl = self._add_side_label(label_text)
+
+        if value:
+            if selectable:
+                value_ctrl = wx.TextCtrl(self._panel, value=unicode(value),
+                                         style=wx.BORDER_NONE | wx.TE_READONLY)
+                value_ctrl.SetForegroundColour(gui.FG_COLOUR_DIS)
+                value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
+                self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
+                                  flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
+            else:
+                value_ctrl = wx.StaticText(self._panel, label=unicode(value))
+                value_ctrl.SetForegroundColour(gui.FG_COLOUR_DIS)
+                self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), flag=wx.ALL, border=5)
+        else:
+            value_ctrl = None
+
+        return lbl_ctrl, value_ctrl
+
+    @control_bookkeeper
+    def add_radio_control(self, label_text, value=None, conf=None):
+        """ Add a series of radio buttons to the settings panel
+
+        :param label_text: (str) Label text to display
+        :param value: (None or float) Value to display
+        :param conf: (None or dict) Dictionary containing parameters for the control
+
+        """
+
+        lbl_ctrl = self._add_side_label(label_text)
+        value_ctrl = GraphicalRadioButtonControl(self._panel, -1, style=wx.NO_BORDER,
+                                                 **conf if conf else {})
+        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
+                          flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
+
+        if value is not None:
+            value_ctrl.SetValue(value)
+
+        return lbl_ctrl, value_ctrl
+
+    @control_bookkeeper
     def add_exposure_time_ctrl(self, value=None, conf=None):
         """ Add exposure time controls to the stream panel
 
@@ -816,9 +981,6 @@ class StreamPanel(wx.Panel):
 
     @control_bookkeeper
     def add_dye_excitation_ctrl(self, band, readonly, center_wl_color):
-        """
-        :param center_wl: (float) center wavelength of the current band of the VA
-        """
         lbl_ctrl, value_ctrl, lbl_exc_peak, btn_excitation = self._add_filter_line("Excitation",
                                                                                    band,
                                                                                    readonly,
@@ -827,9 +989,6 @@ class StreamPanel(wx.Panel):
 
     @control_bookkeeper
     def add_dye_emission_ctrl(self, band, readonly, center_wl_color):
-        """
-        :param center_wl: (float) center wavelength of the current band of the VA
-        """
         lbl_ctrl, value_ctrl, lbl_em_peak, btn_emission = self._add_filter_line("Emission",
                                                                                 band,
                                                                                 readonly,
@@ -840,6 +999,7 @@ class StreamPanel(wx.Panel):
         """ Create the controls for dye emission/excitation colour filter setting
 
         :param name: (str): the label name
+        :param band (2+ floats): the current wavelength band
         :param readonly (bool) read-only when there's no or just one band value
         :param center_wl_color: (r, g, b) center wavelength color of the current band of the VA
 

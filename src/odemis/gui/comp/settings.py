@@ -180,6 +180,16 @@ class SettingsPanel(wx.Panel):
 
         return lbl_ctrl, value_ctrl
 
+    def _add_slider(self, klass, label_text, value, conf):
+        """ Add a slider of type 'klass' to the settings panel """
+
+        lbl_ctrl = self._add_side_label(label_text)
+        value_ctrl = klass(self, value=value, **conf)
+        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
+                          flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
+
+        return lbl_ctrl, value_ctrl
+
     @control_bookkeeper
     def add_slider(self, label_text, value=None, conf=None):
         """ Add an integer value slider to the settings panel
@@ -189,13 +199,7 @@ class SettingsPanel(wx.Panel):
         :param conf: (None or dict) Dictionary containing parameters for the control
 
         """
-
-        lbl_ctrl = self._add_side_label(label_text)
-        value_ctrl = Slider(self, value=value, **conf)
-        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
-                          flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
-
-        return lbl_ctrl, value_ctrl
+        return self._add_slider(Slider, label_text, value, conf)
 
     @control_bookkeeper
     def add_integer_slider(self, label_text, value=None, conf=None):
@@ -206,13 +210,7 @@ class SettingsPanel(wx.Panel):
         :param conf: (None or dict) Dictionary containing parameters for the control
 
         """
-
-        lbl_ctrl = self._add_side_label(label_text)
-        value_ctrl = UnitIntegerSlider(self, value=value, **conf)
-        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
-                          flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
-
-        return lbl_ctrl, value_ctrl
+        return self._add_slider(UnitIntegerSlider, label_text, value, conf)
 
     @control_bookkeeper
     def add_float_slider(self, label_text, value=None, conf=None):
@@ -223,13 +221,7 @@ class SettingsPanel(wx.Panel):
         :param conf: (None or dict) Dictionary containing parameters for the control
 
         """
-
-        lbl_ctrl = self._add_side_label(label_text)
-        value_ctrl = UnitFloatSlider(self, value=value, **conf)
-        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
-                          flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
-
-        return lbl_ctrl, value_ctrl
+        return self._add_slider(UnitFloatSlider, label_text, value, conf)
 
     @control_bookkeeper
     def add_int_field(self, label_text, value=None, conf=None):
@@ -305,20 +297,6 @@ class SettingsPanel(wx.Panel):
 
         self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
                           flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
-
-        # TODO: move this to ComboBox?
-        def _eat_event(evt):
-            """ Quick and dirty empty function used to 'eat' mouse wheel events """
-
-            # TODO: This solution only makes sure that the control's value
-            # doesn't accidentally get altered when it gets hit by a mouse
-            # wheel event. However, it also stop the event from propagating
-            # so the containing scrolled window will not scroll either.
-            # (If the event is skipped, the control will change value again)
-            # No easy fix found in wxPython 3.0.
-            pass
-
-        value_ctrl.Bind(wx.EVT_MOUSEWHEEL, _eat_event)
 
         if value:
             value_ctrl.SetValue(unicode(value))

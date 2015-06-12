@@ -29,18 +29,22 @@ import wx
 from wx.lib.pubsub import pub
 
 import odemis.acq.stream as acqstream
-from odemis.acq.stream import OpticalStream, CameraStream
+from odemis.acq.stream import CameraStream
 from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR
 from odemis.gui.comp.stream import StreamPanel, EVT_STREAM_VISIBLE
-from odemis.gui.conf.data import HW_SETTINGS_CONFIG
+from odemis.gui.conf.data import get_hw_settings_config
+from odemis.gui.conf.util import create_setting_entry
+from odemis.gui.cont.settings import SettingEntry
 import odemis.gui.model as guimodel
 from odemis import model
 from odemis.gui.util import wxlimit_invocation, dead_object_wrapper
 from odemis.util import fluo
 from odemis.gui.model import dye
-from odemis.gui.util.widgets import VigilantAttributeConnector
 from odemis.util.conversion import wave2rgb
 from odemis.util.fluo import to_readable_band, get_one_center
+
+
+
 
 
 # Stream scheduling policies: decides which streams which are with .should_update get .is_active
@@ -55,37 +59,6 @@ SCHED_ALL = 2  # All the streams which are in the should_update stream
 # stream).
 
 
-class SettingEntry(VigilantAttributeConnector):
-    """ An Entry linked to a Vigilant Attribute """
-
-    def __init__(self, name, va=None, stream=None, lbl_ctrl=None, value_ctrl=None,
-                 va_2_ctrl=None, ctrl_2_va=None, events=None):
-        """ See the super classes for parameter descriptions
-
-        :param name: (str): The name of the setting
-        :param va: (VigilantAttribute): The VA containing the setting value
-        :param stream: (Stream): The possible data stream associated with this entry
-        :param lbl_ctrl: (wx.StaticText): The setting label
-        :param value_ctrl: (wx.Window): The widget containing the current value
-
-        """
-
-        self.name = name
-        self.stream = stream
-        self.lbl_ctrl = lbl_ctrl
-        self.value_ctrl = value_ctrl
-
-        VigilantAttributeConnector.__init__(self, va, value_ctrl, va_2_ctrl, ctrl_2_va, events)
-
-    def pause(self):
-        if self.vigilattr:
-            super(SettingEntry, self).pause()
-
-    def resume(self):
-        if self.vigilattr:
-            super(SettingEntry, self).resume()
-
-
 class StreamController(object):
     """ Manage a stream and it's accompanying stream panel """
 
@@ -93,6 +66,8 @@ class StreamController(object):
 
         self.stream = stream
         self.stream_bar = stream_bar
+
+        self.hw_settings_config = get_hw_settings_config()
 
         label_edit = False
 
@@ -124,16 +99,16 @@ class StreamController(object):
 
         self.entries = OrderedDict()
 
-        # Check if light and exposure controls are necessary
-        if isinstance(stream, OpticalStream):
-            if hasattr(stream, 'detExposureTime'):
-                self._add_exposure_time_ctrl()
-            if hasattr(stream, 'emtPower'):
-                self._add_light_power_ctrl()
+        # Add local hardware settings to the stream panel
+        self._add_hw_setting_controls()
 
         # Check if dye control is needed
         if hasattr(stream, "excitation") and hasattr(stream, "emission"):
             self._add_dye_ctrl()
+        elif hasattr(stream, "excitation"):  # only excitation
+            self._add_excitation_ctrl()
+        elif hasattr(stream, "emission"):  # only emission
+            self._add_emission_ctrl()
 
         if hasattr(stream, "auto_bc") and hasattr(stream, "intensityRange"):
             self._add_brightnesscontrast_ctrls()
@@ -150,6 +125,72 @@ class StreamController(object):
         self.stream_panel.Bind(EVT_STREAM_VISIBLE, self._on_stream_visible)
 
         stream_bar.add_stream_panel(self.stream_panel, show_panel)
+
+    def _add_hw_setting_controls(self):
+        """ Add local version of linked hardware setting VAs """
+
+        emitter_conf = {}
+        detector_conf = {}
+
+        # Get the emitter and detector configurations if they exist
+
+        if self.stream.emitter.role in self.hw_settings_config:
+            emitter_conf = self.hw_settings_config[self.stream.emitter.role]
+
+        if self.stream.detector.role in self.hw_settings_config:
+            detector_conf = self.hw_settings_config[self.stream.detector.role]
+
+        # Process the emitter vas first
+
+        add_divider = False
+
+        for name, va in self.stream.emt_vas.items():
+            setting_conf = {}
+
+            if emitter_conf and name in emitter_conf:
+                logging.debug("%s emitter configuration found for %s", name,
+                              self.stream.emitter.role)
+                setting_conf = self.hw_settings_config[self.stream.emitter.role][name]
+            elif detector_conf and name in detector_conf:
+                logging.error("Detector %s setting va added to emitter group!", name)
+                continue
+
+            try:
+                se = create_setting_entry(self.stream_panel, name, va, self.stream.emitter,
+                                          setting_conf)
+                self.entries[se.name] = se
+                add_divider = True
+            except AttributeError:
+                logging.exception("Unsupported control type for %s!", name)
+
+        if add_divider:
+            self.stream_panel.add_divider()
+
+        # Then process the detector
+
+        add_divider = False
+
+        for name, va in self.stream.det_vas.items():
+            setting_conf = {}
+
+            if detector_conf and name in detector_conf:
+                logging.debug("%s detector configuration found for %s", name,
+                              self.stream.detector.role)
+                setting_conf = self.hw_settings_config[self.stream.detector.role][name]
+            elif emitter_conf and name in emitter_conf:
+                logging.error("Emitter %s setting va added to detector group!", name)
+                continue
+
+            try:
+                se = create_setting_entry(self.stream_panel, name, va, self.stream.emitter,
+                                          setting_conf)
+                self.entries[se.name] = se
+                add_divider = True
+            except AttributeError:
+                logging.exception("Unsupported control type for %s!", name)
+
+        if add_divider:
+            self.stream_panel.add_divider()
 
     def _on_stream_panel_destroy(self, _):
         """ Remove all references to setting entries and the possible VAs they might contain
@@ -352,64 +393,35 @@ class StreamController(object):
         # spectrum VA, like histogram VA
         self.stream.image.subscribe(_on_new_spec_data, init=True)
 
-    def _add_exposure_time_ctrl(self):
-        """ Add exposure time controls to the stream panel"""
-
-        # Assertion mainly needed for dynamic attribute recognition (i.e. exposureTime)
-        assert(isinstance(self.stream, CameraStream))
-        et_config = HW_SETTINGS_CONFIG['ccd']['exposureTime']
-
-        conf = {
-            'min_val': et_config["range"][0],
-            'max_val': et_config["range"][1],
-            'unit': self.stream.detExposureTime.unit,
-            'scale': et_config["scale"],
-            'accuracy': et_config["accuracy"],
-        }
-
-        lbl_ctrl, value_ctrl = self.stream_panel.add_exposure_time_ctrl(
-            self.stream.detExposureTime.value, conf
-        )
-
-        se = SettingEntry(name="exposureTime", va=self.stream.detExposureTime, stream=self.stream,
-                          lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl, events=wx.EVT_SLIDER)
-        self.entries[se.name] = se
-
-    def _add_light_power_ctrl(self):
-        """ Add light power controls to the stream panel """
-
-        # Assertion mainly needed for dynamic attribute recognition (i.e. emtPower)
-        assert(isinstance(self.stream, CameraStream))
-
-        et_config = HW_SETTINGS_CONFIG['light']['power']
-
-        conf = {
-            'min_val': self.stream.emtPower.range[0],
-            'max_val': self.stream.emtPower.range[1],
-            'unit': self.stream.emtPower.unit,
-            'scale': et_config["scale"],
-            'accuracy': 4
-        }
-
-        lbl_ctrl, value_ctrl = self.stream_panel.add_light_power_ctrl(
-            self.stream.emtPower.value, conf
-        )
-
-        se = SettingEntry(name="lightPower", va=self.stream.emtPower, stream=self.stream,
-                          lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl, events=wx.EVT_SLIDER)
-        self.entries[se.name] = se
-
     def _add_dye_ctrl(self):
-        """ Add controls to the stream panel needed for dye emission and exitation """
-
+        """
+        Add controls to the stream panel needed for dye emission and excitation
+        Specifically used when both emission and excitation are present (because
+         together, more information can be extracted/presented).
+        """
+        # Excitation
         if not self.stream.excitation.readonly:
             # TODO: mark dye incompatible with the hardware with a "disabled"
             # colour in the list. (Need a special version of the combobox?)
             self.stream_panel.set_header_choices(dye.DyeDatabase.keys())
             self.stream_panel.header_change_callback = self._on_new_dye_name
 
-        center_wl = 0
-        center_wl_color = wave2rgb(center_wl)
+        center_wl = fluo.get_one_center_ex(self.stream.excitation.value, self.stream.emission.value)
+        self._add_excitation_ctrl(wave2rgb(center_wl))
+
+        # Emission
+        center_wl = fluo.get_one_center_em(self.stream.emission.value, self.stream.excitation.value)
+        self._add_emission_ctrl(wave2rgb(center_wl))
+
+    def _add_excitation_ctrl(self, center_wl_color=None):
+        """
+        Add excitation ctrl
+        center_wl_color (None or 3 0<= int <= 255): RGB colour. If None, it
+          will be guessed.
+        """
+        if center_wl_color is None:
+            center_wl = fluo.get_one_center(self.stream.excitation.value)
+            center_wl_color = wave2rgb(center_wl)
 
         band = to_readable_band(self.stream.excitation.value)
         readonly = self.stream.excitation.readonly or len(self.stream.excitation.choices) <= 1
@@ -452,7 +464,8 @@ class StreamController(object):
                     colour = wave2rgb(fluo.get_one_center_ex(value, self.stream.emission.value))
                     self._btn_excitation.set_colour(colour)
                 else:
-                    self.update_peak_label_fit(self._lbl_exc_peak, self._btn_excitation,
+                    self.update_peak_label_fit(self._lbl_exc_peak,
+                                               self._btn_excitation,
                                                self._dye_xwl, value)
 
                 # also update emission colour as it's dependent on excitation when multi-band
@@ -465,6 +478,16 @@ class StreamController(object):
                               va_2_ctrl=_excitation_2_ctrl, ctrl_2_va=_excitation_2_va)
 
             self.entries[se.name] = se
+
+    def _add_emission_ctrl(self, center_wl_color=None):
+        """
+        Add emission ctrl
+        center_wl_color (None or 3 0<= int <= 255): RGB colour. If None, it
+          will be guessed.
+        """
+        if center_wl_color is None:
+            center_wl = fluo.get_one_center(self.stream.emission.value)
+            center_wl_color = wave2rgb(center_wl)
 
         band = to_readable_band(self.stream.emission.value)
         readonly = self.stream.emission.readonly or len(self.stream.emission.choices) <= 1
@@ -505,8 +528,8 @@ class StreamController(object):
                     self._btn_emission.set_colour(colour)
                 else:
                     self.update_peak_label_fit(self._lbl_em_peak,
-                                                            self._btn_emission,
-                                                            self._dye_ewl, value)
+                                               self._btn_emission,
+                                               self._dye_ewl, value)
                 # also update excitation colour as it's dependent on emission when multiband
                 if self._dye_xwl is None:
                     colour = wave2rgb(fluo.get_one_center_ex(self.stream.excitation.value, value))
@@ -828,9 +851,12 @@ class StreamBarController(object):
                         # Brightfield
                         name = channel_data.metadata.get(model.MD_DESCRIPTION, "Brightfield")
                         klass = acqstream.StaticBrightfieldStream
-                elif model.MD_IN_WL in channel_data.metadata:  # no MD_OUT_WL
+                elif model.MD_IN_WL in channel_data.metadata:  # only MD_IN_WL
                     name = channel_data.metadata.get(model.MD_DESCRIPTION, "Brightfield")
                     klass = acqstream.StaticBrightfieldStream
+                elif model.MD_OUT_WL in channel_data.metadata:  # only MD_OUT_WL
+                    name = channel_data.metadata.get(model.MD_DESCRIPTION, "Cathodoluminescence")
+                    klass = acqstream.StaticCLStream
                 else:
                     name = channel_data.metadata.get(model.MD_DESCRIPTION, "Secondary electrons")
                     klass = acqstream.StaticSEMStream

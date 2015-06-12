@@ -237,9 +237,7 @@ class OverlayTestCase(test.GuiTestCase):
 
         sol = wol.SpotModeOverlay(cnvs)
         cnvs.add_world_overlay(sol)
-        # sol.activate()
         cnvs.update_drawing()
-        
         test.gui_loop()
 
     def test_streamicon_overlay(self):

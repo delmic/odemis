@@ -107,8 +107,8 @@ class Stream(object):
         self._hwvasetters = {}  # str (name of the proxied VA) -> setter
         self._lvaupdaters = {}  # str (name of the proxied VA) -> listener
 
-        self._duplicateVAs(detector, "det", detvas or set())
-        self._duplicateVAs(emitter, "emt", emtvas or set())
+        self._det_vas = self._duplicateVAs(detector, "det", detvas or set())
+        self._emt_vas = self._duplicateVAs(emitter, "emt", emtvas or set())
 
         self._drange = None  # min/max data range, or None if unknown
 
@@ -167,6 +167,14 @@ class Stream(object):
     def detector(self):
         return self._detector
 
+    @property
+    def det_vas(self):
+        return self._det_vas
+
+    @property
+    def emt_vas(self):
+        return self._emt_vas
+
     def __str__(self):
         return "%s %s" % (self.__class__.__name__, self.name.value)
 
@@ -180,9 +188,14 @@ class Stream(object):
         :raise:
             LookupError: if the component doesn't have a listed VA
 
+        :return:
+            Dictionary {va name: duplicated vd}
+
         """
         if not isinstance(vas, set):
             raise ValueError("vas should be a set but got %s" % (vas,))
+
+        dup_vas = {}
 
         for vaname in vas:
             try:
@@ -198,6 +211,8 @@ class Stream(object):
             # as long as the stream is active
             vasetter = functools.partial(self._va_sync_setter, va)
             dupva = self._duplicateVA(va, setter=vasetter)
+            # Collect the vas, so we can return them at the end of the method
+            dup_vas[vaname] = dupva
 
             # Convert from originalName to prefixOriginalName
             newname = prefix + vaname[0].upper() + vaname[1:]
@@ -207,6 +222,8 @@ class Stream(object):
             self._hwvas[newname] = va
             # Keep setters, mostly to not have them dereferenced
             self._hwvasetters[newname] = vasetter
+
+        return dup_vas
 
     def _va_sync_setter(self, origva, v):
         """
