@@ -785,6 +785,21 @@ class TestSEMCounter(unittest.TestCase):
         self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
 
+#     @unittest.skip("simple")
+    def test_acquire_long_dt(self):
+        # Dwell time above 0.83s cannot be handled by one command only, so dpr
+        # is required
+        self.scanner.dwellTime.value = 3  # s
+        self.scanner.resolution.value = (3, 5)
+        expected_duration = self.compute_expected_duration()
+
+        start = time.time()
+        im = self.cnt.data.get()
+        duration = time.time() - start
+
+        self.assertEqual(im.shape, self.size[::-1])
+        self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
+        self.assertIn(model.MD_DWELL_TIME, im.metadata)
 
 #    @unittest.skip("simple")
     def test_acquire_two_flows(self):
