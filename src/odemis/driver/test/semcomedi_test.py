@@ -791,6 +791,7 @@ class TestSEMCounter(unittest.TestCase):
         # is required
         self.scanner.dwellTime.value = 3  # s
         self.scanner.resolution.value = (3, 5)
+        self.size = self.scanner.resolution.value
         expected_duration = self.compute_expected_duration()
 
         start = time.time()
