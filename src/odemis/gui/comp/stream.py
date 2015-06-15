@@ -973,6 +973,31 @@ class StreamPanel(wx.Panel):
         return lbl_ctrl, value_ctrl
 
     @control_bookkeeper
+    def add_text_field(self, label_text, value=None, readonly=False):
+        """ Add a label and text control to the settings panel
+
+        :param label_text: (str) Label text to display
+        :param value: (None or str) Value to display
+        :param readonly: (boolean) Whether the value can be changed by the user
+
+        :return: (Ctrl, Ctrl) Label and text control
+
+        """
+
+        lbl_ctrl = self._add_side_label(label_text)
+        value_ctrl = wx.TextCtrl(self._panel, value=unicode(value or ""),
+                                 style=wx.BORDER_NONE | (wx.TE_READONLY if readonly else 0))
+        if readonly:
+            value_ctrl.SetForegroundColour(gui.FG_COLOUR_DIS)
+        else:
+            value_ctrl.SetForegroundColour(gui.FG_COLOUR_EDIT)
+        value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
+        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
+                          flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
+
+        return lbl_ctrl, value_ctrl
+
+    @control_bookkeeper
     def add_divider(self):
         """ Add a divigin line to the stream panel """
         line_ctrl = wx.StaticLine(self._panel, size=(-1, 1))

@@ -19,9 +19,9 @@ This file is part of Odemis.
 
 """
 from collections import OrderedDict
-
 import wx
 
+from odemis.model import getVAs
 import odemis.gui
 import odemis.gui.conf.util as util
 
@@ -309,3 +309,19 @@ def get_hw_settings_config(role=None):
     if role in HW_SETTINGS_CONFIG_PER_ROLE:
         recursive_dict_update(hw_settings, HW_SETTINGS_CONFIG_PER_ROLE[role])
     return hw_settings
+
+def get_hw_settings(hw_comp):
+
+    config = get_hw_settings_config()
+    hidden_vas = {"children", "affects", "state"}
+
+    comp_vas = list(getVAs(hw_comp).items())
+    config_vas = config.get(hw_comp.role, {}) # OrderedDict or dict
+
+    settings = set()
+
+    for name, value in comp_vas:
+        if name not in hidden_vas and name in config_vas:
+            settings.add(name)
+
+    return settings

@@ -39,6 +39,7 @@ from odemis.gui.comp.canvas import CAN_ZOOM
 from odemis.gui.comp.popup import Message
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.conf import get_acqui_conf
+from odemis.gui.conf.data import get_hw_settings
 from odemis.gui.conf.util import dump_emitter_and_detector_vas
 from odemis.gui.cont import settings, tools
 from odemis.gui.cont.actuators import ActuatorController
@@ -580,8 +581,8 @@ class SparcAcquisitionTab(Tab):
             main_data.sed,
             main_data.sed.data,
             main_data.ebeam,
-            emtvas={"dwellTime", "resolution", "scale", "magnification"},
-            detvas={},
+            emtvas=get_hw_settings(main_data.ebeam),
+            detvas=get_hw_settings(main_data.sed),
         )
         self._sem_live_stream = sem_stream
 
@@ -788,8 +789,8 @@ class SparcAcquisitionTab(Tab):
             self.tab_data_model.main.ccd,
             self.tab_data_model.main.ccd.data,
             self.tab_data_model.main.ebeam,
-            emtvas={"dwellTime"},
-            detvas={"exposureTime", "binning", "resolution", "gain", "readoutRate"},
+            emtvas=get_hw_settings(self.tab_data_model.main.ebeam),
+            detvas=get_hw_settings(self.tab_data_model.main.ccd),
         )
 
         dump_emitter_and_detector_vas(ar_stream)
@@ -826,7 +827,9 @@ class SparcAcquisitionTab(Tab):
             "CL intensity",
             self.tab_data_model.main.cld,
             self.tab_data_model.main.cld.data,
-            self.tab_data_model.main.ebeam
+            self.tab_data_model.main.ebeam,
+            emtvas=get_hw_settings(self.tab_data_model.main.ebeam),
+            detvas=get_hw_settings(self.tab_data_model.main.cld),
         )
 
         stream_cont = self._streambar_controller._add_stream(cli_stream,
@@ -844,7 +847,9 @@ class SparcAcquisitionTab(Tab):
             "Spectrum",
             self.tab_data_model.main.spectrometer,
             self.tab_data_model.main.spectrometer.data,
-            self.tab_data_model.main.ebeam
+            self.tab_data_model.main.ebeam,
+            emtvas=get_hw_settings(self.tab_data_model.main.ebeam),
+            detvas=get_hw_settings(self.tab_data_model.main.spectrometer),
         )
         spec_stream.roi.subscribe(self.onSpecROI)
         # FIXME NOW: Make the acquisition controller aware of this VA in a different way
@@ -871,7 +876,9 @@ class SparcAcquisitionTab(Tab):
             self.tab_data_model.main.monochromator,
             self.tab_data_model.main.monochromator.data,
             self.tab_data_model.main.ebeam,
-            self.tab_data_model.main.spectrograph
+            self.tab_data_model.main.spectrograph,
+            emtvas=get_hw_settings(self.tab_data_model.main.ebeam),
+            detvas=get_hw_settings(self.tab_data_model.main.monochromator),
         )
 
         stream_cont = self._streambar_controller._add_stream(monoch_stream,

@@ -144,7 +144,7 @@ class SettingsController(object):
 
         :param name: (string): name of the axis
         :param comp: (Component): the component that contains this axis
-        :param conf: ({}): Configuration items that may override default settings
+        :param conf: ({}): Configuration items that may overri.CONTROL_NOide default settings
 
         """
 
