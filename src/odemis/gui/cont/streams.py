@@ -4,7 +4,7 @@ Created on 26 Sep 2012
 
 @author: Éric Piel
 
-Copyright © 2012-2014 Éric Piel, Delmic
+Copyright © 2012-2015 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -22,33 +22,31 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 from __future__ import division
+
 from collections import OrderedDict
 import collections
 import logging
 import numpy
+from odemis import model
+from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR
+from odemis.gui.comp.stream import StreamPanel, EVT_STREAM_VISIBLE
+from odemis.gui.conf.data import get_hw_settings_config, get_hw_settings
+from odemis.gui.conf.util import create_setting_entry, \
+    dump_emitter_and_detector_vas
+from odemis.gui.cont.settings import SettingEntry
+from odemis.gui.model import dye
+from odemis.gui.util import wxlimit_invocation, dead_object_wrapper
+from odemis.util import fluo
+from odemis.util.conversion import wave2rgb
+from odemis.util.fluo import to_readable_band, get_one_center
 import wx
 from wx.lib.pubsub import pub
 
 import odemis.acq.stream as acqstream
-from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR
-from odemis.gui.comp.stream import StreamPanel, EVT_STREAM_VISIBLE
-from odemis.gui.conf.data import get_hw_settings_config
-from odemis.gui.conf.util import create_setting_entry
-from odemis.gui.cont.settings import SettingEntry
 import odemis.gui.model as guimodel
-from odemis import model
-from odemis.gui.util import wxlimit_invocation, dead_object_wrapper
-from odemis.util import fluo
-from odemis.gui.model import dye
-from odemis.util.conversion import wave2rgb
-from odemis.util.fluo import to_readable_band, get_one_center
-
-
-
 
 
 # Stream scheduling policies: decides which streams which are with .should_update get .is_active
-
 SCHED_LAST_ONE = 1  # Last stream which got added to the should_update set
 SCHED_ALL = 2  # All the streams which are in the should_update stream
 # Note: it seems users don't like ideas like round-robin, where the hardware
@@ -60,7 +58,7 @@ SCHED_ALL = 2  # All the streams which are in the should_update stream
 
 
 class StreamController(object):
-    """ Manage a stream and it's accompanying stream panel """
+    """ Manage a stream and its accompanying stream panel """
 
     def __init__(self, stream_bar, stream, tab_data_model, show_panel=True):
 
@@ -762,13 +760,6 @@ class StreamBarController(object):
         self._tab_data_model.focussedView.subscribe(self._onView, init=True)
         pub.subscribe(self.removeStream, 'stream.remove')
 
-        # TODO: uncomment if needed
-        # if hasattr(tab_data, 'opticalState'):
-        # tab_data.opticalState.subscribe(self.onOpticalState, init=True)
-        #
-        # if hasattr(tab_data, 'emState'):
-        #     tab_data.emState.subscribe(self.onEMState, init=True)
-
         # This attribute indicates whether live data is processed by the streams
         # in the controller, or that they just display static data.
         self.static_mode = static
@@ -916,67 +907,16 @@ class StreamBarController(object):
         Change the stream scheduling policy
         policy (SCHED_*): the new policy
         """
-        assert policy in [SCHED_LAST_ONE, SCHED_ALL]
+        assert policy in (SCHED_LAST_ONE, SCHED_ALL)
         self._sched_policy = policy
 
     def _createAddStreamActions(self):
-        """ Create the compatible "add stream" actions according to the current microscope.
-
-        To be executed only once, at initialisation.
-
         """
-
-        # Basically one action per type of stream
-
-        # TODO: always display the action (if it's compatible), but update
-        # the disable/enable depending on the state of the chamber (iow if SEM
-        # or optical button is enabled)
-
-        # First: Fluorescent stream (for dyes)
-        if (
-                self._main_data_model.light and
-                self._main_data_model.light_filter and
-                self._main_data_model.ccd
-        ):
-            def fluor_capable():
-                # TODO: need better way to check, maybe opticalState == STATE_DISABLED?
-                enabled = self._main_data_model.chamberState.value in {guimodel.CHAMBER_VACUUM,
-                                                                       guimodel.CHAMBER_UNKNOWN}
-                view = self._tab_data_model.focussedView.value
-                compatible = view.is_compatible(acqstream.FluoStream)
-                return enabled and compatible
-
-            # TODO: how to know it's _fluorescent_ microscope?
-            # => multiple source? filter?
-            self.add_action("Filtered colour", self._userAddFluo, fluor_capable)
-
-        # Bright-field
-        if self._main_data_model.brightlight and self._main_data_model.ccd:
-            def brightfield_capable():
-                enabled = self._main_data_model.chamberState.value in {guimodel.CHAMBER_VACUUM,
-                                                                       guimodel.CHAMBER_UNKNOWN}
-                view = self._tab_data_model.focussedView.value
-                compatible = view.is_compatible(acqstream.BrightfieldStream)
-                return enabled and compatible
-
-            self.add_action("Bright-field", self.addBrightfield, brightfield_capable)
-
-        def sem_capable():
-            """ Check if focussed view is compatible with a SEM stream """
-            enabled = self._main_data_model.chamberState.value in {guimodel.CHAMBER_VACUUM,
-                                                                   guimodel.CHAMBER_UNKNOWN}
-            view = self._tab_data_model.focussedView.value
-            compatible = view.is_compatible(acqstream.SEMStream)
-            return enabled and compatible
-
-        if self._main_data_model.role != "sparc":
-            # For SPARC: action creation is handled by the Sparc Acquisition Tab
-            # SED
-            if self._main_data_model.ebeam and self._main_data_model.sed:
-                self.add_action("Secondary electrons", self.addSEMSED, sem_capable)
-            # BSED
-            if self._main_data_model.ebeam and self._main_data_model.bsd:
-                self.add_action("Backscattered electrons", self.addSEMBSD, sem_capable)
+        Create the compatible "add stream" actions according to the current
+        microscope.
+        To be executed only once, at initialisation.
+        """
+        pass
 
     def _userAddFluo(self, **kwargs):
         """ Called when the user request adding a Fluo stream
@@ -1081,8 +1021,6 @@ class StreamBarController(object):
                 self._main_data_model.stage,
                 shiftebeam=acqstream.MTD_EBEAM_SHIFT
             )
-            # Select between "Metadata update" and "Stage move"
-            # TODO: use shiftebeam once the phenom driver supports it
         else:
             s = acqstream.SEMStream(
                 "Backscattered electrons",
@@ -1307,7 +1245,6 @@ class StreamBarController(object):
         # create an adapted subscriber for the scheduler
         def detectUpdate(updated, stream=stream):
             self._onStreamUpdate(stream, updated)
-            self._updateMicroscopeStates()
 
         self._scheduler_subscriptions[stream] = detectUpdate
         stream.should_update.subscribe(detectUpdate)
@@ -1324,43 +1261,6 @@ class StreamBarController(object):
         if stream in self._scheduler_subscriptions:
             callback = self._scheduler_subscriptions.pop(stream)
             stream.should_update.unsubscribe(callback)
-
-    def onOpticalState(self, state):
-        # TODO: disable/enable add stream actions
-        if state == guimodel.STATE_OFF:
-            pass
-        elif state == guimodel.STATE_ON:
-            pass
-
-    def onEMState(self, state):
-        # TODO: disable/enable add stream actions
-        if state == guimodel.STATE_OFF:
-            pass
-        elif state == guimodel.STATE_ON:
-            pass
-
-    def _updateMicroscopeStates(self):
-        """
-        Update the SEM/optical states based on the stream currently playing
-        """
-        streams = set()  # streams currently playing
-        for s in self._tab_data_model.streams.value:
-            if s.should_update.value:
-                streams.add(s)
-
-        # optical state = at least one stream playing is optical
-        if hasattr(self._tab_data_model, 'opticalState'):
-            if any(isinstance(s, acqstream.OpticalStream) for s in streams):
-                self._tab_data_model.opticalState.value = guimodel.STATE_ON
-            else:
-                self._tab_data_model.opticalState.value = guimodel.STATE_OFF
-
-        # sem state = at least one stream playing is sem
-        if hasattr(self._tab_data_model, 'emState'):
-            if any(isinstance(s, acqstream.EMStream) for s in streams):
-                self._tab_data_model.emState.value = guimodel.STATE_ON
-            else:
-                self._tab_data_model.emState.value = guimodel.STATE_OFF
 
     # TODO: shall we also have a suspend/resume streams that directly changes
     # is_active, and used when the tab/window is hidden?
@@ -1478,3 +1378,301 @@ class StreamBarController(object):
 
     def _has_visible_streams(self):
         return any(s.IsShown() for s in self._stream_bar.stream_panels)
+
+
+class SecomStreamsController(StreamBarController):
+    """
+    Controlls the streams for the SECOM and DELPHI live view
+    """
+
+    def _createAddStreamActions(self):
+        """ Create the compatible "add stream" actions according to the current microscope.
+
+        To be executed only once, at initialisation.
+        """
+
+        # Basically one action per type of stream
+
+        # TODO: always display the action (if it's compatible), but update
+        # the disable/enable depending on the state of the chamber (iow if SEM
+        # or optical button is enabled)
+
+        # First: Fluorescent stream (for dyes)
+        if (
+                self._main_data_model.light and
+                self._main_data_model.light_filter and
+                self._main_data_model.ccd
+        ):
+            def fluor_capable():
+                # TODO: need better way to check, maybe opticalState == STATE_DISABLED?
+                enabled = self._main_data_model.chamberState.value in {guimodel.CHAMBER_VACUUM,
+                                                                       guimodel.CHAMBER_UNKNOWN}
+                view = self._tab_data_model.focussedView.value
+                compatible = view.is_compatible(acqstream.FluoStream)
+                return enabled and compatible
+
+            # TODO: how to know it's _fluorescent_ microscope?
+            # => multiple source? filter?
+            self.add_action("Filtered colour", self._userAddFluo, fluor_capable)
+
+        # Bright-field
+        if self._main_data_model.brightlight and self._main_data_model.ccd:
+            def brightfield_capable():
+                enabled = self._main_data_model.chamberState.value in {guimodel.CHAMBER_VACUUM,
+                                                                       guimodel.CHAMBER_UNKNOWN}
+                view = self._tab_data_model.focussedView.value
+                compatible = view.is_compatible(acqstream.BrightfieldStream)
+                return enabled and compatible
+
+            self.add_action("Bright-field", self.addBrightfield, brightfield_capable)
+
+        def sem_capable():
+            """ Check if focussed view is compatible with a SEM stream """
+            enabled = self._main_data_model.chamberState.value in {guimodel.CHAMBER_VACUUM,
+                                                                   guimodel.CHAMBER_UNKNOWN}
+            view = self._tab_data_model.focussedView.value
+            compatible = view.is_compatible(acqstream.SEMStream)
+            return enabled and compatible
+
+        # SED
+        if self._main_data_model.ebeam and self._main_data_model.sed:
+            self.add_action("Secondary electrons", self.addSEMSED, sem_capable)
+        # BSED
+        if self._main_data_model.ebeam and self._main_data_model.bsd:
+            self.add_action("Backscattered electrons", self.addSEMBSD, sem_capable)
+
+    def _onStreamUpdate(self, stream, updated):
+        super(SecomStreamsController, self)._onStreamUpdate(stream, updated)
+        self._updateMicroscopeStates()
+
+    def _updateMicroscopeStates(self):
+        """
+        Update the SEM/optical states based on the stream currently playing
+        """
+        streams = set()  # streams currently playing
+        for s in self._tab_data_model.streams.value:
+            if s.should_update.value:
+                streams.add(s)
+
+        # optical state = at least one stream playing is optical
+        if hasattr(self._tab_data_model, 'opticalState'):
+            if any(isinstance(s, acqstream.OpticalStream) for s in streams):
+                self._tab_data_model.opticalState.value = guimodel.STATE_ON
+            else:
+                self._tab_data_model.opticalState.value = guimodel.STATE_OFF
+
+        # sem state = at least one stream playing is sem
+        if hasattr(self._tab_data_model, 'emState'):
+            if any(isinstance(s, acqstream.EMStream) for s in streams):
+                self._tab_data_model.emState.value = guimodel.STATE_ON
+            else:
+                self._tab_data_model.emState.value = guimodel.STATE_OFF
+
+
+class SparcStreamsController(StreamBarController):
+    """
+    Controlls the streams for the SPARC acquisition view
+    """
+
+    def _createAddStreamActions(self):
+        """ Create the compatible "add stream" actions according to the current microscope.
+
+        To be executed only once, at initialisation.
+        """
+        main_data = self._main_data_model
+
+        # Basically one action per type of stream
+        if main_data.ccd:
+            self.add_action("Angle-resolved", self.addAR)
+        if main_data.cld:
+            self.add_action("CL intensity", self.addCLIntensity)
+        if main_data.spectrometer:
+            self.add_action("Spectrum", self.addSpectrum)
+        if main_data.monochromator:
+            self.add_action("Monochromator", self.addMonochromator)
+
+    def addAR(self):
+        """ Create a camera stream and add to to all compatible viewports """
+
+        main_data = self._main_data_model
+        ar_stream = acqstream.ARSettingsStream(
+            "Angle-resolved",
+            main_data.ccd,
+            main_data.ccd.data,
+            main_data.ebeam,
+            # emtvas=get_hw_settings(main_data.ebeam), # no need
+            detvas=get_hw_settings(main_data.ccd),
+        )
+
+        dump_emitter_and_detector_vas(ar_stream)
+
+        # print ar_stream.emitter, ar_stream.detector
+
+        ar_stream.roi.subscribe(self.onARROI)
+        # FIXME NOW: Make the acquisition controller aware of this VA in a different way
+        # vas_settings.append(self._ar_stream.repetition)
+
+        stream_cont = self._add_stream(ar_stream, add_to_all_views=True)
+        stream_cont.stream_panel.show_visible_btn(False)
+
+        # TODO: directly create the equivalent MDStream, so that the acquisition
+        # time can be correctly computed?
+        # self._sem_ar_stream = acqstream.SEMARMDStream("SEM AR",
+        #                                               self._sem_cl_stream,
+        #                                               self._ar_stream)
+        # # FIXME NOW: Update the acq view on acquisition (i.e. button click)
+        # self.tab_data_model.acquisitionView.addStream(self._sem_ar_stream)
+
+
+        # FIXME: move to tab, self.view_controller.focusViewWithStream()
+#         self.tab_data_model.focussedView.value = self.main_frame.vp_sparc_tr.microscope_view
+
+        return stream_cont
+
+    def addCLIntensity(self):
+        """ Create a CLi stream and add to to all compatible viewports """
+
+        main_data = self._main_data_model
+        cli_stream = acqstream.CLSettingsStream(
+            "CL intensity",
+            main_data.cld,
+            main_data.cld.data,
+            main_data.ebeam,
+            emtvas={"dwellTime"},
+            detvas=get_hw_settings(main_data.cld),
+        )
+
+        stream_cont = self._add_stream(cli_stream, add_to_all_views=True)
+        stream_cont.stream_panel.show_visible_btn(False)
+
+#         self._tab_data_model.focussedView.value = self.main_frame.vp_sparc_tl.microscope_view
+
+        return stream_cont
+
+    def addSpectrum(self):
+        """ Create a Spectrum stream and add to to all compatible viewports """
+
+        main_data = self._main_data_model
+        spec_stream = acqstream.SpectrumSettingsStream(
+            "Spectrum",
+            main_data.spectrometer,
+            main_data.spectrometer.data,
+            main_data.ebeam,
+            # emtvas=get_hw_settings(main_data.ebeam), # no need
+            detvas=get_hw_settings(main_data.spectrometer),
+        )
+        spec_stream.roi.subscribe(self.onARROI)
+        stream_cont = self._add_stream(spec_stream, add_to_all_views=True)
+        stream_cont.stream_panel.show_visible_btn(False)
+
+#         self._tab_data_model.focussedView.value = self.main_frame.vp_sparc_bl.microscope_view
+
+        # self._sem_spec_stream = acqstream.SEMSpectrumMDStream("SEM Spectrum",
+        #                                                       self._sem_cl_stream,
+        #                                                       self._spec_stream)
+        # # FIXME NOW: Update the acq view on acquisition (i.e. button click)
+        # self.tab_data_model.acquisitionView.addStream(self._sem_spec_stream)
+
+        return stream_cont
+
+    def addMonochromator(self):
+        """ Create a Monochromator stream and add to to all compatible viewports """
+
+        main_data = self._main_data_model
+        monoch_stream = acqstream.MonochromatorSettingsStream(
+            "Monochromator",
+            main_data.monochromator,
+            main_data.monochromator.data,
+            main_data.ebeam,
+            main_data.spectrograph,
+            emtvas={"dwellTime"},
+            detvas=get_hw_settings(main_data.monochromator),
+        )
+
+        stream_cont = self._add_stream(monoch_stream, add_to_all_views=True)
+        stream_cont.stream_panel.show_visible_btn(False)
+
+#         self._tab_data_model.focussedView.value = self.main_frame.vp_sparc_br.microscope_view
+
+        return stream_cont
+
+    # ROA handling stuff
+
+    # TODO: make it generic
+    def onARROI(self, roi):
+        """
+        called when the Angle Resolved roi is changed
+        """
+        # copy ROI only if it's activated, and spectrum is not, otherwise
+        # Spectrum plays the role of "master of ROI" if both streams are
+        # simultaneously active (even if it should not currently happen)
+        streams = self.tab_data_model.acquisitionView.getStreams()
+        if self._sem_ar_stream in streams and self._sem_spec_stream not in streams:
+            # unsubscribe to be sure it won't call us back directly
+            self._sem_cl_stream.roi.unsubscribe(self.onROI)
+            self._sem_cl_stream.roi.value = roi
+            self._sem_cl_stream.roi.subscribe(self.onROI)
+
+    # Special event handlers for repetition indication in the ROI selection
+
+    def update_roa_rep(self):
+        # Here is the global rule (in order):
+        # * if mouse is hovering an entry for AR or spec => display repetition for this one
+        # * if an entry for AR or spec has focus => display repetition for this one
+        # * don't display repetition
+
+        if self._hover_stream:
+            stream = self._hover_stream
+        elif (self.spec_rep and
+                  (self.spec_rep.value_ctrl.HasFocus() or self.spec_pxs.value_ctrl.HasFocus())):
+            stream = self._spec_stream
+        elif self.angu_rep and self.angu_rep.value_ctrl.HasFocus():
+            stream = self._ar_stream
+        else:
+            stream = None
+
+        # Convert stream to right display
+        # TODO: do this for each canvas of views which are spatial
+        cvs = self.main_frame.vp_sparc_tl.canvas
+        if stream is None:
+            cvs.show_repetition(None)
+        else:
+            rep = stream.repetition.value
+            if isinstance(stream, acqstream.ARStream):
+                style = overlay.world.RepetitionSelectOverlay.FILL_POINT
+            else:
+                style = overlay.world.RepetitionSelectOverlay.FILL_GRID
+            cvs.show_repetition(rep, style)
+
+    def on_rep_focus(self, evt):
+        """
+        Called when any control related to the repetition get/loose focus
+        """
+        self.update_roa_rep()
+        evt.Skip()
+
+    def on_rep_change(self, rep):
+        """
+        Called when any repetition VA is changed
+        """
+        self.update_roa_rep()
+
+    def on_spec_rep_enter(self, evt):
+        self._hover_stream = self._spec_stream
+        self.update_roa_rep()
+        evt.Skip()
+
+    def on_spec_rep_leave(self, evt):
+        self._hover_stream = None
+        self.update_roa_rep()
+        evt.Skip()
+
+    def on_ar_rep_enter(self, evt):
+        self._hover_stream = self._ar_stream
+        self.update_roa_rep()
+        evt.Skip()
+
+    def on_ar_rep_leave(self, evt):
+        self._hover_stream = None
+        self.update_roa_rep()
+        evt.Skip()

@@ -492,7 +492,7 @@ class CLSettingsStream(PMTSettingsStream):
     is many magnitudes shorter (ie, close to the SED), the live view is the
     entire image.
 
-    In live view, the ROI is not applied, but the pixelSize is. S
+    In live view, the ROI is not applied, but the pixelSize is.
 
     Note: It could be possible to acquire an image simultaneously to the
       SED in live view, but they would need to pick one dwell time/resolution.

@@ -379,26 +379,21 @@ class SparcAcquiController(object):
     tab.
     """
 
-    def __init__(self, tab_data, main_frame, settings_controller, roa, vas):
+    def __init__(self, tab_data, main_frame, stream_ctrl, vas):
         """
         tab_data (MicroscopyGUIData): the representation of the microscope GUI
         main_frame: (wx.Frame): the frame which contains the 4 viewports
-        settings_controller (SettingsController)
-        roa (VA): VA of the ROA
+        stream_ctrl (StreamBarController): controller to pause/resume the streams
         vas (list of VAs): all the VAs which might affect acquisition (time)
         """
         self._tab_data_model = tab_data
         self._main_data_model = tab_data.main
         self._main_frame = main_frame
-        self._roa = roa
+        self._stream_controller = stream_ctrl
         self._vas = vas
 
         # For file selection
         self.conf = conf.get_acqui_conf()
-
-        # for saving/restoring the settings
-        self._settings_controller = settings_controller
-        self._orig_settings = {} # Entry -> value to restore
 
         # TODO: this should be the date at which the user presses the acquire
         # button (or when the last settings were changed)!
@@ -418,6 +413,8 @@ class SparcAcquiController(object):
         self.lbl_acqestimate = self._main_frame.lbl_sparc_acq_estimate
         self._acq_future_connector = None
 
+        self._stream_paused = ()
+
         # TODO: share an executor with the whole GUI.
         self._executor = futures.ThreadPoolExecutor(max_workers=2)
 
@@ -434,11 +431,14 @@ class SparcAcquiController(object):
 
         # Event binding
         pub.subscribe(self.on_setting_change, 'setting.changed')
+        # TODO: Should work with new streams => listen to tab_data_model.streams
         # TODO We should also listen to repetition, in case it's modified after we've
         # received the new ROI. Or maybe always compute acquisition time a bit delayed?
         for va in vas:
             va.subscribe(self.onAnyVA)
-        roa.subscribe(self.onROA, init=True)
+
+        self._roa = tab_data.semStream.roi
+        self._roa.subscribe(self.onROA, init=True)
 
     def __del__(self):
         self._executor.shutdown(wait=False)
@@ -501,15 +501,11 @@ class SparcAcquiController(object):
 
         self.lbl_acqestimate.SetLabel(txt)
 
-
-    def _pause_settings(self):
+    def _pause_streams(self):
         """
         Pause the settings of the GUI and save the values for restoring them later
         """
-        # save the original settings
-        self._orig_settings = preset_as_is(self._settings_controller.entries)
-        self._settings_controller.pause()
-        self._settings_controller.enable(False)
+        self._stream_paused = self._stream_controller.pauseStreams()
 
         # TODO: also freeze the MicroscopeView (for now we just pause the streams)
         # pause all the live acquisitions
@@ -518,19 +514,13 @@ class SparcAcquiController(object):
             s.is_active.value = False
             s.should_update.value = False
 
-    def _resume_settings(self):
+    def _resume_streams(self):
         """
         Resume (unfreeze) the settings in the GUI and make sure the value are
         back to the previous value
         """
-        live_streams = self._tab_data_model.focussedView.value.getStreams()
-        for s in live_streams:
-            s.should_update.value = True
-            s.is_active.value = True
-
-        acqmng.apply_preset(self._orig_settings)
-        self._settings_controller.resume()
-        self._settings_controller.enable(True)
+        # TODO: just start SEM survey again?
+        self._stream_controller.resumeStreams(self._stream_paused)
 
         # Make sure that the acquisition button is enabled again.
         self._main_frame.btn_sparc_acquire.Enable()
@@ -545,7 +535,7 @@ class SparcAcquiController(object):
         self.btn_cancel.Hide()
         self.btn_acquire.Enable()
         self._main_frame.Layout()
-        self._resume_settings()
+        self._resume_streams()
 
         self._main_data_model.acquiring = False
 
@@ -576,7 +566,7 @@ class SparcAcquiController(object):
         Start the acquisition (really)
         Similar to win.acquisition.on_acquire()
         """
-        self._pause_settings()
+        self._pause_streams()
         self.btn_acquire.Disable()
         self.btn_cancel.Enable()
 
@@ -680,6 +670,7 @@ class SparcAcquiController(object):
             # display in the analysis tab
             self._show_acquisition(data, open(filename))
         self._reset_acquisition_gui()
+
 
 # TODO: merge with AutoCenterController because they share too many GUI elements
 class FineAlignController(object):

@@ -195,6 +195,9 @@ HW_SETTINGS_CONFIG = {
                 "control_type": odemis.gui.CONTROL_COMBO,
             },
         },
+    "cl-detector": {
+            "gain": {},
+        },
 }
 
 # Allows to override some values based on the microscope role
@@ -294,6 +297,7 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
     },
 }
 
+
 def get_hw_settings_config(role=None):
     """ Return a copy of the HW_SETTINGS_CONFIG dictionary
 
@@ -309,6 +313,7 @@ def get_hw_settings_config(role=None):
     if role in HW_SETTINGS_CONFIG_PER_ROLE:
         recursive_dict_update(hw_settings, HW_SETTINGS_CONFIG_PER_ROLE[role])
     return hw_settings
+
 
 def get_hw_settings(hw_comp):
 

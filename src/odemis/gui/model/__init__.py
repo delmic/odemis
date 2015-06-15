@@ -422,6 +422,7 @@ class ScannedAcquisitionGUIData(MicroscopyGUIData):
         self.acquisitionView = MicroscopeView("Acquisition")
 
         # The SEM CL stream that is used to select the acquisition settings
+        # eg, ROI (aka ROA), dcPeriod, dcRegion.
         # It will be set at start up by the tab controller
         self.semStream = None
 
