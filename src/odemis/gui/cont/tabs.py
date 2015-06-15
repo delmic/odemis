@@ -737,26 +737,6 @@ class SparcAcquisitionTab(Tab):
         if should_update and self.tab_data_model.tool.value == guimod.TOOL_SPOT:
             self.tab_data_model.tool.value = guimod.TOOL_NONE
 
-    def _clean_acqview(self, streams):
-        """ Remove MD streams from the acquisition view that have one or more sub streams missing
-
-        Args:
-            streams (list of streams): The streams currently used in this tab
-        """
-
-        # The acquisition streams
-        acq_streams = self.tab_data_model.acquisitionView.getStreams()
-
-        # For all MD streams in the acquisition view...
-        for mds in [s for s in acq_streams if isinstance(s, MultipleDetectorStream)]:
-            # Are all the sub streams of the MDStreams still there?
-            for ss in mds.streams:
-                # If not, remove the MD stream
-                if ss not in streams:
-                    logging.debug("Removing acquisition stream %s because %s is gone", mds.name, ss.name)
-                    self.tab_data_model.acquisitionView.removeStream(mds)
-                    break
-
     def on_acquisition(self, is_acquiring):
         # Don't change anchor region during acquisition (this can happen
         # because the dwell time VA is directly attached to the hardware,

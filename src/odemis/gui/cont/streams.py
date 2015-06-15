@@ -1491,6 +1491,28 @@ class SparcStreamsController(StreamBarController):
         if main_data.monochromator:
             self.add_action("Monochromator", self.addMonochromator)
 
+    def _clean_acqview(self, streams):
+        """ Remove MD streams from the acquisition view that have one or more sub streams missing
+
+        Args:
+            streams (list of streams): The streams currently used in this tab
+        """
+
+        # The acquisition streams
+        acq_streams = self.tab_data_model.acquisitionView.getStreams()
+
+        # For all MD streams in the acquisition view...
+        for mds in acq_streams:
+            if not isinstance(mds, acqstream.MultipleDetectorStream):
+                continue
+            # Are all the sub streams of the MDStreams still there?
+            for ss in mds.streams:
+                # If not, remove the MD stream
+                if ss not in streams:
+                    logging.debug("Removing acquisition stream %s because %s is gone", mds.name, ss.name)
+                    self.tab_data_model.acquisitionView.removeStream(mds)
+                    break
+
     def addAR(self):
         """ Create a camera stream and add to to all compatible viewports """
 
