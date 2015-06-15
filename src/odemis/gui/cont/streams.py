@@ -20,6 +20,7 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
+
 from __future__ import division
 from collections import OrderedDict
 import collections
@@ -29,7 +30,6 @@ import wx
 from wx.lib.pubsub import pub
 
 import odemis.acq.stream as acqstream
-from odemis.acq.stream import CameraStream
 from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR
 from odemis.gui.comp.stream import StreamPanel, EVT_STREAM_VISIBLE
 from odemis.gui.conf.data import get_hw_settings_config
@@ -67,7 +67,7 @@ class StreamController(object):
         self.stream = stream
         self.stream_bar = stream_bar
 
-        self.hw_settings_config = get_hw_settings_config()
+        self.hw_settings_config = get_hw_settings_config(tab_data_model.main.role)
 
         label_edit = False
 
@@ -191,6 +191,21 @@ class StreamController(object):
 
         if add_divider:
             self.stream_panel.add_divider()
+
+    def add_setting_entry(self, name, va, hw_comp, conf=None):
+        """ Add a name/value pair to the settings panel.
+
+        :param name: (string): name of the value
+        :param va: (VigilantAttribute)
+        :param hw_comp: (Component): the component that contains this VigilantAttribute
+        :param conf: ({}): Configuration items that may override default settings
+
+        """
+
+        se = create_setting_entry(self.stream_panel, name, va, hw_comp, conf)
+        self.entries[se.name] = se
+
+        return se
 
     def _on_stream_panel_destroy(self, _):
         """ Remove all references to setting entries and the possible VAs they might contain

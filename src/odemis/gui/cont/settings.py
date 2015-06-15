@@ -633,37 +633,10 @@ class SparcSettingsController(SettingsBarController):
         super(SparcSettingsController, self).__init__(tab_data)
         main_data = tab_data.main
 
-        # self._sem_panel = SemSettingsController(
-        #     parent_frame.fp_settings_sparc_sem,
-        #     "No SEM found",
-        #     highlight_change
-        # )
-        # self._angular_panel = AngularSettingsController(
-        #     parent_frame.fp_settings_sparc_angular,
-        #     "No angular camera found",
-        #     highlight_change
-        # )
-        # self._spectrum_panel = SpectrumSettingsController(
-        #     parent_frame.fp_settings_sparc_spectrum,
-        #     "No spectrometer found",
-        #     highlight_change
-        # )
-
         # Somewhat of a hack to get direct references to a couple of controls
         self.angular_rep_ent = None
         self.spectro_rep_ent = None
         self.spec_pxs_ent = None
-
-        # if main_data.ebeam:
-        #     self.add_hw_component(main_data.ebeam, self._sem_panel)
-        #
-        #     if sem_stream:
-        #         self.sem_dcperiod_ent = self._sem_panel.add_setting_entry(
-        #             "dcPeriod",
-        #             sem_stream.dcPeriod,
-        #             None,  # component
-        #             self._va_config["streamsem"]["dcPeriod"]
-        #         )
 
         if main_data.spectrometer:
             # self.add_hw_component(main_data.spectrometer, self._spectrum_panel)
@@ -675,7 +648,6 @@ class SparcSettingsController(SettingsBarController):
             #     self._spectrum_panel.add_axis("band", main_data.light_filter,
             #                                   self._va_config["filter"]["band"])
 
-            # self._spectrum_panel.panel.add_divider()
             if spec_stream:
                 # self.spectro_rep_ent = self._spectrum_panel.add_setting_entry(
                 #     "repetition",

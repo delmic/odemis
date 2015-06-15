@@ -650,6 +650,14 @@ class SparcAcquisitionTab(Tab):
 
         # The sem stream is always visible, so add it by default
         sem_stream_cont = self._streambar_controller.addStream(sem_stream, add_to_all_views=True)
+
+        self.sem_dcperiod_ent = sem_stream_cont.add_setting_entry(
+            "dcPeriod",
+            sem_stream.dcPeriod,
+            None,  # component
+            sem_stream_cont.hw_settings_config["streamsem"]["dcPeriod"]
+        )
+
         sem_stream_cont.stream_panel.show_remove_btn(False)
         sem_stream_cont.stream_panel.show_visible_btn(False)
 

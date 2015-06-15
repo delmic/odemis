@@ -37,7 +37,7 @@ from wx.lib.pubsub import pub
 from odemis import model
 import odemis.gui
 from odemis.gui.util.widgets import VigilantAttributeConnector, AxisConnector
-from odemis.model import VigilantAttributeBase, getVAs
+from odemis.model import VigilantAttributeBase
 import odemis.util.units as utun
 from odemis.model import NotApplicableError
 from odemis.util.driver import reproduceTypedValue
