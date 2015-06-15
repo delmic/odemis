@@ -1473,6 +1473,44 @@ class SparcStreamsController(StreamBarController):
     """
     Controlls the streams for the SPARC acquisition view
     """
+    def __init__(self, tab_data, stream_bar, view_ctrl, **kwargs):
+        super(SparcStreamsController, self).__init__(tab_data, stream_bar, **kwargs)
+
+        self._view_controller = view_ctrl
+        # Each stream will be created both as a SettingsStream and a MDStream
+        # When the SettingsStream is deleted, automatically remove the MDStream
+        tab_data.streams.subscribe(self._clean_acqview)
+
+        # Repetition visualisation
+        self._hover_stream = None  # stream for which the repetition must be displayed
+
+        # Grab the repetition entries, so we can use it to hook extra event handlers to it.
+
+        # TODO: do this when adding a new stream
+#         self.spec_rep = self._settings_controller.spectro_rep_ent
+#         if self.spec_rep:
+#             self.spec_rep.vigilattr.subscribe(self.on_rep_change)
+#             self.spec_rep.value_ctrl.Bind(wx.EVT_SET_FOCUS, self.on_rep_focus)
+#             self.spec_rep.value_ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
+#             self.spec_rep.value_ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_spec_rep_enter)
+#             self.spec_rep.value_ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_spec_rep_leave)
+#
+#         self.spec_pxs = self._settings_controller.spec_pxs_ent
+#         if self.spec_pxs:
+#             self.spec_pxs.vigilattr.subscribe(self.on_rep_change)
+#             self.spec_pxs.value_ctrl.Bind(wx.EVT_SET_FOCUS, self.on_rep_focus)
+#             self.spec_pxs.value_ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
+#             self.spec_pxs.value_ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_spec_rep_enter)
+#             self.spec_pxs.value_ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_spec_rep_leave)
+#
+#         self.angu_rep = self._settings_controller.angular_rep_ent
+#         if self.angu_rep:
+#             self.angu_rep.vigilattr.subscribe(self.on_rep_change)
+#             self.angu_rep.value_ctrl.Bind(wx.EVT_SET_FOCUS, self.on_rep_focus)
+#             self.angu_rep.value_ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
+#             self.angu_rep.value_ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_ar_rep_enter)
+#             self.angu_rep.value_ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_ar_rep_leave)
+        # AR settings don't have pixel size
 
     def _createAddStreamActions(self):
         """ Create the compatible "add stream" actions according to the current microscope.
@@ -1499,7 +1537,7 @@ class SparcStreamsController(StreamBarController):
         """
 
         # The acquisition streams
-        acq_streams = self.tab_data_model.acquisitionView.getStreams()
+        acq_streams = self._tab_data_model.acquisitionView.getStreams()
 
         # For all MD streams in the acquisition view...
         for mds in acq_streams:
@@ -1510,7 +1548,7 @@ class SparcStreamsController(StreamBarController):
                 # If not, remove the MD stream
                 if ss not in streams:
                     logging.debug("Removing acquisition stream %s because %s is gone", mds.name, ss.name)
-                    self.tab_data_model.acquisitionView.removeStream(mds)
+                    self._tab_data_model.acquisitionView.removeStream(mds)
                     break
 
     def addAR(self):
@@ -1530,24 +1568,16 @@ class SparcStreamsController(StreamBarController):
 
         # print ar_stream.emitter, ar_stream.detector
 
+        # TODO: ROI -> semStream.roi needs to be generic
         ar_stream.roi.subscribe(self.onARROI)
-        # FIXME NOW: Make the acquisition controller aware of this VA in a different way
-        # vas_settings.append(self._ar_stream.repetition)
 
         stream_cont = self._add_stream(ar_stream, add_to_all_views=True)
         stream_cont.stream_panel.show_visible_btn(False)
 
-        # TODO: directly create the equivalent MDStream, so that the acquisition
-        # time can be correctly computed?
-        # self._sem_ar_stream = acqstream.SEMARMDStream("SEM AR",
-        #                                               self._sem_cl_stream,
-        #                                               self._ar_stream)
-        # # FIXME NOW: Update the acq view on acquisition (i.e. button click)
-        # self.tab_data_model.acquisitionView.addStream(self._sem_ar_stream)
-
-
-        # FIXME: move to tab, self.view_controller.focusViewWithStream()
-#         self.tab_data_model.focussedView.value = self.main_frame.vp_sparc_tr.microscope_view
+        # Create the equivalent MDStream
+        sem_stream = self._tab_data_model.semStream
+        sem_ar_stream = acqstream.SEMARMDStream("SEM AR", sem_stream, ar_stream)
+        self._tab_data_model.acquisitionView.addStream(sem_ar_stream)
 
         return stream_cont
 
@@ -1567,7 +1597,10 @@ class SparcStreamsController(StreamBarController):
         stream_cont = self._add_stream(cli_stream, add_to_all_views=True)
         stream_cont.stream_panel.show_visible_btn(False)
 
-#         self._tab_data_model.focussedView.value = self.main_frame.vp_sparc_tl.microscope_view
+        # Create the equivalent MDStream
+        sem_stream = self._tab_data_model.semStream
+        sem_cli_stream = acqstream.SEMMDStream("SEM CLi", sem_stream, cli_stream)
+        self._tab_data_model.acquisitionView.addStream(sem_cli_stream)
 
         return stream_cont
 
@@ -1587,13 +1620,10 @@ class SparcStreamsController(StreamBarController):
         stream_cont = self._add_stream(spec_stream, add_to_all_views=True)
         stream_cont.stream_panel.show_visible_btn(False)
 
-#         self._tab_data_model.focussedView.value = self.main_frame.vp_sparc_bl.microscope_view
-
-        # self._sem_spec_stream = acqstream.SEMSpectrumMDStream("SEM Spectrum",
-        #                                                       self._sem_cl_stream,
-        #                                                       self._spec_stream)
-        # # FIXME NOW: Update the acq view on acquisition (i.e. button click)
-        # self.tab_data_model.acquisitionView.addStream(self._sem_spec_stream)
+        # Create the equivalent MDStream
+        sem_stream = self._tab_data_model.semStream
+        sem_spec_stream = acqstream.SEMSpectrumMDStream("SEM Spectrum", sem_stream, spec_stream)
+        self._tab_data_model.acquisitionView.addStream(sem_spec_stream)
 
         return stream_cont
 
@@ -1614,9 +1644,32 @@ class SparcStreamsController(StreamBarController):
         stream_cont = self._add_stream(monoch_stream, add_to_all_views=True)
         stream_cont.stream_panel.show_visible_btn(False)
 
-#         self._tab_data_model.focussedView.value = self.main_frame.vp_sparc_br.microscope_view
+        # Create the equivalent MDStream
+        sem_stream = self._tab_data_model.semStream
+        sem_monoch_stream = acqstream.SEMMDStream("SEM Monochromator", sem_stream, monoch_stream)
+        self._tab_data_model.acquisitionView.addStream(sem_monoch_stream)
 
         return stream_cont
+
+    def _onStreamUpdate(self, stream, updated):
+        # Prepare the optical path
+        if updated:
+            opm = self._main_data_model.opm
+            try:
+                mode = opm.guessMode(stream)
+            except ValueError:
+                logging.debug("Stream %s doesn't require optical path change", stream.name)
+            else:
+                # TODO: Run in a separate thread as in live view it's ok if
+                # the path is not immediately correct?
+                opm.setPath(mode)
+
+        super(SparcStreamsController, self)._onStreamUpdate(stream, updated)
+
+        # Make sure the current view is compatible with the stream playing
+        if updated:
+            self._view_controller.focusViewWithStream(stream)
+
 
     # ROA handling stuff
 

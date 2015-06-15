@@ -556,8 +556,9 @@ class SparcAcquisitionTab(Tab):
 
         # Create the streams:
         # * SEM (survey): live stream displaying the current SEM view (full FoV)
-        # * Spot SEM: live stream to go into spot mode
-        # * SEM CL: SEM stream used to store SEM settings for final acquisition
+        # * Spot SEM: live stream to set e-beam into spot mode
+        # * SEM CL: SEM stream used to store SEM settings for final acquisition.
+        #           That's tab_data.semStream
         # When one new stream is added, it actually creates two streams:
         # * XXXSettingsStream: for the live view and the settings
         # * MDStream: for the acquisition
@@ -635,6 +636,7 @@ class SparcAcquisitionTab(Tab):
         self._stream_controller = streamcont.SparcStreamsController(
             self.tab_data_model,
             self.main_frame.pnl_sparc_streams,
+            self.view_controller,
             ignore_view=True  # Show all stream panels, independent of any selected viewport
         )
 
@@ -652,21 +654,8 @@ class SparcAcquisitionTab(Tab):
             sem_stream_cont.hw_settings_config["streamsem"]["dcPeriod"]
         )
 
-        # Clean the acquisition view when (settings) streams get removed
-        self.tab_data_model.streams.subscribe(self._clean_acqview)
-
-#         # needs to have the AR and Spectrum streams on the acquisition view
-#         self._settings_controller = settings.SparcSettingsController(
-#             self.main_frame,
-#             self.tab_data_model,
-#             sem_stream=self._sem_cl_stream,
-#             spec_stream=self._spec_stream,
-#             ar_stream=self._ar_stream
-#         )
-
         main_data.is_acquiring.subscribe(self.on_acquisition)
 
-        # needs settings_controller
         self._acquisition_controller = acqcont.SparcAcquiController(
             self.tab_data_model,
             self.main_frame,
@@ -674,37 +663,6 @@ class SparcAcquisitionTab(Tab):
             vas_settings,
         )
 
-
-        # Repetition visualisation
-        self._hover_stream = None  # stream for which the repetition must be displayed
-
-        # Grab the repetition entries, so we can use it to hook extra event handlers to it.
-
-        # TODO: do this when adding a new stream
-#         self.spec_rep = self._settings_controller.spectro_rep_ent
-#         if self.spec_rep:
-#             self.spec_rep.vigilattr.subscribe(self.on_rep_change)
-#             self.spec_rep.value_ctrl.Bind(wx.EVT_SET_FOCUS, self.on_rep_focus)
-#             self.spec_rep.value_ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
-#             self.spec_rep.value_ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_spec_rep_enter)
-#             self.spec_rep.value_ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_spec_rep_leave)
-#
-#         self.spec_pxs = self._settings_controller.spec_pxs_ent
-#         if self.spec_pxs:
-#             self.spec_pxs.vigilattr.subscribe(self.on_rep_change)
-#             self.spec_pxs.value_ctrl.Bind(wx.EVT_SET_FOCUS, self.on_rep_focus)
-#             self.spec_pxs.value_ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
-#             self.spec_pxs.value_ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_spec_rep_enter)
-#             self.spec_pxs.value_ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_spec_rep_leave)
-#
-#         self.angu_rep = self._settings_controller.angular_rep_ent
-#         if self.angu_rep:
-#             self.angu_rep.vigilattr.subscribe(self.on_rep_change)
-#             self.angu_rep.value_ctrl.Bind(wx.EVT_SET_FOCUS, self.on_rep_focus)
-#             self.angu_rep.value_ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
-#             self.angu_rep.value_ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_ar_rep_enter)
-#             self.angu_rep.value_ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_ar_rep_leave)
-        # AR settings don't have pixel size
 
     @property
     def stream_controller(self):
@@ -759,7 +717,24 @@ class SparcAcquisitionTab(Tab):
         self.main_frame.btn_sparc_change_file.Enable(not is_acquiring)
 
     def _copyDwellTimeToAnchor(self, dt):
+        """
+        Use the sem stream dwell time as the anchor dwell time
+        """
         self.tab_data_model.semStream.dcDwellTime.value = dt
+
+    def onROI(self, roi):
+        """
+        called when the SEM CL roi (region of acquisition) is changed
+        To synchronise global ROA -> streams ROI
+        """
+        # Updating the ROI requires a bit of care, because the streams might
+        # update back their ROI with a modified value. It should normally
+        # converge, but we must absolutely ensure it will never cause infinite
+        # loops.
+        for s in self.tab_data_model.acquisitionView.getStreams():
+            if isinstance(s, acqstream.MultipleDetectorStream):
+                # logging.debug("setting roi of %s to %s", s.name.value, roi)
+                s._rep_stream.roi.value = roi
 
     def Show(self, show=True):
         assert (show != self.IsShown())  # we assume it's only called when changed
@@ -781,19 +756,6 @@ class SparcAcquisitionTab(Tab):
         for s in self.tab_data_model.streams.value:
             s.is_active.value = False
         self._spot_stream.is_active.value = False
-
-    def onROI(self, roi):
-        """
-        called when the SEM CL roi (region of acquisition) is changed
-        """
-        # Updating the ROI requires a bit of care, because the streams might
-        # update back their ROI with a modified value. It should normally
-        # converge, but we must absolutely ensure it will never cause infinite
-        # loops.
-        for s in self.tab_data_model.acquisitionView.getStreams():
-            if isinstance(s, acqstream.MultipleDetectorStream):
-                # logging.debug("setting roi of %s to %s", s.name.value, roi)
-                s._rep_stream.roi.value = roi
 
 
 
