@@ -134,10 +134,10 @@ class StreamController(object):
 
         # Get the emitter and detector configurations if they exist
 
-        if self.stream.emitter.role in self.hw_settings_config:
+        if self.stream.emitter and self.stream.emitter.role in self.hw_settings_config:
             emitter_conf = self.hw_settings_config[self.stream.emitter.role]
 
-        if self.stream.detector.role in self.hw_settings_config:
+        if self.stream.detector and self.stream.detector.role in self.hw_settings_config:
             detector_conf = self.hw_settings_config[self.stream.detector.role]
 
         # Process the emitter vas first
