@@ -29,11 +29,11 @@ from logging.handlers import BufferingHandler
 
 logger = logging.getLogger().setLevel(logging.DEBUG)
 
-SN = "0E203C44"  # put the serial number written on the component to test
+# SN = "12345678"  # put the serial number written on the component to test
 
 # Test using the hardware
 CLASS = pmtctrl.PMTControl
-# KWARGS = dict(name="test", role="pmt_control", sn=SN)
+# KWARGS = dict(name="test", role="pmt_control", port="/dev/ttyPMT*")
 # Test using the simulator
 KWARGS = dict(name="test", role="pmt_control", port="/dev/fake")
 
@@ -57,6 +57,7 @@ class TestStatic(unittest.TestCase):
     """
     Tests which don't need a component ready
     """
+    @skip("simple")
     def test_scan(self):
         devices = CLASS.scan()
         self.assertGreater(len(devices), 0)
@@ -138,7 +139,7 @@ class TestPMTControl(unittest.TestCase):
         self.dev.protection.value = protection
         self.assertEqual(self.dev.protection.value, protection)
 
-
+# @skip("simple")
 class TestPMT(unittest.TestCase):
     """
     Test the PMT class

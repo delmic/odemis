@@ -93,14 +93,27 @@ class PMT(model.Detector):
         self.data = PMTDataFlow(self, self._pmt, self._control)
 
         # Duplicate control unit VAs
-        self._gain = ctrl.gain.range[0]
-        self.gain = model.FloatContinuous(self._gain, ctrl.gain.range, unit="V",
-                                          setter=self._setGain)
-        self._last_gain = self._gain
-        self.gain.value = self._gain  # Just start with no gain
-        self.powerSupply = ctrl.powerSupply
-        # Turn on the controller
-        self.powerSupply.value = True
+        # In case of counting PMT these VAs are not available since a
+        # spectrograph is given instead of the control unit.
+        if (hasattr(ctrl, "gain")
+            and isinstance(ctrl.gain, model.VigilantAttributeBase)):
+            self._gain = ctrl.gain.range[0]
+            self.gain = model.FloatContinuous(self._gain, ctrl.gain.range, unit="V",
+                                              setter=self._setGain)
+            self._last_gain = self._gain
+            self.gain.value = self._gain  # Just start with no gain
+        if (hasattr(ctrl, "powerSupply")
+            and isinstance(ctrl.powerSupply, model.VigilantAttributeBase)):
+            self.powerSupply = ctrl.powerSupply
+            # Turn on the controller
+            self.powerSupply.value = True
+
+        # Protection VA should be available anyway
+        if not (hasattr(ctrl, "protection")
+            and isinstance(ctrl.protection, model.VigilantAttributeBase)):
+            raise IOError("Given component appears to be neither a PMT control ",
+                          "unit or a spectrograph since protection VA is not ",
+                          "available.")
 
     def terminate(self):
         # Turn off the controller

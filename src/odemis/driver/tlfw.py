@@ -64,7 +64,7 @@ class FW102c(model.Actuator):
         logging.info("Found FW102C device on port %s", self._port)
         if _scan:
             return
-        
+
         # check bands contains correct data
         self._maxpos = self.GetMaxPosition() 
         if not bands:
