@@ -193,9 +193,11 @@ def histogram(data, irange=None):
             irange = (data.view(numpy.ndarray).min(), data.view(numpy.ndarray).max())
 
     # short-cuts (for the most usual types)
-    if data.dtype.kind in "biu" and irange[0] >= 0:
+    if data.dtype.kind in "biu" and irange[0] >= 0 and data.itemsize <= 2:
         # TODO: for int (irange[0] < 0), treat as unsigned, and swap the first
         # and second halves of the histogram.
+        # TODO: for 32 or 64 bits with full range, convert to a view looking
+        # only at the 2 high bytes.
         length = irange[1] - irange[0] + 1
         hist = numpy.bincount(data.flat, minlength=length)
         edges = (0, hist.size - 1)
@@ -203,7 +205,7 @@ def histogram(data, irange=None):
             logging.warning("Unexpected value %d outside of range %s", edges[1], irange)
     else:
         if data.dtype.kind in "biu":
-            length = irange[1] - irange[0] + 1
+            length = min(4096, irange[1] - irange[0] + 1)
         else:
             # For floats, it will automatically find the minimum and maximum
             length = 256

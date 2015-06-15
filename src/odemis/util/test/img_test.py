@@ -195,6 +195,25 @@ class TestHistogram(unittest.TestCase):
         self.assertGreaterEqual(edges[1], depth - 1)
         numpy.testing.assert_array_equal(hist, hist_auto[:depth])
 
+    def test_uint32(self):
+        # 32 bits
+        depth = 2 ** 32
+        size = (512, 100)
+        grey_img = numpy.zeros(size, dtype="uint32") + (depth // 3)
+        grey_img[0, 0] = 0
+        grey_img[0, 1] = depth - 1
+        hist, edges = img.histogram(grey_img, (0, depth - 1))
+        self.assertTrue(256 <= len(hist) <= depth)
+        self.assertEqual(edges, (0, depth - 1))
+        self.assertEqual(hist[0], 1)
+        self.assertEqual(hist[-1], 1)
+        u = numpy.unique(hist[1:-1])
+        self.assertEqual(sorted(u.tolist()), [0, grey_img.size - 2])
+
+        hist_auto, edges = img.histogram(grey_img)
+        self.assertGreaterEqual(edges[1], depth - 1)
+        numpy.testing.assert_array_equal(hist, hist_auto[:depth])
+
     def test_float(self):
         size = (102, 965)
         grey_img = numpy.zeros(size, dtype="float") + 15.05
