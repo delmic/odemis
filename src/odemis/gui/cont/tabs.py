@@ -587,6 +587,7 @@ class SparcAcquisitionTab(Tab):
         spot_stream = acqstream.SpotSEMStream("Spot", main_data.sed,
                                               main_data.sed.data, main_data.ebeam)
         self._spot_stream = spot_stream
+        # TODO: add to tab_data.streams and move the handling to the stream controller?
 
         # the SEM acquisition simultaneous to the CCDs
         semcl_stream = acqstream.SEMStream(
@@ -721,10 +722,14 @@ class SparcAcquisitionTab(Tab):
 
             # Start the spot mode
             self._spot_stream.should_update.value = True
+            self._spot_stream.is_active.value = True
 
             for s in paused_st:  # TODO: move this to new stream creation
                 s.should_update.subscribe(self._cancel_spot_mode)
             # TODO: re-activate stream when spot mode tool is turned off?
+        else:
+            self._spot_stream.is_active.value = False
+            self._spot_stream.should_update.value = False
 
     def _cancel_spot_mode(self, should_update):
         """ Cancel spot mode if SEM/CL stream start playing """
@@ -764,6 +769,11 @@ class SparcAcquisitionTab(Tab):
 
         # TODO: Make sure nothing can be modified during acquisition
 
+        if is_acquiring:
+            self._spot_stream.is_active.value = False
+        else:
+            self._spot_stream.is_active.value = self._spot_stream.should_update.value
+
         self.tb.enable(not is_acquiring)
         self.main_frame.vp_sparc_tl.Enable(not is_acquiring)
         self.main_frame.btn_sparc_change_file.Enable(not is_acquiring)
@@ -780,14 +790,17 @@ class SparcAcquisitionTab(Tab):
             # TODO: double check the chamber state hasn't changed in between
             # We should never turn on the streams if the chamber is not in vacuum
             self._stream_controller.resumeStreams(self._streams_to_restart)
+            self._spot_stream.is_active.value = self._spot_stream.should_update.value
         else:
             paused_st = self._stream_controller.pauseStreams()
             self._streams_to_restart = weakref.WeakSet(paused_st)
+            self._spot_stream.is_active.value = False
 
     def terminate(self):
         # make sure the streams are stopped
         for s in self.tab_data_model.streams.value:
             s.is_active.value = False
+        self._spot_stream.is_active.value = False
 
     def onROI(self, roi):
         """
@@ -805,7 +818,7 @@ class SparcAcquisitionTab(Tab):
 
 
 class AnalysisTab(Tab):
-    """ Handle the loading and displaying of acquisistion files
+    """ Handle the loading and displaying of acquisition files
 
     Creation
     ~~~~~~~~
