@@ -19,8 +19,7 @@ SPARC-MONASH: {
        scanner: "SEM E-beam",
        detector0: "SEM Detector",
        detector1: "CL PMT",
-       detector2: "Monochromator PMT",
-       #counter0: "Monochromator PMT",
+       counter0: "Monochromator PMT",
     }
 }
 
@@ -65,7 +64,7 @@ SPARC-MONASH: {
     role: null,
     init: {
         channel: 1,
-        limits: [0, 5] # V
+        limits: [-5, 5] # V
     },
 }
 
@@ -73,7 +72,7 @@ SPARC-MONASH: {
     class: pmtctrl.PMTControl,
     role: null,
     init: {
-        sn: "0E203C44",  # can be found on the bottom of the device
+        port: "/dev/ttyPMT*",
         prot_time: 0.0002,  # s
         prot_curr: 50.e-6,  # A
     }
@@ -88,35 +87,24 @@ SPARC-MONASH: {
     },
 }
 
-# TODO: put correct info once fully implemented
-# Must be connected on AI ?/AI GND
+# Must be connected on PFI 8
+# Note: it also uses PFI 10 internally, so nothing should be connected to that pin
 "Monochromator PMT": { # the raw detector of the counting PMT for monochromator
     # Internal child of SEM Scan Interface, so no class but instead a creator
     creator: "SEM Scan Interface",
     role: null,
     init: {
-        channel: 2,
-        limits: [0, 5] # V
+        source: 8,  # PFI number
     },
 }
 
-# TODO: a special software component that just change the TTL signal on acquisition
-"Monochromator PMT control unit": {
-    class: pmtctrl.PMTControl,
-    role: null,
-    init: {
-        sn: "AAAAAA??4",  # can be found on the bottom of the device
-        prot_time: 0.0002,  # s
-        prot_curr: 50.e-6,  # A
-    }
-}
-
+# Just to turn off automatically the PMT when it's not in use
 "Monochromator": {
     class: pmtctrl.PMT,
     role: monochromator,
     children: {
        "detector": "Monochromator PMT",
-       "pmt-control": "Monochromator PMT control unit",
+       "pmt-control": "Spectrograph",
     },
 }
 
@@ -164,7 +152,6 @@ SPARC-MONASH: {
     role: filter,
     init: {port: "/dev/ttyFTDI*", # will automatically find the right port
            bands: {1: [420.e-9, 460.e-9], # pos -> m,m
-                   2: [500.e-9, 550.e-9],
                    3: "polariser",
                    6: "pass-through"},
            },
@@ -177,7 +164,7 @@ SPARC-MONASH: {
     role: ccd,
     init: {
         device: 0,  # if a real camera is plugged in, it's usually 0
-        transpose: [1, -2], # mirrored on Y axis
+        #transpose: [1, 2], # mirrored or rotated?
     },
     properties: {
     #    fanSpeed: 0.0, # 0 = Off, 0.5= half speed, 1 = max speed
@@ -245,7 +232,7 @@ SPARC-MONASH: {
         slits: {1: "slit-in", # INPUT_SIDE
                 3: "slit-monochromator", # OUTPUT_SIDE
         },
-        accessory: "slitleds",
+        accessory: "slitleds", # TTL output to off when leds might be on
     },
 }
 
@@ -294,6 +281,7 @@ SPARC-MONASH: {
         sn: "11511",
         # X/Y are wrt light path (from the sample to the detector)
         axes: ["x", "y"],
+        # inverted: ["y",],
         stepsize: [33.e-9, 33.e-9] # m/step
     },
 }
