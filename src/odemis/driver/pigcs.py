@@ -8,15 +8,15 @@ Copyright © 2012-2015 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
@@ -426,8 +426,8 @@ class Controller(object):
         """
         Send a command and return its report
         com (string): the command to send (without address prefix but with \n)
-        return (string or list of strings): the report without prefix 
-           (e.g.,"0 1") nor newline. If answer is multiline: returns a list of each line 
+        return (string or list of strings): the report without prefix
+           (e.g.,"0 1") nor newline. If answer is multiline: returns a list of each line
         """
         try:
             lines = self.busacc.sendQueryCommand(self.address, com)
@@ -529,7 +529,7 @@ class Controller(object):
     def GetAvailableParameters(self):
         """
         Returns the available parameters
-        return (dict param -> list of strings): parameter number and strings 
+        return (dict param -> list of strings): parameter number and strings
          used to describe it (typically: 0, 1, FLOAT, description)
         """
         # HPA? (Get List Of Available Parameters)
@@ -552,7 +552,7 @@ class Controller(object):
         """
         axis (1<int<16): axis number
         param (0<int): parameter id (cf p.35)
-        returns (string): the string representing this parameter 
+        returns (string): the string representing this parameter
         """
         # SPA? (Get Volatile Memory Parameters)
         assert((1 <= axis) and (axis <= 16))
@@ -614,10 +614,10 @@ class Controller(object):
 
     def HasLimitSwitches(self, axis):
         """
-        Report whether the given axis has limit switches (is able to detect 
+        Report whether the given axis has limit switches (is able to detect
          the ends of the axis).
-        Note: It's just read from a configuration value in flash 
-        memory. Can be configured easily with PIMikroMove 
+        Note: It's just read from a configuration value in flash
+        memory. Can be configured easily with PIMikroMove
         axis (1<int<16): axis number
         returns (bool)
         """
@@ -629,7 +629,7 @@ class Controller(object):
         """
         Report whether the given axis has a reference switch (is able to detect
          the "middle" of the axis).
-        Note: apparently it's just read from a configuration value in flash 
+        Note: apparently it's just read from a configuration value in flash
         memory. Can be configured easily with PIMikroMove
         axis (1<int<16): axis number
         returns (bool)
@@ -698,7 +698,7 @@ class Controller(object):
 
     def IsOnTarget(self, axis):
         """
-        Report whether the given axis is considered on target (for closed-loop 
+        Report whether the given axis is considered on target (for closed-loop
           moves only)
         axis (1<int<16): axis number
         returns (bool)
@@ -748,7 +748,7 @@ class Controller(object):
         """
         Stop motion with deceleration
         Note: see Stop
-        axis (1<int<16): axis number, 
+        axis (1<int<16): axis number,
         """
         # HLT (Stop All Axes): immediate stop (high deceleration != HLT)
         # set error code to 10
@@ -780,7 +780,7 @@ class Controller(object):
 
     def SetServo(self, axis, activated):
         """
-        Activate or de-activate the servo. 
+        Activate or de-activate the servo.
         Note: only activate it if there is a sensor (cf .HasRefSwitch and ._hasRefSwitch)
         axis (1<int<16): axis number
         activated (boolean): True if the servo should be activated (closed-loop)
@@ -799,8 +799,8 @@ class Controller(object):
 
     def SetReferenceMode(self, axis, absolute):
         """
-        Select the reference mode. 
-        Note: only useful for closed-loop moves 
+        Select the reference mode.
+        Note: only useful for closed-loop moves
         axis (1<int<16): axis number
         absolute (bool): If True, absolute moves can be used, but needs to have
           been referenced.
@@ -885,7 +885,7 @@ class Controller(object):
         """
         Set open-loop acceleration of given axis.
         axis (1<int<16): axis number
-        value (0<float): acceleration in step-cycles/s². Default is 2000 
+        value (0<float): acceleration in step-cycles/s². Default is 2000
         """
         # OAC (Set Open-Loop Acceleration)
         assert(axis in self._channels)
@@ -896,7 +896,7 @@ class Controller(object):
         """
         Set the open-loop deceleration.
         axis (1<int<16): axis number
-        value (0<float): deceleration in step-cycles/s². Default is 2000 
+        value (0<float): deceleration in step-cycles/s². Default is 2000
         """
         # ODC (Set Open-Loop Deceleration)
         assert(axis in self._channels)
@@ -966,7 +966,8 @@ class Controller(object):
 
     def SetPosition(self, axis, pos):
         """
-        Get the position (in "user" units)
+        Assign a position value (in "user" units) for the current location.
+        No move is performed.
         axis (1<int<16): axis number
         pos (float): pos can be negative
         """
@@ -1025,7 +1026,7 @@ class Controller(object):
         """
         Set closed-loop acceleration of given axis.
         axis (1<int<16): axis number
-        value (0<float): acceleration in units/s² 
+        value (0<float): acceleration in units/s²
         """
         # ACC (Set Closed-Loop Acceleration)
         assert(axis in self._channels)
@@ -1036,7 +1037,7 @@ class Controller(object):
         """
         Set the closed-loop deceleration.
         axis (1<int<16): axis number
-        value (0<float): deceleration in units/s² 
+        value (0<float): deceleration in units/s²
         """
         # DEC (Set Closed-Loop Deceleration)
         assert(axis in self._channels)
@@ -1532,7 +1533,7 @@ class CLController(Controller):
 
     def _updateSpeedAccel(self, axis):
         """
-        Update the speed and acceleration values for the given axis. 
+        Update the speed and acceleration values for the given axis.
         It's only done if necessary, and only for the current closed- or open-
         loop mode.
         axis (1<=int<=16): the axis
@@ -1697,11 +1698,11 @@ class OLController(Controller):
                  dist_to_steps=None, min_dist=None):
         """
         dist_to_steps (0 < float): allows to calibrate how many steps correspond
-          to a given distance (in step/m). Default is 1e5, a value that could 
+          to a given distance (in step/m). Default is 1e5, a value that could
           make sense.
-        min_dist (0 <= float < 1): minimum distance required for the axis to 
+        min_dist (0 <= float < 1): minimum distance required for the axis to
           even move (in m). Below this distance, a command will be sent, but it
-          is expected that the actuator doesn't move at all. Default is 0.01 
+          is expected that the actuator doesn't move at all. Default is 0.01
           step (= 0.01 / dist_to_steps).
         """
         if dist_to_steps and not (0 < dist_to_steps):
@@ -1833,11 +1834,11 @@ class SMOController(Controller):
     """
     def __init__(self, busacc, address=None, axes=None, vmin=2., speed_base=0.03):
         """
-        vmin (0.5 < float < 10): lowest voltage at which the actuator moves 
+        vmin (0.5 < float < 10): lowest voltage at which the actuator moves
           reliably in V. This is the voltage used when performing small moves
           (~< 50 µm).
         speed_base (0<float<10): speed in m/s at the base voltage (3.5V). The
-          base voltage is used for long moves (~> 50 µm). 
+          base voltage is used for long moves (~> 50 µm).
         """
         # TODO: need 4 settings:
         # vmin/speed_min: voltage/speed for the smallest moves (will be used < 50 µm)
@@ -1957,7 +1958,7 @@ class SMOController(Controller):
             # Consider the speed linear of the voltage with:
             # * vmin - 0.5 -> 0 m/s
             # * base voltage -> speed_base
-            # * vmin -> 0.5 * speed_base / (bv - vmin +0.5) 
+            # * vmin -> 0.5 * speed_base / (bv - vmin +0.5)
             # It's totally wrong, but approximately correct
             voltage_u = self._min_motor_out
             bv = self._base_motor_out * (10 / 32767)
@@ -3236,7 +3237,7 @@ class E861Simulator(object):
 class DaisyChainSimulator(object):
     """
     Simulated serial port that can simulate daisy chain on the controllers
-    Same interface as the serial port + list of (fake) serial ports to connect 
+    Same interface as the serial port + list of (fake) serial ports to connect
     """
     def __init__(self, port, timeout=0, *args, **kwargs):
         """
@@ -3322,7 +3323,7 @@ class FakeBus(Bus):
         """
         Opens a fake serial port
         port (string): the name of the serial port (e.g., /dev/ttyUSB0)
-        _addresses (dict of int -> bool, or None): list of each address that should have 
+        _addresses (dict of int -> bool, or None): list of each address that should have
          a simulated controller created and wheter it is closed-loop or not.
          Default to {1: False, 2:False} (used for scan).
         return (serial): the opened serial port

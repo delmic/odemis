@@ -47,6 +47,8 @@ less likely with kernels >= 3.5).
 logging.getLogger().setLevel(logging.DEBUG)
 #comedi.comedi_loglevel(3)
 
+TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
+
 # arguments used for the creation of basic components
 CONFIG_SED = {"name": "sed", "role": "sed", "channel":5, "limits": [-3, 3]}
 CONFIG_BSD = {"name": "bsd", "role": "bsd", "channel":6, "limits": [-0.1, 0.2]}
@@ -62,6 +64,9 @@ CONFIG_SEM2 = {"name": "sem", "role": "sem", "device": "/dev/comedi0",
               "children": {"detector0": CONFIG_SED, "detector1": CONFIG_BSD, "scanner": CONFIG_SCANNER}
               }
 
+KWARGS_SEM_CNT = {"name": "sem", "role": "sem", "device": "/dev/comedi0",
+              "children": {"detector0": CONFIG_SED, "counter0": CONFIG_CNT, "scanner": CONFIG_SCANNER}
+              }
 
 #@unittest.skip("simple")
 class TestSEMStatic(unittest.TestCase):
@@ -722,6 +727,140 @@ class TestSEM2(unittest.TestCase):
         self.left2 -= 1
         if self.left2 <= 0:
             dataflow.unsubscribe(self.receive_image2)
+
+
+# @unittest.skip("simple")
+class TestSEMCounter(unittest.TestCase):
+    """
+    Tests of a SEM device with 1 analog and 1 counting detector
+    """
+    @classmethod
+    def setUpClass(cls):
+        if TEST_NOHW:
+            # simulator doesn't support counter
+            return
+        cls.sem = semcomedi.SEMComedi(**KWARGS_SEM_CNT)
+
+        for child in cls.sem.children.value:
+            if child.name == CONFIG_SED["name"]:
+                cls.sed = child
+            elif child.name == CONFIG_CNT["name"]:
+                cls.cnt = child
+            elif child.name == CONFIG_SCANNER["name"]:
+                cls.scanner = child
+
+    @classmethod
+    def tearUpClass(cls):
+        cls.sem.terminate()
+
+    def setUp(self):
+        if TEST_NOHW:
+            # simulator doesn't support
+            self.skipTest("Counter no simulated")
+        # reset resolution and dwellTime
+        self.scanner.resolution.value = (25, 20)
+        self.size = self.scanner.resolution.value
+        self.scanner.dwellTime.value = 1e-3  # 1 ms is pretty fast for the counter
+        self.acq_dates = (set(), set())  # 2 sets of dates, one for each receiver
+
+    def tearUp(self):
+        pass
+
+    def compute_expected_duration(self):
+        dwell = self.scanner.dwellTime.value
+        settle = self.scanner.settleTime
+        size = self.scanner.resolution.value
+        return size[0] * size[1] * dwell + size[1] * settle
+
+#     @unittest.skip("simple")
+    def test_acquire_cnt(self):
+        self.scanner.dwellTime.value = 100e-3
+        expected_duration = self.compute_expected_duration()
+
+        start = time.time()
+        im = self.cnt.data.get()
+        duration = time.time() - start
+
+        self.assertEqual(im.shape, self.size[::-1])
+        self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
+        self.assertIn(model.MD_DWELL_TIME, im.metadata)
+
+#     @unittest.skip("simple")
+    def test_acquire_long_dt(self):
+        # Dwell time above 0.83s cannot be handled by one command only, so dpr
+        # is required
+        self.scanner.dwellTime.value = 3  # s
+        self.scanner.resolution.value = (3, 5)
+        self.size = self.scanner.resolution.value
+        expected_duration = self.compute_expected_duration()
+
+        start = time.time()
+        im = self.cnt.data.get()
+        duration = time.time() - start
+
+        self.assertEqual(im.shape, self.size[::-1])
+        self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
+        self.assertIn(model.MD_DWELL_TIME, im.metadata)
+
+#    @unittest.skip("simple")
+    def test_acquire_two_flows(self):
+        """
+        Simple acquisition with two dataflows acquiring (more or less)
+        simultaneously
+        """
+        expected_duration = self.compute_expected_duration()
+        number, number2 = 3, 5
+
+        self.left = number
+        self.sed.data.subscribe(self.receive_image)
+
+        time.sleep(expected_duration)  # make sure we'll start asynchronously
+        self.left2 = number2
+        # now, only the counter will generate (true) data
+        self.cnt.data.subscribe(self.receive_image2)
+
+        for i in range(number + number2):
+            # end early if it's already finished
+            if self.left == 0 and self.left2 == 0:
+                break
+            time.sleep(2 + expected_duration * 1.1)  # 2s per image should be more than enough in any case
+
+        # check that at least some images were acquired simultaneously
+        common_dates = self.acq_dates[0] & self.acq_dates[1]
+        self.assertGreater(len(common_dates), 0, "No common dates between %r and %r" %
+                           (self.acq_dates[0], self.acq_dates[1]))
+
+        self.assertEqual(self.left, 0)
+        self.assertEqual(self.left2, 0)
+
+    def receive_image(self, dataflow, image):
+        """
+        callback for df of test_acquire_flow()
+        """
+        # it's ok (for now) that the SED returns empty array
+        if image.shape == (0,):
+            print "Received empty array"
+        else:
+            self.assertEqual(image.shape, self.size[-1:-3:-1])
+        self.assertIn(model.MD_DWELL_TIME, image.metadata)
+        self.acq_dates[0].add(image.metadata[model.MD_ACQ_DATE])
+#        print "Received an image"
+        self.left -= 1
+        if self.left <= 0:
+            dataflow.unsubscribe(self.receive_image)
+
+    def receive_image2(self, dataflow, image):
+        """
+        callback for df of test_acquire_flow()
+        """
+        self.assertEqual(image.shape, self.size[-1:-3:-1])
+        self.assertIn(model.MD_DWELL_TIME, image.metadata)
+        self.acq_dates[1].add(image.metadata[model.MD_ACQ_DATE])
+        #print "Received an image %s" % (image,)
+        self.left2 -= 1
+        if self.left2 <= 0:
+            dataflow.unsubscribe(self.receive_image2)
+
 
 if __name__ == "__main__":
     unittest.main()
