@@ -589,6 +589,7 @@ class SparcAcquisitionTab(Tab):
                                               main_data.sed.data, main_data.ebeam)
         self._spot_stream = spot_stream
         # TODO: add to tab_data.streams and move the handling to the stream controller?
+        tab_data.spotPosition.subscribe(self._onSpotPosition)
 
         # the SEM acquisition simultaneous to the CCDs
         semcl_stream = acqstream.SEMStream(
@@ -663,7 +664,6 @@ class SparcAcquisitionTab(Tab):
             vas_settings,
         )
 
-
     @property
     def stream_controller(self):
         return self._stream_controller
@@ -677,6 +677,16 @@ class SparcAcquisitionTab(Tab):
             # Make sure the spatial streams controlling the e-beam are not playing
             paused_st = self._stream_controller.pauseStreams(
                                         (acqstream.EMStream, acqstream.CLStream))
+
+            # Put the spot position at a "good" place if not yet defined
+            if self.tab_data_model.spotPosition.value == (None, None):
+                roa = self.tab_data_model.semStream.roi.value
+                if roa == acqstream.UNDEFINED_ROI:
+                    # If no ROA => just at the center of the FoV
+                    pos = (0.5, 0.5)
+                else:  # Otherwise => in the center of the ROI
+                    pos = ((roa[0] + roa[2]) / 2, (roa[1] + roa[3]) / 2)
+                self.tab_data_model.spotPosition.value = pos
 
             # Start the spot mode
             self._spot_stream.should_update.value = True
@@ -694,6 +704,16 @@ class SparcAcquisitionTab(Tab):
         # print  should_update , self.tab_data_model.tool.value
         if should_update and self.tab_data_model.tool.value == guimod.TOOL_SPOT:
             self.tab_data_model.tool.value = guimod.TOOL_NONE
+
+    def _onSpotPosition(self, pos):
+        """
+        Called when the spot position is changed (via the overlay)
+        """
+        if None not in pos:
+            assert len(pos) == 2
+            assert all(0 <= p <= 1 for p in pos)
+            # Just use the same value for LT and RB points
+            self._spot_stream.roi.value = (pos + pos)
 
     def on_acquisition(self, is_acquiring):
         # Don't change anchor region during acquisition (this can happen
