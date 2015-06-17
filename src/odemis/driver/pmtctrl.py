@@ -274,14 +274,14 @@ class PMTControl(model.HwComponent):
 
     def _setProtection(self, value):
         if value:
-            self._sendCommand("PROT 0")
+            self._sendCommand("SWITCH 0")
         else:
-            self._sendCommand("PROT 1")
+            self._sendCommand("SWITCH 1")
 
         return value
 
     def _getProtection(self):
-        ans = self._sendCommand("PROT?")
+        ans = self._sendCommand("SWITCH?")
         if ans == "0":
             status = True
         else:
@@ -533,7 +533,7 @@ class PMTControlSimulator(object):
                     else:
                         self._powerSupply = False
                     res = '\n'
-            elif tokens[0] == "PROT":
+            elif tokens[0] == "SWITCH":
                 if (value != 0) and (value != 1):
                     res = "ERROR: Out of range set value\n"
                 else:
@@ -585,7 +585,7 @@ class PMTControlSimulator(object):
                 res = str(self._prot_curr) + '\n'
             elif tokens[0] == "PTIME?":
                 res = str(self._prot_time) + '\n'
-            elif tokens[0] == "PROT?":
+            elif tokens[0] == "SWITCH?":
                 if self._protection:
                     res = "0" + '\n'
                 else:

@@ -210,7 +210,7 @@ class TestPMT(unittest.TestCase):
         self.pmt.data.subscribe(self.receive_image)
         self.assertEqual(self.pmt.data.active, True)
         # Turn protection on and catch the warning message
-        self.control._sendCommand("PROT 0")
+        self.control._sendCommand("SWITCH 0")
         self.is_received.wait()
         self.assertTrue(h.matches(message="PMT protection was triggered during acquisition."))
         # Protection should be reset after acquisition is done
@@ -227,7 +227,7 @@ class TestPMT(unittest.TestCase):
         self.assertEqual(self.pmt.data.active, True)
         # Turn protection on and then decrease the gain, so the protection is
         # expected to be reset
-        self.control._sendCommand("PROT 0")
+        self.control._sendCommand("SWITCH 0")
         self.pmt.gain.value = 0.5
         self.is_received.wait()
         self.assertFalse(h.matches(message="PMT protection was triggered during acquisition."))
