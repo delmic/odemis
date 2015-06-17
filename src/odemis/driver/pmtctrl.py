@@ -274,15 +274,15 @@ class PMTControl(model.HwComponent):
 
     def _setProtection(self, value):
         if value:
-            self._sendCommand("PROT 1")
-        else:
             self._sendCommand("PROT 0")
+        else:
+            self._sendCommand("PROT 1")
 
         return value
 
     def _getProtection(self):
         ans = self._sendCommand("PROT?")
-        if ans == "1":
+        if ans == "0":
             status = True
         else:
             status = False
