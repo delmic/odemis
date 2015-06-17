@@ -467,7 +467,7 @@ class PMTControlSimulator(object):
         self._sn = 37000002
         self._gain = MIN_VOLT
         self._powerSupply = False
-        self._protection = False
+        self._protection = True
         self._prot_curr = 50
         self._contact = True
         self._prot_time = 0.001
@@ -538,9 +538,9 @@ class PMTControlSimulator(object):
                     res = "ERROR: Out of range set value\n"
                 else:
                     if value:
-                        self._protection = True
-                    else:
                         self._protection = False
+                    else:
+                        self._protection = True
                     res = '\n'
             elif tokens[0] == "VOLT":
                 if (value < MIN_VOLT) or (value > MAX_VOLT):
@@ -587,9 +587,9 @@ class PMTControlSimulator(object):
                 res = str(self._prot_time) + '\n'
             elif tokens[0] == "PROT?":
                 if self._protection:
-                    res = "1" + '\n'
-                else:
                     res = "0" + '\n'
+                else:
+                    res = "1" + '\n'
             elif tokens[0] == "RELAY?":
                 if self._contact:
                     res = "0" + '\n'
