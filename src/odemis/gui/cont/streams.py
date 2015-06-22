@@ -215,8 +215,8 @@ class StreamController(object):
 
         """
 
-        ae = create_axis_entry(self.panel, name)
-        self.entries.append(ae)
+        ae = create_axis_entry(self.stream_panel, name, comp, conf)
+        self.entries[ae.name] = ae
 
         return ae
 
@@ -1595,6 +1595,13 @@ class SparcStreamsController(StreamBarController):
             stream_cont.hw_settings_config["streamar"]["repetition"]
         )
 
+        # Add Axis
+
+        stream_cont.add_axis_entry(
+            "band",
+            main_data.light_filter
+        )
+
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
         sem_ar_stream = acqstream.SEMARMDStream("SEM AR", sem_stream, ar_stream)
@@ -1631,6 +1638,13 @@ class SparcStreamsController(StreamBarController):
             cli_stream.pixelSize,
             None,  # component
             stream_cont.hw_settings_config["streamspec"]["pixelSize"]
+        )
+
+        # Add Axis
+
+        stream_cont.add_axis_entry(
+            "band",
+            main_data.light_filter
         )
 
         # Create the equivalent MDStream
@@ -1670,14 +1684,32 @@ class SparcStreamsController(StreamBarController):
             stream_cont.hw_settings_config["streamspec"]["pixelSize"]
         )
 
-        # stream_cont.add_axis_entry(
-        #     "center wavelength",
-        #     spec_stream
-        # )
+        # Add axes
+
+        stream_cont.add_axis_entry(
+            "wavelength",
+            main_data.spectrograph
+        )
+
+        stream_cont.add_axis_entry(
+            "grating",
+            main_data.spectrograph
+        )
+
+        stream_cont.add_axis_entry(
+            "slit-in",
+            main_data.spectrograph
+        )
+
+        stream_cont.add_axis_entry(
+            "band",
+            main_data.light_filter
+        )
 
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
         sem_spec_stream = acqstream.SEMSpectrumMDStream("SEM Spectrum", sem_stream, spec_stream)
+
         self._tab_data_model.acquisitionView.addStream(sem_spec_stream)
 
         return stream_cont
@@ -1696,7 +1728,7 @@ class SparcStreamsController(StreamBarController):
             detvas=get_hw_settings(main_data.monochromator),
         )
 
-        stream_cont = self._add_stream(monoch_stream, add_to_all_views=True)
+        stream_cont = self._add_stream(monoch_stream, add_to_all_views=True, no_bc=True)
         stream_cont.stream_panel.show_visible_btn(False)
 
         # FIXME: control config is 'borrowed' from streamspec
@@ -1712,6 +1744,33 @@ class SparcStreamsController(StreamBarController):
             monoch_stream.pixelSize,
             None,  # component
             stream_cont.hw_settings_config["streamspec"]["pixelSize"]
+        )
+
+        # Add Axes
+
+        stream_cont.add_axis_entry(
+            "wavelength",
+            main_data.spectrograph
+        )
+
+        stream_cont.add_axis_entry(
+            "grating",
+            main_data.spectrograph
+        )
+
+        stream_cont.add_axis_entry(
+            "slit-in",
+            main_data.spectrograph
+        )
+
+        stream_cont.add_axis_entry(
+            "slit-monochromator",
+            main_data.spectrograph
+        )
+
+        stream_cont.add_axis_entry(
+            "band",
+            main_data.light_filter
         )
 
         # Create the equivalent MDStream

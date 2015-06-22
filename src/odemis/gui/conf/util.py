@@ -735,7 +735,7 @@ def create_axis_entry(container, name, comp, conf=None):
     # Format label
     label_text = conf.get('label', label_to_human(name))
 
-    logging.warn("Adding Axis control %s", label_text)
+    logging.debug("Adding Axis control %s", label_text)
 
     ad = comp.axes[name]
     pos = comp.position.value[name]
