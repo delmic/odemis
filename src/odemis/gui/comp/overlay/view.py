@@ -25,14 +25,13 @@ from __future__ import division
 
 import logging
 import math
-
 import cairo
 import wx
 
 import odemis.gui as gui
 import odemis.model as model
 import odemis.gui.comp.overlay.base as base
-from odemis.model._vattributes import TupleVA
+from odemis.model import TupleVA
 import odemis.util.conversion as conversion
 import odemis.util.units as units
 
@@ -1201,7 +1200,7 @@ class SpotModeOverlay(base.ViewOverlay, base.DragMixin):
 
     """
 
-    def __init__(self, cnvs):
+    def __init__(self, cnvs, spot_va=None):
         base.ViewOverlay.__init__(self, cnvs)
         base.DragMixin.__init__(self)
 
@@ -1215,7 +1214,7 @@ class SpotModeOverlay(base.ViewOverlay, base.DragMixin):
         self._spot_radius = 12
 
         # Spot position as a percentage (x, y) where x and y [0..1]
-        self.r_pos = TupleVA((0.5, 0.5))
+        self.r_pos = spot_va or TupleVA((0.5, 0.5))
         self.v_pos = None
 
     def on_size(self, _):
