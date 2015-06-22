@@ -235,8 +235,8 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.background_brush = wx.BRUSHSTYLE_CROSS_HATCH
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
-        sol = wol.SpotModeOverlay(cnvs)
-        cnvs.add_world_overlay(sol)
+        sol = vol.SpotModeOverlay(cnvs)
+        cnvs.add_view_overlay(sol)
         cnvs.update_drawing()
         test.gui_loop()
 

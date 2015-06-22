@@ -245,10 +245,10 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             return
 
         if self._spotmode_ol is None:
-            self._spotmode_ol = world_overlay.SpotModeOverlay(self)
+            self._spotmode_ol = view_overlay.SpotModeOverlay(self)
 
         if tool_mode == guimodel.TOOL_SPOT:
-            self.add_world_overlay(self._spotmode_ol)
+            self.add_view_overlay(self._spotmode_ol)
             # Activate the spotmode overlay when the canvas can be dragged, so the user can position
             # the spot. (By default, the spot is static in the center)
             if CAN_DRAG in self.abilities:

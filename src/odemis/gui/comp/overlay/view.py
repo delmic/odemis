@@ -32,6 +32,7 @@ import wx
 import odemis.gui as gui
 import odemis.model as model
 import odemis.gui.comp.overlay.base as base
+from odemis.model._vattributes import TupleVA
 import odemis.util.conversion as conversion
 import odemis.util.units as units
 
@@ -1189,3 +1190,134 @@ class HistoryOverlay(base.ViewOverlay):
         # Render rectangles of 3 pixels wide
         ctx.rectangle(x, y, v_size[0], v_size[1])
         ctx.stroke()
+
+
+class SpotModeOverlay(base.ViewOverlay, base.DragMixin):
+    """ Render the spot mode indicator in the center of the view
+
+    If a position is provided, the spot will be drawn there.
+
+    If the overlay is activated, the user can use the mouse cursor to select a position
+
+    """
+
+    def __init__(self, cnvs):
+        base.ViewOverlay.__init__(self, cnvs)
+        base.DragMixin.__init__(self)
+
+        self.colour = conversion.hex_to_frgb(gui.FG_COLOUR_EDIT)
+        self.highlight = conversion.hex_to_frgb(gui.FG_COLOUR_HIGHLIGHT)
+
+        # Rendering attributes
+        self._sect_count = 3
+        self._gap = 0.15
+        self._sect_width = 2.0 * math.pi / self._sect_count
+        self._spot_radius = 12
+
+        # Spot position as a percentage (x, y) where x and y [0..1]
+        self.r_pos = TupleVA((0.5, 0.5))
+        self.v_pos = None
+
+    def on_size(self, _):
+        self._r_to_v()
+
+    def _v_to_r(self):
+        self.r_pos.value = (
+            float(self.v_pos[0] / self.cnvs.view_width),
+            float(self.v_pos[1] / self.cnvs.view_height)
+        )
+
+    def _r_to_v(self):
+        self.v_pos = (
+            int(self.cnvs.view_width * self.r_pos.value[0]),
+            int(self.cnvs.view_height * self.r_pos.value[1])
+        )
+
+    def draw(self, ctx, shift=(0, 0), scale=1.0):
+
+        if self.v_pos is None:
+            return
+
+        start = -0.5 * math.pi
+
+        r, g, b = self.highlight
+
+        x, y = self.v_pos
+
+        width = self._spot_radius / 6.0
+
+        for i in range(self._sect_count):
+            ctx.set_line_width(width)
+
+            ctx.set_source_rgba(0, 0, 0, 0.6)
+            ctx.arc(x + 1, y + 1,
+                    self._spot_radius,
+                    start + self._gap,
+                    start + self._sect_width - self._gap)
+            ctx.stroke()
+
+            ctx.set_source_rgb(r, g, b)
+            ctx.arc(x, y,
+                    self._spot_radius,
+                    start + self._gap,
+                    start + self._sect_width - self._gap)
+            ctx.stroke()
+
+            start += self._sect_width
+
+        width = self._spot_radius / 3.5
+        radius = self._spot_radius * 0.6
+
+        ctx.set_line_width(width)
+
+        ctx.set_source_rgba(0, 0, 0, 0.6)
+        ctx.arc(x + 1, y + 1, radius, 0, 2 * math.pi)
+        ctx.stroke()
+
+        ctx.set_source_rgb(r, g, b)
+        ctx.arc(x, y, radius, 0, 2 * math.pi)
+        ctx.stroke()
+
+    def on_left_down(self, evt):
+        if self.active:
+            base.DragMixin._on_left_down(self, evt)
+        else:
+            base.ViewOverlay.on_left_down(self, evt)
+
+    def on_left_up(self, evt):
+        if self.active:
+            base.DragMixin._on_left_up(self, evt)
+            self.v_pos = evt.GetPositionTuple()
+            self._v_to_r()
+            self.cnvs.update_drawing()
+        else:
+            base.ViewOverlay.on_left_up(self, evt)
+
+    def on_motion(self, evt):
+        if self.active and self.left_dragging:
+            self.v_pos = evt.GetPositionTuple()
+            self._v_to_r()
+            self.cnvs.update_drawing()
+        else:
+            base.ViewOverlay.on_left_up(self, evt)
+
+    def on_enter(self, evt):
+        if self.active:
+            self.cnvs.set_default_cursor(wx.CROSS_CURSOR)
+        else:
+            base.ViewOverlay.on_enter(self, evt)
+
+    def on_leave(self, evt):
+        if self.active:
+            self.cnvs.reset_default_cursor()
+        else:
+            base.ViewOverlay.on_leave(self, evt)
+
+    def activate(self):
+        self.r_pos.value = (0.5, 0.5)
+        self._r_to_v()
+        base.ViewOverlay.activate(self)
+
+    def deactivate(self):
+        self.v_pos = None
+        base.ViewOverlay.deactivate(self)
