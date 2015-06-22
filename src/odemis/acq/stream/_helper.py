@@ -364,10 +364,6 @@ class SpectrumSettingsStream(CCDSettingsStream):
         # Contains one spectrum (start with an empty array)
         self.image.value = model.DataArray([])
 
-        # Remove the autobc and intensityRange attributes, since this is not a bitmap stream
-        delattr(self, "auto_bc")
-        # delattr(self, "intensityRange") # Cannot remove, causes exceptions
-
         # TODO: grating/cw as VAs (from the spectrometer)
 
     # onActive: same as the standard LiveStream (ie, acquire from the dataflow)

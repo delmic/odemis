@@ -60,7 +60,7 @@ SCHED_ALL = 2  # All the streams which are in the should_update stream
 class StreamController(object):
     """ Manage a stream and its accompanying stream panel """
 
-    def __init__(self, stream_bar, stream, tab_data_model, show_panel=True):
+    def __init__(self, stream_bar, stream, tab_data_model, show_panel=True, no_bc=False):
 
         self.stream = stream
         self.stream_bar = stream_bar
@@ -108,7 +108,8 @@ class StreamController(object):
         elif hasattr(stream, "emission"):  # only emission
             self._add_emission_ctrl()
 
-        if hasattr(stream, "auto_bc") and hasattr(stream, "intensityRange"):
+        # Change the quick and dirty way in which BC controls are hidden (Use config in data.py)
+        if hasattr(stream, "auto_bc") and hasattr(stream, "intensityRange") and not no_bc:
             self._add_brightnesscontrast_ctrls()
             self._add_outliers_ctrls()
 
@@ -205,7 +206,7 @@ class StreamController(object):
 
         return se
 
-    def add_axis(self, name, comp, conf=None):
+    def add_axis_entry(self, name, comp, conf=None):
         """ Add a widget to the setting panel to control an axis
 
         :param name: (string): name of the axis
@@ -571,7 +572,7 @@ class StreamController(object):
     def _add_brightnesscontrast_ctrls(self):
         """ Add controls for manipulating the (auto) contrast of the stream image data """
 
-        btn_autobc, sld_outliers = self.stream_panel.add_autobc_ctrls()
+        btn_autobc, lbl_bc_outliers, sld_outliers = self.stream_panel.add_autobc_ctrls()
 
         # The following closures are used to link the state of the button to the availability of
         # the slider
@@ -592,7 +593,7 @@ class StreamController(object):
 
         # Store a setting entry for the outliers slider
         se = SettingEntry(name="outliers", va=self.stream.auto_bc_outliers, stream=self.stream,
-                          value_ctrl=sld_outliers, events=wx.EVT_SLIDER)
+                          value_ctrl=sld_outliers, lbl_ctrl=lbl_bc_outliers, events=wx.EVT_SLIDER)
         self.entries[se.name] = se
 
     def _add_outliers_ctrls(self):
@@ -1064,7 +1065,7 @@ class StreamBarController(object):
         """
         return self._add_stream(stream, **kwargs)
 
-    def _add_stream(self, stream, add_to_all_views=False, visible=True, play=None):
+    def _add_stream(self, stream, add_to_all_views=False, visible=True, play=None, no_bc=False):
         """ Add the given stream to the tab data model and appropriate views
 
         Args:
@@ -1117,7 +1118,7 @@ class StreamBarController(object):
             show_panel = isinstance(stream, self._tab_data_model.focussedView.value.stream_classes)
             show_panel |= self.ignore_view
 
-            stream_cont = self._add_stream_cont(stream, show_panel, static=False)
+            stream_cont = self._add_stream_cont(stream, show_panel, static=False, no_bc=no_bc)
 
             # TODO: make StreamTree a VA-like and remove this
             logging.debug("Sending stream.ctrl.added message")
@@ -1139,14 +1140,15 @@ class StreamBarController(object):
 
         return self._add_stream_cont(stream, show_panel=True, static=True)
 
-    def _add_stream_cont(self, stream, show_panel=True, locked=False, static=False):
+    def _add_stream_cont(self, stream, show_panel=True, locked=False, static=False, no_bc=False):
         """ Create and add a stream controller for the given stream
 
         :return: (StreamController)
 
         """
 
-        stream_cont = StreamController(self._stream_bar, stream, self._tab_data_model, show_panel)
+        stream_cont = StreamController(self._stream_bar, stream, self._tab_data_model,
+                                       show_panel, no_bc)
 
         if locked:
             stream_cont.to_locked_mode()
@@ -1651,7 +1653,7 @@ class SparcStreamsController(StreamBarController):
             detvas=get_hw_settings(main_data.spectrometer),
         )
         spec_stream.roi.subscribe(self.onARROI)
-        stream_cont = self._add_stream(spec_stream, add_to_all_views=True)
+        stream_cont = self._add_stream(spec_stream, add_to_all_views=True, no_bc=True)
         stream_cont.stream_panel.show_visible_btn(False)
 
         stream_cont.add_setting_entry(
@@ -1667,6 +1669,11 @@ class SparcStreamsController(StreamBarController):
             None,  # component
             stream_cont.hw_settings_config["streamspec"]["pixelSize"]
         )
+
+        # stream_cont.add_axis_entry(
+        #     "center wavelength",
+        #     spec_stream
+        # )
 
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream

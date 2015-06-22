@@ -711,7 +711,7 @@ class StreamPanel(wx.Panel):
         self.gb_sizer.Add(autobc_sz, (self.num_rows, 0), span=(1, 3),
                           flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
 
-        return btn_autobc, sld_bc_outliers
+        return btn_autobc, lbl_bc_outliers, sld_bc_outliers
 
     @control_bookkeeper
     def add_outliers_ctrls(self):
