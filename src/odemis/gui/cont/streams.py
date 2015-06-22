@@ -32,7 +32,7 @@ from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR
 from odemis.gui.comp.stream import StreamPanel, EVT_STREAM_VISIBLE
 from odemis.gui.conf.data import get_hw_settings_config, get_hw_settings
 from odemis.gui.conf.util import create_setting_entry, \
-    dump_emitter_and_detector_vas
+    dump_emitter_and_detector_vas, create_axis_entry
 from odemis.gui.cont.settings import SettingEntry
 from odemis.gui.model import dye
 from odemis.gui.util import wxlimit_invocation, dead_object_wrapper
@@ -204,6 +204,20 @@ class StreamController(object):
         self.entries[se.name] = se
 
         return se
+
+    def add_axis(self, name, comp, conf=None):
+        """ Add a widget to the setting panel to control an axis
+
+        :param name: (string): name of the axis
+        :param comp: (Component): the component that contains this axis
+        :param conf: ({}): Configuration items that may override default settings
+
+        """
+
+        ae = create_axis_entry(self.panel, name)
+        self.entries.append(ae)
+
+        return ae
 
     def _on_stream_panel_destroy(self, _):
         """ Remove all references to setting entries and the possible VAs they might contain
@@ -1486,30 +1500,30 @@ class SparcStreamsController(StreamBarController):
 
         # Grab the repetition entries, so we can use it to hook extra event handlers to it.
 
-        # TODO: do this when adding a new stream
-#         self.spec_rep = self._settings_controller.spectro_rep_ent
-#         if self.spec_rep:
-#             self.spec_rep.vigilattr.subscribe(self.on_rep_change)
-#             self.spec_rep.value_ctrl.Bind(wx.EVT_SET_FOCUS, self.on_rep_focus)
-#             self.spec_rep.value_ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
-#             self.spec_rep.value_ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_spec_rep_enter)
-#             self.spec_rep.value_ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_spec_rep_leave)
-#
-#         self.spec_pxs = self._settings_controller.spec_pxs_ent
-#         if self.spec_pxs:
-#             self.spec_pxs.vigilattr.subscribe(self.on_rep_change)
-#             self.spec_pxs.value_ctrl.Bind(wx.EVT_SET_FOCUS, self.on_rep_focus)
-#             self.spec_pxs.value_ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
-#             self.spec_pxs.value_ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_spec_rep_enter)
-#             self.spec_pxs.value_ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_spec_rep_leave)
-#
-#         self.angu_rep = self._settings_controller.angular_rep_ent
-#         if self.angu_rep:
-#             self.angu_rep.vigilattr.subscribe(self.on_rep_change)
-#             self.angu_rep.value_ctrl.Bind(wx.EVT_SET_FOCUS, self.on_rep_focus)
-#             self.angu_rep.value_ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
-#             self.angu_rep.value_ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_ar_rep_enter)
-#             self.angu_rep.value_ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_ar_rep_leave)
+        # FIXME NOW: do this when adding a new stream
+        # self.spec_rep = self._settings_controller.spectro_rep_ent
+        # if self.spec_rep:
+        #     self.spec_rep.vigilattr.subscribe(self.on_rep_change)
+        #     self.spec_rep.value_ctrl.Bind(wx.EVT_SET_FOCUS, self.on_rep_focus)
+        #     self.spec_rep.value_ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
+        #     self.spec_rep.value_ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_spec_rep_enter)
+        #     self.spec_rep.value_ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_spec_rep_leave)
+        #
+        # self.spec_pxs = self._settings_controller.spec_pxs_ent
+        # if self.spec_pxs:
+        #     self.spec_pxs.vigilattr.subscribe(self.on_rep_change)
+        #     self.spec_pxs.value_ctrl.Bind(wx.EVT_SET_FOCUS, self.on_rep_focus)
+        #     self.spec_pxs.value_ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
+        #     self.spec_pxs.value_ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_spec_rep_enter)
+        #     self.spec_pxs.value_ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_spec_rep_leave)
+        #
+        # self.angu_rep = self._settings_controller.angular_rep_ent
+        # if self.angu_rep:
+        #     self.angu_rep.vigilattr.subscribe(self.on_rep_change)
+        #     self.angu_rep.value_ctrl.Bind(wx.EVT_SET_FOCUS, self.on_rep_focus)
+        #     self.angu_rep.value_ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
+        #     self.angu_rep.value_ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_ar_rep_enter)
+        #     self.angu_rep.value_ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_ar_rep_leave)
         # AR settings don't have pixel size
 
     def _createAddStreamActions(self):
@@ -1520,10 +1534,10 @@ class SparcStreamsController(StreamBarController):
         main_data = self._main_data_model
 
         # Basically one action per type of stream
-        if main_data.ccd:
-            self.add_action("Angle-resolved", self.addAR)
         if main_data.cld:
             self.add_action("CL intensity", self.addCLIntensity)
+        if main_data.ccd:
+            self.add_action("Angle-resolved", self.addAR)
         if main_data.spectrometer:
             self.add_action("Spectrum", self.addSpectrum)
         if main_data.monochromator:
@@ -1547,7 +1561,8 @@ class SparcStreamsController(StreamBarController):
             for ss in mds.streams:
                 # If not, remove the MD stream
                 if ss not in streams:
-                    logging.debug("Removing acquisition stream %s because %s is gone", mds.name, ss.name)
+                    logging.debug("Removing acquisition stream %s because %s is gone",
+                                  mds.name, ss.name)
                     self._tab_data_model.acquisitionView.removeStream(mds)
                     break
 
@@ -1560,19 +1575,23 @@ class SparcStreamsController(StreamBarController):
             main_data.ccd,
             main_data.ccd.data,
             main_data.ebeam,
-            # emtvas=get_hw_settings(main_data.ebeam), # no need
             detvas=get_hw_settings(main_data.ccd),
         )
 
-        dump_emitter_and_detector_vas(ar_stream)
-
-        # print ar_stream.emitter, ar_stream.detector
+        # dump_emitter_and_detector_vas(ar_stream)
 
         # TODO: ROI -> semStream.roi needs to be generic
         ar_stream.roi.subscribe(self.onARROI)
 
         stream_cont = self._add_stream(ar_stream, add_to_all_views=True)
         stream_cont.stream_panel.show_visible_btn(False)
+
+        stream_cont.add_setting_entry(
+            "repetition",
+            ar_stream.repetition,
+            None,  # component
+            stream_cont.hw_settings_config["streamar"]["repetition"]
+        )
 
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
@@ -1597,6 +1616,21 @@ class SparcStreamsController(StreamBarController):
         stream_cont = self._add_stream(cli_stream, add_to_all_views=True)
         stream_cont.stream_panel.show_visible_btn(False)
 
+        # FIXME: control config is 'borrowed' from streamspec
+        stream_cont.add_setting_entry(
+            "repetition",
+            cli_stream.repetition,
+            None,  # component
+            stream_cont.hw_settings_config["streamspec"]["repetition"]
+        )
+
+        stream_cont.add_setting_entry(
+            "pixel size",
+            cli_stream.pixelSize,
+            None,  # component
+            stream_cont.hw_settings_config["streamspec"]["pixelSize"]
+        )
+
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
         sem_cli_stream = acqstream.SEMMDStream("SEM CLi", sem_stream, cli_stream)
@@ -1619,6 +1653,20 @@ class SparcStreamsController(StreamBarController):
         spec_stream.roi.subscribe(self.onARROI)
         stream_cont = self._add_stream(spec_stream, add_to_all_views=True)
         stream_cont.stream_panel.show_visible_btn(False)
+
+        stream_cont.add_setting_entry(
+            "repetition",
+            spec_stream.repetition,
+            None,  # component
+            stream_cont.hw_settings_config["streamspec"]["repetition"]
+        )
+
+        stream_cont.add_setting_entry(
+            "pixel size",
+            spec_stream.pixelSize,
+            None,  # component
+            stream_cont.hw_settings_config["streamspec"]["pixelSize"]
+        )
 
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
@@ -1643,6 +1691,21 @@ class SparcStreamsController(StreamBarController):
 
         stream_cont = self._add_stream(monoch_stream, add_to_all_views=True)
         stream_cont.stream_panel.show_visible_btn(False)
+
+        # FIXME: control config is 'borrowed' from streamspec
+        stream_cont.add_setting_entry(
+            "repetition",
+            monoch_stream.repetition,
+            None,  # component
+            stream_cont.hw_settings_config["streamspec"]["repetition"]
+        )
+
+        stream_cont.add_setting_entry(
+            "pixel size",
+            monoch_stream.pixelSize,
+            None,  # component
+            stream_cont.hw_settings_config["streamspec"]["pixelSize"]
+        )
 
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
@@ -1670,18 +1733,15 @@ class SparcStreamsController(StreamBarController):
         if updated:
             self._view_controller.focusViewWithStream(stream)
 
-
     # ROA handling stuff
 
     # TODO: make it generic
     def onARROI(self, roi):
-        """
-        called when the Angle Resolved roi is changed
-        """
+        """ called when the Angle Resolved roi is changed """
         # copy ROI only if it's activated, and spectrum is not, otherwise
         # Spectrum plays the role of "master of ROI" if both streams are
         # simultaneously active (even if it should not currently happen)
-        streams = self.tab_data_model.acquisitionView.getStreams()
+        streams = self._tab_data_model.acquisitionView.getStreams()
         if self._sem_ar_stream in streams and self._sem_spec_stream not in streams:
             # unsubscribe to be sure it won't call us back directly
             self._sem_cl_stream.roi.unsubscribe(self.onROI)

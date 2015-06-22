@@ -43,7 +43,7 @@ from odemis.gui.comp.file import EVT_FILE_SELECT
 from odemis.gui.comp.slider import UnitFloatSlider
 from odemis.gui.conf.data import get_hw_settings_config
 from odemis.gui.conf.util import choice_to_str, bind_setting_context_menu, label_to_human, \
-    create_setting_entry, SettingEntry, AxisSettingEntry
+    create_setting_entry, SettingEntry, AxisSettingEntry, create_axis_entry
 import odemis.gui.img.data as img
 from odemis.gui.model import CHAMBER_UNKNOWN, CHAMBER_VACUUM
 import odemis.gui.util
@@ -129,7 +129,6 @@ class SettingsController(object):
         self.panel.clear_default_message()
 
         ne = create_setting_entry(self.panel, name, va, hw_comp, conf, self.on_setting_changed)
-
         self.entries.append(ne)
 
         if self.highlight_change:
@@ -144,117 +143,12 @@ class SettingsController(object):
 
         :param name: (string): name of the axis
         :param comp: (Component): the component that contains this axis
-        :param conf: ({}): Configuration items that may overri.CONTROL_NOide default settings
+        :param conf: ({}): Configuration items that may override default settings
 
         """
 
-        # If no conf provided, set it to an empty dictionary
-        conf = conf or {}
-
-        # Format label
-        label = conf.get('label', label_to_human(name))
-        # Add the label to the panel
-        lbl_ctrl = wx.StaticText(self.panel, -1, u"%s" % label)
-        self.panel.gb_sizer.Add(lbl_ctrl, (self.panel.num_rows, 0),
-                                 flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
-
-        logging.debug("Adding Axis control %s", label)
-
-        ad = comp.axes[name]
-        pos = comp.position.value[name]
-        unit = ad.unit
-
-        # If axis has .range (continuous) => slider
-        # If axis has .choices (enumerated) => combo box
-        if hasattr(ad, "range"):
-            minv, maxv = ad.range
-
-            value_ctrl = UnitFloatSlider(
-                self.panel,
-                value=pos,
-                min_val=minv,
-                max_val=maxv,
-                unit=unit,
-                t_size=(50, -1),
-                accuracy=conf.get('accuracy', 3)
-            )
-
-            # don't bind to wx.EVT_SLIDER, which happens as soon as the slider moves,
-            # but to EVT_SCROLL_CHANGED, which happens when the user has made his
-            # mind. This avoid too many unnecessary actuator moves and disabling the
-            # widget too early.
-            ne = AxisSettingEntry(name, comp, lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
-                                  events=wx.EVT_SCROLL_CHANGED)
-        else:
-            # format the choices
-            choices = ad.choices
-            if isinstance(choices, dict):
-                # it's then already value -> string (user-friendly display)
-                choices_fmt = choices.items()
-            elif (unit and len(choices) > 1 and
-                  all([isinstance(c, numbers.Real) for c in choices])):
-                # TODO: need same update as add_value
-                fmt, prefix = utun.si_scale_list(choices)
-                choices_fmt = zip(choices, [u"%g" % c for c in fmt])
-                unit = prefix + unit
-            else:
-                choices_fmt = [(c, choice_to_str(c)) for c in choices]
-
-            choices_fmt = sorted(choices_fmt) # sort 2-tuples = according to first value in tuple
-
-            value_ctrl = ComboBox(
-                self.panel,
-                wx.ID_ANY,
-                value='', pos=(0, 0), size=(100, 16),
-                # FIXME: should be readonly, but it fails with GetInsertionPoint
-                style=wx.BORDER_NONE | wx.TE_PROCESS_ENTER | wx.CB_READONLY
-            )
-
-            def _eat_event(evt):
-                """ Quick and dirty empty function used to 'eat'
-                mouse wheel events
-                """
-                pass
-            value_ctrl.Bind(wx.EVT_MOUSEWHEEL, _eat_event)
-
-            # Set choices
-            if unit is None:
-                unit = ""
-            for choice, formatted in choices_fmt:
-                value_ctrl.Append(u"%s %s" % (formatted, unit), choice)
-
-            # A small wrapper function makes sure that the value can
-            # be set by passing the actual value (As opposed to the text label)
-            def cb_set(value, ctrl=value_ctrl, unit=unit):
-                for i in range(ctrl.Count):
-                    if ctrl.GetClientData(i) == value:
-                        logging.debug("Setting ComboBox value to %s", ctrl.Items[i])
-                        return ctrl.SetValue(ctrl.Items[i])
-                else:
-                    logging.warning("No existing label found for value %s", value)
-                    return ctrl.GetValue()
-
-            # equivalent wrapper function to retrieve the actual value
-            def cb_get(ctrl=value_ctrl, name=name):
-                value = ctrl.GetValue()
-                # Try to use the predefined value if it's available
-                for i in range(ctrl.Count):
-                    if ctrl.Items[i] == value:
-                        logging.debug("Getting CB value %s", ctrl.GetClientData(i))
-                        return ctrl.GetClientData(i)
-                else:
-                    logging.error("Failed to find value %s for axis %s", value, name)
-
-            ne = AxisSettingEntry(name, comp, lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
-                                  pos_2_ctrl=cb_set, ctrl_2_pos=cb_get,
-                                  events=(wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER))
-
-        self.panel.gb_sizer.Add(value_ctrl, (self.panel.num_rows, 1),
-                                 flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
-                                 border=5)
-
+        ne = create_axis_entry(self.panel, name)
         self.entries.append(ne)
-        self.panel.num_rows += 1
 
         if self.highlight_change:
             bind_setting_context_menu(ne)

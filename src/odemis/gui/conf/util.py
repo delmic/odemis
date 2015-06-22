@@ -728,6 +728,101 @@ def create_setting_entry(container, name, va, hw_comp, conf, change_callback=Non
     return setting_entry
 
 
+def create_axis_entry(container, name, comp, conf=None):
+    # If no conf provided, set it to an empty dictionary
+    conf = conf or {}
+
+    # Format label
+    label_text = conf.get('label', label_to_human(name))
+
+    logging.warn("Adding Axis control %s", label_text)
+
+    ad = comp.axes[name]
+    pos = comp.position.value[name]
+    unit = ad.unit
+
+    # If axis has .range (continuous) => slider
+    # If axis has .choices (enumerated) => combo box
+    if hasattr(ad, "range"):
+        minv, maxv = ad.range
+
+        ctrl_conf = {
+            'min_val': minv,
+            'max_val': maxv,
+            'unit': unit,
+            'accuracy': conf.get('accuracy', 3),
+        }
+
+        lbl_ctrl, value_ctrl = container.add_float_slider(label_text, pos, ctrl_conf)
+
+        # don't bind to wx.EVT_SLIDER, which happens as soon as the slider moves,
+        # but to EVT_SCROLL_CHANGED, which happens when the user has made his
+        # mind. This avoid too many unnecessary actuator moves and disabling the
+        # widget too early.
+        axis_entry = AxisSettingEntry(name, comp, lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
+                                      events=wx.EVT_SCROLL_CHANGED)
+    else:
+        # FIXME: should be readonly, but it fails with GetInsertionPoint (wx.CB_READONLY)
+        lbl_ctrl, value_ctrl = container.add_combobox_control(label_text)
+
+        # format the choices
+        choices = ad.choices
+
+        if isinstance(choices, dict):
+            # it's then already value -> string (user-friendly display)
+            choices_fmt = choices.items()
+        elif (unit and len(choices) > 1 and
+              all([isinstance(c, numbers.Real) for c in choices])):
+            # TODO: need same update as add_value
+            fmt, prefix = utun.si_scale_list(choices)
+            choices_fmt = zip(choices, [u"%g" % c for c in fmt])
+            unit = prefix + unit
+        else:
+            choices_fmt = [(c, choice_to_str(c)) for c in choices]
+
+        choices_fmt = sorted(choices_fmt) # sort 2-tuples = according to first value in tuple
+
+        # FIXME: Is this still needed?
+        def _eat_event(evt):
+            """ Quick and dirty empty function used to 'eat' mouse wheel events """
+            pass
+        value_ctrl.Bind(wx.EVT_MOUSEWHEEL, _eat_event)
+
+        # Set choices
+        if unit is None:
+            unit = ""
+        for choice, formatted in choices_fmt:
+            value_ctrl.Append(u"%s %s" % (formatted, unit), choice)
+
+        # A small wrapper function makes sure that the value can
+        # be set by passing the actual value (As opposed to the text label)
+        def cb_set(value, ctrl=value_ctrl, unit=unit):
+            for i in range(ctrl.Count):
+                if ctrl.GetClientData(i) == value:
+                    logging.debug("Setting ComboBox value to %s", ctrl.Items[i])
+                    return ctrl.SetValue(ctrl.Items[i])
+            else:
+                logging.warning("No existing label found for value %s", value)
+                return ctrl.GetValue()
+
+        # equivalent wrapper function to retrieve the actual value
+        def cb_get(ctrl=value_ctrl, name=name):
+            value = ctrl.GetValue()
+            # Try to use the predefined value if it's available
+            for i in range(ctrl.Count):
+                if ctrl.Items[i] == value:
+                    logging.debug("Getting CB value %s", ctrl.GetClientData(i))
+                    return ctrl.GetClientData(i)
+            else:
+                logging.error("Failed to find value %s for axis %s", value, name)
+
+        axis_entry = AxisSettingEntry(name, comp, lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
+                                      pos_2_ctrl=cb_set, ctrl_2_pos=cb_get,
+                                      events=(wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER))
+
+    return axis_entry
+
+
 class Entry(object):
     """ Describes a setting entry in the settings panel """
 

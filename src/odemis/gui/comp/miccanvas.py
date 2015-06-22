@@ -367,6 +367,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # Sort by size, so that the biggest picture is first drawn (no opacity)
         def get_area(d):
             return numpy.prod(d[0].shape[0:2]) * d[0].metadata[model.MD_PIXEL_SIZE][0]
+
         images_opt.sort(key=get_area, reverse=True)
         images_spc.sort(key=get_area, reverse=True)
         images_std.sort(key=get_area, reverse=True)

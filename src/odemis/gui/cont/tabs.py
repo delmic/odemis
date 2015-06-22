@@ -629,9 +629,10 @@ class SparcAcquisitionTab(Tab):
 
         self.tb.add_tool(tools.TOOL_ZOOM_FIT, self.view_controller.fitViewToContent)
 
-        # Add the SEM stream to the focussed (only) view
+        # Add the SEM stream to the focused (only) view
         self.tab_data_model.streams.value.append(sem_stream)
-        self.tab_data_model.streams.value.append(spot_stream)  # TODO: needed? To stop it when tab loses focus?
+        # TODO: needed? To stop it when tab loses focus?
+        self.tab_data_model.streams.value.append(spot_stream)
 
         # Create Stream Bar Controller
         self._stream_controller = streamcont.SparcStreamsController(
@@ -720,10 +721,10 @@ class SparcAcquisitionTab(Tab):
         # because the dwell time VA is directly attached to the hardware,
         # instead of actually being the dwell time of the sem survey stream)
         # TODO: still needed? (probably not, now that there are local settings)
-#         if is_acquiring:
-#             self._sem_stream.emtDwellTime.unsubscribe(self._copyDwellTimeToAnchor)
-#         else:
-#             self._sem_stream.emtDwellTime.subscribe(self._copyDwellTimeToAnchor)
+        # if is_acquiring:
+        #     self._sem_stream.emtDwellTime.unsubscribe(self._copyDwellTimeToAnchor)
+        # else:
+        #     self._sem_stream.emtDwellTime.subscribe(self._copyDwellTimeToAnchor)
 
         # TODO: Make sure nothing can be modified during acquisition
 
