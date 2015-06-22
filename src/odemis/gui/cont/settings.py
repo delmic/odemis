@@ -533,6 +533,9 @@ class SparcSettingsController(SettingsBarController):
         self.spec_pxs_ent = None
 
         if main_data.spectrometer:
+            pass
+            spec_stream.repetition.subscribe(self.on_spec_rep)
+
             # self.add_hw_component(main_data.spectrometer, self._spectrum_panel)
 
             # If available, add filter selection
@@ -542,14 +545,14 @@ class SparcSettingsController(SettingsBarController):
             #     self._spectrum_panel.add_axis("band", main_data.light_filter,
             #                                   self._va_config["filter"]["band"])
 
-            if spec_stream:
+            # if spec_stream:
                 # self.spectro_rep_ent = self._spectrum_panel.add_setting_entry(
                 #     "repetition",
                 #     spec_stream.repetition,
                 #     None,  # component
                 #     self._va_config["streamspec"]["repetition"]
                 # )
-                spec_stream.repetition.subscribe(self.on_spec_rep)
+
 
                 # self.spec_pxs_ent = self._spectrum_panel.add_setting_entry(
                 #     "pixelSize",
@@ -600,43 +603,7 @@ class SparcSettingsController(SettingsBarController):
         # else:
         #     parent_frame.fp_settings_sparc_angular.Hide()
 
-    def on_spec_rep(self, rep):
-        self._on_rep(rep, self.spectro_rep_ent.vigilattr, self.spectro_rep_ent.value_ctrl)
 
-    def on_ar_rep(self, rep):
-        self._on_rep(rep, self.angular_rep_ent.vigilattr, self.angular_rep_ent.value_ctrl)
-
-    @staticmethod
-    def _on_rep(rep, rep_va, rep_ctrl):
-        """ Recalculate the repetition presets according to the ROI ratio """
-        ratio = rep[1] / rep[0]
-
-        # Create the entries:
-        choices = [(1, 1)]  # 1 x 1 should always be there
-
-        # Add a couple values below/above the current repetition
-        for m in (1 / 4, 1 / 2, 1, 2, 4, 10):
-            x = int(round(rep[0] * m))
-            y = int(round(x * ratio))
-            choices.append((x, y))
-
-        # remove non-possible ones
-        def is_compatible(c):
-            # TODO: it's actually further restricted by the current size of
-            # the ROI (and the minimum size of the pixelSize), so some of the
-            # big repetitions might actually not be valid. It's not a big
-            # problem as the VA setter will silently limit the repetition
-            return (rep_va.range[0][0] <= c[0] <= rep_va.range[1][0] and
-                    rep_va.range[0][1] <= c[1] <= rep_va.range[1][1])
-        choices = [choice for choice in choices if is_compatible(choice)]
-
-        # remove duplicates and sort
-        choices = sorted(set(choices))
-
-        # replace the old list with this new version
-        rep_ctrl.Clear()
-        for choice in choices:
-            rep_ctrl.Append(u"%s x %s px" % choice, choice)
 
 
 class AnalysisSettingsController(SettingsBarController):
