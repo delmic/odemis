@@ -1221,16 +1221,22 @@ class SpotModeOverlay(base.ViewOverlay, base.DragMixin):
         self._r_to_v()
 
     def _v_to_r(self):
-        self.r_pos.value = (
-            float(self.v_pos[0] / self.cnvs.view_width),
-            float(self.v_pos[1] / self.cnvs.view_height)
-        )
+        if self.v_pos is None:
+            self.r_pos.value = (0.5, 0.5)
+        else:
+            self.r_pos.value = (
+                float(self.v_pos[0] / self.cnvs.view_width),
+                float(self.v_pos[1] / self.cnvs.view_height)
+            )
 
     def _r_to_v(self):
-        self.v_pos = (
-            int(self.cnvs.view_width * self.r_pos.value[0]),
-            int(self.cnvs.view_height * self.r_pos.value[1])
-        )
+        if self.r_pos.value is (None, None):
+            self.v_pos = None
+        else:
+            self.v_pos = (
+                int(self.cnvs.view_width * self.r_pos.value[0]),
+                int(self.cnvs.view_height * self.r_pos.value[1])
+            )
 
     def draw(self, ctx, shift=(0, 0), scale=1.0):
 
