@@ -583,8 +583,8 @@ class SparcAcquiController(object):
 
         self.acq_future = acq.acquire(streams)
         self._acq_future_connector = ProgressiveFutureConnector(self.acq_future,
-                                                               self.gauge_acq,
-                                                               self.lbl_acqestimate)
+                                                                self.gauge_acq,
+                                                                self.lbl_acqestimate)
         self.acq_future.add_done_callback(self.on_acquisition_done)
 
     def on_cancel(self, evt):
