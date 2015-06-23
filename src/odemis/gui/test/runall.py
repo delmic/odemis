@@ -27,7 +27,6 @@ def run_test():
 
     print "\n** Gathering all Odemis GUI TestCases...\n"
 
-
     alltests = unittest.TestSuite()
 
     path = os.path.dirname(os.path.realpath(__file__))
@@ -70,7 +69,6 @@ def run_test():
         print " * %s" % failure[0]
         for line in failure[1].splitlines():
             print "  %s" % line
-
 
     print "** Done."
 

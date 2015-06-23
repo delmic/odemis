@@ -41,7 +41,7 @@ KWARGS_CAM_SIM = dict(name="idus", role="ccd", device="fake", transpose=[-1, 2])
 
 CLASS = andorshrk.AndorSpec
 KWARGS_SIM = dict(name="spectrometer", role="ccd",
-              children={"shamrock": KWARGS_SPG_SIM, "andorcam2": KWARGS_CAM_SIM})
+                  children={"shamrock": KWARGS_SPG_SIM, "andorcam2": KWARGS_CAM_SIM})
 KWARGS = dict(name="spectrometer", role="ccd",
               children={"shamrock": KWARGS_SPG, "andorcam2": KWARGS_CAM})
 
