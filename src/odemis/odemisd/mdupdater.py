@@ -233,15 +233,19 @@ class MetadataUpdater(model.Component):
             logging.warning("Does not know what to do with a spectrograph affecting a %s", comp.role)
             return
 
-        # calculate monochromator wavelength based on center wavelength
-        # and slit-monochromator opening
-        spec_wl = spectrograph.position.value['wavelength']
-        slit_pos = spectrograph.position.value['slit-monochromator']
-        # TODO Need actual formula to calculate wavelength
-        wl = (spec_wl - 20e-9, spec_wl + 20e-9)  # dummy
+        grating = spectrograph.position.value['grating']
+        wavelength = spectrograph.position.value['wavelength']
+        slit = spectrograph.position.value['slit-monochromator']
+
+        # Get nominal dispersion based on grating
+        limit = slit * spectrograph.GetNominalDispersion(grating)
+        # calculate monochromator bandwidth based on center wavelength,
+        # and slit opening
+        bandwidth = (wavelength - limit, wavelength + limit)  # dummy
+
         # clip negative values
-        wl = (max(0, wl[0]), max(0, wl[1]))
-        md = {model.MD_OUT_WL: wl}
+        bandwidth = (max(0, bandwidth[0]), max(0, bandwidth[1]))
+        md = {model.MD_OUT_WL: bandwidth}
         comp.updateMetadata(md)
 
     def terminate(self):

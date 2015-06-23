@@ -66,7 +66,9 @@ SIDE_PORT = 1
 
 ERRORLENGTH = 64
 
-
+# Nominal dispersion values with respect to the grating (in m / m)
+NOMINAL_DISPERSIONS = {1: 0.000010720, 2: 0.000005220, 3: 0.000002410}
+                 
 class ShamrockError(Exception):
     def __init__(self, errno, strerror):
         self.args = (errno, strerror)
@@ -490,6 +492,20 @@ class Shamrock(model.Actuator):
         else:
             blaze = None
         return Lines.value * 1e3, blaze, Home.value, Offset.value
+
+    def GetNominalDispersion(self, grating):
+        """
+        grating (0<int<=3)
+        return:
+              nominal_dispersion (float): nominal dispersion for given grating
+                  in m / m
+        """
+        # TODO: Can be extended to also support SR193. For now we assume that
+        # SR303 is used and, since the divergence due to the wavelength is minor,
+        # we use the value calculated for wavelength = 500nm
+        assert 1 <= grating <= 3
+        nominal_dispersion = NOMINAL_DISPERSIONS[grating]
+        return nominal_dispersion
 
     def SetWavelength(self, wavelength):
         """
