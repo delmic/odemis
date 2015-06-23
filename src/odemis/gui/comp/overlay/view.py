@@ -55,34 +55,31 @@ class CrossHairOverlay(base.ViewOverlay):
 
         self.colour = conversion.hex_to_frgba(colour)
         self.size = size
-        self.center = self.cnvs.get_half_view_size()
-
-    def on_size(self, evt):
-        self.center = self.cnvs.get_half_view_size()
-        base.ViewOverlay.on_size(self, evt)
 
     def draw(self, ctx):
         """ Draw a cross hair to the Cairo context """
 
-        tl = (self.center[0] - self.size, self.center[1] - self.size)
-        br = (self.center[0] + self.size, self.center[1] + self.size)
+        center = self.cnvs.get_half_view_size()
+
+        tl = (center[0] - self.size, center[1] - self.size)
+        br = (center[0] + self.size, center[1] + self.size)
 
         ctx.set_line_width(1)
 
         # Draw shadow
         ctx.set_source_rgba(0, 0, 0, 0.9)
-        ctx.move_to(tl[0] + 1.5, self.center[1] + 1.5)
-        ctx.line_to(br[0] + 1.5, self.center[1] + 1.5)
-        ctx.move_to(self.center[0] + 1.5, tl[1] + 1.5)
-        ctx.line_to(self.center[0] + 1.5, br[1] + 1.5)
+        ctx.move_to(tl[0] + 1.5, center[1] + 1.5)
+        ctx.line_to(br[0] + 1.5, center[1] + 1.5)
+        ctx.move_to(center[0] + 1.5, tl[1] + 1.5)
+        ctx.line_to(center[0] + 1.5, br[1] + 1.5)
         ctx.stroke()
 
         # Draw cross hair
         ctx.set_source_rgba(*self.colour)
-        ctx.move_to(tl[0] + 0.5, self.center[1] + 0.5)
-        ctx.line_to(br[0] + 0.5, self.center[1] + 0.5)
-        ctx.move_to(self.center[0] + 0.5, tl[1] + 0.5)
-        ctx.line_to(self.center[0] + 0.5, br[1] + 0.5)
+        ctx.move_to(tl[0] + 0.5, center[1] + 0.5)
+        ctx.line_to(br[0] + 0.5, center[1] + 0.5)
+        ctx.move_to(center[0] + 0.5, tl[1] + 0.5)
+        ctx.line_to(center[0] + 0.5, br[1] + 0.5)
         ctx.stroke()
 
 
@@ -1230,13 +1227,13 @@ class SpotModeOverlay(base.ViewOverlay, base.DragMixin):
             )
 
     def _r_to_v(self):
-        if self.r_pos.value is (None, None):
-            self.v_pos = None
-        else:
+        try:
             self.v_pos = (
                 int(self.cnvs.view_width * self.r_pos.value[0]),
                 int(self.cnvs.view_height * self.r_pos.value[1])
             )
+        except TypeError, KeyError:
+            self.v_pos = None
 
     def draw(self, ctx, shift=(0, 0), scale=1.0):
 
