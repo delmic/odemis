@@ -1,0 +1,61 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+'''
+Created on 25 Jun 2015
+
+@author: Kimon Tsitsikas
+
+Copyright © 2015 Kimon Tsitsikas, Delmic
+
+This file is part of Odemis.
+
+Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License version 2 as published by the Free Software Foundation.
+
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
+'''
+
+import logging
+import os
+import sys
+import serial
+import time
+logging.getLogger().setLevel(logging.DEBUG)
+
+def main(args):
+    """
+    Handles the command line arguments
+    args is the list of arguments passed
+    return (int): value to return to the OS as program exit code
+    """
+    port = "/dev/" + args[1]
+    # For now just turn on
+    # value = args[2]
+    value = 1
+
+    # Connect to serial device
+    ser = serial.Serial(
+        port=port,
+        baudrate=115200,
+        timeout=1  # s
+    )
+
+    # Purge (as recommended in the documentation)
+    time.sleep(0.05)  # 50 ms
+    ser.flush()
+    ser.flushInput()
+    time.sleep(0.05)  # 50 ms
+
+    # Prepare the port
+    ser.setRTS()
+
+    # Send command
+    cmd = "RELAY " + str(value) + "\n"
+    ser.write(cmd)
+
+    return 0
+
+if __name__ == '__main__':
+    ret = main(sys.argv)
+    exit(ret)
