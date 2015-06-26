@@ -39,8 +39,8 @@ ACCESSORYMAX = 1
 SLITWIDTHMIN = 10
 SLITWIDTHMAX = 2500
 # SHAMROCK_I24SLITWIDTHMAX 24000
-# SHAMROCK_SHUTTERMODEMIN 0
-# SHAMROCK_SHUTTERMODEMAX 1
+SHUTTERMODEMIN = 0
+SHUTTERMODEMAX = 1
 # SHAMROCK_DET_OFFSET_MIN -240000
 # SHAMROCK_DET_OFFSET_MAX 240000
 # SHAMROCK_GRAT_OFFSET_MIN -20000
@@ -332,6 +332,13 @@ class Shamrock(model.Actuator):
                     logging.info("Adding slit %d added as %s", i, slitn)
                 else:
                     logging.info("Slit %d (%s) is not present", i, slitn)
+
+            # TODO: allow more clever shutter management? eg, only opened when acquiring?
+            if self.ShutterIsPresent():
+                self.SetShutter(1)  # 1 = open
+                logging.info("Opening shutter (all the time)")
+            else:
+                logging.info("No shutter is present")
 
             # TODO: allow to define the name of the axis? or anyway, we can use
             # MultiplexActuator to rename the axis?
@@ -655,6 +662,33 @@ class Shamrock(model.Actuator):
         assert(SLIT_INDEX_MIN <= index <= SLIT_INDEX_MAX)
         present = c_int()
         self._dll.ShamrockAutoSlitIsPresent(self._device, index, byref(present))
+        return (present.value != 0)
+
+# Shutter management
+    def SetShutter(self, mode):
+        assert(SHUTTERMODEMIN <= mode <= SHUTTERMODEMAX)
+        with self._hw_access:
+            self._dll.ShamrockSetShutter(self._device, mode)
+
+    def ShamrockGetShutter(self):
+        mode = c_int()
+
+        with self._hw_access:
+            self._dll.ShamrockGetShutter(self._device, byref(mode))
+        return mode.value
+
+    def IsModePossible(self, mode):
+        possible = c_int()
+
+        with self._hw_access:
+            self._dll.ShamrockIsModePossible(self._device, byref(possible))
+        return (possible.value != 0)
+
+    def ShutterIsPresent(self):
+        present = c_int()
+
+        with self._hw_access:
+            self._dll.ShamrockShutterIsPresent(self._device, byref(present))
         return (present.value != 0)
 
 # Mirror flipper management
@@ -1122,6 +1156,10 @@ class FakeShamrockDLL(object):
             self._slits[_val(index)] = w
         else:
             raise ShamrockError(20268, ShamrockDLL.err_code[20268])
+
+    def ShamrockShutterIsPresent(self, device, p_present):
+        present = _deref(p_present, c_int)
+        present.value = 0  # no!
 
     def ShamrockFlipperMirrorIsPresent(self, device, flipper, p_present):
         present = _deref(p_present, c_int)
