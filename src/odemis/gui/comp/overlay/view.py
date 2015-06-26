@@ -345,6 +345,8 @@ class MarkingLineOverlay(base.ViewOverlay, base.DragMixin):
         self._y_label = self.add_label("", colour=self.colour, align=wx.ALIGN_BOTTOM)
 
         self.orientation = orientation or self.HORIZONTAL
+        self.label_orientation = self.orientation
+
         self.line_width = 2
 
     @property
@@ -353,7 +355,8 @@ class MarkingLineOverlay(base.ViewOverlay, base.DragMixin):
 
     @x_label.setter
     def x_label(self, lbl):
-        self._x_label.text = lbl
+        if self.label_orientation & self.VERTICAL == self.VERTICAL:
+            self._x_label.text = lbl
 
     @property
     def y_label(self):
@@ -365,6 +368,9 @@ class MarkingLineOverlay(base.ViewOverlay, base.DragMixin):
 
     def clear_labels(self):
         self.v_pos.value = None
+
+    def hide_x_label(self):
+        self.label_orientation = self.HORIZONTAL
 
     # Event Handlers
 

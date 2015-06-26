@@ -29,7 +29,7 @@ import logging
 import wx
 
 from odemis import gui, model
-from odemis.acq.stream import OpticalStream, EMStream, SpectrumStream
+from odemis.acq.stream import OpticalStream, EMStream, SpectrumStream, MonochromatorSettingsStream
 from odemis.gui import BG_COLOUR_LEGEND, FG_COLOUR_LEGEND
 from odemis.gui.comp import miccanvas
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
@@ -643,6 +643,7 @@ class PlotViewport(ViewPort):
         """
 
         ss = self.microscope_view.stream_tree.spectrum_streams
+
         if self.spectrum_stream in ss:
             logging.debug("not reconnecting to stream as it's already connected")
             return
@@ -737,6 +738,75 @@ class PlotViewport(ViewPort):
         # the stream tree itself... it just there is nothing to do that.
         microscope_view.lastUpdate.subscribe(self.connect_stream)
 
+
+class SparcAcquisitionMonoViewport(PlotViewport):
+
+    def __init__(self, *args, **kwargs):
+        super(SparcAcquisitionMonoViewport, self).__init__(*args, **kwargs)
+        self.canvas.markline_overlay.hide_x_label()
+
+    def setView(self, microscope_view, tab_data):
+        super(SparcAcquisitionMonoViewport, self).setView(microscope_view, tab_data)
+        self._microscope_view.stream_tree.should_update.subscribe(self.on_streamtree_change,
+                                                                  init=True)
+
+    def on_streamtree_change(self, is_playing):
+        """ Show or hide the indicator icon that shows if a stream is playing in the viewport """
+        if len(self._microscope_view.stream_tree):
+            self.canvas.play_overlay.show = True
+            self.canvas.play_overlay.hide_pause(is_playing)
+        else:
+            self.canvas.play_overlay.show = False
+
+    def connect_stream(self, _=None):
+        """ This method will connect this ViewPort to the Spectrum Stream so it it can react to
+        spectrum pixel selection.
+        """
+
+        ss = self.microscope_view.stream_tree.get_streams_by_type(MonochromatorSettingsStream)
+
+        if self.spectrum_stream in ss:
+            logging.debug("not reconnecting to stream as it's already connected")
+            return
+
+        # There should be exactly one Spectrum stream. In the future there
+        # might be scenarios where there are more than one.
+        if not ss:
+            self.spectrum_stream = None
+            logging.info("No Monoschromator stream found")
+            self.clear()  # Remove legend ticks and clear plot
+            return
+        elif len(ss) > 1:
+            logging.warning("Found %d Monoschromator streams, will pick one randomly", len(ss))
+
+        self.spectrum_stream = ss[0]
+
+        if hasattr(self.spectrum_stream, 'image'):
+            self.spectrum_stream.image.subscribe(self._on_new_data, init=True)
+
+    def _on_new_data(self, data):
+        # spectrum_range = self.spectrum_stream.get_spectrum_range()
+        # unit_x = self.spectrum_stream.spectrumBandwidth.unit
+        if data.size:
+            unit_x = 's'
+
+            range_y = (0, max(data))
+            range_x = (-self.spectrum_stream.windowPeriod.value, 0)
+
+            self.canvas.set_data(zip(range(len(data)), data), unit_x, range_y=range_y)
+
+
+
+            self.bottom_legend.unit = unit_x
+            self.bottom_legend.range = range_x
+            self.bottom_legend.tooltip = "Time (s)"
+
+            self.left_legend.range = range_y
+            self.left_legend.tooltip = "Count per second"
+
+        else:
+            self.clear()
+        self.Refresh()
 
 class SparcAcquisitionPlotViewport(PlotViewport):
 

@@ -204,7 +204,6 @@ class StreamTree(object):
             elif isinstance(s, StreamTree):
                 images.append(s.getImage(rect, mpp))
 
-
         return self.operator(images, rect, mpp, **self.kwargs)
 
     def getImages(self):
@@ -258,8 +257,8 @@ class StreamTree(object):
         return list(leaves)
 
     def get_streams_by_type(self, stream_types):
-        """ Return a flat list of streams of `stream_type` within the StreamTree
-        """
+        """ Return a flat list of streams of `stream_type` within the StreamTree """
+
         streams = []
 
         for s in self.streams:
@@ -269,5 +268,3 @@ class StreamTree(object):
                 streams.append(s)
 
         return streams
-
-

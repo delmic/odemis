@@ -25,6 +25,7 @@ from functools import wraps
 import logging
 import math
 import numpy
+import random
 from odemis import model
 from odemis.acq import align
 from odemis.util import limit_invocation
@@ -430,6 +431,14 @@ class MonochromatorSettingsStream(PMTSettingsStream):
         self.raw = self.raw[first:]
 
         self._raw_date.append(date)
+
+        # # TESTING TESTINGTESTINGTESTINGTESTINGTESTINGTESTINGTESTINGTESTING
+        # if self.raw:
+        #     self.raw.append((random.randint(90, 110) / 100.0) * self.raw[-1])
+        # else:
+        #     self.raw.append(1000)
+        # # TESTING TESTINGTESTINGTESTINGTESTINGTESTINGTESTINGTESTINGTESTING
+
         self.raw.append(count)
 
     @limit_invocation(0.1)

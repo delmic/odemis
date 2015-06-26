@@ -3014,7 +3014,7 @@ def __init_resources():
                     <assign_var>1</assign_var>
                   </XRCED>
                 </object>
-                <object class="MicroscopeViewport" name="vp_sparc_br">
+                <object class="SparcAcquisitionMonoViewport" name="vp_sparc_br">
                   <XRCED>
                     <assign_var>1</assign_var>
                   </XRCED>
