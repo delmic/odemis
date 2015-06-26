@@ -795,8 +795,6 @@ class SparcAcquisitionMonoViewport(PlotViewport):
 
             self.canvas.set_data(zip(range(len(data)), data), unit_x, range_y=range_y)
 
-
-
             self.bottom_legend.unit = unit_x
             self.bottom_legend.range = range_x
             self.bottom_legend.tooltip = "Time (s)"

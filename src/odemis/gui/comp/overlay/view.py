@@ -1218,7 +1218,11 @@ class SpotModeOverlay(base.ViewOverlay, base.DragMixin):
 
         # Spot position as a percentage (x, y) where x and y [0..1]
         self.r_pos = spot_va or TupleVA((0.5, 0.5))
+        self.r_pos.subscribe(self.on_spot_change)
         self.v_pos = None
+
+    def on_spot_change(self, _):
+        self._r_to_v()
 
     def on_size(self, _):
         self._r_to_v()
@@ -1238,7 +1242,7 @@ class SpotModeOverlay(base.ViewOverlay, base.DragMixin):
                 int(self.cnvs.view_width * self.r_pos.value[0]),
                 int(self.cnvs.view_height * self.r_pos.value[1])
             )
-        except TypeError, KeyError:
+        except (TypeError, KeyError):
             self.v_pos = None
 
     def draw(self, ctx, shift=(0, 0), scale=1.0):
@@ -1322,7 +1326,6 @@ class SpotModeOverlay(base.ViewOverlay, base.DragMixin):
             base.ViewOverlay.on_leave(self, evt)
 
     def activate(self):
-        self.r_pos.value = (0.5, 0.5)
         self._r_to_v()
         base.ViewOverlay.activate(self)
 

@@ -671,17 +671,19 @@ class SparcAcquisitionTab(Tab):
             # self.main_frame.vp_sparc_tl.canvas._spotmode_ol.activate()
 
             # Make sure the spatial streams controlling the e-beam are not playing
-            paused_st = self._stream_controller.pauseStreams(
-                                        (acqstream.EMStream, acqstream.CLStream))
+            paused_st = self._stream_controller.pauseStreams((acqstream.EMStream,
+                                                              acqstream.CLStream))
 
             # Put the spot position at a "good" place if not yet defined
             if self.tab_data_model.spotPosition.value == (None, None):
+                logging.warn("Setting pos")
                 roa = self.tab_data_model.semStream.roi.value
                 if roa == acqstream.UNDEFINED_ROI:
                     # If no ROA => just at the center of the FoV
                     pos = (0.5, 0.5)
                 else:  # Otherwise => in the center of the ROI
                     pos = ((roa[0] + roa[2]) / 2, (roa[1] + roa[3]) / 2)
+
                 self.tab_data_model.spotPosition.value = pos
 
             # Start the spot mode
