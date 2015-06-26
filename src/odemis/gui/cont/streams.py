@@ -29,6 +29,7 @@ import logging
 import numpy
 from odemis import model
 from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR
+from odemis.gui.comp.overlay.world import RepetitionSelectOverlay
 from odemis.gui.comp.stream import StreamPanel, EVT_STREAM_VISIBLE
 from odemis.gui.conf.data import get_hw_settings_config, get_hw_settings
 from odemis.gui.conf.util import create_setting_entry, \
@@ -1507,7 +1508,15 @@ class SparcStreamsController(StreamBarController):
 
         # Grab the repetition entries, so we can use it to hook extra event handlers to it.
 
-        # FIXME NOW: do this when adding a new stream
+        # FIXME: How to handle multiple streams of the same type?
+        self.spec_rep = None
+        self.spec_pxs = None
+        self.angu_rep = None
+
+        # Setting streams
+        self._spec_stream = None
+        self._ar_stream = None
+
         # self.spec_rep = self._settings_controller.spectro_rep_ent
         # if self.spec_rep:
         #     self.spec_rep.vigilattr.subscribe(self.on_rep_change)
@@ -1584,7 +1593,7 @@ class SparcStreamsController(StreamBarController):
             main_data.ebeam,
             detvas=get_hw_settings(main_data.ccd),
         )
-
+        self._ar_stream = ar_stream
         # dump_emitter_and_detector_vas(ar_stream)
 
         # TODO: ROI -> semStream.roi needs to be generic
@@ -1593,12 +1602,20 @@ class SparcStreamsController(StreamBarController):
         stream_cont = self._add_stream(ar_stream, add_to_all_views=True)
         stream_cont.stream_panel.show_visible_btn(False)
 
-        stream_cont.add_setting_entry(
+        angu_rep = stream_cont.add_setting_entry(
             "repetition",
             ar_stream.repetition,
             None,  # component
             stream_cont.hw_settings_config["streamar"]["repetition"]
         )
+
+        angu_rep.vigilattr.subscribe(self.on_rep_change)
+        angu_rep.value_ctrl.Bind(wx.EVT_SET_FOCUS, self.on_rep_focus)
+        angu_rep.value_ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
+        angu_rep.value_ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_ar_rep_enter)
+        angu_rep.value_ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_ar_rep_leave)
+
+        self.angu_rep = angu_rep
 
         # Add Axis
 
@@ -1673,23 +1690,41 @@ class SparcStreamsController(StreamBarController):
             # emtvas=get_hw_settings(main_data.ebeam), # no need
             detvas=get_hw_settings(main_data.spectrometer),
         )
+        self._spec_stream = spec_stream
+
         spec_stream.roi.subscribe(self.onARROI)
         stream_cont = self._add_stream(spec_stream, add_to_all_views=True, no_bc=True)
         stream_cont.stream_panel.show_visible_btn(False)
 
-        stream_cont.add_setting_entry(
+        spec_rep = stream_cont.add_setting_entry(
             "repetition",
             spec_stream.repetition,
             None,  # component
             stream_cont.hw_settings_config["streamspec"]["repetition"]
         )
 
-        stream_cont.add_setting_entry(
+        spec_rep.vigilattr.subscribe(self.on_rep_change)
+        spec_rep.value_ctrl.Bind(wx.EVT_SET_FOCUS, self.on_rep_focus)
+        spec_rep.value_ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
+        spec_rep.value_ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_spec_rep_enter)
+        spec_rep.value_ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_spec_rep_leave)
+
+        self.spec_rep = spec_rep
+
+        spec_pxs = stream_cont.add_setting_entry(
             "pixel size",
             spec_stream.pixelSize,
             None,  # component
             stream_cont.hw_settings_config["streamspec"]["pixelSize"]
         )
+
+        spec_pxs.vigilattr.subscribe(self.on_rep_change)
+        spec_pxs.value_ctrl.Bind(wx.EVT_SET_FOCUS, self.on_rep_focus)
+        spec_pxs.value_ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
+        spec_pxs.value_ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_spec_rep_enter)
+        spec_pxs.value_ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_spec_rep_leave)
+
+        self.spec_pxs = spec_pxs
 
         # Add axes
 
@@ -1866,15 +1901,16 @@ class SparcStreamsController(StreamBarController):
 
         # Convert stream to right display
         # TODO: do this for each canvas of views which are spatial
-        cvs = self.main_frame.vp_sparc_tl.canvas
+        cvs = self._view_controller.main_frame.vp_sparc_tl.canvas
+        # cvs = self.main_frame.vp_sparc_tl.canvas
         if stream is None:
             cvs.show_repetition(None)
         else:
             rep = stream.repetition.value
             if isinstance(stream, acqstream.ARStream):
-                style = overlay.world.RepetitionSelectOverlay.FILL_POINT
+                style = RepetitionSelectOverlay.FILL_POINT
             else:
-                style = overlay.world.RepetitionSelectOverlay.FILL_GRID
+                style = RepetitionSelectOverlay.FILL_GRID
             cvs.show_repetition(rep, style)
 
     def on_rep_focus(self, evt):

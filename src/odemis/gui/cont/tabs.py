@@ -34,7 +34,6 @@ from odemis.acq import stream
 from odemis.acq.align import AutoFocus
 from odemis.acq.stream import MultipleDetectorStream
 from odemis.driver.actuator import ConvertStage
-from odemis.gui.comp import overlay
 from odemis.gui.comp.canvas import CAN_ZOOM
 from odemis.gui.comp.popup import Message
 from odemis.gui.comp.scalewindow import ScaleWindow
