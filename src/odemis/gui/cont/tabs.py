@@ -602,10 +602,6 @@ class SparcAcquisitionTab(Tab):
         self._sem_cl_stream = semcl_stream
         self.tab_data_model.semStream = semcl_stream
 
-        # Force the ROA to be defined by the user on first use
-        semcl_stream.roi.value = acqstream.UNDEFINED_ROI
-        semcl_stream.roi.subscribe(self.onROI)
-
         # drift correction is disabled until a roi is selected
         semcl_stream.dcRegion.value = acqstream.UNDEFINED_ROI
         vas_settings.append(semcl_stream.dcRegion)
@@ -742,20 +738,6 @@ class SparcAcquisitionTab(Tab):
         Use the sem stream dwell time as the anchor dwell time
         """
         self.tab_data_model.semStream.dcDwellTime.value = dt
-
-    def onROI(self, roi):
-        """
-        called when the SEM CL roi (region of acquisition) is changed
-        To synchronise global ROA -> streams ROI
-        """
-        # Updating the ROI requires a bit of care, because the streams might
-        # update back their ROI with a modified value. It should normally
-        # converge, but we must absolutely ensure it will never cause infinite
-        # loops.
-        for s in self.tab_data_model.acquisitionView.getStreams():
-            if isinstance(s, acqstream.MultipleDetectorStream):
-                # logging.debug("setting roi of %s to %s", s.name.value, roi)
-                s._rep_stream.roi.value = roi
 
     def Show(self, show=True):
         assert (show != self.IsShown())  # we assume it's only called when changed

@@ -1500,6 +1500,11 @@ class SparcStreamsController(StreamBarController):
         # Repetition visualisation
         self._hover_stream = None  # stream for which the repetition must be displayed
 
+        # Force the ROA to be defined by the user on first use
+        # semStream is semcl_stream set in tabs.py
+        tab_data.semStream.roi.value = acqstream.UNDEFINED_ROI
+        tab_data.semStream.roi.subscribe(self.onROI)
+
         # Grab the repetition entries, so we can use it to hook extra event handlers to it.
 
         # FIXME NOW: do this when adding a new stream
@@ -1811,12 +1816,35 @@ class SparcStreamsController(StreamBarController):
         # copy ROI only if it's activated, and spectrum is not, otherwise
         # Spectrum plays the role of "master of ROI" if both streams are
         # simultaneously active (even if it should not currently happen)
-        streams = self._tab_data_model.acquisitionView.getStreams()
-        if self._sem_ar_stream in streams and self._sem_spec_stream not in streams:
+        ar_present = False
+        spec_present = False
+
+        for stream in self._tab_data_model.acquisitionView.getStreams():
+            if isinstance(stream, acqstream.SEMARMDStream):
+                ar_present = True
+            elif isinstance(stream, acqstream.SEMSpectrumMDStream):
+                spec_present = True
+
+        if ar_present and not spec_present:
             # unsubscribe to be sure it won't call us back directly
-            self._sem_cl_stream.roi.unsubscribe(self.onROI)
-            self._sem_cl_stream.roi.value = roi
-            self._sem_cl_stream.roi.subscribe(self.onROI)
+            # semStream is semcl_stream set in tabs.py
+            self._tab_data_model.semStream.roi.unsubscribe(self.onROI)
+            self._tab_data_model.semStream.roi.value = roi
+            self._tab_data_model.semStream.roi.subscribe(self.onROI)
+
+    def onROI(self, roi):
+        """
+        called when the SEM CL roi (region of acquisition) is changed
+        To synchronise global ROA -> streams ROI
+        """
+        # Updating the ROI requires a bit of care, because the streams might
+        # update back their ROI with a modified value. It should normally
+        # converge, but we must absolutely ensure it will never cause infinite
+        # loops.
+        for s in self._tab_data_model.acquisitionView.getStreams():
+            if isinstance(s, acqstream.MultipleDetectorStream):
+                # logging.debug("setting roi of %s to %s", s.name.value, roi)
+                s._rep_stream.roi.value = roi
 
     # Special event handlers for repetition indication in the ROI selection
 
