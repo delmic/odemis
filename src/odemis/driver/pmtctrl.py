@@ -229,6 +229,11 @@ class PMTControl(model.HwComponent):
         self.powerSupply = model.BooleanVA(True, setter=self._setPowerSupply)
         self._setPowerSupply(True)
 
+        # relay initialization
+        self.setContact(False)
+        time.sleep(5)
+        self.setContact(True)
+
     def terminate(self):
         with self._ser_access:
             if self._serial:
@@ -296,15 +301,15 @@ class PMTControl(model.HwComponent):
     def setContact(self, value):
         # When True, the relay contact is connected
         if value:
-            self._sendCommand("RELAY 0")
-        else:
             self._sendCommand("RELAY 1")
+        else:
+            self._sendCommand("RELAY 0")
 
         return value
 
     def getContact(self):
         ans = self._sendCommand("RELAY?")
-        if ans == "0":
+        if ans == "1":
             status = True
         else:
             status = False
@@ -565,9 +570,9 @@ class PMTControlSimulator(object):
                     res = "ERROR: Out of range set value\n"
                 else:
                     if value:
-                        self._contact = False
-                    else:
                         self._contact = True
+                    else:
+                        self._contact = False
                     res = '\n'
             else:
                 res = "ERROR: Cannot parse this command\n"
@@ -592,9 +597,9 @@ class PMTControlSimulator(object):
                     res = "1" + '\n'
             elif tokens[0] == "RELAY?":
                 if self._contact:
-                    res = "0" + '\n'
-                else:
                     res = "1" + '\n'
+                else:
+                    res = "0" + '\n'
             else:
                 res = "ERROR: Cannot parse this command\n"
         else:
