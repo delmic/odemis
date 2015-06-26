@@ -244,22 +244,31 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         if not any([isinstance(s, EMStream) for s in self.microscope_view.stream_tree]):
             return
 
+        use_world = hasattr(self._tab_data_model, 'spotPosition')
         if self._spotmode_ol is None:
-            if hasattr(self._tab_data_model, 'spotPosition'):
+            if use_world:
                 spot_va = self._tab_data_model.spotPosition
+                self._spotmode_ol = world_overlay.SpotModeOverlay(self, spot_va)
             else:
                 spot_va = None
-            self._spotmode_ol = view_overlay.SpotModeOverlay(self, spot_va)
+                self._spotmode_ol = view_overlay.SpotModeOverlay(self, spot_va)
 
         if tool_mode == guimodel.TOOL_SPOT:
-            self.add_view_overlay(self._spotmode_ol)
-            # Activate the spot mode overlay when the canvas can be dragged, so the user can
-            # position the spot. (By default, the spot is static in the center)
-            if CAN_DRAG in self.abilities:
+            if use_world:
+                self.add_world_overlay(self._spotmode_ol)
+                # Activate the spot mode overlay when the canvas can be dragged, so the user can
+                # position the spot. (By default, the spot is static in the center)
+                if CAN_DRAG in self.abilities:
+                    self._spotmode_ol.activate()
+            else:
+                self.add_view_overlay(self._spotmode_ol)
                 self._spotmode_ol.activate()
 
         else:
-            self.remove_world_overlay(self._spotmode_ol)
+            if use_world:
+                self.remove_world_overlay(self._spotmode_ol)
+            else:
+                self.remove_view_overlay(self._spotmode_ol)
             self._spotmode_ol.deactivate()
 
         if self._spotmode_ol:
@@ -750,6 +759,46 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # The y value needs to be flipped between physical and world coordinates.
         return phy_pos[0], -phy_pos[1]
 
+    def convert_spot_ratio_to_phys(self, r_spot):
+        if r_spot in (None, (None, None)):
+            return None
+        else:
+            # convert relative position to physical position
+            try:
+                sem_rect = self._get_sem_rect()
+            except AttributeError:
+                logging.warning("Trying to convert a SEM ROI, but no SEM available")
+                return None
+
+        # In physical coordinates Y goes up, but in ROI, Y goes down => "1-"
+        phys_pos = (
+            sem_rect[0] + r_spot[0] * (sem_rect[2] - sem_rect[0]),
+            sem_rect[1] + (1 - r_spot[1]) * (sem_rect[3] - sem_rect[1])
+        )
+
+        return phys_pos
+
+    def convert_spot_phys_to_ratio(self, p_spot):
+        # Get the position of the overlay in physical coordinates
+        if p_spot is None:
+            return 0.5, 0.5
+
+        # Position of the complete SEM scan in physical coordinates
+        l, t, r, b = self._get_sem_rect()
+        px, py = p_spot
+
+        # Take only the intersection so that that ROA is always inside the SEM scan
+        p_spot = (max(min(px, r), l), max(min(py, b), t))
+
+        # Convert the ROI into relative value compared to the SEM scan
+        # In physical coordinates Y goes up, but in ROI, Y goes down => "1-"
+        r_spot = (
+            (p_spot[0] - l) / (r - l),
+            (p_spot[1] - t) / (b - t)
+        )
+
+        return r_spot
+
     def selection_to_real_size(self, start_w_pos, end_w_pos):
         w = abs(start_w_pos[0] - end_w_pos[0])
         h = abs(start_w_pos[1] - end_w_pos[1])
@@ -967,7 +1016,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         """
         Returns the (theoretical) scanning area of the SEM. Works even if the
         SEM has not send any image yet.
-        returns (tuple of 4 floats): position in physical coordinates m (l, t, b, r)
+        returns (tuple of 4 floats): position in physical coordinates m (l, t, r,br)
         raises AttributeError in case no SEM is found
         """
         sem = self._tab_data_model.main.ebeam

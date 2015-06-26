@@ -236,6 +236,7 @@ class OverlayTestCase(test.GuiTestCase):
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
         sol = vol.SpotModeOverlay(cnvs)
+        sol.activate()
         cnvs.add_view_overlay(sol)
         cnvs.update_drawing()
         test.gui_loop()

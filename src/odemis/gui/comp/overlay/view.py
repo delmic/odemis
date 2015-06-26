@@ -1201,6 +1201,8 @@ class SpotModeOverlay(base.ViewOverlay, base.DragMixin):
 
     If the overlay is activated, the user can use the mouse cursor to select a position
 
+    TODO: Combine with the world view version?
+
     """
 
     def __init__(self, cnvs, spot_va=None):
@@ -1289,41 +1291,6 @@ class SpotModeOverlay(base.ViewOverlay, base.DragMixin):
         ctx.set_source_rgb(r, g, b)
         ctx.arc(x, y, radius, 0, 2 * math.pi)
         ctx.stroke()
-
-    def on_left_down(self, evt):
-        if self.active:
-            base.DragMixin._on_left_down(self, evt)
-        else:
-            base.ViewOverlay.on_left_down(self, evt)
-
-    def on_left_up(self, evt):
-        if self.active:
-            base.DragMixin._on_left_up(self, evt)
-            self.v_pos = evt.GetPositionTuple()
-            self._v_to_r()
-            self.cnvs.update_drawing()
-        else:
-            base.ViewOverlay.on_left_up(self, evt)
-
-    def on_motion(self, evt):
-        if self.active and self.left_dragging:
-            self.v_pos = evt.GetPositionTuple()
-            self._v_to_r()
-            self.cnvs.update_drawing()
-        else:
-            base.ViewOverlay.on_left_up(self, evt)
-
-    def on_enter(self, evt):
-        if self.active:
-            self.cnvs.set_default_cursor(wx.CROSS_CURSOR)
-        else:
-            base.ViewOverlay.on_enter(self, evt)
-
-    def on_leave(self, evt):
-        if self.active:
-            self.cnvs.reset_default_cursor()
-        else:
-            base.ViewOverlay.on_leave(self, evt)
 
     def activate(self):
         self._r_to_v()

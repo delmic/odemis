@@ -33,6 +33,7 @@ import odemis.gui as gui
 import odemis.gui.comp.overlay.base as base
 import odemis.gui.img.data as img
 from odemis.gui.util.raster import rasterize_line
+from odemis.model import TupleVA
 from odemis.util import clip_line
 import odemis.util.conversion as conversion
 import odemis.util.units as units
@@ -486,6 +487,144 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
 
         WorldSelectOverlay.draw(self, ctx, shift, scale)
         self.selection_mode = mode_cache
+
+
+class SpotModeOverlay(base.WorldOverlay, base.DragMixin):
+    """ Render the spot mode indicator in the center of the view
+
+    If a position is provided, the spot will be drawn there.
+
+    If the overlay is activated, the user can use the mouse cursor to select a position
+
+    """
+
+    def __init__(self, cnvs, spot_va=None):
+        base.WorldOverlay.__init__(self, cnvs)
+        base.DragMixin.__init__(self)
+
+        self.colour = conversion.hex_to_frgb(gui.FG_COLOUR_EDIT)
+        self.highlight = conversion.hex_to_frgb(gui.FG_COLOUR_HIGHLIGHT)
+
+        # Rendering attributes
+        self._sect_count = 3
+        self._gap = 0.15
+        self._sect_width = 2.0 * math.pi / self._sect_count
+        self._spot_radius = 12
+
+        # Spot position as a percentage (x, y) where x and y [0..1]
+        self.r_pos = spot_va or TupleVA((0.5, 0.5))
+        self.r_pos.subscribe(self.on_spot_change)
+        self.w_pos = None
+
+    def on_spot_change(self, _):
+        self._r_to_w()
+
+    def on_size(self, _):
+        self._r_to_w()
+
+    def _w_to_r(self):
+        if self.w_pos is None:
+            self.r_pos.value = (0.5, 0.5)
+        else:
+            self.r_pos.value = self.cnvs.convert_spot_phys_to_ratio(self.w_pos)
+
+    def _r_to_w(self):
+        try:
+            phys_spot = self.cnvs.convert_spot_ratio_to_phys(self.r_pos.value)
+            self.w_pos = self.cnvs.physical_to_world_pos(phys_spot)
+        except (TypeError, KeyError):
+            self.w_pos = None
+
+    def draw(self, ctx, shift=(0, 0), scale=1.0):
+
+        if self.w_pos is None:
+            return
+
+        start = -0.5 * math.pi
+
+        r, g, b = self.highlight
+
+        offset = self.cnvs.get_half_buffer_size()
+        bx, by = self.cnvs.world_to_buffer(self.w_pos, offset)
+
+        width = self._spot_radius / 6.0
+
+        for i in range(self._sect_count):
+            ctx.set_line_width(width)
+
+            ctx.set_source_rgba(0, 0, 0, 0.6)
+            ctx.arc(bx + 1, by + 1,
+                    self._spot_radius,
+                    start + self._gap,
+                    start + self._sect_width - self._gap)
+            ctx.stroke()
+
+            ctx.set_source_rgb(r, g, b)
+            ctx.arc(bx, by,
+                    self._spot_radius,
+                    start + self._gap,
+                    start + self._sect_width - self._gap)
+            ctx.stroke()
+
+            start += self._sect_width
+
+        width = self._spot_radius / 3.5
+        radius = self._spot_radius * 0.6
+
+        ctx.set_line_width(width)
+
+        ctx.set_source_rgba(0, 0, 0, 0.6)
+        ctx.arc(bx + 1, by + 1, radius, 0, 2 * math.pi)
+        ctx.stroke()
+
+        ctx.set_source_rgb(r, g, b)
+        ctx.arc(bx, by, radius, 0, 2 * math.pi)
+        ctx.stroke()
+
+    def on_left_down(self, evt):
+        if self.active:
+            base.DragMixin._on_left_down(self, evt)
+        else:
+            base.WorldOverlay.on_left_down(self, evt)
+
+    def on_left_up(self, evt):
+        if self.active:
+            base.DragMixin._on_left_up(self, evt)
+            offset = self.cnvs.get_half_buffer_size()
+            self.w_pos = self.cnvs.view_to_world(evt.GetPositionTuple(), offset)
+            self._w_to_r()
+            self.cnvs.update_drawing()
+        else:
+            base.WorldOverlay.on_left_up(self, evt)
+
+    def on_motion(self, evt):
+        if self.active and self.left_dragging:
+            offset = self.cnvs.get_half_buffer_size()
+            self.w_pos = self.cnvs.view_to_world(evt.GetPositionTuple(), offset)
+            self._w_to_r()
+            self.cnvs.update_drawing()
+        else:
+            base.WorldOverlay.on_left_up(self, evt)
+
+    def on_enter(self, evt):
+        if self.active:
+            self.cnvs.set_default_cursor(wx.CROSS_CURSOR)
+        else:
+            base.WorldOverlay.on_enter(self, evt)
+
+    def on_leave(self, evt):
+        if self.active:
+            self.cnvs.reset_default_cursor()
+        else:
+            base.WorldOverlay.on_leave(self, evt)
+
+    def activate(self):
+        self._r_to_w()
+        base.WorldOverlay.activate(self)
+
+    def deactivate(self):
+        self.w_pos = None
+        base.WorldOverlay.deactivate(self)
 
 
 class LineSelectOverlay(WorldSelectOverlay):
