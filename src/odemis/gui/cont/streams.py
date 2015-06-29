@@ -1697,7 +1697,7 @@ class SparcStreamsController(StreamBarController):
         self._spec_stream = spec_stream
 
         spec_stream.roi.subscribe(self.onARROI)
-        stream_cont = self._add_stream(spec_stream, add_to_all_views=True, no_bc=True)
+        stream_cont = self._add_stream(spec_stream, add_to_all_views=True, no_bc=True, play=False)
         stream_cont.stream_panel.show_visible_btn(False)
 
         spec_rep = stream_cont.add_setting_entry(
@@ -1775,7 +1775,7 @@ class SparcStreamsController(StreamBarController):
             detvas=get_hw_settings(main_data.monochromator),
         )
 
-        stream_cont = self._add_stream(monoch_stream, add_to_all_views=True, no_bc=True)
+        stream_cont = self._add_stream(monoch_stream, add_to_all_views=True, no_bc=True, play=False)
         stream_cont.stream_panel.show_visible_btn(False)
 
         # FIXME: control config is 'borrowed' from streamspec
