@@ -68,6 +68,11 @@ class LegendTestCase(test.GuiTestCase):
             vleg.range = r
             test.gui_loop()
 
+        for r in BAD_RANGES:
+            hleg.range = r
+            vleg.range = r
+            test.gui_loop()
+
 
 if __name__ == "__main__":
     unittest.main()

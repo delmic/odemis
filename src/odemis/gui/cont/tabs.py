@@ -676,7 +676,6 @@ class SparcAcquisitionTab(Tab):
 
             # Put the spot position at a "good" place if not yet defined
             if self.tab_data_model.spotPosition.value == (None, None):
-                logging.warn("Setting pos")
                 roa = self.tab_data_model.semStream.roi.value
                 if roa == acqstream.UNDEFINED_ROI:
                     # If no ROA => just at the center of the FoV

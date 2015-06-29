@@ -26,6 +26,7 @@ from __future__ import division
 
 import cairo
 import logging
+import math
 from odemis.acq import stream
 from odemis.gui import FG_COLOUR_DIS
 from odemis.gui.comp.scalewindow import ScaleWindow
@@ -353,7 +354,12 @@ class AxisLegend(wx.Panel):
 
     def value_to_pixel(self, value):
         """ Map range value to legend pixel postion """
-        pixel = int(round(((value - self._value_range[0]) / self._value_space) * self._pixel_space))
+        if self._value_space:
+            pixel = ((value - self._value_range[0]) / self._value_space) * self._pixel_space
+            # NaN was encounter at Monache, so this extra test was added
+            pixel = 0 if math.isnan(pixel) else int(round(pixel))
+        else:
+            pixel = 0
         return pixel if self._orientation == wx.HORIZONTAL else self._pixel_space - pixel
 
     def pixel_to_value(self, pixel):
