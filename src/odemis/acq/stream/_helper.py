@@ -21,19 +21,19 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 
+from abc import abstractmethod
 from functools import wraps
 import logging
 import math
 import numpy
-import random
 from odemis import model
 from odemis.acq import align
-from odemis.util import limit_invocation
+from odemis.util import limit_invocation, spectrum
+import random
 import time
 
 from ._base import Stream, UNDEFINED_ROI
 from ._live import LiveStream
-from abc import abstractmethod
 
 
 class RepetitionStream(LiveStream):
@@ -362,7 +362,7 @@ class SpectrumSettingsStream(CCDSettingsStream):
         # For SPARC: typical user wants density a bit lower than SEM
         self.pixelSize.value *= 6
 
-        # Contains one spectrum (start with an empty array)
+        # Contains one 1D spectrum (start with an empty array)
         self.image.value = model.DataArray([])
 
         # TODO: grating/cw as VAs (from the spectrometer)
@@ -371,8 +371,12 @@ class SpectrumSettingsStream(CCDSettingsStream):
 
     @limit_invocation(0.1)
     def _updateImage(self):
-        # Just copy the raw data into the image
-        self.image.value = self.raw[0]
+        # Just copy the raw data into the image, removing useless second dimension
+        data = self.raw[0]
+        if data.shape[0] != 1:
+            logging.warning("Got a spectrum with multiple lines (shape = %s)", data.shape)
+
+        self.image.value = self.raw[0][0]
 
 
 class MonochromatorSettingsStream(PMTSettingsStream):

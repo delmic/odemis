@@ -26,8 +26,6 @@ Created on 8 Feb 2012
 from __future__ import division
 
 import logging
-import wx
-
 from odemis import gui, model
 from odemis.acq.stream import OpticalStream, EMStream, SpectrumStream, MonochromatorSettingsStream
 from odemis.gui import BG_COLOUR_LEGEND, FG_COLOUR_LEGEND
@@ -39,7 +37,8 @@ from odemis.gui.model import CHAMBER_VACUUM, CHAMBER_UNKNOWN
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.raster import rasterize_line
 from odemis.model import NotApplicableError
-from odemis.util import units
+from odemis.util import units, spectrum
+import wx
 
 
 class ViewPort(wx.Panel):
@@ -666,11 +665,23 @@ class PlotViewport(ViewPort):
             self.spectrum_stream.image.subscribe(self._on_new_data, init=True)
 
     def _on_new_data(self, data):
-        # spectrum_range = self.spectrum_stream.get_spectrum_range()
-        # unit_x = self.spectrum_stream.spectrumBandwidth.unit
+        """
+        Called when a new data is available.
+        data (1D DataArray)
+        """
         if data.size:
-            unit_x = 'nm'
-            self.canvas.set_1d_data(range(len(data[0])), data[0], unit_x)
+            # TODO: factorize with get_spectrum_range() for static stream?
+            try:
+                spectrum_range = spectrum.get_wavelength_per_pixel(data)
+                unit_x = "m"
+            except (ValueError, KeyError):
+                # useless polynomial => just show pixels values (ex: -50 -> +50 px)
+                max_bw = data.shape[0] // 2
+                min_bw = (max_bw - data.shape[0]) + 1
+                spectrum_range = range(min_bw, max_bw + 1)
+                unit_x = "px"
+
+            self.canvas.set_1d_data(spectrum_range, data, unit_x)
 
             self.bottom_legend.unit = unit_x
             self.bottom_legend.range = self.canvas.range_x

@@ -408,7 +408,7 @@ class StaticSpectrumStream(StaticStream):
         """
         name (string)
         image (model.DataArray of shape (CYX) or (C11YX)). The metadata
-        MD_WL_POLYNOMIAL should be included in order to associate the C to a
+        MD_WL_POLYNOMIAL or MD_WL_LIST should be included in order to associate the C to a
         wavelength.
         """
         # Spectrum stream has in addition to normal stream:
