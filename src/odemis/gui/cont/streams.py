@@ -1645,6 +1645,10 @@ class SparcStreamsController(StreamBarController):
             detvas=get_hw_settings(main_data.cld),
         )
 
+        # Special "safety" feature to avoid having a too high gain at start
+        if hasattr(cli_stream, "detGain"):
+            cli_stream.detGain.value = cli_stream.detGain.range[0]
+
         stream_cont = self._add_stream(cli_stream, add_to_all_views=True)
         stream_cont.stream_panel.show_visible_btn(False)
 
