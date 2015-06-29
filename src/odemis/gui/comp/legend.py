@@ -394,7 +394,7 @@ class AxisLegend(wx.Panel):
         self._value_space = self._value_range[1] - self._value_range[0]
 
         num_ticks = self._pixel_space // self._tick_spacing
-        logging.debug("Aiming for %s ticks with a client of size %s", num_ticks, self._pixel_space)
+        # logging.debug("Aiming for %s ticks with a client of size %s", num_ticks, self._pixel_space)
         # Calculate the best step size in powers of 10, so it will cover at
         # least the distance `val_dist`
         value_step = 1e-12
@@ -403,19 +403,19 @@ class AxisLegend(wx.Panel):
         # in the range
         while value_step and self._value_space / value_step > num_ticks:
             value_step *= 10
-        logging.debug("Value step is %s after first iteration with range %s",
-                      value_step, self._value_space)
+        # logging.debug("Value step is %s after first iteration with range %s",
+        #               value_step, self._value_space)
 
         # Divide the value step by two,
         while value_step and self._value_space / value_step < num_ticks:
             value_step /= 2
-        logging.debug("Value step is %s after second iteration with range %s",
-                      value_step, self._value_space)
+        # logging.debug("Value step is %s after second iteration with range %s",
+        #               value_step, self._value_space)
 
         min_val = self._value_range[0]
 
         first_val = (int(min_val / value_step) + 1) * value_step if value_step else 0
-        logging.debug("Setting first tick at value %s", first_val)
+        # logging.debug("Setting first tick at value %s", first_val)
 
         tick_values = [min_val]
         cur_val = first_val
@@ -436,21 +436,3 @@ class AxisLegend(wx.Panel):
                 else:
                     if 10 <= pixel <= self._pixel_space:
                         self._tick_list.append(pix_val)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
