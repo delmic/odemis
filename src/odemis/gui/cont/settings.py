@@ -545,36 +545,6 @@ class SparcSettingsController(SettingsBarController):
             #     self._spectrum_panel.add_axis("band", main_data.light_filter,
             #                                   self._va_config["filter"]["band"])
 
-            # if spec_stream:
-                # self.spectro_rep_ent = self._spectrum_panel.add_setting_entry(
-                #     "repetition",
-                #     spec_stream.repetition,
-                #     None,  # component
-                #     self._va_config["streamspec"]["repetition"]
-                # )
-
-
-                # self.spec_pxs_ent = self._spectrum_panel.add_setting_entry(
-                #     "pixelSize",
-                #     spec_stream.pixelSize,
-                #     None,  # component
-                #     self._va_config["streamspec"]["pixelSize"]
-                # )
-
-            # # Add spectrograph control if available
-            # if main_data.spectrograph:
-            #     # Without the "wavelength" axis, it's boring
-            #     if "wavelength" in main_data.spectrograph.axes:
-            #         self._spectrum_panel.add_axis(
-            #             "wavelength",
-            #             main_data.spectrograph,
-            #             self._va_config["spectrograph"]["wavelength"])
-            #     if "grating" in main_data.spectrograph.axes:
-            #         self._spectrum_panel.add_axis(
-            #             "grating",
-            #             main_data.spectrograph,
-            #             self._va_config["spectrograph"]["grating"])
-
             # self.add_spec_chronograph(self._spectrum_panel)
         else:
             parent_frame.fp_settings_sparc_spectrum.Hide()

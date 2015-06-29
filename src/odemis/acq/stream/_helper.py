@@ -443,6 +443,7 @@ class MonochromatorSettingsStream(PMTSettingsStream):
         #     self.raw.append(1000)
         # # TESTING TESTINGTESTINGTESTINGTESTINGTESTINGTESTINGTESTINGTESTING
 
+        logging.warn("Monochromator count: %s", count)
         self.raw.append(count)
 
     @limit_invocation(0.1)
