@@ -211,7 +211,12 @@ class PMTControl(model.HwComponent):
 
         # Get identification of the PMT control device
         # TODO Use it to check that we connect to the right device
-        self._idn = self._sendCommand("*IDN?")
+        try:
+            self._idn = self._sendCommand("*IDN?")
+        except IOError:
+            raise HwError("PMT Control Unit connection timeout. "
+                          "Please unplug and re-plug the USB cable connector.")
+
         # Set protection current and time
         self._setProtectionCurrent(self._prot_curr)
         self._setProtectionTime(self._prot_time)
@@ -330,7 +335,9 @@ class PMTControl(model.HwComponent):
             ans = ''
             char = None
             while (char != '\n'):
-                char = self._serial.read(1)
+                char = self._serial.read()
+                if not char:
+                    raise IOError("PMT Control Unit timeout while waiting for reply")
                 # Handle ERROR coming from PMT control unit firmware
                 ans += char
 
