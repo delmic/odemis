@@ -1769,9 +1769,12 @@ class PlotCanvas(BufferedCanvas):
 
         """
 
-        if data:
-            self._locked = True
+        if self._locked:
+            return
 
+        self._locked = True
+
+        if data:
             # Check if sorted
             s = all(data[i][0] < data[i + 1][0] for i in xrange(len(data) - 1))
             if not s:
@@ -1788,11 +1791,11 @@ class PlotCanvas(BufferedCanvas):
             self.unit_y = unit_y
 
             self._calc_data_characteristics(range_x, range_y)
-
-            self._locked = False
         else:
             logging.warn("Trying to fill PlotCanvas with empty data!")
             self.clear()
+
+        self._locked = False
 
         wx.CallAfter(self.request_drawing_update)
 
@@ -1957,11 +1960,18 @@ class PlotCanvas(BufferedCanvas):
         #     logging.warn("No buffer created yet, ignoring draw request")
         #     return
 
-        if self.IsEnabled() and not self._locked:
+        if self.IsEnabled():
+            if self._locked:
+                return
+
+            self._locked = True
+
             self._draw_background(self.ctx)
 
             if self._data:
                 self._plot_data(self.ctx)
+
+            self._locked = False
 
     def _plot_data(self, ctx):
         """ Plot the current `_data` to the given context """
