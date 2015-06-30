@@ -254,6 +254,10 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
             {
                 "control_type": odemis.gui.CONTROL_FLT,
             },
+            "wavelength":
+            {
+                "range": (0.0, 1900e-9),
+            },
         },
         "streamar":
         {

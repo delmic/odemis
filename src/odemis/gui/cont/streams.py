@@ -1765,7 +1765,8 @@ class SparcStreamsController(StreamBarController):
 
         stream_cont.add_axis_entry(
             "wavelength",
-            main_data.spectrograph
+            main_data.spectrograph,
+            stream_cont.hw_settings_config["streamspec"]["wavelength"]
         )
 
         stream_cont.add_axis_entry(

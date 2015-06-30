@@ -744,7 +744,10 @@ def create_axis_entry(container, name, comp, conf=None):
     # If axis has .range (continuous) => slider
     # If axis has .choices (enumerated) => combo box
     if hasattr(ad, "range"):
-        minv, maxv = ad.range
+        if "range" in conf:
+            minv, maxv = conf["range"]
+        else:
+            minv, maxv = ad.range
 
         ctrl_conf = {
             'min_val': minv,
