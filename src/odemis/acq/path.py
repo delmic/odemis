@@ -63,7 +63,7 @@ MODES = {'ar': ("ccd",
                  'filter': {'band': 'pass-through'},
                  'ar-spec-selector': {'rx': math.radians(90)},
                  'spec-det-selector': {'rx': 0},
-                 'spectrograph': {'slit-in': 500e-6, 'wavelength': 0},
+                 'spectrograph': {'slit-in': 500e-6},
                 }),
          }
 
@@ -191,7 +191,10 @@ class OpticalPathManager(object):
 
         # wait for all the moves to be completed
         for f in fmoves:
-            f.result()
+            try:
+                f.result()
+            except Exception as e:
+                logging.debug("Actuator move was timed out giving the error %s", e)
 
     def guessMode(self, guess_stream):
         """
