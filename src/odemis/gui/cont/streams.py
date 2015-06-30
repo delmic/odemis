@@ -1747,11 +1747,11 @@ class SparcStreamsController(StreamBarController):
             main_data.spectrograph
         )
 
-        stream_cont.add_axis_entry(
-            "band",
-            main_data.light_filter,
-            stream_cont.hw_settings_config["filter"]["band"]
-        )
+        # stream_cont.add_axis_entry(
+        #     "band",
+        #     main_data.light_filter,
+        #     stream_cont.hw_settings_config["filter"]["band"]
+        # )
 
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
@@ -1815,11 +1815,11 @@ class SparcStreamsController(StreamBarController):
             main_data.spectrograph
         )
 
-        stream_cont.add_axis_entry(
-            "band",
-            main_data.light_filter,
-            stream_cont.hw_settings_config["filter"]["band"]
-        )
+        # stream_cont.add_axis_entry(
+        #     "band",
+        #     main_data.light_filter,
+        #     stream_cont.hw_settings_config["filter"]["band"]
+        # )
 
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
