@@ -147,7 +147,7 @@ class SettingsController(object):
 
         """
 
-        ne = create_axis_entry(self.panel, name)
+        ne = create_axis_entry(self.panel, name, comp, conf)
         self.entries.append(ne)
 
         if self.highlight_change:
@@ -772,6 +772,7 @@ class SparcAlignSettingsController(SettingsBarController):
     def __init__(self, parent_frame, tab_data):
         super(SparcAlignSettingsController, self).__init__(tab_data)
         main_data = tab_data.main
+        self.hw_settings_config = get_hw_settings_config(main_data.role)
 
         self._ar_setting_cont = AngularSettingsController(parent_frame.fp_ma_settings_ar,
                                                           "No angle-resolved camera found")
@@ -787,3 +788,20 @@ class SparcAlignSettingsController(SettingsBarController):
 
             # This need to be added to a stream
             self.add_spec_chronograph(self._spect_setting_cont, 9)
+
+        if main_data.spectrograph:
+            self._spect_setting_cont.add_axis(
+                "wavelength",
+                main_data.spectrograph,
+                self.hw_settings_config["streamspec"]["wavelength"]
+            )
+
+            self._spect_setting_cont.add_axis(
+                "grating",
+                main_data.spectrograph
+            )
+
+            self._spect_setting_cont.add_axis(
+                "slit-in",
+                main_data.spectrograph
+            )
