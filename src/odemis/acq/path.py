@@ -90,8 +90,7 @@ class OpticalPathManager(object):
         self._known_comps = dict()  # str (role) -> component
         # TODO: need to generalise (to any axis)
         self._stored_band = None  # last band of the filter (when not in alignment mode)
-        # last wavelength and slit position of the spectrograph (when not in alignment mode)
-        self._stored_wavelength = None
+        # last slit position of the spectrograph (when not in alignment mode)
         self._stored_slit = None
         self._last_mode = None  # previous mode that was set
         # Removes modes which are not supported by the current microscope
@@ -159,9 +158,6 @@ class OpticalPathManager(object):
                         else:
                             logging.debug("Choice %s is not present in %s axis", pos, axis)
                             continue
-                    elif axis == "wavelength":
-                        if self._last_mode != 'fiber-align':
-                            self._stored_wavelength = comp.position.value[axis]
                     elif axis == "slit-in":
                         if self._last_mode != 'fiber-align':
                             self._stored_slit = comp.position.value[axis]
@@ -182,7 +178,6 @@ class OpticalPathManager(object):
             spectrograph = model.getComponent(role="spectrograph")
             if (self._last_mode == 'fiber-align') and (mode != 'fiber-align'):
                 fmoves.append(spectrograph.moveAbs({"slit-in": self._stored_slit}))
-                fmoves.append(spectrograph.moveAbs({"wavelength": self._stored_wavelength}))
         except LookupError:
             logging.debug("No spectrograph component available")
 
@@ -193,8 +188,8 @@ class OpticalPathManager(object):
         for f in fmoves:
             try:
                 f.result()
-            except Exception as e:
-                logging.debug("Actuator move was timed out giving the error %s", e)
+            except IOError as e:
+                logging.debug("Actuator move failed giving the error %s", e)
 
     def guessMode(self, guess_stream):
         """

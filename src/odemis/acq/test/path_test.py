@@ -221,7 +221,6 @@ class MonashPathTestCase(unittest.TestCase):
         # Special assertion for filter wheel and spectrograph
         self.assertEqual(self.filter.position.value, {path.MODES["fiber-align"][1]["filter"].keys()[0] : 6})
         self.assertEqual(self.specgraph.position.value['slit-in'], path.MODES["fiber-align"][1]["spectrograph"]['slit-in'])
-        self.assertEqual(self.specgraph.position.value['wavelength'], path.MODES["fiber-align"][1]["spectrograph"]['wavelength'])
 
         # setting cli
         self.optmngr.setPath("cli")
