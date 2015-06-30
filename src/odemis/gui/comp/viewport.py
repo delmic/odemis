@@ -769,7 +769,7 @@ class SparcAcquisitionMonoViewport(PlotViewport):
         else:
             self.canvas.play_overlay.show = False
 
-    def connect_stream(self, _=None):
+    def connect_stream(self, _):
         """ This method will connect this ViewPort to the Spectrum Stream so it it can react to
         spectrum pixel selection.
         """
@@ -777,7 +777,9 @@ class SparcAcquisitionMonoViewport(PlotViewport):
         ss = self.microscope_view.stream_tree.get_streams_by_type(MonochromatorSettingsStream)
 
         if self.spectrum_stream in ss:
-            logging.debug("not reconnecting to stream as it's already connected")
+            # import traceback
+            # traceback.print_stack()
+            # logging.debug("not reconnecting to stream as it's already connected")
             return
 
         # There should be exactly one Spectrum stream. In the future there

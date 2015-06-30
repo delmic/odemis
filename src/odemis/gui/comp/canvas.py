@@ -1720,6 +1720,9 @@ class PlotCanvas(BufferedCanvas):
         # The data to be plotted, a list of numerical value pairs
         self._data = None
 
+        # When setting new data, this canvas can be locked to prevent rendering
+        self._locked = False
+
         # Interesting values taken from the data.
         self.min_x = None
         self.max_x = None
@@ -1767,6 +1770,8 @@ class PlotCanvas(BufferedCanvas):
         """
 
         if data:
+            self._locked = True
+
             # Check if sorted
             s = all(data[i][0] < data[i + 1][0] for i in xrange(len(data) - 1))
             if not s:
@@ -1781,13 +1786,15 @@ class PlotCanvas(BufferedCanvas):
 
             self.unit_x = unit_x
             self.unit_y = unit_y
-            self.range_x = range_x
-            self.range_y = range_y
 
-            self._calc_data_characteristics()
+            self._calc_data_characteristics(range_x, range_y)
+
+            self._locked = False
         else:
             logging.warn("Trying to fill PlotCanvas with empty data!")
             self.clear()
+
+        wx.CallAfter(self.request_drawing_update)
 
     def clear(self):
         self._data = None
@@ -1805,7 +1812,7 @@ class PlotCanvas(BufferedCanvas):
 
     # Attribute calculators
 
-    def _calc_data_characteristics(self):
+    def _calc_data_characteristics(self, range_x, range_y):
         """ Get the minimum and maximum
 
         This method can be used to override the values derived from the data set, so that the
@@ -1821,10 +1828,11 @@ class PlotCanvas(BufferedCanvas):
         self.max_y = max(vert)
 
         # If a range is not given, we calculate it from the data
-        if not self.range_x:
+        if not range_x:
             self.range_x = (self.min_x, self.max_x)
             self.data_width = self.max_x - self.min_x
         else:
+            self.range_x = range_x
             # Make sure the values are valid and calculate the width of the data
             if self.range_x[0] <= self.min_x <= self.max_x <= self.range_x[1]:
                 self.data_width = self.range_x[1] - self.range_x[0]
@@ -1833,18 +1841,17 @@ class PlotCanvas(BufferedCanvas):
                 raise ValueError(msg % (self.min_x, self.max_x, self.range_x))
 
         # If a range is not given, we calculate it from the data
-        if not self.range_y:
+        if not range_y:
             self.range_y = (self.min_y, self.max_y)
             self.data_height = self.max_y - self.min_y
         else:
+            self.range_y = range_y
             # Make sure the values are valid and calculate the height of the data
             if self.range_y[0] <= self.min_y <= self.max_y <= self.range_y[1]:
                 self.data_height = self.range_y[1] - self.range_y[0]
             else:
                 msg = "Y values out of range! min: %s, max: %s, range: %s"
                 raise ValueError(msg % (self.min_y, self.max_y, self.range_y))
-
-        wx.CallAfter(self.request_drawing_update)
 
     # Value calculation methods
 
@@ -1950,7 +1957,7 @@ class PlotCanvas(BufferedCanvas):
         #     logging.warn("No buffer created yet, ignoring draw request")
         #     return
 
-        if self.IsEnabled():
+        if self.IsEnabled() and not self._locked:
             self._draw_background(self.ctx)
 
             if self._data:

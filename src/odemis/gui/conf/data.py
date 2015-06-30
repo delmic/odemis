@@ -218,6 +218,17 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
                 "control_type": odemis.gui.CONTROL_COMBO,
             },
         },
+        "spectrometer":
+        {
+            # "gain":
+            # {
+            #     "control_type": odemis.gui.CONTROL_COMBO,
+            # },
+            # "slit-in":
+            # {
+            #
+            # },
+        },
         "streamsem":
         {
             # VAs from the stream

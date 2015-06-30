@@ -443,11 +443,11 @@ class MonochromatorSettingsStream(PMTSettingsStream):
         #     self.raw.append(1000)
         # # TESTING TESTINGTESTINGTESTINGTESTINGTESTINGTESTINGTESTINGTESTING
 
-        logging.warn("Monochromator count: %s", count)
         self.raw.append(count)
 
     @limit_invocation(0.1)
     def _updateImage(self):
+
         # convert the list into a DataArray
         im = model.DataArray(self.raw)
         # save the time of each point as ACQ_DATE, unorthodox but should not
