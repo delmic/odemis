@@ -1498,6 +1498,9 @@ class SparcStreamsController(StreamBarController):
         # When the SettingsStream is deleted, automatically remove the MDStream
         tab_data.streams.subscribe(self._clean_acqview)
 
+        # Remove streams and stream controllers used for repetition tracking and events
+        tab_data.streams.subscribe(self._clean_event_entries)
+
         # Repetition visualisation
         self._hover_stream = None  # stream for which the repetition must be displayed
 
@@ -1558,6 +1561,34 @@ class SparcStreamsController(StreamBarController):
             self.add_action("Spectrum", self.addSpectrum)
         if main_data.monochromator:
             self.add_action("Monochromator", self.addMonochromator)
+
+    def _clean_event_entries(self, streams):
+        """ Remove references to the streams used for event binding
+
+        TODO: Those streams will have to be organised differently, to allow for multiple streams of
+        the same type. This will also require this method to be changed.
+
+        """
+
+        if self.spec_rep not in streams:
+            logging.debug("Removed spec_rep stream controller")
+            self.spec_rep = None
+
+        if self.spec_pxs not in streams:
+            logging.debug("Removed spec_pxs stream controller")
+            self.spec_pxs = None
+
+        if self.angu_rep not in streams:
+            logging.debug("Removed angu_rep stream controller")
+            self.angu_rep = None
+
+        if self._spec_stream not in streams:
+            logging.debug("Removed _spec_stream stream")
+            self._spec_stream = None
+
+        if self._ar_stream not in streams:
+            logging.debug("Removed _ar_stream stream")
+            self._ar_stream = None
 
     def _clean_acqview(self, streams):
         """ Remove MD streams from the acquisition view that have one or more sub streams missing
@@ -1895,8 +1926,10 @@ class SparcStreamsController(StreamBarController):
 
         if self._hover_stream:
             stream = self._hover_stream
-        elif (self.spec_rep and
-                  (self.spec_rep.value_ctrl.HasFocus() or self.spec_pxs.value_ctrl.HasFocus())):
+        elif (
+                self.spec_rep and
+                (self.spec_rep.value_ctrl.HasFocus() or self.spec_pxs.value_ctrl.HasFocus())
+        ):
             stream = self._spec_stream
         elif self.angu_rep and self.angu_rep.value_ctrl.HasFocus():
             stream = self._ar_stream
