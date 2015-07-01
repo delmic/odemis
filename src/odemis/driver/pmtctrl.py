@@ -110,7 +110,8 @@ class PMT(model.Detector):
                 self.powerSupply.value = True
         except IOError:
             raise HwError("PMT Control Unit connection timeout. "
-                          "Please unplug and re-plug the USB cable connector.")
+                          "Please turn off and on the power to the box and "
+                          "then restart Odemis.")
 
         # Protection VA should be available anyway
         if not (hasattr(ctrl, "protection")
@@ -219,7 +220,8 @@ class PMTControl(model.HwComponent):
             self._idn = self._sendCommand("*IDN?")
         except IOError:
             raise HwError("PMT Control Unit connection timeout. "
-                          "Please unplug and re-plug the USB cable connector.")
+                          "Please turn off and on the power to the box and "
+                          "then restart Odemis.")
 
         # Set protection current and time
         self._setProtectionCurrent(self._prot_curr)
