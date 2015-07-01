@@ -674,7 +674,9 @@ class PlotViewport(ViewPort):
             try:
                 spectrum_range = spectrum.get_wavelength_per_pixel(data)
                 unit_x = "m"
-            except (ValueError, KeyError):
+            except (ValueError, KeyError), ex:
+                logging.warn("Monash debug: error thrown while calling "
+                             "get_wavelength_per_pixel!\n%s", ex)
                 # useless polynomial => just show pixels values (ex: -50 -> +50 px)
                 max_bw = data.shape[0] // 2
                 min_bw = (max_bw - data.shape[0]) + 1
