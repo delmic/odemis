@@ -1755,9 +1755,6 @@ class MirrorAlignTab(Tab):
             self._spec_graph = self._settings_controller.spec_graph
             self._txt_mean = self._settings_controller.txt_mean
             self._scount_stream.image.subscribe(self._on_spec_count, init=True)
-        else:
-            self._scount_stream = None
-            self.main_frame.fp_settings_sparc_spectrum.Show(False)
 
         if main_data.ebeam:
             # Force a spot at the center of the FoV
