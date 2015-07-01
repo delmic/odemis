@@ -1211,7 +1211,7 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
 
             if s.name.value == "Goal":
                 # goal image => add at the end
-                ims.append((wim, pos, scale, keepalpha, None, None, None, None, s.name.value))
+                ims.append((wim, pos, scale, keepalpha, None, None, wx.VERTICAL, None, s.name.value))
             else:
                 # add at the beginning
                 ims[0] = (wim, pos, scale, keepalpha, None, None, wx.VERTICAL, None, s.name.value)
