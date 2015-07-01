@@ -35,7 +35,7 @@ from odemis.gui.conf.data import get_hw_settings_config, get_hw_settings
 from odemis.gui.conf.util import create_setting_entry, \
     dump_emitter_and_detector_vas, create_axis_entry
 from odemis.gui.cont.settings import SettingEntry
-from odemis.gui.model import dye
+from odemis.gui.model import dye, TOOL_SPOT
 from odemis.gui.util import wxlimit_invocation, dead_object_wrapper
 from odemis.util import fluo
 from odemis.util.conversion import wave2rgb
@@ -1806,6 +1806,18 @@ class SparcStreamsController(StreamBarController):
             emtvas={"dwellTime"},
             detvas=get_hw_settings(main_data.monochromator),
         )
+
+        def _activate_spot_mode(should_update, tool=self._tab_data_model.tool):
+            """ Activate spot mode when the monochromator streams plays """
+            if should_update:
+                tool.value = TOOL_SPOT
+
+        # Dynamically bind the event listener to keep a reference
+        # TODO:  figure out is there's a good reason not to do it like this
+        # Pros: Easy way to keep a reference to the event listener as long as the stream object
+        # exists, and no need to clutter the stream controller with small methods
+        monoch_stream._activate_spot_mode = _activate_spot_mode
+        monoch_stream.should_update.subscribe(monoch_stream._activate_spot_mode)
 
         stream_cont = self._add_stream(monoch_stream, add_to_all_views=True, no_bc=True, play=False)
         stream_cont.stream_panel.show_visible_btn(False)

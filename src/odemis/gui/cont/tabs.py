@@ -667,9 +667,6 @@ class SparcAcquisitionTab(Tab):
     def on_tool_change(self, tool):
         """ Pause the SE and CLI streams when the Spot mode tool is activated """
         if tool == guimod.TOOL_SPOT:
-            # TODO: Make activating the spot mode overlay (i.e. making the spot movable) less ugly
-            # self.main_frame.vp_sparc_tl.canvas._spotmode_ol.activate()
-
             # Make sure the spatial streams controlling the e-beam are not playing
             paused_st = self._stream_controller.pauseStreams((acqstream.EMStream,
                                                               acqstream.CLStream))
@@ -1561,7 +1558,6 @@ class LensAlignTab(Tab):
         binning = main_data.ccd.binning.value
         dt = main_data.ccd.exposureTime.value * numpy.prod(binning)
         main_data.fineAlignDwellTime.value = main_data.fineAlignDwellTime.clip(dt)
-
 
     # "Move to center" functions
     @call_in_wx_main
