@@ -913,7 +913,7 @@ class SparcARAcquiCanvas(DblMicroscopeCanvas):
             pos = self.physical_to_world_pos(rgbim.metadata[model.MD_POS])
             rot = rgbim.metadata.get(model.MD_ROTATION, 0)
             shear = rgbim.metadata.get(model.MD_SHEAR, 0)
-            flip = wx.HORIZONTAL
+            flip = wx.VERTICAL
 
             ims.append((rgba_im, pos, scale, keepalpha, rot, shear, flip, blend_mode, name))
 
@@ -1214,7 +1214,7 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
                 ims.append((wim, pos, scale, keepalpha, None, None, None, None, s.name.value))
             else:
                 # add at the beginning
-                ims[0] = (wim, pos, scale, keepalpha, None, None, wx.HORIZONTAL, None, s.name.value)
+                ims[0] = (wim, pos, scale, keepalpha, None, None, wx.VERTICAL, None, s.name.value)
 
         self.set_images(ims)
 
