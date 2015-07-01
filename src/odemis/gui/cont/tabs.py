@@ -1713,13 +1713,16 @@ class MirrorAlignTab(Tab):
 
             # create a view on the microscope model
             vpv = collections.OrderedDict([
-                (main_frame.vp_sparc_align,
-                 {"name": "Optical",
-                  "stream_classes": None,  # everything is good
-                  # no stage, or would need a fake stage to control X/Y of the
-                  # mirror
-                  # no focus, or could control yaw/pitch?
-                 }),
+                (
+                    main_frame.vp_sparc_align,
+                    {
+                        "name": "Optical",
+                        "stream_classes": None,  # everything is good
+                        # no stage, or would need a fake stage to control X/Y of the
+                        # mirror
+                        # no focus, or could control yaw/pitch?
+                    }
+                ),
             ])
             self.view_controller = viewcont.ViewPortController(
                 self.tab_data_model,

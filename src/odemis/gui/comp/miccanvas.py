@@ -413,8 +413,9 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             pos = self.physical_to_world_pos(rgbim.metadata[model.MD_POS])
             rot = rgbim.metadata.get(model.MD_ROTATION, 0)
             shear = rgbim.metadata.get(model.MD_SHEAR, 0)
+            flip = rgbim.metadata.get(model.MD_FLIP, 0)
 
-            ims.append((rgba_im, pos, scale, keepalpha, rot, shear, blend_mode, name))
+            ims.append((rgba_im, pos, scale, keepalpha, rot, shear, flip, blend_mode, name))
 
         # TODO: Canvas needs to accept the NDArray (+ specific attributes recorded separately).
         self.set_images(ims)
@@ -889,6 +890,49 @@ class OverviewCanvas(DblMicroscopeCanvas):
         self.microscope_view.thumbnail.value = scaled_img
 
 
+class SparcARAcquiCanvas(DblMicroscopeCanvas):
+    """ Canvas added to easily enable the horizontal flipping of the Sparc AR acquisition image
+
+    TODO: find a cleaner solution
+
+    """
+
+    def _convert_streams_to_images(self):
+        images = self._get_ordered_images()
+
+        # add the images in order
+        ims = []
+        for rgbim, blend_mode, name in images:
+            # TODO: convert to RGBA later, in canvas and/or cache the conversion
+            # On large images it costs 100 ms (per image and per canvas)
+
+            rgba_im = format_rgba_darray(rgbim)
+
+            keepalpha = False
+            scale = rgbim.metadata[model.MD_PIXEL_SIZE]
+            pos = self.physical_to_world_pos(rgbim.metadata[model.MD_POS])
+            rot = rgbim.metadata.get(model.MD_ROTATION, 0)
+            shear = rgbim.metadata.get(model.MD_SHEAR, 0)
+            flip = wx.HORIZONTAL
+
+            ims.append((rgba_im, pos, scale, keepalpha, rot, shear, flip, blend_mode, name))
+
+        # TODO: Canvas needs to accept the NDArray (+ specific attributes recorded separately).
+        self.set_images(ims)
+
+        # For debug only:
+        # if images:
+        #     self._lastest_datetime = max(im[0].metadata.get(model.MD_ACQ_DATE, 0) for im in images)
+        # else:
+        #     self._lastest_datetime = 0
+
+        # if self._lastest_datetime > 0:
+        #     logging.debug("Updated canvas list %g s after acquisition",
+        #                   time.time() - self._lastest_datetime)
+
+        self.merge_ratio = self.microscope_view.stream_tree.kwargs.get("merge", 0.5)
+
+
 class SecomCanvas(DblMicroscopeCanvas):
 
     def __init__(self, *args, **kwargs):
@@ -1167,10 +1211,10 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
 
             if s.name.value == "Goal":
                 # goal image => add at the end
-                ims.append((wim, pos, scale, keepalpha, None, None, None, s.name.value))
+                ims.append((wim, pos, scale, keepalpha, None, None, None, None, s.name.value))
             else:
                 # add at the beginning
-                ims[0] = (wim, pos, scale, keepalpha, None, None, None, s.name.value)
+                ims[0] = (wim, pos, scale, keepalpha, None, None, wx.HORIZONTAL, None, s.name.value)
 
         self.set_images(ims)
 
@@ -1399,7 +1443,7 @@ class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
 
         """
 
-        self.set_images([(im_data, (0.0, 0.0), 1.0, True, None, None, None, "Spatial Spectrum")])
+        self.set_images([(im_data, (0.0, 0.0), 1.0, True, None, None, None, None, "Spatial Spectrum")])
         self.markline_overlay.clear_labels()
         self.markline_overlay.activate()
 
@@ -1477,7 +1521,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         for s in streams:
             # image is always centered, fitting the whole canvas
             wim = format_rgba_darray(s.image.value)
-            ims.append((wim, (0, 0), (1, 1), False, None, None, None, s.name.value))
+            ims.append((wim, (0, 0), (1, 1), False, None, None, None, None, s.name.value))
 
         self.set_images(ims)
 

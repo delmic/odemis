@@ -362,10 +362,10 @@ class TestCanvas(test.GuiTestCase):
         print darray_two
 
         images = [
-            (darray_one, (0.0, 0.0), (0.0000003, 0.0000003), True, None, 0.1, None, 'one'),
-            (darray_two, (-0.000001, 0.0), (0.0000003, 0.0000003), True, 0.2, None, None, 'one'),
-            # (darray_two, (0.0, 0.0), 0.33, True, None, None, None, 'two'),
-            # (darray_thr, (0, 0.0), 1, True, None, None, None, 'three'),
+            (darray_one, (0.0, 0.0), (0.0000003, 0.0000003), True, None, 0.1, None, None, 'one'),
+            (darray_two, (-0.000001, 0.0), (0.0000003, 0.0000003), True, 0.2, None, None,None,  'one'),
+            # (darray_two, (0.0, 0.0), 0.33, True, None, None, None, None, 'two'),
+            # (darray_thr, (0, 0.0), 1, True, None, None, None, None, 'three'),
         ]
 
         old_canvas.set_images(images)
@@ -390,10 +390,10 @@ class TestCanvas(test.GuiTestCase):
         darray_green = generate_img_data(250, 250, 4, 204, (50, 205, 154))
 
         images = [
-            (darray_grey, (0.0, 0.0), (0.0000003, 0.0000003), True, None, None, None, "grey"),
-            (darray_orange, (0.0, 0.0), (0.0000003, 0.0000002), True, None, 0.1, None, "orange"),
-            # (darray_blue, (0.0, 0.0), (0.0000003, 0.0000003), True, 0.5, None, BLEND_SCREEN, "purple"),
-            # (darray_green, (0.0, 0.0), (0.0000003, 0.0000003), True, 1.5, None, BLEND_SCREEN, "greem"),
+            (darray_grey, (0.0, 0.0), (0.0000003, 0.0000003), True, None, None, None, None, "grey"),
+            (darray_orange, (0.0, 0.0), (0.0000003, 0.0000002), True, None, 0.1, None, None, "orange"),
+            # (darray_blue, (0.0, 0.0), (0.0000003, 0.0000003), True, 0.5, None, None, BLEND_SCREEN, "purple"),
+            # (darray_green, (0.0, 0.0), (0.0000003, 0.0000003), True, 1.5, None, None, BLEND_SCREEN, "greem"),
         ]
 
         cnvs.set_images(images)
@@ -438,7 +438,7 @@ class TestCanvas(test.GuiTestCase):
         # Set the mpp again, because the on_size handler will have recalculated it
         view.mpp.value = 1
 
-        images = [(darray, (0.0, 0.0), (2, 2), True, None, None, None, "nanana")]
+        images = [(darray, (0.0, 0.0), (2, 2), True, None, None, None, None, "nanana")]
         canvas.set_images(images)
         canvas.scale = 1
         canvas.update_drawing()

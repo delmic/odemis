@@ -520,62 +520,6 @@ class LensAlignSettingsController(SettingsBarController):
             self.add_hw_component(main_data.ebeam, self._sem_panel)
 
 
-class SparcSettingsController(SettingsBarController):
-
-    def __init__(self, parent_frame, tab_data, highlight_change=False,
-                 sem_stream=None, spec_stream=None, ar_stream=None):
-        super(SparcSettingsController, self).__init__(tab_data)
-        main_data = tab_data.main
-
-        # Somewhat of a hack to get direct references to a couple of controls
-        self.angular_rep_ent = None
-        self.spectro_rep_ent = None
-        self.spec_pxs_ent = None
-
-        if main_data.spectrometer:
-            pass
-            spec_stream.repetition.subscribe(self.on_spec_rep)
-
-            # self.add_hw_component(main_data.spectrometer, self._spectrum_panel)
-
-            # If available, add filter selection
-            # TODO: have the control in a (common) separate panel?
-            # TODO: also add it to the Mirror alignment tab?
-            # if main_data.light_filter:
-            #     self._spectrum_panel.add_axis("band", main_data.light_filter,
-            #                                   self._va_config["filter"]["band"])
-
-            # self.add_spec_chronograph(self._spectrum_panel)
-        else:
-            parent_frame.fp_settings_sparc_spectrum.Hide()
-
-        # if main_data.ccd:
-        #     self.add_hw_component(main_data.ccd, self._angular_panel)
-        #
-        #     if main_data.light_filter:
-        #         self._angular_panel.add_axis("band", main_data.light_filter,
-        #                                      self._va_config["filter"]["band"])
-        #
-        #     self._angular_panel.panel.add_divider()
-        #     if ar_stream is not None:
-        #         self.angular_rep_ent = self._angular_panel.add_setting_entry(
-        #             "repetition",
-        #             ar_stream.repetition,
-        #             None,  # component
-        #             self._va_config["streamar"]["repetition"]
-        #         )
-        #
-        #         ar_stream.repetition.subscribe(self.on_ar_rep)
-        #
-        #     else:
-        #         logging.warning("AR camera available, but no AR stream provided")
-        #
-        # else:
-        #     parent_frame.fp_settings_sparc_angular.Hide()
-
-
-
-
 class AnalysisSettingsController(SettingsBarController):
     """ Control the widgets/settings in the right column of the analysis tab """
 

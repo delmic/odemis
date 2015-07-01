@@ -30,6 +30,7 @@ MD_AD_LIST = "Acquisition dates" # s since epoch for each element in dimension T
 # adjacent pixels considering that these two points are in focus
 MD_PIXEL_SIZE = "Pixel size" # (m, m)
 MD_SHEAR = "Shear"  # float, TODO
+MD_FLIP = "Flip"
 MD_BINNING = "Binning" # (px, px), number of pixels acquired as one big pixel, in each dimension
 MD_SAMPLES_PER_PIXEL = "Samples per pixel" # samples (number of samples acquired for each pixel) default: 1
 MD_HW_VERSION = "Hardware version" # str

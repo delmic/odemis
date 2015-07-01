@@ -804,10 +804,11 @@ class BitmapCanvas(BufferedCanvas):
             2. scale (float, float): scale of the image
             3. keepalpha (boolean): whether the alpha channel must be used to draw
             4. rotation (float): clockwise rotation in radians on the center of the image
-            4. shear (float): horizontal shear relative to the center of the image
-            6. blend_mode (int): blend mode to use for the image. Defaults to `source` which
+            5. shear (float): horizontal shear relative to the center of the image
+            6. flip (int): Image horz or vert flipping. 0 for no flip, wx.HORZ and wx.VERT otherwise
+            7. blend_mode (int): blend mode to use for the image. Defaults to `source` which
                     just overrides underlying layers.
-            7. name (str): name of the stream that the image originated from
+            8. name (str): name of the stream that the image originated from
 
         ..note::
             Call request_drawing_update() after calling `set_images` to actually get the images
@@ -826,7 +827,7 @@ class BitmapCanvas(BufferedCanvas):
             if args is None:
                 images.append(None)
             else:
-                im, w_pos, scale, keepalpha, rotation, shear, blend_mode, name = args
+                im, w_pos, scale, keepalpha, rotation, shear, flip, blend_mode, name = args
 
                 if not blend_mode:
                     blend_mode = BLEND_DEFAULT
@@ -842,6 +843,7 @@ class BitmapCanvas(BufferedCanvas):
                 im.metadata['dc_scale'] = scale
                 im.metadata['dc_rotation'] = rotation
                 im.metadata['dc_shear'] = shear
+                im.metadata['dc_flip'] = flip
                 im.metadata['dc_keepalpha'] = keepalpha
                 im.metadata['blend_mode'] = blend_mode
                 im.metadata['name'] = name
@@ -930,6 +932,7 @@ class BitmapCanvas(BufferedCanvas):
                     im_scale=im.metadata['dc_scale'],
                     rotation=im.metadata['dc_rotation'],
                     shear=im.metadata['dc_shear'],
+                    flip=im.metadata['dc_flip'],
                     blend_mode=im.metadata['blend_mode']
                 )
 
@@ -951,11 +954,13 @@ class BitmapCanvas(BufferedCanvas):
                 im_scale=last_image.metadata['dc_scale'],
                 rotation=last_image.metadata['dc_rotation'],
                 shear=last_image.metadata['dc_shear'],
+                flip=im.metadata['dc_flip'],
                 blend_mode=last_image.metadata['blend_mode']
             )
 
     def _draw_image(self, ctx, im_data, w_im_center, opacity=1.0,
-                    im_scale=(1.0, 1.0), rotation=None, shear=None, blend_mode=BLEND_DEFAULT):
+                    im_scale=(1.0, 1.0), rotation=None, shear=None, flip=None,
+                    blend_mode=BLEND_DEFAULT):
         """ Draw the given image to the Cairo context
 
         The buffer is considered to have it's 0,0 origin at the top left
@@ -967,6 +972,7 @@ class BitmapCanvas(BufferedCanvas):
         :param im_scale: (float, float)
         :param rotation: (float) Clock-wise rotation around the image center in radians
         :param shear: (float) Horizontal shearing of the image data (around it's center)
+        :param flip: (wx.HORIZONTAL | wx.VERTICAL) If and how to flip the image
         :param blend_mode: (int) Graphical blending type used for transparency
 
         """
@@ -1027,6 +1033,27 @@ class BitmapCanvas(BufferedCanvas):
             ctx.transform(shear_matrix)
             ctx.translate(-shear_x, -shear_y)
 
+        if flip:
+            fx = fy = 1.0
+
+            if flip & wx.HORIZONTAL == wx.HORIZONTAL:
+                fx = -1.0
+
+            if flip & wx.VERTICAL == wx.VERTICAL:
+                fy = -1.0
+
+            x, y, w, h = b_im_rect
+
+            flip_x = x + w / 2
+            flip_y = y + h / 2
+
+            flip_matrix = cairo.Matrix(fx, 0.0, 0.0, fy)
+
+            ctx.translate(flip_x, flip_y)
+
+            ctx.transform(flip_matrix)
+            ctx.translate(-flip_x, -flip_y)
+
         # logging.debug("Total scale: %s x %s = %s", im_scale, self.scale, total_scale)
 
         scale_x, scale_y = im_scale
@@ -1042,7 +1069,6 @@ class BitmapCanvas(BufferedCanvas):
             # If very little data is trimmed, it's better to scale the entire image than to create
             # a slightly smaller copy first.
             if b_im_rect[2] > intersection[2] * 1.1 or b_im_rect[3] > intersection[3] * 1.1:
-
                 im_data, tl = self._get_sub_img(intersection, b_im_rect, im_data, total_scale)
                 b_im_rect = (tl[0], tl[1], b_im_rect[2], b_im_rect[3], )
 
@@ -1497,6 +1523,7 @@ class DraggableCanvas(BitmapCanvas):
         wx.WXK_UP: (0, 100),
         wx.WXK_DOWN:(0, -100),
     }
+
     def on_char(self, evt):
         key = evt.GetKeyCode()
 
@@ -1543,8 +1570,7 @@ class DraggableCanvas(BitmapCanvas):
         self.margins = ((self._bmp_buffer_size[0] - self.ClientSize.x) // 2,
                         (self._bmp_buffer_size[1] - self.ClientSize.y) // 2)
 
-        src_pos = (self.margins[0] - self.drag_shift[0],
-                   self.margins[1] - self.drag_shift[1])
+        src_pos = (self.margins[0] - self.drag_shift[0], self.margins[1] - self.drag_shift[1])
 
         # Blit the appropriate area from the buffer to the view port
         dc_view.BlitPointSize(
