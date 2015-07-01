@@ -661,7 +661,13 @@ class AndorCam2(model.DigitalCamera):
                 self._initpath = possibilities[0] # try just in case
 
         logging.debug("Initialising with path %s", self._initpath)
-        self.atcore.Initialize(self._initpath)
+        try:
+            self.atcore.Initialize(self._initpath)
+        except AndorV2Error as exp:
+            if exp.errno == 20992:  # DRV_P1INVALID
+                raise HwError("Failed to connect to Andor camera. "
+                              "Please disconnect and then reconnect the camera "
+                              "to the computer.")
         logging.info("Initialisation completed.")
 
     def Reinitialize(self):

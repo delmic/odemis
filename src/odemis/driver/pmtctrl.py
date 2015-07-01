@@ -236,7 +236,7 @@ class PMTControl(model.HwComponent):
 
         # relay initialization
         self.setContact(False)
-        time.sleep(5)
+        time.sleep(10)
         self.setContact(True)
 
     def terminate(self):
