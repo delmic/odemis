@@ -38,6 +38,7 @@ from odemis import model
 import odemis.gui
 from odemis.gui.util.widgets import VigilantAttributeConnector, AxisConnector
 from odemis.model import VigilantAttributeBase
+from odemis.util.conversion import change_brightness
 import odemis.util.units as utun
 from odemis.model import NotApplicableError
 from odemis.util.driver import reproduceTypedValue
@@ -167,7 +168,7 @@ def hfw_choices(comp, va, conf):
 
     try:
         choices = va.choices
-    except NotApplicableError:
+    except (NotApplicableError, AttributeError):
         mi, ma, = va.range
         choices = [mi]
         step = 1
@@ -386,7 +387,7 @@ def process_setting_metadata(hw_comp, setting_va, conf):
             # Ensure that each choice is within the range
             rng = setting_va.range
             choices = set(c for c in choices if rng[0] <= c <= rng[1])
-    except (AttributeError, NotApplicableError):
+    except (AttributeError, NotApplicableError), e:
         pass
 
     # Ensure the choices contain the current value
