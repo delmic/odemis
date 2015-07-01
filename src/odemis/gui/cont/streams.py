@@ -1608,8 +1608,8 @@ class SparcStreamsController(StreamBarController):
             for ss in mds.streams:
                 # If not, remove the MD stream
                 if ss not in streams:
-                    logging.debug("Removing acquisition stream %s because %s is gone",
-                                  mds.name, ss.name)
+                    logging.error("Removing acquisition stream %s because %s is gone",
+                                  mds.name.value, ss.name.value)
                     self._tab_data_model.acquisitionView.removeStream(mds)
                     break
 

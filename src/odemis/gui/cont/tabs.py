@@ -628,6 +628,8 @@ class SparcAcquisitionTab(Tab):
         self.tab_data_model.streams.value.append(sem_stream)
         # TODO: needed? To stop it when tab loses focus?
         self.tab_data_model.streams.value.append(spot_stream)
+        # Add semcl stream, needed for Monochromator
+        self.tab_data_model.streams.value.append(semcl_stream)
 
         # Create Stream Bar Controller
         self._stream_controller = streamcont.SparcStreamsController(
