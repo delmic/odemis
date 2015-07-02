@@ -212,6 +212,7 @@ class AcquisitionTask(object):
                 if self._opm is not None:
                     try:
                         guess_mode = self._opm.guessMode(s)
+                        logging.info("setting optical path %s for stream %s", guess_mode, s.name.value)
                         self._opm.setPath(guess_mode)
                     except ValueError:
                         logging.info("No mode can be inferred for the given stream")

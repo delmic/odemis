@@ -581,7 +581,7 @@ class SparcAcquiController(object):
         # start acquisition + connect events to callback
         streams = self._tab_data_model.acquisitionView.getStreams()
 
-        self.acq_future = acq.acquire(streams)
+        self.acq_future = acq.acquire(streams, self._main_data_model.opm)
         self._acq_future_connector = ProgressiveFutureConnector(self.acq_future,
                                                                 self.gauge_acq,
                                                                 self.lbl_acqestimate)
