@@ -778,14 +778,14 @@ class SEMMDStream(MultipleDetectorStream):
                 trigger.notify()
                 # Time to scan a frame
                 frame_time = self._emitter.dwellTime.value * cur_dc_period
-                if not self._acq_rep_complete.wait(frame_time * 2 + 5):
+                if not self._acq_rep_complete.wait(frame_time * 10 + 5):
                     raise TimeoutError("Acquisition of repetition stream for frame %s timed out after %g s"
-                                       % (self._emitter.translation.value, frame_time * 2 + 5))
+                                       % (self._emitter.translation.value, frame_time * 10 + 5))
                 if self._acq_state == CANCELLED:
                     raise CancelledError()
-                if not self._acq_main_complete.wait(frame_time * 1.5 + 1):
+                if not self._acq_main_complete.wait(frame_time * 5 + 1):
                     raise TimeoutError("Acquisition of SEM frame %s timed out after %g s"
-                                       % (self._emitter.translation.value, frame_time * 1.5 + 1))
+                                       % (self._emitter.translation.value, frame_time * 5 + 1))
 
                 self._main_df.unsubscribe(self._ssOnMainImage)
                 self._rep_df.unsubscribe(self._ssOnRepetitionImage)  # synchronized DF last
@@ -834,7 +834,13 @@ class SEMMDStream(MultipleDetectorStream):
                     raise CancelledError()
                 self._acq_state = FINISHED
 
-            main_one = self._assembleMainData(rep, roi, self._main_data)  # shape is (Y, X)
+            # in case of monochromator i.e. spot mode
+            if self._main_data[0].shape == (0,):
+                md = self._main_data[0].metadata.copy()
+                main_one = model.DataArray(numpy.array([[0]], dtype=numpy.uint16), metadata=md)
+            else:
+                main_one = self._assembleMainData(rep, roi, self._main_data)
+            rep_one = self._assembleMainData(rep, roi, rep_buf)
             # explicitly add names to make sure they are different
             main_one.metadata[MD_DESCRIPTION] = self._main_stream.name.value
             # we just need to treat the same way as main data
