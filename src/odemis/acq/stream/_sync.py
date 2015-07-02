@@ -93,7 +93,9 @@ class MultipleDetectorStream(Stream):
         # build the .raw from all the substreams
         r = []
         for s in self._streams:
-            r.extend(s.raw)
+            for da in s.raw:
+                if da.shape != (0,):  # don't add empty array
+                    r.append(da)
         if self._anchor_raw is not None:
             r.extend(self._anchor_raw)
         return r
@@ -128,7 +130,7 @@ class MultipleDetectorStream(Stream):
 
     def acquire(self):
         # TODO: if already acquiring, queue the Future for later acquisition
-        if self._current_future != None and not self._current_future.done():
+        if self._current_future is not None and not self._current_future.done():
             raise IOError("Cannot do multiple acquisitions simultaneously")
 
         if self._acq_thread and self._acq_thread.isAlive():
@@ -172,7 +174,7 @@ class MultipleDetectorStream(Stream):
         """
         called at the end of an entire acquisition
         main_data (DataArray): the main stream data
-        rep_data (list of DataArray): the repetition stream data (ordered, with 
+        rep_data (list of DataArray): the repetition stream data (ordered, with
             X changing fast, then Y slow)
         """
         pass
@@ -281,7 +283,7 @@ class MultipleDetectorStream(Stream):
 
     def _assembleMainData(self, rep, roi, data_list):
         """
-        Take all the data received from the main stream and assemble it in a 
+        Take all the data received from the main stream and assemble it in a
         2D image. The result goes into .raw.
 
         rep (tuple of 2 0<ints): X/Y repetition
@@ -290,6 +292,14 @@ class MultipleDetectorStream(Stream):
         with X variating first, then Y.
         """
         assert len(data_list) > 0
+
+        # If the detector generated no data, just return no data
+        # This currently happens with the semcomedi counters, which cannot
+        # acquire simultaneously analog input.
+        if data_list[0].shape == (0,):
+            if not all(d.shape == (0,) for d in data_list):
+                logging.warning("Detector received mix of empty and non-empty data")
+            return data_list[0]
 
         # start with the metadata from the first point
         md = data_list[0].metadata.copy()
@@ -304,12 +314,8 @@ class MultipleDetectorStream(Stream):
 
         # Compute center of area, based on the position of the first point (the
         # position of the other points can be wrong due to drift correction)
-        if len(data_list[0].shape) == 1:
-            # Monochromator data
-            tl = md[MD_POS]
-        else:
-            tl = (md[MD_POS][0] - (pxs[0] * (data_list[0].shape[0] - 1)) / 2,
-                  md[MD_POS][1] + (pxs[1] * (data_list[0].shape[1] - 1)) / 2)  # center of the first point (top-left)
+        tl = (md[MD_POS][0] - (pxs[0] * (data_list[0].shape[0] - 1)) / 2,
+              md[MD_POS][1] + (pxs[1] * (data_list[0].shape[1] - 1)) / 2)  # center of the first point (top-left)
         center = (tl[0] + (pxs[0] * (rep[0] - 1)) / 2,
                   tl[1] - (pxs[1] * (rep[1] - 1)) / 2)
 
@@ -796,7 +802,7 @@ class SEMMDStream(MultipleDetectorStream):
                 raw_pos = self._main_data[-1].metadata[MD_POS]
                 rep_data.metadata[MD_POS] = (raw_pos[0] + drift_shift[0] * main_pxs[0],
                                              raw_pos[1] - drift_shift[1] * main_pxs[1])  # Y is upside down
-                rep_data.metadata[MD_DESCRIPTION] = self._rep_stream.name.value
+                rep_data.metadata[MD_DESCRIPTION] = self._rep_stream.name.value  # TODO: do at the end
                 rep_buf.append(rep_data)
 
                 # guess how many drift anchors to acquire
@@ -833,7 +839,7 @@ class SEMMDStream(MultipleDetectorStream):
             main_one.metadata[MD_DESCRIPTION] = self._main_stream.name.value
             # we just need to treat the same way as main data
             rep_one = self._assembleMainData(rep, roi, rep_buf)
-            self._onMultipleDetectorData(main_one, rep_one)
+            self._onMultipleDetectorData(main_one, rep_one)  # FIXME: change to respect API => create rep_one inside
 
             if self._dc_estimator is not None:
                 self._anchor_raw = self._assembleAnchorData(self._dc_estimator.raw)
@@ -882,7 +888,7 @@ class SEMSpectrumMDStream(SEMCCDMDStream):
         # assemble all the CCD data into one
         md_sem = main_data.metadata
         pxs = md_sem[MD_PIXEL_SIZE]
-        if self._rep_stream.fuzzing.value is True:
+        if self._rep_stream.fuzzing.value:
             repetition = (repetition[0] / TILE_SHAPE[0], repetition[1] / TILE_SHAPE[1])
             pxs = (md_sem[MD_PIXEL_SIZE][0] * TILE_SHAPE[0], md_sem[MD_PIXEL_SIZE][1] * TILE_SHAPE[1])
 
