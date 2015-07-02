@@ -31,6 +31,8 @@ from odemis.acq import stream
 from odemis.gui import FG_COLOUR_DIS
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.slider import Slider
+from odemis.gui.util import call_in_wx_main
+from odemis.util import limit_invocation
 from odemis.util.conversion import wxcol_to_frgb
 import wx
 
@@ -232,14 +234,10 @@ class AxisLegend(wx.Panel):
 
         self.tick_colour = wxcol_to_frgb(self.ForegroundColour)
 
+        self._locked = False
+
         self.Bind(wx.EVT_PAINT, self.on_paint)
         self.Bind(wx.EVT_SIZE, self.on_size)
-
-        self._value_range = None  # 2 tuple with the minimum and maximum value
-        self._tick_list = None  # Lust of 2 tuples, containing the pixel position and value
-
-        self._value_space = None  # Difference between min and max values
-        self._pixel_space = None  # Number of available pixels
 
         self._orientation = orientation
         self._max_tick_width = 32  # Largest pixel width of any label in use
@@ -253,6 +251,13 @@ class AxisLegend(wx.Panel):
             self.SetMinSize((42, -1))
 
         self.tooltip_ctrl = None
+
+        # The following properties are volatile, meaning that they can change often
+
+        self._value_range = None  # 2 tuple with the minimum and maximum value
+        self._tick_list = None  # Lust of 2 tuples, containing the pixel position and value
+        self._value_space = None  # Difference between min and max values
+        self._pixel_space = None  # Number of available pixels
 
         self.on_size()  # Force a refresh
 
@@ -275,9 +280,9 @@ class AxisLegend(wx.Panel):
 
     @unit.setter
     def unit(self, val):
-        self._unit = val
-        self.calculate_ticks()
-        self.Refresh()
+        if self._unit != val:
+            self._unit = val
+            self.limited_refresh()
 
     @property
     def range(self):
@@ -287,9 +292,9 @@ class AxisLegend(wx.Panel):
     def range(self, val):
         if val[0] > val[1]:
             raise ValueError("The range values need to be ordered!")
-        self._value_range = val
-        self.calculate_ticks()
-        self.Refresh()
+        elif self._value_range != val:
+            self._value_range = val
+            self.limited_refresh()
 
     def clear(self):
         self._value_range = None
@@ -298,13 +303,18 @@ class AxisLegend(wx.Panel):
 
     def on_size(self, _=None):
         if self._value_range:
-            self.calculate_ticks()
-        self.Refresh(eraseBackground=False)
+            self.limited_refresh()
+
+    @limit_invocation(0.2)
+    def limited_refresh(self):
+        self.Refresh()
 
     def on_paint(self, _):
 
-        if None in (self._value_range, self._tick_list):
+        if self._value_range is None:
             return
+
+        self.calculate_ticks()
 
         # Set Font
         font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
@@ -354,7 +364,9 @@ class AxisLegend(wx.Panel):
 
     def value_to_pixel(self, value):
         """ Map range value to legend pixel postion """
-        if self._value_space:
+        if self._pixel_space is None:
+            return None
+        elif None not in (self._value_space, self._value_range):
             pixel = ((value - self._value_range[0]) / self._value_space) * self._pixel_space
             # NaN was encounter at Monache, so this extra test was added
             pixel = 0 if math.isnan(pixel) else int(round(pixel))
@@ -377,6 +389,7 @@ class AxisLegend(wx.Panel):
         pixel = pixel if self._orientation == wx.HORIZONTAL else self._pixel_space - pixel
         return pixel / self._pixel_space
 
+    # @limit_invocation(1)
     def calculate_ticks(self):
         """ Calculate which values in the range to represent as ticks on the axis
 
@@ -387,14 +400,15 @@ class AxisLegend(wx.Panel):
         if self._value_range is None:
             return
 
+        min_val, max_val = self._value_range
+
         # Get the horizontal/vertical space in pixels
         self._pixel_space = self.ClientSize[self._orientation != wx.HORIZONTAL]
 
         # Range width
-        self._value_space = self._value_range[1] - self._value_range[0]
+        self._value_space = max_val - min_val
 
         num_ticks = self._pixel_space // self._tick_spacing
-        # logging.debug("Aiming for %s ticks with a client of size %s", num_ticks, self._pixel_space)
         # Calculate the best step size in powers of 10, so it will cover at
         # least the distance `val_dist`
         value_step = 1e-12
@@ -412,15 +426,13 @@ class AxisLegend(wx.Panel):
         # logging.debug("Value step is %s after second iteration with range %s",
         #               value_step, self._value_space)
 
-        min_val = self._value_range[0]
-
         first_val = (int(min_val / value_step) + 1) * value_step if value_step else 0
         # logging.debug("Setting first tick at value %s", first_val)
 
         tick_values = [min_val]
         cur_val = first_val
 
-        while cur_val < self._value_range[1]:
+        while cur_val < max_val:
             tick_values.append(cur_val)
             cur_val += value_step
 

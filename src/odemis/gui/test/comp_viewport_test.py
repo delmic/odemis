@@ -23,9 +23,12 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 #===============================================================================
 # Test module for Odemis' gui.comp.viewport module
 #===============================================================================
+from collections import deque
+import threading
 
 import unittest
 import wx
+import math
 
 import odemis.gui.comp.viewport as viewport
 import odemis.gui.comp.canvas as canvas
@@ -70,7 +73,17 @@ class ViewportTestCase(test.GuiTestCase):
 
     frame_class = test.test_gui.xrccanvas_frame
 
-    def test_sandbox(self):
+    def _generate_sine_list(self, period, amp=1):
+
+        sine_list = []
+        step_size = (math.pi * 2) / period
+
+        for i in range(period):
+            sine_list.append(math.sin(i * step_size) * amp)
+
+        return deque(sine_list)
+
+    def test_threaded_plot(self):
         vwp = viewport.PlotViewport(self.panel)
         vwp.canvas.SetBackgroundColour("#333")
         vwp.canvas.SetForegroundColour("#A0CC27")
@@ -78,14 +91,30 @@ class ViewportTestCase(test.GuiTestCase):
 
         vwp.canvas.set_plot_mode(canvas.PLOT_MODE_BAR)
 
-        plot = RANGED_PLOTS[-1]
+        data_size = 100
+        xs = range(data_size)
+        ys = self._generate_sine_list(data_size)
 
-        vwp.canvas.set_1d_data(plot[2], plot[3], range_x=plot[0], range_y=plot[1])
+        def rotate(q, v):
+            v.bottom_legend.unit = 'm'
 
-        vwp.left_legend.unit = 'm'
-        vwp.left_legend.range = (min(plot[1]), max(plot[1]))
-        vwp.bottom_legend.unit = 'g'
-        vwp.bottom_legend.range = (min(plot[0]), max(plot[0]))
+            scale = 1.001
+
+            while True:
+                v.canvas.set_1d_data(xs, ys, unit_x='m', unit_y='g')
+                q[-1] *= scale
+                q.rotate(1)
+
+                v.bottom_legend.range = v.canvas.range_x
+                # v.bottom_legend.tooltip = "Time (s)"
+
+                v.left_legend.range = v.canvas.range_y
+                # v.left_legend.tooltip = "Count per second"
+
+                threading._sleep(0.0005)
+
+        t = threading.Thread(target=rotate, args=(ys, vwp))
+        t.start()
 
         test.gui_loop()
 
