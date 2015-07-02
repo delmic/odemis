@@ -304,8 +304,12 @@ class MultipleDetectorStream(Stream):
 
         # Compute center of area, based on the position of the first point (the
         # position of the other points can be wrong due to drift correction)
-        tl = (md[MD_POS][0] - (pxs[0] * (data_list[0].shape[0] - 1)) / 2,
-              md[MD_POS][1] + (pxs[1] * (data_list[0].shape[1] - 1)) / 2)  # center of the first point (top-left)
+        if len(data_list[0].shape) == 1:
+            # Monochromator data
+            tl = md[MD_POS]
+        else:
+            tl = (md[MD_POS][0] - (pxs[0] * (data_list[0].shape[0] - 1)) / 2,
+                  md[MD_POS][1] + (pxs[1] * (data_list[0].shape[1] - 1)) / 2)  # center of the first point (top-left)
         center = (tl[0] + (pxs[0] * (rep[0] - 1)) / 2,
                   tl[1] - (pxs[1] * (rep[1] - 1)) / 2)
 
