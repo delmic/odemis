@@ -304,12 +304,8 @@ class MultipleDetectorStream(Stream):
 
         # Compute center of area, based on the position of the first point (the
         # position of the other points can be wrong due to drift correction)
-        if len(data_list[0].shape) == 1:
-            # Monochromator data
-            tl = md[MD_POS]
-        else:
-            tl = (md[MD_POS][0] - (pxs[0] * (data_list[0].shape[0] - 1)) / 2,
-                  md[MD_POS][1] + (pxs[1] * (data_list[0].shape[1] - 1)) / 2)  # center of the first point (top-left)
+        tl = (md[MD_POS][0] - (pxs[0] * (data_list[0].shape[0] - 1)) / 2,
+              md[MD_POS][1] + (pxs[1] * (data_list[0].shape[1] - 1)) / 2)  # center of the first point (top-left)
         center = (tl[0] + (pxs[0] * (rep[0] - 1)) / 2,
                   tl[1] - (pxs[1] * (rep[1] - 1)) / 2)
 
@@ -828,7 +824,13 @@ class SEMMDStream(MultipleDetectorStream):
                     raise CancelledError()
                 self._acq_state = FINISHED
 
-            main_one = self._assembleMainData(rep, roi, self._main_data)  # shape is (Y, X)
+            # in case of monochromator i.e. spot mode
+            if self._main_data[0].shape == (0,):
+                md = self._main_data[0].metadata.copy()
+                main_one = model.DataArray(numpy.array([[0]], dtype=numpy.uint16), metadata=md)
+            else:
+                main_one = self._assembleMainData(rep, roi, self._main_data)
+            rep_one = self._assembleMainData(rep, roi, rep_buf)
             # explicitly add names to make sure they are different
             main_one.metadata[MD_DESCRIPTION] = self._main_stream.name.value
             # we just need to treat the same way as main data
