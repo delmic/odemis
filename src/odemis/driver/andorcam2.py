@@ -435,9 +435,8 @@ class AndorCam2(model.DigitalCamera):
         # up-to-date metadata to be included in dataflow
         hw_name = self.getModelName()
         self._metadata[model.MD_HW_NAME] = hw_name
-        # TODO test on other hardwares
         caps = self.GetCapabilities()
-        if not caps.CameraType in AndorCapabilities.CameraTypes:
+        if caps.CameraType not in AndorCapabilities.CameraTypes:
             logging.warning("This driver has not been tested for this camera type")
 
         # drivers/hardware info
@@ -474,7 +473,7 @@ class AndorCam2(model.DigitalCamera):
 
         if self.hasFeature(AndorCapabilities.FEATURES_FANCONTROL):
             # max speed
-            self.fanSpeed = model.FloatContinuous(1.0, [0.0, 1.0], unit="",
+            self.fanSpeed = model.FloatContinuous(1.0, (0.0, 1.0), unit="",
                                         setter=self._setFanSpeed) # ratio to max speed
             self._setFanSpeed(1.0, force=True)
 
@@ -482,15 +481,15 @@ class AndorCam2(model.DigitalCamera):
         self._image_rect = (1, resolution[0], 1, resolution[1])
         # need to be before binning, as it is modified when changing binning
         self.resolution = model.ResolutionVA(self._transposeSizeToUser(resolution),
-                        [self._transposeSizeToUser((1, 1)),
-                         self._transposeSizeToUser(resolution)],
-                         setter=self._setResolution)
+                                             (self._transposeSizeToUser((1, 1)),
+                                              self._transposeSizeToUser(resolution)),
+                                             setter=self._setResolution)
         self._setResolution(self._transposeSizeToUser(resolution))
 
         maxbin = self.GetMaximumBinnings(AndorV2DLL.RM_IMAGE)
         self.binning = model.ResolutionVA(self._transposeSizeToUser(self._binning),
-                             [self._transposeSizeToUser((1, 1)),
-                              self._transposeSizeToUser(maxbin)],
+                                          (self._transposeSizeToUser((1, 1)),
+                                           self._transposeSizeToUser(maxbin)),
                                           setter=self._setBinning)
 
         # default values try to get live microscopy imaging more likely to show something
@@ -664,10 +663,13 @@ class AndorCam2(model.DigitalCamera):
         try:
             self.atcore.Initialize(self._initpath)
         except AndorV2Error as exp:
-            if exp.errno == 20992:  # DRV_P1INVALID
+            if exp.errno == 20992:  # DRV_NOT_AVAILABLE
                 raise HwError("Failed to connect to Andor camera. "
                               "Please disconnect and then reconnect the camera "
                               "to the computer.")
+            else:
+                raise
+
         logging.info("Initialisation completed.")
 
     def Reinitialize(self):
