@@ -736,9 +736,6 @@ class TestSEMCounter(unittest.TestCase):
     """
     @classmethod
     def setUpClass(cls):
-        if TEST_NOHW:
-            # simulator doesn't support counter
-            return
         cls.sem = semcomedi.SEMComedi(**KWARGS_SEM_CNT)
 
         for child in cls.sem.children.value:
@@ -754,9 +751,6 @@ class TestSEMCounter(unittest.TestCase):
         cls.sem.terminate()
 
     def setUp(self):
-        if TEST_NOHW:
-            # simulator doesn't support
-            self.skipTest("Counter no simulated")
         # reset resolution and dwellTime
         self.scanner.resolution.value = (25, 20)
         self.size = self.scanner.resolution.value

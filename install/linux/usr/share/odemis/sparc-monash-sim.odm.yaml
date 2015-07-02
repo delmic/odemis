@@ -23,8 +23,7 @@ SPARC-MONASH: {
        scanner: "SEM E-beam",
        detector0: "SEM Detector",
        detector1: "CL PMT",
-       detector2: "Monochromator PMT", # simulator doesn't support counter
-       #counter0: "Monochromator PMT",
+       counter0: "Monochromator PMT",
     }
 }
 
@@ -99,8 +98,7 @@ SPARC-MONASH: {
     creator: "SEM Scan Interface",
     role: null,
     init: {
-        channel: 2, # data is black is the time
-        limits: [0, 5] # V
+        source: 8,  # PFI number
     },
 }
 

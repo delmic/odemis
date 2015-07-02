@@ -256,8 +256,13 @@ class SEMComedi(model.HwComponent):
                 self.children.value.add(self._detectors[name])
             elif name.startswith("counter"):
                 ctrn = len(self._counters)  # just assign the counter subdevice in order
-                self._counters[name] = CountingDetector(parent=self, counter=ctrn,
-                                                        daemon=daemon, **ckwargs)
+                if self._test:
+                    cd = FakeCountingDetector(parent=self, counter=ctrn,
+                                              daemon=daemon, **ckwargs)
+                else:
+                    cd = CountingDetector(parent=self, counter=ctrn,
+                                          daemon=daemon, **ckwargs)
+                self._counters[name] = cd
                 self.children.value.add(self._counters[name])
 
         rchannels = set(d.channel for d in self._detectors.values())
@@ -1294,8 +1299,7 @@ class SEMComedi(model.HwComponent):
          the given analog input channels and convert back to 2d array
         wchannels (list of int): channels to write (in same the order as data)
         wranges (list of int): ranges of each write channel
-        rchannels (list of int): channels to read (in same the order as data)
-        rranges (list of int): ranges of each read channel
+        counter (Counter): counter to use to acquire the data
         period (float): sampling period in s (time between two pixels on the same
          channel)
         margin (0 <= int): number of additional pixels at the begginning of each line
@@ -1429,13 +1433,15 @@ class SEMComedi(model.HwComponent):
             # create a command for writing
             # Note: we don't have the problem with write buffers of 1 sample,
             # because we always do at least 2 scans.
-            self.setup_timed_command(self._ao_subdevice, wchannels, wranges, period_ns,
-                                     stop_arg=nwscans)
+            if not self._test:
+                self.setup_timed_command(self._ao_subdevice, wchannels, wranges, period_ns,
+                                         stop_arg=nwscans)
 
             self._writer.prepare(wdata.ravel(), expected_time)
 
         # run the commands
-        comedi.internal_trigger(self._device, self._ao_subdevice, 0)
+        if not self._test:
+            comedi.internal_trigger(self._device, self._ao_subdevice, 0)
         start = time.time()
         self._writer.run()
         counter.reader.run()
@@ -1778,7 +1784,7 @@ class SEMComedi(model.HwComponent):
             if i == ic:
                 b = rbuf[0]
             else:
-                b = numpy.empty((0,), dtype = self._reader.dtype)  # empty array
+                b = numpy.empty([[0]], dtype=self._reader.dtype)  # empty array
             rdas.append(model.DataArray(b, md[i]))
 
         return rdas
@@ -2086,6 +2092,41 @@ class CounterReader(Reader):
         except comedi.ComediError:
             logging.debug("Failed to cancel read")
         return buf
+
+
+class FakeCounterReader(Accesser):
+    """
+    Same as CounterReader, but generates random data => for the comedi_test driver
+    """
+    def __init__(self, parent):
+        self._duration = None
+        self._must_stop = threading.Event()
+        self._expected_end = 0
+        self._maxdata = 2 ** 31 - 1  # randint doesn't work above this
+        self.dtype = numpy.uint32()
+
+    def close(self):
+        pass
+
+    def prepare(self, count, duration):
+        self._count = count
+        self._duration = duration
+        self._must_stop.clear()
+
+    def run(self):
+        self._expected_end = time.time() + self._duration
+
+    def wait(self, timeout=None):
+        left = self._expected_end - time.time()
+        if left > 0:
+            logging.debug("simulating a read for another %g s", left)
+            self._must_stop.wait(left)
+
+        # generates random data
+        return numpy.random.randint(self._maxdata, size=self._count)
+
+    def cancel(self):
+        self._must_stop.set()
 
 
 class MMapReader(Reader):
@@ -2899,12 +2940,12 @@ class AnalogDetector(model.Detector):
 
 class CountingDetector(model.Detector):
     """
-    Represents a detector which generates a pulsed signal. Typically, the higher
+    Represents a detector which observe a pulsed signal. Typically, the higher
     the pulse frequency, the stronger the original signal is. E.g., a counting
     PMT.
     Note: only NI devices are supported.
     PFI(10 + counter number) are used internally (to connect the AO scan signal
-    to the sampling clock)
+    to the sampling clock), so they shouldn't be used for anything else.
 
     There are currently some restrictions:
     * Dwell time should be > 100µs. Below that, there is a "Gate_Error" problem
@@ -3166,6 +3207,34 @@ class CountingDetector(model.Detector):
         # send the command
         comedi.command(self._device, cmd)
 
+
+class FakeCountingDetector(CountingDetector):
+    """
+    Same as counting detector but actually counting nothing. For testing only.
+    """
+    def __init__(self, name, role, parent, counter, source, **kwargs):
+        """
+        counter (0 <= int): hardware counter number
+        source (0 <= int): PFI number, the input pin on which the signal is received
+        """
+        # It will set up ._shape and .parent
+        model.Detector.__init__(self, name, role, parent=parent, **kwargs)
+        logging.info("Creating fake counter %d", counter)
+
+        self.counter = counter
+        self.source = source
+
+        maxdata = 2 ** 32 - 1
+        self._shape = (maxdata + 1,)  # only one point
+        self.data = SEMDataFlow(self, parent)
+
+        # Special event to request software unblocking on the scan
+        self.softwareTrigger = model.Event()
+
+        self.reader = FakeCounterReader(self)
+
+    def setup_count_command(self):
+        pass  # nothing to do
 
 class SEMDataFlow(model.DataFlow):
     def __init__(self, detector, sem):
