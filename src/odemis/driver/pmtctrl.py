@@ -241,6 +241,7 @@ class PMTControl(model.HwComponent):
         self._setPowerSupply(True)
 
         # relay initialization
+        logging.info("Turning off and on relay power (will take 10 s)")
         self.setContact(False)
         time.sleep(10)
         self.setContact(True)
