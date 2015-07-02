@@ -500,6 +500,7 @@ class SpotSEMStream(LiveStream):
         # To indicate the position, use the ROI. We expect that the ROI has an
         # "empty" area (ie, lt == rb)
         self.roi.value = (0.5, 0.5, 0.5, 0.5)  # centre
+        self.roi.subscribe(self._onROI)
 
     def _applyROI(self):
         """
