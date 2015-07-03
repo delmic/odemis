@@ -379,18 +379,16 @@ class SparcAcquiController(object):
     tab.
     """
 
-    def __init__(self, tab_data, main_frame, stream_ctrl, vas):
+    def __init__(self, tab_data, main_frame, stream_ctrl):
         """
         tab_data (MicroscopyGUIData): the representation of the microscope GUI
         main_frame: (wx.Frame): the frame which contains the 4 viewports
         stream_ctrl (StreamBarController): controller to pause/resume the streams
-        vas (list of VAs): all the VAs which might affect acquisition (time)
         """
         self._tab_data_model = tab_data
         self._main_data_model = tab_data.main
         self._main_frame = main_frame
         self._stream_controller = stream_ctrl
-        self._vas = vas
 
         # For file selection
         self.conf = conf.get_acqui_conf()
@@ -429,19 +427,35 @@ class SparcAcquiController(object):
         # TODO: we need to be informed if the user closes suddenly the window
         # self.Bind(wx.EVT_CLOSE, self.on_close)
 
-        # Event binding
-        pub.subscribe(self.on_setting_change, 'setting.changed')
-        # TODO: Should work with new streams => listen to tab_data_model.streams
-        # TODO We should also listen to repetition, in case it's modified after we've
-        # received the new ROI. Or maybe always compute acquisition time a bit delayed?
-        for va in vas:
-            va.subscribe(self.onAnyVA)
+        # Listen to change of streams to update the acquisition time
+        self._prev_streams = set() # set of streams already listened to
+        tab_data.streams.subscribe(self._onStreams, init=True)
+        # also listen to .semStream, which is not in .streams
+        for va in self._get_settings_vas(tab_data.semStream):
+            va.subscribe(self._onAnyVA)
 
         self._roa = tab_data.semStream.roi
-        self._roa.subscribe(self.onROA, init=True)
+        self._roa.subscribe(self._onROA, init=True)
 
     def __del__(self):
         self._executor.shutdown(wait=False)
+
+    # black list of VAs name which are known to not affect the acquisition time
+    VAS_NO_ACQUSITION_EFFECT = ("image", "autoBC", "intensityRange", "histogram",
+                                "is_active", "should_update", "status")
+
+    def _get_settings_vas(self, stream):
+        """
+        Find all the VAs of a stream which can potentially affect the acquisition time
+        return (set of VAs)
+        """
+        nvas = model.getVAs(stream) # name -> va
+        vas = set()
+        # remove some VAs known to not affect the acquisition time
+        for n, va in nvas.items():
+            if n not in self.VAS_NO_ACQUSITION_EFFECT:
+                vas.add(va)
+        return vas
 
     def _get_default_filename(self):
         """
@@ -461,20 +475,35 @@ class SparcAcquiController(object):
         self._main_frame.txt_destination.SetInsertionPointEnd()
         self._main_frame.txt_filename.SetValue(unicode(base))
 
-    def onROA(self, roi):
+    def _onROA(self, roi):
         """ updates the acquire button according to the acquisition ROI """
         self.btn_acquire.Enable(roi != UNDEFINED_ROI)
-        self.update_acquisition_time() # to update the message
+        self.update_acquisition_time()  # to update the message
 
-    def onAnyVA(self, val):
+    def _onStreams(self, streams):
+        """
+        Called when streams are added/deleted. Used to listen to settings change
+         and update the acquisition time.
+        """
+        streams = set(streams)
+        # remove subscription for streams that were deleted
+        for s in (self._prev_streams - streams):
+            for va in self._get_settings_vas(s):
+                va.unsubscribe(self._onAnyVA)
+
+        # add subscription for new streams
+        for s in (streams - self._prev_streams):
+            for va in self._get_settings_vas(s):
+                va.subscribe(self._onAnyVA)
+
+        self._prev_streams = streams
+        self.update_acquisition_time()  # to update the message
+
+    def _onAnyVA(self, val):
         """
         Called whenever a VA which might affect the acquisition is modified
         """
         self.update_acquisition_time() # to update the message
-
-    def on_setting_change(self):
-        """ Handler for pubsub 'setting.changed' messages """
-        self.update_acquisition_time()
 
     def on_change_file(self, evt):
         """

@@ -1849,6 +1849,7 @@ class SparcStreamsController(StreamBarController):
             main_data.spectrograph
         )
 
+        # TODO: this should be automatically computed out of the slit-monochromator
         stream_cont.add_axis_entry(
             "slit-in",
             main_data.spectrograph
@@ -1858,12 +1859,6 @@ class SparcStreamsController(StreamBarController):
             "slit-monochromator",
             main_data.spectrograph
         )
-
-        # stream_cont.add_axis_entry(
-        #     "band",
-        #     main_data.light_filter,
-        #     stream_cont.hw_settings_config["filter"]["band"]
-        # )
 
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream

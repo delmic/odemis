@@ -603,8 +603,6 @@ class SparcAcquisitionTab(Tab):
 
         # drift correction is disabled until a roi is selected
         semcl_stream.dcRegion.value = acqstream.UNDEFINED_ROI
-        vas_settings.append(semcl_stream.dcRegion)
-        vas_settings.append(semcl_stream.dcPeriod)
         # Set anchor region dwell time to the same value as the SEM survey
         sem_stream.emtDwellTime.subscribe(self._copyDwellTimeToAnchor, init=True)
 
@@ -659,7 +657,6 @@ class SparcAcquisitionTab(Tab):
             self.tab_data_model,
             self.main_frame,
             self.stream_controller,
-            vas_settings,
         )
 
     @property

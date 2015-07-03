@@ -310,6 +310,7 @@ class BackendContainer(model.Container):
         # end ourself
         model.Container.terminate(self)
 
+
 class BackendRunner(object):
     CONTAINER_ALL_IN_ONE = "1" # one backend container for everything
     CONTAINER_SEPARATED = "+" # each component is started in a separate container
