@@ -144,14 +144,15 @@ class StreamController(object):
 
         add_divider = False
 
+        # TODO: order the VAs according to the config order (cf settings controller)
         for name, va in self.stream.emt_vas.items():
             setting_conf = {}
 
-            if emitter_conf and name in emitter_conf:
+            if name in emitter_conf:
                 logging.debug("%s emitter configuration found for %s", name,
                               self.stream.emitter.role)
                 setting_conf = self.hw_settings_config[self.stream.emitter.role][name]
-            elif detector_conf and name in detector_conf:
+            elif name in detector_conf:
                 logging.error("Detector %s setting va added to emitter group!", name)
                 continue
 
@@ -168,11 +169,11 @@ class StreamController(object):
         for name, va in self.stream.det_vas.items():
             setting_conf = {}
 
-            if detector_conf and name in detector_conf:
+            if name in detector_conf:
                 logging.debug("%s detector configuration found for %s", name,
                               self.stream.detector.role)
                 setting_conf = self.hw_settings_config[self.stream.detector.role][name]
-            elif emitter_conf and name in emitter_conf:
+            elif name in emitter_conf:
                 logging.error("Emitter %s setting va added to detector group!", name)
                 continue
 
