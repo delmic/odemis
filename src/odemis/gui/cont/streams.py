@@ -163,12 +163,7 @@ class StreamController(object):
             except AttributeError:
                 logging.exception("Unsupported control type for %s!", name)
 
-        if add_divider:
-            self.stream_panel.add_divider()
-
         # Then process the detector
-
-        add_divider = False
 
         for name, va in self.stream.det_vas.items():
             setting_conf = {}
