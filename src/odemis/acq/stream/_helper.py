@@ -28,8 +28,7 @@ import math
 import numpy
 from odemis import model
 from odemis.acq import align
-from odemis.util import limit_invocation, spectrum
-import random
+from odemis.util import limit_invocation
 import time
 
 from ._base import Stream, UNDEFINED_ROI
@@ -76,7 +75,14 @@ class RepetitionStream(LiveStream):
         # it will be assigned to the resolution of the emitter (but cannot be
         # directly set, as one might want to use the emitter while configuring
         # the stream).
-        self.repetition = model.ResolutionVA(emitter.resolution.value,
+        res = emitter.resolution.value
+        if 1 in res:  # 1x1 or something like that ?
+            rep = emitter.resolution.clip((2048, 2048))
+            logging.info("resolution of SEM is too small %s, will use %s",
+                         res, rep)
+        else:
+            rep = res
+        self.repetition = model.ResolutionVA(rep,
                                              emitter.resolution.range,
                                              setter=self._setRepetition)
 
@@ -84,7 +90,7 @@ class RepetitionStream(LiveStream):
         epxs = emitter.pixelSize.value
         eshape = emitter.shape
         phy_size_x = epxs[0] * eshape[0]  # one dim is enough
-        pxs = phy_size_x / self.repetition.value[0]
+        pxs = phy_size_x / rep[0]
         # actual range is dynamic, as it changes with the magnification
         self.pixelSize = model.FloatContinuous(pxs, range=(0, 1), unit="m",
                                                setter=self._setPixelSize)
@@ -415,10 +421,9 @@ class MonochromatorSettingsStream(PMTSettingsStream):
         self.windowPeriod = model.FloatContinuous(30, range=[0, 1e6], unit="s")
 
     # onActive: same as the standard LiveStream (ie, acquire from the dataflow)
-    # TODO: how to set up the dwell time? If the ebeam is already scanning
-    # => don't change. If spot mode, => put something useful?
-
-    # TODO: don't set the dwellTime (if local VA)?
+    # Note: we assume we are in spot mode, if not the dwell time will be messed up!
+    # TODO: if the dwell time is small (eg, < 0.1s), do multiple acquisitions
+    # at the same spot (how?)
 
     def _append(self, count, date):
         """
@@ -435,13 +440,6 @@ class MonochromatorSettingsStream(PMTSettingsStream):
         self.raw = self.raw[first:]
 
         self._raw_date.append(date)
-
-        # # TESTING TESTINGTESTINGTESTINGTESTINGTESTINGTESTINGTESTINGTESTING
-        # if self.raw:
-        #     self.raw.append((random.randint(90, 110) / 100.0) * self.raw[-1])
-        # else:
-        #     self.raw.append(1000)
-        # # TESTING TESTINGTESTINGTESTINGTESTINGTESTINGTESTINGTESTINGTESTING
 
         self.raw.append(count)
 
@@ -541,28 +539,32 @@ class CLSettingsStream(PMTSettingsStream):
 
     # projection: same as the standard LiveStream
 
-    def _applyScale(self):
+    def _applyROI(self):
         """
-        Update the hardware scale setting based on the pixelSize
+        Update the hardware scale/resolution setting based on the pixelSize
         """
         hwpxs = self._emitter.pixelSize.value[0]
         scale = self.pixelSize.value / hwpxs
         logging.debug("Setting scale to %f, based on pxs = %f m", scale, self.pixelSize.value)
         self._emitter.scale.value = (scale, scale)
 
+        # use full FoV
+        res = tuple(int(round(s / scale)) for s in self._emitter.shape[:2])
+        self._emitter.resolution.value = res
+
     def _onPixelSize(self, pxs):
         if self.is_active.value:
-            self._applyScale()
+            self._applyROI()
 
     def _onActive(self, active):
         if active:
-            self._applyScale()
+            self._applyROI()
 
         super(CLSettingsStream, self)._onActive(active)
 
     def _onDwellTime(self, value):
-        # TODO: this tend to be too pesmistic as to when to restart as it uses
-        # the ROI to compute the acqusition time, while we are actually full ROI.
+        # TODO: this tend to be too pessimistic as to when to restart as it uses
+        # the ROI to compute the acquisition time, while we are actually full ROI.
         self._updateAcquisitionTime()
 
     def _onResolution(self, value):

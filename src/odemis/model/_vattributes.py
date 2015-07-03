@@ -834,6 +834,7 @@ class Continuous(object):
 
         If the range contains vectors of length n, each element of val will be
         clipped separately by position for positions 0..n-1
+        return (same type as val): value clipped
         """
 
         if isinstance(self.min, collections.Iterable):

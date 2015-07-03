@@ -665,6 +665,8 @@ class SparcAcquisitionTab(Tab):
 
     def on_tool_change(self, tool):
         """ Pause the SE and CLI streams when the Spot mode tool is activated """
+        # TODO: move to stream scheduler? Have a set of stream that require spot
+        # stream and a set that cannot play with spot stream?
         if tool == guimod.TOOL_SPOT:
             # Make sure the spatial streams controlling the e-beam are not playing
             paused_st = self._stream_controller.pauseStreams((acqstream.EMStream,
@@ -687,13 +689,16 @@ class SparcAcquisitionTab(Tab):
 
             for s in paused_st:  # TODO: move this to new stream creation
                 s.should_update.subscribe(self._cancel_spot_mode)
-            # TODO: re-activate stream when spot mode tool is turned off?
+            # TODO: re-activate stream when spot mode tool is turned off? => no too confusing/complicated
         else:
+            # TODO: when spot mode is disabled, ensure that streams requiring spot (ie, monochromator) are paused
             self._spot_stream.is_active.value = False
             self._spot_stream.should_update.value = False
 
     def _cancel_spot_mode(self, should_update):
         """ Cancel spot mode if SEM/CL stream start playing """
+        # FIXME: this is all messy because spot stream modifies (restores) the
+        # VA when being stopped. That is
         # print  should_update , self.tab_data_model.tool.value
         if should_update and self.tab_data_model.tool.value == guimod.TOOL_SPOT:
             self.tab_data_model.tool.value = guimod.TOOL_NONE
