@@ -38,6 +38,7 @@ class TLFWError(Exception):
     """
     pass
 
+
 class FW102c(model.Actuator):
     """
     Represents a Thorlabs filter wheel FW102C as an actuator.
@@ -66,7 +67,7 @@ class FW102c(model.Actuator):
             return
 
         # check bands contains correct data
-        self._maxpos = self.GetMaxPosition() 
+        self._maxpos = self.GetMaxPosition()
         if not bands:
             raise ValueError("Argument bands must contain at least one band")
         try:
@@ -83,10 +84,15 @@ class FW102c(model.Actuator):
         except Exception:
             logging.exception("Failed to parse bands %s", bands)
             raise
-        
+
+        curpos = self.GetPosition()
+        if curpos not in bands:
+            logging.info("Current position %d is not configured, will add it", curpos)
+            bands[curpos] = "unknown"
+
         axes = {"band": model.Axis(choices=bands)}
         model.Actuator.__init__(self, name, role, axes=axes, **kwargs)
-        
+
         driver_name = driver.getSerialDriver(self._port)
         self._swVersion = "%s (serial driver: %s)" % (odemis.__version__, driver_name)
         self._hwVersion = self._idn
@@ -96,7 +102,6 @@ class FW102c(model.Actuator):
 
         self._speed = self.GetSpeed()
 
-        curpos = self.GetPosition()
         self.position = model.VigilantAttribute({"band": curpos}, readonly=True)
 
         # TODO: MD_OUT_WL or MD_IN_WL depending on affect
@@ -149,7 +154,7 @@ class FW102c(model.Actuator):
                      "wavelength, ensure the value is in meters: %r." % band)
 
         # no error found
-        
+
     def _findDevice(self, ports):
         """
         Look for a compatible device
@@ -162,7 +167,7 @@ class FW102c(model.Actuator):
         """
         if os.name == "nt":
             # TODO
-            #ports = ["COM" + str(n) for n in range (15)]
+            # ports = ["COM" + str(n) for n in range(15)]
             raise NotImplementedError("Windows not supported")
         else:
             names = glob.glob(ports)
@@ -204,7 +209,7 @@ class FW102c(model.Actuator):
             bytesize=serial.EIGHTBITS,
             parity=serial.PARITY_NONE,
             stopbits=serial.STOPBITS_ONE,
-            timeout=1 #s
+            timeout=1  # s
         )
 
         return ser
@@ -238,17 +243,17 @@ class FW102c(model.Actuator):
         with self._ser_access:
             logging.debug("Sending: '%s'", full_com.encode('string_escape'))
             self._serial.write(full_com)
-    
+
             # ensure everything is received, before expecting an answer
             self._serial.flush()
-    
+
             # Read until end of answer
             line = b""
             while True:
                 char = self._serial.read() # empty if timeout
                 if not char: # should always finish by a "> "
                     raise IOError("Controller timeout, after receiving %s" % line)
-    
+
                 # normal char
                 line += char
                 if line[-2:] == "> ":
@@ -258,13 +263,13 @@ class FW102c(model.Actuator):
 
         # remove echo + suffix + new line
         line = line[len(full_com):-2].rstrip("\r")
-        
+
         # if it's an error message => raise an error
         m = re.match(self.re_err, line)
         if m:
             err = m.group(1)
             raise TLFWError("Device rejected command '%s': %s" % (com, err))
-        
+
         return line
 
     def _sendCommand(self, com):
@@ -278,7 +283,7 @@ class FW102c(model.Actuator):
         """
         self._sendQuery(com)
         # don't return anything
-    
+
     def GetIdentification(self):
         """
         return (str): model name as reported by the device
@@ -322,9 +327,9 @@ class FW102c(model.Actuator):
         p1, p2 = sorted([pos, cur_pos])
         dist = min(p2 - p1, (6 + p1) - p2)
         if self._speed == 0:
-            dur_one = 2 #s
+            dur_one = 2  # s
         else:
-            dur_one = 1 #s
+            dur_one = 1  # s
         maxdur = 1 + dist * dur_one * 2 # x 2 as a safe bet
         prev_timeout = self._serial.timeout
         try:
@@ -366,7 +371,7 @@ class FW102c(model.Actuator):
         self._checkMoveRel(shift)
         # TODO move to the +N next position? (and modulo number of axes)
         raise NotImplementedError("Relative move on enumerated axis not supported")
-        
+
     @isasync
     def moveAbs(self, pos):
         if not pos:
@@ -374,7 +379,7 @@ class FW102c(model.Actuator):
         self._checkMoveAbs(pos)
 
         return self._executor.submit(self._doMoveBand, pos["band"])
-    
+
     def stop(self, axes=None):
         self._executor.cancel()
 
@@ -388,9 +393,9 @@ class FW102c(model.Actuator):
             maxpos = self.GetMaxPosition()
             if 1 <= pos <= maxpos:
                 return True
-        except:
+        except Exception:
             logging.exception("Selftest failed")
-        
+
         return False
 
     @classmethod
@@ -404,10 +409,10 @@ class FW102c(model.Actuator):
             ports = [port]
         else:
             if os.name == "nt":
-                ports = ["COM" + str(n) for n in range (0,8)]
+                ports = ["COM" + str(n) for n in range(15)]
             else:
                 ports = glob.glob('/dev/ttyS?*') + glob.glob('/dev/ttyUSB?*')
-        
+
         logging.info("Serial ports scanning for Thorlabs filter wheel in progress...")
         found = []  # (list of 2-tuple): name, kwargs
         for p in ports:
@@ -431,7 +436,8 @@ class FW102c(model.Actuator):
                 found.append((dev._idn, {"port": p, "bands": bands}))
 
         return found
-    
+
+
 # Emulator
 class FakeFW102c(FW102c):
     """
@@ -453,7 +459,7 @@ class FakeFW102c(FW102c):
             bytesize=serial.EIGHTBITS,
             parity=serial.PARITY_NONE,
             stopbits=serial.STOPBITS_ONE,
-            timeout=1 #s
+            timeout=1  # s
         )
 
         return ser
@@ -461,6 +467,7 @@ class FakeFW102c(FW102c):
     @classmethod
     def scan(cls, port=None):
         return super(FakeFW102c, cls).scan(port="/dev/null")
+
 
 class FW102cSimulator(object):
     """
@@ -472,7 +479,7 @@ class FW102cSimulator(object):
         self.timeout = timeout
         self._output_buf = "" # what the commands sends back to the "host computer"
         self._input_buf = "" # what we receive from the "host computer"
-        
+
         # internal values (same as command names)
         self._state = {"speed": 1,
                        "trig": 0,
@@ -530,8 +537,8 @@ class FW102cSimulator(object):
                 val = int(com[4:])
                 if not 1 <= val <= self._state["pcount"]:
                     raise ValueError("%d" % val)
-                
-                # simulate a move 
+
+                # simulate a move
                 curpos = self._state["pos"]
                 p1, p2 = sorted([val, curpos])
                 dist = min(p2 - p1, (6 + p1) - p2)
