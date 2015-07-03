@@ -31,7 +31,6 @@ import serial
 import sys
 import threading
 import time
-import re
 
 
 class PMT(model.Detector):
@@ -121,10 +120,9 @@ class PMT(model.Detector):
                           "available.")
 
     def terminate(self):
-        # Turn off the controller
-        self.powerSupply.value = False
-        self._pmt.terminate()
-        self._control.terminate()
+        if hasattr(self, "powerSupply"):
+            # Turn off the PMT
+            self.powerSupply.value = False
 
     def updateMetadata(self, md):
         self._pmt.updateMetadata(md)
