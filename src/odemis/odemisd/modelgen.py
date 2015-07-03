@@ -318,7 +318,7 @@ class Instantiator(object):
     def is_leaf(self, name):
         """
         says whether a component is a leaf or not. A "leaf" is a component which
-        has no children separately instantiated.
+          has no children separately instantiated (ie, only delegated children).
         name (str): name of the component instance
         """
         attr = self.ast[name]
@@ -401,8 +401,8 @@ class Instantiator(object):
         Return all the components created by delegation when creating the given
          component (including the given component)
         name (str): name of the component
-        return (set of str): all the components that will be created when
-          instantiating the given component
+        return (set of str): the name of the components that will be created when
+          instantiating the given component, including the component itself
         """
         ret = {name}
         for n, attrs in self.ast.items():
@@ -414,10 +414,11 @@ class Instantiator(object):
     @staticmethod
     def get_children(root):
         """
-        Return the set of components which are referenced from the given component 
+        Return the set of components which are referenced from the given component
          (via children)
         root (HwComponent): the component to start from
-        returns (set of HwComponents)
+        returns (set of HwComponents): all the children, including the component
+          itself.
         """
         ret = {root}
         for child in root.children.value:

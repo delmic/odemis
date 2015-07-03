@@ -22,6 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
 from __future__ import division
+
 import argparse
 import grp
 from logging import FileHandler
@@ -228,6 +229,51 @@ class BackendContainer(model.Container):
             mic.ghosts.value = ghosts
             return dchildren
 
+    def _terminate_all_alive(self):
+        """
+        Stops all the components that are currently alive (excepted the
+          microscope)
+        It terminate them parents first as the instantiated children should
+         never need their parent but the parent might rely on the children.
+         Delegated children should be directly terminated by their creator, so
+         by the time we terminate them, it's a no-op.
+        """
+        mic = self._instantiator.microscope
+        alive = list(mic.alive.value)
+
+        # create a "graph" child->parents
+        parents = dict((c, set()) for c in alive)  # comp -> set of comps (all its parents)
+        for comp in alive:
+            # TODO: if a component was created by delegation, use its creator
+            # instead of itself of the other components, to ensure they might
+            # not be terminated too early.
+            for child in comp.children.value:
+                # TODO: do not add the creator
+                parents[child].add(comp)
+
+        # terminate all the components in order
+        while parents:
+            parent_less = tuple(c for c, p in parents.items() if not p)
+            if not parent_less:
+                # just pick a random component if some loop
+                logging.warning("All the components to terminate have parents: %s",
+                                parents)
+                parent_less = (tuple(parents.keys())[0],)
+
+            for c in parent_less:
+                logging.debug("Stopping comp %s", c.name)
+                # TODO: update the .alive VA every time a component is stopped?
+                # maybe not necessary as we are finishing _everything_
+                try:
+                    c.terminate()
+                except Exception:
+                    logging.warning("Failed to terminate component '%s'", c.name, exc_info=True)
+
+                # remove from the graph
+                del parents[c]
+                for p in parents.values():
+                    p.discard(c)
+
     def terminate(self):
         # Stop the component instantiator, to be sure it'll not restart the components
         self._must_stop.set()
@@ -245,17 +291,9 @@ class BackendContainer(model.Container):
             except Exception:
                 logging.warning("Failed to terminate Metadata updater", exc_info=True)
 
-        mic = self._instantiator.microscope
-        alive = list(mic.alive.value)
-        for comp in alive:
-            logging.debug("Stopping comp %s", comp.name)
-            # TODO: update the .alive VA every time a component is stopped?
-            # maybe not necessary as we are finishing _everything_
-            try:
-                comp.terminate()
-            except Exception:
-                logging.warning("Failed to terminate component '%s'", comp.name, exc_info=True)
+        self._terminate_all_alive()
 
+        mic = self._instantiator.microscope
         try:
             mic.terminate()
         except Exception:
