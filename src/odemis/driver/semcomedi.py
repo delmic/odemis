@@ -1784,7 +1784,7 @@ class SEMComedi(model.HwComponent):
             if i == ic:
                 b = rbuf[0]
             else:
-                b = numpy.empty([[0]], dtype=self._reader.dtype)  # empty array
+                b = numpy.empty((0,), dtype=self._reader.dtype)  # empty array
             rdas.append(model.DataArray(b, md[i]))
 
         return rdas
