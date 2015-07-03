@@ -420,6 +420,14 @@ class MonochromatorSettingsStream(PMTSettingsStream):
         # value should be included
         self.windowPeriod = model.FloatContinuous(30, range=[0, 1e6], unit="s")
 
+        # TODO: once the semcomedi works with any value, remove this
+        if "dwellTime" in self._emt_vas:
+            dt = self.emtDwellTime
+            # Recommended > 1ms, but 0.1 ms should work
+            dt.value = max(1e-3, dt.value)
+            mn, mx = dt.range
+            dt.range = (max(0.1e-3, mn), mx)
+
     # onActive: same as the standard LiveStream (ie, acquire from the dataflow)
     # Note: we assume we are in spot mode, if not the dwell time will be messed up!
     # TODO: if the dwell time is small (eg, < 0.1s), do multiple acquisitions
