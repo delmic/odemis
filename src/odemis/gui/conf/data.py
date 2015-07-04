@@ -210,6 +210,13 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
                 "range": (0.01, 500.0),  # Typically much longer than on a SECOM
             },
         },
+        "e-beam":
+        {
+            "dwellTime":
+            {
+                "range": (1e-9, 10.0),  # TODO: actually only useful for the monochromator settings
+            },
+        },
         "filter":
         {
             "band":  # to select the filter used

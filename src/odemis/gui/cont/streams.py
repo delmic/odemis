@@ -1877,6 +1877,7 @@ class SparcStreamsController(StreamBarController):
             else:
                 # TODO: Run in a separate thread as in live view it's ok if
                 # the path is not immediately correct?
+                logging.debug("Going to mode %s for stream %s", mode, stream)
                 opm.setPath(mode)
 
         super(SparcStreamsController, self)._onStreamUpdate(stream, updated)
