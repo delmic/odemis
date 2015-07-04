@@ -2122,8 +2122,11 @@ class FakeCounterReader(Accesser):
             logging.debug("simulating a read for another %g s", left)
             self._must_stop.wait(left)
 
-        # generates random data
-        return numpy.random.randint(self._maxdata, size=self._count)
+        # Generates random data, to be a bit realistic, we assume it takes 1s
+        # to generate maxdata.
+        bin_dur = self._duration / self._count
+        mx = max(1, self._maxdata * min(bin_dur, 1))
+        return numpy.random.randint(mx, size=self._count)
 
     def cancel(self):
         self._must_stop.set()
