@@ -224,16 +224,16 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
             "dcPeriod":
             {
                 "label": "Drift corr. period",
-                "tooltip": "Maximum time between anchor region acquisitions",
+                "tooltip": u"Maximum time between anchor region acquisitions",
                 "control_type": odemis.gui.CONTROL_SLIDER,
                 "scale": "log",
                 "range": (1, 300),  # s, the VA allows a wider range, not typically needed
                 "accuracy": 2,
             },
         },
+        # VAs from the streams, temporarily here
         "streamspec":
         {
-            # VAs from the stream, temporarily here
             "repetition":
             {
                 "control_type": odemis.gui.CONTROL_COMBO,
@@ -247,14 +247,56 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
             {
                 "range": (0.0, 1900e-9),
             },
+            "slit-in":
+            {
+                "label": "Input slit",
+                "tooltip": u"Opening size of the spectrograph input slit.\nA wide opening means more light and a worse resolution.",
+            },
         },
-        "streamar":
+        "streammonoch":
         {
-            # VAs from the stream, temporarily here
             "repetition":
             {
                 "control_type": odemis.gui.CONTROL_COMBO,
                 "choices": util.resolution_from_range_plus_point,
+            },
+            "pixelSize":
+            {
+                "control_type": odemis.gui.CONTROL_FLT,
+            },
+            "wavelength":
+            {
+                "range": (0.0, 1900e-9),
+            },
+            "slit-in":
+            {
+                "label": "Input slit",
+                "tooltip": u"Opening size of the spectrograph input slit.\nA wide opening is usually fine.",
+            },
+            "slit-monochromator":
+            {
+                "label": "Det. slit",
+                "tooltip": u"Opening size of the detector slit.\nThe wider, the larger the wavelength bandwidth.",
+            },
+        },
+        "streamar":
+        {
+            "repetition":
+            {
+                "control_type": odemis.gui.CONTROL_COMBO,
+                "choices": util.resolution_from_range_plus_point,
+            },
+        },
+        "streamcli":
+        {
+            "repetition":
+            {
+                "control_type": odemis.gui.CONTROL_COMBO,
+                "choices": util.resolution_from_range_plus_point,
+            },
+            "pixelSize":
+            {
+                "control_type": odemis.gui.CONTROL_FLT,
             },
         },
     },

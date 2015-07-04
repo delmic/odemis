@@ -32,8 +32,7 @@ from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR
 from odemis.gui.comp.overlay.world import RepetitionSelectOverlay
 from odemis.gui.comp.stream import StreamPanel, EVT_STREAM_VISIBLE
 from odemis.gui.conf.data import get_hw_settings_config, get_hw_settings
-from odemis.gui.conf.util import create_setting_entry, \
-    dump_emitter_and_detector_vas, create_axis_entry
+from odemis.gui.conf.util import create_setting_entry, create_axis_entry
 from odemis.gui.cont.settings import SettingEntry
 from odemis.gui.model import dye, TOOL_SPOT
 from odemis.gui.util import wxlimit_invocation, dead_object_wrapper
@@ -1621,7 +1620,6 @@ class SparcStreamsController(StreamBarController):
             detvas=get_hw_settings(main_data.ccd),
         )
         self._ar_stream = ar_stream
-        # dump_emitter_and_detector_vas(ar_stream)
 
         # TODO: ROI -> semStream.roi needs to be generic
         ar_stream.roi.subscribe(self.onARROI)
@@ -1679,19 +1677,18 @@ class SparcStreamsController(StreamBarController):
         stream_cont = self._add_stream(cli_stream, add_to_all_views=True)
         stream_cont.stream_panel.show_visible_btn(False)
 
-        # FIXME: control config is 'borrowed' from streamspec
         stream_cont.add_setting_entry(
             "repetition",
             cli_stream.repetition,
             None,  # component
-            stream_cont.hw_settings_config["streamspec"]["repetition"]
+            stream_cont.hw_settings_config["streamcli"]["repetition"]
         )
 
         stream_cont.add_setting_entry(
             "pixel size",
             cli_stream.pixelSize,
             None,  # component
-            stream_cont.hw_settings_config["streamspec"]["pixelSize"]
+            stream_cont.hw_settings_config["streamcli"]["pixelSize"]
         )
 
         # Add Axis
@@ -1772,7 +1769,8 @@ class SparcStreamsController(StreamBarController):
 
         stream_cont.add_axis_entry(
             "slit-in",
-            main_data.spectrograph
+            main_data.spectrograph,
+            stream_cont.hw_settings_config["streamspec"]["slit-in"]
         )
 
         # stream_cont.add_axis_entry(
@@ -1818,26 +1816,26 @@ class SparcStreamsController(StreamBarController):
         stream_cont = self._add_stream(monoch_stream, add_to_all_views=True, no_bc=True, play=False)
         stream_cont.stream_panel.show_visible_btn(False)
 
-        # FIXME: control config is 'borrowed' from streamspec
         stream_cont.add_setting_entry(
             "repetition",
             monoch_stream.repetition,
             None,  # component
-            stream_cont.hw_settings_config["streamspec"]["repetition"]
+            stream_cont.hw_settings_config["streammonoch"]["repetition"]
         )
 
         stream_cont.add_setting_entry(
             "pixel size",
             monoch_stream.pixelSize,
             None,  # component
-            stream_cont.hw_settings_config["streamspec"]["pixelSize"]
+            stream_cont.hw_settings_config["streammonoch"]["pixelSize"]
         )
 
         # Add Axes
 
         stream_cont.add_axis_entry(
             "wavelength",
-            main_data.spectrograph
+            main_data.spectrograph,
+            stream_cont.hw_settings_config["streammonoch"]["wavelength"]
         )
 
         stream_cont.add_axis_entry(
@@ -1848,12 +1846,14 @@ class SparcStreamsController(StreamBarController):
         # TODO: this should be automatically computed out of the slit-monochromator
         stream_cont.add_axis_entry(
             "slit-in",
-            main_data.spectrograph
+            main_data.spectrograph,
+            stream_cont.hw_settings_config["streammonoch"]["slit-in"]
         )
 
         stream_cont.add_axis_entry(
             "slit-monochromator",
-            main_data.spectrograph
+            main_data.spectrograph,
+            stream_cont.hw_settings_config["streammonoch"]["slit-monochromator"]
         )
 
         # Create the equivalent MDStream

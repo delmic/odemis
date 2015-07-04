@@ -1219,8 +1219,8 @@ class StreamBar(wx.Panel):
         acq.stream.StaticStream,
         acq.stream.FluoStream,
         acq.stream.CLStream,
-        acq.stream.SpectrumSettingsStream,
         acq.stream.ARSettingsStream,
+        acq.stream.SpectrumSettingsStream,
         acq.stream.MonochromatorSettingsStream,
     )
 

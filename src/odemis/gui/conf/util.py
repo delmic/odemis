@@ -503,7 +503,7 @@ def label_to_human(camel_label):
 
 
 def create_setting_entry(container, name, va, hw_comp, conf, change_callback=None):
-    """ Determin what type on control to use for a setting and have the container create it
+    """ Determine what type on control to use for a setting and have the container create it
 
     Args:
         container (SettingsController or StreamController): Controller in charge of the settings
@@ -735,6 +735,7 @@ def create_axis_entry(container, name, comp, conf=None):
 
     # Format label
     label_text = conf.get('label', label_to_human(name))
+    tooltip = conf.get('tooltip', "")
 
     logging.debug("Adding Axis control %s", label_text)
 
@@ -823,6 +824,9 @@ def create_axis_entry(container, name, comp, conf=None):
         axis_entry = AxisSettingEntry(name, comp, lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
                                       pos_2_ctrl=cb_set, ctrl_2_pos=cb_get,
                                       events=(wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER))
+
+    value_ctrl.SetToolTipString(tooltip)
+    lbl_ctrl.SetToolTipString(tooltip)
 
     return axis_entry
 
