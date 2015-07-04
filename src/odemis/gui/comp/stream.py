@@ -1257,7 +1257,7 @@ class StreamBar(wx.Panel):
 
             self._set_warning()
 
-            self.btn_add_stream.Bind(wx.EVT_BUTTON, self.on_add_stream)
+            # self.btn_add_stream.Bind(wx.EVT_BUTTON, self.on_add_stream)
 
         self.fit_streams()
 
@@ -1303,8 +1303,8 @@ class StreamBar(wx.Panel):
 
     # === Event Handlers
 
-    def on_add_stream(self, evt):
-        evt.Skip()
+#     def on_add_stream(self, evt):
+#         evt.Skip()
 
     def on_stream_remove(self, evt):
         logging.debug("StreamBar received remove event %r", evt)

@@ -769,6 +769,8 @@ class StreamBarController(object):
         self.ignore_view = ignore_view
 
         self._tab_data_model.focussedView.subscribe(self._onView, init=True)
+        # FIXME: don't use pubsub events, but either wxEVT or VAs. For now every
+        # stream controller is going to try to remove the stream.
         pub.subscribe(self.removeStream, 'stream.remove')
 
         # This attribute indicates whether live data is processed by the streams
@@ -777,6 +779,7 @@ class StreamBarController(object):
         # Disable all controls
         self.locked_mode = locked
 
+    # unused (but in test case)
     def get_actions(self):
         return self.menu_actions
 

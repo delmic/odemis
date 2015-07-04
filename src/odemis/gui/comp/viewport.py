@@ -621,7 +621,7 @@ class PlotViewport(ViewPort):
         # We need a local reference to the spectrum stream, because if we rely
         # on the reference within the MicroscopeView, it might be replaced
         # before we get an explicit chance to unsubscribe event handlers
-        self.spectrum_stream = None
+        self.spectrum_stream = None  # TODO: more generic name => "stream"?
 
     def Refresh(self, *args, **kwargs):
         """ Refresh the ViewPort while making sure the legends get redrawn as well """
@@ -777,20 +777,21 @@ class SparcAcquisitionMonoViewport(PlotViewport):
         ss = self.microscope_view.stream_tree.get_streams_by_type(MonochromatorSettingsStream)
 
         if self.spectrum_stream in ss:
-            # import traceback
-            # traceback.print_stack()
-            # logging.debug("not reconnecting to stream as it's already connected")
+            logging.debug("not reconnecting to stream as it's already connected")
             return
 
-        # There should be exactly one Spectrum stream. In the future there
+        # There should be exactly one stream. In the future there
         # might be scenarios where there are more than one.
         if not ss:
+            if hasattr(self.spectrum_stream, 'image'):
+                # important, otherwise we might receive data even after stream is removed
+                self.spectrum_stream.image.unsubscribe(self._on_new_data)
             self.spectrum_stream = None
-            logging.info("No Monoschromator stream found")
+            logging.info("No Monochromator stream found")
             self.clear()  # Remove legend ticks and clear plot
             return
         elif len(ss) > 1:
-            logging.warning("Found %d Monoschromator streams, will pick one randomly", len(ss))
+            logging.warning("Found %d Monochromator streams, will pick one randomly", len(ss))
 
         self.spectrum_stream = ss[0]
 
@@ -831,6 +832,7 @@ class SparcAcquisitionPlotViewport(PlotViewport):
 
     def on_streamtree_change(self, is_playing):
         """ Show or hide the indicator icon that shows if a stream is playing in the viewport """
+        # TODO: merge into parent class
         if len(self._microscope_view.stream_tree):
             self.canvas.play_overlay.show = True
             self.canvas.play_overlay.hide_pause(is_playing)
