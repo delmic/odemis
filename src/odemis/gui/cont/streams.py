@@ -1674,7 +1674,7 @@ class SparcStreamsController(StreamBarController):
         if hasattr(cli_stream, "detGain"):
             cli_stream.detGain.value = cli_stream.detGain.range[0]
 
-        stream_cont = self._add_stream(cli_stream, add_to_all_views=True)
+        stream_cont = self._add_stream(cli_stream, add_to_all_views=True, play=False)
         stream_cont.stream_panel.show_visible_btn(False)
 
         stream_cont.add_setting_entry(
@@ -1721,7 +1721,7 @@ class SparcStreamsController(StreamBarController):
         self._spec_stream = spec_stream
 
         spec_stream.roi.subscribe(self.onARROI)
-        stream_cont = self._add_stream(spec_stream, add_to_all_views=True, no_bc=True, play=False)
+        stream_cont = self._add_stream(spec_stream, add_to_all_views=True, no_bc=True)
         stream_cont.stream_panel.show_visible_btn(False)
 
         spec_rep = stream_cont.add_setting_entry(
