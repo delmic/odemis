@@ -18,13 +18,14 @@ from __future__ import division
 
 import glob
 import logging
+from logging.handlers import BufferingHandler
 from odemis import model
 from odemis.driver import pmtctrl
 from odemis.driver import semcomedi
+import os
 import threading
 import unittest
 from unittest.case import skip
-from logging.handlers import BufferingHandler
 
 
 logger = logging.getLogger().setLevel(logging.DEBUG)
@@ -71,26 +72,21 @@ class TestStatic(unittest.TestCase):
         self.assertTrue(dev.selfTest(), "self test failed.")
         dev.terminate()
 
-    def test_wrong_serial(self):
+    def test_wrong_device(self):
         """
-        Check it correctly fails if the device with the given serial number is
-        not a PMT Control.
+        Check it correctly fails if the port given is not a PMT Control.
         """
         # Look for a device with a serial number not starting with 37
-        paths = glob.glob("/sys/bus/usb/devices/*/serial")
+        paths = glob.glob("/dev/ttyACM*") + glob.glob("/dev/ttyUSB*")
+        realpaths = set(os.readlink(p) for p in glob.glob("/dev/ttyPMT*"))
         for p in paths:
-            try:
-                f = open(p)
-                snw = f.read().strip()
-            except IOError:
-                logging.debug("Failed to read %s, skipping device", p)
-        else:
-            self.skipTest("Failed to find any USB device with a serial number")
+            if p in realpaths:
+                continue  # don't try a device which is probably a good one
 
-        kwargsw = dict(KWARGS)
-        kwargsw["sn"] = snw
-        with self.assertRaises(ValueError):
-            dev = CLASS(**kwargsw)
+            kwargsw = dict(KWARGS)
+            kwargsw["port"] = p
+            with self.assertRaises(ValueError):
+                dev = CLASS(**kwargsw)
 
 
 class TestPMTControl(unittest.TestCase):

@@ -26,6 +26,7 @@ import logging
 from odemis import model
 from odemis.model import ComponentBase, DataFlowBase
 from odemis.model import HwError
+from odemis.util import driver
 import os
 import serial
 import sys
@@ -182,13 +183,18 @@ class PMTDataFlow(model.DataFlow):
         model.DataFlow.notify(self, data)
 
 
-# Min and Max gain values in V
-MAX_GAIN = 1.1
+# Min and max gain values in V
 MIN_GAIN = 0
+MAX_GAIN = 1.1
 
 class PMTControl(model.HwComponent):
     '''
     This represents the PMT control unit.
+    At start up the following is set:
+     * protection is on (=> gain is forced to 0)
+     * gain = 0
+     * power up
+     * relay is reset (off for 10s, then on)
     '''
     def __init__(self, name, role, port, prot_time=1e-3, prot_curr=50e-6, **kwargs):
         '''
@@ -207,7 +213,7 @@ class PMTControl(model.HwComponent):
             raise ValueError("prot_curr (%s A) is not between 0 and 100.e-6" % (prot_curr,))
         self._prot_curr = prot_curr
 
-        self._port = self._findDevice(port)
+        self._port = self._findDevice(port)  # sets ._serial
         logging.info("Found PMT Control device on port %s", self._port)
 
         # TODO: catch errors and convert to HwError
@@ -216,10 +222,14 @@ class PMTControl(model.HwComponent):
         # Get identification of the PMT control device
         # TODO Use it to check that we connect to the right device
         try:
-            self._idn = self._sendCommand("*IDN?")
+            self._idn = self._getIdentification()
         except IOError:
             raise HwError("PMT Control Unit connection timeout. "
                           "Please turn off and on the power to the box.")
+
+        driver_name = driver.getSerialDriver(self._port)
+        self._swVersion = "serial driver: %s" % (driver_name,)
+        self._hwVersion = "%s" % (self._idn,)
 
         # Set protection current and time
         self._setProtectionCurrent(self._prot_curr)
@@ -249,6 +259,9 @@ class PMTControl(model.HwComponent):
             if self._serial:
                 self._serial.close()
                 self._serial = None
+
+    def _getIdentification(self):
+        return self._sendCommand("*IDN?")
 
     def _setGain(self, value):
         self._sendCommand("VOLT %f" % (value,))
@@ -280,12 +293,7 @@ class PMTControl(model.HwComponent):
 
     def _getPowerSupply(self):
         ans = self._sendCommand("PWR?")
-        if ans == "1":
-            status = True
-        else:
-            status = False
-
-        return status
+        return (ans == "1")
 
     def _setProtection(self, value):
         if value:
@@ -297,12 +305,7 @@ class PMTControl(model.HwComponent):
 
     def _getProtection(self):
         ans = self._sendCommand("SWITCH?")
-        if ans == "0":
-            status = True
-        else:
-            status = False
-
-        return status
+        return (ans == "0")
 
     # These two methods are strictly used for the SPARC system in Monash. Use
     # them to send a high/low signal via the PMT Control Unit to the relay, thus
@@ -468,7 +471,7 @@ MAX_PCURR = 100
 MIN_PCURR = 0
 MAX_PTIME = 100
 MIN_PTIME = 0.000001
-IDN = "Delmic Analog PMT simulator"
+IDN = "Delmic Analog PMT simulator 1.0"
 
 class PMTControlSimulator(object):
     """
