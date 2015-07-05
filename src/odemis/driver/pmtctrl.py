@@ -108,6 +108,7 @@ class PMT(model.Detector):
                 # Turn on the controller
                 self.powerSupply.value = True
         except IOError:
+            # FIXME: needs to be handled directly by PMTControl (at least automatic reconnect)
             raise HwError("PMT Control Unit connection timeout. "
                           "Please turn off and on the power to the box and "
                           "then restart Odemis.")
@@ -218,8 +219,7 @@ class PMTControl(model.HwComponent):
             self._idn = self._sendCommand("*IDN?")
         except IOError:
             raise HwError("PMT Control Unit connection timeout. "
-                          "Please turn off and on the power to the box and "
-                          "then restart Odemis.")
+                          "Please turn off and on the power to the box.")
 
         # Set protection current and time
         self._setProtectionCurrent(self._prot_curr)
@@ -230,7 +230,7 @@ class PMTControl(model.HwComponent):
                                           getter=self._getProtection)
         self._setProtection(True)
 
-        gain_rng = [MIN_GAIN, MAX_GAIN]
+        gain_rng = (MIN_GAIN, MAX_GAIN)
         gain = self._getGain()
         self.gain = model.FloatContinuous(gain, gain_rng, unit="V",
                                           setter=self._setGain)
@@ -240,9 +240,9 @@ class PMTControl(model.HwComponent):
 
         # relay initialization
         logging.info("Turning off and on relay power (will take 10 s)")
-        self.setContact(False)
+        self.setRelay(False)
         time.sleep(10)
-        self.setContact(True)
+        self.setRelay(True)
 
     def terminate(self):
         with self._ser_access:
@@ -308,7 +308,7 @@ class PMTControl(model.HwComponent):
     # them to send a high/low signal via the PMT Control Unit to the relay, thus
     # to pull/push the relay contact and control the power supply from the power
     # board to the flippers and filter wheel.
-    def setContact(self, value):
+    def setRelay(self, value):
         # When True, the relay contact is connected
         if value:
             self._sendCommand("RELAY 1")
@@ -317,7 +317,7 @@ class PMTControl(model.HwComponent):
 
         return value
 
-    def getContact(self):
+    def getRelay(self):
         ans = self._sendCommand("RELAY?")
         if ans == "1":
             status = True
@@ -364,12 +364,12 @@ class PMTControl(model.HwComponent):
             timeout=5  # s
         )
 
-        # Purge (as recommended in the documentation)
-        time.sleep(0.05)  # 50 ms
+        # Purge
         ser.flush()
         ser.flushInput()
         time.sleep(0.05)  # 50 ms
 
+        # TODO: needed?
         # Prepare the port
         ser.setRTS()
 

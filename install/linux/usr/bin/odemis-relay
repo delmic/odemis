@@ -32,17 +32,16 @@ def main(args):
     port = "/dev/" + args[1]
     # For now just turn on
     # value = args[2]
-    value = 1
+    value = 1 # on
 
     # Connect to serial device
     ser = serial.Serial(
         port=port,
         baudrate=115200,
-        timeout=1  # s
+        timeout=5  # s
     )
 
-    # Purge (as recommended in the documentation)
-    time.sleep(0.05)  # 50 ms
+    # Purge
     ser.flush()
     ser.flushInput()
     time.sleep(0.05)  # 50 ms
@@ -50,12 +49,18 @@ def main(args):
     # Prepare the port
     ser.setRTS()
 
+    # TODO: check *IDN?
+
     # Send command
-    cmd = "RELAY " + str(value) + "\n"
+    cmd = "RELAY %s\n" % (value,)
     ser.write(cmd)
 
     return 0
 
 if __name__ == '__main__':
-    ret = main(sys.argv)
+    try:
+        ret = main(sys.argv)
+    except Exception:
+        logging.exception("Failure during execution.")
+        ret = 128
     exit(ret)
