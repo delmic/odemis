@@ -196,7 +196,9 @@ HW_SETTINGS_CONFIG = {
             },
         },
     "cl-detector": {
-            "gain": {},
+            "gain": {
+                "accuracy": 3,
+            },
         },
 }
 
