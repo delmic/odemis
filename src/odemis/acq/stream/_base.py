@@ -154,7 +154,7 @@ class Stream(object):
 
         # if there is already some data, update image with it
         if self.raw:
-            self._onNewImage(None, self.raw[-1])
+            self._onNewData(None, self.raw[-1])
 
     # No __del__: subscription should be automatically stopped when the object
     # disappears, and the user should stop the update first anyway.
@@ -240,19 +240,19 @@ class Stream(object):
             logging.debug("not updating VA %s to %s", origva, v)
             return v
 
-    def _va_sync_from_hw(self, lva, v):
-        """
-        Called when the Hw VA is modified, to update the local VA
-        lva (VA): the local VA
-        v: the new value
-        """
-        # Don't use the setter, directly put the value as-is. That avoids the
-        # setter to again set the Hw VA, and ensure we always accept the Hw
-        # value
-        logging.debug("updating VA %s to %s", lva, v)
-        if lva._value != v:
-            lva._value = v # TODO: works with ListVA?
-            lva.notify(v)
+#     def _va_sync_from_hw(self, lva, v):
+#         """
+#         Called when the Hw VA is modified, to update the local VA
+#         lva (VA): the local VA
+#         v: the new value
+#         """
+#         # Don't use the setter, directly put the value as-is. That avoids the
+#         # setter to again set the Hw VA, and ensure we always accept the Hw
+#         # value
+#         logging.debug("updating VA %s to %s", lva, v)
+#         if lva._value != v:
+#             lva._value = v # TODO: works with ListVA?
+#             lva.notify(v)
 
     # TODO: move to odemis.util ?
     def _duplicateVA(self, va, setter=None):
@@ -312,6 +312,7 @@ class Stream(object):
         except ValueError: # VA name is not listed => put last
             return len(self.VA_ORDER) + 1
 
+    # TODO: rename to applyHwVAs and never call unlinkHwVAs?
     def _linkHwVAs(self):
         """
         Apply the current value of each duplicated hardware VAs from the stream
@@ -335,21 +336,25 @@ class Stream(object):
                 logging.debug("Failed to set VA %s to value %s on hardware",
                               vaname, lva.value)
 
+        # Note: for now disabled. Normally, we don't need to set the VA value
+        # via the hardware VA, and it causes confusion in some cases if the
+        # hardware settings are changed temporarily for some reason.
         # make sure the local VA value is synchronised
-        for vaname, hwva in self._hwvas.items():
-            if hwva.readonly:
-                continue
-            lva = getattr(self, vaname)
-            updater = functools.partial(self._va_sync_from_hw, lva)
-            self._lvaupdaters[vaname] = updater
-            hwva.subscribe(updater, init=True)
+#         for vaname, hwva in self._hwvas.items():
+#             if hwva.readonly:
+#                 continue
+#             lva = getattr(self, vaname)
+#             updater = functools.partial(self._va_sync_from_hw, lva)
+#             self._lvaupdaters[vaname] = updater
+#             hwva.subscribe(updater, init=True)
 
     def _unlinkHwVAs(self):
-        for vaname, hwva in self._hwvas.items():
-            if hwva.readonly:
-                continue
-            updater = self._lvaupdaters[vaname]
-            hwva.unsubscribe(updater)
+        pass
+#         for vaname, hwva in self._hwvas.items():
+#             if hwva.readonly:
+#                 continue
+#             updater = self._lvaupdaters[vaname]
+#             hwva.unsubscribe(updater)
 
     def _getEmitterVA(self, vaname):
         """
@@ -664,7 +669,7 @@ class Stream(object):
         self.histogram._value = chist
         self.histogram.notify(chist)
 
-    def _onNewImage(self, dataflow, data):
+    def _onNewData(self, dataflow, data):
         # For now, raw images are pretty simple: we only have one
         # (in the future, we could keep the old ones which are not fully
         # overlapped)

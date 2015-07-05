@@ -461,7 +461,7 @@ class MonochromatorSettingsStream(PMTSettingsStream):
         im.metadata[model.MD_ACQ_DATE] = self._raw_date
         self.image.value = im
 
-    def _onNewImage(self, dataflow, data):
+    def _onNewData(self, dataflow, data):
         # we absolutely need the acquisition time
         try:
             date = data.metadata[model.MD_ACQ_DATE]
@@ -577,6 +577,14 @@ class CLSettingsStream(PMTSettingsStream):
 
     def _onResolution(self, value):
         self._updateAcquisitionTime()
+
+    def _onNewData(self, dataflow, data):
+        # TODO: read protection status just after acquisition
+        # How? Export protection VA from PMT? Have a warning status?
+        # protection = self._detector.protection.value
+        # And update the stream status if protection was triggered
+        super(CLSettingsStream, self)._onNewData(dataflow, data)
+
 
 # Maximum allowed overlay difference in electron coordinates.
 # Above this, the find overlay procedure will consider an error occurred and

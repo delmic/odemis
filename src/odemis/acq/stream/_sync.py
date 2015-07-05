@@ -129,6 +129,11 @@ class MultipleDetectorStream(Stream):
         return total_time
 
     def acquire(self):
+        # Order matters: if same local VAs for emitter (e-beam). the rep ones
+        # are used.
+        self._main_stream._linkHwVAs()
+        self._rep_stream._linkHwVAs()
+
         # TODO: if already acquiring, queue the Future for later acquisition
         if self._current_future is not None and not self._current_future.done():
             raise IOError("Cannot do multiple acquisitions simultaneously")
@@ -450,6 +455,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
        so good for short dwell times.
     TODO: in software synchronisation, we can easily do our own fuzzing.
     """
+    # FIXME: use local settings
     def _ssAdjustHardwareSettings(self):
         """
         Read the SEM and CCD stream settings and adapt the SEM scanner
@@ -690,6 +696,7 @@ class SEMMDStream(MultipleDetectorStream):
         """
         # In this case settings are set dynamically according to the number of
         # pixels to be scanned
+        # FIXME: dwellTime should be from the rep stream
         pass
 
     def _ssRunAcquisition(self, future):

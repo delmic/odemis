@@ -83,11 +83,11 @@ class LiveStream(Stream):
             if not self.should_update.value:
                 logging.warning("Trying to activate stream while it's not "
                                 "supposed to update")
-            self._dataflow.subscribe(self._onNewImage)
+            self._dataflow.subscribe(self._onNewData)
         else:
             msg = "Unsubscribing from dataflow of component %s"
             logging.debug(msg, self._detector.name)
-            self._dataflow.unsubscribe(self._onNewImage)
+            self._dataflow.unsubscribe(self._onNewData)
 
     def _updateAcquisitionTime(self):
         """
@@ -118,8 +118,8 @@ class LiveStream(Stream):
         # TODO: do this on a rate-limited fashion (now, or ~1s)
         # unsubscribe, and re-subscribe immediately
         logging.debug("Restarting acquisition because it lasts %f s", prev_dur)
-        self._dataflow.unsubscribe(self._onNewImage)
-        self._dataflow.subscribe(self._onNewImage)
+        self._dataflow.unsubscribe(self._onNewData)
+        self._dataflow.subscribe(self._onNewData)
 
     def _shouldUpdateHistogram(self):
         """
@@ -167,7 +167,7 @@ class LiveStream(Stream):
                 # stream is not active (but that can happen even without this).
                 self._updateImage()
 
-    def _onNewImage(self, dataflow, data):
+    def _onNewData(self, dataflow, data):
         old_drange = self._drange
 
         if not self.raw:
@@ -585,7 +585,7 @@ class SpotSEMStream(LiveStream):
         """
         return 0.1
 
-    def _onNewImage(self, df, data):
+    def _onNewData(self, df, data):
         """
         received a new image from the hardware
         """
@@ -740,7 +740,7 @@ class CameraCountStream(CameraStream):
         im.metadata[model.MD_ACQ_DATE] = self._raw_date
         self.image.value = im
 
-    def _onNewImage(self, dataflow, data):
+    def _onNewData(self, dataflow, data):
         # we absolutely need the acquisition time
         try:
             date = data.metadata[model.MD_ACQ_DATE]
@@ -892,7 +892,7 @@ class FluoStream(CameraStream):
         emissions[i] = 1.
         self._emitter.emissions.value = emissions
 
-    def _onNewImage(self, dataflow, data):
+    def _onNewData(self, dataflow, data):
         # Add some metadata on the fluorescence
 
         # TODO: should be handled by the MD updater?
@@ -902,7 +902,7 @@ class FluoStream(CameraStream):
             data.metadata[model.MD_OUT_WL] = em_band
 
         data.metadata[model.MD_USER_TINT] = self.tint.value
-        super(FluoStream, self)._onNewImage(dataflow, data)
+        super(FluoStream, self)._onNewData(dataflow, data)
 
 
 class RGBCameraStream(CameraStream):
