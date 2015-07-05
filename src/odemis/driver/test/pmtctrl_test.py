@@ -58,7 +58,6 @@ class TestStatic(unittest.TestCase):
     """
     Tests which don't need a component ready
     """
-    @skip("simple")
     def test_scan(self):
         devices = CLASS.scan()
         self.assertGreater(len(devices), 0)
