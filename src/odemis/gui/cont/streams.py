@@ -220,7 +220,7 @@ class StreamController(object):
         """ Remove all references to setting entries and the possible VAs they might contain
 
         TODO: Make stream panel creation and destruction cleaner by having the StreamBarController
-        being the main class respobsible for it.
+        being the main class responsible for it.
 
         """
 
