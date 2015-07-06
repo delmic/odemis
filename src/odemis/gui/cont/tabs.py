@@ -714,15 +714,6 @@ class SparcAcquisitionTab(Tab):
             self._spot_stream.roi.value = (pos + pos)
 
     def on_acquisition(self, is_acquiring):
-        # Don't change anchor region during acquisition (this can happen
-        # because the dwell time VA is directly attached to the hardware,
-        # instead of actually being the dwell time of the sem survey stream)
-        # TODO: still needed? (probably not, now that there are local settings)
-        # if is_acquiring:
-        #     self._sem_stream.emtDwellTime.unsubscribe(self._copyDwellTimeToAnchor)
-        # else:
-        #     self._sem_stream.emtDwellTime.subscribe(self._copyDwellTimeToAnchor)
-
         # TODO: Make sure nothing can be modified during acquisition
 
         if is_acquiring:
