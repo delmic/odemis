@@ -49,11 +49,18 @@ def main(args):
     # Prepare the port
     ser.setRTS()
 
-    # TODO: check *IDN?
-
-    # Send command
-    cmd = "RELAY %s\n" % (value,)
+    # check IDN to make sure it is the correct HW
+    cmd = "*IDN?\n"
     ser.write(cmd)
+    ans = ''
+    char = None
+    while (char != '\n'):
+        char = ser.read()
+        ans += char
+    if ans.startswith("Delmic Analog PMT version"):
+        # Send command
+        cmd = "RELAY %s\n" % (value,)
+        ser.write(cmd)
 
     return 0
 
