@@ -54,6 +54,7 @@ import odemis.gui.conf.util as util
 # on which they are displayed.
 from odemis.util import recursive_dict_update
 
+# TODO: seperate HW settings from Stream settings (use stream class -> settings)
 
 HW_SETTINGS_CONFIG = {
     "ccd":
@@ -120,6 +121,7 @@ HW_SETTINGS_CONFIG = {
             }),
             ("dwellTime", {
                 "control_type": odemis.gui.CONTROL_SLIDER,
+                "tooltip": "Time spent by the e-beam on each pixel",
                 "range": (1e-9, 1),
                 "scale": "log",
                 "type": "float",
@@ -134,6 +136,7 @@ HW_SETTINGS_CONFIG = {
             }),
             ("resolution", {
                 "control_type": odemis.gui.CONTROL_COMBO,
+                "tooltip": "Number of pixels scanned",
                 "choices": util.resolution_from_range,
                 "accuracy": None,  # never simplify the numbers
             }),
@@ -211,12 +214,29 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
             {
                 "range": (0.01, 500.0),  # Typically much longer than on a SECOM
             },
+            # TODO: need better stream GUI with crop ratio (aka ROI) + resolution based on scale + ROI
+            "resolution":  # Read-only because cropping is useless for the user
+            {
+                "control_type": odemis.gui.CONTROL_READONLY,
+            },
         },
         "e-beam":
         {
             "dwellTime":
             {
                 "range": (1e-9, 10.0),  # TODO: actually only useful for the monochromator settings
+            },
+            # TODO: need better stream GUI with crop ratio (aka ROI) + resolution based on scale + ROI
+            "resolution":  # Read-only because ROI override it
+            {
+                "control_type": odemis.gui.CONTROL_READONLY,
+            },
+        },
+        "spectrometer":
+        {
+            "resolution":  # Read-only it shouldn't be changed by the user
+            {
+                "control_type": odemis.gui.CONTROL_READONLY,
             },
         },
         "filter":
