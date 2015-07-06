@@ -568,9 +568,6 @@ class SparcAcquisitionTab(Tab):
         # For remembering which streams are paused when hiding the tab
         self._streams_to_restart = set()  # set of weakref to the streams
 
-        # TODO: need to be more dynamic => move to acquisition controller
-        vas_settings = []  # VAs that can affect the acquisition time
-
         # This stream is used both for rendering and acquisition
         sem_stream = acqstream.SEMStream(
             "Secondary electrons",
@@ -589,6 +586,11 @@ class SparcAcquisitionTab(Tab):
         self._spot_stream = spot_stream
         # TODO: add to tab_data.streams and move the handling to the stream controller?
         tab_data.spotPosition.subscribe(self._onSpotPosition)
+
+        # TODO: when there is an active monochromator stream, copy its dwell time
+        # to the spot stream (so that the dwell time is correct). Otherwise, use
+        # 0.1s dwell time for the spot stream (affects only the refreshing of
+        # position).
 
         # the SEM acquisition simultaneous to the CCDs
         semcl_stream = acqstream.SEMStream(
