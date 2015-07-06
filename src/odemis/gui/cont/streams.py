@@ -1117,7 +1117,11 @@ class StreamBarController(object):
             show_panel = isinstance(stream, self._tab_data_model.focussedView.value.stream_classes)
             show_panel |= self.ignore_view
 
-            stream_cont = self._add_stream_cont(stream, show_panel, static=False, no_bc=no_bc)
+            stream_cont = self._add_stream_cont(stream,
+                                                show_panel,
+                                                locked=self.locked_mode,
+                                                static=self.static_mode,
+                                                no_bc=no_bc)
 
             # TODO: make StreamTree a VA-like and remove this
             logging.debug("Sending stream.ctrl.added message")
