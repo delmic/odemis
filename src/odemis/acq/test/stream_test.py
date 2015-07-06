@@ -354,20 +354,22 @@ class StreamTestCase(unittest.TestCase):
         self.assertEqual(ebeam.magnification.value, 200)
         self.assertEqual(ebeam.scale.value, ss.emtScale.value)
         self.assertEqual(ebeam.scale.value, (5.3, 5.3))
+        # resolution is tricky because it's automatically computed out of the ROI
         self.assertEqual(ebeam.resolution.value, ss.emtResolution.value)
 
-        # Directly change HW VAs, and check the stream see the changes
-        ebeam.magnification.value = 10
-        self.assertEqual(ebeam.magnification.value, ss.emtMagnification.value)
-
-        ebeam.scale.value = (2, 2)
-        self.assertEqual(ebeam.scale.value, ss.emtScale.value)
-
-        ebeam.resolution.value = (128, 128) # normally automatically done
-        self.assertEqual(ebeam.resolution.value, ss.emtResolution.value)
+        # TODO: remove (now that this has been disabled)
+#         # Directly change HW VAs, and check the stream see the changes
+#         ebeam.magnification.value = 10
+#         self.assertEqual(ebeam.magnification.value, ss.emtMagnification.value)
+#
+#         ebeam.scale.value = (2, 2)
+#         self.assertEqual(ebeam.scale.value, ss.emtScale.value)
+#
+#         ebeam.resolution.value = (128, 128) # normally automatically done
+#         self.assertEqual(ebeam.resolution.value, ss.emtResolution.value)
 
         # Change the local VAs while playing
-        ss.emtMagnification.value = 200
+        ss.emtMagnification.value = 20
         self.assertEqual(ebeam.magnification.value, ss.emtMagnification.value)
 
         ss.emtScale.value = (5, 5)
@@ -509,8 +511,8 @@ class SECOMTestCase(unittest.TestCase):
         light = self.light
 
         # original VA name -> expected local setting VA name
-        det_lsvas = {"exposureTime": "det_ExposureTime"}
-        emt_lsvas = {"power": "emt_Power"}
+        det_lsvas = {"exposureTime": "detExposureTime"}
+        emt_lsvas = {"power": "emtPower"}
         detvas = set(det_lsvas.keys())
         emtvas = set(emt_lsvas.keys())
         fs = stream.FluoStream("fluo", ccd, ccd.data, light, self.light_filter,
@@ -546,12 +548,12 @@ class SECOMTestCase(unittest.TestCase):
         self.assertEqual(ccd.exposureTime.value, fs.detExposureTime.value)
         self.assertEqual(ccd.exposureTime.value, 0.5)
 
-        # Directly change HW VAs, and check the stream see the changes
+        # Directly change HW VAs, and check the stream doesn't see the changes
         light.power.value = 0.1
         ccd.exposureTime.value = 0.2
         time.sleep(0.01) # updates are asynchonous so it can take a little time to receive them
-        self.assertEqual(light.power.value, fs.emtPower.value)
-        self.assertEqual(ccd.exposureTime.value, fs.detExposureTime.value)
+        self.assertNotEqual(light.power.value, fs.emtPower.value)
+        self.assertNotEqual(ccd.exposureTime.value, fs.detExposureTime.value)
 
         # Change the local VAs while playing
         fs.emtPower.value = 0.4
@@ -1024,8 +1026,8 @@ class SettingsStreamsTestCase(unittest.TestCase):
 
         self.assertIsNotNone(self._image, "No spectrum received after 2s")
         self.assertIsInstance(self._image, model.DataArray)
-        self.assertEqual(self._image.shape, specs.detResolution.value[::-1])
-        self.assertEqual(self._image.shape[0], 1)
+        # .image should be a 1D spectrum
+        self.assertEqual(self._image.shape, (specs.detResolution.value[0],))
 
         # TODO
         # change center wavelength and try again
@@ -1035,7 +1037,7 @@ class SettingsStreamsTestCase(unittest.TestCase):
         # Create the stream and a SpotStream (to drive the ebeam)
         mcs = stream.MonochromatorSettingsStream("test",
                       self.mnchr, self.mnchr.data, self.ebeam, self.spgp,
-                      emtvas={"dwellTime", })  # , "scale", "resolution"
+                      emtvas={"dwellTime", })
         spots = stream.SpotSEMStream("spot", self.sed, self.sed.data, self.ebeam)
 
         self._image = None
@@ -1049,7 +1051,6 @@ class SettingsStreamsTestCase(unittest.TestCase):
         mcs.roi.value = (0.15, 0.6, 0.8, 0.8)
         mcs.repetition.value = (5, 6)
 
-#        mcs.emtResolution.value = (1, 1) # spot
         mcs.emtDwellTime.value = 0.01 # s
         mcs.windowPeriod.value = 10 # s
 
@@ -1057,7 +1058,12 @@ class SettingsStreamsTestCase(unittest.TestCase):
         mcs.should_update.value = True
         mcs.is_active.value = True
 
-        time.sleep(2)
+        # move spot
+        time.sleep(0.2)
+        spots.roi.value = (0.1, 0.3, 0.1, 0.3)
+        time.sleep(0.2)
+        spots.roi.value = (0.5, 0.2, 0.5, 0.2)
+        time.sleep(1)
         mcs.is_active.value = False
 
         self.assertIsNotNone(self._image, "No data received after 2s")
@@ -1076,16 +1082,20 @@ class SettingsStreamsTestCase(unittest.TestCase):
         Test short & long acquisition for SEM MD
         """
         # Create the stream
-        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam,
+                        emtvas={"dwellTime", "scale", "magnification", "pixelSize"})
         mcs = stream.MonochromatorSettingsStream("test",
                       self.mnchr, self.mnchr.data, self.ebeam, self.spgp,
-                      emtvas={"dwellTime", })  # , "scale", "resolution"
+                      emtvas={"dwellTime", })
         sms = stream.SEMMDStream("test sem-md", sems, mcs)
 
         mcs.roi.value = (0.2, 0.2, 0.5, 0.6)
         sems.dcPeriod.value = 100
         sems.dcRegion.value = (0.525, 0.525, 0.6, 0.6)
         sems.dcDwellTime.value = 1e-06
+
+        # dwell time of sems shouldn't matter
+        mcs.emtDwellTime.value = 1e-3  # s
 
         mcs.repetition.value = (5, 6)
         exp_shape = mcs.repetition.value[::-1]
@@ -1318,7 +1328,9 @@ class StaticStreamsTestCase(unittest.TestCase):
     def _create_spec_data(self):
         # Spectrum
         data = numpy.ones((251, 1, 1, 200, 300), dtype="uint16")
-        data[:, 0, 0, :, 3] = numpy.random.randint(0, 2 ** 12 - 1, (200,))
+        # data[:, 0, 0, :, 3] = numpy.random.randint(0, 2 ** 12 - 1, (200,))
+        data[:, 0, 0, :, 3] = range(200)
+        data[:, 0, 0, :, 3] *= 3
         data[2, :, :, :, :] = range(300)
         data[200, 0, 0, 2] = range(300)
         wld = 433e-9 + numpy.array(range(data.shape[0])) * 0.1e-9
@@ -1465,12 +1477,14 @@ class StaticStreamsTestCase(unittest.TestCase):
         """Test StaticSpectrumStream calibration"""
         spec = self._create_spec_data()
         specs = stream.StaticSpectrumStream("test", spec)
+        specs.spectrumBandwidth.value = (specs.spectrumBandwidth.range[0][0], specs.spectrumBandwidth.range[1][1])
+        time.sleep(0.5)  # ensure that .image is updated
 
         # Check efficiency compensation
         prev_im2d = specs.image.value
 
-        dbckg = numpy.ones(spec.shape, dtype=numpy.uint16)
-        wl_bckg = 400e-9 + numpy.array(range(dbckg.shape[0])) * 10e-9
+        dbckg = numpy.ones(spec.shape, dtype=numpy.uint16) + 10
+        wl_bckg = list(spec.metadata[model.MD_WL_LIST])
         obckg = model.DataArray(dbckg, metadata={model.MD_WL_LIST: wl_bckg})
         bckg = calibration.get_spectrum_data([obckg])
 

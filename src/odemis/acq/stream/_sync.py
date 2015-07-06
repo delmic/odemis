@@ -100,9 +100,17 @@ class MultipleDetectorStream(Stream):
             r.extend(self._anchor_raw)
         return r
 
+    @abstractmethod
+    def _estimateRawAcquisitionTime(self):
+        """
+        return (float): time in s for acquiring the whole image, without drift
+         correction
+        """
+        return 0
+
     def estimateAcquisitionTime(self):
         # Time required without drift correction
-        acq_time = self._rep_stream.estimateAcquisitionTime()
+        acq_time = self._estimateRawAcquisitionTime()
 
         if self._main_stream.dcRegion.value == UNDEFINED_ROI:
             return acq_time
@@ -226,8 +234,8 @@ class MultipleDetectorStream(Stream):
     @abstractmethod
     def _ssAdjustHardwareSettings(self):
         """
-        Read the  stream settings and adapt the SEM scanner accordingly.
-        return (float): estimated time for a whole image scanning.
+        Read the stream settings and adapt the SEM scanner accordingly.
+        return (float): estimated time per pixel.
         """
         pass
 
@@ -252,7 +260,8 @@ class MultipleDetectorStream(Stream):
         # (situated at 0.5, 0.5), can be floats
         lim_main = (shape[0] * (lim[0] - 0.5), shape[1] * (lim[1] - 0.5),
                     shape[0] * (lim[2] - 0.5), shape[1] * (lim[3] - 0.5))
-        logging.debug("Generating points in the SEM area %s", lim_main)
+        logging.debug("Generating points in the SEM area %s, from rep %s and roi %s",
+                      lim_main, repetition, roi)
 
         pos = numpy.empty(repetition + (2,), dtype=numpy.float)
         posx = pos[:, :, 0].swapaxes(0, 1)  # just a view to have X as last dim
@@ -294,7 +303,7 @@ class MultipleDetectorStream(Stream):
         rep (tuple of 2 0<ints): X/Y repetition
         roi (tupel of 3 0<floats<=1): region of interest in logical coordinates
         data_list (list of M DataArray of shape (1, 1)): all the data received,
-        with X variating first, then Y.
+        with X varying first, then Y.
         """
         assert len(data_list) > 0
 
@@ -308,22 +317,7 @@ class MultipleDetectorStream(Stream):
 
         # start with the metadata from the first point
         md = data_list[0].metadata.copy()
-
-        # Pixel size is the size of field of view divided by the repetition
-        main_pxs = self._emitter.pixelSize.value
-        main_shape = self._emitter.shape[:2]
-        width = (roi[2] - roi[0], roi[3] - roi[1])
-        fov = (width[0] * main_shape[0] * main_pxs[0],
-               width[1] * main_shape[1] * main_pxs[1])
-        pxs = (fov[0] / rep[0], fov[1] / rep[1])
-
-        # Compute center of area, based on the position of the first point (the
-        # position of the other points can be wrong due to drift correction)
-        tl = (md[MD_POS][0] - (pxs[0] * (data_list[0].shape[0] - 1)) / 2,
-              md[MD_POS][1] + (pxs[1] * (data_list[0].shape[1] - 1)) / 2)  # center of the first point (top-left)
-        center = (tl[0] + (pxs[0] * (rep[0] - 1)) / 2,
-                  tl[1] - (pxs[1] * (rep[1] - 1)) / 2)
-
+        center, pxs = self._get_center_pxs(rep, roi, data_list[0])
         md.update({MD_POS: center,
                    MD_PIXEL_SIZE: pxs})
 
@@ -335,70 +329,57 @@ class MultipleDetectorStream(Stream):
         main_data = model.DataArray(main_data, metadata=md)
         return main_data
 
-    def get_sem_fov(self):
+    def _get_center_pxs(self, rep, roi, datatl):
         """
-        Returns the (theoretical) scanning area of the SEM. Works even if the
-        SEM has not sent any image yet.
-        returns (tuple of 4 floats): position in physical coordinates m (l, t, b, r)
+        rep
+        roi
+        datatl (DataArray): first data array acquired
+        return:
+            center (tuple of floats): position in m of the whole data
+            pxs (tuple of floats): pixel size in m
         """
-        # just relative to the center of the SEM
-        center = (0, 0)
+        # Pixel size is the size of field of view divided by the repetition
+        main_pxs = self._emitter.pixelSize.value
+        main_shape = self._emitter.shape[:2]
+        width = (roi[2] - roi[0], roi[3] - roi[1])
+        fov = (width[0] * main_shape[0] * main_pxs[0],
+               width[1] * main_shape[1] * main_pxs[1])
+        pxs = (fov[0] / rep[0], fov[1] / rep[1])
 
-        sem_width = (self._emitter.shape[0] * self._emitter.pixelSize.value[0],
-                     self._emitter.shape[1] * self._emitter.pixelSize.value[1])
-        sem_rect = [center[0] - sem_width[0] / 2,  # left
-                    center[1] - sem_width[1] / 2,  # top
-                    center[0] + sem_width[0] / 2,  # right
-                    center[1] + sem_width[1] / 2]  # bottom
-        # TODO: handle rotation?
+        center_tl = datatl.metadata[MD_POS]
+        # Compute center of area, based on the position of the first point (the
+        # position of the other points can be wrong due to drift correction)
+        tl = (center_tl[0] - (pxs[0] * (datatl.shape[0] - 1)) / 2,
+              center_tl[1] + (pxs[1] * (datatl.shape[1] - 1)) / 2)  # center of the first point (top-left)
+        center = (tl[0] + (pxs[0] * (rep[0] - 1)) / 2,
+                  tl[1] - (pxs[1] * (rep[1] - 1)) / 2)
 
-        return sem_rect
+        return center, pxs
 
-    def convert_roi_ratio_to_phys(self, roi):
-        """
-        Convert the ROI in relative coordinates (to the SEM FoV) into physical
-         coordinates
-        roi (4 floats): ltrb positions relative to the FoV
-        return (4 floats): physical ltrb positions
-        """
-        sem_rect = self.get_sem_fov()
-        logging.debug("SEM FoV = %s", sem_rect)
-        phys_width = (sem_rect[2] - sem_rect[0],
-                      sem_rect[3] - sem_rect[1])
-
-        # In physical coordinates Y goes up, but in ROI, Y goes down => "1-"
-        phys_rect = (sem_rect[0] + roi[0] * phys_width[0],
-                     sem_rect[1] + (1 - roi[3]) * phys_width[1],
-                     sem_rect[0] + roi[2] * phys_width[0],
-                     sem_rect[1] + (1 - roi[1]) * phys_width[1]
-                     )
-
-        return phys_rect
-
-    def _assembleTiles(self, shape, data, roi, pxs):
+    def _assembleTiles(self, rep, roi, data_list):
         """
         Convert a series of tiles acquisitions into an image (2D)
-        shape (2 x 0<ints): Number of tiles in the output (Y, X)
-        data (ndarray of shape N, T, S): the values,
-         ordered in blocks of TxS with X first, then Y. N = Y*X.
-         Each element along N is tiled on the final data.
+        rep (2 x 0<ints): Number of tiles in the output (Y, X)
         roi (4 0<=floats<=1): ROI relative to the SEM FoV used to compute the
           spots positions
-        pxs (0<float): distance (in m) between 2 tile centers, used to compute the
-          spots positions
+        data_list (list of N DataArray of shape T, S): the values,
+         ordered in blocks of TxS with X first, then Y. N = Y*X.
+         Each element along N is tiled on the final data.
         return (DataArray of shape Y*T, X*S): the data with the correct metadata
         """
-        N, T, S = data.shape
+        # N = len(data_list)
+        T, S = data_list[0].shape
+        # copy into one big array N, Y, X
+        arr = numpy.array(data_list)
         if T == 1 and S == 1:
-            # fast path: the data is already ordered
-            arr = data
+            # fast path: the data is already ordered just copy
             # reshape to get a 2D image
-            arr.shape = shape[::-1]
+            arr.shape = rep[::-1]
         else:
             # need to reorder data by tiles
-            X, Y = shape
+            X, Y = rep
             # change N to Y, X
-            arr = data.reshape((Y, X, T, S))
+            arr.shape = (Y, X, T, S)
             # change to Y, T, X, S by moving the "T" axis
             arr = numpy.rollaxis(arr, 2, 1)
             # and apply the change in memory (= 1 copy)
@@ -406,12 +387,11 @@ class MultipleDetectorStream(Stream):
             # reshape to apply the tiles
             arr.shape = (Y * T, X * S)
 
-        # set the metadata
-        phys_roi = self.convert_roi_ratio_to_phys(roi)
-        center = ((phys_roi[0] + phys_roi[2]) / 2,
-                  (phys_roi[1] + phys_roi[3]) / 2)
-        md = {model.MD_POS: center,
-              model.MD_PIXEL_SIZE: (pxs / S, pxs / T)}
+        # start with the metadata from the first point
+        md = data_list[0].metadata.copy()
+        center, pxs = self._get_center_pxs(rep, roi, data_list[0])
+        md.update({MD_POS: center,
+                   MD_PIXEL_SIZE: pxs})
 
         return model.DataArray(arr, md)
 
@@ -453,43 +433,70 @@ class SEMCCDMDStream(MultipleDetectorStream):
        automatically synchronises the CCD. As the dwell time is constant, it
        must be bigger than the worst time for CCD acquisition. Less overhead,
        so good for short dwell times.
-    TODO: in software synchronisation, we can easily do our own fuzzing.
     """
-    # FIXME: use local settings
+
+    def _estimateRawAcquisitionTime(self):
+        """
+        return (float): time in s for acquiring the whole image, without drift
+         correction
+        """
+        rep_stream = self._rep_stream
+        try:
+            # Each pixel x the exposure time (of the detector) + readout time +
+            # 30ms overhead + 20% overhead
+            try:
+                ro_rate = rep_stream._getDetectorVA("readoutRate").value
+            except Exception:
+                ro_rate = 100e6 # Hz
+            res = rep_stream._getDetectorVA("resolution").value
+            readout = numpy.prod(res) / ro_rate
+
+            exp = rep_stream._getDetectorVA("exposureTime").value
+            dur_image = (exp + readout + 0.03) * 1.20
+            duration = numpy.prod(rep_stream.repetition.value) * dur_image
+            # Add the setup time
+            duration += self.SETUP_OVERHEAD
+
+            return duration
+        except Exception:
+            msg = "Exception while estimating acquisition time of %s"
+            logging.exception(msg, self.name.value)
+            return Stream.estimateAcquisitionTime(self)
+
     def _ssAdjustHardwareSettings(self):
         """
         Read the SEM and CCD stream settings and adapt the SEM scanner
         accordingly.
         return (float): estimated time for a whole CCD image
         """
-        # Dwell Time: a "little bit" more than the exposure time
         exp = self._rep_det.exposureTime.value  # s
         rep_size = self._rep_det.resolution.value
-
-        # Dwell time as long as possible, but better be slightly shorter than
-        # CCD to be sure it is not slowing thing down.
         readout = numpy.prod(rep_size) / self._rep_det.readoutRate.value
-        rng = self._emitter.dwellTime.range
 
         if self._rep_stream.fuzzing.value:
-            # Handle fuzzing by scaning tile instead of spot
+            # Handle fuzzing by scanning tile instead of spot
             sem_pxs = self._emitter.pixelSize.value
-            subpx_x = math.trunc(TILE_SHAPE[0])
-            subpxs = self._rep_stream.pixelSize.value / subpx_x
+            subpx_x = math.trunc(TILE_SHAPE[0])  # FIXME: this is plain weird => just use TILE_SHAPE[0]?
+            subpxs = self._rep_stream.pixelSize.value / subpx_x  # TODO: either use only one dim TILESHAPE, or compute subpxs for Y too
             scale = (subpxs / sem_pxs[0], subpxs / sem_pxs[1])
+            # FIXME: if scale < 1 => either less subpixels or just disable fuzzing
             self._emitter.scale.value = scale
             dt = (exp / numpy.prod(TILE_SHAPE)) / 2
-            self._emitter.dwellTime.value = numpy.clip(dt, rng[0], rng[1])
-            if self._emitter.dwellTime.value == rng[0]:
+            rng = self._emitter.dwellTime.range
+            if dt < rng[0]:
                 # In case it is below the minimum dwell time reduce tile resolution
                 self._emitter.resolution.value = (1, 1)
+                # FIXME: need to either completely give up fuzzing or less subpixels
             else:
                 self._emitter.resolution.value = TILE_SHAPE  # grid scan
+            self._emitter.dwellTime.value = self._emitter.dwellTime.clip(dt)
         else:
             # Set SEM to spot mode, without caring about actual position (set later)
             self._emitter.scale.value = (1, 1)  # min, to avoid limits on translation
             self._emitter.resolution.value = (1, 1)
-            self._emitter.dwellTime.value = sorted(rng + (exp + readout,))[1]  # clip
+            # Dwell time as long as possible, but better be slightly shorter than
+            # CCD to be sure it is not slowing thing down.
+            self._emitter.dwellTime.value = self._emitter.dwellTime.clip(exp + readout)
 
         return exp + readout
 
@@ -533,7 +540,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
             # Translate dc_period to a number of pixels
             if self._dc_estimator is not None:
-                rep_time_psmt = self._rep_stream.estimateAcquisitionTime() / numpy.prod(rep)
+                rep_time_psmt = self._estimateRawAcquisitionTime() / numpy.prod(rep)
                 pxs_dc_period = self._dc_estimator.estimateCorrectionPeriod(
                                         self._main_stream.dcPeriod.value,
                                         rep_time_psmt,
@@ -569,9 +576,9 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     start = time.time()
                     trigger.notify()
 
-                    if not self._acq_rep_complete.wait(rep_time * 2 + 5):
+                    if not self._acq_rep_complete.wait(rep_time * 4 + 5):
                         raise TimeoutError("Acquisition of repetition stream for pixel %s timed out after %g s"
-                                           % (i, rep_time * 2 + 5))
+                                           % (i, rep_time * 4 + 5))
                     if self._acq_state == CANCELLED:
                         raise CancelledError()
                     dur = time.time() - start
@@ -590,7 +597,6 @@ class SEMCCDMDStream(MultipleDetectorStream):
                             self._rep_df.subscribe(self._ssOnRepetitionImage)
                             continue
 
-                    # FIXME: with the semcomedi, it fails if exposure time > 30s ?!
                     # Normally, the SEM acquisition has already completed
                     if not self._acq_main_complete.wait(dwell_time * 1.5 + 1):
                         raise TimeoutError("Acquisition of SEM pixel %s timed out after %g s"
@@ -611,7 +617,6 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     raw_pos = self._main_data[-1].metadata[MD_POS]
                     rep_data.metadata[MD_POS] = (raw_pos[0] + drift_shift[0] * main_pxs[0],
                                                  raw_pos[1] - drift_shift[1] * main_pxs[1])  # Y is upside down
-                    rep_data.metadata[MD_DESCRIPTION] = self._rep_stream.name.value
                     rep_buf.append(rep_data)
 
                     n += 1
@@ -651,10 +656,9 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     raise CancelledError()
                 self._acq_state = FINISHED
 
-            if self._rep_stream.fuzzing.value:
+            if self._rep_stream.fuzzing.value:  # TODO: only if really fuzzing happened
                 # Handle data generated by fuzzing
-                main_array = numpy.array(self._main_data)
-                main_one = self._assembleTiles(rep, main_array, roi, self._rep_stream.pixelSize.value)
+                main_one = self._assembleTiles(rep, roi, self._main_data)
             else:
                 main_one = self._assembleMainData(rep, roi, self._main_data)  # shape is (Y, X)
             # explicitly add names to make sure they are different
@@ -681,6 +685,8 @@ class SEMCCDMDStream(MultipleDetectorStream):
         else:
             return self.raw
         finally:
+            self._main_stream._unlinkHwVAs()
+            self._rep_stream._unlinkHwVAs()
             del self._main_data  # regain a bit of memory
 
 
@@ -689,15 +695,32 @@ class SEMMDStream(MultipleDetectorStream):
     Same as SEMCCDMDStream, but expects two SEM streams: the first one is the
     one for the SED, and the second one for the CL or Monochromator.
     """
+    def _estimateRawAcquisitionTime(self):
+        """
+        return (float): time in s for acquiring the whole image, without drift
+         correction
+        """
+        rep_stream = self._rep_stream
+        # Each pixel x the dwell time (of the emitter) + 20% overhead
+        dt = rep_stream._getEmitterVA("dwellTime").value
+        duration = numpy.prod(rep_stream.repetition.value) * dt * 1.20
+        # Add the setup time
+        duration += self.SETUP_OVERHEAD
+
+        return duration
+
     def _ssAdjustHardwareSettings(self):
         """
         Read the SEM streams settings and adapt the SEM scanner accordingly.
-        return (float): estimated time for an SEM image
+        return (float): dwell time (for one pixel)
         """
-        # In this case settings are set dynamically according to the number of
-        # pixels to be scanned
-        # FIXME: dwellTime should be from the rep stream
-        pass
+        # Not much to do: dwell time is already set, and resolution will be set
+        # dynamically
+        sem_pxs = self._emitter.pixelSize.value
+        scale = (self._rep_stream.pixelSize.value / sem_pxs[0],
+                 self._rep_stream.pixelSize.value / sem_pxs[1])
+        self._emitter.scale.value = scale
+        return self._rep_stream._getEmitterVA("dwellTime").value
 
     def _ssRunAcquisition(self, future):
         """
@@ -709,14 +732,16 @@ class SEMMDStream(MultipleDetectorStream):
           Exceptions if error
         """
         try:
+            dt = self._ssAdjustHardwareSettings()
+            if self._emitter.dwellTime.value != dt:
+                raise IOError("Expected hw dt = %f but got %f" % (dt, self._emitter.dwellTime.value))
             spot_pos = self._getSpotPositions()
             rep = self._rep_stream.repetition.value
-            trans_list = []
+            trans_list = []  # TODO: use a numpy array => faster
             for i in numpy.ndindex(*rep[::-1]):  # last dim (X) iterates first
                 trans_list.append((spot_pos[i[::-1]][0], spot_pos[i[::-1]][1]))
             roi = self._rep_stream.roi.value
             drift_shift = (0, 0)  # total drift shift (in sem px)
-            main_pxs = self._emitter.pixelSize.value
             self._main_data = []
             self._rep_data = None
             rep_buf = []
@@ -730,7 +755,7 @@ class SEMMDStream(MultipleDetectorStream):
 
             # Translate dc_period to a number of pixels
             if self._dc_estimator is not None:
-                rep_time_psmt = self._rep_stream.estimateAcquisitionTime() / numpy.prod(rep)
+                rep_time_psmt = self._estimateRawAcquisitionTime() / numpy.prod(rep)
                 pxs_dc_period = self._dc_estimator.estimateCorrectionPeriod(
                                         self._main_stream.dcPeriod.value,
                                         rep_time_psmt,
@@ -748,8 +773,6 @@ class SEMMDStream(MultipleDetectorStream):
 
             # number of spots scanned so far
             spots_sum = 0
-            sem_pxs = self._emitter.pixelSize.value
-            scale = (self._rep_stream.pixelSize.value / sem_pxs[0], self._rep_stream.pixelSize.value / sem_pxs[1])
             while spots_sum < tot_num:
                 # Adjust the settings depending if scanning is in frames or all
                 # in once
@@ -759,7 +782,6 @@ class SEMMDStream(MultipleDetectorStream):
                     cptrans = self._emitter.translation.clip(trans)
                     self._emitter.translation.value = cptrans
                     # Scan the whole image at once
-                    self._emitter.scale.value = scale
                     self._emitter.resolution.value = rep
                 else:
                     # Move the beam to the center of the frame
@@ -770,7 +792,6 @@ class SEMMDStream(MultipleDetectorStream):
                     # Scan drift correction number of pixels
                     n_x = numpy.clip(cur_dc_period, 1, rep[0])
                     n_y = numpy.clip(cur_dc_period // rep[0], 1, rep[1])
-                    self._emitter.scale.value = scale
                     self._emitter.resolution.value = (n_x, n_y)
                 spots_sum += cur_dc_period
 
@@ -784,13 +805,13 @@ class SEMMDStream(MultipleDetectorStream):
                 self._main_df.subscribe(self._ssOnMainImage)
                 trigger.notify()
                 # Time to scan a frame
-                frame_time = self._emitter.dwellTime.value * cur_dc_period
+                frame_time = dt * cur_dc_period
                 if not self._acq_rep_complete.wait(frame_time * 10 + 5):
                     raise TimeoutError("Acquisition of repetition stream for frame %s timed out after %g s"
                                        % (self._emitter.translation.value, frame_time * 10 + 5))
                 if self._acq_state == CANCELLED:
                     raise CancelledError()
-                if not self._acq_main_complete.wait(frame_time * 5 + 1):
+                if not self._acq_main_complete.wait(frame_time * 1.1 + 1):
                     raise TimeoutError("Acquisition of SEM frame %s timed out after %g s"
                                        % (self._emitter.translation.value, frame_time * 5 + 1))
 
@@ -803,14 +824,7 @@ class SEMMDStream(MultipleDetectorStream):
                 if self._acq_state == CANCELLED:
                     raise CancelledError()
 
-                # MD_POS default to the center of the stage, but it needs to be
-                # the position of the e-beam (corrected for drift)
-                rep_data = self._rep_data
-                raw_pos = self._main_data[-1].metadata[MD_POS]
-                rep_data.metadata[MD_POS] = (raw_pos[0] + drift_shift[0] * main_pxs[0],
-                                             raw_pos[1] - drift_shift[1] * main_pxs[1])  # Y is upside down
-                rep_data.metadata[MD_DESCRIPTION] = self._rep_stream.name.value  # TODO: do at the end
-                rep_buf.append(rep_data)
+                rep_buf.append(self._rep_data)
 
                 # guess how many drift anchors to acquire
                 n_anchor = (tot_num - spots_sum) // cur_dc_period
@@ -841,18 +855,10 @@ class SEMMDStream(MultipleDetectorStream):
                     raise CancelledError()
                 self._acq_state = FINISHED
 
-            # in case of monochromator i.e. spot mode
-            if self._main_data[0].shape == (0,):
-                md = self._main_data[0].metadata.copy()
-                main_one = model.DataArray(numpy.array([[0]], dtype=numpy.uint16), metadata=md)
-            else:
-                main_one = self._assembleMainData(rep, roi, self._main_data)
-            rep_one = self._assembleMainData(rep, roi, rep_buf)
+            main_one = self._assembleMainData(rep, roi, self._main_data)
             # explicitly add names to make sure they are different
             main_one.metadata[MD_DESCRIPTION] = self._main_stream.name.value
-            # we just need to treat the same way as main data
-            rep_one = self._assembleMainData(rep, roi, rep_buf)
-            self._onMultipleDetectorData(main_one, rep_one)  # FIXME: change to respect API => create rep_one inside
+            self._onMultipleDetectorData(main_one, rep_buf)
 
             if self._dc_estimator is not None:
                 self._anchor_raw = self._assembleAnchorData(self._dc_estimator.raw)
@@ -868,19 +874,26 @@ class SEMMDStream(MultipleDetectorStream):
             self._rep_stream.raw = []
             self._main_stream.raw = []
             if not isinstance(exp, CancelledError) and self._acq_state == CANCELLED:
-                logging.warning("Converting exception to cancellation")
+                logging.warning("Converting exception to cancellation", exc_info=True)
                 raise CancelledError()
             raise
         else:
             return self.raw
         finally:
+            self._main_stream._unlinkHwVAs()
+            self._rep_stream._unlinkHwVAs()
             del self._main_data  # regain a bit of memory
 
     def _onMultipleDetectorData(self, main_data, rep_data):
         """
         cf SEMCCDMDStream._onMultipleDetectorData()
         """
-        self._rep_stream.raw = [rep_data]
+        # we just need to treat the same way as main data
+        rep = self._rep_stream.repetition.value
+        roi = self._rep_stream.roi.value
+        rep_one = self._assembleMainData(rep, roi, rep_data)
+        rep_one.metadata[MD_DESCRIPTION] = self._rep_stream.name.value
+        self._rep_stream.raw = [rep_one]
         self._main_stream.raw = [main_data]
 
 
@@ -896,21 +909,22 @@ class SEMSpectrumMDStream(SEMCCDMDStream):
         cf SEMCCDMDStream._onMultipleDetectorData()
         """
         assert rep_data[0].shape[-2] == 1  # should be a spectra (Y == 1)
-        repetition = main_data.shape[-1:-3:-1]  # 1,1,1,Y,X -> X, Y
+        rep = self._rep_stream.repetition.value
 
         # assemble all the CCD data into one
-        md_sem = main_data.metadata
-        pxs = md_sem[MD_PIXEL_SIZE]
-        if self._rep_stream.fuzzing.value:
-            repetition = (repetition[0] / TILE_SHAPE[0], repetition[1] / TILE_SHAPE[1])
-            pxs = (md_sem[MD_PIXEL_SIZE][0] * TILE_SHAPE[0], md_sem[MD_PIXEL_SIZE][1] * TILE_SHAPE[1])
-
-        spec_data = self._assembleSpecData(rep_data, repetition)
+        spec_data = self._assembleSpecData(rep_data, rep)
         try:
-            spec_data.metadata[MD_PIXEL_SIZE] = pxs
+            md_sem = main_data.metadata
             spec_data.metadata[MD_POS] = md_sem[MD_POS]
+            # handle sub-pixels (aka fuzzing)
+            shape_main = main_data.shape[-1:-3:-1]  # 1,1,1,Y,X -> X, Y
+            tile_shape = (shape_main[0] / rep[0], shape_main[1] / rep[1])
+            pxs = (md_sem[MD_PIXEL_SIZE][0] * tile_shape[0],
+                   md_sem[MD_PIXEL_SIZE][1] * tile_shape[1])
+            spec_data.metadata[MD_PIXEL_SIZE] = pxs
         except KeyError:
             logging.warning("Metadata missing from the SEM data")
+        spec_data.metadata[MD_DESCRIPTION] = self._rep_stream.name.value
 
         # save the new data
         self._rep_stream.raw = [spec_data]
@@ -959,6 +973,10 @@ class SEMARMDStream(SEMCCDMDStream):
         # MD_AR_POLE is set automatically, copied from the lens property.
         # In theory it's dependant on MD_POS, but so slightly that we don't need
         # to correct it.
+        sname = self._rep_stream.name.value
+        for d in rep_data:
+            d.metadata[MD_DESCRIPTION] = sname
+
         self._rep_stream.raw = rep_data
         self._main_stream.raw = [main_data]
 

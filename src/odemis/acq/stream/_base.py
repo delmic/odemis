@@ -46,6 +46,9 @@ class Stream(object):
 
     Note: If a Stream needs multiple Emitters, then this should be implemented
     in a subclass of Stream.
+
+    Note: in general it's a bad idea to use .resolution as a local VA (because
+    it's automatically modified by binning/scale and affect by .roi)
     """
 
     # Minimum overhead time in seconds when acquiring an image
@@ -189,7 +192,7 @@ class Stream(object):
             LookupError: if the component doesn't have a listed VA
 
         :return:
-            Dictionary {va name: duplicated vd}
+            Dictionary (str -> VA): original va name -> duplicated va
 
         """
         if not isinstance(vas, set):
@@ -211,6 +214,7 @@ class Stream(object):
             # as long as the stream is active
             vasetter = functools.partial(self._va_sync_setter, va)
             dupva = self._duplicateVA(va, setter=vasetter)
+            logging.debug("Duplicated VA '%s' with value %s", vaname, va.value)
             # Collect the vas, so we can return them at the end of the method
             dup_vas[vaname] = dupva
 
@@ -232,27 +236,27 @@ class Stream(object):
         v: the new value
         return: the real new value (as accepted by the original VA)
         """
-        if self.is_active.value: # only synchronised when the stream is active
-            logging.debug("updating VA %s to %s", origva, v)
+        if self.is_active.value:  # only synchronised when the stream is active
+            logging.debug("updating VA (%s) to %s", origva, v)
             origva.value = v
             return origva.value
         else:
-            logging.debug("not updating VA %s to %s", origva, v)
+            logging.debug("not updating VA (%s) to %s", origva, v)
             return v
 
-#     def _va_sync_from_hw(self, lva, v):
-#         """
-#         Called when the Hw VA is modified, to update the local VA
-#         lva (VA): the local VA
-#         v: the new value
-#         """
-#         # Don't use the setter, directly put the value as-is. That avoids the
-#         # setter to again set the Hw VA, and ensure we always accept the Hw
-#         # value
-#         logging.debug("updating VA %s to %s", lva, v)
-#         if lva._value != v:
-#             lva._value = v # TODO: works with ListVA?
-#             lva.notify(v)
+    def _va_sync_from_hw(self, lva, v):
+        """
+        Called when the Hw VA is modified, to update the local VA
+        lva (VA): the local VA
+        v: the new value
+        """
+        # Don't use the setter, directly put the value as-is. That avoids the
+        # setter to again set the Hw VA, and ensure we always accept the Hw
+        # value
+        logging.debug("updating local VA (%s) to %s", lva, v)
+        if lva._value != v:
+            lva._value = v  # TODO: works with ListVA?
+            lva.notify(v)
 
     # TODO: move to odemis.util ?
     def _duplicateVA(self, va, setter=None):
@@ -299,14 +303,14 @@ class Stream(object):
     # Order in which VAs should be set to ensure the values are kept as-is.
     # This should be the behaviour of the hardware component... but the driver
     # might be buggy, so beware!
-    VA_ORDER = ("binning", "scale", "resolution", "translation", "rotation")
+    VA_ORDER = ("Binning", "Scale", "Resolution", "Translation", "Rotation")
     def _index_in_va_order(self, va_entry):
         """
         return the position of the VA name in VA_ORDER
         va_entry (tuple): first element must be the name of the VA
         return (int)
         """
-        name = va_entry[0]
+        name = va_entry[0][3:]  # strip "det" or "emt"
         try:
             return self.VA_ORDER.index(name)
         except ValueError: # VA name is not listed => put last
@@ -336,6 +340,24 @@ class Stream(object):
                 logging.debug("Failed to set VA %s to value %s on hardware",
                               vaname, lva.value)
 
+        # Immediately read the VAs back, to read the actual values accepted by the hardware
+        for vaname, hwva in hwvas:
+            if hwva.readonly:
+                continue
+            lva = getattr(self, vaname)
+            try:
+                lva.value = hwva.value
+            except Exception:
+                logging.debug("Failed to update VA %s to value %s from hardware",
+                              vaname, hwva.value)
+
+            # Hack: There shouldn't be a resolution local VA, but for now there is.
+            # In order to set it to some correct value, we read back from the hardware.
+            if vaname[3:] == "Resolution":
+                updater = functools.partial(self._va_sync_from_hw, lva)
+                self._lvaupdaters[vaname] = updater
+                hwva.subscribe(updater)
+
         # Note: for now disabled. Normally, we don't need to set the VA value
         # via the hardware VA, and it causes confusion in some cases if the
         # hardware settings are changed temporarily for some reason.
@@ -349,12 +371,10 @@ class Stream(object):
 #             hwva.subscribe(updater, init=True)
 
     def _unlinkHwVAs(self):
-        pass
-#         for vaname, hwva in self._hwvas.items():
-#             if hwva.readonly:
-#                 continue
-#             updater = self._lvaupdaters[vaname]
-#             hwva.unsubscribe(updater)
+        for vaname, updater in self._lvaupdaters.items():
+            hwva = self._hwvas[vaname]
+            hwva.unsubscribe(updater)
+            del self._lvaupdaters[vaname]
 
     def _getEmitterVA(self, vaname):
         """

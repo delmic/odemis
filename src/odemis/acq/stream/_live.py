@@ -188,25 +188,17 @@ class SEMStream(LiveStream):
     """ Stream containing images obtained via Scanning electron microscope.
 
     It basically knows how to activate the scanning electron and the detector.
+    Warning: do not use local .resolution and .translation, but use the ROI.
+    Local VA .resolution is supported, but only as read-only.
     """
     def __init__(self, name, detector, dataflow, emitter, **kwargs):
         super(SEMStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
 
-        # TODO: Anti-aliasing/Pixel fuzzing
-        # .fuzzing: boolean
-        # Might be better to automatically activate it for Spectrum, and disable
-        # it for AR (without asking the user)
-
-        # TODO: do the same for .resolution
         # To restart directly acquisition if settings change
         try:
             self._getEmitterVA("dwellTime").subscribe(self._onDwellTime)
         except AttributeError:
             # if emitter has no dwell time -> no problem
-            pass
-        try:
-            self._getEmitterVA("resolution").subscribe(self._onResolution)
-        except AttributeError:
             pass
 
         # Actually use the ROI
@@ -274,6 +266,7 @@ class SEMStream(LiveStream):
         # simple like this.
         if self.is_active.value:
             self._applyROI()
+            self._updateAcquisitionTime()
 
     def _setDCRegion(self, roi):
         """
@@ -311,15 +304,18 @@ class SEMStream(LiveStream):
     def estimateAcquisitionTime(self):
 
         try:
-            res = list(self._getEmitterVA("resolution").value)
-            # Typically there is few more pixels inserted at the beginning of
-            # each line for the settle time of the beam. We guesstimate by just
-            # adding 1 pixel to each line
-            if len(res) == 2:
-                res[1] += 1
-            else:
-                logging.warning(("Resolution of scanner is not 2 dimensional, "
-                                 "time estimation might be wrong"))
+            # Compute the number of pixels to acquire
+            shape = self._emitter.shape
+            scale = self._getEmitterVA("scale").value
+            roi = self.roi.value
+            width = (roi[2] - roi[0], roi[3] - roi[1])
+            res = [max(1, int(round(shape[0] * width[0] / scale[0]))),
+                   max(1, int(round(shape[1] * width[1] / scale[1])))]
+
+            # Typically there are a few more pixels inserted at the beginning of
+            # each line for the settle time of the beam. We don't take this into
+            # account and so tend to slightly under-estimate.
+
             # Each pixel x the dwell time in seconds
             duration = self._getEmitterVA("dwellTime").value * numpy.prod(res)
             # Add the setup time
@@ -345,9 +341,6 @@ class SEMStream(LiveStream):
         super(SEMStream, self)._onActive(active)
 
     def _onDwellTime(self, value):
-        self._updateAcquisitionTime()
-
-    def _onResolution(self, value):
         self._updateAcquisitionTime()
 
 

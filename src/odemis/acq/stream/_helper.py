@@ -315,45 +315,24 @@ class RepetitionStream(LiveStream):
 class CCDSettingsStream(RepetitionStream):
 
     def estimateAcquisitionTime(self):
+        # Exposure time (of the detector) + readout time + 30ms overhead + 20% overhead
         try:
-            # Each pixel x the exposure time (of the detector) + readout time +
-            # 30ms overhead + 20% overhead
-            try:
-                ro_rate = self._getDetectorVA("readoutRate").value
-            except Exception:
-                ro_rate = 100e6 # Hz
-            res = self._getDetectorVA("resolution").value
-            readout = numpy.prod(res) / ro_rate
-
-            exp = self._getDetectorVA("exposureTime").value
-            dur_image = (exp + readout + 0.03) * 1.20
-            duration = numpy.prod(self.repetition.value) * dur_image
-            # Add the setup time
-            duration += self.SETUP_OVERHEAD
-
-            return duration
+            ro_rate = self._getDetectorVA("readoutRate").value
         except Exception:
-            msg = "Exception while estimating acquisition time of %s"
-            logging.exception(msg, self.name.value)
-            return Stream.estimateAcquisitionTime(self)
+            ro_rate = 100e6  # Hz
+        res = self._getDetectorVA("resolution").value
+        readout = numpy.prod(res) / ro_rate
+
+        exp = self._getDetectorVA("exposureTime").value
+        duration = (exp + readout + 0.03) * 1.20
+        # Add the setup time
+        duration += self.SETUP_OVERHEAD
+
+        return duration
 
 
 class PMTSettingsStream(RepetitionStream):
-
-    def estimateAcquisitionTime(self):
-        try:
-            # Each pixel x the dwell time (of the emitter) + 20% overhead
-            dt = self._getEmitterVA("dwellTime").value
-            duration = numpy.prod(self.repetition.value) * dt * 1.20
-            # Add the setup time
-            duration += self.SETUP_OVERHEAD
-            logging.debug("duration = %f", duration)
-
-            return duration
-        except Exception:
-            msg = "Exception while estimating acquisition time of %s"
-            logging.exception(msg, self.name.value)
-            return Stream.estimateAcquisitionTime(self)
+    pass
 
 
 class SpectrumSettingsStream(CCDSettingsStream):
@@ -421,12 +400,20 @@ class MonochromatorSettingsStream(PMTSettingsStream):
         self.windowPeriod = model.FloatContinuous(30, range=[0, 1e6], unit="s")
 
         # TODO: once the semcomedi works with any value, remove this
-        if "dwellTime" in self._emt_vas:
+        if hasattr(self, "emtDwellTime"):
             dt = self.emtDwellTime
             # Recommended > 1ms, but 0.1 ms should work
             dt.value = max(1e-3, dt.value)
             mn, mx = dt.range
             dt.range = (max(0.1e-3, mn), mx)
+
+    def estimateAcquisitionTime(self):
+        # 1 pixel => the dwell time (of the emitter)
+        duration = self._getEmitterVA("dwellTime").value
+        # Add the setup time
+        duration += self.SETUP_OVERHEAD
+
+        return duration
 
     # onActive: same as the standard LiveStream (ie, acquire from the dataflow)
     # Note: we assume we are in spot mode, if not the dwell time will be messed up!
@@ -546,6 +533,25 @@ class CLSettingsStream(PMTSettingsStream):
             pass
 
     # projection: same as the standard LiveStream
+
+    def estimateAcquisitionTime(self):
+        try:
+            # Find out the resolution (it's full FoV, using pixelSize)
+            hwpxs = self._emitter.pixelSize.value[0]
+            scale = self.pixelSize.value / hwpxs
+            res = tuple(int(round(s / scale)) for s in self._emitter.shape[:2])
+
+            # Each pixel x the dwell time (of the emitter) + 20% overhead
+            dt = self._getEmitterVA("dwellTime").value
+            duration = numpy.prod(res) * dt * 1.20
+            # Add the setup time
+            duration += self.SETUP_OVERHEAD
+
+            return duration
+        except Exception:
+            msg = "Exception while estimating acquisition time of %s"
+            logging.exception(msg, self.name.value)
+            return Stream.estimateAcquisitionTime(self)
 
     def _applyROI(self):
         """
