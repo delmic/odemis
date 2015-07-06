@@ -104,7 +104,7 @@ def get_spectrum_data(das):
                 # take the average for each wavelength (accumulated with a float64)
                 dam = da.reshape((da.shape[0], -1)).mean(axis=1)
                 dam = dam.astype(da.dtype) # put back into original dtype
-                dam.shape += (1,1,1,1)
+                dam.shape += (1, 1, 1, 1)
                 specs.append(dam)
 
     if not specs:
@@ -151,8 +151,8 @@ def get_spectrum_efficiency(das):
 
     if not specs:
         raise LookupError("Failed to find any spectrum efficiency correction "
-                           "data within the %d data acquisitions" %
-                           (len(das)))
+                          "data within the %d data acquisitions" %
+                          (len(das)))
     elif len(specs) == 1:
         ret = specs[0]
     else:
@@ -191,10 +191,10 @@ def compensate_spectrum_efficiency(data, bckg=None, coef=None):
     """
     # Need to get the calibration data for each wavelength of the data
     wl_data = spectrum.get_wavelength_per_pixel(data)
-    
+
     # TODO: use MD_BASELINE as a fallback?
     if bckg is not None:
-        if bckg.shape[1:] != (1,1,1,1):
+        if bckg.shape[1:] != (1, 1, 1, 1):
             raise ValueError("bckg should have shape C1111")
         # It must be fitting the data
         # TODO: support if the data is binned?
@@ -205,8 +205,8 @@ def compensate_spectrum_efficiency(data, bckg=None, coef=None):
         wl_bckg = spectrum.get_wavelength_per_pixel(bckg)
         # Warn if not the same wavelength
         if not numpy.allclose(wl_bckg, wl_data):
-            logging.warning("Spectrum background is only between "
-                            "%g->%g nm, while the spectrum is between %g->%g nm.",
+            logging.warning("Spectrum background is between %g->%g nm, "
+                            "while the spectrum is between %g->%g nm.",
                             wl_bckg[0] * 1e9, wl_bckg[-1] * 1e9,
                             wl_data[0] * 1e9, wl_data[-1] * 1e9)
 
@@ -215,7 +215,7 @@ def compensate_spectrum_efficiency(data, bckg=None, coef=None):
     # We could be more clever if calib has a MD_WL_POLYNOMIAL, but it's very
     # unlikely the calibration is in this form anyway.
     if coef is not None:
-        if coef.shape[1:] != (1,1,1,1):
+        if coef.shape[1:] != (1, 1, 1, 1):
             raise ValueError("coef should have shape C1111")
         wl_coef = spectrum.get_wavelength_per_pixel(coef)
 
