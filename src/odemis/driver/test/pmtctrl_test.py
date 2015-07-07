@@ -22,7 +22,6 @@ from logging.handlers import BufferingHandler
 from odemis import model
 from odemis.driver import pmtctrl
 from odemis.driver import semcomedi
-import os
 import threading
 import unittest
 from unittest.case import skip
@@ -71,22 +70,6 @@ class TestStatic(unittest.TestCase):
         self.assertTrue(dev.selfTest(), "self test failed.")
         dev.terminate()
 
-    def test_wrong_device(self):
-        """
-        Check it correctly fails if the port given is not a PMT Control.
-        """
-        # Look for a device with a serial number not starting with 37
-        paths = glob.glob("/dev/ttyACM*") + glob.glob("/dev/ttyUSB*")
-        realpaths = set(os.readlink(p) for p in glob.glob("/dev/ttyPMT*"))
-        for p in paths:
-            if p in realpaths:
-                continue  # don't try a device which is probably a good one
-
-            kwargsw = dict(KWARGS)
-            kwargsw["port"] = p
-            with self.assertRaises(ValueError):
-                dev = CLASS(**kwargsw)
-
 
 class TestPMTControl(unittest.TestCase):
     """
@@ -134,7 +117,7 @@ class TestPMTControl(unittest.TestCase):
         self.dev.protection.value = protection
         self.assertEqual(self.dev.protection.value, protection)
 
-# @skip("simple")
+
 class TestPMT(unittest.TestCase):
     """
     Test the PMT class

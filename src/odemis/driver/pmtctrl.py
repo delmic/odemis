@@ -220,12 +220,16 @@ class PMTControl(model.HwComponent):
         self._ser_access = threading.Lock()
 
         # Get identification of the PMT control device
-        # TODO Use it to check that we connect to the right device
         try:
             self._idn = self._getIdentification()
         except IOError:
             raise HwError("PMT Control Unit connection timeout. "
                           "Please turn off and on the power to the box.")
+
+        # Check that we connect to the right device
+        if not self._idn.startswith("Delmic Analog PMT"):
+            raise HwError("Wrong device connected. Please make sure you have "
+                          "connected the PMT Control Unit to the computer.")
 
         driver_name = driver.getSerialDriver(self._port)
         self._swVersion = "serial driver: %s" % (driver_name,)
@@ -370,11 +374,13 @@ class PMTControl(model.HwComponent):
         # Purge
         ser.flush()
         ser.flushInput()
-        time.sleep(0.05)  # 50 ms
 
-        # TODO: needed?
-        # Prepare the port
-        ser.setRTS()
+        # Try to read until timeout to be extra safe that we properly flushed
+        while (True):
+            char = ser.read()
+            if char == '':
+                break
+        logging.debug("Nothing left to read, PMT Control Unit can safely initialize.")
 
         return ser
 
@@ -388,15 +394,15 @@ class PMTControl(model.HwComponent):
         raises:
             IOError: if no device are found
         """
-        if os.name == "nt":
-            raise NotImplementedError("Windows not supported")
-        else:
-            names = glob.glob(ports)
-
         # For debugging purpose
         if ports == "/dev/fake":
             self._serial = PMTControlSimulator(timeout=1)
             return ports
+
+        if os.name == "nt":
+            raise NotImplementedError("Windows not supported")
+        else:
+            names = glob.glob(ports)
 
         for n in names:
             try:
@@ -420,34 +426,15 @@ class PMTControl(model.HwComponent):
         found = []  # (list of 2-tuple): name, kwargs
 
         if sys.platform.startswith('linux'):
-            # Look for each USB device, if the serial number is potentially good
-            sn_paths = glob.glob('/sys/bus/usb/devices/*/serial')
-            for p in sn_paths:
-                try:
-                    f = open(p)
-                    snp = f.read().strip()
-                except IOError:
-                    logging.debug("Failed to read %s, skipping device", p)
-
-                # Deduce the tty:
-                # .../3-1.2/serial => .../3-1.2/3-1.2:1.0/ttyUSB1
-                sys_path = os.path.dirname(p)
-                usb_num = os.path.basename(sys_path)
-                logging.info("Looking at device %s with S/N=%s", usb_num, snp)
-                tty_paths = glob.glob("%s/%s/tty/ttyACM?*" % (sys_path, usb_num + ":1.0"))
-                if not tty_paths:  # 0 or 1 paths
-                    continue
-                tty = os.path.basename(tty_paths[0])
-
-                # Convert to /dev
-                # Note: that works because udev rules create a dev with the same name
-                # otherwise, we would need to check the char numbers
-                port = "/dev/%s" % (tty,)
-
+            # Look for each ACM device, if the IDN is the expected one
+            acm_paths = glob.glob('/dev/ttyACM?')
+            for port in acm_paths:
                 # open and try to communicate
                 try:
                     dev = cls(name="test", role="test", port=port)
-                    found.append({"sn": snp})
+                    idn = dev._getIdentification()
+                    if idn.startswith("Delmic Analog PMT"):
+                        found.append({"idn": idn})
                 except Exception:
                     pass
         else:
