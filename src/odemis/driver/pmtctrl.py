@@ -221,11 +221,7 @@ class PMTControl(model.HwComponent):
         logging.info("Found PMT Control device on port %s", self._port)
 
         # Get identification of the PMT control device
-        try:
-            self._idn = self._getIdentification()
-        except IOError:
-            raise HwError("PMT Control Unit connection timeout. "
-                          "Please turn off and on the power to the box.")
+        self._idn = self._getIdentification()
 
         driver_name = driver.getSerialDriver(self._port)
         self._swVersion = "serial driver: %s" % (driver_name,)
@@ -346,7 +342,10 @@ class PMTControl(model.HwComponent):
             while (char != '\n'):
                 char = self._serial.read()
                 if not char:
-                    raise IOError("PMT Control Unit timeout while waiting for reply")
+                    # TODO: See how you should handle a timeout before you raise
+                    # an HWError
+                    raise HwError("PMT Control Unit connection timeout. "
+                                  "Please turn off and on the power to the box.")
                 # Handle ERROR coming from PMT control unit firmware
                 ans += char
 
