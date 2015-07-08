@@ -560,10 +560,7 @@ class SparcAcquisitionTab(Tab):
         #           That's tab_data.semStream
         # When one new stream is added, it actually creates two streams:
         # * XXXSettingsStream: for the live view and the settings
-        # * MDStream: for the acquisition
-        self._sem_live_stream = None
-        self._spot_stream = None
-        self._sem_cl_stream = None
+        # * MDStream: for the acquisition (view)
 
         # For remembering which streams are paused when hiding the tab
         self._streams_to_restart = set()  # set of weakref to the streams
@@ -581,16 +578,20 @@ class SparcAcquisitionTab(Tab):
         sem_stream.should_update.value = True  # TODO: put it in _streams_to_restart instead?
         self.tab_data_model.acquisitionView.addStream(sem_stream)  # it should also be saved
 
+        # This stream is a bit tricky, because it will play (potentially)
+        # simultaneously as another one, and it changes the SEM settings at
+        # play and pause.
         spot_stream = acqstream.SpotSEMStream("Spot", main_data.sed,
                                               main_data.sed.data, main_data.ebeam)
-        self._spot_stream = spot_stream
+        self.tab_data_model.spotStream = spot_stream
         # TODO: add to tab_data.streams and move the handling to the stream controller?
         tab_data.spotPosition.subscribe(self._onSpotPosition)
 
         # TODO: when there is an active monochromator stream, copy its dwell time
         # to the spot stream (so that the dwell time is correct). Otherwise, use
         # 0.1s dwell time for the spot stream (affects only the refreshing of
-        # position).
+        # position). => The goal is just to reset the dwell time after monochromator
+        # is paused? There are easier ways.
 
         # the SEM acquisition simultaneous to the CCDs
         semcl_stream = acqstream.SEMStream(
@@ -600,7 +601,6 @@ class SparcAcquisitionTab(Tab):
             main_data.ebeam
             # No local VAs,
         )
-        self._sem_cl_stream = semcl_stream
         self.tab_data_model.semStream = semcl_stream
 
         # drift correction is disabled until a roi is selected
@@ -624,12 +624,10 @@ class SparcAcquisitionTab(Tab):
 
         self.tb.add_tool(tools.TOOL_ZOOM_FIT, self.view_controller.fitViewToContent)
 
-        # Add the SEM stream to the focused (only) view
+        # Add the SEM stream to the view
         self.tab_data_model.streams.value.append(sem_stream)
-        # TODO: needed? To stop it when tab loses focus?
+        # To make sure the spot mode is stopped when the tab loses focus
         self.tab_data_model.streams.value.append(spot_stream)
-        # Add semcl stream, needed for Monochromator
-        self.tab_data_model.streams.value.append(semcl_stream)
 
         # Create Stream Bar Controller
         self._stream_controller = streamcont.SparcStreamsController(
@@ -666,14 +664,8 @@ class SparcAcquisitionTab(Tab):
         return self._stream_controller
 
     def on_tool_change(self, tool):
-        """ Pause the SE and CLI streams when the Spot mode tool is activated """
-        # TODO: move to stream scheduler? Have a set of stream that require spot
-        # stream and a set that cannot play with spot stream?
+        """ Ensure spot position is always defined when using the spot """
         if tool == guimod.TOOL_SPOT:
-            # Make sure the spatial streams controlling the e-beam are not playing
-            paused_st = self._stream_controller.pauseStreams((acqstream.EMStream,
-                                                              acqstream.CLStream))
-
             # Put the spot position at a "good" place if not yet defined
             if self.tab_data_model.spotPosition.value == (None, None):
                 roa = self.tab_data_model.semStream.roi.value
@@ -684,26 +676,8 @@ class SparcAcquisitionTab(Tab):
                     pos = ((roa[0] + roa[2]) / 2, (roa[1] + roa[3]) / 2)
 
                 self.tab_data_model.spotPosition.value = pos
-
-            # Start the spot mode
-            self._spot_stream.should_update.value = True
-            self._spot_stream.is_active.value = True
-
-            for s in paused_st:  # TODO: move this to new stream creation
-                s.should_update.subscribe(self._cancel_spot_mode)
-            # TODO: re-activate stream when spot mode tool is turned off? => no too confusing/complicated
-        else:
-            # TODO: when spot mode is disabled, ensure that streams requiring spot (ie, monochromator) are paused
-            self._spot_stream.is_active.value = False
-            self._spot_stream.should_update.value = False
-
-    def _cancel_spot_mode(self, should_update):
-        """ Cancel spot mode if SEM/CL stream start playing """
-        # FIXME: this is all messy because spot stream modifies (restores) the
-        # VA when being stopped. That is
-        # print  should_update , self.tab_data_model.tool.value
-        if should_update and self.tab_data_model.tool.value == guimod.TOOL_SPOT:
-            self.tab_data_model.tool.value = guimod.TOOL_NONE
+            # TODO: reset the spot position as defined in the spec?
+            # Too much reset for the user and not really helpful?
 
     def _onSpotPosition(self, pos):
         """
@@ -713,15 +687,10 @@ class SparcAcquisitionTab(Tab):
             assert len(pos) == 2
             assert all(0 <= p <= 1 for p in pos)
             # Just use the same value for LT and RB points
-            self._spot_stream.roi.value = (pos + pos)
+            self.tab_data_model.spotStream.roi.value = (pos + pos)
 
     def on_acquisition(self, is_acquiring):
         # TODO: Make sure nothing can be modified during acquisition
-
-        if is_acquiring:
-            self._spot_stream.is_active.value = False
-        else:
-            self._spot_stream.is_active.value = self._spot_stream.should_update.value
 
         self.tb.enable(not is_acquiring)
         self.main_frame.vp_sparc_tl.Enable(not is_acquiring)
@@ -742,17 +711,14 @@ class SparcAcquisitionTab(Tab):
             # TODO: double check the chamber state hasn't changed in between
             # We should never turn on the streams if the chamber is not in vacuum
             self._stream_controller.resumeStreams(self._streams_to_restart)
-            self._spot_stream.is_active.value = self._spot_stream.should_update.value
         else:
             paused_st = self._stream_controller.pauseStreams()
             self._streams_to_restart = weakref.WeakSet(paused_st)
-            self._spot_stream.is_active.value = False
 
     def terminate(self):
         # make sure the streams are stopped
         for s in self.tab_data_model.streams.value:
             s.is_active.value = False
-        self._spot_stream.is_active.value = False
 
 
 

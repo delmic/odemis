@@ -423,8 +423,12 @@ class ScannedAcquisitionGUIData(MicroscopyGUIData):
 
         # The SEM CL stream that is used to select the acquisition settings
         # eg, ROI (aka ROA), dcPeriod, dcRegion.
-        # It will be set at start up by the tab controller
+        # It is set at start-up by the tab controller, and will never be active.
         self.semStream = None
+
+        # The Spot SEM stream, used to control spot mode.
+        # It is set at start-up by the tab controller.
+        self.spotStream = None
 
         # The position of the spot. Two floats 0->1. (None, None) if undefined.
         self.spotPosition = model.TupleVA((None, None))
