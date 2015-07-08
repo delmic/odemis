@@ -1569,8 +1569,11 @@ class SEMComedi(model.HwComponent):
         with self._acquisition_init_lock:
             self._acquisition_must_stop.set()
             self._cancel_new_position_notifier()
+            # Cancelling parts which are not running is a no-op
             self._writer.cancel()
             self._reader.cancel()
+            for c in self._counters.values():
+                c.reader.cancel()
 
     def _wait_acquisition_stopped(self):
         """
@@ -1581,7 +1584,7 @@ class SEMComedi(model.HwComponent):
         if self._acquisition_must_stop.is_set():
             self._acquisition_thread.join(10) # 10s timeout for safety
             if self._acquisition_thread.isAlive():
-                logging.exception("Failed to stop the acquisition thread")
+                logging.error("Failed to stop the acquisition thread")
                 self._reset_device()
                 # Now let's hope everything is back to normal...
             # ensure it's not set, even if the thread died prematurely

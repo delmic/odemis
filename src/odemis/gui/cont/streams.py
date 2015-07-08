@@ -34,7 +34,7 @@ from odemis.gui.comp.stream import StreamPanel, EVT_STREAM_VISIBLE
 from odemis.gui.conf.data import get_hw_settings_config, get_hw_settings
 from odemis.gui.conf.util import create_setting_entry, create_axis_entry
 from odemis.gui.cont.settings import SettingEntry
-from odemis.gui.model import dye, TOOL_SPOT
+from odemis.gui.model import dye, TOOL_SPOT, TOOL_NONE
 from odemis.gui.util import wxlimit_invocation, dead_object_wrapper
 from odemis.util import fluo
 from odemis.util.conversion import wave2rgb
@@ -779,6 +779,12 @@ class StreamBarController(object):
         # Disable all controls
         self.locked_mode = locked
 
+        # If any stream already present: listen to them in the scheduler (but
+        # don't display)
+        for s in self._tab_data_model.streams.value:
+            logging.debug("Scheduling stream present at init: %s", s)
+            self._scheduleStream(s)
+
     # unused (but in test case)
     def get_actions(self):
         return self.menu_actions
@@ -1224,10 +1230,12 @@ class StreamBarController(object):
                 stream.is_active.value = False
                 # the other streams might or might not be updated, we don't care
             else:
+                # FIXME: hack to not stop the spot stream => different scheduling policy?
+                spots = getattr(self._tab_data_model, "spotStream", None)
                 # Make sure that other streams are not updated (and it also
                 # provides feedback to the user about which stream is active)
                 for s, cb in self._scheduler_subscriptions.items():
-                    if s != stream:
+                    if s != stream and s is not spots:
                         s.is_active.value = False
                         s.should_update.unsubscribe(cb)  # don't inform us of that change
                         s.should_update.value = False
@@ -1491,17 +1499,35 @@ class SecomStreamsController(StreamBarController):
 class SparcStreamsController(StreamBarController):
     """
     Controlls the streams for the SPARC acquisition view
+    In addition to the standard controller it:
+     * Updates the .acquisitionView when a stream is added/removed
+     * Connects the ROA (.roi of each settings streams) to semStream
+     * Shows the repetition overlay when the repetition setting is focused
+     * Play/pause the spot stream in spot mode
+
+    Note: tab_data.spotStream should be part of the streams
     """
     def __init__(self, tab_data, stream_bar, view_ctrl, **kwargs):
         super(SparcStreamsController, self).__init__(tab_data, stream_bar, **kwargs)
-
         self._view_controller = view_ctrl
+
+        # Never allow SEM and CLi Stream to play with spot mode (because they are
+        # spatial, so it doesn't make sense to see just one point), and force
+        # AR, Spectrum, and Monochromator streams with spot mode (because the
+        # first two otherwise could be playing with beam "blanked", which shows
+        # weird signal, and the last one would be very slow to update).
+        # TODO: it could make sense to allow AR and Spectrum stream to play
+        # while doing a normal scan, but the scheduler would need to allow playing
+        # on spatial stream simultaneously (just the SE?) and force to play it
+        # when not in spot mode. (for now, we keep it simple)
+        self._spot_incompatible = (acqstream.SEMStream, acqstream.CLStream)
+        self._spot_required = (acqstream.ARStream, acqstream.SpectrumStream,
+                               acqstream.MonochromatorSettingsStream)
+        tab_data.tool.subscribe(self.on_tool_change)
+
         # Each stream will be created both as a SettingsStream and a MDStream
         # When the SettingsStream is deleted, automatically remove the MDStream
         tab_data.streams.subscribe(self._clean_acqview)
-
-        # Remove streams and stream controllers used for repetition tracking and events
-        tab_data.streams.subscribe(self._clean_event_entries)
 
         # Repetition visualisation
         self._hover_stream = None  # stream for which the repetition must be displayed
@@ -1510,6 +1536,9 @@ class SparcStreamsController(StreamBarController):
         # semStream is semcl_stream set in tabs.py
         tab_data.semStream.roi.value = acqstream.UNDEFINED_ROI
         tab_data.semStream.roi.subscribe(self.onROI)
+
+        # Remove streams and stream controllers used for repetition tracking and events
+        tab_data.streams.subscribe(self._clean_event_entries)
 
         # Grab the repetition entries, so we can use it to hook extra event handlers to it.
 
@@ -1598,7 +1627,7 @@ class SparcStreamsController(StreamBarController):
         Args:
             streams (list of streams): The streams currently used in this tab
         """
-
+        semcls = self._tab_data_model.semStream
         # The acquisition streams
         acq_streams = self._tab_data_model.acquisitionView.getStreams()
 
@@ -1609,7 +1638,9 @@ class SparcStreamsController(StreamBarController):
             # Are all the sub streams of the MDStreams still there?
             for ss in mds.streams:
                 # If not, remove the MD stream
-                if ss not in streams:
+                if ss is not semcls and ss not in streams:
+                    if isinstance(ss, acqstream.SEMStream):
+                        logging.warning("Removing stream because %s is gone!", ss)
                     logging.debug("Removing acquisition stream %s because %s is gone",
                                   mds.name.value, ss.name.value)
                     self._tab_data_model.acquisitionView.removeStream(mds)
@@ -1808,18 +1839,6 @@ class SparcStreamsController(StreamBarController):
             detvas=get_hw_settings(main_data.monochromator),
         )
 
-        def _activate_spot_mode(should_update, tool=self._tab_data_model.tool):
-            """ Activate spot mode when the monochromator streams plays """
-            if should_update:
-                tool.value = TOOL_SPOT
-
-        # Dynamically bind the event listener to keep a reference
-        # TODO:  figure out is there's a good reason not to do it like this
-        # Pros: Easy way to keep a reference to the event listener as long as the stream object
-        # exists, and no need to clutter the stream controller with small methods
-        monoch_stream._activate_spot_mode = _activate_spot_mode
-        monoch_stream.should_update.subscribe(monoch_stream._activate_spot_mode)
-
         stream_cont = self._add_stream(monoch_stream, add_to_all_views=True, no_bc=True, play=False)
         stream_cont.stream_panel.show_visible_btn(False)
 
@@ -1870,19 +1889,61 @@ class SparcStreamsController(StreamBarController):
 
         return stream_cont
 
+    # Stream scheduling related methods
+
+    def on_tool_change(self, tool):
+        """ Pause the SE and CLI streams when the Spot mode tool is activated """
+        # TODO: move to stream scheduler? Have a set of stream that require spot
+        # stream and a set that cannot play with spot stream?
+        spots = self._tab_data_model.spotStream
+        if tool == TOOL_SPOT:
+            # Make sure the streams non compatible are not playing
+            paused_st = self.pauseStreams(self._spot_incompatible)
+            spots.should_update.value = True
+        else:
+            # Make sure that the streams requiring the spot are not playing
+            paused_st = self.pauseStreams(self._spot_required)
+            spots.should_update.value = False
+
     def _onStreamUpdate(self, stream, updated):
-        # Prepare the optical path
+
+        # Don't mess too much with the spot stream => just copy "should_update"
+        if stream is self._tab_data_model.spotStream:
+            stream.is_active.value = updated
+            return
+
         if updated:
+            # Prepare the optical path
             opm = self._main_data_model.opm
             try:
                 mode = opm.guessMode(stream)
             except ValueError:
-                logging.debug("Stream %s doesn't require optical path change", stream.name)
+                logging.debug("%s doesn't require optical path change", stream)
             else:
                 # TODO: Run in a separate thread as in live view it's ok if
                 # the path is not immediately correct?
-                logging.debug("Going to mode %s for stream %s", mode, stream)
+                logging.debug("Going to mode %s for %s", mode, stream)
                 opm.setPath(mode)
+
+            # Activate or deactive spot mode based on what the stream needs
+            # Note: changing tool is fine, because it will only _pause_ the
+            # other streams, and we will not come here again.
+            if isinstance(stream, self._spot_incompatible):
+                logging.info("Stopping spot mode because %s starts", stream)
+                self._tab_data_model.tool.value = TOOL_NONE
+            elif isinstance(stream, self._spot_required):
+                logging.info("Starting spot mode because %s starts", stream)
+                spots = self._tab_data_model.spotStream
+                was_active = spots.is_active.value
+                self._tab_data_model.tool.value = TOOL_SPOT
+
+                # Hack: to be sure the settings of the spot streams are correct
+                # (because the concurrent stream might have changed them, cf
+                # Monochormator), we stop/start it each time a stream plays
+                if was_active:
+                    logging.debug("Resetting spot mode")
+                    spots.is_active.value = False
+                    spots.is_active.value = True
 
         super(SparcStreamsController, self)._onStreamUpdate(stream, updated)
 
