@@ -209,6 +209,9 @@ SPARC-MONASH: {
 "Fiber Flipper": {
     class: tlaptmf.MFF,
     role: ar-spec-selector,
+    # This is just to enforce PMT control to be initialized before the Fiber Flipper
+    # since we need the relay reset to happen before the flipper is turned on
+    children: {"pmt-control": "CL PMT control unit"},
     init: {port: "/dev/fake", # for simulator
            #sn: "37857201",
            axis: "rx",

@@ -120,8 +120,12 @@ class MFF(model.Actuator):
     """
     Represents one Thorlabs Motorized Filter Flipper (ie: MFF101 or MFF102)
     """
-    def __init__(self, name, role, sn=None, port=None, axis="rz", inverted=None, **kwargs):
+    def __init__(self, name, role, children=None, sn=None, port=None, axis="rz", inverted=None, **kwargs):
         """
+        children (dict string->model.HwComponent): they are not actually used.
+            In case of Monash SPARC we pass "pmt-control" just to enforce PMT
+            control to be initialized before the Fiber Flipper since we need the
+            relay reset to happen before the flipper is turned on
         sn (str): serial number (recommended)
         port (str): port name (only if sn is not specified)
         axis (str): name of the axis
