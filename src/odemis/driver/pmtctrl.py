@@ -196,11 +196,12 @@ class PMTControl(model.HwComponent):
      * power up
      * relay is reset (off for 10s, then on)
     '''
-    def __init__(self, name, role, port, prot_time=1e-3, prot_curr=50e-6, **kwargs):
+    def __init__(self, name, role, port, prot_time=1e-3, prot_curr=50e-6, relay_powercycle=False, **kwargs):
         '''
         port (str): port name
         prot_time (float): protection trip time (in s)
         prot_curr (float): protection current threshold (in Amperes)
+        relay_powercycle (boolean): if True then powercycle relay
         Raise an exception if the device cannot be opened
         '''
         model.HwComponent.__init__(self, name, role, **kwargs)
@@ -213,23 +214,14 @@ class PMTControl(model.HwComponent):
             raise ValueError("prot_curr (%s A) is not between 0 and 100.e-6" % (prot_curr,))
         self._prot_curr = prot_curr
 
-        self._port = self._findDevice(port)  # sets ._serial
-        logging.info("Found PMT Control device on port %s", self._port)
-
         # TODO: catch errors and convert to HwError
         self._ser_access = threading.Lock()
 
-        # Get identification of the PMT control device
-        try:
-            self._idn = self._getIdentification()
-        except IOError:
-            raise HwError("PMT Control Unit connection timeout. "
-                          "Please turn off and on the power to the box.")
+        self._port = self._findDevice(port)  # sets ._serial
+        logging.info("Found PMT Control device on port %s", self._port)
 
-        # Check that we connect to the right device
-        if not self._idn.startswith("Delmic Analog PMT"):
-            raise HwError("Wrong device connected. Please make sure you have "
-                          "connected the PMT Control Unit to the computer.")
+        # Get identification of the PMT control device
+        self._idn = self._getIdentification()
 
         driver_name = driver.getSerialDriver(self._port)
         self._swVersion = "serial driver: %s" % (driver_name,)
@@ -253,9 +245,10 @@ class PMTControl(model.HwComponent):
         self._setPowerSupply(True)
 
         # relay initialization
-        logging.info("Turning off and on relay power (will take 10 s)")
-        self.setRelay(False)
-        time.sleep(10)
+        if relay_powercycle:
+            logging.info("Turning off and on relay power (will take 10 s)")
+            self.setRelay(False)
+            time.sleep(10)
         self.setRelay(True)
 
     def terminate(self):
@@ -349,7 +342,10 @@ class PMTControl(model.HwComponent):
             while (char != '\n'):
                 char = self._serial.read()
                 if not char:
-                    raise IOError("PMT Control Unit timeout while waiting for reply")
+                    # TODO: See how you should handle a timeout before you raise
+                    # an HWError
+                    raise HwError("PMT Control Unit connection timeout. "
+                                  "Please turn off and on the power to the box.")
                 # Handle ERROR coming from PMT control unit firmware
                 ans += char
 
@@ -407,6 +403,11 @@ class PMTControl(model.HwComponent):
         for n in names:
             try:
                 self._serial = self._openSerialPort(n)
+                idn = self._getIdentification()
+                # Check that we connect to the right device
+                if not idn.startswith("Delmic Analog PMT"):
+                    logging.debug("Connected to wrong device. Try the next one.")
+                    continue
                 return n
             except serial.SerialException:
                 # not possible to use this port? next one!
@@ -459,6 +460,7 @@ MIN_PCURR = 0
 MAX_PTIME = 100
 MIN_PTIME = 0.000001
 IDN = "Delmic Analog PMT simulator 1.0"
+
 
 class PMTControlSimulator(object):
     """
