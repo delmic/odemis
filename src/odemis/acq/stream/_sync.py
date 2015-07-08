@@ -719,7 +719,13 @@ class SEMMDStream(MultipleDetectorStream):
         sem_pxs = self._emitter.pixelSize.value
         scale = (self._rep_stream.pixelSize.value / sem_pxs[0],
                  self._rep_stream.pixelSize.value / sem_pxs[1])
-        self._emitter.scale.value = scale
+
+        cscale = self._emitter.scale.clip(scale)
+        if cscale != scale:
+            logging.warning("Pixel size requested (%f m) < SEM pixel size (%f m)",
+                            self._rep_stream.pixelSize.value, sem_pxs[0])
+
+        self._emitter.scale.value = cscale
         return self._rep_stream._getEmitterVA("dwellTime").value
 
     def _ssRunAcquisition(self, future):
