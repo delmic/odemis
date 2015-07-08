@@ -196,7 +196,7 @@ class PMTControl(model.HwComponent):
      * power up
      * relay is reset (off for 10s, then on)
     '''
-    def __init__(self, name, role, port, prot_time=1e-3, prot_curr=50e-6, relay_powercycle=True, **kwargs):
+    def __init__(self, name, role, port, prot_time=1e-3, prot_curr=50e-6, relay_powercycle=False, **kwargs):
         '''
         port (str): port name
         prot_time (float): protection trip time (in s)
