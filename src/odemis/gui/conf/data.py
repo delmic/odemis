@@ -267,6 +267,7 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
             {
                 "control_type": odemis.gui.CONTROL_COMBO,
                 "choices": util.resolution_from_range_plus_point,
+                "accuracy": None,  # never simplify the numbers
             },
             "pixelSize":
             {
@@ -288,6 +289,7 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
             {
                 "control_type": odemis.gui.CONTROL_COMBO,
                 "choices": util.resolution_from_range_plus_point,
+                "accuracy": None,  # never simplify the numbers
             },
             "pixelSize":
             {
@@ -314,6 +316,7 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
             {
                 "control_type": odemis.gui.CONTROL_COMBO,
                 "choices": util.resolution_from_range_plus_point,
+                "accuracy": None,  # never simplify the numbers
             },
         },
         "streamcli":
@@ -322,6 +325,7 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
             {
                 "control_type": odemis.gui.CONTROL_COMBO,
                 "choices": util.resolution_from_range_plus_point,
+                "accuracy": None,  # never simplify the numbers
             },
             "pixelSize":
             {
