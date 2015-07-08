@@ -213,11 +213,11 @@ class PMTControl(model.HwComponent):
             raise ValueError("prot_curr (%s A) is not between 0 and 100.e-6" % (prot_curr,))
         self._prot_curr = prot_curr
 
-        self._port = self._findDevice(port)  # sets ._serial
-        logging.info("Found PMT Control device on port %s", self._port)
-
         # TODO: catch errors and convert to HwError
         self._ser_access = threading.Lock()
+
+        self._port = self._findDevice(port)  # sets ._serial
+        logging.info("Found PMT Control device on port %s", self._port)
 
         # Get identification of the PMT control device
         try:
@@ -225,11 +225,6 @@ class PMTControl(model.HwComponent):
         except IOError:
             raise HwError("PMT Control Unit connection timeout. "
                           "Please turn off and on the power to the box.")
-
-        # Check that we connect to the right device
-        if not self._idn.startswith("Delmic Analog PMT"):
-            raise HwError("Wrong device connected. Please make sure you have "
-                          "connected the PMT Control Unit to the computer.")
 
         driver_name = driver.getSerialDriver(self._port)
         self._swVersion = "serial driver: %s" % (driver_name,)
@@ -407,6 +402,11 @@ class PMTControl(model.HwComponent):
         for n in names:
             try:
                 self._serial = self._openSerialPort(n)
+                idn = self._getIdentification()
+                # Check that we connect to the right device
+                if not idn.startswith("Delmic Analog PMT"):
+                    logging.debug("Connected to wrong device. Try the next one.")
+                    continue
                 return n
             except serial.SerialException:
                 # not possible to use this port? next one!
@@ -459,6 +459,7 @@ MIN_PCURR = 0
 MAX_PTIME = 100
 MIN_PTIME = 0.000001
 IDN = "Delmic Analog PMT simulator 1.0"
+
 
 class PMTControlSimulator(object):
     """
