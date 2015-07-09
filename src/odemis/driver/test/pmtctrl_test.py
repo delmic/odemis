@@ -59,8 +59,10 @@ class TestStatic(unittest.TestCase):
     Tests which don't need a component ready
     """
     def test_scan(self):
-        devices = CLASS.scan()
-        self.assertGreater(len(devices), 0)
+        # Only test for actual device
+        if KWARGS["port"] == "/dev/ttyPMT*":
+            devices = CLASS.scan()
+            self.assertGreater(len(devices), 0)
 
     def test_creation(self):
         """
@@ -77,7 +79,7 @@ class TestStatic(unittest.TestCase):
         """
         # Look for a device with a serial number not starting with 37
         paths = glob.glob("/dev/ttyACM*") + glob.glob("/dev/ttyUSB*")
-        realpaths = set(os.readlink(p) for p in glob.glob("/dev/ttyPMT*"))
+        realpaths = set(os.path.join(os.path.dirname(p), os.readlink(p)) for p in glob.glob("/dev/ttyPMT*"))
         for p in paths:
             if p in realpaths:
                 continue  # don't try a device which is probably a good one
