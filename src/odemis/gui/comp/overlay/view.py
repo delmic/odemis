@@ -1226,8 +1226,9 @@ class SpotModeOverlay(base.ViewOverlay, base.DragMixin):
     def on_spot_change(self, _):
         self._r_to_v()
 
-    def on_size(self, _):
+    def on_size(self, evt):
         self._r_to_v()
+        base.ViewOverlay.on_size(self, evt)
 
     def _v_to_r(self):
         if self.v_pos is None:
