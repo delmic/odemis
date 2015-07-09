@@ -124,6 +124,38 @@ class RepetitionStream(LiveStream):
         self.pixelSize._value *= ratio
         self.pixelSize.notify(self.pixelSize._value)
 
+    def _fitROI(self, roi):
+        """
+        Ensure that a ROI fits within its bounds. If not, it will move it or
+        reduce it.
+        roi (4 floats)
+        return (4 floats)
+        """
+        roi = list(roi)
+
+        # Ensure it's not too big
+        if roi[2] - roi[0] > 1:
+            roi[2] = roi[0] + 1
+        if roi[3] - roi[1] > 1:
+            roi[3] = roi[1] + 1
+
+        # shift the ROI if it's now slightly outside the possible area
+        if roi[0] < 0:
+            roi[2] = min(1, roi[2] - roi[0])
+            roi[0] = 0
+        elif roi[2] > 1:
+            roi[0] = max(0, roi[0] - (roi[2] - 1))
+            roi[2] = 1
+
+        if roi[1] < 0:
+            roi[3] = min(1, roi[3] - roi[1])
+            roi[1] = 0
+        elif roi[3] > 1:
+            roi[1] = max(0, roi[1] - (roi[3] - 1))
+            roi[3] = 1
+
+        return roi
+
     def _updateROIAndPixelSize(self, roi, pxs):
         """
         Adapt a ROI and pixel size so that they are correct. It checks that they
@@ -144,21 +176,7 @@ class RepetitionStream(LiveStream):
         pxs_range = self._getPixelSizeRange()
         pxs = max(pxs_range[0], min(pxs, pxs_range[1]))
 
-        # shift the ROI if it's now slightly outside the possible area
-        roi = list(roi)
-        if roi[0] < 0:
-            roi[2] = min(1, roi[2] - roi[0])
-            roi[0] = 0
-        elif roi[2] > 1:
-            roi[0] = max(0, roi[0] - (roi[2] - 1))
-            roi[2] = 1
-
-        if roi[1] < 0:
-            roi[3] = min(1, roi[3] - roi[1])
-            roi[1] = 0
-        elif roi[3] > 1:
-            roi[1] = max(0, roi[1] - (roi[3] - 1))
-            roi[3] = 1
+        roi = self._fitROI(roi)
 
         # compute the repetition (ints) that fits the ROI with the pixel size
         epxs = self.emitter.pixelSize.value
@@ -166,8 +184,9 @@ class RepetitionStream(LiveStream):
         phy_size = (epxs[0] * eshape[0], epxs[1] * eshape[1]) # max physical ROI
         roi_size = (roi[2] - roi[0], roi[3] - roi[1])
 
-        rep = (int(phy_size[0] * roi_size[0] / pxs),
-               int(phy_size[1] * roi_size[1] / pxs))
+        rep = (int(round(phy_size[0] * roi_size[0] / pxs)),
+               int(round(phy_size[1] * roi_size[1] / pxs)))
+
         # TODO: not needed? It should already always be below the max?
         # maximum repetition: either depends on minimum pxs or maximum roi
         max_rep = (max(1, min(int(eshape[0] * roi_size[0]), int(phy_size[0] / pxs))),
@@ -181,10 +200,11 @@ class RepetitionStream(LiveStream):
                       (roi[1] + roi[3]) / 2)
         roi_size = (rep[0] * pxs / phy_size[0],
                     rep[1] * pxs / phy_size[1])
-        roi = (roi_center[0] - roi_size[0] / 2,
+        roi = [roi_center[0] - roi_size[0] / 2,
                roi_center[1] - roi_size[1] / 2,
                roi_center[0] + roi_size[0] / 2,
-               roi_center[1] + roi_size[1] / 2)
+               roi_center[1] + roi_size[1] / 2]
+        roi = self._fitROI(roi)
 
         # Double check we didn't end up with scale < 1
         rep_full = (rep[0] / roi_size[0], rep[1] / roi_size[1])
