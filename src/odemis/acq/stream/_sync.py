@@ -469,18 +469,21 @@ class SEMCCDMDStream(MultipleDetectorStream):
         readout = numpy.prod(rep_size) / self._rep_det.readoutRate.value
 
         # Calculate dwellTime and scale to check if fuzzing could be applied
-        dt = (exp / numpy.prod(TILE_SHAPE)) / 2
-        rng = self._emitter.dwellTime.range
-        sem_pxs = self._emitter.pixelSize.value
-        subpx_x = math.trunc(TILE_SHAPE[0])
-        subpxs_x = self._rep_stream.pixelSize.value / subpx_x
-        subpx_y = math.trunc(TILE_SHAPE[1])
-        subpxs_y = self._rep_stream.pixelSize.value / subpx_y
-        scale = (subpxs_x / sem_pxs[0], subpxs_y / sem_pxs[1])
+        fuzzing = self._rep_stream.fuzzing.value
+        if fuzzing:
+            dt = (exp / numpy.prod(TILE_SHAPE)) / 2
+            sem_pxs = self._emitter.pixelSize.value
+            subpxs = (self._rep_stream.pixelSize.value / TILE_SHAPE[0],
+                      self._rep_stream.pixelSize.value / TILE_SHAPE[1])
+            scale = (subpxs[0] / sem_pxs[0], subpxs[1] / sem_pxs[1])
 
-        # In case dt it is below the minimum dwell time or scale is less than 1,
-        # fully give up fuzzing and do normal acquisition
-        if self._rep_stream.fuzzing.value and rng[0] <= dt <= rng[1] and scale >= 1:
+            # In case dt it is below the minimum dwell time or scale is less
+            # than 1, fully give up fuzzing and do normal acquisition
+            rng = self._emitter.dwellTime.range
+            if not (rng[0] <= dt <= rng[1]) or scale < 1:
+                fuzzing = False
+
+        if fuzzing:
             # Handle fuzzing by scanning tile instead of spot
             self._emitter.scale.value = scale
             self._emitter.resolution.value = TILE_SHAPE  # grid scan
