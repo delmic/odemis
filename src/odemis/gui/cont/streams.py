@@ -1657,10 +1657,11 @@ class SparcStreamsController(StreamBarController):
             main_data.ebeam,
             detvas=get_hw_settings(main_data.ccd),
         )
-        self._ar_stream = ar_stream
-
+        ar_stream.roi.value = self._tab_data_model.semStream.roi.value
         # TODO: ROI -> semStream.roi needs to be generic
         ar_stream.roi.subscribe(self.onARROI)
+
+        self._ar_stream = ar_stream
 
         stream_cont = self._add_stream(ar_stream, add_to_all_views=True)
         stream_cont.stream_panel.show_visible_btn(False)
@@ -1707,6 +1708,7 @@ class SparcStreamsController(StreamBarController):
             emtvas={"dwellTime"},
             detvas=get_hw_settings(main_data.cld),
         )
+        cli_stream.roi.value = self._tab_data_model.semStream.roi.value
 
         # Special "safety" feature to avoid having a too high gain at start
         if hasattr(cli_stream, "detGain"):
@@ -1756,6 +1758,7 @@ class SparcStreamsController(StreamBarController):
             # emtvas=get_hw_settings(main_data.ebeam), # no need
             detvas=get_hw_settings(main_data.spectrometer),
         )
+        spec_stream.roi.value = self._tab_data_model.semStream.roi.value
         self._spec_stream = spec_stream
 
         spec_stream.roi.subscribe(self.onARROI)
@@ -1838,6 +1841,7 @@ class SparcStreamsController(StreamBarController):
             emtvas={"dwellTime"},
             detvas=get_hw_settings(main_data.monochromator),
         )
+        monoch_stream.roi.value = self._tab_data_model.semStream.roi.value
 
         stream_cont = self._add_stream(monoch_stream, add_to_all_views=True, no_bc=True, play=False)
         stream_cont.stream_panel.show_visible_btn(False)
@@ -1984,10 +1988,27 @@ class SparcStreamsController(StreamBarController):
         # update back their ROI with a modified value. It should normally
         # converge, but we must absolutely ensure it will never cause infinite
         # loops.
-        for s in self._tab_data_model.acquisitionView.getStreams():
-            if isinstance(s, acqstream.MultipleDetectorStream):
+        srois = []  # all the stream ROIs
+        for s in self._tab_data_model.streams.value:
+            if isinstance(s, acqstream.RepetitionStream):
                 # logging.debug("setting roi of %s to %s", s.name.value, roi)
-                s._rep_stream.roi.value = roi
+                s.roi.value = roi
+                srois.append(s.roi)
+
+        semStream = self._tab_data_model.semStream
+        if len(srois) == 0:
+            return
+        elif len(srois) == 1:
+            semStream.roi.unsubscribe(self.onROI)
+            semStream.roi.value = srois[0].value
+            semStream.roi.subscribe(self.onROI)
+        else:
+            # TODO: what? the bounding box?
+            # Or use the ROI of the latest stream used?
+            semStream.roi.unsubscribe(self.onROI)
+            semStream.roi.value = srois[0].value
+            semStream.roi.subscribe(self.onROI)
+            logging.info("Don't know how to synchronise multiple rois")
 
     # Special event handlers for repetition indication in the ROI selection
 

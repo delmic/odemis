@@ -161,24 +161,19 @@ class MultipleDetectorStream(Stream):
         else:
             self._dc_estimator = None
 
-
         est_start = time.time() + 0.1
         f = model.ProgressiveFuture(start=est_start,
                                     end=est_start + self.estimateAcquisitionTime())
         self._current_future = f
         self._acq_state = RUNNING  # TODO: move to per acquisition
         # for progress time estimation
-        self._prog_n = 0
         self._prog_sum = 0
-
-        # long dwell time => use software synchronisation
-        runAcquisition = self._ssRunAcquisition
         f.task_canceller = self._ssCancelAcquisition
 
         # run task in separate thread
         self._acq_thread = threading.Thread(target=_futures.executeTask,
                               name="Multiple detector acquisition",
-                              args=(f, runAcquisition, f))
+                              args=(f, self._ssRunAcquisition, f))
         self._acq_thread.start()
         return f
 
@@ -192,26 +187,26 @@ class MultipleDetectorStream(Stream):
         """
         pass
 
-    def _updateProgress(self, future, dur, tot, bonus=0):
+    def _updateProgress(self, future, dur, current, tot, bonus=0):
         """
         update end time of future by indicating the time for one new pixel
         future (ProgressiveFuture): future to update
         dur (float): time it took to do this acquisition
+        current (1<int<=tot): current number of acquisitions done
         tot (0<int): number of acquisitions
         bonus (0<float): additional time needed (for drift correction)
         """
-        self._prog_n += 1
-
         # Trick: we don't count the first frame because it's often
         # much slower and so messes up the estimation
-        if self._prog_n == 1:
+        if current <= 1:
             return
 
         self._prog_sum += dur
-        ratio = (tot - self._prog_n) / (self._prog_n - 1)
+        ratio = (tot - current) / (current - 1)
         left = self._prog_sum * ratio
+        time_assemble = 0.001 * tot  # very rough approximation
         # add some overhead for the end of the acquisition
-        future.set_end_time(time.time() + left + bonus + 0.1)
+        future.set_end_time(time.time() + left + time_assemble + bonus + 0.1)
 
     def _ssCancelAcquisition(self, future):
         with self._acq_lock:
@@ -623,7 +618,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     # guess how many drift anchors to acquire
                     n_anchor = (tot_num - n) // cur_dc_period
                     anchor_time = n_anchor * dc_acq_time
-                    self._updateProgress(future, time.time() - start, tot_num, anchor_time)
+                    self._updateProgress(future, time.time() - start, n, tot_num, anchor_time)
 
                     # Check if it is time for drift correction
                     if self._dc_estimator is not None and n >= cur_dc_period:
@@ -719,7 +714,13 @@ class SEMMDStream(MultipleDetectorStream):
         sem_pxs = self._emitter.pixelSize.value
         scale = (self._rep_stream.pixelSize.value / sem_pxs[0],
                  self._rep_stream.pixelSize.value / sem_pxs[1])
-        self._emitter.scale.value = scale
+
+        cscale = self._emitter.scale.clip(scale)
+        if cscale != scale:
+            logging.warning("Pixel size requested (%f m) < SEM pixel size (%f m)",
+                            self._rep_stream.pixelSize.value, sem_pxs[0])
+
+        self._emitter.scale.value = cscale
         return self._rep_stream._getEmitterVA("dwellTime").value
 
     def _ssRunAcquisition(self, future):
@@ -829,7 +830,7 @@ class SEMMDStream(MultipleDetectorStream):
                 # guess how many drift anchors to acquire
                 n_anchor = (tot_num - spots_sum) // cur_dc_period
                 anchor_time = n_anchor * dc_acq_time
-                self._updateProgress(future, time.time() - start, tot_num, anchor_time)
+                self._updateProgress(future, time.time() - start, spots_sum, tot_num, anchor_time)
 
                 # Check if it is time for drift correction
                 if self._dc_estimator is not None:

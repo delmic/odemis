@@ -664,6 +664,8 @@ def create_setting_entry(container, name, va, hw_comp, conf, change_callback=Non
 
     elif control_type == odemis.gui.CONTROL_COMBO:
 
+        accuracy = conf.get('accuracy', 3)
+
         # TODO: Might need size=(100, 16)!!
         lbl_ctrl, value_ctrl = container.add_combobox_control(label_text)
 
@@ -682,7 +684,7 @@ def create_setting_entry(container, name, va, hw_comp, conf, change_callback=Non
             else:
                 logging.debug("No existing label found for value %s", value)
                 # entering value as free text
-                txt = readable_str(value, u, sig=3)
+                txt = readable_str(value, u, sig=accuracy)
                 return ctrl.SetValue(txt)
 
         # equivalent wrapper function to retrieve the actual value

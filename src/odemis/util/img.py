@@ -193,7 +193,7 @@ def histogram(data, irange=None):
             irange = (data.view(numpy.ndarray).min(), data.view(numpy.ndarray).max())
 
     # short-cuts (for the most usual types)
-    if data.dtype.kind in "biu" and irange[0] >= 0 and data.itemsize <= 2:
+    if data.dtype.kind in "biu" and irange[0] >= 0 and data.itemsize <= 2 and len(data) > 0:
         # TODO: for int (irange[0] < 0), treat as unsigned, and swap the first
         # and second halves of the histogram.
         # TODO: for 32 or 64 bits with full range, convert to a view looking

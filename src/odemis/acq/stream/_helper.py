@@ -124,46 +124,20 @@ class RepetitionStream(LiveStream):
         self.pixelSize._value *= ratio
         self.pixelSize.notify(self.pixelSize._value)
 
-    def _updateROIAndPixelSize(self, roi, pxs):
+    def _fitROI(self, roi):
         """
-        Adapt a ROI and pixel size so that they are correct. It checks that they
-          are within bounds and if not, make them fit in the bounds by adapting
-          the repetition.
-        roi (4 floats): ROI wanted (might be slightly changed)
-        pxs (float): new pixel size (must be within allowed range, always respected)
-        returns:
-          4 floats: new ROI
-          2 ints: new repetition
+        Ensure that a ROI fits within its bounds. If not, it will move it or
+        reduce it.
+        roi (4 floats)
+        return (4 floats)
         """
-        # If ROI is undefined => everything is fine
-        if roi == UNDEFINED_ROI:
-            return roi, self.repetition.value
+        roi = list(roi)
 
-        epxs = self.emitter.pixelSize.value
-        eshape = self.emitter.shape
-        phy_size = (epxs[0] * eshape[0], epxs[1] * eshape[1]) # max physical ROI
-
-        # maximum repetition: either depends on minimum pxs or maximum roi
-        roi_size = (roi[2] - roi[0], roi[3] - roi[1])
-        max_rep = (max(1, min(int(eshape[0] * roi_size[0]), int(phy_size[0] / pxs))),
-                   max(1, min(int(eshape[1] * roi_size[1]), int(phy_size[1] / pxs))))
-
-        # compute the repetition (ints) that fits the ROI with the pixel size
-        rep = (round(phy_size[0] * roi_size[0] / pxs),
-               round(phy_size[1] * roi_size[1] / pxs))
-        rep = [int(max(1, min(rep[0], max_rep[0]))),
-               int(max(1, min(rep[1], max_rep[1])))]
-
-        # update the ROI so that it's _exactly_ pixel size * repetition,
-        # while keeping its center fixed
-        roi_center = ((roi[0] + roi[2]) / 2,
-                      (roi[1] + roi[3]) / 2)
-        roi_size = (rep[0] * pxs / phy_size[0],
-                    rep[1] * pxs / phy_size[1])
-        roi = [roi_center[0] - roi_size[0] / 2,
-               roi_center[1] - roi_size[1] / 2,
-               roi_center[0] + roi_size[0] / 2,
-               roi_center[1] + roi_size[1] / 2]
+        # Ensure it's not too big
+        if roi[2] - roi[0] > 1:
+            roi[2] = roi[0] + 1
+        if roi[3] - roi[1] > 1:
+            roi[3] = roi[1] + 1
 
         # shift the ROI if it's now slightly outside the possible area
         if roi[0] < 0:
@@ -180,7 +154,65 @@ class RepetitionStream(LiveStream):
             roi[1] = max(0, roi[1] - (roi[3] - 1))
             roi[3] = 1
 
-        return tuple(roi), tuple(rep)
+        return roi
+
+    def _updateROIAndPixelSize(self, roi, pxs):
+        """
+        Adapt a ROI and pixel size so that they are correct. It checks that they
+          are within bounds and if not, make them fit in the bounds by adapting
+          the repetition.
+        roi (4 floats): ROI wanted (might be slightly changed)
+        pxs (float): new pixel size
+        returns:
+          4 floats: new ROI
+          2 ints: new repetition
+          float: pixel size
+        """
+        # If ROI is undefined => everything is fine
+        if roi == UNDEFINED_ROI:
+            return roi, self.repetition.value, pxs
+
+        # TODO: use the fact that pxs_range/fov is fixed => faster
+        pxs_range = self._getPixelSizeRange()
+        pxs = max(pxs_range[0], min(pxs, pxs_range[1]))
+
+        roi = self._fitROI(roi)
+
+        # compute the repetition (ints) that fits the ROI with the pixel size
+        epxs = self.emitter.pixelSize.value
+        eshape = self.emitter.shape
+        phy_size = (epxs[0] * eshape[0], epxs[1] * eshape[1]) # max physical ROI
+        roi_size = (roi[2] - roi[0], roi[3] - roi[1])
+
+        rep = (int(round(phy_size[0] * roi_size[0] / pxs)),
+               int(round(phy_size[1] * roi_size[1] / pxs)))
+
+        # TODO: not needed? It should already always be below the max?
+        # maximum repetition: either depends on minimum pxs or maximum roi
+        max_rep = (max(1, min(int(eshape[0] * roi_size[0]), int(phy_size[0] / pxs))),
+                   max(1, min(int(eshape[1] * roi_size[1]), int(phy_size[1] / pxs))))
+        rep = (max(1, min(rep[0], max_rep[0])),
+               max(1, min(rep[1], max_rep[1])))
+
+        # update the ROI so that it's _exactly_ pixel size * repetition,
+        # while keeping its center fixed
+        roi_center = ((roi[0] + roi[2]) / 2,
+                      (roi[1] + roi[3]) / 2)
+        roi_size = (rep[0] * pxs / phy_size[0],
+                    rep[1] * pxs / phy_size[1])
+        roi = [roi_center[0] - roi_size[0] / 2,
+               roi_center[1] - roi_size[1] / 2,
+               roi_center[0] + roi_size[0] / 2,
+               roi_center[1] + roi_size[1] / 2]
+        roi = self._fitROI(roi)
+
+        # Double check we didn't end up with scale < 1
+        rep_full = (rep[0] / roi_size[0], rep[1] / roi_size[1])
+        if any(rf > s for rf, s in zip(rep_full, eshape)):
+            logging.error("Computed impossibly small pixel size %s", pxs)
+
+        logging.debug("Computed roi = %s, rep = %s, pxs = %g", roi, rep, pxs)
+        return tuple(roi), tuple(rep), pxs
 
     def _setROI(self, roi):
         """
@@ -211,10 +243,8 @@ class RepetitionStream(LiveStream):
                 new_rep_flt = new_phy_size / pxs
                 new_rep_int = max(1, round(new_rep_flt))
                 pxs *= new_rep_flt / new_rep_int
-                pxs_range = self._getPixelSizeRange()
-                pxs = max(pxs_range[0], min(pxs, pxs_range[1]))
 
-        roi, rep = self._updateROIAndPixelSize(roi, pxs)
+        roi, rep, pxs = self._updateROIAndPixelSize(roi, pxs)
         # update repetition without going through the checks
         self.repetition._value = rep
         self.repetition.notify(rep)
@@ -229,10 +259,7 @@ class RepetitionStream(LiveStream):
          ROI and repetition.
         return (float): new pixel size
         """
-        # clamp
-        pxs_range = self._getPixelSizeRange()
-        pxs = max(pxs_range[0], min(pxs, pxs_range[1]))
-        roi, rep = self._updateROIAndPixelSize(self.roi.value, pxs)
+        roi, rep, pxs = self._updateROIAndPixelSize(self.roi.value, pxs)
 
         # update roi and rep without going through the checks
         self.roi._value = roi
@@ -280,7 +307,7 @@ class RepetitionStream(LiveStream):
                roi_center[0] + roi_size[0] / 2,
                roi_center[1] + roi_size[1] / 2)
 
-        roi, rep = self._updateROIAndPixelSize(roi, pxs)
+        roi, rep, pxs = self._updateROIAndPixelSize(roi, pxs)
         # update roi and pixel size without going through the checks
         self.roi._value = roi
         self.roi.notify(roi)
