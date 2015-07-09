@@ -519,8 +519,9 @@ class SpotModeOverlay(base.WorldOverlay, base.DragMixin):
     def on_spot_change(self, _):
         self._r_to_w()
 
-    def on_size(self, _):
+    def on_size(self, evt):
         self._r_to_w()
+        base.WorldOverlay.on_size(self, evt)
 
     def _w_to_r(self):
         if self.w_pos is None:

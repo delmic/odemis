@@ -619,7 +619,6 @@ class SelectionMixin(DragMixin):
         if self._last_shiftscale != shiftscale:
             logging.warn("Updating view position of selection %s", shiftscale)
             self._last_shiftscale = shiftscale
-
             self.select_v_start_pos = list(self.cnvs.buffer_to_view(b_start_pos))
             self.select_v_end_pos = list(self.cnvs.buffer_to_view(b_end_pos))
             self._calc_edges()
