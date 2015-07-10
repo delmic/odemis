@@ -1,0 +1,4 @@
+# Access BlinkStick device without root permissions
+
+SUBSYSTEMS=="usb", ATTRS{idProduct}=="41e5", ATTRS{idVendor}=="20a0", MODE:="0666", GROUP="odemis"
+
