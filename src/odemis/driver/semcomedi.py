@@ -1537,12 +1537,14 @@ class SEMComedi(model.HwComponent):
 
         # the thread uses acquisition_data_lock, so we should never wait for
         # the thread to stop with this lock acquired.
+        # TODO: just have one thread, which is commanded via a queue
         with self._acquisition_mng_lock:
-            self._wait_acquisition_stopped() # only wait if acquisition thread is stopping
+            running = self._wait_acquisition_stopped()  # only wait if acquisition thread is stopping
             # Set up thread if not already running (for another detector)
-            if not self._acquisition_thread or not self._acquisition_thread.isAlive():
+            if not running:
                 self._acquisition_thread = threading.Thread(target=self._acquisition_run,
                                                             name="SEM acquisition thread")
+                logging.debug("Created acquisition thread")
                 self._acquisition_thread.start()
 
     def stop_acquire(self, detector):
@@ -1579,16 +1581,26 @@ class SEMComedi(model.HwComponent):
         """
         Waits until the acquisition thread is fully finished _iff_ it was requested
         to stop.
+        return bool: True if the acquisition thread is still running (because
+         it doesn't need to be stopped), False if the acquisition thread is stopped.
         """
+        acqthread = self._acquisition_thread
+        if acqthread is None:
+            return False
+
         # "if" is to not wait if it's already finished
         if self._acquisition_must_stop.is_set():
-            self._acquisition_thread.join(10) # 10s timeout for safety
-            if self._acquisition_thread.isAlive():
+            logging.debug("waiting for the acquisition thread to stop...")
+            acqthread.join(10)  # 10s timeout for safety
+            if acqthread.isAlive():
                 logging.error("Failed to stop the acquisition thread")
                 self._reset_device()
                 # Now let's hope everything is back to normal...
             # ensure it's not set, even if the thread died prematurely
             self._acquisition_must_stop.clear()
+            return False  # thread stopped
+        else:
+            return acqthread.isAlive()
 
     def _acq_wait_detectors_ready(self):
         """
@@ -1671,6 +1683,7 @@ class SEMComedi(model.HwComponent):
                 # can happen if the driver already terminated
                 pass
             logging.debug("Acquisition thread closed")
+            self._acquisition_thread = None
             self._acquisition_must_stop.clear()
             gc.collect()
 
