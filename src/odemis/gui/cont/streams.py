@@ -25,6 +25,7 @@ from __future__ import division
 
 from collections import OrderedDict
 import collections
+import functools
 import logging
 import numpy
 from odemis import model
@@ -1535,7 +1536,10 @@ class SparcStreamsController(StreamBarController):
         # Force the ROA to be defined by the user on first use
         # semStream is semcl_stream set in tabs.py
         tab_data.semStream.roi.value = acqstream.UNDEFINED_ROI
-        tab_data.semStream.roi.subscribe(self.onROI)
+        tab_data.semStream.roi.subscribe(self._onROA)
+
+        # for storing the ROI listeners of the repetition streams
+        self._rep_streams = {}  # RepetitionStream -> callable
 
         # Remove streams and stream controllers used for repetition tracking and events
         tab_data.streams.subscribe(self._clean_event_entries)
@@ -1623,6 +1627,7 @@ class SparcStreamsController(StreamBarController):
 
     def _clean_acqview(self, streams):
         """ Remove MD streams from the acquisition view that have one or more sub streams missing
+        Also remove the ROI subscriptions
 
         Args:
             streams (list of streams): The streams currently used in this tab
@@ -1646,6 +1651,12 @@ class SparcStreamsController(StreamBarController):
                     self._tab_data_model.acquisitionView.removeStream(mds)
                     break
 
+        # clean up the ROI listeners
+        for s in self._rep_streams.keys():
+            if s not in streams:
+                logging.debug("Removing %s from ROI subscriptions", s)
+                del self._rep_streams[s]  # automatically unsubscribed
+
     def addAR(self):
         """ Create a camera stream and add to to all compatible viewports """
 
@@ -1657,10 +1668,7 @@ class SparcStreamsController(StreamBarController):
             main_data.ebeam,
             detvas=get_hw_settings(main_data.ccd),
         )
-        ar_stream.roi.value = self._tab_data_model.semStream.roi.value
-        # TODO: ROI -> semStream.roi needs to be generic
-        ar_stream.roi.subscribe(self.onARROI)
-
+        self._connectROI(ar_stream)
         self._ar_stream = ar_stream
 
         stream_cont = self._add_stream(ar_stream, add_to_all_views=True)
@@ -1708,7 +1716,7 @@ class SparcStreamsController(StreamBarController):
             emtvas={"dwellTime"},
             detvas=get_hw_settings(main_data.cld),
         )
-        cli_stream.roi.value = self._tab_data_model.semStream.roi.value
+        self._connectROI(cli_stream)
 
         # Special "safety" feature to avoid having a too high gain at start
         if hasattr(cli_stream, "detGain"):
@@ -1758,10 +1766,9 @@ class SparcStreamsController(StreamBarController):
             # emtvas=get_hw_settings(main_data.ebeam), # no need
             detvas=get_hw_settings(main_data.spectrometer),
         )
-        spec_stream.roi.value = self._tab_data_model.semStream.roi.value
+        self._connectROI(spec_stream)
         self._spec_stream = spec_stream
 
-        spec_stream.roi.subscribe(self.onARROI)
         stream_cont = self._add_stream(spec_stream, add_to_all_views=True, no_bc=True)
         stream_cont.stream_panel.show_visible_btn(False)
 
@@ -1841,7 +1848,7 @@ class SparcStreamsController(StreamBarController):
             emtvas={"dwellTime"},
             detvas=get_hw_settings(main_data.monochromator),
         )
-        monoch_stream.roi.value = self._tab_data_model.semStream.roi.value
+        self._connectROI(monoch_stream)
 
         stream_cont = self._add_stream(monoch_stream, add_to_all_views=True, no_bc=True, play=False)
         stream_cont.stream_panel.show_visible_btn(False)
@@ -1955,62 +1962,76 @@ class SparcStreamsController(StreamBarController):
         if updated:
             self._view_controller.focusViewWithStream(stream)
 
-    # ROA handling stuff
+    # ROA synchronisation methods
+    # Updating the ROI requires a bit of care, because the streams might
+    # update back their ROI with a modified value. To avoid loops, we disable
+    # and re-enable before and after each (direct) change.
 
-    # TODO: make it generic
-    def onARROI(self, roi):
-        """ called when the Angle Resolved roi is changed """
-        # copy ROI only if it's activated, and spectrum is not, otherwise
-        # Spectrum plays the role of "master of ROI" if both streams are
-        # simultaneously active (even if it should not currently happen)
-        ar_present = False
-        spec_present = False
+    def _connectROI(self, stream):
+        """
+        Connect the .roi of the (repetition) stream to the global ROA
+        """
+        # First, start with the same ROI as the global ROA
+        stream.roi.value = self._tab_data_model.semStream.roi.value
 
-        for stream in self._tab_data_model.acquisitionView.getStreams():
-            if isinstance(stream, acqstream.SEMARMDStream):
-                ar_present = True
-            elif isinstance(stream, acqstream.SEMSpectrumMDStream):
-                spec_present = True
+        listener = functools.partial(self._onStreamROI, stream)
+        stream.roi.subscribe(listener)
+        self._rep_streams[stream] = listener
 
-        if ar_present and not spec_present:
-            # unsubscribe to be sure it won't call us back directly
-            # semStream is semcl_stream set in tabs.py
-            self._tab_data_model.semStream.roi.unsubscribe(self.onROI)
+    def _disableROISub(self):
+        self._tab_data_model.semStream.roi.unsubscribe(self._onROA)
+        for s, listener in self._rep_streams.items():
+            s.roi.unsubscribe(listener)
+
+    def _enableROISub(self):
+        self._tab_data_model.semStream.roi.subscribe(self._onROA)
+        for s, listener in self._rep_streams.items():
+            s.roi.subscribe(listener)
+
+    def _onStreamROI(self, stream, roi):
+        """
+        Called when the ROI of a stream is changed.
+        Used to update the global ROA.
+        stream (Stream): the stream which is changed
+        roi (4 floats): roi
+        """
+        self._disableROISub()
+        try:
+            # Set the global ROA to the new ROI (defined by the user)
+            logging.debug("setting roa from %s to %s", stream.name.value, roi)
             self._tab_data_model.semStream.roi.value = roi
-            self._tab_data_model.semStream.roi.subscribe(self.onROI)
 
-    def onROI(self, roi):
+            # Update all the other streams to (almost) the same ROI too
+            for s in self._rep_streams:
+                if s is not stream:
+                    logging.debug("setting roi of %s to %s", s.name.value, roi)
+                    s.roi.value = roi
+        finally:
+            self._enableROISub()
+
+    def _onROA(self, roi):
         """
         called when the SEM CL roi (region of acquisition) is changed
         To synchronise global ROA -> streams ROI
         """
-        # Updating the ROI requires a bit of care, because the streams might
-        # update back their ROI with a modified value. It should normally
-        # converge, but we must absolutely ensure it will never cause infinite
-        # loops.
-        srois = []  # all the stream ROIs
-        for s in self._tab_data_model.streams.value:
-            if isinstance(s, acqstream.RepetitionStream):
-                # logging.debug("setting roi of %s to %s", s.name.value, roi)
+        self._disableROISub()
+        try:
+            # Set all the streams to the requested ROA
+            for s in self._rep_streams:
+                logging.debug("setting roi of %s to %s", s.name.value, roi)
                 s.roi.value = roi
-                srois.append(s.roi)
 
-        semStream = self._tab_data_model.semStream
-        if len(srois) == 0:
-            return
-        elif len(srois) == 1:
-            semStream.roi.unsubscribe(self.onROI)
-            semStream.roi.value = srois[0].value
-            semStream.roi.subscribe(self.onROI)
-        else:
-            # TODO: what? the bounding box?
-            # Or use the ROI of the latest stream used?
-            semStream.roi.unsubscribe(self.onROI)
-            semStream.roi.value = srois[0].value
-            semStream.roi.subscribe(self.onROI)
-            logging.info("Don't know how to synchronise multiple rois")
+            # Read back the ROA from the "main" stream (= latest played)
+            for s in self._tab_data_model.streams.value: # in LRU order
+                if s in self._rep_streams:
+                    logging.debug("setting roa back from %s to %s",
+                                  s.name.value, s.roi.value)
+                    self._tab_data_model.semStream.roi.value = s.roi.value
+                    break
+        finally:
+            self._enableROISub()
 
-    # Special event handlers for repetition indication in the ROI selection
+    # ROA + rep display on focus/hover methods
 
     def update_roa_rep(self):
         # Here is the global rule (in order):
