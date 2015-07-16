@@ -478,7 +478,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
             scale = (subpxs[0] / sem_pxs[0], subpxs[1] / sem_pxs[1])
 
             # In case dt it is below the minimum dwell time or scale is less
-            # than 1, fully give up fuzzing and do normal acquisition
+            # than 1, give up fuzzing and do normal acquisition
             rng = self._emitter.dwellTime.range
             if not (rng[0] <= dt <= rng[1]) or scale < 1:
                 fuzzing = False

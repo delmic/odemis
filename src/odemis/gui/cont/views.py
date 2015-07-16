@@ -127,7 +127,8 @@ class ViewPortController(object):
 
         assert not self._data_model.views.value  # should still be empty
 
-        # If AnalysisTab for Sparc: SEM/Spec/AR/SEM
+        # AnalysisTab: create everything and the right one will be swapped when
+        # loading an acquisition file.
         if isinstance(self._data_model, model.AnalysisGUIData):
 
             # Viewport type checking to avoid mismatches
