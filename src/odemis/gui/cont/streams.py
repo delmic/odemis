@@ -1526,59 +1526,22 @@ class SparcStreamsController(StreamBarController):
                                acqstream.MonochromatorSettingsStream)
         tab_data.tool.subscribe(self.on_tool_change)
 
-        # Each stream will be created both as a SettingsStream and a MDStream
-        # When the SettingsStream is deleted, automatically remove the MDStream
-        tab_data.streams.subscribe(self._clean_acqview)
-
-        # Repetition visualisation
-        self._hover_stream = None  # stream for which the repetition must be displayed
-
         # Force the ROA to be defined by the user on first use
         # semStream is semcl_stream set in tabs.py
         tab_data.semStream.roi.value = acqstream.UNDEFINED_ROI
         tab_data.semStream.roi.subscribe(self._onROA)
 
         # for storing the ROI listeners of the repetition streams
-        self._rep_streams = {}  # RepetitionStream -> callable
+        self._roi_listeners = {}  # RepetitionStream -> callable
 
-        # Remove streams and stream controllers used for repetition tracking and events
-        tab_data.streams.subscribe(self._clean_event_entries)
+        # Repetition visualisation
+        self._hover_stream = None  # stream for which the repetition must be displayed
+        self._rep_listeners = {}  # RepetitionStream -> callable
+        self._rep_ctrl = {}  # wx Control -> RepetitionStream
 
-        # Grab the repetition entries, so we can use it to hook extra event handlers to it.
-
-        # FIXME: How to handle multiple streams of the same type?
-        self.spec_rep = None
-        self.spec_pxs = None
-        self.angu_rep = None
-
-        # Setting streams
-        self._spec_stream = None
-        self._ar_stream = None
-
-        # self.spec_rep = self._settings_controller.spectro_rep_ent
-        # if self.spec_rep:
-        #     self.spec_rep.vigilattr.subscribe(self.on_rep_change)
-        #     self.spec_rep.value_ctrl.Bind(wx.EVT_SET_FOCUS, self.on_rep_focus)
-        #     self.spec_rep.value_ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
-        #     self.spec_rep.value_ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_spec_rep_enter)
-        #     self.spec_rep.value_ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_spec_rep_leave)
-        #
-        # self.spec_pxs = self._settings_controller.spec_pxs_ent
-        # if self.spec_pxs:
-        #     self.spec_pxs.vigilattr.subscribe(self.on_rep_change)
-        #     self.spec_pxs.value_ctrl.Bind(wx.EVT_SET_FOCUS, self.on_rep_focus)
-        #     self.spec_pxs.value_ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
-        #     self.spec_pxs.value_ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_spec_rep_enter)
-        #     self.spec_pxs.value_ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_spec_rep_leave)
-        #
-        # self.angu_rep = self._settings_controller.angular_rep_ent
-        # if self.angu_rep:
-        #     self.angu_rep.vigilattr.subscribe(self.on_rep_change)
-        #     self.angu_rep.value_ctrl.Bind(wx.EVT_SET_FOCUS, self.on_rep_focus)
-        #     self.angu_rep.value_ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
-        #     self.angu_rep.value_ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_ar_rep_enter)
-        #     self.angu_rep.value_ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_ar_rep_leave)
-        # AR settings don't have pixel size
+        # Each stream will be created both as a SettingsStream and a MDStream
+        # When the SettingsStream is deleted, automatically remove the MDStream
+        tab_data.streams.subscribe(self._on_streams)
 
     def _createAddStreamActions(self):
         """ Create the compatible "add stream" actions according to the current microscope.
@@ -1597,37 +1560,9 @@ class SparcStreamsController(StreamBarController):
         if main_data.monochromator:
             self.add_action("Monochromator", self.addMonochromator)
 
-    def _clean_event_entries(self, streams):
-        """ Remove references to the streams used for event binding
-
-        TODO: Those streams will have to be organised differently, to allow for multiple streams of
-        the same type. This will also require this method to be changed.
-
-        """
-
-        if self.spec_rep not in streams:
-            logging.debug("Removed spec_rep stream controller")
-            self.spec_rep = None
-
-        if self.spec_pxs not in streams:
-            logging.debug("Removed spec_pxs stream controller")
-            self.spec_pxs = None
-
-        if self.angu_rep not in streams:
-            logging.debug("Removed angu_rep stream controller")
-            self.angu_rep = None
-
-        if self._spec_stream not in streams:
-            logging.debug("Removed _spec_stream stream")
-            self._spec_stream = None
-
-        if self._ar_stream not in streams:
-            logging.debug("Removed _ar_stream stream")
-            self._ar_stream = None
-
-    def _clean_acqview(self, streams):
+    def _on_streams(self, streams):
         """ Remove MD streams from the acquisition view that have one or more sub streams missing
-        Also remove the ROI subscriptions
+        Also remove the ROI subscriptions and wx events.
 
         Args:
             streams (list of streams): The streams currently used in this tab
@@ -1652,10 +1587,25 @@ class SparcStreamsController(StreamBarController):
                     break
 
         # clean up the ROI listeners
-        for s in self._rep_streams.keys():
+        for s in self._roi_listeners.keys():
             if s not in streams:
                 logging.debug("Removing %s from ROI subscriptions", s)
-                del self._rep_streams[s]  # automatically unsubscribed
+                del self._roi_listeners[s]  # automatically unsubscribed
+
+        # clean up the repetition listeners
+        for s in self._rep_listeners.keys():
+            if s not in streams:
+                logging.debug("Removing %s from repetition subscriptions", s)
+                del self._rep_listeners[s]  # automatically unsubscribed
+
+                for c, cs in self._rep_ctrl.items():
+                    if cs is s:
+                        del self._rep_ctrl[c]
+                        # TODO: need to unbind events even if the control is destroyed anyway?
+                        # c.Unbind()
+
+                if self._hover_stream is s:
+                    self._hover_stream = None
 
     def addAR(self):
         """ Create a camera stream and add to to all compatible viewports """
@@ -1669,25 +1619,17 @@ class SparcStreamsController(StreamBarController):
             detvas=get_hw_settings(main_data.ccd),
         )
         self._connectROI(ar_stream)
-        self._ar_stream = ar_stream
 
         stream_cont = self._add_stream(ar_stream, add_to_all_views=True)
         stream_cont.stream_panel.show_visible_btn(False)
 
-        angu_rep = stream_cont.add_setting_entry(
+        rep = stream_cont.add_setting_entry(
             "repetition",
             ar_stream.repetition,
             None,  # component
             stream_cont.hw_settings_config["streamar"]["repetition"]
         )
-
-        angu_rep.vigilattr.subscribe(self.on_rep_change)
-        angu_rep.value_ctrl.Bind(wx.EVT_SET_FOCUS, self.on_rep_focus)
-        angu_rep.value_ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
-        angu_rep.value_ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_ar_rep_enter)
-        angu_rep.value_ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_ar_rep_leave)
-
-        self.angu_rep = angu_rep
+        self._connectRepOverlay(ar_stream, (rep.value_ctrl,))
 
         # Add Axis
 
@@ -1725,19 +1667,21 @@ class SparcStreamsController(StreamBarController):
         stream_cont = self._add_stream(cli_stream, add_to_all_views=True, play=False)
         stream_cont.stream_panel.show_visible_btn(False)
 
-        stream_cont.add_setting_entry(
+        rep = stream_cont.add_setting_entry(
             "repetition",
             cli_stream.repetition,
             None,  # component
             stream_cont.hw_settings_config["streamcli"]["repetition"]
         )
 
-        stream_cont.add_setting_entry(
+        pxs = stream_cont.add_setting_entry(
             "pixel size",
             cli_stream.pixelSize,
             None,  # component
             stream_cont.hw_settings_config["streamcli"]["pixelSize"]
         )
+
+        self._connectRepOverlay(cli_stream, (rep.value_ctrl, pxs.value_ctrl))
 
         # Add Axis
 
@@ -1767,43 +1711,27 @@ class SparcStreamsController(StreamBarController):
             detvas=get_hw_settings(main_data.spectrometer),
         )
         self._connectROI(spec_stream)
-        self._spec_stream = spec_stream
 
         stream_cont = self._add_stream(spec_stream, add_to_all_views=True, no_bc=True)
         stream_cont.stream_panel.show_visible_btn(False)
 
-        spec_rep = stream_cont.add_setting_entry(
+        rep = stream_cont.add_setting_entry(
             "repetition",
             spec_stream.repetition,
             None,  # component
             stream_cont.hw_settings_config["streamspec"]["repetition"]
         )
 
-        spec_rep.vigilattr.subscribe(self.on_rep_change)
-        spec_rep.value_ctrl.Bind(wx.EVT_SET_FOCUS, self.on_rep_focus)
-        spec_rep.value_ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
-        spec_rep.value_ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_spec_rep_enter)
-        spec_rep.value_ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_spec_rep_leave)
-
-        self.spec_rep = spec_rep
-
-        spec_pxs = stream_cont.add_setting_entry(
+        pxs = stream_cont.add_setting_entry(
             "pixel size",
             spec_stream.pixelSize,
             None,  # component
             stream_cont.hw_settings_config["streamspec"]["pixelSize"]
         )
 
-        spec_pxs.vigilattr.subscribe(self.on_rep_change)
-        spec_pxs.value_ctrl.Bind(wx.EVT_SET_FOCUS, self.on_rep_focus)
-        spec_pxs.value_ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
-        spec_pxs.value_ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_spec_rep_enter)
-        spec_pxs.value_ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_spec_rep_leave)
-
-        self.spec_pxs = spec_pxs
+        self._connectRepOverlay(spec_stream, (rep.value_ctrl, pxs.value_ctrl))
 
         # Add axes
-
         stream_cont.add_axis_entry(
             "wavelength",
             main_data.spectrograph,
@@ -1821,11 +1749,7 @@ class SparcStreamsController(StreamBarController):
             stream_cont.hw_settings_config["streamspec"]["slit-in"]
         )
 
-        # stream_cont.add_axis_entry(
-        #     "band",
-        #     main_data.light_filter,
-        #     stream_cont.hw_settings_config["filter"]["band"]
-        # )
+        # No light filter for the spectrum stream: typically useless
 
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
@@ -1853,19 +1777,21 @@ class SparcStreamsController(StreamBarController):
         stream_cont = self._add_stream(monoch_stream, add_to_all_views=True, no_bc=True, play=False)
         stream_cont.stream_panel.show_visible_btn(False)
 
-        stream_cont.add_setting_entry(
+        rep = stream_cont.add_setting_entry(
             "repetition",
             monoch_stream.repetition,
             None,  # component
             stream_cont.hw_settings_config["streammonoch"]["repetition"]
         )
 
-        stream_cont.add_setting_entry(
+        pxs = stream_cont.add_setting_entry(
             "pixel size",
             monoch_stream.pixelSize,
             None,  # component
             stream_cont.hw_settings_config["streammonoch"]["pixelSize"]
         )
+
+        self._connectRepOverlay(monoch_stream, (rep.value_ctrl, pxs.value_ctrl))
 
         # Add Axes
 
@@ -1892,6 +1818,8 @@ class SparcStreamsController(StreamBarController):
             main_data.spectrograph,
             stream_cont.hw_settings_config["streammonoch"]["slit-monochromator"]
         )
+
+        # No light filter for the spectrum stream: typically useless
 
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
@@ -1976,16 +1904,16 @@ class SparcStreamsController(StreamBarController):
 
         listener = functools.partial(self._onStreamROI, stream)
         stream.roi.subscribe(listener)
-        self._rep_streams[stream] = listener
+        self._roi_listeners[stream] = listener
 
     def _disableROISub(self):
         self._tab_data_model.semStream.roi.unsubscribe(self._onROA)
-        for s, listener in self._rep_streams.items():
+        for s, listener in self._roi_listeners.items():
             s.roi.unsubscribe(listener)
 
     def _enableROISub(self):
         self._tab_data_model.semStream.roi.subscribe(self._onROA)
-        for s, listener in self._rep_streams.items():
+        for s, listener in self._roi_listeners.items():
             s.roi.subscribe(listener)
 
     def _onStreamROI(self, stream, roi):
@@ -2002,7 +1930,7 @@ class SparcStreamsController(StreamBarController):
             self._tab_data_model.semStream.roi.value = roi
 
             # Update all the other streams to (almost) the same ROI too
-            for s in self._rep_streams:
+            for s in self._roi_listeners:
                 if s is not stream:
                     logging.debug("setting roi of %s to %s", s.name.value, roi)
                     s.roi.value = roi
@@ -2017,13 +1945,13 @@ class SparcStreamsController(StreamBarController):
         self._disableROISub()
         try:
             # Set all the streams to the requested ROA
-            for s in self._rep_streams:
+            for s in self._roi_listeners:
                 logging.debug("setting roi of %s to %s", s.name.value, roi)
                 s.roi.value = roi
 
             # Read back the ROA from the "main" stream (= latest played)
             for s in self._tab_data_model.streams.value: # in LRU order
-                if s in self._rep_streams:
+                if s in self._roi_listeners:
                     logging.debug("setting roa back from %s to %s",
                                   s.name.value, s.roi.value)
                     self._tab_data_model.semStream.roi.value = s.roi.value
@@ -2031,75 +1959,97 @@ class SparcStreamsController(StreamBarController):
         finally:
             self._enableROISub()
 
-    # ROA + rep display on focus/hover methods
+    # Repetition visualisation on focus/hover methods
+    # The global rule (in order):
+    # * if mouse is hovering an entry (repetition or pixel size) => display
+    #   repetition for this stream
+    # * if an entry of stream has focus => display repetition for this stream
+    # * don't display repetition
 
-    def update_roa_rep(self):
-        # Here is the global rule (in order):
-        # * if mouse is hovering an entry for AR or spec => display repetition for this one
-        # * if an entry for AR or spec has focus => display repetition for this one
-        # * don't display repetition
+    def _connectRepOverlay(self, stream, controls):
+        """
+        Connects the stream VAs and controls to display the repetition overlay
+          when needed.
+        stream (RepetitionStream)
+        controls (list of wx.Controls): controls that are used to change the
+          repetition/pixel size info
+        """
+
+        listener = functools.partial(self._onStreamRep, stream)
+        # repetition VA not needed: if it changes, either roi or pxs also change
+        stream.roi.subscribe(listener)
+        stream.pixelSize.subscribe(listener)
+        self._rep_listeners[stream] = listener
+
+        for c in controls:
+            self._rep_ctrl[c] = stream
+            c.Bind(wx.EVT_SET_FOCUS, self._onRepFocus)
+            c.Bind(wx.EVT_KILL_FOCUS, self._onRepFocus)
+            c.Bind(wx.EVT_ENTER_WINDOW, self._onRepHover)
+            c.Bind(wx.EVT_LEAVE_WINDOW, self._onRepHover)
+            # To handle the combobox, which send leave window events when the
+            # mouse goes into the text ctrl child of the combobox.
+            if hasattr(c, "TextCtrl"):
+                tc = c.TextCtrl
+                self._rep_ctrl[tc] = stream
+                tc.Bind(wx.EVT_ENTER_WINDOW, self._onRepHover)
+
+    @wxlimit_invocation(0.1)
+    def _updateRepOverlay(self):
+        """
+        Ensure the repetition overlay is displaying the right thing
+        """
 
         if self._hover_stream:
             stream = self._hover_stream
-        elif (
-                self.spec_rep and
-                (self.spec_rep.value_ctrl.HasFocus() or self.spec_pxs.value_ctrl.HasFocus())
-        ):
-            stream = self._spec_stream
-        elif self.angu_rep and self.angu_rep.value_ctrl.HasFocus():
-            stream = self._ar_stream
         else:
-            stream = None
+            # TODO: save _focused_stream on enter/leave and avoid call to FindFocus?
+            focused = wx.Window.FindFocus()
+            stream = self._rep_ctrl.get(focused) # 'None' if not an interesting control
 
-        # Convert stream to right display
-        # TODO: do this for each canvas of views which are spatial
-        cvs = self._view_controller.main_frame.vp_sparc_tl.canvas
-        # cvs = self.main_frame.vp_sparc_tl.canvas
-        if stream is None:
-            cvs.show_repetition(None)
-        else:
-            rep = stream.repetition.value
-            if isinstance(stream, acqstream.ARStream):
-                style = RepetitionSelectOverlay.FILL_POINT
+        # Convert stream to right display (for each spatial/SEM view)
+        views = self._tab_data_model.visible_views.value
+        em_views = [v for v in views if issubclass(acqstream.EMStream, v.stream_classes)]
+        em_cvs = [vp.canvas for vp in self._view_controller.views_to_viewports(em_views)]
+        for cvs in em_cvs:
+            if stream is None:
+                cvs.show_repetition(None)
             else:
-                style = RepetitionSelectOverlay.FILL_GRID
-            cvs.show_repetition(rep, style)
+                rep = stream.repetition.value
+                if isinstance(stream, acqstream.ARStream):
+                    style = RepetitionSelectOverlay.FILL_POINT
+                else:
+                    style = RepetitionSelectOverlay.FILL_GRID
+                cvs.show_repetition(rep, style)
 
-    def on_rep_focus(self, evt):
+    def _onStreamRep(self, stream, val):
+        """
+        Called when one of the repetition VAs of a RepetitionStream is modified
+        stream (RepetitionStream)
+        val (value): new VA value, unused
+        """
+        self._updateRepOverlay()
+
+    def _onRepFocus(self, evt):
         """
         Called when any control related to the repetition get/loose focus
         """
-        self.update_roa_rep()
+        self._updateRepOverlay()
         evt.Skip()
 
-    def on_rep_change(self, rep):
-        """
-        Called when any repetition VA is changed
-        """
-        self.update_roa_rep()
-
-    def on_spec_rep_enter(self, evt):
-        self._hover_stream = self._spec_stream
-        self.update_roa_rep()
+    def _onRepHover(self, evt):
+        if evt.Entering():
+            stream = self._rep_ctrl[evt.EventObject]
+        elif evt.Leaving():
+            stream = None
+        else:
+            logging.warning("neither leaving nor entering")
+        # logging.debug("Event hover on stream %s", stream)
+        self._hover_stream = stream
+        self._updateRepOverlay()
         evt.Skip()
 
-    def on_spec_rep_leave(self, evt):
-        self._hover_stream = None
-        self.update_roa_rep()
-        evt.Skip()
-
-    def on_ar_rep_enter(self, evt):
-        self._hover_stream = self._ar_stream
-        self.update_roa_rep()
-        evt.Skip()
-
-    def on_ar_rep_leave(self, evt):
-        self._hover_stream = None
-        self.update_roa_rep()
-        evt.Skip()
-
-    def on_spec_rep(self, rep):
-        self._on_rep(rep, self.spectro_rep_ent.vigilattr, self.spectro_rep_ent.value_ctrl)
+    # TODO: connect to each repetition VA => into stream panel?
 
     def on_ar_rep(self, rep):
         self._on_rep(rep, self.angular_rep_ent.vigilattr, self.angular_rep_ent.value_ctrl)
