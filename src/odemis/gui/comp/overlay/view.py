@@ -1201,9 +1201,9 @@ class SpotModeOverlay(base.ViewOverlay, base.DragMixin):
 
     If the overlay is activated, the user can use the mouse cursor to select a position
 
-    TODO: Combine with the world view version?
 
     """
+    # TODO: Share code or combine with the world view version
 
     def __init__(self, cnvs, spot_va=None):
         base.ViewOverlay.__init__(self, cnvs)
@@ -1213,7 +1213,7 @@ class SpotModeOverlay(base.ViewOverlay, base.DragMixin):
         self.highlight = conversion.hex_to_frgb(gui.FG_COLOUR_HIGHLIGHT)
 
         # Rendering attributes
-        self._sect_count = 3
+        self._sect_count = 4
         self._gap = 0.15
         self._sect_width = 2.0 * math.pi / self._sect_count
         self._spot_radius = 12
@@ -1260,6 +1260,8 @@ class SpotModeOverlay(base.ViewOverlay, base.DragMixin):
         x, y = self.v_pos
 
         width = self._spot_radius / 6.0
+
+        ctx.new_sub_path()  # to ensure it doesn't draw a line from the previous point
 
         for i in range(self._sect_count):
             ctx.set_line_width(width)
