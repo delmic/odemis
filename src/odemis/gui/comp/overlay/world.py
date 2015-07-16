@@ -506,7 +506,7 @@ class SpotModeOverlay(base.WorldOverlay, base.DragMixin):
         self.highlight = conversion.hex_to_frgb(gui.FG_COLOUR_HIGHLIGHT)
 
         # Rendering attributes
-        self._sect_count = 3
+        self._sect_count = 4
         self._gap = 0.15
         self._sect_width = 2.0 * math.pi / self._sect_count
         self._spot_radius = 12
