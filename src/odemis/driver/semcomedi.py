@@ -1544,7 +1544,6 @@ class SEMComedi(model.HwComponent):
             if not running:
                 self._acquisition_thread = threading.Thread(target=self._acquisition_run,
                                                             name="SEM acquisition thread")
-                logging.debug("Created acquisition thread")
                 self._acquisition_thread.start()
 
     def stop_acquire(self, detector):
