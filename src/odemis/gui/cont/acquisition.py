@@ -34,13 +34,14 @@ from concurrent.futures._base import CancelledError
 import logging
 import math
 from odemis import model, dataio, acq
-from odemis.acq import align
+from odemis.acq import align, stream
 from odemis.acq.align.spot import OBJECTIVE_MOVE
 from odemis.acq.stream import UNDEFINED_ROI
 from odemis.gui import conf, acqmng
 from odemis.gui.acqmng import preset_as_is
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
 from odemis.gui.comp.popup import Message
+from odemis.gui.model import TOOL_NONE
 from odemis.gui.util import img, get_picture_folder, call_in_wx_main, \
     wxlimit_invocation
 from odemis.gui.util.widgets import ProgressiveFutureConnector
@@ -536,20 +537,21 @@ class SparcAcquiController(object):
         """
         self._stream_paused = self._stream_controller.pauseStreams()
 
-        # TODO: also freeze the MicroscopeView (for now we just pause the streams)
-        # pause all the live acquisitions
-        live_streams = self._tab_data_model.focussedView.value.getStreams()
-        for s in live_streams:
-            s.is_active.value = False
-            s.should_update.value = False
-
     def _resume_streams(self):
         """
         Resume (unfreeze) the settings in the GUI and make sure the value are
         back to the previous value
         """
-        # TODO: just start SEM survey again?
-        self._stream_controller.resumeStreams(self._stream_paused)
+        # We don't restart the streams paused, because it's unlikely the user
+        # is again interested it this one, and if the detector is sensitive,
+        # it could even be dangerous. So just start the SEM survey. It also
+        # ensures that the e-beam settings are reasonable for if the GUI is
+        # restarted.
+        self._tab_data_model.tool.value = TOOL_NONE
+        for s in self._tab_data_model.streams.value:
+            if isinstance(s, stream.SEMStream):
+                s.should_update.value = True
+                break
 
         # Make sure that the acquisition button is enabled again.
         self._main_frame.btn_sparc_acquire.Enable()
@@ -693,12 +695,15 @@ class SparcAcquiController(object):
             self._reset_acquisition_gui("Saving acquisition file failed")
             return
 
+        # Needs to be done before changing tabs as it will play again the stream
+        # (and they will be immediately be stopped when changing tab).
+        self._reset_acquisition_gui()
+
         # TODO: we should add the file to the list of recently-used files
         # cf http://pyxdg.readthedocs.org/en/latest/recentfiles.html
         if exp is None:
             # display in the analysis tab
             self._show_acquisition(data, open(filename))
-        self._reset_acquisition_gui()
 
 
 # TODO: merge with AutoCenterController because they share too many GUI elements
