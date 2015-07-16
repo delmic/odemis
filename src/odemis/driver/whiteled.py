@@ -72,7 +72,8 @@ class WhiteLed(model.Emitter):
     def _setPower(self, value):
         logging.debug("WhiteLed power set to %f W", value)
         # Calculate the corresponding intensity ([0,255]) for the power given
-        intensity = int((value / (self.power.range[1] - self.power.range[0])) * (INTENSITY_RANGE[1] - INTENSITY_RANGE[0]))
+        intensity = int((value / (self.power.range[1] - self.power.range[0])) *
+                        (INTENSITY_RANGE[1] - INTENSITY_RANGE[0]))
         for i in range(self.no_leds):
             # All leds are connected to channel 0 and colour red
             self.bstick.set_color(0, i, red=intensity)
