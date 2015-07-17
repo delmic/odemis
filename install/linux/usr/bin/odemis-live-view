@@ -1,0 +1,18 @@
+#!/bin/bash
+
+odemis-cli --check
+status=$?
+if [ $status -nq 0 -a $status -nq 3 ] ; then
+    zenity --error --text "Odemis is not running, start it first." --title "Impossible to display live view"
+    exit
+fi
+
+# Find the detectors and select one
+redet="role:(ccd|sp-ccd|se-detector|bs-detector|cl-detector)"
+detector=$(odemis-cli --list --machine | grep -E "$redet" | cut -f 2 | cut -d : -f 2|
+            zenity --list --title "Live view" --text "Select a detector" --column "" --hide-header)
+
+
+# Display
+odemis-cli --live $detector
+

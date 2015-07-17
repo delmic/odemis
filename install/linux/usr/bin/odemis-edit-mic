@@ -1,0 +1,11 @@
+#!/bin/bash
+
+. /etc/odemis.conf
+sudo gedit "$MODEL"
+
+# TODO: validate the new microscope file even if backend is running
+odemisd --validate "$MODEL"
+if [ "$?" -eq 127 ]; then
+    echo
+    read -p "Microsope file seems to contain error, check it."
+fi
