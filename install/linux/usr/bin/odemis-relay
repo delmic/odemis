@@ -30,24 +30,18 @@ def main(args):
     return (int): value to return to the OS as program exit code
     """
     port = "/dev/" + args[1]
-    # For now just turn on
+    # For now just turn off & on
     # value = args[2]
-    value = 1 # on
 
     # Connect to serial device
     ser = serial.Serial(
         port=port,
-        baudrate=115200,
         timeout=5  # s
     )
 
     # Purge
     ser.flush()
     ser.flushInput()
-    time.sleep(0.05)  # 50 ms
-
-    # Prepare the port
-    ser.setRTS()
 
     # check IDN to make sure it is the correct HW
     cmd = "*IDN?\n"
@@ -59,8 +53,11 @@ def main(args):
         ans += char
     if ans.startswith("Delmic Analog PMT version"):
         # Send command
-        cmd = "RELAY %s\n" % (value,)
-        ser.write(cmd)
+        ser.write("RELAY 0\n")
+        time.sleep(10)
+        ser.write("RELAY 1\n")
+    else:
+        return 1
 
     return 0
 

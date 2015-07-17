@@ -79,7 +79,6 @@ SPARC-MONASH: {
         port: "/dev/fake", # for simulator
         prot_time: 0.0002,  # s
         prot_curr: 50.e-6,  # A
-        relay_powercycle: True,
     }
 }
 
