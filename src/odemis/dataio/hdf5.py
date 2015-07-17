@@ -278,23 +278,30 @@ def _add_image_info(group, dataset, image):
         _h5svi_set_state(group["DimensionScaleT"], ST_DEFAULT)
         dataset.dims[tpos].attach_scale(group["DimensionScaleT"])
 
-    # Wavelength (for spectrograms)
+    # Wavelength (for spectrograms and monochromator)
     if ("C" in dims and
-        set(image.metadata.keys()) & {model.MD_WL_LIST, model.MD_WL_POLYNOMIAL}):
+        set(image.metadata.keys()) & {model.MD_WL_LIST, model.MD_WL_POLYNOMIAL,
+                                      model.MD_OUT_WL}):
         try:
             # polynomial of degree = 2 => linear, so use compact notation
             if (model.MD_WL_POLYNOMIAL in image.metadata and
-                len(image.metadata[model.MD_WL_POLYNOMIAL]) == 2):
+                    len(image.metadata[model.MD_WL_POLYNOMIAL]) == 2):
                 pn = image.metadata[model.MD_WL_POLYNOMIAL]
                 group["COffset"] = pn[0]
                 _h5svi_set_state(group["COffset"], ST_REPORTED)
                 group["DimensionScaleC"] = pn[1] # m
+            # monochromator wavelength
+            elif (model.MD_OUT_WL in image.metadata):
+                wl = image.metadata[model.MD_OUT_WL]
+                group["COffset"] = wl[0]
+                _h5svi_set_state(group["COffset"], ST_REPORTED)
+                group["DimensionScaleC"] = wl[1] - wl[0]  # m
             else:
                 wll = spectrum.get_wavelength_per_pixel(image)
                 # list or polynomial of degree > 2 => store the values of each
                 # pixel index explicitly. We follow another way to express
                 # scaling in HDF5.
-                group["DimensionScaleC"] = wll # m
+                group["DimensionScaleC"] = wll  # m
 
             group["DimensionScaleC"].attrs["UNIT"] = "m"
             dataset.dims.create_scale(group["DimensionScaleC"], "C")
@@ -304,7 +311,6 @@ def _add_image_info(group, dataset, image):
         except Exception:
             logging.warning("Failed to record wavelength information, "
                             "it will not be saved.")
-        
 
     # Rotation (3-scalar): X,Y,Z of the rotation vector, with the norm being the
     # angle in radians (according to the right-hand rule)
@@ -355,9 +361,12 @@ def _read_image_info(group):
     except Exception:
         pass
 
-    # Wavelength is only if the data has a C dimension and it has one number 
-    # for the scale (linear polynomial) or it it has a list of wavelengths (one 
-    # per pixel).
+    # Wavelength is only if the data has a C dimension and it has two numbers
+    # that represent the range of the monochromator bandwidth or the offset and
+    # scale (linear polynomial) or it has a list of wavelengths (one per pixel).
+    # To distinguish between polynomial and monochromator wavelength we just
+    # check if the shape of the dataset equals to 1, which implies single-pixel
+    # data coming from the monochromator.
     # Note that not all data has information, for example RGB images, or
     # fluorescence images have no scale (but the SVI flavour has several
     # metadata related in the PhysicalData group).
@@ -369,7 +378,10 @@ def _read_image_info(group):
                 elif dim[0].shape == ():
                     pn = [float(group["COffset"][()]),
                           float(dim[0][()])]
-                    md[model.MD_WL_POLYNOMIAL] = pn
+                    if dataset.shape[i] == 1:
+                        md[model.MD_OUT_WL] = (pn[0], pn[0] + pn[1])
+                    else:
+                        md[model.MD_WL_POLYNOMIAL] = pn
     except Exception:
         pass
 
@@ -467,7 +479,8 @@ def _parse_physical_data(pdgroup, da):
             state = _h5svi_get_state(ds)
             if state and state[i] == ST_INVALID:
                 raise ValueError
-            md[model.MD_OUT_WL] = (ewl - h_width, ewl + h_width)
+            if model.MD_OUT_WL not in md:  # could already be filled by C scale
+                md[model.MD_OUT_WL] = (ewl - h_width, ewl + h_width)
         except (KeyError, IndexError, ValueError):
             pass
 
