@@ -196,12 +196,11 @@ class PMTControl(model.HwComponent):
      * power up
      * relay is reset (off for 10s, then on)
     '''
-    def __init__(self, name, role, port, prot_time=1e-3, prot_curr=50e-6, relay_powercycle=False, **kwargs):
+    def __init__(self, name, role, port, prot_time=1e-3, prot_curr=50e-6, **kwargs):
         '''
         port (str): port name
         prot_time (float): protection trip time (in s)
         prot_curr (float): protection current threshold (in Amperes)
-        relay_powercycle (boolean): if True then powercycle relay
         Raise an exception if the device cannot be opened
         '''
         model.HwComponent.__init__(self, name, role, **kwargs)
@@ -245,10 +244,6 @@ class PMTControl(model.HwComponent):
         self._setPowerSupply(True)
 
         # relay initialization
-        if relay_powercycle:
-            logging.info("Turning off and on relay power (will take 10 s)")
-            self.setRelay(False)
-            time.sleep(10)
         self.setRelay(True)
 
     def terminate(self):
@@ -363,7 +358,6 @@ class PMTControl(model.HwComponent):
         """
         ser = serial.Serial(
             port=port,
-            baudrate=115200,
             timeout=5  # s
         )
 
