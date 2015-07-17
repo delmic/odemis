@@ -538,7 +538,7 @@ def main(args):
 
     if options.validate and (options.kill or options.check or options.daemon):
         logging.error("Impossible to validate a model and manage the daemon simultaneously")
-        return 127
+        return 1
 
     # Daemon management
     # python-daemon is a fancy library but seems to do too many things for us.
