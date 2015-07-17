@@ -32,6 +32,7 @@ from odemis import model
 from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR
 from odemis.gui.comp.overlay.world import RepetitionSelectOverlay
 from odemis.gui.comp.stream import StreamPanel, EVT_STREAM_VISIBLE
+from odemis.gui.conf import data
 from odemis.gui.conf.data import get_hw_settings_config, get_hw_settings
 from odemis.gui.conf.util import create_setting_entry, create_axis_entry
 from odemis.gui.cont.settings import SettingEntry
@@ -1512,6 +1513,8 @@ class SparcStreamsController(StreamBarController):
         super(SparcStreamsController, self).__init__(tab_data, stream_bar, **kwargs)
         self._view_controller = view_ctrl
 
+        self._stream_config = data.get_stream_settings_config()
+
         # Never allow SEM and CLi Stream to play with spot mode (because they are
         # spatial, so it doesn't make sense to see just one point), and force
         # AR, Spectrum, and Monochromator streams with spot mode (because the
@@ -1616,6 +1619,46 @@ class SparcStreamsController(StreamBarController):
                 logging.debug("Removing %s from repetition content subscriptions", s)
                 del self._repct_listeners[s]  # automatically unsubscribed
 
+    def _addRepStream(self, stream, mdstream, vas, axes, **kwargs):
+        """
+        Display and connect a new RepetitionStream to the GUI
+        stream (RepetitionStream): freshly baked stream
+        mdstream (MDStream): corresponding new stream for acquisition
+        vas (list of str): name of VAs entries to create (in addition to standard one,
+          such as local HW VAs and B/C control)
+        axes (dict axis name -> Component): axis entries to create
+        kwargs (dict): to be passed to _add_stream()
+        return (StreamController): the new stream controller
+        """
+        self._connectROI(stream)
+
+        stream_cont = self._add_stream(stream, add_to_all_views=True, **kwargs)
+        stream_cont.stream_panel.show_visible_btn(False)
+
+        # add the acquisition stream to the acquisition view
+        self._tab_data_model.acquisitionView.addStream(mdstream)
+
+        stream_config = self._stream_config.get(type(stream), {})
+        # Add VAs
+        vactrls = []
+        for vaname in vas:
+            va = getattr(stream, vaname)
+            conf = stream_config.get(vaname)
+            ent = stream_cont.add_setting_entry(vaname, va, hw_comp=None, conf=conf)
+            vactrls.append(ent.value_ctrl)
+
+            if vaname == "repetition":
+                self._connectRepContent(stream, ent.value_ctrl)
+
+        self._connectRepOverlay(stream, vactrls)
+
+        # Add Axes
+        for axisname, comp in axes.items():
+            conf = stream_config.get(axisname)
+            stream_cont.add_axis_entry(axisname, comp, conf)
+
+        return stream_cont
+
     def addAR(self):
         """ Create a camera stream and add to to all compatible viewports """
 
@@ -1627,34 +1670,15 @@ class SparcStreamsController(StreamBarController):
             main_data.ebeam,
             detvas=get_hw_settings(main_data.ccd),
         )
-        self._connectROI(ar_stream)
-
-        stream_cont = self._add_stream(ar_stream, add_to_all_views=True)
-        stream_cont.stream_panel.show_visible_btn(False)
-
-        rep = stream_cont.add_setting_entry(
-            "repetition",
-            ar_stream.repetition,
-            None,  # component
-            stream_cont.hw_settings_config["streamar"]["repetition"]
-        )
-        self._connectRepContent(ar_stream, rep.value_ctrl)
-        self._connectRepOverlay(ar_stream, (rep.value_ctrl,))
-
-        # Add Axis
-
-        stream_cont.add_axis_entry(
-            "band",
-            main_data.light_filter,
-            stream_cont.hw_settings_config["filter"]["band"]
-        )
 
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
         sem_ar_stream = acqstream.SEMARMDStream("SEM AR", sem_stream, ar_stream)
-        self._tab_data_model.acquisitionView.addStream(sem_ar_stream)
 
-        return stream_cont
+        return self._addRepStream(ar_stream, sem_ar_stream,
+                                  vas=("repetition",),
+                                  axes={"band": main_data.light_filter}
+                                  )
 
     def addCLIntensity(self):
         """ Create a CLi stream and add to to all compatible viewports """
@@ -1668,46 +1692,20 @@ class SparcStreamsController(StreamBarController):
             emtvas={"dwellTime"},
             detvas=get_hw_settings(main_data.cld),
         )
-        self._connectROI(cli_stream)
 
         # Special "safety" feature to avoid having a too high gain at start
         if hasattr(cli_stream, "detGain"):
             cli_stream.detGain.value = cli_stream.detGain.range[0]
 
-        stream_cont = self._add_stream(cli_stream, add_to_all_views=True, play=False)
-        stream_cont.stream_panel.show_visible_btn(False)
-
-        rep = stream_cont.add_setting_entry(
-            "repetition",
-            cli_stream.repetition,
-            None,  # component
-            stream_cont.hw_settings_config["streamcli"]["repetition"]
-        )
-        self._connectRepContent(cli_stream, rep.value_ctrl)
-
-        pxs = stream_cont.add_setting_entry(
-            "pixel size",
-            cli_stream.pixelSize,
-            None,  # component
-            stream_cont.hw_settings_config["streamcli"]["pixelSize"]
-        )
-
-        self._connectRepOverlay(cli_stream, (rep.value_ctrl, pxs.value_ctrl))
-
-        # Add Axis
-
-        stream_cont.add_axis_entry(
-            "band",
-            main_data.light_filter,
-            stream_cont.hw_settings_config["filter"]["band"]
-        )
-
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
         sem_cli_stream = acqstream.SEMMDStream("SEM CLi", sem_stream, cli_stream)
-        self._tab_data_model.acquisitionView.addStream(sem_cli_stream)
 
-        return stream_cont
+        return self._addRepStream(cli_stream, sem_cli_stream,
+                                  vas=("repetition", "pixelSize"),
+                                  axes={"band": main_data.light_filter},
+                                  play=False
+                                  )
 
     def addSpectrum(self):
         """ Create a Spectrum stream and add to to all compatible viewports """
@@ -1721,55 +1719,20 @@ class SparcStreamsController(StreamBarController):
             # emtvas=get_hw_settings(main_data.ebeam), # no need
             detvas=get_hw_settings(main_data.spectrometer),
         )
-        self._connectROI(spec_stream)
-
-        stream_cont = self._add_stream(spec_stream, add_to_all_views=True, no_bc=True)
-        stream_cont.stream_panel.show_visible_btn(False)
-
-        rep = stream_cont.add_setting_entry(
-            "repetition",
-            spec_stream.repetition,
-            None,  # component
-            stream_cont.hw_settings_config["streamspec"]["repetition"]
-        )
-        self._connectRepContent(spec_stream, rep.value_ctrl)
-
-        pxs = stream_cont.add_setting_entry(
-            "pixel size",
-            spec_stream.pixelSize,
-            None,  # component
-            stream_cont.hw_settings_config["streamspec"]["pixelSize"]
-        )
-
-        self._connectRepOverlay(spec_stream, (rep.value_ctrl, pxs.value_ctrl))
-
-        # Add axes
-        stream_cont.add_axis_entry(
-            "wavelength",
-            main_data.spectrograph,
-            stream_cont.hw_settings_config["streamspec"]["wavelength"]
-        )
-
-        stream_cont.add_axis_entry(
-            "grating",
-            main_data.spectrograph
-        )
-
-        stream_cont.add_axis_entry(
-            "slit-in",
-            main_data.spectrograph,
-            stream_cont.hw_settings_config["streamspec"]["slit-in"]
-        )
-
-        # No light filter for the spectrum stream: typically useless
 
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
         sem_spec_stream = acqstream.SEMSpectrumMDStream("SEM Spectrum", sem_stream, spec_stream)
 
-        self._tab_data_model.acquisitionView.addStream(sem_spec_stream)
-
-        return stream_cont
+        # No light filter for the spectrum stream: typically useless
+        return self._addRepStream(spec_stream, sem_spec_stream,
+                                  vas=("repetition", "pixelSize"),
+                                  axes={"wavelength": main_data.spectrograph,
+                                        "grating": main_data.spectrograph,
+                                        "slit-in": main_data.spectrograph,
+                                        },
+                                  no_bc=True
+                                  )
 
     def addMonochromator(self):
         """ Create a Monochromator stream and add to to all compatible viewports """
@@ -1784,62 +1747,22 @@ class SparcStreamsController(StreamBarController):
             emtvas={"dwellTime"},
             detvas=get_hw_settings(main_data.monochromator),
         )
-        self._connectROI(monoch_stream)
-
-        stream_cont = self._add_stream(monoch_stream, add_to_all_views=True, no_bc=True, play=False)
-        stream_cont.stream_panel.show_visible_btn(False)
-
-        rep = stream_cont.add_setting_entry(
-            "repetition",
-            monoch_stream.repetition,
-            None,  # component
-            stream_cont.hw_settings_config["streammonoch"]["repetition"]
-        )
-        self._connectRepContent(monoch_stream, rep.value_ctrl)
-
-        pxs = stream_cont.add_setting_entry(
-            "pixel size",
-            monoch_stream.pixelSize,
-            None,  # component
-            stream_cont.hw_settings_config["streammonoch"]["pixelSize"]
-        )
-
-        self._connectRepOverlay(monoch_stream, (rep.value_ctrl, pxs.value_ctrl))
-
-        # Add Axes
-
-        stream_cont.add_axis_entry(
-            "wavelength",
-            main_data.spectrograph,
-            stream_cont.hw_settings_config["streammonoch"]["wavelength"]
-        )
-
-        stream_cont.add_axis_entry(
-            "grating",
-            main_data.spectrograph
-        )
-
-        # TODO: this should be automatically computed out of the slit-monochromator
-        stream_cont.add_axis_entry(
-            "slit-in",
-            main_data.spectrograph,
-            stream_cont.hw_settings_config["streammonoch"]["slit-in"]
-        )
-
-        stream_cont.add_axis_entry(
-            "slit-monochromator",
-            main_data.spectrograph,
-            stream_cont.hw_settings_config["streammonoch"]["slit-monochromator"]
-        )
-
-        # No light filter for the spectrum stream: typically useless
 
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
         sem_monoch_stream = acqstream.SEMMDStream("SEM Monochromator", sem_stream, monoch_stream)
-        self._tab_data_model.acquisitionView.addStream(sem_monoch_stream)
 
-        return stream_cont
+        # No light filter for the spectrum stream: typically useless
+        return self._addRepStream(monoch_stream, sem_monoch_stream,
+                                  vas=("repetition", "pixelSize"),
+                                  axes={"wavelength": main_data.spectrograph,
+                                        "grating": main_data.spectrograph,
+                                        "slit-in": main_data.spectrograph,
+                                        "slit-monochromator": main_data.spectrograph,
+                                        },
+                                  no_bc=True,
+                                  play=False
+                                  )
 
     # Stream scheduling related methods
 

@@ -737,7 +737,7 @@ class SparcAlignSettingsController(SettingsBarController):
             self._spect_setting_cont.add_axis(
                 "wavelength",
                 main_data.spectrograph,
-                self.hw_settings_config["streamspec"]["wavelength"]
+                self.hw_settings_config["spectrograph"]["wavelength"]
             )
 
             self._spect_setting_cont.add_axis(
@@ -745,7 +745,9 @@ class SparcAlignSettingsController(SettingsBarController):
                 main_data.spectrograph
             )
 
+            # FIXME: only if axis exists
             self._spect_setting_cont.add_axis(
                 "slit-in",
-                main_data.spectrograph
+                main_data.spectrograph,
+                self.hw_settings_config["spectrograph"]["slit-in"]
             )

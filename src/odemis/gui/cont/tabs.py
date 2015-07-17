@@ -32,13 +32,12 @@ from odemis import dataio, model
 from odemis.acq import calibration
 from odemis.acq import stream
 from odemis.acq.align import AutoFocus
-from odemis.acq.stream import MultipleDetectorStream
 from odemis.driver.actuator import ConvertStage
 from odemis.gui.comp.canvas import CAN_ZOOM
 from odemis.gui.comp.popup import Message
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.conf import get_acqui_conf
-from odemis.gui.conf.data import get_hw_settings
+from odemis.gui.conf.data import get_hw_settings, get_stream_settings_config
 from odemis.gui.cont import settings, tools
 from odemis.gui.cont.actuators import ActuatorController
 from odemis.gui.cont.microscope import SecomStateController, DelphiStateController
@@ -51,11 +50,11 @@ import pkg_resources
 import scipy.misc
 import threading
 import weakref
+import wx
 # IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
 # file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
 # This is not related to any particular wxPython version and is most likely permanent.
 import wx.html
-import wx
 
 import odemis.acq.stream as acqstream
 import odemis.gui.cont.acquisition as acqcont
@@ -648,7 +647,7 @@ class SparcAcquisitionTab(Tab):
             "dcPeriod",
             semcl_stream.dcPeriod,
             None,  # component
-            sem_stream_cont.hw_settings_config["streamsem"]["dcPeriod"]
+            get_stream_settings_config()[acqstream.SEMStream]["dcPeriod"]
         )
 
         main_data.is_acquiring.subscribe(self.on_acquisition)
