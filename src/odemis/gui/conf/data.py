@@ -219,6 +219,9 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
             {
                 "control_type": odemis.gui.CONTROL_READONLY,
             },
+            "temperature": {
+                "control_type": odemis.gui.CONTROL_NONE,
+            },
         },
         "e-beam":
         {
@@ -237,6 +240,9 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
             "resolution":  # Read-only it shouldn't be changed by the user
             {
                 "control_type": odemis.gui.CONTROL_READONLY,
+            },
+            "temperature": {
+                "control_type": odemis.gui.CONTROL_NONE,
             },
         },
         "filter":

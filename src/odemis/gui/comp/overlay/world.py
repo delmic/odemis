@@ -506,7 +506,7 @@ class SpotModeOverlay(base.WorldOverlay, base.DragMixin):
         self.highlight = conversion.hex_to_frgb(gui.FG_COLOUR_HIGHLIGHT)
 
         # Rendering attributes
-        self._sect_count = 3
+        self._sect_count = 4
         self._gap = 0.15
         self._sect_width = 2.0 * math.pi / self._sect_count
         self._spot_radius = 12
@@ -549,6 +549,8 @@ class SpotModeOverlay(base.WorldOverlay, base.DragMixin):
         bx, by = self.cnvs.world_to_buffer(self.w_pos, offset)
 
         width = self._spot_radius / 6.0
+
+        ctx.new_sub_path()  # to ensure it doesn't draw a line from the previous point
 
         for i in range(self._sect_count):
             ctx.set_line_width(width)
@@ -1231,7 +1233,7 @@ class PointsOverlay(base.WorldOverlay):
         for w_pos in self.choices.keys():
             b_x, b_y = self.cnvs.world_to_buffer(w_pos, offset)
 
-            ctx.move_to(b_x, b_y)
+            ctx.new_sub_path()
             ctx.arc(b_x, b_y, self.dot_size, 0, 2*math.pi)
 
             # If the mouse is hovering over a dot (and we are not dragging)
