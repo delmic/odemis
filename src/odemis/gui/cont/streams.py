@@ -1539,6 +1539,9 @@ class SparcStreamsController(StreamBarController):
         self._rep_listeners = {}  # RepetitionStream -> callable
         self._rep_ctrl = {}  # wx Control -> RepetitionStream
 
+        # Repetition Combobox updater
+        self._repct_listeners = {}  # RepetitionStream -> callable
+
         # Each stream will be created both as a SettingsStream and a MDStream
         # When the SettingsStream is deleted, automatically remove the MDStream
         tab_data.streams.subscribe(self._on_streams)
@@ -1607,6 +1610,12 @@ class SparcStreamsController(StreamBarController):
                 if self._hover_stream is s:
                     self._hover_stream = None
 
+        # clean up the repetition content updater listeners
+        for s in self._repct_listeners.keys():
+            if s not in streams:
+                logging.debug("Removing %s from repetition content subscriptions", s)
+                del self._repct_listeners[s]  # automatically unsubscribed
+
     def addAR(self):
         """ Create a camera stream and add to to all compatible viewports """
 
@@ -1629,6 +1638,7 @@ class SparcStreamsController(StreamBarController):
             None,  # component
             stream_cont.hw_settings_config["streamar"]["repetition"]
         )
+        self._connectRepContent(ar_stream, rep.value_ctrl)
         self._connectRepOverlay(ar_stream, (rep.value_ctrl,))
 
         # Add Axis
@@ -1673,6 +1683,7 @@ class SparcStreamsController(StreamBarController):
             None,  # component
             stream_cont.hw_settings_config["streamcli"]["repetition"]
         )
+        self._connectRepContent(cli_stream, rep.value_ctrl)
 
         pxs = stream_cont.add_setting_entry(
             "pixel size",
@@ -1721,6 +1732,7 @@ class SparcStreamsController(StreamBarController):
             None,  # component
             stream_cont.hw_settings_config["streamspec"]["repetition"]
         )
+        self._connectRepContent(spec_stream, rep.value_ctrl)
 
         pxs = stream_cont.add_setting_entry(
             "pixel size",
@@ -1783,6 +1795,7 @@ class SparcStreamsController(StreamBarController):
             None,  # component
             stream_cont.hw_settings_config["streammonoch"]["repetition"]
         )
+        self._connectRepContent(monoch_stream, rep.value_ctrl)
 
         pxs = stream_cont.add_setting_entry(
             "pixel size",
@@ -1975,7 +1988,7 @@ class SparcStreamsController(StreamBarController):
           repetition/pixel size info
         """
 
-        listener = functools.partial(self._onStreamRep, stream)
+        listener = functools.partial(self._onRepStreamVA, stream)
         # repetition VA not needed: if it changes, either roi or pxs also change
         stream.roi.subscribe(listener)
         stream.pixelSize.subscribe(listener)
@@ -2022,7 +2035,7 @@ class SparcStreamsController(StreamBarController):
                     style = RepetitionSelectOverlay.FILL_GRID
                 cvs.show_repetition(rep, style)
 
-    def _onStreamRep(self, stream, val):
+    def _onRepStreamVA(self, stream, val):
         """
         Called when one of the repetition VAs of a RepetitionStream is modified
         stream (RepetitionStream)
@@ -2049,14 +2062,25 @@ class SparcStreamsController(StreamBarController):
         self._updateRepOverlay()
         evt.Skip()
 
-    # TODO: connect to each repetition VA => into stream panel?
+    # Repetition combobox content updater
 
-    def on_ar_rep(self, rep):
-        self._on_rep(rep, self.angular_rep_ent.vigilattr, self.angular_rep_ent.value_ctrl)
+    def _connectRepContent(self, stream, control):
+        """
+        Connects the stream repetition VA to ensure the combobox choices are
+        always up-to-date
+        stream (RepetitionStream)
+        control (Combobox)
+        """
 
-    @staticmethod
-    def _on_rep(rep, rep_va, rep_ctrl):
-        """ Recalculate the repetition presets according to the ROI ratio """
+        listener = functools.partial(self._onStreamRep, stream.repetition, control)
+        stream.repetition.subscribe(listener, init=True)
+        self._repct_listeners[stream] = listener
+
+    def _onStreamRep(self, va, control, rep):
+        """
+        Called when the repetition VAs of a RepetitionStream is modified.
+        Recalculate the repetition presets according to the repetition ratio
+        """
         ratio = rep[1] / rep[0]
 
         # Create the entries:
@@ -2074,14 +2098,14 @@ class SparcStreamsController(StreamBarController):
             # the ROI (and the minimum size of the pixelSize), so some of the
             # big repetitions might actually not be valid. It's not a big
             # problem as the VA setter will silently limit the repetition
-            return (rep_va.range[0][0] <= c[0] <= rep_va.range[1][0] and
-                    rep_va.range[0][1] <= c[1] <= rep_va.range[1][1])
+            return (va.range[0][0] <= c[0] <= va.range[1][0] and
+                    va.range[0][1] <= c[1] <= va.range[1][1])
         choices = [choice for choice in choices if is_compatible(choice)]
 
         # remove duplicates and sort
         choices = sorted(set(choices))
 
         # replace the old list with this new version
-        rep_ctrl.Clear()
+        control.Clear()
         for choice in choices:
-            rep_ctrl.Append(u"%s x %s px" % choice, choice)
+            control.Append(u"%s x %s px" % choice, choice)
