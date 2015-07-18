@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Edit odemis.conf
+Comment=Edit main Odemis configuration file as root
+Keywords=odemis.conf
+Exec=sudo gedit /etc/odemis.conf
+Terminal=true
+Type=Application
+StartupNotify=true
+Icon=accessories-text-editor
