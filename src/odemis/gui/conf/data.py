@@ -186,19 +186,18 @@ HW_SETTINGS_CONFIG = {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
         )),
-    "spectrograph": {
-            "wavelength": {
+    "spectrograph":
+        OrderedDict((
+            ("wavelength", {
                 "control_type": odemis.gui.CONTROL_SLIDER,
                 "accuracy": 3,
-            },
-            "grating": { # to select the bandwidth observed
-                "control_type": odemis.gui.CONTROL_COMBO,
-            },
-            "slit-in": {
+            }),
+            ("grating", {}),
+            ("slit-in", {
                 "label": "Input slit",
                 "tooltip": u"Opening size of the spectrograph input slit.\nA wide opening means more light.",
-            },
-        },
+            }),
+        )),
     "cl-detector": {
             "gain": {
                 "accuracy": 3,
@@ -302,90 +301,79 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
 
 # Stream class -> config
 STREAM_SETTINGS_CONFIG = {
-    stream.SEMStream:
-    {
-        # VAs from the stream
-        "dcPeriod":
-        {
-            "label": "Drift corr. period",
-            "tooltip": u"Maximum time between anchor region acquisitions",
-            "control_type": odemis.gui.CONTROL_SLIDER,
-            "scale": "log",
-            "range": (1, 300),  # s, the VA allows a wider range, not typically needed
-            "accuracy": 2,
-        },
+    stream.SEMStream: {
+            # VAs from the stream
+            "dcPeriod":
+            {
+                "label": "Drift corr. period",
+                "tooltip": u"Maximum time between anchor region acquisitions",
+                "control_type": odemis.gui.CONTROL_SLIDER,
+                "scale": "log",
+                "range": (1, 300),  # s, the VA allows a wider range, not typically needed
+                "accuracy": 2,
+            },
     },
     stream.SpectrumSettingsStream:
-    {
-        "repetition":
-        {
-            "control_type": odemis.gui.CONTROL_COMBO,
-            "choices": util.resolution_from_range_plus_point,
-            "accuracy": None,  # never simplify the numbers
-        },
-        "pixelSize":
-        {
-            "control_type": odemis.gui.CONTROL_FLT,
-        },
-        "wavelength":
-        {
-            "range": (0.0, 1900e-9),
-        },
-        "slit-in":
-        {
-            "label": "Input slit",
-            "tooltip": u"Opening size of the spectrograph input slit.\nA wide opening means more light and a worse resolution.",
-        },
-    },
+        OrderedDict((
+            ("repetition", {
+                "control_type": odemis.gui.CONTROL_COMBO,
+                "choices": util.resolution_from_range_plus_point,
+                "accuracy": None,  # never simplify the numbers
+            }),
+            ("pixelSize", {
+                "control_type": odemis.gui.CONTROL_FLT,
+            }),
+            ("wavelength", {
+                "range": (0.0, 1900e-9),
+            }),
+            ("grating", {}),
+            ("slit-in", {
+                "label": "Input slit",
+                "tooltip": u"Opening size of the spectrograph input slit.\nA wide opening means more light and a worse resolution.",
+            }),
+        )),
     stream.MonochromatorSettingsStream:
-    {
-        "repetition":
-        {
-            "control_type": odemis.gui.CONTROL_COMBO,
-            "choices": util.resolution_from_range_plus_point,
-            "accuracy": None,  # never simplify the numbers
-        },
-        "pixelSize":
-        {
-            "control_type": odemis.gui.CONTROL_FLT,
-        },
-        "wavelength":
-        {
-            "range": (0.0, 1900e-9),
-        },
-        "slit-in":
-        {
-            "label": "Input slit",
-            "tooltip": u"Opening size of the spectrograph input slit.\nA wide opening is usually fine.",
-        },
-        "slit-monochromator":
-        {
-            "label": "Det. slit",
-            "tooltip": u"Opening size of the detector slit.\nThe wider, the larger the wavelength bandwidth.",
-        },
-    },
+        OrderedDict((
+            ("repetition", {
+                "control_type": odemis.gui.CONTROL_COMBO,
+                "choices": util.resolution_from_range_plus_point,
+                "accuracy": None,  # never simplify the numbers
+            }),
+            ("pixelSize", {
+                "control_type": odemis.gui.CONTROL_FLT,
+            }),
+            ("wavelength", {
+                "range": (0.0, 1900e-9),
+            }),
+            ("grating", {}),
+            ("slit-in", {
+                "label": "Input slit",
+                "tooltip": u"Opening size of the spectrograph input slit.\nA wide opening is usually fine.",
+            }),
+            ("slit-monochromator", {
+                "label": "Det. slit",
+                "tooltip": u"Opening size of the detector slit.\nThe wider, the larger the wavelength bandwidth.",
+            }),
+        )),
     stream.ARSettingsStream:
-    {
-        "repetition":
-        {
-            "control_type": odemis.gui.CONTROL_COMBO,
-            "choices": util.resolution_from_range_plus_point,
-            "accuracy": None,  # never simplify the numbers
-        },
-    },
+        OrderedDict((
+            ("repetition", {
+                "control_type": odemis.gui.CONTROL_COMBO,
+                "choices": util.resolution_from_range_plus_point,
+                "accuracy": None,  # never simplify the numbers
+            }),
+        )),
     stream.CLSettingsStream:
-    {
-        "repetition":
-        {
-            "control_type": odemis.gui.CONTROL_COMBO,
-            "choices": util.resolution_from_range_plus_point,
-            "accuracy": None,  # never simplify the numbers
-        },
-        "pixelSize":
-        {
-            "control_type": odemis.gui.CONTROL_FLT,
-        },
-    },
+        OrderedDict((
+            ("repetition", {
+                "control_type": odemis.gui.CONTROL_COMBO,
+                "choices": util.resolution_from_range_plus_point,
+                "accuracy": None,  # never simplify the numbers
+            }),
+            ("pixelSize", {
+                "control_type": odemis.gui.CONTROL_FLT,
+            }),
+        )),
 }
 
 
