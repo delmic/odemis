@@ -10,6 +10,16 @@ fn="$HOME/Desktop/$bn"
 # Compress in background
 zip -j $fn /var/log/odemis.log $HOME/odemis-gui.log "$MODEL" /etc/odemis.conf &
 
+# Take a screenshot if the GUI is there
+if pgrep -f $GUI > /dev/null; then
+    scfn="/tmp/odemis-bug-screenshot.png"
+    gm import -window root "$scfn"
+    # Only available in Ubuntu 14.04+ (a bit better because you see a "flash")
+    # gnome-screenshot -f "$scfn"
+else
+    scfn=""
+fi
+
 # Save hw status (if available)
 odemis-cli --check
 status=$?
@@ -26,6 +36,7 @@ descfn="/tmp/description.txt"
 cat >"$descfn" <<EOL
 Summary of the problem:
 
+Contact person (name and email address):
 
 Ways to reproduce the problem:
 1.
@@ -54,7 +65,12 @@ if [ "$ret" -eq 1 ]; then # cancelled
     exit
 fi
 
-# Add the description (no quotes for hwfn so that it becomes nothing when it's nothing)
-file-roller --add "$descfn" $hwfn --add-to "$fn"
+# Add the description (no quotes for hwfn and scfn so that they become nothing when they are nothing)
+file-roller --add "$descfn" $hwfn $scfn --add-to "$fn"
 
 zenity --info --text "Please send the file <tt>$bn</tt> on the Desktop to <tt>bugreport@delmic.com</tt>.\n\nYou can use http://delmic.wetransfer.com ." --title "Problem report ready" --no-wrap
+
+# Open wetransfer
+# TODO: any way to automatically send the file?
+firefox "https://delmic.wetransfer.com/?to=bugreport@delmic.com"
+
