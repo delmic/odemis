@@ -50,10 +50,6 @@ import odemis.gui.model as guimodel
 import wx.lib.wxcairo as wxcairo
 
 
-SECOM_MODES = (guimodel.TOOL_ZOOM, guimodel.TOOL_ROI)
-SPARC_MODES = (guimodel.TOOL_ROA, guimodel.TOOL_POINT, guimodel.TOOL_RO_ANCHOR)
-
-
 @decorator
 def microscope_view_check(f, self, *args, **kwargs):
     """ This method decorator check if the microscope_view attribute is set """
@@ -288,6 +284,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         elif self.dicho_overlay:
             self.dicho_overlay.deactivate()
 
+    # TODO: move the logic of tool -> overlay to the controller
+    # => different mode for "pixel" or "point"
     def _set_point_select_mode(self, tool_mode):
         """ Activate the required point selection overlay """
 
@@ -935,27 +933,7 @@ class SparcARAcquiCanvas(DblMicroscopeCanvas):
 
 class SecomCanvas(DblMicroscopeCanvas):
 
-    def __init__(self, *args, **kwargs):
-        super(SecomCanvas, self).__init__(*args, **kwargs)
-
-        self.background_brush = wx.BRUSHSTYLE_SOLID
-
-    # TODO: merge the following mode management into the super class
-
-    # Prevent certain events from being processed by the canvas
-
-    def on_wheel(self, event):
-        if self.current_mode not in SECOM_MODES:
-            super(SecomCanvas, self).on_wheel(event)
-
-    def on_right_down(self, event):
-        # If we're currently not performing an action...
-        if self.current_mode not in SECOM_MODES:
-            super(SecomCanvas, self).on_right_down(event)
-
-    def on_right_up(self, event):
-        if self.current_mode not in SECOM_MODES:
-            super(SecomCanvas, self).on_right_up(event)
+    pass
 
 
 class SparcAcquiCanvas(DblMicroscopeCanvas):
