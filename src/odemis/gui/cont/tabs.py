@@ -30,7 +30,6 @@ import math
 import numpy
 from odemis import dataio, model
 from odemis.acq import calibration
-from odemis.acq import stream
 from odemis.acq.align import AutoFocus
 from odemis.driver.actuator import ConvertStage
 from odemis.gui.comp.canvas import CAN_ZOOM
@@ -361,13 +360,13 @@ class SecomStreamsTab(Tab):
         focus = None
         # Slightly different depending on the stream type, especially as the
         # stream doesn't have information on the focus, we need to "guess"
-        if isinstance(s, stream.StaticStream):
+        if isinstance(s, acqstream.StaticStream):
             pass
-        elif isinstance(s, stream.SEMStream):
+        elif isinstance(s, acqstream.SEMStream):
             detector = s.detector
             emitter = s.emitter
             focus = self.main_data.ebeam_focus
-        elif isinstance(s, stream.CameraStream):
+        elif isinstance(s, acqstream.CameraStream):
             detector = s.detector
             focus = self.main_data.focus
         # TODO: handle overview stream
@@ -718,7 +717,6 @@ class SparcAcquisitionTab(Tab):
         # make sure the streams are stopped
         for s in self.tab_data_model.streams.value:
             s.is_active.value = False
-
 
 
 class AnalysisTab(Tab):

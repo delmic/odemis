@@ -15,6 +15,7 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
+
 import logging
 from odemis import model
 from odemis.acq import stream, align
@@ -23,6 +24,7 @@ import odemis.gui.conf
 from odemis.gui.model.dye import DyeDatabase
 from odemis.gui.util import call_in_wx_main
 import subprocess
+import sys
 import wx
 
 import odemis.gui.img.data as imgdata
@@ -136,11 +138,14 @@ class MenuController(object):
                     self._on_debug_menu)
         main_data.debug.subscribe(self._on_debug_va, init=True)
 
-        # TODO: Assign 'Bug report' functionality
-        # * Report a bug... (Opens a mail client to send an email to us?)
-        # wx.EVT_MENU(self.main_frame,
-        #             self.main_frame.menu_bugreport.GetId(),
-        #             <function>)
+        # TODO: make it work on Windows too
+        # /Help/Report a problem...
+        if sys.platform.startswith('win32'):
+            main_frame.menu_item_bugreport.Disable()
+        else:
+            wx.EVT_MENU(main_frame,
+                        main_frame.menu_item_bugreport.GetId(),
+                        self._on_bugreport)
 
         # /Help/About
         wx.EVT_MENU(main_frame,
@@ -350,6 +355,10 @@ class MenuController(object):
         if analysis_tab.select_acq_file():
             # show the new tab
             self._main_data.tab.value = analysis_tab
+
+    def _on_bugreport(self, evt):
+        # Popen, so that it's non-blocking
+        subprocess.Popen("odemis-bug-report")
 
     def _on_about(self, evt):
 

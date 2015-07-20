@@ -404,8 +404,7 @@ def __init_resources():
           </object>
         </object>
         <object class="wxMenuItem" name="menu_item_bugreport">
-          <label>Report a Bug...</label>
-          <enabled>0</enabled>
+          <label>Report a problem...</label>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
