@@ -2,7 +2,7 @@
 
 """
 :author: Rinze de Laat
-:copyright: © 2012-2013 Rinze de Laat, Delmic
+:copyright: © 2012-2015 Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
@@ -30,30 +30,25 @@ from __future__ import division
 from abc import ABCMeta
 import collections
 import logging
-import numbers
+from odemis import model, util
+import odemis.dataio
+from odemis.gui.comp.buttons import ImageTextToggleButton
+from odemis.gui.comp.file import EVT_FILE_SELECT
+from odemis.gui.comp.settings import SettingsPanel
+from odemis.gui.conf.data import get_hw_settings_config
+from odemis.gui.conf.util import (bind_setting_context_menu, create_setting_entry,
+                                  SettingEntry, create_axis_entry)
+from odemis.gui.model import CHAMBER_UNKNOWN, CHAMBER_VACUUM
+import odemis.gui.util
+from odemis.model import getVAs, VigilantAttributeBase
+from odemis.util.units import readable_str
 import time
 import wx
 from wx.lib.pubsub import pub
 
-from odemis import model
-import odemis.dataio
-from odemis.gui.comp.buttons import ImageTextToggleButton
-from odemis.gui.comp.combo import ComboBox
-from odemis.gui.comp.file import EVT_FILE_SELECT
-from odemis.gui.comp.slider import UnitFloatSlider
-from odemis.gui.conf.data import get_hw_settings_config
-from odemis.gui.conf.util import choice_to_str, bind_setting_context_menu, label_to_human, \
-    create_setting_entry, SettingEntry, AxisSettingEntry, create_axis_entry
-import odemis.gui.img.data as img
-from odemis.gui.model import CHAMBER_UNKNOWN, CHAMBER_VACUUM
-import odemis.gui.util
-from odemis.gui.util.widgets import AxisConnector
-from odemis.model import getVAs, VigilantAttributeBase
-from odemis.util.units import readable_str
 import odemis.gui.comp.hist as hist
-from odemis.gui.comp.settings import SettingsPanel
 import odemis.gui.conf as guiconf
-import odemis.util.units as utun
+import odemis.gui.img.data as img
 
 
 class SettingsController(object):
@@ -392,23 +387,13 @@ class SettingsBarController(object):
         """ Add setting entries for the given hardware component  """
         self.settings_panels.append(panel)
 
-        vas_comp = list(getVAs(hw_comp).items())
+        vas_comp = getVAs(hw_comp)
         vas_config = self._va_config.get(hw_comp.role, {}) # OrderedDict or dict
 
         # Re-order the VAs of the component in the same order as in the config
-        vas_config_names = list(vas_config.keys())
+        vas_names = util.sorted_according_to(vas_comp.keys(), vas_config.keys())
 
-        def index_in_config(va_def):
-            """ return the position of the VA name in vas_config """
-            n, va = va_def
-            try:
-                return vas_config_names.index(n)
-            except ValueError: # VA name is not in the config => put last
-                return len(vas_config) + 1
-
-        vas_comp.sort(key=index_in_config)
-
-        for name, value in vas_comp:
+        for name in vas_names:
             try:
                 if name in self.HIDDEN_VAS:
                     continue
@@ -417,7 +402,8 @@ class SettingsBarController(object):
                 else:
                     logging.debug("No config found for %s: %s", hw_comp.role, name)
                     va_conf = None
-                panel.add_setting_entry(name, value, hw_comp, va_conf)
+                va = vas_comp[name]
+                panel.add_setting_entry(name, va, hw_comp, va_conf)
             except TypeError:
                 msg = "Error adding %s setting for: %s"
                 logging.exception(msg, hw_comp.name, name)
@@ -729,25 +715,14 @@ class SparcAlignSettingsController(SettingsBarController):
         if main_data.spectrometer:
             self.add_hw_component(main_data.spectrometer, self._spect_setting_cont)
             # increase a bit the font size for easy reading from far
-
-            # This need to be added to a stream
-            self.add_spec_chronograph(self._spect_setting_cont, 9)
+            self.add_spec_chronograph(self._spect_setting_cont, 12)
 
         if main_data.spectrograph:
-            self._spect_setting_cont.add_axis(
-                "wavelength",
-                main_data.spectrograph,
-                self.hw_settings_config["spectrograph"]["wavelength"]
-            )
-
-            self._spect_setting_cont.add_axis(
-                "grating",
-                main_data.spectrograph
-            )
-
-            # FIXME: only if axis exists
-            self._spect_setting_cont.add_axis(
-                "slit-in",
-                main_data.spectrograph,
-                self.hw_settings_config["spectrograph"]["slit-in"]
-            )
+            comp = main_data.spectrograph
+            for a in ("wavelength", "grating", "slit-in"):
+                if a not in comp.axes:
+                    logging.debug("Skipping non existent axis %s on component %s",
+                                  a, comp.name)
+                    continue
+                conf = self.hw_settings_config[comp.role].get(a)
+                self._spect_setting_cont.add_axis(a, comp, conf)

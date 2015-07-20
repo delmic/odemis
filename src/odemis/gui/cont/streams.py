@@ -28,7 +28,7 @@ import collections
 import functools
 import logging
 import numpy
-from odemis import model
+from odemis import model, util
 from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR
 from odemis.gui.comp.overlay.world import RepetitionSelectOverlay
 from odemis.gui.comp.stream import StreamPanel, EVT_STREAM_VISIBLE
@@ -129,62 +129,45 @@ class StreamController(object):
 
     def _add_hw_setting_controls(self):
         """ Add local version of linked hardware setting VAs """
+        # Get the emitter and detector configurations if they exist (otherwise,
+        # the variable will not be used)
+        if self.stream.emitter:
+            emitter_conf = self.hw_settings_config.get(self.stream.emitter.role, {})
 
-        emitter_conf = {}
-        detector_conf = {}
-
-        # Get the emitter and detector configurations if they exist
-
-        if self.stream.emitter and self.stream.emitter.role in self.hw_settings_config:
-            emitter_conf = self.hw_settings_config[self.stream.emitter.role]
-
-        if self.stream.detector and self.stream.detector.role in self.hw_settings_config:
-            detector_conf = self.hw_settings_config[self.stream.detector.role]
-
-        # Process the emitter vas first
+        if self.stream.detector:
+            detector_conf = self.hw_settings_config.get(self.stream.detector.role, {})
 
         add_divider = False
 
-        # TODO: order the VAs according to the config order (cf settings controller)
-        for name, va in self.stream.emt_vas.items():
-            setting_conf = {}
-
-            if name in emitter_conf:
+        # Process the emitter VAs first
+        vas_names = util.sorted_according_to(self.stream.emt_vas.keys(),
+                                             emitter_conf.keys())
+        for name in vas_names:
+            va = self.stream.emt_vas[name]
+            conf = emitter_conf.get(name)
+            if conf is not None:
                 logging.debug("%s emitter configuration found for %s", name,
                               self.stream.emitter.role)
-                setting_conf = self.hw_settings_config[self.stream.emitter.role][name]
-            elif name in detector_conf:
-                logging.error("Detector %s setting va added to emitter group!", name)
-                continue
 
-            try:
-                se = create_setting_entry(self.stream_panel, name, va, self.stream.emitter,
-                                          setting_conf)
-                self.entries[se.name] = se
-                add_divider = True
-            except AttributeError:
-                logging.exception("Unsupported control type for %s!", name)
+            se = create_setting_entry(self.stream_panel, name, va, self.stream.emitter,
+                                      conf)
+            self.entries[se.name] = se
+            add_divider = True
 
         # Then process the detector
-
-        for name, va in self.stream.det_vas.items():
-            setting_conf = {}
-
-            if name in detector_conf:
+        vas_names = util.sorted_according_to(self.stream.det_vas.keys(),
+                                             detector_conf.keys())
+        for name in vas_names:
+            va = self.stream.det_vas[name]
+            conf = detector_conf.get(name)
+            if conf is not None:
                 logging.debug("%s detector configuration found for %s", name,
                               self.stream.detector.role)
-                setting_conf = self.hw_settings_config[self.stream.detector.role][name]
-            elif name in emitter_conf:
-                logging.error("Emitter %s setting va added to detector group!", name)
-                continue
 
-            try:
-                se = create_setting_entry(self.stream_panel, name, va, self.stream.emitter,
-                                          setting_conf)
-                self.entries[se.name] = se
-                add_divider = True
-            except AttributeError:
-                logging.exception("Unsupported control type for %s!", name)
+            se = create_setting_entry(self.stream_panel, name, va, self.stream.emitter,
+                                      conf)
+            self.entries[se.name] = se
+            add_divider = True
 
         if add_divider:
             self.stream_panel.add_divider()
@@ -1639,10 +1622,15 @@ class SparcStreamsController(StreamBarController):
         self._tab_data_model.acquisitionView.addStream(mdstream)
 
         stream_config = self._stream_config.get(type(stream), {})
-        # Add VAs
+        # Add VAs (in same order as config)
+        vas = util.sorted_according_to(vas, stream_config.keys())
         vactrls = []
         for vaname in vas:
-            va = getattr(stream, vaname)
+            try:
+                va = getattr(stream, vaname)
+            except AttributeError:
+                logging.debug("Skipping non existent VA %s on %s", vaname, stream)
+                continue
             conf = stream_config.get(vaname)
             ent = stream_cont.add_setting_entry(vaname, va, hw_comp=None, conf=conf)
             vactrls.append(ent.value_ctrl)
@@ -1652,8 +1640,14 @@ class SparcStreamsController(StreamBarController):
 
         self._connectRepOverlay(stream, vactrls)
 
-        # Add Axes
-        for axisname, comp in axes.items():
+        # Add Axes (in same order as config)
+        axes_names = util.sorted_according_to(axes.keys(), stream_config.keys())
+        for axisname in axes_names:
+            comp = axes[axisname]
+            if axisname not in comp.axes:
+                logging.debug("Skipping non existent axis %s on component %s",
+                              axisname, comp.name)
+                continue
             conf = stream_config.get(axisname)
             stream_cont.add_axis_entry(axisname, comp, conf)
 

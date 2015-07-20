@@ -92,6 +92,25 @@ def recursive_dict_update(d, other):
             d[k] = other[k]
     return d
 
+
+def sorted_according_to(la, lb):
+    """
+    Sort a list (or any iterable) following the order of another list. If an
+      item of a la is not in lb, then it'll be placed at the end.
+    la (iterable): the list to sort
+    lb (list or tuple): a list the same values as la, but in the order expected
+    return (list): la sorted according to lb
+    """
+    def index_in_lb(e):
+        """ return the position of the element in lb """
+        try:
+            return lb.index(e)
+        except ValueError:  # e is not in lb => put last
+            return len(lb) + 1
+
+    return sorted(la, key=index_in_lb)
+
+
 def rect_intersect(ra, rb):
     """
     Computes the rectangle representing the intersection area of two rectangles
