@@ -2,7 +2,7 @@
 
 odemis-cli --check
 status=$?
-if [ $status -nq 0 -a $status -nq 3 ] ; then
+if [ $status -ne 0 -a $status -ne 3 ] ; then
     zenity --error --text "Odemis is not running, start it first." --title "Impossible to show hardware status"
     exit
 fi
