@@ -169,14 +169,17 @@ class OpticalPathManager(object):
 
         # If we are about to leave mirror-align or fiber-align restore values
         try:
-            filter = model.getComponent(role="filter")
-            if (self._last_mode in {'mirror-align', 'fiber-align'}) and (mode not in {'mirror-align', 'fiber-align'}):
+            if (self._last_mode in {'mirror-align', 'fiber-align'}
+                and mode not in {'mirror-align', 'fiber-align'}
+                and self._stored_band is not None):
+                filter = self._getComponent("filter")
                 fmoves.append(filter.moveAbs({"band": self._stored_band}))
         except LookupError:
             logging.debug("No filter component available")
         try:
-            spectrograph = model.getComponent(role="spectrograph")
-            if (self._last_mode == 'fiber-align') and (mode != 'fiber-align'):
+            if (self._last_mode == 'fiber-align' and mode != 'fiber-align'
+                and self._stored_slit is not None):
+                spectrograph = self._getComponent("spectrograph")
                 fmoves.append(spectrograph.moveAbs({"slit-in": self._stored_slit}))
         except LookupError:
             logging.debug("No spectrograph component available")
