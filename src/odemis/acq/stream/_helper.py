@@ -434,7 +434,7 @@ class MonochromatorSettingsStream(PMTSettingsStream):
         if hasattr(self, "emtDwellTime"):
             dt = self.emtDwellTime
             # Recommended > 1ms, but 0.1 ms should work
-            dt.value = max(1e-3, dt.value)
+            dt.value = max(10e-3, dt.value)
             mn, mx = dt.range
             dt.range = (max(0.1e-3, mn), mx)
 
