@@ -129,13 +129,16 @@ class StreamController(object):
 
     def _add_hw_setting_controls(self):
         """ Add local version of linked hardware setting VAs """
-        # Get the emitter and detector configurations if they exist (otherwise,
-        # the variable will not be used)
+        # Get the emitter and detector configurations if they exist
         if self.stream.emitter:
             emitter_conf = self.hw_settings_config.get(self.stream.emitter.role, {})
+        else:
+            emitter_conf = {}
 
         if self.stream.detector:
             detector_conf = self.hw_settings_config.get(self.stream.detector.role, {})
+        else:
+            detector_conf = {}
 
         add_divider = False
 
