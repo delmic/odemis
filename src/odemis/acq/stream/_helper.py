@@ -418,15 +418,14 @@ class MonochromatorSettingsStream(PMTSettingsStream):
         RepetitionStream.__init__(self, name, detector, dataflow, emitter, **kwargs)
         # Don't change pixel size, as we keep the same as the SEM
 
-        # raw is an array of floats with time on the first dim, and count/date
+        # .raw is an array of floats with time on the first dim, and count/date
         # on the second dim.
         self.raw = numpy.empty((0, 2), dtype=numpy.float64)
-        # self._raw_date = [] # time of each raw acquisition (=count)
         self.image.value = model.DataArray([]) # start with an empty array
 
         # TODO: grating/cw as VAs (from the spectrograph)
 
-        # time over which to accumulate the data. 0 indicates that only the last
+        # Time over which to accumulate the data. 0 indicates that only the last
         # value should be included
         self.windowPeriod = model.FloatContinuous(30, range=[0, 1e6], unit="s")
 

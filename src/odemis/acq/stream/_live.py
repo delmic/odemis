@@ -958,12 +958,3 @@ class RGBCameraStream(CameraStream):
         except Exception:
             logging.exception("Updating %s image", self.__class__.__name__)
 
-    # TODO: any problem with drange computation?
-    # histogram doesn't like it?
-#     def _onNewImage(self, dataflow, data):
-#         # simple version, without drange computation
-#         if not self.raw:
-#             self.raw.append(data)
-#         else:
-#             self.raw[0] = data
-#         self._updateImage()
