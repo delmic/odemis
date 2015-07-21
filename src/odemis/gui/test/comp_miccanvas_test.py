@@ -179,7 +179,7 @@ class PlotCanvasTestCase(test.GuiTestCase):
         self.add_control(cnvs, wx.EXPAND, proportion=1)
 
         im_data = generate_img_data(300, 300, 4)
-        img = (im_data, (0.0, 0.0), (1.0, 1.0), True, None, None, None, "bitmap test")
+        img = (im_data, (0.0, 0.0), (1.0, 1.0), True, None, None, 0, None, "bitmap test")
 
         cnvs.set_images([img, None])
         cnvs.update_drawing()
