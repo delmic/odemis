@@ -804,10 +804,12 @@ class SparcAcquisitionMonoViewport(PlotViewport):
         if data.size:
             unit_x = 's'
 
+            x = data.metadata[model.MD_ACQ_DATE]
+            y = data
+            range_x = (min(x[0], -self.spectrum_stream.windowPeriod.value), x[-1])
             range_y = (0, max(data))
-            range_x = (-self.spectrum_stream.windowPeriod.value, 0)
 
-            self.canvas.set_data(zip(range(len(data)), data), unit_x, range_y=range_y)
+            self.canvas.set_data(zip(x, y), unit_x, range_x=range_x, range_y=range_y)
 
             self.bottom_legend.unit = unit_x
             self.bottom_legend.range = range_x

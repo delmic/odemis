@@ -417,7 +417,10 @@ class MonochromatorSettingsStream(PMTSettingsStream):
         RepetitionStream.__init__(self, name, detector, dataflow, emitter, **kwargs)
         # Don't change pixel size, as we keep the same as the SEM
 
-        self._raw_date = [] # time of each raw acquisition (=count)
+        # raw is an array of floats with time on the first dim, and count/date
+        # on the second dim.
+        self.raw = numpy.empty((0, 2), dtype=numpy.float64)
+        # self._raw_date = [] # time of each raw acquisition (=count)
         self.image.value = model.DataArray([]) # start with an empty array
 
         # TODO: grating/cw as VAs (from the spectrograph)
@@ -451,28 +454,31 @@ class MonochromatorSettingsStream(PMTSettingsStream):
         """
         Adds a new count and updates the window
         """
-        # delete all old data
+        # find first element still part of the window
         oldest = date - self.windowPeriod.value
-        first = 0 # first element still part of the window
-        for i, d in enumerate(self._raw_date):
-            if d >= oldest:
-                first = i
-                break
-        self._raw_date = self._raw_date[first:]
-        self.raw = self.raw[first:]
+        first = numpy.searchsorted(self.raw[:, 1], oldest)
 
-        self._raw_date.append(date)
-
-        self.raw.append(count)
+        # We must update .raw atomically as _updateImage() can run simultaneously
+        new = numpy.array([[count, date]], dtype=numpy.float64)
+        self.raw = numpy.append(self.raw[first:], new, axis=0)
 
     @limit_invocation(0.1)
     def _updateImage(self):
 
         # convert the list into a DataArray
-        im = model.DataArray(self.raw)
-        # save the time of each point as ACQ_DATE, unorthodox but should not
+        raw = self.raw  # read in one shot
+        count, date = raw[:, 0], raw[:, 1]
+        im = model.DataArray(count)
+        # save the relative time of each point as ACQ_DATE, unorthodox but should not
         # cause much problems as the data is so special anyway.
-        im.metadata[model.MD_ACQ_DATE] = self._raw_date
+        if len(date) > 0:
+            age = date - date[-1]
+        else:
+            age = date  # empty
+        im.metadata[model.MD_ACQ_DATE] = age
+        assert len(im) == len(date)
+        assert im.ndim == 1
+
         self.image.value = im
 
     def _onNewData(self, dataflow, data):
@@ -491,14 +497,14 @@ class MonochromatorSettingsStream(PMTSettingsStream):
                             "will use %f s", dt)
 
         if data.shape == (1, 1): # obtained during spot mode?
-            # Just convert to
+            # Just convert to count / s
             d = data[0, 0] / dt
         else: # obtained during a scan
             logging.debug("Monochromator got %s points instead of 1", data.shape)
             # TODO: cut the data into subparts based on the dwell time
             d = data.mean() / dt
 
-        self._append(d, date) # there is just one element in data
+        self._append(d, date)
 
         self._updateImage()
 
