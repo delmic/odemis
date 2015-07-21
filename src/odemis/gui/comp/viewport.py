@@ -535,6 +535,7 @@ class OverviewViewport(MicroscopeViewport):
                 self._microscope_view.moveStageTo(p_pos)
 
 
+# TODO: merge with SparcAcquisitionViewport and rename LiveViewPort
 class SecomViewport(MicroscopeViewport):
     """
     Used to display live streams on Secom and Delphi.
@@ -584,6 +585,7 @@ class SparcAcquisitionViewport(MicroscopeViewport):
             self.canvas.play_overlay.show = False
 
 
+# TODO: merge with SparcAlignViewport
 class SparcAcquisitionARViewport(SparcAcquisitionViewport):
 
     canvas_class = miccanvas.SparcARAcquiCanvas
