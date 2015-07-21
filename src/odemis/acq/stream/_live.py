@@ -44,7 +44,7 @@ class LiveStream(Stream):
         forcemd (None or dict of MD_* -> value): force the metadata of the
           .image DataArray to be overridden by this metadata.
         """
-        Stream.__init__(self, name, detector, dataflow, emitter, **kwargs)
+        super(LiveStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
 
         self._forcemd = forcemd
 
@@ -360,7 +360,7 @@ class AlignedSEMStream(SEMStream):
          (iow, using emitter.shift). If MTD_MD_UPD, it will just update the
          position correction metadata on the SEM images.
         """
-        SEMStream.__init__(self, name, detector, dataflow, emitter, **kwargs)
+        super(AlignedSEMStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
         self._ccd = ccd
         self._stage = stage
         self._shiftebeam = shiftebeam
@@ -601,7 +601,7 @@ class CameraStream(LiveStream):
         if emtvas and "emission" in emtvas:
             raise ValueError("emission VA cannot be made local")
 
-        LiveStream.__init__(self, name, detector, dataflow, emitter, emtvas=emtvas, **kwargs)
+        super(CameraStream, self).__init__(name, detector, dataflow, emitter, emtvas=emtvas, **kwargs)
 
     def estimateAcquisitionTime(self):
         # exposure time + readout time * pixels (if CCD) + set-up time
@@ -684,7 +684,7 @@ class CameraCountStream(CameraStream):
      data over time. The last acquired data is the last value in the array.
     """
     def __init__(self, *args, **kwargs):
-        CameraStream.__init__(self, *args, **kwargs)
+        super(CameraCountStream, self).__init__(*args, **kwargs)
         self._raw_date = [] # time of each raw acquisition (=count)
         self.image.value = model.DataArray([]) # start with an empty array
 
@@ -762,7 +762,7 @@ class FluoStream(CameraStream):
         emitter (Light): the HwComponent to modify the light excitation
         em_filter (Filter): the HwComponent to modify the emission light filtering
         """
-        CameraStream.__init__(self, name, detector, dataflow, emitter, **kwargs)
+        super(FluoStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
         self._em_filter = em_filter
 
         # Emission and excitation are based on the hardware capacities.
@@ -911,7 +911,7 @@ class RGBCameraStream(CameraStream):
         dataflow (Dataflow): the dataflow from which to get the data
         emitter (Light or None): the HwComponent to turn on the light
         """
-        CameraStream.__init__(self, name, detector, *args, **kwargs)
+        super(RGBCameraStream, self).__init__(name, detector, *args, **kwargs)
         if len(detector.shape) != 4:
             logging.warning("RGBCameraStream expects detector with shape of "
                             "length 4, but shape is %s", detector.shape)

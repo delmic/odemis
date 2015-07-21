@@ -371,7 +371,7 @@ class SpectrumSettingsStream(CCDSettingsStream):
     """
 
     def __init__(self, name, detector, dataflow, emitter, **kwargs):
-        RepetitionStream.__init__(self, name, detector, dataflow, emitter, **kwargs)
+        super(SpectrumSettingsStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
         # For SPARC: typical user wants density a bit lower than SEM
         self.pixelSize.value *= 6
 
@@ -415,7 +415,7 @@ class MonochromatorSettingsStream(PMTSettingsStream):
         emtvas: don't put resolution or scale, if it will be used with a
           concurrent SEM stream
         """
-        RepetitionStream.__init__(self, name, detector, dataflow, emitter, **kwargs)
+        super(MonochromatorSettingsStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
         # Don't change pixel size, as we keep the same as the SEM
 
         # .raw is an array of floats with time on the first dim, and count/date
@@ -519,7 +519,7 @@ class ARSettingsStream(CCDSettingsStream):
     See StaticARStream for displaying a stream with polar projection.
     """
     def __init__(self, name, detector, dataflow, emitter, **kwargs):
-        RepetitionStream.__init__(self, name, detector, dataflow, emitter, **kwargs)
+        super(ARSettingsStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
         # For SPARC: typical user wants density much lower than SEM
         self.pixelSize.value *= 30
 
@@ -545,7 +545,7 @@ class CLSettingsStream(PMTSettingsStream):
         """
         emtvas: don't put resolution or scale
         """
-        RepetitionStream.__init__(self, name, detector, dataflow, emitter, **kwargs)
+        super(CLSettingsStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
         # Don't change pixel size, as we keep the same as the SEM
 
         # For the live view, we need a way to define the scale and resolution,
@@ -611,8 +611,8 @@ class CLSettingsStream(PMTSettingsStream):
         super(CLSettingsStream, self)._onActive(active)
 
     def _onDwellTime(self, value):
-        # TODO: this tend to be too pessimistic as to when to restart as it uses
-        # the ROI to compute the acquisition time, while we are actually full ROI.
+        # TODO: restarting the acquisition means also resetting the protection.
+        # => don't do anything is protection is active
         self._updateAcquisitionTime()
 
     def _onResolution(self, value):
