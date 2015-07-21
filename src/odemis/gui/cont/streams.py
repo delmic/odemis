@@ -1811,8 +1811,11 @@ class SparcStreamsController(StreamBarController):
 
                 # Hack: to be sure the settings of the spot streams are correct
                 # (because the concurrent stream might have changed them, cf
-                # Monochormator), we stop/start it each time a stream plays
+                # Monochromator), we stop/start it each time a stream plays
                 if was_active:
+                    # FIXME: when switching from one Monochromator stream to
+                    # another one, it seems to mess up the resolution on the
+                    # first time
                     logging.debug("Resetting spot mode")
                     spots.is_active.value = False
                     spots.is_active.value = True
