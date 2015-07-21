@@ -25,6 +25,7 @@ from abc import abstractmethod
 from functools import wraps
 import logging
 import math
+import numbers
 import numpy
 from odemis import model
 from odemis.acq import align
@@ -502,8 +503,9 @@ class MonochromatorSettingsStream(PMTSettingsStream):
         else: # obtained during a scan
             logging.debug("Monochromator got %s points instead of 1", data.shape)
             # TODO: cut the data into subparts based on the dwell time
-            d = data.mean() / dt
+            d = data.view(numpy.ndarray).mean() / dt
 
+        assert isinstance(d, numbers.Real), "%s is not a number" % d
         self._append(d, date)
 
         self._updateImage()
