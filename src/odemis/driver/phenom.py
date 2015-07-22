@@ -862,6 +862,7 @@ class Detector(model.Detector):
                           res, bpp, self._scanParams.nrOfFrames)
             # Check if spot mode is required
             if res == (1, 1):
+                center_x, center_y = self.parent._scanner.tran_roi[0] + spot_shift[0], self.parent._scanner.tran_roi[1] + spot_shift[1]
                 # Cancel possible grid scanning
                 if self._is_scanning:
                     self._spot_scanner.cancel()
@@ -869,8 +870,8 @@ class Detector(model.Detector):
                     # Wait grid scanner to stop
                     with self._grid_lock:
                         # Move back to the center
-                        self._scan_params_view.center.x = self.parent._scanner.tran_roi[0] + spot_shift[0]
-                        self._scan_params_view.center.y = self.parent._scanner.tran_roi[1] + spot_shift[1]
+                        self._scan_params_view.center.x = center_x
+                        self._scan_params_view.center.y = center_y
                         try:
                             self._acq_device.SetSEMViewingMode(self._scan_params_view, 'SEM-SCAN-MODE-IMAGING')
                         except suds.WebFault:
@@ -879,10 +880,10 @@ class Detector(model.Detector):
                 # Avoid setting resolution to 1,1
                 # Set scale so the FoV is reduced to something really small
                 # even if the current HFW is the maximum
-                if self._scan_params_view.scale != 0:
+                if self._scan_params_view.scale != 0 or self._scan_params_view.center.x != center_x or self._scan_params_view.center.y != center_y:
                     self._scan_params_view.scale = 0
-                    self._scan_params_view.center.x = self.parent._scanner.tran_roi[0] + spot_shift[0]
-                    self._scan_params_view.center.y = self.parent._scanner.tran_roi[1] + spot_shift[1]
+                    self._scan_params_view.center.x = center_x
+                    self._scan_params_view.center.y = center_y
                     self._acq_device.SetSEMViewingMode(self._scan_params_view, 'SEM-SCAN-MODE-IMAGING')
                 time.sleep(0.1)
                 # MD_POS is hopefully set via updateMetadata
