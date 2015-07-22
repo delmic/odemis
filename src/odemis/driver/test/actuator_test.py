@@ -32,7 +32,7 @@ from odemis import model
 import odemis
 from odemis.driver import simulated
 from odemis.util import test
-from odemis.driver.actuator import ConvertStage, AntiBacklashActuator, MultiplexActuator
+from odemis.driver.actuator import ConvertStage, AntiBacklashActuator, MultiplexActuator, FixedPositionsActuator
 import simulated_test
 
 
@@ -57,6 +57,73 @@ class MultiplexTest(unittest.TestCase, simulated_test.ActuatorTest):
     # force to not use the default method from TestCase
     def tearDown(self):
         super(MultiplexTest, self).tearDown()
+
+
+class FixedPositionsTest(unittest.TestCase):
+
+    actuator_type = FixedPositionsActuator
+
+    def setUp(self):
+        # create 2 children and then combine one axis each with MultiplexActuator
+        self.child1 = simulated.Stage("sstage1", "test", {"a"})
+        self.dev_normal = self.actuator_type("stage", "stage",
+                                             {"x": self.child1}, "a", {0: "pos0", 0.01: "pos1",
+                                                                       0.02: "pos2", 0.03: "pos3",
+                                                                       0.04: "pos4", 0.05: "pos5"})
+        self.dev_cycle = self.actuator_type("stage", "stage",
+                                            {"x": self.child1}, "a", {0: "pos0", 0.01: "pos1",
+                                                                      0.02: "pos2", 0.03: "pos3",
+                                                                      0.04: "pos4", 0.05: "pos5"}, cycle=0.06)
+
+    def test_normal_moveAbs(self):
+        # It's optional
+        if not hasattr(self.dev_normal, "moveAbs"):
+            self.skipTest("Actuator doesn't support absolute move")
+
+        move = {}
+        move["x"] = 0.01
+        f = self.dev_normal.moveAbs(move)
+        f.result()  # wait
+        self.assertDictEqual(move, self.dev_normal.position.value,
+                             "Actuator didn't move to the requested position")
+
+    def test_unsupported_position(self):
+        # It's optional
+        if not hasattr(self.dev_normal, "moveAbs"):
+            self.skipTest("Actuator doesn't support absolute move")
+
+        move = {}
+        move["x"] = 0.07
+        with self.assertRaises(ValueError):
+            f = self.dev_normal.moveAbs(move)
+            f.result()  # wait
+
+    def test_cycle_moveAbs(self):
+        cur_pos = self.dev_cycle.position.value["x"]
+
+        # don't change position
+        f = self.dev_cycle.moveAbs({"x": cur_pos})
+        f.result()
+
+        self.assertEqual(self.dev_cycle.position.value["x"], cur_pos)
+
+        # find a different position
+        new_pos = cur_pos
+        position = self.dev_cycle.axes["x"]
+        for p in position.choices:
+            if p != cur_pos:
+                new_pos = p
+                break
+        else:
+            self.fail("Failed to find a position different from %d" % cur_pos)
+
+        f = self.dev_cycle.moveAbs({"x": new_pos})
+        f.result()
+        self.assertEqual(self.dev_cycle.position.value["x"], new_pos)
+
+    # force to not use the default method from TestCase
+    def tearDown(self):
+        super(FixedPositionsTest, self).tearDown()
 
 
 class TestCoupledStage(unittest.TestCase):

@@ -59,9 +59,8 @@ class MultiplexActuator(model.Actuator):
         self._referenced = {}
         axes = {}
         for axis, child in children.items():
-            # self._children.add(child)
-            child.parent = self
-            self._axis_to_child[axis] = (child, axes_map[axis])
+            caxis = axes_map[axis]
+            self._axis_to_child[axis] = (child, caxis)
 
             # Ducktyping (useful to support also testing with MockComponent)
             # At least, it has .axes
@@ -69,16 +68,16 @@ class MultiplexActuator(model.Actuator):
                 raise ValueError("Child %s is not a component." % (child,))
             if not hasattr(child, "axes") or not isinstance(child.axes, dict):
                 raise ValueError("Child %s is not an actuator." % child.name)
-            axes[axis] = child.axes[axes_map[axis]]
+            axes[axis] = child.axes[caxis]
             self._position[axis] = child.position.value[axes_map[axis]]
             if (hasattr(child, "speed") and
                 isinstance(child.speed, model.VigilantAttributeBase) and
-                axis in child.speed.value):
-                self._speed[axis] = child.speed.value[axes_map[axis]]
+                caxis in child.speed.value):
+                self._speed[axis] = child.speed.value[caxis]
             if (hasattr(child, "referenced") and
                 isinstance(child.referenced, model.VigilantAttributeBase) and
-                axis in child.referenced.value):
-                self._referenced[axis] = child.referenced.value[axes_map[axis]]
+                caxis in child.referenced.value):
+                self._referenced[axis] = child.referenced.value[caxis]
 
         # TODO: test/finish conversion to Axis
         # this set ._axes and ._children
@@ -750,3 +749,197 @@ class AntiBacklashActuator(model.Actuator):
     def reference(self, axes):
         f = self._child.reference(axes)
         return f
+
+
+class FixedPositionsActuator(model.Actuator):
+    """
+    A generic actuator component which only allows moving to fixed positions
+    defined by the user upon initialization. It is actually a wrapper to just
+    one axis/actuator and it can also apply cyclic move e.g. in case the
+    actuator moves a filter wheel.
+    """
+
+    def __init__(self, name, role, children, axis_name, positions, cycle=None, **kwargs):
+        """
+        name (string)
+        role (string)
+        children (dict str -> actuator): axis name (in this actuator) -> actuator to be used for this axis
+        axis_name (str): axis name in the child actuator
+        positions (set or dict value -> str): positions where the actuator is allowed to move
+        cycle (float): if not None, it means the actuator does a cyclic move and this value represents a full cycle
+        """
+        if len(children) != 1:
+            raise ValueError("FixedPositionsActuator needs precisely one child")
+
+        self._cycle = cycle
+        self._position = {}
+        self._speed = {}
+        self._referenced = {}
+        axis, child = children.items()[0]
+        self._axis = axis
+        self._child = child
+        self._axis_name = axis_name
+
+        if not isinstance(child, model.ComponentBase):
+            raise ValueError("Child %s is not a component." % (child,))
+        if not hasattr(child, "axes") or not isinstance(child.axes, dict):
+            raise ValueError("Child %s is not an actuator." % child.name)
+
+        axes = {}
+        axes[axis] = child.axes[axis_name]
+        axes[axis].choices = positions
+        self._position[axis] = child.position.value[axis_name]
+
+        # keep a reference to the subscribers so that they are not
+        # automatically garbage collected
+        self._subfun = []
+
+        if (hasattr(child, "speed") and
+            isinstance(child.speed, model.VigilantAttributeBase) and
+            axis_name in child.speed.value):
+            self._speed[axis] = child.speed.value[axis_name]
+            self.speed = model.MultiSpeedVA(self._speed, [0., 10.], setter=self._setSpeed)
+            child.speed.subscribe(self.update_child_speed)
+            self._subfun.append(self.update_child_speed)
+        if (hasattr(child, "referenced") and
+            isinstance(child.referenced, model.VigilantAttributeBase) and
+            axis_name in child.referenced.value):
+            # If referenceable but unreferenced, then reference
+            if child.referenced.value[axis_name] is False:
+                child.reference({axis_name})
+            self._referenced[axis] = child.referenced.value[axis_name]
+            self.referenced = model.VigilantAttribute(self._referenced, readonly=True)
+            child.referenced.subscribe(self.update_child_ref)
+            self._subfun.append(self.update_child_ref)
+
+        model.Actuator.__init__(self, name, role, axes=axes, children=children,
+                                **kwargs)
+
+        # position & speed: special VAs combining multiple VAs
+        self.position = model.VigilantAttribute(self._position, readonly=True)
+
+        logging.debug("Subscribing to position of child %s", child.name)
+        child.position.subscribe(self.update_child_position)
+        self._subfun.append(self.update_child_position)
+
+        # If at unsupported position, move to the nearest supported position
+        if self.position.value[axis] not in positions:
+            nearest = min(positions.keys(), key=lambda k: abs(k - self.position.value[axis]))
+            f = self.moveAbs({axis: nearest})
+            f.result()
+
+    def update_child_position(self, value):
+        self._position[self._axis] = value[self._axis_name]
+        self._updatePosition()
+
+    def update_child_speed(self, value):
+        self._speed[self._axis] = value[self._axis_name]
+        self._updateSpeed()
+
+    def update_child_ref(self, value):
+        self._referenced[self._axis] = value[self._axis_name]
+        self._updateReferenced()
+
+    def _updatePosition(self):
+        """
+        update the position VA
+        """
+        # it's read-only, so we change it via _value
+        pos = self._applyInversionAbs(self._position)
+        logging.debug("reporting position %s", pos)
+        self.position._value = pos
+        self.position.notify(pos)
+
+    def _updateSpeed(self):
+        """
+        update the speed VA
+        """
+        # we must not call the setter, so write directly the raw value
+        self.speed._value = self._speed
+        self.speed.notify(self._speed)
+
+    def _updateReferenced(self):
+        """
+        update the referenced VA
+        """
+        # it's read-only, so we change it via _value
+        self.referenced._value = self._referenced
+        self.referenced.notify(self._referenced)
+
+    def _setSpeed(self, value):
+        """
+        value (dict string-> float): speed for each axis
+        returns (dict string-> float): the new value
+        """
+        final_value = dict(value)  # copy
+        new_speed = dict(self._child.speed.value)  # copy
+        new_speed[self._axis_name] = value[self._axis]
+        self._child.speed.value = new_speed
+        final_value[self._axis] = self._child.speed.value[self._axis_name]
+        return final_value
+
+    @isasync
+    def moveRel(self, shift):
+        if not shift:
+            return model.InstantaneousFuture()
+        self._checkMoveRel(shift)
+        raise NotImplementedError("Relative move on fixed positions axis not supported")
+
+    @isasync
+    def moveAbs(self, pos):
+        """
+        Move the actuator to the defined position in m for each axis given.
+        pos dict(string-> float): name of the axis and position in m
+        """
+        if not pos:
+            return model.InstantaneousFuture()
+        self._checkMoveAbs(pos)
+        pos = self._applyInversionAbs(pos)
+
+        axis, distance = pos.items()[0]
+        logging.debug("Moving axis %s (-> %s) to %g", self._axis, self._axis_name, distance)
+
+        if self._cycle is None:
+            move = {self._axis_name: distance}
+            f = self._child.moveAbs(move)
+        else:
+            # Optimize by moving through the closest way
+            vector1 = distance - self._child.position.value[self._axis_name]
+            mod1 = vector1 % self._cycle
+            vector2 = self._child.position.value[self._axis_name] - distance
+            mod2 = vector2 % self._cycle
+            if abs(mod1) < abs(mod2):
+                move = {self._axis_name:mod1}
+            else:
+                move = {self._axis_name:-mod2}
+            f = self._child.moveRel(move)
+
+        return f
+
+    @isasync
+    def reference(self, axes):
+        if not axes:
+            return model.InstantaneousFuture()
+        self._checkReference(axes)
+
+        logging.debug("Referencing axis %s (-> %s)", self._axis, self._axis_name)
+        f = self._child.reference(self._axis_name)
+
+        return f
+
+    reference.__doc__ = model.Actuator.reference.__doc__
+
+    def stop(self, axes=None):
+        """
+        stops the motion
+        axes (iterable or None): list of axes to stop, or None if all should be stopped
+        """
+        # it's synchronous, but we want to stop it as soon as possible
+        thread = threading.Thread(name="stopping axis", target=self._child.stop, args=(self._axis_name,))
+        thread.start()
+
+        # wait for completion
+        thread.join(1)
+        if thread.is_alive():
+            logging.warning("Stopping child actuator of '%s' is taking more than 1s", self.name)
+
