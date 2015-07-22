@@ -58,6 +58,12 @@ MODES = {'ar': ("ccd",
                  'ar-spec-selector': {'rx': 0},
                  'ar-det-selector': {'rx': 0},
                 }),
+         'chamber-view': ("ccd",
+                {'lens-switch': {'rx': math.radians(90)},
+                 'filter': {'band': 'pass-through'},
+                 'ar-spec-selector': {'rx': 0},
+                 'ar-det-selector': {'rx': 0},
+                }),
          'fiber-align': ("spectrometer",
                 {'lens-switch': {'rx': math.radians(90)},
                  'filter': {'band': 'pass-through'},
@@ -67,10 +73,13 @@ MODES = {'ar': ("ccd",
                 }),
          }
 
+ALIGN_MODES = {'mirror-align', 'chamber-view', 'fiber-align'}
+
 # Use subset for modes guessed
 GUESS_MODES = MODES.copy()
-del GUESS_MODES['mirror-align']  # No stream should ever imply alignment mode
-del GUESS_MODES['fiber-align']
+# No stream should ever imply alignment mode
+for m in ALIGN_MODES:
+    del GUESS_MODES[m]
 
 
 class OpticalPathManager(object):
@@ -152,14 +161,14 @@ class OpticalPathManager(object):
                                 pos = key
                                 # Just to store current band in order to restore
                                 # it once we leave this mode
-                                if self._last_mode not in {'mirror-align', 'fiber-align'}:
+                                if self._last_mode not in ALIGN_MODES:
                                     self._stored_band = comp.position.value[axis]
                                 break
                         else:
                             logging.debug("Choice %s is not present in %s axis", pos, axis)
                             continue
                     elif axis == "slit-in":
-                        if self._last_mode != 'fiber-align':
+                        if self._last_mode not in ALIGN_MODES:
                             self._stored_slit = comp.position.value[axis]
                     mv[axis] = pos
                 else:
@@ -167,22 +176,20 @@ class OpticalPathManager(object):
 
             fmoves.append(comp.moveAbs(mv))
 
-        # If we are about to leave mirror-align or fiber-align restore values
-        try:
-            if (self._last_mode in {'mirror-align', 'fiber-align'}
-                and mode not in {'mirror-align', 'fiber-align'}
-                and self._stored_band is not None):
-                filter = self._getComponent("filter")
-                fmoves.append(filter.moveAbs({"band": self._stored_band}))
-        except LookupError:
-            logging.debug("No filter component available")
-        try:
-            if (self._last_mode == 'fiber-align' and mode != 'fiber-align'
-                and self._stored_slit is not None):
-                spectrograph = self._getComponent("spectrograph")
-                fmoves.append(spectrograph.moveAbs({"slit-in": self._stored_slit}))
-        except LookupError:
-            logging.debug("No spectrograph component available")
+        # If we are about to leave alignment modes, restore values
+        if self._last_mode in ALIGN_MODES and mode not in ALIGN_MODES:
+            if self._stored_band is not None:
+                try:
+                    flter = self._getComponent("filter")
+                    fmoves.append(flter.moveAbs({"band": self._stored_band}))
+                except LookupError:
+                    logging.debug("No filter component available")
+            if self._stored_slit is not None:
+                try:
+                    spectrograph = self._getComponent("spectrograph")
+                    fmoves.append(spectrograph.moveAbs({"slit-in": self._stored_slit}))
+                except LookupError:
+                    logging.debug("No spectrograph component available")
 
         # Save last mode
         self._last_mode = mode
@@ -201,7 +208,7 @@ class OpticalPathManager(object):
         guess_stream (object): The given optical stream
         returns (str): Mode estimated
         raises:
-                ValueError if no mode can be inferred for the given stream
+                LookupError if no mode can be inferred for the given stream
                 IOError if given object is not a stream
         """
         # Handle multiple detector streams
@@ -216,6 +223,6 @@ class OpticalPathManager(object):
                     if conf[0] == guess_stream.detector.role:
                         return mode
             # In case no mode was found yet
-            raise ValueError("No mode can be inferred for the given stream")
+            raise LookupError("No mode can be inferred for the given stream")
         else:
             raise IOError("Given object is not a stream")
