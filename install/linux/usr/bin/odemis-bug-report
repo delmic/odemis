@@ -1,0 +1,76 @@
+#!/bin/bash
+
+. /etc/odemis.conf
+
+# filename is %hostname-odemis-log-%date.zip
+# Zip is nice, because it's very fast add files
+bn="$(hostname)-odemis-log-$(date +%Y%m%d-%H%M%S).zip"
+fn="$HOME/Desktop/$bn"
+
+# Compress in background
+zip -j $fn /var/log/odemis.log $HOME/odemis-gui.log "$MODEL" /etc/odemis.conf &
+
+# Take a screenshot if the GUI is there
+if pgrep -f $GUI > /dev/null; then
+    scfn="/tmp/odemis-bug-screenshot.png"
+    gm import -window root "$scfn"
+    # Only available in Ubuntu 14.04+ (a bit better because you see a "flash")
+    # gnome-screenshot -f "$scfn"
+else
+    scfn=""
+fi
+
+# Save hw status (if available)
+odemis-cli --check
+status=$?
+if [ $status -eq 0 -o $status -eq 3 ] ; then
+    hwfn="/tmp/odemis-hw-status.txt"
+    odemis-cli --list-prop '*' > "$hwfn"
+else
+    hwfn=""
+fi
+
+
+descfn="/tmp/description.txt"
+# Ask to describe the problem (in the mean time)
+cat >"$descfn" <<EOL
+Summary of the problem:
+
+Contact person (name and email address):
+
+Ways to reproduce the problem:
+1.
+2.
+3.
+:
+
+Current behaviour:
+
+Expected behaviour:
+
+
+Additional information (eg, reproducability, severity):
+
+EOL
+
+zenity --text-info --filename "$descfn" --editable --width 800 --height 800 --title "Enter problem description"
+ret="$?"
+
+# wait for zip to be done
+echo "Waiting for zip to be done..."
+wait
+
+if [ "$ret" -eq 1 ]; then # cancelled
+    rm $fn
+    exit
+fi
+
+# Add the description (no quotes for hwfn and scfn so that they become nothing when they are nothing)
+file-roller --add "$descfn" $hwfn $scfn --add-to "$fn"
+
+zenity --info --text "Please send the file <tt>$bn</tt> on the Desktop to <tt>bugreport@delmic.com</tt>.\n\nYou can use http://delmic.wetransfer.com ." --title "Problem report ready" --no-wrap
+
+# Open wetransfer
+# TODO: any way to automatically send the file?
+firefox "https://delmic.wetransfer.com/?to=bugreport@delmic.com"
+

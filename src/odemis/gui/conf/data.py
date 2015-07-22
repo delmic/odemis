@@ -19,11 +19,14 @@ This file is part of Odemis.
 
 """
 from collections import OrderedDict
+from odemis.acq import stream
+import odemis.gui
+from odemis.model import getVAs
+from odemis.util import recursive_dict_update
 import wx
 
-from odemis.model import getVAs
-import odemis.gui
 import odemis.gui.conf.util as util
+
 
 # All values in CONFIG are optional
 #
@@ -49,13 +52,9 @@ import odemis.gui.conf.util as util
 #
 # The configurations with a * can be replaced with a function, to allow for
 # dynamic values which can be depending on the backend configuration.
-
 # This is the default global settings, with ordered dict, to specify the order
 # on which they are displayed.
-from odemis.util import recursive_dict_update
-
 # TODO: seperate HW settings from Stream settings (use stream class -> settings)
-
 HW_SETTINGS_CONFIG = {
     "ccd":
         OrderedDict((
@@ -187,17 +186,18 @@ HW_SETTINGS_CONFIG = {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
         )),
-    "spectrograph": {
-            "wavelength":
-            {
+    "spectrograph":
+        OrderedDict((
+            ("wavelength", {
                 "control_type": odemis.gui.CONTROL_SLIDER,
                 "accuracy": 3,
-            },
-            "grating":  # that select the bandwidth observed
-            {
-                "control_type": odemis.gui.CONTROL_COMBO,
-            },
-        },
+            }),
+            ("grating", {}),
+            ("slit-in", {
+                "label": "Input slit",
+                "tooltip": u"Opening size of the spectrograph input slit.\nA wide opening means more light.",
+            }),
+        )),
     "cl-detector": {
             "gain": {
                 "accuracy": 3,
@@ -253,91 +253,6 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
                 "control_type": odemis.gui.CONTROL_COMBO,
             },
         },
-        "streamsem":
-        {
-            # VAs from the stream
-            "dcPeriod":
-            {
-                "label": "Drift corr. period",
-                "tooltip": u"Maximum time between anchor region acquisitions",
-                "control_type": odemis.gui.CONTROL_SLIDER,
-                "scale": "log",
-                "range": (1, 300),  # s, the VA allows a wider range, not typically needed
-                "accuracy": 2,
-            },
-        },
-        # VAs from the streams, temporarily here
-        "streamspec":
-        {
-            "repetition":
-            {
-                "control_type": odemis.gui.CONTROL_COMBO,
-                "choices": util.resolution_from_range_plus_point,
-                "accuracy": None,  # never simplify the numbers
-            },
-            "pixelSize":
-            {
-                "control_type": odemis.gui.CONTROL_FLT,
-            },
-            "wavelength":
-            {
-                "range": (0.0, 1900e-9),
-            },
-            "slit-in":
-            {
-                "label": "Input slit",
-                "tooltip": u"Opening size of the spectrograph input slit.\nA wide opening means more light and a worse resolution.",
-            },
-        },
-        "streammonoch":
-        {
-            "repetition":
-            {
-                "control_type": odemis.gui.CONTROL_COMBO,
-                "choices": util.resolution_from_range_plus_point,
-                "accuracy": None,  # never simplify the numbers
-            },
-            "pixelSize":
-            {
-                "control_type": odemis.gui.CONTROL_FLT,
-            },
-            "wavelength":
-            {
-                "range": (0.0, 1900e-9),
-            },
-            "slit-in":
-            {
-                "label": "Input slit",
-                "tooltip": u"Opening size of the spectrograph input slit.\nA wide opening is usually fine.",
-            },
-            "slit-monochromator":
-            {
-                "label": "Det. slit",
-                "tooltip": u"Opening size of the detector slit.\nThe wider, the larger the wavelength bandwidth.",
-            },
-        },
-        "streamar":
-        {
-            "repetition":
-            {
-                "control_type": odemis.gui.CONTROL_COMBO,
-                "choices": util.resolution_from_range_plus_point,
-                "accuracy": None,  # never simplify the numbers
-            },
-        },
-        "streamcli":
-        {
-            "repetition":
-            {
-                "control_type": odemis.gui.CONTROL_COMBO,
-                "choices": util.resolution_from_range_plus_point,
-                "accuracy": None,  # never simplify the numbers
-            },
-            "pixelSize":
-            {
-                "control_type": odemis.gui.CONTROL_FLT,
-            },
-        },
     },
     "delphi": {
         # Some settings are continuous values, but it's more convenient to the user
@@ -382,6 +297,85 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
     },
 }
 
+# TODO: OrderedDict
+
+# Stream class -> config
+STREAM_SETTINGS_CONFIG = {
+    stream.SEMStream: {
+            # VAs from the stream
+            "dcPeriod":
+            {
+                "label": "Drift corr. period",
+                "tooltip": u"Maximum time between anchor region acquisitions",
+                "control_type": odemis.gui.CONTROL_SLIDER,
+                "scale": "log",
+                "range": (1, 300),  # s, the VA allows a wider range, not typically needed
+                "accuracy": 2,
+            },
+    },
+    stream.SpectrumSettingsStream:
+        OrderedDict((
+            ("repetition", {
+                "control_type": odemis.gui.CONTROL_COMBO,
+                "choices": util.resolution_from_range_plus_point,
+                "accuracy": None,  # never simplify the numbers
+            }),
+            ("pixelSize", {
+                "control_type": odemis.gui.CONTROL_FLT,
+            }),
+            ("wavelength", {
+                "range": (0.0, 1900e-9),
+            }),
+            ("grating", {}),
+            ("slit-in", {
+                "label": "Input slit",
+                "tooltip": u"Opening size of the spectrograph input slit.\nA wide opening means more light and a worse resolution.",
+            }),
+        )),
+    stream.MonochromatorSettingsStream:
+        OrderedDict((
+            ("repetition", {
+                "control_type": odemis.gui.CONTROL_COMBO,
+                "choices": util.resolution_from_range_plus_point,
+                "accuracy": None,  # never simplify the numbers
+            }),
+            ("pixelSize", {
+                "control_type": odemis.gui.CONTROL_FLT,
+            }),
+            ("wavelength", {
+                "range": (0.0, 1900e-9),
+            }),
+            ("grating", {}),
+            ("slit-in", {
+                "label": "Input slit",
+                "tooltip": u"Opening size of the spectrograph input slit.\nA wide opening is usually fine.",
+            }),
+            ("slit-monochromator", {
+                "label": "Det. slit",
+                "tooltip": u"Opening size of the detector slit.\nThe wider, the larger the wavelength bandwidth.",
+            }),
+        )),
+    stream.ARSettingsStream:
+        OrderedDict((
+            ("repetition", {
+                "control_type": odemis.gui.CONTROL_COMBO,
+                "choices": util.resolution_from_range_plus_point,
+                "accuracy": None,  # never simplify the numbers
+            }),
+        )),
+    stream.CLSettingsStream:
+        OrderedDict((
+            ("repetition", {
+                "control_type": odemis.gui.CONTROL_COMBO,
+                "choices": util.resolution_from_range_plus_point,
+                "accuracy": None,  # never simplify the numbers
+            }),
+            ("pixelSize", {
+                "control_type": odemis.gui.CONTROL_FLT,
+            }),
+        )),
+}
+
 
 def get_hw_settings_config(role=None):
     """ Return a copy of the HW_SETTINGS_CONFIG dictionary
@@ -400,7 +394,21 @@ def get_hw_settings_config(role=None):
     return hw_settings
 
 
+def get_stream_settings_config():
+    """
+    return (dict cls -> dict): config per stream class
+    """
+    return STREAM_SETTINGS_CONFIG
+
+
+# TODO: currently used only to find the VAs to be used as stream local VAs.
+# Rename and/or check the function make sense.
 def get_hw_settings(hw_comp):
+    """
+    Find all the VAs of a component which have a configuration defined
+    hw_comp (HwComponent)
+    return (set of str): all the names for the given comp
+    """
 
     config = get_hw_settings_config()
     hidden_vas = {"children", "affects", "state"}
@@ -415,3 +423,4 @@ def get_hw_settings(hw_comp):
             settings.add(name)
 
     return settings
+

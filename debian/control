@@ -43,6 +43,7 @@ Depends: python (>= 2.7.1),
          python-pyro4-delmic,
          cgroup-bin,
          odemis-doc,
+         graphicsmagick, # just to take screenshots during bug report
          ${shlibs:Depends},
          ${misc:Depends},
          ${python:Depends},

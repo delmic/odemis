@@ -149,6 +149,7 @@ from decorator import decorator
 import logging
 import math
 import numpy
+from odemis import util
 from odemis.gui import BLEND_DEFAULT, BLEND_SCREEN
 from odemis.gui.comp.overlay.base import WorldOverlay, ViewOverlay
 from odemis.gui.util import call_in_wx_main
@@ -954,7 +955,7 @@ class BitmapCanvas(BufferedCanvas):
                 im_scale=last_image.metadata['dc_scale'],
                 rotation=last_image.metadata['dc_rotation'],
                 shear=last_image.metadata['dc_shear'],
-                flip=im.metadata['dc_flip'],
+                flip=last_image.metadata['dc_flip'],
                 blend_mode=last_image.metadata['blend_mode']
             )
 
@@ -1744,6 +1745,7 @@ class PlotCanvas(BufferedCanvas):
         BufferedCanvas.__init__(self, *args, **kwargs)
 
         # The data to be plotted, a list of numerical value pairs
+        # TODO: change to tuple of x data, y data for optimisation
         self._data = None
 
         # When setting new data, this canvas can be locked to prevent rendering
@@ -1951,7 +1953,7 @@ class PlotCanvas(BufferedCanvas):
 
         if snap:
             # Return the value closest to val_x
-            return min([(abs(val_x - x), x) for x, _ in self._data])[1]
+            return util.find_closest(val_x, [x for x, _ in self._data])
         else:
             # Clip the value
             val_x = max(min(val_x, self.range_x[1]), self.range_x[0])
@@ -1960,7 +1962,7 @@ class PlotCanvas(BufferedCanvas):
 
     def _val_x_to_val_y(self, val_x, snap=False):
         """ Map the give x pixel value to a y value """
-        return min([(abs(val_x - x), y) for x, y in self._data])[1]
+        return min((abs(val_x - x), y) for x, y in self._data)[1]
 
     def SetForegroundColour(self, *args, **kwargs):
         BufferedCanvas.SetForegroundColour(self, *args, **kwargs)
@@ -2067,9 +2069,9 @@ class PlotCanvas(BufferedCanvas):
             line_to(x, y)
 
         if self.plot_closed == PLOT_CLOSE_BOTTOM:
-            x, y = self.value_to_position((self.max_x, 0))
+            x, y = value_to_position((self.max_x, 0))
             ctx.line_to(x, y)
-            x, y = self.value_to_position((0, 0))
+            x, y = value_to_position((0, 0))
             ctx.line_to(x, y)
         else:
             ctx.close_path()

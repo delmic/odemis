@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Report a problem in Odemis
+Comment=Saves the logs and compress them to report a bug on Odemis
+Keywords=bug;odemis;issue;problem;log;
+Exec=odemis-bug-report
+Terminal=false
+Type=Application
+Icon=dialog-warning

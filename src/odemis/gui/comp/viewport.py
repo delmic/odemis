@@ -535,6 +535,7 @@ class OverviewViewport(MicroscopeViewport):
                 self._microscope_view.moveStageTo(p_pos)
 
 
+# TODO: merge with SparcAcquisitionViewport and rename LiveViewPort
 class SecomViewport(MicroscopeViewport):
     """
     Used to display live streams on Secom and Delphi.
@@ -584,6 +585,7 @@ class SparcAcquisitionViewport(MicroscopeViewport):
             self.canvas.play_overlay.show = False
 
 
+# TODO: merge with SparcAlignViewport
 class SparcAcquisitionARViewport(SparcAcquisitionViewport):
 
     canvas_class = miccanvas.SparcARAcquiCanvas
@@ -758,45 +760,62 @@ class SparcAcquisitionMonoViewport(PlotViewport):
 
     def setView(self, microscope_view, tab_data):
         super(SparcAcquisitionMonoViewport, self).setView(microscope_view, tab_data)
-        self._microscope_view.stream_tree.should_update.subscribe(self.on_streamtree_change,
-                                                                  init=True)
+        microscope_view.stream_tree.should_update.subscribe(self._on_stream_play,
+                                                            init=True)
+        microscope_view.lastUpdate.subscribe(self._on_stream_update, init=True)
 
-    def on_streamtree_change(self, is_playing):
-        """ Show or hide the indicator icon that shows if a stream is playing in the viewport """
-        if len(self._microscope_view.stream_tree):
-            self.canvas.play_overlay.show = True
-            self.canvas.play_overlay.hide_pause(is_playing)
-        else:
-            self.canvas.play_overlay.show = False
+    def _on_stream_update(self, _):
+        """
+        Hide the play icon overlay if no stream are present
+        """
+        show = len(self._microscope_view.stream_tree) > 0
+        self.canvas.play_overlay.show = show
+
+    def _on_stream_play(self, is_playing):
+        """
+        Update the status of the play/pause icon overlay
+        """
+        self.canvas.play_overlay.hide_pause(is_playing)
 
     def connect_stream(self, _):
         """ This method will connect this ViewPort to the Spectrum Stream so it it can react to
         spectrum pixel selection.
         """
-
+        # There should be exactly one stream. In the future there
+        # might be scenarios where there are more than one.
         ss = self.microscope_view.stream_tree.get_streams_by_type(MonochromatorSettingsStream)
+        if not ss:
+            stream = None
+        elif len(ss) > 1:
+            # => pick the first one playing
+            for s in ss:
+                if s.should_update.value:
+                    stream = s
+                    break
+            else:  # no stream playing
+                logging.warning("Found %d Monochromator streams, will pick one randomly", len(ss))
+                if self.spectrum_stream in ss:
+                    stream = self.spectrum_stream # don't change
+                else:
+                    stream = ss[0]
+        else:
+            stream = ss[0]
 
-        if self.spectrum_stream in ss:
+        if self.spectrum_stream is stream:
             logging.debug("not reconnecting to stream as it's already connected")
             return
 
-        # There should be exactly one stream. In the future there
-        # might be scenarios where there are more than one.
-        if not ss:
-            if hasattr(self.spectrum_stream, 'image'):
-                # important, otherwise we might receive data even after stream is removed
-                self.spectrum_stream.image.unsubscribe(self._on_new_data)
-            self.spectrum_stream = None
+        # Disconnect the old stream
+        if self.spectrum_stream:
+            self.spectrum_stream.image.unsubscribe(self._on_new_data)
+
+        # Connect the new one
+        self.spectrum_stream = stream
+        if stream:
+            self.spectrum_stream.image.subscribe(self._on_new_data, init=True)
+        else:
             logging.info("No Monochromator stream found")
             self.clear()  # Remove legend ticks and clear plot
-            return
-        elif len(ss) > 1:
-            logging.warning("Found %d Monochromator streams, will pick one randomly", len(ss))
-
-        self.spectrum_stream = ss[0]
-
-        if hasattr(self.spectrum_stream, 'image'):
-            self.spectrum_stream.image.subscribe(self._on_new_data, init=True)
 
     def _on_new_data(self, data):
         # spectrum_range = self.spectrum_stream.get_spectrum_range()
@@ -804,10 +823,12 @@ class SparcAcquisitionMonoViewport(PlotViewport):
         if data.size:
             unit_x = 's'
 
-            range_y = (0, max(data))
-            range_x = (-self.spectrum_stream.windowPeriod.value, 0)
+            x = data.metadata[model.MD_ACQ_DATE]
+            y = data
+            range_x = (min(x[0], -self.spectrum_stream.windowPeriod.value), x[-1])
+            range_y = (0, float(max(data)))  # float() to avoid numpy arrays
 
-            self.canvas.set_data(zip(range(len(data)), data), unit_x, range_y=range_y)
+            self.canvas.set_data(zip(x, y), unit_x, range_x=range_x, range_y=range_y)
 
             self.bottom_legend.unit = unit_x
             self.bottom_legend.range = range_x

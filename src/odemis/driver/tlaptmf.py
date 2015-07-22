@@ -185,9 +185,10 @@ class MFF(model.Actuator):
             # it can be a sign the device is in a bad state. (it is known to
             # fail when turned on and plugged in before the host computer is
             # turned on)
-            raise HwError("No USB device with S/N %s. "
-                              "Check that the Thorlabs filter flipper was "
-                              "turned on *after* the host computer." % sn)
+            logging.exception("GetInfo() failed.")
+            raise HwError("USB device with S/N %s seems in bad state. "
+                          "Check that the Thorlabs filter flipper was "
+                          "turned on *after* the host computer." % sn)
         self._hwVersion = "%s v%d (firmware %s)" % (modl, hwv, fmv)
 
         self.position = model.VigilantAttribute({}, readonly=True)

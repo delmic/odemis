@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=Show Odemis hardware status
+Comment=Show the properties and status of all the hardware components of the microscope
+Exec=odemis-hw-status
+Terminal=false
+Type=Application
+Icon=system-run

@@ -256,7 +256,7 @@ class AxisLegend(wx.Panel):
 
         self._value_range = None  # 2 tuple with the minimum and maximum value
         self._tick_list = None  # Lust of 2 tuples, containing the pixel position and value
-        self._value_space = None  # Difference between min and max values
+        self._vtp_ratio = None  # Ratio to convert value to pixel
         self._pixel_space = None  # Number of available pixels
 
         self.on_size()  # Force a refresh
@@ -363,27 +363,27 @@ class AxisLegend(wx.Panel):
             self.Parent.GetSizer().Layout()
 
     def value_to_pixel(self, value):
-        """ Map range value to legend pixel postion """
+        """ Map range value to legend pixel position """
         if self._pixel_space is None:
             return None
-        elif None not in (self._value_space, self._value_range):
-            pixel = ((value - self._value_range[0]) / self._value_space) * self._pixel_space
-            # NaN was encounter at Monache, so this extra test was added
-            pixel = 0 if math.isnan(pixel) else int(round(pixel))
+        elif None not in (self._vtp_ratio, self._value_range):
+            pixel = (value - self._value_range[0]) * self._vtp_ratio
+            pixel = int(round(pixel))
         else:
             pixel = 0
         return pixel if self._orientation == wx.HORIZONTAL else self._pixel_space - pixel
 
     def pixel_to_value(self, pixel):
         """ Map pixel value to range value """
+        if not self._vtp_ratio:  # None or 0
+            return self._value_range[0]
         pixel = pixel if self._orientation == wx.HORIZONTAL else self._pixel_space - pixel
-        return ((pixel / self._pixel_space) * self._value_space) + self._value_range[0]
+        return (pixel / self._vtp_ratio) + self._value_range[0]
 
     def pixel_to_ratio(self, pixel):
         """ Map the given pixel value to the ratio of the pixel space
 
         :return: (float) [0..1]
-
         """
 
         pixel = pixel if self._orientation == wx.HORIZONTAL else self._pixel_space - pixel
@@ -406,7 +406,12 @@ class AxisLegend(wx.Panel):
         self._pixel_space = self.ClientSize[self._orientation != wx.HORIZONTAL]
 
         # Range width
-        self._value_space = max_val - min_val
+        value_space = max_val - min_val
+        if value_space == 0:
+            logging.info("Trying to compute legend tick with range %s", self._value_range)
+            self._vtp_ratio = None
+        else:
+            self._vtp_ratio = self._pixel_space / value_space
 
         num_ticks = self._pixel_space // self._tick_spacing
         # Calculate the best step size in powers of 10, so it will cover at
@@ -415,16 +420,16 @@ class AxisLegend(wx.Panel):
 
         # Increase the value step tenfold while it fits more than num_ticks times
         # in the range
-        while value_step and self._value_space / value_step > num_ticks:
+        while value_step and value_space / value_step > num_ticks:
             value_step *= 10
         # logging.debug("Value step is %s after first iteration with range %s",
-        #               value_step, self._value_space)
+        #               value_step, value_space)
 
         # Divide the value step by two,
-        while value_step and self._value_space / value_step < num_ticks:
+        while value_step and value_space / value_step < num_ticks:
             value_step /= 2
         # logging.debug("Value step is %s after second iteration with range %s",
-        #               value_step, self._value_space)
+        #               value_step, value_space)
 
         first_val = (int(min_val / value_step) + 1) * value_step if value_step else 0
         # logging.debug("Setting first tick at value %s", first_val)
@@ -436,15 +441,18 @@ class AxisLegend(wx.Panel):
             tick_values.append(cur_val)
             cur_val += value_step
 
-        self._tick_list = []
+        if self._orientation == wx.HORIZONTAL:
+            min_pixel = 0
+        else:
+            # Don't display ticks too close from the left border
+            min_pixel = 10
 
+        ticks = []
         for tick_value in tick_values:
             pixel = self.value_to_pixel(tick_value)
             pix_val = (pixel, tick_value)
-            if self._tick_list is not None and pix_val not in self._tick_list:
-                if self._orientation == wx.HORIZONTAL:
-                    if 0 <= pixel <= self._pixel_space:
-                        self._tick_list.append(pix_val)
-                else:
-                    if 10 <= pixel <= self._pixel_space:
-                        self._tick_list.append(pix_val)
+            if pix_val not in ticks:
+                if min_pixel <= pixel <= self._pixel_space:
+                    ticks.append(pix_val)
+
+        self._tick_list = ticks

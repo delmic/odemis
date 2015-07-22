@@ -342,11 +342,16 @@ def get_detector(comp_name):
 def list_properties(comp_name, pretty=True):
     """
     print the data-flows and VAs of a component
-    comp_name (string): name of the component
+    comp_name (string): name of the component or "*"
     pretty (bool): if True, display with pretty-printing
     """
-    component = get_component(comp_name)
-    print_attributes(component, pretty)
+    if comp_name == "*":
+        for c in model.getComponents():
+            print_attributes(c, pretty)
+            print("")
+    else:
+        component = get_component(comp_name)
+        print_attributes(component, pretty)
 
 def set_attr(comp_name, attr_val_str):
     """
@@ -741,7 +746,7 @@ def main(args):
     dm_grpe.add_argument("--list", "-l", dest="list", action="store_true", default=False,
                          help="list the components of the microscope")
     dm_grpe.add_argument("--list-prop", "-L", dest="listprop", metavar="<component>",
-                         help="list the properties of a component")
+                         help="list the properties of a component. Use '*' to list all the components.")
     dm_grpe.add_argument("--set-attr", "-s", dest="setattr", nargs="+", action='append',
                          metavar=("<component>", "<attribute>"),
                          help="set the attribute of a component. First the component name, "

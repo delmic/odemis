@@ -50,10 +50,6 @@ import odemis.gui.model as guimodel
 import wx.lib.wxcairo as wxcairo
 
 
-SECOM_MODES = (guimodel.TOOL_ZOOM, guimodel.TOOL_ROI)
-SPARC_MODES = (guimodel.TOOL_ROA, guimodel.TOOL_POINT, guimodel.TOOL_RO_ANCHOR)
-
-
 @decorator
 def microscope_view_check(f, self, *args, **kwargs):
     """ This method decorator check if the microscope_view attribute is set """
@@ -288,9 +284,14 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         elif self.dicho_overlay:
             self.dicho_overlay.deactivate()
 
+    # TODO: move the logic of tool -> overlay to the controller
+    # => different mode for "pixel" or "point"
     def _set_point_select_mode(self, tool_mode):
         """ Activate the required point selection overlay """
 
+        # TODO: if a spectrum stream is visible => pixel
+        #       elif a AR stream exists => points
+        #       elif a spectrum stream is present => pixel
         if tool_mode == guimodel.TOOL_POINT:
             # Enable the Spectrum point select overlay when a spectrum stream
             # is attached to the view
@@ -301,7 +302,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             tab_streams = self._tab_data_model.streams.value
 
             if (len(self.microscope_view.stream_tree) and
-                    any([isinstance(s, stream.ARStream) for s in tab_streams])):
+                    any(isinstance(s, stream.ARStream) for s in tab_streams)):
                 self.add_world_overlay(self.points_overlay)
                 self.points_overlay.activate()
             # TODO: Filtering by the name SEM CL is not desired. There should be
@@ -760,6 +761,32 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # The y value needs to be flipped between physical and world coordinates.
         return phy_pos[0], -phy_pos[1]
 
+    def _get_sem_rect(self):
+        """
+        Returns the (theoretical) scanning area of the SEM. Works even if the
+        SEM has not send any image yet.
+        returns (tuple of 4 floats): position in physical coordinates m (l, t, r,br)
+        raises AttributeError in case no SEM is found
+        """
+        sem = self._tab_data_model.main.ebeam
+
+        try:
+            sem_center = self.microscope_view.stage_pos.value
+        except AttributeError:
+            # no stage => pos is always 0,0
+            sem_center = (0, 0)
+        # TODO: pixelSize will be updated when the SEM magnification changes,
+        # so we might want to recompute this ROA whenever pixelSize changes so
+        # that it's always correct (but maybe not here in the view)
+        sem_width = (sem.shape[0] * sem.pixelSize.value[0],
+                     sem.shape[1] * sem.pixelSize.value[1])
+        sem_rect = [sem_center[0] - sem_width[0] / 2,  # left
+                    sem_center[1] - sem_width[1] / 2,  # top
+                    sem_center[0] + sem_width[0] / 2,  # right
+                    sem_center[1] + sem_width[1] / 2]  # bottom
+
+        return sem_rect
+
     def convert_spot_ratio_to_phys(self, r_spot):
         if r_spot in (None, (None, None)):
             return None
@@ -799,6 +826,73 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         )
 
         return r_spot
+
+    def convert_roi_phys_to_ratio(self, phys_rect):
+        """
+        Convert and truncate the ROI in physical coordinates to the coordinates
+         relative to the SEM FoV
+        phys_rect (None or 4 floats): physical position of the tl and br points
+        return (4 floats): tlbr positions relative to the FoV
+        """
+        sem = self._tab_data_model.main.ebeam
+
+        # Get the position of the overlay in physical coordinates
+        if phys_rect is None:
+            return UNDEFINED_ROI
+
+        # Position of the complete SEM scan in physical coordinates
+        sem_rect = self._get_sem_rect()
+
+        # Take only the intersection so that that ROA is always inside the SEM scan
+        phys_rect = util.rect_intersect(phys_rect, sem_rect)
+        if phys_rect is None:
+            return UNDEFINED_ROI
+
+        # Convert the ROI into relative value compared to the SEM scan
+        # In physical coordinates Y goes up, but in ROI, Y goes down => "1-"
+        rel_rect = [(phys_rect[0] - sem_rect[0]) / (sem_rect[2] - sem_rect[0]),
+                    1 - (phys_rect[3] - sem_rect[1]) / (sem_rect[3] - sem_rect[1]),
+                    (phys_rect[2] - sem_rect[0]) / (sem_rect[2] - sem_rect[0]),
+                    1 - (phys_rect[1] - sem_rect[1]) / (sem_rect[3] - sem_rect[1])]
+
+        # and is at least one pixel big
+        rel_pixel_size = (1 / sem.shape[0], 1 / sem.shape[1])
+        rel_rect[2] = max(rel_rect[2], rel_rect[0] + rel_pixel_size[0])
+        if rel_rect[2] > 1:  # if went too far
+            rel_rect[0] -= rel_rect[2] - 1
+            rel_rect[2] = 1
+        rel_rect[3] = max(rel_rect[3], rel_rect[1] + rel_pixel_size[1])
+        if rel_rect[3] > 1:
+            rel_rect[1] -= rel_rect[3] - 1
+            rel_rect[3] = 1
+
+        return rel_rect
+
+    def convert_roi_ratio_to_phys(self, roi):
+        """
+        Convert the ROI in relative coordinates (to the SEM FoV) into physical
+         coordinates
+        roi (4 floats): tlbr positions relative to the FoV
+        return (None or 4 floats): physical position of the tl and br points, or
+          None if no ROI is defined
+        """
+        if roi == UNDEFINED_ROI:
+            return None
+        else:
+            # convert relative position to physical position
+            try:
+                sem_rect = self._get_sem_rect()
+            except AttributeError:
+                logging.warning("Trying to convert a SEM ROI, but no SEM available")
+                return None
+
+        # In physical coordinates Y goes up, but in ROI, Y goes down => "1-"
+        phys_rect = (sem_rect[0] + roi[0] * (sem_rect[2] - sem_rect[0]),
+                     sem_rect[1] + (1 - roi[3]) * (sem_rect[3] - sem_rect[1]),
+                     sem_rect[0] + roi[2] * (sem_rect[2] - sem_rect[0]),
+                     sem_rect[1] + (1 - roi[1]) * (sem_rect[3] - sem_rect[1]))
+
+        return phys_rect
 
     def selection_to_real_size(self, start_w_pos, end_w_pos):
         w = abs(start_w_pos[0] - end_w_pos[0])
@@ -935,27 +1029,7 @@ class SparcARAcquiCanvas(DblMicroscopeCanvas):
 
 class SecomCanvas(DblMicroscopeCanvas):
 
-    def __init__(self, *args, **kwargs):
-        super(SecomCanvas, self).__init__(*args, **kwargs)
-
-        self.background_brush = wx.BRUSHSTYLE_SOLID
-
-    # TODO: merge the following mode management into the super class
-
-    # Prevent certain events from being processed by the canvas
-
-    def on_wheel(self, event):
-        if self.current_mode not in SECOM_MODES:
-            super(SecomCanvas, self).on_wheel(event)
-
-    def on_right_down(self, event):
-        # If we're currently not performing an action...
-        if self.current_mode not in SECOM_MODES:
-            super(SecomCanvas, self).on_right_down(event)
-
-    def on_right_up(self, event):
-        if self.current_mode not in SECOM_MODES:
-            super(SecomCanvas, self).on_right_up(event)
+    pass
 
 
 class SparcAcquiCanvas(DblMicroscopeCanvas):
@@ -1055,99 +1129,6 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         # pick solution 2.
         self.roa_overlay.on_roa(self._roa.value)
         self.driftcor_overlay.on_roa(self._dc_region.value)
-
-    def _get_sem_rect(self):
-        """
-        Returns the (theoretical) scanning area of the SEM. Works even if the
-        SEM has not send any image yet.
-        returns (tuple of 4 floats): position in physical coordinates m (l, t, r,br)
-        raises AttributeError in case no SEM is found
-        """
-        sem = self._tab_data_model.main.ebeam
-
-        try:
-            sem_center = self.microscope_view.stage_pos.value
-        except AttributeError:
-            # no stage => pos is always 0,0
-            sem_center = (0, 0)
-        # TODO: pixelSize will be updated when the SEM magnification changes,
-        # so we might want to recompute this ROA whenever pixelSize changes so
-        # that it's always correct (but maybe not here in the view)
-        sem_width = (sem.shape[0] * sem.pixelSize.value[0],
-                     sem.shape[1] * sem.pixelSize.value[1])
-        sem_rect = [sem_center[0] - sem_width[0] / 2, # left
-                    sem_center[1] - sem_width[1] / 2, # top
-                    sem_center[0] + sem_width[0] / 2, # right
-                    sem_center[1] + sem_width[1] / 2] # bottom
-
-        return sem_rect
-
-    def convert_roi_phys_to_ratio(self, phys_rect):
-        """
-        Convert and truncate the ROI in physical coordinates to the coordinates
-         relative to the SEM FoV
-        phys_rect (None or 4 floats): physical position of the tl and br points
-        return (4 floats): tlbr positions relative to the FoV
-        """
-        sem = self._tab_data_model.main.ebeam
-
-        # Get the position of the overlay in physical coordinates
-        if phys_rect is None:
-            return UNDEFINED_ROI
-
-        # Position of the complete SEM scan in physical coordinates
-        sem_rect = self._get_sem_rect()
-
-        # Take only the intersection so that that ROA is always inside the SEM scan
-        phys_rect = util.rect_intersect(phys_rect, sem_rect)
-        if phys_rect is None:
-            return UNDEFINED_ROI
-
-        # Convert the ROI into relative value compared to the SEM scan
-        # In physical coordinates Y goes up, but in ROI, Y goes down => "1-"
-        rel_rect = [(phys_rect[0] - sem_rect[0]) / (sem_rect[2] - sem_rect[0]),
-                    1 - (phys_rect[3] - sem_rect[1]) / (sem_rect[3] - sem_rect[1]),
-                    (phys_rect[2] - sem_rect[0]) / (sem_rect[2] - sem_rect[0]),
-                    1 - (phys_rect[1] - sem_rect[1]) / (sem_rect[3] - sem_rect[1])]
-
-        # and is at least one pixel big
-        rel_pixel_size = (1 / sem.shape[0], 1 / sem.shape[1])
-        rel_rect[2] = max(rel_rect[2], rel_rect[0] + rel_pixel_size[0])
-        if rel_rect[2] > 1: # if went too far
-            rel_rect[0] -= rel_rect[2] - 1
-            rel_rect[2] = 1
-        rel_rect[3] = max(rel_rect[3], rel_rect[1] + rel_pixel_size[1])
-        if rel_rect[3] > 1:
-            rel_rect[1] -= rel_rect[3] - 1
-            rel_rect[3] = 1
-
-        return rel_rect
-
-    def convert_roi_ratio_to_phys(self, roi):
-        """
-        Convert the ROI in relative coordinates (to the SEM FoV) into physical
-         coordinates
-        roi (4 floats): tlbr positions relative to the FoV
-        return (None or 4 floats): physical position of the tl and br points, or
-          None if no ROI is defined
-        """
-        if roi == UNDEFINED_ROI:
-            return None
-        else:
-            # convert relative position to physical position
-            try:
-                sem_rect = self._get_sem_rect()
-            except AttributeError:
-                logging.warning("Trying to convert a SEM ROI, but no SEM available")
-                return None
-
-        # In physical coordinates Y goes up, but in ROI, Y goes down => "1-"
-        phys_rect = (sem_rect[0] + roi[0] * (sem_rect[2] - sem_rect[0]),
-                     sem_rect[1] + (1 - roi[3]) * (sem_rect[3] - sem_rect[1]),
-                     sem_rect[0] + roi[2] * (sem_rect[2] - sem_rect[0]),
-                     sem_rect[1] + (1 - roi[1]) * (sem_rect[3] - sem_rect[1]))
-
-        return phys_rect
 
 
 class SparcAlignCanvas(DblMicroscopeCanvas):

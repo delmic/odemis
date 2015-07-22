@@ -501,7 +501,7 @@ def label_to_human(camel_label):
     return re.sub(r"([A-Z])", r" \1", camel_label).capitalize()
 
 
-def create_setting_entry(container, name, va, hw_comp, conf, change_callback=None):
+def create_setting_entry(container, name, va, hw_comp, conf=None, change_callback=None):
     """ Determine what type on control to use for a setting and have the container create it
 
     Args:

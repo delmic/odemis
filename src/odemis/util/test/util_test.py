@@ -96,6 +96,19 @@ class TestTimeout(unittest.TestCase):
         time.sleep(1)
 
 
+class SortedAccordingTestCase(unittest.TestCase):
+
+    def test_simple(self):
+        in_exp = ((([1, 2, 3], [3, 2, 1]), [3, 2, 1]),
+                  (([1, 2, 3], [4, 2]), [2, 1, 3]),
+                  (([], [4, 2]), []),
+                  ((["b", "a"], []), ["b", "a"]),
+                  )
+        for i, eo in in_exp:
+            o = util.sorted_according_to(*i)
+            self.assertEqual(o, eo, "Failed to get correct output for %s" % (i,))
+
+
 class AlmostEqualTestCase(unittest.TestCase):
 
     def test_simple(self):

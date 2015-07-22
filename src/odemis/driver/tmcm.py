@@ -86,6 +86,11 @@ class TMCM3110(model.Actuator):
         inverted (set of str): names of the axes which are inverted (IOW, either
          empty or the name of the axis)
         """
+        # TODO: accept address number, which correspond to the DIP switch,
+        # with None meaning any address accepted. The address is the one returned
+        # when receiving an answer to a message. (By USB, all messages are answered anyway)
+
+        # TODO: allow any number or axes (>=1 and <= max ports)
         if len(axes) != 3:
             raise ValueError("Axes must be a list of 3 axis names (got %s)" % (axes,))
         self._axes_names = axes # axes names in order
@@ -115,6 +120,7 @@ class TMCM3110(model.Actuator):
         self._resynchonise()
 
         modl, vmaj, vmin = self.GetVersion()
+        # TODO: check 6110 too => and rename to TMCMx110?
         if modl != 3110:
             logging.warning("Controller TMCM-%d is not supported, will try anyway",
                             modl)
@@ -135,7 +141,7 @@ class TMCM3110(model.Actuator):
                     ]
             self.UploadProgram(prog, addr)
             if not self._isFullyPowered():
-                # Only a warning, at the power can be connected afterwards
+                # Only a warning, as the power can be connected afterwards
                 logging.warning("Device %s has no power, the motor will not move", name)
 
         # will take care of executing axis move asynchronously
@@ -215,6 +221,7 @@ class TMCM3110(model.Actuator):
         self.SetAxisParam(axis, 163, 0)  # chopper mode
         self.SetAxisParam(axis, 162, 2)  # Chopper blank time (1 = for low current applications)
         self.SetAxisParam(axis, 167, 3)  # Chopper off time (2 = minimum)
+        # TODO: configure StallGuard properly
         self.MoveRelPos(axis, 0) # activate parameter with dummy move
 
         if self._refproc == REFPROC_2XFF:

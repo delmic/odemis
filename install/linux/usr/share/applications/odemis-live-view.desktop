@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=Detector live view
+Comment=Display the current raw data from one of Odemis detectors
+Exec=odemis-live-view
+Terminal=false
+Type=Application
+Icon=media-playback-start

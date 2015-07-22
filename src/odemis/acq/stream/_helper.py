@@ -25,6 +25,7 @@ from abc import abstractmethod
 from functools import wraps
 import logging
 import math
+import numbers
 import numpy
 from odemis import model
 from odemis.acq import align
@@ -370,7 +371,7 @@ class SpectrumSettingsStream(CCDSettingsStream):
     """
 
     def __init__(self, name, detector, dataflow, emitter, **kwargs):
-        RepetitionStream.__init__(self, name, detector, dataflow, emitter, **kwargs)
+        super(SpectrumSettingsStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
         # For SPARC: typical user wants density a bit lower than SEM
         self.pixelSize.value *= 6
 
@@ -414,15 +415,17 @@ class MonochromatorSettingsStream(PMTSettingsStream):
         emtvas: don't put resolution or scale, if it will be used with a
           concurrent SEM stream
         """
-        RepetitionStream.__init__(self, name, detector, dataflow, emitter, **kwargs)
+        super(MonochromatorSettingsStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
         # Don't change pixel size, as we keep the same as the SEM
 
-        self._raw_date = [] # time of each raw acquisition (=count)
+        # .raw is an array of floats with time on the first dim, and count/date
+        # on the second dim.
+        self.raw = numpy.empty((0, 2), dtype=numpy.float64)
         self.image.value = model.DataArray([]) # start with an empty array
 
         # TODO: grating/cw as VAs (from the spectrograph)
 
-        # time over which to accumulate the data. 0 indicates that only the last
+        # Time over which to accumulate the data. 0 indicates that only the last
         # value should be included
         self.windowPeriod = model.FloatContinuous(30, range=[0, 1e6], unit="s")
 
@@ -430,7 +433,7 @@ class MonochromatorSettingsStream(PMTSettingsStream):
         if hasattr(self, "emtDwellTime"):
             dt = self.emtDwellTime
             # Recommended > 1ms, but 0.1 ms should work
-            dt.value = max(1e-3, dt.value)
+            dt.value = max(10e-3, dt.value)
             mn, mx = dt.range
             dt.range = (max(0.1e-3, mn), mx)
 
@@ -451,28 +454,31 @@ class MonochromatorSettingsStream(PMTSettingsStream):
         """
         Adds a new count and updates the window
         """
-        # delete all old data
+        # find first element still part of the window
         oldest = date - self.windowPeriod.value
-        first = 0 # first element still part of the window
-        for i, d in enumerate(self._raw_date):
-            if d >= oldest:
-                first = i
-                break
-        self._raw_date = self._raw_date[first:]
-        self.raw = self.raw[first:]
+        first = numpy.searchsorted(self.raw[:, 1], oldest)
 
-        self._raw_date.append(date)
-
-        self.raw.append(count)
+        # We must update .raw atomically as _updateImage() can run simultaneously
+        new = numpy.array([[count, date]], dtype=numpy.float64)
+        self.raw = numpy.append(self.raw[first:], new, axis=0)
 
     @limit_invocation(0.1)
     def _updateImage(self):
 
         # convert the list into a DataArray
-        im = model.DataArray(self.raw)
-        # save the time of each point as ACQ_DATE, unorthodox but should not
+        raw = self.raw  # read in one shot
+        count, date = raw[:, 0], raw[:, 1]
+        im = model.DataArray(count)
+        # save the relative time of each point as ACQ_DATE, unorthodox but should not
         # cause much problems as the data is so special anyway.
-        im.metadata[model.MD_ACQ_DATE] = self._raw_date
+        if len(date) > 0:
+            age = date - date[-1]
+        else:
+            age = date  # empty
+        im.metadata[model.MD_ACQ_DATE] = age
+        assert len(im) == len(date)
+        assert im.ndim == 1
+
         self.image.value = im
 
     def _onNewData(self, dataflow, data):
@@ -491,14 +497,15 @@ class MonochromatorSettingsStream(PMTSettingsStream):
                             "will use %f s", dt)
 
         if data.shape == (1, 1): # obtained during spot mode?
-            # Just convert to
+            # Just convert to count / s
             d = data[0, 0] / dt
         else: # obtained during a scan
             logging.debug("Monochromator got %s points instead of 1", data.shape)
             # TODO: cut the data into subparts based on the dwell time
-            d = data.mean() / dt
+            d = data.view(numpy.ndarray).mean() / dt
 
-        self._append(d, date) # there is just one element in data
+        assert isinstance(d, numbers.Real), "%s is not a number" % d
+        self._append(d, date)
 
         self._updateImage()
 
@@ -512,7 +519,7 @@ class ARSettingsStream(CCDSettingsStream):
     See StaticARStream for displaying a stream with polar projection.
     """
     def __init__(self, name, detector, dataflow, emitter, **kwargs):
-        RepetitionStream.__init__(self, name, detector, dataflow, emitter, **kwargs)
+        super(ARSettingsStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
         # For SPARC: typical user wants density much lower than SEM
         self.pixelSize.value *= 30
 
@@ -538,7 +545,7 @@ class CLSettingsStream(PMTSettingsStream):
         """
         emtvas: don't put resolution or scale
         """
-        RepetitionStream.__init__(self, name, detector, dataflow, emitter, **kwargs)
+        super(CLSettingsStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
         # Don't change pixel size, as we keep the same as the SEM
 
         # For the live view, we need a way to define the scale and resolution,
@@ -604,8 +611,8 @@ class CLSettingsStream(PMTSettingsStream):
         super(CLSettingsStream, self)._onActive(active)
 
     def _onDwellTime(self, value):
-        # TODO: this tend to be too pessimistic as to when to restart as it uses
-        # the ROI to compute the acquisition time, while we are actually full ROI.
+        # TODO: restarting the acquisition means also resetting the protection.
+        # => don't do anything is protection is active
         self._updateAcquisitionTime()
 
     def _onResolution(self, value):

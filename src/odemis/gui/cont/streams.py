@@ -28,10 +28,11 @@ import collections
 import functools
 import logging
 import numpy
-from odemis import model
+from odemis import model, util
 from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR
 from odemis.gui.comp.overlay.world import RepetitionSelectOverlay
 from odemis.gui.comp.stream import StreamPanel, EVT_STREAM_VISIBLE
+from odemis.gui.conf import data
 from odemis.gui.conf.data import get_hw_settings_config, get_hw_settings
 from odemis.gui.conf.util import create_setting_entry, create_axis_entry
 from odemis.gui.cont.settings import SettingEntry
@@ -128,62 +129,48 @@ class StreamController(object):
 
     def _add_hw_setting_controls(self):
         """ Add local version of linked hardware setting VAs """
-
-        emitter_conf = {}
-        detector_conf = {}
-
         # Get the emitter and detector configurations if they exist
+        if self.stream.emitter:
+            emitter_conf = self.hw_settings_config.get(self.stream.emitter.role, {})
+        else:
+            emitter_conf = {}
 
-        if self.stream.emitter and self.stream.emitter.role in self.hw_settings_config:
-            emitter_conf = self.hw_settings_config[self.stream.emitter.role]
-
-        if self.stream.detector and self.stream.detector.role in self.hw_settings_config:
-            detector_conf = self.hw_settings_config[self.stream.detector.role]
-
-        # Process the emitter vas first
+        if self.stream.detector:
+            detector_conf = self.hw_settings_config.get(self.stream.detector.role, {})
+        else:
+            detector_conf = {}
 
         add_divider = False
 
-        # TODO: order the VAs according to the config order (cf settings controller)
-        for name, va in self.stream.emt_vas.items():
-            setting_conf = {}
-
-            if name in emitter_conf:
+        # Process the emitter VAs first
+        vas_names = util.sorted_according_to(self.stream.emt_vas.keys(),
+                                             emitter_conf.keys())
+        for name in vas_names:
+            va = self.stream.emt_vas[name]
+            conf = emitter_conf.get(name)
+            if conf is not None:
                 logging.debug("%s emitter configuration found for %s", name,
                               self.stream.emitter.role)
-                setting_conf = self.hw_settings_config[self.stream.emitter.role][name]
-            elif name in detector_conf:
-                logging.error("Detector %s setting va added to emitter group!", name)
-                continue
 
-            try:
-                se = create_setting_entry(self.stream_panel, name, va, self.stream.emitter,
-                                          setting_conf)
-                self.entries[se.name] = se
-                add_divider = True
-            except AttributeError:
-                logging.exception("Unsupported control type for %s!", name)
+            se = create_setting_entry(self.stream_panel, name, va, self.stream.emitter,
+                                      conf)
+            self.entries[se.name] = se
+            add_divider = True
 
         # Then process the detector
-
-        for name, va in self.stream.det_vas.items():
-            setting_conf = {}
-
-            if name in detector_conf:
+        vas_names = util.sorted_according_to(self.stream.det_vas.keys(),
+                                             detector_conf.keys())
+        for name in vas_names:
+            va = self.stream.det_vas[name]
+            conf = detector_conf.get(name)
+            if conf is not None:
                 logging.debug("%s detector configuration found for %s", name,
                               self.stream.detector.role)
-                setting_conf = self.hw_settings_config[self.stream.detector.role][name]
-            elif name in emitter_conf:
-                logging.error("Emitter %s setting va added to detector group!", name)
-                continue
 
-            try:
-                se = create_setting_entry(self.stream_panel, name, va, self.stream.emitter,
-                                          setting_conf)
-                self.entries[se.name] = se
-                add_divider = True
-            except AttributeError:
-                logging.exception("Unsupported control type for %s!", name)
+            se = create_setting_entry(self.stream_panel, name, va, self.stream.emitter,
+                                      conf)
+            self.entries[se.name] = se
+            add_divider = True
 
         if add_divider:
             self.stream_panel.add_divider()
@@ -1512,6 +1499,8 @@ class SparcStreamsController(StreamBarController):
         super(SparcStreamsController, self).__init__(tab_data, stream_bar, **kwargs)
         self._view_controller = view_ctrl
 
+        self._stream_config = data.get_stream_settings_config()
+
         # Never allow SEM and CLi Stream to play with spot mode (because they are
         # spatial, so it doesn't make sense to see just one point), and force
         # AR, Spectrum, and Monochromator streams with spot mode (because the
@@ -1538,6 +1527,9 @@ class SparcStreamsController(StreamBarController):
         self._hover_stream = None  # stream for which the repetition must be displayed
         self._rep_listeners = {}  # RepetitionStream -> callable
         self._rep_ctrl = {}  # wx Control -> RepetitionStream
+
+        # Repetition Combobox updater
+        self._repct_listeners = {}  # RepetitionStream -> callable
 
         # Each stream will be created both as a SettingsStream and a MDStream
         # When the SettingsStream is deleted, automatically remove the MDStream
@@ -1607,6 +1599,63 @@ class SparcStreamsController(StreamBarController):
                 if self._hover_stream is s:
                     self._hover_stream = None
 
+        # clean up the repetition content updater listeners
+        for s in self._repct_listeners.keys():
+            if s not in streams:
+                logging.debug("Removing %s from repetition content subscriptions", s)
+                del self._repct_listeners[s]  # automatically unsubscribed
+
+    def _addRepStream(self, stream, mdstream, vas, axes, **kwargs):
+        """
+        Display and connect a new RepetitionStream to the GUI
+        stream (RepetitionStream): freshly baked stream
+        mdstream (MDStream): corresponding new stream for acquisition
+        vas (list of str): name of VAs entries to create (in addition to standard one,
+          such as local HW VAs and B/C control)
+        axes (dict axis name -> Component): axis entries to create
+        kwargs (dict): to be passed to _add_stream()
+        return (StreamController): the new stream controller
+        """
+        self._connectROI(stream)
+
+        stream_cont = self._add_stream(stream, add_to_all_views=True, **kwargs)
+        stream_cont.stream_panel.show_visible_btn(False)
+
+        # add the acquisition stream to the acquisition view
+        self._tab_data_model.acquisitionView.addStream(mdstream)
+
+        stream_config = self._stream_config.get(type(stream), {})
+        # Add VAs (in same order as config)
+        vas = util.sorted_according_to(vas, stream_config.keys())
+        vactrls = []
+        for vaname in vas:
+            try:
+                va = getattr(stream, vaname)
+            except AttributeError:
+                logging.debug("Skipping non existent VA %s on %s", vaname, stream)
+                continue
+            conf = stream_config.get(vaname)
+            ent = stream_cont.add_setting_entry(vaname, va, hw_comp=None, conf=conf)
+            vactrls.append(ent.value_ctrl)
+
+            if vaname == "repetition":
+                self._connectRepContent(stream, ent.value_ctrl)
+
+        self._connectRepOverlay(stream, vactrls)
+
+        # Add Axes (in same order as config)
+        axes_names = util.sorted_according_to(axes.keys(), stream_config.keys())
+        for axisname in axes_names:
+            comp = axes[axisname]
+            if axisname not in comp.axes:
+                logging.debug("Skipping non existent axis %s on component %s",
+                              axisname, comp.name)
+                continue
+            conf = stream_config.get(axisname)
+            stream_cont.add_axis_entry(axisname, comp, conf)
+
+        return stream_cont
+
     def addAR(self):
         """ Create a camera stream and add to to all compatible viewports """
 
@@ -1618,33 +1667,15 @@ class SparcStreamsController(StreamBarController):
             main_data.ebeam,
             detvas=get_hw_settings(main_data.ccd),
         )
-        self._connectROI(ar_stream)
-
-        stream_cont = self._add_stream(ar_stream, add_to_all_views=True)
-        stream_cont.stream_panel.show_visible_btn(False)
-
-        rep = stream_cont.add_setting_entry(
-            "repetition",
-            ar_stream.repetition,
-            None,  # component
-            stream_cont.hw_settings_config["streamar"]["repetition"]
-        )
-        self._connectRepOverlay(ar_stream, (rep.value_ctrl,))
-
-        # Add Axis
-
-        stream_cont.add_axis_entry(
-            "band",
-            main_data.light_filter,
-            stream_cont.hw_settings_config["filter"]["band"]
-        )
 
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
         sem_ar_stream = acqstream.SEMARMDStream("SEM AR", sem_stream, ar_stream)
-        self._tab_data_model.acquisitionView.addStream(sem_ar_stream)
 
-        return stream_cont
+        return self._addRepStream(ar_stream, sem_ar_stream,
+                                  vas=("repetition",),
+                                  axes={"band": main_data.light_filter}
+                                  )
 
     def addCLIntensity(self):
         """ Create a CLi stream and add to to all compatible viewports """
@@ -1658,45 +1689,20 @@ class SparcStreamsController(StreamBarController):
             emtvas={"dwellTime"},
             detvas=get_hw_settings(main_data.cld),
         )
-        self._connectROI(cli_stream)
 
         # Special "safety" feature to avoid having a too high gain at start
         if hasattr(cli_stream, "detGain"):
             cli_stream.detGain.value = cli_stream.detGain.range[0]
 
-        stream_cont = self._add_stream(cli_stream, add_to_all_views=True, play=False)
-        stream_cont.stream_panel.show_visible_btn(False)
-
-        rep = stream_cont.add_setting_entry(
-            "repetition",
-            cli_stream.repetition,
-            None,  # component
-            stream_cont.hw_settings_config["streamcli"]["repetition"]
-        )
-
-        pxs = stream_cont.add_setting_entry(
-            "pixel size",
-            cli_stream.pixelSize,
-            None,  # component
-            stream_cont.hw_settings_config["streamcli"]["pixelSize"]
-        )
-
-        self._connectRepOverlay(cli_stream, (rep.value_ctrl, pxs.value_ctrl))
-
-        # Add Axis
-
-        stream_cont.add_axis_entry(
-            "band",
-            main_data.light_filter,
-            stream_cont.hw_settings_config["filter"]["band"]
-        )
-
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
         sem_cli_stream = acqstream.SEMMDStream("SEM CLi", sem_stream, cli_stream)
-        self._tab_data_model.acquisitionView.addStream(sem_cli_stream)
 
-        return stream_cont
+        return self._addRepStream(cli_stream, sem_cli_stream,
+                                  vas=("repetition", "pixelSize"),
+                                  axes={"band": main_data.light_filter},
+                                  play=False
+                                  )
 
     def addSpectrum(self):
         """ Create a Spectrum stream and add to to all compatible viewports """
@@ -1710,54 +1716,20 @@ class SparcStreamsController(StreamBarController):
             # emtvas=get_hw_settings(main_data.ebeam), # no need
             detvas=get_hw_settings(main_data.spectrometer),
         )
-        self._connectROI(spec_stream)
-
-        stream_cont = self._add_stream(spec_stream, add_to_all_views=True, no_bc=True)
-        stream_cont.stream_panel.show_visible_btn(False)
-
-        rep = stream_cont.add_setting_entry(
-            "repetition",
-            spec_stream.repetition,
-            None,  # component
-            stream_cont.hw_settings_config["streamspec"]["repetition"]
-        )
-
-        pxs = stream_cont.add_setting_entry(
-            "pixel size",
-            spec_stream.pixelSize,
-            None,  # component
-            stream_cont.hw_settings_config["streamspec"]["pixelSize"]
-        )
-
-        self._connectRepOverlay(spec_stream, (rep.value_ctrl, pxs.value_ctrl))
-
-        # Add axes
-        stream_cont.add_axis_entry(
-            "wavelength",
-            main_data.spectrograph,
-            stream_cont.hw_settings_config["streamspec"]["wavelength"]
-        )
-
-        stream_cont.add_axis_entry(
-            "grating",
-            main_data.spectrograph
-        )
-
-        stream_cont.add_axis_entry(
-            "slit-in",
-            main_data.spectrograph,
-            stream_cont.hw_settings_config["streamspec"]["slit-in"]
-        )
-
-        # No light filter for the spectrum stream: typically useless
 
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
         sem_spec_stream = acqstream.SEMSpectrumMDStream("SEM Spectrum", sem_stream, spec_stream)
 
-        self._tab_data_model.acquisitionView.addStream(sem_spec_stream)
-
-        return stream_cont
+        # No light filter for the spectrum stream: typically useless
+        return self._addRepStream(spec_stream, sem_spec_stream,
+                                  vas=("repetition", "pixelSize"),
+                                  axes={"wavelength": main_data.spectrograph,
+                                        "grating": main_data.spectrograph,
+                                        "slit-in": main_data.spectrograph,
+                                        },
+                                  no_bc=True
+                                  )
 
     def addMonochromator(self):
         """ Create a Monochromator stream and add to to all compatible viewports """
@@ -1772,61 +1744,22 @@ class SparcStreamsController(StreamBarController):
             emtvas={"dwellTime"},
             detvas=get_hw_settings(main_data.monochromator),
         )
-        self._connectROI(monoch_stream)
-
-        stream_cont = self._add_stream(monoch_stream, add_to_all_views=True, no_bc=True, play=False)
-        stream_cont.stream_panel.show_visible_btn(False)
-
-        rep = stream_cont.add_setting_entry(
-            "repetition",
-            monoch_stream.repetition,
-            None,  # component
-            stream_cont.hw_settings_config["streammonoch"]["repetition"]
-        )
-
-        pxs = stream_cont.add_setting_entry(
-            "pixel size",
-            monoch_stream.pixelSize,
-            None,  # component
-            stream_cont.hw_settings_config["streammonoch"]["pixelSize"]
-        )
-
-        self._connectRepOverlay(monoch_stream, (rep.value_ctrl, pxs.value_ctrl))
-
-        # Add Axes
-
-        stream_cont.add_axis_entry(
-            "wavelength",
-            main_data.spectrograph,
-            stream_cont.hw_settings_config["streammonoch"]["wavelength"]
-        )
-
-        stream_cont.add_axis_entry(
-            "grating",
-            main_data.spectrograph
-        )
-
-        # TODO: this should be automatically computed out of the slit-monochromator
-        stream_cont.add_axis_entry(
-            "slit-in",
-            main_data.spectrograph,
-            stream_cont.hw_settings_config["streammonoch"]["slit-in"]
-        )
-
-        stream_cont.add_axis_entry(
-            "slit-monochromator",
-            main_data.spectrograph,
-            stream_cont.hw_settings_config["streammonoch"]["slit-monochromator"]
-        )
-
-        # No light filter for the spectrum stream: typically useless
 
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
         sem_monoch_stream = acqstream.SEMMDStream("SEM Monochromator", sem_stream, monoch_stream)
-        self._tab_data_model.acquisitionView.addStream(sem_monoch_stream)
 
-        return stream_cont
+        # No light filter for the spectrum stream: typically useless
+        return self._addRepStream(monoch_stream, sem_monoch_stream,
+                                  vas=("repetition", "pixelSize"),
+                                  axes={"wavelength": main_data.spectrograph,
+                                        "grating": main_data.spectrograph,
+                                        "slit-in": main_data.spectrograph,
+                                        "slit-monochromator": main_data.spectrograph,
+                                        },
+                                  no_bc=True,
+                                  play=False
+                                  )
 
     # Stream scheduling related methods
 
@@ -1878,8 +1811,11 @@ class SparcStreamsController(StreamBarController):
 
                 # Hack: to be sure the settings of the spot streams are correct
                 # (because the concurrent stream might have changed them, cf
-                # Monochormator), we stop/start it each time a stream plays
+                # Monochromator), we stop/start it each time a stream plays
                 if was_active:
+                    # FIXME: when switching from one Monochromator stream to
+                    # another one, it seems to mess up the resolution on the
+                    # first time
                     logging.debug("Resetting spot mode")
                     spots.is_active.value = False
                     spots.is_active.value = True
@@ -1975,7 +1911,7 @@ class SparcStreamsController(StreamBarController):
           repetition/pixel size info
         """
 
-        listener = functools.partial(self._onStreamRep, stream)
+        listener = functools.partial(self._onRepStreamVA, stream)
         # repetition VA not needed: if it changes, either roi or pxs also change
         stream.roi.subscribe(listener)
         stream.pixelSize.subscribe(listener)
@@ -2022,7 +1958,7 @@ class SparcStreamsController(StreamBarController):
                     style = RepetitionSelectOverlay.FILL_GRID
                 cvs.show_repetition(rep, style)
 
-    def _onStreamRep(self, stream, val):
+    def _onRepStreamVA(self, stream, val):
         """
         Called when one of the repetition VAs of a RepetitionStream is modified
         stream (RepetitionStream)
@@ -2049,14 +1985,25 @@ class SparcStreamsController(StreamBarController):
         self._updateRepOverlay()
         evt.Skip()
 
-    # TODO: connect to each repetition VA => into stream panel?
+    # Repetition combobox content updater
 
-    def on_ar_rep(self, rep):
-        self._on_rep(rep, self.angular_rep_ent.vigilattr, self.angular_rep_ent.value_ctrl)
+    def _connectRepContent(self, stream, control):
+        """
+        Connects the stream repetition VA to ensure the combobox choices are
+        always up-to-date
+        stream (RepetitionStream)
+        control (Combobox)
+        """
 
-    @staticmethod
-    def _on_rep(rep, rep_va, rep_ctrl):
-        """ Recalculate the repetition presets according to the ROI ratio """
+        listener = functools.partial(self._onStreamRep, stream.repetition, control)
+        stream.repetition.subscribe(listener, init=True)
+        self._repct_listeners[stream] = listener
+
+    def _onStreamRep(self, va, control, rep):
+        """
+        Called when the repetition VAs of a RepetitionStream is modified.
+        Recalculate the repetition presets according to the repetition ratio
+        """
         ratio = rep[1] / rep[0]
 
         # Create the entries:
@@ -2074,14 +2021,14 @@ class SparcStreamsController(StreamBarController):
             # the ROI (and the minimum size of the pixelSize), so some of the
             # big repetitions might actually not be valid. It's not a big
             # problem as the VA setter will silently limit the repetition
-            return (rep_va.range[0][0] <= c[0] <= rep_va.range[1][0] and
-                    rep_va.range[0][1] <= c[1] <= rep_va.range[1][1])
+            return (va.range[0][0] <= c[0] <= va.range[1][0] and
+                    va.range[0][1] <= c[1] <= va.range[1][1])
         choices = [choice for choice in choices if is_compatible(choice)]
 
         # remove duplicates and sort
         choices = sorted(set(choices))
 
         # replace the old list with this new version
-        rep_ctrl.Clear()
+        control.Clear()
         for choice in choices:
-            rep_ctrl.Append(u"%s x %s px" % choice, choice)
+            control.Append(u"%s x %s px" % choice, choice)
