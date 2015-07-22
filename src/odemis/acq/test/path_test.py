@@ -108,6 +108,11 @@ class SimPathTestCase(unittest.TestCase):
         # Assert that actuator was moved according to mode given
         self.assertEqual(self.lenswitch.position.value, path.MODES["mirror-align"][1]["lens-switch"])
 
+        self.optmngr.setPath("chamber-view")
+        # Assert that actuator was moved according to mode given
+        self.assertEqual(self.lenswitch.position.value, path.MODES["chamber-view"][1]["lens-switch"])
+
+
         # setting cli
         with self.assertRaises(ValueError):
             self.optmngr.setPath("cli")
@@ -316,8 +321,8 @@ class SpecPathTestCase(unittest.TestCase):
 #    @skip("simple")
     def test_set_path(self):
         """
-        Test setting modes that do exist. We expect only spectral mode to be
-        available
+        Test setting modes that do exist, but not available.
+        We expect only spectral mode to be available
         """
         # setting ar
         with self.assertRaises(ValueError):
@@ -350,5 +355,9 @@ class SpecPathTestCase(unittest.TestCase):
 
         guess = self.optmngr.guessMode(sps)
         self.assertEqual(guess, "spectral")
+
+        with self.assertRaises(LookupError):
+            guess = self.optmngr.guessMode(sems)
+
 if __name__ == "__main__":
     unittest.main()

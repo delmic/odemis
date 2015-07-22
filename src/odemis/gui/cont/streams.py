@@ -1789,7 +1789,7 @@ class SparcStreamsController(StreamBarController):
             opm = self._main_data_model.opm
             try:
                 mode = opm.guessMode(stream)
-            except ValueError:
+            except LookupError:
                 logging.debug("%s doesn't require optical path change", stream)
             else:
                 # TODO: Run in a separate thread as in live view it's ok if
@@ -1815,7 +1815,8 @@ class SparcStreamsController(StreamBarController):
                 if was_active:
                     # FIXME: when switching from one Monochromator stream to
                     # another one, it seems to mess up the resolution on the
-                    # first time
+                    # first time => needs to be done after the old stream is paused
+                    # and before the new one plays
                     logging.debug("Resetting spot mode")
                     spots.is_active.value = False
                     spots.is_active.value = True
