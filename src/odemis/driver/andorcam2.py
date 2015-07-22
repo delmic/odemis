@@ -168,6 +168,7 @@ class AndorCapabilities(Structure):
         CAMERATYPE_IVAC_CCD: "iVac CCD",
         }
 
+
 class AndorV2DLL(CDLL):
     """
     Subclass of CDLL specific to andor library, which handles error codes for
@@ -215,7 +216,7 @@ class AndorV2DLL(CDLL):
         Follows the ctypes.errcheck callback convention
         """
         # everything returns DRV_SUCCESS on correct usage, _except_ GetTemperature()
-        if not result in AndorV2DLL.ok_code:
+        if result not in AndorV2DLL.ok_code:
             if result in AndorV2DLL.err_code:
                 raise AndorV2Error(result, "Call to %s failed with error code %d: %s" %
                                (str(func.__name__), result, AndorV2DLL.err_code[result]))
@@ -1615,7 +1616,6 @@ class AndorCam2(model.DigitalCamera):
             logging.debug("Acquisition thread closed")
             self.acquire_must_stop.clear()
 
-
     def _acquire_thread_synchronized(self, callback):
         """
         The core of the acquisition thread. Runs until acquire_must_stop is set.
@@ -1744,7 +1744,6 @@ class AndorCam2(model.DigitalCamera):
             gc.collect()
             logging.debug("Acquisition thread closed")
             self.acquire_must_stop.clear()
-
 
     def _start_acquisition(self):
         """
@@ -2097,8 +2096,6 @@ class FakeAndorV2DLL(object):
         self.acq_end = None
         self.acq_aborted = threading.Event()
 
-
-    # init
     def Initialize(self, path):
         assert(os.path.isdir(path))
 
@@ -2198,10 +2195,13 @@ class FakeAndorV2DLL(object):
 
     def SetFanMode(self, val):
         pass
+
     def CoolerOFF(self):
         pass
+
     def CoolerON(self):
         pass
+
     def SetCoolerMode(self, mode):
         pass
 
@@ -2381,10 +2381,11 @@ class FakeAndorV2DLL(object):
     def FreeInternalMemory(self):
         pass
 
+
 class FakeAndorCam2(AndorCam2):
     def __init__(self, name, role, device=None, **kwargs):
         AndorCam2.__init__(self, name, role, device="fake", **kwargs)
+
     @staticmethod
     def scan():
         return AndorCam2.scan(_fake=True)
-
