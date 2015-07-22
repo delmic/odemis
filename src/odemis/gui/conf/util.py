@@ -299,6 +299,10 @@ def bind_setting_context_menu(settings_entry):
     :param settings_entry: (SettingEntry) Must at least have a valid label, ctrl and va
 
     """
+    if settings_entry.value_ctrl is None:
+        logging.debug("Skipping highlight of %s, as it has no control",
+                      settings_entry.name)
+        return
 
     orig_val = settings_entry.vigilattr.value
 
@@ -877,24 +881,24 @@ class SettingEntry(VigilantAttributeConnector, Entry):
                  va_2_ctrl=None, ctrl_2_va=None, events=None):
         """ See the super classes for parameter descriptions """
 
-        self.vigilattr = None  # This attribute is needed, even if there's not VAC to provide it
-
         Entry.__init__(self, name, hw_comp, stream, lbl_ctrl, value_ctrl)
 
+        # TODO: can it happen value_ctrl is None and va_2_ctrl is not None?!
         if va and (value_ctrl or va_2_ctrl):
             VigilantAttributeConnector.__init__(self, va, value_ctrl, va_2_ctrl, ctrl_2_va, events)
         elif any((va_2_ctrl, ctrl_2_va, events)):
             raise ValueError("Cannot create VigilantAttributeConnector for %s, while also "
                              "receiving value getting and setting parameters!" % name)
         else:
+            self.vigilattr = va  # Attribute needed, even if there's no VAC to provide it
             logging.debug("Creating empty SettingEntry without VigilantAttributeConnector")
 
     def pause(self):
-        if self.vigilattr:
+        if hasattr(self, "va_2_ctrl"):
             super(SettingEntry, self).pause()
 
     def resume(self):
-        if self.vigilattr:
+        if hasattr(self, "va_2_ctrl"):
             super(SettingEntry, self).resume()
 
 
