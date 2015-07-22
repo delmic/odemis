@@ -200,6 +200,11 @@ class SEMStream(LiveStream):
         except AttributeError:
             # if emitter has no dwell time -> no problem
             pass
+        try:
+            # Resolution picks up also scale and ROI change
+            self._getEmitterVA("resolution").subscribe(self._onResolution)
+        except AttributeError:
+            pass
 
         # Actually use the ROI
         self.roi.subscribe(self._onROI)
@@ -341,6 +346,9 @@ class SEMStream(LiveStream):
         super(SEMStream, self)._onActive(active)
 
     def _onDwellTime(self, value):
+        self._updateAcquisitionTime()
+
+    def _onResolution(self, value):
         self._updateAcquisitionTime()
 
 
