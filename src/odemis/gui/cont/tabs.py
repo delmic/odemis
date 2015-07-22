@@ -1327,6 +1327,8 @@ class LensAlignTab(Tab):
 
         # TODO: when paused via the shortcut or menu, really pause it
         #   => use a stream scheduler?
+        # TODO: exposureTime as local setting, so that it's not changed when
+        # going to acquisition tab
         # create CCD stream
         ccd_stream = acqstream.CameraStream("Optical CL",
                                             main_data.ccd,
