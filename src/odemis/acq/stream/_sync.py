@@ -333,18 +333,24 @@ class MultipleDetectorStream(Stream):
             pxs (tuple of floats): pixel size in m
         """
         # Pixel size is the size of field of view divided by the repetition
-        main_pxs = self._emitter.pixelSize.value
-        main_shape = self._emitter.shape[:2]
-        width = (roi[2] - roi[0], roi[3] - roi[1])
-        fov = (width[0] * main_shape[0] * main_pxs[0],
-               width[1] * main_shape[1] * main_pxs[1])
-        pxs = (fov[0] / rep[0], fov[1] / rep[1])
+        emt_pxs = self._emitter.pixelSize.value
+        emt_shape = self._emitter.shape[:2]
+        fov = (emt_shape[0] * emt_pxs[0], emt_shape[1] * emt_pxs[1])
+        rel_width = (roi[2] - roi[0], roi[3] - roi[1])
+        pxs = (rel_width[0] * fov[0] / rep[0], rel_width[1] * fov[1] / rep[1])
 
         center_tl = datatl.metadata[MD_POS]
+        pxs_tl = datatl.metadata[MD_PIXEL_SIZE]
+        if pxs != pxs_tl:
+            # For e-beam data, they should be the same. If datatl is from a CCD
+            # then they have no reason to be identical
+            logging.warning("Computed global pxs %s is different from acquisition pxs %s",
+                            pxs, pxs_tl)
+
         # Compute center of area, based on the position of the first point (the
         # position of the other points can be wrong due to drift correction)
-        tl = (center_tl[0] - (pxs[0] * (datatl.shape[0] - 1)) / 2,
-              center_tl[1] + (pxs[1] * (datatl.shape[1] - 1)) / 2)  # center of the first point (top-left)
+        tl = (center_tl[0] - (pxs[0] * (datatl.shape[-1] - 1)) / 2,
+              center_tl[1] + (pxs[1] * (datatl.shape[-2] - 1)) / 2)
         center = (tl[0] + (pxs[0] * (rep[0] - 1)) / 2,
                   tl[1] - (pxs[1] * (rep[1] - 1)) / 2)
 
@@ -383,7 +389,7 @@ class MultipleDetectorStream(Stream):
 
         # start with the metadata from the first point
         md = data_list[0].metadata.copy()
-        center, pxs = self._get_center_pxs(rep, roi, data_list[0])
+        center, pxs = self._get_center_pxs(arr.shape[::-1], roi, data_list[0])
         md.update({MD_POS: center,
                    MD_PIXEL_SIZE: pxs})
 
@@ -510,8 +516,9 @@ class SEMCCDMDStream(MultipleDetectorStream):
         try:
             rep_time = self._ssAdjustHardwareSettings()
             dwell_time = self._emitter.dwellTime.value
+            sem_time = dwell_time * numpy.prod(self._emitter.resolution.value)
             spot_pos = self._getSpotPositions()
-            logging.debug("Generating %s spots for %g (=%g) s", spot_pos.shape[:2], rep_time, dwell_time)
+            logging.debug("Generating %s spots for %g (dt=%g) s", spot_pos.shape[:2], rep_time, dwell_time)
             rep = self._rep_stream.repetition.value
             roi = self._rep_stream.roi.value
             drift_shift = (0, 0)  # total drift shift (in sem px)
@@ -595,9 +602,9 @@ class SEMCCDMDStream(MultipleDetectorStream):
                             continue
 
                     # Normally, the SEM acquisition has already completed
-                    if not self._acq_main_complete.wait(dwell_time * 1.5 + 1):
+                    if not self._acq_main_complete.wait(sem_time * 1.5 + 5):
                         raise TimeoutError("Acquisition of SEM pixel %s timed out after %g s"
-                                           % (i, dwell_time * 1.5 + 1))
+                                           % (i, sem_time * 1.5 + 5))
                     # TODO: we don't really need to stop it, we could have a small
                     # dwell time, move the ebeam to the new position, and as soon as
                     # we get next acquisition we can expect the spot has moved. The
@@ -777,25 +784,23 @@ class SEMMDStream(MultipleDetectorStream):
             # number of spots scanned so far
             spots_sum = 0
             while spots_sum < tot_num:
-                # Adjust the settings depending if scanning is in frames or all
-                # in once
-                if cur_dc_period >= tot_num:
-                    # Move the beam to the center of the roi
-                    trans = tuple(numpy.mean(trans_list, axis=0))
-                    cptrans = self._emitter.translation.clip(trans)
-                    self._emitter.translation.value = cptrans
-                    # Scan the whole image at once
-                    self._emitter.resolution.value = rep
-                else:
-                    # Move the beam to the center of the frame
-                    cur_dc_period = numpy.clip(cur_dc_period, 0, (tot_num - spots_sum))
-                    trans = tuple(numpy.mean(trans_list[spots_sum:(spots_sum + cur_dc_period)], axis=0))
-                    cptrans = self._emitter.translation.clip(trans)
-                    self._emitter.translation.value = cptrans
-                    # Scan drift correction number of pixels
-                    n_x = numpy.clip(cur_dc_period, 1, rep[0])
-                    n_y = numpy.clip(cur_dc_period // rep[0], 1, rep[1])
-                    self._emitter.resolution.value = (n_x, n_y)
+                # don't get crazy if dcPeriod is longer than the whole acquisition
+                cur_dc_period = min(cur_dc_period, tot_num - spots_sum)
+
+                # Scan drift correction number of pixels
+                n_x = numpy.clip(cur_dc_period, 1, rep[0])
+                n_y = numpy.clip(cur_dc_period // rep[0], 1, rep[1])
+                self._emitter.resolution.value = (n_x, n_y)
+
+                # Move the beam to the center of the frame
+                trans = tuple(numpy.mean(trans_list[spots_sum:(spots_sum + cur_dc_period)], axis=0))
+                cptrans = self._emitter.translation.clip(trans)
+                if cptrans != trans:
+                    logging.error("Drift of %s px caused acquisition region out "
+                                  "of bounds: needed to scan spot at %s.",
+                                  drift_shift, trans)
+                self._emitter.translation.value = cptrans
+
                 spots_sum += cur_dc_period
 
                 # and now the acquisition
@@ -815,8 +820,9 @@ class SEMMDStream(MultipleDetectorStream):
                 if self._acq_state == CANCELLED:
                     raise CancelledError()
                 if not self._acq_main_complete.wait(frame_time * 1.1 + 1):
+                    # SEM data should arrive at the same time, so no reason to be late
                     raise TimeoutError("Acquisition of SEM frame %s timed out after %g s"
-                                       % (self._emitter.translation.value, frame_time * 5 + 1))
+                                       % (self._emitter.translation.value, frame_time * 1.1 + 1))
 
                 self._main_df.unsubscribe(self._ssOnMainImage)
                 self._rep_df.unsubscribe(self._ssOnRepetitionImage)  # synchronized DF last
