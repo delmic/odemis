@@ -426,7 +426,7 @@ class SEMComedi(model.HwComponent):
         try:
             return self._get_closest_period(self._ao_subdevice, 2, 2 ** 32 - 1)
         except IOError:
-            return 2 ** 32 - 1 # Whatever (for test driver)
+            return 2 ** 20 * 1000  # Whatever (for test driver)
 
     def _get_closest_period(self, subdevice, nchannels, period):
         """
@@ -1416,7 +1416,8 @@ class SEMComedi(model.HwComponent):
 
         nwscans = wdata.shape[0]
         period_ns = int(round(period * 1e9))  # in nanoseconds
-        expected_time = nwscans * period  # s
+        # Last write will immediatly end the read, so will wait for 1 scan less
+        expected_time = (nwscans - 1) * period  # s
 
         with self._acquisition_init_lock:
             # Check if the acquisition has already been cancelled

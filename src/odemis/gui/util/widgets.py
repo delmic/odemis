@@ -63,10 +63,10 @@ class VigilantAttributeConnector(object):
 
         self.paused = False
 
+        va_2_ctrl = va_2_ctrl or value_ctrl.SetValue
         # Dead_object_wrapper might need/benefit from recognizing bound methods.
         # Or it can be tough to recognize wxPyDeadObjects being passed as 'self'
-        self.va_2_ctrl = call_in_wx_main_wrapper(dead_object_wrapper(va_2_ctrl or
-                                                                     value_ctrl.SetValue))
+        self.va_2_ctrl = call_in_wx_main_wrapper(dead_object_wrapper(va_2_ctrl))
         self.ctrl_2_va = ctrl_2_va or value_ctrl.GetValue
         if events is None:
             self.change_events = ()
@@ -111,11 +111,11 @@ class VigilantAttributeConnector(object):
         for event in self.change_events:
             self.value_ctrl.Bind(event, self._on_value_change)
 
-    def disconnect(self):
-        logging.debug("Disconnecting VigilantAttributeConnector")
-        for event in self.change_events:
-            self.value_ctrl.Unbind(event, handler=self._on_value_change)
-        self.vigilattr.unsubscribe(self.va_2_ctrl)
+#     def disconnect(self):
+#         logging.debug("Disconnecting VigilantAttributeConnector")
+#         for event in self.change_events:
+#             self.value_ctrl.Unbind(event, handler=self._on_value_change)
+#         self.vigilattr.unsubscribe(self.va_2_ctrl)
 
 
 class AxisConnector(object):
@@ -141,7 +141,8 @@ class AxisConnector(object):
         self.axis = axis
         self.comp = comp
         self.value_ctrl = value_ctrl
-        self.pos_2_ctrl = pos_2_ctrl or value_ctrl.SetValue
+        pos_2_ctrl = pos_2_ctrl or value_ctrl.SetValue
+        self.pos_2_ctrl = call_in_wx_main_wrapper(dead_object_wrapper(pos_2_ctrl))
         self.ctrl_2_pos = ctrl_2_pos or value_ctrl.GetValue
         if events is None:
             self.change_events = ()
@@ -205,11 +206,11 @@ class AxisConnector(object):
         for event in self.change_events:
             self.value_ctrl.Bind(event, self._on_value_change)
 
-    def disconnect(self):
-        logging.debug("Disconnecting AxisConnector")
-        for event in self.change_events:
-            self.value_ctrl.Unbind(event, self._on_value_change)
-        self.comp.position.unsubscribe(self._on_pos_change)
+#     def disconnect(self):
+#         logging.debug("Disconnecting AxisConnector")
+#         for event in self.change_events:
+#             self.value_ctrl.Unbind(event, self._on_value_change)
+#         self.comp.position.unsubscribe(self._on_pos_change)
 
 
 class ProgressiveFutureConnector(object):

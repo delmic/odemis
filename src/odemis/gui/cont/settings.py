@@ -383,8 +383,11 @@ class SettingsBarController(object):
     # VAs which should never be displayed
     HIDDEN_VAS = {"children", "affects", "state"}
 
-    def add_hw_component(self, hw_comp, panel):
-        """ Add setting entries for the given hardware component  """
+    def add_hw_component(self, hw_comp, panel, hidden=None):
+        """ Add setting entries for the given hardware component
+        hidden (None or set of str): name of VAs to not show
+        """
+        hidden = (hidden or set()) | self.HIDDEN_VAS
         self.settings_panels.append(panel)
 
         vas_comp = getVAs(hw_comp)
@@ -395,7 +398,7 @@ class SettingsBarController(object):
 
         for name in vas_names:
             try:
-                if name in self.HIDDEN_VAS:
+                if name in hidden:
                     continue
                 elif name in vas_config:
                     va_conf = vas_config[name]
@@ -458,17 +461,18 @@ class SecomSettingsController(SettingsBarController):
         # Add the components based on what is available
         # TODO: move it to a separate thread to save time at init?
         if main_data.ccd:
-            self.add_hw_component(main_data.ccd, self._optical_panel)
+            # Hide exposureTime as it's in local settings of the stream
+            self.add_hw_component(main_data.ccd, self._optical_panel, hidden={"exposureTime"})
 
             # TODO once Power (light) is now by each stream individually. The
             # following code block can be disabled.
-
-            if main_data.light:
-                self._optical_panel.panel.add_divider()
-
-                self._optical_panel.add_setting_entry("power", main_data.light.power,
-                                                      main_data.light,
-                                                      self._va_config["light"]["power"])
+#
+#             if main_data.light:
+#                 self._optical_panel.panel.add_divider()
+#
+#                 self._optical_panel.add_setting_entry("power", main_data.light.power,
+#                                                       main_data.light,
+#                                                       self._va_config["light"]["power"])
 
         if main_data.ebeam:
             self.add_hw_component(main_data.ebeam, self._sem_panel)
@@ -496,11 +500,9 @@ class LensAlignSettingsController(SettingsBarController):
                                                         "No optical microscope found",
                                                         highlight_change)
 
-        # Query Odemis daemon (Should move this to separate thread)
+        # Add the components based on what is available
         if main_data.ccd:
             self.add_hw_component(main_data.ccd, self._optical_panel)
-
-        # TODO: allow to change light.power
 
         if main_data.ebeam:
             self.add_hw_component(main_data.ebeam, self._sem_panel)

@@ -59,7 +59,6 @@ HW_SETTINGS_CONFIG = {
     "ccd":
         OrderedDict((
             ("exposureTime", {
-                # TODO: change to odemis.gui.CONTROL_NONE once local settings are implemented
                 "control_type": odemis.gui.CONTROL_SLIDER,
                 "scale": "log",
                 "range": (0.001, 60.0),
@@ -297,14 +296,11 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
     },
 }
 
-# TODO: OrderedDict
 
 # Stream class -> config
 STREAM_SETTINGS_CONFIG = {
     stream.SEMStream: {
-            # VAs from the stream
-            "dcPeriod":
-            {
+            "dcPeriod": {
                 "label": "Drift corr. period",
                 "tooltip": u"Maximum time between anchor region acquisitions",
                 "control_type": odemis.gui.CONTROL_SLIDER,
@@ -402,7 +398,7 @@ def get_stream_settings_config():
 
 
 # TODO: currently used only to find the VAs to be used as stream local VAs.
-# Rename and/or check the function make sense.
+# => Rename and/or check the function make sense?
 def get_hw_settings(hw_comp):
     """
     Find all the VAs of a component which have a configuration defined

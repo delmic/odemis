@@ -4,4 +4,4 @@ Comment=Edit current Odemis microscope file as root
 Exec=odemis-edit-mic
 Terminal=true
 Type=Application
-Icon=gnome-desktop-config
+Icon=applications-engineering
