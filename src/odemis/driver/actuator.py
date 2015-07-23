@@ -918,7 +918,7 @@ class FixedPositionsActuator(model.Actuator):
 
     def _doReference(self, axes):
         logging.debug("Referencing axis %s (-> %s)", self._axis, self._axis_name)
-        f = self._child.reference(self._axis_name)
+        f = self._child.reference({self._axis_name})
         f.result()
 
         # If we just did homing and ended up to an unsupported position, move to
