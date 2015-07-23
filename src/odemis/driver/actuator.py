@@ -27,7 +27,7 @@ import logging
 import math
 import numbers
 import numpy
-from odemis import model
+from odemis import model, util
 from odemis.model import CancellableThreadPoolExecutor, isasync, MD_PIXEL_SIZE_COR, MD_ROTATION_COR, \
     MD_POS_COR
 import threading
@@ -779,20 +779,23 @@ class FixedPositionsActuator(model.Actuator):
         self._axis = axis
         self._child = child
         self._axis_name = axis_name
+        self._positions = positions
+        # Executor used to reference and move to nearest position
+        self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
 
         if not isinstance(child, model.ComponentBase):
             raise ValueError("Child %s is not a component." % (child,))
         if not hasattr(child, "axes") or not isinstance(child.axes, dict):
             raise ValueError("Child %s is not an actuator." % child.name)
 
+        if cycle is not None:
+            if not all(0 <= p < cycle for p in positions.keys()):
+                raise ValueError("Positions must be between 0 and %s (non inclusive)" % (cycle,))
+
         axes = {}
         axes[axis] = child.axes[axis_name]
         axes[axis].choices = positions
         self._position[axis] = child.position.value[axis_name]
-
-        # keep a reference to the subscribers so that they are not
-        # automatically garbage collected
-        self._subfun = []
 
         if (hasattr(child, "speed") and
             isinstance(child.speed, model.VigilantAttributeBase) and
@@ -800,17 +803,12 @@ class FixedPositionsActuator(model.Actuator):
             self._speed[axis] = child.speed.value[axis_name]
             self.speed = model.MultiSpeedVA(self._speed, [0., 10.], setter=self._setSpeed)
             child.speed.subscribe(self.update_child_speed)
-            self._subfun.append(self.update_child_speed)
         if (hasattr(child, "referenced") and
             isinstance(child.referenced, model.VigilantAttributeBase) and
             axis_name in child.referenced.value):
-            # If referenceable but unreferenced, then reference
-            if child.referenced.value[axis_name] is False:
-                child.reference({axis_name})
             self._referenced[axis] = child.referenced.value[axis_name]
             self.referenced = model.VigilantAttribute(self._referenced, readonly=True)
             child.referenced.subscribe(self.update_child_ref)
-            self._subfun.append(self.update_child_ref)
 
         model.Actuator.__init__(self, name, role, axes=axes, children=children,
                                 **kwargs)
@@ -820,16 +818,16 @@ class FixedPositionsActuator(model.Actuator):
 
         logging.debug("Subscribing to position of child %s", child.name)
         child.position.subscribe(self.update_child_position)
-        self._subfun.append(self.update_child_position)
 
-        # If at unsupported position, move to the nearest supported position
-        if self.position.value[axis] not in positions:
-            nearest = min(positions.keys(), key=lambda k: abs(k - self.position.value[axis]))
-            f = self.moveAbs({axis: nearest})
-            f.result()
+        # If the axis can be referenced => do it now (and move to a known position)
+        if not self._referenced.get(axis, True):
+            self.reference({axis}).result()
 
     def update_child_position(self, value):
-        self._position[self._axis] = value[self._axis_name]
+        p = value[self._axis_name]
+        if self._cycle is not None:
+            p %= self._cycle
+        self._position[self._axis] = p
         self._updatePosition()
 
     def update_child_speed(self, value):
@@ -844,8 +842,10 @@ class FixedPositionsActuator(model.Actuator):
         """
         update the position VA
         """
+        # if it is an unsupported position report the nearest supported one
+        nearest = util.find_closest(self._position[self._axis], self._positions.keys())
         # it's read-only, so we change it via _value
-        pos = self._applyInversionAbs(self._position)
+        pos = self._applyInversionAbs({self._axis: nearest})
         logging.debug("reporting position %s", pos)
         self.position._value = pos
         self.position.notify(pos)
@@ -916,17 +916,26 @@ class FixedPositionsActuator(model.Actuator):
 
         return f
 
+    def _doReference(self, axes):
+        logging.debug("Referencing axis %s (-> %s)", self._axis, self._axis_name)
+        f = self._child.reference(self._axis_name)
+        f.result()
+
+        # If we just did homing and ended up to an unsupported position, move to
+        # the nearest supported position
+        if (self._child.position.value[self._axis_name] not in self._positions):
+            nearest = min(self._positions.keys(), key=lambda k: abs(k - self._child.position.value[self._axis_name]))
+            f = self.moveAbs({self._axis: nearest})
+            f.result()
+
     @isasync
     def reference(self, axes):
         if not axes:
             return model.InstantaneousFuture()
         self._checkReference(axes)
 
-        logging.debug("Referencing axis %s (-> %s)", self._axis, self._axis_name)
-        f = self._child.reference(self._axis_name)
-
+        f = self._executor.submit(self._doReference, axes)
         return f
-
     reference.__doc__ = model.Actuator.reference.__doc__
 
     def stop(self, axes=None):
@@ -943,3 +952,8 @@ class FixedPositionsActuator(model.Actuator):
         if thread.is_alive():
             logging.warning("Stopping child actuator of '%s' is taking more than 1s", self.name)
 
+    def terminate(self):
+        if self._executor:
+            self.stop()
+            self._executor.shutdown(wait=True)
+            self._executor = None
