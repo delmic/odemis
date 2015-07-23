@@ -24,7 +24,6 @@ from abc import ABCMeta, abstractmethod
 from concurrent.futures._base import RUNNING, FINISHED, CANCELLED, TimeoutError, \
     CancelledError
 import logging
-import math
 import numpy
 from odemis import model
 from odemis.acq import _futures

@@ -610,6 +610,40 @@ class SPARCTestCase(unittest.TestCase):
         if self.backend_was_running:
             self.skipTest("Running backend found")
 
+    def _roiToPhys(self, repst):
+        """
+        Compute the (expected) physical position of a stream ROI
+        repst (RepetitionStream): the repetition stream with ROI
+        return:
+            pos (tuple of 2 floats): physical position of the center
+            pxs (tuple of 2 floats): pixel size in m
+            res (tuple of ints): number of pixels
+        """
+        res = repst.repetition.value
+        pxs = (repst.pixelSize.value,) * 2
+
+        # To compute pos, we need to convert the ROI to physical coordinates
+        roi = repst.roi.value
+        roi_center = ((roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2)
+
+        try:
+            sem_center = repst.detector.getMetadata()[model.MD_POS]
+        except KeyError:
+            # no stage => pos is always 0,0
+            sem_center = (0, 0)
+        # TODO: pixelSize will be updated when the SEM magnification changes,
+        # so we might want to recompute this ROA whenever pixelSize changes so
+        # that it's always correct (but maybe not here in the view)
+        emt = repst.emitter
+        sem_width = (emt.shape[0] * emt.pixelSize.value[0],
+                     emt.shape[1] * emt.pixelSize.value[1])
+        # In physical coordinates Y goes up, but in ROI, Y goes down => "1-"
+        pos = (sem_center[0] + sem_width[0] * (roi_center[0] - 0.5),
+               sem_center[1] - sem_width[1] * (roi_center[1] - 0.5))
+
+        logging.debug("Expecting pos %s, pxs %s, res %s", pos, pxs, res)
+        return pos, pxs, res
+
 #    @skip("simple")
     def test_progressive_future(self):
         """
@@ -801,7 +835,7 @@ class SPARCTestCase(unittest.TestCase):
         # Long acquisition (small rep to avoid being too long) > 0.1s
         self.spec.exposureTime.value = 0.3 # s
         specs.repetition.value = (5, 6)
-        exp_shape = specs.repetition.value[::-1]
+        exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
 
         # Start acquisition
         timeout = 1 + 1.5 * sps.estimateAcquisitionTime()
@@ -815,7 +849,7 @@ class SPARCTestCase(unittest.TestCase):
         self.assertTrue(f.done())
         self.assertEqual(len(data), len(sems.raw) + len(specs.raw))
         self.assertEqual(len(sems.raw), 1)
-        self.assertEqual(sems.raw[0].shape, exp_shape)
+        self.assertEqual(sems.raw[0].shape, exp_res[::-1])
         self.assertEqual(len(specs.raw), 1)
         sshape = specs.raw[0].shape
         self.assertEqual(len(sshape), 5)
@@ -824,11 +858,13 @@ class SPARCTestCase(unittest.TestCase):
         spec_md = specs.raw[0].metadata
         self.assertAlmostEqual(sem_md[model.MD_POS], spec_md[model.MD_POS])
         self.assertAlmostEqual(sem_md[model.MD_PIXEL_SIZE], spec_md[model.MD_PIXEL_SIZE])
+        numpy.testing.assert_allclose(spec_md[model.MD_POS], exp_pos)
+        numpy.testing.assert_allclose(spec_md[model.MD_PIXEL_SIZE], exp_pxs)
 
         # Short acquisition (< 0.1s)
         self.spec.exposureTime.value = 0.01 # s
         specs.repetition.value = (25, 60)
-        exp_shape = specs.repetition.value[::-1]
+        exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
 
         # Start acquisition
         timeout = 1 + 1.5 * sps.estimateAcquisitionTime()
@@ -842,7 +878,7 @@ class SPARCTestCase(unittest.TestCase):
         self.assertTrue(f.done())
         self.assertEqual(len(data), len(sems.raw) + len(specs.raw))
         self.assertEqual(len(sems.raw), 1)
-        self.assertEqual(sems.raw[0].shape, exp_shape)
+        self.assertEqual(sems.raw[0].shape, exp_res[::-1])
         self.assertEqual(len(specs.raw), 1)
         sshape = specs.raw[0].shape
         self.assertEqual(len(sshape), 5)
@@ -851,6 +887,9 @@ class SPARCTestCase(unittest.TestCase):
         spec_md = specs.raw[0].metadata
         self.assertAlmostEqual(sem_md[model.MD_POS], spec_md[model.MD_POS])
         self.assertAlmostEqual(sem_md[model.MD_PIXEL_SIZE], spec_md[model.MD_PIXEL_SIZE])
+        numpy.testing.assert_allclose(spec_md[model.MD_POS], exp_pos)
+        numpy.testing.assert_allclose(spec_md[model.MD_PIXEL_SIZE], exp_pxs)
+
 
 #     @skip("simple")
     def test_acq_fuz(self):
@@ -868,7 +907,7 @@ class SPARCTestCase(unittest.TestCase):
         # Long acquisition (small rep to avoid being too long) > 0.1s
         self.spec.exposureTime.value = 0.3  # s
         specs.repetition.value = (5, 6)
-        exp_shape = specs.repetition.value[::-1]
+        exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
 
         # Start acquisition
         timeout = 1 + 1.5 * sps.estimateAcquisitionTime()
@@ -882,21 +921,25 @@ class SPARCTestCase(unittest.TestCase):
         self.assertTrue(f.done())
         self.assertEqual(len(data), len(sems.raw) + len(specs.raw))
         self.assertEqual(len(sems.raw), 1)
-        self.assertEqual(sems.raw[0].shape, (exp_shape[0] * stream.TILE_SHAPE[0], exp_shape[1] * stream.TILE_SHAPE[1]))
+        exp_sem_res = (exp_res[0] * stream.TILE_SHAPE[0], exp_res[1] * stream.TILE_SHAPE[1])
+        self.assertEqual(sems.raw[0].shape, exp_sem_res[::-1])
         self.assertEqual(len(specs.raw), 1)
         sshape = specs.raw[0].shape
         self.assertEqual(len(sshape), 5)
         self.assertGreater(sshape[0], 1)  # should have at least 2 wavelengths
+        self.assertEqual(sshape[-1:-3:-1], exp_res)
         sem_md = sems.raw[0].metadata
         spec_md = specs.raw[0].metadata
         self.assertAlmostEqual(sem_md[model.MD_POS], spec_md[model.MD_POS])
         self.assertAlmostEqual(sem_md[model.MD_PIXEL_SIZE],
                                (spec_md[model.MD_PIXEL_SIZE][0] / stream.TILE_SHAPE[0], spec_md[model.MD_PIXEL_SIZE][1] / stream.TILE_SHAPE[1]))
+        numpy.testing.assert_allclose(spec_md[model.MD_POS], exp_pos)
+        numpy.testing.assert_allclose(spec_md[model.MD_PIXEL_SIZE], exp_pxs)
 
         # Short acquisition (< 0.1s)
         self.spec.exposureTime.value = 0.01  # s
         specs.repetition.value = (25, 60)
-        exp_shape = specs.repetition.value[::-1]
+        exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
 
         # Start acquisition
         timeout = 1 + 1.5 * sps.estimateAcquisitionTime()
@@ -910,16 +953,20 @@ class SPARCTestCase(unittest.TestCase):
         self.assertTrue(f.done())
         self.assertEqual(len(data), len(sems.raw) + len(specs.raw))
         self.assertEqual(len(sems.raw), 1)
-        self.assertEqual(sems.raw[0].shape, (exp_shape[0] * stream.TILE_SHAPE[0], exp_shape[1] * stream.TILE_SHAPE[1]))
+        exp_sem_res = (exp_res[0] * stream.TILE_SHAPE[0], exp_res[1] * stream.TILE_SHAPE[1])
+        self.assertEqual(sems.raw[0].shape, exp_sem_res[::-1])
         self.assertEqual(len(specs.raw), 1)
         sshape = specs.raw[0].shape
         self.assertEqual(len(sshape), 5)
         self.assertGreater(sshape[0], 1)  # should have at least 2 wavelengths
+        self.assertEqual(sshape[-1:-3:-1], exp_res)
         sem_md = sems.raw[0].metadata
         spec_md = specs.raw[0].metadata
         self.assertAlmostEqual(sem_md[model.MD_POS], spec_md[model.MD_POS])
         self.assertAlmostEqual(sem_md[model.MD_PIXEL_SIZE],
                                (spec_md[model.MD_PIXEL_SIZE][0] / stream.TILE_SHAPE[0], spec_md[model.MD_PIXEL_SIZE][1] / stream.TILE_SHAPE[1]))
+        numpy.testing.assert_allclose(spec_md[model.MD_POS], exp_pos)
+        numpy.testing.assert_allclose(spec_md[model.MD_PIXEL_SIZE], exp_pxs)
 
     def test_acq_mn(self):
         """
@@ -941,8 +988,8 @@ class SPARCTestCase(unittest.TestCase):
         # dwell time of sems shouldn't matter
         mcs.emtDwellTime.value = 1e-3  # s
 
-        mcs.repetition.value = (5, 6)
-        exp_shape = mcs.repetition.value[::-1]
+        mcs.repetition.value = (5, 7)
+        exp_pos, exp_pxs, exp_res = self._roiToPhys(mcs)
 
         # Start acquisition
         start = time.time()
@@ -961,11 +1008,12 @@ class SPARCTestCase(unittest.TestCase):
                 # TODO: check anchor
                 self.assertGreaterEqual(d.shape[-4], 2)
             else:
-                self.assertEqual(d.shape, exp_shape)
+                self.assertEqual(d.shape, exp_res[::-1])
         # sms.raw should be the same as data
         self.assertEqual(len(data), len(sms.raw))
         md = mcs.raw[0].metadata
-        self.assertIn(model.MD_POS, md)
+        numpy.testing.assert_allclose(md[model.MD_POS], exp_pos)
+        numpy.testing.assert_allclose(md[model.MD_PIXEL_SIZE], exp_pxs)
 
         # Now same thing but with more pixels
         mcs.roi.value = (0.1, 0.1, 0.8, 0.8)
@@ -973,8 +1021,8 @@ class SPARCTestCase(unittest.TestCase):
         sems.dcRegion.value = (0.525, 0.525, 0.6, 0.6)
         sems.dcDwellTime.value = 1e-06
 
-        mcs.repetition.value = (25, 30)
-        exp_shape = mcs.repetition.value[::-1]
+        mcs.repetition.value = (30, 40)
+        exp_pos, exp_pxs, exp_res = self._roiToPhys(mcs)
 
         # Start acquisition
         start = time.time()
@@ -993,7 +1041,7 @@ class SPARCTestCase(unittest.TestCase):
                 # TODO: check anchor
                 self.assertGreaterEqual(d.shape[-4], 2)
             else:
-                self.assertEqual(d.shape, exp_shape)
+                self.assertEqual(d.shape, exp_res[::-1])
         # sms.raw should be the same as data
         self.assertEqual(len(data), len(sms.raw))
         md = mcs.raw[0].metadata
