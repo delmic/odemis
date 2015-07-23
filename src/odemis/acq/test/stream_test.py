@@ -40,8 +40,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 # logging.getLogger().handlers[0].setFormatter(logging.Formatter(_frm))
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
-SPARC_CONFIG = CONFIG_PATH + "sparc-sim.odm.yaml"
-FULLSPARC_CONFIG = CONFIG_PATH + "sparc-monash-sim.odm.yaml"
+SPARC_CONFIG = CONFIG_PATH + "sparc-monash-sim.odm.yaml"
 SECOM_CONFIG = CONFIG_PATH + "secom-sim.odm.yaml"
 
 RGBCAM_CLASS = simcam.Camera
@@ -598,6 +597,8 @@ class SPARCTestCase(unittest.TestCase):
         cls.spec = model.getComponent(role="spectrometer")
         cls.ebeam = model.getComponent(role="e-beam")
         cls.sed = model.getComponent(role="se-detector")
+        cls.mnchr = model.getComponent(role="monochromator")
+        cls.spgp = model.getComponent(role="spectrograph")
 
     @classmethod
     def tearDownClass(cls):
@@ -920,6 +921,84 @@ class SPARCTestCase(unittest.TestCase):
         self.assertAlmostEqual(sem_md[model.MD_PIXEL_SIZE],
                                (spec_md[model.MD_PIXEL_SIZE][0] / stream.TILE_SHAPE[0], spec_md[model.MD_PIXEL_SIZE][1] / stream.TILE_SHAPE[1]))
 
+    def test_acq_mn(self):
+        """
+        Test short & long acquisition for SEM MD
+        """
+        # Create the stream
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam,
+                        emtvas={"dwellTime", "scale", "magnification", "pixelSize"})
+        mcs = stream.MonochromatorSettingsStream("test",
+                      self.mnchr, self.mnchr.data, self.ebeam, self.spgp,
+                      emtvas={"dwellTime", })
+        sms = stream.SEMMDStream("test sem-md", sems, mcs)
+
+        mcs.roi.value = (0.2, 0.2, 0.5, 0.6)
+        sems.dcPeriod.value = 100
+        sems.dcRegion.value = (0.525, 0.525, 0.6, 0.6)
+        sems.dcDwellTime.value = 1e-06
+
+        # dwell time of sems shouldn't matter
+        mcs.emtDwellTime.value = 1e-3  # s
+
+        mcs.repetition.value = (5, 6)
+        exp_shape = mcs.repetition.value[::-1]
+
+        # Start acquisition
+        start = time.time()
+        f = sms.acquire()
+
+        # wait until it's over
+        data = f.result()
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(f.done())
+        # No SEM data with monochromator (currently), so only PMT + anchor
+        self.assertEqual(len(data), 2)
+        for d in data:
+            if d.ndim >= 4 and d.shape[-4] > 1:
+                # anchor
+                # TODO: check anchor
+                self.assertGreaterEqual(d.shape[-4], 2)
+            else:
+                self.assertEqual(d.shape, exp_shape)
+        # sms.raw should be the same as data
+        self.assertEqual(len(data), len(sms.raw))
+        md = mcs.raw[0].metadata
+        self.assertIn(model.MD_POS, md)
+
+        # Now same thing but with more pixels
+        mcs.roi.value = (0.1, 0.1, 0.8, 0.8)
+        sems.dcPeriod.value = 5
+        sems.dcRegion.value = (0.525, 0.525, 0.6, 0.6)
+        sems.dcDwellTime.value = 1e-06
+
+        mcs.repetition.value = (25, 30)
+        exp_shape = mcs.repetition.value[::-1]
+
+        # Start acquisition
+        start = time.time()
+        f = sms.acquire()
+
+        # wait until it's over
+        data = f.result()
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(f.done())
+        # No SEM data with monochromator (currently), so only PMT + anchor
+        self.assertEqual(len(data), 2)
+        for d in data:
+            if d.ndim >= 4 and d.shape[-4] > 1:
+                # anchor
+                # TODO: check anchor
+                self.assertGreaterEqual(d.shape[-4], 2)
+            else:
+                self.assertEqual(d.shape, exp_shape)
+        # sms.raw should be the same as data
+        self.assertEqual(len(data), len(sms.raw))
+        md = mcs.raw[0].metadata
+        self.assertIn(model.MD_POS, md)
+
     def test_count(self):
         cs = stream.CameraCountStream("test count", self.spec, self.spec.data, self.ebeam)
         self.spec.exposureTime.value = 0.1
@@ -973,7 +1052,7 @@ class SettingsStreamsTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         try:
-            test.start_backend(FULLSPARC_CONFIG)
+            test.start_backend(SPARC_CONFIG)
         except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
@@ -985,9 +1064,8 @@ class SettingsStreamsTestCase(unittest.TestCase):
         # Find CCD & SEM components
         cls.ccd = model.getComponent(role="ccd")
         cls.spec = model.getComponent(role="spectrometer")
-        #cls.mnchr = model.getComponent(role="monochromator")
+        cls.mnchr = model.getComponent(role="monochromator")
         cls.spgp = model.getComponent(role="spectrograph")
-        cls.mnchr = model.getComponent(role="cl-detector")  # Until we get a simulated counting PMT
         cls.cl = model.getComponent(role="cl-detector")
         cls.ebeam = model.getComponent(role="e-beam")
         cls.sed = model.getComponent(role="se-detector")
@@ -1076,69 +1154,6 @@ class SettingsStreamsTestCase(unittest.TestCase):
 
         # TODO
         # change center wavelength and try again
-
-    def test_sem_md(self):
-        """
-        Test short & long acquisition for SEM MD
-        """
-        # Create the stream
-        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam,
-                        emtvas={"dwellTime", "scale", "magnification", "pixelSize"})
-        mcs = stream.MonochromatorSettingsStream("test",
-                      self.mnchr, self.mnchr.data, self.ebeam, self.spgp,
-                      emtvas={"dwellTime", })
-        sms = stream.SEMMDStream("test sem-md", sems, mcs)
-
-        mcs.roi.value = (0.2, 0.2, 0.5, 0.6)
-        sems.dcPeriod.value = 100
-        sems.dcRegion.value = (0.525, 0.525, 0.6, 0.6)
-        sems.dcDwellTime.value = 1e-06
-
-        # dwell time of sems shouldn't matter
-        mcs.emtDwellTime.value = 1e-3  # s
-
-        mcs.repetition.value = (5, 6)
-        exp_shape = mcs.repetition.value[::-1]
-        num_ar = numpy.prod(mcs.repetition.value)
-
-        # Start acquisition
-        start = time.time()
-        f = sms.acquire()
-
-        # wait until it's over
-        data = f.result()
-        dur = time.time() - start
-        logging.debug("Acquisition took %g s", dur)
-        self.assertTrue(f.done())
-        self.assertEqual(len(sems.raw), 1)
-        self.assertEqual(numpy.prod(data[0].shape), num_ar)
-        self.assertEqual(sems.raw[0].shape, exp_shape)
-        md = mcs.raw[0].metadata
-        self.assertIn(model.MD_POS, md)
-
-        mcs.roi.value = (0.1, 0.1, 0.8, 0.8)
-        sems.dcPeriod.value = 5
-        sems.dcRegion.value = (0.525, 0.525, 0.6, 0.6)
-        sems.dcDwellTime.value = 1e-06
-
-        mcs.repetition.value = (25, 30)
-        exp_shape = mcs.repetition.value[::-1]
-        num_ar = numpy.prod(mcs.repetition.value)
-
-        # Start acquisition
-        start = time.time()
-        f = sms.acquire()
-
-        # wait until it's over
-        data = f.result()
-        dur = time.time() - start
-        logging.debug("Acquisition took %g s", dur)
-        self.assertTrue(f.done())
-        self.assertEqual(len(sems.raw), 1)
-        self.assertEqual(numpy.prod(data[0].shape), num_ar)
-        self.assertEqual(sems.raw[0].shape, exp_shape)
-        md = mcs.raw[0].metadata
-        self.assertIn(model.MD_POS, md)
 
     def test_ar_ss(self):
         """ Test ARSettingsStream """
