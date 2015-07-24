@@ -235,7 +235,7 @@ class PlotCanvasTestCase(test.GuiTestCase):
     def test_plot_canvas(self):
         # Create and add a test plot canvas
         # cnvs = canvas.PlotCanvas(self.panel)
-        cnvs = miccanvas.ZeroDimensionalPlotCanvas(self.panel)
+        cnvs = miccanvas.BarPlotCanvas(self.panel)
 
         cnvs.SetBackgroundColour(wx.BLACK)
         cnvs.SetForegroundColour("#DDDDDD")
@@ -273,7 +273,7 @@ class PlotCanvasTestCase(test.GuiTestCase):
         test.gui_loop()
 
     def test_onedimensional_canvas(self):
-        cnvs = miccanvas.OneDimensionalSpatialSpectrumCanvas(self.panel)
+        cnvs = miccanvas.TwoDPlotCanvas(self.panel)
         cnvs.SetBackgroundColour("#00599B")
         self.add_control(cnvs, wx.EXPAND, proportion=1)
 

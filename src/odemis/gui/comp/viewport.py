@@ -25,6 +25,7 @@ Created on 8 Feb 2012
 
 from __future__ import division
 
+from abc import abstractmethod, ABCMeta
 import logging
 from odemis import gui, model
 from odemis.acq.stream import OpticalStream, EMStream, SpectrumStream, MonochromatorSettingsStream
@@ -45,7 +46,7 @@ class ViewPort(wx.Panel):
 
     # Default classes for the canvas and the legend. These may be overridden
     # in subclasses
-    canvas_class = miccanvas.DblMicroscopeCanvas
+    canvas_class = None
     bottom_legend_class = None
     left_legend_class = None
 
@@ -212,7 +213,7 @@ class MicroscopeViewport(ViewPort):
     This is a generic class, that should be inherited by more specific classes.
 
     """
-
+    canvas_class = miccanvas.DblMicroscopeCanvas
     bottom_legend_class = InfoLegend
 
     def __init__(self, *args, **kwargs):
@@ -535,26 +536,24 @@ class OverviewViewport(MicroscopeViewport):
                 self._microscope_view.moveStageTo(p_pos)
 
 
-# TODO: merge with SparcAcquisitionViewport and rename LiveViewPort
-class SecomViewport(MicroscopeViewport):
+class LiveViewport(MicroscopeViewport):
     """
     Used to display live streams on Secom and Delphi.
     The main difference is the handling of the pause state, which prevents
     stage move and indicate it via an icon.
     """
 
-    canvas_class = miccanvas.SecomCanvas
-
     def __init__(self, *args, **kwargs):
-        super(SecomViewport, self).__init__(*args, **kwargs)
+        super(LiveViewport, self).__init__(*args, **kwargs)
         self._orig_abilities = set()
 
     def setView(self, microscope_view, tab_data):
-        super(SecomViewport, self).setView(microscope_view, tab_data)
+        super(LiveViewport, self).setView(microscope_view, tab_data)
         self._orig_abilities = self.canvas.abilities & {CAN_DRAG, CAN_FOCUS}
-        self._microscope_view.stream_tree.should_update.subscribe(self.hide_pause, init=True)
+        microscope_view.stream_tree.should_update.subscribe(self._on_stream_play,
+                                                            init=True)
 
-    def hide_pause(self, is_playing):
+    def _on_stream_play(self, is_playing):
         self.canvas.play_overlay.hide_pause(is_playing)
         if self._microscope_view.has_stage():
             # disable/enable move and focus change
@@ -564,66 +563,130 @@ class SecomViewport(MicroscopeViewport):
                 self.canvas.abilities -= {CAN_DRAG, CAN_FOCUS}
 
 
-class SparcAcquisitionViewport(MicroscopeViewport):
+# TODO: remove once SparcAcquiCanvas is just a normal canvas
+class SparcLiveViewport(LiveViewport):
+    """
+    LiveViewport which support additional modes for the SPARC
+    """
 
     canvas_class = miccanvas.SparcAcquiCanvas
 
-    def __init__(self, *args, **kwargs):
-        super(SparcAcquisitionViewport, self).__init__(*args, **kwargs)
 
-    def setView(self, microscope_view, tab_data):
-        super(SparcAcquisitionViewport, self).setView(microscope_view, tab_data)
-        self._microscope_view.stream_tree.should_update.subscribe(self.on_streamtree_change,
-                                                                  init=True)
-
-    def on_streamtree_change(self, is_playing):
-        """ Show or hide the indicator icon that shows if a stream is playing in the viewport """
-        if len(self._microscope_view.stream_tree):
-            self.canvas.play_overlay.show = True
-            self.canvas.play_overlay.hide_pause(is_playing)
-        else:
-            self.canvas.play_overlay.show = False
-
-
-# TODO: merge with SparcAlignViewport
-class SparcAcquisitionARViewport(SparcAcquisitionViewport):
-
-    canvas_class = miccanvas.SparcARAcquiCanvas
-    bottom_legend_class = None
-
-    def __init__(self, *args, **kwargs):
-        super(SparcAcquisitionARViewport, self).__init__(*args, **kwargs)
-        self.canvas.disable_zoom()
-        self.canvas.disable_drag()
-
-
-class SparcAlignViewport(MicroscopeViewport):
+class ARLiveViewport(LiveViewport):
     """
-    Very simple viewport with no zoom or move allowed
+    LiveViewport dedicated to show AR images.
+    Never allow to move/zoom, and do not show pause icon if no stream.
     """
-    canvas_class = miccanvas.SparcAlignCanvas
+
+    canvas_class = miccanvas.SparcARCanvas
 
     def __init__(self, *args, **kwargs):
-        super(SparcAlignViewport, self).__init__(*args, **kwargs)
+        super(ARLiveViewport, self).__init__(*args, **kwargs)
         # TODO: should be done on the fly by _checkMergeSliderDisplay()
         # change SEM icon to Goal
-        self.bottom_legend.bmp_slider_right.SetBitmap(getico_blending_goalBitmap())
+        if self.bottom_legend:
+            self.bottom_legend.bmp_slider_right.SetBitmap(getico_blending_goalBitmap())
+
+    def setView(self, microscope_view, tab_data):
+        super(ARLiveViewport, self).setView(microscope_view, tab_data)
+        microscope_view.lastUpdate.subscribe(self._on_stream_update, init=True)
+
+    def _on_stream_update(self, _):
+        """
+        Hide the play icon overlay if no stream are present
+        """
+        show = len(self._microscope_view.stream_tree) > 0
+        self.canvas.play_overlay.show = show
+
+
+class ARAcquiViewport(ARLiveViewport):
+    """
+    Same as ARLiveViewport, but without legend
+    """
+    bottom_legend_class = None
+
+
+class AngularResolvedViewport(ViewPort):
+    """
+    Viewport to show the (static) AR images with polar projection
+    """
+
+    # Default class
+    canvas_class = miccanvas.AngularResolvedCanvas
+    bottom_legend_class = None
+
+    def setView(self, microscope_view, tab_data):
+        assert(self._microscope_view is None)
+
+        self._microscope_view = microscope_view
+        self._tab_data_model = tab_data
+
+        # canvas handles also directly some of the view properties
+        self.canvas.setView(microscope_view, tab_data)
 
 
 class PlotViewport(ViewPort):
     """ Class for displaying plotted data """
+    __metaclass__ = ABCMeta
 
     # Default class
-    canvas_class = miccanvas.ZeroDimensionalPlotCanvas
+    canvas_class = miccanvas.BarPlotCanvas
     bottom_legend_class = AxisLegend
     left_legend_class = AxisLegend
 
     def __init__(self, *args, **kwargs):
-        ViewPort.__init__(self, *args, **kwargs)
-        # We need a local reference to the spectrum stream, because if we rely
+        super(PlotViewport, self).__init__(*args, **kwargs)
+        # We need a local reference to the stream, because if we rely
         # on the reference within the MicroscopeView, it might be replaced
         # before we get an explicit chance to unsubscribe event handlers
-        self.spectrum_stream = None  # TODO: more generic name => "stream"?
+        self.stream = None
+
+    def setView(self, microscope_view, tab_data):
+        """
+        Set the microscope view that this viewport is displaying/representing
+        *Important*: Should be called only once, at initialisation.
+
+        :param microscope_view:(model.View)
+        :param tab_data: (model.MicroscopyGUIData)
+        """
+        # TODO: rename `microscope_view`, since this parameter is a regular view
+
+        # This is a kind of a kludge, as it'd be best to have the viewport
+        # created after the microscope view, but they are created independently
+        # via XRC.
+        assert(self._microscope_view is None)
+
+        # import traceback
+        # traceback.print_stack()
+
+        self._microscope_view = microscope_view
+        self._tab_data_model = tab_data
+
+        # canvas handles also directly some of the view properties
+        self.canvas.setView(microscope_view, tab_data)
+
+        # Keep an eye on the stream tree, so we can (re)connect when it changes
+        # microscope_view.stream_tree.should_update.subscribe(self.connect_stream)
+        # FIXME: it shouldn't listen to should_update, but to modifications of
+        # the stream tree itself... it just there is nothing to do that.
+        microscope_view.lastUpdate.subscribe(self.connect_stream)
+
+        microscope_view.stream_tree.should_update.subscribe(self._on_stream_play,
+                                                            init=True)
+        microscope_view.lastUpdate.subscribe(self._on_stream_update, init=True)
+
+    def _on_stream_update(self, _):
+        """
+        Hide the play icon overlay if no stream are present
+        """
+        show = len(self._microscope_view.stream_tree) > 0
+        self.canvas.play_overlay.show = show
+
+    def _on_stream_play(self, is_playing):
+        """
+        Update the status of the play/pause icon overlay
+        """
+        self.canvas.play_overlay.hide_pause(is_playing)
 
     def Refresh(self, *args, **kwargs):
         """ Refresh the ViewPort while making sure the legends get redrawn as well """
@@ -631,40 +694,71 @@ class PlotViewport(ViewPort):
         self.bottom_legend.Refresh()
         super(PlotViewport, self).Refresh(*args, **kwargs)
 
-    def OnSize(self, evt):
-        evt.Skip()  # processed also by the parent
-
-    @property
-    def microscope_view(self):
-        return self._microscope_view
-
-    def connect_stream(self, _=None):
-        """ This method will connect this ViewPort to the Spectrum Stream so it it can react to
-        spectrum pixel selection.
+    def connect_stream(self, _):
         """
+        Find the most appropriate stream in the view to be displayed, and make
+        sure the display is updated when the stream is updated.
+        """
+        ss = self._microscope_view.getStreams()
+        # Most of the time, there is only one stream, but in some cases, there
+        # might be more.
+        # TODO: filter based on the type of stream?
+        # ss = self.microscope_view.stream_tree.get_streams_by_type(MonochromatorSettingsStream)
+        if not ss:
+            stream = None
+        elif len(ss) > 1:
+            # => pick the first one playing
+            for s in ss:
+                if s.should_update.value:
+                    stream = s
+                    break
+            else:  # no stream playing
+                logging.warning("Found %d streams, will pick one randomly", len(ss))
+                if self.stream in ss:
+                    stream = self.stream  # don't change
+                else:
+                    stream = ss[0]
+        else:
+            stream = ss[0]
 
-        ss = self.microscope_view.stream_tree.spectrum_streams
-
-        if self.spectrum_stream in ss:
+        if self.stream is stream:
             logging.debug("not reconnecting to stream as it's already connected")
             return
 
-        # There should be exactly one Spectrum stream. In the future there
-        # might be scenarios where there are more than one.
-        if not ss:
-            self.spectrum_stream = None
-            logging.info("No spectrum stream found")
+        # Disconnect the old stream
+        if self.stream:
+            if hasattr(self.stream, 'selected_pixel'):
+                self.stream.selected_pixel.unsubscribe(self._on_pixel_select)
+            elif hasattr(self.stream, 'image'):
+                self.stream.image.unsubscribe(self._on_new_data)
+
+        # Connect the new one
+        self.stream = stream
+        if stream:
+            # Hack: StaticSpectrumStream contain a 2D spectrum in .image, and
+            # to get the point spectrum we need to use get_pixel_spectrum() and
+            # listen to selected_pixel VA.
+            if hasattr(self.stream, 'selected_pixel'):
+                self.stream.selected_pixel.subscribe(self._on_pixel_select, init=True)
+            elif hasattr(self.stream, 'image'):
+                self.stream.image.subscribe(self._on_new_data, init=True)
+        else:
+            logging.info("No stream to plot found")
             self.clear()  # Remove legend ticks and clear plot
-            return
-        elif len(ss) > 1:
-            logging.warning("Found %d spectrum streams, will pick one randomly", len(ss))
 
-        self.spectrum_stream = ss[0]
+    @abstractmethod
+    def _on_new_data(self, data):
+        pass
 
-        if hasattr(self.spectrum_stream, 'selected_pixel'):
-            self.spectrum_stream.selected_pixel.subscribe(self._on_pixel_select, init=True)
-        elif hasattr(self.spectrum_stream, 'image'):
-            self.spectrum_stream.image.subscribe(self._on_new_data, init=True)
+    def _on_pixel_select(self, pixel):
+        raise NotImplementedError("This viewport doesn't support streams with .selected_pixel")
+
+
+class PointSpectrumViewport(PlotViewport):
+    """
+    Shows the spectrum of a point -> bar plot + legend
+    Legend axes are wavelength/intensity.
+    """
 
     def _on_new_data(self, data):
         """
@@ -703,13 +797,15 @@ class PlotViewport(ViewPort):
             # Remove legend ticks and clear plot
             self.clear()
             return
-        elif self.spectrum_stream is None:
+        elif self.stream is None:
             logging.warning("No Spectrum Stream present!")
             return
 
-        data = self.spectrum_stream.get_pixel_spectrum()
-        spectrum_range = self.spectrum_stream.get_spectrum_range()
-        unit_x = self.spectrum_stream.spectrumBandwidth.unit
+        data = self.stream.get_pixel_spectrum()
+        spectrum_range = self.stream.get_spectrum_range()
+        unit_x = self.stream.spectrumBandwidth.unit
+
+        self.canvas.set_1d_data(spectrum_range, data, unit_x)
 
         self.bottom_legend.unit = unit_x
         self.bottom_legend.range = (spectrum_range[0], spectrum_range[-1])
@@ -717,115 +813,26 @@ class PlotViewport(ViewPort):
         self.left_legend.range = (min(data), max(data))
         self.left_legend.tooltip = "Intensity"
 
-        self.canvas.set_1d_data(spectrum_range, data, unit_x)
         self.Refresh()
 
-    def setView(self, microscope_view, tab_data):
-        """
-        Set the microscope view that this viewport is displaying/representing
-        *Important*: Should be called only once, at initialisation.
 
-        :param microscope_view:(model.View)
-        :param tab_data: (model.MicroscopyGUIData)
-
-        TODO: rename `microscope_view`, since this parameter is a regular view
-        """
-
-        # This is a kind of a kludge, as it'd be best to have the viewport
-        # created after the microscope view, but they are created independently
-        # via XRC.
-        assert(self._microscope_view is None)
-
-        # import traceback
-        # traceback.print_stack()
-
-        self._microscope_view = microscope_view
-        self._tab_data_model = tab_data
-
-        # canvas handles also directly some of the view properties
-        self.canvas.setView(microscope_view, tab_data)
-
-        # Keep an eye on the stream tree, so we can (re)connect when it changes
-        # microscope_view.stream_tree.should_update.subscribe(self.connect_stream)
-        # FIXME: it shouldn't listen to should_update, but to modifications of
-        # the stream tree itself... it just there is nothing to do that.
-        microscope_view.lastUpdate.subscribe(self.connect_stream)
-
-
-class SparcAcquisitionMonoViewport(PlotViewport):
+class ChronographViewport(PlotViewport):
+    """
+    Shows the chronograph of a 0D detector reading -> bar plot + legend
+    Legend axes are time/intensity.
+    """
 
     def __init__(self, *args, **kwargs):
-        super(SparcAcquisitionMonoViewport, self).__init__(*args, **kwargs)
+        super(ChronographViewport, self).__init__(*args, **kwargs)
         self.canvas.markline_overlay.hide_x_label()
 
-    def setView(self, microscope_view, tab_data):
-        super(SparcAcquisitionMonoViewport, self).setView(microscope_view, tab_data)
-        microscope_view.stream_tree.should_update.subscribe(self._on_stream_play,
-                                                            init=True)
-        microscope_view.lastUpdate.subscribe(self._on_stream_update, init=True)
-
-    def _on_stream_update(self, _):
-        """
-        Hide the play icon overlay if no stream are present
-        """
-        show = len(self._microscope_view.stream_tree) > 0
-        self.canvas.play_overlay.show = show
-
-    def _on_stream_play(self, is_playing):
-        """
-        Update the status of the play/pause icon overlay
-        """
-        self.canvas.play_overlay.hide_pause(is_playing)
-
-    def connect_stream(self, _):
-        """ This method will connect this ViewPort to the Spectrum Stream so it it can react to
-        spectrum pixel selection.
-        """
-        # There should be exactly one stream. In the future there
-        # might be scenarios where there are more than one.
-        ss = self.microscope_view.stream_tree.get_streams_by_type(MonochromatorSettingsStream)
-        if not ss:
-            stream = None
-        elif len(ss) > 1:
-            # => pick the first one playing
-            for s in ss:
-                if s.should_update.value:
-                    stream = s
-                    break
-            else:  # no stream playing
-                logging.warning("Found %d Monochromator streams, will pick one randomly", len(ss))
-                if self.spectrum_stream in ss:
-                    stream = self.spectrum_stream # don't change
-                else:
-                    stream = ss[0]
-        else:
-            stream = ss[0]
-
-        if self.spectrum_stream is stream:
-            logging.debug("not reconnecting to stream as it's already connected")
-            return
-
-        # Disconnect the old stream
-        if self.spectrum_stream:
-            self.spectrum_stream.image.unsubscribe(self._on_new_data)
-
-        # Connect the new one
-        self.spectrum_stream = stream
-        if stream:
-            self.spectrum_stream.image.subscribe(self._on_new_data, init=True)
-        else:
-            logging.info("No Monochromator stream found")
-            self.clear()  # Remove legend ticks and clear plot
-
     def _on_new_data(self, data):
-        # spectrum_range = self.spectrum_stream.get_spectrum_range()
-        # unit_x = self.spectrum_stream.spectrumBandwidth.unit
         if data.size:
             unit_x = 's'
 
             x = data.metadata[model.MD_ACQ_DATE]
             y = data
-            range_x = (min(x[0], -self.spectrum_stream.windowPeriod.value), x[-1])
+            range_x = (min(x[0], -self.stream.windowPeriod.value), x[-1])
             range_y = (0, float(max(data)))  # float() to avoid numpy arrays
 
             self.canvas.set_data(zip(x, y), unit_x, range_x=range_x, range_y=range_y)
@@ -841,60 +848,15 @@ class SparcAcquisitionMonoViewport(PlotViewport):
             self.clear()
         self.Refresh()
 
-class SparcAcquisitionPlotViewport(PlotViewport):
-
-    def __init__(self, *args, **kwargs):
-        super(SparcAcquisitionPlotViewport, self).__init__(*args, **kwargs)
-
-    def setView(self, microscope_view, tab_data):
-        super(SparcAcquisitionPlotViewport, self).setView(microscope_view, tab_data)
-        self._microscope_view.stream_tree.should_update.subscribe(self.on_streamtree_change,
-                                                                  init=True)
-
-    def on_streamtree_change(self, is_playing):
-        """ Show or hide the indicator icon that shows if a stream is playing in the viewport """
-        # TODO: merge into parent class
-        if len(self._microscope_view.stream_tree):
-            self.canvas.play_overlay.show = True
-            self.canvas.play_overlay.hide_pause(is_playing)
-        else:
-            self.canvas.play_overlay.show = False
-
-
-class AngularResolvedViewport(ViewPort):
-
-    # Default class
-    canvas_class = miccanvas.AngularResolvedCanvas
-    bottom_legend_class = None
-
-    def setView(self, microscope_view, tab_data):
-        """
-        """
-
-        # This is a kind of a kludge, as it'd be best to have the viewport
-        # created after the microscope view, but they are created independently
-        # via XRC.
-        assert(self._microscope_view is None)
-
-        # import traceback
-        # traceback.print_stack()
-
-        self._microscope_view = microscope_view
-        self._tab_data_model = tab_data
-
-        # canvas handles also directly some of the view properties
-        self.canvas.setView(microscope_view, tab_data)
-
 
 class SpatialSpectrumViewport(ViewPort):
-    """ A panel that shows a microscope view and its legend below it.
-
-    This is a generic class, that should be inherited by more specific classes.
-
-    FIXME: This class shares a lot with PlotViewport, see what can be merged
     """
+    A viewport for showing 1D spectum: an image with wavelength horizontally and
+    space vertically.
+    """
+    # FIXME: This class shares a lot with PlotViewport, see what can be merged
 
-    canvas_class = miccanvas.OneDimensionalSpatialSpectrumCanvas
+    canvas_class = miccanvas.TwoDPlotCanvas
     bottom_legend_class = AxisLegend
     left_legend_class = AxisLegend
 
@@ -904,7 +866,7 @@ class SpatialSpectrumViewport(ViewPort):
         """
         # Call parent constructor at the end, because it needs the legend panel
         super(SpatialSpectrumViewport, self).__init__(*args, **kwargs)
-        self.spectrum_stream = None
+        self.stream = None
         self.current_line = None
 
         self.canvas.markline_overlay.v_pos.subscribe(self.on_spectrum_motion)
@@ -924,7 +886,7 @@ class SpatialSpectrumViewport(ViewPort):
             )
             rat = self.left_legend.pixel_to_ratio(vpos[1])
             line_pixels = rasterize_line(*self.current_line)
-            self.spectrum_stream.selected_pixel.value = line_pixels[int(len(line_pixels) * rat)]
+            self.stream.selected_pixel.value = line_pixels[int(len(line_pixels) * rat)]
 
     def Refresh(self, *args, **kwargs):
         """ Refresh the ViewPort while making sure the legends get redrawn as well """
@@ -969,23 +931,23 @@ class SpatialSpectrumViewport(ViewPort):
         it can react to spectrum pixel selection.
         """
         ss = self.microscope_view.stream_tree.spectrum_streams
-        if self.spectrum_stream in ss:
+        if self.stream in ss:
             logging.debug("not reconnecting to stream as it's already connected")
             return
 
         # There should be exactly one Spectrum stream. In the future there
         # might be scenarios where there are more than one.
         if not ss:
-            self.spectrum_stream = None
+            self.stream = None
             logging.info("No spectrum streams found")
             self.clear()  # Remove legend ticks and clear image
             return
         elif len(ss) > 1:
             logging.warning("Found %d spectrum streams, will pick one randomly", len(ss))
 
-        self.spectrum_stream = ss[0]
-        self.spectrum_stream.selected_line.subscribe(self._on_line_select, init=True)
-        self.spectrum_stream.selected_pixel.subscribe(self._on_pixel_select)
+        self.stream = ss[0]
+        self.stream.selected_line.subscribe(self._on_line_select, init=True)
+        self.stream.selected_pixel.subscribe(self._on_pixel_select)
 
     def _on_pixel_select(self, pixel):
         """ Clear the marking line when the selected pixel is cleared """
@@ -1000,18 +962,18 @@ class SpatialSpectrumViewport(ViewPort):
             self.clear()
             self.current_line = None
             return
-        elif self.spectrum_stream is None:
+        elif self.stream is None:
             logging.warning("No Spectrum Stream present!")
             return
 
-        data = self.spectrum_stream.get_line_spectrum()
+        data = self.stream.get_line_spectrum()
         self.current_line = line
 
         if data is not None:
-            spectrum_range = self.spectrum_stream.get_spectrum_range()
+            spectrum_range = self.stream.get_spectrum_range()
             line_length = data.shape[0] * data.metadata[model.MD_PIXEL_SIZE][1]
 
-            unit_x = self.spectrum_stream.spectrumBandwidth.unit
+            unit_x = self.stream.spectrumBandwidth.unit
             self.bottom_legend.unit = unit_x
             self.bottom_legend.range = (spectrum_range[0], spectrum_range[-1])
             self.bottom_legend.tooltip = "Wavelength"

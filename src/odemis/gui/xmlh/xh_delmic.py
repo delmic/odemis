@@ -752,67 +752,58 @@ class MicroscopeViewportXmlHandler(xrc.XmlResourceHandler):
 HANDLER_CLASS_LIST.append(MicroscopeViewportXmlHandler)
 
 
-class SecomViewportXmlHandler(MicroscopeViewportXmlHandler):
+class LiveViewportXmlHandler(MicroscopeViewportXmlHandler):
 
-    klass = vport.SecomViewport
-
-    def CanHandle(self, node):
-        return self.IsOfClass(node, "SecomViewport")
-HANDLER_CLASS_LIST.append(SecomViewportXmlHandler)
-
-
-class SparcAcquisitionViewportXmlHandler(MicroscopeViewportXmlHandler):
-
-    klass = vport.SparcAcquisitionViewport
+    klass = vport.LiveViewport
 
     def CanHandle(self, node):
-        return self.IsOfClass(node, "SparcAcquisitionViewport")
-HANDLER_CLASS_LIST.append(SparcAcquisitionViewportXmlHandler)
+        return self.IsOfClass(node, "LiveViewport")
+HANDLER_CLASS_LIST.append(LiveViewportXmlHandler)
 
 
-class SparcAcquisitionARViewportXmlHandler(MicroscopeViewportXmlHandler):
+class SparcLiveViewportXmlHandler(MicroscopeViewportXmlHandler):
 
-    klass = vport.SparcAcquisitionARViewport
-
-    def CanHandle(self, node):
-        return self.IsOfClass(node, "SparcAcquisitionARViewport")
-HANDLER_CLASS_LIST.append(SparcAcquisitionARViewportXmlHandler)
-
-
-class SparcAcquisitionPlotViewportXmlHandler(MicroscopeViewportXmlHandler):
-
-    klass = vport.SparcAcquisitionPlotViewport
+    klass = vport.SparcLiveViewport
 
     def CanHandle(self, node):
-        return self.IsOfClass(node, "SparcAcquisitionPlotViewport")
-HANDLER_CLASS_LIST.append(SparcAcquisitionPlotViewportXmlHandler)
+        return self.IsOfClass(node, "SparcLiveViewport")
+HANDLER_CLASS_LIST.append(SparcLiveViewportXmlHandler)
 
 
-class SparcAcquisitionMonoViewportXmlHandler(MicroscopeViewportXmlHandler):
+class ARAcquiViewportXmlHandler(MicroscopeViewportXmlHandler):
 
-    klass = vport.SparcAcquisitionMonoViewport
-
-    def CanHandle(self, node):
-        return self.IsOfClass(node, "SparcAcquisitionMonoViewport")
-HANDLER_CLASS_LIST.append(SparcAcquisitionMonoViewportXmlHandler)
-
-
-class SparcAlignViewportXmlHandler(MicroscopeViewportXmlHandler):
-
-    klass = vport.SparcAlignViewport
+    klass = vport.ARAcquiViewport
 
     def CanHandle(self, node):
-        return self.IsOfClass(node, "SparcAlignViewport")
-HANDLER_CLASS_LIST.append(SparcAlignViewportXmlHandler)
+        return self.IsOfClass(node, "ARAcquiViewport")
+HANDLER_CLASS_LIST.append(ARAcquiViewportXmlHandler)
 
 
-class PlotViewportXmlHandler(MicroscopeViewportXmlHandler):
+class PointSpectrumViewportXmlHandler(MicroscopeViewportXmlHandler):
 
-    klass = vport.PlotViewport
+    klass = vport.PointSpectrumViewport
 
     def CanHandle(self, node):
-        return self.IsOfClass(node, "PlotViewport")
-HANDLER_CLASS_LIST.append(PlotViewportXmlHandler)
+        return self.IsOfClass(node, "PointSpectrumViewport")
+HANDLER_CLASS_LIST.append(PointSpectrumViewportXmlHandler)
+
+
+class ChronographViewportXmlHandler(MicroscopeViewportXmlHandler):
+
+    klass = vport.ChronographViewport
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, "ChronographViewport")
+HANDLER_CLASS_LIST.append(ChronographViewportXmlHandler)
+
+
+class ARLiveViewportXmlHandler(MicroscopeViewportXmlHandler):
+
+    klass = vport.ARLiveViewport
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, "ARLiveViewport")
+HANDLER_CLASS_LIST.append(ARLiveViewportXmlHandler)
 
 
 class AngularResolvedViewportXmlHandler(MicroscopeViewportXmlHandler):
