@@ -3,7 +3,7 @@ SPARC2: {
     class: Microscope,
     role: sparc2,
     children: ["SEM E-beam", "SEM Detector", "Stage", "Slit", "Optical Path Properties",
-    "Angular Camera", "Spectrometer", "CL Detector", "Mirror",
+    "Angular Camera", "Spectrometer", "CL Detector", "Mirror", "Spec CCD-PMT Flipper",
     "Lens1 Mover", "Lens2 Switch", "Filter Wheel"],
 }
 
@@ -194,7 +194,7 @@ SPARC2: {
 # Sets the slit position to either open or closed
 "Slit": {
     class: actuator.FixedPositionsActuator,
-    role: cl-det-selector,
+    role: slit-in-big,
     children: {"x": "Optical Actuators"},
     init: {axis_name: "z",
            positions: {0: "on",
@@ -218,7 +218,7 @@ SPARC2: {
 # Redux stage
 "Stage": {
     class: actuator.MultiplexActuator,
-    role: None,
+    role: stage,
     affects: ["Angular Camera"],
     children: {"x": "Stage Actuators", "y": "Stage Actuators"},
     init: {
@@ -237,6 +237,18 @@ SPARC2: {
         refproc: "FakeReferencing", # referencing procedure for simulator
         temp: True,
     },
+}
+
+# Provide the mirror of the spectrograph as a separate component
+"Spec CCD-PMT Flipper": {
+    class: actuator.MultiplexActuator,
+    role: spec-det-selector,
+    affects: ["Angular Camera", "Spectral Camera"],
+    children: {"rx": "Spectrograph"},
+    init: {
+        axes_map: {"rx": "flip-out"},
+    },
+    affects: ["Spectrometer", "Angular Camera"],
 }
 
 "Filter Wheel": {
