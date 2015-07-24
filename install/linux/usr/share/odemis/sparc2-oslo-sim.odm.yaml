@@ -3,8 +3,9 @@ SPARC2: {
     class: Microscope,
     role: sparc2,
     children: ["SEM E-beam", "SEM Detector", "Stage", "Slit", "Optical Path Properties",
-    "Angular Camera", "Spectrometer", "CL Detector", "Mirror", "Spec CCD-PMT Flipper",
-    "Lens1 Mover", "Lens2 Switch", "Filter Wheel"],
+    "Angular Camera", "Spectrometer", "CL Detector", "Spec CCD-PMT Flipper",
+    #"Mirror", "Filter Wheel",
+    "Lens1 Mover", "Lens2 Switch"],
 }
 
 
@@ -208,8 +209,10 @@ SPARC2: {
     role: none,
     init: {
         port: "/dev/fake",
-        axes: ["x", "y", "z", "a", "b"],
-        ustepsize: [5.9e-9, 5.9e-9, 5.9e-9, 5.9e-9, 5.9e-9], # m/µstep
+        axes: ["x", "y", "z"],
+        #axes: ["x", "y", "z", "a", "b"],
+        ustepsize: [5.9e-9, 5.9e-9, 5.9e-9], # m/µstep
+        #ustepsize: [5.9e-9, 5.9e-9, 5.9e-9, 5.9e-9, 5.9e-9], # m/µstep
         refproc: "FakeReferencing", # referencing procedure for simulator
         temp: True,
     },
@@ -251,30 +254,31 @@ SPARC2: {
     affects: ["Spectrometer", "Angular Camera"],
 }
 
-"Filter Wheel": {
-    class: actuator.FixedPositionsActuator,
-    role: filter,
-    children: {"x": "Optical Actuators"},
-    init: {axis_name: "a",
-           positions: {0: [420.e-9, 460.e-9], # pos -> m,m
-                   1: [500.e-9, 550.e-9],
-                   2: "polariser",
-                   5: "pass-through"},
-           cycle: 6
-           },
-    affects: ["Angular Camera", "Spectrometer", "CL Detector"]
-}
+#"Filter Wheel": {
+#    class: actuator.FixedPositionsActuator,
+#    role: filter,
+#    children: {"x": "Optical Actuators"},
+#    init: {axis_name: "a",
+#           positions: {0: [420.e-9, 460.e-9], # pos -> m,m
+#                   1: [500.e-9, 550.e-9],
+#                   2: "polariser",
+#                   5: "pass-through"},
+#           cycle: 6
+#           },
+#    affects: ["Angular Camera", "Spectrometer", "CL Detector"]
+#}
 
 # Mirror in Plate 2, selects between spectrometer and cl-detector
-"Mirror": {
-    class: actuator.FixedPositionsActuator,
-    role: cl-det-selector,
-    children: {"x": "Optical Actuators"},
-    init: {axis_name: "b",
-           positions: {0: "on",
-                     0.1: "off"},
-           },
-    affects: ["Angular Camera", "Spectrometer", "CL Detector"]
-}
+#"Mirror": {
+#    class: actuator.FixedPositionsActuator,
+#    role: cl-det-selector,
+#    children: {"x": "Optical Actuators"},
+#    init: {axis_name: "b",
+#           positions: {0: "on",
+#                     0.1: "off"},
+#           },
+#    affects: ["Angular Camera", "Spectrometer", "CL Detector"]
+#}
 
+#TODO add light (lamp) support
 #TODO add support for Power Control Unit
