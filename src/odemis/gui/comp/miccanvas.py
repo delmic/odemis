@@ -1131,7 +1131,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         self.driftcor_overlay.on_roa(self._dc_region.value)
 
 
-class SparcAlignCanvas(DblMicroscopeCanvas):
+class SparcARCanvas(DblMicroscopeCanvas):
     """
     Special restricted version that displays the first stream always fitting
     the entire canvas.
@@ -1139,7 +1139,7 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
     # TODO: could probably be done with a simple BitmapCanvas + fit_to_content?
 
     def __init__(self, *args, **kwargs):
-        super(SparcAlignCanvas, self).__init__(*args, **kwargs)
+        super(SparcARCanvas, self).__init__(*args, **kwargs)
         self.abilities -= {CAN_ZOOM, CAN_DRAG}
 
         self._goal_im_ref = None
@@ -1212,12 +1212,11 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
         canvas.DraggableCanvas.on_size(self, event)
 
 
-class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
-    """ A plotable canvas with a vertical 'focus line', that shows the x and y
-    values of the selected position.
-
-    TODO: change name?
-
+class BarPlotCanvas(canvas.PlotCanvas):
+    """
+    A canvas to represent 1D data (not necessarily equally distributed), and
+    provides an overlay to show the value corresponding to a given x position.
+    It takes a set of coordinates (ordered along X).
     """
 
     def __init__(self, *args, **kwargs):
@@ -1232,7 +1231,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         self.microscope_view = None
         self._tab_data_model = None
 
-        super(ZeroDimensionalPlotCanvas, self).__init__(*args, **kwargs)
+        super(BarPlotCanvas, self).__init__(*args, **kwargs)
 
         # play/pause icon
         self.play_overlay = view_overlay.PlayIconOverlay(self)
@@ -1254,7 +1253,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
 
     def set_data(self, data, unit_x=None, unit_y=None, range_x=None, range_y=None):
         """ Subscribe to the x position of the overlay when data is loaded """
-        super(ZeroDimensionalPlotCanvas, self).set_data(data, unit_x, unit_y, range_x, range_y)
+        super(BarPlotCanvas, self).set_data(data, unit_x, unit_y, range_x, range_y)
 
         if data is None:
             self.markline_overlay.v_pos.unsubscribe(self._map_to_plot_values)
@@ -1264,7 +1263,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
             self.markline_overlay.activate()
 
     def clear(self):
-        super(ZeroDimensionalPlotCanvas, self).clear()
+        super(BarPlotCanvas, self).clear()
         self.val_x.value = None
         self.val_y.value = None
         self.markline_overlay.clear_labels()
@@ -1275,7 +1274,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
 
     def on_size(self, evt):
         """ Update the position of the focus line """
-        super(ZeroDimensionalPlotCanvas, self).on_size(evt)
+        super(BarPlotCanvas, self).on_size(evt)
         if None not in (self.val_x.value, self.val_y.value):
             pos = (self._val_x_to_pos_x(self.val_x.value),
                    self._val_y_to_pos_y(self.val_y.value))
@@ -1324,7 +1323,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
                     self.microscope_view.thumbnail.value = img
 
     def update_drawing(self):
-        super(ZeroDimensionalPlotCanvas, self).update_drawing()
+        super(BarPlotCanvas, self).update_drawing()
 
         if self.microscope_view:
             self.update_thumbnail()
@@ -1334,11 +1333,15 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         return self.val_y.value
 
 
-class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
+class TwoDPlotCanvas(BitmapCanvas):
+    """
+    Canvas that shows 2D data and plots the value as intensity. IOW, it takes
+    an image and scale it to fit the whole area.
+    """
 
     def __init__(self, *args, **kwargs):
 
-        super(OneDimensionalSpatialSpectrumCanvas, self).__init__(*args, **kwargs)
+        super(TwoDPlotCanvas, self).__init__(*args, **kwargs)
 
         self.SetBackgroundColour(stepColour(self.Parent.BackgroundColour, 50))
         self.SetForegroundColour(self.Parent.ForegroundColour)
@@ -1392,12 +1395,12 @@ class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
 
     def update_drawing(self):
         """ Update the drawing and thumbnail """
-        super(OneDimensionalSpatialSpectrumCanvas, self).update_drawing()
+        super(TwoDPlotCanvas, self).update_drawing()
         if self.microscope_view:
             self.update_thumbnail()
 
     def clear(self):
-        super(OneDimensionalSpatialSpectrumCanvas, self).clear()
+        super(TwoDPlotCanvas, self).clear()
         self.markline_overlay.clear_labels()
         self.markline_overlay.deactivate()
         wx.CallAfter(self.update_drawing)

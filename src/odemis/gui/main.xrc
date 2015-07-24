@@ -526,28 +526,28 @@
             </object>
             <object class="sizeritem">
               <object class="ViewportGrid" name="pnl_secom_grid">
-                <object class="SecomViewport" name="vp_secom_tl">
+                <object class="LiveViewport" name="vp_secom_tl">
                   <fg>#BFBFBF</fg>
                   <bg>#000000</bg>
                   <XRCED>
                     <assign_var>1</assign_var>
                   </XRCED>
                 </object>
-                <object class="SecomViewport" name="vp_secom_tr">
+                <object class="LiveViewport" name="vp_secom_tr">
                   <fg>#BFBFBF</fg>
                   <bg>#000000</bg>
                   <XRCED>
                     <assign_var>1</assign_var>
                   </XRCED>
                 </object>
-                <object class="SecomViewport" name="vp_secom_bl">
+                <object class="LiveViewport" name="vp_secom_bl">
                   <fg>#BFBFBF</fg>
                   <bg>#000000</bg>
                   <XRCED>
                     <assign_var>1</assign_var>
                   </XRCED>
                 </object>
-                <object class="SecomViewport" name="vp_secom_br">
+                <object class="LiveViewport" name="vp_secom_br">
                   <fg>#BFBFBF</fg>
                   <bg>#000000</bg>
                   <XRCED>
@@ -1459,7 +1459,7 @@
               <border>10</border>
             </object>
             <object class="sizeritem">
-              <object class="SecomViewport" name="vp_align_ccd">
+              <object class="LiveViewport" name="vp_align_ccd">
                 <size>400,-1</size>
                 <XRCED>
                   <assign_var>1</assign_var>
@@ -1648,7 +1648,7 @@
                     <border>5</border>
                   </object>
                   <object class="sizeritem">
-                    <object class="SecomViewport" name="vp_align_sem">
+                    <object class="LiveViewport" name="vp_align_sem">
                       <XRCED>
                         <assign_var>1</assign_var>
                       </XRCED>
@@ -2447,7 +2447,7 @@
               <flag>wxEXPAND</flag>
             </object>
             <object class="sizeritem">
-              <object class="SparcAlignViewport" name="vp_sparc_align">
+              <object class="ARLiveViewport" name="vp_sparc_align">
                 <size>400,-1</size>
                 <XRCED>
                   <assign_var>1</assign_var>
@@ -2732,22 +2732,22 @@
             </object>
             <object class="sizeritem">
               <object class="ViewportGrid" name="pnl_sparc_grid">
-                <object class="SparcAcquisitionViewport" name="vp_sparc_tl">
+                <object class="SparcLiveViewport" name="vp_sparc_tl">
                   <XRCED>
                     <assign_var>1</assign_var>
                   </XRCED>
                 </object>
-                <object class="SparcAcquisitionARViewport" name="vp_sparc_tr">
+                <object class="ARAcquiViewport" name="vp_sparc_tr">
                   <XRCED>
                     <assign_var>1</assign_var>
                   </XRCED>
                 </object>
-                <object class="SparcAcquisitionPlotViewport" name="vp_sparc_bl">
+                <object class="PointSpectrumViewport" name="vp_sparc_bl">
                   <XRCED>
                     <assign_var>1</assign_var>
                   </XRCED>
                 </object>
-                <object class="SparcAcquisitionMonoViewport" name="vp_sparc_br">
+                <object class="ChronographViewport" name="vp_sparc_br">
                   <XRCED>
                     <assign_var>1</assign_var>
                   </XRCED>
@@ -3270,7 +3270,7 @@
                     <assign_var>1</assign_var>
                   </XRCED>
                 </object>
-                <object class="PlotViewport" name="vp_inspection_plot">
+                <object class="PointSpectrumViewport" name="vp_inspection_plot">
                   <hidden>1</hidden>
                   <XRCED>
                     <assign_var>1</assign_var>
@@ -3433,7 +3433,7 @@
       <growablecols>0</growablecols>
       <growablerows>0</growablerows>
       <object class="sizeritem">
-        <object class="SecomViewport" name="pnl_view_acq">
+        <object class="LiveViewport" name="pnl_view_acq">
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
