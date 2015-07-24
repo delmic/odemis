@@ -775,8 +775,13 @@ class SPARCTestCase(unittest.TestCase):
         # with dwell time > 4s, so let's directly test both.
         self.ccd.exposureTime.value = 5 # s
         ars.repetition.value = (2, 3)
-        exp_shape = ars.repetition.value[::-1]
         num_ar = numpy.prod(ars.repetition.value)
+        exp_pos, exp_pxs, exp_res = self._roiToPhys(ars)
+        phys_roi = (exp_pos[0] - (exp_pxs[0] * exp_res[0] / 2),
+                    exp_pos[1] - (exp_pxs[1] * exp_res[1] / 2),
+                    exp_pos[0] + (exp_pxs[0] * exp_res[0] / 2),
+                    exp_pos[1] + (exp_pxs[1] * exp_res[1] / 2),
+                    )
 
         # Start acquisition
         timeout = 1 + 1.5 * sas.estimateAcquisitionTime()
@@ -790,16 +795,26 @@ class SPARCTestCase(unittest.TestCase):
         self.assertTrue(f.done())
         self.assertEqual(len(data), len(sems.raw) + len(ars.raw))
         self.assertEqual(len(sems.raw), 1)
-        self.assertEqual(sems.raw[0].shape, exp_shape)
+        self.assertEqual(sems.raw[0].shape, exp_res[::-1])
         self.assertEqual(len(ars.raw), num_ar)
-        md = ars.raw[0].metadata
-        self.assertIn(model.MD_POS, md)
-        self.assertIn(model.MD_AR_POLE, md)
+        for d in ars.raw:
+            md = d.metadata
+            self.assertIn(model.MD_POS, md)
+            self.assertIn(model.MD_AR_POLE, md)
+            pos = md[model.MD_POS]
+            self.assertTrue(phys_roi[0] <= pos[0] <= phys_roi[2] and
+                            phys_roi[1] <= pos[1] <= phys_roi[3])
 
         # Short acquisition (< 0.1s)
         self.ccd.exposureTime.value = 0.03 # s
         ars.repetition.value = (30, 20)
-        exp_shape = ars.repetition.value[::-1]
+        exp_pos, exp_pxs, exp_res = self._roiToPhys(ars)
+        phys_roi = (exp_pos[0] - (exp_pxs[0] * exp_res[0] / 2),
+                    exp_pos[1] - (exp_pxs[1] * exp_res[1] / 2),
+                    exp_pos[0] + (exp_pxs[0] * exp_res[0] / 2),
+                    exp_pos[1] + (exp_pxs[1] * exp_res[1] / 2),
+                    )
+
         num_ar = numpy.prod(ars.repetition.value)
 
         # Start acquisition
@@ -814,11 +829,15 @@ class SPARCTestCase(unittest.TestCase):
         self.assertTrue(f.done())
         self.assertEqual(len(data), len(sems.raw) + len(ars.raw))
         self.assertEqual(len(sems.raw), 1)
-        self.assertEqual(sems.raw[0].shape, exp_shape)
+        self.assertEqual(sems.raw[0].shape, exp_res[::-1])
         self.assertEqual(len(ars.raw), num_ar)
-        md = ars.raw[0].metadata
-        self.assertIn(model.MD_POS, md)
-        self.assertIn(model.MD_AR_POLE, md)
+        for d in ars.raw:
+            md = d.metadata
+            self.assertIn(model.MD_POS, md)
+            self.assertIn(model.MD_AR_POLE, md)
+            pos = md[model.MD_POS]
+            self.assertTrue(phys_roi[0] <= pos[0] <= phys_roi[2] and
+                            phys_roi[1] <= pos[1] <= phys_roi[3])
 
 #    @skip("simple")
     def test_acq_spec(self):
