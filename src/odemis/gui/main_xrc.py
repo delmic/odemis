@@ -134,6 +134,7 @@ class xrcfr_main(wx.Frame):
         self.vp_align_sem = xrc.XRCCTRL(self, "vp_align_sem")
         self.pnl_tab_sparc_align = xrc.XRCCTRL(self, "pnl_tab_sparc_align")
         self.pnl_alignment_btns = xrc.XRCCTRL(self, "pnl_alignment_btns")
+        self.btn_align_chamber = xrc.XRCCTRL(self, "btn_align_chamber")
         self.btn_align_mirror = xrc.XRCCTRL(self, "btn_align_mirror")
         self.btn_align_fiber = xrc.XRCCTRL(self, "btn_align_fiber")
         self.pnl_sparc_trans = xrc.XRCCTRL(self, "pnl_sparc_trans")
@@ -1949,6 +1950,30 @@ def __init_resources():
                     <object class="wxPanel" name="pnl_alignment_btns">
                       <object class="wxBoxSizer">
                         <orient>wxHORIZONTAL</orient>
+                        <object class="sizeritem">
+                          <object class="GraphicRadioButton" name="btn_align_chamber">
+                            <label>          CHAMBER</label>
+                            <delta>1</delta>
+                            <bitmap>img_button_btn_mirror_png</bitmap>
+                            <hover>img_button_btn_mirror_h_png</hover>
+                            <selected>img_button_btn_mirror_a_png</selected>
+                            <fg>#1A1A1A</fg>
+                            <font>
+                              <size>11</size>
+                              <style>normal</style>
+                              <weight>normal</weight>
+                              <underlined>0</underlined>
+                              <face>Ubuntu</face>
+                              <encoding>UTF-8</encoding>
+                            </font>
+                            <style>wxALIGN_CENTRE</style>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                          </object>
+                          <flag>wxALL</flag>
+                          <border>10</border>
+                        </object>
                         <object class="sizeritem">
                           <object class="GraphicRadioButton" name="btn_align_mirror">
                             <label>          MIRROR</label>

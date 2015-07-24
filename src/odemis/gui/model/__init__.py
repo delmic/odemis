@@ -529,7 +529,7 @@ class ActuatorGUIData(MicroscopyGUIData):
         # For the SPARC, the current alignment mode. Same values than the modes
         # of the OpticalPathManager
         # TODO: move to subclass
-        self.align_mode = StringEnumerated("mirror-align", choices={"mirror-align", "fiber-align"})
+        self.align_mode = StringEnumerated("chamber-view", choices={"chamber-view", "mirror-align", "fiber-align"})
 
     def step(self, actuator, axis, factor, sync=False):
         """
