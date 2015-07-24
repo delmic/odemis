@@ -194,7 +194,7 @@ SPARC2: {
 # Sets the slit position to either open or closed
 "Slit": {
     class: actuator.FixedPositionsActuator,
-    role: cl-det-selector,
+    role: slit-in,
     children: {"x": "Optical Actuators"},
     init: {axis_name: "z",
            positions: {0: "on",
