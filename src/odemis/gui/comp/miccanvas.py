@@ -984,51 +984,7 @@ class OverviewCanvas(DblMicroscopeCanvas):
         self.microscope_view.thumbnail.value = scaled_img
 
 
-class SparcARAcquiCanvas(DblMicroscopeCanvas):
-    """ Canvas added to easily enable the horizontal flipping of the Sparc AR acquisition image
-
-    TODO: find a cleaner solution
-
-    """
-
-    def _convert_streams_to_images(self):
-        images = self._get_ordered_images()
-
-        # add the images in order
-        ims = []
-        for rgbim, blend_mode, name in images:
-            # TODO: convert to RGBA later, in canvas and/or cache the conversion
-            # On large images it costs 100 ms (per image and per canvas)
-
-            rgba_im = format_rgba_darray(rgbim)
-
-            keepalpha = False
-            scale = rgbim.metadata[model.MD_PIXEL_SIZE]
-            pos = self.physical_to_world_pos(rgbim.metadata[model.MD_POS])
-            rot = rgbim.metadata.get(model.MD_ROTATION, 0)
-            shear = rgbim.metadata.get(model.MD_SHEAR, 0)
-            flip = wx.VERTICAL
-
-            ims.append((rgba_im, pos, scale, keepalpha, rot, shear, flip, blend_mode, name))
-
-        # TODO: Canvas needs to accept the NDArray (+ specific attributes recorded separately).
-        self.set_images(ims)
-
-        # For debug only:
-        # if images:
-        #     self._lastest_datetime = max(im[0].metadata.get(model.MD_ACQ_DATE, 0) for im in images)
-        # else:
-        #     self._lastest_datetime = 0
-
-        # if self._lastest_datetime > 0:
-        #     logging.debug("Updated canvas list %g s after acquisition",
-        #                   time.time() - self._lastest_datetime)
-
-        self.merge_ratio = self.microscope_view.stream_tree.kwargs.get("merge", 0.5)
-
-
 class SecomCanvas(DblMicroscopeCanvas):
-
     pass
 
 
@@ -1135,12 +1091,16 @@ class SparcARCanvas(DblMicroscopeCanvas):
     """
     Special restricted version that displays the first stream always fitting
     the entire canvas.
+    It also has a .flip attribute to flip horizontally and/or vertically the
+    whole image if needed.
     """
     # TODO: could probably be done with a simple BitmapCanvas + fit_to_content?
 
     def __init__(self, *args, **kwargs):
         super(SparcARCanvas, self).__init__(*args, **kwargs)
         self.abilities -= {CAN_ZOOM, CAN_DRAG}
+        # same as flip argument of set_images(): int with wx.VERTICAL or wx.HORIZONTAL
+        self.flip = wx.VERTICAL  # TODO: default to 0 (and change in Viewport)
 
         self._goal_im_ref = None
         self._goal_wim = None
@@ -1192,10 +1152,10 @@ class SparcARCanvas(DblMicroscopeCanvas):
 
             if s.name.value == "Goal":
                 # goal image => add at the end
-                ims.append((wim, pos, scale, keepalpha, None, None, wx.VERTICAL, None, s.name.value))
+                ims.append((wim, pos, scale, keepalpha, None, None, self.flip, None, s.name.value))
             else:
                 # add at the beginning
-                ims[0] = (wim, pos, scale, keepalpha, None, None, wx.VERTICAL, None, s.name.value)
+                ims[0] = (wim, pos, scale, keepalpha, None, None, self.flip, None, s.name.value)
 
         self.set_images(ims)
 

@@ -1648,6 +1648,7 @@ class MirrorAlignTab(Tab):
             locked=True
         )
         self._ccd_stream = None
+        self._goal_stream = None
         # TODO: add on/off button for the CCD and connect the MicroscopeStateController
 
         self._settings_controller = settings.SparcAlignSettingsController(
@@ -1667,7 +1668,7 @@ class MirrorAlignTab(Tab):
             # The mirror center (with the lens set) is defined as pole position
             # in the microscope configuration file.
             goal_im = self._getGoalImage(main_data)
-            goal_stream = acqstream.RGBStream("Goal", goal_im)
+            self._goal_stream = acqstream.RGBStream("Goal", goal_im)
 
             # create a view on the microscope model
             vpv = collections.OrderedDict([
@@ -1693,8 +1694,6 @@ class MirrorAlignTab(Tab):
 
             ccd_spe = self._stream_controller.addStream(ccd_stream)
             ccd_spe.stream_panel.flatten()
-            # TODO: use addStatic ?
-            self._stream_controller.addStream(goal_stream, visible=False)
             ccd_stream.should_update.value = True
         else:
             self.view_controller = None
@@ -1727,17 +1726,19 @@ class MirrorAlignTab(Tab):
             self._spot_stream = None
 
         # Switch between alignment modes
+        # * chamber-view: see the mirror and the sample in the chamber
         # * mirror-align: move x, y, yaw, and pitch with AR feedback
         # * fiber-align: move yaw, pitch and x/Y of fiber with scount feedback
-        if main_data.ccd is None or main_data.spectrometer is None:
-            # Only one mode possible => hide the buttons
+        self._alignbtn_to_mode = {main_frame.btn_align_chamber: "chamber-view",
+                                  main_frame.btn_align_mirror: "mirror-align",
+                                  main_frame.btn_align_fiber: "fiber-align"}
+        if main_data.ccd is None:
+            # No AR => only one mode possible => hide the buttons
             main_frame.pnl_alignment_btns.Show(False)
-            if main_data.ccd is None:
-                # No AR => use only fiber alignment as mirror alignment is impossible
-                tab_data.align_mode.value = "fiber-align"
+            tab_data.align_mode.value = "fiber-align"
         else:
-            main_frame.btn_align_mirror.Bind(wx.EVT_BUTTON, self._onClickAlignButton)
-            main_frame.btn_align_fiber.Bind(wx.EVT_BUTTON, self._onClickAlignButton)
+            for btn in self._alignbtn_to_mode:
+                btn.Bind(wx.EVT_BUTTON, self._onClickAlignButton)
 
         tab_data.align_mode.subscribe(self._onAlignMode, init=True)
 
@@ -1759,11 +1760,9 @@ class MirrorAlignTab(Tab):
             logging.warning("Got event from button being untoggled")
             return
 
-        if btn == self.main_frame.btn_align_mirror:
-            mode = "mirror-align"
-        elif btn == self.main_frame.btn_align_fiber:
-            mode = "fiber-align"
-        else:
+        try:
+            mode = self._alignbtn_to_mode[btn]
+        except KeyError:
             logging.warning("Unknown button %s pressed", btn)
             return
         # untoggling the other button will be done when the VA is updated
@@ -1776,14 +1775,31 @@ class MirrorAlignTab(Tab):
         mode (str): the new alignment mode
         """
         # Ensure the toggle buttons are correctly set
-        self.main_frame.btn_align_mirror.SetToggle(mode == "mirror-align")
-        self.main_frame.btn_align_fiber.SetToggle(mode == "fiber-align")
+        for btn, m in self._alignbtn_to_mode.items():
+            btn.SetToggle(mode == m)
 
-        # Disable controls which are useless (to guide the user)
-        if mode == "mirror-align":
+        # Disable controls/streams which are useless (to guide the user)
+        if mode == "chamber-view":
+            # With the lens, the image must be flipped to keep the mirror at the
+            # top and the sample at the bottom.
+            self.main_frame.vp_sparc_align.canvas.flip = wx.VERTICAL
+            # Hide goal image
+            self._stream_controller.removeStream(self._goal_stream)
+            self._ccd_stream.should_update.value = True
+            self.main_frame.pnl_sparc_trans.Enable(True)
+            self.main_frame.pnl_sparc_fib.Enable(False)
+        elif mode == "mirror-align":
+            # Show image normally
+            self.main_frame.vp_sparc_align.canvas.flip = 0
+            # Show the goal image (= add it, if it's not already there)
+            streams = self.main_frame.vp_sparc_align.microscope_view.getStreams()
+            if self._goal_stream not in streams:
+                self._stream_controller.addStream(self._goal_stream, visible=False)
+            self._ccd_stream.should_update.value = True
             self.main_frame.pnl_sparc_trans.Enable(True)
             self.main_frame.pnl_sparc_fib.Enable(False)
         else:
+            self._ccd_stream.should_update.value = False
             self.main_frame.pnl_sparc_trans.Enable(False)
             self.main_frame.pnl_sparc_fib.Enable(True)
 
