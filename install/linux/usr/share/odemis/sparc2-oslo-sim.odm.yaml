@@ -218,7 +218,7 @@ SPARC2: {
 # Redux stage
 "Stage": {
     class: actuator.MultiplexActuator,
-    role: None,
+    role: stage,
     affects: ["Angular Camera"],
     children: {"x": "Stage Actuators", "y": "Stage Actuators"},
     init: {
