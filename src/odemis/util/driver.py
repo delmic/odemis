@@ -146,6 +146,41 @@ def reproduceTypedValue(real_val, str_val):
     raise TypeError("Type %r is not supported to convert %s" % (type(real_val), str_val))
 
 
+def checkLightBand(band):
+    """
+    Check that the given object looks like a light band. It should either be
+    two float representing light wavelength in m, or a list of such tuple.
+    band (object): should be tuple of floats or list of tuple of floats
+    raise ValueError: if the band doesn't follow the convention
+    """
+    if not isinstance(band, collections.Iterable) or len(band) == 0:
+        raise ValueError("Band %r is not a (list of a) list of 2 floats" % (band,))
+    # is it a list of list?
+    if isinstance(band[0], collections.Iterable):
+        # => set of 2-tuples
+        for sb in band:
+            if len(sb) != 2:
+                raise ValueError("Expected only 2 floats in band, found %d" % len(sb))
+        band = tuple(band)
+    else:
+        # 2-tuple
+        if len(band) != 2:
+            raise ValueError("Expected only 2 floats in band, found %d" % len(band))
+        band = (tuple(band),)
+
+    # Check the values are min/max and in m: typically within nm (< µm!)
+    max_val = 10e-6  # m
+    for low, high in band:
+        if low > high:
+            raise ValueError("Min of band %s must be first in list" % (band,))
+        if low < 0:
+            raise ValueError("Band %s must be 2 positive value in meters" % (band,))
+        if low > max_val or high > max_val:
+            raise ValueError("Band %s contains very high values for light "
+                             "wavelength, ensure the value is in meters." % (band,))
+
+    # no error found
+
 # Special trick functions for speeding up Pyro start-up
 def _speedUpPyroVAConnect(comp):
     """
