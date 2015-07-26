@@ -49,7 +49,8 @@ KWARGS = dict(name="spectrometer", role="ccd",
 CLASS_SHRK = andorshrk.Shamrock
 KWARGS_SHRK = dict(name="sr193", role="spectrograph", device=0)
 KWARGS_SHRK_SIM = dict(name="sr193", role="spectrograph", device="fake",
-                       slits={1: "slit-in", 3: "slit-monochromator"})
+                       slits={1: "slit-in", 3: "slit-monochromator"},
+                       bands={1: (230e-9, 500e-9), 3: (600e-9, 1253e-9), 5: "pass-through"})
 
 if TEST_NOHW:
     KWARGS = KWARGS_SIM
@@ -58,7 +59,19 @@ if TEST_NOHW:
 
 #@skip("simple")
 class TestShamrockStatic(unittest.TestCase):
-    def test_fake(self):
+    def test_fake_independent(self):
+        """
+        Just makes sure we don't (completely) break Shamrock after an update
+        """
+        sp = CLASS_SHRK(**KWARGS_SHRK_SIM)
+
+        self.assertGreater(len(sp.axes["grating"].choices), 0)
+        sp.moveAbs({"wavelength": 300e-9})
+
+        self.assertTrue(sp.selfTest(), "self test failed.")
+        sp.terminate()
+
+    def test_fake_with_ccd(self):
         """
         Just makes sure we don't (completely) break Shamrock after an update
         """
@@ -71,12 +84,17 @@ class TestShamrockStatic(unittest.TestCase):
                 break
 
         self.assertGreater(len(sp.axes["grating"].choices), 0)
-        sp.moveAbs({"wavelength":300e-9})
+        sp.moveAbs({"wavelength": 300e-9})
 
         self.assertTrue(sp.selfTest(), "self test failed.")
         dev.terminate()
 
+
 class TestSpectrograph(object):
+    """
+    Abstract class for testing the spectrograph.
+    Subclass needs to inherit from unittest.TestCase too and to provide .spectrograph
+    """
 
     def tearDown(self):
         # restore position
@@ -109,7 +127,6 @@ class TestSpectrograph(object):
         f = self.spectrograph.moveAbs({'wavelength': new_wl})
         f.result()  # wait for the move to finish
         self.assertAlmostEqual(self.spectrograph.position.value["wavelength"], new_wl)
-
 
 #    @skip("simple")
     def test_fail_move(self):
@@ -228,8 +245,8 @@ class TestSpectrograph(object):
         Ask for several long moves in a row, and checks that nothing breaks
         """
         sp = self.spectrograph
-        pos_1 = {'wavelength':300e-9}
-        pos_2 = {'wavelength':500e-9}
+        pos_1 = {'wavelength': 300e-9}
+        pos_2 = {'wavelength': 500e-9}
 
         # mesure how long it takes to do one move
         f = sp.moveAbs(pos_1)
@@ -248,8 +265,10 @@ class TestSpectrograph(object):
         # intentionally skip some sync (it _should_ not matter)
 #        f0.result()
         f1.result()
+        self.assertTrue(f0.done())
 #        f2.result()
         f3.result()
+        self.assertTrue(f2.done())
 
         dur = time.time() - start
         self.assertGreaterEqual(dur, expected_time)
@@ -257,8 +276,8 @@ class TestSpectrograph(object):
 #    @skip("simple")
     def test_cancel(self):
         sp = self.spectrograph
-        pos_1 = {'wavelength':300e-9}
-        pos_2 = {'wavelength':500e-9}
+        pos_1 = {'wavelength': 300e-9}
+        pos_2 = {'wavelength': 500e-9}
 
         f = sp.moveAbs(pos_1)
         # cancel during action is not supported so don't try
@@ -281,6 +300,50 @@ class TestSpectrograph(object):
         self.assertTrue(f2.done())
 
         f1.result()
+
+    def testFilterWheel(self):
+        sp = self.spectrograph
+        if "band" not in sp.axes:
+            self.skipTest("No band axis, cannot test changing it")
+
+        cur_pos = sp.position.value["band"]
+
+        # don't change position
+        f = sp.moveAbs({"band": cur_pos})
+        f.result()
+
+        self.assertEqual(sp.position.value["band"], cur_pos)
+
+        # find a different position
+        new_pos = cur_pos
+        bands = sp.axes["band"]
+        for p in bands.choices:
+            if p != cur_pos:
+                new_pos = p
+                break
+        else:
+            self.fail("Failed to find a position different from %d" % cur_pos)
+
+        f = sp.moveAbs({"band": new_pos})
+        f.result()
+        self.assertEqual(sp.position.value["band"], new_pos)
+
+    def testFocus(self):
+        sp = self.spectrograph
+        if "focus" not in sp.axes:
+            self.skipTest("No focus axis, cannot test changing it")
+
+        orig_focus = sp.position.value["focus"]
+        # check relative moves
+        f1 = sp.moveRel({"focus": 10e-6})
+        f2 = sp.moveRel({"focus": -5e-6})
+        f2.result()
+        self.assertTrue(f1.done())
+        f1.result()
+        self.assertAlmostEqual(sp.position.value["focus"], orig_focus + 5e-6)
+
+        # check abs moves
+        sp.moveAbs({"focus": orig_focus}).result()
 
 
 class TestShamrock(TestSpectrograph, unittest.TestCase):
