@@ -271,6 +271,7 @@ def change_brightness(colour, weight):
     return new_fcol + (_alpha,) if _alpha is not None else new_fcol
 
 
+# String -> VA conversion helper
 def convertToObject(s):
     """
     Tries to convert a string to a (simple) object.
@@ -291,6 +292,75 @@ def convertToObject(s):
         logging.error("Syntax error: %s", exc)
         # TODO: with Python3: raise from?
         raise ValueError("Failed to parse %s" % s)
+
+
+def boolify(s):
+    if s == 'True' or s == 'true':
+        return True
+    if s == 'False' or s == 'false':
+        return False
+    raise ValueError('Not a boolean value: %s' % s)
+
+
+def reproduceTypedValue(real_val, str_val):
+    """
+    Tries to convert a string to the type of the given value
+    real_val (object): example value with the type that must be converted to
+    str_val (string): string that will be converted
+    return the value contained in the string with the type of the real value
+    raises
+      ValueError() if not possible to convert
+      TypeError() if type of real value is not supported
+    """
+    if isinstance(real_val, bool):
+        return boolify(str_val)
+    elif isinstance(real_val, int):
+        return int(str_val)
+    elif isinstance(real_val, float):
+        return float(str_val)
+    elif isinstance(real_val, basestring):
+        return str_val
+    elif isinstance(real_val, dict):  # must be before iterable
+        if len(real_val) > 0:
+            key_real_val = real_val.keys()[0]
+            value_real_val = real_val[key_real_val]
+        else:
+            logging.warning("Type of attribute is unknown, using string")
+            sub_real_val = ""
+            value_real_val = ""
+
+        dict_val = {}
+        for sub_str in str_val.split(','):
+            item = sub_str.split(':')
+            if len(item) != 2:
+                raise ValueError("Cannot convert '%s' to a dictionary item" % item)
+            key = reproduceTypedValue(key_real_val, item[0])  # TODO Should warn if len(item) != 2
+            value = reproduceTypedValue(value_real_val, item[1])
+            dict_val[key] = value
+        return dict_val
+    elif isinstance(real_val, collections.Iterable):
+        if len(real_val) > 0:
+            sub_real_val = real_val[0]
+        else:
+            logging.warning("Type of attribute is unknown, using string")
+            sub_real_val = ""
+
+        # Try to be open-minded if the sub-type is a number (so that things like
+        # " 3 x 5 px" returns (3, 5)
+        if isinstance(sub_real_val, (int, long)):
+            pattern = "[+-]?[\d]+"  # ex: -15
+        elif isinstance(sub_real_val, float):
+            pattern = "[+-]?[\d.]+(?:[eE][+-]?[\d]+)?"  # ex: -156.41e-9
+        else:
+            pattern = "[^,]+"
+
+        iter_val = []
+        for sub_str in re.findall(pattern, str_val):
+            iter_val.append(reproduceTypedValue(sub_real_val, sub_str))
+        final_val = type(real_val)(iter_val)  # cast to real type
+        return final_val
+
+    raise TypeError("Type %r is not supported to convert %s" % (type(real_val), str_val))
 
 
 def ensureTuple(v):

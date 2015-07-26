@@ -40,7 +40,7 @@ from odemis.gui.util.widgets import VigilantAttributeConnector, AxisConnector
 from odemis.model import VigilantAttributeBase
 import odemis.util.units as utun
 from odemis.model import NotApplicableError
-from odemis.util.driver import reproduceTypedValue
+from odemis.util.conversion import reproduceTypedValue
 from odemis.util.units import readable_str
 
 
