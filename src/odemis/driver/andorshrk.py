@@ -68,9 +68,6 @@ SIDE_PORT = 1
 
 ERRORLENGTH = 64
 
-# FIXME: pass it as argument
-# Nominal dispersion values with respect to the grating (in m / m)
-NOMINAL_DISPERSIONS = {1: 0.000010720, 2: 0.000005220, 3: 0.000002410}
 
 class ShamrockError(Exception):
     def __init__(self, errno, strerror):
@@ -340,7 +337,7 @@ class Shamrock(model.Actuator):
                 self._focus_step_size = fstepsize
                 mx = self.GetFocusMirrorMaxSteps() * fstepsize
                 axes["focus"] = model.Axis(unit="m",
-                                           range=(0, mx))
+                                           range=(fstepsize, mx))
                 logging.info("Focus actuator added as 'focus'")
             else:
                 logging.info("Focus actuator is not present")
@@ -552,7 +549,8 @@ class Shamrock(model.Actuator):
         Offset = c_int()
         self._dll.ShamrockGetGratingInfo(self._device, grating,
                          byref(Lines), Blaze, byref(Home), byref(Offset))
-        logging.debug("Grating is %f, %s, %d, %d", Lines.value, Blaze.value, Home.value, Offset.value)
+        logging.debug("Grating %d is %f, %s, %d, %d", grating,
+                      Lines.value, Blaze.value, Home.value, Offset.value)
 
         return Lines.value * 1e3, Blaze.value, Home.value, Offset.value
 
@@ -615,19 +613,43 @@ class Shamrock(model.Actuator):
     def GetCalibration(self, npixels):
         """
         npixels (0<int): number of pixels on the sensor. It's actually the
-           length of the list that is being returned.
+          length of the list that is being returned. Note: on small center
+          wavelength, the values might be meaningless, and multiple 0 nm can be
+          returned.
         return (list of floats of length npixels): wavelength in m
         """
-        # TODO: check if the result when the wavelength is almost 0 is compatible with Odemis
         assert(0 < npixels)
+        # Warning: if npixels <= 7, very weird/large values are returned (with SDK 2.100).
+        # Probably because GetPixelCalibrationCoefficients() returns also very
+        # strange polynomial.
+        if npixels <= 7:
+            logging.warning("Requested calibration info for %d pixels, which is known to fail", npixels)
         # TODO: this is pretty slow, and could be optimised either by using a
         # numpy array or returning directly the C array. We could also just
         # allocate one array at the init, and reuse it.
         CalibrationValues = (c_float * npixels)()
         self._dll.ShamrockGetCalibration(self._device, CalibrationValues, npixels)
-        return [v * 1e-9 for v in CalibrationValues]
+        # Note: it just applies the polynomial, so you can end up with negative
+        # values => clamp them to 0.
+        return [max(0, v * 1e-9) for v in CalibrationValues]
 
-# def ShamrockGetCCDLimits(int device, int port, float *Low, float *High);
+    def GetPixelCalibrationCoefficients(self):
+        """
+        return (4 floats)
+        """
+        a, b, c, d = c_float(), c_float(), c_float(), c_float()
+        self._dll.ShamrockGetPixelCalibrationCoefficients(self._device, byref(a), byref(b), byref(c), byref(d))
+        return a.value, b.value, c.value, d.value
+
+    def GetCCDLimits(self, port):
+        """
+        No idea what it really does
+        return (float, float): low/high wavelength in m
+        """
+        low = c_float()
+        high = c_float()
+        self._dll.ShamrockGetCCDLimits(self._device, port, byref(low), byref(high))
+        return low.value * 1e-9, high.value * 1e-9
 
     def SetPixelWidth(self, width):
         """
@@ -656,6 +678,7 @@ class Shamrock(model.Actuator):
         steps (int): relative numbers of steps to do
         """
         assert isinstance(steps, int)
+        # The documentation states focus is >=0, but SR193 only accepts >0
         self._dll.ShamrockSetFocusMirror(self._device, steps)
 
     def GetFocusMirror(self):
@@ -899,36 +922,37 @@ class Shamrock(model.Actuator):
         grating/wavelength.
         return (list of floats): pixel number -> wavelength in m
         """
+        # FIXME: calling this during a move seems to hang => need a hw access lock
         # If wavelength is 0, report empty list to indicate it makes no sense
-        if self.position.value["wavelength"] == 0:
+        if self.position.value["wavelength"] <= 1e-9:
             return []
 
         npixels = self._camera.resolution.value[0]
 
         self.SetNumberPixels(npixels)
         self.SetPixelWidth(self._camera.pixelSize.value[0] * self._camera.binning.value[0])
-        # TODO: can GetCalibration() return several values identical? eg, 0's if
-        # cw is near 0 nm? If so, something should be done, as GUI hates that...
+        # TODO: GetCalibration() return several values identical (eg, 0's if
+        # cw is < 75 nm). Need to decide if we return something better (what?)
+        # or check all the clients handle this corner case well.
         return self.GetCalibration(npixels)
 
-    # TODO: rename. and change API? getOpeningToWavelenth(width) -> (float, float)?
-    def GetNominalDispersion(self, grating):
+    def getOpeningToWavelength(self, width):
         """
-        grating (0<int<=3)
-        return:
-              nominal_dispersion (float): nominal dispersion for given grating
-                  in m / m
+        Computes the range of the wavelength observed for a given slit opening
+        width (in front of the detector).
+        That is correct for the current grating/wavelength.
+        width (float): opening width in m
+        return (float, float): minimum/maximum wavelength observed
         """
-        # TODO: Can be extended to also support SR193. For now we assume that
-        # SR303 is used and, since the divergence due to the wavelength is minor,
-        # we use the value calculated for wavelength = 500nm
-
-        # TODO: can we avoid the constants? Focal length + grating's lines is suffisient?
-        # Or just second value of the polynomial?
-        # Or just set 2 pixels with the opening width as pixelWidth and read GetCalibration()?
-        assert 1 <= grating <= 3
-        nominal_dispersion = NOMINAL_DISPERSIONS[grating]
-        return nominal_dispersion
+        # Pretend we have a small CCD and look at the wavelength at the side
+        # Note: In theory, we could just say we have 2 pixels, but the SDK doesn't
+        # seem to put the center exactly at the center of the sensor (ie, it
+        # seems pixel npixels/2 get the center wavelength), and the SDK doesn't
+        # like resolutions < 8 anyway.
+        self.SetNumberPixels(10)
+        self.SetPixelWidth(width / 10)
+        calib = self.GetCalibration(10)
+        return calib[0], calib[-1]
 
     @isasync
     def moveRel(self, shift):
@@ -1029,9 +1053,12 @@ class Shamrock(model.Actuator):
         """
         # don't complain if the user asked for non reachable wl: he couldn't know
         minp, maxp = self.GetWavelengthLimits(self.GetGrating())
-        pos = min(max(minp, pos), maxp)
+        rpos = min(max(minp, pos), maxp)
+        if rpos != pos:
+            logging.info("Limiting wavelength to %f nm (requested %f nm)",
+                         rpos * 1e9, pos * 1e9)
 
-        self.SetWavelength(pos)
+        self.SetWavelength(rpos)
         self._updatePosition()
 
     def _doSetGrating(self, g):
@@ -1050,7 +1077,7 @@ class Shamrock(model.Actuator):
         # it's only now that we can check the goal (absolute) position is wrong
         shift_st = int(round(shift / self._focus_step_size))
         steps = self.GetFocusMirror() + shift_st  # absolute pos
-        if not 0 <= steps <= self.GetFocusMirrorMaxSteps():
+        if not 0 < steps <= self.GetFocusMirrorMaxSteps():
             rng = self.axes["focus"].range
             raise ValueError(u"Position %f of axis 'focus' not within range %f→%f" %
                              (steps * self._focus_step_size, rng[0], rng[1]))
@@ -1209,12 +1236,11 @@ class FakeShamrockDLL(object):
         # filter wheel
         self._filter = 1  # current position
         # filter info: pos - 1 -> str
-        # TODO: find out what the typical filter info looks like
-        self._filters = ("fdafd1",
-                         "fdsfd2",
-                         "fdsfd3",
+        self._filters = ("Filter 1",
+                         "Filter 2",
+                         "Filter 3",
                          "",
-                         "fdsfd5",
+                         "Filter 5",
                          "",
                          )
 
@@ -1256,9 +1282,9 @@ class FakeShamrockDLL(object):
         fl = _deref(p_fl, c_float)
         ad = _deref(p_ad, c_float)
         ft = _deref(p_ft, c_float)
-        fl.value = 0.300 # m
+        fl.value = 0.301  # m
         ad.value = 2.3 # °
-        ft.value = 0.001 # m
+        ft.value = -2.1695098876953125  # °
 
     def ShamrockSetGrating(self, device, grating):
         self._check_hw_access()

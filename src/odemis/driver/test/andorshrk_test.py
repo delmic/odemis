@@ -345,6 +345,32 @@ class TestSpectrograph(object):
         # check abs moves
         sp.moveAbs({"focus": orig_focus}).result()
 
+    def test_calib(self):
+        sp = self.spectrograph
+
+        # Try with a normal cw.
+        # Most gratings (but mirrors) works well with 600 nm
+        sp.moveAbs({"wavelength": 600e-9}).result()
+        wl = sp.position.value['wavelength']
+        lt = sp.getPixelToWavelength()
+        self.assertEqual(len(lt), self.ccd.resolution.value[0])
+        self.assertTrue(lt[0] < wl < lt[-1])
+
+        rng = sp.getOpeningToWavelength(10e-6)
+        self.assertEqual(len(rng), 2)
+        self.assertTrue(rng[0] < wl < rng[1])
+        rng = sp.getOpeningToWavelength(10e-3)
+        self.assertEqual(len(rng), 2)
+        self.assertTrue(rng[0] < wl < rng[1])
+
+        # Check it doesn't go too crazy at zero order
+        sp.moveAbs({"wavelength": 0}).result()
+        wl = sp.position.value['wavelength']
+        self.assertLessEqual(wl, 10e-9)
+        lt = sp.getPixelToWavelength()
+        for w in lt:
+            self.assertTrue(0 <= w <= 20e-9)
+
 
 class TestShamrock(TestSpectrograph, unittest.TestCase):
     """
