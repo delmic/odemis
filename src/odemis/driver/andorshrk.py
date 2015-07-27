@@ -24,17 +24,19 @@ from odemis import model
 import odemis
 from odemis.driver import andorcam2
 from odemis.model import isasync, CancellableThreadPoolExecutor, HwError
+from odemis.util import driver
 import os
 import time
+
 
 # Constants from ShamrockCIF.h
 ACCESSORYMIN = 0  # changed in the latest version (from 1->2)
 ACCESSORYMAX = 1
-# SHAMROCK_FILTERMIN 1
-# SHAMROCK_FILTERMAX 6
+FILTERMIN = 1
+FILTERMAX = 6
 # SHAMROCK_TURRETMIN 1
 # SHAMROCK_TURRETMAX 3
-# SHAMROCK_GRATINGMIN 1
+GRATINGMIN = 1
 # Note: the documentation mentions the width is in mm, but it's actually µm.
 SLITWIDTHMIN = 10
 SLITWIDTHMAX = 2500
@@ -66,9 +68,10 @@ SIDE_PORT = 1
 
 ERRORLENGTH = 64
 
+# FIXME: pass it as argument
 # Nominal dispersion values with respect to the grating (in m / m)
 NOMINAL_DISPERSIONS = {1: 0.000010720, 2: 0.000005220, 3: 0.000002410}
-                 
+
 class ShamrockError(Exception):
     def __init__(self, errno, strerror):
         self.args = (errno, strerror)
@@ -220,11 +223,11 @@ class Shamrock(model.Actuator):
     On Linux, the SR303i is supported since SDK 2.97, and the other ones,
     including the SR193i since SDK 2.99.
     The SR303i must be connected via the I²C cable on the iDus. With SDK 2.100+,
-    it should also work via the direct USB connection.
+    it also work via the direct USB connection.
     Note: we don't handle changing turret.
     """
     def __init__(self, name, role, device, camera=None, accessory=None,
-                 slits=None, children=None, **kwargs):
+                 slits=None, bands=None, fstepsize=1e-6, children=None, **kwargs):
         """
         device (0<=int or "fake"): device number
         camera (None or AndorCam2): Needed if the connection is done via the
@@ -237,9 +240,18 @@ class Shamrock(model.Actuator):
           high on line 1 whenever one of the slit leds might be turned on.
         slits (None or dict int -> str): names of each slit,
           for 1 to 4: in-side, in-direct, out-side, out-direct
+        bands (None or dict 1<=int<=6 -> 2-tuple of floats > 0 or str):
+          wavelength range or name of each filter for the filter wheel from 1->6.
+          Positions without filters do not need to be defined.
+        fstepsize (0<float): size of one step on the focus actuator. Not very
+          important, mostly useful for providing to the user a rough idea of how
+          much the image will change after a move.
         """
+        # TODO: allow to specify the device via its sn, instead of the (absolutely
+        # unreliable) device number?
+
         # From the documentation:
-        # If controlling the shamrock through i2c it is important that both the
+        # If controlling the shamrock through I²C it is important that both the
         # camera and spectrograph are being controlled through the same calling
         # program and that the DLLs used are contained in the same working
         # folder. The camera MUST be initialized before attempting to
@@ -298,12 +310,10 @@ class Shamrock(model.Actuator):
             # for now, it's fixed (and it's unlikely to be useful to allow less than the max)
             max_speed = 1000e-9 / 5 # about 1000 nm takes 5s => max speed in m/s
             self.speed = model.MultiSpeedVA({"wavelength": max_speed},
-                                            range=[max_speed, max_speed],
+                                            range=(max_speed, max_speed),
                                             unit="m/s",
                                             readonly=True)
 
-            # FIXME: for now the SDK 2.99 with SR193, commands will fail if not
-            # separated by some delay (eg, 1s)
             gchoices = self._getGratingChoices()
 
             # The actual limits are per grating. We cannot provide this much
@@ -312,7 +322,7 @@ class Shamrock(model.Actuator):
             wl_range = (float("inf"), float("-inf"))
             for g in gchoices:
                 try:
-                    wmin, wmax = self.GetWavelengthLimits(1)
+                    wmin, wmax = self.GetWavelengthLimits(g)
                 except ShamrockError:
                     logging.exception("Failed to find wavelength limit for grating %d", g)
                     continue
@@ -323,13 +333,58 @@ class Shamrock(model.Actuator):
                     "grating": model.Axis(choices=gchoices)
                     }
 
+            if self.FocusMirrorIsPresent():
+                # TODO: how to get a conversion from steps to meter? => param?
+                if not 0 < fstepsize <= 0.1:  # m
+                    raise ValueError("fstepsize is %f but should be between 0 and 0.1m" % (fstepsize,))
+                self._focus_step_size = fstepsize
+                mx = self.GetFocusMirrorMaxSteps() * fstepsize
+                axes["focus"] = model.Axis(unit="m",
+                                           range=(0, mx))
+                logging.info("Focus actuator added as 'focus'")
+            else:
+                logging.info("Focus actuator is not present")
+
+            if self.FilterIsPresent():
+                if bands is None:  # User gave no info => fallback to what the hardware knows
+                    # TODO: way to detect that a position has no filter?
+                    bands = dict((i, self.GetFilterInfo(i + 1)) for i in range(FILTERMAX))
+                else:  # Check the content
+                    try:
+                        for pos, band in bands.items():
+                            if not FILTERMIN <= pos <= FILTERMAX:
+                                raise ValueError("Filter position should be between %d and "
+                                                 "%d, but got %d." % (FILTERMIN, FILTERMAX, pos))
+                            # To support "weird" filter, we accept strings
+                            if isinstance(band, basestring):
+                                if not band.strip():
+                                    raise ValueError("Name of filter %d is empty" % pos)
+                            else:
+                                driver.checkLightBand(band)
+                    except Exception:
+                        logging.exception("Failed to parse bands %s", bands)
+                        raise
+                # If the current position is not among the known positions =>
+                # add this position
+                b = self.GetFilter()
+                if b not in bands:
+                    bands[b] = self.GetFilterInfo(b)
+
+                axes["band"] = model.Axis(choices=bands)
+                logging.info("Filter wheel added as 'band'")
+            else:
+                if bands is not None:
+                    raise ValueError("Device %d has no filter wheel, but 'bands'"
+                                     " argument provided." % (bands,))
+                logging.info("Filter wheel is not present")
+
             # add slits which are available
             for i, slitn in self._slit_names.items():
                 if self.AutoSlitIsPresent(i):
                     axes[slitn] = model.Axis(unit="m",
                                              range=(SLITWIDTHMIN * 1e-6, SLITWIDTHMAX * 1e-6)
                                              )
-                    logging.info("Adding slit %d added as %s", i, slitn)
+                    logging.info("Slit %d added as %s", i, slitn)
                 else:
                     logging.info("Slit %d (%s) is not present", i, slitn)
 
@@ -358,13 +413,16 @@ class Shamrock(model.Actuator):
             # set HW and SW version
             self._swVersion = "%s" % (odemis.__version__)
             # TODO: EEPROM contains name of the device, but there doesn't seem to be any function for getting it?!
-            self._hwVersion = "%s (s/n: %s)" % ("Andor Shamrock", self.GetSerialNumber())
+            sn = self.GetSerialNumber()
+            fl, ad, ft = self.EepromGetOpticalParams()
+            self._hwVersion = ("%s (s/n: %s, focal length: %d mm)" %
+                               ("Andor Shamrock", sn, round(fl * 1000)))
 
             # will take care of executing axis move asynchronously
             self._executor = CancellableThreadPoolExecutor(max_workers=1) # one task at a time
 
             # RO, as to modify it the client must use .moveRel() or .moveAbs()
-            self.position = model.VigilantAttribute({}, unit="m", readonly=True)
+            self.position = model.VigilantAttribute({}, readonly=True)
             self._updatePosition()
 
         except Exception:
@@ -481,7 +539,9 @@ class Shamrock(model.Actuator):
         grating (0<int<=3)
         return:
               lines (float): number of lines / m
-              blaze (None or float): wavelength in m or None if a mirro
+              blaze (str): wavelength or mirror info, as reported by the device
+                Note that some devices add a unit (eg, nm), and some don't.
+                When it is a mirror, there is typically a "mirror" keyword.
               home (int): beginning of the grating in steps
               offset (int): offset to the grating in steps
         """
@@ -494,25 +554,7 @@ class Shamrock(model.Actuator):
                          byref(Lines), Blaze, byref(Home), byref(Offset))
         logging.debug("Grating is %f, %s, %d, %d", Lines.value, Blaze.value, Home.value, Offset.value)
 
-        if Blaze.value: # empty string if no blaze (= mirror)
-            blaze = float(Blaze.value) * 1e-9
-        else:
-            blaze = None
-        return Lines.value * 1e3, blaze, Home.value, Offset.value
-
-    def GetNominalDispersion(self, grating):
-        """
-        grating (0<int<=3)
-        return:
-              nominal_dispersion (float): nominal dispersion for given grating
-                  in m / m
-        """
-        # TODO: Can be extended to also support SR193. For now we assume that
-        # SR303 is used and, since the divergence due to the wavelength is minor,
-        # we use the value calculated for wavelength = 500nm
-        assert 1 <= grating <= 3
-        nominal_dispersion = NOMINAL_DISPERSIONS[grating]
-        return nominal_dispersion
+        return Lines.value * 1e3, Blaze.value, Home.value, Offset.value
 
     def SetWavelength(self, wavelength):
         """
@@ -520,12 +562,6 @@ class Shamrock(model.Actuator):
         wavelength (0<=float): wavelength in m
         """
         assert 0 <= wavelength <= 50e-6
-
-        # Note: When connected via the I²C bus of the camera, it is not
-        # possible to change the wavelength (or the grating) while the CCD
-        # is acquiring. So this will fail with an exception, and that's
-        # probably the best we can do (unless we want to synchronize with the
-        # CCD and ask to temporarily stop the acquisition).
 
         # Currently the SDK sometimes fail with 20201: SHAMROCK_COMMUNICATION_ERROR
         # when changing wavelength by a few additional nm. It _seems_ that it
@@ -562,10 +598,9 @@ class Shamrock(model.Actuator):
         grating (0<int<=3)
         return (0<=float< float): min, max wavelength in m
         """
-        logging.debug("grating = %d", grating)
         assert 1 <= grating <= 3
         Min, Max = c_float(), c_float() # in nm
-        self._dll.ShamrockGetWavelengthLimits(self._device, grating, 
+        self._dll.ShamrockGetWavelengthLimits(self._device, grating,
                                               byref(Min), byref(Max))
         return Min.value * 1e-9, Max.value * 1e-9
 
@@ -577,20 +612,13 @@ class Shamrock(model.Actuator):
         self._dll.ShamrockWavelengthIsPresent(self._device, byref(present))
         return (present.value != 0)
 
-# TODO: for SR193i
-# ShamrockSetFocusMirror(int device, int focus)
-# ShamrockGetFocusMirror(int device, int *focus)
-# ShamrockGetFocusMirrorMaxSteps(int device, int *steps)
-# ShamrockFocusMirrorReset(int device)
-# ShamrockFocusMirrorIsPresent(int device, int *present)
-
-
     def GetCalibration(self, npixels):
         """
         npixels (0<int): number of pixels on the sensor. It's actually the
            length of the list that is being returned.
         return (list of floats of length npixels): wavelength in m
         """
+        # TODO: check if the result when the wavelength is almost 0 is compatible with Odemis
         assert(0 < npixels)
         # TODO: this is pretty slow, and could be optimised either by using a
         # numpy array or returning directly the C array. We could also just
@@ -621,6 +649,71 @@ class Shamrock(model.Actuator):
 #self._dll.ShamrockGetPixelWidth(self._device, float* Width)
 #self._dll.ShamrockGetNumberPixels(self._device, int* NumberPixels)
 
+    # Focus mirror management
+    def SetFocusMirror(self, steps):
+        """
+        Relative move on the focus
+        steps (int): relative numbers of steps to do
+        """
+        assert isinstance(steps, int)
+        self._dll.ShamrockSetFocusMirror(self._device, steps)
+
+    def GetFocusMirror(self):
+        """
+        Get the current position of the focus
+        return (0<=int<=maxsteps): absolute position (in steps)
+        """
+        focus = c_int()
+        self._dll.ShamrockGetFocusMirror(self._device, byref(focus))
+        return focus.value
+
+    def GetFocusMirrorMaxSteps(self):
+        """
+        Get the maximum position of the focus
+        return (0 <= int): absolute max position (in steps)
+        """
+        focus = c_int()
+        self._dll.ShamrockGetFocusMirrorMaxSteps(self._device, byref(focus))
+        return focus.value
+
+    def FocusMirrorIsPresent(self):
+        present = c_int()
+        self._dll.ShamrockFocusMirrorIsPresent(self._device, byref(present))
+        return (present.value != 0)
+
+    # Filter wheel support
+    def SetFilter(self, pos):
+        """
+        Absolute move on the filter wheel
+        pos (1<=int<=6): new position
+        """
+        assert(FILTERMIN <= pos <= FILTERMAX)
+        self._dll.ShamrockSetFilter(self._device, pos)
+
+    def GetFilter(self):
+        """
+        Return the current absolute position of the filter wheel
+        return (1<=int<=6): current filter
+        """
+        pos = c_int()
+        self._dll.ShamrockGetFilter(self._device, byref(pos))
+        return pos.value
+
+    def GetFilterInfo(self, pos):
+        """
+        pos (int): filter number
+        return (str): the text associated to the given filter
+        """
+        info = create_string_buffer(64)  # TODO: what's a good size? The SDK doc says nothing
+        self._dll.ShamrockGetFilterInfo(self._device, pos, info)
+        return info.value
+
+    def FilterIsPresent(self):
+        present = c_int()
+        self._dll.ShamrockFilterIsPresent(self._device, byref(present))
+        return (present.value != 0)
+
+    # Slits management
     def SetAutoSlitWidth(self, index, width):
         """
         index (1<=int<=4): Slit number
@@ -664,7 +757,7 @@ class Shamrock(model.Actuator):
         self._dll.ShamrockAutoSlitIsPresent(self._device, index, byref(present))
         return (present.value != 0)
 
-# Shutter management
+    # Shutter management
     def SetShutter(self, mode):
         assert(SHUTTERMODEMIN <= mode <= SHUTTERMODEMAX)
         with self._hw_access:
@@ -759,10 +852,11 @@ class Shamrock(model.Actuator):
         for g in range(1, ngratings + 1):
             try:
                 lines, blaze, home, offset = self.GetGratingInfo(g)
-                if blaze is None:
-                    gchoices[g] = "%.1f l/mm (mirror)" % (lines * 1e-3)
+                if lines == 0 or "mirror" in blaze.lower():
+                    logging.debug("Concidering grating %d a mirror", g)
+                    gchoices[g] = "mirror"
                 else:
-                    gchoices[g] = "%.1f l/mm (blaze: %g nm)" % (lines * 1e-3, blaze * 1e9)
+                    gchoices[g] = "%.1f l/mm (blaze: %s)" % (lines * 1e-3, blaze)
             except ShamrockError:
                 logging.exception("Failed to get grating info for %d", g)
                 gchoices[g] = "unknown"
@@ -779,6 +873,12 @@ class Shamrock(model.Actuator):
                "grating": self.GetGrating()
               }
 
+        if "focus" in self.axes:
+            pos["focus"] = self.GetFocusMirror() * self._focus_step_size
+
+        if "band" in self.axes:
+            pos["band"] = self.GetFilter()
+
         for i, name in self._slit_names.items():
             if name in self.axes:
                 pos[name] = self.GetAutoSlitWidth(i)
@@ -794,6 +894,9 @@ class Shamrock(model.Actuator):
 
     def getPixelToWavelength(self):
         """
+        Return the lookup table pixel number of the CCD -> wavelength observed.
+        That's correct for the given current CCD binning, and current
+        grating/wavelength.
         return (list of floats): pixel number -> wavelength in m
         """
         # If wavelength is 0, report empty list to indicate it makes no sense
@@ -807,6 +910,25 @@ class Shamrock(model.Actuator):
         # TODO: can GetCalibration() return several values identical? eg, 0's if
         # cw is near 0 nm? If so, something should be done, as GUI hates that...
         return self.GetCalibration(npixels)
+
+    # TODO: rename. and change API? getOpeningToWavelenth(width) -> (float, float)?
+    def GetNominalDispersion(self, grating):
+        """
+        grating (0<int<=3)
+        return:
+              nominal_dispersion (float): nominal dispersion for given grating
+                  in m / m
+        """
+        # TODO: Can be extended to also support SR193. For now we assume that
+        # SR303 is used and, since the divergence due to the wavelength is minor,
+        # we use the value calculated for wavelength = 500nm
+
+        # TODO: can we avoid the constants? Focal length + grating's lines is suffisient?
+        # Or just second value of the polynomial?
+        # Or just set 2 pixels with the opening width as pixelWidth and read GetCalibration()?
+        assert 1 <= grating <= 3
+        nominal_dispersion = NOMINAL_DISPERSIONS[grating]
+        return nominal_dispersion
 
     @isasync
     def moveRel(self, shift):
@@ -823,15 +945,13 @@ class Shamrock(model.Actuator):
         # several in a row must mean they accumulate. So we queue a
         # special task. That also means the range check is delayed until
         # the actual position is known.
-        ordered_axes = ("wavelength",) + tuple(self._slit_names.values())
+
         actions = []
-        for axis in ordered_axes:
-            try:
-                s = shift[axis]
-            except KeyError:
-                continue
+        for axis, s in shift.items():  # order doesn't matter
             if axis == "wavelength":
                 actions.append((self._doSetWavelengthRel, s))
+            elif axis == "focus":
+                actions.append((self._doSetFocusRel, s))
             elif axis == self._slit_names.values():
                 sid = [k for k, v in self._slit_names.items() if v == axis][0]
                 actions.append((self._doSetSlitRel, sid, s))
@@ -851,7 +971,7 @@ class Shamrock(model.Actuator):
         self._checkMoveAbs(pos)
 
         # If grating needs to be changed, change it first, then the wavelength
-        ordered_axes = ("grating", "wavelength", "flip-out") + tuple(self._slit_names.values())
+        ordered_axes = ("grating", "wavelength", "band", "focus", "flip-out") + tuple(self._slit_names.values())
         actions = []
         for axis in ordered_axes:
             try:
@@ -862,6 +982,10 @@ class Shamrock(model.Actuator):
                 actions.append((self._doSetGrating, p))
             elif axis == "wavelength":
                 actions.append((self._doSetWavelengthAbs, p))
+            elif axis == "band":
+                actions.append((self._doSetFilter, p))
+            elif axis == "focus":
+                actions.append((self._doSetFocusAbs, p))
             elif axis == "flip-out":
                 actions.append((self._doSetFlipper, OUTPUT_FLIPPER, p))
             elif axis in self._slit_names.values():
@@ -922,6 +1046,28 @@ class Shamrock(model.Actuator):
 
         self._updatePosition()
 
+    def _doSetFocusRel(self, shift):
+        # it's only now that we can check the goal (absolute) position is wrong
+        shift_st = int(round(shift / self._focus_step_size))
+        steps = self.GetFocusMirror() + shift_st  # absolute pos
+        if not 0 <= steps <= self.GetFocusMirrorMaxSteps():
+            rng = self.axes["focus"].range
+            raise ValueError(u"Position %f of axis 'focus' not within range %f→%f" %
+                             (steps * self._focus_step_size, rng[0], rng[1]))
+
+        self.SetFocusMirror(shift_st)  # needs relative value
+        self._updatePosition()
+
+    def _doSetFocusAbs(self, pos):
+        steps = int(round(pos / self._focus_step_size))
+        shift_st = steps - self.GetFocusMirror()
+        self.SetFocusMirror(shift_st)  # needs relative value
+        self._updatePosition()
+
+    def _doSetFilter(self, pos):
+        self.SetFilter(pos)
+        self._updatePosition()
+
     def _doSetSlitRel(self, sid, shift):
         """
         Change the slit width by a value
@@ -930,10 +1076,11 @@ class Shamrock(model.Actuator):
         """
         width = self.GetAutoSlitWidth(sid) + shift
         # it's only now that we can check the absolute position is wrong
-        minp, maxp = SLITWIDTHMIN * 1e-6, SLITWIDTHMAX * 1e-6
-        if not minp <= width <= maxp:
+        n = self._slit_names[sid]
+        rng = self.axes[n].range
+        if not rng[0] <= width <= rng[1]:
             raise ValueError(u"Position %f of axis '%s' not within range %f→%f" %
-                             (width, self._slit_names[sid], minp, maxp))
+                             (width, n, rng[0], rng[1]))
 
         self.SetAutoSlitWidth(sid, width)
         self._updatePosition()
@@ -990,7 +1137,24 @@ class Shamrock(model.Actuator):
 
         return False
 
-    # TODO scan
+    @staticmethod
+    def scan():
+        dll = ShamrockDLL()
+        # TODO: for now it will only find the Shamrocks connected directly via
+        # USB, the I²C connections are not detected.
+        # => also try to find every AndorCam2 and connect via them?
+        dll.ShamrockInitialize("")
+        nodevices = c_int()
+        dll.ShamrockGetNumberDevices(byref(nodevices))
+        logging.info("Scanning %d Andor Shamrock devices", nodevices.value)
+        dev = []
+        for i in range(nodevices.value):
+            dev.append(("Andor Shamrock", # TODO: add serial number
+                        {"device": i})
+                      )
+
+        return dev
+
 
 # Only for testing/simulation purpose
 # Very rough version that is just enough so that if the wrapper behaves correctly,
@@ -1029,13 +1193,30 @@ class FakeShamrockDLL(object):
     def __init__(self, ccd=None):
         # gratings: l/mm, blaze, home, offset, min wl, max wl
         self._gratings = [(299.9, "300.0", 1000, -200, 0.0, 5003.6),
-                          (601.02, "500.0", 10000, 26, 0.0, 1578.95),
+                          # (601.02, "500.0", 10000, 26, 0.0, 1578.95),
+                          (0.0, "Mirror", 10000, 26, 0.0, 0.0),
                           (1200.1, "500.0", 30000, -65, 0.0, 808.65)]
 
         self._cw = 300.2 # current wavelength (nm)
         self._cg = 1 # current grating (1->3)
         self._pw = 0 # pixel width
         self._np = 0 # number of pixels
+
+        # focus
+        self._focus_pos = 25  # steps
+        self._focus_max = 500  # steps
+
+        # filter wheel
+        self._filter = 1  # current position
+        # filter info: pos - 1 -> str
+        # TODO: find out what the typical filter info looks like
+        self._filters = ("fdafd1",
+                         "fdsfd2",
+                         "fdsfd3",
+                         "",
+                         "fdsfd5",
+                         "",
+                         )
 
         # slits: int (id) -> float (position in µm)
         self._slits = {1: 10.3,
@@ -1071,9 +1252,13 @@ class FakeShamrockDLL(object):
     def ShamrockGetSerialNumber(self, device, serial):
         serial.value = "SR303fake"
 
-#    def ShamrockEepromGetOpticalParams(self, device,
-#                 byref(FocalLength), byref(AngularDeviation), byref(FocalTilt)):
-#        pass
+    def ShamrockEepromGetOpticalParams(self, device, p_fl, p_ad, p_ft):
+        fl = _deref(p_fl, c_float)
+        ad = _deref(p_ad, c_float)
+        ft = _deref(p_ft, c_float)
+        fl.value = 0.300 # m
+        ad.value = 2.3 # °
+        ft.value = 0.001 # m
 
     def ShamrockSetGrating(self, device, grating):
         self._check_hw_access()
@@ -1136,6 +1321,54 @@ class FakeShamrockDLL(object):
 
     def ShamrockSetNumberPixels(self, device, npixels):
         self._np = _val(npixels)
+
+    def ShamrockSetFocusMirror(self, device, focus):
+        if 0 <= self._focus_pos + focus <= self._focus_max:
+            self._focus_pos += focus
+            time.sleep(abs(focus) / 100)  # 100 steps/s
+        else:
+            raise ShamrockError(20267, ShamrockDLL.err_code[20267])
+
+    def ShamrockGetFocusMirror(self, device, p_focus):
+        focus = _deref(p_focus, c_int)
+        focus.value = self._focus_pos
+
+    def ShamrockGetFocusMirrorMaxSteps(self, device, p_steps):
+        steps = _deref(p_steps, c_int)
+        steps.value = self._focus_max
+
+    def ShamrockFocusMirrorReset(self, device):
+        self._focus_pos = 0
+
+    def ShamrockFocusMirrorIsPresent(self, device, p_present):
+        present = _deref(p_present, c_int)
+        present.value = 1 # yes !
+
+    def ShamrockSetFilter(self, device, flter):
+        if FILTERMIN <= flter <= FILTERMAX:
+            dist = abs(self._filter - flter)
+            time.sleep(dist)  # 1s / position
+            # TODO: sleep based on most direct move
+            self._filter = flter
+        else:
+            raise ShamrockError(20268, ShamrockDLL.err_code[20268])
+
+    def ShamrockGetFilter(self, device, p_filter):
+        flter = _deref(p_filter, c_int)
+        flter.value = self._filter
+
+    def ShamrockGetFilterInfo(self, device, flter, s_info):
+        s_info.value = self._filters[flter - 1]
+
+#     def ShamrockSetFilterInfo(self, device,int Filter, char* Info):
+#     def ShamrockFilterReset(self, device):
+
+    def ShamrockFilterIsPresent(self, device, p_present):
+        present = _deref(p_present, c_int)
+        if self._filters:
+            present.value = 1
+        else:
+            present.value = 0
 
     def ShamrockAutoSlitIsPresent(self, device, index, p_present):
         present = _deref(p_present, c_int)

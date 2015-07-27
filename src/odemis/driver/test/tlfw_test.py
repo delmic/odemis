@@ -29,7 +29,15 @@ if os.name == "nt":
 else:
     PORT = "/dev/ttyFTDI*" #"/dev/ttyUSB0"
 
-CLASS = tlfw.FakeFW102c # use FakeFW102c if no hardware present
+# Export TEST_NOHW=1 to force using only the simulator and skipping test cases
+# needing real hardware
+TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
+
+if TEST_NOHW:
+    CLASS = tlfw.FakeFW102c
+else:
+    CLASS = tlfw.FW102c
+
 KWARGS = {"name": "test", "role": "filter", "port": PORT,
           "bands": {1: (100e-9, 150e-9),
                    2: (200e-9, 250e-9),
@@ -40,6 +48,7 @@ KWARGS = {"name": "test", "role": "filter", "port": PORT,
                    # one filter not present
                    }
           }
+
 
 #@skip("simple")
 class TestStatic(unittest.TestCase):
@@ -80,6 +89,7 @@ class TestStatic(unittest.TestCase):
         self.assertTrue(dev.selfTest(), "self test failed.")
         dev.terminate()
 
+
 class TestFW102c(unittest.TestCase):
     """
     Tests which need a component ready
@@ -94,7 +104,7 @@ class TestFW102c(unittest.TestCase):
         f = self.dev.moveAbs(self.orig_pos)
         f.result()
         self.dev.terminate()
-    
+
     def test_simple(self):
         cur_pos = self.dev.position.value["band"]
 

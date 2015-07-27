@@ -80,7 +80,7 @@ class FW102c(model.Actuator):
                     if not band.strip():
                         raise ValueError("Name of filter %d is empty" % pos)
                 else:
-                    self._checkBand(band)
+                    driver.checkLightBand(band)
         except Exception:
             logging.exception("Failed to parse bands %s", bands)
             raise
@@ -121,39 +121,6 @@ class FW102c(model.Actuator):
             if self._serial:
                 self._serial.close()
                 self._serial = None
-
-    def _checkBand(self, band):
-        """
-        band (object): should be tuple of floats or list of tuple of floats
-        raise ValueError: if the band doesn't follow the convention
-        """
-        if not isinstance(band, collections.Iterable) or len(band) == 0:
-            raise ValueError("band must be a (list of a) list of 2 floats")
-        # is it a list of list?
-        if isinstance(band[0], collections.Iterable):
-            # => set of 2-tuples
-            for sb in band:
-                if len(sb) != 2:
-                    raise ValueError("Expected only 2 floats in band, found %d" % len(sb))
-            band = tuple(band)
-        else:
-            # 2-tuple
-            if len(band) != 2:
-                raise ValueError("Expected only 2 floats in band, found %d" % len(band))
-            band = (tuple(band),)
-
-        # Check the values are min/max and in m: typically within nm (< µm!)
-        max_val = 10e-6 # m
-        for low, high in band:
-            if low > high:
-                raise ValueError("Min of band must be first in list")
-            if low < 0:
-                raise ValueError("Band must be 2 positive value in meters")
-            if low > max_val or high > max_val:
-                raise ValueError("Band contains very high values for light "
-                     "wavelength, ensure the value is in meters: %r." % band)
-
-        # no error found
 
     def _findDevice(self, ports):
         """

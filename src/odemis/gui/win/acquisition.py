@@ -32,7 +32,8 @@ from odemis.gui.conf import get_acqui_conf
 from odemis.gui.cont.settings import SecomSettingsController
 from odemis.gui.cont.streams import StreamBarController
 from odemis.gui.main_xrc import xrcfr_acq
-from odemis.gui.util import call_in_wx_main, formats_to_wildcards
+from odemis.gui.util import call_in_wx_main, formats_to_wildcards, \
+    wxlimit_invocation
 from odemis.gui.util.widgets import ProgressiveFutureConnector
 from odemis.util import units
 import os.path
@@ -92,7 +93,7 @@ class AcquisitionDialog(xrcfr_acq):
         self._orig_fan_speed = None
 
         orig_view = orig_tab_data.focussedView.value
-        view = self._tab_data_model.focussedView.value
+        self._view = self._tab_data_model.focussedView.value
 
         self.streambar_controller = StreamBarController(self._tab_data_model,
                                                         self.pnl_secom_streams)
@@ -125,12 +126,12 @@ class AcquisitionDialog(xrcfr_acq):
 
         # make sure the view displays the same thing as the one we are
         # duplicating
-        view.view_pos.value = orig_view.view_pos.value
-        view.mpp.value = orig_view.mpp.value
-        view.merge_ratio.value = orig_view.merge_ratio.value
+        self._view.view_pos.value = orig_view.view_pos.value
+        self._view.mpp.value = orig_view.mpp.value
+        self._view.merge_ratio.value = orig_view.merge_ratio.value
 
         # attach the view to the viewport
-        self.pnl_view_acq.setView(view, self._tab_data_model)
+        self.pnl_view_acq.setView(self._view, self._tab_data_model)
 
         self.Bind(wx.EVT_CHAR_HOOK, self.on_key)
 
@@ -147,9 +148,9 @@ class AcquisitionDialog(xrcfr_acq):
         pub.subscribe(self.on_setting_change, 'setting.changed')
         # TODO: we should actually listen to the stream tree, but it's not
         # currently possible.
-        # Currently just use view.last_update which should be "similar"
+        # Currently just use view.lastUpdate which should be "similar"
         # (but doesn't work if the stream contains no image)
-        view.lastUpdate.subscribe(self.on_streams_changed)
+        self._view.lastUpdate.subscribe(self.on_streams_changed)
 
     def duplicate_tab_data_model(self, orig):
         """
@@ -177,20 +178,17 @@ class AcquisitionDialog(xrcfr_acq):
         """
         # the order the streams are added should not matter on the display, so
         # it's ok to not duplicate the streamTree literally
-        view = self._tab_data_model.focussedView.value
 
         # go through all the streams available in the interface model
         for s in self._tab_data_model.streams.value:
-            view.addStream(s)  # Add first to the view, so "visible" button is correct
+            self._view.addStream(s)  # Add first to the view, so "visible" button is correct
             self.streambar_controller.add_acquisition_stream_cont(s)
 
     def remove_all_streams(self):
         """ Remove the streams we added to the view on creation """
         # Ensure we don't update the view after the window is destroyed
-        view = self._tab_data_model.focussedView.value
-
-        for s in view.getStreams():
-            view.removeStream(s)
+        for s in self._view.getStreams():
+            self._view.removeStream(s)
 
     def find_current_preset(self):
         """
@@ -234,7 +232,7 @@ class AcquisitionDialog(xrcfr_acq):
 
         return True
 
-    @call_in_wx_main
+    @wxlimit_invocation(0.1)
     def update_setting_display(self):
         # if gauge was left over from an error => now hide it
         if self.gauge_acq.IsShown():
@@ -242,7 +240,7 @@ class AcquisitionDialog(xrcfr_acq):
             self.Layout()
 
         # Enable/disable Fine alignment check box
-        streams = self._tab_data_model.focussedView.value.getStreams()
+        streams = self._view.getStreams()
         can_fa = self._can_fine_align(streams)
         if self.chkbox_fine_align.Enabled:
             self._prev_fine_align = self.chkbox_fine_align.Value
@@ -277,7 +275,7 @@ class AcquisitionDialog(xrcfr_acq):
         self.cmb_presets.SetValue(preset_name)
 
     def update_acquisition_time(self):
-        streams = self._tab_data_model.focussedView.value.getStreams()
+        streams = self._view.getStreams()
         if streams:
             if self.chkbox_fine_align.Value:
                 streams.append(self._ovrl_stream)
@@ -369,6 +367,7 @@ class AcquisitionDialog(xrcfr_acq):
         self.remove_all_streams()
         # stop listening to events
         pub.unsubscribe(self.on_setting_change, 'setting.changed')
+        self._view.lastUpdate.unsubscribe(self.on_streams_changed)
 
         self.Destroy()
 
@@ -408,8 +407,7 @@ class AcquisitionDialog(xrcfr_acq):
         self.btn_secom_acquire.Disable()
 
         # disable estimation time updates during acquisition
-        view = self._tab_data_model.focussedView.value
-        view.lastUpdate.unsubscribe(self.on_streams_changed)
+        self._view.lastUpdate.unsubscribe(self.on_streams_changed)
 
         # TODO: freeze all the settings so that it's not possible to change anything
         self._pause_settings()
@@ -418,7 +416,7 @@ class AcquisitionDialog(xrcfr_acq):
         self.Layout()  # to put the gauge at the right place
 
         # start acquisition + connect events to callback
-        streams = self._tab_data_model.focussedView.value.getStreams()
+        streams = self._view.getStreams()
 
         # Add the overlay stream if the fine alignment check box is checked
         if self.chkbox_fine_align.Value:
@@ -456,8 +454,7 @@ class AcquisitionDialog(xrcfr_acq):
         self._resume_settings()
 
         # re-enable estimation time updates
-        view = self._tab_data_model.focussedView.value
-        view.lastUpdate.subscribe(self.on_streams_changed)
+        self._view.lastUpdate.subscribe(self.on_streams_changed)
 
         try:
             data, exp = future.result(1) # timeout is just for safety
@@ -487,9 +484,7 @@ class AcquisitionDialog(xrcfr_acq):
         # save result to file
         self.lbl_acqestimate.SetLabel("Saving file...")
         try:
-            thumb = acq.computeThumbnail(
-                            self._tab_data_model.focussedView.value.stream_tree,
-                            future)
+            thumb = acq.computeThumbnail(self._view.stream_tree, future)
             filename = self.filename.value
             exporter = dataio.get_converter(self.conf.last_format)
             exporter.export(filename, data, thumb)

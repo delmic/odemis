@@ -75,76 +75,41 @@ def estimateMoveDuration(distance, speed, accel):
         t2 = vp / accel
         return t1 + t2
 
-# String -> VA conversion helper
 
-def boolify(s):
-    if s == 'True' or s == 'true':
-        return True
-    if s == 'False' or s == 'false':
-        return False
-    raise ValueError('Not a boolean value: %s' % s)
-
-
-def reproduceTypedValue(real_val, str_val):
+def checkLightBand(band):
     """
-    Tries to convert a string to the type of the given value
-    real_val (object): example value with the type that must be converted to
-    str_val (string): string that will be converted
-    return the value contained in the string with the type of the real value
-    raises
-      ValueError() if not possible to convert
-      TypeError() if type of real value is not supported
+    Check that the given object looks like a light band. It should either be
+    two float representing light wavelength in m, or a list of such tuple.
+    band (object): should be tuple of floats or list of tuple of floats
+    raise ValueError: if the band doesn't follow the convention
     """
-    if isinstance(real_val, bool):
-        return boolify(str_val)
-    elif isinstance(real_val, int):
-        return int(str_val)
-    elif isinstance(real_val, float):
-        return float(str_val)
-    elif isinstance(real_val, basestring):
-        return str_val
-    elif isinstance(real_val, dict): # must be before iterable
-        if len(real_val) > 0:
-            key_real_val = real_val.keys()[0]
-            value_real_val = real_val[key_real_val]
-        else:
-            logging.warning("Type of attribute is unknown, using string")
-            sub_real_val = ""
-            value_real_val = ""
+    if not isinstance(band, collections.Iterable) or len(band) == 0:
+        raise ValueError("Band %r is not a (list of a) list of 2 floats" % (band,))
+    # is it a list of list?
+    if isinstance(band[0], collections.Iterable):
+        # => set of 2-tuples
+        for sb in band:
+            if len(sb) != 2:
+                raise ValueError("Expected only 2 floats in band, found %d" % len(sb))
+        band = tuple(band)
+    else:
+        # 2-tuple
+        if len(band) != 2:
+            raise ValueError("Expected only 2 floats in band, found %d" % len(band))
+        band = (tuple(band),)
 
-        dict_val = {}
-        for sub_str in str_val.split(','):
-            item = sub_str.split(':')
-            if len(item) != 2:
-                raise ValueError("Cannot convert '%s' to a dictionary item" % item)
-            key = reproduceTypedValue(key_real_val, item[0]) # TODO Should warn if len(item) != 2
-            value = reproduceTypedValue(value_real_val, item[1])
-            dict_val[key] = value
-        return dict_val
-    elif isinstance(real_val, collections.Iterable):
-        if len(real_val) > 0:
-            sub_real_val = real_val[0]
-        else:
-            logging.warning("Type of attribute is unknown, using string")
-            sub_real_val = ""
+    # Check the values are min/max and in m: typically within nm (< µm!)
+    max_val = 10e-6  # m
+    for low, high in band:
+        if low > high:
+            raise ValueError("Min of band %s must be first in list" % (band,))
+        if low < 0:
+            raise ValueError("Band %s must be 2 positive value in meters" % (band,))
+        if low > max_val or high > max_val:
+            raise ValueError("Band %s contains very high values for light "
+                             "wavelength, ensure the value is in meters." % (band,))
 
-        # Try to be open-minded if the sub-type is a number (so that things like
-        # " 3 x 5 px" returns (3, 5)
-        if isinstance(sub_real_val, (int, long)):
-            pattern = "[+-]?[\d]+" # ex: -15
-        elif isinstance(sub_real_val, float):
-            pattern = "[+-]?[\d.]+(?:[eE][+-]?[\d]+)?" # ex: -156.41e-9
-        else:
-            pattern = "[^,]+"
-
-        iter_val = []
-        for sub_str in re.findall(pattern, str_val):
-            iter_val.append(reproduceTypedValue(sub_real_val, sub_str))
-        final_val = type(real_val)(iter_val) # cast to real type
-        return final_val
-
-    raise TypeError("Type %r is not supported to convert %s" % (type(real_val), str_val))
-
+    # no error found
 
 # Special trick functions for speeding up Pyro start-up
 def _speedUpPyroVAConnect(comp):
