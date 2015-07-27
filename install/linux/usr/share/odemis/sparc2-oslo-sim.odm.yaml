@@ -188,7 +188,7 @@ SPARC2: {
     children: {"x": "Optical Actuators"},
     init: {axis_name: "y",
            positions: {0: "on",
-                     0.1: "off"},
+                     0.01: "off"},
            },
 }
 
@@ -199,7 +199,7 @@ SPARC2: {
     children: {"x": "Optical Actuators"},
     init: {axis_name: "z",
            positions: {0: "on",
-                     0.1: "off"},
+                     0.01: "off"},
            },
 }
 
@@ -275,7 +275,7 @@ SPARC2: {
 #    children: {"x": "Optical Actuators"},
 #    init: {axis_name: "b",
 #           positions: {0: "on",
-#                     0.1: "off"},
+#                     0.01: "off"},
 #           },
 #    affects: ["Angular Camera", "Spectrometer", "CL Detector"]
 #}
