@@ -159,13 +159,15 @@ class AcquisitionDialog(xrcfr_acq):
         orig (MicroscopyGUIData)
         return (MicroscopyGUIData)
         """
+        # TODO: we'd better create a new view and copy the streams
         new = copy.copy(orig)  # shallow copy
 
         # create view (which cannot move or focus)
-        view = guimodel.MicroscopeView(orig.focussedView.value.name.value)
+        view = guimodel.MicroscopeView("All")
 
         # differentiate it (only one view)
-        new.views = {"all": view}
+        new.views = model.ListVA()
+        new.views.value.append(view)
         new.focussedView = model.VigilantAttribute(view)
         new.viewLayout = model.IntEnumerated(guimodel.VIEW_LAYOUT_ONE,
                                              choices=set([guimodel.VIEW_LAYOUT_ONE]))
