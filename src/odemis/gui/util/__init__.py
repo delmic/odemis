@@ -49,6 +49,11 @@ def call_in_wx_main(f, self, *args, **kwargs):
 
 @decorator
 def ignore_dead(f, self, *args, **kwargs):
+    """
+    If used on a function also decorated with call_in_wx_main, it should be
+    the closest to the real function. IOW, always put this decorator at the
+    bottom of the decorators.
+    """
     try:
         return f(self, *args, **kwargs)
     except (wx.PyDeadObjectError, RuntimeError):
@@ -69,9 +74,9 @@ def wxlimit_invocation(delay_s):
 
     :param delay_s: (float) The minimum interval between executions in seconds.
 
-    Note that the method might be called in a separate thread. In wxPython, you
-    might need to decorate it by @call_in_wx_main to ensure it is called in the GUI
-    thread.
+    Note that the method is _always_ called within the main GUI thread, and
+    with dead object protection, so there is no need to also decorate it with
+    @call_in_wx_main or @ignore_dead.
     """
     liwrapper = util.limit_invocation(delay_s)
 
