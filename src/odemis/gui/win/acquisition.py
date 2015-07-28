@@ -162,6 +162,8 @@ class AcquisitionDialog(xrcfr_acq):
         # TODO: we'd better create a new view and copy the streams
         new = copy.copy(orig)  # shallow copy
 
+        new.streams = model.ListVA(orig.streams.value)  # duplicate
+
         # create view (which cannot move or focus)
         view = guimodel.MicroscopeView("All")
 
@@ -189,8 +191,8 @@ class AcquisitionDialog(xrcfr_acq):
     def remove_all_streams(self):
         """ Remove the streams we added to the view on creation """
         # Ensure we don't update the view after the window is destroyed
-        for s in self._view.getStreams():
-            self._view.removeStream(s)
+        for s in list(self._tab_data_model.streams.value):  # copy, as it's modified by stream cont
+            self.streambar_controller.removeStream(s)
 
     def find_current_preset(self):
         """

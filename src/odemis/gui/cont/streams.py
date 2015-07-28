@@ -1352,9 +1352,9 @@ class StreamBarController(object):
 
         try:
             self._tab_data_model.streams.value.remove(stream)
-            logging.debug("%s Stream removed", stream)
+            logging.debug("%s removed", stream)
         except ValueError:
-            logging.warn("%s Stream not found, so not removed", stream)
+            logging.warn("%s not found, so not removed", stream)
 
     def clear(self):
         """
