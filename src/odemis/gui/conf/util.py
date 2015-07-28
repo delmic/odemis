@@ -893,12 +893,12 @@ class SettingEntry(VigilantAttributeConnector, Entry):
             logging.debug("Creating empty SettingEntry without VigilantAttributeConnector")
 
     def pause(self):
-        if hasattr(self, "va_2_ctrl"):
-            super(SettingEntry, self).pause()
+        if hasattr(self, "va_2_ctrl") and self.va_2_ctrl:
+            VigilantAttributeConnector.pause(self)
 
     def resume(self):
-        if hasattr(self, "va_2_ctrl"):
-            super(SettingEntry, self).resume()
+        if hasattr(self, "va_2_ctrl") and self.va_2_ctrl:
+            VigilantAttributeConnector.resume(self)
 
 
 class AxisSettingEntry(AxisConnector, Entry):
@@ -924,6 +924,15 @@ class AxisSettingEntry(AxisConnector, Entry):
             logging.error("Cannot create AxisConnector")
         else:
             logging.debug("Cannot create AxisConnector")
+
+    def pause(self):
+        if hasattr(self, "pos_2_ctrl") and self.pos_2_ctrl:
+            AxisConnector.pause(self)
+
+    def resume(self):
+        if hasattr(self, "pos_2_ctrl") and self.pos_2_ctrl:
+            AxisConnector.resume(self)
+
 
 def dump_emitter_and_detector_vas(stream):
     """ Log emitter and detector VAs of the given stream. For debugging purposes only """
