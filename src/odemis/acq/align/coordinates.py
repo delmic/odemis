@@ -549,22 +549,29 @@ def _MatchAndCalculate(transformed_coordinates, optical_coordinates, electron_co
 
         # Calculate the angle difference for the wrong electron_coordinates
         angle_vect_transformed_e_index1 = [angle_vect_transformed[i] for i in compress(index1, e_wrong_points)]
-        angle_diff_electron_wrong = [x - y for x, y in zip(list(compress(angle_vect_electron, e_wrong_points)), angle_vect_transformed_e_index1)]
-        # Ensure the angle is between -pi and pi
-        # FIXME: not working (because it's not numpy)
-        angle_diff_electron_wrong[angle_diff_electron_wrong > math.pi] = angle_diff_electron_wrong[angle_diff_electron_wrong > math.pi] - 2 * math.pi
-        angle_diff_electron_wrong[angle_diff_electron_wrong < -math.pi] = angle_diff_electron_wrong[angle_diff_electron_wrong < -math.pi] + 2 * math.pi
+        angle_diff_electron_wrong = []
+        for x, y in zip(compress(angle_vect_electron, e_wrong_points), angle_vect_transformed_e_index1):
+            a = (x - y)
+            # Ensure the angle is between -Pi and Pi
+            a %= (2 * math.pi)
+            if a > math.pi:
+                a -= 2 * math.pi
+            angle_diff_electron_wrong.append(a)
 
         # Calculate the angle difference for the wrong transformed_coordinates
         angle_vect_electron_o_index2 = [angle_vect_electron[i] for i in compress(index2, o_wrong_points)]
-        angle_diff_transformed_wrong = [x - y for x, y in zip(list(compress(angle_vect_transformed, o_wrong_points)), angle_vect_electron_o_index2)]
-        # Ensure the angle is between -pi and pi
-        angle_diff_transformed_wrong[angle_diff_transformed_wrong > math.pi] = angle_diff_transformed_wrong[angle_diff_transformed_wrong > math.pi] - 2 * math.pi
-        angle_diff_transformed_wrong[angle_diff_transformed_wrong < -math.pi] = angle_diff_transformed_wrong[angle_diff_transformed_wrong < -math.pi] + 2 * math.pi
+        angle_diff_transformed_wrong = []
+        for x, y in zip(compress(angle_vect_transformed, o_wrong_points), angle_vect_electron_o_index2):
+            a = (x - y)
+            # Ensure the angle is between -Pi and Pi
+            a %= (2 * math.pi)
+            if a > math.pi:
+                a -= 2 * math.pi
+            angle_diff_transformed_wrong.append(a)
 
         # Apply correction
-        angle_correction = 0.5 * (numpy.mean(angle_diff_electron_wrong, 0) - numpy.mean(angle_diff_transformed_wrong, 0))
-        avg_rotation = avg_rotation + angle_correction
+        angle_correction = 0.5 * (numpy.mean(angle_diff_electron_wrong) - numpy.mean(angle_diff_transformed_wrong))
+        avg_rotation += angle_correction
 
     # Perform transformation
     estimated_coordinates = _TransformCoordinates(optical_coordinates, avg_move,
