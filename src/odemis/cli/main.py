@@ -54,6 +54,7 @@ class Scanner(model.Component):
         assert(inspect.isclass(cls))
         model.Component.__init__(self, "scanner for %s" % cls.__name__, **kwargs)
         self.cls = cls
+
     def scan(self):
         return self.cls.scan()
 
@@ -107,9 +108,9 @@ def scan(cls=None):
                     for name, args in devices:
                         print "%s.%s: '%s' init=%s" % (module_name, cls_name, name, str(args))
 
-
     if cls and not cls_found:
         raise ValueError("Failed to find class %s" % cls)
+
 
 def kill_backend():
     try:
@@ -117,6 +118,7 @@ def kill_backend():
         backend.terminate()
     except Exception:
         raise IOError("Failed to stop the back-end")
+
 
 def print_component(comp, pretty=True, level=0):
     """
