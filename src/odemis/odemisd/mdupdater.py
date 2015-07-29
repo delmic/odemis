@@ -48,6 +48,10 @@ class MetadataUpdater(model.Component):
         # so we cannot access the back-end.
         self._mic = microscope
 
+        # keep list of already accessed components, to avoid creating new proxys
+        # every time the mode changes
+        self._known_comps = dict()  # str (name) -> component
+
         # list of 2-tuples (function, *arg): to be called on terminate
         self._onTerminate = []
         # All the components already observed
@@ -55,6 +59,20 @@ class MetadataUpdater(model.Component):
         self._observed = collections.defaultdict(set)
 
         microscope.alive.subscribe(self._onAlive, init=True)
+
+    def _getComponent(self, name):
+        """
+        same as model.getComponent, but optimised by caching the result
+        return Component
+        raise LookupError: if no component found
+        """
+        try:
+            comp = self._known_comps[name]
+        except LookupError:
+            comp = model.getComponent(name=name)
+            self._known_comps[name] = comp
+
+        return comp
 
     def _onAlive(self, components):
         """
@@ -67,7 +85,7 @@ class MetadataUpdater(model.Component):
             for dn in a.affects.value:
                 # TODO: if component not alive yet, wait for it
                 try:
-                    d = model.getComponent(name=dn)
+                    d = self._getComponent(dn)
                 except LookupError:
                     # TODO: stop subscriptions if the component was there (=> just died)
                     self._observed[a.name].discard(dn)
