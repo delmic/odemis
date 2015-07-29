@@ -855,7 +855,15 @@ class Entry(object):
         self.value_ctrl = value_ctrl
 
     def __repr__(self):
-        return "Label: %s" % self.lbl_ctrl.GetLabel() if self.lbl_ctrl else None
+        r = "name: %s" % self.name
+
+        if self.lbl_ctrl:
+            r += " label: %s" % self.lbl_ctrl.GetLabel()
+
+        if self.value_ctrl:
+            r += " ctrl: %s, val: %s" % (self.value_ctrl.__class__.__name__,
+                                        self.value_ctrl.GetValue())
+        return r
 
     def highlight(self, active=True):
         """ Highlight the setting entry by adjusting its colour
