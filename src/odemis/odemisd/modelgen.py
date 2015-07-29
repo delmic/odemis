@@ -102,11 +102,11 @@ class Instantiator(object):
         """
         self.ast = self._parse_instantiation_model(inst_file) # AST of the model to instantiate
         self.root_container = container # the container for non-leaf components
-        
+
         self.microscope = None # the root of the model (Microscope component)
         self._microscope_ast = None # the definition of the Microscope
         self.components = set() # all the components created
-        self.sub_containers = set() # all the sub-containers created for the components
+        self.sub_containers = {}  # name -> container: all the sub-containers created for the components
         self.create_sub_containers = create_sub_containers # flag for creating sub-containers
         self.dry_run = dry_run # flag for instantiating mock version of the components
 
@@ -368,7 +368,7 @@ class Instantiator(object):
             if self.create_sub_containers and self.is_leaf(name):
                 # new container has the same name as the component
                 cont, comp = model.createInNewContainer(name, class_comp, args)
-                self.sub_containers.add(cont)
+                self.sub_containers[name] = cont
             else:
                 logging.debug("Creating %s in root container", name)
                 comp = self.root_container.instantiate(class_comp, args)

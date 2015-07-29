@@ -237,6 +237,7 @@ class BackendContainer(model.Container):
          never need their parent but the parent might rely on the children.
          Delegated children should be directly terminated by their creator, so
          by the time we terminate them, it's a no-op.
+        It also stops the containers, once no component is running in them.
         """
         mic = self._instantiator.microscope
         alive = list(mic.alive.value)
@@ -251,6 +252,10 @@ class BackendContainer(model.Container):
                 # TODO: do not add the creator
                 parents[child].add(comp)
 
+        # TODO: for the components created by delegation, either terminate them
+        # before their parents, or don't do it at all (as the parent normally
+        # is in charge of it).
+
         # terminate all the components in order
         while parents:
             parent_less = tuple(c for c, p in parents.items() if not p)
@@ -261,13 +266,31 @@ class BackendContainer(model.Container):
                 parent_less = (tuple(parents.keys())[0],)
 
             for c in parent_less:
-                logging.debug("Stopping comp %s", c.name)
+                cname = c.name
+                logging.debug("Stopping comp %s", cname)
                 # TODO: update the .alive VA every time a component is stopped?
                 # maybe not necessary as we are finishing _everything_
                 try:
+                    # FIXME: don't try to terminate the children created by
+                    # delegation after terminating their parent (and container)
+                    # For now it just causes a warning message, but it'd be
+                    # better to not have the warning at all.
                     c.terminate()
                 except Exception:
-                    logging.warning("Failed to terminate component '%s'", c.name, exc_info=True)
+                    logging.warning("Failed to terminate component '%s'", cname, exc_info=True)
+
+                # Terminate the container if that was the component for which it
+                # was created.
+                # TODO: check there is really no component still running in the
+                # container?
+                if cname in self._instantiator.sub_containers:
+                    container = self._instantiator.sub_containers[cname]
+                    logging.debug("Stopping container %s", container)
+                    try:
+                        container.terminate()
+                    except Exception:
+                        logging.warning("Failed to terminate container %r", container, exc_info=True)
+                    del self._instantiator.sub_containers[cname]
 
                 # remove from the graph
                 del parents[c]
@@ -298,14 +321,6 @@ class BackendContainer(model.Container):
             mic.terminate()
         except Exception:
             logging.warning("Failed to terminate root", exc_info=True)
-
-        # end all the (sub-)containers
-        for container in self._instantiator.sub_containers:
-            logging.debug("Stopping container %s", container)
-            try:
-                container.terminate()
-            except Exception:
-                logging.warning("Failed to terminate container %r", container, exc_info=True)
 
         # end ourself
         model.Container.terminate(self)
