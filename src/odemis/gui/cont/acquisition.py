@@ -345,15 +345,17 @@ class SecomAcquiController(object):
         secom_live_tab = self._tab_data_model.main.getTabByName("secom_live")
 
         # save the original settings
-        main_settings_controller = secom_live_tab.settings_controller
-        orig_settings = preset_as_is(main_settings_controller.entries)
-        main_settings_controller.pause()
-        main_settings_controller.enable(False)
+        settingsbar_controller = secom_live_tab.settingsbar_controller
+        orig_settings = preset_as_is(settingsbar_controller.entries)
+        settingsbar_controller.pause()
+        settingsbar_controller.enable(False)
         # TODO: also pause the MicroscopeViews
 
         # pause all the live acquisitions
-        main_stream_controller = secom_live_tab.stream_controller
-        paused_streams = main_stream_controller.pauseStreams()
+        streambar_controller = secom_live_tab.streambar_controller
+        paused_streams = streambar_controller.pauseStreams()
+        streambar_controller.pause()
+        streambar_controller.enable(False)
 
         # create the dialog
         acq_dialog = AcquisitionDialog(self._main_frame, self._tab_data_model)
@@ -364,11 +366,15 @@ class SecomAcquiController(object):
             acq_dialog.Center()
             acq_dialog.ShowModal()
         finally:
-            main_stream_controller.resumeStreams(paused_streams)
+            streambar_controller.resumeStreams(paused_streams)
 
             acqmng.apply_preset(orig_settings)
-            main_settings_controller.resume()
-            main_settings_controller.enable(True)
+
+            settingsbar_controller.enable(True)
+            settingsbar_controller.resume()
+
+            streambar_controller.enable(True)
+            streambar_controller.resume()
 
             # Make sure that the acquisition button is enabled again.
             self._main_frame.btn_secom_acquire.Enable()
