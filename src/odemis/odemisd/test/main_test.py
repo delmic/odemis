@@ -24,6 +24,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import StringIO
 import logging
 from odemis import model
+import odemis
 from odemis.odemisd import main
 from odemis.util import timeout
 import os
@@ -35,8 +36,9 @@ import unittest
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-ODEMISD_CMD = "python2 -m odemis.odemisd.main"
-SIM_CONFIG = "optical-sim.odm.yaml"
+# ODEMISD_CMD = "/usr/bin/python2 -m odemis.odemisd.main"
+ODEMISD_CMD = ["/usr/bin/python2", os.path.dirname(odemis.__file__) + "/odemisd/main.py"]
+SIM_CONFIG = os.path.dirname(__file__) + "/optical-sim.odm.yaml"
 
 class TestCommandLine(unittest.TestCase):
     """
@@ -152,8 +154,8 @@ class TestCommandLine(unittest.TestCase):
         
         # run the backend as a daemon
         # we cannot run it normally as the child would also think he's in a unittest
-        cmdline = ODEMISD_CMD + " --log-level=2 --log-target=testdaemon.log --daemonize %s" % SIM_CONFIG
-        ret = subprocess.call(cmdline.split())
+        cmdline = "--log-level=2 --log-target=testdaemon.log --daemonize %s" % SIM_CONFIG
+        ret = subprocess.call(ODEMISD_CMD + cmdline.split())
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
         
         time.sleep(1) # give some time to start
@@ -195,17 +197,17 @@ class TestCommandLine(unittest.TestCase):
             self.fail("no error detected in erroneous config file '%s'" % filename)
 
         os.remove("test.log")
-        
-    @timeout(10)
+
+    @timeout(20)
     def test_multiple_parents(self):
         """Test creating component with multiple parents"""
         filename = "multiple-parents.odm.yaml"
-        cmdline = ODEMISD_CMD + " --log-level=2 --log-target=testdaemon.log --daemonize %s" % filename
-        ret = subprocess.call(cmdline.split())
-        self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
+        cmdline = "--log-level=2 --log-target=testdaemon.log --daemonize %s" % filename
+        ret = subprocess.call(ODEMISD_CMD + cmdline.split())
+        self.assertEqual(ret, 0, "trying to run '%s' gave status %d" % (cmdline, ret))
 
         # eventually it should say it's running
-        ret = self._wait_backend_starts(5)
+        ret = self._wait_backend_starts(10)
         self.assertEqual(ret, 0, "backend status check returned %d" % (ret,))
 
         # stop the backend
@@ -222,8 +224,8 @@ class TestCommandLine(unittest.TestCase):
     def test_properties_set(self):
         """Test creating component with specific properties"""
         filename = "example-secom.odm.yaml"
-        cmdline = ODEMISD_CMD + " --log-level=2 --log-target=testdaemon.log --daemonize %s" % filename
-        ret = subprocess.call(cmdline.split())
+        cmdline = "--log-level=2 --log-target=testdaemon.log --daemonize %s" % filename
+        ret = subprocess.call(ODEMISD_CMD + cmdline.split())
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
 
         # eventually it should say it's running
@@ -255,6 +257,7 @@ class TestCommandLine(unittest.TestCase):
         timeout (0<float): maximum time to wait
         return (int): the new status
         """
+        time.sleep(1)
         end = time.time() + timeout
         cmdline = "odemisd --log-level=2 --log-target=test.log --check"
         while time.time() < end:

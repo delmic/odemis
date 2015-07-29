@@ -4,7 +4,7 @@ Created on 26 Mar 2012
 
 @author: Éric Piel
 
-Copyright © 2012 Éric Piel, Delmic
+Copyright © 2012-2015 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -177,19 +177,10 @@ class ComponentProxy(ComponentBase, Pyro4.Proxy):
         Pyro4.Proxy.__init__(self, uri)
         self._parent = None
 
-    # same as in Component, but set via __setstate__
+    # like a roattribute, but set via __setstate__
     @property
     def parent(self):
-        if self._parent:
-            return self._parent() # returns None if ref is gone
-        else:
-            return None
-    @parent.setter
-    def parent(self, p):
-        if p:
-            self._parent = weakref.ref(p)
-        else:
-            self._parent = None
+        return self._parent
 
     # The goal of __getstate__ is to allow pickling a proxy and getting a similar
     # proxy talking directly to the server (it reset the connection and the lock).
@@ -209,7 +200,8 @@ class ComponentProxy(ComponentBase, Pyro4.Proxy):
         dataflows (dict string -> dataflow)
         vas (dict string -> VA)
         """
-        proxy_state, self.parent, roattributes, dataflows, vas, events = state
+        proxy_state, parent, roattributes, dataflows, vas, events = state
+        self._parent = parent
         Pyro4.Proxy.__setstate__(self, proxy_state)
         _core.load_roattributes(self, roattributes)
         _dataflow.load_dataflows(self, dataflows)

@@ -27,12 +27,12 @@ class MockComponent(model.HwComponent):
     It's used for validation of the instantiation model.
     Do not use or inherit when writing a device driver!
     """
-    def __init__(self, name, role, _realcls, children=None, _vas=None, daemon=None, **kwargs):
+    def __init__(self, name, role, _realcls, parent=None, children=None, _vas=None, daemon=None, **kwargs):
         """
         _realcls (class): the class we pretend to be
         _vas (list of string): a list of mock vigilant attributes to create
         """
-        model.HwComponent.__init__(self, name, role, daemon=daemon)
+        model.HwComponent.__init__(self, name, role, daemon=daemon, parent=parent)
         if len(kwargs) > 0:
             logging.debug("Component '%s' got init arguments %r", name, kwargs)
 
@@ -57,12 +57,11 @@ class MockComponent(model.HwComponent):
             if isinstance(child_args, dict): # delegation
                 # the real class is unknown, so just give a generic one
                 logging.debug("Instantiating mock child component %s", child_name)
-                child = MockComponent(_realcls=model.HwComponent, daemon=daemon, **child_args)
+                child = MockComponent(_realcls=model.HwComponent, parent=self, daemon=daemon, **child_args)
             else: # explicit creation (already done)
                 child = child_args
 
             cc.add(child)
-            child.parent = self
 
         # use explicit setter to be sure the changes are notified
         self.children.value = self.children.value | cc

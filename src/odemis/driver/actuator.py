@@ -307,8 +307,6 @@ class CoupledStage(model.Actuator):
         self._slave = None
 
         for crole, child in children.items():
-            child.parent = self
-
             # Check if children are actuators
             if not isinstance(child, model.ComponentBase):
                 raise ValueError("Child %s is not a component." % child)
