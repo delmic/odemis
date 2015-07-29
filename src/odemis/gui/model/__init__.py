@@ -735,9 +735,8 @@ class StreamView(View):
 
                 # rate limit to 20 Hz
                 sleept = time_last_move + 0.05 - time.time()
-
-                if sleept > 0:
-                    time.sleep(sleept)
+                # We always wait a bit, so that we don't start with a tiny move
+                time.sleep(max(0.05, sleept))
 
                 # Add more moves if there are already more
                 try:
