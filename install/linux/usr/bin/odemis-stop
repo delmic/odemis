@@ -39,6 +39,18 @@ if [ -n "$OLD_BE_PIDS" ]; then
     NOW_BE_PIDS=$(pgrep -f $BACKEND)
     # pick PIDs which were seen at the beginning and still seen now
     LEFT_BE_PIDS=$(sort <<< "$OLD_BE_PIDS"$'\n'"$NOW_BE_PIDS" | uniq -d | sed '/^ $/d')
+    NOLD_PIDS=$(wc -w <<< "$OLD_BE_PIDS")
+    NLEFT_PIDS=$(wc -w <<< "$LEFT_BE_PIDS")
+    echo "was $NOLD_PIDS, now $NLEFT_PIDS"
+    # As long as number of PIDS decreases, sleep more
+    while [ "$NLEFT_PIDS" -gt 0 -o "$NLEFT_PIDS" -lt "$NOLD_PIDS" ]; do
+        echo "Waiting for a back-end a bit more ($NLEFT_PIDS processes left)..."
+        sleep 1
+        NOLD_PIDS="$NLEFT_PIDS"
+        NOW_BE_PIDS=$(pgrep -f $BACKEND)
+        LEFT_BE_PIDS=$(sort <<< "$OLD_BE_PIDS"$'\n'"$NOW_BE_PIDS" | uniq -d | sed '/^ $/d')
+        NLEFT_PIDS=$(wc -w <<< "$LEFT_BE_PIDS")
+    done
     #echo "Left = $LEFT_BE_PIDS"
     if [ -n "$LEFT_BE_PIDS" ]; then
         echo "Back-end still running, killing it..."
