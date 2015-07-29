@@ -127,6 +127,31 @@ class StreamController(object):
 
         stream_bar.add_stream_panel(self.stream_panel, show_panel)
 
+    def pause(self):
+        """ Pause SettingEntry related control updates """
+        for _, entry in self.entries.iteritems():
+            entry.pause()
+
+    def resume(self):
+        """ Pause SettingEntry related control updates """
+        for _, entry in self.entries.iteritems():
+            entry.resume()
+
+    def enable(self, enabled):
+        """ Enable or disable all SettingEntries
+
+        FIXME: There is a possible problem that, for now, seems to work itself out: When related
+               controls dictate between themselves which ones are enabled (i.e. a toggle button,
+               dictating which slider is activated, as with auto brightness and contrast), enabling
+               all of them could/would be wrong.
+
+               When all are enabled now, the position the toggle button is in, immediately causes
+               the right slider to be disabled again.
+
+        """
+        for entry in [e for _, e in self.entries.iteritems() if e.value_ctrl]:
+            entry.value_ctrl.Enable(enabled)
+
     def _add_hw_setting_controls(self):
         """ Add local version of linked hardware setting VAs """
         # Get the emitter and detector configurations if they exist
@@ -744,6 +769,7 @@ class StreamBarController(object):
         self._main_data_model = tab_data.main
 
         self._stream_bar = stream_bar
+        self.stream_controllers = []
 
         self.menu_actions = collections.OrderedDict()  # title => callback
 
@@ -772,6 +798,20 @@ class StreamBarController(object):
         for s in self._tab_data_model.streams.value:
             logging.debug("Scheduling stream present at init: %s", s)
             self._scheduleStream(s)
+
+    def pause(self):
+        """ Pause SettingEntry related control updates """
+        for stream_controller in self.stream_controllers:
+            stream_controller.pause()
+
+    def resume(self):
+        """ Resume SettingEntry related control updates """
+        for stream_controller in self.stream_controllers:
+            stream_controller.resume()
+
+    def enable(self, enabled):
+        for stream_controller in self.stream_controllers:
+            stream_controller.enable(enabled)
 
     # unused (but in test case)
     def get_actions(self):
@@ -1151,6 +1191,8 @@ class StreamBarController(object):
             stream_cont.to_locked_mode()
         elif static:
             stream_cont.to_static_mode()
+
+        self.stream_controllers.append(stream_cont)
 
         return stream_cont
 

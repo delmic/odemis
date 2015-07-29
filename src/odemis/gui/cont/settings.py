@@ -36,8 +36,8 @@ from odemis.gui.comp.buttons import ImageTextToggleButton
 from odemis.gui.comp.file import EVT_FILE_SELECT
 from odemis.gui.comp.settings import SettingsPanel
 from odemis.gui.conf.data import get_hw_settings_config
-from odemis.gui.conf.util import (bind_setting_context_menu, create_setting_entry,
-                                  SettingEntry, create_axis_entry)
+from odemis.gui.conf.util import bind_setting_context_menu, create_setting_entry, SettingEntry,  \
+    create_axis_entry
 from odemis.gui.model import CHAMBER_UNKNOWN, CHAMBER_VACUUM
 import odemis.gui.util
 from odemis.model import getVAs, VigilantAttributeBase
@@ -349,7 +349,7 @@ class SettingsBarController(object):
 
     def __init__(self, tab_data):
         self._tab_data_model = tab_data
-        self.settings_panels = []
+        self.setting_controllers = []
 
         # TODO: see if we need to listen to main.is_acquiring, and automatically
         # pause + enable. For now, it's done by the acquisition controllers,
@@ -360,35 +360,38 @@ class SettingsBarController(object):
 
     def pause(self):
         """ Pause SettingEntry related control updates """
-        for panel in self.settings_panels:
-            panel.pause()
+        for setting_conroller in self.setting_controllers:
+            setting_conroller.pause()
 
     def resume(self):
         """ Resume SettingEntry related control updates """
-        for panel in self.settings_panels:
-            panel.resume()
+        for setting_conroller in self.setting_controllers:
+            setting_conroller.resume()
 
     @property
     def entries(self):
         """ Return a list of all the setting entries of all the panels """
         entries = []
-        for panel in self.settings_panels:
-            entries.extend(panel.entries)
+        for setting_controller in self.setting_controllers:
+            entries.extend(setting_controller.entries)
         return entries
 
     def enable(self, enabled):
-        for panel in self.settings_panels:
-            panel.enable(enabled)
+        for setting_controller in self.setting_controllers:
+            setting_controller.enable(enabled)
 
     # VAs which should never be displayed
     HIDDEN_VAS = {"children", "affects", "state"}
 
-    def add_hw_component(self, hw_comp, panel, hidden=None):
+    def add_hw_component(self, hw_comp, setting_controller, hidden=None):
         """ Add setting entries for the given hardware component
+
         hidden (None or set of str): name of VAs to not show
+
         """
+
         hidden = (hidden or set()) | self.HIDDEN_VAS
-        self.settings_panels.append(panel)
+        self.setting_controllers.append(setting_controller)
 
         vas_comp = getVAs(hw_comp)
         vas_config = self._va_config.get(hw_comp.role, {}) # OrderedDict or dict
@@ -406,7 +409,7 @@ class SettingsBarController(object):
                     logging.debug("No config found for %s: %s", hw_comp.role, name)
                     va_conf = None
                 va = vas_comp[name]
-                panel.add_setting_entry(name, va, hw_comp, va_conf)
+                setting_controller.add_setting_entry(name, va, hw_comp, va_conf)
             except TypeError:
                 msg = "Error adding %s setting for: %s"
                 logging.exception(msg, hw_comp.name, name)
@@ -466,13 +469,13 @@ class SecomSettingsController(SettingsBarController):
 
             # TODO once Power (light) is now by each stream individually. The
             # following code block can be disabled.
-#
-#             if main_data.light:
-#                 self._optical_panel.panel.add_divider()
-#
-#                 self._optical_panel.add_setting_entry("power", main_data.light.power,
-#                                                       main_data.light,
-#                                                       self._va_config["light"]["power"])
+            #
+            # if main_data.light:
+            #     self._optical_panel.panel.add_divider()
+            #
+            #     self._optical_panel.add_setting_entry("power", main_data.light.power,
+            #                                           main_data.light,
+            #                                           self._va_config["light"]["power"])
 
         if main_data.ebeam:
             self.add_hw_component(main_data.ebeam, self._sem_panel)

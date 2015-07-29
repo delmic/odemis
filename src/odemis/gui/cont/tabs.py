@@ -266,12 +266,12 @@ class SecomStreamsTab(Tab):
             # In any case, to support displaying Overview in the normal 2x2
             # views we'd need to have a special Overview class
 
-        self._settings_controller = settings.SecomSettingsController(
+        self._settingbar_controller = settings.SecomSettingsController(
             self.main_frame,
             self.tab_data_model
         )
 
-        self._stream_controller = streamcont.SecomStreamsController(
+        self._streambar_controller = streamcont.SecomStreamsController(
             self.tab_data_model,
             self.main_frame.pnl_secom_streams
         )
@@ -311,7 +311,7 @@ class SecomStreamsTab(Tab):
             self.tab_data_model,
             self.main_frame,
             "live_btn_",
-            self._stream_controller
+            self._streambar_controller
         )
 
         # For remembering which streams are paused when hiding the tab
@@ -326,9 +326,9 @@ class SecomStreamsTab(Tab):
             tab_data.emState.subscribe(self.onEMState)
             # decide which kind of EM stream to add by default
             if main_data.sed:
-                self._add_em_stream = self._stream_controller.addSEMSED
+                self._add_em_stream = self._streambar_controller.addSEMSED
             elif main_data.bsd:
-                self._add_em_stream = self._stream_controller.addSEMBSD
+                self._add_em_stream = self._streambar_controller.addSEMBSD
             else:
                 logging.error("No EM detector found")
 
@@ -339,12 +339,12 @@ class SecomStreamsTab(Tab):
         self._ensure_base_streams()
 
     @property
-    def settings_controller(self):
-        return self._settings_controller
+    def settingsbar_controller(self):
+        return self._settingbar_controller
 
     @property
-    def stream_controller(self):
-        return self._stream_controller
+    def streambar_controller(self):
+        return self._streambar_controller
 
     def _get_focus_hw(self, s):
         """
@@ -448,7 +448,7 @@ class SecomStreamsTab(Tab):
             has_opt = any(isinstance(s, acqstream.OpticalStream)
                           for s in self.tab_data_model.streams.value)
             if not has_opt:
-                self._stream_controller.addFluo(add_to_all_views=True, play=False)
+                self._streambar_controller.addFluo(add_to_all_views=True, play=False)
                 # don't forbid to remove it, as for the user it can be easier to
                 # remove than change all the values
 
@@ -476,14 +476,14 @@ class SecomStreamsTab(Tab):
                     opts = s
                     break
             else: # Could happen if the user has deleted all the optical streams
-                sp = self._stream_controller.addFluo(add_to_all_views=True)
+                sp = self._streambar_controller.addFluo(add_to_all_views=True)
                 opts = sp.stream
 
-            self._stream_controller.resumeStreams({opts})
+            self._streambar_controller.resumeStreams({opts})
             # focus the view
             self.view_controller.focusViewWithStream(opts)
         else:
-            self._stream_controller.pauseStreams(acqstream.OpticalStream)
+            self._streambar_controller.pauseStreams(acqstream.OpticalStream)
 
     def onEMState(self, state):
         if state == guimod.STATE_ON:
@@ -497,11 +497,11 @@ class SecomStreamsTab(Tab):
                 sp.show_remove_btn(False)
                 sems = sp.stream
 
-            self._stream_controller.resumeStreams({sems})
+            self._streambar_controller.resumeStreams({sems})
             # focus the view
             self.view_controller.focusViewWithStream(sems)
         else:
-            self._stream_controller.pauseStreams(acqstream.EMStream)
+            self._streambar_controller.pauseStreams(acqstream.EMStream)
 
     def Show(self, show=True):
         assert (show != self.IsShown()) # we assume it's only called when changed
@@ -511,9 +511,9 @@ class SecomStreamsTab(Tab):
         if show:
             # TODO: double check the chamber state hasn't changed in between
             # We should never turn on the streams if the chamber is not in vacuum
-            self._stream_controller.resumeStreams(self._streams_to_restart)
+            self._streambar_controller.resumeStreams(self._streams_to_restart)
         else:
-            paused_st = self._stream_controller.pauseStreams()
+            paused_st = self._streambar_controller.pauseStreams()
             self._streams_to_restart = weakref.WeakSet(paused_st)
 
 

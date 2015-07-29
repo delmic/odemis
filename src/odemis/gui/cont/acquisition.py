@@ -345,15 +345,17 @@ class SecomAcquiController(object):
         secom_live_tab = self._tab_data_model.main.getTabByName("secom_live")
 
         # save the original settings
-        main_settings_controller = secom_live_tab.settings_controller
-        orig_settings = preset_as_is(main_settings_controller.entries)
-        main_settings_controller.pause()
-        main_settings_controller.enable(False)
+        settingsbar_controller = secom_live_tab.settingsbar_controller
+        orig_settings = preset_as_is(settingsbar_controller.entries)
+        settingsbar_controller.pause()
+        settingsbar_controller.enable(False)
         # TODO: also pause the MicroscopeViews
 
         # pause all the live acquisitions
-        main_stream_controller = secom_live_tab.stream_controller
-        paused_streams = main_stream_controller.pauseStreams()
+        streambar_controller = secom_live_tab.streambar_controller
+        paused_streams = streambar_controller.pauseStreams()
+        streambar_controller.pause()
+        streambar_controller.enable(False)
 
         # create the dialog
         acq_dialog = AcquisitionDialog(self._main_frame, self._tab_data_model)
@@ -364,11 +366,15 @@ class SecomAcquiController(object):
             acq_dialog.Center()
             acq_dialog.ShowModal()
         finally:
-            main_stream_controller.resumeStreams(paused_streams)
+            streambar_controller.resumeStreams(paused_streams)
 
             acqmng.apply_preset(orig_settings)
-            main_settings_controller.resume()
-            main_settings_controller.enable(True)
+
+            settingsbar_controller.enable(True)
+            settingsbar_controller.resume()
+
+            streambar_controller.enable(True)
+            streambar_controller.resume()
 
             # Make sure that the acquisition button is enabled again.
             self._main_frame.btn_secom_acquire.Enable()
@@ -380,7 +386,7 @@ class SparcAcquiController(object):
     tab.
     """
 
-    def __init__(self, tab_data, main_frame, stream_ctrl):
+    def __init__(self, tab_data, main_frame, streambar_controller):
         """
         tab_data (MicroscopyGUIData): the representation of the microscope GUI
         main_frame: (wx.Frame): the frame which contains the 4 viewports
@@ -389,7 +395,7 @@ class SparcAcquiController(object):
         self._tab_data_model = tab_data
         self._main_data_model = tab_data.main
         self._main_frame = main_frame
-        self._stream_controller = stream_ctrl
+        self._streambar_controller = streambar_controller
 
         # For file selection
         self.conf = conf.get_acqui_conf()
@@ -535,7 +541,7 @@ class SparcAcquiController(object):
         """
         Pause the settings of the GUI and save the values for restoring them later
         """
-        self._stream_paused = self._stream_controller.pauseStreams()
+        self._stream_paused = self._streambar_controller.pauseStreams()
 
     def _resume_streams(self):
         """
@@ -598,6 +604,10 @@ class SparcAcquiController(object):
         Similar to win.acquisition.on_acquire()
         """
         self._pause_streams()
+
+        self._streambar_controller.pause()
+        self._streambar_controller.enable(False)
+
         self.btn_acquire.Disable()
         self.btn_cancel.Enable()
 
@@ -607,7 +617,7 @@ class SparcAcquiController(object):
         self._main_data_model.is_acquiring.value = True
 
         # FIXME: probably not the whole window is required, just the file settings
-        self._main_frame.Layout() # to put the gauge at the right place
+        self._main_frame.Layout()  # to put the gauge at the right place
 
         # start acquisition + connect events to callback
         streams = self._tab_data_model.acquisitionView.getStreams()
@@ -627,8 +637,11 @@ class SparcAcquiController(object):
             logging.warning(msg)
             return
 
+        self._streambar_controller.enable(True)
+        self._streambar_controller.resume()
+
         self.acq_future.cancel()
-#        self._main_data_model.is_acquiring.value = False
+        # self._main_data_model.is_acquiring.value = False
         # all the rest will be handled by on_acquisition_done()
 
     def _export_to_file(self, acq_future):

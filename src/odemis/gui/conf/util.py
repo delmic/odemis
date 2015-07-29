@@ -855,7 +855,15 @@ class Entry(object):
         self.value_ctrl = value_ctrl
 
     def __repr__(self):
-        return "Label: %s" % self.lbl_ctrl.GetLabel() if self.lbl_ctrl else None
+        r = "name: %s" % self.name
+
+        if self.lbl_ctrl:
+            r += " label: %s" % self.lbl_ctrl.GetLabel()
+
+        if self.value_ctrl:
+            r += " ctrl: %s, val: %s" % (self.value_ctrl.__class__.__name__,
+                                        self.value_ctrl.GetValue())
+        return r
 
     def highlight(self, active=True):
         """ Highlight the setting entry by adjusting its colour
@@ -893,12 +901,12 @@ class SettingEntry(VigilantAttributeConnector, Entry):
             logging.debug("Creating empty SettingEntry without VigilantAttributeConnector")
 
     def pause(self):
-        if hasattr(self, "va_2_ctrl"):
-            super(SettingEntry, self).pause()
+        if hasattr(self, "va_2_ctrl") and self.va_2_ctrl:
+            VigilantAttributeConnector.pause(self)
 
     def resume(self):
-        if hasattr(self, "va_2_ctrl"):
-            super(SettingEntry, self).resume()
+        if hasattr(self, "va_2_ctrl") and self.va_2_ctrl:
+            VigilantAttributeConnector.resume(self)
 
 
 class AxisSettingEntry(AxisConnector, Entry):
@@ -924,6 +932,15 @@ class AxisSettingEntry(AxisConnector, Entry):
             logging.error("Cannot create AxisConnector")
         else:
             logging.debug("Cannot create AxisConnector")
+
+    def pause(self):
+        if hasattr(self, "pos_2_ctrl") and self.pos_2_ctrl:
+            AxisConnector.pause(self)
+
+    def resume(self):
+        if hasattr(self, "pos_2_ctrl") and self.pos_2_ctrl:
+            AxisConnector.resume(self)
+
 
 def dump_emitter_and_detector_vas(stream):
     """ Log emitter and detector VAs of the given stream. For debugging purposes only """

@@ -81,7 +81,7 @@ class AcquisitionDialog(xrcfr_acq):
         # FIXME: pass the fold_panels
 
         # Compute the preset values for each preset
-        self._preset_values = {} # dict string -> dict (SettingEntries -> value)
+        self._preset_values = {}  # dict string -> dict (SettingEntries -> value)
         orig_entries = self._settings_controller.entries
         self._orig_settings = preset_as_is(orig_entries) # to detect changes
         for n, preset in presets.items():
@@ -113,8 +113,7 @@ class AcquisitionDialog(xrcfr_acq):
                     em_emt = s.emitter
                 elif isinstance(s, OpticalStream):
                     opt_det = s.detector
-            self._ovrl_stream = stream.OverlayStream("Fine alignment",
-                                                     opt_det, em_emt, em_det)
+            self._ovrl_stream = stream.OverlayStream("Fine alignment", opt_det, em_emt, em_det)
             if self._tab_data_model.main.role == "delphi":
                 self._tab_data_model.main.fineAlignDwellTime.value = 0.5
             self._ovrl_stream.dwellTime.value = self._tab_data_model.main.fineAlignDwellTime.value
@@ -376,15 +375,20 @@ class AcquisitionDialog(xrcfr_acq):
         self.Destroy()
 
     def _pause_settings(self):
-        """
-        Pause the settings of the GUI and save the values for restoring them later
-        """
+        """ Pause the settings of the GUI and save the values for restoring them later """
         self._settings_controller.pause()
         self._settings_controller.enable(False)
 
+        self.streambar_controller.pause()
+        self.streambar_controller.enable(False)
+
     def _resume_settings(self):
-        self._settings_controller.resume()
+        """ Resume the settings of the GUI and save the values for restoring them later """
         self._settings_controller.enable(True)
+        self._settings_controller.resume()
+
+        self.streambar_controller.enable(True)
+        self.streambar_controller.resume()
 
     def _set_fan(self, enable):
         """
@@ -432,8 +436,8 @@ class AcquisitionDialog(xrcfr_acq):
         # It should never be possible to reach here with no streams
         self.acq_future = acq.acquire(streams)
         self._acq_future_connector = ProgressiveFutureConnector(self.acq_future,
-                                                               self.gauge_acq,
-                                                               self.lbl_acqestimate)
+                                                                self.gauge_acq,
+                                                                self.lbl_acqestimate)
         self.acq_future.add_done_callback(self.on_acquisition_done)
 
         self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_cancel)
