@@ -793,11 +793,11 @@ class SPARCTestCase(unittest.TestCase):
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
-        self.assertEqual(len(data), len(sems.raw) + len(ars.raw))
-        self.assertEqual(len(sems.raw), 1)
-        self.assertEqual(sems.raw[0].shape, exp_res[::-1])
-        self.assertEqual(len(ars.raw), num_ar)
-        for d in ars.raw:
+        self.assertEqual(len(data), len(sas.raw))
+        self.assertEqual(len(sas._main_raw), 1)
+        self.assertEqual(sas._main_raw[0].shape, exp_res[::-1])
+        self.assertEqual(len(sas._rep_raw), num_ar)
+        for d in sas._rep_raw:
             md = d.metadata
             self.assertIn(model.MD_POS, md)
             self.assertIn(model.MD_AR_POLE, md)
@@ -827,11 +827,11 @@ class SPARCTestCase(unittest.TestCase):
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
-        self.assertEqual(len(data), len(sems.raw) + len(ars.raw))
-        self.assertEqual(len(sems.raw), 1)
-        self.assertEqual(sems.raw[0].shape, exp_res[::-1])
-        self.assertEqual(len(ars.raw), num_ar)
-        for d in ars.raw:
+        self.assertEqual(len(data), len(sas.raw))
+        self.assertEqual(len(sas._main_raw), 1)
+        self.assertEqual(sas._main_raw[0].shape, exp_res[::-1])
+        self.assertEqual(len(sas._rep_raw), num_ar)
+        for d in sas._rep_raw:
             md = d.metadata
             self.assertIn(model.MD_POS, md)
             self.assertIn(model.MD_AR_POLE, md)
@@ -866,15 +866,15 @@ class SPARCTestCase(unittest.TestCase):
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
-        self.assertEqual(len(data), len(sems.raw) + len(specs.raw))
-        self.assertEqual(len(sems.raw), 1)
-        self.assertEqual(sems.raw[0].shape, exp_res[::-1])
-        self.assertEqual(len(specs.raw), 1)
-        sshape = specs.raw[0].shape
+        self.assertEqual(len(data), len(sps.raw))
+        self.assertEqual(len(sps._main_raw), 1)
+        self.assertEqual(sps._main_raw[0].shape, exp_res[::-1])
+        self.assertEqual(len(sps._rep_raw), 1)
+        sshape = sps._rep_raw[0].shape
         self.assertEqual(len(sshape), 5)
         self.assertGreater(sshape[0], 1) # should have at least 2 wavelengths
-        sem_md = sems.raw[0].metadata
-        spec_md = specs.raw[0].metadata
+        sem_md = sps._main_raw[0].metadata
+        spec_md = sps._rep_raw[0].metadata
         self.assertAlmostEqual(sem_md[model.MD_POS], spec_md[model.MD_POS])
         self.assertAlmostEqual(sem_md[model.MD_PIXEL_SIZE], spec_md[model.MD_PIXEL_SIZE])
         numpy.testing.assert_allclose(spec_md[model.MD_POS], exp_pos)
@@ -895,15 +895,15 @@ class SPARCTestCase(unittest.TestCase):
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
-        self.assertEqual(len(data), len(sems.raw) + len(specs.raw))
-        self.assertEqual(len(sems.raw), 1)
-        self.assertEqual(sems.raw[0].shape, exp_res[::-1])
-        self.assertEqual(len(specs.raw), 1)
-        sshape = specs.raw[0].shape
+        self.assertEqual(len(data), len(sps.raw))
+        self.assertEqual(len(sps._main_raw), 1)
+        self.assertEqual(sps._main_raw[0].shape, exp_res[::-1])
+        self.assertEqual(len(sps._rep_raw), 1)
+        sshape = sps._rep_raw[0].shape
         self.assertEqual(len(sshape), 5)
         self.assertGreater(sshape[0], 1) # should have at least 2 wavelengths
-        sem_md = sems.raw[0].metadata
-        spec_md = specs.raw[0].metadata
+        sem_md = sps._main_raw[0].metadata
+        spec_md = sps._rep_raw[0].metadata
         self.assertAlmostEqual(sem_md[model.MD_POS], spec_md[model.MD_POS])
         self.assertAlmostEqual(sem_md[model.MD_PIXEL_SIZE], spec_md[model.MD_PIXEL_SIZE])
         numpy.testing.assert_allclose(spec_md[model.MD_POS], exp_pos)
@@ -938,17 +938,17 @@ class SPARCTestCase(unittest.TestCase):
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
-        self.assertEqual(len(data), len(sems.raw) + len(specs.raw))
-        self.assertEqual(len(sems.raw), 1)
+        self.assertEqual(len(data), len(sps.raw))
+        self.assertEqual(len(sps._main_raw), 1)
         exp_sem_res = (exp_res[0] * stream.TILE_SHAPE[0], exp_res[1] * stream.TILE_SHAPE[1])
-        self.assertEqual(sems.raw[0].shape, exp_sem_res[::-1])
-        self.assertEqual(len(specs.raw), 1)
-        sshape = specs.raw[0].shape
+        self.assertEqual(sps._main_raw[0].shape, exp_sem_res[::-1])
+        self.assertEqual(len(sps._rep_raw), 1)
+        sshape = sps._rep_raw[0].shape
         self.assertEqual(len(sshape), 5)
         self.assertGreater(sshape[0], 1)  # should have at least 2 wavelengths
         self.assertEqual(sshape[-1:-3:-1], exp_res)
-        sem_md = sems.raw[0].metadata
-        spec_md = specs.raw[0].metadata
+        sem_md = sps._main_raw[0].metadata
+        spec_md = sps._rep_raw[0].metadata
         self.assertAlmostEqual(sem_md[model.MD_POS], spec_md[model.MD_POS])
         self.assertAlmostEqual(sem_md[model.MD_PIXEL_SIZE],
                                (spec_md[model.MD_PIXEL_SIZE][0] / stream.TILE_SHAPE[0], spec_md[model.MD_PIXEL_SIZE][1] / stream.TILE_SHAPE[1]))
@@ -970,17 +970,17 @@ class SPARCTestCase(unittest.TestCase):
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
-        self.assertEqual(len(data), len(sems.raw) + len(specs.raw))
-        self.assertEqual(len(sems.raw), 1)
+        self.assertEqual(len(data), len(sps.raw))
+        self.assertEqual(len(sps._main_raw), 1)
         exp_sem_res = (exp_res[0] * stream.TILE_SHAPE[0], exp_res[1] * stream.TILE_SHAPE[1])
-        self.assertEqual(sems.raw[0].shape, exp_sem_res[::-1])
-        self.assertEqual(len(specs.raw), 1)
-        sshape = specs.raw[0].shape
+        self.assertEqual(sps._main_raw[0].shape, exp_sem_res[::-1])
+        self.assertEqual(len(sps._rep_raw), 1)
+        sshape = sps._rep_raw[0].shape
         self.assertEqual(len(sshape), 5)
         self.assertGreater(sshape[0], 1)  # should have at least 2 wavelengths
         self.assertEqual(sshape[-1:-3:-1], exp_res)
-        sem_md = sems.raw[0].metadata
-        spec_md = specs.raw[0].metadata
+        sem_md = sps._main_raw[0].metadata
+        spec_md = sps._rep_raw[0].metadata
         self.assertAlmostEqual(sem_md[model.MD_POS], spec_md[model.MD_POS])
         self.assertAlmostEqual(sem_md[model.MD_PIXEL_SIZE],
                                (spec_md[model.MD_PIXEL_SIZE][0] / stream.TILE_SHAPE[0], spec_md[model.MD_PIXEL_SIZE][1] / stream.TILE_SHAPE[1]))
@@ -1021,6 +1021,7 @@ class SPARCTestCase(unittest.TestCase):
         self.assertTrue(f.done())
         # No SEM data with monochromator (currently), so only PMT + anchor
         self.assertEqual(len(data), 2)
+        mcsd = None
         for d in data:
             if d.ndim >= 4 and d.shape[-4] > 1:
                 # anchor
@@ -1028,9 +1029,11 @@ class SPARCTestCase(unittest.TestCase):
                 self.assertGreaterEqual(d.shape[-4], 2)
             else:
                 self.assertEqual(d.shape, exp_res[::-1])
+                if model.MD_OUT_WL in d.metadata:  # monochromator data
+                    mcsd = d
         # sms.raw should be the same as data
         self.assertEqual(len(data), len(sms.raw))
-        md = mcs.raw[0].metadata
+        md = mcsd.metadata
         numpy.testing.assert_allclose(md[model.MD_POS], exp_pos)
         numpy.testing.assert_allclose(md[model.MD_PIXEL_SIZE], exp_pxs)
 
@@ -1054,6 +1057,7 @@ class SPARCTestCase(unittest.TestCase):
         self.assertTrue(f.done())
         # No SEM data with monochromator (currently), so only PMT + anchor
         self.assertEqual(len(data), 2)
+        mcsd = None
         for d in data:
             if d.ndim >= 4 and d.shape[-4] > 1:
                 # anchor
@@ -1061,9 +1065,11 @@ class SPARCTestCase(unittest.TestCase):
                 self.assertGreaterEqual(d.shape[-4], 2)
             else:
                 self.assertEqual(d.shape, exp_res[::-1])
+                if model.MD_OUT_WL in d.metadata:  # monochromator data
+                    mcsd = d
         # sms.raw should be the same as data
         self.assertEqual(len(data), len(sms.raw))
-        md = mcs.raw[0].metadata
+        md = mcsd.metadata
         self.assertIn(model.MD_POS, md)
 
     def test_count(self):

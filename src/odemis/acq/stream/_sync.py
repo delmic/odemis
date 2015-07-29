@@ -41,7 +41,7 @@ TILE_SHAPE = (4, 4)
 
 class MultipleDetectorStream(Stream):
     """
-    Abstract class for all specialized streams which are actually a combination
+    Abstract class for all specialised streams which are actually a combination
     of multiple streams acquired simultaneously. The main difference from a
     normal stream is the init arguments are Streams, and .raw is composed of all
     the .raw from the sub-streams.
@@ -53,7 +53,10 @@ class MultipleDetectorStream(Stream):
 
         self._main_stream = main_stream
         self._rep_stream = rep_stream
-        self._anchor_raw = None  # data of the anchor region
+        # Don't use the .raw of the substreams, because that is used for live view
+        self._main_raw = []
+        self._rep_raw = []
+        self._anchor_raw = []  # data of the anchor region
 
         assert main_stream._emitter == rep_stream._emitter
         self._emitter = main_stream._emitter
@@ -91,12 +94,10 @@ class MultipleDetectorStream(Stream):
     def raw(self):
         # build the .raw from all the substreams
         r = []
-        for s in self._streams:
-            for da in s.raw:
+        for sr in (self._main_raw, self._rep_raw, self._anchor_raw):
+            for da in sr:
                 if da.shape != (0,):  # don't add empty array
                     r.append(da)
-        if self._anchor_raw is not None:
-            r.extend(self._anchor_raw)
         return r
 
     @abstractmethod
@@ -526,9 +527,9 @@ class SEMCCDMDStream(MultipleDetectorStream):
             self._main_data = []
             self._rep_data = None
             rep_buf = []
-            self._rep_stream.raw = []
-            self._main_stream.raw = []
-            self._anchor_raw = None
+            self._rep_raw = []
+            self._main_raw = []
+            self._anchor_raw = []
             logging.debug("Starting repetition stream acquisition with components %s and %s",
                           self._main_det.name, self._rep_det.name)
 
@@ -670,7 +671,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
             self._onMultipleDetectorData(main_one, rep_buf)
 
             if self._dc_estimator is not None:
-                self._anchor_raw = self._assembleAnchorData(self._dc_estimator.raw)
+                self._anchor_raw.append(self._assembleAnchorData(self._dc_estimator.raw))
         except Exception as exp:
             if not isinstance(exp, CancelledError):
                 logging.exception("Software sync acquisition of multiple detectors failed")
@@ -680,8 +681,9 @@ class SEMCCDMDStream(MultipleDetectorStream):
             self._rep_df.unsubscribe(self._ssOnRepetitionImage)
             self._rep_df.synchronizedOn(None)
 
-            self._rep_stream.raw = []
-            self._main_stream.raw = []
+            self._rep_raw = []
+            self._main_raw = []
+            self._anchor_raw = []
             if not isinstance(exp, CancelledError) and self._acq_state == CANCELLED:
                 logging.warning("Converting exception to cancellation")
                 raise CancelledError()
@@ -755,9 +757,9 @@ class SEMMDStream(MultipleDetectorStream):
             self._main_data = []
             self._rep_data = None
             rep_buf = []
-            self._rep_stream.raw = []
-            self._main_stream.raw = []
-            self._anchor_raw = None
+            self._rep_raw = []
+            self._main_raw = []
+            self._anchor_raw = []
             logging.debug("Starting repetition stream acquisition with components %s and %s",
                           self._main_det.name, self._rep_det.name)
 
@@ -870,7 +872,7 @@ class SEMMDStream(MultipleDetectorStream):
             self._onMultipleDetectorData(main_one, rep_buf)
 
             if self._dc_estimator is not None:
-                self._anchor_raw = self._assembleAnchorData(self._dc_estimator.raw)
+                self._anchor_raw.append(self._assembleAnchorData(self._dc_estimator.raw))
         except Exception as exp:
             if not isinstance(exp, CancelledError):
                 logging.exception("Software sync acquisition of multiple detectors failed")
@@ -880,8 +882,9 @@ class SEMMDStream(MultipleDetectorStream):
             self._rep_df.unsubscribe(self._ssOnRepetitionImage)
             self._rep_df.synchronizedOn(None)
 
-            self._rep_stream.raw = []
-            self._main_stream.raw = []
+            self._rep_raw = []
+            self._main_raw = []
+            self._anchor_raw = []
             if not isinstance(exp, CancelledError) and self._acq_state == CANCELLED:
                 logging.warning("Converting exception to cancellation", exc_info=True)
                 raise CancelledError()
@@ -902,8 +905,8 @@ class SEMMDStream(MultipleDetectorStream):
         roi = self._rep_stream.roi.value
         rep_one = self._assembleMainData(rep, roi, rep_data)
         rep_one.metadata[MD_DESCRIPTION] = self._rep_stream.name.value
-        self._rep_stream.raw = [rep_one]
-        self._main_stream.raw = [main_data]
+        self._rep_raw = [rep_one]
+        self._main_raw = [main_data]
 
 
 class SEMSpectrumMDStream(SEMCCDMDStream):
@@ -936,8 +939,8 @@ class SEMSpectrumMDStream(SEMCCDMDStream):
         spec_data.metadata[MD_DESCRIPTION] = self._rep_stream.name.value
 
         # save the new data
-        self._rep_stream.raw = [spec_data]
-        self._main_stream.raw = [main_data]
+        self._rep_raw = [spec_data]
+        self._main_raw = [main_data]
 
     def _assembleSpecData(self, data_list, repetition):
         """
@@ -986,8 +989,8 @@ class SEMARMDStream(SEMCCDMDStream):
         for d in rep_data:
             d.metadata[MD_DESCRIPTION] = sname
 
-        self._rep_stream.raw = rep_data
-        self._main_stream.raw = [main_data]
+        self._rep_raw = rep_data
+        self._main_raw = [main_data]
 
 
 # On the SPARC, it's possible that both the AR and Spectrum are acquired in the
