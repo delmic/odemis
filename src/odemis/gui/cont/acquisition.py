@@ -386,7 +386,7 @@ class SparcAcquiController(object):
     tab.
     """
 
-    def __init__(self, tab_data, main_frame, stream_ctrl):
+    def __init__(self, tab_data, main_frame, streambar_controller):
         """
         tab_data (MicroscopyGUIData): the representation of the microscope GUI
         main_frame: (wx.Frame): the frame which contains the 4 viewports
@@ -395,7 +395,7 @@ class SparcAcquiController(object):
         self._tab_data_model = tab_data
         self._main_data_model = tab_data.main
         self._main_frame = main_frame
-        self._stream_controller = stream_ctrl
+        self._streambar_controller = streambar_controller
 
         # For file selection
         self.conf = conf.get_acqui_conf()
@@ -541,7 +541,7 @@ class SparcAcquiController(object):
         """
         Pause the settings of the GUI and save the values for restoring them later
         """
-        self._stream_paused = self._stream_controller.pauseStreams()
+        self._stream_paused = self._streambar_controller.pauseStreams()
 
     def _resume_streams(self):
         """
@@ -604,6 +604,10 @@ class SparcAcquiController(object):
         Similar to win.acquisition.on_acquire()
         """
         self._pause_streams()
+
+        self._streambar_controller.pause()
+        self._streambar_controller.enable(False)
+
         self.btn_acquire.Disable()
         self.btn_cancel.Enable()
 
@@ -613,7 +617,7 @@ class SparcAcquiController(object):
         self._main_data_model.is_acquiring.value = True
 
         # FIXME: probably not the whole window is required, just the file settings
-        self._main_frame.Layout() # to put the gauge at the right place
+        self._main_frame.Layout()  # to put the gauge at the right place
 
         # start acquisition + connect events to callback
         streams = self._tab_data_model.acquisitionView.getStreams()
@@ -633,8 +637,11 @@ class SparcAcquiController(object):
             logging.warning(msg)
             return
 
+        self._streambar_controller.enable(True)
+        self._streambar_controller.resume()
+
         self.acq_future.cancel()
-#        self._main_data_model.is_acquiring.value = False
+        # self._main_data_model.is_acquiring.value = False
         # all the rest will be handled by on_acquisition_done()
 
     def _export_to_file(self, acq_future):
