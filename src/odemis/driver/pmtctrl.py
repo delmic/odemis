@@ -330,6 +330,7 @@ class PMTControl(model.HwComponent):
         """
         cmd = cmd + "\n"
         with self._ser_access:
+            logging.debug("Sending command %s", cmd.encode('string_escape'))
             self._serial.write(cmd)
 
             ans = ''
@@ -337,6 +338,7 @@ class PMTControl(model.HwComponent):
             while (char != '\n'):
                 char = self._serial.read()
                 if not char:
+                    logging.error("Timeout after receiving %s", ans.encode('string_escape'))
                     # TODO: See how you should handle a timeout before you raise
                     # an HWError
                     raise HwError("PMT Control Unit connection timeout. "
@@ -344,6 +346,7 @@ class PMTControl(model.HwComponent):
                 # Handle ERROR coming from PMT control unit firmware
                 ans += char
 
+            logging.debug("Received answer %s", ans.encode('string_escape'))
             if ans.startswith("ERROR"):
                 raise PMTControlError(ans.split(' ', 1)[1])
 
