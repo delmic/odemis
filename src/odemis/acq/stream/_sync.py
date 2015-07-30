@@ -475,7 +475,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
         readout = numpy.prod(rep_size) / self._rep_det.readoutRate.value
 
         # Calculate dwellTime and scale to check if fuzzing could be applied
-        fuzzing = self._rep_stream.fuzzing.value
+        fuzzing = (hasattr(self._rep_stream, "fuzzing") and self._rep_stream.fuzzing.value)
         if fuzzing:
             dt = (exp / numpy.prod(TILE_SHAPE)) / 2
             sem_pxs = self._emitter.pixelSize.value

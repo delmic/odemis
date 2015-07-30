@@ -97,6 +97,7 @@ class RepetitionStream(LiveStream):
                                                setter=self._setPixelSize)
 
         # fuzzy scanning avoids aliasing by sub-scanning each region of a pixel
+        # Note: some subclasses for which it doesn't make sense will remove it
         self.fuzzing = model.BooleanVA(False)
 
         # exposure time of each pixel is the exposure time of the detector,
@@ -418,6 +419,10 @@ class MonochromatorSettingsStream(PMTSettingsStream):
         super(MonochromatorSettingsStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
         # Don't change pixel size, as we keep the same as the SEM
 
+        # Fuzzing is not handled for SEM/SEM streams (and doesn't make much
+        # sense as it's the same as software-binning
+        del self.fuzzing
+
         # .raw is an array of floats with time on the first dim, and count/date
         # on the second dim.
         self.raw = numpy.empty((0, 2), dtype=numpy.float64)
@@ -523,6 +528,10 @@ class ARSettingsStream(CCDSettingsStream):
         # For SPARC: typical user wants density much lower than SEM
         self.pixelSize.value *= 30
 
+        # Fuzzing makes no sense for AR acquisitions, which need to have a spot
+        # as precise as possible
+        del self.fuzzing
+
     # onActive & projection: same as the standard LiveStream
 
 
@@ -547,6 +556,10 @@ class CLSettingsStream(PMTSettingsStream):
         """
         super(CLSettingsStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
         # Don't change pixel size, as we keep the same as the SEM
+
+        # Fuzzing is not handled for SEM/SEM streams (and doesn't make much
+        # sense as it's the same as software-binning
+        del self.fuzzing
 
         # For the live view, we need a way to define the scale and resolution,
         # but not changing any hardware setting would mean we rely on another
