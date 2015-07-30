@@ -28,7 +28,7 @@ from __future__ import division
 from abc import abstractmethod, ABCMeta
 import logging
 from odemis import gui, model
-from odemis.acq.stream import OpticalStream, EMStream, SpectrumStream, MonochromatorSettingsStream
+from odemis.acq.stream import OpticalStream, EMStream, SpectrumStream, StaticStream
 from odemis.gui import BG_COLOUR_LEGEND, FG_COLOUR_LEGEND
 from odemis.gui.comp import miccanvas
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
@@ -677,9 +677,14 @@ class PlotViewport(ViewPort):
 
     def _on_stream_update(self, _):
         """
-        Hide the play icon overlay if no stream are present
+        Hide the play icon overlay if no stream are present (or they are all static)
         """
-        show = len(self._microscope_view.stream_tree) > 0
+        ss = self._microscope_view.getStreams()
+        if len(ss) > 0:
+            # Any stream not static?
+            show = any(not isinstance(s, StaticStream) for s in ss)
+        else:
+            show = False
         self.canvas.play_overlay.show = show
 
     def _on_stream_play(self, is_playing):
