@@ -539,28 +539,31 @@ class SparcAcquiController(object):
 
     def _pause_streams(self):
         """
-        Pause the settings of the GUI and save the values for restoring them later
+        Freeze the streams settings and ensure no stream is playing
         """
         self._stream_paused = self._streambar_controller.pauseStreams()
 
+        self._streambar_controller.pause()
+        self._streambar_controller.enable(False)
+
     def _resume_streams(self):
         """
-        Resume (unfreeze) the settings in the GUI and make sure the value are
-        back to the previous value
+        Resume (unfreeze) the stream settings
         """
         # We don't restart the streams paused, because it's unlikely the user
         # is again interested it this one, and if the detector is sensitive,
         # it could even be dangerous. So just start the SEM survey. It also
         # ensures that the e-beam settings are reasonable for if the GUI is
         # restarted.
+        # TODO: if acquisition was cancelled => put back streams as they were?
         self._tab_data_model.tool.value = TOOL_NONE
         for s in self._tab_data_model.streams.value:
             if isinstance(s, stream.SEMStream):
                 s.should_update.value = True
                 break
 
-        # Make sure that the acquisition button is enabled again.
-        self._main_frame.btn_sparc_acquire.Enable()
+        self._streambar_controller.enable(True)
+        self._streambar_controller.resume()
 
     def _reset_acquisition_gui(self, text=None, keep_filename=False):
         """
@@ -573,8 +576,6 @@ class SparcAcquiController(object):
         self.btn_acquire.Enable()
         self._main_frame.Layout()
         self._resume_streams()
-
-        self._main_data_model.acquiring = False
 
         if not keep_filename:
             # change filename, to ensure not overwriting anything
@@ -605,9 +606,6 @@ class SparcAcquiController(object):
         """
         self._pause_streams()
 
-        self._streambar_controller.pause()
-        self._streambar_controller.enable(False)
-
         self.btn_acquire.Disable()
         self.btn_cancel.Enable()
 
@@ -636,9 +634,6 @@ class SparcAcquiController(object):
             msg = "Tried to cancel acquisition while it was not started"
             logging.warning(msg)
             return
-
-        self._streambar_controller.enable(True)
-        self._streambar_controller.resume()
 
         self.acq_future.cancel()
         # self._main_data_model.is_acquiring.value = False
