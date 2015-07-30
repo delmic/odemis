@@ -156,6 +156,25 @@ class TestFindOptimalRange(unittest.TestCase):
 
         numpy.testing.assert_equal(img_auto, img_manu)
 
+    def test_uint32_small(self):
+        """
+        Test uint32, but with values very close from each other => the histogram
+        will look like just one column not null. But we still want the image
+        to display between 0->255 in RGB.
+        """
+        depth = 2 ** 32
+        size = (512, 100)
+        grey_img = numpy.zeros(size, dtype="uint32") + 3
+        grey_img[0, :] = 0
+        grey_img[:, 1] = 40
+        hist, edges = img.histogram(grey_img)  # , (0, depth - 1))
+        irange = img.findOptimalRange(hist, edges, 0)
+
+        rgb = img.DataArray2RGB(grey_img, irange)
+
+        self.assertEqual(rgb[0, 0].tolist(), [0, 0, 0])
+        self.assertEqual(rgb[5, 1].tolist(), [255, 255, 255])
+        self.assertTrue(0 < rgb[50, 50, 0] < 255)
 
 class TestHistogram(unittest.TestCase):
     # 8 and 16 bit short-cuts test
@@ -213,6 +232,33 @@ class TestHistogram(unittest.TestCase):
         hist_auto, edges = img.histogram(grey_img)
         self.assertGreaterEqual(edges[1], depth - 1)
         numpy.testing.assert_array_equal(hist, hist_auto[:depth])
+
+    def test_uint32_small(self):
+        """
+        Test uint32, but with values very close from each other => the histogram
+        will look like just one column not null.
+        """
+        depth = 2 ** 32
+        size = (512, 100)
+        grey_img = numpy.zeros(size, dtype="uint32") + 3
+        grey_img[0, 0] = 0
+        grey_img[0, 1] = 40
+        hist, edges = img.histogram(grey_img, (0, depth - 1))
+        self.assertTrue(256 <= len(hist) <= depth)
+        self.assertEqual(edges, (0, depth - 1))
+        self.assertEqual(hist[0], grey_img.size)
+        self.assertEqual(hist[-1], 0)
+
+        # Only between 0 and next power above max data (40 -> 63)
+        hist, edges = img.histogram(grey_img, (0, 63))
+        self.assertTrue(len(hist) <= depth)
+        self.assertEqual(edges, (0, 63))
+        self.assertEqual(hist[0], 1)
+        self.assertEqual(hist[40], 1)
+
+        hist_auto, edges = img.histogram(grey_img)
+        self.assertEqual(edges[1], grey_img.max())
+        numpy.testing.assert_array_equal(hist[:len(hist_auto)], hist_auto[:len(hist)])
 
     def test_float(self):
         size = (102, 965)

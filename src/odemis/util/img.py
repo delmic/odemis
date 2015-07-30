@@ -159,7 +159,7 @@ def compactHistogram(hist, length):
         logging.warning("Length of histogram = %d, not multiple of %d",
                          hist.size, length)
         # add enough zeros at the end to make it a multiple
-        hist = numpy.concatenate(hist, numpy.zeros(length - hist.size % length))
+        hist = numpy.append(hist, numpy.zeros(length - hist.size % length, dtype=hist.dtype))
     # Reshape to have on first axis the length, and second axis the bins which
     # must be accumulated.
     chist = hist.reshape(length, hist.size // length)
@@ -196,12 +196,16 @@ def histogram(data, irange=None):
         if data.dtype.kind in "biu":
             idt = numpy.iinfo(data.dtype)
             irange = (idt.min, idt.max)
+            if data.itemsize > 2:
+                # range is too big to be used as is => look really at the data
+                irange = (int(data.view(numpy.ndarray).min()),
+                          int(data.view(numpy.ndarray).max()))
         else:
             # cast to ndarray to ensure a scalar (instead of a DataArray)
             irange = (data.view(numpy.ndarray).min(), data.view(numpy.ndarray).max())
 
     # short-cuts (for the most usual types)
-    if data.dtype.kind in "biu" and irange[0] >= 0 and data.itemsize <= 2 and len(data) > 0:
+    if data.dtype.kind in "biu" and irange[0] == 0 and data.itemsize <= 2 and len(data) > 0:
         # TODO: for int (irange[0] < 0), treat as unsigned, and swap the first
         # and second halves of the histogram.
         # TODO: for 32 or 64 bits with full range, convert to a view looking
@@ -213,7 +217,7 @@ def histogram(data, irange=None):
             logging.warning("Unexpected value %d outside of range %s", edges[1], irange)
     else:
         if data.dtype.kind in "biu":
-            length = min(4096, irange[1] - irange[0] + 1)
+            length = min(8092, irange[1] - irange[0] + 1)
         else:
             # For floats, it will automatically find the minimum and maximum
             length = 256
