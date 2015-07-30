@@ -98,11 +98,19 @@ def findOptimalRange(hist, edges, outliers=0):
     if outliers == 0:
         # short-cut if no outliers: find first and last non null value
         inz = numpy.flatnonzero(hist)
-        idxrng = inz[0], inz[-1]
+        try:
+            idxrng = inz[0], inz[-1]
+        except IndexError:
+            # No non-zero => data had no value => histogram of an empty array
+            return edges
     else:
         # accumulate each bin into the next bin
         cum_hist = hist.cumsum()
         nval = cum_hist[-1]
+
+        # if we got a histogram of an empty array, don't try too hard
+        if nval == 0:
+            return edges
 
         # trick: if there are lots (>1%) of complete black and not a single
         # value just above it, it's a sign that the black is not part of the
@@ -117,8 +125,8 @@ def findOptimalRange(hist, edges, outliers=0):
 
         # search for first bin equal or above lowv
         lowi = numpy.searchsorted(cum_hist, lowv, side="right")
-        # if exactly lowv -> remove this bin too, otherwise include the bin
         if hist[lowi] == lowv:
+            # if exactly lowv -> remove this bin too, otherwise include the bin
             lowi += 1
         # same with highv (note: it's always found, so highi is always
         # within hist)
