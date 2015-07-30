@@ -217,7 +217,7 @@ def histogram(data, irange=None):
             logging.warning("Unexpected value %d outside of range %s", edges[1], irange)
     else:
         if data.dtype.kind in "biu":
-            length = min(8092, irange[1] - irange[0] + 1)
+            length = min(8192, irange[1] - irange[0] + 1)
         else:
             # For floats, it will automatically find the minimum and maximum
             length = 256
