@@ -251,6 +251,10 @@ def determine_default_control(va):
         except (AttributeError, NotApplicableError):
             pass
 
+        # Is it just a boolean?
+        if isinstance(va.value, bool):
+            return odemis.gui.CONTROL_CHECK
+
         # Return default control
         return odemis.gui.CONTROL_TEXT
 
@@ -645,6 +649,18 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
 
         if change_callback:
             value_ctrl.Bind(wx.EVT_COMMAND_ENTER, change_callback)
+
+    elif control_type == odemis.gui.CONTROL_CHECK:
+        # Only supports boolean VAs
+
+        lbl_ctrl, value_ctrl = container.add_checkbox_control(label_text, value=va.value)
+
+        setting_entry = SettingEntry(name=name, va=va, hw_comp=hw_comp,
+                                     lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
+                                     events=wx.EVT_CHECKBOX)
+
+        if change_callback:
+            value_ctrl.Bind(wx.EVT_CHECKBOX, change_callback)
 
     elif control_type == odemis.gui.CONTROL_RADIO:
         unit_fmt = (choices_si_prefix or "") + (unit or "")

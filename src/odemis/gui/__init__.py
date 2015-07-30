@@ -43,6 +43,7 @@ CONTROL_TEXT = 4      # Editable text value (with or without unit)
 CONTROL_SLIDER = 5    # Value slider
 CONTROL_RADIO = 6     # Choice buttons (like radio buttons)
 CONTROL_COMBO = 7     # Drop down combo box
+CONTROL_CHECK = 8  # Check-box
 
 # Overlay settings
 
