@@ -512,6 +512,9 @@ class Stream(object):
                     diff = max(1, mx - mn)
                     diff = 1 << int(math.ceil(math.log(diff, 2)))  # next power of 2
                     drange = (mn, mn + diff - 1)
+                    if self._drange is not None:
+                        drange = (min(drange[0], self._drange[0]),
+                                  max(drange[1], self._drange[1]))
             else: # float
                 # cast to ndarray to ensure a scalar (instead of a DataArray)
                 drange = (data.view(numpy.ndarray).min(),
