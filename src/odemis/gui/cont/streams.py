@@ -679,7 +679,10 @@ class StreamController(object):
             if len(hist):
                 # a logarithmic histogram is easier to read
                 lhist = numpy.log1p(hist)
-                norm_hist = lhist / float(lhist.max())
+                lhistmx = lhist.max()
+                if lhistmx == 0:  # avoid dividing by 0
+                    lhistmx = 1
+                norm_hist = lhist / lhistmx
                 # ndarrays work too, but slower to display
                 norm_hist = norm_hist.tolist()
             else:
