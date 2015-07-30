@@ -157,7 +157,8 @@ class Stream(object):
 
         # if there is already some data, update image with it
         if self.raw:
-            self._onNewData(None, self.raw[-1])
+            self._updateHistogram(self.raw[0])
+            self._onNewData(None, self.raw[0])
 
     # No __del__: subscription should be automatically stopped when the object
     # disappears, and the user should stop the update first anyway.
@@ -500,6 +501,17 @@ class Stream(object):
                     except (AttributeError, IndexError, ValueError):
                         idt = numpy.iinfo(data.dtype)
                         drange = (idt.min, idt.max)
+
+                # If range is too big to be used as is => look really at the data
+                if drange[1] - drange[0] > 4095:
+                    mn = int(data.view(numpy.ndarray).min())
+                    mx = int(data.view(numpy.ndarray).max())
+                    # Try to find "round" values
+                    if 0 < mn < 256:
+                        mn = 0
+                    diff = max(1, mx - mn)
+                    diff = 1 << int(math.ceil(math.log(diff, 2)))  # next power of 2
+                    drange = (mn, mn + diff - 1)
             else: # float
                 # cast to ndarray to ensure a scalar (instead of a DataArray)
                 drange = (data.view(numpy.ndarray).min(),
