@@ -110,7 +110,7 @@ class StreamController(object):
         elif hasattr(stream, "emission"):  # only emission
             self._add_emission_ctrl()
 
-        # Change the quick and dirty way in which BC controls are hidden (Use config in data.py)
+        # TODO: Change the quick and dirty way in which BC controls are hidden (Use config in data.py)
         if hasattr(stream, "auto_bc") and hasattr(stream, "intensityRange") and not no_bc:
             self._add_brightnesscontrast_ctrls()
             self._add_outliers_ctrls()
@@ -129,26 +129,28 @@ class StreamController(object):
 
     def pause(self):
         """ Pause SettingEntry related control updates """
+        # TODO: just call enable(False) from here? or is there any reason to
+        # want to pause without showing it to the user?
         for _, entry in self.entries.iteritems():
             entry.pause()
 
     def resume(self):
-        """ Pause SettingEntry related control updates """
+        """ Resume SettingEntry related control updates """
         for _, entry in self.entries.iteritems():
             entry.resume()
 
     def enable(self, enabled):
         """ Enable or disable all SettingEntries
-
-        FIXME: There is a possible problem that, for now, seems to work itself out: When related
-               controls dictate between themselves which ones are enabled (i.e. a toggle button,
-               dictating which slider is activated, as with auto brightness and contrast), enabling
-               all of them could/would be wrong.
-
-               When all are enabled now, the position the toggle button is in, immediately causes
-               the right slider to be disabled again.
-
         """
+
+#         FIXME: There is a possible problem that, for now, seems to work itself out: When related
+#                controls dictate between themselves which ones are enabled (i.e. a toggle button,
+#                dictating which slider is activated, as with auto brightness and contrast), enabling
+#                all of them could/would be wrong.
+#
+#                When all are enabled now, the position the toggle button is in, immediately causes
+#                the right slider to be disabled again.
+
         for entry in [e for _, e in self.entries.iteritems() if e.value_ctrl]:
             entry.value_ctrl.Enable(enabled)
 
@@ -1670,6 +1672,9 @@ class SparcStreamsController(StreamBarController):
         self._tab_data_model.acquisitionView.addStream(mdstream)
 
         stream_config = self._stream_config.get(type(stream), {})
+
+        # TODO: let the stream panel controller handle it based on the VAs
+        # present. (and get the controls via stream_cont.entries[vaname])
         # Add VAs (in same order as config)
         vas = util.sorted_according_to(vas, stream_config.keys())
         vactrls = []
@@ -1768,7 +1773,7 @@ class SparcStreamsController(StreamBarController):
 
         # No light filter for the spectrum stream: typically useless
         return self._addRepStream(spec_stream, sem_spec_stream,
-                                  vas=("repetition", "pixelSize"),
+                                  vas=("repetition", "pixelSize", "fuzzing"),
                                   axes={"wavelength": main_data.spectrograph,
                                         "grating": main_data.spectrograph,
                                         "slit-in": main_data.spectrograph,
