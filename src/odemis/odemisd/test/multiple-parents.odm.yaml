@@ -9,9 +9,7 @@
 Test: {
     class: Microscope,
     role: optical,
-    emitters: ["Spectra"],
-    detectors: ["Cam"],
-    actuators: ["Stage"],
+    children: ["Spectra", "Cam", "Stage"],
 }
 
 Spectra: {
@@ -46,14 +44,14 @@ Spectra: {
 "Cam focus": {
     creator: Cam, # Needs to be explicit as Stage also uses this component
     role: focus,
-    #affects: ["Cam"], # FIXME: doesn't work because it refers to its parent
+    affects: ["Cam"],
 }
 
 # Using Z as X doesn't make sense, but it makes it easy for testing
 "Stage": {
     class: actuator.MultiplexActuator,
     role: stage,
-    # affects: ["Cam"],
+    affects: ["Cam"],
     children: {"x": "Cam focus", "y": "Second Axis"},
     init: {
         axes_map: {"x": "z", "y": "y"},

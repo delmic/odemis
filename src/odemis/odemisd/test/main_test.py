@@ -38,7 +38,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 # ODEMISD_CMD = "/usr/bin/python2 -m odemis.odemisd.main"
 ODEMISD_CMD = ["/usr/bin/python2", os.path.dirname(odemis.__file__) + "/odemisd/main.py"]
-SIM_CONFIG = os.path.dirname(__file__) + "/optical-sim.odm.yaml"
+SIM_CONFIG = os.path.join(os.path.dirname(__file__), "optical-sim.odm.yaml")
 
 class TestCommandLine(unittest.TestCase):
     """
