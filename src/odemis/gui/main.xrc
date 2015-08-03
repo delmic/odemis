@@ -1685,11 +1685,11 @@
                         <orient>wxHORIZONTAL</orient>
                         <object class="sizeritem">
                           <object class="GraphicRadioButton" name="btn_align_chamber">
-                            <label>          CHAMBER</label>
+                            <label>             CHAMBER</label>
                             <delta>1</delta>
-                            <bitmap>img/button/btn_mirror.png</bitmap>
-                            <hover>img/button/btn_mirror_h.png</hover>
-                            <selected>img/button/btn_mirror_a.png</selected>
+                            <bitmap>img/button/btn_chamber.png</bitmap>
+                            <hover>img/button/btn_chamber_h.png</hover>
+                            <selected>img/button/btn_chamber_green_a.png</selected>
                             <fg>#1A1A1A</fg>
                             <font>
                               <size>11</size>
@@ -1709,11 +1709,11 @@
                         </object>
                         <object class="sizeritem">
                           <object class="GraphicRadioButton" name="btn_align_mirror">
-                            <label>          MIRROR</label>
+                            <label>            MIRROR</label>
                             <delta>1</delta>
-                            <bitmap>img/button/btn_mirror.png</bitmap>
-                            <hover>img/button/btn_mirror_h.png</hover>
-                            <selected>img/button/btn_mirror_a.png</selected>
+                            <bitmap>img/button/btn_ar_normal.png</bitmap>
+                            <hover>img/button/btn_ar_normal_h.png</hover>
+                            <selected>img/button/btn_ar_green_a.png</selected>
                             <fg>#1A1A1A</fg>
                             <font>
                               <size>11</size>
