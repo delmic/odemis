@@ -175,7 +175,7 @@ class TestCommandLine(unittest.TestCase):
         cmdline = "odemisd --log-level=2 --log-target=test.log --check"
         ret = main.main(cmdline.split())
         self.assertEqual(ret, 2, "Back-end not stopped: ret = %d" % ret)
-        
+
         os.remove("test.log")
         os.remove("testdaemon.log")
 

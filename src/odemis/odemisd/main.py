@@ -158,7 +158,7 @@ class BackendContainer(model.Container):
 
                 for n in nexts:
                     ghosts = mic.ghosts.value.copy()
-                    if not n in ghosts:
+                    if n not in ghosts:
                         logging.warning("going to instantiate %s but not a ghost", n)
                     # TODO: run each of them in a future, so that they start
                     # in parallel, and (bonus) when the future is done, check
@@ -174,6 +174,7 @@ class BackendContainer(model.Container):
                             raise
                         # We now need to stop, but cannot call terminate()
                         # directly, as it would deadlock, waiting for us
+                        logging.debug("Stopping instantiation due to unrecoverable error")
                         threading.Thread(target=self.terminate).start()
                         return
                     if not newcmps:
@@ -207,7 +208,7 @@ class BackendContainer(model.Container):
             mic.ghosts.value = ghosts
             return set()
         except Exception as exp:
-            # Anything else means: driver is borked, give up
+            # Anything else means: microscope file or driver is borked => give up
             # Exception might have happened remotely, so log it nicely
             logging.error("Failed to instantiate the model due to component %s", name)
             logging.info("Full traceback of the error follows", exc_info=1)
@@ -315,6 +316,17 @@ class BackendContainer(model.Container):
                 logging.warning("Failed to terminate Metadata updater", exc_info=True)
 
         self._terminate_all_alive()
+
+        # In case of instantiation failure, some containers might have no
+        # component, but we still need to end them.
+        for cname, c in self._instantiator.sub_containers.items():
+            logging.debug("Stopping container %s, which was running without component %s",
+                          c, cname)
+            try:
+                c.terminate()
+            except Exception:
+                logging.warning("Failed to terminate container %r", c, exc_info=True)
+            del self._instantiator.sub_containers[cname]
 
         mic = self._instantiator.microscope
         try:
