@@ -1715,15 +1715,14 @@ class MirrorAlignTab(Tab):
             self._spec_graph = self._settings_controller.spec_graph
             self._txt_mean = self._settings_controller.txt_mean
             self._scount_stream.image.subscribe(self._on_spec_count, init=True)
-
-        if main_data.ebeam:
-            # Force a spot at the center of the FoV
-            # Not via stream controller, so we can avoid the scheduler
-            spot_stream = acqstream.SpotSEMStream("SpotSEM", main_data.sed,
-                                                  main_data.sed.data, main_data.ebeam)
-            self._spot_stream = spot_stream
         else:
-            self._spot_stream = None
+            self._scount_stream = None
+
+        # Force a spot at the center of the FoV
+        # Not via stream controller, so we can avoid the scheduler
+        spot_stream = acqstream.SpotSEMStream("SpotSEM", main_data.sed,
+                                              main_data.sed.data, main_data.ebeam)
+        self._spot_stream = spot_stream
 
         # Switch between alignment modes
         # * chamber-view: see the mirror and the sample in the chamber
@@ -1732,6 +1731,15 @@ class MirrorAlignTab(Tab):
         self._alignbtn_to_mode = {main_frame.btn_align_chamber: "chamber-view",
                                   main_frame.btn_align_mirror: "mirror-align",
                                   main_frame.btn_align_fiber: "fiber-align"}
+
+        # TODO: move mode detection in the model, and hide buttons for which
+        # no mode exist.
+        if main_data.spectrometer is None:
+            # Note: if no fiber alignment actuators, but a spectrometer, it's
+            # still good to provide the mode, as the user can do it manually.
+            main_frame.btn_align_fiber.Show(False)
+            del self._alignbtn_to_mode[main_frame.btn_align_fiber]
+
         if main_data.ccd is None:
             # No AR => only one mode possible => hide the buttons
             main_frame.pnl_alignment_btns.Show(False)
