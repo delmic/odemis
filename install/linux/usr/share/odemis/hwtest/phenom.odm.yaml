@@ -1,3 +1,4 @@
+# Allows to control a Phenom from Odemis (and nothing else)
 PhenomProX: {
     class: Microscope,
     role: sem,

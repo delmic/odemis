@@ -1,26 +1,26 @@
-# Configuration for the SPARC system at Chalmers University, with only the angle resolved camera
-SPARC-AR: {
+# Configuration for the SPARC system with a AR CCD and Spectrometer CCD
+SPARC: {
     class: Microscope,
     role: sparc,
-    emitters: ["EBeam ExtXY", "AR Lens", "FW102C"],
-    detectors: ["SED ExtXY", "ARCam"],
-    actuators: ["MirrorMover", "MFFLens", "MFFSelector"],
+    emitters: ["SEM E-beam", "Focus Lens", "Optical Emission Filter"],
+    detectors: ["SEM Detector", "Angular Camera", "Spectrometer"],
+    actuators: ["Mirror Actuators", "Focus Lens Flipper", "Fiber Flipper"],
 }
 
 # Quanta SEM driven via external X/Y connection, using a DAQ board
-"SEM ExtXY": {
+"SEM Scan Interface": {
     class: semcomedi.SEMComedi,
     role: none,
     init: {device: "/dev/comedi0"},
     # more detectors can be added, if necessary
-    children: {scanner: "EBeam ExtXY", detector0: "SED ExtXY"}
+    children: {scanner: "SEM E-beam", detector0: "SEM Detector"}
 }
 
 # Connect:
 # X -> AO 0
 # Y -> AO 1
 # Ground -> AO GND
-"EBeam ExtXY": {
+"SEM E-beam": {
     # Internal child of SEM ExtXY, so no class
     role: e-beam,
     init: {
@@ -35,11 +35,11 @@ SPARC-AR: {
         dwellTime: 10.e-6, # s
         magnification: 100, # (ratio)
     },
-    affects: ["SED ExtXY", ARCam] # affects the CCD in case of cathodoluminescence
+    affects: ["SEM Detector", "Spectrometer", "Angular Camera"] # affects the CCD in case of cathodoluminescence
 }
 
 # Must be connected on AI 0/AI GND
-"SED ExtXY": { # aka ETD
+"SEM Detector": { # aka ETD
     # Internal child of Quanta ExtXY, so no class
     role: se-detector,
     init: {
@@ -48,7 +48,7 @@ SPARC-AR: {
     },
 }
 
-"AR Lens": {
+"Focus Lens": {
     class: static.OpticalLens,
     role: lens,
     init: {mag: 0.4917, # ratio
@@ -58,26 +58,25 @@ SPARC-AR: {
            focus_dist: 0.5e-3,  # m, the vertical mirror cutoff, iow the min distance between the mirror and the sample
            parabola_f: 2.5e-3,  # m, parabola_parameter=1/4f
           }, 
-    affects: ["ARCam"]
+    affects: ["Angular Camera"]
 }
-
 
 # Thorlabs MFF102 holding the lens
 # The convention for the position is:
 # 0° (1)  -> no lens
 # 90° (2) -> lens
-"MFFLens": {
+"Focus Lens Flipper": {
     class: tlaptmf.MFF,
     role: lens-switch,
     init: {sn: "37848823",
            axis: "rx",
            # inverted: ["rx"],
     },
-    affects: ["AR Lens", "ARCam"]  
+    affects: ["Focus Lens", "Angular Camera", "Spectrometer"]  
 }
 
 # Thorlabs FW102C with some filters
-"FW102C": {
+"Optical Emission Filter": {
     class: tlfw.FW102c,
     role: filter,
     init: {port: "/dev/ttyFTDI*", # will automatically find the right port
@@ -86,10 +85,11 @@ SPARC-AR: {
                    3: "polariser",
                    6: "pass-through"},
            },
-    affects: ["ARCam"]
+    affects: ["Angular Camera", "Spectrometer"]
 }
-# Zyla/CL
-ARCam: {
+
+# Andor Neo
+"Angular Camera": {
     class: andorcam3.AndorCam3,
     role: ccd,
     init: {
@@ -106,14 +106,48 @@ ARCam: {
 # The convention for the position is:
 # 0° (1)  -> AR
 # 90° (2) -> spectrometer
-"MFFSelector": {
+"Fiber Flipper": {
     class: tlaptmf.MFF,
     role: ar-spec-selector,
     init: {sn: "37848720",
            axis: "rx",
            # inverted: ["rx"],
     },
-    affects: ["ARCam"]  
+    affects: ["Angular Camera", "Spectrometer"]  
+}
+
+# Andor iDus 406 + Shamrock SR303i
+"Spectrometer": {
+    class: andorshrk.AndorSpec, # Instantiates an Andorcam2 + Shamrock
+    role: spectrometer,
+    children: {andorcam2: "Spectral Camera", shamrock: "Spectrograph"},
+    init: {},
+    properties: {
+        #binning: [4, 256],
+    },
+}
+
+"Spectral Camera": {
+    # no class, as it's instantiated by AndorSpec
+    role: sp-ccd,
+    init: {
+           device: 0, # 0 = first and only Andor SDK 2 camera
+           #transpose: [-1, 2], # mirrored on X axis if camera is upside-down
+    },
+    properties: {
+        targetTemperature: -55, # °C
+    },
+}
+
+"Spectrograph": {
+    # no class, as it's instantiated by AndorSpec
+    role: spectrograph,
+    init: {
+        device: 0,
+        slits: {
+            1: "slit-in", # used to be called "slit"
+        }
+    },
 }
 
 # PI E-861 jumpers (. = off):
@@ -121,7 +155,7 @@ ARCam: {
 # Y          = 123..6..
 # RZ (yaw)   = 12.4.6..
 # RY (pitch) = 12...6..
-MirrorMover: {
+"Mirror Actuators": {
     class: pigcs.Bus,
     role: mirror,
     init: {
@@ -141,5 +175,3 @@ MirrorMover: {
         speed: {"x": 0.01, "y": 0.01, "rz": 0.01, "ry": 0.01} # m/s
     }
 }
-
-

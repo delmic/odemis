@@ -1,4 +1,4 @@
-# Fake SPARC configuration using the SECOM components in TUD. 
+# Fake SPARC configuration using the SECOM components. 
 # Just for testing purposes.
 SPARC-FAKE-TUD: {
     class: Microscope,
