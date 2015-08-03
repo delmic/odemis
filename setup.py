@@ -85,6 +85,11 @@ if sys.platform.startswith('linux'):
                'install/linux/usr/bin/odemis-start',
                'install/linux/usr/bin/odemis-stop',
                'install/linux/usr/bin/odemis-cycle',
+               'install/linux/usr/bin/odemis-relay',
+               'install/linux/usr/bin/odemis-bug-report',
+               'install/linux/usr/bin/odemis-edit-mic',
+               'install/linux/usr/bin/odemis-hw-status',
+               'install/linux/usr/bin/odemis-live-view',
                ]
 else:
     data_files = []
