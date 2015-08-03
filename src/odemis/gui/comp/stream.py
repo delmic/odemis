@@ -297,9 +297,36 @@ class StreamPanelHeader(wx.Control):
         """ Show or hide the tint button """
         self._show_ctrl(self.btn_tint, show)
 
+    def enable_remove_btn(self, enabled):
+        """ Enable or disable the remove button """
+        self.btn_remove.Enable(enabled)
+
     def enable_updated_btn(self, enabled):
         """ Enable or disable the update button """
         self.btn_update.Enable(enabled)
+
+    def enable_show_btn(self, enabled):
+        """ Enable or disable the show button """
+        self.btn_show.Enable(enabled)
+
+    def enable_tint_btn(self, enabled):
+        """ Enable or disable the tint button """
+        self.btn_tint.Enable(enabled)
+
+    def enable(self, enabled):
+        """ Enable or disable all buttons that are present """
+
+        if self.btn_remove:
+            self.enable_remove_btn(enabled)
+
+        if self.btn_update:
+            self.enable_updated_btn(enabled)
+
+        if self.btn_show:
+            self.enable_show_btn(enabled)
+
+        if self.btn_tint:
+            self.enable_tint_btn(enabled)
 
     def to_static_mode(self):
         """ Remove or disable the controls not needed for a static view of the stream """
@@ -609,6 +636,9 @@ class StreamPanel(wx.Panel):
 
     def show_visible_btn(self, show):
         self._header.show_show_btn(show)
+
+    def enable(self, enabled):
+        self._header.enable(enabled)
 
     def OnSize(self, event):
         """ Handles the wx.EVT_SIZE event for StreamPanel

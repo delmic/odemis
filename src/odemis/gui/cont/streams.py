@@ -110,7 +110,7 @@ class StreamController(object):
         elif hasattr(stream, "emission"):  # only emission
             self._add_emission_ctrl()
 
-        # TODO: Change the quick and dirty way in which BC controls are hidden (Use config in data.py)
+        # TODO: Change the way in which BC controls are hidden (Use config in data.py)
         if hasattr(stream, "auto_bc") and hasattr(stream, "intensityRange") and not no_bc:
             self._add_brightnesscontrast_ctrls()
             self._add_outliers_ctrls()
@@ -134,22 +134,26 @@ class StreamController(object):
         for _, entry in self.entries.iteritems():
             entry.pause()
 
+        self.stream_panel.enable(False)
+
     def resume(self):
         """ Resume SettingEntry related control updates """
         for _, entry in self.entries.iteritems():
             entry.resume()
 
+        self.stream_panel.enable(True)
+
     def enable(self, enabled):
         """ Enable or disable all SettingEntries
         """
 
-#         FIXME: There is a possible problem that, for now, seems to work itself out: When related
-#                controls dictate between themselves which ones are enabled (i.e. a toggle button,
-#                dictating which slider is activated, as with auto brightness and contrast), enabling
-#                all of them could/would be wrong.
-#
-#                When all are enabled now, the position the toggle button is in, immediately causes
-#                the right slider to be disabled again.
+        # FIXME: There is a possible problem that, for now, seems to work itself out: When related
+        # controls dictate between themselves which ones are enabled (i.e. a toggle button,
+        # dictating which slider is activated, as with auto brightness and contrast), enabling
+        # all of them could/would be wrong.
+        #
+        # When all are enabled now, the position the toggle button is in, immediately causes
+        # the right slider to be disabled again.
 
         for entry in [e for _, e in self.entries.iteritems() if e.value_ctrl]:
             entry.value_ctrl.Enable(enabled)
