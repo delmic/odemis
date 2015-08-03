@@ -33,7 +33,7 @@ import unittest
 logging.getLogger().setLevel(logging.DEBUG)
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
-SECOM_CONFIG = CONFIG_PATH + "secom-sim.odm.yaml"
+SECOM_CONFIG = CONFIG_PATH + "sim/secom-sim.odm.yaml"
 
 class TestDriver(unittest.TestCase):
     """

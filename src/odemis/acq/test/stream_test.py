@@ -40,8 +40,8 @@ logging.getLogger().setLevel(logging.DEBUG)
 # logging.getLogger().handlers[0].setFormatter(logging.Formatter(_frm))
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
-SPARC_CONFIG = CONFIG_PATH + "sparc-monash-sim.odm.yaml"
-SECOM_CONFIG = CONFIG_PATH + "secom-sim.odm.yaml"
+SPARC_CONFIG = CONFIG_PATH + "sim/sparc-pmts-sim.odm.yaml"
+SECOM_CONFIG = CONFIG_PATH + "sim/secom-sim.odm.yaml"
 
 RGBCAM_CLASS = simcam.Camera
 RGBCAM_KWARGS = dict(name="camera", role="overview", image="simcam-fake-overview.h5")

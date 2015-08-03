@@ -42,7 +42,7 @@ logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(messag
 logging.getLogger().setLevel(logging.DEBUG)
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
-SECOM_LENS_CONFIG = CONFIG_PATH + "secom-sim-lens-align.odm.yaml"  # 7x7
+SECOM_LENS_CONFIG = CONFIG_PATH + "sim/secom-sim-lens-align.odm.yaml"  # 4x4
 
 
 class TestAlignment(unittest.TestCase):

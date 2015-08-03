@@ -39,7 +39,7 @@ import simulated_test
 logging.getLogger().setLevel(logging.DEBUG)
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
-DELPHI_CONFIG = CONFIG_PATH + "delphi-sim.odm.yaml"
+DELPHI_CONFIG = CONFIG_PATH + "sim/delphi-sim.odm.yaml"
 
 
 class MultiplexTest(unittest.TestCase, simulated_test.ActuatorTest):

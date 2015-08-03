@@ -37,8 +37,8 @@ import odemis.acq.path as path
 logging.getLogger().setLevel(logging.DEBUG)
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
-SPARC_CONFIG = CONFIG_PATH + "sparc-monash-sim.odm.yaml"
-SECOM_CONFIG = CONFIG_PATH + "secom-sim.odm.yaml"
+SPARC_CONFIG = CONFIG_PATH + "sim/sparc-pmts-sim.odm.yaml"
+SECOM_CONFIG = CONFIG_PATH + "sim/secom-sim.odm.yaml"
 
 class TestNoBackend(unittest.TestCase):
     # No backend, and only fake streams that don't generate anything

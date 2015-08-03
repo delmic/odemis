@@ -36,7 +36,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 # logging.getLogger().handlers[0].setFormatter(logging.Formatter(_frm))
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
-DELPHI_CONFIG = CONFIG_PATH + "delphi-sim.odm.yaml"
+DELPHI_CONFIG = CONFIG_PATH + "sim/delphi-sim.odm.yaml"
 
 # @unittest.skip("skip")
 class TestCalibration(unittest.TestCase):

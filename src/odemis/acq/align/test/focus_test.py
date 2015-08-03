@@ -38,7 +38,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 # logging.getLogger().handlers[0].setFormatter(logging.Formatter(_frm))
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
-SECOM_CONFIG = CONFIG_PATH + "secom-focus-test.odm.yaml"  # 7x7
+SECOM_CONFIG = CONFIG_PATH + "sim/secom-focus-test.odm.yaml"  # 4x4
 
 
 class TestAutofocus(unittest.TestCase):

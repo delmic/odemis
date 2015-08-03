@@ -66,7 +66,9 @@ if sys.platform.startswith('linux'):
                   # TODO udev rules might actually be better off in /lib/udev/rules.d/
                   ('/lib/udev/rules.d', glob.glob('install/linux/lib/udev/rules.d/*.rules')),
                   ('share/odemis/', glob.glob('install/linux/usr/share/odemis/*.odm.yaml')),
+                  ('share/odemis/sim', glob.glob('install/linux/usr/share/odemis/sim/*.odm.yaml')),
                   ('share/odemis/examples', glob.glob('install/linux/usr/share/odemis/examples/*.odm.yaml')),
+                  ('share/odemis/hwtest', glob.glob('install/linux/usr/share/odemis/hwtest/*.odm.yaml')),
                   # TODO: need to run desktop-file-install in addition to update-desktop-database?
                   ('share/applications/', glob.glob('install/linux/usr/share/applications/*.desktop')),
                   ('share/icons/hicolor/32x32/apps/', ['install/linux/usr/share/icons/hicolor/32x32/apps/odemis.png']),

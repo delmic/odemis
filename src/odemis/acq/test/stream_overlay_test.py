@@ -35,7 +35,7 @@ import unittest
 logging.getLogger().setLevel(logging.DEBUG)
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
-SECOM_LENS_CONFIG = CONFIG_PATH + "secom-sim-lens-align.odm.yaml"
+SECOM_LENS_CONFIG = CONFIG_PATH + "sim/secom-sim-lens-align.odm.yaml"
 
 class TestOverlayStream(unittest.TestCase):
     backend_was_running = False

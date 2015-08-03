@@ -35,10 +35,10 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 # Test for the different configurations
-SPARC_CONFIG = CONFIG_PATH + "sparc-sim.odm.yaml"
-MONASH_CONFIG = CONFIG_PATH + "sparc-monash-sim.odm.yaml"
-SPEC_CONFIG = CONFIG_PATH + "sparc-sim-spec.odm.yaml"
-OSLO_CONFIG = CONFIG_PATH + "sparc2-oslo-sim.odm.yaml"
+SPARC_CONFIG = CONFIG_PATH + "sim/sparc-sim.odm.yaml"
+MONASH_CONFIG = CONFIG_PATH + "sim/sparc-pmts-sim.odm.yaml"
+SPEC_CONFIG = CONFIG_PATH + "sim/sparc-sim-spec.odm.yaml"
+OSLO_CONFIG = CONFIG_PATH + "sim/sparc2-sim.odm.yaml"
 
 
 # @skip("faster")
