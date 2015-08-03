@@ -819,8 +819,12 @@ class StreamBarController(object):
             stream_controller.resume()
 
     def enable(self, enabled):
+        """ Enable or disable all the streambar controls """
         for stream_controller in self.stream_controllers:
             stream_controller.enable(enabled)
+
+        if self._stream_bar.btn_add_stream:
+            self._stream_bar.btn_add_stream.Enable(enabled)
 
     # unused (but in test case)
     def get_actions(self):
