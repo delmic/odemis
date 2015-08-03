@@ -1697,6 +1697,10 @@ class SparcStreamsController(StreamBarController):
         axes_names = util.sorted_according_to(axes.keys(), stream_config.keys())
         for axisname in axes_names:
             comp = axes[axisname]
+            if comp is None:
+                logging.debug("Skipping axis %s for non existent component",
+                              axisname)
+                continue
             if axisname not in comp.axes:
                 logging.debug("Skipping non existent axis %s on component %s",
                               axisname, comp.name)
