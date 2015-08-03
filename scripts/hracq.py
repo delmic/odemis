@@ -176,8 +176,8 @@ def main(args):
         acquirer = HRAcquirer(options.output, options.number)
         acquirer.set_hardware_settings(options.exposure, options.binning,
                                        options.power, options.wavelength)
-            filename = options.output.decode(sys.getfilesystemencoding())
-            acquire(component, dataflows, filename)
+        filename = options.output.decode(sys.getfilesystemencoding())
+        acquire(component, dataflows, filename)
     except ValueError as exp:
         logging.error("%s", exp)
         return 127
