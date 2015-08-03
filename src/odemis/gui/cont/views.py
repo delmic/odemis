@@ -46,9 +46,9 @@ class ViewPortController(object):
         """
         :param tab_data: MicroscopyGUIData -- the representation of the microscope GUI
         :param main_frame: wx.Frame -- the frame which contains the 4 viewports
-        :param viewports: [MicroscopeViewport] or OrderedDict(MicroscopeViewport -> {}) -- the
-            viewports to update. The first one is the one focused. If it's an OrderedDict, the
-            kwargs are passed to the MicroscopeView creation. A special kwarg "cls"
+        :param viewports (OrderedDict(MicroscopeViewport -> {}): the
+            viewports to update. The first one is the one focused.
+            The kwargs are passed to the MicroscopeView creation. A special kwarg "cls"
             can be used to use a specific class for the View (instead of MicroscopeView)
             If there are more than 4 viewports, only the first 4 will be made visible and any others
             will be hidden.
@@ -65,13 +65,10 @@ class ViewPortController(object):
         self.main_frame = main_frame
         self._toolbar = toolbar
 
-        if isinstance(viewports, collections.OrderedDict):
-            self._viewports = viewports.keys()
-            self._create_views_fixed(viewports)
-        else:
-            # create the (default) views
-            self._viewports = viewports
-            self._create_views_auto()
+        assert not self._data_model.views.value  # should still be empty
+
+        self._viewports = viewports.keys()
+        self._create_views_fixed(viewports)
 
         # First view is focused
         tab_data.focussedView.value = tab_data.visible_views.value[0]
@@ -80,6 +77,15 @@ class ViewPortController(object):
         tab_data.visible_views.subscribe(self._on_visible_views)
         tab_data.viewLayout.subscribe(self._on_view_layout, init=True)
         tab_data.focussedView.subscribe(self._on_focussed_view, init=True)
+
+        # TODO: just let the viewport do that?
+        # Track the mpp of the SEM view in order to set the magnification
+        ebeam = self._main_data_model.ebeam
+        if (ebeam and isinstance(ebeam.horizontalFoV, VigilantAttributeBase)):
+            # => Link the SEM FoV with the mpp of the live SEM viewport
+            for vp in self.viewports:
+                if vp.microscope_view.stream_classes == EMStream:  # For SEM only views
+                    vp.track_view_hfw(ebeam.horizontalFoV)
 
     @property
     def viewports(self):
@@ -111,209 +117,6 @@ class ViewPortController(object):
 
         self._data_model.views.value = views
         self._data_model.visible_views.value = visible_views
-
-    def _create_views_auto(self):
-        """ Create the different views displayed, according to the current
-        microscope.
-
-        To be executed only once, at initialisation.
-        """
-        # TODO: just get the sizer that will contain the viewports, and
-        # create the viewports according to the stream classes.
-        # It could be possible to even delete viewports and create new ones
-        # when .views changes.
-        # When .visible_views changes, put the viewports in the right order
-        # in the sizer.
-
-        assert not self._data_model.views.value  # should still be empty
-
-        # AnalysisTab: create everything and the right one will be swapped when
-        # loading an acquisition file.
-        if isinstance(self._data_model, model.AnalysisGUIData):
-
-            # Viewport type checking to avoid mismatches
-            for vp in self._viewports[:4]:
-                assert(isinstance(vp, MicroscopeViewport))
-            assert(isinstance(self._viewports[4], AngularResolvedViewport))
-            assert(isinstance(self._viewports[5], PlotViewport))
-            assert(isinstance(self._viewports[6], SpatialSpectrumViewport))
-
-            logging.info("Creating static viewport layout")
-            vpv = collections.OrderedDict([
-                (self._viewports[0],  # focused view
-                 {"name": "Optical",
-                  "stream_classes": (OpticalStream, SpectrumStream, CLStream),
-                  }),
-                (self._viewports[1],
-                 {"name": "SEM",
-                  "stream_classes": EMStream,
-                  }),
-                (self._viewports[2],
-                 {"name": "Combined 1",
-                  "stream_classes": (EMStream, OpticalStream, SpectrumStream, CLStream),
-                  }),
-                (self._viewports[3],
-                 {"name": "Combined 2",  # Was SEM CL for Sparc
-                  "stream_classes": (EMStream, OpticalStream, SpectrumStream, CLStream),
-                  }),
-                (self._viewports[4],
-                 {"name": "Angle-resolved",
-                  "stream_classes": ARStream,
-                  }),
-                (self._viewports[5],
-                 {"name": "Spectrum plot",
-                  "stream_classes": SpectrumStream,
-                  }),
-                (self._viewports[6],
-                 {"name": "Spatial spectrum",
-                  "stream_classes": (SpectrumStream, CLStream),
-                  }),
-            ])
-            self._create_views_fixed(vpv)
-            return
-
-        # Streams tab (or acquisition tab for the Sparc)
-
-        # If both SEM and Optical are present (= SECOM & DELPHI)
-        if (
-                self._main_data_model.ebeam and
-                self._main_data_model.light and
-                len(self._viewports) > 4
-        ):
-            # Viewport type checking to avoid mismatches
-            for vp in self._viewports[:4]:
-                assert(isinstance(vp, MicroscopeViewport))
-
-            logging.info("Creating combined SEM/Optical viewport layout")
-            vpv = collections.OrderedDict([
-                (self._viewports[0], # focused view
-                 {"name": "Optical",
-                  "stage": self._main_data_model.stage,
-                  "focus": self._main_data_model.focus,
-                  "stream_classes": OpticalStream,
-                  }),
-                (self._viewports[1],
-                 {"name": "SEM",
-                  # centered on content, even on Delphi when POS_COR used to
-                  # align on the optical streams
-                  "cls": model.ContentView,
-                  "stage": self._main_data_model.stage,
-                  "focus": self._main_data_model.ebeam_focus,
-                  "stream_classes": EMStream,
-                  }),
-                (self._viewports[2],
-                 {"name": "Combined 1",
-                  "stage": self._main_data_model.stage,
-                  "focus": self._main_data_model.focus,
-                  "stream_classes": (EMStream, OpticalStream),
-                  }),
-                (self._viewports[3],
-                 {"name": "Combined 2",
-                  "stage": self._main_data_model.stage,
-                  "focus": self._main_data_model.focus,
-                  "stream_classes": (EMStream, OpticalStream),
-                  }),
-            ])
-        # SPARC
-        elif (
-                self._main_data_model.ebeam and
-                self._main_data_model.spectrograph and
-                self._main_data_model.spectrometer and
-                len(self._viewports) == 4
-        ):
-            for vp in self._viewports[:4]:
-                assert(isinstance(vp, MicroscopeViewport) or isinstance(vp, PlotViewport))
-
-            logging.info("Creating Sparc Acquisition viewport layout")
-
-            vpv = collections.OrderedDict([
-                (self._viewports[0],
-                 {"name": "SEM",
-                  "cls": model.ContentView,
-                  "stage": self._main_data_model.stage,
-                  "focus": self._main_data_model.ebeam_focus,
-                  "stream_classes": (EMStream, CLSettingsStream),
-                  }),
-                (self._viewports[1],  # focused view
-                 {"name": "Angle-resolved",
-                  "stage": self._main_data_model.stage,
-                  "focus": self._main_data_model.focus,
-                  "stream_classes": ARSettingsStream,
-                  }),
-                (self._viewports[2],
-                 {"name": "Spectrum",
-                  "stream_classes": SpectrumStream,
-                  }),
-                (self._viewports[3],
-                 {"name": "Monochromator",
-                  "stage": self._main_data_model.stage,
-                  "stream_classes": MonochromatorSettingsStream,
-                  }),
-            ])
-        # If SEM only: all SEM
-        # Works also for the Sparc, as there is no other emitter, and we don't
-        # need to display anything else anyway
-        elif self._main_data_model.ebeam and not self._main_data_model.light:
-            logging.info("Creating SEM only viewport layout")
-            vpv = collections.OrderedDict()
-            for i, viewport in enumerate(self._viewports):
-                vpv[viewport] = {"name": "SEM %d" % (i + 1),
-                                 "stage": self._main_data_model.stage,
-                                 "focus": self._main_data_model.ebeam_focus,
-                                 "stream_classes": EMStream,
-                                 }
-
-        # If Optical only: all optical
-        elif not self._main_data_model.ebeam and self._main_data_model.light:
-            logging.info("Creating Optical only viewport layout")
-            vpv = collections.OrderedDict()
-            for i, viewport in enumerate(self._viewports):
-                vpv[viewport] = {"name": "Optical %d" % (i + 1),
-                                 "stage": self._main_data_model.stage,
-                                 "focus": self._main_data_model.focus,
-                                 "stream_classes": OpticalStream,
-                                 }
-        else:
-            logging.warning("No known microscope configuration, creating %d "
-                            "generic views", len(self._viewports))
-            vpv = collections.OrderedDict()
-            for i, viewport in enumerate(self._viewports):
-                vpv[viewport] = {
-                    "name": "View %d" % (i + 1),
-                    "stage": self._main_data_model.stage,
-                    "focus": self._main_data_model.focus,
-                    "stream_classes": None,  # everything
-                }
-
-        # Insert a Chamber viewport into the lower left position if a chamber camera is present
-        if self._main_data_model.chamber_ccd and self._main_data_model.chamber_light:
-            logging.debug("Inserting Chamber viewport")
-            vpv[self._viewports[2]] = {
-                "name": "Chamber",
-                "stream_classes": (RGBCameraStream, BrightfieldStream),
-            }
-
-        # If there are 5 viewports, we'll assume that the last one is an overview camera stream
-        if len(self._viewports) == 5:
-            logging.debug("Inserting Overview viewport")
-            vpv[self._viewports[4]] = {
-                "cls": model.OverviewView,
-                "name": "Overview",
-                "stage": self._main_data_model.stage,
-                "stream_classes": (RGBCameraStream, BrightfieldStream),
-            }
-
-        self._create_views_fixed(vpv)
-        # TODO: if chamber camera: br is just chamber, and it's the focussedView
-
-        # Track the mpp of the SEM view in order to set the magnification
-        if (self._main_data_model.ebeam and isinstance(self._main_data_model.ebeam.horizontalFoV,
-                                                       VigilantAttributeBase)):
-
-            # => Link the SEM FoV with the mpp of the live SEM viewport
-            for viewport, conf in vpv.items():
-                if conf["stream_classes"] == EMStream:
-                    viewport.track_view_hfw(self._main_data_model.ebeam.horizontalFoV)
 
     def _viewport_by_view(self, view):
         """ Return the ViewPort associated with the given view """

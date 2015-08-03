@@ -31,10 +31,14 @@ import numpy
 from odemis import dataio, model
 from odemis.acq import calibration
 from odemis.acq.align import AutoFocus
+from odemis.acq.stream import OpticalStream, SpectrumStream, CLStream, EMStream, \
+    ARStream, CLSettingsStream, ARSettingsStream, MonochromatorSettingsStream, RGBCameraStream, BrightfieldStream
 from odemis.driver.actuator import ConvertStage
 from odemis.gui.comp.canvas import CAN_ZOOM
 from odemis.gui.comp.popup import Message
 from odemis.gui.comp.scalewindow import ScaleWindow
+from odemis.gui.comp.viewport import MicroscopeViewport, AngularResolvedViewport, \
+    PlotViewport, SpatialSpectrumViewport
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.conf.data import get_hw_settings, get_stream_settings_config
 from odemis.gui.cont import settings, tools
@@ -204,14 +208,11 @@ class Tab(object):
 class SecomStreamsTab(Tab):
     def __init__(self, name, button, panel, main_frame, main_data):
         """
-
         :type name: str
         :type button: odemis.gui.comp.buttons.TabButton
         :type panel: wx._windows.Panel
         :type main_frame: odemis.gui.main_xrc.xrcfr_main
         :type main_data: odemis.gui.model.MainGUIData
-        :return:
-
         """
 
         tab_data = guimod.LiveViewGUIData(main_data)
@@ -219,38 +220,14 @@ class SecomStreamsTab(Tab):
 
         self.main_data = main_data
 
-        buttons = collections.OrderedDict([
-            (
-                self.main_frame.btn_secom_view_all,
-                (None, self.main_frame.lbl_secom_view_all)),
-            (
-                self.main_frame.btn_secom_view_tl,
-                (self.main_frame.vp_secom_tl, self.main_frame.lbl_secom_view_tl)),
-            (
-                self.main_frame.btn_secom_view_tr,
-                (self.main_frame.vp_secom_tr, self.main_frame.lbl_secom_view_tr)),
-            (
-                self.main_frame.btn_secom_view_bl,
-                (self.main_frame.vp_secom_bl, self.main_frame.lbl_secom_view_bl)),
-            (
-                self.main_frame.btn_secom_view_br,
-                (self.main_frame.vp_secom_br, self.main_frame.lbl_secom_view_br)),
-            (
-                self.main_frame.btn_secom_overview,
-                (self.main_frame.vp_overview_sem, self.main_frame.lbl_secom_overview)),
-        ])
-
         # Order matters!
         # First we create the views, then the streams
-        self.view_controller = viewcont.ViewPortController(
-            self.tab_data_model,
-            self.main_frame,
-            self.main_frame.pnl_secom_grid.viewports
-        )
+        vpv = self._create_views(main_data, main_frame.pnl_secom_grid.viewports)
+        self.view_controller = viewcont.ViewPortController(tab_data, main_frame, vpv)
 
-        self.overview_controller = viewcont.OverviewController(
-                                                        self.tab_data_model,
-                                                        self.main_frame.vp_overview_sem.canvas)
+        # Special overview button selection
+        self.overview_controller = viewcont.OverviewController(tab_data,
+                                            main_frame.vp_overview_sem.canvas)
         ovv = self.main_frame.vp_overview_sem.microscope_view
         if main_data.overview_ccd:
             # Overview camera can be RGB => in that case len(shape) == 4
@@ -266,18 +243,47 @@ class SecomStreamsTab(Tab):
             # In any case, to support displaying Overview in the normal 2x2
             # views we'd need to have a special Overview class
 
+        # Connect the view selection buttons
+        buttons = collections.OrderedDict([
+            (
+                main_frame.btn_secom_view_all,
+                (None, main_frame.lbl_secom_view_all)),
+            (
+                main_frame.btn_secom_view_tl,
+                (main_frame.vp_secom_tl, main_frame.lbl_secom_view_tl)),
+            (
+                main_frame.btn_secom_view_tr,
+                (main_frame.vp_secom_tr, main_frame.lbl_secom_view_tr)),
+            (
+                main_frame.btn_secom_view_bl,
+                (main_frame.vp_secom_bl, main_frame.lbl_secom_view_bl)),
+            (
+                main_frame.btn_secom_view_br,
+                (main_frame.vp_secom_br, main_frame.lbl_secom_view_br)),
+            (
+                main_frame.btn_secom_overview,
+                (main_frame.vp_overview_sem, main_frame.lbl_secom_overview)),
+        ])
+
+        self._view_selector = viewcont.ViewButtonController(
+            tab_data,
+            main_frame,
+            buttons,
+            main_frame.pnl_secom_grid.viewports
+        )
+
         self._settingbar_controller = settings.SecomSettingsController(
-            self.main_frame,
-            self.tab_data_model
+            main_frame,
+            tab_data
         )
 
         self._streambar_controller = streamcont.SecomStreamsController(
-            self.tab_data_model,
-            self.main_frame.pnl_secom_streams
+            tab_data,
+            main_frame.pnl_secom_streams
         )
 
         # Toolbar
-        self.tb = self.main_frame.secom_toolbar
+        self.tb = main_frame.secom_toolbar
         # TODO: Add the buttons when the functionality is there
         # tb.add_tool(tools.TOOL_ROI, self.tab_data_model.tool)
         # tb.add_tool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
@@ -290,16 +296,9 @@ class SecomStreamsTab(Tab):
         self.tab_data_model.autofocus_active.subscribe(self._onAutofocus)
         tab_data.streams.subscribe(self._on_current_stream)
 
-        self._view_selector = viewcont.ViewButtonController(
-            self.tab_data_model,
-            self.main_frame,
-            buttons,
-            self.main_frame.pnl_secom_grid.viewports
-        )
-
         self._acquisition_controller = acqcont.SecomAcquiController(
-            self.tab_data_model,
-            self.main_frame
+            tab_data,
+            main_frame
         )
 
         if main_data.role == "delphi":
@@ -308,8 +307,8 @@ class SecomStreamsTab(Tab):
             state_controller_cls = SecomStateController
 
         self._state_controller = state_controller_cls(
-            self.tab_data_model,
-            self.main_frame,
+            tab_data,
+            main_frame,
             "live_btn_",
             self._streambar_controller
         )
@@ -345,6 +344,103 @@ class SecomStreamsTab(Tab):
     @property
     def streambar_controller(self):
         return self._streambar_controller
+
+    def _create_views(self, main_data, viewports):
+        """
+        Create views depending on the actual hardware present
+        return OrderedDict: as needed for the ViewPortController
+        """
+
+        # If both SEM and Optical are present (= SECOM & DELPHI)
+        if (main_data.ebeam and main_data.light):
+            # Viewport type checking to avoid mismatches
+            for vp in viewports[:4]:
+                assert(isinstance(vp, MicroscopeViewport))
+
+            logging.info("Creating combined SEM/Optical viewport layout")
+            vpv = collections.OrderedDict([
+                (viewports[0],  # focused view
+                 {"name": "Optical",
+                  "stage": main_data.stage,
+                  "focus": main_data.focus,
+                  "stream_classes": OpticalStream,
+                  }),
+                (viewports[1],
+                 {"name": "SEM",
+                  # centered on content, even on Delphi when POS_COR used to
+                  # align on the optical streams
+                  "cls": guimod.ContentView,
+                  "stage": main_data.stage,
+                  "focus": main_data.ebeam_focus,
+                  "stream_classes": EMStream,
+                  }),
+                (viewports[2],
+                 {"name": "Combined 1",
+                  "stage": main_data.stage,
+                  "focus": main_data.focus,
+                  "stream_classes": (EMStream, OpticalStream),
+                  }),
+                (viewports[3],
+                 {"name": "Combined 2",
+                  "stage": main_data.stage,
+                  "focus": main_data.focus,
+                  "stream_classes": (EMStream, OpticalStream),
+                  }),
+            ])
+        # If SEM only: all SEM
+        # Works also for the Sparc, as there is no other emitter, and we don't
+        # need to display anything else anyway
+        elif main_data.ebeam and not main_data.light:
+            logging.info("Creating SEM only viewport layout")
+            vpv = collections.OrderedDict()
+            for i, viewport in enumerate(viewports):
+                vpv[viewport] = {"name": "SEM %d" % (i + 1),
+                                 "stage": main_data.stage,
+                                 "focus": main_data.ebeam_focus,
+                                 "stream_classes": EMStream,
+                                 }
+
+        # If Optical only: all optical
+        elif not main_data.ebeam and main_data.light:
+            logging.info("Creating Optical only viewport layout")
+            vpv = collections.OrderedDict()
+            for i, viewport in enumerate(viewports):
+                vpv[viewport] = {"name": "Optical %d" % (i + 1),
+                                 "stage": main_data.stage,
+                                 "focus": main_data.focus,
+                                 "stream_classes": OpticalStream,
+                                 }
+        else:
+            logging.warning("No known microscope configuration, creating %d "
+                            "generic views", len(viewports))
+            vpv = collections.OrderedDict()
+            for i, viewport in enumerate(viewports):
+                vpv[viewport] = {
+                    "name": "View %d" % (i + 1),
+                    "stage": main_data.stage,
+                    "focus": main_data.focus,
+                    "stream_classes": None,  # everything
+                }
+
+        # Insert a Chamber viewport into the lower left position if a chamber camera is present
+        if main_data.chamber_ccd and main_data.chamber_light:
+            logging.debug("Inserting Chamber viewport")
+            vpv[viewports[2]] = {
+                "name": "Chamber",
+                "stream_classes": (RGBCameraStream, BrightfieldStream),
+            }
+
+        # If there are 5 viewports, we'll assume that the last one is an overview camera stream
+        if len(viewports) == 5:
+            logging.debug("Inserting Overview viewport")
+            vpv[viewports[4]] = {
+                "cls": guimod.OverviewView,
+                "name": "Overview",
+                "stage": main_data.stage,
+                "stream_classes": (RGBCameraStream, BrightfieldStream),
+            }
+
+        return vpv
 
     def _get_focus_hw(self, s):
         """
@@ -522,36 +618,7 @@ class SparcAcquisitionTab(Tab):
         tab_data = guimod.ScannedAcquisitionGUIData(main_data)
         super(SparcAcquisitionTab, self).__init__(name, button, panel, main_frame, tab_data)
 
-        buttons = collections.OrderedDict([
-            (
-                self.main_frame.btn_sparc_view_all,
-                (None, self.main_frame.lbl_sparc_view_all)),
-            (
-                self.main_frame.btn_sparc_view_tl,
-                (self.main_frame.vp_sparc_tl, self.main_frame.lbl_sparc_view_tl)),
-            (
-                self.main_frame.btn_sparc_view_tr,
-                (self.main_frame.vp_sparc_tr, self.main_frame.lbl_sparc_view_tr)),
-            (
-                self.main_frame.btn_sparc_view_bl,
-                (self.main_frame.vp_sparc_bl, self.main_frame.lbl_sparc_view_bl)),
-            (
-                self.main_frame.btn_sparc_view_br,
-                (self.main_frame.vp_sparc_br, self.main_frame.lbl_sparc_view_br)),
-        ])
-
-        # Toolbar
-        self.tb = self.main_frame.sparc_acq_toolbar
-        self.tb.add_tool(tools.TOOL_ROA, self.tab_data_model.tool)
-        self.tb.add_tool(tools.TOOL_RO_ANCHOR, self.tab_data_model.tool)
-        self.tb.add_tool(tools.TOOL_SPOT, self.tab_data_model.tool)
-        # TODO: Add the buttons when the functionality is there
-        #self.tb.add_tool(tools.TOOL_POINT, self.tab_data_model.tool)
-        #self.tb.add_tool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
-
-        self.tab_data_model.tool.subscribe(self.on_tool_change)
-
-        # Create the streams:
+        # Create the streams (first, as SEM viewport needs SEM CL stream):
         # * SEM (survey): live stream displaying the current SEM view (full FoV)
         # * Spot SEM: live stream to set e-beam into spot mode
         # * SEM CL: SEM stream used to store SEM settings for final acquisition.
@@ -606,26 +673,79 @@ class SparcAcquisitionTab(Tab):
         # Set anchor region dwell time to the same value as the SEM survey
         sem_stream.emtDwellTime.subscribe(self._copyDwellTimeToAnchor, init=True)
 
-        # create a view on the tab model
-        self.view_controller = viewcont.ViewPortController(
-            self.tab_data_model,
-            self.main_frame,
-            self.main_frame.pnl_sparc_grid.viewports
-        )
-
-        self._view_selector = viewcont.ViewButtonController(
-            self.tab_data_model,
-            self.main_frame,
-            buttons,
-            self.main_frame.pnl_sparc_grid.viewports
-        )
-
-        self.tb.add_tool(tools.TOOL_ZOOM_FIT, self.view_controller.fitViewToContent)
-
         # Add the SEM stream to the view
         self.tab_data_model.streams.value.append(sem_stream)
         # To make sure the spot mode is stopped when the tab loses focus
         self.tab_data_model.streams.value.append(spot_stream)
+
+        viewports = main_frame.pnl_sparc_grid.viewports
+        for vp in viewports[:4]:
+            assert(isinstance(vp, MicroscopeViewport) or isinstance(vp, PlotViewport))
+
+        # Connect the views
+        # TODO: make them different depending on the hardware available?
+        #       If so, to what? Does having multiple SEM views help?
+        vpv = collections.OrderedDict([
+            (viewports[0],
+             {"name": "SEM",
+              "cls": guimod.ContentView,  # Center on content (instead of stage)
+              "stage": main_data.stage,
+              "focus": main_data.ebeam_focus,
+              "stream_classes": (EMStream, CLSettingsStream),
+              }),
+            (viewports[1],  # focused view
+             {"name": "Angle-resolved",
+              "stream_classes": ARSettingsStream,
+              }),
+            (viewports[2],
+             {"name": "Spectrum",
+              "stream_classes": SpectrumStream,
+              }),
+            (viewports[3],
+             {"name": "Monochromator",
+              "stream_classes": MonochromatorSettingsStream,
+              }),
+        ])
+
+        self.view_controller = viewcont.ViewPortController(tab_data, main_frame, vpv)
+
+        # Connect the view selection buttons
+        buttons = collections.OrderedDict([
+            (
+                main_frame.btn_sparc_view_all,
+                (None, main_frame.lbl_sparc_view_all)),
+            (
+                main_frame.btn_sparc_view_tl,
+                (main_frame.vp_sparc_tl, main_frame.lbl_sparc_view_tl)),
+            (
+                main_frame.btn_sparc_view_tr,
+                (main_frame.vp_sparc_tr, main_frame.lbl_sparc_view_tr)),
+            (
+                main_frame.btn_sparc_view_bl,
+                (main_frame.vp_sparc_bl, main_frame.lbl_sparc_view_bl)),
+            (
+                main_frame.btn_sparc_view_br,
+                (main_frame.vp_sparc_br, main_frame.lbl_sparc_view_br)),
+        ])
+
+        self._view_selector = viewcont.ViewButtonController(
+            tab_data,
+            main_frame,
+            buttons,
+            viewports
+        )
+
+        # Toolbar
+        self.tb = self.main_frame.sparc_acq_toolbar
+        self.tb.add_tool(tools.TOOL_ROA, self.tab_data_model.tool)
+        self.tb.add_tool(tools.TOOL_RO_ANCHOR, self.tab_data_model.tool)
+        self.tb.add_tool(tools.TOOL_SPOT, self.tab_data_model.tool)
+        # TODO: Add the buttons when the functionality is there
+        #self.tb.add_tool(tools.TOOL_POINT, self.tab_data_model.tool)
+        #self.tb.add_tool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
+        self.tb.add_tool(tools.TOOL_ZOOM_FIT, self.view_controller.fitViewToContent)
+
+        self.tab_data_model.tool.subscribe(self.on_tool_change)
 
         # Create Stream Bar Controller
         self._stream_controller = streamcont.SparcStreamsController(
@@ -756,39 +876,79 @@ class AnalysisTab(Tab):
         tab_data = guimod.AnalysisGUIData(main_data)
         super(AnalysisTab, self).__init__(name, button, panel, main_frame, tab_data)
 
+        # Connect viewports
+        viewports = main_frame.pnl_inspection_grid.viewports
+        # Viewport type checking to avoid mismatches
+        for vp in viewports[:4]:
+            assert(isinstance(vp, MicroscopeViewport))
+        assert(isinstance(viewports[4], AngularResolvedViewport))
+        assert(isinstance(viewports[5], PlotViewport))
+        assert(isinstance(viewports[6], SpatialSpectrumViewport))
+
+        vpv = collections.OrderedDict([
+            (viewports[0],  # focused view
+             {"name": "Optical",
+              "stream_classes": (OpticalStream, SpectrumStream, CLStream),
+              }),
+            (viewports[1],
+             {"name": "SEM",
+              "stream_classes": EMStream,
+              }),
+            (viewports[2],
+             {"name": "Combined 1",
+              "stream_classes": (EMStream, OpticalStream, SpectrumStream, CLStream),
+              }),
+            (viewports[3],
+             {"name": "Combined 2",  # Was SEM CL for Sparc
+              "stream_classes": (EMStream, OpticalStream, SpectrumStream, CLStream),
+              }),
+            (viewports[4],
+             {"name": "Angle-resolved",
+              "stream_classes": ARStream,
+              }),
+            (viewports[5],
+             {"name": "Spectrum plot",
+              "stream_classes": SpectrumStream,
+              }),
+            (viewports[6],
+             {"name": "Spatial spectrum",
+              "stream_classes": (SpectrumStream, CLStream),
+              }),
+        ])
+
+        self.view_controller = viewcont.ViewPortController(tab_data, main_frame, vpv)
+
+        # Connect view selection button
         buttons = collections.OrderedDict([
             (
-                self.main_frame.btn_inspection_view_all,
-                (None, self.main_frame.lbl_inspection_view_all)
+                main_frame.btn_inspection_view_all,
+                (None, main_frame.lbl_inspection_view_all)
             ),
             (
-                self.main_frame.btn_inspection_view_tl,
-                (self.main_frame.vp_inspection_tl, self.main_frame.lbl_inspection_view_tl)
+                main_frame.btn_inspection_view_tl,
+                (main_frame.vp_inspection_tl, main_frame.lbl_inspection_view_tl)
             ),
             (
-                self.main_frame.btn_inspection_view_tr,
-                (self.main_frame.vp_inspection_tr, self.main_frame.lbl_inspection_view_tr)
+                main_frame.btn_inspection_view_tr,
+                (main_frame.vp_inspection_tr, main_frame.lbl_inspection_view_tr)
             ),
             (
-                self.main_frame.btn_inspection_view_bl,
-                (self.main_frame.vp_inspection_bl, self.main_frame.lbl_inspection_view_bl)
+                main_frame.btn_inspection_view_bl,
+                (main_frame.vp_inspection_bl, main_frame.lbl_inspection_view_bl)
             ),
             (
-                self.main_frame.btn_inspection_view_br,
-                (self.main_frame.vp_inspection_br, self.main_frame.lbl_inspection_view_br)
+                main_frame.btn_inspection_view_br,
+                (main_frame.vp_inspection_br, main_frame.lbl_inspection_view_br)
             )
         ])
 
-        # The view controller also has special code for the sparc to create the
-        # right type of view.
-        self.view_controller = viewcont.ViewPortController(
-            self.tab_data_model,
-            self.main_frame,
-            self.main_frame.pnl_inspection_grid.viewports
-        )
+        self._view_selector = viewcont.ViewButtonController(tab_data,
+                                                            main_frame,
+                                                            buttons,
+                                                            viewports)
 
         # Toolbar
-        self.tb = self.main_frame.ana_toolbar
+        self.tb = main_frame.ana_toolbar
         # TODO: Add the buttons when the functionality is there
         # tb.add_tool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
         self.tb.add_tool(tools.TOOL_POINT, self.tab_data_model.tool)
@@ -797,41 +957,24 @@ class AnalysisTab(Tab):
         self.tb.enable_button(tools.TOOL_LINE, False)
         self.tb.add_tool(tools.TOOL_ZOOM_FIT, self.view_controller.fitViewToContent)
 
-        # FIXME: Way too hacky approach to get the right viewport shown,
-        # so we need to rethink and re-do it. Might involve letting the
-        # view controller be more clever and able to create viewports and
-        # position them in the sizer.
-        # Also see the button definition below.
-        # if main_data.role == "sparc":
-        #     vp_bottom_left = self.main_frame.vp_angular
-        #     ar_view = vp_bottom_left.microscope_view
-        #     tab_data.visible_views.value[2] = ar_view  # switch views
-        # else:
-        #     vp_bottom_left = self.main_frame.vp_inspection_bl
-
         # save the views to be able to reset them later
         self._def_views = list(tab_data.visible_views.value)
 
+        # Show the streams (when a file is opened)
         self._stream_controller = streamcont.StreamBarController(
-            self.tab_data_model,
-            self.main_frame.pnl_inspection_streams,
+            tab_data,
+            main_frame.pnl_inspection_streams,
             static=True
         )
 
+        # Show the file info and correction selection
         self._settings_controller = settings.AnalysisSettingsController(
-            self.main_frame,
-            self.tab_data_model
+            main_frame,
+            tab_data
         )
         self._settings_controller.setter_ar_file = self.set_ar_background
         self._settings_controller.setter_spec_bck_file = self.set_spec_background
         self._settings_controller.setter_spec_file = self.set_spec_comp
-
-        self._view_selector = viewcont.ViewButtonController(
-            self.tab_data_model,
-            self.main_frame,
-            buttons,
-            self.main_frame.pnl_inspection_grid.viewports
-        )
 
         self.main_frame.btn_open_image.Bind(
             wx.EVT_BUTTON,
