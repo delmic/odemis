@@ -31,7 +31,7 @@ from odemis.acq import stream
 from odemis.gui import FG_COLOUR_DIS
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.slider import Slider
-from odemis.gui.util import call_in_wx_main
+from odemis.gui.util import call_in_wx_main, wxlimit_invocation
 from odemis.util import limit_invocation
 from odemis.util.conversion import wxcol_to_frgb
 import wx
@@ -282,7 +282,7 @@ class AxisLegend(wx.Panel):
     def unit(self, val):
         if self._unit != val:
             self._unit = val
-            self.limited_refresh()
+            self.Refresh()
 
     @property
     def range(self):
@@ -294,7 +294,7 @@ class AxisLegend(wx.Panel):
             raise ValueError("The range values need to be ordered!")
         elif self._value_range != val:
             self._value_range = val
-            self.limited_refresh()
+            self.Refresh()
 
     def clear(self):
         self._value_range = None
@@ -303,14 +303,14 @@ class AxisLegend(wx.Panel):
 
     def on_size(self, _=None):
         if self._value_range:
-            self.limited_refresh()
+            self.Refresh()
 
-    # @limit_invocation(0.2)
-    def limited_refresh(self):
-        self.Refresh()
+    @wxlimit_invocation(0.2)
+    def Refresh(self):
+        wx.Panel.Refresh(self)
 
     def on_paint(self, _):
-        print "there"
+        # print "there"
 
         if self._value_range is None:
             return

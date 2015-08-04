@@ -114,6 +114,12 @@ def dead_object_wrapper(f):
                 return f(*args, **kwargs)
         except (wx.PyDeadObjectError, RuntimeError):
             logging.warning("Dead object ignored in %s", f.__name__)
+        except TypeError:
+            if any([isinstance(a, wx._core._wxPyDeadObject) for a in args]):
+                logging.warning("Dead object parameter ignored in %s", f.__name__)
+            else:
+                raise
+
     return dead_object_wrapzor
 
 # ============== ENDWrappers

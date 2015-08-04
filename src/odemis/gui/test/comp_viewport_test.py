@@ -114,6 +114,8 @@ class ViewportTestCase(test.GuiTestCase):
                 threading._sleep(0.0005)
 
         t = threading.Thread(target=rotate, args=(ys, vwp))
+        # Setting Daemon to True, will cause the thread to exit when the parent does
+        t.setDaemon(True)
         t.start()
 
         test.gui_loop()

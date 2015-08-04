@@ -25,6 +25,9 @@ This file is part of Odemis.
 import threading
 import unittest
 import wx
+import sys
+import numbers
+import collections
 
 import odemis.gui.comp.legend as legend
 import odemis.gui.test as test
@@ -34,6 +37,28 @@ test.goto_manual()
 
 RANGES = [(-5, 5), (0, 37)]
 BAD_RANGES = [(0, 0)]
+
+
+def getsize(obj):
+    # recursive function to dig out sizes of member objects:
+    def inner(obj, _seen_ids = set()):
+        obj_id = id(obj)
+        if obj_id in _seen_ids:
+            return 0
+        _seen_ids.add(obj_id)
+        size = sys.getsizeof(obj)
+        if isinstance(obj, (basestring, numbers.Number, xrange)):
+            pass # bypass remaining control flow and return
+        elif isinstance(obj, (tuple, list, set, frozenset)):
+            size += sum(inner(i) for i in obj)
+        elif isinstance(obj, collections.Mapping) or hasattr(obj, 'iteritems'):
+            size += sum(inner(k) + inner(v) for k, v in obj.iteritems())
+        else:
+            attr = getattr(obj, '__dict__', None)
+            if attr is not None:
+                size += inner(attr)
+        return size
+    return inner(obj)
 
 
 class LegendTestCase(test.GuiTestCase):
@@ -48,24 +73,21 @@ class LegendTestCase(test.GuiTestCase):
         test.gui_loop()
 
         def set_range():
-            for i in range(1000):
-                for j in range(i, i + 1000):
-                    leg.range = (i, j)
-                    threading._sleep(0.1)
-                    print "here"
-            print "done"
+            start, end = 0, 1
+            while end < 100000:
+                end *= 1.001
+                leg.range = (start, end)
+                threading._sleep(0.001)
+            self.frame.Destroy()
+
+        test.gui_loop(500)
 
         t = threading.Thread(target=set_range)
+        # Setting Daemon to True, will cause the thread to exit when the parent does
+        t.setDaemon(True)
         t.start()
 
         test.gui_loop()
-
-        #
-        # for i in range(1000):
-        #     for j in range(1000):
-        #         leg.range = (i, j)
-        #         leg.Refresh()
-        #         test.gui_loop()
 
     def test_bitmap_axis_legend(self):
         self.frame.SetSize((400, 300))
