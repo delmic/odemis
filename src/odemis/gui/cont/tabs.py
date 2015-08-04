@@ -772,8 +772,8 @@ class SparcAcquisitionTab(Tab):
         main_data.is_acquiring.subscribe(self.on_acquisition)
 
         self._acquisition_controller = acqcont.SparcAcquiController(
-            self.tab_data_model,
-            self.main_frame,
+            tab_data,
+            main_frame,
             self.stream_controller,
         )
 
@@ -1784,19 +1784,19 @@ class MirrorAlignTab(Tab):
         tab_data = guimod.ActuatorGUIData(main_data)
         super(MirrorAlignTab, self).__init__(name, button, panel,
                                              main_frame, tab_data)
-
-        self._stream_controller = streamcont.StreamBarController(
-            self.tab_data_model,
-            self.main_frame.pnl_sparc_align_streams,
-            locked=True
-        )
         self._ccd_stream = None
         self._goal_stream = None
         # TODO: add on/off button for the CCD and connect the MicroscopeStateController
 
         self._settings_controller = settings.SparcAlignSettingsController(
-            self.main_frame,
-            self.tab_data_model,
+            main_frame,
+            tab_data,
+        )
+
+        self._stream_controller = streamcont.StreamBarController(
+            tab_data,
+            main_frame.pnl_sparc_align_streams,
+            locked=True
         )
 
         # create the stream to the AR image + goal image
@@ -1827,8 +1827,8 @@ class MirrorAlignTab(Tab):
                 ),
             ])
             self.view_controller = viewcont.ViewPortController(
-                self.tab_data_model,
-                self.main_frame,
+                tab_data,
+                main_frame,
                 vpv
             )
             mic_view = self.tab_data_model.focussedView.value
@@ -1893,7 +1893,7 @@ class MirrorAlignTab(Tab):
 
         tab_data.align_mode.subscribe(self._onAlignMode, init=True)
 
-        self._actuator_controller = ActuatorController(self.tab_data_model,
+        self._actuator_controller = ActuatorController(tab_data,
                                                        main_frame,
                                                        "mirror_align_")
 
@@ -1950,7 +1950,8 @@ class MirrorAlignTab(Tab):
             self.main_frame.pnl_sparc_trans.Enable(True)
             self.main_frame.pnl_sparc_fib.Enable(False)
         else:
-            self._ccd_stream.should_update.value = False
+            if self._ccd_stream:
+                self._ccd_stream.should_update.value = False
             self.main_frame.pnl_sparc_trans.Enable(False)
             self.main_frame.pnl_sparc_fib.Enable(True)
 
@@ -2072,7 +2073,8 @@ class MirrorAlignTab(Tab):
 
     def terminate(self):
         for s in (self._ccd_stream, self._scount_stream, self._spot_stream):
-            s.is_active.value = False
+            if s:
+                s.is_active.value = False
 
 
 class TabBarController(object):
