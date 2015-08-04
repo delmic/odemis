@@ -33,15 +33,15 @@ from .dc_region import GuessAnchorRegion
 
 
 MIN_RESOLUTION = (20, 20) # seems 10x10 sometimes work, but let's not tent it
-MAX_PIXELS = 128 ** 2 # px 
+MAX_PIXELS = 128 ** 2  # px
 
 class AnchoredEstimator(object):
     """
     Drift estimator based on an "anchor" area. Periodically, a small region
     (the anchor) is scanned. By comparing the images of the anchor area over
     time, an estimation of the drift is computed.
-    
-    To use, call .acquire() periodically (and preferably at specific places of 
+
+    To use, call .acquire() periodically (and preferably at specific places of
     the global acquire, such as at the beginning of a line), and call .estimate()
     to measure the drift.
     """
@@ -168,7 +168,7 @@ class AnchoredEstimator(object):
                 self.max_drift = self.orig_drift
 
         return self.orig_drift
-    
+
     def estimateAcquisitionTime(self):
         """
         return (float): estimated time to acquire 1 anchor area
