@@ -3690,7 +3690,7 @@
           <object class="wxBoxSizer">
             <object class="sizeritem">
               <object class="ImageTextButton" name="btn_cancel">
-                <label>Cancel</label>
+                <label>Close</label>
                 <delta>1</delta>
                 <bitmap>img/button/btn_128x48.png</bitmap>
                 <hover>img/button/btn_128x48_h.png</hover>

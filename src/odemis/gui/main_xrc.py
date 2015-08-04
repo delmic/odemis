@@ -3957,7 +3957,7 @@ def __init_resources():
           <object class="wxBoxSizer">
             <object class="sizeritem">
               <object class="ImageTextButton" name="btn_cancel">
-                <label>Cancel</label>
+                <label>Close</label>
                 <delta>1</delta>
                 <bitmap>img_button_btn_128x48_png</bitmap>
                 <hover>img_button_btn_128x48_h_png</hover>
