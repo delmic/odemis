@@ -84,7 +84,7 @@ class ViewportTestCase(test.GuiTestCase):
         return deque(sine_list)
 
     def test_threaded_plot(self):
-        vwp = viewport.PlotViewport(self.panel)
+        vwp = viewport.ChronographViewport(self.panel)
         vwp.canvas.SetBackgroundColour("#333")
         vwp.canvas.SetForegroundColour("#A0CC27")
         self.add_control(vwp, wx.EXPAND, proportion=1)

@@ -305,11 +305,12 @@ class AxisLegend(wx.Panel):
         if self._value_range:
             self.limited_refresh()
 
-    @limit_invocation(0.2)
+    # @limit_invocation(0.2)
     def limited_refresh(self):
         self.Refresh()
 
     def on_paint(self, _):
+        print "there"
 
         if self._value_range is None:
             return

@@ -22,6 +22,7 @@ This file is part of Odemis.
 
 # Test module for Odemis' gui.comp.legend module
 
+import threading
 import unittest
 import wx
 
@@ -38,6 +39,33 @@ BAD_RANGES = [(0, 0)]
 class LegendTestCase(test.GuiTestCase):
 
     frame_class = test.test_gui.xrccanvas_frame
+
+    def test_legend(self):
+        self.frame.SetSize((400, 30))
+        leg = legend.AxisLegend(self.panel)
+        leg.SetBackgroundColour(wx.RED)
+        self.add_control(leg, flags=wx.EXPAND)
+        test.gui_loop()
+
+        def set_range():
+            for i in range(1000):
+                for j in range(i, i + 1000):
+                    leg.range = (i, j)
+                    threading._sleep(0.1)
+                    print "here"
+            print "done"
+
+        t = threading.Thread(target=set_range)
+        t.start()
+
+        test.gui_loop()
+
+        #
+        # for i in range(1000):
+        #     for j in range(1000):
+        #         leg.range = (i, j)
+        #         leg.Refresh()
+        #         test.gui_loop()
 
     def test_bitmap_axis_legend(self):
         self.frame.SetSize((400, 300))
