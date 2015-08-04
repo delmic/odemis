@@ -201,7 +201,7 @@ class AnchoredEstimator(object):
         pxs_dc_period = []
         pxs = int(period // dwell_time) # number of pixels per period
         pxs_per_line = repetitions[0]
-        if pxs > pxs_per_line:
+        if pxs >= pxs_per_line:
             # Correct every (pxs // pxs_per_line) lines
             pxs_dc_period.append((pxs // pxs_per_line) * pxs_per_line)
         elif pxs <= 1: # also catches cases that would be 1,1,2,1,...
