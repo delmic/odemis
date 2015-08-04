@@ -33,7 +33,7 @@ import odemis.gui.comp.legend as legend
 import odemis.gui.test as test
 
 
-test.goto_manual()
+# test.goto_manual()
 
 RANGES = [(-5, 5), (0, 37)]
 BAD_RANGES = [(0, 0)]
@@ -66,7 +66,8 @@ class LegendTestCase(test.GuiTestCase):
     frame_class = test.test_gui.xrccanvas_frame
 
     def test_legend(self):
-        self.frame.SetSize((400, 30))
+        test.goto_manual()
+        self.frame.SetSize((400, 60))
         leg = legend.AxisLegend(self.panel)
         leg.SetBackgroundColour(wx.RED)
         self.add_control(leg, flags=wx.EXPAND)
