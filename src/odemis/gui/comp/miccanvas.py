@@ -807,6 +807,13 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         return phys_pos
 
     def convert_spot_phys_to_ratio(self, p_spot):
+        """ Clip the physical spot to the sem data and convert it into a ratio
+
+        returns:
+            The clipped physical spot and the ratio
+
+        """
+
         # Get the position of the overlay in physical coordinates
         if p_spot is None:
             return 0.5, 0.5
@@ -825,7 +832,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             (p_spot[1] - t) / (b - t)
         )
 
-        return r_spot
+        return p_spot, r_spot
 
     def convert_roi_phys_to_ratio(self, phys_rect):
         """

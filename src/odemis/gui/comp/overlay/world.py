@@ -527,7 +527,8 @@ class SpotModeOverlay(base.WorldOverlay, base.DragMixin):
         if self.w_pos is None:
             self.r_pos.value = (0.5, 0.5)
         else:
-            self.r_pos.value = self.cnvs.convert_spot_phys_to_ratio(self.w_pos)
+            # Since converting to a ratio possibly involves clipping, the w_pos is also updated
+            self.w_pos, self.r_pos.value = self.cnvs.convert_spot_phys_to_ratio(self.w_pos)
 
     def _r_to_w(self):
         try:
