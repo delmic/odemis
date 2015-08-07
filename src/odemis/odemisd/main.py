@@ -353,8 +353,10 @@ class BackendRunner(object):
 
         self._container = None
 
+        # React nicely to keyboard interrupt and shutdown request
         self._main_thread = threading.current_thread()
-        signal.signal(signal.SIGINT, self.handle_signal)
+        signal.signal(signal.SIGINT, self.on_signal_term)
+        signal.signal(signal.SIGTERM, self.on_signal_term)
 
     # TODO: drop the need to be root (and allow to run directly as a standard user)
     # need to ensure that BASE_DIRECTORY is already existing, and that the log
@@ -401,12 +403,13 @@ class BackendRunner(object):
             # the unlikely case it's a file
             logging.warning(model.BASE_DIRECTORY + " is not a directory, trying anyway...")
 
-    def handle_signal(self, signum, frame):
+    def on_signal_term(self, signum, frame):
         # TODO: ensure this is only processed by the main thread
         if threading.current_thread() == self._main_thread:
             logging.warning("Received signal %d: quitting", signum)
-            self.stop()
+            threading.Thread(target=self.stop).start()
         else:
+            # TODO: do something more clever for sub-processes?
             logging.info("Skipping signal %d in sub-thread", signum)
 
     def stop(self):
