@@ -20,22 +20,17 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
-#===============================================================================
-# Test module for Odemis' gui.comp.viewport module
-#===============================================================================
 from collections import deque
 import threading
 
 import unittest
 import wx
 import math
+import time
 
 import odemis.gui.comp.viewport as viewport
 import odemis.gui.comp.canvas as canvas
 import odemis.gui.test as test
-
-
-test.goto_manual()
 
 MODES = [canvas.PLOT_MODE_POINT, canvas.PLOT_MODE_LINE, canvas.PLOT_MODE_BAR]
 
@@ -84,7 +79,9 @@ class ViewportTestCase(test.GuiTestCase):
         return deque(sine_list)
 
     def test_threaded_plot(self):
-        vwp = viewport.PlotViewport(self.panel)
+        test.goto_manual()
+
+        vwp = viewport.ChronographViewport(self.panel)
         vwp.canvas.SetBackgroundColour("#333")
         vwp.canvas.SetForegroundColour("#A0CC27")
         self.add_control(vwp, wx.EXPAND, proportion=1)
@@ -100,10 +97,15 @@ class ViewportTestCase(test.GuiTestCase):
 
             scale = 1.001
 
+            timeout = time.time() + 600
+
             while True:
                 v.canvas.set_1d_data(xs, ys, unit_x='m', unit_y='g')
                 q[-1] *= scale
                 q.rotate(1)
+
+                if time.time() > timeout:
+                    break
 
                 v.bottom_legend.range = v.canvas.range_x
                 # v.bottom_legend.tooltip = "Time (s)"
@@ -112,8 +114,12 @@ class ViewportTestCase(test.GuiTestCase):
                 # v.left_legend.tooltip = "Count per second"
 
                 threading._sleep(0.0005)
+            print "No error..."
+            self.frame.Destroy()
 
         t = threading.Thread(target=rotate, args=(ys, vwp))
+        # Setting Daemon to True, will cause the thread to exit when the parent does
+        t.setDaemon(True)
         t.start()
 
         test.gui_loop()

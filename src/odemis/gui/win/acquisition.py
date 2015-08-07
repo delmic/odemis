@@ -440,6 +440,7 @@ class AcquisitionDialog(xrcfr_acq):
                                                                 self.lbl_acqestimate)
         self.acq_future.add_done_callback(self.on_acquisition_done)
 
+        self.btn_cancel.SetLabel("Cancel")
         self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_cancel)
 
     def on_cancel(self, evt):
@@ -450,6 +451,7 @@ class AcquisitionDialog(xrcfr_acq):
 
         logging.info("Cancel button clicked, stopping acquisition")
         self.acq_future.cancel()
+        self.btn_cancel.SetLabel("Close")
         # all the rest will be handled by on_acquisition_done()
 
     @call_in_wx_main
