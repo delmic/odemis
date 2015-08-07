@@ -47,6 +47,11 @@ from wx.lib.pubsub import pub
 import odemis.acq.stream as acqstream
 import odemis.gui.model as guimodel
 
+# There are two kinds of controllers:
+# * Stream controller: links 1 stream <-> stream panel (cont/stream/StreamPanel)
+# * StreamBar controller: links .streams VA <-> stream bar (cont/stream/StreamBar)
+#   The StreamBar controller is also in charge of the scheduling of the streams.
+
 
 # Stream scheduling policies: decides which streams which are with .should_update get .is_active
 SCHED_LAST_ONE = 1  # Last stream which got added to the should_update set
@@ -128,7 +133,7 @@ class StreamController(object):
         stream_bar.add_stream_panel(self.stream_panel, show_panel)
 
     def pause(self):
-        """ Pause SettingEntry related control updates """
+        """ Pause (freeze) SettingEntry related control updates """
         # TODO: just call enable(False) from here? or is there any reason to
         # want to pause without showing it to the user?
         for _, entry in self.entries.iteritems():
@@ -809,7 +814,7 @@ class StreamBarController(object):
             self._scheduleStream(s)
 
     def pause(self):
-        """ Pause SettingEntry related control updates """
+        """ Pause (=freeze) SettingEntry related control updates """
         for stream_controller in self.stream_controllers:
             stream_controller.pause()
 
@@ -1405,11 +1410,21 @@ class StreamBarController(object):
                 # logging.warn("> %s > %s", v, stream)
                 v.removeStream(stream)
 
+        # Remove from the list of streams
         try:
             self._tab_data_model.streams.value.remove(stream)
             logging.debug("%s removed", stream)
         except ValueError:
-            logging.warn("%s not found, so not removed", stream)
+            # Can happen, as all the tabs receive this event
+            logging.info("%s not found, so not removed", stream)
+
+        # Remove the corresponding stream controller
+        for sc in self.stream_controllers:
+            if sc.stream is stream:
+                self.stream_controllers.remove(sc)
+                break
+        else:
+            logging.info("Stream controller of %s no found", stream)
 
     def clear(self):
         """
