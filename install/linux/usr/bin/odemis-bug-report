@@ -31,9 +31,9 @@ else
 fi
 
 
-descfn="/tmp/description.txt"
 # Ask to describe the problem (in the mean time)
-cat >"$descfn" <<EOL
+descfn="/tmp/description.txt"
+zenity --text-info --editable --width 800 --height 800 --title "Enter problem description" >"$descfn" <<EOL
 Summary of the problem:
 
 Contact person (name and email address):
@@ -52,8 +52,6 @@ Expected behaviour:
 Additional information (eg, reproducability, severity):
 
 EOL
-
-zenity --text-info --filename "$descfn" --editable --width 800 --height 800 --title "Enter problem description"
 ret="$?"
 
 # wait for zip to be done
