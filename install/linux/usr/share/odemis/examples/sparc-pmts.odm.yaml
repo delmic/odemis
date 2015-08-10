@@ -69,8 +69,7 @@ SPARC-MONASH: {
     role: null,
     init: {
         channel: 1,
-        limits: [-5, 5], # V
-        inverted: True,  # to reverse the contrast
+        limits: [5, -5], # V, with contrast reversed
     },
 }
 

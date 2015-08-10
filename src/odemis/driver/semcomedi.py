@@ -2920,22 +2920,29 @@ class AnalogDetector(model.Detector):
     Represents an analog detector activated by energy caused by the e-beam.
     E.g., secondary electron detector, backscatter detector, analog PMT.
     """
-    def __init__(self, name, role, parent, channel, limits, inverted=False, **kwargs):
+    def __init__(self, name, role, parent, channel, limits, **kwargs):
         """
         channel (0<= int): input channel from which to read
-        limits (2-tuple of number): min/max voltage to acquire (in V)
-        inverted (bool): if True, the data is inverted (=reversed contrast)
+        limits (2-tuple of number): min/max voltage to acquire (in V). If the
+          first value > second value, the data is inverted (=reversed contrast)
         """
         # It will set up ._shape and .parent
         model.Detector.__init__(self, name, role, parent=parent, **kwargs)
         self._channel = channel
-        self.inverted = inverted
+
         nchan = comedi.get_n_channels(parent._device, parent._ai_subdevice)
         if nchan < channel:
             raise ValueError("Requested channel %d on device '%s' which has only %d input channels"
                              % (channel, parent._device_name, nchan))
 
         # TODO allow limits to be None, meaning take the biggest range available
+        if limits[0] > limits[1]:
+            logging.info("Will invert the data as limit is inverted")
+            self.inverted = True
+            limits = (limits[1], limits[0])
+        else:
+            self.inverted = False
+
         self._limits = limits
         # find the range
         try:
@@ -2946,6 +2953,9 @@ class AnalogDetector(model.Detector):
             raise ValueError("Data range between %g and %g V is too high for hardware." %
                              (limits[0], limits[1]))
         self._range = best_range
+        range_info = comedi.get_range(parent._device, parent._ai_subdevice,
+                                      channel, best_range)
+        logging.debug("Using range %s for %s", (range_info.min, range_info.max), name)
 
         # The closest to the actual precision of the device
         maxdata = comedi.get_maxdata(parent._device, parent._ai_subdevice,
