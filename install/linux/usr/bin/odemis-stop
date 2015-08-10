@@ -43,7 +43,7 @@ if [ -n "$OLD_BE_PIDS" ]; then
     NLEFT_PIDS=$(wc -w <<< "$LEFT_BE_PIDS")
     echo "was $NOLD_PIDS, now $NLEFT_PIDS"
     # As long as number of PIDS decreases, sleep more
-    while [ "$NLEFT_PIDS" -gt 0 -o "$NLEFT_PIDS" -lt "$NOLD_PIDS" ]; do
+    while [ "$NLEFT_PIDS" -gt 0 -a "$NLEFT_PIDS" -lt "$NOLD_PIDS" ]; do
         echo "Waiting for a back-end a bit more ($NLEFT_PIDS processes left)..."
         sleep 1
         NOLD_PIDS="$NLEFT_PIDS"
