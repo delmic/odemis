@@ -1830,6 +1830,7 @@ class AndorCam2(model.DigitalCamera):
         """
         if self.temp_timer is not None:
             self.temp_timer.cancel()
+            self.temp_timer.join(10)
             self.temp_timer = None
 
         if self.handle is not None:
