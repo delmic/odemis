@@ -684,6 +684,7 @@ class AndorCam2(model.DigitalCamera):
         # stop trying to read the temperature while we reinitialize
         if self.temp_timer is not None:
             self.temp_timer.cancel()
+            self.temp_timer.join(10)
             self.temp_timer = None
 
         # This stops the driver's internal threads
