@@ -86,6 +86,9 @@ SPARC-MONASH: {
 "CL Detector": {
     class: pmtctrl.PMT,
     role: cl-detector,
+    init: {
+        settle_time: 0.5,  # s, time for the gain to be fully active
+    },
     children: {
        "detector": "CL PMT",
        "pmt-control": "CL PMT control unit",

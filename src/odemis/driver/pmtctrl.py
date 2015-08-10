@@ -58,14 +58,25 @@ class PMT(model.Detector):
         - Upon initialization it turns on the power supply and turns it off on
         termination.
     '''
-    def __init__(self, name, role, children, **kwargs):
+    def __init__(self, name, role, children, settle_time=0, **kwargs):
         '''
         children (dict string->model.HwComponent): the children
             There must be exactly two children "pmt-control" and "detector".
+        settle_time (0 < float): time to wait after turning on the gain to have
+          it fully working.
         Raise an ValueError exception if the children are not compatible
         '''
         # we will fill the set of children with Components later in ._children
         model.Detector.__init__(self, name, role, **kwargs)
+
+        if settle_time < 0:
+            raise ValueError("Settle time of %g s for '%s' is negative"
+                             % (settle_time, name))
+        elif settle_time > 10:
+            # a large value is a sign that the user mistook in units
+            raise ValueError("Settle time of %g s for '%s' is too long"
+                             % (settle_time, name))
+        self._settle_time = settle_time
 
         # Check the children
         pmt = children["detector"]
@@ -161,6 +172,8 @@ class PMTDataFlow(model.DataFlow):
     def start_generate(self):
         # Reset protection first
         self._control.protection.value = False
+        logging.info("Activating PMT, and waiting %f s for gain settling", self.component._settle_time)
+        time.sleep(self.component._settle_time)
         self._pmt.data.subscribe(self._newFrame)
         self.active = True
 
