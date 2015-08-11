@@ -790,9 +790,8 @@ class FixedPositionsActuator(model.Actuator):
             if not all(0 <= p < cycle for p in positions.keys()):
                 raise ValueError("Positions must be between 0 and %s (non inclusive)" % (cycle,))
 
-        axes = {}
-        axes[axis] = child.axes[axis_name]
-        axes[axis].choices = positions
+        ac = child.axes[axis_name]
+        axes = {axis: model.Axis(choices=positions, unit=ac.unit)}  # TODO: allow the user to override the unit?
         self._position[axis] = child.position.value[axis_name]
 
         if (hasattr(child, "speed") and
