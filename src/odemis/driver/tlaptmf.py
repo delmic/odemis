@@ -140,19 +140,20 @@ class MFF(model.Actuator):
                                 "device (should be 8 digits starting with %s).",
                                 sn, SN_PREFIX_MFF)
             self._port = self._getSerialPort(sn)
+            self._sn = sn
         else:
             self._port = port
+            # The MFF returns no serial number from GetInfo(), so find via USB
+            try:
+                self._sn = self._getSerialNumber(port)
+                logging.info("Found serial number %s for device %s", self._sn, name)
+            except LookupError:
+                self._sn = None
 
         self._serial = self._openSerialPort(self._port)
-        self._ser_access = threading.Lock()
-
-        # Ensure we don't receive anything
-        self.SendMessage(HW_STOP_UPDATEMSGS)
-        self._serial.flushInput()
-
-        # Documentation says it should be done first, though it doesn't seem
-        # required
-        self.SendMessage(HW_NO_FLASH_PROGRAMMING)
+        self._ser_access = threading.RLock()  # reentrant, so that recovery can keep sending messages
+        self._recover = False
+        self._initHw()
 
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1) # one task at a time
@@ -191,6 +192,9 @@ class MFF(model.Actuator):
                           "turned on *after* the host computer." % sn)
         self._hwVersion = "%s v%d (firmware %s)" % (modl, hwv, fmv)
 
+        # It has worked at least once, so if it fails, there are hopes
+        self._recover = True
+
         self.position = model.VigilantAttribute({}, readonly=True)
         self._updatePosition()
 
@@ -209,6 +213,8 @@ class MFF(model.Actuator):
         # always off without doing anything (cf MOT_SET_AVMODES)
 
     def terminate(self):
+        self._recover = False  # to stop recovering if it's ongoing
+
         if self._executor:
             self.stop()
             self._executor.shutdown()
@@ -218,6 +224,49 @@ class MFF(model.Actuator):
             if self._serial:
                 self._serial.close()
                 self._serial = None
+
+    def _initHw(self):
+        # Ensure we don't receive anything
+        self.SendMessage(HW_STOP_UPDATEMSGS)
+        self._serial.flushInput()
+
+        # Documentation says it should be done first, though it doesn't seem
+        # required
+        self.SendMessage(HW_NO_FLASH_PROGRAMMING)
+
+    def _recoverHwError(self):
+        """
+        Returns when the device is back online
+        """
+        if self._serial:
+            self._serial.close()
+            self._serial = None
+
+        # keep looking for a serial port with the right serial number
+        while self._recover:
+            time.sleep(1)
+            try:
+                self._port = self._getSerialPort(self._sn)
+            except HwError:
+                logging.debug("Waiting more for the device %s to come back", self._sn)
+            except Exception:
+                raise
+            else:
+                break
+        else:
+            raise IOError("Device disappeared, and driver terminated")
+
+        # TODO: if it failed again, try again?
+        logging.info("Found again device %s, on port %s", self._sn, self._port)
+        self._serial = self._openSerialPort(self._port)
+
+        # Reinit Hw
+        self._initHw()
+
+        # TODO: put back to last known position? Or at least force to a known position?
+        self._updatePosition()
+
+        self.state._set_value(model.ST_RUNNING, force_write=True)
 
     def SendMessage(self, msg, dest=0x50, src=1, p1=None, p2=None, data=None):
         """
@@ -243,20 +292,32 @@ class MFF(model.Actuator):
         else: # long message
             com = struct.pack("<HHBB", msg.id, len(data), dest | 0x80, src) + data
 
-        logging.debug("Sending: '%s'", ", ".join("%02X" % ord(c) for c in com))
+        trials = 0
         with self._ser_access:
-            self._serial.write(com)
+            while True:
+                trials += 1
+                try:
+                    logging.debug("Sending: '%s'", ", ".join("%02X" % ord(c) for c in com))
+                    self._serial.write(com)
 
-            if isinstance(msg, APTReq):  # read the response
-                # ensure everything is sent, before expecting an answer
-                self._serial.flush()
+                    if isinstance(msg, APTReq):  # read the response
+                        # ensure everything is sent, before expecting an answer
+                        self._serial.flush()
 
-                # Read until end of answer
-                while True:
-                    rid, res = self._ReadMessage()
-                    if rid == msg.rid:
-                        return res
-                    logging.debug("Skipping unexpected message %X", rid)
+                        # Read until end of answer
+                        while True:
+                            rid, res = self._ReadMessage()
+                            if rid == msg.rid:
+                                return res
+                            logging.debug("Skipping unexpected message %X", rid)
+                    else:
+                        return
+                except IOError as ex:
+                    if not self._recover or trials >= 5:
+                        raise
+                    logging.warning("Failed to send message, trying to recover", exc_info=True)
+                    self.state._set_value(ex, force_write=True)
+                    self._recoverHwError()
 
     # Note: unused
     def WaitMessage(self, msg, timeout=None):
@@ -467,7 +528,7 @@ class MFF(model.Actuator):
             parity=serial.PARITY_NONE,
             stopbits=serial.STOPBITS_ONE,
             rtscts=True,
-            timeout=1 #s
+            timeout=1  # s
         )
 
         # Purge (as recommended in the documentation)
@@ -518,6 +579,30 @@ class MFF(model.Actuator):
             # Note: that works because udev rules create a dev with the same name
             # otherwise, we would need to check the char numbers
             return "/dev/%s" % (tty,)
+        else:
+            # TODO: Windows version
+            raise NotImplementedError("OS not yet supported")
+
+    def _getSerialNumber(self, port):
+        """
+        Get the serial number of the device (via USB info)
+        port (str): port name of the device (eg: "/dev/ttyUSB0" on Linux)
+        return (str): serial number
+        """
+        if sys.platform.startswith('linux'):
+            # Go reverse from getSerialPort():
+            # /sys/bus/usb-serial/devices/ttyUSB0
+            # -> read the link and remove the last two levels
+            try:
+                tty = os.path.basename(port)
+                sys_path = "/sys/bus/usb-serial/devices/" + tty
+                usb_path = os.path.join(os.path.dirname(sys_path), os.readlink(sys_path))
+                serial_path = usb_path + "/../../serial"
+                f = open(serial_path)
+                snp = f.read().strip()
+                return snp
+            except (IOError, OSError):
+                raise LookupError("Failed to find serial number of %s" % (port,))
         else:
             # TODO: Windows version
             raise NotImplementedError("OS not yet supported")

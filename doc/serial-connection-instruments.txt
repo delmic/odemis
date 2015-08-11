@@ -31,6 +31,9 @@ SUBSYSTEMS=="usb", ATTRS{idProduct}=="1008", ATTRS{idVendor}=="1a72", KERNEL=="t
 
 By default, in Ubuntu, the port is accessible for the group "dialout". So you might need to add your user to this group (and re-login) to access the port.
 
+Another way to differentiate the instruments is to rely on the serial number
+reported via the USB protocol. Check /sys/bus/usb/devices/*/serial.
+
 = Trying manually =
 As a first phase, it is recommended to try to change the instrument settings, or
 recover the instrument data manually, i.e., by typing them in a terminal and

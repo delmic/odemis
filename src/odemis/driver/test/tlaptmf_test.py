@@ -19,6 +19,7 @@ from __future__ import division
 import glob
 import logging
 from odemis.driver import tlaptmf
+import os
 import unittest
 from unittest.case import skip
 
@@ -27,11 +28,16 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 SN = "37848720" # put the serial number written on the component to test
 SN_SIM = "37000001"
-
 CLASS = tlaptmf.MFF
+
+# Export TEST_NOHW=1 to force using only the simulator and skipping test cases
+# needing real hardware
+TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
+
 KWARGS_SIM = dict(name="test", role="switch", port="/dev/fake", axis="r", inverted=["r"])
-KWARGS = KWARGS_SIM
-# KWARGS = dict(name="test", role="switch", sn=SN, axis="r", inverted=["r"])
+KWARGS = dict(name="test", role="switch", sn=SN, axis="r", inverted=["r"])
+if TEST_NOHW:
+    KWARGS = KWARGS_SIM
 
 # @skip("simple")
 class TestStatic(unittest.TestCase):
