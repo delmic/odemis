@@ -365,8 +365,8 @@ class StreamController(object):
         crop (0 < float <= 1): ratio of the FoV used
         """
         # TODO: only do this if the stream is not playing,
-        newres = (int(round(self._resmx[0] * crop / scale[0])),
-                  int(round(self._resmx[1] * crop / scale[1])))
+        newres = (int((self._resmx[0] * crop) // scale[0]),
+                  int((self._resmx[1] * crop) // scale[1]))
         newres = self._resva.clip(newres)
         logging.debug("Updated resolution to %s", newres)
         self._resva.value = newres
