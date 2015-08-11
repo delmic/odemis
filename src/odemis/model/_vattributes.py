@@ -28,7 +28,6 @@ import inspect
 import logging
 import numbers
 import numpy
-from odemis import util
 import threading
 from types import NoneType
 import zmq
@@ -179,9 +178,17 @@ class VigilantAttribute(VigilantAttributeBase):
                 return self._value
 
     # cannot be oneway because we need the exception in case of error
-    def _set_value(self, value, must_notify=False):
+    def _set_value(self, value, must_notify=False, force_write=False):
+        """
+        Check the value is acceptable, change the VA value and notify listeners
+        value: new value to set
+        must_notify (bool): if True, will force the notification, even if value
+          hasn't changed.
+        force_write (bool): if True, will accept to set the value even if the
+          VA is readonly. Should only be used by the 'owner' of the VA.
+        """
         # TODO need a lock?
-        if self.readonly:
+        if self.readonly and not force_write:
             raise NotSettableError("Value is read-only")
         prev_value = self._value
 
