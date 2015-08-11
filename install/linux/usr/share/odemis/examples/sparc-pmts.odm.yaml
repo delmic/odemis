@@ -69,7 +69,7 @@ SPARC-MONASH: {
     role: null,
     init: {
         channel: 1,
-        limits: [5, -5], # V, with contrast reversed
+        limits: [3, 0], # V, with contrast reversed
     },
 }
 

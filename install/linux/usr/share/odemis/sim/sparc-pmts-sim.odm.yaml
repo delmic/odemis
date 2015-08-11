@@ -68,7 +68,7 @@ SPARC-MONASH: {
     role: null,
     init: {
         channel: 1, # 0-> sawtooth waves, 1-> square waves
-        limits: [5, -5], # V, with contrast reversed
+        limits: [3, 0], # V, with contrast reversed
     },
 }
 
