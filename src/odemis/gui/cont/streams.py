@@ -89,6 +89,10 @@ class StreamController(object):
 
         self.tab_data_model = tab_data_model
 
+        # To update the local resolution without hardware feedback
+        self._resva = None
+        self._resmx = None
+
         # Peak excitation/emission wavelength of the selected dye, to be used for peak text and
         # wavelength colour
         # FIXME: Move all dye related code to a separate subclass of StreamController?
@@ -106,6 +110,13 @@ class StreamController(object):
 
         # Add local hardware settings to the stream panel
         self._add_hw_setting_controls()
+
+        if hasattr(stream, "emtResolution") or hasattr(stream, "detResolution"):
+            self._link_resolution()
+        # TODO: Add also a widget to change the "cropping" by selecting a ratio
+        # (of the area of the detector), and update the ROI/resolution based on this.
+        # In that case, we might be able to drop resolution from the local VA
+        # completely, and only display as an information based on binning and ROI.
 
         # Check if dye control is needed
         if hasattr(stream, "excitation") and hasattr(stream, "emission"):
@@ -314,6 +325,51 @@ class StreamController(object):
         self.stream_panel.to_static_mode()
 
     # END Panel state methods
+
+    def _link_resolution(self):
+        """
+        Ensure that the resolution setting is recomputed when the binning/scale
+          changes.
+        """
+        # shape and resolution.range[1] are almost always the same, but in some
+        # cases like spectrometer, only the shape contains the info needed.
+        if hasattr(self.stream, "emtResolution"):
+            self._resva = self.stream.emtResolution
+            self._resmx = self.stream.emitter.shape[:2]
+            prefix = "emt"
+        elif hasattr(self.stream, "detResolution"):
+            self._resva = self.stream.detResolution
+            self._resmx = self.stream.detector.shape[:2]
+            prefix = "det"
+        else:
+            raise LookupError("No resolution VA found")
+
+        if self._resva.readonly:
+            logging.info("Will not update resolution, as it is readonly")
+
+        # Find the binning/scale VA
+        for n in ("Binning", "Scale"):
+            fn = prefix + n
+            if hasattr(self.stream, fn):
+                binva = getattr(self.stream, fn)
+                break
+        else:
+            logging.warning("Stream has resolution VA but no binning/scale, so it will not be updated.")
+            return
+
+        binva.subscribe(self._update_resolution)
+
+    def _update_resolution(self, scale, crop=1.0):
+        """
+        scale (2 ints or floats): new divisor of the resolution
+        crop (0 < float <= 1): ratio of the FoV used
+        """
+        # TODO: only do this if the stream is not playing,
+        newres = (int(round(self._resmx[0] * crop / scale[0])),
+                  int(round(self._resmx[1] * crop / scale[1])))
+        newres = self._resva.clip(newres)
+        logging.debug("Updated resolution to %s", newres)
+        self._resva.value = newres
 
     def sync_tint_on_emission(self, emission_wl, exitation_wl):
         """ Set the tint to the same colour as emission, if no dye has been selected. If a dye is
