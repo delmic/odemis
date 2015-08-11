@@ -113,14 +113,13 @@ STA_IN_MOTION = (STA_FWD_MOT | STA_RVS_MOT | STA_FWD_JOG | STA_RVS_JOG)
 # All MFFxxx have serial number starting with 37
 SN_PREFIX_MFF = "37"
 
-POS_UP = 0
-POS_DOWN = math.radians(90)
 
 class MFF(model.Actuator):
     """
     Represents one Thorlabs Motorized Filter Flipper (ie: MFF101 or MFF102)
     """
-    def __init__(self, name, role, children=None, sn=None, port=None, axis="rz", inverted=None, **kwargs):
+    def __init__(self, name, role, children=None, sn=None, port=None, axis="rz",
+                 inverted=None, positions=None, **kwargs):
         """
         children (dict string->model.HwComponent): they are not actually used.
             In case of Monash SPARC we pass "pmt-control" just to enforce PMT
@@ -131,6 +130,8 @@ class MFF(model.Actuator):
         axis (str): name of the axis
         inverted (set of str): names of the axes which are inverted (IOW, either
          empty or the name of the axis)
+        positions (None, or list of 2 tuples (value, str)): positions values and
+         their corresponding name. If None: 0 and Pi/2 are used, without names.
         """
         if (sn is None and port is None) or (sn is not None and port is not None):
             raise ValueError("sn or port argument must be specified (but not both)")
@@ -158,23 +159,28 @@ class MFF(model.Actuator):
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1) # one task at a time
 
-        # TODO: have the standard inverted Actuator functions work on enumerated
-        # use a different format than the standard Actuator
-        if inverted and axis in inverted:
-            self._pos_to_jog = {POS_UP: 2,
-                                POS_DOWN: 1}
-            self._status_to_pos = {STA_RVS_HLS: POS_UP,
-                                   STA_FWD_HLS: POS_DOWN}
+        if positions is None:
+            positions = ((0, None), (math.radians(90), None))
         else:
-            self._pos_to_jog = {POS_UP: 1,
-                                POS_DOWN: 2}
-            self._status_to_pos = {STA_FWD_HLS: POS_UP,
-                                   STA_RVS_HLS: POS_DOWN}
+            if len(positions) != 2 or any(len(p) != 2 for p in positions):
+                raise ValueError("Positions must be exactly 2 tuples of 2 values")
+
+        # TODO: have the standard inverted Actuator functions work on enumerated axis
+        if inverted and axis in inverted:
+            positions = (positions[1], positions[0])
+
+        self._pos_to_jog = {positions[0][0]: 1,
+                            positions[1][0]: 2}
+        self._status_to_pos = {STA_FWD_HLS: positions[0][0],
+                               STA_RVS_HLS: positions[1][0]}
+
+        if positions[0][1] is None:
+            choices = set(p[0] for p in positions)
+        else:
+            choices = dict(positions)
 
         # TODO: add support for speed
-        axes = {axis: model.Axis(unit="rad",
-                                 choices=set(self._pos_to_jog.keys()))
-                }
+        axes = {axis: model.Axis(unit="rad", choices=choices)}
         model.Actuator.__init__(self, name, role, axes=axes, **kwargs)
 
         driver_name = driver.getSerialDriver(self._port)
@@ -198,8 +204,8 @@ class MFF(model.Actuator):
         self.position = model.VigilantAttribute({}, readonly=True)
         self._updatePosition()
 
-        # It'd be nice to know when a move is over, but it seems the MFF10x
-        # never report ends of move.
+        # It'd be nice to know when a move is over, but it the MFF10x doesn't
+        # report ends of move.
         # self.SendMessage(MOT_RESUME_ENDOFMOVEMSGS)
 
         # If we need constant status updates, then, we'll need to answer them
@@ -210,7 +216,7 @@ class MFF(model.Actuator):
         # self.SendMessage(HW_START_UPDATEMSGS) # Causes a lot of messages
 
         # We should make sure that the led is always off, but apparently, it's
-        # always off without doing anything (cf MOT_SET_AVMODES)
+        # off by default until explicitly asking for it (cf MOD_IDENTIFY)
 
     def terminate(self):
         self._recover = False  # to stop recovering if it's ongoing

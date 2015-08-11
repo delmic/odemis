@@ -150,6 +150,7 @@ SPARC-MONASH: {
     init: {sn: "37857195",
            axis: "rx",
            inverted: ["rx"],
+           positions: [[0, "on"], [1.5707963267948966, "off"]],
     },
     affects: ["Focus Lens", "Angular Camera", "Spectrometer"]  
 }
@@ -189,6 +190,7 @@ SPARC-MONASH: {
     init: {sn: "37857191",
            axis: "rx",
            # inverted: ["rx"],
+           positions: [[0, "on"], [1.5707963267948966, "off"]],
     },
     affects: ["Angular Camera", "CL Detector"]
 }
@@ -207,6 +209,7 @@ SPARC-MONASH: {
     init: {sn: "37857201",
            axis: "rx",
            # inverted: ["rx"],
+           positions: [[0, "on"], [1.5707963267948966, "off"]],
     },
     affects: ["Angular Camera", "Spectrometer"]  
 }

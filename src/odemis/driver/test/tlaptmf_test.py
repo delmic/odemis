@@ -26,7 +26,7 @@ from unittest.case import skip
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-SN = "37848720" # put the serial number written on the component to test
+SN = "37848720"  # put the serial number written on the component to test
 SN_SIM = "37000001"
 CLASS = tlaptmf.MFF
 
@@ -34,7 +34,8 @@ CLASS = tlaptmf.MFF
 # needing real hardware
 TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 
-KWARGS_SIM = dict(name="test", role="switch", port="/dev/fake", axis="r", inverted=["r"])
+KWARGS_SIM = dict(name="test", role="switch", port="/dev/fake", axis="r",
+                  inverted=["r"], positions=[[0, "off"], [1, "on"]])
 KWARGS = dict(name="test", role="switch", sn=SN, axis="r", inverted=["r"])
 if TEST_NOHW:
     KWARGS = KWARGS_SIM
