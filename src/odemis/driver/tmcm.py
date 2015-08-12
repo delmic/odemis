@@ -25,6 +25,7 @@ You should have received a copy of the GNU General Public License along with Ode
 from __future__ import division
 
 from concurrent.futures import CancelledError
+import fcntl
 import glob
 import logging
 import numpy
@@ -108,11 +109,7 @@ class TMCM3110(model.Actuator):
                 raise ValueError("ustepsize should be in meter, but got %g" % (sz,))
         self._ustepsize = ustepsize
 
-        try:
-            self._serial = self._openSerialPort(port)
-        except serial.SerialException:
-            raise HwError("Failed to find device %s on port %s. Ensure it is "
-                          "connected to the computer." % (name, port))
+        self._serial = self._openSerialPort(port)
         self._port = port
         self._ser_access = threading.Lock()
         self._target = 1 # Always one, when directly connected via USB
@@ -1018,19 +1015,32 @@ class TMCM3110(model.Actuator):
         Opens the given serial port the right way for a Thorlabs APT device.
         port (string): the name of the serial port (e.g., /dev/ttyUSB0)
         return (serial): the opened serial port
+        raise HwError: if the serial port cannot be opened (doesn't exist, or
+          already opened)
         """
         # For debugging purpose
         if port == "/dev/fake":
             return TMCM3110Simulator(timeout=0.1)
 
-        ser = serial.Serial(
-            port=port,
-            baudrate=9600, # TODO: can be changed by RS485 setting p.85?
-            bytesize=serial.EIGHTBITS,
-            parity=serial.PARITY_NONE,
-            stopbits=serial.STOPBITS_ONE,
-            timeout=0.1 # s
-        )
+        try:
+            ser = serial.Serial(
+                port=port,
+                baudrate=9600, # TODO: can be changed by RS485 setting p.85?
+                bytesize=serial.EIGHTBITS,
+                parity=serial.PARITY_NONE,
+                stopbits=serial.STOPBITS_ONE,
+                timeout=0.1 # s
+            )
+        except IOError:
+            raise HwError("Failed to find device on port %s. Ensure it is "
+                          "connected to the computer." % (port,))
+
+        # Ensure we are the only one connected to it
+        try:
+            fcntl.flock(ser.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except IOError:
+            raise HwError("Device on port %s is already in use. Ensure Odemis "
+                          "is not already running." % (port,))
 
         return ser
 
