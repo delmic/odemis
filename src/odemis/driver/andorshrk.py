@@ -149,19 +149,22 @@ class HwAccessMgr(object):
 
     def __enter__(self):
         if self._ccd is None:
-            return
-        self._ccd.request_hw.append(None) # let the acquisition thread know it should release the lock
-        logging.debug("requesting access to hw")
-        self._ccd.hw_lock.acquire()
+            logging.debug("Not taking CCD lock")
+        else:
+            self._ccd.request_hw.append(None)  # let the acquisition thread know it should release the lock
+            logging.debug("Requesting access to CCD")
+            self._ccd.hw_lock.acquire()
 
     def __exit__(self, exc_type, exc_value, traceback):
         """
         returns True if the exception is to be suppressed (never)
         """
         if self._ccd is None:
-            return
-        self._ccd.request_hw.pop() # hw no more needed
-        self._ccd.hw_lock.release()
+            logging.debug("CCD lock doesn't need to be released")
+        else:
+            self._ccd.request_hw.pop()  # hw no more needed
+            logging.debug("Released CCD lock")
+            self._ccd.hw_lock.release()
 
 
 class LedActiveMgr(object):
@@ -624,6 +627,7 @@ class Shamrock(model.Actuator):
         # strange polynomial.
         if npixels <= 7:
             logging.warning("Requested calibration info for %d pixels, which is known to fail", npixels)
+        logging.debug("Requesting calibration info for %d px", npixels)
         # TODO: this is pretty slow, and could be optimised either by using a
         # numpy array or returning directly the C array. We could also just
         # allocate one array at the init, and reuse it.
