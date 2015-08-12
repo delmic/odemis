@@ -21,7 +21,6 @@ import os
 import sys
 import serial
 import time
-logging.getLogger().setLevel(logging.DEBUG)
 
 def main(args):
     """
@@ -29,7 +28,9 @@ def main(args):
     args is the list of arguments passed
     return (int): value to return to the OS as program exit code
     """
+
     port = "/dev/" + args[1]
+    logging.debug("Trying to connect to device on port %s", port)
     # For now just turn off & on
     # value = args[2]
 
@@ -51,17 +52,28 @@ def main(args):
     while (char != '\n'):
         char = ser.read()
         ans += char
+    logging.debug("Device identified itself as '%s'", ans.encode('string_escape'))
     if ans.startswith("Delmic Analog PMT version"):
         # Send command
+        logging.info("Will now reset the power relay for 10s.")
         ser.write("RELAY 0\n")
         time.sleep(10)
         ser.write("RELAY 1\n")
+        logging.info("Power relay is active again.")
     else:
         return 1
 
     return 0
 
 if __name__ == '__main__':
+    logging.getLogger().setLevel(logging.DEBUG)
+    try:
+        handler = logging.FileHandler("/var/log/odemis-relay.log")
+        handler.setFormatter(logging.Formatter('%(asctime)s (%(module)s) %(levelname)s: %(message)s'))
+        logging.getLogger().addHandler(handler)
+    except Exception:
+        logging.warning("Logging failed to open log file")
+
     try:
         ret = main(sys.argv)
     except Exception:
