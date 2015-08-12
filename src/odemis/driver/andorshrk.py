@@ -876,10 +876,10 @@ class Shamrock(model.Actuator):
             try:
                 lines, blaze, home, offset = self.GetGratingInfo(g)
                 if lines == 0 or "mirror" in blaze.lower():
-                    logging.debug("Concidering grating %d a mirror", g)
+                    logging.debug("Considering grating %d a mirror", g)
                     gchoices[g] = "mirror"
                 else:
-                    gchoices[g] = "%.1f l/mm (blaze: %s)" % (lines * 1e-3, blaze)
+                    gchoices[g] = "%.0f l/mm (blaze: %s)" % (lines * 1e-3, blaze)
             except ShamrockError:
                 logging.exception("Failed to get grating info for %d", g)
                 gchoices[g] = "unknown"
