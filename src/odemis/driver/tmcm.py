@@ -129,17 +129,17 @@ class TMCM3110(model.Actuator):
         if name is None and role is None: # For scan only
             return
 
-        if port != "/dev/fake": # TODO: support programs in simulator
-            # Detect if it is "USB bus powered" by using the fact that programs
-            # don't run when USB bus powered
-            addr = 80 # big enough to not overlap with REFPROC_2XFF programs
-            prog = [(9, 50, 2, 1), # Set global param 50 to 1
-                    (28,), # STOP
-                    ]
-            self.UploadProgram(prog, addr)
-            if not self._isFullyPowered():
-                # Only a warning, as the power can be connected afterwards
-                logging.warning("Device %s has no power, the motor will not move", name)
+#         if port != "/dev/fake": # TODO: support programs in simulator
+#             # Detect if it is "USB bus powered" by using the fact that programs
+#             # don't run when USB bus powered
+#             addr = 80 # big enough to not overlap with REFPROC_2XFF programs
+#             prog = [(9, 50, 2, 1), # Set global param 50 to 1
+#                     (28,), # STOP
+#                     ]
+#             self.UploadProgram(prog, addr)
+        if not self._isFullyPowered():
+            # Only a warning, as the power can be connected afterwards
+            logging.warning("Device %s has no power, the motor will not move", name)
 
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1) # one task at a time
@@ -580,14 +580,21 @@ class TMCM3110(model.Actuator):
          motors will be able to move) or False if the device is "USB bus powered"
          (meaning it does answer to the computer, but nothing more).
         """
-        # We use a strange fact that programs will not run if the device is not
-        # self-powered.
-        gparam = 50
-        self.SetGlobalParam(2, gparam, 0)
-        self.RunProgram(80) # our stupid program address
-        time.sleep(0.01) # 10 ms should be more than enough to run one instruction
-        status = self.GetGlobalParam(2, gparam)
-        return (status == 1)
+        # It's undocumented, but the IDE uses this feature too:
+        # supply voltage is reported on analog channel 8
+        val = self.GetIO(1, 8)  # 1 <-> 0.1 V
+        v_supply = 0.1 * val
+        logging.debug("Supply power reported is %.1f V", v_supply)
+        return (10.8 <= v_supply)  # check if supply is >= 12V - 10%
+
+        # Old method was to use a strange fact that programs will not run if the
+        # device is not self-powered.
+#         gparam = 50
+#         self.SetGlobalParam(2, gparam, 0)
+#         self.RunProgram(80) # our stupid program address
+#         time.sleep(0.01) # 10 ms should be more than enough to run one instruction
+#         status = self.GetGlobalParam(2, gparam)
+#         return (status == 1)
 
     def _doInputReference(self, axis, speed):
         """
@@ -1256,14 +1263,20 @@ class TMCM3110Simulator(object):
             if not 0 <= mot <= 2:
                 self._sendReply(inst, status=4) # invalid value
                 return
-            if not 0 <= typ <= 7:
-                self._sendReply(inst, status=3) # wrong type
-                return
             if mot == 0: # digital inputs
+                if not 0 <= typ <= 7:
+                    self._sendReply(inst, status=3)  # wrong type
+                    return
                 rval = 0 # between 0..1
             elif mot == 1: # analogue inputs
+                if typ not in (0, 4, 8):
+                    self._sendReply(inst, status=3)  # wrong type
+                    return
                 rval = 178 # between 0..4095
             elif mot == 2: # digital outputs
+                if not 0 <= typ <= 7:
+                    self._sendReply(inst, status=3)  # wrong type
+                    return
                 rval = 0 # between 0..1
             self._sendReply(inst, val=rval)
         elif inst == 136: # Get firmware version
