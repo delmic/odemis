@@ -232,7 +232,7 @@ SPARC-MONASH: {
     role: spectrometer,
     children: {detector: "Spectral Camera", spectrograph: "Spectrograph"},
     properties: {
-        #binning: [4, 256],
+        binning: [4, 64],
     },
 }
 

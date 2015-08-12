@@ -112,23 +112,14 @@ class CompositedSpectrometer(model.Detector):
                          "px of the sensor", name, dt.binning.range[1][1],
                          dt.resolution.range[1][1])
 
-        resolution = [dt.resolution.range[1][0], 1] # max,1
-        binning = [1, 1]
-        # horizontally: as fine as possible, with a maximum around 256px, over
-        #  this, use binning if possible
-        binning[0] = min(max(resolution[0] // 256,
-                             dt.binning.range[0][0]), dt.binning.range[1][0])
-        resolution[0] //= binning[0]
-
-        # vertically: 1, with binning as big as possible
-        binning[1] = min(dt.binning.range[1][1], dt.resolution.range[1][1])
-
+        resolution = (dt.resolution.range[1][0], 1)  # max,1
         min_res = (dt.resolution.range[0][0], 1)
         max_res = (dt.resolution.range[1][0], 1)
-        self.resolution = model.ResolutionVA(tuple(resolution), [min_res, max_res],
+        self.resolution = model.ResolutionVA(resolution, (min_res, max_res),
                                              setter=self._setResolution)
         # 2D binning is like a "small resolution"
-        self._binning = tuple(binning)
+        # Initial binning is miimum binning horizontally, and maximum vertically
+        self._binning = (1, min(dt.binning.range[1][1], dt.resolution.range[1][1]))
         self.binning = model.ResolutionVA(self._binning, dt.binning.range,
                                           setter=self._setBinning)
 
