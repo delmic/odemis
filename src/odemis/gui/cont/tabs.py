@@ -618,10 +618,10 @@ class SparcAcquisitionTab(Tab):
         tab_data = guimod.ScannedAcquisitionGUIData(main_data)
         super(SparcAcquisitionTab, self).__init__(name, button, panel, main_frame, tab_data)
 
-        # Create the streams (first, as SEM viewport needs SEM CL stream):
+        # Create the streams (first, as SEM viewport needs SEM concurrent stream):
         # * SEM (survey): live stream displaying the current SEM view (full FoV)
         # * Spot SEM: live stream to set e-beam into spot mode
-        # * SEM CL: SEM stream used to store SEM settings for final acquisition.
+        # * SEM (concurrent): SEM stream used to store SEM settings for final acquisition.
         #           That's tab_data.semStream
         # When one new stream is added, it actually creates two streams:
         # * XXXSettingsStream: for the live view and the settings
@@ -632,13 +632,16 @@ class SparcAcquisitionTab(Tab):
 
         # This stream is used both for rendering and acquisition
         sem_stream = acqstream.SEMStream(
-            "Secondary electrons",
+            "Secondary electrons survey",
             main_data.sed,
             main_data.sed.data,
             main_data.ebeam,
             emtvas=get_hw_settings(main_data.ebeam),
             detvas=get_hw_settings(main_data.sed),
         )
+        # TODO: do not put local magnification/hfw VA, but just the global one,
+        # so that if SEM is not playing, but CLi (or other stream with e-beam as
+        # emitter) is, then it's possible to change it.
         self._sem_live_stream = sem_stream
         sem_stream.should_update.value = True  # TODO: put it in _streams_to_restart instead?
         self.tab_data_model.acquisitionView.addStream(sem_stream)  # it should also be saved
@@ -660,7 +663,7 @@ class SparcAcquisitionTab(Tab):
 
         # the SEM acquisition simultaneous to the CCDs
         semcl_stream = acqstream.SEMStream(
-            "SEM CL",  # name matters, used to find the stream for the ROI
+            "Secondary electrons concurrent",  # name matters, used to find the stream for the ROI
             main_data.sed,
             main_data.sed.data,
             main_data.ebeam
@@ -761,7 +764,7 @@ class SparcAcquisitionTab(Tab):
         sem_stream_cont.stream_panel.show_visible_btn(False)
 
         # TODO: move the entry to the "acquisition" panel?
-        # We add on the SEM live stream panel, the VA for the SEM CL stream
+        # We add on the SEM live stream panel, the VA for the SEM concurrent stream
         self.sem_dcperiod_ent = sem_stream_cont.add_setting_entry(
             "dcPeriod",
             semcl_stream.dcPeriod,
@@ -899,7 +902,7 @@ class AnalysisTab(Tab):
               "stream_classes": (EMStream, OpticalStream, SpectrumStream, CLStream),
               }),
             (viewports[3],
-             {"name": "Combined 2",  # Was SEM CL for Sparc
+             {"name": "Combined 2",
               "stream_classes": (EMStream, OpticalStream, SpectrumStream, CLStream),
               }),
             (viewports[4],

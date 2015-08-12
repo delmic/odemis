@@ -421,7 +421,7 @@ class ScannedAcquisitionGUIData(MicroscopyGUIData):
         # The tab controller will take care of filling it
         self.acquisitionView = MicroscopeView("Acquisition")
 
-        # The SEM CL stream that is used to select the acquisition settings
+        # The SEM concurrent stream that is used to select the acquisition settings
         # eg, ROI (aka ROA), dcPeriod, dcRegion.
         # It is set at start-up by the tab controller, and will never be active.
         self.semStream = None

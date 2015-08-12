@@ -284,31 +284,33 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         elif self.dicho_overlay:
             self.dicho_overlay.deactivate()
 
-    # TODO: move the logic of tool -> overlay to the controller
+    # TODO: move the logic of 'tool -> overlay' to the (tab?) controller
     # => different mode for "pixel" or "point"
     def _set_point_select_mode(self, tool_mode):
-        """ Activate the required point selection overlay """
+        """ Activate the required point selection overlay
+        """
 
-        # TODO: if a spectrum stream is visible => pixel
-        #       elif a AR stream exists => points
-        #       elif a spectrum stream is present => pixel
         if tool_mode == guimodel.TOOL_POINT:
-            # Enable the Spectrum point select overlay when a spectrum stream
-            # is attached to the view
-            stream_tree = self.microscope_view.stream_tree
-            # Enable the Angle-resolved point select overlay when there's a
-            # AR stream known anywhere in the data model (and the view has
-            # streams).
-            tab_streams = self._tab_data_model.streams.value
+            # if no stream => don't show anything
+            # elif a spectrum stream is visible => pixel (spec)
+            # elif a AR stream is present => points (AR)
+            # elif a spectrum stream is present => pixel (spec)
+            # else => don't show anything
+            # TODO: shall we always display an overlay if stream is present?
+            # Otherwise, when going from no stream to one stream, nothing
+            # happens until tool is changed and changed back.
 
-            if (len(self.microscope_view.stream_tree) and
-                    any(isinstance(s, stream.ARStream) for s in tab_streams)):
+            stream_tree = self.microscope_view.stream_tree
+            tab_streams = self._tab_data_model.streams.value
+            if not len(stream_tree):
+                return
+            elif stream_tree.get_streams_by_type(stream.SpectrumStream):
+                self.pixel_overlay.activate()
+                self.add_world_overlay(self.pixel_overlay)
+            elif any(isinstance(s, stream.ARStream) for s in tab_streams):
                 self.add_world_overlay(self.points_overlay)
                 self.points_overlay.activate()
-            # TODO: Filtering by the name SEM CL is not desired. There should be
-            # a more intelligent way to query the StreamTree about what's
-            # present, like how it's done for Spectrum and AR streams
-            elif stream_tree.spectrum_streams or stream_tree.get_streams_by_name("SEM CL"):
+            elif any(isinstance(s, stream.SpectrumStream) for s in tab_streams):
                 self.pixel_overlay.activate()
                 self.add_world_overlay(self.pixel_overlay)
         else:
@@ -326,7 +328,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             # Enable the Spectrum point select overlay when a spectrum stream
             # is attached to the view
             stream_tree = self.microscope_view.stream_tree
-            if stream_tree.spectrum_streams or stream_tree.get_streams_by_name("SEM CL"):
+            if stream_tree.get_streams_by_type(stream.SpectrumStream):
                 self.line_overlay.activate()
                 self.add_world_overlay(self.line_overlay)
         else:
@@ -999,10 +1001,10 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
     def __init__(self, *args, **kwargs):
         super(SparcAcquiCanvas, self).__init__(*args, **kwargs)
 
-        self._roa = None  # The ROI VA of SEM CL stream, initialized on setView()
+        self._roa = None  # The ROI VA of SEM concurrent stream, initialized on setView()
         self.roa_overlay = None
 
-        self._dc_region = None  # The dcRegion VA of the SEM CL
+        self._dc_region = None  # The dcRegion VA of the SEM concurrent
         self.driftcor_overlay = None
 
     def _on_tool(self, tool_mode):
@@ -1039,10 +1041,10 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         if not sem:
             raise AttributeError("No SEM on the microscope")
 
-        # Associate the ROI of the SEM CL stream to the region of acquisition
+        # Associate the ROI of the SEM concurrent stream to the region of acquisition
         sem_stream = tab_data.semStream
         if sem_stream is None:
-            raise KeyError("SEM CL stream not set, required for the SPARC acquisition")
+            raise KeyError("SEM concurrent stream not set, required for the SPARC acquisition")
 
         super(SparcAcquiCanvas, self).setView(microscope_view, tab_data)
 

@@ -2009,7 +2009,7 @@ class SparcStreamsController(StreamBarController):
 
     def _onROA(self, roi):
         """
-        called when the SEM CL roi (region of acquisition) is changed
+        called when the SEM concurrent roi (region of acquisition) is changed
         To synchronise global ROA -> streams ROI
         """
         self._disableROISub()
