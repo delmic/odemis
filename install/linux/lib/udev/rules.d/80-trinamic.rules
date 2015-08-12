@@ -2,5 +2,7 @@
 # appear under a specific name.
 # By default, they appear as a standard ttyACM* device.
 
+# TMCM-3110
 SUBSYSTEMS=="usb", ATTRS{idProduct}=="06cc", ATTRS{idVendor}=="16d0", KERNEL=="ttyACM[0-9]*", SYMLINK="ttyTMCM%n", GROUP="odemis"
-
+# TMCM-6110
+SUBSYSTEMS=="usb", ATTRS{idProduct}=="0650", ATTRS{idVendor}=="16d0", KERNEL=="ttyACM[0-9]*", SYMLINK="ttyTMCM%n", GROUP="odemis"
