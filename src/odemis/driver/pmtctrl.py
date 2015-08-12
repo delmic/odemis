@@ -21,6 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
+import fcntl
 import glob
 import logging
 from odemis import model
@@ -30,6 +31,7 @@ from odemis.util import driver
 import os
 import serial
 import sys
+import tempfile
 import threading
 import time
 
@@ -413,6 +415,15 @@ class PMTControl(model.HwComponent):
         for n in names:
             try:
                 self._serial = self._openSerialPort(n)
+                # If the device has just been inserted, odemis-relay will block
+                # it for 10s while reseting the relay, so be patient
+                try:
+                    fcntl.flock(self._serial.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except IOError:
+                    logging.info("Port %s is busy, will wait and retry", n)
+                    time.sleep(11)
+                    fcntl.flock(self._serial.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+
                 idn = self._getIdentification()
                 # Check that we connect to the right device
                 if not idn.startswith("Delmic Analog PMT"):
@@ -445,7 +456,7 @@ class PMTControl(model.HwComponent):
                     dev = cls(name="test", role="test", port=port)
                     idn = dev._getIdentification()
                     if idn.startswith("Delmic Analog PMT"):
-                        found.append({"idn": idn})
+                        found.append({"port": port})
                 except Exception:
                     pass
         else:
@@ -479,17 +490,20 @@ class PMTControlSimulator(object):
     """
     def __init__(self, timeout=0, *args, **kwargs):
         self.timeout = timeout
+        self._f = tempfile.TemporaryFile()  # for fileno
         self._output_buf = ""  # what the PMT Control Unit sends back to the "host computer"
         self._input_buf = ""  # what PMT Control Unit receives from the "host computer"
 
         # internal values
-        self._sn = 37000002
         self._gain = MIN_VOLT
         self._powerSupply = False
         self._protection = True
         self._prot_curr = 50
         self._contact = True
         self._prot_time = 0.001
+
+    def fileno(self):
+        return self._f.fileno()
 
     def write(self, data):
         self._input_buf += data

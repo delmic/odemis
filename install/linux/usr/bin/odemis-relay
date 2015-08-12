@@ -21,6 +21,7 @@ import os
 import sys
 import serial
 import time
+import fcntl
 
 def main(args):
     """
@@ -39,6 +40,7 @@ def main(args):
         port=port,
         timeout=5  # s
     )
+    fcntl.flock(ser.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
 
     # Purge
     ser.flush()

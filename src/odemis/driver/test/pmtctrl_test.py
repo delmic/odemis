@@ -30,13 +30,17 @@ from unittest.case import skip
 
 logger = logging.getLogger().setLevel(logging.DEBUG)
 
-# SN = "12345678"  # put the serial number written on the component to test
+# Export TEST_NOHW=1 to force using only the simulator and skipping test cases
+# needing real hardware
+TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 
-# Test using the hardware
 CLASS = pmtctrl.PMTControl
-# KWARGS = dict(name="test", role="pmt_control", port="/dev/ttyPMT*")
-# Test using the simulator
-KWARGS = dict(name="test", role="pmt_control", port="/dev/fake")
+if TEST_NOHW:
+    # Test using the simulator
+    KWARGS = dict(name="test", role="pmt_control", port="/dev/fake")
+else:
+    # Test using the hardware
+    KWARGS = dict(name="test", role="pmt_control", port="/dev/ttyPMT*")
 
 # Control unit used for PMT testing
 CLASS_CTRL = CLASS
@@ -61,14 +65,14 @@ class TestStatic(unittest.TestCase):
     def test_scan(self):
         # Only test for actual device
         if KWARGS["port"] == "/dev/ttyPMT*":
-            devices = CLASS.scan()
+            devices = CLASS_CTRL.scan()
             self.assertGreater(len(devices), 0)
 
     def test_creation(self):
         """
         Doesn't even try to do anything, just create and delete components
         """
-        dev = CLASS(**KWARGS)
+        dev = CLASS_CTRL(**KWARGS)
 
         self.assertTrue(dev.selfTest(), "self test failed.")
         dev.terminate()
@@ -87,7 +91,7 @@ class TestStatic(unittest.TestCase):
             kwargsw = dict(KWARGS)
             kwargsw["port"] = p
             with self.assertRaises(IOError):
-                dev = CLASS(**kwargsw)
+                dev = CLASS_CTRL(**kwargsw)
 
 
 class TestPMTControl(unittest.TestCase):
@@ -96,7 +100,7 @@ class TestPMTControl(unittest.TestCase):
     """
 
     def setUp(self):
-        self.dev = CLASS(**KWARGS)
+        self.dev = CLASS_CTRL(**KWARGS)
 
     def tearDown(self):
         self.dev.terminate()
