@@ -179,11 +179,13 @@ class PM8742(model.Actuator):
                     # => first read error and see if that explains anything
                     self._checkError()
                 except IOError:
-                    # Sometimes the hardware seems to lose connection
-                    # => try to reconnect
+                    # Sometimes the hardware seems to lose connection, and when
+                    # reconnecting it also is sometimes shifted in answers
+                    # => try to reset & reconnect
                     logging.warning("Device seems disconnected, will try to reconnect")
+                    self._accesser.sendOrderCommand("RS")
                     self._accesser.terminate()
-                    time.sleep(0.1)
+                    time.sleep(2)
                     self._accesser = self._openConnection(self._address, self._sn)
                     self._checkError()
                     logging.info("Recovered lost connection to device %s", self.name)
@@ -731,10 +733,10 @@ class IPAccesser(object):
         else:
             try:
                 self.socket = socket.create_connection((host, port), timeout=5)
-            except socket.timeout:
+            except socket.error:
                 raise model.HwError("Failed to connect to '%s:%d', check the New Focus "
                                     "controller is connected to the network, turned "
-                                    " on, and correctly configured." % (host, port))
+                                    "on, and correctly configured." % (host, port))
 
         self.socket.settimeout(1.0) # s
 
