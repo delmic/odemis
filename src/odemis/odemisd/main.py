@@ -169,6 +169,14 @@ class BackendContainer(model.Container):
                         ghosts[n] = ST_STARTING
                         mic.ghosts.value = ghosts
                         newcmps = self._instantiate_component(n)
+                        if self._must_stop.is_set():
+                            # in case the termination was too late to stop these new component
+                            for c in newcmps:
+                                try:
+                                    c.terminate()
+                                except Exception:
+                                    logging.warning("Failed to terminate component '%s'", c.name, exc_info=True)
+                            break
                     except ValueError:
                         if self._dry_run:
                             raise
@@ -189,7 +197,7 @@ class BackendContainer(model.Container):
     def _instantiate_component(self, name):
         """
         Instantiate a component and handle the outcome
-        return (set of str): name of all the component instantiated, so it is an
+        return (set of HwComponent): all the components instantiated, so it is an
           empty set if the component failed to instantiate (due to HwError)
         raise ValueError: if the component failed so badly to instantiate that
                           it's unlikely it'll ever instantiate
@@ -228,7 +236,7 @@ class BackendContainer(model.Container):
                 del ghosts[n]
 
             mic.ghosts.value = ghosts
-            return dchildren
+            return newcmps
 
     def _terminate_all_alive(self):
         """
