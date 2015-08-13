@@ -179,7 +179,7 @@ class AnchoredEstimator(object):
         shape = self._emitter.shape
         res = (max(1, int(round(shape[0] * width[0]))),
                max(1, int(round(shape[1] * width[1]))))
-        anchor_time = numpy.prod(res) * self._dwell_time + 0.01
+        anchor_time = min(numpy.prod(res), MAX_PIXELS) * self._dwell_time + 0.01
 
         return anchor_time
 
