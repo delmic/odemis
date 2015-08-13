@@ -424,13 +424,19 @@ class PMTControl(model.HwComponent):
                     time.sleep(11)
                     fcntl.flock(self._serial.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
 
-                idn = self._getIdentification()
+                try:
+                    idn = self._getIdentification()
+                except PMTControlError:
+                    # Can happen if the device has received some weird characters
+                    # => try again (now that it's flushed)
+                    logging.info("Device answered by an error, will try again")
+                    idn = self._getIdentification()
                 # Check that we connect to the right device
                 if not idn.startswith("Delmic Analog PMT"):
-                    logging.debug("Connected to wrong device. Try the next one.")
+                    logging.info("Connected to wrong device on %s, skipping.", n)
                     continue
                 return n
-            except serial.SerialException:
+            except (IOError, PMTControlError):
                 # not possible to use this port? next one!
                 continue
         else:
