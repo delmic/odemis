@@ -25,12 +25,15 @@
 #===============================================================================
 # Test module for Odemis' gui.comp.canvas module
 #===============================================================================
+from collections import deque
+import threading
 
 import unittest
 import math
 import logging
 
 import wx
+import time
 
 import odemis.gui.comp.miccanvas as miccanvas
 import odemis.gui.comp.canvas as canvas
@@ -167,10 +170,62 @@ class PlotCanvasTestCase(test.GuiTestCase):
 
     frame_class = test.test_gui.xrccanvas_frame
 
+    def _generate_sine_list(self, period, amp=1):
+
+        sine_list = []
+        step_size = (math.pi * 2) / period
+
+        for i in range(period):
+            sine_list.append(math.sin(i * step_size) * amp)
+
+        return deque(sine_list)
+
     # @unittest.skip("simple")
     def test_buffered_canvas(self):
         # BufferedCanvas is abstract and shoul not be instantiated
         self.assertRaises(TypeError, canvas.BufferedCanvas, self.panel)
+
+    @unittest.skip("simple")
+    def test_threaded_plot(self):
+        test.goto_manual()
+
+        cnvs = miccanvas.BarPlotCanvas(self.panel)
+
+        cnvs.SetBackgroundColour(wx.BLACK)
+        cnvs.SetForegroundColour("#DDDDDD")
+        cnvs.set_closure(canvas.PLOT_CLOSE_STRAIGHT)
+        self.add_control(cnvs, wx.EXPAND, proportion=1)
+
+        cnvs.set_plot_mode(canvas.PLOT_MODE_BAR)
+
+        data_size = 100
+        xs = range(data_size)
+        ys = self._generate_sine_list(data_size)
+
+        def rotate(q):
+
+            scale = 1.001
+
+            timeout = time.time() + 600
+
+            while True:
+                cnvs.set_1d_data(xs, ys, unit_x='m', unit_y='g')
+                q[-1] *= scale
+                q.rotate(1)
+
+                if time.time() > timeout:
+                    break
+
+                # threading._sleep(0.0005)
+            print "No error..."
+            self.frame.Destroy()
+
+        t = threading.Thread(target=rotate, args=(ys, ))
+        # Setting Daemon to True, will cause the thread to exit when the parent does
+        t.setDaemon(True)
+        t.start()
+
+        test.gui_loop()
 
     # @unittest.skip("simple")
     def test_bitmap_canvas(self):
@@ -206,7 +261,7 @@ class PlotCanvasTestCase(test.GuiTestCase):
         #     test.gui_loop()
         #     test.sleep(10)
 
-    # @unittest.skip("simple")
+    @unittest.skip("simple")
     def test_plot_viewport(self):
         vwp = viewport.PlotViewport(self.panel)
         self.add_control(vwp, wx.EXPAND, proportion=1)

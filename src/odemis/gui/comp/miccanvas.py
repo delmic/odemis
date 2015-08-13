@@ -1222,14 +1222,15 @@ class BarPlotCanvas(canvas.PlotCanvas):
 
     def set_data(self, data, unit_x=None, unit_y=None, range_x=None, range_y=None):
         """ Subscribe to the x position of the overlay when data is loaded """
+
         super(BarPlotCanvas, self).set_data(data, unit_x, unit_y, range_x, range_y)
 
-        if data is None:
-            self.markline_overlay.v_pos.unsubscribe(self._map_to_plot_values)
-            self.markline_overlay.deactivate()
-        else:
+        if data:
             self.markline_overlay.v_pos.subscribe(self._map_to_plot_values, init=True)
             self.markline_overlay.activate()
+        else:
+            self.markline_overlay.v_pos.unsubscribe(self._map_to_plot_values)
+            self.markline_overlay.deactivate()
 
     def clear(self):
         super(BarPlotCanvas, self).clear()
@@ -1245,8 +1246,7 @@ class BarPlotCanvas(canvas.PlotCanvas):
         """ Update the position of the focus line """
         super(BarPlotCanvas, self).on_size(evt)
         if None not in (self.val_x.value, self.val_y.value):
-            pos = (self._val_x_to_pos_x(self.val_x.value),
-                   self._val_y_to_pos_y(self.val_y.value))
+            pos = (self._val_x_to_pos_x(self.val_x.value), self._val_y_to_pos_y(self.val_y.value))
             self.markline_overlay.set_position(pos)
 
     def _map_to_plot_values(self, v_pos):
@@ -1260,13 +1260,13 @@ class BarPlotCanvas(canvas.PlotCanvas):
         self.val_x.value = self._pos_x_to_val_x(v_posx, snap=True)
         self.val_y.value = self._val_x_to_val_y(self.val_x.value, snap=True)
 
-        pos = (v_posx, self._val_y_to_pos_y(self.val_y.value))
+        pos = (v_posx, self._val_y_to_pos_y(self.val_y.value, self.data_prop[2], self.data_prop[3]))
         self.markline_overlay.set_position(pos)
 
         self.markline_overlay.x_label = units.readable_str(self.val_x.value, self.unit_x, 3)
         self.markline_overlay.y_label = units.readable_str(self.val_y.value, self.unit_y, 3)
 
-        self.Parent.Refresh()  # TODO: Does it need to be parent? is it needed at all?
+        # self.Parent.Refresh()  # TODO: Does it need to be parent? is it needed at all?
 
     def setView(self, microscope_view, tab_data):
         """ Set the microscope_view that this canvas is displaying/representing

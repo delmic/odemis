@@ -132,8 +132,7 @@ class FileBrowser(wx.Panel):
             if not os.path.exists(self.file_path):
                 self.text_ctrl.SetForegroundColour(odemis.gui.FG_COLOUR_ERROR)
             else:
-                self.text_ctrl.SetForegroundColour(
-                                            odemis.gui.FG_COLOUR_EDIT)
+                self.text_ctrl.SetForegroundColour(odemis.gui.FG_COLOUR_EDIT)
 
             self.text_ctrl.SetValue(self.file_path)
 

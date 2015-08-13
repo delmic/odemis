@@ -290,7 +290,7 @@ class AxisLegend(wx.Panel):
 
     @range.setter
     def range(self, val):
-        if val[0] > val[1]:
+        if val and val[0] > val[1]:
             raise ValueError("The range values need to be ordered!")
         elif self._value_range != val:
             self._value_range = val
@@ -310,8 +310,6 @@ class AxisLegend(wx.Panel):
         wx.Panel.Refresh(self)
 
     def on_paint(self, _):
-        # print "there"
-
         if self._value_range is None:
             return
 

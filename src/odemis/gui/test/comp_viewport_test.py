@@ -21,6 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 from collections import deque
+import copy
 import threading
 
 import unittest
@@ -78,6 +79,7 @@ class ViewportTestCase(test.GuiTestCase):
 
         return deque(sine_list)
 
+    @unittest.skip("simple")
     def test_threaded_plot(self):
         test.goto_manual()
 
@@ -87,19 +89,22 @@ class ViewportTestCase(test.GuiTestCase):
         self.add_control(vwp, wx.EXPAND, proportion=1)
 
         vwp.canvas.set_plot_mode(canvas.PLOT_MODE_BAR)
+        vwp.canvas.set_plot_mode(canvas.PLOT_MODE_LINE)
+        # vwp.canvas.set_plot_mode(canvas.PLOT_MODE_POINT)
 
         data_size = 100
         xs = range(data_size)
         ys = self._generate_sine_list(data_size)
 
         def rotate(q, v):
-            v.bottom_legend.unit = 'm'
+            # v.bottom_legend.unit = 'm'
 
             scale = 1.001
 
             timeout = time.time() + 600
 
             while True:
+
                 v.canvas.set_1d_data(xs, ys, unit_x='m', unit_y='g')
                 q[-1] *= scale
                 q.rotate(1)
@@ -107,14 +112,13 @@ class ViewportTestCase(test.GuiTestCase):
                 if time.time() > timeout:
                     break
 
-                v.bottom_legend.range = v.canvas.range_x
-                # v.bottom_legend.tooltip = "Time (s)"
+                v.bottom_legend.range = (min(xs), max(xs))
+                v.bottom_legend.tooltip = u"Time (s)"
 
-                v.left_legend.range = v.canvas.range_y
-                # v.left_legend.tooltip = "Count per second"
+                v.left_legend.range = (min(ys), max(ys))
+                v.left_legend.tooltip = u"Count per second"
 
-                threading._sleep(0.0005)
-            print "No error..."
+                # threading._sleep(0.000001)
             self.frame.Destroy()
 
         t = threading.Thread(target=rotate, args=(ys, vwp))
@@ -124,6 +128,7 @@ class ViewportTestCase(test.GuiTestCase):
 
         test.gui_loop()
 
+    @unittest.skip("simple")
     def test_plot_viewport(self):
 
         test.set_sleep_time(100)
