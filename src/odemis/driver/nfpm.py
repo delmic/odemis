@@ -90,12 +90,18 @@ class PM8742(model.Actuator):
                 raise ValueError("stepsize should be in meter, but got %g" % (sz,))
         self._stepsize = stepsize
 
+        self._address = address
+        self._sn = sn
         self._accesser = self._openConnection(address, sn)
+        self._recover = False
 
         self._resynchonise()
 
         if name is None and role is None: # For scan only
             return
+
+        # Seems to really be the device, so handle connection errors fully
+        self._recover = True
 
         modl, fw, sn = self.GetIdentification()
         if modl != "8742":
@@ -152,6 +158,38 @@ class PM8742(model.Actuator):
             self._accesser.terminate()
             self._accesser = None
 
+    def _sendOrderCommand(self, cmd, val="", axis=None):
+        return self._accesser.sendOrderCommand(cmd, val, axis)
+
+    def _sendQueryCommand(self, cmd, val="", axis=None):
+        """
+        Same as accesser's sendQueryCommand, but with error recovery
+        """
+        trials = 0
+        while True:
+            try:
+                return self._accesser.sendQueryCommand(cmd, val, axis)
+            except IOError: # Typically due to timeout
+                trials += 1
+                if not self._recover and trials < 5:
+                    raise
+                self._recover = False
+                try:
+                    # can also happen just due to error
+                    # => first read error and see if that explains anything
+                    self._checkError()
+                except IOError:
+                    # Sometimes the hardware seems to lose connection
+                    # => try to reconnect
+                    logging.warning("Device seems disconnected, will try to reconnect")
+                    self._accesser.terminate()
+                    time.sleep(0.1)
+                    self._accesser = self._openConnection(self._address, self._sn)
+                    self._checkError()
+                    logging.info("Recovered lost connection to device %s", self.name)
+                finally:
+                    self._recover = True
+
     # Low level functions
     def GetIdentification(self):
         """
@@ -160,7 +198,7 @@ class PM8742(model.Actuator):
              Firmware version (and date)
              serial number
         """
-        resp = self._accesser.sendQueryCommand("*IDN")
+        resp = self._sendQueryCommand("*IDN")
         # expects something like this:
         # New_Focus 8742 v2.2 08/01/13 11511
         try:
@@ -180,7 +218,7 @@ class PM8742(model.Actuator):
         axis (1<=int<=4): axis number
         return (0<=int<=3): the motor type
         """
-        resp = self._accesser.sendQueryCommand("QM", axis=axis)
+        resp = self._sendQueryCommand("QM", axis=axis)
         return int(resp)
 
     def GetVelocity(self, axis):
@@ -189,7 +227,7 @@ class PM8742(model.Actuator):
         axis (1<=int<=4): axis number
         return (0<=int<=2000): the speed in step/s
         """
-        resp = self._accesser.sendQueryCommand("VA", axis=axis)
+        resp = self._sendQueryCommand("VA", axis=axis)
         return int(resp)
 
     def SetVelocity(self, axis, val):
@@ -200,7 +238,7 @@ class PM8742(model.Actuator):
         """
         if not 1 <= val <= 2000:
             raise ValueError("Velocity outside of the range 0->2000")
-        self._accesser.sendOrderCommand("VA", "%d" % (val,), axis)
+        self._sendOrderCommand("VA", "%d" % (val,), axis)
 
     def GetAccel(self, axis):
         """
@@ -208,7 +246,7 @@ class PM8742(model.Actuator):
         axis (1<=int<=4): axis number
         return (0<=int): the acceleration in step/s²
         """
-        resp = self._accesser.sendQueryCommand("AC", axis=axis)
+        resp = self._sendQueryCommand("AC", axis=axis)
         return int(resp)
 
     def SetAccel(self, axis, val):
@@ -219,14 +257,14 @@ class PM8742(model.Actuator):
         """
         if not 1 <= val <= 200000:
             raise ValueError("Acceleration outside of the range 0->200000")
-        self._accesser.sendOrderCommand("AC", "%d" % (val,), axis)
+        self._sendOrderCommand("AC", "%d" % (val,), axis)
 
     def MotorCheck(self):
         """
         Run the motor check command, that automatically configure the right
         values based on the type of motors connected.
         """
-        self._accesser.sendOrderCommand("MC")
+        self._sendOrderCommand("MC")
 
     def MoveAbs(self, axis, pos):
         """
@@ -234,7 +272,7 @@ class PM8742(model.Actuator):
         axis (1<=int<=4): axis number
         pos (-2**31 <= int 2*31-1): position in step
         """
-        self._accesser.sendOrderCommand("PA", "%d" % (pos,), axis)
+        self._sendOrderCommand("PA", "%d" % (pos,), axis)
 
     def GetTarget(self, axis):
         """
@@ -243,7 +281,7 @@ class PM8742(model.Actuator):
         return (int): the position in steps
         """
         # Note, it's not clear what's the difference with PR?
-        resp = self._accesser.sendQueryCommand("PA", axis=axis)
+        resp = self._sendQueryCommand("PA", axis=axis)
         return int(resp)
 
     def MoveRel(self, axis, offset):
@@ -252,7 +290,7 @@ class PM8742(model.Actuator):
         axis (1<=int<=4): axis number
         offset (-2**31 <= int 2*31-1): offset in step
         """
-        self._accesser.sendOrderCommand("PR", "%d" % (offset,), axis)
+        self._sendOrderCommand("PR", "%d" % (offset,), axis)
 
     def GetPosition(self, axis):
         """
@@ -260,7 +298,7 @@ class PM8742(model.Actuator):
         axis (1<=int<=4): axis number
         return (int): the position in steps
         """
-        resp = self._accesser.sendQueryCommand("TP", axis=axis)
+        resp = self._sendQueryCommand("TP", axis=axis)
         return int(resp)
 
     def IsMotionDone(self, axis):
@@ -269,7 +307,7 @@ class PM8742(model.Actuator):
         axis (1<=int<=4): axis number
         return (bool): False if in motion, True if motion is finished
         """
-        resp = self._accesser.sendQueryCommand("MD", axis=axis)
+        resp = self._sendQueryCommand("MD", axis=axis)
         if resp == "0": # motion in progress
             return False
         elif resp == "1": # no motion
@@ -282,14 +320,14 @@ class PM8742(model.Actuator):
         """
         Stop immediately the motion on all the axes
         """
-        self._accesser.sendOrderCommand("AB")
+        self._sendOrderCommand("AB")
 
     def StopMotion(self, axis):
         """
         Stop nicely the motion (using accel/decel values)
         axis (1<=int<=4): axis number
         """
-        self._accesser.sendOrderCommand("ST", axis=axis)
+        self._sendOrderCommand("ST", axis=axis)
 
     def GetError(self):
         """
@@ -301,7 +339,7 @@ class PM8742(model.Actuator):
         """
         # Note: there is another one "TE" which only returns the number, and so
         # is faster, but then there is no way to get the message
-        resp = self._accesser.sendQueryCommand("TB")
+        resp = self._sendQueryCommand("TB")
         # returns something like "108, MOTOR NOT CONNECTED"
         try:
             m = re.match("(?P<no>\d+), (?P<msg>.+)", resp)
@@ -717,11 +755,10 @@ class IPAccesser(object):
         """
         Sends one command, and don't expect any reply
         cmd (str): command to send
-        val (str): value to send (if any) 
+        val (str): value to send (if any)
         axis (1<=int<=4 or None): axis number
         raises:
             IOError: if problem with sending/receiving data over the connection
-            NewFocusError: if error happened
         """
         if axis is None:
             str_axis = ""
@@ -743,7 +780,7 @@ class IPAccesser(object):
         """
         Sends one command, and don't expect any reply
         cmd (str): command to send, without ?
-        val (str): value to send (if any) 
+        val (str): value to send (if any)
         axis (1<=int<=4 or None): axis number
         raises:
             IOError: if problem with sending/receiving data over the connection
@@ -772,7 +809,7 @@ class IPAccesser(object):
                 try:
                     data = self.socket.recv(4096)
                 except socket.timeout:
-                    raise HwError("Controller %s timed out after %s" %
+                    raise IOError("Controller %s timed out after %s" %
                                   (self._host, msg.encode('string_escape')))
 
                 if not data:
