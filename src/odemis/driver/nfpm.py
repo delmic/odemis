@@ -179,13 +179,15 @@ class PM8742(model.Actuator):
                     # => first read error and see if that explains anything
                     self._checkError()
                 except IOError:
-                    # Sometimes the hardware seems to lose connection, and when
-                    # reconnecting it also is sometimes shifted in answers
-                    # => try to reset & reconnect
+                    # Sometimes the hardware seems to lose connection
+                    # => try to reconnect
                     logging.warning("Device seems disconnected, will try to reconnect")
-                    self._accesser.sendOrderCommand("RS")
+                    # Sometimes the device gets confused and answers are shifted.
+                    # Reset helps, but it also reset the current position, which
+                    # is not handy.
+                    # self._accesser.sendOrderCommand("RS")
                     self._accesser.terminate()
-                    time.sleep(2)
+                    time.sleep(0.5)
                     self._accesser = self._openConnection(self._address, self._sn)
                     self._checkError()
                     logging.info("Recovered lost connection to device %s", self.name)
@@ -216,7 +218,7 @@ class PM8742(model.Actuator):
         """
         Read the motor type.
         The motor check action must have been performed before to get correct
-          values. 
+          values.
         axis (1<=int<=4): axis number
         return (0<=int<=3): the motor type
         """
@@ -515,7 +517,7 @@ class PM8742(model.Actuator):
 
     def _waitEndMove(self, future, axes, end=0):
         """
-        Wait until all the given axes are finished moving, or a request to 
+        Wait until all the given axes are finished moving, or a request to
         stop has been received.
         future (Future): the future it handles
         axes (set of int): the axes IDs to check
@@ -717,6 +719,7 @@ class PM8742(model.Actuator):
 
         return ret
 
+
 class IPAccesser(object):
     """
     Manages low-level connections over IP
@@ -869,9 +872,9 @@ class PM8742Simulator(object):
                            }
         self._astates = [dict(orig_axis_state) for i in range(self._naxes)]
 
-        # (float, float, int) for each axis 
+        # (float, float, int) for each axis
         # start, end, start position of a move
-        self._axis_move = [(0,0,0)] * self._naxes
+        self._axis_move = [(0, 0, 0)] * self._naxes
 
     def _getCurrentPos(self, axis):
         """
