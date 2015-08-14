@@ -30,7 +30,7 @@ def main(args):
     return (int): value to return to the OS as program exit code
     """
 
-    port = "/dev/" + args[1]
+    port = args[1]
     logging.debug("Trying to connect to device on port %s", port)
     # For now just turn off & on
     # value = args[2]
