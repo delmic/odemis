@@ -167,7 +167,7 @@ class TestSEM(unittest.TestCase):
                 cls.scanner = child
 
     @classmethod
-    def tearUpClass(cls):
+    def tearDownClass(cls):
         cls.sem.terminate()
         time.sleep(3)
 
@@ -180,7 +180,7 @@ class TestSEM(unittest.TestCase):
         self.acq_dates = (set(), set()) # 2 sets of dates, one for each receiver
         self.acq_done = threading.Event()
 
-    def tearUp(self):
+    def tearDown(self):
 #        print gc.get_referrers(self.camera)
 #        gc.collect()
         pass
@@ -581,7 +581,7 @@ class TestSEM2(unittest.TestCase):
                 cls.scanner = child
 
     @classmethod
-    def tearUpClass(cls):
+    def tearDownClass(cls):
         cls.sem.terminate()
 
     def setUp(self):
@@ -591,7 +591,7 @@ class TestSEM2(unittest.TestCase):
         self.scanner.dwellTime.value = self.scanner.dwellTime.range[0]
         self.acq_dates = (set(), set()) # 2 sets of dates, one for each receiver
 
-    def tearUp(self):
+    def tearDown(self):
         pass
 
     def compute_expected_duration(self):
@@ -747,7 +747,7 @@ class TestSEMCounter(unittest.TestCase):
                 cls.scanner = child
 
     @classmethod
-    def tearUpClass(cls):
+    def tearDownClass(cls):
         cls.sem.terminate()
 
     def setUp(self):
@@ -757,7 +757,7 @@ class TestSEMCounter(unittest.TestCase):
         self.scanner.dwellTime.value = 1e-3  # 1 ms is pretty fast for the counter
         self.acq_dates = (set(), set())  # 2 sets of dates, one for each receiver
 
-    def tearUp(self):
+    def tearDown(self):
         pass
 
     def compute_expected_duration(self):

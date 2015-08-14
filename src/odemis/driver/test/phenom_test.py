@@ -137,7 +137,7 @@ class TestSEM(unittest.TestCase):
                 cls.pressure = child
 
     @classmethod
-    def tearUpClass(cls):
+    def tearDownClass(cls):
         cls.sem.terminate()
         time.sleep(3)
 
@@ -153,7 +153,7 @@ class TestSEM(unittest.TestCase):
         self.acq_dates = (set(), set())  # 2 sets of dates, one for each receiver
         self.acq_done = threading.Event()
 
-    def tearUp(self):
+    def tearDown(self):
 #        print gc.get_referrers(self.camera)
 #        gc.collect()
         pass

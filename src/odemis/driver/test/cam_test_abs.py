@@ -472,14 +472,14 @@ class VirtualTestSynchronized(object):
                 cls.scanner = child
 
     @classmethod
-    def tearUpClass(cls):
+    def tearDownClass(cls):
         cls.ccd.terminate()
         cls.sem.terminate()
 
     def setUp(self):
         self.got_image = threading.Event()
 
-    def tearUp(self):
+    def tearDown(self):
         # just in case it failed
         self.ccd.data.subscribe(self.receive_ccd_image)
         self.sed.data.subscribe(self.receive_sem_data)

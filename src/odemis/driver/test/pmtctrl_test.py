@@ -163,7 +163,7 @@ class TestPMT(unittest.TestCase):
                                            "pmt-control": cls.control})
 
     @classmethod
-    def tearUpClass(cls):
+    def tearDownClass(cls):
         cls.pmt.terminate()
         cls.sem.terminate()
         cls.control.terminate()
@@ -186,7 +186,7 @@ class TestPMT(unittest.TestCase):
         self._orig_gain = self.pmt.gain.value
         self._orig_powerSupply = self.pmt.powerSupply.value
 
-    def tearUp(self):
+    def tearDown(self):
         pass
 
     def test_simple_acquisition(self):
