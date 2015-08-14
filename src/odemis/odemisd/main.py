@@ -54,7 +54,7 @@ class BackendContainer(model.Container):
     terminates.
     """
     def __init__(self, model_file, create_sub_containers=False,
-                dry_run=False, name=model.BACKEND_NAME):
+                 dry_run=False, name=model.BACKEND_NAME):
         """
         inst_file (file): opened file that contains the yaml
         container (Container): container in which to instantiate the components

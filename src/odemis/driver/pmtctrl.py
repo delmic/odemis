@@ -115,7 +115,7 @@ class PMT(model.Detector):
                 self.gain = model.FloatContinuous(self._gain, ctrl.gain.range, unit="V",
                                                   setter=self._setGain)
                 self._last_gain = self._gain
-                self.gain.value = self._gain  # Just start with no gain
+                self._setGain(self._gain)  # Just start with no gain
             if (hasattr(ctrl, "powerSupply")
                 and isinstance(ctrl.powerSupply, model.VigilantAttributeBase)):
                 self.powerSupply = ctrl.powerSupply
@@ -350,7 +350,7 @@ class PMTControl(model.HwComponent):
 
             ans = ''
             char = None
-            while (char != '\n'):
+            while char != '\n':
                 char = self._serial.read()
                 if not char:
                     logging.error("Timeout after receiving %s", ans.encode('string_escape'))
@@ -384,7 +384,7 @@ class PMTControl(model.HwComponent):
         ser.flushInput()
 
         # Try to read until timeout to be extra safe that we properly flushed
-        while (True):
+        while True:
             char = ser.read()
             if char == '':
                 break
