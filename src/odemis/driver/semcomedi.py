@@ -2993,8 +2993,8 @@ class CountingDetector(model.Detector):
         """
 
         # Counters and pulse generators are fairly different in terms of
-        # functionallity, but they correspond to similar devices seen as input
-        # or output. When generalising, these devices are both refered to as
+        # functionality, but they correspond to similar devices seen as input
+        # or output. When generalising, these devices are both referred to as
         # "counters".
         # A counter is made of the following basic elements:
         # * Input source: the signal measured or the clock of the pulse generation
@@ -3005,7 +3005,7 @@ class CountingDetector(model.Detector):
         # On the NI board, the counters are defined by:
         # There are different ways to count (eg, counting up or down, on
         # the edge rising or lowering).
-        # We use up countining on edge rising. In comedi,
+        # We use up counting on edge rising. In comedi,
         # this is specified via the comedi_set_counter_mode(). The "source"
         # is the input signal which is observed. The standard input for the first
         # counter is PFI 8, and for the second counter is PFI 3. This can be
@@ -3020,7 +3020,7 @@ class CountingDetector(model.Detector):
         # seems to indicate for buffered counting the gate is used to carry the
         # sampling clock).
         # Note that the counter can overflow (after maxdata).
-        # In buffer mode, it is cummulative by default, and can be reset by setting
+        # In buffer mode, it is cumulative by default, and can be reset by setting
         # the mode to NI_GPCT_LOADING_ON_GATE_BIT.
         # In buffered counting, the sampling clock is the (first) gate.
         # Note that in direct counting, the gate is used to "pause". The counter
@@ -3073,8 +3073,8 @@ class CountingDetector(model.Detector):
 
         # more complex tricks:
         # The hardware triggers a "data stale" if no pulse between two
-        # clock sampling signal (aka gate). However, it's only in noncummulative
-        # mode, it doesn't happen in cummulative mode.
+        # clock sampling signal (aka gate). However, it's only in noncumulative
+        # mode, it doesn't happen in cumulative mode.
         #
         # TC: stands for terminal counter, and it's a signal set when the counter
         # rolls over (in order to detect it, and maybe increment another counter).
@@ -3083,7 +3083,7 @@ class CountingDetector(model.Detector):
         # under other (but similar) names.
         # Trigger_Mode_For_Edge_Gate = 3 => NI_GPCT_EDGE_GATE_NO_STARTS_NO_STOPS_BITS
         # only valid if Gating_Mode != 0 (gating disabled, other modes being
-        # level or edge triggered). They recommand a gate source with CR_EDGE
+        # level or edge triggered). They recommend a gate source with CR_EDGE
         # (but not clear if necessary).
         # Constants can also be found in the NI DDK: tMSeries.* and tTIO.*.
 
