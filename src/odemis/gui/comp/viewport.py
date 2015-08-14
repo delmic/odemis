@@ -39,6 +39,7 @@ from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.raster import rasterize_line
 from odemis.model import NotApplicableError
 from odemis.util import units, spectrum
+import random
 import wx
 
 
@@ -727,7 +728,7 @@ class PlotViewport(ViewPort):
             stream = ss[0]
 
         if self.stream is stream:
-            logging.debug("not reconnecting to stream as it's already connected")
+            # logging.debug("not reconnecting to stream as it's already connected")
             return
 
         # Disconnect the old stream
@@ -765,6 +766,11 @@ class PointSpectrumViewport(PlotViewport):
     Legend axes are wavelength/intensity.
     """
 
+    def setView(self, microscope_view, tab_data):
+        super(PointSpectrumViewport, self).setView(microscope_view, tab_data)
+        self.bottom_legend.tooltip = "Wavelength"
+        self.left_legend.tooltip = "Intensity"
+
     def _on_new_data(self, data):
         """
         Called when a new data is available.
@@ -785,11 +791,10 @@ class PointSpectrumViewport(PlotViewport):
             self.canvas.set_1d_data(spectrum_range, data, unit_x)
 
             self.bottom_legend.unit = unit_x
-            self.bottom_legend.range = self.canvas.range_x
-            self.bottom_legend.tooltip = "Wavelength"
-            self.left_legend.range = self.canvas.range_y
-            self.left_legend.tooltip = "Intensity"
-
+            self.bottom_legend.range = (spectrum_range[0], spectrum_range[-1])
+            self.left_legend.range = (min(data), max(data))
+            # For testing
+            # self.left_legend.range = (min(data) + random.randint(0, 100), max(data) + random.randint(-100, 100))
         else:
             self.clear()
         self.Refresh()
@@ -814,9 +819,7 @@ class PointSpectrumViewport(PlotViewport):
 
         self.bottom_legend.unit = unit_x
         self.bottom_legend.range = (spectrum_range[0], spectrum_range[-1])
-        self.bottom_legend.tooltip = "Wavelength"
         self.left_legend.range = (min(data), max(data))
-        self.left_legend.tooltip = "Intensity"
 
         self.Refresh()
 
@@ -831,6 +834,11 @@ class ChronographViewport(PlotViewport):
         super(ChronographViewport, self).__init__(*args, **kwargs)
         self.canvas.markline_overlay.hide_x_label()
 
+    def setView(self, microscope_view, tab_data):
+        super(ChronographViewport, self).setView(microscope_view, tab_data)
+        self.bottom_legend.tooltip = "Time (s)"
+        self.left_legend.tooltip = "Count per second"
+
     def _on_new_data(self, data):
         if data.size:
             unit_x = 's'
@@ -844,10 +852,7 @@ class ChronographViewport(PlotViewport):
 
             self.bottom_legend.unit = unit_x
             self.bottom_legend.range = range_x
-            self.bottom_legend.tooltip = "Time (s)"
-
             self.left_legend.range = range_y
-            self.left_legend.tooltip = "Count per second"
 
         else:
             self.clear()
