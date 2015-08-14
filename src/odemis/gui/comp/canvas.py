@@ -1748,11 +1748,8 @@ class PlotCanvas(BufferedCanvas):
     def __init__(self, *args, **kwargs):
         BufferedCanvas.__init__(self, *args, **kwargs)
 
-        # The data to be plotted, ([x values], [y values])
+        # The data to be plotted: list of 2-tuples (x, y, for each point)
         self._data = None
-
-        # When setting new data, this canvas can be locked to prevent rendering
-        self._dirty = False
 
         # The range of the x and y data
         self.range_x = None
@@ -1760,11 +1757,11 @@ class PlotCanvas(BufferedCanvas):
 
         self.data_prop = None
 
+        # TODO not used?
         self.unit_x = None
         self.unit_y = None
 
         # Rendering settings
-
         self.line_width = 2.0  # px
         self.line_colour = wxcol_to_frgb(self.ForegroundColour)
         self.fill_colour = self.line_colour
@@ -1792,8 +1789,6 @@ class PlotCanvas(BufferedCanvas):
             ordered and not duplicated.
 
         """
-
-        self._dirty = True
 
         if data:
             # Check if sorted
@@ -1886,7 +1881,7 @@ class PlotCanvas(BufferedCanvas):
                           range_y=None):
         """ Translate a value tuple to a pixel position tuple
 
-        If a value (x or y) is out of range, it will be clippped.
+        If a value (x or y) is out of range, it will be clipped.
 
         :param value_tuple: (float, float) The value coordinates to translate
 
@@ -1968,7 +1963,7 @@ class PlotCanvas(BufferedCanvas):
         return val_x
 
     def _val_x_to_val_y(self, val_x, snap=False):
-        """ Map the give x pixel value to a y value """
+        """ Map the given x pixel value to a y value """
         return min((abs(val_x - x), y) for x, y in self._data)[1]
 
     def SetForegroundColour(self, *args, **kwargs):
@@ -2005,9 +2000,10 @@ class PlotCanvas(BufferedCanvas):
 
             if self._data:
                 data = self._data
+                # TODO: reuse data_prop if the data has not changed
                 data_width, range_x, data_height, range_y = self._calc_data_characteristics(data)
-                self._plot_data(self.ctx, data, data_width, range_x, data_height, range_y)
                 self.data_prop = (data_width, range_x, data_height, range_y)
+                self._plot_data(self.ctx, data, data_width, range_x, data_height, range_y)
 
             # self._locked = False
 
