@@ -733,6 +733,7 @@ class PlotViewport(ViewPort):
 
         # Disconnect the old stream
         if self.stream:
+            logging.debug("Disconnecting %s from plotviewport", stream)
             if hasattr(self.stream, 'selected_pixel'):
                 self.stream.selected_pixel.unsubscribe(self._on_pixel_select)
             elif hasattr(self.stream, 'image'):
@@ -741,6 +742,7 @@ class PlotViewport(ViewPort):
         # Connect the new one
         self.stream = stream
         if stream:
+            logging.debug("Connecting %s to plotviewport", stream)
             # Hack: StaticSpectrumStream contain a 2D spectrum in .image, and
             # to get the point spectrum we need to use get_pixel_spectrum() and
             # listen to selected_pixel VA.
@@ -768,8 +770,8 @@ class PointSpectrumViewport(PlotViewport):
 
     def setView(self, microscope_view, tab_data):
         super(PointSpectrumViewport, self).setView(microscope_view, tab_data)
-        self.bottom_legend.tooltip = "Wavelength"
-        self.left_legend.tooltip = "Intensity"
+        wx.CallAfter(self.bottom_legend.SetToolTipString, "Wavelength")
+        wx.CallAfter(self.left_legend.SetToolTipString, "Intensity")
 
     def _on_new_data(self, data):
         """
@@ -794,7 +796,7 @@ class PointSpectrumViewport(PlotViewport):
             self.bottom_legend.range = (spectrum_range[0], spectrum_range[-1])
             self.left_legend.range = (min(data), max(data))
             # For testing
-            # self.left_legend.range = (min(data) + random.randint(0, 100), max(data) + random.randint(-100, 100))
+#             self.left_legend.range = (min(data) + random.randint(0, 100), max(data) + random.randint(-100, 100))
         else:
             self.clear()
         self.Refresh()
@@ -836,8 +838,8 @@ class ChronographViewport(PlotViewport):
 
     def setView(self, microscope_view, tab_data):
         super(ChronographViewport, self).setView(microscope_view, tab_data)
-        self.bottom_legend.tooltip = "Time (s)"
-        self.left_legend.tooltip = "Count per second"
+        wx.CallAfter(self.bottom_legend.SetToolTipString, "Time (s)")
+        wx.CallAfter(self.left_legend.SetToolTipString, "Count per second")
 
     def _on_new_data(self, data):
         if data.size:
@@ -936,6 +938,9 @@ class SpatialSpectrumViewport(ViewPort):
         # the stream tree itself... it just there is nothing to do that.
         microscope_view.lastUpdate.subscribe(self.connect_stream)
 
+        wx.CallAfter(self.bottom_legend.SetToolTipString, "Wavelength")
+        wx.CallAfter(self.left_legend.SetToolTipString, "Distance from origin")
+
     def connect_stream(self, _=None):
         """ This method will connect this ViewPort to the Spectrum Stream so it
         it can react to spectrum pixel selection.
@@ -986,10 +991,8 @@ class SpatialSpectrumViewport(ViewPort):
             unit_x = self.stream.spectrumBandwidth.unit
             self.bottom_legend.unit = unit_x
             self.bottom_legend.range = (spectrum_range[0], spectrum_range[-1])
-            self.bottom_legend.tooltip = "Wavelength"
             self.left_legend.unit = 'm'
             self.left_legend.range = (0, line_length)
-            self.left_legend.tooltip = "Distance from origin"
 
             self.canvas.set_2d_data(data)
         else:

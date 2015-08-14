@@ -113,10 +113,10 @@ class ViewportTestCase(test.GuiTestCase):
                     break
 
                 v.bottom_legend.range = (min(xs), max(xs))
-                v.bottom_legend.tooltip = u"Time (s)"
+                v.bottom_legend.SetToolTipString(u"Time (s)")
 
                 v.left_legend.range = (min(ys), max(ys))
-                v.left_legend.tooltip = u"Count per second"
+                v.left_legend.SetToolTipString(u"Count per second")
 
                 # threading._sleep(0.000001)
             self.frame.Destroy()

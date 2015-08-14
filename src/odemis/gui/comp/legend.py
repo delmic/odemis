@@ -250,8 +250,6 @@ class AxisLegend(wx.Panel):
         else:
             self.SetMinSize((42, -1))
 
-        self.tooltip_ctrl = None
-
         # The following properties are volatile, meaning that they can change often
 
         self._value_range = None  # 2 tuple with the minimum and maximum value
@@ -260,19 +258,6 @@ class AxisLegend(wx.Panel):
         self._pixel_space = None  # Number of available pixels
 
         self.on_size()  # Force a refresh
-
-    @property
-    def tooltip(self):
-        return self.tooltip_ctrl.GetTip()
-
-    @tooltip.setter
-    def tooltip(self, val):
-        if not self.tooltip_ctrl:
-            self.tooltip_ctrl = wx.ToolTip(val)
-            self.tooltip_ctrl.SetDelay(0)
-            self.SetToolTip(self.tooltip_ctrl)
-        else:
-            self.tooltip_ctrl.SetTip(val)
 
     @property
     def unit(self):
@@ -314,6 +299,7 @@ class AxisLegend(wx.Panel):
             return
 
         self.calculate_ticks()
+        csize = self.ClientSize
 
         # Set Font
         font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
@@ -326,7 +312,7 @@ class AxisLegend(wx.Panel):
         ctx.set_line_join(cairo.LINE_JOIN_MITER)
 
         max_width = 0
-        prev_lpos = 0 if self._orientation == wx.HORIZONTAL else self.ClientSize.y
+        prev_lpos = 0 if self._orientation == wx.HORIZONTAL else csize.y
 
         for i, (pos, val) in enumerate(self._tick_list):
             label = units.readable_str(val, self.unit, 3)
@@ -334,7 +320,7 @@ class AxisLegend(wx.Panel):
 
             if self._orientation == wx.HORIZONTAL:
                 lpos = pos - (lbl_width // 2)
-                lpos = max(min(lpos, self.ClientSize.x - lbl_width - 2), 2)
+                lpos = max(min(lpos, csize.x - lbl_width - 2), 2)
                 # print (i, prev_right, lpos)
                 if prev_lpos < lpos:
                     ctx.move_to(lpos, lbl_height + 8)
@@ -345,13 +331,13 @@ class AxisLegend(wx.Panel):
             else:
                 max_width = max(max_width, lbl_width)
                 lpos = pos + (lbl_height // 2)
-                lpos = max(min(lpos, self.ClientSize.y), 2)
+                lpos = max(min(lpos, csize.y), 2)
 
                 if prev_lpos >= lpos + 20 or i == 0:
-                    ctx.move_to(self.ClientSize.x - lbl_width - 9, lpos)
+                    ctx.move_to(csize.x - lbl_width - 9, lpos)
                     ctx.show_text(label)
-                    ctx.move_to(self.ClientSize.x - 5, pos)
-                    ctx.line_to(self.ClientSize.x, pos)
+                    ctx.move_to(csize.x - 5, pos)
+                    ctx.line_to(csize.x, pos)
                 prev_lpos = lpos + lbl_height
 
             ctx.stroke()
