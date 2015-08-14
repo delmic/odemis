@@ -104,6 +104,9 @@ NI_TRIG_AI_START1 = 18  # Trigger number for AI Start1 (= beginning of a command
 NI_AO_TRIG_AI_START2 = 18  # Trigger number for AI Start2 (= beginning of a scan)
 NI_AO_TRIG_AI_START1 = 19  # Trigger number for AI Start1 (= beginning of a command)
 
+ACQ_CMD_UPD = 1
+ACQ_CMD_TERM = 2
+
 # helper functions
 def get_best_dtype_for_acc(idtype, count):
     """
@@ -239,11 +242,11 @@ class SEMComedi(model.HwComponent):
 
         # acquisition thread setup
         # FIXME: we have too many locks. Need to simplify the acquisition and cancellation code
-        self._acquisition_data_lock = threading.Lock()
+        # self._acquisition_data_lock = threading.Lock()
         self._acquisition_mng_lock = threading.Lock()
         self._acquisition_init_lock = threading.Lock()
+        self._acq_cmd_q = Queue.Queue()
         self._acquisition_must_stop = threading.Event()
-        self._acquisition_thread = None
         self._acquisitions = set()  # detectors currently active
 
         # create the detector children "detectorN" and "counterN"
@@ -291,7 +294,9 @@ class SEMComedi(model.HwComponent):
         self._new_position_thread = None
         self._new_position_thread_pipe = [] # list to communicate with the current thread
 
-        self.set_to_resting_position()
+        self._acquisition_thread = threading.Thread(target=self._acquisition_run,
+                                                    name="SEM acquisition thread")
+        self._acquisition_thread.start()
 
     # There are two temperature sensors:
     # * One on the board itself (TODO how to access it with Comedi?)
@@ -1531,21 +1536,15 @@ class SEMComedi(model.HwComponent):
         raises KeyError if the detector is already being acquired.
         """
         # to be thread-safe (simultaneous calls to start/stop_acquire())
-        with self._acquisition_data_lock:
+        with self._acquisition_mng_lock:
             if detector in self._acquisitions:
                 raise KeyError("Channel %d already set up for acquisition." % detector.channel)
             self._acquisitions.add(detector)
+            self._acq_cmd_q.put(ACQ_CMD_UPD)
 
-        # the thread uses acquisition_data_lock, so we should never wait for
-        # the thread to stop with this lock acquired.
-        # TODO: just have one thread, which is commanded via a queue
-        with self._acquisition_mng_lock:
-            running = self._wait_acquisition_stopped()  # only wait if acquisition thread is stopping
-            # Set up thread if not already running (for another detector)
-            if not running:
-                self._acquisition_thread = threading.Thread(target=self._acquisition_run,
-                                                            name="SEM acquisition thread")
-                self._acquisition_thread.start()
+            # If something went wrong with the thread, report also here
+            if self._acquisition_thread is None:
+                raise IOError("Acquisition thread is gone, cannot acquire")
 
     def stop_acquire(self, detector):
         """
@@ -1553,14 +1552,111 @@ class SEMComedi(model.HwComponent):
         detector (Detector): detector from which to acquire an image
         Note: acquisition might still go on on other channels
         """
-        with self._acquisition_data_lock:
+        with self._acquisition_mng_lock:
             self._acquisitions.discard(detector)
-            if self._acquisitions:
-                # Still something to acquire => keep the thread running
+            self._acq_cmd_q.put(ACQ_CMD_UPD)
+            if not self._acquisitions:
+                self._req_stop_acquisition()
+
+    def _check_cmd_q(self, block=True):
+        """
+        block (bool): if True, will wait for a (just one) command to come,
+          otherwise, will wait for no more command to be queued
+        raise CancelledError: if the TERM command was received.
+        """
+        # Read until there are no more commands
+        while True:
+            try:
+                cmd = self._acq_cmd_q.get(block=block)
+            except Queue.Empty:
+                break
+
+            # Decode command
+            if cmd == ACQ_CMD_UPD:
+                pass
+            elif cmd == ACQ_CMD_TERM:
+                logging.debug("Acquisition thread received terminate command")
+                raise CancelledError("Terminate command received")
+            else:
+                logging.error("Unexpected command %s", cmd)
+
+            if block:
                 return
 
-        with self._acquisition_mng_lock:
-            self._req_stop_acquisition()
+    def _acquisition_run(self):
+        """
+        Acquire images until asked to stop. Sends the raw acquired data to the
+          callbacks.
+        Note: to be run in a separate thread
+        """
+        last_gc = 0
+        nfailures = 0
+        try:
+            while True:
+                with self._acquisition_init_lock:
+                    # Ensure that if a rest/term is needed, and we don't catch
+                    # it in the queue (yet), it will be detected before starting
+                    # the read/write commands.
+                    self._acquisition_must_stop.clear()
+
+                self._check_cmd_q(block=False)
+
+                detectors = tuple(self._acq_wait_detectors_ready())  # ordered
+                if detectors:
+                    # write and read the raw data
+                    try:
+                        if any(isinstance(d, CountingDetector) for d in detectors):
+                            rdas = self._acquire_counting_detector(detectors)
+                        else:
+                            rdas = self._acquire_analog_detectors(detectors)
+                    except CancelledError:
+                        # either because must terminate or just need to rest
+                        logging.debug("Acquisition was cancelled")
+                        continue
+                    except (IOError, comedi.ComediError):
+                        # could be genuine or just due to cancellation
+                        self._check_cmd_q(block=False)
+
+                        nfailures += 1
+                        if nfailures == 5:
+                            logging.exception("Acquisition failed %d times in a row, giving up", nfailures)
+                            return
+                        else:
+                            logging.exception("Acquisition failed, will retry")
+                            time.sleep(1)
+                            self._reset_device()
+                            continue
+
+                    nfailures = 0
+
+                    for d, da in zip(detectors, rdas):
+                        if d.inverted:
+                            da = (d.shape[0] - 1) - da
+                        d.data.notify(da)
+
+                    # force the GC to non-used buffers, for some reason, without this
+                    # the GC runs only after we've managed to fill up the memory
+                    if time.time() - last_gc > 2:  # Costly, so not too often
+                        gc.collect()  # TODO: if scan is long enough, during scan
+                        last_gc = time.time()
+                else:  # nothing to acquire => rest
+                    self.set_to_resting_position()
+                    gc.collect()
+                    # wait until something new comes in
+                    self._check_cmd_q(block=True)
+                    last_gc = time.time()
+        except CancelledError:
+            logging.info("Acquisition threading terminated on request")
+        except Exception:
+            logging.exception("Unexpected failure during image acquisition")
+        finally:
+            try:
+                self.set_to_resting_position()
+            except comedi.ComediError:
+                # can happen if the driver already terminated
+                pass
+            logging.info("Acquisition thread closed")
+            self._acquisition_thread = None
 
     def _req_stop_acquisition(self):
         """
@@ -1576,31 +1672,6 @@ class SEMComedi(model.HwComponent):
             self._reader.cancel()
             for c in self._counters.values():
                 c.reader.cancel()
-
-    def _wait_acquisition_stopped(self):
-        """
-        Waits until the acquisition thread is fully finished _iff_ it was requested
-        to stop.
-        return bool: True if the acquisition thread is still running (because
-         it doesn't need to be stopped), False if the acquisition thread is stopped.
-        """
-        acqthread = self._acquisition_thread
-        if acqthread is None:
-            return False
-
-        # "if" is to not wait if it's already finished
-        if self._acquisition_must_stop.is_set():
-            logging.debug("waiting for the acquisition thread to stop...")
-            acqthread.join(10)  # 10s timeout for safety
-            if acqthread.isAlive():
-                logging.error("Failed to stop the acquisition thread")
-                self._reset_device()
-                # Now let's hope everything is back to normal...
-            # ensure it's not set, even if the thread died prematurely
-            self._acquisition_must_stop.clear()
-            return False  # thread stopped
-        else:
-            return acqthread.isAlive()
 
     def _acq_wait_detectors_ready(self):
         """
@@ -1618,76 +1689,11 @@ class SEMComedi(model.HwComponent):
                 det_ready.add(d)
 
             # Check if new detectors were added (or removed) in the mean time
-            with self._acquisition_data_lock:
+            with self._acquisition_mng_lock:
                 detectors = self._acquisitions.copy()
             det_not_ready = detectors - det_ready
 
         return detectors
-
-    def _acquisition_run(self):
-        """
-        Acquire images until asked to stop. Sends the raw acquired data to the
-          callbacks.
-        Note: to be run in a separate thread
-        """
-        last_gc = 0
-        nfailures = 0
-        try:
-            while not self._acquisition_must_stop.is_set():
-                detectors = tuple(self._acq_wait_detectors_ready())  # ordered
-                if not detectors:  # can happen if must_stop not yet set
-                    break
-
-                # write and read the raw data
-                try:
-                    if any(isinstance(d, CountingDetector) for d in detectors):
-                        rdas = self._acquire_counting_detector(detectors)
-                    else:
-                        rdas = self._acquire_analog_detectors(detectors)
-                except (IOError, comedi.ComediError):
-                    # could be genuine or just due to cancellation
-                    if self._acquisition_must_stop.is_set():
-                        return
-
-                    nfailures += 1
-                    if nfailures == 5:
-                        logging.exception("Acquisition failed %d times in a row, giving up", nfailures)
-                        return
-                    else:
-                        logging.exception("Acquisition failed, will retry")
-                        time.sleep(1)
-                        self._reset_device()
-                        continue
-                except CancelledError:
-                    # either because must be stopped or settings updated
-                    logging.debug("Acquisition was cancelled")
-                    continue
-
-                nfailures = 0
-
-                for d, da in zip(detectors, rdas):
-                    if d.inverted:
-                        da = (d.shape[0] - 1) - da
-                    d.data.notify(da)
-
-                # force the GC to non-used buffers, for some reason, without this
-                # the GC runs only after we've managed to fill up the memory
-                if (not self._acquisition_must_stop.is_set()
-                    and time.time() - last_gc > 2): # Costly, so not too often
-                    gc.collect() # TODO: if scan is long enough, during scan
-                    last_gc = time.time()
-        except Exception:
-            logging.exception("Unexpected failure during image acquisition")
-        finally:
-            try:
-                self.set_to_resting_position()
-            except comedi.ComediError:
-                # can happen if the driver already terminated
-                pass
-            logging.debug("Acquisition thread closed")
-            self._acquisition_thread = None
-            self._acquisition_must_stop.clear()
-            gc.collect()
 
     def _acquire_analog_detectors(self, detectors):
         """
@@ -1816,8 +1822,12 @@ class SEMComedi(model.HwComponent):
             comedi.cleanup_calibration(self._calibration)
             self._calibration = None
         if self._device:
-            # stop the acquisition thread if it's still running
-            self._req_stop_acquisition()
+            # stop the acquisition thread
+            with self._acquisition_mng_lock:
+                self._acquisitions.clear()
+                self._acq_cmd_q.put(ACQ_CMD_TERM)
+                self._req_stop_acquisition()
+            self._acquisition_thread.join(10)
 
             comedi.close(self._device)
             self._device = None
