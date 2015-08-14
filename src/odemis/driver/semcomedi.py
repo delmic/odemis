@@ -3253,6 +3253,7 @@ class FakeCountingDetector(CountingDetector):
         """
         # It will set up ._shape and .parent
         model.Detector.__init__(self, name, role, parent=parent, **kwargs)
+        self.inverted = False  # inverted is not supported
         logging.info("Creating fake counter %d", counter)
 
         self.counter = counter
