@@ -283,7 +283,16 @@ class Container(Pyro4.core.Daemon):
         returns the new component instantiated
         """
         kwargs["daemon"] = self # the component will auto-register
-        comp = klass(**kwargs)
+        try:
+            comp = klass(**kwargs)
+        except Exception:
+            try:
+                # If the component already auto-registered, unregister it, so
+                # that it can try again later
+                self.unregister(urllib.quote(kwargs["name"]))
+            except Exception:
+                pass
+            raise
         return comp
 
     def setRoot(self, component):
