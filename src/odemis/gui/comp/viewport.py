@@ -797,8 +797,8 @@ class PointSpectrumViewport(PlotViewport):
             self.bottom_legend.unit = unit_x
             self.bottom_legend.range = (spectrum_range[0], spectrum_range[-1])
             self.left_legend.range = (min(data), max(data))
-            # # For testing
-            self.left_legend.range = (min(data) + random.randint(0, 100), max(data) + random.randint(-100, 100))
+            # For testing
+            # self.left_legend.range = (min(data) + random.randint(0, 100), max(data) + random.randint(-100, 100))
         else:
             self.clear()
         self.Refresh()
