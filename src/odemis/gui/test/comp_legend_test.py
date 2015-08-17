@@ -75,10 +75,11 @@ class LegendTestCase(test.GuiTestCase):
 
         def set_range():
             start, end = 0, 1
-            while end < 100000:
-                end *= 1.001
+            while end < 10e6:
+                end *= 1.0001
+                leg.unit = 'm'
                 leg.range = (start, end)
-                threading._sleep(0.001)
+                threading._sleep(0.0005)
             self.frame.Destroy()
 
         test.gui_loop(500)

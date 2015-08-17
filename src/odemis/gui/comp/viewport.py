@@ -642,12 +642,12 @@ class PlotViewport(ViewPort):
         # before we get an explicit chance to unsubscribe event handlers
         self.stream = None
 
-    def setView(self, microscope_view, tab_data):
+    def setView(self, view, tab_data):
         """
         Set the microscope view that this viewport is displaying/representing
         *Important*: Should be called only once, at initialisation.
 
-        :param microscope_view:(model.View)
+        :param view:(model.View)
         :param tab_data: (model.MicroscopyGUIData)
         """
         # TODO: rename `microscope_view`, since this parameter is a regular view
@@ -660,21 +660,20 @@ class PlotViewport(ViewPort):
         # import traceback
         # traceback.print_stack()
 
-        self._microscope_view = microscope_view
+        self._microscope_view = view
         self._tab_data_model = tab_data
 
         # canvas handles also directly some of the view properties
-        self.canvas.setView(microscope_view, tab_data)
+        self.canvas.setView(view, tab_data)
 
         # Keep an eye on the stream tree, so we can (re)connect when it changes
         # microscope_view.stream_tree.should_update.subscribe(self.connect_stream)
         # FIXME: it shouldn't listen to should_update, but to modifications of
         # the stream tree itself... it just there is nothing to do that.
-        microscope_view.lastUpdate.subscribe(self.connect_stream)
+        view.lastUpdate.subscribe(self.connect_stream)
 
-        microscope_view.stream_tree.should_update.subscribe(self._on_stream_play,
-                                                            init=True)
-        microscope_view.lastUpdate.subscribe(self._on_stream_update, init=True)
+        view.stream_tree.should_update.subscribe(self._on_stream_play, init=True)
+        view.lastUpdate.subscribe(self._on_stream_update, init=True)
 
     def _on_stream_update(self, _):
         """
@@ -698,7 +697,7 @@ class PlotViewport(ViewPort):
         """ Refresh the ViewPort while making sure the legends get redrawn as well """
         self.left_legend.Refresh()
         self.bottom_legend.Refresh()
-        super(PlotViewport, self).Refresh(*args, **kwargs)
+        self.canvas.Refresh()
 
     def connect_stream(self, _):
         """
@@ -768,8 +767,8 @@ class PointSpectrumViewport(PlotViewport):
     Legend axes are wavelength/intensity.
     """
 
-    def setView(self, microscope_view, tab_data):
-        super(PointSpectrumViewport, self).setView(microscope_view, tab_data)
+    def setView(self, view, tab_data):
+        super(PointSpectrumViewport, self).setView(view, tab_data)
         wx.CallAfter(self.bottom_legend.SetToolTipString, "Wavelength")
         wx.CallAfter(self.left_legend.SetToolTipString, "Intensity")
 
@@ -795,8 +794,8 @@ class PointSpectrumViewport(PlotViewport):
             self.bottom_legend.unit = unit_x
             self.bottom_legend.range = (spectrum_range[0], spectrum_range[-1])
             self.left_legend.range = (min(data), max(data))
-            # For testing
-#             self.left_legend.range = (min(data) + random.randint(0, 100), max(data) + random.randint(-100, 100))
+            # # For testing
+            self.left_legend.range = (min(data) + random.randint(0, 100), max(data) + random.randint(-100, 100))
         else:
             self.clear()
         self.Refresh()
@@ -836,8 +835,8 @@ class ChronographViewport(PlotViewport):
         super(ChronographViewport, self).__init__(*args, **kwargs)
         self.canvas.markline_overlay.hide_x_label()
 
-    def setView(self, microscope_view, tab_data):
-        super(ChronographViewport, self).setView(microscope_view, tab_data)
+    def setView(self, view, tab_data):
+        super(ChronographViewport, self).setView(view, tab_data)
         wx.CallAfter(self.bottom_legend.SetToolTipString, "Time (s)")
         wx.CallAfter(self.left_legend.SetToolTipString, "Count per second")
 
