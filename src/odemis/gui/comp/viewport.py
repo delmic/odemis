@@ -694,7 +694,10 @@ class PlotViewport(ViewPort):
         self.canvas.play_overlay.hide_pause(is_playing)
 
     def Refresh(self, *args, **kwargs):
-        """ Refresh the ViewPort while making sure the legends get redrawn as well """
+        """
+        Refresh the ViewPort while making sure the legends get redrawn as well
+        Can be called safely from other threads.
+        """
         self.left_legend.Refresh()
         self.bottom_legend.Refresh()
         self.canvas.Refresh()
@@ -900,10 +903,14 @@ class SpatialSpectrumViewport(ViewPort):
             self.stream.selected_pixel.value = line_pixels[int(len(line_pixels) * rat)]
 
     def Refresh(self, *args, **kwargs):
-        """ Refresh the ViewPort while making sure the legends get redrawn as well """
+        """
+        Refresh the ViewPort while making sure the legends get redrawn as well
+        Can be called safely from other threads
+        """
         self.left_legend.Refresh()
         self.bottom_legend.Refresh()
-        super(SpatialSpectrumViewport, self).Refresh(*args, **kwargs)
+        # Note: this is not thread safe, so would need to be in a CallAfter()
+        # super(SpatialSpectrumViewport, self).Refresh(*args, **kwargs)
         wx.CallAfter(self.canvas.update_drawing)
 
     def setView(self, microscope_view, tab_data):
@@ -913,9 +920,8 @@ class SpatialSpectrumViewport(ViewPort):
 
         :param microscope_view:(model.View)
         :param tab_data: (model.MicroscopyGUIData)
-
-        TODO: rename `microscope_view`, since this parameter is a regular view
         """
+        # TODO: rename `microscope_view`, since this parameter is a regular view
 
         # This is a kind of a kludge, as it'd be best to have the viewport
         # created after the microscope view, but they are created independently

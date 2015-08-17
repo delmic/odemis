@@ -274,6 +274,9 @@ class BufferedCanvas(wx.Panel):
         return self._dc_buffer
 
     def Refresh(self, *args, **kwargs):
+        """
+        Refresh, which can be called safely from other threads
+        """
         wx.CallAfter(wx.Panel.Refresh, self, *args, **kwargs)
 
     # ########### Cursor Management ###########

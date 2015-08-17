@@ -292,6 +292,9 @@ class AxisLegend(wx.Panel):
 
     @wxlimit_invocation(0.2)
     def Refresh(self):
+        """
+        Refresh, which can be called safely from other threads
+        """
         wx.Panel.Refresh(self)
 
     def on_paint(self, _):
