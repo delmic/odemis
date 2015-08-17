@@ -509,7 +509,7 @@ class Stream(object):
                     # Try to find "round" values
                     if 0 < mn < 256:
                         mn = 0
-                    diff = max(1, mx - mn)
+                    diff = max(2, mx - mn)
                     diff = 1 << int(math.ceil(math.log(diff, 2)))  # next power of 2
                     drange = (mn, mn + diff - 1)
                     if self._drange is not None:

@@ -108,8 +108,9 @@ def findOptimalRange(hist, edges, outliers=0):
         cum_hist = hist.cumsum()
         nval = cum_hist[-1]
 
-        # if we got a histogram of an empty array, don't try too hard
-        if nval == 0:
+        # if we got a histogram of an empty array, or histogram with only one
+        # value, don't try too hard.
+        if nval == 0 or len(hist) < 2:
             return edges
 
         # trick: if there are lots (>1%) of complete black and not a single
