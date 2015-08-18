@@ -141,7 +141,7 @@ class MenuController(object):
         # TODO: make it work on Windows too
         # /Help/Report a problem...
         if sys.platform.startswith('win32'):
-            main_frame.menu_item_bugreport.Disable()
+            main_frame.menu_item_bugreport.Enable(False)
         else:
             wx.EVT_MENU(main_frame,
                         main_frame.menu_item_bugreport.GetId(),

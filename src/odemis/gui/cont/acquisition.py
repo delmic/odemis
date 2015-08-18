@@ -28,6 +28,7 @@ of microscope images.
 """
 
 from __future__ import division
+import platform
 
 from concurrent import futures
 from concurrent.futures._base import CancelledError
@@ -269,13 +270,21 @@ class SnapshotController(object):
 
     @staticmethod
     def get_display_outputs():
+        """ Detect and return output displays
+
+        This method returns an empty list on MS Windows
+
+        :return: (set of strings): names of outputs used
+
         """
-        returns (set of strings): names of outputs used
-        """
-        xrandr_out = subprocess.check_output("xrandr")
-        # only pick the "connected" outputs
-        ret = re.findall("^(\\w+) connected ", xrandr_out, re.MULTILINE)
-        return ret
+
+        if not os.name == 'nt':
+            xrandr_out = subprocess.check_output("xrandr")
+            # only pick the "connected" outputs
+            ret = re.findall("^(\\w+) connected ", xrandr_out, re.MULTILINE)
+            return ret
+        else:
+            return []
 
     @staticmethod
     def set_output_brightness(outputs, brightness):
