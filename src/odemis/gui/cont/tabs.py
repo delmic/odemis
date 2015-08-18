@@ -2018,7 +2018,7 @@ class MirrorAlignTab(Tab):
         # a file for each supported sensor size.
         pxs = ccd.pixelSize.value
         ccd_res = ccd.shape[0:2]
-        ccd_sz = tuple(int(p * l * 1e6) for p, l in zip(pxs, ccd_res))
+        ccd_sz = tuple(int(round(p * l * 1e6)) for p, l in zip(pxs, ccd_res))
         try:
             goal_rs = pkg_resources.resource_stream("odemis.gui.img",
                                                     "calibration/ma_goal_5_13_sensor_%d_%d.png" % ccd_sz)
