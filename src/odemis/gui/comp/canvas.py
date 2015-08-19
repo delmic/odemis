@@ -214,9 +214,8 @@ class BufferedCanvas(wx.Panel):
         self._bmp_buffer_size = (1, 1)
 
         if os.name == "nt":
-            # Avoids flickering on windows, but prevents black background on
-            # Linux...
-            # TODO: to check, the documentation says the opposite
+            # Avoids flickering on windows, but prevents black background on Linux...
+            # Confirmed: If this statement is not present, there is flickering on MS Windows
             self.SetBackgroundStyle(wx.BG_STYLE_CUSTOM)
 
         # Initialize the buffer
@@ -461,6 +460,7 @@ class BufferedCanvas(wx.Panel):
         """
 
         dc_view = wx.PaintDC(self)
+
         # Blit the appropriate area from the buffer to the view port
         dc_view.BlitPointSize(
             (0, 0),             # destination point
@@ -468,6 +468,7 @@ class BufferedCanvas(wx.Panel):
             self._dc_buffer,    # source
             (0, 0)              # source point
         )
+
         ctx = wxcairo.ContextFromDC(dc_view)
         self._draw_view_overlays(ctx)
 
@@ -520,6 +521,9 @@ class BufferedCanvas(wx.Panel):
         self._bmp_buffer = wx.EmptyBitmap(*size)
         self._bmp_buffer_size = size
 
+        # Create a new DC, needed on Windows
+        if os.name == "nt":
+            self._dc_buffer = wx.MemoryDC()
         # Select the bitmap into the device context
         self._dc_buffer.SelectObject(self._bmp_buffer)
         # On Linux necessary after every 'SelectObject'
@@ -598,21 +602,6 @@ class BufferedCanvas(wx.Panel):
             ctx.save()
             vo.draw(ctx)
             ctx.restore()
-
-    # TODO: Remove if this turns out to be deprecated
-    # def _draw_world_overlays(self, ctx):
-    #     """ Draw all the world overlays
-    #
-    #     ctx (cairo context): the buffer context on which to draw
-    #
-    #     """
-    #
-    #     for wo in self.world_overlays:
-    #         ctx.save()
-    #         wo.draw(ctx, self.w_buffer_center, self.scale)
-    #         ctx.restore()
-
-    # ########### Position conversion ############
 
     @classmethod
     def world_to_buffer_pos(cls, w_pos, w_buff_center, scale, offset=(0, 0)):
@@ -777,6 +766,7 @@ class BufferedCanvas(wx.Panel):
         del dc
 
         return wx.ImageFromBitmap(bitmap)
+
 
 class BitmapCanvas(BufferedCanvas):
     """
