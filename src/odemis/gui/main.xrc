@@ -172,7 +172,7 @@
                   <style>normal</style>
                   <weight>normal</weight>
                   <underlined>0</underlined>
-                  <encoding>UTF-8</encoding>
+
                 </font>
                 <style>wxALIGN_CENTRE</style>
                 <XRCED>
@@ -196,7 +196,7 @@
                   <style>normal</style>
                   <weight>normal</weight>
                   <underlined>0</underlined>
-                  <encoding>UTF-8</encoding>
+
                 </font>
                 <style>wxALIGN_CENTRE</style>
                 <XRCED>
@@ -220,7 +220,7 @@
                   <style>normal</style>
                   <weight>normal</weight>
                   <underlined>0</underlined>
-                  <encoding>UTF-8</encoding>
+
                 </font>
                 <style>wxALIGN_CENTRE</style>
                 <XRCED>
@@ -249,7 +249,7 @@
                   <style>normal</style>
                   <weight>normal</weight>
                   <underlined>0</underlined>
-                  <encoding>UTF-8</encoding>
+
                 </font>
                 <style>wxALIGN_CENTRE</style>
                 <XRCED>
@@ -273,7 +273,7 @@
                   <style>normal</style>
                   <weight>normal</weight>
                   <underlined>0</underlined>
-                  <encoding>UTF-8</encoding>
+
                 </font>
                 <style>wxALIGN_CENTRE</style>
                 <XRCED>
@@ -585,7 +585,7 @@
                                   <style>normal</style>
                                   <weight>normal</weight>
                                   <underlined>0</underlined>
-                                  <encoding>UTF-8</encoding>
+
                                 </font>
                                 <style>wxALIGN_RIGHT</style>
                                 <XRCED>
@@ -612,7 +612,7 @@
                                   <style>normal</style>
                                   <weight>normal</weight>
                                   <underlined>0</underlined>
-                                  <encoding>UTF-8</encoding>
+
                                 </font>
                                 <style>wxALIGN_RIGHT</style>
                                 <XRCED>
@@ -636,7 +636,7 @@
                                   <style>normal</style>
                                   <weight>normal</weight>
                                   <underlined>0</underlined>
-                                  <encoding>UTF-8</encoding>
+
                                 </font>
                                 <style>wxALIGN_RIGHT</style>
                                 <XRCED>
@@ -851,7 +851,7 @@
                               <style>normal</style>
                               <weight>normal</weight>
                               <underlined>0</underlined>
-                              <encoding>UTF-8</encoding>
+
                             </font>
                             <enabled>0</enabled>
                             <style>wxALIGN_CENTRE</style>
@@ -929,7 +929,7 @@
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <encoding>UTF-8</encoding>
+
                             </font>
                           </object>
                           <cellpos>0,0</cellpos>
@@ -943,7 +943,7 @@
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <encoding>UTF-8</encoding>
+
                             </font>
                           </object>
                           <cellpos>0,3</cellpos>
@@ -957,7 +957,7 @@
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <encoding>UTF-8</encoding>
+
                             </font>
                           </object>
                           <flag>wxALIGN_RIGHT</flag>
@@ -972,7 +972,7 @@
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <encoding>UTF-8</encoding>
+
                             </font>
                           </object>
                           <cellpos>3,3</cellpos>
@@ -989,7 +989,7 @@
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <encoding>UTF-8</encoding>
+
                             </font>
                             <style>wxALIGN_CENTRE</style>
                             <XRCED>
@@ -1012,7 +1012,7 @@
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <encoding>UTF-8</encoding>
+
                             </font>
                             <style>wxALIGN_CENTRE</style>
                             <XRCED>
@@ -1035,7 +1035,7 @@
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <encoding>UTF-8</encoding>
+
                             </font>
                             <style>wxALIGN_CENTRE</style>
                             <XRCED>
@@ -1058,7 +1058,7 @@
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <encoding>UTF-8</encoding>
+
                             </font>
                             <style>wxALIGN_CENTRE</style>
                             <XRCED>
@@ -1093,7 +1093,7 @@
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <encoding>UTF-8</encoding>
+
                             </font>
                           </object>
                           <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
@@ -1109,7 +1109,7 @@
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <encoding>UTF-8</encoding>
+
                             </font>
                           </object>
                           <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
@@ -1125,7 +1125,7 @@
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <encoding>UTF-8</encoding>
+
                             </font>
                             <style>wxALIGN_LEFT</style>
                           </object>
@@ -1142,7 +1142,7 @@
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <encoding>UTF-8</encoding>
+
                             </font>
                           </object>
                           <flag>wxRIGHT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
@@ -1161,7 +1161,7 @@
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <encoding>UTF-8</encoding>
+
                             </font>
                             <style>wxALIGN_CENTRE</style>
                             <XRCED>
@@ -1184,7 +1184,7 @@
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <encoding>UTF-8</encoding>
+
                             </font>
                             <style>wxALIGN_CENTRE</style>
                             <XRCED>
@@ -1207,7 +1207,7 @@
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <encoding>UTF-8</encoding>
+
                             </font>
                             <style>wxALIGN_CENTRE</style>
                             <XRCED>
@@ -1228,7 +1228,7 @@
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <encoding>UTF-8</encoding>
+
                             </font>
                             <style>wxALIGN_CENTRE</style>
                             <XRCED>
@@ -1465,7 +1465,7 @@
                               <style>normal</style>
                               <weight>normal</weight>
                               <underlined>0</underlined>
-                              <encoding>UTF-8</encoding>
+
                             </font>
                             <style>wxALIGN_RIGHT</style>
                             <XRCED>
@@ -1489,7 +1489,7 @@
                               <style>normal</style>
                               <weight>normal</weight>
                               <underlined>0</underlined>
-                              <encoding>UTF-8</encoding>
+
                             </font>
                             <style>wxALIGN_RIGHT</style>
                             <XRCED>
@@ -1669,7 +1669,7 @@
                               <style>normal</style>
                               <weight>normal</weight>
                               <underlined>0</underlined>
-                              <encoding>UTF-8</encoding>
+
                             </font>
                             <style>wxALIGN_CENTRE</style>
                             <XRCED>
@@ -1692,7 +1692,7 @@
                               <style>normal</style>
                               <weight>normal</weight>
                               <underlined>0</underlined>
-                              <encoding>UTF-8</encoding>
+
                             </font>
                             <style>wxALIGN_CENTRE</style>
                             <XRCED>
@@ -1715,7 +1715,7 @@
                               <style>normal</style>
                               <weight>normal</weight>
                               <underlined>0</underlined>
-                              <encoding>UTF-8</encoding>
+
                             </font>
                             <style>wxALIGN_CENTRE</style>
                             <XRCED>
@@ -1747,7 +1747,7 @@
                               <style>normal</style>
                               <weight>normal</weight>
                               <underlined>0</underlined>
-                              <encoding>UTF-8</encoding>
+
                             </font>
                           </object>
                           <flag>wxALL</flag>
@@ -1814,7 +1814,7 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <encoding>UTF-8</encoding>
+
                                 </font>
                               </object>
                               <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
@@ -1830,7 +1830,7 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <encoding>UTF-8</encoding>
+
                                 </font>
                               </object>
                               <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
@@ -1846,7 +1846,7 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <encoding>UTF-8</encoding>
+
                                 </font>
                                 <style>wxALIGN_LEFT</style>
                               </object>
@@ -1863,7 +1863,7 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <encoding>UTF-8</encoding>
+
                                 </font>
                               </object>
                               <flag>wxRIGHT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
@@ -1882,7 +1882,7 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <encoding>UTF-8</encoding>
+
                                 </font>
                                 <style>wxALIGN_CENTRE</style>
                                 <XRCED>
@@ -1905,7 +1905,7 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <encoding>UTF-8</encoding>
+
                                 </font>
                                 <style>wxALIGN_CENTRE</style>
                                 <XRCED>
@@ -1928,7 +1928,7 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <encoding>UTF-8</encoding>
+
                                 </font>
                                 <style>wxALIGN_CENTRE</style>
                                 <XRCED>
@@ -1949,7 +1949,7 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <encoding>UTF-8</encoding>
+
                                 </font>
                                 <style>wxALIGN_CENTRE</style>
                                 <XRCED>
@@ -1988,7 +1988,7 @@
                               <style>normal</style>
                               <weight>normal</weight>
                               <underlined>0</underlined>
-                              <encoding>UTF-8</encoding>
+
                             </font>
                           </object>
                           <flag>wxBOTTOM|wxALL</flag>
@@ -2029,7 +2029,7 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <encoding>UTF-8</encoding>
+
                                 </font>
                               </object>
                               <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
@@ -2045,7 +2045,7 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <encoding>UTF-8</encoding>
+
                                 </font>
                               </object>
                               <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
@@ -2061,7 +2061,7 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <encoding>UTF-8</encoding>
+
                                 </font>
                                 <style>wxALIGN_LEFT</style>
                               </object>
@@ -2078,7 +2078,7 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <encoding>UTF-8</encoding>
+
                                 </font>
                               </object>
                               <flag>wxRIGHT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
@@ -2097,7 +2097,7 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <encoding>UTF-8</encoding>
+
                                 </font>
                                 <style>wxALIGN_CENTRE</style>
                                 <XRCED>
@@ -2120,7 +2120,7 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <encoding>UTF-8</encoding>
+
                                 </font>
                                 <style>wxALIGN_CENTRE</style>
                                 <XRCED>
@@ -2143,7 +2143,7 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <encoding>UTF-8</encoding>
+
                                 </font>
                                 <style>wxALIGN_CENTRE</style>
                                 <XRCED>
@@ -2164,7 +2164,7 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <encoding>UTF-8</encoding>
+
                                 </font>
                                 <style>wxALIGN_CENTRE</style>
                                 <XRCED>
@@ -2204,7 +2204,7 @@
                               <style>normal</style>
                               <weight>normal</weight>
                               <underlined>0</underlined>
-                              <encoding>UTF-8</encoding>
+
                             </font>
                           </object>
                           <flag>wxBOTTOM|wxALL</flag>
@@ -2245,7 +2245,7 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <encoding>UTF-8</encoding>
+
                                 </font>
                               </object>
                               <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
@@ -2261,7 +2261,7 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <encoding>UTF-8</encoding>
+
                                 </font>
                               </object>
                               <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
@@ -2277,7 +2277,7 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <encoding>UTF-8</encoding>
+
                                 </font>
                                 <style>wxALIGN_LEFT</style>
                               </object>
@@ -2294,7 +2294,7 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <encoding>UTF-8</encoding>
+
                                 </font>
                               </object>
                               <flag>wxRIGHT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
@@ -2313,7 +2313,7 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <encoding>UTF-8</encoding>
+
                                 </font>
                                 <style>wxALIGN_CENTRE</style>
                                 <XRCED>
@@ -2336,7 +2336,7 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <encoding>UTF-8</encoding>
+
                                 </font>
                                 <style>wxALIGN_CENTRE</style>
                                 <XRCED>
@@ -2359,7 +2359,7 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <encoding>UTF-8</encoding>
+
                                 </font>
                                 <style>wxALIGN_CENTRE</style>
                                 <XRCED>
@@ -2380,7 +2380,7 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <encoding>UTF-8</encoding>
+
                                 </font>
                                 <style>wxALIGN_CENTRE</style>
                                 <XRCED>
@@ -2829,7 +2829,7 @@
                                             <style>normal</style>
                                             <weight>normal</weight>
                                             <underlined>0</underlined>
-                                            <encoding>UTF-8</encoding>
+
                                           </font>
                                           <tooltip>Choose a filename and destination of the next scan</tooltip>
                                           <XRCED>
@@ -2879,7 +2879,7 @@
                                     <style>normal</style>
                                     <weight>normal</weight>
                                     <underlined>0</underlined>
-                                    <encoding>UTF-8</encoding>
+
                                   </font>
                                   <style>wxALIGN_RIGHT</style>
                                   <XRCED>
@@ -2919,7 +2919,7 @@
                                         <style>normal</style>
                                         <weight>normal</weight>
                                         <underlined>0</underlined>
-                                        <encoding>UTF-8</encoding>
+
                                       </font>
                                       <hidden>1</hidden>
                                       <style>wxALIGN_CENTRE</style>
@@ -2954,7 +2954,7 @@
                               <style>normal</style>
                               <weight>normal</weight>
                               <underlined>0</underlined>
-                              <encoding>UTF-8</encoding>
+
                             </font>
                             <enabled>0</enabled>
                             <style>wxALIGN_CENTRE</style>
@@ -3005,7 +3005,7 @@
                         <style>normal</style>
                         <weight>normal</weight>
                         <underlined>0</underlined>
-                        <encoding>UTF-8</encoding>
+
                       </font>
                       <style>wxALIGN_CENTRE</style>
                       <XRCED>
@@ -3353,7 +3353,7 @@
                   <weight>normal</weight>
                   <underlined>0</underlined>
                   <face>Monospace</face>
-                  <encoding>UTF-8</encoding>
+
                 </font>
                 <style>wxBORDER_NONE|wxTE_MULTILINE</style>
                 <XRCED>
@@ -3384,7 +3384,7 @@
       <style>normal</style>
       <weight>normal</weight>
       <underlined>0</underlined>
-      <encoding>UTF-8</encoding>
+
     </font>
   </object>
   <object class="wxDialog" name="fr_acq">
@@ -3605,7 +3605,7 @@
                   <style>normal</style>
                   <weight>normal</weight>
                   <underlined>0</underlined>
-                  <encoding>UTF-8</encoding>
+
                 </font>
                 <style>wxALIGN_RIGHT</style>
                 <XRCED>
@@ -3637,7 +3637,7 @@
                   <style>normal</style>
                   <weight>normal</weight>
                   <underlined>0</underlined>
-                  <encoding>UTF-8</encoding>
+
                 </font>
                 <style>wxALIGN_CENTRE</style>
                 <XRCED>
@@ -3663,7 +3663,7 @@
                   <style>normal</style>
                   <weight>normal</weight>
                   <underlined>0</underlined>
-                  <encoding>UTF-8</encoding>
+
                 </font>
                 <style>wxALIGN_CENTRE</style>
                 <XRCED>
@@ -3686,7 +3686,7 @@
       <style>normal</style>
       <weight>normal</weight>
       <underlined>0</underlined>
-      <encoding>UTF-8</encoding>
+
     </font>
     <style>wxDEFAULT_DIALOG_STYLE|wxRESIZE_BORDER</style>
   </object>
