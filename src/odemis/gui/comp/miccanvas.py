@@ -1323,6 +1323,7 @@ class TwoDPlotCanvas(BitmapCanvas):
 
         if self.IsEnabled():
             im_data = self.images[0]
+            ctx = wxcairo.ContextFromDC(self._dc_buffer)
 
             if im_data is not None:
                 im_format = cairo.FORMAT_RGB24
@@ -1341,19 +1342,19 @@ class TwoDPlotCanvas(BitmapCanvas):
                 surfpat.set_filter(cairo.FILTER_FAST)
 
                 # Save and restore the transformation matrix, to prevent scale accumulation
-                self.ctx.save()
+                ctx.save()
 
                 # Scale the width and height separately in such a way that the image data fill the
                 # entire canvas
-                self.ctx.scale(self.ClientSize.x / width, self.ClientSize.y / height)
-                self.ctx.set_source(surfpat)
-                self.ctx.paint()
+                ctx.scale(self.ClientSize.x / width, self.ClientSize.y / height)
+                ctx.set_source(surfpat)
+                ctx.paint()
 
-                self.ctx.restore()
+                ctx.restore()
             else:
                 # The background only needs to be drawn when there is no image data, since the image
                 # data will always fill the entire view.
-                self._draw_background(self.ctx)
+                self._draw_background(ctx)
 
     def update_drawing(self):
         """ Update the drawing and thumbnail """

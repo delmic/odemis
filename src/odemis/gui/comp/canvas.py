@@ -206,8 +206,6 @@ class BufferedCanvas(wx.Panel):
 
         # Memory buffer device context
         self._dc_buffer = wx.MemoryDC()
-        # The Cairo context derived from the DC buffer
-        self.ctx = None
         # Center of the buffer in world coordinates
         self.w_buffer_center = (0, 0)
         # wx.Bitmap that will always contain the image to be displayed
@@ -526,7 +524,6 @@ class BufferedCanvas(wx.Panel):
         self._dc_buffer.SelectObject(self._bmp_buffer)
         # On Linux necessary after every 'SelectObject'
         self._dc_buffer.SetBackground(wx.Brush(self.BackgroundColour, wx.BRUSHSTYLE_SOLID))
-        self.ctx = wxcairo.ContextFromDC(self._dc_buffer)
 
     def request_drawing_update(self, delay=0.1):
         """ Schedule an update of the buffer if the timer is not already running
@@ -752,7 +749,8 @@ class BufferedCanvas(wx.Panel):
     @call_in_wx_main
     def clear(self):
         """ Clear the canvas by redrawing the background """
-        self._draw_background(self.ctx)
+        ctx = wxcairo.ContextFromDC(self._dc_buffer)
+        self._draw_background(ctx)
 
     def _get_img_from_buffer(self):
         """
@@ -872,19 +870,21 @@ class BitmapCanvas(BufferedCanvas):
         if not self.IsEnabled():
             return
 
-        self._draw_background(self.ctx)
-        self.ctx.identity_matrix()  # Reset the transformation matrix
+        ctx = wxcairo.ContextFromDC(self._dc_buffer)
 
-        self._draw_merged_images(self.ctx)
-        self.ctx.identity_matrix()  # Reset the transformation matrix
+        self._draw_background(ctx)
+        ctx.identity_matrix()  # Reset the transformation matrix
+
+        self._draw_merged_images(ctx)
+        ctx.identity_matrix()  # Reset the transformation matrix
 
         # Remember that the device context being passed belongs to the *buffer* and the view
         # overlays are drawn in the `on_paint` method where the buffer is blitted to the device
         # context.
         for o in self.world_overlays:
-            self.ctx.save()
-            o.draw(self.ctx, self.w_buffer_center, self.scale)
-            self.ctx.restore()
+            ctx.save()
+            o.draw(ctx, self.w_buffer_center, self.scale)
+            ctx.restore()
 
     def _draw_merged_images(self, ctx):
         """ Draw the images on the DC buffer, centred around their _dc_center, with their own
@@ -1999,14 +1999,16 @@ class PlotCanvas(BufferedCanvas):
             #
             # self._locked = True
 
-            self._draw_background(self.ctx)
+            ctx = wxcairo.ContextFromDC(self._dc_buffer)
+            self._draw_background(ctx)
 
             if self._data:
                 data = self._data
                 # TODO: reuse data_prop if the data has not changed
                 data_width, range_x, data_height, range_y = self._calc_data_characteristics(data)
                 self.data_prop = (data_width, range_x, data_height, range_y)
-                self._plot_data(self.ctx, data, data_width, range_x, data_height, range_y)
+                ctx = wxcairo.ContextFromDC(self._dc_buffer)
+                self._plot_data(ctx, data, data_width, range_x, data_height, range_y)
 
             # self._locked = False
 
