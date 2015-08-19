@@ -203,22 +203,81 @@ class MainWindow(wx.Frame):
 
 #=============================================================================
 
-fs = []
+try:
+    import wx.lib.wxcairo as wxcairo
+    import cairo
+    import odemis.gui.img.data as imgdata
+    haveCairo = True
+except ImportError:
+    haveCairo = False
 
-for i in range(4):
-    def grr():
-        def t():
-            res = "%s %s" % (id(t), t.x)
-            t.x += 1
-            return res
-        t.x = i
-        return t
-    fs.append(grr())
 
-    # def t():
-    #     t.x = i + 0
-    #     return "%s %s %s" % (id(t), t.x, id(t.x))
-    # fs.append(t)
+class MyFrame(wx.Frame):
+    def __init__(self, parent, title):
+        wx.Frame.__init__(self, parent, title=title, size=(640,480))
+        self.canvas = CairoPanel(self)
+        self.Show()
 
-print [f() for f in fs]
-print [f() for f in fs]
+
+class CairoPanel(wx.Panel):
+    def __init__(self, parent):
+        wx.Panel.__init__(self, parent, style=wx.BORDER_SIMPLE)
+        self.Bind(wx.EVT_PAINT, self.OnPaint)
+        self.text = 'Hello World!'
+        self.imgdata = imgdata.getcanvasbgBitmap()
+        self.offset = 5
+
+    def OnPaint(self, evt):
+        #Here we do some magic WX stuff.
+        dcp = wx.PaintDC(self)
+        width, height = self.GetClientSize()
+
+        dcb = wx.MemoryDC()
+        buff = wx.EmptyBitmap(2 * width, 2 * height)
+        dcb.SelectObject(buff)
+
+        cr = wx.lib.wxcairo.ContextFromDC(dcb)
+
+        surface = wxcairo.ImageSurfaceFromBitmap(self.imgdata)
+        surface.set_device_offset(self.offset, self.offset)
+
+        pattern = cairo.SurfacePattern(surface)
+        pattern.set_extend(cairo.EXTEND_REPEAT)
+        cr.set_source(pattern)
+
+        cr.rectangle(0, 0, width, height)
+        cr.fill()
+
+        #Here's actual Cairo drawing
+        size = min(width, height)
+        cr.scale(size, size)
+        cr.set_source_rgb(1, 0, 0) #black
+        # cr.rectangle(0, 0, width, height)
+        # cr.fill()
+
+        cr.set_source_rgb(1, 1, 1) #white
+        cr.set_line_width(0.04)
+        cr.select_font_face("Sans", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
+        cr.set_font_size(0.07)
+        cr.move_to(0.5, 0.5)
+        cr.show_text(self.text)
+        cr.stroke()
+
+        dcp.BlitPointSize(
+            (0, 0),             # destination point
+            self.ClientSize,    # size of area to copy
+            dcb,                # source
+            (0, 0)              # source point
+        )
+
+    #Change what text is shown
+    def SetText(self, text):
+        self.text = text
+        self.Refresh()
+
+if haveCairo:
+    app = wx.App(False)
+    theFrame = MyFrame(None, 'Barebones Cairo Example')
+    app.MainLoop()
+else:
+    print "Error! PyCairo or a related dependency was not found"
