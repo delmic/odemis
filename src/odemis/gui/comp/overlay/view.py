@@ -190,7 +190,8 @@ class FocusOverlay(base.ViewOverlay):
 
         self.margin = 10
         self.line_width = 16
-        self.shifts = [0, 0]
+        self.shifts = [0, 0]  # m
+        self.ppm = (5e6, 5e6)  # px/m, conversion ratio m -> px
 
         self.focus_label = self.add_label("", align=wx.ALIGN_RIGHT | wx.ALIGN_CENTER_VERTICAL)
 
@@ -208,7 +209,7 @@ class FocusOverlay(base.ViewOverlay):
             y -= self.margin + (self.line_width // 2)
             middle = x / 2
 
-            shift = self.shifts[0] * 1e6  # typically within µm
+            shift = self.shifts[0] * self.ppm[0]
             end_x = middle + (middle * (shift / (x / 2)))
             end_x = min(max(self.margin, end_x), x - self.margin)
 
@@ -226,7 +227,7 @@ class FocusOverlay(base.ViewOverlay):
             x -= self.margin + (self.line_width // 2)
             middle = y / 2
 
-            shift = self.shifts[1] * 1e6  # typically within µm
+            shift = self.shifts[1] * self.ppm[1]
             end_y = middle - (middle * (shift / (y / 2)))
             end_y = min(max(self.margin, end_y), y - self.margin)
 

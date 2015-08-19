@@ -264,9 +264,8 @@ class MenuController(object):
         static = isinstance(curr_s, stream.StaticStream)
         self._main_frame.menu_item_play_stream.Check(updated and not static)
 
-        # enable only if focuser is available, and no autofocus happening
-        d, e, f = align.get_focus_hw(self._main_data, curr_s)
-        f_enable = all((updated, d, f))
+        # enable only if focuser is available
+        f_enable = (updated and curr_s.focuser is not None)
         self._main_frame.menu_item_auto_focus.Enable(f_enable)
 
     @call_in_wx_main

@@ -142,9 +142,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.microscope_view = microscope_view
         self._tab_data_model = tab_data
 
-        if self.microscope_view.focus is not None:
-            self._focus_overlay = self.add_view_overlay(view_overlay.FocusOverlay(self))
-
         self.microscope_view.mpp.subscribe(self._on_view_mpp, init=True)
         self.microscope_view.view_pos.subscribe(self._onViewPos)
         # Update new position immediately, so that fit_to_content() directly
@@ -648,23 +645,17 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         axis (int>0): the axis modified
             0 => X
             1 => Y
-        shift (int): relative amount of pixel moved
+        shift (float): relative amount of "virtual pixels" moved
             >0: toward up/right
+            Note: "virtual pixel" is expected to already be converted based on the
+            mouse movement and key context. So it can be different from the
+            actual number of pixels that were moved by the mouse.
         """
+        if axis == 1:
+            phy_shift = self.microscope_view.moveFocusRel(shift)
+            self._focus_overlay.add_shift(phy_shift, axis)
 
-        if axis == 1 and self.microscope_view.focus is not None:
-            # conversion: 1 unit => 5 nm (so a whole screen, ~44000u, is a
-            # less than a mm)
-            # TODO: this should be adjusted by the lens NA or magnification:
-            # the higher the magnification, the smaller is the change
-            # (=> proportional ?)
-            # negative == go up == closer from the sample
-            val = 5e-9 * shift  # m
-            assert(abs(val) < 0.01) # a move of 1 cm is a clear sign of bug
-            # logging.error("%s, %s", axis, shift)
-            self.microscope_view.moveFocusRel(val)
-            self._focus_overlay.add_shift(val, axis)
-
+    @microscope_view_check
     def on_right_down(self, event):
         """ Process right mouse button down event
 
@@ -673,12 +664,14 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         """
         if CAN_FOCUS in self.abilities and not self.dragging:
+            # Create the overlay, on the first time it is needed
+            if not self._focus_overlay:
+                self._focus_overlay = self.add_view_overlay(view_overlay.FocusOverlay(self))
             # Note: Set the cursor before the super method is called.
             # There is a Ubuntu/wxPython related bug that SetCursor does not work once CaptureMouse
             # is called (which happens in the super method).
-            if self.microscope_view and self.microscope_view.focus is not None:
-                self.set_dynamic_cursor(wx.CURSOR_SIZENS)
-                self._focus_overlay.clear_shift()
+            self.set_dynamic_cursor(wx.CURSOR_SIZENS)
+            self._focus_overlay.clear_shift()
 
         super(DblMicroscopeCanvas, self).on_right_down(event)
 
@@ -721,7 +714,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             else:
                 softener = 1
 
-            linear_zone = 32.0
+            linear_zone = 32  # px
             # We only care of the vertical position for the focus
             pos = evt.GetPositionTuple()
             # Flip the sign for vertical movement, as indicated in the

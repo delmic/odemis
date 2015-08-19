@@ -652,11 +652,10 @@ class StreamView(View):
     other objects can update it.
     """
 
-    def __init__(self, name, stage=None, focus=None, stream_classes=None):
+    def __init__(self, name, stage=None, stream_classes=None):
         """
         :param name (string): user-friendly name of the view
         :param stage (Actuator): actuator with two axes: x and y
-        :param focus (Actuator): actuator with one axis: z. Can be None
         :param stream_classes (None, or tuple of classes): all subclasses that the
           streams in this view is allowed to show.
         """
@@ -669,16 +668,9 @@ class StreamView(View):
             self.stream_classes = stream_classes
         self._stage = stage
 
-        # TODO: allow to have multiple focus, one per stream class
-        self.focus = focus
-        if focus is not None:
-            self._focus_queue = Queue.Queue()
-            self._focus_thread = threading.Thread(target=self._moveFocus,
-                                                  name="Focus mover view %s" % name)
-            # TODO: way to detect the view is not used and so we need to stop the thread?
-            # (cf __del__?)
-            self._focus_thread.daemon = True
-            self._focus_thread.start()
+        # Will be created on the first time it's needed
+        self._focus_thread = None
+        self._focus_queue = Queue.Queue()  # contains tuples of (focuser, relative distance)
 
         # The real stage position, to be modified via moveStageToView()
         # it's a direct access from the stage, so looks like a dict of axes
@@ -722,16 +714,16 @@ class StreamView(View):
 
     def _moveFocus(self):
         time_last_move = 0
-        axis = self.focus.axes["z"]
-        try:
-            rng = axis.range
-        except AttributeError:
-            rng = None
         try:
             while True:
                 # wait until there is something to do
-                shift = self._focus_queue.get()
-                pos = self.focus.position.value["z"]
+                focuser, shift = self._focus_queue.get()
+                pos = focuser.position.value["z"]
+                axis = focuser.axes["z"]
+                try:
+                    rng = axis.range
+                except AttributeError:
+                    rng = None
 
                 # rate limit to 20 Hz
                 sleept = time_last_move + 0.05 - time.time()
@@ -740,11 +732,16 @@ class StreamView(View):
 
                 # Add more moves if there are already more
                 try:
-                    while True:
-                        shift += self._focus_queue.get(block=False)
+                    nf = focuser
+                    while nf is focuser:
+                        nf, ns = self._focus_queue.get(block=False)
+                        shift += ns
+                        if nf is not focuser:
+                            # Oops, got a bit too fast, and read message for another focuser => put it back
+                            self._focus_queue.put((nf, ns))
                 except Queue.Empty:
                     pass
-                logging.debug("Moving focus by %f μm", shift * 1e6)
+                logging.debug("Moving focus '%s' by %f μm", focuser.name, shift * 1e6)
 
                 # clip to the range
                 if rng:
@@ -756,7 +753,7 @@ class StreamView(View):
                         logging.info("Restricting focus move to %f µm as it reached the end",
                                      shift * 1e6)
 
-                f = self.focus.moveRel({"z": shift})
+                f = focuser.moveRel({"z": shift})
                 time_last_move = time.time()
                 # wait until it's finished so that we don't accumulate requests,
                 # but instead only do requests of size "big enough"
@@ -768,8 +765,46 @@ class StreamView(View):
             logging.exception("Focus mover thread failed")
 
     def moveFocusRel(self, shift):
+        """
+        shift (float): position change in "virtual pixels".
+            >0: toward up/right
+            Note: "virtual pixel" represents the number of pixels, taking into
+            account mouse movement and key context. So it can be different from
+            the actual number of pixels that were moved by the mouse.
+        return (float): actual distance moved by the focus in meter
+        """
         # FIXME: "stop all axes" should also clear the queue
-        self._focus_queue.put(shift)
+
+        # TODO: optimise by only updating focuser when the stream tree changes
+        for s in self.getStreams():
+            if s.should_update.value:
+                focuser = s.focuser
+                break
+        else:
+            logging.info("Trying to change focus while no stream is playing")
+            return 0
+
+        # Create the focus thread if it's not yet existing
+        if self._focus_thread is None:
+            self._focus_thread = threading.Thread(target=self._moveFocus,
+                                      name="Focus mover view %s" % self.name.value)
+            # TODO: way to detect the view is not used and so we need to stop the thread?
+            # (cf __del__?)
+            self._focus_thread.daemon = True
+            self._focus_thread.start()
+
+        # positive == opt lens goes up == closer from the sample
+
+        # TODO: based on the focus actuator/current stream, pick a good conversion ratio
+        # (=> find the depth of field)
+        # k is a magical constant that allows to ensure a small move has a small
+        # effect, and a big move has a significant effect.
+        k = 5e-3  # 1/px
+        dof = 1e-6  # m, depth of field
+        val = dof * k * shift  # m
+        assert(abs(val) < 0.01)  # a move of 1 cm is a clear sign of bug
+        self._focus_queue.put((focuser, val))
+        return val
 
     def moveStageBy(self, shift):
         """
