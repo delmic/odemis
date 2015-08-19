@@ -114,7 +114,7 @@ TOOLS = {
         ),
     TOOL_LINE:
         ModeTool(
-            "btn_view_1dpick",  # TODO icon
+            "btn_view_1dpick",
             model.TOOL_LINE,
             model.TOOL_NONE,
             "Select line"
@@ -139,12 +139,12 @@ TOOLS = {
             "Zoom to fit content"
         ),
     TOOL_AUTO_FOCUS:
-       ModeTool(
-           "btn_view_autofocus",
+        ModeTool(
+            "btn_view_autofocus",
             model.TOOL_AUTO_FOCUS_ON,
             model.TOOL_AUTO_FOCUS_OFF,
-           "Apply autofocus"
-       ),
+            "Apply autofocus"
+        ),
 }
 
 
