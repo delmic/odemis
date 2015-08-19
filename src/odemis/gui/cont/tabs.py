@@ -442,45 +442,16 @@ class SecomStreamsTab(Tab):
 
         return vpv
 
-    def _get_focus_hw(self, s):
-        """
-        Finds the hardware required to focus a given stream
-        s (Stream)
-        return:
-             (HwComponent) detector
-             (HwComponent) emitter
-             (HwComponent) focus
-        """
-        detector = None
-        emitter = None
-        focus = None
-        # Slightly different depending on the stream type, especially as the
-        # stream doesn't have information on the focus, we need to "guess"
-        if isinstance(s, acqstream.StaticStream):
-            pass
-        elif isinstance(s, acqstream.SEMStream):
-            detector = s.detector
-            emitter = s.emitter
-            focus = self.main_data.ebeam_focus
-        elif isinstance(s, acqstream.CameraStream):
-            detector = s.detector
-            focus = self.main_data.focus
-        # TODO: handle overview stream
-        else:
-            logging.info("Doesn't know how to focus stream %s", type(s).__name__)
-
-        return detector, emitter, focus
-
-    def _onAutofocus(self, state):
+    def _onAutofocus(self, active):
         # Determine which stream is active
-        if state == guimod.TOOL_AUTO_FOCUS_ON:
+        if active:
             try:
                 curr_s = self.tab_data_model.streams.value[0]
             except IndexError:
                 d, e, f = None, None, None
             else:
                 # enable only if focuser is available, and no autofocus happening
-                d, e, f = self._get_focus_hw(curr_s)
+                d, e, f = align.get_focus_hw(self.main_data, curr_s)
 
             if all((d, f)):
                 self._autofocus_f = AutoFocus(d, e, f)
@@ -488,14 +459,13 @@ class SecomStreamsTab(Tab):
             else:
                 # Should never happen as normally the menu/icon are disabled
                 logging.info("Autofocus cannot run as no hardware is available")
-                self.tab_data_model.autofocus_active.value = guimod.TOOL_AUTO_FOCUS_OFF
+                self.tab_data_model.autofocus_active.value = False
         else:
             if self._autofocus_f is not None:
                 self._autofocus_f.cancel()
 
-    @call_in_wx_main
     def _on_autofocus_done(self, future):
-        self.tab_data_model.autofocus_active.value = guimod.TOOL_AUTO_FOCUS_OFF
+        self.tab_data_model.autofocus_active.value = False
 
     def _on_current_stream(self, streams):
         """
@@ -515,15 +485,17 @@ class SecomStreamsTab(Tab):
     def _on_stream_update(self, updated):
         """
         Called when the current stream changes play/pause
-        Used to update the autofocus menu and button
+        Used to update the autofocus button
         """
+        # TODO: just let the menu controller also update toolbar (as it also
+        # does the same check for the menu entry)
         try:
             curr_s = self.tab_data_model.streams.value[0]
         except IndexError:
             d, e, f = None, None, None
         else:
             # enable only if focuser is available, and no autofocus happening
-            d, e, f = self._get_focus_hw(curr_s)
+            d, e, f = align.get_focus_hw(self.main_data, curr_s)
 
         f_enable = all((updated, d, f))
         if not f_enable:
