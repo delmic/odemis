@@ -439,7 +439,6 @@ def __init_resources():
                   <style>normal</style>
                   <weight>normal</weight>
                   <underlined>0</underlined>
-                  <face>Ubuntu</face>
                   <encoding>UTF-8</encoding>
                 </font>
                 <style>wxALIGN_CENTRE</style>
@@ -464,7 +463,6 @@ def __init_resources():
                   <style>normal</style>
                   <weight>normal</weight>
                   <underlined>0</underlined>
-                  <face>Ubuntu</face>
                   <encoding>UTF-8</encoding>
                 </font>
                 <style>wxALIGN_CENTRE</style>
@@ -489,7 +487,6 @@ def __init_resources():
                   <style>normal</style>
                   <weight>normal</weight>
                   <underlined>0</underlined>
-                  <face>Ubuntu</face>
                   <encoding>UTF-8</encoding>
                 </font>
                 <style>wxALIGN_CENTRE</style>
@@ -519,7 +516,6 @@ def __init_resources():
                   <style>normal</style>
                   <weight>normal</weight>
                   <underlined>0</underlined>
-                  <face>Ubuntu</face>
                   <encoding>UTF-8</encoding>
                 </font>
                 <style>wxALIGN_CENTRE</style>
@@ -544,7 +540,6 @@ def __init_resources():
                   <style>normal</style>
                   <weight>normal</weight>
                   <underlined>0</underlined>
-                  <face>Ubuntu</face>
                   <encoding>UTF-8</encoding>
                 </font>
                 <style>wxALIGN_CENTRE</style>
@@ -857,7 +852,6 @@ def __init_resources():
                                   <style>normal</style>
                                   <weight>normal</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                                 <style>wxALIGN_RIGHT</style>
@@ -885,7 +879,6 @@ def __init_resources():
                                   <style>normal</style>
                                   <weight>normal</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                                 <style>wxALIGN_RIGHT</style>
@@ -910,7 +903,6 @@ def __init_resources():
                                   <style>normal</style>
                                   <weight>normal</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                                 <style>wxALIGN_RIGHT</style>
@@ -1126,7 +1118,6 @@ def __init_resources():
                               <style>normal</style>
                               <weight>normal</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                             <enabled>0</enabled>
@@ -1205,7 +1196,6 @@ def __init_resources():
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                           </object>
@@ -1220,7 +1210,6 @@ def __init_resources():
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                           </object>
@@ -1235,7 +1224,6 @@ def __init_resources():
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                           </object>
@@ -1251,7 +1239,6 @@ def __init_resources():
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                           </object>
@@ -1269,7 +1256,6 @@ def __init_resources():
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                             <style>wxALIGN_CENTRE</style>
@@ -1293,7 +1279,6 @@ def __init_resources():
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                             <style>wxALIGN_CENTRE</style>
@@ -1317,7 +1302,6 @@ def __init_resources():
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                             <style>wxALIGN_CENTRE</style>
@@ -1341,7 +1325,6 @@ def __init_resources():
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                             <style>wxALIGN_CENTRE</style>
@@ -1377,7 +1360,6 @@ def __init_resources():
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                           </object>
@@ -1394,7 +1376,6 @@ def __init_resources():
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                           </object>
@@ -1411,7 +1392,6 @@ def __init_resources():
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                             <style>wxALIGN_LEFT</style>
@@ -1429,7 +1409,6 @@ def __init_resources():
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                           </object>
@@ -1449,7 +1428,6 @@ def __init_resources():
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                             <style>wxALIGN_CENTRE</style>
@@ -1473,7 +1451,6 @@ def __init_resources():
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                             <style>wxALIGN_CENTRE</style>
@@ -1497,7 +1474,6 @@ def __init_resources():
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                             <style>wxALIGN_CENTRE</style>
@@ -1519,7 +1495,6 @@ def __init_resources():
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                             <style>wxALIGN_CENTRE</style>
@@ -1757,7 +1732,6 @@ def __init_resources():
                               <style>normal</style>
                               <weight>normal</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                             <style>wxALIGN_RIGHT</style>
@@ -1782,7 +1756,6 @@ def __init_resources():
                               <style>normal</style>
                               <weight>normal</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                             <style>wxALIGN_RIGHT</style>
@@ -1963,7 +1936,6 @@ def __init_resources():
                               <style>normal</style>
                               <weight>normal</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                             <style>wxALIGN_CENTRE</style>
@@ -1987,7 +1959,6 @@ def __init_resources():
                               <style>normal</style>
                               <weight>normal</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                             <style>wxALIGN_CENTRE</style>
@@ -2011,7 +1982,6 @@ def __init_resources():
                               <style>normal</style>
                               <weight>normal</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                             <style>wxALIGN_CENTRE</style>
@@ -2044,7 +2014,6 @@ def __init_resources():
                               <style>normal</style>
                               <weight>normal</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                           </object>
@@ -2112,7 +2081,6 @@ def __init_resources():
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                               </object>
@@ -2129,7 +2097,6 @@ def __init_resources():
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                               </object>
@@ -2146,7 +2113,6 @@ def __init_resources():
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                                 <style>wxALIGN_LEFT</style>
@@ -2164,7 +2130,6 @@ def __init_resources():
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                               </object>
@@ -2184,7 +2149,6 @@ def __init_resources():
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                                 <style>wxALIGN_CENTRE</style>
@@ -2208,7 +2172,6 @@ def __init_resources():
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                                 <style>wxALIGN_CENTRE</style>
@@ -2232,7 +2195,6 @@ def __init_resources():
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                                 <style>wxALIGN_CENTRE</style>
@@ -2254,7 +2216,6 @@ def __init_resources():
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                                 <style>wxALIGN_CENTRE</style>
@@ -2294,7 +2255,6 @@ def __init_resources():
                               <style>normal</style>
                               <weight>normal</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                           </object>
@@ -2336,7 +2296,6 @@ def __init_resources():
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                               </object>
@@ -2353,7 +2312,6 @@ def __init_resources():
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                               </object>
@@ -2370,7 +2328,6 @@ def __init_resources():
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                                 <style>wxALIGN_LEFT</style>
@@ -2388,7 +2345,6 @@ def __init_resources():
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                               </object>
@@ -2408,7 +2364,6 @@ def __init_resources():
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                                 <style>wxALIGN_CENTRE</style>
@@ -2432,7 +2387,6 @@ def __init_resources():
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                                 <style>wxALIGN_CENTRE</style>
@@ -2456,7 +2410,6 @@ def __init_resources():
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                                 <style>wxALIGN_CENTRE</style>
@@ -2478,7 +2431,6 @@ def __init_resources():
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                                 <style>wxALIGN_CENTRE</style>
@@ -2519,7 +2471,6 @@ def __init_resources():
                               <style>normal</style>
                               <weight>normal</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                           </object>
@@ -2561,7 +2512,6 @@ def __init_resources():
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                               </object>
@@ -2578,7 +2528,6 @@ def __init_resources():
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                               </object>
@@ -2595,7 +2544,6 @@ def __init_resources():
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                                 <style>wxALIGN_LEFT</style>
@@ -2613,7 +2561,6 @@ def __init_resources():
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                               </object>
@@ -2633,7 +2580,6 @@ def __init_resources():
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                                 <style>wxALIGN_CENTRE</style>
@@ -2657,7 +2603,6 @@ def __init_resources():
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                                 <style>wxALIGN_CENTRE</style>
@@ -2681,7 +2626,6 @@ def __init_resources():
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                                 <style>wxALIGN_CENTRE</style>
@@ -2703,7 +2647,6 @@ def __init_resources():
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                                 <style>wxALIGN_CENTRE</style>
@@ -3153,7 +3096,6 @@ def __init_resources():
                                             <style>normal</style>
                                             <weight>normal</weight>
                                             <underlined>0</underlined>
-                                            <face>Ubuntu</face>
                                             <encoding>UTF-8</encoding>
                                           </font>
                                           <tooltip>Choose a filename and destination of the next scan</tooltip>
@@ -3204,7 +3146,6 @@ def __init_resources():
                                     <style>normal</style>
                                     <weight>normal</weight>
                                     <underlined>0</underlined>
-                                    <face>Ubuntu</face>
                                     <encoding>UTF-8</encoding>
                                   </font>
                                   <style>wxALIGN_RIGHT</style>
@@ -3245,7 +3186,6 @@ def __init_resources():
                                         <style>normal</style>
                                         <weight>normal</weight>
                                         <underlined>0</underlined>
-                                        <face>Ubuntu</face>
                                         <encoding>UTF-8</encoding>
                                       </font>
                                       <hidden>1</hidden>
@@ -3281,7 +3221,6 @@ def __init_resources():
                               <style>normal</style>
                               <weight>normal</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                             <enabled>0</enabled>
@@ -3333,7 +3272,6 @@ def __init_resources():
                         <style>normal</style>
                         <weight>normal</weight>
                         <underlined>0</underlined>
-                        <face>Ubuntu</face>
                         <encoding>UTF-8</encoding>
                       </font>
                       <style>wxALIGN_CENTRE</style>
@@ -3713,7 +3651,6 @@ def __init_resources():
       <style>normal</style>
       <weight>normal</weight>
       <underlined>0</underlined>
-      <face>Ubuntu</face>
       <encoding>UTF-8</encoding>
     </font>
   </object>
@@ -3935,7 +3872,6 @@ def __init_resources():
                   <style>normal</style>
                   <weight>normal</weight>
                   <underlined>0</underlined>
-                  <face>Ubuntu</face>
                   <encoding>UTF-8</encoding>
                 </font>
                 <style>wxALIGN_RIGHT</style>
@@ -3968,7 +3904,6 @@ def __init_resources():
                   <style>normal</style>
                   <weight>normal</weight>
                   <underlined>0</underlined>
-                  <face>Ubuntu</face>
                   <encoding>UTF-8</encoding>
                 </font>
                 <style>wxALIGN_CENTRE</style>
@@ -3995,7 +3930,6 @@ def __init_resources():
                   <style>normal</style>
                   <weight>normal</weight>
                   <underlined>0</underlined>
-                  <face>Ubuntu</face>
                   <encoding>UTF-8</encoding>
                 </font>
                 <style>wxALIGN_CENTRE</style>
@@ -4019,7 +3953,6 @@ def __init_resources():
       <style>normal</style>
       <weight>normal</weight>
       <underlined>0</underlined>
-      <face>Ubuntu</face>
       <encoding>UTF-8</encoding>
     </font>
     <style>wxDEFAULT_DIALOG_STYLE|wxRESIZE_BORDER</style>

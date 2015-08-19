@@ -172,7 +172,6 @@
                   <style>normal</style>
                   <weight>normal</weight>
                   <underlined>0</underlined>
-                  <face>Ubuntu</face>
                   <encoding>UTF-8</encoding>
                 </font>
                 <style>wxALIGN_CENTRE</style>
@@ -197,7 +196,6 @@
                   <style>normal</style>
                   <weight>normal</weight>
                   <underlined>0</underlined>
-                  <face>Ubuntu</face>
                   <encoding>UTF-8</encoding>
                 </font>
                 <style>wxALIGN_CENTRE</style>
@@ -222,7 +220,6 @@
                   <style>normal</style>
                   <weight>normal</weight>
                   <underlined>0</underlined>
-                  <face>Ubuntu</face>
                   <encoding>UTF-8</encoding>
                 </font>
                 <style>wxALIGN_CENTRE</style>
@@ -252,7 +249,6 @@
                   <style>normal</style>
                   <weight>normal</weight>
                   <underlined>0</underlined>
-                  <face>Ubuntu</face>
                   <encoding>UTF-8</encoding>
                 </font>
                 <style>wxALIGN_CENTRE</style>
@@ -277,7 +273,6 @@
                   <style>normal</style>
                   <weight>normal</weight>
                   <underlined>0</underlined>
-                  <face>Ubuntu</face>
                   <encoding>UTF-8</encoding>
                 </font>
                 <style>wxALIGN_CENTRE</style>
@@ -590,7 +585,6 @@
                                   <style>normal</style>
                                   <weight>normal</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                                 <style>wxALIGN_RIGHT</style>
@@ -618,7 +612,6 @@
                                   <style>normal</style>
                                   <weight>normal</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                                 <style>wxALIGN_RIGHT</style>
@@ -643,7 +636,6 @@
                                   <style>normal</style>
                                   <weight>normal</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                                 <style>wxALIGN_RIGHT</style>
@@ -859,7 +851,6 @@
                               <style>normal</style>
                               <weight>normal</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                             <enabled>0</enabled>
@@ -938,7 +929,6 @@
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                           </object>
@@ -953,7 +943,6 @@
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                           </object>
@@ -968,7 +957,6 @@
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                           </object>
@@ -984,7 +972,6 @@
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                           </object>
@@ -1002,7 +989,6 @@
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                             <style>wxALIGN_CENTRE</style>
@@ -1026,7 +1012,6 @@
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                             <style>wxALIGN_CENTRE</style>
@@ -1050,7 +1035,6 @@
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                             <style>wxALIGN_CENTRE</style>
@@ -1074,7 +1058,6 @@
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                             <style>wxALIGN_CENTRE</style>
@@ -1110,7 +1093,6 @@
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                           </object>
@@ -1127,7 +1109,6 @@
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                           </object>
@@ -1144,7 +1125,6 @@
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                             <style>wxALIGN_LEFT</style>
@@ -1162,7 +1142,6 @@
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                           </object>
@@ -1182,7 +1161,6 @@
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                             <style>wxALIGN_CENTRE</style>
@@ -1206,7 +1184,6 @@
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                             <style>wxALIGN_CENTRE</style>
@@ -1230,7 +1207,6 @@
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                             <style>wxALIGN_CENTRE</style>
@@ -1252,7 +1228,6 @@
                               <style>normal</style>
                               <weight>bold</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                             <style>wxALIGN_CENTRE</style>
@@ -1490,7 +1465,6 @@
                               <style>normal</style>
                               <weight>normal</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                             <style>wxALIGN_RIGHT</style>
@@ -1515,7 +1489,6 @@
                               <style>normal</style>
                               <weight>normal</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                             <style>wxALIGN_RIGHT</style>
@@ -1696,7 +1669,6 @@
                               <style>normal</style>
                               <weight>normal</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                             <style>wxALIGN_CENTRE</style>
@@ -1720,7 +1692,6 @@
                               <style>normal</style>
                               <weight>normal</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                             <style>wxALIGN_CENTRE</style>
@@ -1744,7 +1715,6 @@
                               <style>normal</style>
                               <weight>normal</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                             <style>wxALIGN_CENTRE</style>
@@ -1777,7 +1747,6 @@
                               <style>normal</style>
                               <weight>normal</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                           </object>
@@ -1845,7 +1814,6 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                               </object>
@@ -1862,7 +1830,6 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                               </object>
@@ -1879,7 +1846,6 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                                 <style>wxALIGN_LEFT</style>
@@ -1897,7 +1863,6 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                               </object>
@@ -1917,7 +1882,6 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                                 <style>wxALIGN_CENTRE</style>
@@ -1941,7 +1905,6 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                                 <style>wxALIGN_CENTRE</style>
@@ -1965,7 +1928,6 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                                 <style>wxALIGN_CENTRE</style>
@@ -1987,7 +1949,6 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                                 <style>wxALIGN_CENTRE</style>
@@ -2027,7 +1988,6 @@
                               <style>normal</style>
                               <weight>normal</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                           </object>
@@ -2069,7 +2029,6 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                               </object>
@@ -2086,7 +2045,6 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                               </object>
@@ -2103,7 +2061,6 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                                 <style>wxALIGN_LEFT</style>
@@ -2121,7 +2078,6 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                               </object>
@@ -2141,7 +2097,6 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                                 <style>wxALIGN_CENTRE</style>
@@ -2165,7 +2120,6 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                                 <style>wxALIGN_CENTRE</style>
@@ -2189,7 +2143,6 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                                 <style>wxALIGN_CENTRE</style>
@@ -2211,7 +2164,6 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                                 <style>wxALIGN_CENTRE</style>
@@ -2252,7 +2204,6 @@
                               <style>normal</style>
                               <weight>normal</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                           </object>
@@ -2294,7 +2245,6 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                               </object>
@@ -2311,7 +2261,6 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                               </object>
@@ -2328,7 +2277,6 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                                 <style>wxALIGN_LEFT</style>
@@ -2346,7 +2294,6 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                               </object>
@@ -2366,7 +2313,6 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                                 <style>wxALIGN_CENTRE</style>
@@ -2390,7 +2336,6 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                                 <style>wxALIGN_CENTRE</style>
@@ -2414,7 +2359,6 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                                 <style>wxALIGN_CENTRE</style>
@@ -2436,7 +2380,6 @@
                                   <style>normal</style>
                                   <weight>bold</weight>
                                   <underlined>0</underlined>
-                                  <face>Ubuntu</face>
                                   <encoding>UTF-8</encoding>
                                 </font>
                                 <style>wxALIGN_CENTRE</style>
@@ -2886,7 +2829,6 @@
                                             <style>normal</style>
                                             <weight>normal</weight>
                                             <underlined>0</underlined>
-                                            <face>Ubuntu</face>
                                             <encoding>UTF-8</encoding>
                                           </font>
                                           <tooltip>Choose a filename and destination of the next scan</tooltip>
@@ -2937,7 +2879,6 @@
                                     <style>normal</style>
                                     <weight>normal</weight>
                                     <underlined>0</underlined>
-                                    <face>Ubuntu</face>
                                     <encoding>UTF-8</encoding>
                                   </font>
                                   <style>wxALIGN_RIGHT</style>
@@ -2978,7 +2919,6 @@
                                         <style>normal</style>
                                         <weight>normal</weight>
                                         <underlined>0</underlined>
-                                        <face>Ubuntu</face>
                                         <encoding>UTF-8</encoding>
                                       </font>
                                       <hidden>1</hidden>
@@ -3014,7 +2954,6 @@
                               <style>normal</style>
                               <weight>normal</weight>
                               <underlined>0</underlined>
-                              <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
                             <enabled>0</enabled>
@@ -3066,7 +3005,6 @@
                         <style>normal</style>
                         <weight>normal</weight>
                         <underlined>0</underlined>
-                        <face>Ubuntu</face>
                         <encoding>UTF-8</encoding>
                       </font>
                       <style>wxALIGN_CENTRE</style>
@@ -3446,7 +3384,6 @@
       <style>normal</style>
       <weight>normal</weight>
       <underlined>0</underlined>
-      <face>Ubuntu</face>
       <encoding>UTF-8</encoding>
     </font>
   </object>
@@ -3668,7 +3605,6 @@
                   <style>normal</style>
                   <weight>normal</weight>
                   <underlined>0</underlined>
-                  <face>Ubuntu</face>
                   <encoding>UTF-8</encoding>
                 </font>
                 <style>wxALIGN_RIGHT</style>
@@ -3701,7 +3637,6 @@
                   <style>normal</style>
                   <weight>normal</weight>
                   <underlined>0</underlined>
-                  <face>Ubuntu</face>
                   <encoding>UTF-8</encoding>
                 </font>
                 <style>wxALIGN_CENTRE</style>
@@ -3728,7 +3663,6 @@
                   <style>normal</style>
                   <weight>normal</weight>
                   <underlined>0</underlined>
-                  <face>Ubuntu</face>
                   <encoding>UTF-8</encoding>
                 </font>
                 <style>wxALIGN_CENTRE</style>
@@ -3752,7 +3686,6 @@
       <style>normal</style>
       <weight>normal</weight>
       <underlined>0</underlined>
-      <face>Ubuntu</face>
       <encoding>UTF-8</encoding>
     </font>
     <style>wxDEFAULT_DIALOG_STYLE|wxRESIZE_BORDER</style>
