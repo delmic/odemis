@@ -903,7 +903,10 @@ class BitmapCanvas(BufferedCanvas):
 
         """
 
-        if not self.images or self.images == [None]:
+        # Checking images == [None] caused a FutureWarning from Numpy, because in the future it
+        # will do a element-by element comparison. (Or at least value == None will, it might have
+        # been a false positive). Instead, when working with NDArrays, use `value is None`
+        if not self.images or (len(self.images) == 1 and self.images[0] is None):
             return
 
         # The idea:
