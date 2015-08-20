@@ -361,6 +361,9 @@ STREAM_SETTINGS_CONFIG = {
                 "choices": util.resolution_from_range_plus_point,
                 "accuracy": None,  # never simplify the numbers
             }),
+            ("pixelSize", {
+                "control_type": odemis.gui.CONTROL_FLT,
+            }),
         )),
     stream.CLSettingsStream:
         OrderedDict((

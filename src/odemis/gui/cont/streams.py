@@ -1813,7 +1813,7 @@ class SparcStreamsController(StreamBarController):
         sem_ar_stream = acqstream.SEMARMDStream("SEM AR", sem_stream, ar_stream)
 
         return self._addRepStream(ar_stream, sem_ar_stream,
-                                  vas=("repetition",),
+                                  vas=("repetition", "pixelSize"),
                                   axes={"band": main_data.light_filter}
                                   )
 
