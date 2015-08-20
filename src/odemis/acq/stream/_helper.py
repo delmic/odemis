@@ -170,9 +170,10 @@ class RepetitionStream(LiveStream):
           2 ints: new repetition
           float: pixel size
         """
-        # If ROI is undefined => everything is fine
+        # If ROI is undefined => link rep and pxs as if the ROI was full
         if roi == UNDEFINED_ROI:
-            return roi, self.repetition.value, pxs
+            _, rep, pxs = self._updateROIAndPixelSize((0, 0, 1, 1), pxs)
+            return roi, rep, pxs
 
         # TODO: use the fact that pxs_range/fov is fixed => faster
         pxs_range = self._getPixelSizeRange()
@@ -280,9 +281,22 @@ class RepetitionStream(LiveStream):
         returns (tuple of 2 ints): new (valid) repetition
         """
         roi = self.roi.value
-        # If ROI is undefined => everything is fine
+        epxs = self.emitter.pixelSize.value
+        eshape = self.emitter.shape
+        phy_size = (epxs[0] * eshape[0], epxs[1] * eshape[1])  # max physical ROI
+
+        # clamp repetition to be sure it's correct
+        rep = (min(repetition[0], self.repetition.range[1][0]),
+               min(repetition[1], self.repetition.range[1][1]))
+
+        # If ROI is undefined => link repetition and pxs as if ROI is full
         if roi == UNDEFINED_ROI:
-            return repetition
+            # must be square, so only care about one dim
+            pxs = phy_size[0] / rep[0]
+            roi, rep, pxs = self._updateROIAndPixelSize((0, 0, 1, 1), pxs)
+            self.pixelSize._value = pxs
+            self.pixelSize.notify(pxs)
+            return rep
 
         # The basic principle is that the center and surface of the ROI stay.
         # We only adjust the X/Y ratio and the pixel size based on the new
@@ -290,20 +304,13 @@ class RepetitionStream(LiveStream):
 
         prev_rep = self.repetition.value
         prev_pxs = self.pixelSize.value
-        epxs = self.emitter.pixelSize.value
-        eshape = self.emitter.shape
-        phy_size = (epxs[0] * eshape[0], epxs[1] * eshape[1]) # max physical ROI
 
-        # clamp repetition to be sure it's correct
-        repetition = (min(repetition[0], self.repetition.range[1][0]),
-                      min(repetition[1], self.repetition.range[1][1]))
-
-        # the whole repetition changed => keep area and adapt ROI
+        # keep area and adapt ROI
         roi_center = ((roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2)
         roi_area = numpy.prod(prev_rep) * prev_pxs ** 2
-        pxs = math.sqrt(roi_area / numpy.prod(repetition))
-        roi_size = (pxs * repetition[0] / phy_size[0],
-                    pxs * repetition[1] / phy_size[1])
+        pxs = math.sqrt(roi_area / numpy.prod(rep))
+        roi_size = (pxs * rep[0] / phy_size[0],
+                    pxs * rep[1] / phy_size[1])
         roi = (roi_center[0] - roi_size[0] / 2,
                roi_center[1] - roi_size[1] / 2,
                roi_center[0] + roi_size[0] / 2,
