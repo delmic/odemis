@@ -20,6 +20,7 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
+
 import Pyro4
 from Pyro4.core import isasync
 from abc import ABCMeta, abstractmethod
@@ -29,8 +30,9 @@ import odemis
 import urllib
 import weakref
 
-from . import _core, _dataflow, _vattributes
+from . import _core, _dataflow, _vattributes, _metadata
 from ._core import roattribute
+
 
 class HwError(IOError):
     """
@@ -373,8 +375,13 @@ class DigitalCamera(Detector):
                                  "of the camera once: %s" % (transpose,))
         self._transpose = transpose
 
+        # depth of field will be updated automatically if metadata LENS_MAG,
+        # LENS_NA, and LENS_RI are provided.
+        # To provide some rough idea of the step size when changing focus
+        self.depthOfField = _vattributes.FloatContinuous(1e-6, range=(0, 1e9),
+                                                         unit="m", readonly=True)
         # To be overridden by a VA
-        self.pixelSize = None # (len(dim)-1 * float) size of a pixel (in meters). More precisely it should be the average distance between the centres of two pixels.
+        self.pixelSize = None  # (len(dim)-1 * float) size of a sensor pixel (in meters). More precisely it should be the average distance between the centres of two pixels.
         self.binning = None # how many CCD pixels are merged (in each dimension) to form one pixel on the image.
         self.resolution = None # (len(dim)-1 * int): number of pixels in the image generated for each dimension. If it's smaller than the full resolution of the captor, it's centred.
         self.exposureTime = None # (float): time in second for the exposure for one image.
@@ -389,6 +396,28 @@ class DigitalCamera(Detector):
     @roattribute
     def shape(self):
         return self._transposeShapeToUser(self._shape)
+
+    def updateMetadata(self, md):
+        Detector.updateMetadata(self, md)
+        mdf = self._metadata
+        if self.pixelSize is not None:
+            try:
+                pxs = self.pixelSize.value[0]  # pixel should be square
+                mag = mdf[_metadata.MD_LENS_MAG]
+                na = mdf[_metadata.MD_LENS_NA]
+                ri = mdf[_metadata.MD_LENS_RI]
+                l = 550e-9  # the light wavelength
+                # We could use emission wavelength center for l, but it's mostly
+                # confusing for the user that the focus sensitivity changes when
+                # the observed part changes. So just use 550 nm, which is never
+                # more than 50% wrong.
+                # from https://www.microscopyu.com/articles/formulas/formulasfielddepth.html
+                dof = (l * ri) / na ** 2 + (ri * pxs) / (mag - na)
+                self.depthOfField._set_value(dof, force_write=True)
+            except KeyError:
+                pass  # Not enough metadata is present for computing Depth of Field
+            except Exception:
+                logging.warning("Failure to update the depth of field", exc_info=True)
 
     # helper functions for handling transpose
     def _transposePosToUser(self, v):

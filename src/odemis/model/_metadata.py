@@ -53,6 +53,8 @@ MD_OUT_WL = "Output wavelength range"  # (m, m) or (m, m, m, m, m), lower and up
 MD_LIGHT_POWER = "Light power" # W, power of the emitting light
 MD_LENS_NAME = "Lens name" # str, product name of the lens
 MD_LENS_MAG = "Lens magnification" # float (ratio), magnification factor
+MD_LENS_NA = "Lens numerical aperture"  # float (ratio), numerical aperture
+MD_LENS_RI = "Lens refractive index"  # float (ratio), refractive index
 MD_FILTER_NAME = "Filter name" # str, product name of the light filter
 # TODO: might need to merge DWELL_TIME and EXP_TIME into INTEGRATION_TIME: the time each pixel receive energy
 # + SCANNED_DIMENSIONS: list of dimensions which were scanned instead of being acquired simultaneously

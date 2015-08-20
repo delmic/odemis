@@ -158,19 +158,18 @@ class MetadataUpdater(model.Component):
             except AttributeError:
                 binning = 1, 1
             mag = lens.magnification.value
-            mpp = (captor_mpp[0] * binning[0] / mag, captor_mpp[1] * binning[1] / mag) 
+            mpp = (captor_mpp[0] * binning[0] / mag, captor_mpp[1] * binning[1] / mag)
             md = {model.MD_PIXEL_SIZE: mpp,
                   model.MD_LENS_MAG: mag}
             comp.updateMetadata(md)
 
-        lens.magnification.subscribe(updatePixelDensity)
+        lens.magnification.subscribe(updatePixelDensity, init=True)
         self._onTerminate.append((lens.magnification.unsubscribe, (updatePixelDensity,)))
         try:
             comp.binning.subscribe(updatePixelDensity)
             self._onTerminate.append((comp.binning.unsubscribe, (updatePixelDensity,)))
         except AttributeError:
             pass
-        updatePixelDensity(None) # update it right now
 
         # update pole position, if available
         if (hasattr(lens, "polePosition")
@@ -186,31 +185,31 @@ class MetadataUpdater(model.Component):
                 md = {model.MD_AR_POLE: pp}
                 comp.updateMetadata(md)
 
-            lens.polePosition.subscribe(updatePolePos)
+            lens.polePosition.subscribe(updatePolePos, init=True)
             self._onTerminate.append((lens.polePosition.unsubscribe, (updatePolePos,)))
             try:
                 comp.binning.subscribe(updatePolePos)
                 self._onTerminate.append((comp.binning.unsubscribe, (updatePolePos,)))
             except AttributeError:
                 pass
-            updatePolePos(None) # update it right now
 
-        # update AR data, if available
-        md_va_list = [("xMax", model.MD_AR_XMAX),
+        # update metadata for VAs which can be directly copied
+        md_va_list = (("numericalAperture", model.MD_LENS_NA),
+                      ("refractiveIndex", model.MD_LENS_RI),
+                      ("xMax", model.MD_AR_XMAX),
                       ("holeDiameter", model.MD_AR_HOLE_DIAMETER),
                       ("focusDistance", model.MD_AR_FOCUS_DISTANCE),
-                      ("parabolaF", model.MD_AR_PARABOLA_F)]
+                      ("parabolaF", model.MD_AR_PARABOLA_F))
         for va_name, md_key in md_va_list:
             if (hasattr(lens, va_name)
                 and isinstance(getattr(lens, va_name), model.VigilantAttributeBase)):
                 va = getattr(lens, va_name)
-                def updateARData(unused, va=va, comp=comp):
-                    md = {md_key: va.value}
+                def updateARData(val, md_key=md_key, comp=comp):
+                    md = {md_key: val}
                     comp.updateMetadata(md)
 
-                va.subscribe(updateARData)
+                va.subscribe(updateARData, init=True)
                 self._onTerminate.append((va.unsubscribe, (updateARData,)))
-                updateARData(None)  # update it right now
 
     def observeLight(self, light, comp):
 

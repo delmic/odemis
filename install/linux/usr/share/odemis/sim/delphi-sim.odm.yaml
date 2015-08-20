@@ -100,7 +100,11 @@ DELPHI: {
 "Optical Objective": {
     class: static.OpticalLens,
     role: lens,
-    init: {mag: 40.0}, # ratio
+    init: {
+       mag: 40.0, # ratio
+       na: 0.95, # ratio, numerical aperture
+       ri: 1.0, # ratio, refractive index
+    },
     affects: ["Camera"]
 }
 
