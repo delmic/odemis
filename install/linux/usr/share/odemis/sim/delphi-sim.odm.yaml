@@ -40,7 +40,11 @@ DELPHI: {
 "EBeam Phenom": {
     # Internal child of SimSEM, so no class
     role: e-beam,
-    init: {},
+    init: {
+        # values to simulate the Phenom
+       aperture: 200.e-6, # m
+       wd: 7.e-3, # m
+    },
     properties: {
         dwellTime: 10.e-6, # s
     },

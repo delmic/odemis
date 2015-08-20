@@ -108,13 +108,16 @@ TILT_BLANK = (-1, -1)  # tilt to imitate beam blanking
 
 # SEM ranges in order to allow scanner initialization even if Phenom is in
 # unloaded state
-HFW_RANGE = [2.5e-06, 0.0031]
-TENSION_RANGE = [4797.56, 10000.0]
+HFW_RANGE = (2.5e-06, 0.0031)
+TENSION_RANGE = (4797.56, 10000.0)
 # REFERENCE_TENSION = 10e03 #Volt
 # BEAM_SHIFT_AT_REFERENCE = 19e-06  # Maximum beam shit at the reference tension #m
-SPOT_RANGE = [0.0, 5.73018379531] # TODO: what means a spot of 0? => small value like 1e-3?
+SPOT_RANGE = (0.0, 5.73018379531)  # TODO: what means a spot of 0? => small value like 1e-3?
 NAVCAM_PIXELSIZE = (1.3267543859649122e-05, 1.3267543859649122e-05)
 DELPHI_OVERVIEW_FOCUS = 0.0052  # Good focus position for navcam focus initialization
+
+DELPHI_WORKING_DISTANCE = 7e-3  # m, standard working distance (just to compute the depth of field)
+PHENOM_EBEAM_APERTURE = 200e-6  # m, aperture size of the lens on the phenom
 
 class SEM(model.HwComponent):
     '''
@@ -287,6 +290,11 @@ class Scanner(model.Emitter):
         # == smallest size/ between two different ebeam positions
         self.pixelSize = model.VigilantAttribute((0, 0), unit="m", readonly=True)
 
+        # To provide some rough idea of the step size when changing focus
+        # Depends on the pixelSize, so will be updated whenever the HFW changes
+        self.depthOfField = model.FloatContinuous(1e-6, range=(0, 1e9),
+                                                  unit="m", readonly=True)
+
         # (.resolution), .rotation, and .scaling are used to
         # define the conversion from coordinates to a region of interest.
 
@@ -327,6 +335,7 @@ class Scanner(model.Emitter):
         self.scale.subscribe(self._onScale, init=True)  # to update metadata
 
         self._updatePixelSize() # needs .scale
+        self._updateDepthOfField()  # needs .pixelSize
 
         # (float) in rad => rotation of the image compared to the original axes
         # Just the initialization of rotation. The actual value will be acquired
@@ -382,6 +391,7 @@ class Scanner(model.Emitter):
         # Update current pixelSize and magnification
         self._updatePixelSize()
         self._updateMagnification()
+        self._updateDepthOfField()
 
     def _setHorizontalFoV(self, value):
         # Make sure you are in the current range
@@ -399,8 +409,7 @@ class Scanner(model.Emitter):
 
         # it's read-only, so we change it only via _value
         mag = self._hfw_nomag / self.horizontalFoV.value
-        self.magnification._value = mag
-        self.magnification.notify(mag)
+        self.magnification._set_value(mag, force_write=True)
 
     def _setDwellTime(self, dt):
         # Calculate number of frames
@@ -471,12 +480,24 @@ class Scanner(model.Emitter):
                fov / self._shape[1])
 
         # it's read-only, so we change it only via _value
-        self.pixelSize._value = pxs
-        self.pixelSize.notify(pxs)
+        self.pixelSize._set_value(pxs, force_write=True)
 
         # If scaled up, the pixels are bigger
         pxs_scaled = (pxs[0] * self.scale.value[0], pxs[1] * self.scale.value[1])
         self.parent._metadata[model.MD_PIXEL_SIZE] = pxs_scaled
+
+    def _updateDepthOfField(self):
+        """
+        Update the depth of field, based on the pixel size
+        """
+        # from http://www.emal.engin.umich.edu/courses/semlectures/focus.html
+        # DoF = 2 e / (A / 2 Wd)
+        # e is the scanner pixel size
+        # A is the aperture
+        # Wd is the working distance
+        pxs = self.pixelSize.value[0]  # hopefully it's square
+        dof = 2 * pxs / (PHENOM_EBEAM_APERTURE / (2 * DELPHI_WORKING_DISTANCE))
+        self.depthOfField._set_value(dof, force_write=True)
 
     def _setScale(self, value):
         """

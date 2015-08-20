@@ -36,10 +36,10 @@ import weakref
 
 class SimSEM(model.HwComponent):
     '''
-    This is an extension of the model.HwComponent class. It first reads and 
-    keeps the image that is used and manipulated in order to generate the fake output. 
-    This is a high resolution (2048x2048) SEM image. It then instantiates the scanner 
-    and se-detector children components and provides an update function for its metadata. 
+    This is an extension of the model.HwComponent class. It first reads and
+    keeps the image that is used and manipulated in order to generate the fake output.
+    This is a high resolution (2048x2048) SEM image. It then instantiates the scanner
+    and se-detector children components and provides an update function for its metadata.
     '''
 
     def __init__(self, name, role, children, image=None, drift_period=None,
@@ -101,19 +101,26 @@ class SimSEM(model.HwComponent):
         """
         self._detector._update_drift_timer.cancel()
 
+
 class Scanner(model.Emitter):
     """
-    This is an extension of the model.Emitter class. It contains Vigilant 
+    This is an extension of the model.Emitter class. It contains Vigilant
     Attributes and setters for magnification, pixel size, translation, resolution,
-    scale, rotation and dwell time. Whenever one of these attributes is changed, 
-    its setter also updates another value if needed e.g. when scale is changed, 
-    resolution is updated, when resolution is changed, the translation is recentered 
-    etc. Similarly it subscribes to the VAs of scale and magnification in order 
+    scale, rotation and dwell time. Whenever one of these attributes is changed,
+    its setter also updates another value if needed e.g. when scale is changed,
+    resolution is updated, when resolution is changed, the translation is recentered
+    etc. Similarly it subscribes to the VAs of scale and magnification in order
     to update the pixel size.
     """
-    def __init__(self, name, role, parent, **kwargs):
+    def __init__(self, name, role, parent, aperture=100e-6, wd=10e-3, **kwargs):
+        """
+        aperture (0 < float): aperture diameter of the electron lens
+        wd (0 < float): working distance
+        """
         # It will set up ._shape and .parent
         model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
+        self._aperture = aperture
+        self._working_distance = wd
 
         fake_img = self.parent.fake_img
         if parent._drift_period:
@@ -140,10 +147,16 @@ class Scanner(model.Emitter):
                                                      unit="", readonly=True)
         self.horizontalFoV.subscribe(self._onHFV)
 
+        # To provide some rough idea of the step size when changing focus
+        # Depends on the pixelSize, so will be updated whenever the HFW changes
+        self.depthOfField = model.FloatContinuous(1e-6, range=(0, 1e9),
+                                                  unit="m", readonly=True)
+        self._updateDepthOfField()  # needs .pixelSize
+
         # (.resolution), .translation, .rotation, and .scaling are used to
         # define the conversion from coordinates to a region of interest.
 
-        # (float, float) in m => physically moves the e-beam. 
+        # (float, float) in m => physically moves the e-beam.
         shift_rng = ((-50e-06, -50e-06),
                     (50e-06, 50e-06))
         self.shift = model.TupleContinuous((0, 0), shift_rng,
@@ -195,6 +208,7 @@ class Scanner(model.Emitter):
 
     def _onHFV(self, hfv):
         self._updatePixelSize()
+        self._updateDepthOfField()
 
     def _onScale(self, s):
         self._updatePixelSize()
@@ -221,6 +235,19 @@ class Scanner(model.Emitter):
         self.magnification.notify(mag)
         self.parent._metadata[model.MD_LENS_MAG] = mag
 
+    def _updateDepthOfField(self):
+        """
+        Update the depth of field, based on the pixel size
+        """
+        # from http://www.emal.engin.umich.edu/courses/semlectures/focus.html
+        # DoF = 2 e / (A / 2 Wd)
+        # e is the scanner pixel size
+        # A is the aperture
+        # Wd is the working distance
+        pxs = self.pixelSize.value[0]  # hopefully it's square
+        dof = 2 * pxs / (self._aperture / (2 * self._working_distance))
+        self.depthOfField._set_value(dof, force_write=True)
+
     def _setScale(self, value):
         """
         value (1 < float, 1 < float): increase of size between pixels compared to
@@ -245,7 +272,7 @@ class Scanner(model.Emitter):
 
     def _setResolution(self, value):
         """
-        value (0<int, 0<int): defines the size of the resolution. If the 
+        value (0<int, 0<int): defines the size of the resolution. If the
          resolution is not possible, it will pick the most fitting one. It will
          recenter the translation if otherwise it would be out of the whole
          scanned area.
@@ -294,8 +321,8 @@ class Scanner(model.Emitter):
 
 class Detector(model.Detector):
     """
-    This is an extension of model.Detector class. It performs the main functionality 
-    of the fake SEM. It sets up a Dataflow and notifies it every time that a fake 
+    This is an extension of model.Detector class. It performs the main functionality
+    of the fake SEM. It sets up a Dataflow and notifies it every time that a fake
     SEM image is generated. It also keeps and updates a “drift vector”
     """
     def __init__(self, name, role, parent, **kwargs):
@@ -457,8 +484,8 @@ class Detector(model.Detector):
     def _acquire_thread(self, callback):
         """
         Thread that simulates the SEM acquisition. It calculates and updates the
-        center (e-beam) position based on the translation, imitates the delay according 
-        to the dwell time and resolution and provides the new generated output to 
+        center (e-beam) position based on the translation, imitates the delay according
+        to the dwell time and resolution and provides the new generated output to
         the Dataflow.
         """
         try:
@@ -477,8 +504,8 @@ class Detector(model.Detector):
 
 class SEMDataFlow(model.DataFlow):
     """
-    This is an extension of model.DataFlow. It receives notifications from the 
-    detector component once the fake output is generated. This is the dataflow to 
+    This is an extension of model.DataFlow. It receives notifications from the
+    detector component once the fake output is generated. This is the dataflow to
     which the SEM acquisition streams subscribe.
     """
     def __init__(self, detector, sem):
