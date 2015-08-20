@@ -5,10 +5,10 @@ This document describes how to get the development version Odemis GUI working on
 MS Windows, so it can be used as an image viewer. It will also explain how to
 create an installer for easy distribution.
 
-Also, see https://delmicbv.box.com/s/3renoh6qw32kmzpduyssupnlro3sawn2 for binary
-packages
-Creating the environment
-------------------------
+Also, see https://delmicbv.box.com/s/3renoh6qw32kmzpduyssupnlro3sawn2 for binary packages
+
+Creating the Odemis environment
+-------------------------------
 
 First we create a base installation of Python 2.7:
 
@@ -64,7 +64,21 @@ and use `easy_install` (which is part of `setuptools`) to install the package.
     copy all DLL files to %Windows%/SysWOW64
 #.  Install Pillow, a repackaged version of PIL: `pip install Pillow`
 
-To get PyInstaller working do the following:
+Installing PyInstaller
+----------------------
 
+#. Add the Odemis root path to the `virtualenv_path_extensions.pth` file in the virtualenv:
+   `<path to Odemis>\src`
 #. Install PyWin32: `easy_install pywin32-219.win32-py2.7.exe`
-#. Install PyInstaller: `pip install pyinstaller`
+#. Install PyInstaller: `pip install pyinstaller` or
+   `pip install git+git://github.com/pyinstaller/pyinstaller.git@develop` if pymzq is causing is
+   causing problems.
+#. Install MSVCP90.dll redistribution by running `vcredist_x86.exe`, otherwise Pyinstaller won't be
+   able to find and package it.
+
+Building the stand-alone Odemis viewer
+--------------------------------------
+
+`pyinstaller -y viewer.spec`
+
+
