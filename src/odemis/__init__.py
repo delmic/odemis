@@ -56,7 +56,9 @@ def _get_version_setuptools():
     try:
         return pkg_resources.get_distribution("odemis").version
     except pkg_resources.DistributionNotFound:
-        raise LookupError("Not packaged via setuptools")
+        # FIXME: Dirty workaround for packaging using PyInstaller
+        return "1"
+        # raise LookupError("Not packaged via setuptools")
 
 def _get_version():
     try:
