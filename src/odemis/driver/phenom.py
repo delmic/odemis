@@ -114,7 +114,6 @@ TENSION_RANGE = (4797.56, 10000.0)
 # BEAM_SHIFT_AT_REFERENCE = 19e-06  # Maximum beam shit at the reference tension #m
 SPOT_RANGE = (0.0, 5.73018379531)  # TODO: what means a spot of 0? => small value like 1e-3?
 NAVCAM_PIXELSIZE = (1.3267543859649122e-05, 1.3267543859649122e-05)
-DELPHI_OVERVIEW_FOCUS = 0.0052  # Good focus position for navcam focus initialization
 
 DELPHI_WORKING_DISTANCE = 7e-3  # m, standard working distance (just to compute the depth of field)
 PHENOM_EBEAM_APERTURE = 200e-6  # m, aperture size of the lens on the phenom
@@ -301,7 +300,7 @@ class Scanner(model.Emitter):
         # (float, float) in m => physically moves the e-beam. The move is
         # clipped within the actual limits by the setter function.
         shift_rng = ((-1, -1),
-                    (1, 1))
+                     (1, 1))
         self.shift = model.TupleContinuous((0, 0), shift_rng,
                                               cls=(int, long, float), unit="m",
                                               setter=self._setShift)
@@ -312,8 +311,8 @@ class Scanner(model.Emitter):
         self.tran_roi = (0, 0)
         # (float, float) in m => moves center of acquisition by this amount
         # independent of scale and rotation.
-        tran_rng = [(-self._shape[0] / 2, -self._shape[1] / 2),
-                    (self._shape[0] / 2, self._shape[1] / 2)]
+        tran_rng = ((-self._shape[0] / 2, -self._shape[1] / 2),
+                    (self._shape[0] / 2, self._shape[1] / 2))
         self.translation = model.TupleContinuous((0, 0), tran_rng,
                                                  cls=(int, long, float), unit="px",
                                                  setter=self._setTranslation)
@@ -321,7 +320,7 @@ class Scanner(model.Emitter):
         # .resolution is the number of pixels actually scanned. If it's less than
         # the whole possible area, it's centered.
         resolution = (self._shape[0] // 8, self._shape[1] // 8)
-        self.resolution = model.ResolutionVA(resolution, [(1, 1), self._shape],
+        self.resolution = model.ResolutionVA(resolution, ((1, 1), self._shape),
                                              setter=self._setResolution)
         self._resolution = resolution
 
@@ -1332,7 +1331,7 @@ class NavCam(model.DigitalCamera):
         # RGB
         self._shape = resolution + (3, 2 ** 8)
         self.resolution = model.ResolutionVA(resolution,
-                                      [NAVCAM_RESOLUTION, NAVCAM_RESOLUTION])
+                                      (NAVCAM_RESOLUTION, NAVCAM_RESOLUTION))
                                     # , readonly=True)
         self.exposureTime = model.FloatVA(1.0, unit="s", readonly=True)
         self.pixelSize = model.VigilantAttribute(NAVCAM_PIXELSIZE, unit="m",
@@ -1411,10 +1410,6 @@ class NavCam(model.DigitalCamera):
                 self.parent._device.SetNavCamBrightness(self._brightness)
             except suds.WebFault:
                 logging.warning("Failed to set brightness to %f: %s", self._brightness, e)
-            # Start to a good focus position
-            logging.debug("Setting initial overview focus to %f", DELPHI_OVERVIEW_FOCUS)
-            f = self.parent._navcam_focus.moveAbs({"z": DELPHI_OVERVIEW_FOCUS})
-            f.result()
 
             while not self.acquire_must_stop.is_set():
                 with self.parent._acq_progress_lock:
