@@ -52,6 +52,7 @@ PHENOM_SH_TYPE_STANDARD = 1  # standard sample holder
 PHENOM_SH_TYPE_OPTICAL = 200  # sample holder for the Delphi, containing a lens
 
 DELPHI_OVERVIEW_POS = {"x": 0, "y": 0}  # good position of the stage for overview
+DELPHI_OVERVIEW_FOCUS = {"z": 0.006}  # Good focus position for overview image on the Delphi sample holder
 
 
 class MicroscopeStateController(object):
@@ -934,10 +935,11 @@ class DelphiStateController(SecomStateController):
     # * 2 s for moving to the stage center
     # * 1 s for loading the calibration value
     # * 5 s for referencing the optical stage
+    # * 1 s for focusing the overview
     # * 2 s for overview acquisition
     # * 10 sec for alignment and overview acquisition
     # * 65 sec from NavCam to SEM
-    DELPHI_LOADING_TIMES = (5, 2, 1, 5, 2, 65) # s
+    DELPHI_LOADING_TIMES = (5, 2, 1, 5, 1, 2, 65)  # s
 
     def DelphiLoading(self):
         """
@@ -1009,6 +1011,16 @@ class DelphiStateController(SecomStateController):
             f = self._main_data.stage.moveAbs(DELPHI_OVERVIEW_POS)
             future._delphi_load_state = f
             f.result()  # to be sure referencing doesn't cancel the move
+
+            if future._delphi_load_state == CANCELLED:
+                return
+            # Focus the overview image
+            future._actions_time.pop(0)
+            f = self._main_data.overview_focus.moveAbs(DELPHI_OVERVIEW_FOCUS)
+            future._delphi_load_state = f
+            f.result()  # to be sure referencing doesn't cancel the move
+            # TODO: do also (or instead) a autofocus,
+            # or have a good focus position in the sample holder info
 
             if future._delphi_load_state == CANCELLED:
                 return
