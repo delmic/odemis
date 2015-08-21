@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+    # -*- coding: utf-8 -*-
 '''
 Created on 10 Jul 2015
 
@@ -18,7 +18,8 @@ from __future__ import division
 
 import logging
 import numpy
-from odemis.driver import whiteled
+from odemis.driver import blinkstick
+import os
 import unittest
 from unittest.case import skip
 
@@ -26,10 +27,12 @@ from unittest.case import skip
 logger = logging.getLogger().setLevel(logging.DEBUG)
 
 # Test using the hardware
-# CLASS = whiteled.WhiteLed
-# Test using the simulator
-CLASS = whiteled.FakeWhiteLed
-KWARGS = dict(name="test", role="light", no_leds=1)
+# Export TEST_NOHW=1 to force using only the simulator and skipping test cases
+# needing real hardware
+TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
+
+CLASS = blinkstick.WhiteLed
+KWARGS = dict(name="test", role="light")
 
 
 class TestStatic(unittest.TestCase):
@@ -40,10 +43,24 @@ class TestStatic(unittest.TestCase):
         """
         Doesn't even try to do anything, just create and delete components
         """
+        if TEST_NOHW:
+            self.skipTest("Cannot test without hardware present")
         dev = CLASS(**KWARGS)
 
-        self.assertTrue(dev.selfTest(), "self test failed.")
         dev.terminate()
+
+    def test_scan(self):
+        """
+        Test scanning for the device
+        """
+        devices = CLASS.scan()
+        if not TEST_NOHW:
+            self.assertGreater(len(devices), 0)
+
+        for name, kwargs in devices:
+            print "opening", name
+            d = CLASS(name, "test", **kwargs)
+            d.terminate()
 
 
 class TestWhiteLed(unittest.TestCase):
@@ -52,6 +69,8 @@ class TestWhiteLed(unittest.TestCase):
     """
 
     def setUp(self):
+        if TEST_NOHW:
+            self.skipTest("Cannot test without hardware present")
         self.dev = CLASS(**KWARGS)
 
     def tearDown(self):
@@ -65,8 +84,9 @@ class TestWhiteLed(unittest.TestCase):
         self.dev.power.value = self.dev.power.range[1]
         self.assertEqual(self.dev.power.value, self.dev.power.range[1])
 
-        self.dev.power.value = numpy.mean(self.dev.power.range)
-        self.assertEqual(self.dev.power.value, numpy.mean(self.dev.power.range))
+        h = numpy.mean(self.dev.power.range)
+        self.dev.power.value = h
+        self.assertAlmostEqual(self.dev.power.value, h, delta=1 / 256)
 
 
 if __name__ == "__main__":
