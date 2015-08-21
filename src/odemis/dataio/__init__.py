@@ -37,7 +37,7 @@ import os
 #  * get_data (callable): read a file into model.DataArray
 #  if it doesn't support writing, then is has no .export(), and if it doesn't
 #  support reading, then it has not get_data().
-__all__ = ["tiff", "hdf5", "png"]
+__all__ = ["tiff", "stiff", "hdf5", "png"]
 
 
 def get_available_formats(mode=os.O_RDWR, allowlossy=False):
@@ -55,6 +55,7 @@ def get_available_formats(mode=os.O_RDWR, allowlossy=False):
         try:
             exporter = importlib.import_module("." + module_name, "odemis.dataio")
         except Exception: #pylint: disable=W0703
+            logging.info("Skipping exporter %s, which failed to load", module_name)
             continue # module cannot be loaded
         if not allowlossy and hasattr(exporter, "LOSSY") and exporter.LOSSY:
             logging.debug("Skipping exporter %s as it is lossy", module_name)
