@@ -1311,7 +1311,8 @@ class NavCam(model.DigitalCamera):
         contrast (0<=float<=1): "Contrast" ratio where 1 means bright-field, and 0
          means dark-field
         brightness (0<=float<=1): light intensity between 0 and 1
-        hfw (float): NavCam HFW #m
+        hfw (None or float): NavCam horizontal field with to use (m). If None,
+          will use the maximum available.
         Raise an exception if the device cannot be opened.
         """
         model.DigitalCamera.__init__(self, name, role, parent=parent, **kwargs)
@@ -1325,6 +1326,9 @@ class NavCam(model.DigitalCamera):
             raise ValueError("brightness argument = %s, not between 0 and 1" % brightness)
         self._contrast = contrast
         self._brightness = brightness
+        # TODO: provide a Lens component that provides a .magnification VA
+        # based on this hfw. And/or provide enough LENS_* metadata to compute
+        # the depth of field.
         self._hfw = hfw
 
         resolution = NAVCAM_RESOLUTION
