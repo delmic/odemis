@@ -779,6 +779,7 @@ class StreamView(View):
         for s in self.getStreams():
             if s.should_update.value:
                 focuser = s.focuser
+                curr_s = s
                 break
         else:
             logging.info("Trying to change focus while no stream is playing")
@@ -793,14 +794,20 @@ class StreamView(View):
             self._focus_thread.daemon = True
             self._focus_thread.start()
 
-        # positive == opt lens goes up == closer from the sample
+        # TODO: optimise with the focuser
+        # Find the depth of field (~ the size of one "focus step")
+        for c in (curr_s.detector, curr_s.emitter):
+            if hasattr(c, "depthOfField") and isinstance(c.depthOfField, model.VigilantAttributeBase):
+                dof = c.depthOfField.value
+                break
+        else:
+            logging.debug("No depth of field info found")
+            dof = 1e-6  # m, not too bad value
 
-        # TODO: based on the focus actuator/current stream, pick a good conversion ratio
-        # (=> find the depth of field)
+        # positive == opt lens goes up == closer from the sample
         # k is a magical constant that allows to ensure a small move has a small
         # effect, and a big move has a significant effect.
         k = 5e-3  # 1/px
-        dof = 1e-6  # m, depth of field
         val = dof * k * shift  # m
         assert(abs(val) < 0.01)  # a move of 1 cm is a clear sign of bug
         self._focus_queue.put((focuser, val))

@@ -17,10 +17,6 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 
-import logging
-from odemis.acq import stream
-
-
 # Various helper functions and classes for the lens alignment
 TOP_LEFT = 0
 TOP_RIGHT = 1
@@ -52,34 +48,3 @@ def dichotomy_to_region(seq):
 
     return roi
 
-
-def get_focus_hw(main_data, s):
-    """
-    Finds the hardware required to focus a given stream
-    main_data (MainGUIData)
-    s (Stream)
-    return:
-         (HwComponent) detector
-         (HwComponent) emitter
-         (HwComponent) focus
-        => will be None if cannot be focused
-    """
-    detector = None
-    emitter = None
-    focus = None
-    # Slightly different depending on the stream type, especially as the
-    # stream doesn't have information on the focus, we need to "guess"
-    if isinstance(s, stream.StaticStream):
-        pass
-    elif isinstance(s, stream.SEMStream):
-        detector = s.detector
-        emitter = s.emitter
-        focus = main_data.ebeam_focus
-    elif isinstance(s, stream.CameraStream):
-        detector = s.detector
-        focus = main_data.focus
-    # TODO: handle overview stream
-    else:
-        logging.info("Doesn't know how to focus stream %s", type(s).__name__)
-
-    return detector, emitter, focus
