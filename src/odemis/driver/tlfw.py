@@ -18,7 +18,6 @@ You should have received a copy of the GNU General Public License along with Ode
 from __future__ import division
 
 from Pyro4.core import isasync
-import collections
 import glob
 import logging
 from odemis import model
