@@ -48,20 +48,18 @@ class Light(model.Emitter):
         # just one band: white
         # emissions is list of 0 <= floats <= 1. Always 1.0: cannot lower it.
         self.emissions = model.ListVA([1.0], unit="", setter=lambda x: [1.0])
-        self.spectra = model.ListVA([(380e-9, 160e-9, 560e-9, 960e-9, 740e-9)],
-                                     unit="m", readonly=True) # list of 5-tuples of floats
-
-    def getMetadata(self):
-        metadata = {}
-        metadata[model.MD_IN_WL] = (380e-9, 740e-9)
-        metadata[model.MD_LIGHT_POWER] = self.power.value
-        return metadata
+        # list of 5-tuples of floats
+        self.spectra = model.ListVA([(380e-9, 390e-9, 560e-9, 730e-9, 740e-9)],
+                                    unit="m", readonly=True)
+        self._metadata[model.MD_IN_WL] = (380e-9, 740e-9)
 
     def _updatePower(self, value):
         if value == 0:
             logging.info("Light is off")
         else:
             logging.info("Light is on")
+
+        self._metadata[model.MD_LIGHT_POWER] = self.power.value
 
 
 class Stage(model.Actuator):
