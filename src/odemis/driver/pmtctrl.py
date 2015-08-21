@@ -130,8 +130,8 @@ class PMT(model.Detector):
         # Protection VA should be available anyway
         if not (hasattr(ctrl, "protection")
             and isinstance(ctrl.protection, model.VigilantAttributeBase)):
-            raise IOError("Given component appears to be neither a PMT control ",
-                          "unit or a spectrograph since protection VA is not ",
+            raise IOError("Given component appears to be neither a PMT control "
+                          "unit or a spectrograph since protection VA is not "
                           "available.")
 
     def terminate(self):
