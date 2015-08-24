@@ -32,6 +32,7 @@ from Pyro4.core import oneway
 import collections
 from ctypes import *
 import gc
+import glob
 import logging
 import numpy
 from odemis import model, util
@@ -241,10 +242,9 @@ class AndorCam3(model.DigitalCamera):
         if device is None:
             # nothing else to initialise
             return
-        # TODO: if USB Zyla, check that it's connected via USB 3.
-        # => see "cat /sys/bus/usb/devices/*/version"
-        # and maybe GetInt(UsbProductId) GetInt(UsbDeviceId) or DeviceVideoIndex?
-        # + InterfaceType (=> "USB3")
+
+        if self.GetString(u"InterfaceType") == "USB3":
+            self._check_usb3()
 
         # TODO: handle when the camera is turned off/on => use CameraPresent ?
 
@@ -452,6 +452,44 @@ class AndorCam3(model.DigitalCamera):
     def Close(self):
         assert self.handle is not None
         self.atcore.AT_Close(self.handle)
+
+    def _check_usb3(self):
+        """
+        Raise an HwError if the device is not connected over USB3
+        """
+        # The Zyla must be connected over USB3, but the driver will report that
+        # everything is fine even if it's connected over USB2... until
+        # acquisition starts and strange things happen.
+
+        # Current USB protocol level is in "/sys/bus/usb/devices/*/version".
+        # However, for the Zyla, we cannot use UsbProductId or UsbDeviceId, so
+        # we just use the serial number (which is also in ./serial)
+        try:
+            sn = self.GetString(u"SerialNumber")
+            sn_paths = glob.glob('/sys/bus/usb/devices/*/serial')
+            for p in sn_paths:
+                try:
+                    f = open(p)
+                    snp = f.read().strip()
+                except IOError:
+                    logging.debug("Failed to read %s, skipping device", p)
+                if snp == sn:
+                    break
+            else:
+                logging.warning("Failed to find USB device %s in the USB path", sn)
+                return
+            # .../3-1.2/serial => .../3-1.2/3-1.2:1.0/ttyUSB1
+            sys_path = os.path.dirname(p)
+            f = open(sys_path + "/version")
+            usbv = float(f.read().strip())
+        except Exception:
+            logging.info("Failed to check USB version for device %s", self.name, ex_info=True)
+            return
+
+        if usbv < 3:
+            raise HwError("Device %s is connected via USB %d, instead of USB 3.0. "
+                          "Check the connection of the camera goes to a USB 3.0 port."
+                          % (self.name, usbv))
 
     def Command(self, command):
         self.atcore.AT_Command(self.handle, command)
@@ -799,7 +837,7 @@ class AndorCam3(model.DigitalCamera):
         """
         try:
             firmware = self.GetString(u"FirmwareVersion")
-            return "firmware: '%s'" % firmware
+            return "firmware: %s" % firmware
         except ATError:
             # Simcam has no firmware
             return "unknown"
