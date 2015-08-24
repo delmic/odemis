@@ -23,17 +23,23 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
-from cam_test_abs import VirtualTestCam, VirtualStaticTestCam, VirtualTestSynchronized
-from odemis.driver import andorcam2
-from unittest.case import skip
 import logging
+from odemis.driver import andorcam2
+import os
 import unittest
+from unittest.case import skip
+
+from cam_test_abs import VirtualTestCam, VirtualStaticTestCam, VirtualTestSynchronized
+
 
 logging.getLogger().setLevel(logging.DEBUG)
 
+# Export TEST_NOHW=1 to force using only the simulator and skipping test cases
+# needing real hardware
+TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
+
 CLASS_SIM = andorcam2.FakeAndorCam2
-CLASS = andorcam2.AndorCam2 # use CLASS_SIM if you don't have the hardware
-# CLASS = CLASS_SIM
+CLASS = andorcam2.AndorCam2
 
 KWARGS_SIM = dict(name="camera", role="ccd", device=0, transpose=[2, -1],
                   emgains=[[10e6, 1, 50], [1e6, 1, 150]],
@@ -42,6 +48,9 @@ KWARGS_SIM = dict(name="camera", role="ccd", device=0, transpose=[2, -1],
 KWARGS = dict(name="camera", role="ccd", device=0, transpose=[2, -1],
               emgains=[[10e6, 1, 50], [1e6, 1, 150]])
 
+if TEST_NOHW:
+    CLASS = CLASS_SIM
+    KWARGS = KWARGS_SIM
 
 #@skip("simple")
 class StaticTestFake(VirtualStaticTestCam, unittest.TestCase):
@@ -51,6 +60,7 @@ class StaticTestFake(VirtualStaticTestCam, unittest.TestCase):
     camera_type = andorcam2.FakeAndorCam2
     camera_kwargs = KWARGS_SIM
 
+
 class TestFake(VirtualTestCam, unittest.TestCase):
     """
     Ensure we always test the fake version at least a bit
@@ -58,10 +68,12 @@ class TestFake(VirtualTestCam, unittest.TestCase):
     camera_type = CLASS_SIM
     camera_kwargs = KWARGS_SIM
 
+
 #@skip("simple")
 class StaticTestAndorCam2(VirtualStaticTestCam, unittest.TestCase):
     camera_type = CLASS
     camera_kwargs = KWARGS
+
 
 # Inheritance order is important for setUp, tearDown
 #@skip("simple")
@@ -71,7 +83,8 @@ class TestAndorCam2(VirtualTestCam, unittest.TestCase):
     """
     camera_type = CLASS
     camera_kwargs = KWARGS
-    
+
+
 #@skip("simple")
 class TestSynchronized(VirtualTestSynchronized, unittest.TestCase):
     """

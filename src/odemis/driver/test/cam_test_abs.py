@@ -347,7 +347,6 @@ class VirtualTestCam(object):
         if self.left <= 0:
             dataflow.unsubscribe(self.receive_image)
 
-
     def receive_image2(self, dataflow, image):
         """
         callback for df of test_acquire_flow()
@@ -464,7 +463,6 @@ class VirtualTestSynchronized(object):
         cls.ccd = cls.camera_type(**cls.camera_kwargs)
         cls.sem = semcomedi.SEMComedi(**CONFIG_SEM)
 
-
         for child in cls.sem.children.value:
             if child.name == CONFIG_SED["name"]:
                 cls.sed = child
@@ -481,8 +479,8 @@ class VirtualTestSynchronized(object):
 
     def tearDown(self):
         # just in case it failed
-        self.ccd.data.subscribe(self.receive_ccd_image)
-        self.sed.data.subscribe(self.receive_sem_data)
+        self.ccd.data.unsubscribe(self.receive_ccd_image)
+        self.sed.data.unsubscribe(self.receive_sem_data)
 
     def test_basic(self):
         """
