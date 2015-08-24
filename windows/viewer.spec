@@ -2,6 +2,7 @@
 a = Analysis(['viewer.py'],
              pathex=['D:\\Development\\Odemis\\windows'],
              hiddenimports=[
+                 'cairo',
              ],
              hookspath=None,
              runtime_hooks=None)
@@ -12,12 +13,14 @@ exe = EXE(pyz,
           name='OdemisViewer.exe',
           debug=False,
           strip=None,
-          upx=True,
-          console=False )
+          upx=False,
+          console=False
+       )
 coll = COLLECT(exe,
                a.binaries,
                a.zipfiles,
                a.datas,
                strip=None,
-               upx=True,
-               name='OdemisViewer')
+               upx=False,
+               name='OdemisViewer'
+       )

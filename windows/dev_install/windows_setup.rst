@@ -60,7 +60,7 @@ and use `easy_install` (which is part of `setuptools`) to install the package.
     suitable for use with wxPython). We also need `libcairo-2.dll`,
     `freetype6.dll`, `libexpat-1.dll`, `libfontconfig-1.dll`, `libpng14-14.dll`
     and `zlib1.dll` from this location.
-#.  Install PyCairo using `easy_install py2cairo-1.10.0.win32-py2.7.exe` and
+#.  Install PyCairo using `easy_install -Z py2cairo-1.10.0.win32-py2.7.exe` and
     copy all DLL files to %Windows%/SysWOW64
 #.  Install Pillow, a repackaged version of PIL: `pip install Pillow`
 

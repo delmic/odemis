@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
 
 import logging
-import os
 import sys
+import os
+
+# Needed, so the cairo DLL files will be found
+os.environ['PATH'] = os.environ['PATH'] + ';' + os.path.abspath('.')
 
 # sys.path.append(os.path.abspath('../src'))
 # print "\n".join(sys.path)
