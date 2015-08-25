@@ -1397,12 +1397,12 @@ class TwoDPlotCanvas(BitmapCanvas):
     @wxlimit_invocation(2)  # max 1/2 Hz
     def update_thumbnail(self):
         if self.IsEnabled():
-            if self.images == [None]:
+            if all(i is None for i in self.images):
                 self.microscope_view.thumbnail.value = None
             else:
-                img = self._get_img_from_buffer()
-                if img is not None:
-                    self.microscope_view.thumbnail.value = img
+                image = self._get_img_from_buffer()
+                if image is not None:
+                    self.microscope_view.thumbnail.value = image
 
 
 class AngularResolvedCanvas(canvas.DraggableCanvas):
