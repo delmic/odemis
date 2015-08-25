@@ -37,7 +37,7 @@ SetCompressorDictSize 64
 !define MUI_FINISHPAGE_NOAUTOCLOSE
 !insertmacro MUI_PAGE_INSTFILES
 ; Finish page
-!define MUI_FINISHPAGE_RUN "$INSTDIR\fabrixkassa.exe"
+!define MUI_FINISHPAGE_RUN "$INSTDIR\OdemisViewer.exe"
 !insertmacro MUI_PAGE_FINISH
 
 ; Uninstaller pages
@@ -114,7 +114,7 @@ FunctionEnd
 
 Function un.onInit
   !insertmacro MULTIUSER_UNINIT
-  MessageBox MB_ICONQUESTION|MB_YESNO|MB_DEFBUTTON2 "Weet u zeker dat u $(^Name) wilt verwijderen?" IDYES +2
+  MessageBox MB_ICONQUESTION|MB_YESNO|MB_DEFBUTTON2 "Are you sure you want to uninstall $(^Name)?" IDYES +2
   Abort
 FunctionEnd
 
