@@ -26,7 +26,7 @@ SetCompressorDictSize 64
 !define MUI_ABORTWARNING
 ;;;;;!define MUI_ICON "fabrixkassa\gui\img\fabrixinstall.ico"
 !define MUI_UNICON "${NSISDIR}\Contrib\Graphics\Icons\modern-uninstall.ico"
-;;;;;!define MUI_WELCOMEFINISHPAGE_BITMAP "fabrixkassa\gui\img\install.bmp"
+!define MUI_WELCOMEFINISHPAGE_BITMAP "..\image\install.bmp"
 
 ; Welcome page
 !insertmacro MUI_PAGE_WELCOME
