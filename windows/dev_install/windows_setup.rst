@@ -81,4 +81,9 @@ Building the stand-alone Odemis viewer
 
 `pyinstaller -y viewer.spec`
 
+Building Windows installer
+--------------------------
 
+Install Nsis and runL
+
+`"C:\Program Files (x86)\NSIS\makensis" setup.nsi`
