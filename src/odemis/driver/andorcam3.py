@@ -308,13 +308,13 @@ class AndorCam3(model.DigitalCamera):
             min_res = (1, 1)
         # need to be before binning, as it is modified when changing binning
         self.resolution = model.ResolutionVA(self._transposeSizeToUser(resolution),
-                              [self._transposeSizeToUser(min_res),
-                               self._transposeSizeToUser(resolution)],
+                              (self._transposeSizeToUser(min_res),
+                               self._transposeSizeToUser(resolution)),
                                              setter=self._setResolution)
 
         self.binning = model.ResolutionVA(self._transposeSizeToUser(self._binning),
-                              [self._transposeSizeToUser((1, 1)),
-                               self._transposeSizeToUser(self._getMaxBinnings())],
+                              (self._transposeSizeToUser((1, 1)),
+                               self._transposeSizeToUser(self._getMaxBinnings())),
                                           setter=self._setBinning)
 
         # translation is automatically adjusted to fit whenever res/bin change
@@ -1012,13 +1012,13 @@ class AndorCam3(model.DigitalCamera):
         returns (2-tuple of int): resolution which fits the camera. It is equal
          or bigger than the requested resolution
         """
-        resolution = self.getSensorResolution()
+        resolution = self._shape[:2]
         max_size = (int(resolution[0] // self._binning[0]),
                     int(resolution[1] // self._binning[1]))
 
-        if (not self.isImplemented(u"AOIWidth") or
-            not self.isWritable(u"AOIWidth")):
-            return max_size
+        # Note: u"AOIWidth" is defined as "not writtable" if the acquisition is
+        # active, so no check can be done here. But normally, the VA only
+        # allows to reach here if it was writtable at init.
 
         # smaller than the whole sensor
         size = (min(size_req[0], max_size[0]), min(size_req[1], max_size[1]))
