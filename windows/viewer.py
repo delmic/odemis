@@ -5,7 +5,10 @@ import sys
 import os
 
 # Needed, so the cairo DLL files will be found
-os.environ['PATH'] = os.environ['PATH'] + ';' + os.path.abspath('.')
+if hasattr(sys, 'frozen'):
+    os.environ['PATH'] = os.environ['PATH'] + ';' + os.path.dirname(sys.executable)
+else:
+    os.environ['PATH'] = os.environ['PATH'] + ';' + os.path.dirname(sys.argv[0])
 
 # sys.path.append(os.path.abspath('../src'))
 # print "\n".join(sys.path)
