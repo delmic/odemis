@@ -62,13 +62,15 @@ exe = EXE(pyz,
           debug=False,
           strip=None,
           upx=False,
-          console=False
+          console=False,
+          icon='..\\image\\viewer.ico'
        )
 
 coll = COLLECT(exe,
                a.binaries,
                get_lib_tiff(),
                get_cairo_dlls(),
+               [('OdemisViewer.ico', '..\\image\\viewer.ico', 'DATA')],
                a.zipfiles,
                a.datas,
                strip=None,
