@@ -180,7 +180,7 @@ class VirtualTestCam(object):
 
         self.camera.translation.value = (-10, 3)
         im = self.camera.data.get()
-        exp_pos = (-1.1 + (-10 * 2e-6 * 0.5), -0.9 - (3 * 2e-6 * 0.5))
+        exp_pos = (-1.1 + (-10 * 2e-6 * 0.5), 0.9 - (3 * 2e-6 * 0.5))  # phys Y goes opposite direction
         self.assertEqual(im.metadata[model.MD_POS], exp_pos)
 
         # Note: the position of the image when the resolution is odd can be slightly
