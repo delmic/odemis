@@ -203,7 +203,9 @@ class ViewPortController(object):
 
         for vp in self._viewports:
             vp.SetFocus(False)
+            vp.Refresh()
         viewport.SetFocus(True)
+        viewport.Refresh()
 
     def _on_view_layout(self, layout):
         """ Called when the view layout of the GUI must be changed
