@@ -158,6 +158,8 @@ class StreamPanelHeader(wx.Control):
     def _add_label_ctrl(self):
         """ Add a label control to the header panel """
         label_ctrl = wx.StaticText(self, -1, self.Parent.stream.name.value)
+        label_ctrl.SetBackgroundColour(self.Parent.GetBackgroundColour())
+        label_ctrl.SetForegroundColour(FG_COLOUR_MAIN)
         self._add_ctrl(label_ctrl, stretch=True)
         return label_ctrl
 
