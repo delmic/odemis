@@ -707,6 +707,8 @@ class DelphiStateController(SecomStateController):
         """ Called when the vacuum is reached (ie, the future ended) """
         try:
             future.result()  # just to raise exception if failed
+        except CancelledError:
+            logging.info("Loading of the sample holder was cancelled")
         except Exception as exp:
             # something went wrong => just eject the sample holder
             logging.exception("Loading the sample holder failed")
