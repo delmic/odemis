@@ -106,7 +106,7 @@ class StreamController(object):
         self._lbl_exc_peak = None
         self._lbl_em_peak = None
 
-        self.entries = OrderedDict()
+        self.entries = OrderedDict()  # name -> SettingEntry
 
         # Add local hardware settings to the stream panel
         self._add_hw_setting_controls()
@@ -214,7 +214,7 @@ class StreamController(object):
                 logging.debug("%s detector configuration found for %s", name,
                               self.stream.detector.role)
 
-            se = create_setting_entry(self.stream_panel, name, va, self.stream.emitter,
+            se = create_setting_entry(self.stream_panel, name, va, self.stream.detector,
                                       conf)
             self.entries[se.name] = se
             add_divider = True
