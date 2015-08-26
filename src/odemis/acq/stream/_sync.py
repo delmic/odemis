@@ -28,7 +28,9 @@ import numpy
 from odemis import model
 from odemis.acq import _futures
 from odemis.acq import drift
+from odemis.acq._futures import executeTask
 from odemis.model import MD_POS, MD_DESCRIPTION, MD_PIXEL_SIZE, MD_ACQ_DATE, MD_AD_LIST
+from odemis.util import inertia, limit_invocation, img
 import threading
 import time
 
@@ -56,6 +58,7 @@ class MultipleDetectorStream(Stream):
         # Don't use the .raw of the substreams, because that is used for live view
         self._main_raw = []
         self._rep_raw = []
+        self._mif = []
         self._anchor_raw = []  # data of the anchor region
 
         assert main_stream._emitter == rep_stream._emitter
@@ -66,6 +69,8 @@ class MultipleDetectorStream(Stream):
         # repetition stream detector
         self._rep_det = self._rep_stream._detector
         self._rep_df = self._rep_stream._dataflow
+        # acquisition end event
+        self._acq_done = threading.Event()
 
         # For the acquisition
         self._acq_lock = threading.Lock()
@@ -146,11 +151,12 @@ class MultipleDetectorStream(Stream):
         if self._current_future is not None and not self._current_future.done():
             raise IOError("Cannot do multiple acquisitions simultaneously")
 
-        if self._acq_thread and self._acq_thread.isAlive():
-            logging.debug("Waiting for previous acquisition to fully finish")
-            self._acq_thread.join(10)
-            if self._acq_thread.isAlive():
-                logging.error("Previous acquisition not ending")
+        if not self._acq_done.is_set():
+            if self._acq_thread and self._acq_thread.isAlive():
+                logging.debug("Waiting for previous acquisition to fully finish")
+                self._acq_thread.join(10)
+                if self._acq_thread.isAlive():
+                    logging.error("Previous acquisition not ending")
 
         # At this point dcRegion and dcDwellTime must have been set
         if self._main_stream.dcRegion.value != UNDEFINED_ROI:
@@ -178,12 +184,13 @@ class MultipleDetectorStream(Stream):
         return f
 
     @abstractmethod
-    def _onMultipleDetectorData(self, main_data, rep_data):
+    def _onMultipleDetectorData(self, main_data, rep_data, repetition):
         """
         called at the end of an entire acquisition
         main_data (DataArray): the main stream data
         rep_data (list of DataArray): the repetition stream data (ordered, with
             X changing fast, then Y slow)
+        repetition (tuple of ints): Number of repetitions on each axis aka shape
         """
         pass
 
@@ -515,6 +522,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
         """
         # TODO: handle better very large grid acquisition (than memory oops)
         try:
+            self._acq_done.clear()
             rep_time = self._ssAdjustHardwareSettings()
             dwell_time = self._emitter.dwellTime.value
             sem_time = dwell_time * numpy.prod(self._emitter.resolution.value)
@@ -668,7 +676,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 main_one = self._assembleMainData(rep, roi, self._main_data)  # shape is (Y, X)
             # explicitly add names to make sure they are different
             main_one.metadata[MD_DESCRIPTION] = self._main_stream.name.value
-            self._onMultipleDetectorData(main_one, rep_buf)
+            self._onMultipleDetectorData(main_one, rep_buf, rep)
 
             if self._dc_estimator is not None:
                 self._anchor_raw.append(self._assembleAnchorData(self._dc_estimator.raw))
@@ -694,6 +702,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
             self._main_stream._unlinkHwVAs()
             self._rep_stream._unlinkHwVAs()
             del self._main_data  # regain a bit of memory
+            self._acq_done.set()
 
 
 class SEMMDStream(MultipleDetectorStream):
@@ -744,6 +753,7 @@ class SEMMDStream(MultipleDetectorStream):
           Exceptions if error
         """
         try:
+            self._acq_done.clear()
             dt = self._ssAdjustHardwareSettings()
             if self._emitter.dwellTime.value != dt:
                 raise IOError("Expected hw dt = %f but got %f" % (dt, self._emitter.dwellTime.value))
@@ -869,7 +879,7 @@ class SEMMDStream(MultipleDetectorStream):
             main_one = self._assembleMainData(rep, roi, self._main_data)
             # explicitly add names to make sure they are different
             main_one.metadata[MD_DESCRIPTION] = self._main_stream.name.value
-            self._onMultipleDetectorData(main_one, rep_buf)
+            self._onMultipleDetectorData(main_one, rep_buf, rep)
 
             if self._dc_estimator is not None:
                 self._anchor_raw.append(self._assembleAnchorData(self._dc_estimator.raw))
@@ -895,15 +905,15 @@ class SEMMDStream(MultipleDetectorStream):
             self._main_stream._unlinkHwVAs()
             self._rep_stream._unlinkHwVAs()
             del self._main_data  # regain a bit of memory
+            self._acq_done.set()
 
-    def _onMultipleDetectorData(self, main_data, rep_data):
+    def _onMultipleDetectorData(self, main_data, rep_data, repetition):
         """
         cf SEMCCDMDStream._onMultipleDetectorData()
         """
         # we just need to treat the same way as main data
-        rep = self._rep_stream.repetition.value
         roi = self._rep_stream.roi.value
-        rep_one = self._assembleMainData(rep, roi, rep_data)
+        rep_one = self._assembleMainData(repetition, roi, rep_data)
         rep_one.metadata[MD_DESCRIPTION] = self._rep_stream.name.value
         self._rep_raw = [rep_one]
         self._main_raw = [main_data]
@@ -916,21 +926,20 @@ class SEMSpectrumMDStream(SEMCCDMDStream):
     image).
     """
 
-    def _onMultipleDetectorData(self, main_data, rep_data):
+    def _onMultipleDetectorData(self, main_data, rep_data, repetition):
         """
         cf SEMCCDMDStream._onMultipleDetectorData()
         """
         assert rep_data[0].shape[-2] == 1  # should be a spectra (Y == 1)
-        rep = self._rep_stream.repetition.value
 
         # assemble all the CCD data into one
-        spec_data = self._assembleSpecData(rep_data, rep)
+        spec_data = self._assembleSpecData(rep_data, repetition)
         try:
             md_sem = main_data.metadata
             spec_data.metadata[MD_POS] = md_sem[MD_POS]
             # handle sub-pixels (aka fuzzing)
             shape_main = main_data.shape[-1:-3:-1]  # 1,1,1,Y,X -> X, Y
-            tile_shape = (shape_main[0] / rep[0], shape_main[1] / rep[1])
+            tile_shape = (shape_main[0] / repetition[0], shape_main[1] / repetition[1])
             pxs = (md_sem[MD_PIXEL_SIZE][0] * tile_shape[0],
                    md_sem[MD_PIXEL_SIZE][1] * tile_shape[1])
             spec_data.metadata[MD_PIXEL_SIZE] = pxs
@@ -969,6 +978,170 @@ class SEMSpectrumMDStream(SEMCCDMDStream):
         return model.DataArray(spec_data, metadata=md)
 
 
+class MomentOfInertiaStream(SEMCCDMDStream):
+    """
+    Multiple detector Stream made of SEM + CCD.
+    Provides the live display in the mirror alignment mode for SPARC v2.
+    Assembles the CCD images into a big image representing the moment of inertia.
+    """
+
+    def __init__(self, name, main_stream, rep_stream):
+        super(MomentOfInertiaStream, self).__init__(name, main_stream, rep_stream)
+
+        self.is_active.subscribe(self._onActive)
+
+        # The background data (typically, an acquisition without ebeam).
+        # It is subtracted from the acquisition data.
+        # If set to None, zero background is subtracted.
+        self.background = model.VigilantAttribute(None)
+
+        self._acquire_f = None
+        # DataArray or None: RGB projection of the raw data
+        self.image = model.VigilantAttribute(None)
+        self.image.value = model.DataArray([])  # start with an empty array
+
+    @limit_invocation(0.1)
+    def _updateImage(self):
+        # convert into a RGB DataArray
+        if self.raw:
+            im = img.DataArray2RGB(self.raw[1])
+            self.image.value = im
+
+    def on_done(self, future):
+        self._updateImage()
+
+        # start the new one
+        if self._acq_state != CANCELLED:
+            self._acquire_f = self.acquire()
+            self._acquire_f.add_done_callback(self.on_done)
+
+    def _onActive(self, active):
+        """ Called when the Stream is activated or deactivated by setting the
+        is_active attribute
+        """
+        if active:
+            if not self.should_update.value:
+                logging.warning("Trying to activate stream while it's not "
+                                "supposed to update")
+            self._mif = []
+            self._acquire_f = self.acquire()
+            self._acquire_f.add_done_callback(self.on_done)
+        else:
+            self._acquire_f.cancel()
+
+    def _ssOnRepetitionImage(self, df, data):
+        logging.debug("Repetition stream data received")
+        self._rep_data = model.DataArray(numpy.empty(shape=data.shape))
+        bg_image = self.background.value
+        if bg_image is None:
+            bg_image = numpy.zeros(shape=data.shape)
+        self._mif.append(MomentOfInertia(data, bg_image))
+        self._acq_rep_complete.set()
+
+    def _onMultipleDetectorData(self, main_data, rep_data, repetition):
+        """
+        cf SEMCCDMDStream._onMultipleDetectorData()
+        """
+
+        # Wait for the moment of inertia calculation results
+        mif_results = []
+        for f in self._mif:
+            try:
+                mi = f.result()
+                mif_results.append(mi)
+            except Exception as e:
+                logging.debug("Moment of inertia calculation failed, %s", e)
+        self._mif = []
+        # convert the list into array
+        moment_array = numpy.array(mif_results)
+        moment_array = moment_array.reshape(repetition)
+        self._rep_raw = [model.DataArray(moment_array)]
+        self._main_raw = [main_data]
+
+
+# rough estimation
+MI_DURATION = 0.3  # s
+def _DoMomentOfInertia(future, data, background):
+    """
+    It performs the moment of inertia calculation.
+    future (model.ProgressiveFuture): Progressive future provided by the wrapper
+    data (model.DataArray): The optical image
+    background (model.DataArray): Background image that we use for substraction
+    returns (float): moment of inertia
+    raises:
+        CancelledError() if cancelled
+    """
+    logging.debug("Moment of inertia calculation...")
+
+    try:
+        if future._mi_state == CANCELLED:
+            raise CancelledError()
+        try:
+            moment_of_inertia = inertia.CalculateMomentOfInertia(data, background)
+            return moment_of_inertia
+        except Exception as e:
+            raise e
+    finally:
+        with future._mi_lock:
+            if future._mi_state == CANCELLED:
+                raise CancelledError()
+            future._mi_state = FINISHED
+
+
+def MomentOfInertia(data, background):
+    """
+    Wrapper for DoMomentOfInertia. It provides the ability to check the
+    progress of moment of inertia calculation procedure or even cancel it.
+    data (model.DataArray): The optical image
+    background (model.DataArray): Background image that we use for
+    substraction
+    returns (model.ProgressiveFuture):  Progress of DoMomentOfInertia, whose
+    result() will return:
+            moment of inertia (float)
+    """
+    # Create ProgressiveFuture and update its state to RUNNING
+    est_start = time.time() + 0.1
+
+    f = model.ProgressiveFuture(start=est_start,
+                                end=est_start + estimateMomentOfInertiaTime())
+    f._mi_state = RUNNING
+
+    # Task to run
+    f.task_canceller = _CancelMomentOfInertia
+    f._mi_lock = threading.Lock()
+
+    # Run in separate thread
+    mi_thread = threading.Thread(target=executeTask,
+                                           name="Delphi Calibration",
+                                           args=(f, _DoMomentOfInertia, f, data,
+                                                 background))
+
+    mi_thread.start()
+    return f
+
+
+def _CancelMomentOfInertia(future):
+    """
+    Canceller of _DoMomentOfInertia task.
+    """
+    logging.debug("Cancelling moment of inertia calculation...")
+
+    with future._mi_lock:
+        if future._mi_state == FINISHED:
+            return False
+        future._mi_state = CANCELLED
+        logging.debug("Moment of inertia calculation cancelled.")
+
+    return True
+
+
+def estimateMomentOfInertiaTime():
+    """
+    Estimates calculation procedure duration
+    """
+    return MI_DURATION
+
+
 class SEMARMDStream(SEMCCDMDStream):
     """
     Multiple detector Stream made of SEM + AR.
@@ -976,7 +1149,7 @@ class SEMARMDStream(SEMCCDMDStream):
     image).
     """
 
-    def _onMultipleDetectorData(self, main_data, rep_data):
+    def _onMultipleDetectorData(self, main_data, rep_data, repetition):
         """
         cf SEMCCDMDStream._onMultipleDetectorData()
         """
