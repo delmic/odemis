@@ -9,10 +9,7 @@ SetCompressorDictSize 64
 ; HM NIS Edit Wizard helper defines
 !define PRODUCT_NAME "OdemisViewer"
 ; Product version is defined through the command line!
-!ifndef PRODUCT_VERSION
-    !define PRODUCT_VERSION "2.1"
-!endif
-!define PRODUCT_PUBLISHER "Elit"
+!define PRODUCT_PUBLISHER "Delmic"
 !define PRODUCT_WEB_SITE "http://www.delmic.com"
 !define PRODUCT_DIR_REGKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\${PRODUCT_NAME}.exe"
 !define PRODUCT_UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
@@ -30,7 +27,7 @@ SetCompressorDictSize 64
 
 ; Welcome page
 !insertmacro MUI_PAGE_WELCOME
-!define MUI_TEXT_WELCOME_INFO_TITLE "$(^NameDA) installation"
+!define MUI_TEXT_WELCOME_INFO_TITLE "$(^NameDA)"
 ; Directory page
 !insertmacro MUI_PAGE_DIRECTORY
 ; Instfiles page

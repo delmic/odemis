@@ -67,7 +67,7 @@ exe = EXE(pyz,
           debug=False,
           strip=None,
           upx=False,
-          console=True,
+          console=False,
           icon='..\\image\\viewer.ico'
        )
 
