@@ -44,6 +44,11 @@ def get_cairo_dlls():
 
     raise ImportError("Could not find Libtiff files!")
 
+def get_version():
+    import odemis
+    with open('version.txt', 'w') as f:
+        f.write(odemis._get_version())
+    return [('version.txt', 'version.txt', 'DATA')]
 
 a = Analysis(['viewer.py'],
              pathex=['D:\\Development\\Odemis\\windows'],
@@ -62,7 +67,7 @@ exe = EXE(pyz,
           debug=False,
           strip=None,
           upx=False,
-          console=False,
+          console=True,
           icon='..\\image\\viewer.ico'
        )
 
@@ -70,6 +75,7 @@ coll = COLLECT(exe,
                a.binaries,
                get_lib_tiff(),
                get_cairo_dlls(),
+               get_version(),
                [('OdemisViewer.ico', '..\\image\\viewer.ico', 'DATA')],
                a.zipfiles,
                a.datas,

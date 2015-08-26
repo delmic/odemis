@@ -56,19 +56,26 @@ def _get_version_setuptools():
     try:
         return pkg_resources.get_distribution("odemis").version
     except pkg_resources.DistributionNotFound:
-        # FIXME: Dirty workaround for packaging using PyInstaller
-        return "1"
-        # raise LookupError("Not packaged via setuptools")
+        raise LookupError("Not packaged via setuptools")
 
 def _get_version():
     try:
         return _get_version_git()
     except LookupError:
         # fallback to setuptools (if it's not in git, it should be packaged)
-        return _get_version_setuptools()
-    except LookupError:
-        logging.warning("Unable to find the actual version")
-        return "Unknown"
+        try:
+            return _get_version_setuptools()
+        except LookupError:
+            # Last attempt: see if there is a version file
+            import sys
+            if getattr(sys, 'frozen', False):
+                path = os.path.join(os.path.dirname(sys.executable), 'version.txt')
+                if os.path.exists(path):
+                    with open(path, 'r') as f:
+                        return f.readline()
+
+            logging.warning("Unable to find the actual version")
+            return "Unknown"
 
 def get_major_version():
     """ This function returns a short version string of the form "vX.X" """
@@ -77,8 +84,8 @@ def get_major_version():
 __version__ = _get_version()
 __fullname__ = "Open Delmic Microscope Software"
 __shortname__ = "Odemis"
-__copyright__ = "Copyright © 2012-2015 Delmic"
-__authors__ = ["Éric Piel", "Rinze de Laat", "Kimon Tsitsikas"]
+__copyright__ = u"Copyright © 2012-2015 Delmic"
+__authors__ = [u"Éric Piel", "Rinze de Laat", "Kimon Tsitsikas"]
 __license__ = "GNU General Public License version 2"
 __licensetxt__ = (
 """Odemis is free software: you can redistribute it and/or modify it under the terms
