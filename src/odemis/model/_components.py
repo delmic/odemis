@@ -413,7 +413,11 @@ class DigitalCamera(Detector):
                 # more than 50% wrong.
                 # from https://www.microscopyu.com/articles/formulas/formulasfielddepth.html
                 dof = (l * ri) / na ** 2 + (ri * pxs) / (mag - na)
-                self.depthOfField._set_value(dof, force_write=True)
+                rng = self.depthOfField.range
+                if rng[0] <= dof <= rng[1]:
+                    self.depthOfField._set_value(dof, force_write=True)
+                else:
+                    logging.warning("Depth of field computed seems incorrect: %f m", dof)
             except KeyError:
                 pass  # Not enough metadata is present for computing Depth of Field
             except Exception:
