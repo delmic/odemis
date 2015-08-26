@@ -32,6 +32,7 @@ from Pyro4.core import oneway
 import collections
 from ctypes import *
 import gc
+import glob
 import logging
 import numpy
 from odemis import model, util
@@ -241,10 +242,8 @@ class AndorCam3(model.DigitalCamera):
         if device is None:
             # nothing else to initialise
             return
-        # TODO: if USB Zyla, check that it's connected via USB 3.
-        # => see "cat /sys/bus/usb/devices/*/version"
-        # and maybe GetInt(UsbProductId) GetInt(UsbDeviceId) or DeviceVideoIndex?
-        # + InterfaceType (=> "USB3")
+
+        self._check_connection()
 
         # TODO: handle when the camera is turned off/on => use CameraPresent ?
 
@@ -309,13 +308,13 @@ class AndorCam3(model.DigitalCamera):
             min_res = (1, 1)
         # need to be before binning, as it is modified when changing binning
         self.resolution = model.ResolutionVA(self._transposeSizeToUser(resolution),
-                              [self._transposeSizeToUser(min_res),
-                               self._transposeSizeToUser(resolution)],
+                              (self._transposeSizeToUser(min_res),
+                               self._transposeSizeToUser(resolution)),
                                              setter=self._setResolution)
 
         self.binning = model.ResolutionVA(self._transposeSizeToUser(self._binning),
-                              [self._transposeSizeToUser((1, 1)),
-                               self._transposeSizeToUser(self._getMaxBinnings())],
+                              (self._transposeSizeToUser((1, 1)),
+                               self._transposeSizeToUser(self._getMaxBinnings())),
                                           setter=self._setBinning)
 
         # translation is automatically adjusted to fit whenever res/bin change
@@ -452,6 +451,50 @@ class AndorCam3(model.DigitalCamera):
     def Close(self):
         assert self.handle is not None
         self.atcore.AT_Close(self.handle)
+
+    def _check_connection(self):
+        """
+        Raise an HwError if the device is not connected over the right interface
+        Typically, this happens if a USB3 camera is connected over USB2.
+        """
+        if not self.isImplemented(u"InterfaceType"):
+            return
+
+        itf = self.GetString(u"InterfaceType")
+        if itf == "USB3":
+            # The Zyla must be connected over USB3, but the driver will report that
+            # everything is fine even if it's connected over USB2... until
+            # acquisition starts and strange things happen.
+
+            # Current USB protocol level is in "/sys/bus/usb/devices/*/version".
+            # However, for the Zyla, we cannot use UsbProductId or UsbDeviceId, so
+            # we just use the serial number (which is also in ./serial)
+            try:
+                sn = self.GetString(u"SerialNumber")
+                sn_paths = glob.glob('/sys/bus/usb/devices/*/serial')
+                for p in sn_paths:
+                    try:
+                        f = open(p)
+                        snp = f.read().strip()
+                    except IOError:
+                        logging.debug("Failed to read %s, skipping device", p)
+                    if snp == sn:
+                        break
+                else:
+                    logging.warning("Failed to find USB device %s in the USB path", sn)
+                    return
+                # .../3-1.2/serial => .../3-1.2/3-1.2:1.0/ttyUSB1
+                sys_path = os.path.dirname(p)
+                f = open(sys_path + "/version")
+                usbv = float(f.read().strip())
+            except Exception:
+                logging.info("Failed to check USB version for device %s", self.name, ex_info=True)
+                return
+
+            if usbv < 3:
+                raise HwError("Device %s is connected via USB %d, instead of USB 3.0. "
+                              "Check the connection of the camera goes to a USB 3.0 port."
+                              % (self.name, usbv))
 
     def Command(self, command):
         self.atcore.AT_Command(self.handle, command)
@@ -799,7 +842,7 @@ class AndorCam3(model.DigitalCamera):
         """
         try:
             firmware = self.GetString(u"FirmwareVersion")
-            return "firmware: '%s'" % firmware
+            return "firmware: %s" % firmware
         except ATError:
             # Simcam has no firmware
             return "unknown"
@@ -943,17 +986,9 @@ class AndorCam3(model.DigitalCamera):
                 m = re.match("([0-9]+)x([0-9]+)", bs)
                 b = int(m.group(1)), int(m.group(2))
                 self.SetEnumString(u"AOIBinning", bs)
-                # Note: SDK3.4 32 bits seems to have a problem with AOI < 4096 (kernel oops)
-                # => forbid small resolutions > 48*48 px
-                # From SDK 3.5, it seems to work fine.
-                # Once using only versions >= 3.5: can use this simple code:
+                # Note: Before SDKv3.5, 32 bits had a problem with AOI < 4096 (kernel oops)
                 rrng_width[b[0]] = self.GetIntRanges(u"AOIWidth")
                 rrng_height[b[1]] = self.GetIntRanges(u"AOIHeight")
-
-#                 rng_width = self.GetIntRanges(u"AOIWidth")
-#                 rng_height = self.GetIntRanges(u"AOIHeight")
-#                 rrng_width[b[0]] = (max(48, rng_width[0]), rng_width[1])
-#                 rrng_height[b[1]] = (max(48, rng_height[0]), rng_height[1])
         else:
             # no binning -> 1x1
             rrng_width[1] = self.GetIntRanges(u"AOIWidth")
@@ -969,13 +1004,13 @@ class AndorCam3(model.DigitalCamera):
         returns (2-tuple of int): resolution which fits the camera. It is equal
          or bigger than the requested resolution
         """
-        resolution = self.getSensorResolution()
+        resolution = self._shape[:2]
         max_size = (int(resolution[0] // self._binning[0]),
                     int(resolution[1] // self._binning[1]))
 
-        if (not self.isImplemented(u"AOIWidth") or
-            not self.isWritable(u"AOIWidth")):
-            return max_size
+        # Note: u"AOIWidth" is defined as "not writtable" if the acquisition is
+        # active, so no check can be done here. But normally, the VA only
+        # allows to reach here if it was writtable at init.
 
         # smaller than the whole sensor
         size = (min(size_req[0], max_size[0]), min(size_req[1], max_size[1]))

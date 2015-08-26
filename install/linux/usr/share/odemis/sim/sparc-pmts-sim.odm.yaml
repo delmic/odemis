@@ -1,4 +1,9 @@
-# Configuration for the SPARC system at Monash University
+# Configuration for a SPARC system with 5 detectors:
+# * ETD (from SEM)
+# * AR CCD
+# * Analog CL PMT
+# * Spectrometer CCD
+# * Monochromator counting PMT
 SPARC-MONASH: {
     class: Microscope,
     role: sparc,
@@ -79,6 +84,7 @@ SPARC-MONASH: {
         port: "/dev/fake", # for simulator
         prot_time: 0.0002,  # s
         prot_curr: 50.e-6,  # A
+        relay_cycle: 10, # s
     }
 }
 
@@ -121,6 +127,8 @@ SPARC-MONASH: {
     # Big mirror config
     init: {
        mag: 0.4917, # ratio
+       na: 0.2, # ratio, numerical aperture
+       ri: 1.0, # ratio, refractive index
        pole_pos: [458, 519], # (px, px), position of the pole (aka the hole in the mirror)
        x_max: 13.25e-3,  # m, the distance between the parabola origin and the cutoff position
        hole_diam: 0.6e-3,  # m, diameter the hole in the mirror
@@ -130,6 +138,8 @@ SPARC-MONASH: {
     # Small mirror config
     #init: {
     #   mag: 0.4917, # ratio
+    #   na: 0.2, # ratio, numerical aperture
+    #   ri: 1.0, # ratio, refractive index
     #   pole_pos: [1280, 1080], # (px, px), position of the pole (aka the hole in the mirror)
     #   x_max: 10e-3,  # m, the distance between the parabola origin and the cutoff position
     #   hole_diam: 0.6e-3,  # m, diameter the hole in the mirror
@@ -151,6 +161,9 @@ SPARC-MONASH: {
            axis: "rx",
            inverted: ["rx"],
            positions: [[0, "on"], [1.5707963267948966, "off"]],
+    },
+    children: {
+        "dummy": "CL PMT control unit", # just to enforce init order
     },
     affects: ["Focus Lens", "Angular Camera", "Spectrometer"]  
 }
@@ -203,6 +216,9 @@ SPARC-MONASH: {
            # inverted: ["rx"],
            positions: [[0, "on"], [1.5707963267948966, "off"]],
     },
+    children: {
+        "dummy": "CL PMT control unit", # just to enforce init order
+    },
     affects: ["Angular Camera", "CL Detector"]
 }
 
@@ -222,6 +238,9 @@ SPARC-MONASH: {
            axis: "rx",
            # inverted: ["rx"],
            positions: [[0, "on"], [1.5707963267948966, "off"]],
+    },
+    children: {
+        "dummy": "CL PMT control unit", # just to enforce init order
     },
     affects: ["Angular Camera", "Spectrometer"]  
 }
