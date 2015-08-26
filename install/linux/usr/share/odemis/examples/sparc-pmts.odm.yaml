@@ -80,6 +80,7 @@ SPARC-MONASH: {
         port: "/dev/ttyPMT*",
         prot_time: 0.0002,  # s
         prot_curr: 50.e-6,  # A
+        relay_cycle: 10, # s
     }
 }
 
@@ -156,6 +157,9 @@ SPARC-MONASH: {
            inverted: ["rx"],
            positions: [[0, "on"], [1.5707963267948966, "off"]],
     },
+    children: {
+        "dummy": "CL PMT control unit", # just to enforce init order
+    },
     affects: ["Focus Lens", "Angular Camera", "Spectrometer"]  
 }
 
@@ -196,6 +200,9 @@ SPARC-MONASH: {
            # inverted: ["rx"],
            positions: [[0, "on"], [1.5707963267948966, "off"]],
     },
+    children: {
+        "dummy": "CL PMT control unit", # just to enforce init order
+    },
     affects: ["Angular Camera", "CL Detector"]
 }
 
@@ -214,6 +221,9 @@ SPARC-MONASH: {
            axis: "rx",
            # inverted: ["rx"],
            positions: [[0, "on"], [1.5707963267948966, "off"]],
+    },
+    children: {
+        "dummy": "CL PMT control unit", # just to enforce init order
     },
     affects: ["Angular Camera", "Spectrometer"]  
 }

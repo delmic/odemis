@@ -209,13 +209,15 @@ class PMTControl(model.HwComponent):
      * protection is on (=> gain is forced to 0)
      * gain = 0
      * power up
-     * relay is reset (off for 10s, then on)
     '''
-    def __init__(self, name, role, port, prot_time=1e-3, prot_curr=50e-6, **kwargs):
+    def __init__(self, name, role, port, prot_time=1e-3, prot_curr=50e-6,
+                 relay_cycle=None, **kwargs):
         '''
         port (str): port name
         prot_time (float): protection trip time (in s)
         prot_curr (float): protection current threshold (in Amperes)
+        relay_cycle (None or 0<float): if not None, will power cycle the relay
+          with the given delay (in s)
         Raise an exception if the device cannot be opened
         '''
         model.HwComponent.__init__(self, name, role, **kwargs)
@@ -259,6 +261,10 @@ class PMTControl(model.HwComponent):
         self._setPowerSupply(True)
 
         # relay initialization
+        if relay_cycle is not None:
+            logging.info("Power cycling the relay for %f s", relay_cycle)
+            self.setRelay(False)
+            time.sleep(relay_cycle)
         self.setRelay(True)
 
     def terminate(self):
