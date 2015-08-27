@@ -1566,7 +1566,12 @@ class DraggableCanvas(BitmapCanvas):
         Note: The Device Context (dc) will automatically be drawn when it goes
         out of scope at the end of this method.
         """
-        dc_view = wx.PaintDC(self)
+
+        # Fix to prevent flicker from the Cairo view overlay rendering under Windows
+        if os.name == 'nt':
+            dc_view = wx.BufferedPaintDC(self)
+        else:
+            dc_view = wx.PaintDC(self)
 
         self.margins = ((self._bmp_buffer_size[0] - self.ClientSize.x) // 2,
                         (self._bmp_buffer_size[1] - self.ClientSize.y) // 2)
