@@ -1618,6 +1618,12 @@ class CLController(Controller):
 
         # Nothing is moving => turn off encoder (in a few seconds)
         for a in axes:
+            # TODO: call RelaxPiezos after the end of a move (reduces voltage,
+            # and so reduces heat). Works only if the device supports RNP.
+            # The relax procedure is started by
+            # * the RNP command
+            # * Switching from closed-loop to open-loop operation (“Servo off”)
+            # * Switching to closed-loop operation in analog mode
             self._releaseEncoder(a, 10) # release in 10 s (5x the cost to start)
         return False
 
@@ -1822,6 +1828,8 @@ class OLController(Controller):
         duration = abs(distance) / self._speed[axis]
         self._storeMove(axis, distance, duration)
         return distance
+
+    # TODO: call RelaxPiezos after the end of a move
 
     def stopMotion(self):
         super(OLController, self).stopMotion()

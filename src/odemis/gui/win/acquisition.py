@@ -75,19 +75,8 @@ class AcquisitionDialog(xrcfr_acq):
         self._settings_controller = SecomSettingsController(
             self,
             self._tab_data_model,
-            highlight_change=True
+            highlight_change=True  # also adds a "Reset" context menu
         )
-
-        # FIXME: pass the fold_panels
-
-        # Compute the preset values for each preset
-        self._preset_values = {}  # dict string -> dict (SettingEntries -> value)
-        orig_entries = self._settings_controller.entries
-        self._orig_settings = preset_as_is(orig_entries) # to detect changes
-        for n, preset in presets.items():
-            self._preset_values[n] = preset(orig_entries)
-        # Presets which have been confirmed on the hardware
-        self._presets_confirmed = set() # (string)
 
         # To turn on/off the fan
         self._orig_fan_speed = None
@@ -99,6 +88,19 @@ class AcquisitionDialog(xrcfr_acq):
                                                         self.pnl_secom_streams)
         # The streams currently displayed are the one visible
         self.add_all_streams()
+
+        # FIXME: pass the fold_panels
+
+        # Compute the preset values for each preset
+        self._preset_values = {}  # dict string -> dict (SettingEntries -> value)
+        orig_entries = self._settings_controller.entries
+        for sc in self.streambar_controller.stream_controllers:
+            orig_entries.extend(sc.entries.values())
+        self._orig_settings = preset_as_is(orig_entries) # to detect changes
+        for n, preset in presets.items():
+            self._preset_values[n] = preset(orig_entries)
+        # Presets which have been confirmed on the hardware
+        self._presets_confirmed = set() # (string)
 
         # If it could be possible to do fine alignment, allow the user to choose
         if self._can_fine_align(self._tab_data_model.streams.value):

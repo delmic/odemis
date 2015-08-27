@@ -70,19 +70,22 @@ def apply_preset(preset):
         except Exception:
             logging.exception("Failed to update preset %s", se.name)
 
-def _get_entry(entries, hw_comp, name):
+
+def _get_entries(entries, hw_comp, name):
     """
-    find the entry for the given component with the name
+    Find the entries for the given component with the name
     entries (list of SettingEntries): all the entries
     comp (model.Component)
     name (String)
-    return (SettingEntry or None)
+    return (list of SettingEntry): all the entries which match
     """
+    # TODO: there can be multiple entries with
+    matchs = []
     for e in entries:
         if e.hw_comp == hw_comp and e.name == name:
-            return e
-    else:
-        return None
+            matchs.append(e)
+
+    return matchs
 
 
 # Quality setting presets
@@ -101,7 +104,6 @@ def preset_hq(entries):
             # not a real setting, just info
             logging.debug("Skipping the value %s", entry.name)
             continue
-
 
         value = entry.vigilattr.value
         if entry.name == "resolution":
@@ -139,12 +141,16 @@ def preset_hq(entries):
                 except (AttributeError, model.NotApplicableError):
                     pass
             # Compensate decrease in energy by longer exposure time
-            et_entry = _get_entry(entries, entry.hw_comp, "exposureTime")
-            if et_entry:
-                et_value = ret.get(et_entry, et_entry.vigilattr.value)
+            et_entries = _get_entries(entries, entry.hw_comp, "exposureTime")
+            for e in et_entries:
+                et_value = ret.get(e, e.vigilattr.value)
                 for prevb, newb in zip(prev_val, value):
                     et_value *= prevb / newb
-                ret[et_entry] = et_value
+                ret[e] = et_value
+
+        elif entry.name == "exposureTime":
+            if e in ret:  # already computed (by binning), just reuse that value
+                value = ret[e]
 
         elif entry.name == "readoutRate":
             # the smallest, the less noise (and slower, but we don't care)
