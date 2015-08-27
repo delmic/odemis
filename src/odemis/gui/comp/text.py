@@ -30,10 +30,12 @@ from __future__ import division
 import logging
 import locale
 import math
+import os
 import sys
 
 import wx
 import wx.lib.mixins.listctrl as listmix
+from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_EDIT
 
 from odemis.util import units
 
@@ -678,6 +680,21 @@ class NumberTextCtrl(wx.TextCtrl):
         # the text field
         return self.number
 
+    def Enable(self, enable):
+
+        # TODO: Find a better way to deal with this hack that was put in place because under
+        # MS Windows the background colour cannot (at all?) be set when a control is disbaled
+        if os.name == 'nt':
+            self.SetEditable(enable)
+
+            if enable:
+                self.SetForegroundColour(FG_COLOUR_EDIT)
+            else:
+                self.SetForegroundColour(FG_COLOUR_DIS)
+        else:
+            super(NumberTextCtrl, self).Enable(enable)
+
+
     def SetValue(self, val):
         self.ChangeValue(val)
         # TODO: call _send_change_event() ? => in this case we need to change
@@ -765,9 +782,9 @@ class NumberTextCtrl(wx.TextCtrl):
         prev_num = self.number
         num = self.number
 
-        if key == wx.WXK_UP and self.step:
+        if key == wx.WXK_UP and self.step and self.IsEditable():
             num = (num or 0) + self.step
-        elif key == wx.WXK_DOWN and self.step:
+        elif key == wx.WXK_DOWN and self.step and self.IsEditable():
             num = (num or 0) - self.step
         else:
             # Skip the event, so it can be processed in the regular way

@@ -59,13 +59,10 @@ class OwnerDrawnComboBoxTestCase(test.GuiTestCase):
 
     frame_class = test.test_gui.xrctext_frame
 
-    def test_setting_values(self):
-        pass
-        # self.app.test_frame.unit_float.SetValue(val)
-        # test.gui_loop()
-        # test.sleep(3000)
-        # self.app.test_frame.unit_float.SetValue(0.1235635484321321)
-        # test.gui_loop()
+    def test_ms_windows(self):
+        # test.goto_manual()
+        self.frame.unit_float.Enable(False)
+
 
     def test_unit_float(self):
 

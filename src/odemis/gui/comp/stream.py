@@ -775,11 +775,13 @@ class StreamPanel(wx.Panel):
                                  style=wx.NO_BORDER, size=(-1, 14),
                                  min_val=hist_min, max_val=hist_max,
                                  step=1, accuracy=6)
-        txt_lowi.SetBackgroundColour(BG_COLOUR_MAIN)
         txt_lowi.SetForegroundColour(FG_COLOUR_EDIT)
+        txt_lowi.SetOwnBackgroundColour(BG_COLOUR_MAIN)
+
         txt_lowi.SetToolTipString(tooltip_txt)
 
         lbl_highi = wx.StaticText(self._panel, -1, "High")
+
         tooltip_txt = "Value mapped to white"
         lbl_highi.SetToolTipString(tooltip_txt)
         txt_highi = FloatTextCtrl(self._panel, -1,
