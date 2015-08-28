@@ -324,8 +324,11 @@ If you add/modify an image (used as a GUI element, not a microscope acquisition)
 it should be done in ``src/odemis/gui/img``. After the modifications, you need to 
 regenerate the ``data.py`` file::
 
-    cd src/odemis/gui/img
-    ./img2python.py
+    ./src/odemis/gui/img/img2python.py
+
+If you modify the application main icons in ``image/icon_gui*.png``, you need to call::
+
+    ./util/generate_icons.sh
 
 
 Speed optimization
