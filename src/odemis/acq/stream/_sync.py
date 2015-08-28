@@ -1034,7 +1034,10 @@ class MomentOfInertiaStream(SEMCCDMDStream):
         self._rep_data = model.DataArray(numpy.empty(shape=data.shape))
         bg_image = self.background.value
         if bg_image is None:
-            bg_image = numpy.zeros(shape=data.shape)
+            bg_image = numpy.empty(shape=data.shape)
+            # at least substract the baseline
+            md = self._rep_det.getMetadata()
+            bg_image.fill(md.get(model.MD_BASELINE, 0))
         self._mif.append(MomentOfInertia(data, bg_image))
         self._acq_rep_complete.set()
 
