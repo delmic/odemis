@@ -71,9 +71,10 @@ if sys.platform.startswith('linux'):
                   ('share/odemis/hwtest', glob.glob('install/linux/usr/share/odemis/hwtest/*.odm.yaml')),
                   # TODO: need to run desktop-file-install in addition to update-desktop-database?
                   ('share/applications/', glob.glob('install/linux/usr/share/applications/*.desktop')),
-                  ('share/icons/hicolor/32x32/apps/', ['install/linux/usr/share/icons/hicolor/32x32/apps/odemis.png']),
-                  ('share/icons/hicolor/64x64/apps/', ['install/linux/usr/share/icons/hicolor/64x64/apps/odemis.png']),
-                  ('share/icons/hicolor/128x128/apps/', ['install/linux/usr/share/icons/hicolor/128x128/apps/odemis.png']),
+                  ('share/icons/hicolor/32x32/apps/', glob.glob('install/linux/usr/share/icons/hicolor/32x32/apps/odemis*.png')),
+                  ('share/icons/hicolor/64x64/apps/', glob.glob('install/linux/usr/share/icons/hicolor/64x64/apps/odemis*.png')),
+                  ('share/icons/hicolor/128x128/apps/', glob.glob('install/linux/usr/share/icons/hicolor/128x128/apps/odemis*.png')),
+                  ('share/icons/hicolor/256x256/apps/', glob.glob('install/linux/usr/share/icons/hicolor/256x256/apps/odemis*.png')),
                   ('share/doc/odemis/', glob.glob('doc/*.txt')),
                   ('share/doc/odemis/scripts/', glob.glob('scripts/*.py') + glob.glob('scripts/*.m')),
                   ]

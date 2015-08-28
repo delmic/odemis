@@ -20,13 +20,15 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 from __future__ import division
+
 import Pyro4.errors
 import argparse
 import logging
-from odemis import model
+from odemis import model, gui
 import odemis
 from odemis.gui import main_xrc, log
 from odemis.gui.cont import acquisition
+from odemis.gui.cont.menu import MenuController
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.xmlh import odemis_get_resources
 from odemis.util import driver
@@ -36,7 +38,6 @@ import traceback
 import wx
 from wx.lib.pubsub import pub
 
-from odemis.gui.cont.menu import MenuController
 import odemis.gui.cont.tabs as tabs
 import odemis.gui.img.data as imgdata
 import odemis.gui.model as guimodel
@@ -91,7 +92,12 @@ class OdemisGUIApp(wx.App):
 
         if self._is_standalone:
             microscope = None
+            # Set the name and icon
+            gui.icon = imgdata.catalog['ico_gui_viewer_256'].GetIcon()
+            gui.name = odemis.__shortname__ + "Viewer"
         else:
+            gui.icon = imgdata.catalog['ico_gui_full_256'].GetIcon()
+            gui.name = odemis.__shortname__
             try:
                 microscope = model.getMicroscope()
             except (IOError, Pyro4.errors.CommunicationError), e:
@@ -131,7 +137,7 @@ class OdemisGUIApp(wx.App):
         try:
             # Add frame icon
             ib = wx.IconBundle()
-            ib.AddIcon(imgdata.catalog['icon128'].GetIcon())
+            ib.AddIcon(gui.icon)
             self.main_frame.SetIcons(ib)
 
             self.main_data.debug.subscribe(self.on_debug_va, init=True)
@@ -364,7 +370,7 @@ def main(args):
             # without it, it will crash cf https://groups.google.com/forum/#!topic/wxpython-users/KO_hmLxeDKA
             gtk.remove_log_handlers()
             # Must be done before the first window is displayed
-            name = "Odemis"
+            name = odemis.__shortname__
             if options.standalone:
                 name += "-standalone"
             gtk.gdk.set_program_class(name)
