@@ -1,3 +1,33 @@
+odemis (2.2-1ubuntu1) precise; urgency=low
+
+  * New version: 2.2
+  * Main new features:
+    - SPARC acquisition tab now can show live view of all the streams
+    - Alignment tab can display chamber view (SPARC)
+    - Local settings of light power and exposure time on optical streams (SECOM/DELPHI)
+    - Partial support on Windows: GUI in viewer mode
+    - Spot mode tool in acquisition tab (SPARC)
+    - Support for analog PMT acquisition (SPARC)
+    - Support for counting PMT acquisiton (SPARC)
+    - Support 'fuzzing' on spectrum stream to avoid aliasing (SPARC)
+    - Option to save TIFF files as one file per stream
+    - Support for blinkstick (for bright led, on SECOM)
+  * Main bug fixed and improvements:
+    - Bug report functionality in GUI menu and Ubuntu icon
+    - In analysis tab, automatically shorten histogram width
+    - Support for parabolic mirrors of various sizes (SPARC)
+    - Allow to acquire multiple streams per acquisition (SPARC)
+    - Improve alignment optical/sem stage (DELPHI)
+    - SEM focus step size depends on HFW (DELPHI)
+    - Ensure the Phenom unblanking always works and tilt value is correct (DELPHI)
+    - New (different) icon for Odemis viewer
+    - Small tools for maintenance/testing
+    - Support for Omicron LedHub (SECOMv2)
+    - Support for Andor Shamrock connected over USB (SPARC)
+    - Support inversing contrast on semcomedi
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Thu, 27 Aug 2015 15:49:20 +0200
+
 odemis (2.1-1ubuntu1) precise; urgency=low
 
   * New version: 2.1
