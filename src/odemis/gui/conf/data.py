@@ -90,6 +90,9 @@ HW_SETTINGS_CONFIG = {
             ("pixelSize", {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
+            ("depthOfField", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
         )),
     "light": {
             "power":
@@ -155,6 +158,9 @@ HW_SETTINGS_CONFIG = {
             ("pixelSize", {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
+            ("depthOfField", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
         )),
     "spectrometer":
         OrderedDict((
@@ -182,6 +188,9 @@ HW_SETTINGS_CONFIG = {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
             ("pixelSize", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("depthOfField", {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
         )),
