@@ -158,6 +158,8 @@ class StreamPanelHeader(wx.Control):
     def _add_label_ctrl(self):
         """ Add a label control to the header panel """
         label_ctrl = wx.StaticText(self, -1, self.Parent.stream.name.value)
+        label_ctrl.SetBackgroundColour(self.Parent.GetBackgroundColour())
+        label_ctrl.SetForegroundColour(FG_COLOUR_MAIN)
         self._add_ctrl(label_ctrl, stretch=True)
         return label_ctrl
 
@@ -773,11 +775,13 @@ class StreamPanel(wx.Panel):
                                  style=wx.NO_BORDER, size=(-1, 14),
                                  min_val=hist_min, max_val=hist_max,
                                  step=1, accuracy=6)
-        txt_lowi.SetBackgroundColour(BG_COLOUR_MAIN)
         txt_lowi.SetForegroundColour(FG_COLOUR_EDIT)
+        txt_lowi.SetOwnBackgroundColour(BG_COLOUR_MAIN)
+
         txt_lowi.SetToolTipString(tooltip_txt)
 
         lbl_highi = wx.StaticText(self._panel, -1, "High")
+
         tooltip_txt = "Value mapped to white"
         lbl_highi.SetToolTipString(tooltip_txt)
         txt_highi = FloatTextCtrl(self._panel, -1,

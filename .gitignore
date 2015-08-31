@@ -14,6 +14,8 @@ img_fast.c
 *.egg-info
 dist
 build
+/windows/version.txt
+/windows/bin
 eggs
 parts
 var

@@ -362,7 +362,6 @@ class SecomStreamsTab(Tab):
                 (viewports[0],  # focused view
                  {"name": "Optical",
                   "stage": main_data.stage,
-                  "focus": main_data.focus,
                   "stream_classes": OpticalStream,
                   }),
                 (viewports[1],
@@ -371,19 +370,16 @@ class SecomStreamsTab(Tab):
                   # align on the optical streams
                   "cls": guimod.ContentView,
                   "stage": main_data.stage,
-                  "focus": main_data.ebeam_focus,
                   "stream_classes": EMStream,
                   }),
                 (viewports[2],
                  {"name": "Combined 1",
                   "stage": main_data.stage,
-                  "focus": main_data.focus,
                   "stream_classes": (EMStream, OpticalStream),
                   }),
                 (viewports[3],
                  {"name": "Combined 2",
                   "stage": main_data.stage,
-                  "focus": main_data.focus,
                   "stream_classes": (EMStream, OpticalStream),
                   }),
             ])
@@ -396,7 +392,6 @@ class SecomStreamsTab(Tab):
             for i, viewport in enumerate(viewports):
                 vpv[viewport] = {"name": "SEM %d" % (i + 1),
                                  "stage": main_data.stage,
-                                 "focus": main_data.ebeam_focus,
                                  "stream_classes": EMStream,
                                  }
 
@@ -407,7 +402,6 @@ class SecomStreamsTab(Tab):
             for i, viewport in enumerate(viewports):
                 vpv[viewport] = {"name": "Optical %d" % (i + 1),
                                  "stage": main_data.stage,
-                                 "focus": main_data.focus,
                                  "stream_classes": OpticalStream,
                                  }
         else:
@@ -418,7 +412,6 @@ class SecomStreamsTab(Tab):
                 vpv[viewport] = {
                     "name": "View %d" % (i + 1),
                     "stage": main_data.stage,
-                    "focus": main_data.focus,
                     "stream_classes": None,  # everything
                 }
 
@@ -442,60 +435,31 @@ class SecomStreamsTab(Tab):
 
         return vpv
 
-    def _get_focus_hw(self, s):
-        """
-        Finds the hardware required to focus a given stream
-        s (Stream)
-        return:
-             (HwComponent) detector
-             (HwComponent) emitter
-             (HwComponent) focus
-        """
-        detector = None
-        emitter = None
-        focus = None
-        # Slightly different depending on the stream type, especially as the
-        # stream doesn't have information on the focus, we need to "guess"
-        if isinstance(s, acqstream.StaticStream):
-            pass
-        elif isinstance(s, acqstream.SEMStream):
-            detector = s.detector
-            emitter = s.emitter
-            focus = self.main_data.ebeam_focus
-        elif isinstance(s, acqstream.CameraStream):
-            detector = s.detector
-            focus = self.main_data.focus
-        # TODO: handle overview stream
-        else:
-            logging.info("Doesn't know how to focus stream %s", type(s).__name__)
-
-        return detector, emitter, focus
-
-    def _onAutofocus(self, state):
+    def _onAutofocus(self, active):
         # Determine which stream is active
-        if state == guimod.TOOL_AUTO_FOCUS_ON:
+        if active:
             try:
                 curr_s = self.tab_data_model.streams.value[0]
             except IndexError:
-                d, e, f = None, None, None
-            else:
-                # enable only if focuser is available, and no autofocus happening
-                d, e, f = self._get_focus_hw(curr_s)
+                # Should not happen as the menu/icon should be disabled
+                logging.info("No stream to run the autofocus")
+                self.tab_data_model.autofocus_active.value = False
+                return
 
-            if all((d, f)):
-                self._autofocus_f = AutoFocus(d, e, f)
+            # run only if focuser is available
+            if curr_s.focuser:
+                self._autofocus_f = AutoFocus(curr_s.detector, curr_s.emitter, curr_s.focuser)
                 self._autofocus_f.add_done_callback(self._on_autofocus_done)
             else:
                 # Should never happen as normally the menu/icon are disabled
                 logging.info("Autofocus cannot run as no hardware is available")
-                self.tab_data_model.autofocus_active.value = guimod.TOOL_AUTO_FOCUS_OFF
+                self.tab_data_model.autofocus_active.value = False
         else:
             if self._autofocus_f is not None:
                 self._autofocus_f.cancel()
 
-    @call_in_wx_main
     def _on_autofocus_done(self, future):
-        self.tab_data_model.autofocus_active.value = guimod.TOOL_AUTO_FOCUS_OFF
+        self.tab_data_model.autofocus_active.value = False
 
     def _on_current_stream(self, streams):
         """
@@ -515,17 +479,18 @@ class SecomStreamsTab(Tab):
     def _on_stream_update(self, updated):
         """
         Called when the current stream changes play/pause
-        Used to update the autofocus menu and button
+        Used to update the autofocus button
         """
+        # TODO: just let the menu controller also update toolbar (as it also
+        # does the same check for the menu entry)
         try:
             curr_s = self.tab_data_model.streams.value[0]
         except IndexError:
-            d, e, f = None, None, None
+            f = None
         else:
-            # enable only if focuser is available, and no autofocus happening
-            d, e, f = self._get_focus_hw(curr_s)
+            f = curr_s.focuser
 
-        f_enable = all((updated, d, f))
+        f_enable = all((updated, f))
         if not f_enable:
             self.tab_data_model.autofocus_active.value = False
         wx.CallAfter(self.tb.enable_button, tools.TOOL_AUTO_FOCUS, f_enable)
@@ -636,6 +601,7 @@ class SparcAcquisitionTab(Tab):
             main_data.sed,
             main_data.sed.data,
             main_data.ebeam,
+            focuser=main_data.ebeam_focus,
             emtvas=get_hw_settings(main_data.ebeam),
             detvas=get_hw_settings(main_data.sed),
         )
@@ -693,7 +659,6 @@ class SparcAcquisitionTab(Tab):
              {"name": "SEM",
               "cls": guimod.ContentView,  # Center on content (instead of stage)
               "stage": main_data.stage,
-              "focus": main_data.ebeam_focus,
               "stream_classes": (EMStream, CLSettingsStream),
               }),
             (viewports[1],  # focused view
@@ -1424,7 +1389,6 @@ class LensAlignTab(Tab):
                     "name": "Optical CL",
                     "cls": guimod.ContentView,
                     "stage": self._aligner_xy,
-                    "focus": main_data.focus,
                     "stream_classes": acqstream.CameraStream,
                 }
             ),
@@ -1480,6 +1444,7 @@ class LensAlignTab(Tab):
                                             main_data.ccd,
                                             main_data.ccd.data,
                                             main_data.light,
+                                            focuser=main_data.focus,
                                             forcemd={model.MD_ROTATION: 0,
                                                      model.MD_SHEAR: 0}
                                             )
@@ -2018,7 +1983,7 @@ class MirrorAlignTab(Tab):
         # a file for each supported sensor size.
         pxs = ccd.pixelSize.value
         ccd_res = ccd.shape[0:2]
-        ccd_sz = tuple(int(p * l * 1e6) for p, l in zip(pxs, ccd_res))
+        ccd_sz = tuple(int(round(p * l * 1e6)) for p, l in zip(pxs, ccd_res))
         try:
             goal_rs = pkg_resources.resource_stream("odemis.gui.img",
                                                     "calibration/ma_goal_5_13_sensor_%d_%d.png" % ccd_sz)

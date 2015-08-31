@@ -29,6 +29,9 @@ import math
 import numpy
 from odemis import model
 import scipy.misc
+# Next imprt statement needed under windows, because otherwise scipy.misc.bytescale won't be available
+# See: http://stackoverflow.com/questions/18049687/attributeerror-module-object-scipy-has-no-attribute-why-does-this-error
+import scipy.misc.pilutil
 import scipy.ndimage
 
 

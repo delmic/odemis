@@ -853,7 +853,7 @@ def _foldArraysFromOME(root, das, basename):
 
         # Check if the IFDs are 2D or 3D, based on the first one
         fim = das[fifd]
-        if fim == None:
+        if fim is None:
             continue # thumbnail
         is_3d = (len(fim.shape) == 3 and fim.shape[0] > 1)
 
@@ -1608,9 +1608,9 @@ def export(filename, data, thumbnail=None, compressed=True, multiple_files=False
        Time, Z, Y, X. However, all the first dimensions of size 1 can be omitted
        (ex: an array of 111YX can be given just as YX, but RGB images are 311YX,
        so must always be 5 dimensions).
-    thumbnail (None or numpy.array): Image used as thumbnail 
-      for the file. Can be of any (reasonable) size. Must be either 2D array 
-      (greyscale) or 3D with last dimension of length 3 (RGB). If the exporter 
+    thumbnail (None or numpy.array): Image used as thumbnail
+      for the file. Can be of any (reasonable) size. Must be either 2D array
+      (greyscale) or 3D with last dimension of length 3 (RGB). If the exporter
       doesn't support it, it will be dropped silently.
     compressed (boolean): whether the file is compressed or not.
     multiple_files (boolean): whether the data is distributed across multiple

@@ -31,19 +31,20 @@ def dichotomy_to_region(seq):
     seq (list of 0<=int<4): list of sub part selected
     returns (tuple of 4 0<=float<=1): left, top, right, bottom (in ratio)
     """
-    roi = [0, 0 , 1 , 1] # starts from the whole area
+    roi = (0, 0, 1, 1)  # starts from the whole area
     for quad in seq:
         l, t, r, b = roi
         # divide the roi according to the quadrant
-        if quad in [TOP_LEFT, BOTTOM_LEFT]:
+        if quad in (TOP_LEFT, BOTTOM_LEFT):
             r = l + (r - l) / 2
         else:
             l = (r + l) / 2
-        if quad in [TOP_LEFT, TOP_RIGHT]:
+        if quad in (TOP_LEFT, TOP_RIGHT):
             b = t + (b - t) / 2
         else:
             t = (b + t) / 2
         assert(0 <= l <= r <= 1 and 0 <= t <= b <= 1)
-        roi = [l, t, r, b]
+        roi = (l, t, r, b)
 
     return roi
+

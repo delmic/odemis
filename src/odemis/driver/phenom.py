@@ -108,13 +108,15 @@ TILT_BLANK = (-1, -1)  # tilt to imitate beam blanking
 
 # SEM ranges in order to allow scanner initialization even if Phenom is in
 # unloaded state
-HFW_RANGE = [2.5e-06, 0.0031]
-TENSION_RANGE = [4797.56, 10000.0]
+HFW_RANGE = (2.5e-06, 0.0031)
+TENSION_RANGE = (4797.56, 10000.0)
 # REFERENCE_TENSION = 10e03 #Volt
 # BEAM_SHIFT_AT_REFERENCE = 19e-06  # Maximum beam shit at the reference tension #m
-SPOT_RANGE = [0.0, 5.73018379531] # TODO: what means a spot of 0? => small value like 1e-3?
+SPOT_RANGE = (0.0, 5.73018379531)  # TODO: what means a spot of 0? => small value like 1e-3?
 NAVCAM_PIXELSIZE = (1.3267543859649122e-05, 1.3267543859649122e-05)
-DELPHI_OVERVIEW_FOCUS = 0.0052  # Good focus position for navcam focus initialization
+
+DELPHI_WORKING_DISTANCE = 7e-3  # m, standard working distance (just to compute the depth of field)
+PHENOM_EBEAM_APERTURE = 200e-6  # m, aperture size of the lens on the phenom
 
 class SEM(model.HwComponent):
     '''
@@ -287,13 +289,18 @@ class Scanner(model.Emitter):
         # == smallest size/ between two different ebeam positions
         self.pixelSize = model.VigilantAttribute((0, 0), unit="m", readonly=True)
 
+        # To provide some rough idea of the step size when changing focus
+        # Depends on the pixelSize, so will be updated whenever the HFW changes
+        self.depthOfField = model.FloatContinuous(1e-6, range=(0, 1e9),
+                                                  unit="m", readonly=True)
+
         # (.resolution), .rotation, and .scaling are used to
         # define the conversion from coordinates to a region of interest.
 
         # (float, float) in m => physically moves the e-beam. The move is
         # clipped within the actual limits by the setter function.
         shift_rng = ((-1, -1),
-                    (1, 1))
+                     (1, 1))
         self.shift = model.TupleContinuous((0, 0), shift_rng,
                                               cls=(int, long, float), unit="m",
                                               setter=self._setShift)
@@ -304,8 +311,8 @@ class Scanner(model.Emitter):
         self.tran_roi = (0, 0)
         # (float, float) in m => moves center of acquisition by this amount
         # independent of scale and rotation.
-        tran_rng = [(-self._shape[0] / 2, -self._shape[1] / 2),
-                    (self._shape[0] / 2, self._shape[1] / 2)]
+        tran_rng = ((-self._shape[0] / 2, -self._shape[1] / 2),
+                    (self._shape[0] / 2, self._shape[1] / 2))
         self.translation = model.TupleContinuous((0, 0), tran_rng,
                                                  cls=(int, long, float), unit="px",
                                                  setter=self._setTranslation)
@@ -313,7 +320,7 @@ class Scanner(model.Emitter):
         # .resolution is the number of pixels actually scanned. If it's less than
         # the whole possible area, it's centered.
         resolution = (self._shape[0] // 8, self._shape[1] // 8)
-        self.resolution = model.ResolutionVA(resolution, [(1, 1), self._shape],
+        self.resolution = model.ResolutionVA(resolution, ((1, 1), self._shape),
                                              setter=self._setResolution)
         self._resolution = resolution
 
@@ -327,6 +334,7 @@ class Scanner(model.Emitter):
         self.scale.subscribe(self._onScale, init=True)  # to update metadata
 
         self._updatePixelSize() # needs .scale
+        self._updateDepthOfField()  # needs .pixelSize
 
         # (float) in rad => rotation of the image compared to the original axes
         # Just the initialization of rotation. The actual value will be acquired
@@ -382,6 +390,7 @@ class Scanner(model.Emitter):
         # Update current pixelSize and magnification
         self._updatePixelSize()
         self._updateMagnification()
+        self._updateDepthOfField()
 
     def _setHorizontalFoV(self, value):
         # Make sure you are in the current range
@@ -399,8 +408,7 @@ class Scanner(model.Emitter):
 
         # it's read-only, so we change it only via _value
         mag = self._hfw_nomag / self.horizontalFoV.value
-        self.magnification._value = mag
-        self.magnification.notify(mag)
+        self.magnification._set_value(mag, force_write=True)
 
     def _setDwellTime(self, dt):
         # Calculate number of frames
@@ -471,12 +479,24 @@ class Scanner(model.Emitter):
                fov / self._shape[1])
 
         # it's read-only, so we change it only via _value
-        self.pixelSize._value = pxs
-        self.pixelSize.notify(pxs)
+        self.pixelSize._set_value(pxs, force_write=True)
 
         # If scaled up, the pixels are bigger
         pxs_scaled = (pxs[0] * self.scale.value[0], pxs[1] * self.scale.value[1])
         self.parent._metadata[model.MD_PIXEL_SIZE] = pxs_scaled
+
+    def _updateDepthOfField(self):
+        """
+        Update the depth of field, based on the pixel size
+        """
+        # from http://www.emal.engin.umich.edu/courses/semlectures/focus.html
+        # DoF = 2 e / (A / 2 Wd)
+        # e is the scanner pixel size
+        # A is the aperture
+        # Wd is the working distance
+        pxs = self.pixelSize.value[0]  # hopefully it's square
+        dof = 2 * pxs / (PHENOM_EBEAM_APERTURE / (2 * DELPHI_WORKING_DISTANCE))
+        self.depthOfField._set_value(dof, force_write=True)
 
     def _setScale(self, value):
         """
@@ -1291,7 +1311,8 @@ class NavCam(model.DigitalCamera):
         contrast (0<=float<=1): "Contrast" ratio where 1 means bright-field, and 0
          means dark-field
         brightness (0<=float<=1): light intensity between 0 and 1
-        hfw (float): NavCam HFW #m
+        hfw (None or float): NavCam horizontal field with to use (m). If None,
+          will use the maximum available.
         Raise an exception if the device cannot be opened.
         """
         model.DigitalCamera.__init__(self, name, role, parent=parent, **kwargs)
@@ -1305,13 +1326,16 @@ class NavCam(model.DigitalCamera):
             raise ValueError("brightness argument = %s, not between 0 and 1" % brightness)
         self._contrast = contrast
         self._brightness = brightness
+        # TODO: provide a Lens component that provides a .magnification VA
+        # based on this hfw. And/or provide enough LENS_* metadata to compute
+        # the depth of field.
         self._hfw = hfw
 
         resolution = NAVCAM_RESOLUTION
         # RGB
         self._shape = resolution + (3, 2 ** 8)
         self.resolution = model.ResolutionVA(resolution,
-                                      [NAVCAM_RESOLUTION, NAVCAM_RESOLUTION])
+                                      (NAVCAM_RESOLUTION, NAVCAM_RESOLUTION))
                                     # , readonly=True)
         self.exposureTime = model.FloatVA(1.0, unit="s", readonly=True)
         self.pixelSize = model.VigilantAttribute(NAVCAM_PIXELSIZE, unit="m",
@@ -1390,10 +1414,6 @@ class NavCam(model.DigitalCamera):
                 self.parent._device.SetNavCamBrightness(self._brightness)
             except suds.WebFault:
                 logging.warning("Failed to set brightness to %f: %s", self._brightness, e)
-            # Start to a good focus position
-            logging.debug("Setting initial overview focus to %f", DELPHI_OVERVIEW_FOCUS)
-            f = self.parent._navcam_focus.moveAbs({"z": DELPHI_OVERVIEW_FOCUS})
-            f.result()
 
             while not self.acquire_must_stop.is_set():
                 with self.parent._acq_progress_lock:

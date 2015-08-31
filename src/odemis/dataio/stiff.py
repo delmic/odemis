@@ -24,15 +24,15 @@ from __future__ import division
 from odemis.dataio import tiff
 
 # User-friendly name
-FORMAT = "TIFF"
+FORMAT = "Serialized TIFF"
 # list of file-name extensions possible, the first one is the default when saving a file
 EXTENSIONS = [u".s.ome.tiff"]
 
 # An almost identical OME-XML metadata block is inserted into the first IFD of
-# each constituent OME-TIFF file. This is for redundancy purposes: if even one of
-# the constituent files survives a data crash, the metadata survives. Each of
+# each constituent OME-TIFF file. This is for redundancy purposes: if only a
+# subset of the files are present, the metadata survives. Each of
 # the files in the set has identical metadata apart from the UUID, the unique
-# identifier in each file.
+# identifier of a file.
 
 def export(filename, data, thumbnail=None, compressed=True):
     '''
@@ -42,9 +42,9 @@ def export(filename, data, thumbnail=None, compressed=True):
     data (list of model.DataArray, or model.DataArray): the data to export.
        Metadata is taken directly from the DA object. If it's a list, a multiple
        files distribution is created.
-    thumbnail (None or numpy.array): Image used as thumbnail for the first file. 
-      Can be of any (reasonable) size. Must be either 2D array (greyscale) or 3D 
-      with last dimension of length 3 (RGB). If the exporter doesn't support it, 
+    thumbnail (None or numpy.array): Image used as thumbnail for the first file.
+      Can be of any (reasonable) size. Must be either 2D array (greyscale) or 3D
+      with last dimension of length 3 (RGB). If the exporter doesn't support it,
       it will be dropped silently.
     compressed (boolean): whether the file is compressed or not.
     '''

@@ -17,7 +17,7 @@ You should have received a copy of the GNU General Public License along with Ode
 from __future__ import division
 
 import math
-from matplotlib import tri
+from matplotlib.delaunay import Triangulation
 from matplotlib.delaunay.triangulate import DuplicatePointWarning
 from numpy import ma
 import numpy
@@ -103,7 +103,7 @@ def AngleResolved2Polar(data, output_size, hole=True, dtype=None):
         # Some points might be so close that they are identical (within float
         # precision). It's fine, no need to generate a warning.
         warnings.simplefilter("ignore", DuplicatePointWarning)
-        triang = tri.delaunay.Triangulation(theta_data.flat, phi_data.flat)
+        triang = Triangulation(theta_data.flat, phi_data.flat)
     interp = triang.linear_interpolator(omega_data.flat, default_value=0)
     qz = interp[-h_output_size:h_output_size:complex(0, output_size), # Y
                 - h_output_size:h_output_size:complex(0, output_size)] # X
@@ -115,12 +115,12 @@ def AngleResolved2Polar(data, output_size, hole=True, dtype=None):
 
 def _FindAngle(data, xpix, ypix, pixel_size):
     """
-    For given pixels, finds the angle of the corresponding ray 
+    For given pixels, finds the angle of the corresponding ray
     data (model.DataArray): The DataArray with the image
     xpix (numpy.array): x coordinates of the pixels
     ypix (float): y coordinate of the pixel
     pixel_size (2 floats): CCD pixelsize (X/Y)
-    returns (3 numpy.arrays): theta, phi (the corresponding spherical coordinates for each pixel in ccd) 
+    returns (3 numpy.arrays): theta, phi (the corresponding spherical coordinates for each pixel in ccd)
                               and omega (solid angle)
     """
     parabola_f = data.metadata.get(model.MD_AR_PARABOLA_F, AR_PARABOLA_F)
@@ -152,8 +152,8 @@ def ARBackgroundSubtract(data):
     """
     Subtracts the "baseline" (i.e. the average intensity of the background) from the data.
     This function can be called before AngleResolved2Polar in order to take a better data output.
-    data (model.DataArray): The DataArray with the data. Must be 2D. 
-     Can have metadata MD_BASELINE to indicate the average 0 value. If not, 
+    data (model.DataArray): The DataArray with the data. Must be 2D.
+     Can have metadata MD_BASELINE to indicate the average 0 value. If not,
      it must have metadata MD_PIXEL_SIZE and MD_AR_POLE
     returns (model.DataArray): Filtered data
     """

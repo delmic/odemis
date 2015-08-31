@@ -83,12 +83,12 @@ class Camera(model.DigitalCamera):
         self._shape += (depth,)
 
         # TODO: don't provide range? or don't make it readonly?
-        self.resolution = model.ResolutionVA(res, [res, res])# , readonly=True)
+        self.resolution = model.ResolutionVA(res, (res, res))  # , readonly=True)
         # TODO: support (simulated) binning
-        self.binning = model.ResolutionVA((1, 1), [(1, 1), (1, 1)])
+        self.binning = model.ResolutionVA((1, 1), ((1, 1), (1, 1)))
 
         exp = self._img.metadata.get(model.MD_EXP_TIME, 0.1) # s
-        self.exposureTime = model.FloatContinuous(exp, [1e-3, 1e3], unit="s")
+        self.exposureTime = model.FloatContinuous(exp, (1e-3, 1e3), unit="s")
         # Some code care about the readout rate to know how long an acquisition will take
         self.readoutRate = model.FloatVA(1e9, unit="Hz", readonly=True)
 
@@ -111,17 +111,30 @@ class Camera(model.DigitalCamera):
 
         # Simple implementation of the flow: we keep generating images and if
         # there are subscribers, they'll receive it.
-        self.data = model.DataFlow(self)
-        self._generator = util.RepeatingTimer(exp, self._generate,
-                                              "SimCam image generator")
-        self._generator.start()
+        self.data = SimpleDataFlow(self)
+        self._generator = None
 
     def terminate(self):
         """
         Must be called at the end of the usage. Can be called multiple times,
         but the component shouldn't be used afterwards.
         """
-        self._generator.cancel()
+        self._stop_generate()
+
+    def _start_generate(self):
+        if self._generator is not None:
+            logging.warning("Generator already running")
+            return
+        self._generator = util.RepeatingTimer(self.exposureTime.value,
+                                              self._generate,
+                                              "SimCam image generator")
+        self._generator.start()
+
+    def _stop_generate(self):
+        if self._generator is not None:
+            self._generator.cancel()
+            self._generator.join(10)
+            self._generator = None
 
     def _generate(self):
         """
@@ -140,7 +153,7 @@ class Camera(model.DigitalCamera):
         if self._focus:
             # apply the defocus
             pos = self._focus.position.value['z']
-            dist = abs(pos) * 1e4
+            dist = abs(pos - self._focus._good_focus) * 1e4
             img = ndimage.gaussian_filter(self._img, sigma=dist)
         else:
             img = self._img
@@ -154,6 +167,18 @@ class Camera(model.DigitalCamera):
         self._generator.period = self.exposureTime.value
 
 
+class SimpleDataFlow(model.DataFlow):
+    def __init__(self, ccd):
+        super(SimpleDataFlow, self).__init__()
+        self._ccd = ccd
+
+    def start_generate(self):
+        self._ccd._start_generate()
+
+    def stop_generate(self):
+        self._ccd._stop_generate()
+
+
 class CamFocus(model.Actuator):
     """
     Simulated focus component.
@@ -161,8 +186,9 @@ class CamFocus(model.Actuator):
     """
     # Duplicate of simsem.EbeamFocus
     def __init__(self, name, role, **kwargs):
+        self._good_focus = 0.006
         axes_def = {"z": model.Axis(unit="m", range=[-0.3, 0.3])}
-        self._position = {"z": 0}
+        self._position = {"z": self._good_focus}
 
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
 

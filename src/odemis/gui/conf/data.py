@@ -319,6 +319,9 @@ STREAM_SETTINGS_CONFIG = {
             ("pixelSize", {
                 "control_type": odemis.gui.CONTROL_FLT,
             }),
+            ("fuzzing", {
+                 "tooltip": u"Scans each pixel over their complete area, instead of only scanning the center the pixel area.",
+            }),
             ("wavelength", {
                 "range": (0.0, 1900e-9),
             }),
@@ -357,6 +360,9 @@ STREAM_SETTINGS_CONFIG = {
                 "control_type": odemis.gui.CONTROL_COMBO,
                 "choices": util.resolution_from_range_plus_point,
                 "accuracy": None,  # never simplify the numbers
+            }),
+            ("pixelSize", {
+                "control_type": odemis.gui.CONTROL_FLT,
             }),
         )),
     stream.CLSettingsStream:

@@ -355,7 +355,10 @@ class SecomAcquiController(object):
 
         # save the original settings
         settingsbar_controller = secom_live_tab.settingsbar_controller
-        orig_settings = preset_as_is(settingsbar_controller.entries)
+        orig_entries = settingsbar_controller.entries
+        for sc in secom_live_tab.streambar_controller.stream_controllers:
+            orig_entries.extend(sc.entries.values())
+        orig_settings = preset_as_is(orig_entries)
         settingsbar_controller.pause()
         settingsbar_controller.enable(False)
         # TODO: also pause the MicroscopeViews

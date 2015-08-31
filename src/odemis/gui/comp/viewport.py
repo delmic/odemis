@@ -269,6 +269,9 @@ class MicroscopeViewport(ViewPort):
         # subscribe to image, to update legend on stream tree/image change
         microscope_view.lastUpdate.subscribe(self._onImageUpdate, init=True)
 
+        # By default, cannot focus, unless the child class allows it
+        self.canvas.abilities.discard(CAN_FOCUS)
+
         # canvas handles also directly some of the view properties
         self.canvas.setView(microscope_view, tab_data)
 
@@ -549,19 +552,49 @@ class LiveViewport(MicroscopeViewport):
         self._orig_abilities = set()
 
     def setView(self, microscope_view, tab_data):
-        super(LiveViewport, self).setView(microscope_view, tab_data)
+        # Must be before calling the super, as the super drops CAN_FOCUS automatically
         self._orig_abilities = self.canvas.abilities & {CAN_DRAG, CAN_FOCUS}
+        super(LiveViewport, self).setView(microscope_view, tab_data)
+        tab_data.streams.subscribe(self._on_stream_change)
         microscope_view.stream_tree.should_update.subscribe(self._on_stream_play,
                                                             init=True)
 
     def _on_stream_play(self, is_playing):
+        """
+        Called whenever view contains a stream playing or not.
+        Used to update the drag/focus capabilities
+        """
         self.canvas.play_overlay.hide_pause(is_playing)
-        if self._microscope_view.has_stage():
-            # disable/enable move and focus change
+        if CAN_DRAG in self._orig_abilities and self._microscope_view.has_stage():
+            # disable/enable move
             if is_playing:
-                self.canvas.abilities |= self._orig_abilities
+                self.canvas.abilities.add(CAN_DRAG)
             else:
-                self.canvas.abilities -= {CAN_DRAG, CAN_FOCUS}
+                self.canvas.abilities.discard(CAN_DRAG)
+        # check focus ability too
+        self._on_stream_change()
+
+    def _on_stream_change(self, streams=None):
+        """
+        Called whenever the current (playing) stream changes.
+        Used to update the focus capability based on the stream
+        """
+        if CAN_FOCUS not in self._orig_abilities:
+            return
+        # find out the current playing stream in the view
+        for s in self._microscope_view.getStreams():
+            if s.should_update.value:
+                can_focus = s.focuser is not None
+                logging.debug("current stream can focus: %s", can_focus)
+                break
+        else:
+            logging.debug("Found no playing stream")
+            can_focus = False
+
+        if can_focus:
+            self.canvas.abilities.add(CAN_FOCUS)
+        else:
+            self.canvas.abilities.discard(CAN_FOCUS)
 
 
 # TODO: remove once SparcAcquiCanvas is just a normal canvas

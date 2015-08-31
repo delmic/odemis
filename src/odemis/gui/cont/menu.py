@@ -17,12 +17,12 @@ You should have received a copy of the GNU General Public License along with Ode
 from __future__ import division
 
 import logging
-from odemis import model
-from odemis.acq import stream, align
+from odemis import model, gui
+from odemis.acq import stream
 from odemis.gui.comp.popup import Message
 import odemis.gui.conf
 from odemis.gui.model.dye import DyeDatabase
-from odemis.gui.util import call_in_wx_main
+from odemis.gui.util import call_in_wx_main, align
 import subprocess
 import sys
 import wx
@@ -203,7 +203,6 @@ class MenuController(object):
         fit_enable = hasattr(tab, "view_controller") and tab.view_controller is not None
         self._main_frame.menu_item_fit_content.Enable(fit_enable)
 
-
     @call_in_wx_main
     def _on_current_stream(self, streams):
         """
@@ -215,7 +214,7 @@ class MenuController(object):
             curr_s = streams[0]
         except IndexError:
             curr_s = None
-        enable = not curr_s is None
+        enable = curr_s is not None
 
         if self._prev_stream:
             self._prev_stream.should_update.unsubscribe(self._on_stream_update)
@@ -240,10 +239,11 @@ class MenuController(object):
         else:
             self._main_frame.menu_item_auto_focus.Enable(False)
 
-    def _on_auto_focus_state(self, state):
+    @call_in_wx_main
+    def _on_auto_focus_state(self, active):
         # Be able to cancel current autofocus
         accel = self._main_frame.menu_item_auto_focus.GetAccel().ToString()
-        if state == True:
+        if active:
             self._main_frame.menu_item_auto_focus.SetItemLabel("Stop Auto Focus\t" + accel)
         else:
             self._main_frame.menu_item_auto_focus.SetItemLabel("Auto Focus\t" + accel)
@@ -251,6 +251,7 @@ class MenuController(object):
         streams = tab.tab_data_model.streams.value
         self._on_current_stream(streams)
 
+    @call_in_wx_main
     def _on_stream_update(self, updated):
         """
         Called when the current stream changes play/pause
@@ -263,12 +264,11 @@ class MenuController(object):
         static = isinstance(curr_s, stream.StaticStream)
         self._main_frame.menu_item_play_stream.Check(updated and not static)
 
-        # enable only if focuser is available, and no autofocus happening
-        d, e, f = self._get_focus_hw(curr_s)
-        tab = self._main_data.tab.value
-        f_enable = all((updated, d, f))
+        # enable only if focuser is available
+        f_enable = (updated and curr_s.focuser is not None)
         self._main_frame.menu_item_auto_focus.Enable(f_enable)
 
+    @call_in_wx_main
     def _on_stream_autobc(self, autobc):
         """
         Called when the current stream changes Auto BC
@@ -309,39 +309,9 @@ class MenuController(object):
         if hasattr(tab, "view_controller") and tab.view_controller is not None:
             tab.view_controller.fitViewToContent()
 
-    # Warning: this method is duplicated in cont.tabs
-    def _get_focus_hw(self, s):
-        """
-        Finds the hardware required to focus a given stream
-        s (Stream)
-        return:
-             (HwComponent) detector
-             (HwComponent) emitter
-             (HwComponent) focus
-        """
-        detector = None
-        emitter = None
-        focus = None
-        # Slightly different depending on the stream type, especially as the
-        # stream doesn't have information on the focus, we need to "guess"
-        if isinstance(s, stream.StaticStream):
-            pass
-        elif isinstance(s, stream.SEMStream):
-            detector = s.detector
-            emitter = s.emitter
-            focus = self._main_data.ebeam_focus
-        elif isinstance(s, stream.CameraStream):
-            detector = s.detector
-            focus = self._main_data.focus
-        # TODO: handle overview stream
-        else:
-            logging.info("Doesn't know how to focus stream %s", type(s).__name__)
-
-        return detector, emitter, focus
-
     def _on_auto_focus(self, evt):
         tab = self._main_data.tab.value
-        if tab.tab_data_model.autofocus_active.value == True:
+        if tab.tab_data_model.autofocus_active.value:
             tab.tab_data_model.autofocus_active.value = False
         else:
             tab.tab_data_model.autofocus_active.value = True
@@ -363,8 +333,8 @@ class MenuController(object):
     def _on_about(self, evt):
 
         info = wx.AboutDialogInfo()
-        info.SetIcon(imgdata.catalog['icon128'].GetIcon())
-        info.Name = odemis.__shortname__
+        info.SetIcon(gui.icon)
+        info.Name = gui.name
         info.Version = odemis.__version__
         info.Description = odemis.__fullname__
         info.Copyright = odemis.__copyright__

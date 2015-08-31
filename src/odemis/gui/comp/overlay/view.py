@@ -190,7 +190,8 @@ class FocusOverlay(base.ViewOverlay):
 
         self.margin = 10
         self.line_width = 16
-        self.shifts = [0, 0]
+        self.shifts = [None, None]  # None or float (m)
+        self.ppm = (5e6, 5e6)  # px/m, conversion ratio m -> px
 
         self.focus_label = self.add_label("", align=wx.ALIGN_RIGHT | wx.ALIGN_CENTER_VERTICAL)
 
@@ -204,11 +205,16 @@ class FocusOverlay(base.ViewOverlay):
         x, y = self.cnvs.ClientSize
 
         # Horizontal
-        if self.shifts[0]:
+        if self.shifts[0] is not None:
             y -= self.margin + (self.line_width // 2)
             middle = x / 2
 
-            shift = self.shifts[0] * 1e6  # typically within µm
+            # don't display extremely small values, which are due to accumulation
+            # of floating point error
+            shiftm = self.shifts[0]
+            if abs(shiftm) < 1e-12:
+                shiftm = 0
+            shift = shiftm * self.ppm[0]
             end_x = middle + (middle * (shift / (x / 2)))
             end_x = min(max(self.margin, end_x), x - self.margin)
 
@@ -216,17 +222,22 @@ class FocusOverlay(base.ViewOverlay):
             ctx.line_to(end_x, y)
             ctx.stroke()
 
-            lbl = "focus %s" % units.readable_str(self.shifts[0], 'm', 2)
+            lbl = "focus %s" % units.readable_str(shiftm, 'm', 2)
             self.focus_label.text = lbl
             self.focus_label.pos = (end_x, y - 15)
             self._write_label(ctx, self.focus_label)
 
         # Vertical
-        if self.shifts[1]:
+        if self.shifts[1] is not None:
             x -= self.margin + (self.line_width // 2)
             middle = y / 2
 
-            shift = self.shifts[1] * 1e6  # typically within µm
+            # don't display extremely small values, which are due to accumulation
+            # of floating point error
+            shiftm = self.shifts[1]
+            if abs(shiftm) < 1e-12:
+                shiftm = 0
+            shift = shiftm * self.ppm[1]
             end_y = middle - (middle * (shift / (y / 2)))
             end_y = min(max(self.margin, end_y), y - self.margin)
 
@@ -234,7 +245,7 @@ class FocusOverlay(base.ViewOverlay):
             ctx.line_to(x, end_y)
             ctx.stroke()
 
-            lbl = "focus %s" % units.readable_str(self.shifts[1], 'm', 2)
+            lbl = "focus %s" % units.readable_str(shiftm, 'm', 2)
             self.focus_label.text = lbl
             self.focus_label.pos = (x - 15, end_y)
             self._write_label(ctx, self.focus_label)
@@ -246,13 +257,15 @@ class FocusOverlay(base.ViewOverlay):
         axis (int): axis for which this happens
 
         """
-
-        self.shifts[axis] += shift
+        if self.shifts[axis] is None:
+            self.shifts[axis] = shift
+        else:
+            self.shifts[axis] += shift
         self.cnvs.Refresh()
 
     def clear_shift(self):
         logging.debug("Clearing focus shift")
-        self.shifts = [0, 0]
+        self.shifts = [None, None]
         self.cnvs.Refresh()
 
 

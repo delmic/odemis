@@ -46,8 +46,9 @@ if args.optimize:
 first = True
 
 if not cmd_exists('img2py'):
-    print "Img2py not found, can't optimize!"
+    print "Img2py not found, can't generate python file!"
 else:
+    outpy = os.path.join(base_dir, 'data.py')
     for dirpath, dirnames, filenames in os.walk(base_dir):
         print "** Packaging", dirpath
 
@@ -56,7 +57,7 @@ else:
             print ' - ', ff
 
             if first:
-                subprocess.call(['img2py', '-c', '-f', ff, 'data.py'], stdout=subprocess.PIPE)
+                subprocess.call(['img2py', '-c', '-f', ff, outpy], stdout=subprocess.PIPE)
                 first = False
             else:
-                subprocess.call(['img2py', '-c', '-a', '-f', ff, 'data.py'], stdout=subprocess.PIPE)
+                subprocess.call(['img2py', '-c', '-a', '-f', ff, outpy], stdout=subprocess.PIPE)

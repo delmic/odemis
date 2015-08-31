@@ -54,13 +54,15 @@ class Stream(object):
     # Minimum overhead time in seconds when acquiring an image
     SETUP_OVERHEAD = 0.1
 
-    def __init__(self, name, detector, dataflow, emitter,
+    def __init__(self, name, detector, dataflow, emitter, focuser=None,
                  detvas=None, emtvas=None, raw=None):
         """
         name (string): user-friendly name of this stream
         detector (Detector): the detector which has the dataflow
         dataflow (Dataflow): the dataflow from which to get the data
         emitter (Emitter): the emitter
+        focuser (Actuator or None): an actuator with a 'z' axis that allows to change
+          the focus
         detvas (None or set of str): names of all the detector VigilantAttributes
           (VAs) to be duplicated on the stream. They will be named .detOriginalName
         emtvas (None or set of str): names of all the emitter VAs to be
@@ -73,6 +75,7 @@ class Stream(object):
         # Hardware Components
         self._detector = detector
         self._emitter = emitter
+        self._focuser = focuser
 
         # Dataflow (Live image stream with meta data)
         # Note: A Detectors can have multiple dataflows, so that's why a Stream
@@ -170,6 +173,10 @@ class Stream(object):
     @property
     def detector(self):
         return self._detector
+
+    @property
+    def focuser(self):
+        return self._focuser
 
     @property
     def det_vas(self):
@@ -506,12 +513,17 @@ class Stream(object):
                 if drange[1] - drange[0] > 4095:
                     mn = int(data.view(numpy.ndarray).min())
                     mx = int(data.view(numpy.ndarray).max())
-                    # Try to find "round" values
-                    if 0 < mn < 256:
-                        mn = 0
+                    # Try to find "round" values. Either:
+                    # * mn = 0, mx = max rounded to next power of 2
+                    # * mn = min, width = width rounded to next power of 2
+                    # => pick the one which gives the smallest width
                     diff = max(2, mx - mn)
-                    diff = 1 << int(math.ceil(math.log(diff, 2)))  # next power of 2
-                    drange = (mn, mn + diff - 1)
+                    diffrd = 1 << int(math.ceil(math.log(diff, 2)))  # next power of 2
+                    mxrd = 1 << int(math.ceil(math.log(max(2, mx), 2)))  # next power of 2
+                    if diffrd < mxrd:
+                        drange = (mn, mn + diffrd - 1)
+                    else:
+                        drange = (0, mxrd)
                     if self._drange is not None:
                         drange = (min(drange[0], self._drange[0]),
                                   max(drange[1], self._drange[1]))

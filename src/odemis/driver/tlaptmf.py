@@ -122,9 +122,9 @@ class MFF(model.Actuator):
                  inverted=None, positions=None, **kwargs):
         """
         children (dict string->model.HwComponent): they are not actually used.
-            In case of Monash SPARC we pass "pmt-control" just to enforce PMT
-            control to be initialized before the Fiber Flipper since we need the
-            relay reset to happen before the flipper is turned on
+            This is currently in place just to enforce PMT control to be
+            initialized before the Fiber Flipper since we need the relay reset
+            to happen before the flipper is turned on.
         sn (str): serial number (recommended)
         port (str): port name (only if sn is not specified)
         axis (str): name of the axis

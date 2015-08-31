@@ -644,7 +644,7 @@ class SPARCTestCase(unittest.TestCase):
         logging.debug("Expecting pos %s, pxs %s, res %s", pos, pxs, res)
         return pos, pxs, res
 
-#    @skip("simple")
+#     @skip("simple")
     def test_progressive_future(self):
         """
         Test .acquire interface (should return a progressive future with updates)
@@ -703,7 +703,7 @@ class SPARCTestCase(unittest.TestCase):
         self.assertTrue(self.done)
         self.assertTrue(not f.cancelled())
 
-#    @skip("simple")
+#     @skip("simple")
     def test_sync_future_cancel(self):
         self.image = None
 
@@ -757,7 +757,7 @@ class SPARCTestCase(unittest.TestCase):
         self.end = end
         self.updates += 1
 
-#    @skip("simple")
+#     @skip("simple")
     def test_acq_ar(self):
         """
         Test short & long acquisition for AR
@@ -773,7 +773,7 @@ class SPARCTestCase(unittest.TestCase):
         # Long acquisition (small rep to avoid being too long)
         # The acquisition method is different for time > 0.1 s, but we had bugs
         # with dwell time > 4s, so let's directly test both.
-        self.ccd.exposureTime.value = 5 # s
+        self.ccd.exposureTime.value = 5  # s
         ars.repetition.value = (2, 3)
         num_ar = numpy.prod(ars.repetition.value)
         exp_pos, exp_pxs, exp_res = self._roiToPhys(ars)
@@ -839,7 +839,7 @@ class SPARCTestCase(unittest.TestCase):
             self.assertTrue(phys_roi[0] <= pos[0] <= phys_roi[2] and
                             phys_roi[1] <= pos[1] <= phys_roi[3])
 
-#    @skip("simple")
+#     @skip("simple")
     def test_acq_spec(self):
         """
         Test short & long acquisition for Spectrometer
@@ -987,6 +987,7 @@ class SPARCTestCase(unittest.TestCase):
         numpy.testing.assert_allclose(spec_md[model.MD_POS], exp_pos)
         numpy.testing.assert_allclose(spec_md[model.MD_PIXEL_SIZE], exp_pxs)
 
+#     @skip("simple")
     def test_acq_mn(self):
         """
         Test short & long acquisition for SEM MD
@@ -1072,6 +1073,7 @@ class SPARCTestCase(unittest.TestCase):
         md = mcsd.metadata
         self.assertIn(model.MD_POS, md)
 
+#     @skip("simple")
     def test_count(self):
         cs = stream.CameraCountStream("test count", self.spec, self.spec.data, self.ebeam)
         self.spec.exposureTime.value = 0.1
@@ -1112,6 +1114,48 @@ class SPARCTestCase(unittest.TestCase):
         self.assertTrue(10 <= len(window) <= 16, len(window))
         dates = window.metadata[model.MD_ACQ_DATE]
         self.assertTrue(first_date < dates[0] < dates[-1])
+
+#    @skip("simple")
+    def test_acq_moi(self):
+        """
+        Test acquisition of Moment of Inertia
+        """
+        # Create the stream
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+        ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam)
+        mas = stream.MomentOfInertiaStream("test sem-ar", sems, ars)
+
+        ars.roi.value = (0.1, 0.1, 0.8, 0.8)
+        self.ccd.binning.value = (4, 4)  # hopefully always supported
+
+        self.ccd.exposureTime.value = 1  # s
+        exp = self.ccd.exposureTime.value
+        ars.repetition.value = (2, 2)
+        num_ar = numpy.prod(ars.repetition.value)
+        res = self.ccd.resolution.value
+        rot = numpy.prod(res) / self.ccd.readoutRate.value
+        dur = num_ar * (exp + rot)
+
+        # acquire for a few seconds
+        mas.should_update.value = True
+        mas.is_active.value = True
+
+        time.sleep(2 * dur)
+        mas.is_active.value = False
+        im = mas.image.value
+        X, Y, Z = im.shape
+        self.assertEqual((X, Y), ars.repetition.value)
+
+        ars.repetition.value = (3, 3)
+        num_ar = numpy.prod(ars.repetition.value)
+        dur = num_ar * (exp + rot)
+        mas.is_active.value = True
+
+        time.sleep(3 * dur)
+        mas.is_active.value = False
+        im = mas.image.value
+        X, Y, Z = im.shape
+        self.assertEqual((X, Y), ars.repetition.value)
 
 
 # @skip("faster")

@@ -40,25 +40,28 @@ class OpticalLens(model.HwComponent):
     A very simple class which just represent a lens with a given magnification.
     It should "affect" the detector on which it's in front of.
     """
-    def __init__(self, name, role, mag, pole_pos=None, x_max=None, hole_diam=None,
-                 focus_dist=None, parabola_f=None, ** kwargs):
+    def __init__(self, name, role, mag, na=0.95, ri=1,
+                 pole_pos=None, x_max=None, hole_diam=None,
+                 focus_dist=None, parabola_f=None, **kwargs):
         """
         name (string): should be the name of the product (for metadata)
         mag (float > 0): magnification ratio
+        na (float > 0): numerical aperture
+        ri (0.01 < float < 100): refractive index
         pole_pos (2 floats > 0): position of the pole on the CCD (in px, without
           binning). Used for angular resolved imaging on SPARC (only).
           cf MD_AR_POLE
-        x_max (float): the distance between the parabola origin and the cutoff 
+        x_max (float): the distance between the parabola origin and the cutoff
           position (in meters). Used for angular resolved imaging on SPARC (only).
           cf MD_AR_XMAX
-        hole_diam (float): diameter of the hole in the mirror (in meters). Used 
+        hole_diam (float): diameter of the hole in the mirror (in meters). Used
           for angular resolved imaging on SPARC (only).
           cf MD_AR_HOLE_DIAMETER
-        focus_dist (float): the vertical mirror cutoff, iow the min distance 
-          between the mirror and the sample (in meters). Used for angular 
+        focus_dist (float): the vertical mirror cutoff, iow the min distance
+          between the mirror and the sample (in meters). Used for angular
           resolved imaging on SPARC (only).
           cf MD_AR_FOCUS_DISTANCE
-        parabola_f (float): parabola_parameter=1/4f. Used for angular 
+        parabola_f (float): parabola_parameter=1/4f. Used for angular
           resolved imaging on SPARC (only).
           cf MD_AR_PARABOLA_F
         """
@@ -69,7 +72,9 @@ class OpticalLens(model.HwComponent):
         self._hwVersion = name
 
         # allow the user to modify the value, if the lens is manually changed
-        self.magnification = model.FloatContinuous(mag, range=[1e-3, 1e6], unit="")
+        self.magnification = model.FloatContinuous(mag, range=(1e-3, 1e6), unit="")
+        self.numericalAperture = model.FloatContinuous(na, range=(1e-6, 1e3), unit="")
+        self.refractiveIndex = model.FloatContinuous(ri, range=(0.01, 10), unit="")
 
         if pole_pos is not None:
             if (not isinstance(pole_pos, collections.Iterable) or
@@ -85,6 +90,7 @@ class OpticalLens(model.HwComponent):
             self.focusDistance = model.FloatVA(focus_dist)
         if parabola_f is not None:
             self.parabolaF = model.FloatVA(parabola_f)
+
 
 class LightFilter(model.Actuator):
     """

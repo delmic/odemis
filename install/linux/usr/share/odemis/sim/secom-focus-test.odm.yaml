@@ -73,7 +73,11 @@ Spectra: {
 "Nikon Super Duper": {
     class: static.OpticalLens,
     role: lens,
-    init: {mag: 60.0}, # ratio
+    init: {
+       mag: 60.0, # ratio
+       na: 1.25, # ratio, numerical aperture
+       ri: 1.5, # ratio, refractive index
+    },
     affects: ["SimCam"]
 }
 

@@ -206,8 +206,6 @@ class BufferedCanvas(wx.Panel):
 
         # Memory buffer device context
         self._dc_buffer = wx.MemoryDC()
-        # The Cairo context derived from the DC buffer
-        self.ctx = None
         # Center of the buffer in world coordinates
         self.w_buffer_center = (0, 0)
         # wx.Bitmap that will always contain the image to be displayed
@@ -216,9 +214,8 @@ class BufferedCanvas(wx.Panel):
         self._bmp_buffer_size = (1, 1)
 
         if os.name == "nt":
-            # Avoids flickering on windows, but prevents black background on
-            # Linux...
-            # TODO: to check, the documentation says the opposite
+            # Avoids flickering on windows, but prevents black background on Linux...
+            # Confirmed: If this statement is not present, there is flickering on MS Windows
             self.SetBackgroundStyle(wx.BG_STYLE_CUSTOM)
 
         # Initialize the buffer
@@ -463,6 +460,7 @@ class BufferedCanvas(wx.Panel):
         """
 
         dc_view = wx.PaintDC(self)
+
         # Blit the appropriate area from the buffer to the view port
         dc_view.BlitPointSize(
             (0, 0),             # destination point
@@ -470,6 +468,7 @@ class BufferedCanvas(wx.Panel):
             self._dc_buffer,    # source
             (0, 0)              # source point
         )
+
         ctx = wxcairo.ContextFromDC(dc_view)
         self._draw_view_overlays(ctx)
 
@@ -522,11 +521,13 @@ class BufferedCanvas(wx.Panel):
         self._bmp_buffer = wx.EmptyBitmap(*size)
         self._bmp_buffer_size = size
 
+        # Create a new DC, needed on Windows
+        if os.name == "nt":
+            self._dc_buffer = wx.MemoryDC()
         # Select the bitmap into the device context
         self._dc_buffer.SelectObject(self._bmp_buffer)
         # On Linux necessary after every 'SelectObject'
         self._dc_buffer.SetBackground(wx.Brush(self.BackgroundColour, wx.BRUSHSTYLE_SOLID))
-        self.ctx = wxcairo.ContextFromDC(self._dc_buffer)
 
     def request_drawing_update(self, delay=0.1):
         """ Schedule an update of the buffer if the timer is not already running
@@ -601,21 +602,6 @@ class BufferedCanvas(wx.Panel):
             ctx.save()
             vo.draw(ctx)
             ctx.restore()
-
-    # TODO: Remove if this turns out to be deprecated
-    # def _draw_world_overlays(self, ctx):
-    #     """ Draw all the world overlays
-    #
-    #     ctx (cairo context): the buffer context on which to draw
-    #
-    #     """
-    #
-    #     for wo in self.world_overlays:
-    #         ctx.save()
-    #         wo.draw(ctx, self.w_buffer_center, self.scale)
-    #         ctx.restore()
-
-    # ########### Position conversion ############
 
     @classmethod
     def world_to_buffer_pos(cls, w_pos, w_buff_center, scale, offset=(0, 0)):
@@ -752,7 +738,8 @@ class BufferedCanvas(wx.Panel):
     @call_in_wx_main
     def clear(self):
         """ Clear the canvas by redrawing the background """
-        self._draw_background(self.ctx)
+        ctx = wxcairo.ContextFromDC(self._dc_buffer)
+        self._draw_background(ctx)
 
     def _get_img_from_buffer(self):
         """
@@ -779,6 +766,7 @@ class BufferedCanvas(wx.Panel):
         del dc
 
         return wx.ImageFromBitmap(bitmap)
+
 
 class BitmapCanvas(BufferedCanvas):
     """
@@ -872,19 +860,21 @@ class BitmapCanvas(BufferedCanvas):
         if not self.IsEnabled():
             return
 
-        self._draw_background(self.ctx)
-        self.ctx.identity_matrix()  # Reset the transformation matrix
+        ctx = wxcairo.ContextFromDC(self._dc_buffer)
 
-        self._draw_merged_images(self.ctx)
-        self.ctx.identity_matrix()  # Reset the transformation matrix
+        self._draw_background(ctx)
+        ctx.identity_matrix()  # Reset the transformation matrix
+
+        self._draw_merged_images(ctx)
+        ctx.identity_matrix()  # Reset the transformation matrix
 
         # Remember that the device context being passed belongs to the *buffer* and the view
         # overlays are drawn in the `on_paint` method where the buffer is blitted to the device
         # context.
         for o in self.world_overlays:
-            self.ctx.save()
-            o.draw(self.ctx, self.w_buffer_center, self.scale)
-            self.ctx.restore()
+            ctx.save()
+            o.draw(ctx, self.w_buffer_center, self.scale)
+            ctx.restore()
 
     def _draw_merged_images(self, ctx):
         """ Draw the images on the DC buffer, centred around their _dc_center, with their own
@@ -903,7 +893,10 @@ class BitmapCanvas(BufferedCanvas):
 
         """
 
-        if not self.images or self.images == [None]:
+        # Checking images == [None] caused a FutureWarning from Numpy, because in the future it
+        # will do a element-by element comparison. (Or at least value == None will, it might have
+        # been a false positive). Instead, when working with NDArrays, use `value is None`
+        if not self.images or all(i is None for i in self.images):
             return
 
         # The idea:
@@ -1573,7 +1566,12 @@ class DraggableCanvas(BitmapCanvas):
         Note: The Device Context (dc) will automatically be drawn when it goes
         out of scope at the end of this method.
         """
-        dc_view = wx.PaintDC(self)
+
+        # Fix to prevent flicker from the Cairo view overlay rendering under Windows
+        if os.name == 'nt':
+            dc_view = wx.BufferedPaintDC(self)
+        else:
+            dc_view = wx.PaintDC(self)
 
         self.margins = ((self._bmp_buffer_size[0] - self.ClientSize.x) // 2,
                         (self._bmp_buffer_size[1] - self.ClientSize.y) // 2)
@@ -1999,14 +1997,16 @@ class PlotCanvas(BufferedCanvas):
             #
             # self._locked = True
 
-            self._draw_background(self.ctx)
+            ctx = wxcairo.ContextFromDC(self._dc_buffer)
+            self._draw_background(ctx)
 
             if self._data:
                 data = self._data
                 # TODO: reuse data_prop if the data has not changed
                 data_width, range_x, data_height, range_y = self._calc_data_characteristics(data)
                 self.data_prop = (data_width, range_x, data_height, range_y)
-                self._plot_data(self.ctx, data, data_width, range_x, data_height, range_y)
+                ctx = wxcairo.ContextFromDC(self._dc_buffer)
+                self._plot_data(ctx, data, data_width, range_x, data_height, range_y)
 
             # self._locked = False
 

@@ -68,3 +68,6 @@ VIEW_BTN_SIZE = (160, 116)  # Hard-coded work around to resize thumbnails in the
 
 BLEND_DEFAULT = 2  # CAIRO_OPERATOR_SOURCE or CAIRO_OPERATOR_CLEAR can be used (values 1 and 2)
 BLEND_SCREEN = 15  # CAIRO_OPERATOR_SCREEN
+
+icon = None  # Will be set to a wxIcon at init
+name = None  # str of the name to display of the user, will be set at init

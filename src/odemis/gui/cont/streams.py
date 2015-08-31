@@ -106,7 +106,7 @@ class StreamController(object):
         self._lbl_exc_peak = None
         self._lbl_em_peak = None
 
-        self.entries = OrderedDict()
+        self.entries = OrderedDict()  # name -> SettingEntry
 
         # Add local hardware settings to the stream panel
         self._add_hw_setting_controls()
@@ -214,7 +214,7 @@ class StreamController(object):
                 logging.debug("%s detector configuration found for %s", name,
                               self.stream.detector.role)
 
-            se = create_setting_entry(self.stream_panel, name, va, self.stream.emitter,
+            se = create_setting_entry(self.stream_panel, name, va, self.stream.detector,
                                       conf)
             self.entries[se.name] = se
             add_divider = True
@@ -1068,6 +1068,7 @@ class StreamBarController(object):
             self._main_data_model.ccd.data,
             self._main_data_model.light,
             self._main_data_model.light_filter,
+            focuser=self._main_data_model.focus,
             detvas={"exposureTime"},
             emtvas={"power"}
         )
@@ -1089,6 +1090,7 @@ class StreamBarController(object):
             self._main_data_model.ccd,
             self._main_data_model.ccd.data,
             self._main_data_model.brightlight,
+            focuser=self._main_data_model.focus,
             detvas={"exposureTime"},
             emtvas={"power"}
         )
@@ -1112,6 +1114,7 @@ class StreamBarController(object):
                 self._main_data_model.ebeam,
                 self._main_data_model.ccd,
                 self._main_data_model.stage,
+                focuser=self._main_data_model.ebeam_focus,
                 shiftebeam=acqstream.MTD_EBEAM_SHIFT
             )
             # Select between "Metadata update" and "Stage move"
@@ -1121,7 +1124,8 @@ class StreamBarController(object):
                 "Secondary electrons",
                 self._main_data_model.sed,
                 self._main_data_model.sed.data,
-                self._main_data_model.ebeam
+                self._main_data_model.ebeam,
+                focuser=self._main_data_model.ebeam_focus,
             )
         return self._add_stream(s, **kwargs)
 
@@ -1141,6 +1145,7 @@ class StreamBarController(object):
                 self._main_data_model.ebeam,
                 self._main_data_model.ccd,
                 self._main_data_model.stage,
+                focuser=self._main_data_model.ebeam_focus,
                 shiftebeam=acqstream.MTD_EBEAM_SHIFT
             )
         else:
@@ -1148,7 +1153,8 @@ class StreamBarController(object):
                 "Backscattered electrons",
                 self._main_data_model.bsd,
                 self._main_data_model.bsd.data,
-                self._main_data_model.ebeam
+                self._main_data_model.ebeam,
+                focuser=self._main_data_model.ebeam_focus,
             )
         return self._add_stream(s, **kwargs)
 
@@ -1798,6 +1804,7 @@ class SparcStreamsController(StreamBarController):
             main_data.ccd,
             main_data.ccd.data,
             main_data.ebeam,
+            # TODO: add a focuser for the SPARCv2?
             detvas=get_hw_settings(main_data.ccd),
         )
 
@@ -1806,7 +1813,7 @@ class SparcStreamsController(StreamBarController):
         sem_ar_stream = acqstream.SEMARMDStream("SEM AR", sem_stream, ar_stream)
 
         return self._addRepStream(ar_stream, sem_ar_stream,
-                                  vas=("repetition",),
+                                  vas=("repetition", "pixelSize"),
                                   axes={"band": main_data.light_filter}
                                   )
 
@@ -1819,6 +1826,7 @@ class SparcStreamsController(StreamBarController):
             main_data.cld,
             main_data.cld.data,
             main_data.ebeam,
+            focuser=self._main_data_model.ebeam_focus,
             emtvas={"dwellTime"},
             detvas=get_hw_settings(main_data.cld),
         )
