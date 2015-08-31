@@ -16,17 +16,17 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 from __future__ import division
 
-
 import numpy
 
 
 def CalculateMomentOfInertia(raw_data, background):
     """
     Calculates the moment of inertia for a given optical image
-    data (model.DataArray): The optical image
+    raw_data (model.DataArray): The optical image
     background (model.DataArray): Background image that we use for substraction
     returns (float): moment of inertia
     """
+    # TODO: better background substraction
     data = numpy.clip(raw_data - 1.3 * background, 0, numpy.inf)
     rows, cols = data.shape
     x = numpy.linspace(1, cols, num=cols)

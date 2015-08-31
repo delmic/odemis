@@ -39,7 +39,7 @@ import scipy.ndimage
 try:
     from odemis.util import img_fast
 except ImportError:
-    logging.info("Failed to load optimised functions, slow version will be used.")
+    logging.warn("Failed to load optimised functions, slow version will be used.")
     img_fast = None
 
 # This is a weave-based optimised version (but weave requires g++ installed)

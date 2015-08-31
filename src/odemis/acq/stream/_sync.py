@@ -29,6 +29,7 @@ from odemis import model
 from odemis.acq import _futures
 from odemis.acq import drift
 from odemis.acq._futures import executeTask
+from odemis.acq.align.coordinates import FindCenterCoordinates
 from odemis.model import MD_POS, MD_DESCRIPTION, MD_PIXEL_SIZE, MD_ACQ_DATE, MD_AD_LIST
 from odemis.util import inertia, limit_invocation, img
 import threading
@@ -996,6 +997,8 @@ class MomentOfInertiaStream(SEMCCDMDStream):
         self.background = model.VigilantAttribute(None)
 
         self._acquire_f = None
+        self._spot_size = None
+        self._image_n = 1
         # DataArray or None: RGB projection of the raw data
         self.image = model.VigilantAttribute(None)
         self.image.value = model.DataArray([])  # start with an empty array
@@ -1012,6 +1015,9 @@ class MomentOfInertiaStream(SEMCCDMDStream):
 
         # start the new one
         if self._acq_state != CANCELLED:
+            self._mif = []
+            self._image_n = 1
+            self._center_image = numpy.prod(self._rep_stream.repetition.value) // 2
             self._acquire_f = self.acquire()
             self._acquire_f.add_done_callback(self.on_done)
 
@@ -1024,6 +1030,9 @@ class MomentOfInertiaStream(SEMCCDMDStream):
                 logging.warning("Trying to activate stream while it's not "
                                 "supposed to update")
             self._mif = []
+            self._image_n = 1
+            # approx. the index of the center image
+            self._center_image = numpy.prod(self._rep_stream.repetition.value) // 2
             self._acquire_f = self.acquire()
             self._acquire_f.add_done_callback(self.on_done)
         else:
@@ -1038,8 +1047,12 @@ class MomentOfInertiaStream(SEMCCDMDStream):
             # at least substract the baseline
             md = self._rep_det.getMetadata()
             bg_image.fill(md.get(model.MD_BASELINE, 0))
-        self._mif.append(MomentOfInertia(data, bg_image))
+        ss = False
+        if self._image_n == self._center_image:
+            ss = True
+        self._mif.append(MomentOfInertia(data, bg_image, ss))
         self._acq_rep_complete.set()
+        self._image_n += 1
 
     def _onMultipleDetectorData(self, main_data, rep_data, repetition):
         """
@@ -1050,7 +1063,11 @@ class MomentOfInertiaStream(SEMCCDMDStream):
         mif_results = []
         for f in self._mif:
             try:
-                mi = f.result()
+                mir = f.result()
+                if isinstance(mir, tuple):
+                    mi, self._spot_size = mir
+                else:
+                    mi = mir
                 mif_results.append(mi)
             except Exception as e:
                 logging.debug("Moment of inertia calculation failed, %s", e)
@@ -1061,16 +1078,19 @@ class MomentOfInertiaStream(SEMCCDMDStream):
         self._rep_raw = [model.DataArray(moment_array)]
         self._main_raw = [main_data]
 
+    def getSpotSize(self):
+        return self._spot_size
 
 # rough estimation
 MI_DURATION = 0.3  # s
-def _DoMomentOfInertia(future, data, background):
+def _DoMomentOfInertia(future, data, background, spot_size=False):
     """
     It performs the moment of inertia calculation.
     future (model.ProgressiveFuture): Progressive future provided by the wrapper
     data (model.DataArray): The optical image
     background (model.DataArray): Background image that we use for substraction
-    returns (float): moment of inertia
+    spot_size (boolean): if True also calculate the spot size.
+    returns (float or tuple of floats): moment of inertia and spot size if asked.
     raises:
         CancelledError() if cancelled
     """
@@ -1081,6 +1101,9 @@ def _DoMomentOfInertia(future, data, background):
             raise CancelledError()
         try:
             moment_of_inertia = inertia.CalculateMomentOfInertia(data, background)
+            if spot_size:
+                spot_estimation = CalculateSpotSize(data, background)
+                return moment_of_inertia, spot_estimation
             return moment_of_inertia
         except Exception as e:
             raise e
@@ -1091,16 +1114,17 @@ def _DoMomentOfInertia(future, data, background):
             future._mi_state = FINISHED
 
 
-def MomentOfInertia(data, background):
+def MomentOfInertia(data, background, spot_size=False):
     """
     Wrapper for DoMomentOfInertia. It provides the ability to check the
     progress of moment of inertia calculation procedure or even cancel it.
     data (model.DataArray): The optical image
     background (model.DataArray): Background image that we use for
     substraction
+    spot_size (boolean): if True also calculate the spot size.
     returns (model.ProgressiveFuture):  Progress of DoMomentOfInertia, whose
     result() will return:
-            moment of inertia (float)
+            moment of inertia (float) and spot size (float) if asked
     """
     # Create ProgressiveFuture and update its state to RUNNING
     est_start = time.time() + 0.1
@@ -1117,7 +1141,7 @@ def MomentOfInertia(data, background):
     mi_thread = threading.Thread(target=executeTask,
                                            name="Delphi Calibration",
                                            args=(f, _DoMomentOfInertia, f, data,
-                                                 background))
+                                                 background, spot_size))
 
     mi_thread.start()
     return f
@@ -1143,6 +1167,28 @@ def estimateMomentOfInertiaTime():
     Estimates calculation procedure duration
     """
     return MI_DURATION
+
+
+def CalculateSpotSize(raw_data, background):
+    """
+    Gives an estimation of the spot size given the optical and background image.
+    Rather than an actual spot size measurement, it provides a ratio that is
+    comparable to the same measurement for another image.
+    raw_data (model.DataArray): The optical image
+    background (model.DataArray): Background image that we use for substraction
+    returns (float): spot size estimation
+    """
+    # TODO: better background substraction
+    data = numpy.clip(raw_data - 1.3 * background, 0, numpy.inf)
+    total = data.sum()
+    # center of mass
+    offset = FindCenterCoordinates([data])[0]
+    im_center = (data.shape[1] / 2, data.shape[0] / 2)
+    center = tuple(a + b for a, b in zip(im_center, offset))
+    neighborhood = data[(center[1] - 1):(center[1] + 2),
+                        (center[0] - 1):(center[0] + 2)]
+    spot_size = neighborhood.sum() / total
+    return spot_size
 
 
 class SEMARMDStream(SEMCCDMDStream):
