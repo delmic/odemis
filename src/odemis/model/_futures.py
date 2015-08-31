@@ -96,6 +96,7 @@ class CancellableThreadPoolExecutor(ThreadPoolExecutor):
                 # the task raised an exception => we don't care
                 pass
 
+
 class InstantaneousFuture(futures.Future):
     """
     This is a simple class which follows the Future interface and represents a
@@ -105,6 +106,16 @@ class InstantaneousFuture(futures.Future):
         self._result = result
         self._exception = exception
         self._end = time.time()
+
+    def __repr__(self):
+        if self._exception:
+            return '<InstantaneousFuture at %s raised %s>' % (
+                hex(id(self)),
+                self._exception.__class__.__name__)
+        else:
+            return '<InstantaneousFuture at %s returned %s>' % (
+                hex(id(self)),
+                self._result.__class__.__name__)
 
     def cancel(self):
         return False
