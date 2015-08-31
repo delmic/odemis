@@ -15,11 +15,9 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
-# Driver for Trinamic motion controller devices (TMCM-).
-# Currently only TMCM-3110 (3 axis stepper controller). The documentation is
-# available on trinamic.com (TMCM-3110_TMCL_firmware_manual.pdf).
-# Should be quite easy to adapt to other TMCL-based controllers (TMCM-6110,
-# TMCM-1110...).
+# Driver for Trinamic motion controller devices with TMCL firmware.
+# Currently TMCM-3110 (3 axis stepper controller) and TMCM-6110 are supported.
+# The documentation is available on trinamic.com (TMCM-3110_TMCL_firmware_manual.pdf).
 
 
 from __future__ import division
@@ -53,7 +51,8 @@ class TMCLError(Exception):
 # Status codes from replies which indicate everything went fine
 TMCL_OK_STATUS = {100, # successfully executed
                   101, # commanded loaded in memory
-                 }
+}
+
 # Status codes from replies which indicate an error
 TMCL_ERR_STATUS = {
     1: "Wrong checksum",
@@ -62,26 +61,39 @@ TMCL_ERR_STATUS = {
     4: "Invalid value",
     5: "Configuration EEPROM locked",
     6: "Command not available",
-    }
+}
 
 REFPROC_2XFF = "2xFinalForward" # fast then slow, always finishing by forward move
 REFPROC_FAKE = "FakeReferencing" # assign the current position as the reference
 REFPROC_LS = "LeftSwitch" # Fast to left switch, then slowly go out and go again to left switch
 
-class TMCM3110(model.Actuator):
+# Model number (int) -> Number of axes (int)
+KNOWN_MODELS = {
+    3110: 3,
+    6110: 6,
+}
+
+
+class TMCLController(model.Actuator):
     """
-    Represents one Trinamic TMCM-3110 controller.
+    Represents one Trinamic TMCL-compatible controller.
     Note: it must be set to binary communication mode (that's the default).
     """
-    def __init__(self, name, role, port, axes, ustepsize, refproc=None, temp=False, **kwargs):
+    def __init__(self, name, role, port, address, axes, ustepsize,
+                 refproc=None, temp=False, **kwargs):
         """
-        port (str): port name (use /dev/fake for a simulator)
-        axes (list of str): names of the axes, from the 1st to the 3rd.
+        port (str): port name. Can be a pattern, in which case all the ports
+          fitting the pattern will be tried (use /dev/fake for a simulator).
+        address (None or 1 <= int <= 255): Address of the controller (set via the
+          DIP). If None, any address will be accepted.
+        axes (list of str): names of the axes, from the 1st to the last.
+          If an axis is not connected, put a "".
         ustepsize (list of float): size of a microstep in m (the smaller, the
           bigger will be a move for a given distance in m)
         refproc (str or None): referencing (aka homing) procedure type. Use
           None to indicate it's not possible (no reference/limit switch) or the
-          name of the procedure. For now only "2xFinalForward" is accepted.
+          name of the procedure. For now only "2xFinalForward" or "LeftSwitch"
+          is accepted.
         temp (bool): if True, will read the temperature from the analogue input
          (10 mV <-> 1 °C)
         inverted (set of str): names of the axes which are inverted (IOW, either
@@ -90,17 +102,25 @@ class TMCM3110(model.Actuator):
         # TODO: accept address number, which correspond to the DIP switch,
         # with None meaning any address accepted. The address is the one returned
         # when receiving an answer to a message. (By USB, all messages are answered anyway)
+        # If DIP is set to 0, it will be using the value from global param 66
+        if not (address is None or 1 <= address <= 255):
+            raise ValueError("Address must be None or between 1 and 255, but got %d" % (address,))
 
-        # TODO: allow any number or axes (>=1 and <= max ports)
-        if len(axes) != 3:
-            raise ValueError("Axes must be a list of 3 axis names (got %s)" % (axes,))
-        self._axes_names = axes # axes names in order
+        # TODO: allow any number or axes (>=1 and <= max ports): try GetAxisParameter and see if error is returned?
+        if not (1 <= len(axes) <= 6):
+            raise ValueError("Axes must be a list of maximum 6 axis names (got %s)" % (axes,))
 
         if len(axes) != len(ustepsize):
             raise ValueError("Expecting %d ustepsize (got %s)" %
                              (len(axes), ustepsize))
 
-        if refproc not in {REFPROC_2XFF, REFPROC_FAKE, None}:
+        self._name_to_axis = {}  # str -> int: name -> axis number
+        for i, n in enumerate(axes):
+            if n == "":  # skip this non-connected axis
+                continue
+            self._name_to_axis[n] = i
+
+        if refproc not in {REFPROC_2XFF, REFPROC_FAKE, REFPROC_LS, None}:
             raise ValueError("Reference procedure %s unknown" % (refproc, ))
         self._refproc = refproc
 
@@ -109,19 +129,24 @@ class TMCM3110(model.Actuator):
                 raise ValueError("ustepsize should be in meter, but got %g" % (sz,))
         self._ustepsize = ustepsize
 
-        self._serial = self._openSerialPort(port)
-        self._port = port
         self._ser_access = threading.Lock()
-        self._target = 1 # Always one, when directly connected via USB
-
-        self._resynchonise()
+        self._serial, ra = self._findDevice(port, address)
+        self._target = ra  # same as address, but always the actual one
+        # self._serial = self._openSerialPort(port)
+        self._port = port  # or self._serial.name ?
 
         modl, vmaj, vmin = self.GetVersion()
-        # TODO: check 6110 too => and rename to TMCMx110?
-        if modl != 3110:
+        try:
+            mx_axes = KNOWN_MODELS[modl]
+        except KeyError:
+            mx_axes = 100
             logging.warning("Controller TMCM-%d is not supported, will try anyway",
                             modl)
-        if (vmaj + vmin / 100) < 1.09:
+        if len(axes) > mx_axes:
+            raise ValueError("Axes must be a list of maximum %d axis names (got %s)" % (mx_axes, axes,))
+
+        if modl == 3110 and (vmaj + vmin / 100) < 1.09:
+            # NTS told us the older version had some issues (wrt referencing?)
             raise ValueError("Firmware of TMCM controller %s is version %d.%02d, "
                              "while version 1.09 or later is needed" %
                              (name, vmaj, vmin))
@@ -140,21 +165,23 @@ class TMCM3110(model.Actuator):
         if not self._isFullyPowered():
             # Only a warning, as the power can be connected afterwards
             logging.warning("Device %s has no power, the motor will not move", name)
+        # TODO: add a .powerSupply readonly VA ?
 
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1) # one task at a time
 
         axes_def = {}
-        for n, sz in zip(self._axes_names, self._ustepsize):
+        for n, i in self._name_to_axis.items():
+            sz = ustepsize[i]
+            if not n:
+                continue
             # Mov abs supports ±2³¹ but the actual position is only within ±2²³
-            rng = [(-2 ** 23) * sz, (2 ** 23 - 1) * sz]
+            rng = ((-2 ** 23) * sz, (2 ** 23 - 1) * sz)
             # Probably not that much, but there is no info unless the axis has
             # limit switches and we run a referencing
             axes_def[n] = model.Axis(range=rng, unit="m")
-        model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
-
-        for i, a in enumerate(self._axes_names):
             self._init_axis(i)
+        model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
 
         driver_name = driver.getSerialDriver(self._port)
         self._swVersion = "%s (serial driver: %s)" % (odemis.__version__, driver_name)
@@ -284,6 +311,7 @@ class TMCM3110(model.Actuator):
     def _resynchonise(self):
         """
         Ensures the device communication is "synchronised"
+        return (int): the address reported by the device with connection
         """
         with self._ser_access:
             self._serial.flushInput()
@@ -305,13 +333,17 @@ class TMCM3110(model.Actuator):
                 self._serial.flush()
                 res = self._serial.read(9)
                 if len(res) == 9:
-                    break # just got synchronised
+                    # just got synchronised
+                    # TODO: also check the checksum is correct
+                    logging.debug("Received (for sync) %s", self._reply_to_str(res))
+                    ra, rt, status, rn, rval, chk = struct.unpack('>BBBBiB', res)
+                    return rt
                 elif len(res) == 0:
                     continue
                 else:
-                    logging.error("Device not answering with a 9 bytes reply: %s", res)
+                    raise IOError("Device not answering with a 9 bytes reply: %s", res)
             else:
-                logging.error("Device not answering to a 9 bytes message")
+                raise IOError("Device not answering to a 9 bytes message")
 
     # TODO: finish this method and use where possible
     def SendInstructionRecoverable(self, n, typ=0, mot=0, val=0):
@@ -766,7 +798,7 @@ class TMCM3110(model.Actuator):
           updated
         """
         pos = self.position.value.copy()
-        for i, n in enumerate(self._axes_names):
+        for n, i in self._name_to_axis.items():
             if axes is None or n in axes:
                 # param 1 = current position
                 pos[n] = self.GetAxisParam(i, 1) * self._ustepsize[i]
@@ -786,7 +818,7 @@ class TMCM3110(model.Actuator):
         #       fCLK * velocity
         # usf = ------------------------
         #       2**pulse_div * 2048 * 32
-        for i, n in enumerate(self._axes_names):
+        for n, i in self._name_to_axis.items():
             velocity = self.GetAxisParam(i, 4)
             pulse_div = self.GetAxisParam(i, 154)
             # fCLK = 16 MHz
@@ -841,7 +873,7 @@ class TMCM3110(model.Actuator):
 
         # Check if the distance is big enough to make sense
         for an, v in shift.items():
-            aid = self._axes_names.index(an)
+            aid = self._name_to_axis[an]
             if abs(v) < self._ustepsize[aid]:
                 # TODO: store and accumulate all the small moves instead of dropping them?
                 del shift[an]
@@ -894,7 +926,7 @@ class TMCM3110(model.Actuator):
             end = 0 # expected end
             moving_axes = set()
             for an, v in pos.items():
-                aid = self._axes_names.index(an)
+                aid = self._name_to_axis[an]
                 moving_axes.add(aid)
                 usteps = int(round(v / self._ustepsize[aid]))
                 self.MoveRelPos(aid, usteps)
@@ -916,7 +948,7 @@ class TMCM3110(model.Actuator):
             old_pos = self.position.value
             moving_axes = set()
             for an, v in pos.items():
-                aid = self._axes_names.index(an)
+                aid = self._name_to_axis[an]
                 moving_axes.add(aid)
                 usteps = int(round(v / self._ustepsize[aid]))
                 self.MoveAbsPos(aid, usteps)
@@ -952,7 +984,7 @@ class TMCM3110(model.Actuator):
 
                 # Update the position from time to time (10 Hz)
                 if time.time() - last_upd > 0.1 or last_axes != moving_axes:
-                    last_names = set(self._axes_names[i] for i in last_axes)
+                    last_names = set(n for n, i in self._name_to_axis.items() if i in last_axes)
                     self._updatePosition(last_names)
                     last_upd = time.time()
                     last_axes = moving_axes.copy()
@@ -984,7 +1016,7 @@ class TMCM3110(model.Actuator):
         try:
             # do the referencing for each axis
             for a in axes:
-                aid = self._axes_names.index(a)
+                aid = self._name_to_axis[a]
                 self._startReferencing(aid)
 
             # TODO: handle cancellation
@@ -1015,6 +1047,44 @@ class TMCM3110(model.Actuator):
             if not future._was_stopped:
                 logging.debug("Cancelling failed")
             return future._was_stopped
+
+    def _findDevice(self, port, address=None):
+        """
+        Look for a compatible device
+        port (str): pattern for the port name
+        address (None or int): the address of the
+        return (serial, int): the (opened) serial port used, and the actual address
+        raises:
+            IOError: if no device are found
+        """
+        if os.name == "nt":
+            raise NotImplementedError("Windows not supported")
+        else:
+            names = glob.glob(port)
+
+        for n in names:
+            try:
+                serial = self._openSerialPort(n)
+            except IOError:
+                # not possible to use this port? next one!
+                continue
+
+            # check whether it answers with the right address
+            try:
+                # If any garbage was previously received, make it discarded.
+                self._serial = serial
+                ra = self._resynchonise()
+                if address is None or ra == address:
+                    logging.debug("Found device on port %s, with address %d", n, ra)
+                    return serial, ra  # found it!
+            except Exception as ex:
+                logging.debug("Port %s doesn't seem to have a TMCM device connected: %s",
+                              n, ex)
+            serial.close()  # make sure to close/unlock that port
+        else:
+            raise HwError("Failed to find a TMCM controller on ports '%s' with "
+                          "address %s. Check that the device is turned on and "
+                          "connected to the computer." % (port, address))
 
     @staticmethod
     def _openSerialPort(port):
@@ -1064,16 +1134,16 @@ class TMCM3110(model.Actuator):
             ports = glob.glob('/dev/ttyACM?*')
 
         logging.info("Scanning for TMCM controllers in progress...")
-        found = []  # (list of 2-tuple): name, args (port, axes(channel -> CL?)
+        found = []  # (list of 2-tuple): name, kwargs
         for p in ports:
             try:
                 logging.debug("Trying port %s", p)
-                dev = cls(None, None, p, axes=["x", "y", "z"],
-                          ustepsize=[10e-9, 10e-9, 10e-9])
+                dev = cls(None, None, p, address=None, axes=["x"], ustepsize=[10e-9])
                 modl, vmaj, vmin = dev.GetVersion()
+                address = dev._target
                 # TODO: based on the model name (ie, the first number) deduce
                 # the number of axes
-            except (serial.SerialException, IOError):
+            except IOError:
                 # not possible to use this port? next one!
                 continue
             except Exception:
@@ -1082,11 +1152,18 @@ class TMCM3110(model.Actuator):
 
             found.append(("TMCM-%s" % modl,
                           {"port": p,
+                           "address": address,
                            "axes": ["x", "y", "z"],
                            "ustepsize": [10e-9, 10e-9, 10e-9]})
                         )
 
         return found
+
+
+# Former name, just for compatibility with old config files
+class TMCM3110(TMCLController):
+    pass
+
 
 class TMCM3110Simulator(object):
     """
@@ -1191,7 +1268,7 @@ class TMCM3110Simulator(object):
         return None: self._output_buf is updated if necessary
         """
         target, inst, typ, mot, val, chk = struct.unpack('>BBBBiB', msg)
-#         logging.debug("SIM: parsing %s", TMCM3110._instr_to_str(msg))
+#         logging.debug("SIM: parsing %s", TMCL._instr_to_str(msg))
 
         # Check it's a valid message... for us
         npmsg = numpy.frombuffer(msg, dtype=numpy.uint8)

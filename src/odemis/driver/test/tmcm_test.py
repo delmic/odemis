@@ -38,8 +38,8 @@ else:
 
 CLASS = tmcm.TMCM3110
 KWARGS = dict(name="test", role="stage", port=PORT,
-              axes=["x", "y", "z"],
-              ustepsize=[5.9e-9, 5.8e-9, 5e-9],
+              axes=["", "x", "y"],
+              ustepsize=[0, 5.9e-9, 5.8e-9],
               refproc="2xFinalForward",
               temp=True,
               inverted=["x"])
