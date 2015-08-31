@@ -17,7 +17,7 @@ You should have received a copy of the GNU General Public License along with Ode
 from __future__ import division
 
 import logging
-from odemis import model
+from odemis import model, gui
 from odemis.acq import stream
 from odemis.gui.comp.popup import Message
 import odemis.gui.conf
@@ -333,8 +333,8 @@ class MenuController(object):
     def _on_about(self, evt):
 
         info = wx.AboutDialogInfo()
-        info.SetIcon(imgdata.catalog['icon128'].GetIcon())
-        info.Name = odemis.__shortname__
+        info.SetIcon(gui.icon)
+        info.Name = gui.name
         info.Version = odemis.__version__
         info.Description = odemis.__fullname__
         info.Copyright = odemis.__copyright__

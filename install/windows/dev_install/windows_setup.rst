@@ -64,6 +64,21 @@ and use `easy_install` (which is part of `setuptools`) to install the package.
     copy all DLL files to %Windows%/SysWOW64
 #.  Install Pillow, a repackaged version of PIL: `pip install Pillow`
 
+Building Cython module(s)
+-------------------------
+
+Some parts of Odemis are written with Cython, for optimization reasons. To build these modules on
+MS Windows, first install Visual Studio for Python 2.7, which can be found here:
+
+https://www.microsoft.com/en-us/download/details.aspx?id=44266
+
+This is a simple compiler distribution from Microsoft, specifically made for Python.
+
+After installation, use the `setup.py` file from the `install/windows` folder to build the *.pyd
+files.
+
+**IMPORTANT**: It will be necessary to update the `productdir` path in the `setup.py` file!
+
 Installing PyInstaller
 ----------------------
 

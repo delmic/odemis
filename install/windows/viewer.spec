@@ -51,7 +51,7 @@ def get_version():
     return [('version.txt', 'version.txt', 'DATA')]
 
 a = Analysis(['viewer.py'],
-             pathex=['D:\\Development\\Odemis\\windows'],
+             pathex=['.'],
              hiddenimports=[
                  'cairo',
              ],
@@ -68,7 +68,7 @@ exe = EXE(pyz,
           strip=None,
           upx=False,
           console=False,
-          icon='..\\image\\viewer.ico'
+          icon='odemis-viewer.ico'
        )
 
 coll = COLLECT(exe,
@@ -76,7 +76,7 @@ coll = COLLECT(exe,
                get_lib_tiff(),
                get_cairo_dlls(),
                get_version(),
-               [('OdemisViewer.ico', '..\\image\\viewer.ico', 'DATA')],
+               [('OdemisViewer.ico', 'odemis-viewer.ico', 'DATA')],
                a.zipfiles,
                a.datas,
                strip=None,

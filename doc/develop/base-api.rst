@@ -272,11 +272,7 @@ Each listener has a separate queue, which ensures it will never miss the fact an
 
         Indicates an event has just occurred. Only to be done by the owner of the event.
 
-.. TODO    .. py:method:: wait(object, timeout=None)
-        wait for the event to happen. Returns either True (the event has happened) or False (timeout, or the the object is no more synchronised on this event). It automatically remove from the listener queue the fact the event has happened.
 
-     .. py:method:: clear(object)
-        empties the queue of events.
 Future
 ======
 
@@ -442,8 +438,13 @@ Typically they are used to configure the device to a specific mode (e.g., change
         All the accesses are synchronous: at the end of a set, all the subscribers
         have been notified or an exception was raised.
         
+        Note: if the VA is readonly, it is still possible for the owner to change
+        the value. This can be done either by calling ._set_value(val, force_write=True),
+        or by directly changing ._value (but in which case netheir the setter,
+        nor notify() are called).
+
     .. py:method:: subscribe(callback)
-    
+
         Attaches the callable *callback* to the VigilantAttribute. 
         *callback* will be called when the value changes, with the
         new value as its only argument.
@@ -457,7 +458,7 @@ Typically they are used to configure the device to a specific mode (e.g., change
         receive notifications. In particular, this means that lambda functions
         must be kept explicitly in reference by the caller (for example, in a list). 
         
-        .. Rationale: this permits to have objects subscribed to a VA be easily garbage collected, without the developer having to ensure that every VA is unsubscribed when the object is not used. That also forces the subscribers to always be able to unsubscribe (as unsubscribe uses the callback as identifier).
+        The rationale is that this permits to have objects subscribed to a VA be easily garbage collected, without the developer having to ensure that every VA is unsubscribed when the object is not used. That also forces the subscribers to always be able to unsubscribe (as unsubscribe uses the callback as identifier).
         
     .. py:method:: unsubscribe(callback)
 
