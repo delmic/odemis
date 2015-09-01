@@ -99,16 +99,11 @@ class TMCLController(model.Actuator):
         inverted (set of str): names of the axes which are inverted (IOW, either
          empty or the name of the axis)
         """
-        # TODO: accept address number, which correspond to the DIP switch,
-        # with None meaning any address accepted. The address is the one returned
-        # when receiving an answer to a message. (By USB, all messages are answered anyway)
         # If DIP is set to 0, it will be using the value from global param 66
         if not (address is None or 1 <= address <= 255):
             raise ValueError("Address must be None or between 1 and 255, but got %d" % (address,))
 
         # TODO: allow any number or axes (>=1 and <= max ports): try GetAxisParameter and see if error is returned?
-        if not (1 <= len(axes) <= 6):
-            raise ValueError("Axes must be a list of maximum 6 axis names (got %s)" % (axes,))
 
         if len(axes) != len(ustepsize):
             raise ValueError("Expecting %d ustepsize (got %s)" %
@@ -133,8 +128,14 @@ class TMCLController(model.Actuator):
         self._ser_access = threading.Lock()
         self._serial, ra = self._findDevice(port, address)
         self._target = ra  # same as address, but always the actual one
-        # self._serial = self._openSerialPort(port)
         self._port = port  # or self._serial.name ?
+
+        # Check that the device support that many axes
+        try:
+            self.GetAxisParam(max(self._name_to_axis.values()), 1) # current pos
+        except TMCLError:
+            raise ValueError("Device %s doesn't support %d axes (got %s)" %
+                             (name, max(self._name_to_axis.values()) + 1, axes))
 
         modl, vmaj, vmin = self.GetVersion()
         try:
@@ -445,7 +446,7 @@ class TMCLController(model.Actuator):
     def GetAxisParam(self, axis, param):
         """
         Read the axis/parameter setting from the RAM
-        axis (0<=int<=2): axis number
+        axis (0<=int<=5): axis number
         param (0<=int<=255): parameter number
         return (0<=int): the value stored for the given axis/parameter
         """
@@ -455,7 +456,7 @@ class TMCLController(model.Actuator):
     def SetAxisParam(self, axis, param, val):
         """
         Write the axis/parameter setting from the RAM
-        axis (0<=int<=2): axis number
+        axis (0<=int<=5): axis number
         param (0<=int<=255): parameter number
         val (int): the value to store
         """
@@ -493,7 +494,7 @@ class TMCLController(model.Actuator):
     def GetCoordinate(self, axis, num):
         """
         Read the axis/parameter setting from the RAM
-        axis (0<=int<=2): axis number
+        axis (0<=int<=5): axis number
         num (0<=int<=20): coordinate number
         return (0<=int): the coordinate stored
         """
@@ -503,7 +504,7 @@ class TMCLController(model.Actuator):
     def MoveAbsPos(self, axis, pos):
         """
         Requests a move to an absolute position. This is non-blocking.
-        axis (0<=int<=2): axis number
+        axis (0<=int<=5): axis number
         pos (-2**31 <= int 2*31-1): position
         """
         self.SendInstruction(4, 0, axis, pos) # 0 = absolute
@@ -511,7 +512,7 @@ class TMCLController(model.Actuator):
     def MoveRelPos(self, axis, offset):
         """
         Requests a move to a relative position. This is non-blocking.
-        axis (0<=int<=2): axis number
+        axis (0<=int<=5): axis number
         offset (-2**31 <= int 2*31-1): relative position
         """
         self.SendInstruction(4, 1, axis, offset) # 1 = relative
@@ -1069,7 +1070,9 @@ class TMCLController(model.Actuator):
         raises:
             IOError: if no device are found
         """
-        if os.name == "nt":
+        if port == "/dev/fake":
+            names = [port]
+        elif os.name == "nt":
             raise NotImplementedError("Windows not supported")
         else:
             names = glob.glob(port)
@@ -1079,6 +1082,7 @@ class TMCLController(model.Actuator):
                 serial = self._openSerialPort(n)
             except IOError:
                 # not possible to use this port? next one!
+                logging.info("Skipping port %s, which is not available", n)
                 continue
 
             # check whether it answers with the right address
