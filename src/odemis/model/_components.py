@@ -49,13 +49,17 @@ ST_RUNNING = "running"
 ST_STOPPED = "stopped"
 
 # Helper functions to list selectively the special attributes of a component
+
+
 def getVAs(component):
     """
     returns (dict of name -> VigilantAttributeBase): all the VAs in the component with their name
     """
     # like dump_vigilante_attributes, but doesn't register them
-    vas = inspect.getmembers(component, lambda x: isinstance(x, _vattributes.VigilantAttributeBase))
+    vas = inspect.getmembers(
+        component, lambda x: isinstance(x, _vattributes.VigilantAttributeBase))
     return dict(vas)
+
 
 def getROAttributes(component):
     """
@@ -63,30 +67,37 @@ def getROAttributes(component):
     """
     return _core.dump_roattributes(component)
 
+
 def getDataFlows(component):
     """
     returns (dict of name -> DataFlow): all the DataFlows in the component with their name
     """
     # like dump_dataflow, but doesn't register them
-    dfs = inspect.getmembers(component, lambda x: isinstance(x, _dataflow.DataFlowBase))
+    dfs = inspect.getmembers(
+        component, lambda x: isinstance(x, _dataflow.DataFlowBase))
     return dict(dfs)
+
 
 def getEvents(component):
     """
     returns (dict of name -> Events): all the Events in the component with their name
     """
     # like dump_dataflow, but doesn't register them
-    evts = inspect.getmembers(component, lambda x: isinstance(x, _dataflow.EventBase))
+    evts = inspect.getmembers(
+        component, lambda x: isinstance(x, _dataflow.EventBase))
     return dict(evts)
+
 
 class ComponentBase(object):
     """Abstract class for a component"""
     __metaclass__ = ABCMeta
 
+
 class Component(ComponentBase):
     '''
     Component to be shared remotely
     '''
+
     def __init__(self, name, parent=None, children=None, daemon=None):
         """
         name (string): unique name used to identify the component
@@ -99,16 +110,18 @@ class Component(ComponentBase):
         ComponentBase.__init__(self)
         self._name = name
         if daemon:
-            daemon.register(self, urllib.quote(name)) # registered under its name
+            # registered under its name
+            daemon.register(self, urllib.quote(name))
 
         self._parent = None
-        self.parent = parent # calls the setter, which updates ._parent
+        self.parent = parent  # calls the setter, which updates ._parent
 
         if children is None:
             children = {}
         # Do not add non-Component, so that it's compatible with passing a kwargs
         # It's up to the sub-class to set correctly the .parent of the children
-        cc = set([c for c in children.values() if isinstance(c, ComponentBase)])
+        cc = set(
+            [c for c in children.values() if isinstance(c, ComponentBase)])
         # Note the only way to ensure the VA notifies changes is to set a
         # different object at every change.
         self.children = _vattributes.VigilantAttribute(cc)
@@ -132,6 +145,7 @@ class Component(ComponentBase):
             return self._parent()
         else:
             return None
+
     @parent.setter
     def parent(self, p):
         if p:
@@ -158,7 +172,8 @@ class Component(ComponentBase):
         daemon = getattr(self, "_pyroDaemon", None)
         if daemon:
             # unregister also all the automatically registered VAs and
-            # dataflows (because they hold ref to daemon, so hard to get deleted
+            # dataflows (because they hold ref to daemon, so hard to get
+            # deleted
             _dataflow.unregister_dataflows(self)
             _vattributes.unregister_vigilant_attributes(self)
             _dataflow.unregister_events(self)
@@ -168,10 +183,13 @@ class Component(ComponentBase):
 #        self.terminate()
 
 # Run on the client (the process which asked for a given remote component)
+
+
 class ComponentProxy(ComponentBase, Pyro4.Proxy):
     """
     Representation of the Component in remote containers
     """
+
     def __init__(self, uri):
         """
         Note: should not be called directly only created via pickling
@@ -185,7 +203,8 @@ class ComponentProxy(ComponentBase, Pyro4.Proxy):
         return self._parent
 
     # The goal of __getstate__ is to allow pickling a proxy and getting a similar
-    # proxy talking directly to the server (it reset the connection and the lock).
+    # proxy talking directly to the server (it reset the connection and the
+    # lock).
     def __getstate__(self):
         proxy_state = Pyro4.Proxy.__getstate__(self)
         return (proxy_state, self.parent, _core.dump_roattributes(self),
@@ -213,10 +232,14 @@ class ComponentProxy(ComponentBase, Pyro4.Proxy):
 # Note: this could be directly __reduce__ of Component, but is a separate function
 # to look more like the normal Proxy of Pyro
 # Converter from Component to ComponentProxy
+
+
 def ComponentSerializer(self):
     """reduce function that automatically replaces Component objects by a Proxy"""
     daemon = getattr(self, "_pyroDaemon", None)
-    if daemon: # TODO might not be even necessary: They should be registering themselves in the init
+    # TODO might not be even necessary: They should be registering themselves
+    # in the init
+    if daemon:
         # only return a proxy if the object is a registered pyro object
         return (ComponentProxy, (daemon.uriFor(self),), self._getproxystate())
     else:
@@ -231,9 +254,10 @@ class HwComponent(Component):
     """
     __metaclass__ = ABCMeta
 
-    def __init__(self, name, role, *args, **kwargs):
+    def __init__(self, name, role, psu=None, *args, **kwargs):
         Component.__init__(self, name, *args, **kwargs)
         self._role = role
+        self._psu = psu  # PowerSupplier if available
         self._swVersion = "Unknown (Odemis %s)" % odemis.__version__
         self._hwVersion = "Unknown"
         self._metadata = {}  # internal metadata
@@ -241,7 +265,8 @@ class HwComponent(Component):
         # This one is not RO, but should only be modified by the backend
         # TODO: if it's just static names => make it a roattribute? Or wait
         # until Pyro supports modifying normal attributes?
-        self.affects = _vattributes.ListVA() # list of names (str) of component
+        # list of names (str) of component
+        self.affects = _vattributes.ListVA()
 
         # The component can update it to an HwError when the hardware is not
         # behaving correctly anymore. It could also set it to ST_STARTING during
@@ -249,6 +274,12 @@ class HwComponent(Component):
         # will be visible only by the children.
         # It could almost be an enumerated, but needs to accept any HwError
         self.state = _vattributes.VigilantAttribute(ST_RUNNING, readonly=True)
+
+        # if PowerSupplier available then create powerSupply VA by copying the
+        # corresponding value of the position VA of the PowerSupplier.
+        if self._psu:
+            self.powerSupply = _vattributes.BooleanVA(
+                self._psu.position.value[name], setter=self._setPowerSupply)
 
     @roattribute
     def role(self):
@@ -265,7 +296,8 @@ class HwComponent(Component):
     def hwVersion(self):
         return self._hwVersion
 
-    # can be overridden by components which need to know when the metadata is updated
+    # can be overridden by components which need to know when the metadata is
+    # updated
     def updateMetadata(self, md):
         """
         Updates the internal metadata. It's accumulative, so previous metadata
@@ -279,6 +311,16 @@ class HwComponent(Component):
         return (dict string -> value): internal metadata
         """
         return self._metadata
+
+    def _setPowerSupply(self, value):
+        try:
+            f = self._psu.switch({self.name: value})
+            f.result()
+        except ValueError:
+            logging.debug("Cannot set power supply of component %s to %s", self.name,
+                          value)
+
+        return self._psu.position.value[self.name]
 
     # to be overridden by components which can do self test
     def selfTest(self):
@@ -296,32 +338,37 @@ class HwComponent(Component):
 #    def scan(self):
 #        pass
 
+
 class Microscope(HwComponent):
     """
     A component which represent the whole microscope.
     It does nothing by itself, just contains other components.
     """
+
     def __init__(self, name, role, children=None, model=None, daemon=None, **kwargs):
         """
         model (dict str-> dict): the python representation of the model AST
         """
-        HwComponent.__init__(self, name, role, children=children, daemon=daemon)
+        HwComponent.__init__(
+            self, name, role, children=children, daemon=daemon)
 
         if model is None:
             model = {}
         self._model = model
 
         if kwargs:
-            raise ValueError("Microscope component cannot have initialisation arguments.")
+            raise ValueError(
+                "Microscope component cannot have initialisation arguments.")
 
         # These 2 VAs should not modified, but by the backend
-        self.alive = _vattributes.VigilantAttribute(set()) # set of components
+        self.alive = _vattributes.VigilantAttribute(set())  # set of components
         # dict str -> int or Exception: name of component -> State
         self.ghosts = _vattributes.VigilantAttribute(dict())
 
     @roattribute
     def model(self):
         return self._model
+
 
 class Detector(HwComponent):
     """
@@ -347,6 +394,7 @@ class Detector(HwComponent):
     def shape(self):
         return self._shape
 
+
 class DigitalCamera(Detector):
     """
     A component which represent a digital camera (i.e., CCD or CMOS)
@@ -368,9 +416,10 @@ class DigitalCamera(Detector):
             if len(set(abs(v) for v in transpose)) != len(transpose):
                 raise ValueError("Transpose argument contains multiple times "
                                  "the same axis: %s" % (transpose,))
-            # Shape not yet defined, so can't check precisely all the axes are there
+            # Shape not yet defined, so can't check precisely all the axes are
+            # there
             if (not 1 <= len(transpose) <= 5 or 0 in transpose
-                or any(abs(v) > 5 for v in transpose)):
+                    or any(abs(v) > 5 for v in transpose)):
                 raise ValueError("Transpose argument does not define each axis "
                                  "of the camera once: %s" % (transpose,))
         self._transpose = transpose
@@ -381,10 +430,15 @@ class DigitalCamera(Detector):
         self.depthOfField = _vattributes.FloatContinuous(1e-6, range=(0, 1e9),
                                                          unit="m", readonly=True)
         # To be overridden by a VA
-        self.pixelSize = None  # (len(dim)-1 * float) size of a sensor pixel (in meters). More precisely it should be the average distance between the centres of two pixels.
-        self.binning = None # how many CCD pixels are merged (in each dimension) to form one pixel on the image.
-        self.resolution = None # (len(dim)-1 * int): number of pixels in the image generated for each dimension. If it's smaller than the full resolution of the captor, it's centred.
-        self.exposureTime = None # (float): time in second for the exposure for one image.
+        # (len(dim)-1 * float) size of a sensor pixel (in meters). More precisely it should be the average distance between the centres of two pixels.
+        self.pixelSize = None
+        # how many CCD pixels are merged (in each dimension) to form one pixel
+        # on the image.
+        self.binning = None
+        # (len(dim)-1 * int): number of pixels in the image generated for each dimension. If it's smaller than the full resolution of the captor, it's centred.
+        self.resolution = None
+        # (float): time in second for the exposure for one image.
+        self.exposureTime = None
 
     @roattribute
     def transpose(self):
@@ -411,17 +465,21 @@ class DigitalCamera(Detector):
                 # confusing for the user that the focus sensitivity changes when
                 # the observed part changes. So just use 550 nm, which is never
                 # more than 50% wrong.
-                # from https://www.microscopyu.com/articles/formulas/formulasfielddepth.html
+                # from
+                # https://www.microscopyu.com/articles/formulas/formulasfielddepth.html
                 dof = (l * ri) / na ** 2 + (ri * pxs) / (mag - na)
                 rng = self.depthOfField.range
                 if rng[0] <= dof <= rng[1]:
                     self.depthOfField._set_value(dof, force_write=True)
                 else:
-                    logging.warning("Depth of field computed seems incorrect: %f m", dof)
+                    logging.warning(
+                        "Depth of field computed seems incorrect: %f m", dof)
             except KeyError:
-                pass  # Not enough metadata is present for computing Depth of Field
+                # Not enough metadata is present for computing Depth of Field
+                pass
             except Exception:
-                logging.warning("Failure to update the depth of field", exc_info=True)
+                logging.warning(
+                    "Failure to update the depth of field", exc_info=True)
 
     # helper functions for handling transpose
     def _transposePosToUser(self, v):
@@ -526,7 +584,8 @@ class DigitalCamera(Detector):
         typev = type(v)
         return typev(vt)
 
-    # _transposeShapeFromUser and _transposeDAFromUser do not seem to have usage
+    # _transposeShapeFromUser and _transposeDAFromUser do not seem to have
+    # usage
 
     def _transposeDAToUser(self, v):
         """
@@ -551,20 +610,22 @@ class DigitalCamera(Detector):
         # Build slices on the fly, to reorder the whole array in one go
         slc = []
         for idx in self._transpose:
-        # for idx in reversed(self._transpose):
+            # for idx in reversed(self._transpose):
             if idx > 0:
-                slc.append(slice(None)) # [:] (=no change)
+                slc.append(slice(None))  # [:] (=no change)
             else:
-                slc.append(slice(None, None, -1)) # [::-1] (=fully inverted)
+                slc.append(slice(None, None, -1))  # [::-1] (=fully inverted)
 
         v = v[tuple(slc)]
         return v
+
 
 class Axis(object):
     """
     One axis manipulated by an actuator.
     Only used to report information on the axis.
     """
+
     def __init__(self, canAbs=True, choices=None, unit=None,
                  range=None, speed=None):
         """
@@ -580,7 +641,7 @@ class Axis(object):
         self.canAbs = canAbs
 
         assert isinstance(unit, (type(None), basestring))
-        self.unit = unit # always defined, just sometimes is None
+        self.unit = unit  # always defined, just sometimes is None
 
         if choices is None and range is None:
             raise ValueError("At least choices or range must be defined")
@@ -597,11 +658,11 @@ class Axis(object):
         if range is not None:
             assert choices is None
             assert len(range) == 2
-            self.range = tuple(range) # unit
+            self.range = tuple(range)  # unit
 
         if speed is not None:
             assert len(speed) == 2
-            self.speed = tuple(speed) # speed _range_ in unit/s
+            self.speed = tuple(speed)  # speed _range_ in unit/s
 
     def __str__(self):
         if hasattr(self, "choices"):
@@ -625,7 +686,8 @@ class Axis(object):
                 speed_str = (" (speed %s -> %s %s/s)" %
                              (self.speed[0], self.speed[1], self.unit))
             else:
-                speed_str = " (speed %s -> %s)" % (self.speed[0], self.speed[1])
+                speed_str = " (speed %s -> %s)" % (
+                    self.speed[0], self.speed[1])
         else:
             speed_str = ""
 
@@ -710,7 +772,6 @@ class Actuator(HwComponent):
         """
         raise NotImplementedError("Actuator doesn't accept referencing")
 
-
     # helper methods
     def _applyInversionRel(self, shift):
         """
@@ -735,7 +796,8 @@ class Actuator(HwComponent):
         ret = dict(pos)
         for a in self._inverted:
             if a in ret:
-                ret[a] = self._axes[a].range[0] + self._axes[a].range[1] - ret[a]
+                ret[a] = self._axes[a].range[
+                    0] + self._axes[a].range[1] - ret[a]
         return ret
 
     def _checkMoveRel(self, shift):
@@ -748,7 +810,7 @@ class Actuator(HwComponent):
             if axis in self.axes:
                 axis_def = self.axes[axis]
                 if (hasattr(axis_def, "range") and
-                    abs(val) > abs(axis_def.range[1] - axis_def.range[0])):
+                        abs(val) > abs(axis_def.range[1] - axis_def.range[0])):
                     # we cannot check more precisely, unless we also know all
                     # the moves queued (eg, if we had a targetPosition)
                     rng = axis_def.range
@@ -788,7 +850,84 @@ class Actuator(HwComponent):
         referenceable = set(self.referenced.value.keys())
         nonref = axes - referenceable
         if nonref:
-            raise ValueError("Cannot reference the following axes: %s" % (nonref,))
+            raise ValueError(
+                "Cannot reference the following axes: %s" % (nonref,))
+
+
+class PowerSupplier(HwComponent):
+    """
+    A component which represents a power supplier for one or multiple components.
+    This is an abstract class that should be inherited.
+    """
+    __metaclass__ = ABCMeta
+
+    def __init__(self, name, role, switches_map=None, **kwargs):
+        """
+        switches_map (dict of str -> (str, float, float)): names of the components
+          and the (switch, on_value, off_value) information where "switch" is
+          where the component is connected and "on_value" and "off_value" the
+          values that correspond to turning on and off this component.
+        """
+        HwComponent.__init__(self, name, role, **kwargs)
+
+        switches_map = switches_map or {}
+        self._switches_map = switches_map
+
+        self._components = switches_map.keys()
+
+        # Just initialization, position will be updated once we switch
+        self._position = {}
+        for comp in self._components:
+            self._position[comp] = False
+        self.position = _vattributes.VigilantAttribute(
+            self._position, readonly=True)
+
+    @roattribute
+    def components(self):
+        """ list of str: name of each component available."""
+        return self._components
+
+    def _updatePosition(self, pos):
+        """
+        update the position VA
+        pos (dict of str -> boolean): position to update to.
+        """
+        for comp, value in pos.items():
+            switch = self._switches_map[comp][0]
+            # Update all components that are connected to the same switch
+            to_update = [
+                c for c in self._components if switch == self._switches_map[c][0]]
+            for c_update in to_update:
+                self._position[c_update] = value
+
+        # it's read-only, so we change it via _value
+        self.position._value = self._position
+        self.position.notify(self.position.value)
+
+    @abstractmethod
+    @isasync
+    def switch(self, pos):
+        """
+        Change the power supply to the defined position for each component given.
+        This is an asynchronous method.
+        pos dict(string-> boolean): name of the component and new position
+        returns (Future): object to control the switch request
+        """
+        pass
+
+    def _checkSwitch(self, pos):
+        """
+        Check that the argument passed to switch() is (potentially) correct
+        pos (dict string -> boolean): the new position for a switch()
+        raise ValueError: if the argument is incorrect
+        """
+        for component, val in pos.items():
+            if component in self.components:
+                if not isinstance(val, bool):
+                    raise ValueError("Unsupported position %s for component %s"
+                                     % (val, component))
+            else:
+                raise ValueError("Unknown component %s" % (component,))
 
 
 class Emitter(HwComponent):
@@ -801,7 +940,7 @@ class Emitter(HwComponent):
     def __init__(self, name, role, **kwargs):
         HwComponent.__init__(self, name, role, **kwargs)
 
-        self._shape = (0) # must be initialised by the sub-class
+        self._shape = (0)  # must be initialised by the sub-class
 
     @roattribute
     def shape(self):
