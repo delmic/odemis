@@ -5,6 +5,7 @@
 
 RUNNER=""
 
+MAX_FILES=4096 # 1024 is the default, which can be limitting on large microscopes
 MEMLIM_FILE=/sys/fs/cgroup/memory/odemisd/memory.limit_in_bytes
 MEMSWLIM_FILE=/sys/fs/cgroup/memory/odemisd/memory.memsw.limit_in_bytes
 # make sure we don't use too much memory
@@ -26,6 +27,8 @@ if [ -d /sys/fs/cgroup/memory/odemisd -a -x /usr/bin/cgexec -a -f "$MEMLIM_FILE"
         fi
     fi
 fi
+
+ulimit -n $MAX_FILES
 
 if [ "$RUNNER" == "" ]; then
     echo "Warning: failed to set memory limit protection for odemisd"
