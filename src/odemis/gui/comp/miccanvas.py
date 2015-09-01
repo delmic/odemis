@@ -766,8 +766,9 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         sem = self._tab_data_model.main.ebeam
 
         try:
-            sem_center = self.microscope_view.stage_pos.value
-        except AttributeError:
+            stage_pos = self.microscope_view.stage_pos.value
+            sem_center = (stage_pos["x"], stage_pos["y"])
+        except (AttributeError, KeyError):
             # no stage => pos is always 0,0
             sem_center = (0, 0)
         # TODO: pixelSize will be updated when the SEM magnification changes,
