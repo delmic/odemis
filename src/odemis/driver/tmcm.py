@@ -67,11 +67,8 @@ REFPROC_2XFF = "2xFinalForward" # fast then slow, always finishing by forward mo
 REFPROC_FAKE = "FakeReferencing" # assign the current position as the reference
 REFPROC_LS = "LeftSwitch" # Fast to left switch, then slowly go out and go again to left switch
 
-# Model number (int) -> Number of axes (int)
-KNOWN_MODELS = {
-    3110: 3,
-    6110: 6,
-}
+# Model number (int) of devices tested
+KNOWN_MODELS = {3110, 6110}
 
 
 class TMCLController(model.Actuator):
@@ -83,7 +80,8 @@ class TMCLController(model.Actuator):
                  refproc=None, temp=False, **kwargs):
         """
         port (str): port name. Can be a pattern, in which case all the ports
-          fitting the pattern will be tried (use /dev/fake for a simulator).
+          fitting the pattern will be tried.
+          Use /dev/fake3 or /dev/fake6 for a simulator with 3 or 6 axes.
         address (None or 1 <= int <= 255): Address of the controller (set via the
           DIP). If None, any address will be accepted.
         axes (list of str): names of the axes, from the 1st to the last.
@@ -116,14 +114,26 @@ class TMCLController(model.Actuator):
             # sz is typically ~1µm, so > 1 cm is very fishy
             sz = ustepsize[i]
             if not (0 < sz <= 10e-3):
-                raise ValueError("ustepsize should be in < 10 mm, but got %g m" % (sz,))
+                raise ValueError("ustepsize should be above 0 and < 10 mm, but got %g m" % (sz,))
             self._name_to_axis[n] = i
 
         self._ustepsize = ustepsize
 
-        if refproc not in {REFPROC_2XFF, REFPROC_FAKE, REFPROC_LS, None}:
+        if refproc == REFPROC_2XFF:
+            self._runReferencing = self._runReferencing2xFF
+            self._cancelReferencing = self._cancelReferencing2xFF
+        elif refproc == REFPROC_LS:
+            self._runReferencing = self._runReferencingLS
+            self._cancelReferencing = self._cancelReferencingLS
+        elif refproc == REFPROC_FAKE:
+            self._runReferencing = self._runReferencingFake
+            self._cancelReferencing = self._cancelReferencingFake
+        elif refproc is None:
+            pass
+        else:
             raise ValueError("Reference procedure %s unknown" % (refproc, ))
         self._refproc = refproc
+        self._refproc_cancelled = threading.Event()
 
         self._ser_access = threading.Lock()
         self._serial, ra = self._findDevice(port, address)
@@ -138,14 +148,9 @@ class TMCLController(model.Actuator):
                              (name, max(self._name_to_axis.values()) + 1, axes))
 
         modl, vmaj, vmin = self.GetVersion()
-        try:
-            mx_axes = KNOWN_MODELS[modl]
-        except KeyError:
-            mx_axes = 100
+        if modl not in KNOWN_MODELS:
             logging.warning("Controller TMCM-%d is not supported, will try anyway",
                             modl)
-        if len(axes) > mx_axes:
-            raise ValueError("Axes must be a list of maximum %d axis names (got %s)" % (mx_axes, axes,))
 
         if modl == 3110 and (vmaj + vmin / 100) < 1.09:
             # NTS told us the older version had some issues (wrt referencing?)
@@ -156,14 +161,6 @@ class TMCLController(model.Actuator):
         if name is None and role is None: # For scan only
             return
 
-#         if port != "/dev/fake": # TODO: support programs in simulator
-#             # Detect if it is "USB bus powered" by using the fact that programs
-#             # don't run when USB bus powered
-#             addr = 80 # big enough to not overlap with REFPROC_2XFF programs
-#             prog = [(9, 50, 2, 1), # Set global param 50 to 1
-#                     (28,), # STOP
-#                     ]
-#             self.UploadProgram(prog, addr)
         if not self._isFullyPowered():
             # Only a warning, as the power can be connected afterwards
             logging.warning("Device %s has no power, the motor will not move", name)
@@ -674,134 +671,192 @@ class TMCLController(model.Actuator):
         # Wait until referenced
         status = self.GetGlobalParam(2, gparam)
         while status == 0:
-            time.sleep(0.01)
+            if self._refproc_cancelled.wait(0.01):
+                break
             status = self.GetGlobalParam(2, gparam)
             if time.time() > endt:
                 self.StopRefSearch(axis)
                 self.StopProgram()
                 self.MotorStop(axis)
                 raise IOError("Timeout during reference search from device")
-        if status == 2:
+
+        if self._refproc_cancelled.is_set() or status == 3:
+            raise CancelledError("Reference search dir %d cancelled" % edge)
+        elif status == 2:
             # if timed out raise
             raise IOError("Timeout during reference search dir %d" % edge)
 
         return (edge == 1)
 
     # Special methods for referencing
-    def _startReferencing(self, axis):
+    def _runReferencing2xFF(self, axis):
         """
-        Do the referencing (this is synchronous). The current implementation
-        only supports one axis referencing at a time.
+        Do the 2x final forward referencing (this is synchronous).
+        The current implementation only supports one axis referencing at a time.
+        raise:
+            IOError: if timeout happen
+            CancelledError: if cancelled
+        """
+        logging.info("Starting referencing of axis %d", axis)
+        if not self._isFullyPowered():
+            raise IOError("Device is not powered, so motors cannot move")
+
+        self._refproc_cancelled.clear()
+
+        # Procedure devised by NTS:
+        # It requires the ref signal to be active for half the length. Like:
+        #                      ___________________ 1
+        #                      |
+        # 0 ___________________|
+        # ----------------------------------------> forward
+        # It first checks on which side of the length the actuator is, and
+        # then goes towards the edge. If the movement was backward, then
+        # it does the search a second time forward, to increase the
+        # repeatability.
+        # All this is done twice, once a fast speed finishing with positive
+        # direction, then at slow speed to increase precision, finishing
+        # in negative direction. Note that as the fast speed finishes with
+        # positive direction, normally only one run (in negative direction)
+        # is required on slow speed.
+        # Note also that the reference signal is IN1-3, the "home switch".
+        # Unfortunately the default referencing procedure only support home
+        # as a "spike" signal (contrarily to left/right switch. It seems the
+        # reason is that it was easier to connect them this way.
+        # Because of that, we need a homemade RFS command. That is
+        # done by setting an interrupt to stop the RFS command when the edge
+        # changes. As interrupts only work when a program is running, we
+        # have a small program that waits for the RFS and report the status.
+        # In conclusion, RFS is used pretty much just to move at a constant
+        # speed.
+
+        try:
+            self._setInputInterrupt(axis)
+
+            # TODO: be able to cancel (=> set a flag + call RFS STOP)
+            neg_dir = self._doInputReference(axis, 350) # fast (~0.5 mm/s)
+            if neg_dir: # always finish first by positive direction
+                self._doInputReference(axis, 350) # fast (~0.5 mm/s)
+
+            # Go back far enough that the slow referencing always need quite
+            # a bit of move. This is not part of the official NTS procedure
+            # but without that, the final reference position is affected by
+            # the original position.
+            self.MoveRelPos(axis, -20000) # ~ 100µm
+            for i in range(100):
+                time.sleep(0.01)
+                if self._isOnTarget(axis):
+                    break
+            else:
+                logging.warning("Relative move failed to finish in time")
+
+            neg_dir = self._doInputReference(axis, 50) # slow (~0.07 mm/s)
+            if not neg_dir: # if it was done in positive direction (unlikely), redo
+                logging.debug("Doing one last reference move, in negative dir")
+                # As it always waits for the edge to change, the second time
+                # should be positive
+                neg_dir = self._doInputReference(axis, 50)
+                if not neg_dir:
+                    logging.warning("Second reference search was again in positive direction")
+        finally:
+            # Disable interrupt
+            intid = 40 + axis   # axis 0 = IN1 = 40
+            self.DisableInterrupt(intid)
+            # TODO: to support multiple axes referencing simultaneously,
+            # only this global interrupt would need to be handle globally
+            # (= only disable iff noone needs interrupt).
+            self.DisableInterrupt(255)
+            # For safety, but also necessary to make sure SetAxisParam() works
+            self.MotorStop(axis)
+
+        # Reset the absolute 0 (by setting current pos to 0)
+        logging.debug("Changing referencing position by %d", self.GetAxisParam(axis, 1))
+        self.SetAxisParam(axis, 1, 0)
+
+    def _cancelReferencing2xFF(self, axis):
+        """
+        Cancel the referencing.
+        return (bool): True if the referencing was cancelled successfully
+        """
+        # TODO: protect with a lock the start of the referencing
+        self._refproc_cancelled.set()
+        self.StopRefSearch(axis)
+        self.StopProgram()
+        self.MotorStop(axis)
+        gparam = 50 + axis
+        self.SetGlobalParam(2, gparam, 3)  # 3 => indicate cancelled
+        return True
+
+    def _runReferencingLS(self, axis):
+        """
+        Do the left-switch referencing (this is synchronous).
+        The current implementation only supports one axis referencing at a time.
         raise:
             IOError: if timeout happen
         """
         logging.info("Starting referencing of axis %d", axis)
-        if self._refproc == REFPROC_2XFF:
-            if not self._isFullyPowered():
-                raise IOError("Device is not powered, so motors cannot move")
+        if not self._isFullyPowered():
+            raise IOError("Device is not powered, so motors cannot move")
 
-            # Procedure devised by NTS:
-            # It requires the ref signal to be active for half the length. Like:
-            #                      ___________________ 1
-            #                      |
-            # 0 ___________________|
-            # ----------------------------------------> forward
-            # It first checks on which side of the length the actuator is, and
-            # then goes towards the edge. If the movement was backward, then
-            # it does the search a second time forward, to increase the
-            # repeatability.
-            # All this is done twice, once a fast speed finishing with positive
-            # direction, then at slow speed to increase precision, finishing
-            # in negative direction. Note that as the fast speed finishes with
-            # positive direction, normally only one run (in negative direction)
-            # is required on slow speed.
-            # Note also that the reference signal is IN1-3, the "home switch".
-            # Unfortunately the default referencing procedure only support home
-            # as a "spike" signal (contrarily to left/right switch. It seems the
-            # reason is that it was easier to connect them this way.
-            # Because of that, we need a homemade RFS command. That is
-            # done by setting an interrupt to stop the RFS command when the edge
-            # changes. As interrupts only work when a program is running, we
-            # have a small program that waits for the RFS and report the status.
-            # In conclusion, RFS is used pretty much just to move at a constant
-            # speed.
+        self._refproc_cancelled.clear()
 
-            try:
-                self._setInputInterrupt(axis)
+        # TODO: Untested code
+        self.SetAxisParam(axis, 194, 350) # ref search speed
+        self.SetAxisParam(axis, 195, 50) # ref switch speed (going back and forth again slowly)
+        self.SetAxisParam(axis, 149, 0) # soft stop disabled (will stop quicly when detecting the switch)
+        self.SetAxisParam(axis, 193, 1) # left switch referencing
+        self.GetAxisParam(axis, 11) # read current left switch value
 
-                # TODO: be able to cancel (=> set a flag + call RFS STOP)
-                neg_dir = self._doInputReference(axis, 350) # fast (~0.5 mm/s)
-                if neg_dir: # always finish first by positive direction
-                    self._doInputReference(axis, 350) # fast (~0.5 mm/s)
-
-                # Go back far enough that the slow referencing always need quite
-                # a bit of move. This is not part of the official NTS procedure
-                # but without that, the final reference position is affected by
-                # the original position.
-                self.MoveRelPos(axis, -20000) # ~ 100µm
-                for i in range(100):
-                    time.sleep(0.01)
-                    if self._isOnTarget(axis):
-                        break
-                else:
-                    logging.warning("Relative move failed to finish in time")
-
-                neg_dir = self._doInputReference(axis, 50) # slow (~0.07 mm/s)
-                if not neg_dir: # if it was done in positive direction (unlikely), redo
-                    logging.debug("Doing one last reference move, in negative dir")
-                    # As it always waits for the edge to change, the second time
-                    # should be positive
-                    neg_dir = self._doInputReference(axis, 50)
-                    if not neg_dir:
-                        logging.warning("Second reference search was again in positive direction")
-            finally:
-                # Disable interrupt
-                intid = 40 + axis   # axis 0 = IN1 = 40
-                self.DisableInterrupt(intid)
-                # TODO: to support multiple axes referencing simultaneously,
-                # only this global interrupt would need to be handle globally
-                # (= only disable iff noone needs interrupt).
-                self.DisableInterrupt(255)
-                # For safety, but also necessary to make sure SetAxisParam() works
-                self.MotorStop(axis)
-
-            # Reset the absolute 0 (by setting current pos to 0)
-            logging.debug("Changing referencing position by %d", self.GetAxisParam(axis, 1))
-            self.SetAxisParam(axis, 1, 0)
-        elif self._refproc == REFPROC_LS: # left switch = low position value = start in negative direction
-            if not self._isFullyPowered():
-                raise IOError("Device is not powered, so motors cannot move")
-
-            # TODO: Untested code
-            self.SetAxisParam(axis, 194, 350) # ref search speed
-            self.SetAxisParam(axis, 195, 50) # ref switch speed (going back and forth again slowly)
-            self.SetAxisParam(axis, 149, 0) # soft stop disabled (will stop quicly when detecting the switch)
-            self.SetAxisParam(axis, 193, 1) # left switch referencing
-            self.GetAxisParam(axis, 11) # read current left switch value
-
-            self.StartRefSearch(axis)
-            # wait 10 s max
-            for i in range(1000):
-                time.sleep(0.01)
-                if not self.GetStatusRefSearch(axis):
-                    logging.debug("Referencing procedure sucessful")
-                    break
-            else:
-                self.StopRefSearch(axis)
-                logging.warning("Reference search failed to finish in time")
-
-            # Position 0 is automatically set to the left switch coordinate
-            # and the axis stops there. Axis param 197 contains position in the
-            # old coordinates.
-        elif self._refproc == REFPROC_FAKE:
-            logging.debug("Simulating referencing")
-            # For testing referencing failure, uncomment these lines
-#             time.sleep(1)
-#             raise IOError("timeout")
-            self.MotorStop(axis)
-            self.SetAxisParam(axis, 1, 0)
+        self.StartRefSearch(axis)
+        # wait 30 s max
+        for i in range(3000):
+            if self._refproc_cancelled.wait(0.01):
+                break
+            if not self.GetStatusRefSearch(axis):
+                logging.debug("Referencing procedure ended")
+                break
         else:
-            raise NotImplementedError("Unknown referencing procedure %s" % self._refproc)
+            self.StopRefSearch(axis)
+            logging.warning("Reference search failed to finish in time")
+
+        if self._refproc_cancelled.is_set():
+            logging.debug("Referencing for axis %d cancelled while running", axis)
+            raise CancelledError("Referencing cancelled")
+
+        # Position 0 is automatically set to the left switch coordinate
+        # and the axis stops there. Axis param 197 contains position in the
+        # old coordinates.
+        oldpos = self.GetAxisParam(axis, 197)
+        logging.debug("Changing referencing position by %d", oldpos)
+
+    def _cancelReferencingLS(self, axis):
+        """
+        Cancel the referencing.
+        return (bool): True if the referencing was cancelled successfully
+        """
+        self._refproc_cancelled.set()
+        self.StopRefSearch(axis)
+        return not self.GetStatusRefSearch(axis)
+
+    def _runReferencingFake(self, axis):
+        """
+        Do the fake referencing (this is almost instantaneous).
+        The current implementation only supports one axis referencing at a time.
+        raise:
+            IOError: if timeout happen
+        """
+        logging.debug("Simulating referencing of axis %d", axis)
+        # For testing referencing failure, uncomment these lines
+#       time.sleep(1)
+#       raise IOError("timeout")
+        self.MotorStop(axis)
+        self.SetAxisParam(axis, 1, 0)
+
+    def _cancelReferencingFake(self, axis):
+        """
+        Cancel the referencing.
+        return (bool): True if the referencing was cancelled successfully
+        """
+        return False  # Too fast to cancel
 
     # high-level methods (interface)
     def _updatePosition(self, axes=None):
@@ -1030,7 +1085,7 @@ class TMCLController(model.Actuator):
             # do the referencing for each axis
             for a in axes:
                 aid = self._name_to_axis[a]
-                self._startReferencing(aid)
+                self._runReferencing(aid)
 
             # TODO: handle cancellation
             # If not cancelled and successful, update .referenced
@@ -1070,7 +1125,7 @@ class TMCLController(model.Actuator):
         raises:
             IOError: if no device are found
         """
-        if port == "/dev/fake":
+        if port.startswith("/dev/fake"):
             names = [port]
         elif os.name == "nt":
             raise NotImplementedError("Windows not supported")
@@ -1112,8 +1167,10 @@ class TMCLController(model.Actuator):
           already opened)
         """
         # For debugging purpose
-        if port == "/dev/fake":
-            return TMCM3110Simulator(timeout=0.1)
+        if port == "/dev/fake" or port == "/dev/fake3":
+            return TMCMSimulator(timeout=0.1, naxes=3)
+        elif port == "/dev/fake6":
+            return TMCMSimulator(timeout=0.1, naxes=6)
 
         try:
             ser = serial.Serial(
@@ -1154,7 +1211,7 @@ class TMCLController(model.Actuator):
         for p in ports:
             try:
                 logging.debug("Trying port %s", p)
-                dev = cls(None, None, p, address=None, axes=[""], ustepsize=[0])
+                dev = cls(None, None, p, address=None, axes=["x"], ustepsize=[10e-9])
                 modl, vmaj, vmin = dev.GetVersion()
                 address = dev._target
                 # TODO: based on the model name (ie, the first number) deduce
@@ -1181,18 +1238,18 @@ class TMCM3110(TMCLController):
     pass
 
 
-class TMCM3110Simulator(object):
+class TMCMSimulator(object):
     """
-    Simulates a TMCM-3110 (+ serial port). Only used for testing.
+    Simulates a TMCM-3110 or -6110 (+ serial port). Only used for testing.
     Same interface as the serial port
     """
-    def __init__(self, timeout=0, *args, **kwargs):
+    def __init__(self, timeout=0, naxes=3, *args, **kwargs):
         # we don't care about the actual parameters but timeout
         self.timeout = timeout
         self._output_buf = "" # what the commands sends back to the "host computer"
         self._input_buf = "" # what we receive from the "host computer"
 
-        self._naxes = 3
+        self._naxes = naxes
 
         # internal state
         self._id = 1
@@ -1292,7 +1349,7 @@ class TMCM3110Simulator(object):
         if chk != good_chk:
             self._sendReply(inst, status=1) # "Wrong checksum" message
             return
-        if target != self._id:
+        if target not in {self._id, 0}:
             logging.warning("SIM: skipping message for %d", target)
             # The real controller doesn't seem to care
 
