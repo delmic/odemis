@@ -79,7 +79,7 @@ class TMCLController(model.Actuator):
     Represents one Trinamic TMCL-compatible controller.
     Note: it must be set to binary communication mode (that's the default).
     """
-    def __init__(self, name, role, port, address, axes, ustepsize,
+    def __init__(self, name, role, port, axes, ustepsize, address=None,
                  refproc=None, temp=False, **kwargs):
         """
         port (str): port name. Can be a pattern, in which case all the ports
@@ -118,16 +118,17 @@ class TMCLController(model.Actuator):
         for i, n in enumerate(axes):
             if n == "":  # skip this non-connected axis
                 continue
+            # sz is typically ~1µm, so > 1 cm is very fishy
+            sz = ustepsize[i]
+            if not (0 < sz <= 10e-3):
+                raise ValueError("ustepsize should be in < 10 mm, but got %g m" % (sz,))
             self._name_to_axis[n] = i
+
+        self._ustepsize = ustepsize
 
         if refproc not in {REFPROC_2XFF, REFPROC_FAKE, REFPROC_LS, None}:
             raise ValueError("Reference procedure %s unknown" % (refproc, ))
         self._refproc = refproc
-
-        for sz in ustepsize:
-            if sz > 10e-3: # sz is typically ~1µm, so > 1 cm is very fishy
-                raise ValueError("ustepsize should be in meter, but got %g" % (sz,))
-        self._ustepsize = ustepsize
 
         self._ser_access = threading.Lock()
         self._serial, ra = self._findDevice(port, address)
@@ -314,36 +315,47 @@ class TMCLController(model.Actuator):
         return (int): the address reported by the device with connection
         """
         with self._ser_access:
+            # Flush everything from the input
             self._serial.flushInput()
             garbage = self._serial.read(1000)
             if garbage:
-                logging.debug("Received unexpected bytes '%s'", garbage)
+                logging.debug("Received unexpected bytes '%s'", garbage.encode('string_escape'))
             if len(garbage) == 1000:
                 # Probably a sign that it's not the device we are expecting
                 logging.warning("Lots of garbage sent from device")
 
             # In case the device has received some data before, resynchronise by
-            # sending one byte at a time until we receive a reply.
-            # On Ubuntu, when plugging the device, udev automatically checks
-            # whether this is a real modem, which messes up everything immediately.
+            # sending one byte at a time until we receive a reply. This can
+            # happen for instance if a program is checking whether it's a modem,
+            # or another Odemis driver is probing devices.
+
             # As there is no command 0, either we will receive a "wrong command" or
             # a "wrong checksum", but it's unlikely to ever do anything more.
-            for i in range(9): # a message is 9 bytes
-                self._serial.write(b"\x00")
-                self._serial.flush()
-                res = self._serial.read(9)
-                if len(res) == 9:
-                    # just got synchronised
-                    # TODO: also check the checksum is correct
-                    logging.debug("Received (for sync) %s", self._reply_to_str(res))
-                    ra, rt, status, rn, rval, chk = struct.unpack('>BBBBiB', res)
-                    return rt
-                elif len(res) == 0:
-                    continue
+            msg = b"\x00" * 9  # a 9-byte message
+            logging.debug("Sending '%s'", msg.encode('string_escape'))
+            self._serial.write(msg)
+            self._serial.flush()
+            res = self._serial.read(10)  # See if the device is trying to talk too much
+            if len(res) == 9:  # answer should be 9 bytes
+                logging.debug("Received (for sync) %s", self._reply_to_str(res))
+                ra, rt, status, rn, rval, chk = struct.unpack('>BBBBiB', res)
+                if status == 1:  # Wrong checksum (=> got too many bytes)
+                    # On some devices the timeout of the previous read is enough
+                    # to reset the device input buffer, but on some other it's not.
+                    time.sleep(1)
+                elif status != 2:  # Unknown command (expected)
+                    logging.warning("Unexpected error %d", status)
+                # check the checksum is correct
+                npres = numpy.frombuffer(res, dtype=numpy.uint8)
+                good_chk = numpy.sum(npres[:-1], dtype=numpy.uint8)
+                if chk == good_chk:
+                    return rt  # everything is fine
                 else:
-                    raise IOError("Device not answering with a 9 bytes reply: %s", res)
+                    logging.debug("Device message has wrong checksum")
             else:
-                raise IOError("Device not answering to a 9 bytes message")
+                logging.debug("Device replied unexpected message: %s", res.encode('string_escape'))
+
+            raise IOError("Device did not answer correctly to any sync message")
 
     # TODO: finish this method and use where possible
     def SendInstructionRecoverable(self, n, typ=0, mot=0, val=0):
@@ -401,7 +413,7 @@ class TMCLController(model.Actuator):
                 npres = numpy.frombuffer(res, dtype=numpy.uint8)
                 good_chk = numpy.sum(npres[:-1], dtype=numpy.uint8)
                 if chk == good_chk:
-                    if rt != self._target:
+                    if self._target != 0 and self._target != rt:  # 0 means 'any device'
                         logging.warning("Received a message from %d while expected %d",
                                         rt, self._target)
                     if rn != n:
@@ -1075,7 +1087,7 @@ class TMCLController(model.Actuator):
                 self._serial = serial
                 ra = self._resynchonise()
                 if address is None or ra == address:
-                    logging.debug("Found device on port %s, with address %d", n, ra)
+                    logging.debug("Found device with address %d on port %s", ra, n)
                     return serial, ra  # found it!
             except Exception as ex:
                 logging.debug("Port %s doesn't seem to have a TMCM device connected: %s",
@@ -1138,7 +1150,7 @@ class TMCLController(model.Actuator):
         for p in ports:
             try:
                 logging.debug("Trying port %s", p)
-                dev = cls(None, None, p, address=None, axes=["x"], ustepsize=[10e-9])
+                dev = cls(None, None, p, address=None, axes=[""], ustepsize=[0])
                 modl, vmaj, vmin = dev.GetVersion()
                 address = dev._target
                 # TODO: based on the model name (ie, the first number) deduce
