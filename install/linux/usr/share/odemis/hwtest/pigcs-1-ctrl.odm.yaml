@@ -8,9 +8,6 @@ SimOptical: {
 Light: {
     class: simulated.Light,
     role: brightlight,
-    properties: {
-        power: 100 # W
-    }
 }
 
 PIGCS: {

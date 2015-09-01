@@ -13,10 +13,8 @@ Light: {
     class: simulated.Light,
     role: light,
     affects: [Cam],
-    properties: {
-        power: 100 # W
-    }
 }
+
 "Optical Objective": {
     class: static.OpticalLens,
     role: lens,
