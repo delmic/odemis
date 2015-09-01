@@ -79,7 +79,7 @@ class TMCLController(model.Actuator):
     Represents one Trinamic TMCL-compatible controller.
     Note: it must be set to binary communication mode (that's the default).
     """
-    def __init__(self, name, role, port, address, axes, ustepsize,
+    def __init__(self, name, role, port, axes, ustepsize, address=None,
                  refproc=None, temp=False, **kwargs):
         """
         port (str): port name. Can be a pattern, in which case all the ports
