@@ -1,9 +1,10 @@
 SECOMv2: {
     class: Microscope,
     role: secom,
-    emitters: ["Light Engine", "Optical Objective", "Optical Emission Filter", "SEM E-beam"],
-    detectors: ["Camera", "SEM Detector"],
-    actuators: ["Sample Stage", "Objective Stage", "Optical Focus", "SEM Focus"],
+    children: ["Light Engine", "SEM E-beam", "White Light",
+               "Optical Objective", "Optical Emission Filter",
+               "Camera", "SEM Detector",
+               "Sample Stage", "Objective Stage", "Optical Focus", "SEM Focus"],
 }
 
 "Light Engine": {
@@ -33,6 +34,12 @@ SECOMv2: {
 #     # The light is reflected via a Semrock FF410/504/582/669-DI01-25X36
 #     affects: ["Camera"],
 # }
+
+"White Light": {
+    class: simulated.Light,
+    role: brightlight,
+    affects: ["Camera"],
+}
 
 "SEM Scan Interface": {
     class: simsem.SimSEM,
