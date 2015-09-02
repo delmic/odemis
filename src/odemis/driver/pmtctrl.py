@@ -307,7 +307,7 @@ class PMTControl(model.PowerSupplier):
         switch to the position
         """
         value = pos.values()[0]  # only care about the value
-        self.setRelay(self, value)
+        self.setRelay(value)
         self._updatePosition(value)
 
     def _updatePosition(self, value):
