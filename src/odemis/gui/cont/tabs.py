@@ -124,9 +124,7 @@ class Tab(object):
             self.tab_data_model.viewLayout.subscribe(set_22_menu_check, init=True)
             # Assigning an event handler to the menu item, overrides
             # any previously assigned ones.
-            wx.EVT_MENU(self.main_frame,
-                        self.main_frame.menu_item_22view.GetId(),
-                        on_switch_22)
+            wx.EVT_MENU(self.main_frame, self.main_frame.menu_item_22view.GetId(), on_switch_22)
             self.main_frame.menu_item_22view.Enable()
         else:
             self.main_frame.menu_item_22view.Enable(False)
@@ -164,8 +162,7 @@ class Tab(object):
             self.tab_data_model.focussedView.subscribe(set_cross_check, init=True)
             # Assigning an event handler to the menu item, overrides
             # any previously assigned ones.
-            wx.EVT_MENU(self.main_frame,
-                        self.main_frame.menu_item_cross.GetId(),
+            wx.EVT_MENU(self.main_frame, self.main_frame.menu_item_cross.GetId(),
                         on_switch_crosshair)
             self.main_frame.menu_item_cross.Enable()
         else:
@@ -222,13 +219,13 @@ class SecomStreamsTab(Tab):
 
         # Order matters!
         # First we create the views, then the streams
-        vpv = self._create_views(main_data, main_frame.pnl_secom_grid.viewports)
-        self.view_controller = viewcont.ViewPortController(tab_data, main_frame, vpv)
+        vpv = self._create_views(main_data, panel.pnl_secom_grid.viewports)
+        self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
 
         # Special overview button selection
         self.overview_controller = viewcont.OverviewController(tab_data,
-                                            main_frame.vp_overview_sem.canvas)
-        ovv = self.main_frame.vp_overview_sem.microscope_view
+                                                               panel.vp_overview_sem.canvas)
+        ovv = self.panel.vp_overview_sem.microscope_view
         if main_data.overview_ccd:
             # Overview camera can be RGB => in that case len(shape) == 4
             if len(main_data.overview_ccd.shape) == 4:
@@ -246,44 +243,44 @@ class SecomStreamsTab(Tab):
         # Connect the view selection buttons
         buttons = collections.OrderedDict([
             (
-                main_frame.btn_secom_view_all,
-                (None, main_frame.lbl_secom_view_all)),
+                panel.btn_secom_view_all,
+                (None, panel.lbl_secom_view_all)),
             (
-                main_frame.btn_secom_view_tl,
-                (main_frame.vp_secom_tl, main_frame.lbl_secom_view_tl)),
+                panel.btn_secom_view_tl,
+                (panel.vp_secom_tl, panel.lbl_secom_view_tl)),
             (
-                main_frame.btn_secom_view_tr,
-                (main_frame.vp_secom_tr, main_frame.lbl_secom_view_tr)),
+                panel.btn_secom_view_tr,
+                (panel.vp_secom_tr, panel.lbl_secom_view_tr)),
             (
-                main_frame.btn_secom_view_bl,
-                (main_frame.vp_secom_bl, main_frame.lbl_secom_view_bl)),
+                panel.btn_secom_view_bl,
+                (panel.vp_secom_bl, panel.lbl_secom_view_bl)),
             (
-                main_frame.btn_secom_view_br,
-                (main_frame.vp_secom_br, main_frame.lbl_secom_view_br)),
+                panel.btn_secom_view_br,
+                (panel.vp_secom_br, panel.lbl_secom_view_br)),
             (
-                main_frame.btn_secom_overview,
-                (main_frame.vp_overview_sem, main_frame.lbl_secom_overview)),
+                panel.btn_secom_overview,
+                (panel.vp_overview_sem, panel.lbl_secom_overview)),
         ])
 
         self._view_selector = viewcont.ViewButtonController(
             tab_data,
-            main_frame,
+            panel,
             buttons,
-            main_frame.pnl_secom_grid.viewports
+            panel.pnl_secom_grid.viewports
         )
 
         self._settingbar_controller = settings.SecomSettingsController(
-            main_frame,
+            panel,
             tab_data
         )
 
         self._streambar_controller = streamcont.SecomStreamsController(
             tab_data,
-            main_frame.pnl_secom_streams
+            panel.pnl_secom_streams
         )
 
         # Toolbar
-        self.tb = main_frame.secom_toolbar
+        self.tb = panel.secom_toolbar
         # TODO: Add the buttons when the functionality is there
         # tb.add_tool(tools.TOOL_ROI, self.tab_data_model.tool)
         # tb.add_tool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
@@ -296,10 +293,7 @@ class SecomStreamsTab(Tab):
         self.tab_data_model.autofocus_active.subscribe(self._onAutofocus)
         tab_data.streams.subscribe(self._on_current_stream)
 
-        self._acquisition_controller = acqcont.SecomAcquiController(
-            tab_data,
-            main_frame
-        )
+        self._acquisition_controller = acqcont.SecomAcquiController(tab_data, panel)
 
         if main_data.role == "delphi":
             state_controller_cls = DelphiStateController
@@ -308,7 +302,7 @@ class SecomStreamsTab(Tab):
 
         self._state_controller = state_controller_cls(
             tab_data,
-            main_frame,
+            panel,
             "live_btn_",
             self._streambar_controller
         )
@@ -333,7 +327,7 @@ class SecomStreamsTab(Tab):
 
         main_data.chamberState.subscribe(self.on_chamber_state, init=True)
         if not main_data.chamber:
-            main_frame.live_btn_press.Hide()
+            panel.live_btn_press.Hide()
 
         self._ensure_base_streams()
 
@@ -647,7 +641,7 @@ class SparcAcquisitionTab(Tab):
         # To make sure the spot mode is stopped when the tab loses focus
         self.tab_data_model.streams.value.append(spot_stream)
 
-        viewports = main_frame.pnl_sparc_grid.viewports
+        viewports = panel.pnl_sparc_grid.viewports
         for vp in viewports[:4]:
             assert(isinstance(vp, MicroscopeViewport) or isinstance(vp, PlotViewport))
 
@@ -675,36 +669,31 @@ class SparcAcquisitionTab(Tab):
               }),
         ])
 
-        self.view_controller = viewcont.ViewPortController(tab_data, main_frame, vpv)
+        self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
 
         # Connect the view selection buttons
         buttons = collections.OrderedDict([
             (
-                main_frame.btn_sparc_view_all,
-                (None, main_frame.lbl_sparc_view_all)),
+                panel.btn_sparc_view_all,
+                (None, panel.lbl_sparc_view_all)),
             (
-                main_frame.btn_sparc_view_tl,
-                (main_frame.vp_sparc_tl, main_frame.lbl_sparc_view_tl)),
+                panel.btn_sparc_view_tl,
+                (panel.vp_sparc_tl, panel.lbl_sparc_view_tl)),
             (
-                main_frame.btn_sparc_view_tr,
-                (main_frame.vp_sparc_tr, main_frame.lbl_sparc_view_tr)),
+                panel.btn_sparc_view_tr,
+                (panel.vp_sparc_tr, panel.lbl_sparc_view_tr)),
             (
-                main_frame.btn_sparc_view_bl,
-                (main_frame.vp_sparc_bl, main_frame.lbl_sparc_view_bl)),
+                panel.btn_sparc_view_bl,
+                (panel.vp_sparc_bl, panel.lbl_sparc_view_bl)),
             (
-                main_frame.btn_sparc_view_br,
-                (main_frame.vp_sparc_br, main_frame.lbl_sparc_view_br)),
+                panel.btn_sparc_view_br,
+                (panel.vp_sparc_br, panel.lbl_sparc_view_br)),
         ])
 
-        self._view_selector = viewcont.ViewButtonController(
-            tab_data,
-            main_frame,
-            buttons,
-            viewports
-        )
+        self._view_selector = viewcont.ViewButtonController(tab_data, panel, buttons, viewports)
 
         # Toolbar
-        self.tb = self.main_frame.sparc_acq_toolbar
+        self.tb = self.panel.sparc_acq_toolbar
         self.tb.add_tool(tools.TOOL_ROA, self.tab_data_model.tool)
         self.tb.add_tool(tools.TOOL_RO_ANCHOR, self.tab_data_model.tool)
         self.tb.add_tool(tools.TOOL_SPOT, self.tab_data_model.tool)
@@ -718,7 +707,7 @@ class SparcAcquisitionTab(Tab):
         # Create Stream Bar Controller
         self._stream_controller = streamcont.SparcStreamsController(
             self.tab_data_model,
-            self.main_frame.pnl_sparc_streams,
+            panel.pnl_sparc_streams,
             self.view_controller,
             ignore_view=True  # Show all stream panels, independent of any selected viewport
         )
@@ -741,8 +730,8 @@ class SparcAcquisitionTab(Tab):
 
         self._acquisition_controller = acqcont.SparcAcquiController(
             tab_data,
-            main_frame,
-            self.stream_controller,
+            panel,
+            self.stream_controller
         )
 
     @property
@@ -779,8 +768,8 @@ class SparcAcquisitionTab(Tab):
         # TODO: Make sure nothing can be modified during acquisition
 
         self.tb.enable(not is_acquiring)
-        self.main_frame.vp_sparc_tl.Enable(not is_acquiring)
-        self.main_frame.btn_sparc_change_file.Enable(not is_acquiring)
+        self.panel.vp_sparc_tl.Enable(not is_acquiring)
+        self.panel.btn_sparc_change_file.Enable(not is_acquiring)
 
     def _copyDwellTimeToAnchor(self, dt):
         """
@@ -853,7 +842,7 @@ class AnalysisTab(Tab):
         super(AnalysisTab, self).__init__(name, button, panel, main_frame, tab_data)
 
         # Connect viewports
-        viewports = main_frame.pnl_inspection_grid.viewports
+        viewports = panel.pnl_inspection_grid.viewports
         # Viewport type checking to avoid mismatches
         for vp in viewports[:4]:
             assert(isinstance(vp, MicroscopeViewport))
@@ -892,39 +881,36 @@ class AnalysisTab(Tab):
               }),
         ])
 
-        self.view_controller = viewcont.ViewPortController(tab_data, main_frame, vpv)
+        self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
 
         # Connect view selection button
         buttons = collections.OrderedDict([
             (
-                main_frame.btn_inspection_view_all,
-                (None, main_frame.lbl_inspection_view_all)
+                panel.btn_inspection_view_all,
+                (None, panel.lbl_inspection_view_all)
             ),
             (
-                main_frame.btn_inspection_view_tl,
-                (main_frame.vp_inspection_tl, main_frame.lbl_inspection_view_tl)
+                panel.btn_inspection_view_tl,
+                (panel.vp_inspection_tl, panel.lbl_inspection_view_tl)
             ),
             (
-                main_frame.btn_inspection_view_tr,
-                (main_frame.vp_inspection_tr, main_frame.lbl_inspection_view_tr)
+                panel.btn_inspection_view_tr,
+                (panel.vp_inspection_tr, panel.lbl_inspection_view_tr)
             ),
             (
-                main_frame.btn_inspection_view_bl,
-                (main_frame.vp_inspection_bl, main_frame.lbl_inspection_view_bl)
+                panel.btn_inspection_view_bl,
+                (panel.vp_inspection_bl, panel.lbl_inspection_view_bl)
             ),
             (
-                main_frame.btn_inspection_view_br,
-                (main_frame.vp_inspection_br, main_frame.lbl_inspection_view_br)
+                panel.btn_inspection_view_br,
+                (panel.vp_inspection_br, panel.lbl_inspection_view_br)
             )
         ])
 
-        self._view_selector = viewcont.ViewButtonController(tab_data,
-                                                            main_frame,
-                                                            buttons,
-                                                            viewports)
+        self._view_selector = viewcont.ViewButtonController(tab_data, panel, buttons, viewports)
 
         # Toolbar
-        self.tb = main_frame.ana_toolbar
+        self.tb = panel.ana_toolbar
         # TODO: Add the buttons when the functionality is there
         # tb.add_tool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
         self.tb.add_tool(tools.TOOL_POINT, self.tab_data_model.tool)
@@ -939,23 +925,20 @@ class AnalysisTab(Tab):
         # Show the streams (when a file is opened)
         self._stream_controller = streamcont.StreamBarController(
             tab_data,
-            main_frame.pnl_inspection_streams,
+            panel.pnl_inspection_streams,
             static=True
         )
 
         # Show the file info and correction selection
         self._settings_controller = settings.AnalysisSettingsController(
-            main_frame,
+            panel,
             tab_data
         )
         self._settings_controller.setter_ar_file = self.set_ar_background
         self._settings_controller.setter_spec_bck_file = self.set_spec_background
         self._settings_controller.setter_spec_file = self.set_spec_comp
 
-        self.main_frame.btn_open_image.Bind(
-            wx.EVT_BUTTON,
-            self.on_file_open_button
-        )
+        self.panel.btn_open_image.Bind(wx.EVT_BUTTON, self.on_file_open_button )
 
         self.tab_data_model.tool.subscribe(self._onTool)
 
@@ -1046,15 +1029,15 @@ class AnalysisTab(Tab):
         # Remove all the previous streams
         self._stream_controller.clear()
         # Clear any old plots
-        self.main_frame.vp_inspection_plot.clear()
-        self.main_frame.vp_spatialspec.clear()
-        self.main_frame.vp_angular.clear()
+        self.panel.vp_inspection_plot.clear()
+        self.panel.vp_spatialspec.clear()
+        self.panel.vp_angular.clear()
 
         # Force the canvases to fit to the content
-        for vp in [self.main_frame.vp_inspection_tl,
-                   self.main_frame.vp_inspection_tr,
-                   self.main_frame.vp_inspection_bl,
-                   self.main_frame.vp_inspection_br]:
+        for vp in [self.panel.vp_inspection_tl,
+                   self.panel.vp_inspection_tr,
+                   self.panel.vp_inspection_bl,
+                   self.panel.vp_inspection_br]:
             vp.canvas.fit_view_to_next_image = True
 
         # Fetch the acquisition date
@@ -1122,8 +1105,8 @@ class AnalysisTab(Tab):
             # ########### Combined views and spectrum view visible
 
             new_visible_views[0:2] = self._def_views[2:4]  # Combined
-            new_visible_views[2] = self.main_frame.vp_spatialspec.microscope_view
-            new_visible_views[3] = self.main_frame.vp_inspection_plot.microscope_view
+            new_visible_views[2] = self.panel.vp_spatialspec.microscope_view
+            new_visible_views[3] = self.panel.vp_inspection_plot.microscope_view
 
             # ########### Update tool menu
 
@@ -1146,7 +1129,7 @@ class AnalysisTab(Tab):
 
             new_visible_views[0] = self._def_views[1] # SEM only
             new_visible_views[1] = self._def_views[2] # Combined 1
-            new_visible_views[2] = self.main_frame.vp_angular.microscope_view
+            new_visible_views[2] = self.panel.vp_angular.microscope_view
             new_visible_views[3] = self._def_views[3] # Combined 2
 
             # ########### Update tool menu
@@ -1322,7 +1305,7 @@ class AnalysisTab(Tab):
         """ Event handler for when a point is selected """
         # If we're in 1x1 view, we're bringing the plot to the front
         if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
-            ang_view = self.main_frame.vp_angular.microscope_view
+            ang_view = self.panel.vp_angular.microscope_view
             self.tab_data_model.focussedView.value = ang_view
 
     def _on_pixel_select(self, _):
@@ -1330,7 +1313,7 @@ class AnalysisTab(Tab):
 
         # If we're in 1x1 view, we're bringing the plot to the front
         # if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
-        #     plot_view = self.main_frame.vp_inspection_plot.microscope_view
+        #     plot_view = self.panel.vp_inspection_plot.microscope_view
         #     self.tab_data_model.focussedView.value = plot_view
 
         if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
@@ -1341,7 +1324,7 @@ class AnalysisTab(Tab):
 
         # If we're in 1x1 view, we're bringing the plot to the front
         # if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
-        #     spatial_view = self.main_frame.vp_spatialspec.microscope_view
+        #     spatial_view = self.panel.vp_spatialspec.microscope_view
         #     self.tab_data_model.focussedView.value = spatial_view
 
         if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
@@ -1359,16 +1342,15 @@ class LensAlignTab(Tab):
 
     def __init__(self, name, button, panel, main_frame, main_data):
         tab_data = guimod.ActuatorGUIData(main_data)
-        super(LensAlignTab, self).__init__(name, button, panel,
-                                           main_frame, tab_data)
+        super(LensAlignTab, self).__init__(name, button, panel, main_frame, tab_data)
 
         # TODO: we should actually display the settings of the streams (...once they have it)
         self._settings_controller = settings.LensAlignSettingsController(
-            self.main_frame,
+            self.panel,
             self.tab_data_model
         )
 
-        main_frame.vp_align_sem.ShowLegend(False)
+        panel.vp_align_sem.ShowLegend(False)
 
         # For the SECOMv1, we need to convert A/B to Y/X (with an angle of 45°)
         # Note that this is an approximation of the actual movements.
@@ -1392,7 +1374,7 @@ class LensAlignTab(Tab):
         # vp_align_sem is connected to the stage
         vpv = collections.OrderedDict([
             (
-                main_frame.vp_align_ccd,  # focused view
+                panel.vp_align_ccd,  # focused view
                 {
                     "name": "Optical CL",
                     "cls": guimod.ContentView,
@@ -1401,7 +1383,7 @@ class LensAlignTab(Tab):
                 }
             ),
             (
-                main_frame.vp_align_sem,
+                panel.vp_align_sem,
                 {
                     "name": "SEM",
                     "stage": main_data.stage,
@@ -1412,7 +1394,7 @@ class LensAlignTab(Tab):
 
         self.view_controller = viewcont.ViewPortController(
             self.tab_data_model,
-            self.main_frame,
+            self.panel,
             vpv
         )
 
@@ -1425,7 +1407,7 @@ class LensAlignTab(Tab):
         sem_stream.should_update.value = True
         self.tab_data_model.streams.value.append(sem_stream)
         self._sem_stream = sem_stream
-        self._sem_view = main_frame.vp_align_sem.microscope_view
+        self._sem_view = panel.vp_align_sem.microscope_view
         self._sem_view.addStream(sem_stream)
 
         spot_stream = acqstream.SpotSEMStream("Spot", main_data.sed,
@@ -1435,9 +1417,9 @@ class LensAlignTab(Tab):
 
         # Adapt the zoom level of the SEM to fit exactly the SEM field of view.
         # No need to check for resize events, because the view has a fixed size.
-        main_frame.vp_align_sem.canvas.abilities -= set([CAN_ZOOM])
+        panel.vp_align_sem.canvas.abilities -= set([CAN_ZOOM])
         # prevent the first image to reset our computation
-        main_frame.vp_align_sem.canvas.fit_view_to_next_image = False
+        panel.vp_align_sem.canvas.fit_view_to_next_image = False
         main_data.ebeam.pixelSize.subscribe(self._onSEMpxs, init=True)
 
         # Update the SEM area in dichotomic mode
@@ -1459,34 +1441,32 @@ class LensAlignTab(Tab):
         ccd_stream.should_update.value = True
         self.tab_data_model.streams.value.insert(0, ccd_stream) # current stream
         self._ccd_stream = ccd_stream
-        self._ccd_view = main_frame.vp_align_ccd.microscope_view
+        self._ccd_view = panel.vp_align_ccd.microscope_view
         self._ccd_view.addStream(ccd_stream)
         # create CCD stream panel entry
-        stream_bar = self.main_frame.pnl_secom_align_streams
+        stream_bar = self.panel.pnl_secom_align_streams
         ccd_spe = StreamController(stream_bar, ccd_stream, self.tab_data_model)
         ccd_spe.stream_panel.flatten()  # removes the expander header
         # force this view to never follow the tool mode (just standard view)
-        main_frame.vp_align_ccd.canvas.allowed_modes = set([guimod.TOOL_NONE])
+        panel.vp_align_ccd.canvas.allowed_modes = set([guimod.TOOL_NONE])
 
         # Bind actuator buttons and keys
-        self._actuator_controller = ActuatorController(self.tab_data_model,
-                                                       main_frame,
-                                                       "lens_align_")
-        self._actuator_controller.bind_keyboard(main_frame.pnl_tab_secom_align)
+        self._actuator_controller = ActuatorController(self.tab_data_model, panel, "lens_align_")
+        self._actuator_controller.bind_keyboard(panel)
 
         # Toolbar
-        tb = main_frame.lens_align_tb
+        tb = panel.lens_align_tb
         tb.add_tool(tools.TOOL_DICHO, self.tab_data_model.tool)
         tb.add_tool(tools.TOOL_SPOT, self.tab_data_model.tool)
 
         # Dichotomy mode: during this mode, the label & button "move to center" are
         # shown. If the sequence is empty, or a move is going, it's disabled.
         self._aligner_move = None  # the future of the move (to know if it's over)
-        main_frame.lens_align_btn_to_center.Bind(wx.EVT_BUTTON,
+        panel.lens_align_btn_to_center.Bind(wx.EVT_BUTTON,
                                                  self._on_btn_to_center)
 
         # Fine alignment panel
-        pnl_sem_toolbar = main_frame.pnl_sem_toolbar
+        pnl_sem_toolbar = panel.pnl_sem_toolbar
         fa_sizer = pnl_sem_toolbar.GetSizer()
         scale_win = ScaleWindow(pnl_sem_toolbar)
         self._on_mpp = guiutil.call_in_wx_main_wrapper(scale_win.SetMPP)  # need to keep ref
@@ -1495,24 +1475,24 @@ class LensAlignTab(Tab):
         fa_sizer.Layout()
 
         self._fa_controller = acqcont.FineAlignController(self.tab_data_model,
-                                                          main_frame,
+                                                          panel,
                                                           self._settings_controller)
 
         self._ac_controller = acqcont.AutoCenterController(self.tab_data_model,
                                                            self._aligner_xy,
-                                                           main_frame,
+                                                           panel,
                                                            self._settings_controller)
 
         # Documentation text on the left panel
         doc_path = pkg_resources.resource_filename("odemis.gui", "doc/alignment.html")
-        main_frame.html_alignment_doc.SetBorders(0)  # sizer already give us borders
-        main_frame.html_alignment_doc.LoadPage(doc_path)
+        panel.html_alignment_doc.SetBorders(0)  # sizer already give us borders
+        panel.html_alignment_doc.LoadPage(doc_path)
 
         # Trick to allow easy html editing: double click to reload
         # def reload_page(evt):
         #     evt.GetEventObject().LoadPage(path)
 
-        # main_frame.html_alignment_doc.Bind(wx.EVT_LEFT_DCLICK, reload_page)
+        # panel.html_alignment_doc.Bind(wx.EVT_LEFT_DCLICK, reload_page)
 
         self.tab_data_model.tool.subscribe(self._onTool, init=True)
         main_data.chamberState.subscribe(self.on_chamber_state, init=True)
@@ -1564,8 +1544,8 @@ class LensAlignTab(Tab):
         if tool != guimod.TOOL_DICHO:
             # reset the sequence
             self.tab_data_model.dicho_seq.value = []
-            self.main_frame.pnl_move_to_center.Show(False)
-            self.main_frame.pnl_align_tools.Show(True)
+            self.panel.pnl_move_to_center.Show(False)
+            self.panel.pnl_align_tools.Show(True)
 
         if tool != guimod.TOOL_SPOT:
             self._spot_stream.should_update.value = False
@@ -1575,8 +1555,8 @@ class LensAlignTab(Tab):
 
         # Set new mode
         if tool == guimod.TOOL_DICHO:
-            self.main_frame.pnl_move_to_center.Show(True)
-            self.main_frame.pnl_align_tools.Show(False)
+            self.panel.pnl_move_to_center.Show(True)
+            self.panel.pnl_align_tools.Show(False)
         elif tool == guimod.TOOL_SPOT:
             self._sem_stream.should_update.value = False
             self._sem_stream.is_active.value = False
@@ -1593,7 +1573,7 @@ class LensAlignTab(Tab):
             # is received, stop stream and move back to spot-mode. (need to be careful
             # to handle when the user disables the spot mode during this moment)
 
-        self.main_frame.pnl_move_to_center.Parent.Layout()
+        self.panel.pnl_move_to_center.Parent.Layout()
 
     def _onDichoSeq(self, seq):
         roi = align.dichotomy_to_region(seq)
@@ -1664,11 +1644,11 @@ class LensAlignTab(Tab):
             lbl = "Pick a sub-area to approximate the SEM center.\n"
             enabled = False
 
-        self.main_frame.lens_align_btn_to_center.Enable(enabled)
-        lbl_ctrl = self.main_frame.lens_align_lbl_approc_center
+        self.panel.lens_align_btn_to_center.Enable(enabled)
+        lbl_ctrl = self.panel.lens_align_lbl_approc_center
         lbl_ctrl.SetLabel(lbl)
         lbl_ctrl.Wrap(lbl_ctrl.Size[0])
-        self.main_frame.Layout()
+        self.panel.Layout()
 
     def _on_btn_to_center(self, event):
         """
@@ -1680,7 +1660,7 @@ class LensAlignTab(Tab):
         move = self._computeROICenterMove(roi)
 
         # disable the button to avoid another move
-        self.main_frame.lens_align_btn_to_center.Disable()
+        self.panel.lens_align_btn_to_center.Disable()
 
         # run the move
         logging.debug("Moving by %s", move)
@@ -1739,7 +1719,7 @@ class LensAlignTab(Tab):
 
         eshape = self.tab_data_model.main.ebeam.shape
         fov_size = (eshape[0] * pixel_size[0], eshape[1] * pixel_size[1])  # m
-        semv_size = self.main_frame.vp_align_sem.Size  # px
+        semv_size = self.panel.vp_align_sem.Size  # px
 
         # compute MPP to fit exactly the whole FoV
         mpp = (fov_size[0] / semv_size[0], fov_size[1] / semv_size[1])
@@ -1758,20 +1738,20 @@ class MirrorAlignTab(Tab):
 
     def __init__(self, name, button, panel, main_frame, main_data):
         tab_data = guimod.ActuatorGUIData(main_data)
-        super(MirrorAlignTab, self).__init__(name, button, panel,
-                                             main_frame, tab_data)
+        super(MirrorAlignTab, self).__init__(name, button, panel, main_frame, tab_data)
+
         self._ccd_stream = None
         self._goal_stream = None
         # TODO: add on/off button for the CCD and connect the MicroscopeStateController
 
         self._settings_controller = settings.SparcAlignSettingsController(
-            main_frame,
+            panel,
             tab_data,
         )
 
         self._stream_controller = streamcont.StreamBarController(
             tab_data,
-            main_frame.pnl_sparc_align_streams,
+            panel.pnl_sparc_align_streams,
             locked=True
         )
 
@@ -1792,7 +1772,7 @@ class MirrorAlignTab(Tab):
             # create a view on the microscope model
             vpv = collections.OrderedDict([
                 (
-                    main_frame.vp_sparc_align,
+                    panel.vp_sparc_align,
                     {
                         "name": "Optical",
                         "stream_classes": None,  # everything is good
@@ -1804,7 +1784,7 @@ class MirrorAlignTab(Tab):
             ])
             self.view_controller = viewcont.ViewPortController(
                 tab_data,
-                main_frame,
+                panel,
                 vpv
             )
             mic_view = self.tab_data_model.focussedView.value
@@ -1847,21 +1827,21 @@ class MirrorAlignTab(Tab):
         # * chamber-view: see the mirror and the sample in the chamber
         # * mirror-align: move x, y, yaw, and pitch with AR feedback
         # * fiber-align: move yaw, pitch and x/Y of fiber with scount feedback
-        self._alignbtn_to_mode = {main_frame.btn_align_chamber: "chamber-view",
-                                  main_frame.btn_align_mirror: "mirror-align",
-                                  main_frame.btn_align_fiber: "fiber-align"}
+        self._alignbtn_to_mode = {panel.btn_align_chamber: "chamber-view",
+                                  panel.btn_align_mirror: "mirror-align",
+                                  panel.btn_align_fiber: "fiber-align"}
 
         # TODO: move mode detection in the model, and hide buttons for which
         # no mode exist.
         if main_data.spectrometer is None:
             # Note: if no fiber alignment actuators, but a spectrometer, it's
             # still good to provide the mode, as the user can do it manually.
-            main_frame.btn_align_fiber.Show(False)
-            del self._alignbtn_to_mode[main_frame.btn_align_fiber]
+            panel.btn_align_fiber.Show(False)
+            del self._alignbtn_to_mode[panel.btn_align_fiber]
 
         if main_data.ccd is None:
             # No AR => only one mode possible => hide the buttons
-            main_frame.pnl_alignment_btns.Show(False)
+            panel.pnl_alignment_btns.Show(False)
             tab_data.align_mode.value = "fiber-align"
         else:
             for btn in self._alignbtn_to_mode:
@@ -1869,12 +1849,10 @@ class MirrorAlignTab(Tab):
 
         tab_data.align_mode.subscribe(self._onAlignMode, init=True)
 
-        self._actuator_controller = ActuatorController(tab_data,
-                                                       main_frame,
-                                                       "mirror_align_")
+        self._actuator_controller = ActuatorController(tab_data, panel, "mirror_align_")
 
         # Bind keys
-        self._actuator_controller.bind_keyboard(main_frame.pnl_tab_sparc_align)
+        self._actuator_controller.bind_keyboard(panel)
 
     def _onClickAlignButton(self, evt):
         """
@@ -1909,27 +1887,27 @@ class MirrorAlignTab(Tab):
         if mode == "chamber-view":
             # With the lens, the image must be flipped to keep the mirror at the
             # top and the sample at the bottom.
-            self.main_frame.vp_sparc_align.canvas.flip = wx.VERTICAL
+            self.panel.vp_sparc_align.canvas.flip = wx.VERTICAL
             # Hide goal image
             self._stream_controller.removeStream(self._goal_stream)
             self._ccd_stream.should_update.value = True
-            self.main_frame.pnl_sparc_trans.Enable(True)
-            self.main_frame.pnl_sparc_fib.Enable(False)
+            self.panel.pnl_sparc_trans.Enable(True)
+            self.panel.pnl_sparc_fib.Enable(False)
         elif mode == "mirror-align":
             # Show image normally
-            self.main_frame.vp_sparc_align.canvas.flip = 0
+            self.panel.vp_sparc_align.canvas.flip = 0
             # Show the goal image (= add it, if it's not already there)
-            streams = self.main_frame.vp_sparc_align.microscope_view.getStreams()
+            streams = self.panel.vp_sparc_align.microscope_view.getStreams()
             if self._goal_stream not in streams:
                 self._stream_controller.addStream(self._goal_stream, visible=False)
             self._ccd_stream.should_update.value = True
-            self.main_frame.pnl_sparc_trans.Enable(True)
-            self.main_frame.pnl_sparc_fib.Enable(False)
+            self.panel.pnl_sparc_trans.Enable(True)
+            self.panel.pnl_sparc_fib.Enable(False)
         else:
             if self._ccd_stream:
                 self._ccd_stream.should_update.value = False
-            self.main_frame.pnl_sparc_trans.Enable(False)
-            self.main_frame.pnl_sparc_fib.Enable(True)
+            self.panel.pnl_sparc_trans.Enable(False)
+            self.panel.pnl_sparc_fib.Enable(True)
 
         # This is blocking on the hardware => run in a separate thread
         # TODO: Probably better is that setPath returns a future (and cancel it
@@ -2121,17 +2099,19 @@ class TabBarController(object):
                       role or "no backend")
 
         tabs = []  # Tabs
+        main_sizer = main_frame.GetSizer()
+        index = 1
+
         for troles, tname, tclass, tbtn, tpnl in tab_defs:
             if role in troles:
+                tpnl = tpnl(self.main_frame)
+                main_sizer.Insert(index, tpnl, flag=wx.EXPAND, proportion=1)
+                index += 1
                 tab = tclass(tname, tbtn, tpnl, main_frame, main_data)
                 tab.set_label(troles[role])
                 tabs.append(tab)
             else:
-                # hide the widgets of the tabs not needed
-                logging.debug("Discarding tab %s", tname)
-
-                tbtn.Hide()  # this actually removes the tab
-                tpnl.Hide()
+                tbtn.Hide()  # Hide the tab button
 
         return tabs
 
