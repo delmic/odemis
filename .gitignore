@@ -35,6 +35,7 @@ nosetests.xml
 # Dev environment
 odemis.sublime-project
 odemis.sublime-workspace
+/src/odemis/gui/test/test.png
 .project
 .pydevproject
 .settings

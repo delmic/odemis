@@ -164,24 +164,32 @@ class OdemisGUIApp(wx.App):
                     self.main_frame.pnl_tab_secom_align
                 ),
                 (
-                    ("sparc",),
-                    ("ALIGNMENT",),
+                    ("sparc", "sparc2",),
+                    ("ALIGNMENT", "ALIGNMENT",),
                     "sparc_align",
                     tabs.MirrorAlignTab,
                     self.main_frame.btn_tab_sparc_align,
                     self.main_frame.pnl_tab_sparc_align
                 ),
                 (
-                    ("sparc",),
-                    ("ACQUISITION",),
+                    ("sparc", "sparc2",),
+                    ("ACQUISITION", "ACQUISITION",),
                     "sparc_acqui",
                     tabs.SparcAcquisitionTab,
                     self.main_frame.btn_tab_sparc_acqui,
                     self.main_frame.pnl_tab_sparc_acqui
                 ),
                 (
-                    (None, "secom", "delphi", "sem", "optical", "sparc"),
-                    ("GALLERY", "GALLERY", "GALLERY", "GALLERY", "GALLERY", "ANALYSIS"),
+                    ("sparc2",),
+                    ("CHAMBER",),
+                    "sparc_chamber",
+                    tabs.ChamberTab,
+                    self.main_frame.btn_tab_sparc_chamber,
+                    self.main_frame.pnl_tab_sparc_chamber
+                ),
+                (
+                    (None, "secom", "delphi", "sem", "optical", "sparc", "sparc2"),
+                    ("GALLERY", "GALLERY", "GALLERY", "GALLERY", "GALLERY", "ANALYSIS", "ANALYSIS"),
                     "analysis",
                     tabs.AnalysisTab,
                     self.main_frame.btn_tab_inspection,

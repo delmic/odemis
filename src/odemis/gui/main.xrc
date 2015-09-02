@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<resource version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<resource class="ViewportGrid" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -239,6 +239,31 @@
                 <size>160,30</size>
                 <default>1</default>
                 <label>LENS ALIGNMENT</label>
+                <bitmap>img/tab_inactive.png</bitmap>
+                <hover>img/tab_hover.png</hover>
+                <selected>img/tab_active.png</selected>
+                <disabled>img/tab_hover.png</disabled>
+                <fg>#E5E5E5</fg>
+                <font>
+                  <size>11</size>
+                  <style>normal</style>
+                  <weight>normal</weight>
+                  <underlined>0</underlined>
+                  <face>Ubuntu</face>
+                </font>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
+              <border>20</border>
+            </object>
+            <object class="sizeritem">
+              <object class="TabButton" name="btn_tab_sparc_chamber">
+                <size>160,30</size>
+                <default>1</default>
+                <label>CHAMBER</label>
                 <bitmap>img/tab_inactive.png</bitmap>
                 <hover>img/tab_hover.png</hover>
                 <selected>img/tab_active.png</selected>
@@ -1638,6 +1663,7 @@
             <orient>wxHORIZONTAL</orient>
           </object>
           <bg>#333333</bg>
+          <hidden>1</hidden>
           <style>wxWANTS_CHARS</style>
           <XRCED>
             <assign_var>1</assign_var>
@@ -2501,7 +2527,38 @@
             <orient>wxHORIZONTAL</orient>
           </object>
           <bg>#333333</bg>
+          <hidden>1</hidden>
           <style>wxWANTS_CHARS</style>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <option>1</option>
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="wxPanel" name="pnl_tab_sparc_chamber">
+          <object class="wxBoxSizer">
+            <orient>wxHORIZONTAL</orient>
+            <object class="sizeritem">
+              <object class="wxPanel">
+                <size>200,-1</size>
+                <bg>#333333</bg>
+              </object>
+              <flag>wxEXPAND</flag>
+            </object>
+
+            <object class="sizeritem">
+              <object class="wxPanel">
+                <size>400,-1</size>
+                <bg>#333333</bg>
+                <style>wxBORDER_NONE</style>
+              </object>
+              <flag>wxEXPAND</flag>
+            </object>
+          </object>
+          <bg>#333333</bg>
+          <hidden>1</hidden>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
@@ -2978,6 +3035,7 @@
             </object>
           </object>
           <bg>#333333</bg>
+          <hidden>1</hidden>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
