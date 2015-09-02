@@ -117,6 +117,9 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         self.background_brush = wx.BRUSHSTYLE_SOLID
 
+        # Simple image caching dictionary {obj_id: rgb image}
+        self.images_cache = {}
+
     # Ability manipulation
 
     def disable_zoom(self):
@@ -402,11 +405,19 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         # add the images in order
         ims = []
+        im_cache = {}
         for rgbim, blend_mode, name in images:
             # TODO: convert to RGBA later, in canvas and/or cache the conversion
             # On large images it costs 100 ms (per image and per canvas)
 
-            rgba_im = format_rgba_darray(rgbim)
+            # Get converted RGBA image from cache, or create it and cache it
+            im_id = id(rgbim)
+            if im_id in self.images_cache:
+                rgba_im = self.images_cache[im_id]
+                im_cache[im_id] = rgba_im
+            else:
+                rgba_im = format_rgba_darray(rgbim)
+                im_cache[im_id] = rgba_im
 
             keepalpha = False
             scale = rgbim.metadata[model.MD_PIXEL_SIZE]
@@ -416,6 +427,9 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             flip = rgbim.metadata.get(model.MD_FLIP, 0)
 
             ims.append((rgba_im, pos, scale, keepalpha, rot, shear, flip, blend_mode, name))
+
+        # Repleace the old cache, so the obsolete RGBA images can be garbage collected
+        self.images_cache = im_cache
 
         # TODO: Canvas needs to accept the NDArray (+ specific attributes recorded separately).
         self.set_images(ims)
