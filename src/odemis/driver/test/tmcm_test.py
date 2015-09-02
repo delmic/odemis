@@ -45,7 +45,7 @@ KWARGS = dict(name="test", role="stage", port=PORT,
               inverted=["x"])
 KWARGS_SIM = dict(KWARGS)
 KWARGS_SIM["refproc"] = "FakeReferencing" # simulator doesn't support running program (=> fancy referencing)
-KWARGS_SIM["port"] = "/dev/fake"
+KWARGS_SIM["port"] = "/dev/fake6"
 
 if TEST_NOHW:
     KWARGS = KWARGS_SIM

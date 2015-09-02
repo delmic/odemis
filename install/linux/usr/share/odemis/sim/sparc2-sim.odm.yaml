@@ -1,12 +1,24 @@
-# Configuration for the SPARC2 system
+# Configuration for the SPARC v2 system
 SPARC2: {
     class: Microscope,
     role: sparc2,
-    children: ["SEM E-beam", "SEM Detector", "Stage", "Slit", "Optical Path Properties",
-    "Angular Camera", "Spectrometer", "CL Detector", "Spec CCD-PMT Flipper",
-    #"Mirror", "Filter Wheel",
-    "Lens1 Mover", "Lens2 Switch"],
+    children: ["SEM E-beam", "SEM Detector",
+               "Optical Path Properties",
+               "Camera", "Spectrometer", "CL Detector",
+               "Spec Filter Wheel", "Spec CCD Flipper",
+               "Mirror Actuators", "Slit",
+               "CL Selector", "CL Filter Wheel",
+               "Lens1 Mover", "Lens2 Switch"],
 }
+
+# Light (lamp with known spectrum)
+"Calibration Light": {
+    class: simulated.Light,
+    role: "calib-light",
+    affects: ["Camera"],
+}
+
+#TODO add support for Power Control Unit
 
 
 # Can simulate a SEM connected to a DAQ board by using the comedi_test driver:
@@ -66,7 +78,7 @@ SPARC2: {
     role: null,
     init: {
         channel: 1, # 0-> sawtooth waves, 1-> square waves
-        limits: [-5, 5] # V
+        limits: [3, 0], # V, with contrast reversed
     },
 }
 
@@ -89,20 +101,9 @@ SPARC2: {
     },
 }
 
-# Andor Zyla
-#"Angular Camera": {
-#    class: andorcam3.AndorCam3,
-#    role: ccd,
-#    init: {
-#        device: 0,  # if a real camera is plugged in, it's usually 0
-#        transpose: [1, -2], # mirrored on X axis
-#    },
-#    properties: {
-#        fanSpeed: 0.0, # 0 = Off, 0.5= half speed, 1 = max speed
-#    }
-#}
-
-"Angular Camera": {
+# In reality, this is a Zyla, but you need libandor3-dev to simulate an AndorCam3
+# Depending exactly on the configuration, it might also be used for spectrometer
+"Camera": {
     class: andorcam2.AndorCam2,
     role: ccd,
     init: {
@@ -111,6 +112,8 @@ SPARC2: {
     },
 }
 
+# On some configuration, there is a dedicated camera for the acquisition of the
+# spectra, otherwise 'Camera' is used.
 "Spectral Camera": {
     class: andorcam2.AndorCam2,
     role: sp-ccd,
@@ -129,20 +132,49 @@ SPARC2: {
     role: spectrometer,
     children: {detector: "Spectral Camera", spectrograph: "Spectrograph"},
     properties: {
-        #binning: [4, 256],
+        binning: [4, 16],
     },
 }
 
 "Spectrograph": {
     class: andorshrk.Shamrock,
     role: spectrograph,
-    affects: ["Spectral Camera"],
     children: {"ccd": "Spectral Camera"},
     init: {
         device: "fake",
         slits: {1: "slit-in", # INPUT_SIDE
         },
+        bands: { # The filters in the filter-wheel
+            1: [320.e-9, 400.e-9], # pos -> m,m
+            2: [500.e-9, 550.e-9],
+            3: [400.e-9, 450.e-9],
+            4: "polariser",
+            6: "pass-through"
+        },
     },
+    affects: ["Camera", "Spectral Camera"],
+}
+
+# Provide the mirror (aka port selector) of the spectrograph as a separate component
+"Spec CCD Flipper": {
+    class: actuator.MultiplexActuator,
+    role: "ccd-selector",
+    children: {"rx": "Spectrograph"},
+    init: {
+        axes_map: {"rx": "flip-out"},
+    },
+    affects: ["Camera", "Spectral Camera"],
+}
+
+# Provide the filter wheel of the spectrograph as a separate component
+"Spec Filter Wheel": {
+    class: actuator.MultiplexActuator,
+    role: filter,
+    children: {"band": "Spectrograph"},
+    init: {
+        axes_map: {"band": "band"},
+    },
+    affects: ["Camera", "Spectral Camera"],
 }
 
 "Optical Path Properties": {
@@ -151,125 +183,123 @@ SPARC2: {
     # Standard mirror config
     init: {
        mag: 0.4917, # ratio
+       na: 0.2, # ratio, numerical aperture
+       ri: 1.0, # ratio, refractive index
        pole_pos: [458, 519], # (px, px), position of the pole (aka the hole in the mirror)
        x_max: 13.25e-3,  # m, the distance between the parabola origin and the cutoff position
        hole_diam: 0.6e-3,  # m, diameter the hole in the mirror
        focus_dist: 0.5e-3,  # m, the vertical mirror cutoff, iow the min distance between the mirror and the sample
        parabola_f: 2.5e-3,  # m, parabola_parameter=1/4f
     },
-    affects: ["Angular Camera"]
+    affects: ["Camera"]
+}
+
+# Controller for the motors moving the various parts of the optical box
+"Optical Actuators": {
+    class: tmcm.TMCLController,
+    role: null,
+    init: {
+        port: "/dev/fake6",
+        address: null,
+        axes: ["l1", "l2", "cl-sel", "fw", "slit"],
+        ustepsize: [5.9e-9, 5.9e-9, 5.9e-9, 5.9e-9, 5.9e-9], # m/µstep
+        refproc: "FakeReferencing", # referencing procedure for simulator
+    },
 }
 
 # The first lens of Plate 1, able to move along the whole range
 "Lens1 Mover": {
     class: actuator.MultiplexActuator,
-    role: lens-mover,
-    affects: ["Angular Camera"],
+    role: "lens-mover",
     children: {"x": "Optical Actuators"},
     init: {
-        axes_map: {"x": "x"}
+        axes_map: {"x": "l1"}
     },
+    affects: ["Camera", "Spectral Camera"],
 }
 
 # The second lens of Plate 1, either to working or parking position
 "Lens2 Switch": {
     class: actuator.FixedPositionsActuator,
-    role: lens-switch,
-    affects: ["Angular Camera"],
+    role: "lens-switch",
     children: {"x": "Optical Actuators"},
-    init: {axis_name: "y",
-           positions: {0: "on",
-                     0.01: "off"},
-           },
+    init: {
+        axis_name: "l2",
+        positions: {
+            0: "on",
+            0.01: "off"
+        },
+    },
+    affects: ["Camera", "Spectral Camera"],
 }
 
-# Sets the slit position to either open or closed
+# Control the slit position to either fully-open or small (dependent on the spectrometer slit-in)
 "Slit": {
     class: actuator.FixedPositionsActuator,
-    role: slit-in-big,
+    role: "slit-in-big",
     children: {"x": "Optical Actuators"},
-    init: {axis_name: "z",
-           positions: {0: "on",
-                     0.01: "off"},
-           },
-}
-
-# Controller for the motor moving the lenses in Plate 1, slit, mirror and Filter Wheel
-"Optical Actuators": {
-    class: tmcm.TMCM3110,
-    role: none,
     init: {
-        port: "/dev/fake",
-        axes: ["x", "y", "z"],
-        #axes: ["x", "y", "z", "a", "b"],
-        ustepsize: [5.9e-9, 5.9e-9, 5.9e-9], # m/µstep
-        #ustepsize: [5.9e-9, 5.9e-9, 5.9e-9, 5.9e-9, 5.9e-9], # m/µstep
-        refproc: "FakeReferencing", # referencing procedure for simulator
-        temp: True,
+        axis_name: "slit",
+        positions: {
+            0: "on",
+            0.01: "off"
+        },
     },
+    affects: ["Camera", "Spectral Camera"],
 }
-
-# Redux stage
-"Stage": {
-    class: actuator.MultiplexActuator,
-    role: stage,
-    affects: ["Angular Camera"],
-    children: {"x": "Stage Actuators", "y": "Stage Actuators"},
-    init: {
-        axes_map: {"x": "x", "y": "y"},
-    },
-}
-
-# Controller for moving the Redux stage
-"Stage Actuators": {
-    class: tmcm.TMCM3110,
-    role: none,
-    init: {
-        port: "/dev/fake",
-        axes: ["x", "y", "z"],
-        ustepsize: [5.9e-9, 5.9e-9, 5.9e-9], # m/µstep
-        refproc: "FakeReferencing", # referencing procedure for simulator
-        temp: True,
-    },
-}
-
-# Provide the mirror of the spectrograph as a separate component
-"Spec CCD-PMT Flipper": {
-    class: actuator.MultiplexActuator,
-    role: spec-det-selector,
-    affects: ["Angular Camera", "Spectral Camera"],
-    children: {"rx": "Spectrograph"},
-    init: {
-        axes_map: {"rx": "flip-out"},
-    },
-    affects: ["Spectrometer", "Angular Camera"],
-}
-
-#"Filter Wheel": {
-#    class: actuator.FixedPositionsActuator,
-#    role: filter,
-#    children: {"x": "Optical Actuators"},
-#    init: {axis_name: "a",
-#           positions: {0: [420.e-9, 460.e-9], # pos -> m,m
-#                   1: [500.e-9, 550.e-9],
-#                   2: "polariser",
-#                   5: "pass-through"},
-#           cycle: 6
-#           },
-#    affects: ["Angular Camera", "Spectrometer", "CL Detector"]
-#}
 
 # Mirror in Plate 2, selects between spectrometer and cl-detector
-#"Mirror": {
-#    class: actuator.FixedPositionsActuator,
-#    role: cl-det-selector,
-#    children: {"x": "Optical Actuators"},
-#    init: {axis_name: "b",
-#           positions: {0: "on",
-#                     0.01: "off"},
-#           },
-#    affects: ["Angular Camera", "Spectrometer", "CL Detector"]
-#}
+"CL Selector": {
+    class: actuator.FixedPositionsActuator,
+    role: "cl-det-selector",
+    children: {"x": "Optical Actuators"},
+    init: {
+        axis_name: "cl-sel",
+        positions: {
+            0: "on",
+            0.01: "off"
+        },
+    },
+    affects: ["Camera", "Spectral Camera", "CL Detector"],
+}
 
-#TODO add light (lamp) support
-#TODO add support for Power Control Unit
+"CL Filter Wheel": {
+    class: actuator.FixedPositionsActuator,
+    role: "cl-filter",
+    children: {"band": "Optical Actuators"},
+    init: {
+        axis_name: "fw",
+        positions: {
+            0: [420.e-9, 460.e-9], # pos -> m,m
+            1: [500.e-9, 550.e-9],
+            2: "polariser",
+            5: "pass-through"},
+        cycle: 6, # number of positions on this wheel
+    },
+    affects: ["CL Detector"],
+}
+
+# Controller for moving the 'Simplex' stage
+"Mirror Actuators": {
+    class: tmcm.TMCLController,
+    role: "mirror",
+    init: {
+        port: "/dev/fake6",
+        address: null,
+        axes: ["x", "y"],
+        ustepsize: [5.9e-9, 5.9e-9], # m/µstep
+        refproc: "FakeReferencing", # referencing procedure for simulator
+    },
+}
+
+# Controller for moving the 'Redux' stage
+# "Mirror Actuators": {
+#     class: tmcm.TMCM3110,
+#     role: mirror,
+#     init: {
+#         port: "/dev/fake",
+#         axes: ["x", "y", "z"],
+#         ustepsize: [5.9e-9, 5.9e-9, 5.9e-9], # m/µstep
+#         refproc: "FakeReferencing", # referencing procedure for simulator
+#     },
+#}
