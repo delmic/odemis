@@ -680,10 +680,11 @@ class Controller(object):
         ans = self._sendQueryCommand("\x07")
         if ans == "\xb1":
             return True
-        elif ans == "\xb2":
+        elif ans == "\xb0":
             return False
 
         logging.warning("Controller %d replied unknown ready status '%s'", self.address, ans)
+        return None
 
     def IsReferenced(self, axis):
         """
@@ -1330,8 +1331,18 @@ class CLController(Controller):
 #           For supporting absolute moves, we need to add querying and requesting
 #           "homing" procedure. Then the position would reset to 0 (and that's it
 #           from the user's point of view).
-    def __init__(self, busacc, address=None, axes=None):
+    def __init__(self, busacc, address=None, axes=None, auto_suspend=10):
+        """
+        auto_suspend (False or 0 < float): delay before turning off the servo
+          and encoder after a normal move. Useful as the encoder might cause
+          some warm up, and also ensures that no vibrations are caused by trying
+          to stay on target.
+        """
         super(CLController, self).__init__(busacc, address, axes)
+
+        if not (auto_suspend is False or auto_suspend > 0):
+            raise ValueError("auto_suspend should be False or > 0 but got %s" % (auto_suspend,))
+        self._auto_suspend = auto_suspend
 
         self._speed = {} # m/s dict axis -> speed
         self._accel = {} # m/s² dict axis -> acceleration/deceleration
@@ -1339,13 +1350,14 @@ class CLController(Controller):
 
         # for managing starting/stopping the encoder:
         # * one queue to request turning on/off the encoder and terminating the thread
-        #   It uses ENC_TERMINATE, ENC_START, and a float to indicate the time
+        #   It uses MNG_TERMINATE, MNG_START, and a float to indicate the time
         #   at which it should be stopped earliest.
         # * one event to know when the encoder is ready
         self._encoder_req = {}
         self._encoder_ready = {}
         self._encoder_mng = {}
         self._pos_lock = {}  # acquire to read/write position
+        self._slew_rate = {}  # in s, copy of 0x7000002: slew rate, for E-861
 
         for a, cl in axes.items():
             if a not in self._channels:
@@ -1363,6 +1375,12 @@ class CLController(Controller):
             if unit != "MM":
                 raise IOError("Controller %d configured with unit %s, but only "
                               "millimeters (MM) is supported." % (address, unit))
+
+            try:  # Only exists on E-861
+                # slew rate is stored in ms
+                self._slew_rate[a] = float(self.GetParameter(a, 0x7000002)) * 1e-3
+            except ValueError:  # param doesn't exist => no problem
+                pass
 
             # TODO:
             # * if not referenced => disable reference mode to be able to
@@ -1423,15 +1441,16 @@ class CLController(Controller):
 
     def _stopEncoder(self, axis):
         """
-        Turn off the supply power of the encoder. That means during this time
-        it's not possible to move the axes. Referencing is lost.
+        Turn off the servo the supply power of the encoder.
+        That means during this time it's not possible to move the axes.
+        Referencing is lost.
         Should only be called when no move is taking place.
         axis (1<=int<=16): the axis
         """
-        # This can only be done if the servo is turned off
-        self.SetServo(axis, False)
-        if 0x56 in self._avail_params:
-            with self._pos_lock[axis]:
+        with self._pos_lock[axis]:
+            self.SetServo(axis, False)
+            # This can only be done if the servo is turned off
+            if 0x56 in self._avail_params:
                 # Store the position before turning off the encoder because while
                 # turning off the encoder, some signal will be received which will
                 # make the controller beleive it has moved.
@@ -1443,20 +1462,36 @@ class CLController(Controller):
 
     def _startEncoder(self, axis):
         """
-        Turn on the suplly power of the encoder.
+        Turn on the servo and the suplly power of the encoder.
         axis (1<=int<=16): the axis
         """
         with self._pos_lock[axis]:
-            pos = self.GetPosition(axis)
+            # Param 0x56 is only for C-867 and allows to control encoder power
+            # Param 0x7000002 is only for E-861 and indicates time to start servo
             if 0x56 in self._avail_params:
+                pos = self.GetPosition(axis)
                 # Warning: turning on the encoder can reset the USB connection
                 # (if it's on this very controller)
                 # Turning on the encoder resets the current position
                 self.SetParameter(axis, 0x56, 1, check=False)  # 1 = on
                 time.sleep(2)  # 2 s seems long enough for the encoder to initialise
             self.SetServo(axis, True)
+            # To allow (relative) moves, even if it's not actually referenced
             self.SetReferenceMode(axis, False)
-            self.SetPosition(axis, pos)
+            if 0x56 in self._avail_params:
+                self.SetPosition(axis, pos)
+            if axis in self._slew_rate:
+                # According to the documentation, changing mode can take up to
+                # 4 times the "slew rate". If you don't wait that time before
+                # moving, the move will sometimes fail with error -1008 (BUSY),
+                # and the controller will go crazy causing lots of vibrations
+                # on the axis.
+                # Note: we could try to also check whether the controller is ready
+                # with self.IsReady() or bits 8 to 11 of self.GetStatus(),
+                # and stop sooner if it's possible). But that could lead to
+                # orders/queries to several controllers to be intertwined, which
+                # causes sometimes the "garbage" bug.
+                time.sleep(4 * self._slew_rate[axis])
 
     def _encoder_mng_run(self, axis):
         """
@@ -1512,7 +1547,8 @@ class CLController(Controller):
         self._encoder_req[axis].put(MNG_START)
         # Just in case eventually no move is requested, it will automatically
         # stop the encoder.
-        self._releaseEncoder(axis, delay=20)
+        if self._auto_suspend:
+            self._releaseEncoder(axis, delay=10 + self._auto_suspend)
 
     def _acquireEncoder(self, axis):
         """
@@ -1559,12 +1595,29 @@ class CLController(Controller):
         """
         assert(axis in self._channels)
         self._acquireEncoder(axis)
+
+        # The controller is normally ready. The only case it's is not ready is
+        # when switching the servo/encoder, but that should be already taken
+        # care by startEncoder().
+        for i in range(100):
+            if self.IsReady():
+                break
+            logging.debug("Controller not yet ready, waiting a bit more")
+            time.sleep(0.01)
+        else:
+            logging.warning("Controller indicates it's still not ready, but will not wait any longer")
+
         self._updateSpeedAccel(axis)
         # We trust the caller that it knows it's in range
         # (worst case the hardware will not go further)
         self.MoveRel(axis, distance * 1e3)
 
-        # TODO: E861 needs same trick as in OL?
+        # Warning: this is not just what is looks like!
+        # The E861 over the network controller send (sometimes) garbage if
+        # several controllers get an OSM command without any query in between.
+        # This ensures there is one query after each command.
+        self.checkError()
+
         return distance
 
     def moveAbs(self, axis, position):
@@ -1585,7 +1638,12 @@ class CLController(Controller):
         else:
             self.MoveAbs(axis, position * 1e3)
 
-        # TODO: E861 needs same trick as in OL?
+        # Warning: this is not just what is looks like!
+        # The E861 over the network controller send (sometimes) garbage if
+        # several controllers get an OSM command without any query in between.
+        # This ensures there is one query after each command.
+        self.checkError()
+
         return distance
 
     def getPosition(self, axis):
@@ -1618,13 +1676,8 @@ class CLController(Controller):
 
         # Nothing is moving => turn off encoder (in a few seconds)
         for a in axes:
-            # TODO: call RelaxPiezos after the end of a move (reduces voltage,
-            # and so reduces heat). Works only if the device supports RNP.
-            # The relax procedure is started by
-            # * the RNP command
-            # * Switching from closed-loop to open-loop operation (“Servo off”)
-            # * Switching to closed-loop operation in analog mode
-            self._releaseEncoder(a, 10) # release in 10 s (5x the cost to start)
+            # Note: this will also turn off the servo, which leads to relax mode
+            self._releaseEncoder(a, self._auto_suspend)  # release in 10 s (5x the cost to start)
         return False
 
 
@@ -1656,14 +1709,14 @@ class CLController(Controller):
 
     def startReferencing(self, axis):
         """
-        Start a referencing move. Use isMoving() or isReferenced to know if
+        Start a referencing move. Use isMoving() or isReferenced() to know if
         the move is over. Position will change, as well as absolute positions.
         axis (1<=int<=16)
         """
         self._acquireEncoder(axis)
 
         # Note: setting position only works if ron is disabled. It's possible
-        # also indirectly set it after referencing, but then it will conflict
+        # also to indirectly set it after referencing, but then it will conflict
         # with TMN/TMX and some correct moves will fail.
         # So referencing could look like:
         # ron 1 1
@@ -1671,6 +1724,7 @@ class CLController(Controller):
         # orig_pos = pos?
 
         if self._hasRefSwitch[axis]:
+            self.SetReferenceMode(axis, True)
             self.ReferenceToSwitch(axis)
         elif self._hasLimitSwitches[axis]:
             raise NotImplementedError("Don't know how to reference to limit yet")
@@ -1727,7 +1781,6 @@ class OLController(Controller):
             self.SetServo(a, False)
             self.SetStepAmplitude(a, 55) # maximum is best
             self._position[a] = 0
-
 
         # TODO: allow to pass a polynomial
         self._dist_to_steps = dist_to_steps or 1e5 # step/m
@@ -1835,6 +1888,7 @@ class OLController(Controller):
         super(OLController, self).stopMotion()
         for c in self._channels:
             self._storeStop(c)
+
 
 class SMOController(Controller):
     """
@@ -2042,7 +2096,7 @@ class Bus(model.Actuator):
     """
     def __init__(self, name, role, port, axes, baudrate=38400,
                  dist_to_steps=None, min_dist=None,
-                 vmin=None, speed_base=None,
+                 vmin=None, speed_base=None, auto_suspend=None,
                  _addresses=None, **kwargs):
         """
         port (string): name of the serial port to connect to the controllers
@@ -2055,6 +2109,10 @@ class Bus(model.Actuator):
          _not_ seen as a child from the odemis model point of view.
         baudrate (int): baudrate of the serial port (default is the recommended
           38400). Use .scan() to detect it.
+        auto_suspend (dict str -> (False or 0 < float)): delay before turning
+          off the servo (and encoder if possible) for closed-loop controllers
+          If False, it will never turn the servo off between nornal moves.
+          Default is 10 s.
         Next 3 parameters are for calibration, see Controller for definition
         dist_to_steps (dict string -> (0 < float)): axis name -> value
         min_dist (dict string -> (0 <= float < 1)): axis name -> value
@@ -2066,6 +2124,7 @@ class Bus(model.Actuator):
         min_dist = min_dist or {}
         vmin = vmin or {}
         speed_base = speed_base or {}
+        auto_suspend = auto_suspend or {}
 
         # Prepare initialisation by grouping axes from the same controller
         ac_to_axis = {} # address, channel -> axis name
@@ -2087,6 +2146,8 @@ class Bus(model.Actuator):
                 kwc["vmin"] = vmin[axis]
             if axis in speed_base:
                 kwc["speed_base"] = speed_base[axis]
+            if axis in auto_suspend:
+                kwc["auto_suspend"] = auto_suspend[axis]
 
         # Init each controller
         self._axis_to_cc = {} # axis name => (Controller, channel)
@@ -2269,16 +2330,30 @@ class Bus(model.Actuator):
                     controller.prepareEncoder(channel)
 
             end = 0  # expected end
+            old_pos = self.position.value
             moving_axes = set()
-            for an, v in pos.items():
-                moving_axes.add(an)
-                controller, channel = self._axis_to_cc[an]
-                dist = controller.moveRel(channel, v)
-                # compute expected end
-                dur = driver.estimateMoveDuration(abs(dist),
-                                                  controller.getSpeed(channel),
-                                                  controller.getAccel(channel))
-                end = max(time.time() + dur, end)
+            try:
+                for an, v in pos.items():
+                    moving_axes.add(an)
+                    logging.debug("Expecting axis %s to reach %f", an, old_pos[an] + v)
+                    controller, channel = self._axis_to_cc[an]
+                    dist = controller.moveRel(channel, v)
+                    # compute expected end
+                    dur = driver.estimateMoveDuration(abs(dist),
+                                                      controller.getSpeed(channel),
+                                                      controller.getAccel(channel))
+                    end = max(time.time() + dur, end)
+            except PIGCSError:
+                # If one axis failed, better be safe than sorry: stop the other
+                # ones too.
+                ctlrs = set(self._axis_to_cc[an][0] for an in moving_axes)
+                for controller in ctlrs:
+                    try:
+                        controller.stopMotion()
+                    except Exception:
+                        logging.exception("Failed to stop axis %s after failure", an)
+                self._updatePosition()
+                raise
 
             self._waitEndMove(future, moving_axes, end)
         logging.debug("move successfully completed")
@@ -2298,16 +2373,28 @@ class Bus(model.Actuator):
             end = 0  # expected end
             old_pos = self.position.value
             moving_axes = set()
-            for an, v in pos.items():
-                moving_axes.add(an)
-                controller, channel = self._axis_to_cc[an]
-                dist = controller.moveAbs(channel, v)
-                # compute expected end
-                dur = abs(v - old_pos[an]) / self.speed.value[an]
-                dur = driver.estimateMoveDuration(abs(dist),
-                                                  controller.getSpeed(channel),
-                                                  controller.getAccel(channel))
-                end = max(time.time() + dur, end)
+            try:
+                for an, v in pos.items():
+                    moving_axes.add(an)
+                    controller, channel = self._axis_to_cc[an]
+                    dist = controller.moveAbs(channel, v)
+                    # compute expected end
+                    dur = abs(v - old_pos[an]) / self.speed.value[an]
+                    dur = driver.estimateMoveDuration(abs(dist),
+                                                      controller.getSpeed(channel),
+                                                      controller.getAccel(channel))
+                    end = max(time.time() + dur, end)
+            except PIGCSError:
+                # If one axis failed, better be safe than sorry: stop the other
+                # ones too.
+                ctlrs = set(self._axis_to_cc[an][0] for an in moving_axes)
+                for controller in ctlrs:
+                    try:
+                        controller.stopMotion()
+                    except Exception:
+                        logging.exception("Failed to stop axis %s after failure", an)
+                self._updatePosition()
+                raise
 
             self._waitEndMove(future, moving_axes, end)
         logging.debug("move successfully completed")
@@ -2924,6 +3011,7 @@ class E861Simulator(object):
                             0x0E: 10000000, # unit num (note: normal default is 10000)
                             0x0F: 1,       # unit denum
                             0x56: 1,  # encoder on
+                            0x7000002: 50,  # slew rate in ms
                             0x7000003: 10.0, # SSA
                             0x7000201: 3.2, # OVL
                             0x7000202: 0.9, # OAC
@@ -3066,10 +3154,10 @@ class E861Simulator(object):
                     val = 1 # first axis moving
                 out = "%x" % val
             elif com == "\x07": # Request Controller Ready Status
-                if self._ready: # TODO: when is it not ready??
+                if self._ready:  # TODO: when is it not ready?? (for a little while after changing servo mode)
                     out = "\xb1"
                 else:
-                    out = "\xb2"
+                    out = "\xb0"
             elif com == "\x18" or com == "STP": # Stop immediately
                 self._end_move = 0
                 self._errno = 10 # PI_CNTR_STOP
@@ -3219,6 +3307,7 @@ class E861Simulator(object):
                        "0x3C=\t0\t1\tCHAR\tmotorcontroller\tStagename \n" +
                        "0x56=\t0\t1\tCHAR\tencoder\tactive \n" +
                        "0x7000000=\t0\t1\tFLOAT\tmotorcontroller\ttravel range minimum \n" +
+                       "0x7000002=\t0\t1\tFLOAT\tmotorcontroller\tslew rate \n" +
                        "0x7000601=\t0\t1\tCHAR\tunit\tuser unit \n" +
                        "end of help"
                        )

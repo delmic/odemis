@@ -35,6 +35,9 @@ from unittest.case import skip
 
 logging.getLogger().setLevel(logging.DEBUG)
 
+# Export TEST_NOHW=1 to force using only the simulator and skipping test cases
+# needing real hardware
+TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 
 if os.name == "nt":
     PORT = "COM1"
@@ -48,13 +51,18 @@ CONFIG_CTRL_CL = (1, {1: True})
 CONFIG_BUS_CL = {"x":(1, 1, True)}
 CONFIG_BUS_TWO_CL = {"x":(1, 1, True), "y":(2, 1, True)}
 
-CLASS = pigcs.FakeBus # use FakeBus if no hardware present
+if TEST_NOHW:
+    CLASS = pigcs.FakeBus  # (serial controller) simulator
+else:
+    CLASS = pigcs.Bus
+
 KWARGS = {"name": "test", "role": "stage", "port": PORT, "axes": CONFIG_BUS_BASIC}
 #KWARGS = {"name": "test", "role": "stage", "port": PORT, "axes": CONFIG_BUS_BASIC, "vmin":{"x": 2.4}}
 KWARGS_CL = {"name": "test", "role": "stage", "port": PORT, "axes": CONFIG_BUS_CL}
 
 KWARGS_TWO = {"name": "test", "role": "stage2d", "port": PORT, "axes": CONFIG_BUS_TWO}
-KWARGS_TWO_CL = {"name": "test", "role": "stage2d", "port": PORT, "axes": CONFIG_BUS_TWO_CL}
+KWARGS_TWO_CL = {"name": "test", "role": "stage2d", "port": PORT, "axes": CONFIG_BUS_TWO_CL,
+                 "auto_suspend": {"y": 5, "x": False}}
 
 KWARGS_IP = {"name": "test", "role": "stage", "port": "autoip", "axes": CONFIG_BUS_BASIC}
 KWARGS_TWO_IP = {"name": "test", "role": "stage2d", "port": "autoip", "axes": CONFIG_BUS_TWO}
@@ -72,7 +80,8 @@ class TestController(unittest.TestCase):
 
     def test_scan(self):
         addresses = pigcs.Controller.scan(self.accesser)
-        self.assertGreater(len(addresses), 0, "No controller found")
+        if not TEST_NOHW:
+            self.assertGreater(len(addresses), 0, "No controller found")
 
     def test_move(self):
         """
@@ -160,7 +169,8 @@ class TestActuator(unittest.TestCase):
         connected to at least one controller.
         """
         devices = CLASS.scan()
-        self.assertGreater(len(devices), 0)
+        if not TEST_NOHW:
+            self.assertGreater(len(devices), 0)
 
         for name, kwargs in devices:
             print "opening ", name
@@ -529,6 +539,9 @@ class TestActuatorCL(TestActuator):
 # @skip("faster")
 class TestActuatorIP(TestActuator):
     def setUp(self):
+        if TEST_NOHW:
+            self.skipTest("IP actuator has not simulator")
+
         self.kwargs = KWARGS_IP
         self.kwargs_two = KWARGS_TWO_IP
 
