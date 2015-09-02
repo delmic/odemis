@@ -56,8 +56,7 @@ def getVAs(component):
     returns (dict of name -> VigilantAttributeBase): all the VAs in the component with their name
     """
     # like dump_vigilante_attributes, but doesn't register them
-    vas = inspect.getmembers(
-        component, lambda x: isinstance(x, _vattributes.VigilantAttributeBase))
+    vas = inspect.getmembers(component, lambda x: isinstance(x, _vattributes.VigilantAttributeBase))
     return dict(vas)
 
 
@@ -73,8 +72,7 @@ def getDataFlows(component):
     returns (dict of name -> DataFlow): all the DataFlows in the component with their name
     """
     # like dump_dataflow, but doesn't register them
-    dfs = inspect.getmembers(
-        component, lambda x: isinstance(x, _dataflow.DataFlowBase))
+    dfs = inspect.getmembers(component, lambda x: isinstance(x, _dataflow.DataFlowBase))
     return dict(dfs)
 
 
@@ -83,8 +81,7 @@ def getEvents(component):
     returns (dict of name -> Events): all the Events in the component with their name
     """
     # like dump_dataflow, but doesn't register them
-    evts = inspect.getmembers(
-        component, lambda x: isinstance(x, _dataflow.EventBase))
+    evts = inspect.getmembers(component, lambda x: isinstance(x, _dataflow.EventBase))
     return dict(evts)
 
 
@@ -120,8 +117,7 @@ class Component(ComponentBase):
             children = {}
         # Do not add non-Component, so that it's compatible with passing a kwargs
         # It's up to the sub-class to set correctly the .parent of the children
-        cc = set(
-            [c for c in children.values() if isinstance(c, ComponentBase)])
+        cc = set([c for c in children.values() if isinstance(c, ComponentBase)])
         # Note the only way to ensure the VA notifies changes is to set a
         # different object at every change.
         self.children = _vattributes.VigilantAttribute(cc)
@@ -172,8 +168,7 @@ class Component(ComponentBase):
         daemon = getattr(self, "_pyroDaemon", None)
         if daemon:
             # unregister also all the automatically registered VAs and
-            # dataflows (because they hold ref to daemon, so hard to get
-            # deleted
+            # dataflows (because they hold ref to daemon, so hard to get deleted
             _dataflow.unregister_dataflows(self)
             _vattributes.unregister_vigilant_attributes(self)
             _dataflow.unregister_events(self)
@@ -203,8 +198,7 @@ class ComponentProxy(ComponentBase, Pyro4.Proxy):
         return self._parent
 
     # The goal of __getstate__ is to allow pickling a proxy and getting a similar
-    # proxy talking directly to the server (it reset the connection and the
-    # lock).
+    # proxy talking directly to the server (it reset the connection and the lock).
     def __getstate__(self):
         proxy_state = Pyro4.Proxy.__getstate__(self)
         return (proxy_state, self.parent, _core.dump_roattributes(self),
@@ -237,9 +231,7 @@ class ComponentProxy(ComponentBase, Pyro4.Proxy):
 def ComponentSerializer(self):
     """reduce function that automatically replaces Component objects by a Proxy"""
     daemon = getattr(self, "_pyroDaemon", None)
-    # TODO might not be even necessary: They should be registering themselves
-    # in the init
-    if daemon:
+    if daemon:  # TODO might not be even necessary: They should be registering themselves in the init
         # only return a proxy if the object is a registered pyro object
         return (ComponentProxy, (daemon.uriFor(self),), self._getproxystate())
     else:
@@ -265,8 +257,7 @@ class HwComponent(Component):
         # This one is not RO, but should only be modified by the backend
         # TODO: if it's just static names => make it a roattribute? Or wait
         # until Pyro supports modifying normal attributes?
-        # list of names (str) of component
-        self.affects = _vattributes.ListVA()
+        self.affects = _vattributes.ListVA()  # list of names (str) of component
 
         # The component can update it to an HwError when the hardware is not
         # behaving correctly anymore. It could also set it to ST_STARTING during
@@ -278,8 +269,7 @@ class HwComponent(Component):
         # if PowerSupplier available then create powerSupply VA by copying the
         # corresponding value of the position VA of the PowerSupplier.
         if self._psu:
-            self.powerSupply = _vattributes.BooleanVA(
-                self._psu.position.value[name], setter=self._setPowerSupply)
+            self.powerSupply = _vattributes.BooleanVA(self._psu.position.value[name], setter=self._setPowerSupply)
 
     @roattribute
     def role(self):
@@ -349,16 +339,14 @@ class Microscope(HwComponent):
         """
         model (dict str-> dict): the python representation of the model AST
         """
-        HwComponent.__init__(
-            self, name, role, children=children, daemon=daemon)
+        HwComponent.__init__(self, name, role, children=children, daemon=daemon)
 
         if model is None:
             model = {}
         self._model = model
 
         if kwargs:
-            raise ValueError(
-                "Microscope component cannot have initialisation arguments.")
+            raise ValueError("Microscope component cannot have initialisation arguments.")
 
         # These 2 VAs should not modified, but by the backend
         self.alive = _vattributes.VigilantAttribute(set())  # set of components
@@ -416,8 +404,7 @@ class DigitalCamera(Detector):
             if len(set(abs(v) for v in transpose)) != len(transpose):
                 raise ValueError("Transpose argument contains multiple times "
                                  "the same axis: %s" % (transpose,))
-            # Shape not yet defined, so can't check precisely all the axes are
-            # there
+            # Shape not yet defined, so can't check precisely all the axes are there
             if (not 1 <= len(transpose) <= 5 or 0 in transpose
                     or any(abs(v) > 5 for v in transpose)):
                 raise ValueError("Transpose argument does not define each axis "
@@ -430,15 +417,10 @@ class DigitalCamera(Detector):
         self.depthOfField = _vattributes.FloatContinuous(1e-6, range=(0, 1e9),
                                                          unit="m", readonly=True)
         # To be overridden by a VA
-        # (len(dim)-1 * float) size of a sensor pixel (in meters). More precisely it should be the average distance between the centres of two pixels.
-        self.pixelSize = None
-        # how many CCD pixels are merged (in each dimension) to form one pixel
-        # on the image.
-        self.binning = None
-        # (len(dim)-1 * int): number of pixels in the image generated for each dimension. If it's smaller than the full resolution of the captor, it's centred.
-        self.resolution = None
-        # (float): time in second for the exposure for one image.
-        self.exposureTime = None
+        self.pixelSize = None  # (len(dim)-1 * float) size of a sensor pixel (in meters). More precisely it should be the average distance between the centres of two pixels.
+        self.binning = None  # how many CCD pixels are merged (in each dimension) to form one pixel on the image.
+        self.resolution = None  # (len(dim)-1 * int): number of pixels in the image generated for each dimension. If it's smaller than the full resolution of the captor, it's centred.
+        self.exposureTime = None  # (float): time in second for the exposure for one image.
 
     @roattribute
     def transpose(self):
@@ -465,21 +447,18 @@ class DigitalCamera(Detector):
                 # confusing for the user that the focus sensitivity changes when
                 # the observed part changes. So just use 550 nm, which is never
                 # more than 50% wrong.
-                # from
-                # https://www.microscopyu.com/articles/formulas/formulasfielddepth.html
+                # from https://www.microscopyu.com/articles/formulas/formulasfielddepth.html
                 dof = (l * ri) / na ** 2 + (ri * pxs) / (mag - na)
                 rng = self.depthOfField.range
                 if rng[0] <= dof <= rng[1]:
                     self.depthOfField._set_value(dof, force_write=True)
                 else:
-                    logging.warning(
-                        "Depth of field computed seems incorrect: %f m", dof)
+                    logging.warning("Depth of field computed seems incorrect: %f m", dof)
             except KeyError:
                 # Not enough metadata is present for computing Depth of Field
                 pass
             except Exception:
-                logging.warning(
-                    "Failure to update the depth of field", exc_info=True)
+                logging.warning("Failure to update the depth of field", exc_info=True)
 
     # helper functions for handling transpose
     def _transposePosToUser(self, v):
@@ -584,8 +563,7 @@ class DigitalCamera(Detector):
         typev = type(v)
         return typev(vt)
 
-    # _transposeShapeFromUser and _transposeDAFromUser do not seem to have
-    # usage
+    # _transposeShapeFromUser and _transposeDAFromUser do not seem to have usage
 
     def _transposeDAToUser(self, v):
         """
@@ -686,8 +664,7 @@ class Axis(object):
                 speed_str = (" (speed %s -> %s %s/s)" %
                              (self.speed[0], self.speed[1], self.unit))
             else:
-                speed_str = " (speed %s -> %s)" % (
-                    self.speed[0], self.speed[1])
+                speed_str = " (speed %s -> %s)" % (self.speed[0], self.speed[1])
         else:
             speed_str = ""
 
@@ -796,8 +773,7 @@ class Actuator(HwComponent):
         ret = dict(pos)
         for a in self._inverted:
             if a in ret:
-                ret[a] = self._axes[a].range[
-                    0] + self._axes[a].range[1] - ret[a]
+                ret[a] = self._axes[a].range[0] + self._axes[a].range[1] - ret[a]
         return ret
 
     def _checkMoveRel(self, shift):
@@ -850,8 +826,7 @@ class Actuator(HwComponent):
         referenceable = set(self.referenced.value.keys())
         nonref = axes - referenceable
         if nonref:
-            raise ValueError(
-                "Cannot reference the following axes: %s" % (nonref,))
+            raise ValueError("Cannot reference the following axes: %s" % (nonref,))
 
 
 class PowerSupplier(HwComponent):
@@ -879,8 +854,7 @@ class PowerSupplier(HwComponent):
         self._position = {}
         for comp in self._components:
             self._position[comp] = False
-        self.position = _vattributes.VigilantAttribute(
-            self._position, readonly=True)
+        self.position = _vattributes.VigilantAttribute(self._position, readonly=True)
 
     @roattribute
     def components(self):
@@ -895,8 +869,7 @@ class PowerSupplier(HwComponent):
         for comp, value in pos.items():
             switch = self._switches_map[comp][0]
             # Update all components that are connected to the same switch
-            to_update = [
-                c for c in self._components if switch == self._switches_map[c][0]]
+            to_update = [c for c in self._components if switch == self._switches_map[c][0]]
             for c_update in to_update:
                 self._position[c_update] = value
 
