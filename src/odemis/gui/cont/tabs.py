@@ -104,7 +104,7 @@ class Tab(object):
         """ If the tab has a 2x2 view, this method will connect it to the 2x2
         view menu item (or ensure it's disabled).
         """
-        if len(self.tab_data_model.views.value) >= 4:
+        if hasattr(self.tab_data_model, 'views') and len(self.tab_data_model.views.value) >= 4:
             # We assume it has a 2x2 view layout
             def set_22_menu_check(viewlayout):
                 """Called when the view layout changes"""
@@ -805,6 +805,14 @@ class SparcAcquisitionTab(Tab):
         # make sure the streams are stopped
         for s in self.tab_data_model.streams.value:
             s.is_active.value = False
+
+
+class ChamberTab(Tab):
+    def __init__(self, name, button, panel, main_frame, main_data):
+        """ Sparc2 Chamber tab """
+        
+        tab_data = guimod.ChamberGUIData(main_data)
+        super(ChamberTab, self).__init__(name, button, panel, main_frame, tab_data)
 
 
 class AnalysisTab(Tab):
@@ -2067,6 +2075,7 @@ class TabBarController(object):
 
         # create all the tabs that fit the microscope role
         tab_list = self._create_needed_tabs(tab_rules, main_frame, main_data)
+
         if not tab_list:
             msg = "No interface known for microscope %s" % main_data.role
             raise LookupError(msg)
@@ -2113,7 +2122,7 @@ class TabBarController(object):
 
         tabs = []  # Tabs
         for troles, tlabels, tname, tclass, tbtn, tpnl in tab_defs:
-
+            print troles
             if role in troles:
                 tab = tclass(tname, tbtn, tpnl, main_frame, main_data)
                 tab.set_label(tlabels[troles.index(role)])

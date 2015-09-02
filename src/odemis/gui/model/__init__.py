@@ -434,6 +434,10 @@ class ScannedAcquisitionGUIData(MicroscopyGUIData):
         self.spotPosition = model.TupleVA((None, None))
 
 
+class ChamberGUIData(MicroscopyGUIData):
+    pass
+
+
 class AnalysisGUIData(MicroscopyGUIData):
     """
     Represent an interface used to show the recorded microscope data. Typically
