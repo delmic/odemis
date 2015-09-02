@@ -28,9 +28,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 
 def odemis_get_resources():
-    """ This function provides access to the XML handlers needed for
-        non-standard controls defined in the XRC file.
-    """
+    """ This function provides access to the XML handlers needed for non-standard controls
+    defined in the XRC file. """
 
     import odemis.gui.main_xrc
 
@@ -43,9 +42,7 @@ def odemis_get_resources():
 
 
 def odemis_get_test_resources():
-    """ This function provides access to the XML handlers needed by
-        the test  GUI.
-    """
+    """ This function provides access to the XML handlers needed by the test  GUI. """
     import odemis.gui.test.test_gui
 
     if odemis.gui.test.test_gui.__res is None:

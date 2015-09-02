@@ -130,13 +130,13 @@ class CalibrationProgressDialog(xrcprogress_dialog):
                                                                   self.gauge,
                                                                   self.time_txt)
         self.calib_future.add_done_callback(self.on_calib_done)
-#         self.calib_future.add_update_callback(self.on_calib_update)
+    #     self.calib_future.add_update_callback(self.on_calib_update)
 
-#     def update_calibration_time(self, time):
-#         txt = "Time remaining: {}"
-#         txt = txt.format(units.readable_time(time))
-#
-#         self.time_txt.SetLabel(txt)
+    # def update_calibration_time(self, time):
+    #     txt = "Time remaining: {}"
+    #     txt = txt.format(units.readable_time(time))
+    #
+    #     self.time_txt.SetLabel(txt)
 
     def on_close(self, evt):
         """ Close event handler that executes various cleanup actions

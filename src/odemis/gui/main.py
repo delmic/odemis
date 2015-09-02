@@ -157,7 +157,7 @@ class OdemisGUIApp(wx.App):
                     "secom_live",
                     tabs.SecomStreamsTab,
                     self.main_frame.btn_tab_secom_streams,
-                    self.main_frame.pnl_tab_secom_streams
+                    main_xrc.xrcpnl_tab_secom_streams
                 ),
                 (
                     {
@@ -166,7 +166,7 @@ class OdemisGUIApp(wx.App):
                     "secom_align",
                     tabs.LensAlignTab,
                     self.main_frame.btn_tab_secom_align,
-                    self.main_frame.pnl_tab_secom_align
+                    main_xrc.xrcpnl_tab_secom_align
                 ),
                 (
                     {
@@ -176,7 +176,7 @@ class OdemisGUIApp(wx.App):
                     "sparc_align",
                     tabs.MirrorAlignTab,
                     self.main_frame.btn_tab_sparc_align,
-                    self.main_frame.pnl_tab_sparc_align
+                    main_xrc.xrcpnl_tab_sparc_align
                 ),
                 (
                     {
@@ -186,7 +186,7 @@ class OdemisGUIApp(wx.App):
                     "sparc_acqui",
                     tabs.SparcAcquisitionTab,
                     self.main_frame.btn_tab_sparc_acqui,
-                    self.main_frame.pnl_tab_sparc_acqui
+                    main_xrc.xrcpnl_tab_sparc_acqui
                 ),
                 (
                     {
@@ -195,7 +195,7 @@ class OdemisGUIApp(wx.App):
                     "sparc_chamber",
                     tabs.ChamberTab,
                     self.main_frame.btn_tab_sparc_chamber,
-                    self.main_frame.pnl_tab_sparc_chamber
+                    main_xrc.xrcpnl_tab_sparc_chamber
                 ),
                 (
                     {
@@ -210,7 +210,7 @@ class OdemisGUIApp(wx.App):
                     "analysis",
                     tabs.AnalysisTab,
                     self.main_frame.btn_tab_inspection,
-                    self.main_frame.pnl_tab_inspection
+                    main_xrc.xrcpnl_tab_inspection
                 ),
             ]
 

@@ -42,10 +42,10 @@ import wx
 class ViewPortController(object):
     """ Manage the display of various viewports in a tab """
 
-    def __init__(self, tab_data, main_frame, viewports, toolbar=None):
+    def __init__(self, tab_data, tab_panel, viewports, toolbar=None):
         """
         :param tab_data: MicroscopyGUIData -- the representation of the microscope GUI
-        :param main_frame: wx.Frame -- the frame which contains the 4 viewports
+        :param tab_panel: wx.Frame -- the frame which contains the 4 viewports
         :param viewports (OrderedDict(MicroscopeViewport -> {}): the
             viewports to update. The first one is the one focused.
             The kwargs are passed to the MicroscopeView creation. A special kwarg "cls"
@@ -62,7 +62,7 @@ class ViewPortController(object):
 
         self._data_model = tab_data
         self._main_data_model = tab_data.main
-        self.main_frame = main_frame
+        self.tab_panel = tab_panel
         self._toolbar = toolbar
 
         assert not self._data_model.views.value  # should still be empty
@@ -350,11 +350,11 @@ class OverviewController(object):
 class ViewButtonController(object):
     """ This class controls the view selector buttons and labels associated with them. """
 
-    def __init__(self, tab_data, main_frame, buttons, viewports):
+    def __init__(self, tab_data, tab_panel, buttons, viewports):
         """
 
         tab_data (MicroscopyGUIData): the representation of the microscope GUI
-        main_frame: (wx.Frame): the frame which contains the 4 viewports
+        tab_panel: (wx.Frame): the frame which contains the 4 viewports
         buttons (OrderedDict : btn -> label): View buttons and their associated labels
 
         *important*: The first button has no viewport, for the 2x2 view.
@@ -362,7 +362,7 @@ class ViewButtonController(object):
         """
 
         self._data_model = tab_data
-        self.main_frame = main_frame
+        self.tab_panel = tab_panel
 
         self.buttons = buttons  # Remember, this is an ordered dictionary!
         self.viewports = viewports

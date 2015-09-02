@@ -447,16 +447,16 @@ class SettingsBarController(object):
 
 class SecomSettingsController(SettingsBarController):
 
-    def __init__(self, parent_frame, tab_data, highlight_change=False):
+    def __init__(self, tab_panel, tab_data, highlight_change=False):
         super(SecomSettingsController, self).__init__(tab_data)
         main_data = tab_data.main
 
-        self._sem_panel = SemSettingsController(parent_frame.fp_settings_secom_sem,
+        self._sem_panel = SemSettingsController(tab_panel.fp_settings_secom_sem,
                                                 "No SEM found",
                                                 highlight_change,
                                                 tab_data)
 
-        self._optical_panel = OpticalSettingsController(parent_frame.fp_settings_secom_optical,
+        self._optical_panel = OpticalSettingsController(tab_panel.fp_settings_secom_optical,
                                                         "No optical microscope found",
                                                         highlight_change,
                                                         tab_data)
@@ -490,16 +490,16 @@ class SecomSettingsController(SettingsBarController):
 
 class LensAlignSettingsController(SettingsBarController):
 
-    def __init__(self, parent_frame, tab_data, highlight_change=False):
+    def __init__(self, tab_panel, tab_data, highlight_change=False):
         super(LensAlignSettingsController, self).__init__(tab_data)
         main_data = tab_data.main
 
-        self._sem_panel = SemSettingsController(parent_frame.fp_lens_sem_settings,
+        self._sem_panel = SemSettingsController(tab_panel.fp_lens_sem_settings,
                                                 "No SEM found",
                                                 highlight_change,
                                                 tab_data)
 
-        self._optical_panel = OpticalSettingsController(parent_frame.fp_lens_opt_settings,
+        self._optical_panel = OpticalSettingsController(tab_panel.fp_lens_opt_settings,
                                                         "No optical microscope found",
                                                         highlight_change)
 
@@ -514,10 +514,10 @@ class LensAlignSettingsController(SettingsBarController):
 class AnalysisSettingsController(SettingsBarController):
     """ Control the widgets/settings in the right column of the analysis tab """
 
-    def __init__(self, parent, tab_data):
+    def __init__(self, tab_panel, tab_data):
         super(AnalysisSettingsController, self).__init__(tab_data)
 
-        self.parent = parent
+        self.tab_panel = tab_panel
         # Gui data model
         self.tab_data = tab_data
 
@@ -559,11 +559,11 @@ class AnalysisSettingsController(SettingsBarController):
         """
 
         # Panel containing information about the acquisition file
-        self._pnl_acqfile = FileInfoSettingsController(self.parent.fp_fileinfo, "No file loaded")
+        self._pnl_acqfile = FileInfoSettingsController(self.tab_panel.fp_fileinfo, "No file loaded")
 
         # Panel with AR background file information
         # It's displayed only if there are AR streams (handled by the tab cont)
-        self._pnl_arfile = FileInfoSettingsController(self.parent.fp_fileinfo, "")
+        self._pnl_arfile = FileInfoSettingsController(self.tab_panel.fp_fileinfo, "")
         self._arfile_ctrl = self._pnl_arfile.add_browse_button(
             "AR background",
             "Angle-resolved background acquisition file",
@@ -577,7 +577,7 @@ class AnalysisSettingsController(SettingsBarController):
 
         # Panel with spectrum background + efficiency compensation file information
         # They are displayed only if there are Spectrum streams
-        self._pnl_specfile = FileInfoSettingsController(self.parent.fp_fileinfo, "")
+        self._pnl_specfile = FileInfoSettingsController(self.tab_panel.fp_fileinfo, "")
         self._spec_bckfile_ctrl = self._pnl_specfile.add_browse_button(
             "Spec. background",
             "Spectrum background correction file",
@@ -595,7 +595,7 @@ class AnalysisSettingsController(SettingsBarController):
         self._specfile_ctrl.Bind(EVT_FILE_SELECT, self._on_spec_file_select)
         self.tab_data.spec_cal.subscribe(self._on_spec_cal, init=True)
 
-        self.parent.fp_fileinfo.expand()
+        self.tab_panel.fp_fileinfo.expand()
 
     def on_acqfile_change(self, file_info):
         """ Display the name and location of the file described by file_info
@@ -699,19 +699,19 @@ class AnalysisSettingsController(SettingsBarController):
         if spec is not None:
             self._pnl_specfile.show_panel(spec)
 
-        self.parent.Layout()
+        self.tab_panel.Layout()
 
 
 class SparcAlignSettingsController(SettingsBarController):
 
-    def __init__(self, parent_frame, tab_data):
+    def __init__(self, tab_panel, tab_data):
         super(SparcAlignSettingsController, self).__init__(tab_data)
         main_data = tab_data.main
         self.hw_settings_config = get_hw_settings_config(main_data.role)
 
-        self._ar_setting_cont = AngularSettingsController(parent_frame.fp_ma_settings_ar,
+        self._ar_setting_cont = AngularSettingsController(tab_panel.fp_ma_settings_ar,
                                                           "No angle-resolved camera found")
-        self._spect_setting_cont = SpectrumSettingsController(parent_frame.fp_ma_settings_spectrum,
+        self._spect_setting_cont = SpectrumSettingsController(tab_panel.fp_ma_settings_spectrum,
                                                               "No spectrometer found")
 
         if main_data.ccd:
