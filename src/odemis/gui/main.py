@@ -148,48 +148,65 @@ class OdemisGUIApp(wx.App):
 
             tab_defs = [
                 (
-                    ("secom", "delphi", "sem", "optical"),
-                    ("STREAMS", "STREAMS", "STREAMS", "STREAMS"),
+                    {
+                        "secom": "STREAMS",
+                        "delphi": "STREAMS",
+                        "sem": "STREAMS",
+                        "optical": "STREAMS",
+                    },
                     "secom_live",
                     tabs.SecomStreamsTab,
                     self.main_frame.btn_tab_secom_streams,
                     self.main_frame.pnl_tab_secom_streams
                 ),
                 (
-                    ("secom",),
-                    ("LENS ALIGNMENT",),
+                    {
+                        "secom": "LENS ALIGNMENT"
+                    },
                     "secom_align",
                     tabs.LensAlignTab,
                     self.main_frame.btn_tab_secom_align,
                     self.main_frame.pnl_tab_secom_align
                 ),
                 (
-                    ("sparc", "sparc2",),
-                    ("ALIGNMENT", "ALIGNMENT",),
+                    {
+                        "sparc": "ALIGNMENT",
+                        "sparc2": "ALIGNMENT",
+                    },
                     "sparc_align",
                     tabs.MirrorAlignTab,
                     self.main_frame.btn_tab_sparc_align,
                     self.main_frame.pnl_tab_sparc_align
                 ),
                 (
-                    ("sparc", "sparc2",),
-                    ("ACQUISITION", "ACQUISITION",),
+                    {
+                        "sparc": "ACQUISITION",
+                        "sparc2": "ACQUISITION",
+                    },
                     "sparc_acqui",
                     tabs.SparcAcquisitionTab,
                     self.main_frame.btn_tab_sparc_acqui,
                     self.main_frame.pnl_tab_sparc_acqui
                 ),
                 (
-                    ("sparc2",),
-                    ("CHAMBER",),
+                    {
+                        "sparc2": "CHAMBER",
+                    },
                     "sparc_chamber",
                     tabs.ChamberTab,
                     self.main_frame.btn_tab_sparc_chamber,
                     self.main_frame.pnl_tab_sparc_chamber
                 ),
                 (
-                    (None, "secom", "delphi", "sem", "optical", "sparc", "sparc2"),
-                    ("GALLERY", "GALLERY", "GALLERY", "GALLERY", "GALLERY", "ANALYSIS", "ANALYSIS"),
+                    {
+                        None: "GALLERY",
+                        "secom": "GALLERY",
+                        "delphi": "GALLERY",
+                        "sem": "GALLERY",
+                        "optical": "GALLERY",
+                        "sparc": "ANALYSIS",
+                        "sparc2": "ANALYSIS",
+                    },
                     "analysis",
                     tabs.AnalysisTab,
                     self.main_frame.btn_tab_inspection,

@@ -810,7 +810,7 @@ class SparcAcquisitionTab(Tab):
 class ChamberTab(Tab):
     def __init__(self, name, button, panel, main_frame, main_data):
         """ Sparc2 Chamber tab """
-        
+
         tab_data = guimod.ChamberGUIData(main_data)
         super(ChamberTab, self).__init__(name, button, panel, main_frame, tab_data)
 
@@ -2054,9 +2054,9 @@ class MirrorAlignTab(Tab):
 
 
 class TabBarController(object):
-    def __init__(self, tab_rules, main_frame, main_data):
+    def __init__(self, tab_defs, main_frame, main_data):
         """
-        tab_rules (list of 5-tuples (string, string, Tab class, button, panel):
+        tab_defs (list of 5-tuples (string, string, Tab class, button, panel):
             list of all the possible tabs. Each tuple is:
                 - microscope role(s) (string or tuple of strings/None)
                 - internal name(s)
@@ -2074,7 +2074,7 @@ class TabBarController(object):
         self.main_data = main_data
 
         # create all the tabs that fit the microscope role
-        tab_list = self._create_needed_tabs(tab_rules, main_frame, main_data)
+        tab_list = self._create_needed_tabs(tab_defs, main_frame, main_data)
 
         if not tab_list:
             msg = "No interface known for microscope %s" % main_data.role
@@ -2121,11 +2121,10 @@ class TabBarController(object):
                       role or "no backend")
 
         tabs = []  # Tabs
-        for troles, tlabels, tname, tclass, tbtn, tpnl in tab_defs:
-            print troles
+        for troles, tname, tclass, tbtn, tpnl in tab_defs:
             if role in troles:
                 tab = tclass(tname, tbtn, tpnl, main_frame, main_data)
-                tab.set_label(tlabels[troles.index(role)])
+                tab.set_label(troles[role])
                 tabs.append(tab)
             else:
                 # hide the widgets of the tabs not needed
