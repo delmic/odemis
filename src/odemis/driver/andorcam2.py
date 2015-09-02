@@ -2099,7 +2099,9 @@ class FakeAndorV2DLL(object):
         self.acq_aborted = threading.Event()
 
     def Initialize(self, path):
-        assert(os.path.isdir(path))
+        if not os.path.isdir(path):
+            logging.warning("Trying to inialise simulator with an incorrect path: %s",
+                            path)
 
     def ShutDown(self):
         pass
