@@ -21,12 +21,14 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
+from Pyro4.core import isasync
 import fcntl
 import glob
 import logging
 from odemis import model
 from odemis.model import ComponentBase, DataFlowBase
 from odemis.model import HwError
+from odemis.model._futures import CancellableThreadPoolExecutor
 from odemis.util import driver
 import os
 import serial
@@ -202,7 +204,8 @@ class PMTDataFlow(model.DataFlow):
 MIN_GAIN = 0
 MAX_GAIN = 1.1
 
-class PMTControl(model.HwComponent):
+
+class PMTControl(model.PowerSupplier):
     '''
     This represents the PMT control unit.
     At start up the following is set:
@@ -211,7 +214,7 @@ class PMTControl(model.HwComponent):
      * power up
     '''
     def __init__(self, name, role, port, prot_time=1e-3, prot_curr=50e-6,
-                 relay_cycle=None, **kwargs):
+                 relay_cycle=None, components=[], **kwargs):
         '''
         port (str): port name
         prot_time (float): protection trip time (in s)
@@ -220,7 +223,7 @@ class PMTControl(model.HwComponent):
           with the given delay (in s)
         Raise an exception if the device cannot be opened
         '''
-        model.HwComponent.__init__(self, name, role, **kwargs)
+        model.PowerSupplier.__init__(self, name, role, components=components, **kwargs)
 
         # get protection time (s) and current (A) properties
         if not 0 <= prot_time < 1e3:
@@ -260,18 +263,64 @@ class PMTControl(model.HwComponent):
         self.powerSupply = model.BooleanVA(True, setter=self._setPowerSupply)
         self._setPowerSupply(True)
 
+        # Just initialization, position will be updated once we switch
+        self._position = {}
+        for comp in self.components:
+            self._position[comp] = False
+        self.position = model.VigilantAttribute(self._position, readonly=True)
+
+        # will take care of executing switch asynchronously
+        self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
+
         # relay initialization
         if relay_cycle is not None:
             logging.info("Power cycling the relay for %f s", relay_cycle)
             self.setRelay(False)
             time.sleep(relay_cycle)
-        self.setRelay(True)
+        # self.setRelay(True)
+
+    def stop(self, components=None):
+        # Empty the queue for the given components
+        self._executor.cancel()
+        logging.warning("Stopping all components: %s", ", ".join(self.components))
 
     def terminate(self):
+        if self._executor:
+            self.stop()
+            self._executor.shutdown()
+            self._executor = None
         with self._ser_access:
             if self._serial:
                 self._serial.close()
                 self._serial = None
+
+    @isasync
+    def switch(self, pos):
+        if not pos:
+            return model.InstantaneousFuture()
+        self._checkSwitch(pos)
+
+        return self._executor.submit(self._doSwitch, pos)
+
+    def _doSwitch(self, pos):
+        """
+        switch to the position
+        """
+        value = pos.values()[0]  # only care about the value
+        self.setRelay(self, value)
+        self._updatePosition(value)
+
+    def _updatePosition(self, value):
+        """
+        update the position VA
+        """
+        # update all components since they are all connected to the same switch
+        for comp in self.components:
+            self._position[comp] = value
+
+        # it's read-only, so we change it via _value
+        self.position._value = self._position
+        self.position.notify(self.position.value)
 
     def _getIdentification(self):
         return self._sendCommand("*IDN?")

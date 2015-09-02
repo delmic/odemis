@@ -270,6 +270,7 @@ class HwComponent(Component):
         # corresponding value of the position VA of the PowerSupplier.
         if self._psu:
             self.powerSupply = _vattributes.BooleanVA(self._psu.position.value[name], setter=self._setPowerSupply)
+            self._psu.position.subscribe(self._onPosition)
 
     @roattribute
     def role(self):
@@ -301,6 +302,11 @@ class HwComponent(Component):
         return (dict string -> value): internal metadata
         """
         return self._metadata
+
+    def _onPosition(self, pos):
+        # keep up to date with position changes
+        self.powerSupply._value = pos[self.name]
+        self.powerSupply.notify(self.powerSupply.value)
 
     def _setPowerSupply(self, value):
         try:
@@ -836,46 +842,20 @@ class PowerSupplier(HwComponent):
     """
     __metaclass__ = ABCMeta
 
-    def __init__(self, name, role, switches_map=None, **kwargs):
+    def __init__(self, name, role, components=None, **kwargs):
         """
-        switches_map (dict of str -> (str, float, float)): names of the components
-          and the (switch, on_value, off_value) information where "switch" is
-          where the component is connected and "on_value" and "off_value" the
-          values that correspond to turning on and off this component.
+        components (list of str): name of each component available.
         """
         HwComponent.__init__(self, name, role, **kwargs)
 
-        switches_map = switches_map or {}
-        self._switches_map = switches_map
+        self._components = components
 
-        self._components = switches_map.keys()
-
-        # Just initialization, position will be updated once we switch
-        self._position = {}
-        for comp in self._components:
-            self._position[comp] = False
-        self.position = _vattributes.VigilantAttribute(self._position, readonly=True)
+        # it should also have a .position VA
 
     @roattribute
     def components(self):
         """ list of str: name of each component available."""
         return self._components
-
-    def _updatePosition(self, pos):
-        """
-        update the position VA
-        pos (dict of str -> boolean): position to update to.
-        """
-        for comp, value in pos.items():
-            switch = self._switches_map[comp][0]
-            # Update all components that are connected to the same switch
-            to_update = [c for c in self._components if switch == self._switches_map[c][0]]
-            for c_update in to_update:
-                self._position[c_update] = value
-
-        # it's read-only, so we change it via _value
-        self.position._value = self._position
-        self.position.notify(self.position.value)
 
     @abstractmethod
     @isasync
