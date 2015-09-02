@@ -110,9 +110,11 @@ class FoldPanelBar(wx.Panel):
         return item
 
     def Refresh(self, *args, **kwargs):
+        self.Freeze()
         wx.Panel.Refresh(self, *args, **kwargs)
-        self.Parent.Layout()
+        # self.Parent.Layout()
         self.Parent.FitInside()
+        self.Thaw()
 
 
 class FoldPanelItem(wx.Panel):
@@ -184,7 +186,6 @@ class FoldPanelItem(wx.Panel):
         """ Refresh the ScrolledWindow grandparent, so it and all it's
         children will get the appropriate size
         """
-        # wx.Panel.Refresh(self, *args, **kwargs)
         self.Parent.Refresh()
 
     ##############################

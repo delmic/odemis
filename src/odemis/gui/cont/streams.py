@@ -1284,9 +1284,6 @@ class StreamBarController(object):
         if not view or self.ignore_view:
             return
 
-        # Freeze and Thaw to reduce flicker on Windows
-        self._stream_bar.Freeze()
-
         # hide/show the stream panels which are compatible with the view
         allowed_classes = view.stream_classes
         for e in self._stream_bar.stream_panels:
@@ -1300,8 +1297,6 @@ class StreamBarController(object):
 
         for e in self._stream_bar.stream_panels:
             e.set_visible(e.stream in visible_streams)
-
-        self._stream_bar.Thaw()
 
     def _onStreamUpdate(self, stream, updated):
         """
