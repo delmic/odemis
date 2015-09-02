@@ -20,6 +20,7 @@
     Odemis. If not, see http://www.gnu.org/licenses/.
 """
 from __future__ import division
+import os
 from odemis.gui.img.data import getarr_rightBitmap, getarr_downBitmap
 from odemis.util.conversion import change_brightness, wxcol_to_frgb
 import wx
@@ -183,7 +184,7 @@ class FoldPanelItem(wx.Panel):
         """ Refresh the ScrolledWindow grandparent, so it and all it's
         children will get the appropriate size
         """
-        wx.Panel.Refresh(self, *args, **kwargs)
+        # wx.Panel.Refresh(self, *args, **kwargs)
         self.Parent.Refresh()
 
     ##############################
@@ -255,6 +256,11 @@ class CaptionBar(wx.Window):
         wx.Window.__init__(self, parent, wx.ID_ANY, pos=(0, 0),
                            size=CAPTION_BAR_SIZE, style=wx.NO_BORDER)
 
+        if os.name == "nt":
+            # Avoids flickering on windows, but prevents black background on Linux...
+            # Confirmed: If this statement is not present, there is flickering on MS Windows
+            self.SetBackgroundStyle(wx.BG_STYLE_CUSTOM)
+
         self._collapsed = collapsed  # The current state of the CaptionBar
         self._caption = caption
         self._mouse_hovering = False
@@ -301,6 +307,7 @@ class CaptionBar(wx.Window):
         """ Handle the ``wx.EVT_PAINT`` event for L{CaptionBar} """
 
         dc = wx.PaintDC(self)
+
         win_rect = self.GetRect()
 
         dc.SetPen(wx.TRANSPARENT_PEN)
