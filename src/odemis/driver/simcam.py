@@ -133,7 +133,6 @@ class Camera(model.DigitalCamera):
     def _stop_generate(self):
         if self._generator is not None:
             self._generator.cancel()
-            self._generator.join(10)
             self._generator = None
 
     def _generate(self):
@@ -141,11 +140,12 @@ class Camera(model.DigitalCamera):
         Generates the fake output based on the translation, resolution and
         current drift.
         """
+        timer = self._generator  # might be replaced by None afterwards, so keep a copy
         metadata = dict(self._img.metadata)
         metadata.update(self._metadata)
 
         # update fake output metadata
-        exp = self._generator.period
+        exp = timer.period
         metadata[model.MD_ACQ_DATE] = time.time() - exp
         metadata[model.MD_EXP_TIME] = exp
 
@@ -164,7 +164,7 @@ class Camera(model.DigitalCamera):
         self.data.notify(img)
 
         # simulate exposure time
-        self._generator.period = self.exposureTime.value
+        timer.period = self.exposureTime.value
 
 
 class SimpleDataFlow(model.DataFlow):
