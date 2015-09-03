@@ -43,7 +43,8 @@ import time
 
 
 class NewFocusError(Exception):
-    def __init__(self, errno, strerror):
+    def __init__(self, errno, strerror, *args, **kwargs):
+        super(NewFocusError, self).__init__(errno, strerror, *args, **kwargs)
         self.args = (errno, strerror)
         self.errno = errno
         self.strerror = strerror

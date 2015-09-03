@@ -56,7 +56,8 @@ import weakref
 #8 Mono8 -> error code 19
 #9 Mono32
 class ATError(Exception):
-    def __init__(self, errno, strerror):
+    def __init__(self, errno, strerror, *args, **kwargs):
+        super(ATError, self).__init__(errno, strerror, *args, **kwargs)
         self.args = (errno, strerror)
         self.errno = errno
         self.strerror = strerror

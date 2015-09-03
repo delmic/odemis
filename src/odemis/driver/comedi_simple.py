@@ -33,7 +33,8 @@ import inspect
 import logging
 
 class ComediError(Exception):
-    def __init__(self, msg, errno, strerror):
+    def __init__(self, msg, errno, strerror, *args, **kwargs):
+        super(ComediError, self).__init__(msg, errno, strerror, *args, **kwargs)
         self.args = (msg, errno, strerror)
         self.errno = errno
         self.strerror = strerror

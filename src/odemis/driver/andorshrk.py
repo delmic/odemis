@@ -70,7 +70,8 @@ ERRORLENGTH = 64
 
 
 class ShamrockError(Exception):
-    def __init__(self, errno, strerror):
+    def __init__(self, errno, strerror, *args, **kwargs):
+        super(ShamrockError, self).__init__(errno, strerror, *args, **kwargs)
         self.args = (errno, strerror)
         self.errno = errno
         self.strerror = strerror
