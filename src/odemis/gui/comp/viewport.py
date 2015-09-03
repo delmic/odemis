@@ -208,6 +208,11 @@ class ViewPort(wx.Panel):
         self.canvas.Enable(*args, **kwargs)
 
 
+class CameraViewport(ViewPort):
+    """ Simple viewport for displaying a video feed, with any added parameters """
+    canvas_class = miccanvas.BitmapCanvas
+
+
 class MicroscopeViewport(ViewPort):
     """ A panel that shows a microscope view and its legend(s)
 
@@ -489,10 +494,7 @@ class MicroscopeViewport(ViewPort):
 
 
 class OverviewViewport(MicroscopeViewport):
-    """ A Viewport containing a downscaled overview image of the loaded sample
-
-    If a chamber state can be tracked,
-    """
+    """ A Viewport containing a downscaled overview image of the loaded sample """
 
     canvas_class = miccanvas.OverviewCanvas
     bottom_legend_class = InfoLegend

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<resource class="ViewportGrid" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<resource class="LiveViewport" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -327,12 +327,6 @@
         <flag>wxEXPAND</flag>
         <minsize>-1,40</minsize>
       </object>
-      
-      
-      
-      
-      
-      
       <object class="sizeritem">
         <object class="wxPanel" name="pnl_log">
           <object class="wxBoxSizer">
@@ -1994,18 +1988,23 @@
     <bg>#333333</bg>
     <hidden>1</hidden>
     <style>wxWANTS_CHARS</style>
-    <XRCED>
-      <assign_var>1</assign_var>
-    </XRCED>
   </object>
   <object class="wxPanel" name="pnl_tab_sparc_chamber">
     <object class="wxBoxSizer">
-      <orient>wxHORIZONTAL</orient>
       <object class="sizeritem">
         <object class="wxPanel">
           <size>200,-1</size>
           <bg>#333333</bg>
         </object>
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="CameraViewport" name="vp_chamber">
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <option>1</option>
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">
@@ -2016,6 +2015,7 @@
         </object>
         <flag>wxEXPAND</flag>
       </object>
+      <orient>wxHORIZONTAL</orient>
     </object>
     <bg>#333333</bg>
     <hidden>1</hidden>
