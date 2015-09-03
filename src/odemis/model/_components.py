@@ -755,6 +755,16 @@ class Actuator(HwComponent):
         """
         raise NotImplementedError("Actuator doesn't accept referencing")
 
+    @abstractmethod
+    def stop(self, axes=None):
+        """
+        stops the motion on all axes. It returns once the _request_ to stop all
+          axes is sent, but that not necessarily means the axes are not moving
+          anymore (yet).
+        axes (set of str): axes to stop
+        """
+        pass
+
     # helper methods
     def _applyInversionRel(self, shift):
         """
@@ -833,7 +843,6 @@ class Actuator(HwComponent):
         nonref = axes - referenceable
         if nonref:
             raise ValueError("Cannot reference the following axes: %s" % (nonref,))
-
 
 class PowerSupplier(HwComponent):
     """
