@@ -70,12 +70,12 @@ class xrcpnl_tab_secom_align(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_secom_align.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcpnl_tab_secom_align.PreCreate
 
     def __init__(self, parent):
@@ -126,12 +126,12 @@ class xrcpnl_tab_sparc_align(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_sparc_align.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcpnl_tab_sparc_align.PreCreate
 
     def __init__(self, parent):
@@ -177,12 +177,12 @@ class xrcpnl_tab_sparc_chamber(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_sparc_chamber.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcpnl_tab_sparc_chamber.PreCreate
 
     def __init__(self, parent):
@@ -193,6 +193,7 @@ class xrcpnl_tab_sparc_chamber(wx.Panel):
         self.PostCreate(pre)
 
         # Define variables for the controls, bind event handlers
+        self.vp_chamber = xrc.XRCCTRL(self, "vp_chamber")
 
 
 
@@ -200,12 +201,12 @@ class xrcpnl_tab_sparc_acqui(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_sparc_acqui.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcpnl_tab_sparc_acqui.PreCreate
 
     def __init__(self, parent):
@@ -249,12 +250,12 @@ class xrcpnl_tab_inspection(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_inspection.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcpnl_tab_inspection.PreCreate
 
     def __init__(self, parent):
@@ -296,12 +297,12 @@ class xrcpnl_tab_secom_streams(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_secom_streams.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcpnl_tab_secom_streams.PreCreate
 
     def __init__(self, parent):
@@ -400,7 +401,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource class="ViewportGrid" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource class="LiveViewport" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -728,12 +729,6 @@ def __init_resources():
         <flag>wxEXPAND</flag>
         <minsize>-1,40</minsize>
       </object>
-      
-      
-      
-      
-      
-      
       <object class="sizeritem">
         <object class="wxPanel" name="pnl_log">
           <object class="wxBoxSizer">
@@ -2395,18 +2390,23 @@ def __init_resources():
     <bg>#333333</bg>
     <hidden>1</hidden>
     <style>wxWANTS_CHARS</style>
-    <XRCED>
-      <assign_var>1</assign_var>
-    </XRCED>
   </object>
   <object class="wxPanel" name="pnl_tab_sparc_chamber">
     <object class="wxBoxSizer">
-      <orient>wxHORIZONTAL</orient>
       <object class="sizeritem">
         <object class="wxPanel">
           <size>200,-1</size>
           <bg>#333333</bg>
         </object>
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="CameraViewport" name="vp_chamber">
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <option>1</option>
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">
@@ -2417,6 +2417,7 @@ def __init_resources():
         </object>
         <flag>wxEXPAND</flag>
       </object>
+      <orient>wxHORIZONTAL</orient>
     </object>
     <bg>#333333</bg>
     <hidden>1</hidden>
