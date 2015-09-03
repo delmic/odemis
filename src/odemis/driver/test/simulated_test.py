@@ -36,8 +36,8 @@ class LightTest(unittest.TestCase):
         light = simulated.Light("test", "light")
         self.assertGreaterEqual(len(light.spectra.value), 1)
         self.assertGreaterEqual(len(light.shape), 0)
-        light.power.value = 100
-        self.assertEqual(light.power.value, 100)
+        light.power.value = 10
+        self.assertEqual(light.power.value, 10)
 
 class ActuatorTest(object):
     """
