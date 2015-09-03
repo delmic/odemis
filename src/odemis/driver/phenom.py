@@ -1560,7 +1560,7 @@ class ChamberPressure(model.Actuator):
         self.position = model.VigilantAttribute(
                                     {"pressure": self._position},
                                     unit="Pa", readonly=True)
-        logging.debug("Chamber in position: %s", self.position)
+        logging.debug("Chamber in position: %s", self._position)
 
         # Start dedicated connection for api calls during the change of pressure state
         # The main purpose is to avoid collisions with the calls from the Time updater
@@ -1631,7 +1631,7 @@ class ChamberPressure(model.Actuator):
         # it's read-only, so we change it via _value
         self.position._value = {"pressure": self._position}
         self.position.notify(self.position.value)
-        logging.debug("Chamber in position: %s", self.position)
+        logging.debug("Chamber in position: %s", self._position)
 
     def _updateSampleHolder(self):
         """
