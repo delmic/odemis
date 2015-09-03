@@ -277,7 +277,9 @@ class PMTControl(model.PowerSupplier):
             logging.info("Power cycling the relay for %f s", relay_cycle)
             self.setRelay(False)
             time.sleep(relay_cycle)
-        # self.setRelay(True)
+        # Reset if no components provided
+        if not components:
+            self.setRelay(True)
 
     def stop(self, components=None):
         # Empty the queue for the given components
