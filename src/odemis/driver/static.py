@@ -158,6 +158,9 @@ class LightFilter(model.Actuator):
             raise ValueError("Unsupported position %s" % pos)
         return model.InstantaneousFuture()
 
+    def stop(self, axes=None):
+        pass  # nothing to stop
+
 
 class Spectrograph(model.Actuator):
     """
