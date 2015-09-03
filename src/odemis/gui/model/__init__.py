@@ -879,7 +879,10 @@ class StreamView(View):
         """
         Called whenever a stage move is completed
         """
-        pass # only used in the children classes
+        ex = f.exception()
+        if ex:
+            # TODO: make it warning once it doesn't automatically pops up the panel
+            logging.info("Stage move failed: %s", ex)
 
     def getStreams(self):
         """
@@ -997,7 +1000,7 @@ class MicroscopeView(StreamView):
         """
         Called whenever a stage move is completed
         """
-
+        super(MicroscopeView, self)._on_stage_move_done(f)
         self._on_stage_pos(self.stage_pos.value)
 
 class ContentView(StreamView):
