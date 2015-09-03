@@ -269,6 +269,7 @@ class HwComponent(Component):
         # if PowerSupplier available then create powerSupply VA by copying the
         # corresponding value of the position VA of the PowerSupplier.
         if self._psu:
+            logging.debug("Component %s creates powerSupply VA", name)
             self.powerSupply = _vattributes.BooleanVA(self._psu.position.value[name], setter=self._setPowerSupply)
             self._psu.position.subscribe(self._onPosition)
 
