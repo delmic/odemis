@@ -201,6 +201,20 @@ class Tab(object):
             self.button.notify(False)
             self.notification = False
 
+    def make_default(self):
+        """ Try and make the current tab the default
+
+        This will only work when no tab has been set.
+
+        """
+
+        if not self.tab_data_model.main.tab.value:
+            # Use the '_value' attribute, because the tab choices might not have been set yet
+            self.tab_data_model.main.tab._value = self
+        else:
+            logging.warn("Could not make the '%s' tab default, '%s' already is.",
+                         self, self.tab_data_model.main.tab.value.name)
+
 
 class SecomStreamsTab(Tab):
     def __init__(self, name, button, panel, main_frame, main_data):
@@ -802,6 +816,9 @@ class ChamberTab(Tab):
 
         tab_data = guimod.ChamberGUIData(main_data)
         super(ChamberTab, self).__init__(name, button, panel, main_frame, tab_data)
+
+        # Perfom tests to determine if the chamber tab should be opened on launch
+        self.make_default()
 
 
 class AnalysisTab(Tab):
@@ -2048,28 +2065,29 @@ class TabBarController(object):
 
         """
         self.main_frame = main_frame
-        self._tab = main_data.tab  # VA that we take care of
+        self._tabs = main_data.tab  # VA that we take care of
         self.main_data = main_data
 
         # create all the tabs that fit the microscope role
-        tab_list = self._create_needed_tabs(tab_defs, main_frame, main_data)
+        tab_list, default_tab = self._create_needed_tabs(tab_defs, main_frame, main_data)
 
         if not tab_list:
             msg = "No interface known for microscope %s" % main_data.role
             raise LookupError(msg)
 
         for tab in tab_list:
-            tab.button.Bind(wx.EVT_BUTTON, self.OnClick)
+            tab.button.Bind(wx.EVT_BUTTON, self.on_click)
 
         # Enumerated VA is picky and wants to have choices/value fitting
         # To bootstrap, we set the new value without check
-        self._tab._value = tab_list[0]
+        if not self._tabs.value:
+            self._tabs._value = default_tab or tab_list[0]
         # Choices is a dict tab -> name of the tab
         choices = {t: t.name for t in tab_list}
-        self._tab.choices = choices
-        self._tab.subscribe(self._on_tab_change)
+        self._tabs.choices = choices
+        self._tabs.subscribe(self._on_tab_change)
         # force the switch to the first tab
-        self._tab.notify(self._tab.value)
+        self._tabs.notify(self._tabs.value)
 
         # IMPORTANT NOTE:
         #
@@ -2083,44 +2101,59 @@ class TabBarController(object):
 
         self.main_data.is_acquiring.subscribe(self.on_acquisition)
 
+    def open_tab(self, tab_name):
+        for tab in self._tabs.choices:
+            if tab.name == tab_name:
+                self._tabs.value = tab
+                break
+        else:
+            logging.warn("Could not open tab '%s", tab_name)
+
     def on_acquisition(self, is_acquiring):
-        for tab in self._tab.choices:
+        for tab in self._tabs.choices:
             tab.button.Enable(not is_acquiring)
 
     def _create_needed_tabs(self, tab_defs, main_frame, main_data):
         """ Create the tabs needed by the current microscope
 
-        Tabs that are not wanted or needed will be removed from the list and
-        the associated buttons will be hidden in the user interface.
+        Tabs that are not wanted or needed will be removed from the list and the associated
+        buttons will be hidden in the user interface.
+
         returns (list of Tabs): all the compatible tabs
+
         """
+
         role = main_data.role
-        logging.debug("Creating tabs belonging to the '%s' interface",
-                      role or "no backend")
+        logging.debug("Creating tabs belonging to the '%s' interface", role or "no backend")
 
         tabs = []  # Tabs
         main_sizer = main_frame.GetSizer()
         index = 1
+        default_tab = None
 
-        for troles, tname, tclass, tbtn, tpnl in tab_defs:
-            if role in troles:
-                tpnl = tpnl(self.main_frame)
+        for tab_def in tab_defs:
+            if role in tab_def["roles"]:
+
+                tpnl = tab_def["panel"](self.main_frame)
                 main_sizer.Insert(index, tpnl, flag=wx.EXPAND, proportion=1)
                 index += 1
-                tab = tclass(tname, tbtn, tpnl, main_frame, main_data)
-                tab.set_label(troles[role])
+                tab = tab_def["controller"](tab_def["name"], tab_def["button"], tpnl, main_frame,
+                                            main_data)
+                tab.set_label(tab_def["roles"][role].get("label", tab_def["label"]))
+                if tab_def["roles"][role].get("default", False):
+                    default_tab = tab
                 tabs.append(tab)
             else:
-                tbtn.Hide()  # Hide the tab button
+                tab_def["button"].Hide()  # Hide the tab button
 
-        return tabs
+        return tabs, default_tab
 
     def _on_tab_change(self, tab):
         """ This method is called when the current tab has changed """
 
         try:
             self.main_frame.Freeze()
-            for t in self._tab.choices:
+            for t in self._tabs.choices:
                 if t.IsShown():
                     t.Hide()
         finally:
@@ -2132,13 +2165,12 @@ class TabBarController(object):
         self.main_frame.Layout()
 
     def terminate(self):
-        """
-        Terminate each tab (i.e.,indicate they are not used anymore)
-        """
-        for t in self._tab.choices:
+        """ Terminate each tab (i.e.,indicate they are not used anymore)CameraViewport """
+
+        for t in self._tabs.choices:
             t.terminate()
 
-    def OnClick(self, evt):
+    def on_click(self, evt):
 
         # if .value:
         #     logging.warn("Acquisition in progress, tabs frozen")
@@ -2150,13 +2182,12 @@ class TabBarController(object):
         logging.debug("Tab button click")
 
         evt_btn = evt.GetEventObject()
-        for t in self._tab.choices:
+        for t in self._tabs.choices:
             if evt_btn == t.button:
-                self._tab.value = t
+                self._tabs.value = t
                 break
         else:
-            logging.warning("Couldn't find the tab associated to the button %s",
-                            evt_btn)
+            logging.warning("Couldn't find the tab associated to the button %s", evt_btn)
 
         evt.Skip()
 
