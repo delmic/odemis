@@ -807,7 +807,7 @@ class StreamView(View):
         # positive == opt lens goes up == closer from the sample
         # k is a magical constant that allows to ensure a small move has a small
         # effect, and a big move has a significant effect.
-        k = 5e-3  # 1/px
+        k = 50e-3  # 1/px
         val = dof * k * shift  # m
         assert(abs(val) < 0.01)  # a move of 1 cm is a clear sign of bug
         self._focus_queue.put((focuser, val))
