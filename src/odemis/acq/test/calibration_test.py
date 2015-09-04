@@ -100,19 +100,23 @@ class TestAR(unittest.TestCase):
 
         full_data = [data1, calib, data2]
 
-        for fmt in dataio.get_available_formats():
+        for fmt in dataio.get_available_formats(os.O_WRONLY):
             exporter = dataio.get_converter(fmt)
             logging.info("Trying to export/import with %s", fmt)
             fn = u"test_ar" + exporter.EXTENSIONS[0]
             exporter.export(fn, full_data, thumb)
 
-            idata = exporter.read_data(fn)
-            icalib = calibration.get_ar_data(idata)
-            icalib2d = img.ensure2DImage(icalib)
-            numpy.testing.assert_equal(icalib2d, calib)
-            numpy.testing.assert_almost_equal(icalib.metadata[model.MD_AR_POLE],
-                                              calib.metadata[model.MD_AR_POLE])
-            os.remove(fn)
+            if fmt in dataio.get_available_formats(os.O_RDONLY):
+                idata = exporter.read_data(fn)
+                icalib = calibration.get_ar_data(idata)
+                icalib2d = img.ensure2DImage(icalib)
+                numpy.testing.assert_equal(icalib2d, calib)
+                numpy.testing.assert_almost_equal(icalib.metadata[model.MD_AR_POLE],
+                                                  calib.metadata[model.MD_AR_POLE])
+            try:
+                os.remove(fn)
+            except OSError:
+                logging.exception("Failed to delete the file %s", fn)
 
 
 class TestSpectrum(unittest.TestCase):
@@ -204,7 +208,7 @@ class TestSpectrum(unittest.TestCase):
         full_coef = [data1, calib, data2]
         full_bckg = [data1, bckg, data2]
 
-        for fmt in dataio.get_available_formats():
+        for fmt in dataio.get_available_formats(os.O_WRONLY):
             exporter = dataio.get_converter(fmt)
             logging.info("Trying to export/import with %s", fmt)
             fn_coef = u"test_spec" + exporter.EXTENSIONS[0]
@@ -212,19 +216,25 @@ class TestSpectrum(unittest.TestCase):
             fn_bckg = u"test_bckg" + exporter.EXTENSIONS[0]
             exporter.export(fn_bckg, full_bckg, thumb)
 
-            data_bckg = exporter.read_data(fn_bckg)
-            ibckg = calibration.get_spectrum_data(data_bckg)
-            data_coef = exporter.read_data(fn_coef)
-            icoef = calibration.get_spectrum_efficiency(data_coef)
-            numpy.testing.assert_equal(icoef, calib)
-            numpy.testing.assert_almost_equal(icoef.metadata[model.MD_WL_LIST],
-                                              calib.metadata[model.MD_WL_LIST])
-            numpy.testing.assert_equal(ibckg, bckg)
-            numpy.testing.assert_almost_equal(ibckg.metadata[model.MD_WL_LIST],
-                                              bckg.metadata[model.MD_WL_LIST])
-            os.remove(fn_coef)
-            os.remove(fn_bckg)
-
+            if fmt in dataio.get_available_formats(os.O_RDONLY):
+                data_bckg = exporter.read_data(fn_bckg)
+                ibckg = calibration.get_spectrum_data(data_bckg)
+                data_coef = exporter.read_data(fn_coef)
+                icoef = calibration.get_spectrum_efficiency(data_coef)
+                numpy.testing.assert_equal(icoef, calib)
+                numpy.testing.assert_almost_equal(icoef.metadata[model.MD_WL_LIST],
+                                                  calib.metadata[model.MD_WL_LIST])
+                numpy.testing.assert_equal(ibckg, bckg)
+                numpy.testing.assert_almost_equal(ibckg.metadata[model.MD_WL_LIST],
+                                                  bckg.metadata[model.MD_WL_LIST])
+            try:
+                os.remove(fn_coef)
+            except OSError:
+                logging.exception("Failed to delete the file %s", fn_coef)
+            try:
+                os.remove(fn_bckg)
+            except OSError:
+                logging.exception("Failed to delete the file %s", fn_bckg)
 
     def test_compensate(self):
         """Test applying efficiency compensation"""
