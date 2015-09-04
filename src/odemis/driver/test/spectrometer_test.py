@@ -32,14 +32,18 @@ import unittest
 
 logging.getLogger().setLevel(logging.DEBUG)
 
+# Export TEST_NOHW=1 to force using only the simulator and skipping test cases
+# needing real hardware
+TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
+
 if os.name == "nt":
     PORT_SPG = "COM1"
 else:
     PORT_SPG = "/dev/ttySP"
 
 # Simulated device
-CLASS_SPG = spectrapro.FakeSpectraPro # use FakeSpectraPro for simulated
-CLASS_SPG_SIM = spectrapro.FakeSpectraPro # should always be the simulated version
+CLASS_SPG = spectrapro.SpectraPro
+CLASS_SPG_SIM = spectrapro.FakeSpectraPro
 KWARGS_SPG = {"name": "spg", "role": "spectrograph", "port": PORT_SPG}
 
 # Real device: PI PIXIS
@@ -49,7 +53,9 @@ KWARGS_CCD = {"name": "pixis", "role": "ccd", "device": 0}
 CLASS_CCD_SIM = andorcam2.FakeAndorCam2
 KWARGS_CCD_SIM = {"name": "simcam", "role": "ccd", "device": 0}
 
-CLASS_CCD = CLASS_CCD_SIM # full test simulated
+if TEST_NOHW:
+    CLASS_SPG = CLASS_SPG_SIM
+    CLASS_CCD = CLASS_CCD_SIM
 
 CLASS = spectrometer.CompositedSpectrometer
 
@@ -60,7 +66,8 @@ class TestSimulated(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.detector = CLASS_CCD_SIM(**KWARGS_CCD_SIM)
-        cls.spectrograph = CLASS_SPG_SIM(**KWARGS_SPG)
+        cls.spectrograph = CLASS_SPG_SIM(children={"ccd": cls.detector},
+                                         **KWARGS_SPG)
         cls.spectrometer = CLASS(name="test", role="spectrometer",
                                  children={"detector": cls.detector,
                                            "spectrograph": cls.spectrograph})
@@ -130,7 +137,8 @@ class TestCompositedSpectrometer(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.detector = CLASS_CCD(**KWARGS_CCD)
-        cls.spectrograph = CLASS_SPG(**KWARGS_SPG)
+        cls.spectrograph = CLASS_SPG(children={"ccd": cls.detector},
+                                     **KWARGS_SPG)
         cls.spectrometer = CLASS(name="test", role="spectrometer",
                                  children={"detector": cls.detector,
                                            "spectrograph": cls.spectrograph})
@@ -286,7 +294,7 @@ class TestCompositedSpectrometer(unittest.TestCase):
         """
         Check that the calibration of the wavelength make _some_ sense
         It's not expected that the calibration is correct, but it should be at
-        least some how logical.
+        least somehow logical.
         """
         # the wavelength bandwidth across the CCD should be pretty much constant
         # independent of the resolution (not exactly, as the wavelength is for
@@ -303,27 +311,18 @@ class TestCompositedSpectrometer(unittest.TestCase):
         
         # read calibration
         data = self.spectrometer.data.get()
-        pn = data.metadata[model.MD_WL_POLYNOMIAL]
-        if len(pn) <= 1:
-            logging.warning("Wavelength polynomial is of very low quality: length = %d", len(pn))
+        wl = data.metadata[model.MD_WL_LIST]
+        self.assertEqual(len(wl), res[0])
         # pixel 0 to pixel N +1 => whole CCD
-        wl_bw_max_res =  polynomial.polyval(res[0], pn) - polynomial.polyval(0, pn)
-        cwl_max_res = (polynomial.polyval(0, pn) + polynomial.polyval(res[0]-1, pn)) / 2
-        logging.info("Wl bw = %f nm, center = %f nm", 
-                     wl_bw_max_res * 1e9, cwl_max_res * 1e9)
-        
-        cwl_max_res_s = (polynomial.polyval(res[0]//2, pn) + 
-                         polynomial.polyval(math.ceil(res[0]/2), pn)) / 2
         
         # do they make any sense?
+        cwl = wl[res[0] // 2]
         # should be a monotonic function
-        self.assertTrue(cwl_max_res / 1.1 < cwl_max_res_s and cwl_max_res_s < cwl_max_res * 1.1)
-        # centre wavelength should about (~30%) the same as the wavelength position
-        exp_cwl = self.spectrograph.position.value["wavelength"] 
-        self.assertTrue(exp_cwl / 1.3 < cwl_max_res and cwl_max_res < exp_cwl * 1.3)
         # never heard of bandwidth higher than a few 1000 nm
-        self.assertGreater(wl_bw_max_res, 0)
-        self.assertLess(wl_bw_max_res, 10000e-9)
+        self.assertTrue(0 < wl[0] < cwl < wl[-1] < 10000e-9)
+        # centre wavelength should about (~20 nm) the same as the wavelength position
+        exp_cwl = self.spectrograph.position.value["wavelength"]
+        self.assertAlmostEqual(cwl, exp_cwl, delta=20e-9)
         
         # 8 times smaller resolution
         binning = (min(binning[0] * 8, self.spectrometer.binning.range[1][0]),
@@ -333,14 +332,19 @@ class TestCompositedSpectrometer(unittest.TestCase):
         
         # read calibration
         data = self.spectrometer.data.get()
-        pn = data.metadata[model.MD_WL_POLYNOMIAL]
+        wl = data.metadata[model.MD_WL_LIST]
+        self.assertEqual(len(wl), res[0])
         # pixel 0 to pixel N +1 => whole CCD
-        wl_bw_low_res = polynomial.polyval(res[0], pn) - polynomial.polyval(0, pn)
-        cwl_low_res = (polynomial.polyval(0, pn) + polynomial.polyval(res[0]-1, pn)) / 2
         
-        self.assertAlmostEqual(wl_bw_low_res, wl_bw_max_res, 2)
-        self.assertAlmostEqual(cwl_low_res, cwl_max_res)
-        
+        # do they make any sense?
+        cwl = wl[res[0] // 2]
+        # should be a monotonic function
+        # never heard of bandwidth higher than a few 1000 nm
+        self.assertTrue(0 < wl[0] < cwl < wl[-1] < 10000e-9)
+        # centre wavelength should about (~20 nm) the same as the wavelength position
+        exp_cwl = self.spectrograph.position.value["wavelength"]
+        self.assertAlmostEqual(cwl, exp_cwl, delta=20e-9)
+
     def _select_grating(self, gdensity):
         """
         Selects a grating according to its groove density
@@ -374,8 +378,8 @@ class TestCompositedSpectrometer(unittest.TestCase):
         f.result() # wait for the position to be set
         
         data = self.spectrometer.data.get()
-        pn = data.metadata[model.MD_WL_POLYNOMIAL]
-        wl_bw = polynomial.polyval(res[0], pn) - polynomial.polyval(0, pn)
+        wl = data.metadata[model.MD_WL_LIST]
+        wl_bw = wl[-1] - wl[0]
         logging.debug("Got CCD coverage = %f nm", wl_bw * 1e9)
         self.assertAlmostEqual(wl_bw, 278e-9, 2)
         
@@ -386,8 +390,8 @@ class TestCompositedSpectrometer(unittest.TestCase):
         f.result() # wait for the position to be set
         
         data = self.spectrometer.data.get()
-        pn = data.metadata[model.MD_WL_POLYNOMIAL]
-        wl_bw = polynomial.polyval(res[0], pn) - polynomial.polyval(0, pn)
+        wl = data.metadata[model.MD_WL_LIST]
+        wl_bw = wl[-1] - wl[0]
         logging.debug("Got CCD coverage = %f nm", wl_bw * 1e9)
         self.assertAlmostEqual(wl_bw, 48e-9, 2)
         
