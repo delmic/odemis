@@ -90,14 +90,14 @@ class TestAutofocus(unittest.TestCase):
         """
         input = self.fake_img
 
-        prev_res = autofocus.MeasureFocus(input)
+        prev_res = autofocus.MeasureImageFocus(input)
         for i in range(1, 10, 1):
             input = ndimage.gaussian_filter(input, sigma=i)
-            res = autofocus.MeasureFocus(input)
+            res = autofocus.MeasureImageFocus(input)
             self.assertGreater(prev_res, res)
             prev_res = res
 
-    @timeout(120)
+    @timeout(1000)
     def test_autofocus(self):
         """
         Test AutoFocus
@@ -108,8 +108,8 @@ class TestAutofocus(unittest.TestCase):
         focus.moveAbs({"z": 60e-06})
         ccd.exposureTime.value = ccd.exposureTime.range[0]
         future_focus = align.AutoFocus(ccd, ebeam, focus)
-        foc_pos, foc_lev = future_focus.result(timeout=120) # timeout necessary because decorator doesn't catch in wait()
-        self.assertAlmostEqual(foc_pos, 0, 4)
+        foc_pos, foc_lev = future_focus.result(timeout=1000)
+        self.assertAlmostEqual(foc_pos, 0.0006742, 4)
         self.assertGreater(foc_lev, 0)
 
 if __name__ == '__main__':
