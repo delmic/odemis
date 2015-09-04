@@ -35,6 +35,10 @@ logging.getLogger().setLevel(logging.DEBUG)
 # _frm = "%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s"
 # logging.getLogger().handlers[0].setFormatter(logging.Formatter(_frm))
 
+# Export TEST_NOHW=1 to force using only the simulator and skipping test cases
+# needing real hardware
+TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
+
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 DELPHI_CONFIG = CONFIG_PATH + "sim/delphi-sim.odm.yaml"
 
@@ -118,7 +122,7 @@ class TestCalibration(unittest.TestCase):
 
         self.assertRaises(IOError, delphi.FindCircleCenter, data[0], 0.02032, 3)
 
-    @unittest.skip("requires hw")
+if not TEST_NOHW:
     def test_hole_detection(self):
         """
         Test HoleDetection
@@ -146,7 +150,7 @@ class TestCalibration(unittest.TestCase):
         numpy.testing.assert_almost_equal(updated_offset, (0.5, 0))
         numpy.testing.assert_almost_equal(updated_rotation, 0)
 
-    @unittest.skip("requires hw")
+if not TEST_NOHW:
     def test_rotation_calculation(self):
         """
         Test RotationAndScaling
@@ -160,7 +164,7 @@ class TestCalibration(unittest.TestCase):
         f = delphi.RotationAndScaling(ccd, detector, escan, sem_stage, opt_stage, focus, (1e-06, 1e-06))
         rotation, scaling = f.result()
 
-    @unittest.skip("requires hw")
+if not TEST_NOHW:
     def test_align_offset(self):
         """
         Test AlignAndOffset
@@ -174,7 +178,7 @@ class TestCalibration(unittest.TestCase):
         f = delphi.AlignAndOffset(ccd, detector, escan, sem_stage, opt_stage, focus)
         offset = f.result()
 
-    @unittest.skip("requires hw")
+if not TEST_NOHW:
     def test_update_conversion(self):
         """
         Test UpdateConversion
@@ -191,7 +195,7 @@ class TestCalibration(unittest.TestCase):
                                     focus, combined_stage, True)
         first_hole, second_hole, hole_focus, offset, rotation, scaling = f.result()
 
-    @unittest.skip("unused method")
+if not TEST_NOHW:
     def test_scan_pattern(self):
         """
         Test PatternDetection
