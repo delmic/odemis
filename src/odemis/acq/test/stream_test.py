@@ -272,9 +272,10 @@ class StreamTestCase(unittest.TestCase):
         self.assertEqual((ir[0][0], ir[1][1]), (0, (2 ** 8) - 1))
 
         # Send a 16 bit image with 16 BPP =>
-        #  * The intensity range should update to 16-bit
+        #  * The intensity range should adapt to the actual data (rounded)
         #  * The histogram should stay not too long (<=1024 values)
-        d = numpy.zeros(ebeam.shape[::-1], "uint16")
+        d = numpy.zeros(ebeam.shape[::-1], "uint16") + 1
+        d[1] = 1561  # Next power of 2 is 2**11
         md = {model.MD_BPP: 16,
                     model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
                     model.MD_POS: (1e-3, -30e-3), # m
@@ -287,7 +288,7 @@ class StreamTestCase(unittest.TestCase):
         h = ss.histogram.value
         ir = ss.intensityRange.range
         self.assertLessEqual(len(h), 1024)
-        self.assertEqual((ir[0][0], ir[1][1]), (0, (2 ** 16) - 1))
+        self.assertEqual((ir[0][0], ir[1][1]), (0, 2048 - 1))
 
         # Send a 16 bit image with 12 BPP =>
         #  * The intensity range should update to 12-bit

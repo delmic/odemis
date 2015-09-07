@@ -23,22 +23,16 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import Image
-import libtiff
 import logging
 import numpy
 from numpy.polynomial import polynomial
 from odemis import model, dataio
-import odemis
 from odemis.dataio import stiff, tiff
 from odemis.util import img
 import os
-import re
 import time
 import unittest
 from unittest.case import skip
-
-import libtiff.libtiff_ctypes as T  # for the constant names
-import xml.etree.ElementTree as ET
 
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -646,12 +640,6 @@ class TestTiffIO(unittest.TestCase):
                 self.assertAlmostEqual(im.metadata.get(model.MD_ROTATION, 0), md.get(model.MD_ROTATION, 0))
                 self.assertAlmostEqual(im.metadata.get(model.MD_SHEAR, 0), md.get(model.MD_SHEAR, 0))
 
-def rational2float(rational):
-    """
-    Converts a rational number (from libtiff) to a float
-    rational (numpy array of shape 1 with numer and denom fields): num,denom
-    """
-    return rational["numer"][0]/rational["denom"][0]
 
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']

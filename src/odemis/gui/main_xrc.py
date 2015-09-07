@@ -70,12 +70,12 @@ class xrcpnl_tab_secom_align(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_secom_align.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcpnl_tab_secom_align.PreCreate
 
     def __init__(self, parent):
@@ -126,12 +126,12 @@ class xrcpnl_tab_sparc_align(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_sparc_align.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcpnl_tab_sparc_align.PreCreate
 
     def __init__(self, parent):
@@ -177,12 +177,12 @@ class xrcpnl_tab_sparc_chamber(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_sparc_chamber.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcpnl_tab_sparc_chamber.PreCreate
 
     def __init__(self, parent):
@@ -193,6 +193,8 @@ class xrcpnl_tab_sparc_chamber(wx.Panel):
         self.PostCreate(pre)
 
         # Define variables for the controls, bind event handlers
+        self.btn_park_mirror = xrc.XRCCTRL(self, "btn_park_mirror")
+        self.vp_chamber = xrc.XRCCTRL(self, "vp_chamber")
 
 
 
@@ -200,12 +202,12 @@ class xrcpnl_tab_sparc_acqui(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_sparc_acqui.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcpnl_tab_sparc_acqui.PreCreate
 
     def __init__(self, parent):
@@ -249,12 +251,12 @@ class xrcpnl_tab_inspection(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_inspection.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcpnl_tab_inspection.PreCreate
 
     def __init__(self, parent):
@@ -296,12 +298,12 @@ class xrcpnl_tab_secom_streams(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_secom_streams.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcpnl_tab_secom_streams.PreCreate
 
     def __init__(self, parent):
@@ -400,7 +402,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource class="ViewportGrid" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -728,12 +730,6 @@ def __init_resources():
         <flag>wxEXPAND</flag>
         <minsize>-1,40</minsize>
       </object>
-      
-      
-      
-      
-      
-      
       <object class="sizeritem">
         <object class="wxPanel" name="pnl_log">
           <object class="wxBoxSizer">
@@ -1533,11 +1529,7 @@ def __init_resources():
       <orient>wxHORIZONTAL</orient>
     </object>
     <bg>#333333</bg>
-    <hidden>1</hidden>
     <style>wxWANTS_CHARS</style>
-    <XRCED>
-      <assign_var>1</assign_var>
-    </XRCED>
   </object>
   <object class="wxPanel" name="pnl_tab_sparc_align">
     <object class="wxBoxSizer">
@@ -2393,20 +2385,41 @@ def __init_resources():
       <orient>wxHORIZONTAL</orient>
     </object>
     <bg>#333333</bg>
-    <hidden>1</hidden>
     <style>wxWANTS_CHARS</style>
-    <XRCED>
-      <assign_var>1</assign_var>
-    </XRCED>
   </object>
   <object class="wxPanel" name="pnl_tab_sparc_chamber">
     <object class="wxBoxSizer">
-      <orient>wxHORIZONTAL</orient>
       <object class="sizeritem">
         <object class="wxPanel">
           <size>200,-1</size>
           <bg>#333333</bg>
+          <object class="wxBoxSizer">
+            <orient>wxVERTICAL</orient>
+            <object class="sizeritem">
+              <object class="ImageTextToggleButton" name="btn_park_mirror">
+                <label>        PARK MIR.</label>
+                <delta>1</delta>
+                <bitmap>img_button_btn_eject_png</bitmap>
+                <hover>img_button_btn_eject_h_png</hover>
+                <selected>img_button_btn_eject_a_png</selected>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALL</flag>
+              <border>10</border>
+            </object>
+          </object>
         </object>
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="CameraViewport" name="vp_chamber">
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <option>1</option>
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">
@@ -2417,12 +2430,16 @@ def __init_resources():
         </object>
         <flag>wxEXPAND</flag>
       </object>
+      <orient>wxHORIZONTAL</orient>
     </object>
     <bg>#333333</bg>
-    <hidden>1</hidden>
-    <XRCED>
-      <assign_var>1</assign_var>
-    </XRCED>
+    <font>
+      <size>11</size>
+      <style>normal</style>
+      <weight>normal</weight>
+      <underlined>0</underlined>
+      <face>Ubuntu</face>
+    </font>
   </object>
   <object class="wxPanel" name="pnl_tab_sparc_acqui">
     <object class="wxBoxSizer">
@@ -2892,10 +2909,6 @@ def __init_resources():
       </object>
     </object>
     <bg>#333333</bg>
-    <hidden>1</hidden>
-    <XRCED>
-      <assign_var>1</assign_var>
-    </XRCED>
   </object>
   <object class="wxPanel" name="pnl_tab_inspection">
     <object class="wxBoxSizer">
@@ -3821,10 +3834,6 @@ def __init_resources():
       <orient>wxHORIZONTAL</orient>
     </object>
     <bg>#333333</bg>
-    <hidden>1</hidden>
-    <XRCED>
-      <assign_var>1</assign_var>
-    </XRCED>
   </object>
   <object class="wxDialog" name="fr_acq">
     <object class="wxFlexGridSizer">
@@ -5068,6 +5077,105 @@ d\x0d\x81\xfb\x85~4\x86\xca\xffa\xa7,~\xd6\x1d\xc7\xf9\xd6\xf3\xbc\x9f\
 \xd8\xc1:}\x02)>Q\xac#c\xf5z\xfd\xbb\x01\x12\x85\xca\xa3\xcf\xfa`\x1a\x00\
 \x00\x00\x00IEND\xaeB`\x82'''
 
+    img_button_btn_eject_png = '''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00n\x00\x00\x000\x08\x06\x00\x00\x00\xf0\
+\xdfO|\x00\x00\x02xIDATx\xda\xed\x9c\xcb\x8a\x1aA\x14\x86\x8fv\xd1v{A\x09\
+\x83\xb8SP\x02\xbat\xad{\xdf$\xbb\xc0,\xb3O\xb2NB`\xc8\xb3\xe8\x0bxA\x10\
+\x04\xaf\xe8\xc2\xed\x04D\xf1~K\x9dJ:\x980\x90d&LU\xc3\xff\xc3\xa1\x8b\xee\
+\xb6\x16\xe7\xe3?}\xda*ZT\xab\xd5\x80\xeb\xba\xaf\x84\x10\xaf\x89\xe8\xa5\
+\x0c\x8b \x13u\x921<\x1e\x8f\x9f6\x9b\xcd\x17q\xb9\\\xdel\xb7\xdbw2h\xbf\
+\xdf\xd3\xf9|F\x8a\x0cT0\x18\xb4l\xdb\xce;\x8es\x27\x99\xbd\x10\xeb\xf5\
+\xfa6\x10\x08(h\x90\xc1v;\x9dH:M\x1d%\xb8[!\xadw\x83\xb4\xf8G\x87\xc3\x81\
+\x0f7\x02\xa5\xd1_\x92nSG\xe1\x0d I \x05>\x05\x07\xc7\x01\x1c\x04p\x10\
+\xc0\x01\x1c\x04p\x10\xc0\x01\x1c\x04p\x90\xc1\xe0\x06\x83\x019\x8eC\xe9\
+t\x1aY\xf4\x0b\xb8\xd5jE\x9dN\x87\xd7\x88(\x99L*\x80\xd03\x83{\xcc\xea@\
+\xbd^\xa7H$\xa2\xc6\x8dF\x83J\xa5\x122i\xba\xe3\x86\xc3\xa1r\\"\x91PK\x0c\
+\xf3\xf9\x9c\xa6\xd3)e2\x19d\xd3Tp\xcb\xe5R=\xdb\xe2\xf18\x09\xf1}a!\x1a\
+\x8dR\xb7\xdbU%\xd3u]d\xd44p|_\xab\xd5\xa2p8L\xa1P\x88x\xbb\x03\x8b\xc7\
+\xbc*\xdbl6\xa9\\.#\xa3\xa6\x81\xeb\xf7\xfb\xb4\xdb\xed\x94\xdb\xb8)\xf1\
+dY\x96\x82\xc9%s<\x1eS6\x9bEVMiN\x16\x8b\x05M&\x13\xf5\\\xf3J\xe4/\x93\xc8\
+s\\2\xb9\x8cr\xc9\xf4\x1a\x17H\xa3\xe3\xf8z\xbb\xddV0l\xdb\xfeY"\xaf\xc5\
+\xe7\xb8d\xb2\xf3\xf8^t\x99\x06\x80\xeb\xf5zjK\x18;\xea\xbaD\xfe.\xbe\xc6\
+\xcd\x09\x97\xcc\xd1hD\xb9\\\x0e\xd9\xd5\x05\x8e!\xccf3U"\xf9Y\xf6\xc7\xc9\
+~\x94L.\xab\\2c\xb1\x182\xac\x03\x1cCK\xa5R\xea\x9f\x91\x87J\xe4Cb\xd7\xf1\
+\xfd\xfc\xdb|>\x8f\x0c\xebhN
+\x85\xc2\x93&\xc7\x9eMM\x8e\xab\xd5j\xcai\xeb\xb6\xeb\x86\x86\xdf\xed\
+*\x95
+2\xac\x03\x1cw\x91\x1c\x8f\x11\xefs\xc7\x92\x91&p\xfc\xbc\xe2\x16\xff_\
+\x1d\xe7u\x99\x00\xa7\x09\\\xb1X|\xd2\xe4\x00\xa7\xf1=\x0e\x028\xe8\xb9\
+^\x07 8\x0e\x028\x08\xe0\xfc\x0c\x0e)\x80\xe3 \x80\x83\x00\x0e\xe0 \x80\
+\x83\xfeKWy/\x03_\x17\xf2\x97\xee\xd9q\x1f\xe4\xe0-r\xe1+}d\xc7\xbd\x97\
+\xf1U\x06>{h\xb6\xd4g\x0fe|\x96q\xf7\x0d\x95\xfe>\xd3\xd9\xf7?\xbf\x00\x00\
+\x00\x00IEND\xaeB`\x82'''
+
+    img_button_btn_eject_h_png = '''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00n\x00\x00\x000\x08\x06\x00\x00\x00\xf0\
+\xdfO|\x00\x00\x02pIDATx\xda\xed\x9bM\xca\xdaP\x14\x86\x8f\xf1\xffw\xa4\
+\x13q\x03\x1d(\x82\xa8Cq7-\x1du\xd8\x05\xb4\xe3v\xd4-8\xd15\xa8\x08BFFc\
+\x8a\x8a.@#F\xf1\x0f5\xda\x9cKm\xc1B[\x27_\x92\xf6\xbd\xf0\x80\xe8ur\x1e\
+\xee{NL\x94dY\xf6(\x8a\xf2ZUU\xcd\xe2bq\x03\x8e\x84\xddh\xec\x8a\x9dI\xb7\
+\xdb\xed\xfd\xe9t\xfab\x18\xc6+]\xd7\xbd\xf3\xf9\x9c\x80\xf3`7\xec\x88]\
+\xb13\xe9x<\xbe;\x1c\x0ed\xbdA\xd7\xeb\x95\xb0\x9c\xb9\xd8\x0d;bW\xecL\xba\
+\\.\xc9\xf3\xf9L\x96E\xe0\x02\xd8\x15;\x93P\x0cw\x02q\x10\x07^T\x1c\xda\
+\xbe;\x17N\x1c\xa2\x12\xbc\xa88\xbe>\x00\xee\x03\x27\x0eQ\x09 \x0e@\x1c\
+\xc4\x81c\xaa\xec\xf7\xfb4\x1e\x8f1\xe1\xb9i\xaa\xdcl6\xd4\xedv\xa9\xd5\
+j\xd1~\xbf\xc7\x09pCT\xb2\xedf\xb3I\x91H\x84B\xa1\x90\x90\x87B\xba@\xdc\
+`0 \xc30(\x1e\x8fS,\x16\x13wgG\xa3\x11\x8a\xe9\xe4\x1e\xb7Z\xad\xa8\xd7\
+\xeb\x09a>\x9f\x8f\xfc~\xbfx-\xcb2m\xb7[\xf4\x1e\x27\xf68\xde\xdcn\xb7)\
+\x1c\x0eS0\x18$\x8f\xc7#\xe0\xd7\x0c"\xd3\xa1Q\xa9(
+\xedv;!N\x92~\xde\x0d\xf2z\xbd\xa2\xdfq|j\x9a\x86\xa2:)*\x97\xcb%\x0d\x87\
+\xc3\x1f\x11\xf9\xb8\xf8=\xfe\x8cct\xbd^#\xca\x9c\x10\x95\xa6iR\xa7\xd3\
+\xa1h4J\x81@@\xc4\xe3\xe3\xbaG&\x9fF\xde\x8b\x13\xe1\x80\xa8\xe4S\xc4\x8f\
+\x85=F\xe4/wd\xad\xcfx\x0f\x0f)\xaa\xaa\xa2\xb8vF\xe5b\xb1\xa0\xc9d"N\x1b\
+\xf7\xb2?\xad{dr\xaf\xe3\x09\x14\x91fST\xcef3\xcad2\x94L&)\x91H\x88k\xb7\
+\xdf\xc1{R\xa9\x14\xa5\xd3i\x9aN\xa78\x19vEe\xa1P\xa0R\xa9D\xb9\\\x8e\xb2\
+\xd9\xec_\xc1{\xcb\xe52\xe5\xf3y\x14\xd8\xae\xa8\xac\xd7\xeb\x82F\xa3\xf1\
+\x14\xfc\x9dZ\xad\x86H\xb3+*\xf9\x97\x11\xbeF\xe3\xa1\xe3\x19\xf8;<\x81\
+\xe2d\xd8\x14\x95,\xe1\xde\xbb\x9e\x85\x07\x1a\x14\xd8\xa6\xa8\xacT*\xa2\
+\xc7\x15\x8b\xc5\xa7\xa9V\xab\x884<\xe5\x05\xf0\xe8\x02\xc4\x01\x88\x03\
+\x10\x87\xa9\x12`\xaa\x04\x88J\x00q\x10\x07\xf0\x1fp,\xfc\x07\xfc?\x88J\
+\x1d\x85p\x1d:\x8b\xfb\x84B\xb8\x8e\xcf\xdc\xe3>Z\xbc\xb1\xf8ja\xa2{8v\x99\
+\xdf\x1d\xbd\xb5\xf8\xf0\x0dB\x18\x16$\x90/\xf9\x1f\x00\x00\x00\x00IEND\
+\xaeB`\x82'''
+
+    img_button_btn_eject_a_png = '''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00n\x00\x00\x000\x08\x06\x00\x00\x00\xf0\
+\xdfO|\x00\x00\x02\x92IDATx\xda\xed\x9bK\x8b\xdaP\x18\x86?\xe3]\xa3F\xad\
+\x88\x97\x80\x88\x08\xdd\xb9\xd1\xdf\xd4\xd2U\x97\xfd\x01\xed\xba]\xf5W\
+\x09\x82\xd0\x01E]x\x05\x057**^\x9a\xf70N\xa9\x85\x8e\xe3b\x92\x0c\xef\x07\
+\x0fDM\\|O\xce{NL\xd4*\x95\x8a\xc7\xe2\x83\xc5/\x8b\x83\xc5\x998\x92\xc3\
+\xa3#\xb8\xf2h^\xaf\xf7\x8b\xae\xeb?3\x99\xcc\xfb|>\xef-\x14
+B\x9c\x07\xdc\xc0\x11\\\xc1\x99f\x18\xc6\xe7r\xb9,\xb5ZM\xea\xf5\xba4\x1a\
+\x0d\xe2@\xe0\x06\x8e\xe0
+\xce4\xd34\xdfU\xabU)\x95J<\xb3\x1d\x0e\x1c\xc1\x15\x9ci\xd9lV\xd2\xe9\
+\xb4\x04\x02\x01\xf1x<r>\x9f\x89\x03\x81\x1b8\x82+8\xd3B\xa1\x90X\x99\xc9\
+\xe6\xb8\x04\xb8\x823MX\xae,%\x8eg\xb2\xbbP\xe2\xd8\x08w\xa2]\x0c\xb2\xdc\
+SJ\x1c\xa3\x92QI^;*\x89\x0b\xc51*\x19\x95\x84QI(\xee-\xcfq\xf7\xd6p8\x94\
+\xd9l\xc6\x0b+;~\xf2\xba\xd7\xf8f\xb3\x91\xc1` \xddnWv\xbb\x1dG\x81\x1b\
+\xa2\xf2t:I\xa7\xd3\x91X,&\xba\xae\xabm6\xd3\x05\xe2F\xa3\x91\x1c\x0e\x87\
+\x27q\xdb\xedV\xa6\xd3)\x1b\xeadq\xeb\xf5ZI\x820\x9f\xcf\x27~\xbf_mc\xbe\
+\x83@6\xd5\x81\x17\xe0\x88H\xcci\xd1hT\x82\xc1\xa0\xba+\x0b\xb0\x1d\x89\
+D\xd4gl\xaa\x03/\xc01\xaaP\xe1pX4\xed\xcf\x82\x14we!\x0e\xf19\x99L\xd8\xdc\
+\xd7\x8aJ\x8c\xa4\xe7X\xadV2\x9f\xcf\x9f"\xf2\xba\xf0\x1e>C\x8cb\xc5y\xcb\
+w\x92\xfb\xb8y\x8e\xc3\xce\xfd~_\x89\xb9<Tt]\x97\xc8D\x8c\xf6z=\x8e
+\x27,N\x10\x91\x88\xc6\xeb\x88\xfc\xe7\xa2\xf0q\x1f\x1c3\x1e\x8f\xd9`;\
+\x17\x27\x88\xc8\xe5r\xa9F\x12\xe6\xb2\xe7\xea\x12\x99\x8b\xc5BE&\x9bl\xd3\
+\xe2\x04\x02R\xa9\x94\x1aI\x90\x02y\xff\x03\xfb`\xa1\x82cp,\x1bmST\x9a\xa6\
+)\xb9\\N\x92\xc9\xa4$\x12\x89\x9b\xc0\xbe8\x06O\xdf\xb2\xc96\x89k\xb5Z\xd2\
+n\xb7\xef\xa2\xd9l\xb2\xc9v\x89\xc3S\xb3\x98\xb3\xee\xe1\xb2P!6\x88C\xf3\
+\xf1\x9bd<\x1e1X\xd0\xb0\xc96\xdd\x8f+\x16\x8bj\xce2\x0c\xe3\xc5\xe0X\x96\
+\xc3\xee\xc7\x11>\xba@\xf8x\x1e/\xc0\x09\xa3\x920*\xc9\xdfQ\xc9r\xe1\xdf\
+\xacx\x063*\x09\xa3\x92\xc5\xa4\xbe\xe1\x11\xb7`3\\\xc7\x02\xe2\xbe3.\xdd\
+\x15\x93\x16?\xb4\xfd~\xff\xedx<~\xb4^<X\x1cy6;\x16\xb8y\xb0\\}\xb2\x9c\
+}\xfd\x0d\x15\xd4\x09*
+\xff-\x0c\x00\x00\x00\x00IEND\xaeB`\x82'''
+
     img_preview_block_png = '''\
 \x89PNG\x0d
 \x1a
@@ -6115,6 +6223,9 @@ Z\xb9A\x04\xc6\x89\x00\x00\x00\x00IEND\xaeB`\x82'''
     wx.MemoryFSHandler.AddFile('XRC/main/img_button_btn_fiber_png', img_button_btn_fiber_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_button_btn_fiber_h_png', img_button_btn_fiber_h_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_button_btn_fiber_a_png', img_button_btn_fiber_a_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_button_btn_eject_png', img_button_btn_eject_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_button_btn_eject_h_png', img_button_btn_eject_h_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_button_btn_eject_a_png', img_button_btn_eject_a_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_preview_block_png', img_preview_block_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_preview_block_a_png', img_preview_block_a_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_button_btn_64x16_png', img_button_btn_64x16_png)

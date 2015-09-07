@@ -128,14 +128,18 @@ import time
 # reporting error 555. In that case, it's possible to do a factory reset with the
 # hidden command (which must be followed by the reconfiguration of the parameters):
 # zzz 100 parameter
-class PIGCSError(Exception):
 
-    def __init__(self, errno):
+
+class PIGCSError(StandardError):
+
+    def __init__(self, errno, *args, **kwargs):
+        # Needed for pickling, cf https://bugs.python.org/issue1692335 (fixed in Python 3.3)
+        StandardError.__init__(self, errno, *args, **kwargs)
         self.errno = errno
-        self.strerror = self._errordict.get(errno, "Unknown error")
 
     def __str__(self):
-        return "PIGCS error %d: %s" % (self.errno, self.strerror)
+        desc = self._errordict.get(self.errno, "Unknown error")
+        return "PIGCS error %d: %s" % (self.errno, desc)
 
     _errordict = {
         0: "No error",
@@ -1626,6 +1630,18 @@ class CLController(Controller):
         """
         assert(axis in self._channels)
         self._acquireEncoder(axis)
+
+        # The controller is normally ready. The only case it's is not ready is
+        # when switching the servo/encoder, but that should be already taken
+        # care by startEncoder().
+        for i in range(100):
+            if self.IsReady():
+                break
+            logging.debug("Controller not yet ready, waiting a bit more")
+            time.sleep(0.01)
+        else:
+            logging.warning("Controller indicates it's still not ready, but will not wait any longer")
+
         self._updateSpeedAccel(axis)
         # We trust the caller that it knows it's in range
         # (worst case the hardware will not go further)
@@ -2346,6 +2362,7 @@ class Bus(model.Actuator):
             except PIGCSError:
                 # If one axis failed, better be safe than sorry: stop the other
                 # ones too.
+                logging.info("Failure during start of move, will cancel all of it.")
                 ctlrs = set(self._axis_to_cc[an][0] for an in moving_axes)
                 for controller in ctlrs:
                     try:
@@ -3095,8 +3112,6 @@ class E861Simulator(object):
         process the command, and put the result in the output buffer
         com (str): command
         """
-        logging.debug("Fake controller %d processing command '%s'",
-                      self._address, com.encode('string_escape'))
         out = None # None means error while decoding command
 
         # command can start with a prefix like "5 0 " or "5 "
@@ -3110,9 +3125,11 @@ class E861Simulator(object):
             prefix = ""
 
         if addr != self._address and addr != 255: # message is for us?
-            logging.debug("Controller %d skipping message for %d",
-                          self._address, addr)
+#             logging.debug("Controller %d skipping message for %d",
+#                           self._address, addr)
             return
+        logging.debug("Fake controller %d processing command '%s'",
+                      self._address, com.encode('string_escape'))
 
         com = m.group("com") # also removes the \n at the end if it's there
         # split into arguments separated by spaces (not including empty strings)

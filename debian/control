@@ -21,30 +21,36 @@ Architecture: any
 Depends: python (>= 2.7.1),
          python-wxgtk3.0,
          python-pkg-resources,
+         python-decorator,
          python-yaml,
          python-serial,
          python-netifaces,
+# PIL is only needed in test cases, and indirectly by scipy for some image processing
          python-imaging,
          python-cairo,
-         python-zmq (>= 2.1),
          python-numpy,
          python-concurrent.futures,
          python-scipy,
-         python-decorator,
          python-libtiff,
-         python-comedilib (>= 0.10.0),
          python-h5py (>= 2.1),
          python-xdg,
+# suds is only needed for phenom driver
          python-suds,
          python-matplotlib,
          python-opencv (>= 2.4),
          python-notify,
+# comedi is only needed for semcomedi driver
+         python-comedilib (>= 0.10.0),
+# blinkstick is only needed for blinkstick driver
          python-blinkstick,
+# currently authbind is only needed for the auto probing of nfpm driver
          authbind,
+         python-zmq (>= 2.1),
          python-pyro4-delmic,
          cgroup-bin,
+# just to take screenshots during bug report
+         graphicsmagick,
          odemis-doc,
-         graphicsmagick, # just to take screenshots during bug report
          ${shlibs:Depends},
          ${misc:Depends},
          ${python:Depends},

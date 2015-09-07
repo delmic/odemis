@@ -40,9 +40,9 @@ KWARGS_CAM = dict(name="idus", role="ccd", device=0, transpose=[-1, 2])
 KWARGS_CAM_SIM = dict(name="idus", role="ccd", device="fake", transpose=[-1, 2])
 
 CLASS = andorshrk.AndorSpec
-KWARGS_SIM = dict(name="spectrometer", role="ccd",
+KWARGS_SIM = dict(name="spectrometer", role="spectrometer",
                   children={"shamrock": KWARGS_SPG_SIM, "andorcam2": KWARGS_CAM_SIM})
-KWARGS = dict(name="spectrometer", role="ccd",
+KWARGS = dict(name="spectrometer", role="spectrometer",
               children={"shamrock": KWARGS_SPG, "andorcam2": KWARGS_CAM})
 
 # For testing the Shamrock with direct connection to the PC
@@ -63,13 +63,15 @@ class TestShamrockStatic(unittest.TestCase):
         """
         Just makes sure we don't (completely) break Shamrock after an update
         """
-        sp = CLASS_SHRK(**KWARGS_SHRK_SIM)
+        ccd = CLASS_CAM(**KWARGS_CAM_SIM)
+        sp = CLASS_SHRK(children={"ccd": ccd}, **KWARGS_SHRK_SIM)
 
         self.assertGreater(len(sp.axes["grating"].choices), 0)
         sp.moveAbs({"wavelength": 300e-9})
 
         self.assertTrue(sp.selfTest(), "self test failed.")
         sp.terminate()
+        ccd.terminate()
 
     def test_fake_with_ccd(self):
         """
@@ -93,7 +95,8 @@ class TestShamrockStatic(unittest.TestCase):
 class TestSpectrograph(object):
     """
     Abstract class for testing the spectrograph.
-    Subclass needs to inherit from unittest.TestCase too and to provide .spectrograph
+    Subclass needs to inherit from unittest.TestCase too
+      and to provide .spectrograph and .ccd.
     """
 
     def tearDown(self):
@@ -405,9 +408,8 @@ class TestShamrockAndCCD(TestSpectrograph, unittest.TestCase):
         for c in cls.spectrometer.children.value:
             if c.role == "spectrograph":
                 cls.spectrograph = c
-                break
-        else:
-            cls.fail("Couldn't find spectrograph child")
+            elif c.role == "ccd":
+                cls.ccd = c
 
         #save position
         cls._orig_pos = cls.spectrograph.position.value

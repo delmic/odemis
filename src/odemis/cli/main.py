@@ -472,7 +472,7 @@ def move(comp_name, moves):
 
     try:
         m = component.moveRel(act_mv)
-        m.result()
+        m.result(120)
     except Exception as exc:
         raise IOError("Failed to move component %s by %s: %s" %
                       (comp_name, act_mv, exc))
@@ -525,7 +525,7 @@ def move_abs(comp_name, moves):
 
     try:
         m = component.moveAbs(act_mv)
-        m.result()
+        m.result(120)
     except Exception as exc:
         raise IOError("Failed to move component %s to %s: %s" %
                       (comp_name, act_mv, exc))
@@ -551,7 +551,7 @@ def reference(comp_name, axis_name):
 
     try:
         m = component.reference({axis_name})
-        m.result()
+        m.result(360)
     except Exception as exc:
         raise IOError("Failed to reference axis %s of component %s: %s" %
                       (axis_name, comp_name, exc))

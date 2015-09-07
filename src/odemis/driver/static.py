@@ -158,6 +158,9 @@ class LightFilter(model.Actuator):
             raise ValueError("Unsupported position %s" % pos)
         return model.InstantaneousFuture()
 
+    def stop(self, axes=None):
+        pass  # nothing to stop
+
 
 class Spectrograph(model.Actuator):
     """
@@ -166,7 +169,7 @@ class Spectrograph(model.Actuator):
     Just provide the wavelength list describing the light position on the CCD
     according to the center wavelength specified.
     """
-    def __init__(self, name, role, wlp, **kwargs):
+    def __init__(self, name, role, wlp, children=None, **kwargs):
         """
         wlp (list of floats): polynomial for conversion from distance from the
           center of the CCD to wavelength (in m):
@@ -182,6 +185,11 @@ class Spectrograph(model.Actuator):
 
         if not isinstance(wlp, list) or len(wlp) < 1:
             raise ValueError("wlp need to be a list of at least one float")
+
+        try:
+            self._ccd = children["ccd"]
+        except (TypeError, KeyError):
+            raise ValueError("Spectrograph needs a child 'ccd'")
 
         self._swVersion = "N/A (Odemis %s)" % odemis.__version__
         self._hwVersion = name
@@ -235,7 +243,7 @@ class Spectrograph(model.Actuator):
         # => composition of polynomials
         # with "a" the distance of the centre of the left-most pixel to the
         # centre of the image, and b the density in meters per pixel.
-        ccd = self.parent
+        ccd = self._ccd
         npixels = ccd.resolution.value[0]
         mpp = ccd.pixelSize.value[0] * ccd.binning.value[0] # m/px
         # distance from the pixel 0 to the centre (in m)

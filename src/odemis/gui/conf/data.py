@@ -18,6 +18,8 @@ This file is part of Odemis.
     see http://www.gnu.org/licenses/.
 
 """
+from __future__ import division
+
 from collections import OrderedDict
 from odemis.acq import stream
 import odemis.gui
@@ -289,6 +291,10 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
         # what we don't want to display:
         "ccd":
         {
+            "gain":  # Default value is good for all the standard cases
+            {
+                "control_type": odemis.gui.CONTROL_NONE,
+            },
             "temperature":  # On the Delphi it's pretty always at the target temp
             {
                 "control_type": odemis.gui.CONTROL_NONE,

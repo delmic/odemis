@@ -708,45 +708,24 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         Adjust the focus if it's enabled and the right mouse button is being pressed.
         Left dragging of the canvas is handled in the super class.
-
         """
-
         if CAN_FOCUS in self.abilities and self.right_dragging:
-            # Linear when small, non-linear when big.
-            # use 3 points: starting point, previous point, current point
-            #  * if dis < 32 px => min : dis (small linear zone)
-            #  * else: dis + 1/32 * sign* (dis-32)**2 => (square zone)
-            # send diff between value and previous value sent => it should
-            # always be at the same position for the cursor at the same place
-            #
-            # NOTE: The focus overlay is loosely dependant on the values
-            # generated here, because it uses them to guesstimate the maximum
-            # value produced while focussing.
-
             if evt.ShiftDown():
                 softener = 0.1  # softer
             else:
                 softener = 1
 
-            linear_zone = 32  # px
             # We only care of the vertical position for the focus
             pos = evt.GetPositionTuple()
             # Flip the sign for vertical movement, as indicated in the
             # on_extra_axis_move docstring: up/right is positive
             shift = -(pos[1] - self._rdrag_init_pos[1])
-
-            if abs(shift) <= linear_zone:
-                value = shift
-            else:
-                ssquare = cmp(shift, 0) * (abs(shift) - linear_zone) ** 2
-                value = shift + ssquare / linear_zone
-
-            change = value - self._rdrag_prev_value[1]
+            change = shift - self._rdrag_prev_value[1]
 
             # Changing the extra axis start the focus timer
             if change:
                 self.on_extra_axis_move(1, change * softener)
-                self._rdrag_prev_value[1] = value
+                self._rdrag_prev_value[1] = shift
 
         super(DblMicroscopeCanvas, self).on_motion(evt)
 

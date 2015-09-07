@@ -1531,8 +1531,7 @@ def _dataFromTIFF(filename):
         try:
             # take care of multiple file distribution
             file_data = data
-            drive, path = os.path.splitdrive(filename)
-            path, orig_filename = os.path.split(path)
+            path, basename = os.path.split(filename)
             data = []
             desc = re.sub('xmlns="http://www.openmicroscopy.org/Schemas/OME/....-.."',
                          "", desc, count=1)
@@ -1541,7 +1540,7 @@ def _dataFromTIFF(filename):
             root = ET.fromstring(desc)
 
             # Keep track of the files that were already opened
-            file_read = []
+            file_read = set()
 #             ifd_counter = 0
             for tiff_data in root.findall("Image/Pixels/TiffData"):
 
@@ -1555,16 +1554,14 @@ def _dataFromTIFF(filename):
                 ifd_data = tiff_data.get("IFD")
 #                 ifd_counter += 1
                 # attach to the right path
-                if path != "":
-                    path = path + "/"
-                uuid_path = path + uuid_data
+                uuid_path = os.path.join(path, uuid_data)
                 if uuid_data in file_read:
                     continue
                 # try to find and open the enlisted file
                 try:
                     f_link = TIFF.open(uuid_path, mode='r')
                 except TypeError:
-                    logging.warning("File enlisted in the OME-XML header is missing.")
+                    logging.warning("File '%s' enlisted in the OME-XML header is missing.", uuid_path)
                     continue
                 for image in f_link.iter_images():
                     # If it's a thumbnail, skip it, but leave the space free to not mess with the IFD number
@@ -1574,12 +1571,12 @@ def _dataFromTIFF(filename):
                     md = _readTiffTag(f_link)  # reads tag of the current image
                     da = model.DataArray(image, metadata=md)
                     data.append(da)
-                file_read.append(uuid_data)
+                file_read.add(uuid_data)
 
             # If this file was not enlisted in the xml data we assume it has
             # been renamed. In this case we also include its data.
-            if orig_filename not in file_read:
-                data = data + file_data
+            if basename not in file_read:
+                data.extend(file_data)
 
             data = _reconstructFromOMETIFF(desc, data, os.path.basename(filename))
         except Exception:

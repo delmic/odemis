@@ -22,6 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 The class in this module is an adaptation of http://wiki.wxpython.org/CreatingCustomControls
 
 """
+from __future__ import division
 
 import wx
 from wx.lib.imageutils import grayOut
