@@ -356,6 +356,7 @@ class SecomStateController(MicroscopeStateController):
             s = None
         self._prev_stream = s
 
+    @call_in_wx_main
     def _on_active_stream_status(self, (lvl, msg)):
         """ Display the given message, or clear it
         lvl, msg (int, str): same as Stream.status. Cleared when lvl is None.
@@ -678,6 +679,9 @@ class DelphiStateController(SecomStateController):
         self._dlg = None
 
     def _start_chamber_pumping(self):
+        """
+        Note: must be called in the main GUI thread
+        """
         # Warning: if the sample holder is not yet registered, the Phenom will
         # not accept to even load it to the overview. That's why checking for
         # calibration/registration must be done immediately. Annoyingly, the
@@ -730,6 +734,9 @@ class DelphiStateController(SecomStateController):
         self._show_progress_indicators(False, True)
 
     def _start_chamber_venting(self):
+        """
+        Note: must be called in the main GUI thread
+        """
         # On the DELPHI, we also move the optical stage to 0,0 (= reference
         # position), so that referencing will be faster on next load.
         # We just need to be careful that the axis is referenced
