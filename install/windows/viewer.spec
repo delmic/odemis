@@ -54,6 +54,7 @@ a = Analysis(['viewer.py'],
              pathex=['.'],
              hiddenimports=[
                  'cairo',
+                 'odemis.dataio.*',
              ],
              hookspath=None,
              runtime_hooks=None)
