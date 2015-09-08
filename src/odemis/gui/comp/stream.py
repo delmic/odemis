@@ -460,7 +460,8 @@ class StreamPanel(wx.Panel):
         self.num_rows = 0
 
         # Event handling
-        self.Bind(wx.EVT_SIZE, self.OnSize)
+        # TODO: Remove if nothing weird happens while this event is not bound
+        # self.Bind(wx.EVT_SIZE, self.OnSize)
 
         self._create_controls()
 
@@ -1359,8 +1360,8 @@ class StreamBar(wx.Panel):
 
     # === Event Handlers
 
-#     def on_add_stream(self, evt):
-#         evt.Skip()
+    # def on_add_stream(self, evt):
+    #     evt.Skip()
 
     def on_stream_remove(self, evt):
         logging.debug("StreamBar received remove event %r", evt)

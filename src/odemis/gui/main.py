@@ -147,46 +147,83 @@ class OdemisGUIApp(wx.App):
             # order matters, as the first matching tab is be the default one
 
             tab_defs = [
-                (
-                    ("secom", "delphi", "sem", "optical"),
-                    ("STREAMS", "STREAMS", "STREAMS", "STREAMS"),
-                    "secom_live",
-                    tabs.SecomStreamsTab,
-                    self.main_frame.btn_tab_secom_streams,
-                    self.main_frame.pnl_tab_secom_streams
-                ),
-                (
-                    ("secom",),
-                    ("LENS ALIGNMENT",),
-                    "secom_align",
-                    tabs.LensAlignTab,
-                    self.main_frame.btn_tab_secom_align,
-                    self.main_frame.pnl_tab_secom_align
-                ),
-                (
-                    ("sparc",),
-                    ("ALIGNMENT",),
-                    "sparc_align",
-                    tabs.MirrorAlignTab,
-                    self.main_frame.btn_tab_sparc_align,
-                    self.main_frame.pnl_tab_sparc_align
-                ),
-                (
-                    ("sparc",),
-                    ("ACQUISITION",),
-                    "sparc_acqui",
-                    tabs.SparcAcquisitionTab,
-                    self.main_frame.btn_tab_sparc_acqui,
-                    self.main_frame.pnl_tab_sparc_acqui
-                ),
-                (
-                    (None, "secom", "delphi", "sem", "optical", "sparc"),
-                    ("GALLERY", "GALLERY", "GALLERY", "GALLERY", "GALLERY", "ANALYSIS"),
-                    "analysis",
-                    tabs.AnalysisTab,
-                    self.main_frame.btn_tab_inspection,
-                    self.main_frame.pnl_tab_inspection
-                ),
+                {
+                    # Unique name of the tab
+                    "name": "secom_live",
+                    # Default label for the tab (Might be overridden in the roles section
+                    "label": "STREAMS",
+                    # The microscope roles for which the tab is valid
+                    "roles": {
+                        "secom": {},
+                        "delphi": {},
+                        "sem": {},
+                        "optical": {},
+                    },
+                    # Tab controller for this tab
+                    "controller": tabs.SecomStreamsTab,
+                    # Tab button for this tab
+                    "button": self.main_frame.btn_tab_secom_streams,
+                    # Constructor of the tab panel
+                    "panel": main_xrc.xrcpnl_tab_secom_streams
+                },
+                {
+                    "name": "secom_align",
+                    "label": "LENS ALIGNMENT",
+                    "roles": {
+                        "secom": {},
+                    },
+                    "controller": tabs.LensAlignTab,
+                    "button": self.main_frame.btn_tab_secom_align,
+                    "panel": main_xrc.xrcpnl_tab_secom_align
+                },
+                {
+                    "name": "sparc_align",
+                    "label": "ALIGNMENT",
+                    "roles": {
+                        "sparc": {},
+                        "sparc2": {"default": True},
+                    },
+                    "controller": tabs.MirrorAlignTab,
+                    "button": self.main_frame.btn_tab_sparc_align,
+                    "panel": main_xrc.xrcpnl_tab_sparc_align
+                },
+                {
+                    "name": "sparc_acqui",
+                    "label": "ACQUISITION",
+                    "roles": {
+                        "sparc": {},
+                        "sparc2": {},
+                    },
+                    "controller": tabs.SparcAcquisitionTab,
+                    "button": self.main_frame.btn_tab_sparc_acqui,
+                    "panel": main_xrc.xrcpnl_tab_sparc_acqui
+                },
+                {
+                    "name": "sparc_chamber",
+                    "label": "CHAMBER",
+                    "roles": {
+                        "sparc2": {},
+                    },
+                    "controller": tabs.ChamberTab,
+                    "button": self.main_frame.btn_tab_sparc_chamber,
+                    "panel": main_xrc.xrcpnl_tab_sparc_chamber
+                },
+                {
+                    "name": "analysis",
+                    "label": "GALLERY",
+                    "roles": {
+                        None: {},
+                        "secom": {},
+                        "delphi": {},
+                        "sem": {},
+                        "optical": {},
+                        "sparc": {"label": "ANALYSIS"},
+                        "sparc2": {"label": "ANALYSIS"},
+                    },
+                    "controller": tabs.AnalysisTab,
+                    "button": self.main_frame.btn_tab_inspection,
+                    "panel": main_xrc.xrcpnl_tab_inspection
+                },
             ]
 
             # Create the main tab controller and store a global reference

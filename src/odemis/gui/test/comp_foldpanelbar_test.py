@@ -315,7 +315,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
         new_labels = []
 
-        for dummy in range(3):
+        for dummy in range(4):
             item = wx.StaticText(top_panel, top_panel.GetId(), "ADDED LABEL")
             top_panel.add_item(item)
             new_labels.append(item)
@@ -341,7 +341,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         self.assertEqual(appfpb.has_horz_scrollbar(), False, false_pos_warn)
 
         # Count children of the top fold panel: 2 labels and 4 added labels: 6 total
-        self.assertEqual(len(top_panel._container.GetChildren()), 6)
+        self.assertEqual(len(top_panel._container.GetChildren()), 7)
 
         new_labels.reverse()
         for label in new_labels:

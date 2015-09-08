@@ -321,16 +321,16 @@ class SecomAcquiController(object):
     is currently focused, and block any change of settings during acquisition.
     """
 
-    def __init__(self, tab_data, main_frame):
+    def __init__(self, tab_data, tab_panel):
         """
         tab_data (MicroscopyGUIData): the representation of the microscope GUI
-        main_frame: (wx.Frame): the frame which contains the 4 viewports
+        tab_panel: (wx.Frame): the frame which contains the 4 viewports
         """
         self._tab_data_model = tab_data
-        self._main_frame = main_frame
+        self._tab_panel = tab_panel
 
         # Listen to "acquire image" button
-        self._main_frame.btn_secom_acquire.Bind(wx.EVT_BUTTON, self.on_acquire)
+        self._tab_panel.btn_secom_acquire.Bind(wx.EVT_BUTTON, self.on_acquire)
 
         # Only possible to acquire if there are streams, and the chamber is
         # under vacuum
@@ -345,7 +345,7 @@ class SecomAcquiController(object):
         st_present = not not self._tab_data_model.streams.value
         ch_vacuum = (self._tab_data_model.main.chamberState.value
                         in {guimod.CHAMBER_VACUUM, guimod.CHAMBER_UNKNOWN})
-        self._main_frame.btn_secom_acquire.Enable(st_present and ch_vacuum)
+        self._tab_panel.btn_secom_acquire.Enable(st_present and ch_vacuum)
 
     def on_acquire(self, evt):
         self.open_acquisition_dialog()
@@ -370,8 +370,8 @@ class SecomAcquiController(object):
         streambar_controller.enable(False)
 
         # create the dialog
-        acq_dialog = AcquisitionDialog(self._main_frame, self._tab_data_model)
-        parent_size = [v * 0.77 for v in self._main_frame.GetSize()]
+        acq_dialog = AcquisitionDialog(self._tab_panel.Parent, self._tab_data_model)
+        parent_size = [v * 0.77 for v in self._tab_panel.Parent.GetSize()]
 
         try:
             acq_dialog.SetSize(parent_size)
@@ -389,7 +389,7 @@ class SecomAcquiController(object):
             streambar_controller.resume()
 
             # Make sure that the acquisition button is enabled again.
-            self._main_frame.btn_secom_acquire.Enable()
+            self._tab_panel.btn_secom_acquire.Enable()
 
 
 class SparcAcquiController(object):
@@ -398,15 +398,15 @@ class SparcAcquiController(object):
     tab.
     """
 
-    def __init__(self, tab_data, main_frame, streambar_controller):
+    def __init__(self, tab_data, tab_panel, streambar_controller):
         """
         tab_data (MicroscopyGUIData): the representation of the microscope GUI
-        main_frame: (wx.Frame): the frame which contains the 4 viewports
+        tab_panel: (wx.Frame): the frame which contains the 4 viewports
         stream_ctrl (StreamBarController): controller to pause/resume the streams
         """
         self._tab_data_model = tab_data
         self._main_data_model = tab_data.main
-        self._main_frame = main_frame
+        self._tab_panel = tab_panel
         self._streambar_controller = streambar_controller
 
         # For file selection
@@ -422,12 +422,12 @@ class SparcAcquiController(object):
 
         # For acquisition
         # a ProgressiveFuture if the acquisition is going on
-        self.btn_acquire = self._main_frame.btn_sparc_acquire
-        self.btn_change_file = self._main_frame.btn_sparc_change_file
-        self.btn_cancel = self._main_frame.btn_sparc_cancel
+        self.btn_acquire = self._tab_panel.btn_sparc_acquire
+        self.btn_change_file = self._tab_panel.btn_sparc_change_file
+        self.btn_cancel = self._tab_panel.btn_sparc_cancel
         self.acq_future = None
-        self.gauge_acq = self._main_frame.gauge_sparc_acq
-        self.lbl_acqestimate = self._main_frame.lbl_sparc_acq_estimate
+        self.gauge_acq = self._tab_panel.gauge_sparc_acq
+        self.lbl_acqestimate = self._tab_panel.lbl_sparc_acq_estimate
         self._acq_future_connector = None
 
         self._stream_paused = ()
@@ -441,7 +441,7 @@ class SparcAcquiController(object):
         self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_cancel)
 
         self.gauge_acq.Hide()
-        self._main_frame.Layout()
+        self._tab_panel.Parent.Layout()
 
         # TODO: we need to be informed if the user closes suddenly the window
         # self.Bind(wx.EVT_CLOSE, self.on_close)
@@ -489,10 +489,10 @@ class SparcAcquiController(object):
         """ updates the GUI when the filename is updated """
         # decompose into path/file
         path, base = os.path.split(name)
-        self._main_frame.txt_destination.SetValue(unicode(path))
+        self._tab_panel.txt_destination.SetValue(unicode(path))
         # show the end of the path (usually more important)
-        self._main_frame.txt_destination.SetInsertionPointEnd()
-        self._main_frame.txt_filename.SetValue(unicode(base))
+        self._tab_panel.txt_destination.SetInsertionPointEnd()
+        self._tab_panel.txt_filename.SetValue(unicode(base))
 
     def _onROA(self, roi):
         """ updates the acquire button according to the acquisition ROI """
@@ -530,7 +530,7 @@ class SparcAcquiController(object):
         file.
         returns nothing, but updates .filename and .conf
         """
-        new_name = ShowAcquisitionFileDialog(self._main_frame, self.filename.value)
+        new_name = ShowAcquisitionFileDialog(self._tab_panel, self.filename.value)
         if new_name is not None:
             self.filename.value = new_name
 
@@ -586,7 +586,7 @@ class SparcAcquiController(object):
         """
         self.btn_cancel.Hide()
         self.btn_acquire.Enable()
-        self._main_frame.Layout()
+        self._tab_panel.Layout()
         self._resume_streams()
 
         if not keep_filename:
@@ -627,7 +627,7 @@ class SparcAcquiController(object):
         self._main_data_model.is_acquiring.value = True
 
         # FIXME: probably not the whole window is required, just the file settings
-        self._main_frame.Layout()  # to put the gauge at the right place
+        self._tab_panel.Layout()  # to put the gauge at the right place
 
         # start acquisition + connect events to callback
         streams = self._tab_data_model.acquisitionView.getStreams()
@@ -744,20 +744,20 @@ class FineAlignController(object):
     OVRL_REPETITION = (4, 4)  # Not too many, to keep it fast
     # OVRL_REPETITION = (7, 7)  # DEBUG (for compatibility with fake image)
 
-    def __init__(self, tab_data, main_frame, settings_controller):
+    def __init__(self, tab_data, tab_panel, settings_controller):
         """
         tab_data (MicroscopyGUIData): the representation of the microscope GUI
-        main_frame: (wx.Frame): the frame which contains the viewports
+        tab_panel: (wx.Panel): the tab that containts the viewports
         settings_controller (SettingController)
         """
         self._tab_data_model = tab_data
         self._main_data_model = tab_data.main
-        self._main_frame = main_frame
+        self._tab_panel = tab_panel
         self._settings_controller = settings_controller
-        self._sizer = self._main_frame.pnl_align_tools.GetSizer()
+        self._sizer = self._tab_panel.pnl_align_tools.GetSizer()
 
-        main_frame.btn_fine_align.Bind(wx.EVT_BUTTON, self._on_fine_align)
-        self._fa_btn_label = self._main_frame.btn_fine_align.Label
+        tab_panel.btn_fine_align.Bind(wx.EVT_BUTTON, self._on_fine_align)
+        self._fa_btn_label = self._tab_panel.btn_fine_align.Label
         self._faf_connector = None
 
         # Make sure to reset the correction metadata if lens move
@@ -779,7 +779,7 @@ class FineAlignController(object):
         # time has /some chances/ to represent the needed dwell time)
         spot = (tool == guimod.TOOL_SPOT)
 
-        self._main_frame.btn_fine_align.Enable(spot and not acquiring)
+        self._tab_panel.btn_fine_align.Enable(spot and not acquiring)
         self._update_est_time()
 
     def _on_dwell_time(self, dt):
@@ -797,7 +797,7 @@ class FineAlignController(object):
             txt = u"~ %s" % units.readable_time(t, full=False)
         else:
             txt = u""
-        self._main_frame.lbl_fine_align.Label = txt
+        self._tab_panel.lbl_fine_align.Label = txt
 
     def _on_aligner_pos(self, pos):
         """
@@ -818,32 +818,32 @@ class FineAlignController(object):
         self._settings_controller.enable(False)
         self._settings_controller.pause()
 
-        self._main_frame.lens_align_tb.enable(False)
-        self._main_frame.btn_auto_center.Enable(False)
+        self._tab_panel.lens_align_tb.enable(False)
+        self._tab_panel.btn_auto_center.Enable(False)
 
         # make sure to not disturb the acquisition
         for s in self._tab_data_model.streams.value:
             s.is_active.value = False
 
         # Prevent moving the stages
-        for c in [self._main_frame.vp_align_ccd.canvas,
-                  self._main_frame.vp_align_sem.canvas]:
+        for c in [self._tab_panel.vp_align_ccd.canvas,
+                  self._tab_panel.vp_align_sem.canvas]:
             c.abilities -= set([CAN_DRAG, CAN_FOCUS])
 
     def _resume(self):
         self._settings_controller.resume()
         self._settings_controller.enable(True)
 
-        self._main_frame.lens_align_tb.enable(True)
-        self._main_frame.btn_auto_center.Enable(True)
+        self._tab_panel.lens_align_tb.enable(True)
+        self._tab_panel.btn_auto_center.Enable(True)
 
         # Restart the streams (which were being played)
         for s in self._tab_data_model.streams.value:
             s.is_active.value = s.should_update.value
 
         # Allow moving the stages
-        for c in [self._main_frame.vp_align_ccd.canvas,
-                  self._main_frame.vp_align_sem.canvas]:
+        for c in [self._tab_panel.vp_align_ccd.canvas,
+                  self._tab_panel.vp_align_sem.canvas]:
             c.abilities |= set([CAN_DRAG, CAN_FOCUS])
 
     def _on_fine_align(self, event):
@@ -855,29 +855,30 @@ class FineAlignController(object):
         main_data.is_acquiring.value = True
 
         logging.debug("Starting overlay procedure")
-        f = align.FindOverlay(self.OVRL_REPETITION,
-                                     main_data.fineAlignDwellTime.value,
-                                     self.OVRL_MAX_DIFF,
-                                     main_data.ebeam,
-                                     main_data.ccd,
-                                     main_data.sed,
-                                     skew=True)
+        f = align.FindOverlay(
+            self.OVRL_REPETITION,
+            main_data.fineAlignDwellTime.value,
+            self.OVRL_MAX_DIFF,
+            main_data.ebeam,
+            main_data.ccd,
+            main_data.sed,
+            skew=True
+        )
         logging.debug("Overlay procedure is running...")
         self._acq_future = f
         # Transform Fine alignment button into cancel
-        self._main_frame.btn_fine_align.Bind(wx.EVT_BUTTON, self._on_cancel)
-        self._main_frame.btn_fine_align.Label = "Cancel"
+        self._tab_panel.btn_fine_align.Bind(wx.EVT_BUTTON, self._on_cancel)
+        self._tab_panel.btn_fine_align.Label = "Cancel"
 
         # Set up progress bar
-        self._main_frame.lbl_fine_align.Hide()
-        self._main_frame.gauge_fine_align.Show()
+        self._tab_panel.lbl_fine_align.Hide()
+        self._tab_panel.gauge_fine_align.Show()
         self._sizer.Layout()
-        self._faf_connector = ProgressiveFutureConnector(f,
-                                            self._main_frame.gauge_fine_align)
+        self._faf_connector = ProgressiveFutureConnector(f, self._tab_panel.gauge_fine_align)
 
         f.add_done_callback(self._on_fa_done)
 
-    def _on_cancel(self, evt):
+    def _on_cancel(self, _):
         """
         Called during acquisition when pressing the cancel button
         """
@@ -905,14 +906,14 @@ class FineAlignController(object):
             # The SEM correction metadata goes to the ebeam
             main_data.ebeam.updateMetadata(sem_md)
         except CancelledError:
-            self._main_frame.lbl_fine_align.Label = "Cancelled"
+            self._tab_panel.lbl_fine_align.Label = "Cancelled"
         except Exception:
             logging.warning("Failed to run the fine alignment, a report "
                             "should be available in ~/odemis-overlay-report.")
-            self._main_frame.lbl_fine_align.Label = "Failed"
+            self._tab_panel.lbl_fine_align.Label = "Failed"
         else:
-            self._main_frame.lbl_fine_align.Label = "Successful"
-            self._main_frame.menu_item_reset_finealign.Enable(True)
+            self._tab_panel.lbl_fine_align.Label = "Successful"
+            self._tab_panel.menu_item_reset_finealign.Enable(True)
             # Temporary info until the GUI can actually rotate the images
             rot = math.degrees(opt_md.get(model.MD_ROTATION_COR, 0))
             shear = sem_md.get(model.MD_SHEAR_COR, 0)
@@ -920,7 +921,7 @@ class FineAlignController(object):
             # the worse is the rotation, the longer it's displayed
             timeout = max(2, min(abs(rot), 10))
             Message.show_message(
-                self._main_frame,
+                self._tab_panel,
                 u"Rotation applied: %s\nShear applied: %s\nX/Y Scaling applied: %s"
                 % (units.readable_str(rot, unit="°", sig=3),
                    units.readable_str(shear, sig=3),
@@ -932,15 +933,15 @@ class FineAlignController(object):
                             rot, shear, scaling_xy)
 
         # As the CCD image might have different pixel size, force to fit
-        self._main_frame.vp_align_ccd.canvas.fit_view_to_next_image = True
+        self._tab_panel.vp_align_ccd.canvas.fit_view_to_next_image = True
 
         main_data.is_acquiring.value = False
-        self._main_frame.btn_fine_align.Bind(wx.EVT_BUTTON, self._on_fine_align)
-        self._main_frame.btn_fine_align.Label = self._fa_btn_label
+        self._tab_panel.btn_fine_align.Bind(wx.EVT_BUTTON, self._on_fine_align)
+        self._tab_panel.btn_fine_align.Label = self._fa_btn_label
         self._resume()
 
-        self._main_frame.lbl_fine_align.Show()
-        self._main_frame.gauge_fine_align.Hide()
+        self._tab_panel.lbl_fine_align.Show()
+        self._tab_panel.gauge_fine_align.Hide()
         self._sizer.Layout()
 
 
@@ -953,28 +954,28 @@ class AutoCenterController(object):
     applied to the microscope
     """
 
-    def __init__(self, tab_data, aligner_xy, main_frame, settings_controller):
+    def __init__(self, tab_data, aligner_xy, tab_panel, settings_controller):
         """
         tab_data (MicroscopyGUIData): the representation of the microscope GUI
         aligner_xy (Stage): the stage used to move the objective, with axes X/Y
-        main_frame: (wx.Frame): the frame which contains the viewports
+        tab_panel: (wx.Panel): the tab panel which contains the viewports
         settings_controller (SettingController)
         """
         self._tab_data_model = tab_data
         self._aligner_xy = aligner_xy
         self._main_data_model = tab_data.main
-        self._main_frame = main_frame
+        self._tab_panel = tab_panel
         self._settings_controller = settings_controller
-        self._sizer = self._main_frame.pnl_align_tools.GetSizer()
+        self._sizer = self._tab_panel.pnl_align_tools.GetSizer()
 
-        main_frame.btn_auto_center.Bind(wx.EVT_BUTTON, self._on_auto_center)
-        self._ac_btn_label = self._main_frame.btn_auto_center.Label
+        tab_panel.btn_auto_center.Bind(wx.EVT_BUTTON, self._on_auto_center)
+        self._ac_btn_label = self._tab_panel.btn_auto_center.Label
         self._acf_connector = None
 
         self._main_data_model.ccd.exposureTime.subscribe(self._update_est_time, init=True)
 
     @call_in_wx_main
-    def _update_est_time(self, unused):
+    def _update_est_time(self, _):
         """
         Compute and displays the estimated time for the auto centering
         """
@@ -982,7 +983,7 @@ class AutoCenterController(object):
         t = align.spot.estimateAlignmentTime(et)
         t = math.ceil(t) # round a bit pessimistic
         txt = u"~ %s" % units.readable_time(t, full=False)
-        self._main_frame.lbl_auto_center.Label = txt
+        self._tab_panel.lbl_auto_center.Label = txt
 
     def _pause(self):
         """
@@ -992,33 +993,33 @@ class AutoCenterController(object):
         self._settings_controller.enable(False)
         self._settings_controller.pause()
 
-        self._main_frame.lens_align_tb.enable(False)
-        self._main_frame.btn_fine_align.Enable(False)
+        self._tab_panel.lens_align_tb.enable(False)
+        self._tab_panel.btn_fine_align.Enable(False)
 
         # make sure to not disturb the acquisition
         for s in self._tab_data_model.streams.value:
             s.is_active.value = False
 
         # Prevent moving the stages
-        for c in [self._main_frame.vp_align_ccd.canvas,
-                  self._main_frame.vp_align_sem.canvas]:
+        for c in [self._tab_panel.vp_align_ccd.canvas,
+                  self._tab_panel.vp_align_sem.canvas]:
             c.abilities -= set([CAN_DRAG, CAN_FOCUS])
 
     def _resume(self):
         self._settings_controller.resume()
         self._settings_controller.enable(True)
 
-        self._main_frame.lens_align_tb.enable(True)
+        self._tab_panel.lens_align_tb.enable(True)
         # Spot mode should always be active, so it's fine to directly enable FA
-        self._main_frame.btn_fine_align.Enable(True)
+        self._tab_panel.btn_fine_align.Enable(True)
 
         # Restart the streams (which were being played)
         for s in self._tab_data_model.streams.value:
             s.is_active.value = s.should_update.value
 
         # Allow moving the stages
-        for c in [self._main_frame.vp_align_ccd.canvas,
-                  self._main_frame.vp_align_sem.canvas]:
+        for c in [self._tab_panel.vp_align_ccd.canvas,
+                  self._tab_panel.vp_align_sem.canvas]:
             c.abilities |= set([CAN_DRAG, CAN_FOCUS])
 
     def _on_auto_center(self, event):
@@ -1041,15 +1042,15 @@ class AutoCenterController(object):
         logging.debug("Auto centering is running...")
         self._acq_future = f
         # Transform auto centering button into cancel
-        self._main_frame.btn_auto_center.Bind(wx.EVT_BUTTON, self._on_cancel)
-        self._main_frame.btn_auto_center.Label = "Cancel"
+        self._tab_panel.btn_auto_center.Bind(wx.EVT_BUTTON, self._on_cancel)
+        self._tab_panel.btn_auto_center.Label = "Cancel"
 
         # Set up progress bar
-        self._main_frame.lbl_auto_center.Hide()
-        self._main_frame.gauge_auto_center.Show()
+        self._tab_panel.lbl_auto_center.Hide()
+        self._tab_panel.gauge_auto_center.Show()
         self._sizer.Layout()
         self._acf_connector = ProgressiveFutureConnector(f,
-                                            self._main_frame.gauge_auto_center)
+                                            self._tab_panel.gauge_auto_center)
 
         f.add_done_callback(self._on_ac_done)
 
@@ -1072,21 +1073,21 @@ class AutoCenterController(object):
         try:
             dist = future.result() # returns distance to center
         except CancelledError:
-            self._main_frame.lbl_auto_center.Label = "Cancelled"
+            self._tab_panel.lbl_auto_center.Label = "Cancelled"
         except Exception as exp:
             logging.info("Centering procedure failed: %s", exp)
-            self._main_frame.lbl_auto_center.Label = "Failed"
+            self._tab_panel.lbl_auto_center.Label = "Failed"
         else:
-            self._main_frame.lbl_auto_center.Label = "Successful"
+            self._tab_panel.lbl_auto_center.Label = "Successful"
 
         # As the CCD image might have different pixel size, force to fit
-        self._main_frame.vp_align_ccd.canvas.fit_view_to_next_image = True
+        self._tab_panel.vp_align_ccd.canvas.fit_view_to_next_image = True
 
         main_data.is_acquiring.value = False
-        self._main_frame.btn_auto_center.Bind(wx.EVT_BUTTON, self._on_auto_center)
-        self._main_frame.btn_auto_center.Label = self._ac_btn_label
+        self._tab_panel.btn_auto_center.Bind(wx.EVT_BUTTON, self._on_auto_center)
+        self._tab_panel.btn_auto_center.Label = self._ac_btn_label
         self._resume()
 
-        self._main_frame.lbl_auto_center.Show()
-        self._main_frame.gauge_auto_center.Hide()
+        self._tab_panel.lbl_auto_center.Show()
+        self._tab_panel.gauge_auto_center.Hide()
         self._sizer.Layout()

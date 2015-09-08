@@ -1298,12 +1298,6 @@ class StreamBarController(object):
         for e in self._stream_bar.stream_panels:
             e.set_visible(e.stream in visible_streams)
 
-        # logging.debug("Sending stream.ctrl message")
-        # pub.sendMessage('stream.ctrl',
-        #                 streams_present=True,
-        #                 streams_visible=self._has_visible_streams(),
-        #                 tab=self._tab_data_model)
-
     def _onStreamUpdate(self, stream, updated):
         """
         Called when a stream "updated" state changes

@@ -64,22 +64,22 @@ class MicroscopeStateController(object):
     __metaclass__ = ABCMeta
     btn_to_va = {}
 
-    def __init__(self, tab_data, main_frame, btn_prefix):
+    def __init__(self, tab_data, tab_panel, btn_prefix):
         """ Binds the 'hardware' buttons to their appropriate
         Vigilant Attributes in the model.MainGUIData
 
         tab_data (MicroscopyGUIData): the data model of the tab
-        main_frame: (wx.Frame): the main frame of the GUI
+        tab_panel: (wx.Panel): the microscope tab
         btn_prefix (string): common prefix of the names of the buttons
         """
         self._tab_data = tab_data
-        self._main_frame = main_frame
+        self._tab_panel = tab_panel
 
         # Look for which buttons actually exist, and which VAs exist. Bind the fitting ones
         self._btn_controllers = {}
 
         for btn_name, (va_name, control_class) in self.btn_to_va.items():
-            btn = getattr(main_frame, btn_prefix + btn_name, None)
+            btn = getattr(tab_panel, btn_prefix + btn_name, None)
             if not btn:
                 continue
 
@@ -268,16 +268,16 @@ class SecomStateController(MicroscopeStateController):
     # only SEM, as optical might be used even vented
     cls_streams_involved = stream.EMStream
 
-    def __init__(self, tab_data, main_frame, btn_prefix, st_ctrl):
-        super(SecomStateController, self).__init__(tab_data, main_frame, btn_prefix)
+    def __init__(self, tab_data, tab_panel, btn_prefix, st_ctrl):
+        super(SecomStateController, self).__init__(tab_data, tab_panel, btn_prefix)
 
         self._main_data = tab_data.main
         self._stream_controller = st_ctrl
 
         # Just to be able to disable the buttons when the chamber is vented
-        self._sem_btn = getattr(main_frame, btn_prefix + "sem")
-        self._opt_btn = getattr(main_frame, btn_prefix + "opt")
-        self._acq_btn = getattr(main_frame, btn_prefix + "opt")
+        self._sem_btn = getattr(tab_panel, btn_prefix + "sem")
+        self._opt_btn = getattr(tab_panel, btn_prefix + "opt")
+        self._acq_btn = getattr(tab_panel, btn_prefix + "opt")
 
         # To update the stream status
         self._prev_stream = None
@@ -364,16 +364,16 @@ class SecomStateController(MicroscopeStateController):
         if lvl is None:
             msg = ""
         self._show_status_icons(lvl)
-        self._main_frame.lbl_stream_status.SetLabel(msg)
+        self._tab_panel.lbl_stream_status.SetLabel(msg)
 
         # Whether the status is actually displayed or the progress bar is shown
         # is only dependent on _show_progress_indicators()
 
     def _show_status_icons(self, lvl):
-        self._main_frame.bmp_stream_status_info.Show(lvl in (logging.INFO, logging.DEBUG))
-        self._main_frame.bmp_stream_status_warn.Show(lvl == logging.WARN)
-        self._main_frame.bmp_stream_status_error.Show(lvl == logging.ERROR)
-        self._main_frame.pnl_hw_info.Parent.Layout()
+        self._tab_panel.bmp_stream_status_info.Show(lvl in (logging.INFO, logging.DEBUG))
+        self._tab_panel.bmp_stream_status_warn.Show(lvl == logging.WARN)
+        self._tab_panel.bmp_stream_status_error.Show(lvl == logging.ERROR)
+        self._tab_panel.pnl_hw_info.Parent.Layout()
 
     def _show_progress_indicators(self, show_load, show_status):
         """
@@ -381,9 +381,9 @@ class SecomStateController(MicroscopeStateController):
 
         The stream status text will be hidden if the progress indicators are shown.
         """
-        self._main_frame.pnl_load_status.Show(show_load)
-        self._main_frame.pnl_stream_status.Show(show_status)
-        self._main_frame.pnl_hw_info.Parent.Layout()
+        self._tab_panel.pnl_load_status.Show(show_load)
+        self._tab_panel.pnl_stream_status.Show(show_status)
+        self._tab_panel.pnl_hw_info.Parent.Layout()
 
     def _set_ebeam_power(self, on):
         """ Set the ebeam power (if there is an ebeam that can be controlled)
@@ -527,10 +527,12 @@ class SecomStateController(MicroscopeStateController):
         self._set_ebeam_power(False)
         self._chamber_vent_future = self._main_data.chamber.moveAbs({"pressure": self._vented_pressure})
         # Will actually be displayed only if the hw_info is shown
-        self._chamber_fc = ProgressiveFutureConnector(self._chamber_vent_future,
-                                              self._main_frame.gauge_load_time,
-                                              self._main_frame.lbl_load_time,
-                                              full=False)
+        self._chamber_fc = ProgressiveFutureConnector(
+            self._chamber_vent_future,
+            self._tab_panel.gauge_load_time,
+            self._tab_panel.lbl_load_time,
+            full=False
+        )
         self._chamber_vent_future.add_done_callback(self._on_vented)
 
     def _on_vented(self, future):
@@ -666,7 +668,7 @@ class DelphiStateController(SecomStateController):
         self._calibconf = get_calib_conf()
 
         # Display the panel with the loading progress indicators
-        self._main_frame.pnl_hw_info.Show()
+        self._tab_panel.pnl_hw_info.Show()
 
         # If starts with the sample fully loaded, check for the calibration now
         ch_pos = self._main_data.chamber.position
@@ -691,10 +693,12 @@ class DelphiStateController(SecomStateController):
             return
 
         self._chamber_pump_future = self.DelphiLoading()
-        self._chamber_fc = ProgressiveFutureConnector(self._chamber_pump_future,
-                                            self._main_frame.gauge_load_time,
-                                            self._main_frame.lbl_load_time,
-                                            full=False)
+        self._chamber_fc = ProgressiveFutureConnector(
+            self._chamber_pump_future,
+            self._tab_panel.gauge_load_time,
+            self._tab_panel.lbl_load_time,
+            full=False
+        )
         self._show_progress_indicators(True, False)
 
         # reset the streams to avoid having data from the previous sample
@@ -716,7 +720,7 @@ class DelphiStateController(SecomStateController):
         except Exception as exp:
             # something went wrong => just eject the sample holder
             logging.exception("Loading the sample holder failed")
-            dlg = wx.MessageDialog(self._main_frame,
+            dlg = wx.MessageDialog(self._tab_panel.Parent,
                                    "The loading of the sample holder failed.\n"
                                    "Error: %s\n\n"
                                    "If the problem persists, contact the support service.\n"
@@ -834,7 +838,7 @@ class DelphiStateController(SecomStateController):
             # couldn't be read. So instead of asking the user to calibrate it,
             # just tell the user to try to insert the sample holder again.
             if shid == 0:
-                dlg = wx.MessageDialog(self._main_frame,
+                dlg = wx.MessageDialog(self._tab_panel.Parent,
                                        "The connection with the sample holder failed.\n\n"
                                        "Make sure the pins are clean and try re-inserting it.\n"
                                        "If the problem persists, contact the support service.\n"
@@ -899,7 +903,7 @@ class DelphiStateController(SecomStateController):
         else:
             need_register = False
 
-        dlg = windelphi.FirstCalibrationDialog(self._main_frame, shid, need_register)
+        dlg = windelphi.FirstCalibrationDialog(self._tab_panel.Parent, shid, need_register)
         val = dlg.ShowModal()  # blocks
         regcode = dlg.registrationCode
         dlg.Destroy()
@@ -910,7 +914,7 @@ class DelphiStateController(SecomStateController):
                 try:
                     self._main_data.chamber.registerSampleHolder(regcode)
                 except ValueError as ex:
-                    dlg = wx.MessageDialog(self._main_frame,
+                    dlg = wx.MessageDialog(self._tab_panel.Parent,
                                            "Failed to register: %s" % ex,
                                            "Sample holder registration failed",
                                            wx.OK | wx.ICON_WARNING)
@@ -933,9 +937,15 @@ class DelphiStateController(SecomStateController):
     def _run_full_calibration(self, shid):
         # TODO: once the hole focus is not fixed, save it in the config too
         # Perform calibration and update the progress dialog
-        calib_dialog = CalibrationProgressDialog(self._main_frame, self._main_data,
-                                                 self._overview_pressure, self._vacuum_pressure,
-                                                 self._vented_pressure, self._calibconf, shid)
+        calib_dialog = CalibrationProgressDialog(
+            self._tab_panel.Parent,
+            self._main_data,
+            self._overview_pressure,
+            self._vacuum_pressure,
+            self._vented_pressure,
+            self._calibconf,
+            shid
+        )
         calib_dialog.Center()
         calib_dialog.ShowModal()
 

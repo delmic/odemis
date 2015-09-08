@@ -196,8 +196,10 @@ class MenuController(object):
         tab_data = tab.tab_data_model
         if self._prev_streams:
             self._prev_streams.unsubscribe(self._on_current_stream)
-        self._prev_streams = tab_data.streams
-        tab_data.streams.subscribe(self._on_current_stream, init=True)
+
+        if hasattr(tab_data, "streams"):
+            self._prev_streams = tab_data.streams
+            tab_data.streams.subscribe(self._on_current_stream, init=True)
 
         # Handle fit to content
         fit_enable = hasattr(tab, "view_controller") and tab.view_controller is not None
