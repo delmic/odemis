@@ -85,7 +85,7 @@ SPARC-MONASH: {
         prot_time: 0.0002,  # s
         prot_curr: 50.e-6,  # A
         relay_cycle: 10, # s
-        components: ["Fiber Flipper", "Focus Lens Flipper", "AR CCD-PMT Flipper"]
+        powered: ["Fiber Flipper", "Focus Lens Flipper", "AR CCD-PMT Flipper"]
     }
 }
 
@@ -157,7 +157,7 @@ SPARC-MONASH: {
 "Focus Lens Flipper": {
     class: tlaptmf.MFF,
     role: lens-switch,
-    psu: "CL PMT control unit",
+    power_supplier: "CL PMT control unit",
     init: {port: "/dev/fake", # for simulator
            #sn: "37857195",
            axis: "rx",
@@ -212,7 +212,7 @@ SPARC-MONASH: {
 "AR CCD-PMT Flipper": {
     class: tlaptmf.MFF,
     role: ar-det-selector,
-    psu: "CL PMT control unit",
+    power_supplier: "CL PMT control unit",
     init: {port: "/dev/fake", # for simulator
            #sn: "37857191",
            axis: "rx",
@@ -233,7 +233,7 @@ SPARC-MONASH: {
 "Fiber Flipper": {
     class: tlaptmf.MFF,
     role: ar-spec-selector,
-    psu: "CL PMT control unit",
+    power_supplier: "CL PMT control unit",
     init: {port: "/dev/fake", # for simulator
            #sn: "37857201",
            axis: "rx",

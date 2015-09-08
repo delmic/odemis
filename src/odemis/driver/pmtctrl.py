@@ -214,7 +214,7 @@ class PMTControl(model.PowerSupplier):
      * power up
     '''
     def __init__(self, name, role, port, prot_time=1e-3, prot_curr=50e-6,
-                 relay_cycle=None, components=[], **kwargs):
+                 relay_cycle=None, powered=None, **kwargs):
         '''
         port (str): port name
         prot_time (float): protection trip time (in s)
@@ -223,7 +223,10 @@ class PMTControl(model.PowerSupplier):
           with the given delay (in s)
         Raise an exception if the device cannot be opened
         '''
-        model.PowerSupplier.__init__(self, name, role, components=components, **kwargs)
+        if powered is None:
+            powered = []
+
+        model.PowerSupplier.__init__(self, name, role, powered=powered, **kwargs)
 
         # get protection time (s) and current (A) properties
         if not 0 <= prot_time < 1e3:
@@ -263,13 +266,7 @@ class PMTControl(model.PowerSupplier):
         self.powerSupply = model.BooleanVA(True, setter=self._setPowerSupply)
         self._setPowerSupply(True)
 
-        # Just initialization, position will be updated once we switch
-        self._position = {}
-        for comp in self.components:
-            self._position[comp] = False
-        self.position = model.VigilantAttribute(self._position, readonly=True)
-
-        # will take care of executing switch asynchronously
+        # will take care of executing supply asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
 
         # relay initialization
@@ -277,18 +274,18 @@ class PMTControl(model.PowerSupplier):
             logging.info("Power cycling the relay for %f s", relay_cycle)
             self.setRelay(False)
             time.sleep(relay_cycle)
-        # Reset if no components provided
-        if not components:
-            self.setRelay(True)
 
-    def stop(self, components=None):
-        # Empty the queue for the given components
-        self._executor.cancel()
-        logging.warning("Stopping all components: %s", ", ".join(self.components))
+        # Reset if no powered provided
+        if not powered:
+            self.setRelay(True)
+        else:
+            self._supplied = {}
+            self.supplied = model.VigilantAttribute(self._supplied, readonly=True)
+            self._updateSupplied()
 
     def terminate(self):
         if self._executor:
-            self.stop()
+            self._executor.cancel()
             self._executor.shutdown()
             self._executor = None
         with self._ser_access:
@@ -297,32 +294,33 @@ class PMTControl(model.PowerSupplier):
                 self._serial = None
 
     @isasync
-    def switch(self, pos):
-        if not pos:
+    def supply(self, sup):
+        if not sup:
             return model.InstantaneousFuture()
-        self._checkSwitch(pos)
+        self._checkSupply(sup)
 
-        return self._executor.submit(self._doSwitch, pos)
+        return self._executor.submit(self._doSupply, sup)
 
-    def _doSwitch(self, pos):
+    def _doSupply(self, sup):
         """
-        switch to the position
+        supply power
         """
-        value = pos.values()[0]  # only care about the value
+        value = sup.values()[0]  # only care about the value
         self.setRelay(value)
-        self._updatePosition(value)
+        self._updateSupplied()
 
-    def _updatePosition(self, value):
+    def _updateSupplied(self):
         """
-        update the position VA
+        update the supplied VA
         """
         # update all components since they are all connected to the same switch
-        for comp in self.components:
-            self._position[comp] = value
+        value = self.getRelay()
+        for comp in self.powered:
+            self._supplied[comp] = value
 
         # it's read-only, so we change it via _value
-        self.position._value = self._position
-        self.position.notify(self.position.value)
+        self.supplied._value = self._supplied
+        self.supplied.notify(self.supplied.value)
 
     def _getIdentification(self):
         return self._sendCommand("*IDN?")

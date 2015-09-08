@@ -246,10 +246,10 @@ class HwComponent(Component):
     """
     __metaclass__ = ABCMeta
 
-    def __init__(self, name, role, psu=None, *args, **kwargs):
+    def __init__(self, name, role, power_supplier=None, *args, **kwargs):
         Component.__init__(self, name, *args, **kwargs)
         self._role = role
-        self._psu = psu  # PowerSupplier if available
+        self._power_supplier = power_supplier  # PowerSupplier if available
         self._swVersion = "Unknown (Odemis %s)" % odemis.__version__
         self._hwVersion = "Unknown"
         self._metadata = {}  # internal metadata
@@ -267,11 +267,11 @@ class HwComponent(Component):
         self.state = _vattributes.VigilantAttribute(ST_RUNNING, readonly=True)
 
         # if PowerSupplier available then create powerSupply VA by copying the
-        # corresponding value of the position VA of the PowerSupplier.
-        if self._psu:
+        # corresponding value of the supplied VA of the PowerSupplier.
+        if self._power_supplier:
             logging.debug("Component %s creates powerSupply VA", name)
-            self.powerSupply = _vattributes.BooleanVA(self._psu.position.value[name], setter=self._setPowerSupply)
-            self._psu.position.subscribe(self._onPosition)
+            self.powerSupply = _vattributes.BooleanVA(self._power_supplier.supplied.value[name], setter=self._setPowerSupply)
+            self._power_supplier.supplied.subscribe(self._onSupplied)
 
     @roattribute
     def role(self):
@@ -304,20 +304,15 @@ class HwComponent(Component):
         """
         return self._metadata
 
-    def _onPosition(self, pos):
-        # keep up to date with position changes
-        self.powerSupply._value = pos[self.name]
+    def _onSupplied(self, sup):
+        # keep up to date with supplied changes
+        self.powerSupply._value = sup[self.name]
         self.powerSupply.notify(self.powerSupply.value)
 
     def _setPowerSupply(self, value):
-        try:
-            f = self._psu.switch({self.name: value})
-            f.result()
-        except ValueError:
-            logging.debug("Cannot set power supply of component %s to %s", self.name,
-                          value)
-
-        return self._psu.position.value[self.name]
+        f = self._power_supplier.supply({self.name: value})
+        f.result()
+        return self._power_supplier.supplied.value[self.name]
 
     # to be overridden by components which can do self test
     def selfTest(self):
@@ -843,40 +838,40 @@ class PowerSupplier(HwComponent):
     """
     __metaclass__ = ABCMeta
 
-    def __init__(self, name, role, components=None, **kwargs):
+    def __init__(self, name, role, powered=None, **kwargs):
         """
-        components (list of str): name of each component available.
+        powered (list of str): name of each component available.
         """
         HwComponent.__init__(self, name, role, **kwargs)
 
-        self._components = components
+        self._powered = powered
 
-        # it should also have a .position VA
+        # it should also have a .supplied VA
 
     @roattribute
-    def components(self):
+    def powered(self):
         """ list of str: name of each component available."""
-        return self._components
+        return self._powered
 
     @abstractmethod
     @isasync
-    def switch(self, pos):
+    def supply(self, sup):
         """
-        Change the power supply to the defined position for each component given.
+        Change the power supply to the defined state for each component given.
         This is an asynchronous method.
-        pos dict(string-> boolean): name of the component and new position
-        returns (Future): object to control the switch request
+        sup dict(string-> boolean): name of the component and new state
+        returns (Future): object to control the supply request
         """
         pass
 
-    def _checkSwitch(self, pos):
+    def _checkSupply(self, sup):
         """
-        Check that the argument passed to switch() is (potentially) correct
-        pos (dict string -> boolean): the new position for a switch()
+        Check that the argument passed to supply() is (potentially) correct
+        pos (dict string -> boolean): the new position for a supply()
         raise ValueError: if the argument is incorrect
         """
-        for component, val in pos.items():
-            if component in self.components:
+        for component, val in sup.items():
+            if component in self.powered:
                 if not isinstance(val, bool):
                     raise ValueError("Unsupported position %s for component %s"
                                      % (val, component))
