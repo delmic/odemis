@@ -225,8 +225,9 @@ class PMTControl(model.PowerSupplier):
         '''
         if powered is None:
             powered = []
+        self.powered = powered
 
-        model.PowerSupplier.__init__(self, name, role, powered=powered, **kwargs)
+        model.PowerSupplier.__init__(self, name, role, **kwargs)
 
         # get protection time (s) and current (A) properties
         if not 0 <= prot_time < 1e3:

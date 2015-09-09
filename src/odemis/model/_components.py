@@ -838,20 +838,10 @@ class PowerSupplier(HwComponent):
     """
     __metaclass__ = ABCMeta
 
-    def __init__(self, name, role, powered=None, **kwargs):
-        """
-        powered (list of str): name of each component available.
-        """
+    def __init__(self, name, role, **kwargs):
         HwComponent.__init__(self, name, role, **kwargs)
 
-        self._powered = powered
-
         # it should also have a .supplied VA
-
-    @roattribute
-    def powered(self):
-        """ list of str: name of each component available."""
-        return self._powered
 
     @abstractmethod
     @isasync
@@ -867,11 +857,11 @@ class PowerSupplier(HwComponent):
     def _checkSupply(self, sup):
         """
         Check that the argument passed to supply() is (potentially) correct
-        pos (dict string -> boolean): the new position for a supply()
+        sup (dict string -> boolean): the new position for a supply()
         raise ValueError: if the argument is incorrect
         """
         for component, val in sup.items():
-            if component in self.powered:
+            if component in self.supplied.value:
                 if not isinstance(val, bool):
                     raise ValueError("Unsupported position %s for component %s"
                                      % (val, component))
