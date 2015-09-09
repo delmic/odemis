@@ -104,7 +104,7 @@ def SetBitmapLabel(self, bitmap, createOthers=True):
         self.SetBitmapDisabled(wx.BitmapFromImage(image))
 
 
-GenBitmapButton.SetBitmapLabel = SetBitmapLabel
+# GenBitmapButton.SetBitmapLabel = SetBitmapLabel
 
 
 class ImageButton(GenBitmapButton):
