@@ -1693,7 +1693,9 @@ class CLController(Controller):
         # Nothing is moving => turn off encoder (in a few seconds)
         for a in axes:
             # Note: this will also turn off the servo, which leads to relax mode
-            self._releaseEncoder(a, self._auto_suspend)  # release in 10 s (5x the cost to start)
+            if self._auto_suspend:
+                self._releaseEncoder(a, self._auto_suspend)  # release in 10 s (5x the cost to start)
+
         return False
 
 
@@ -2450,6 +2452,7 @@ class Bus(model.Actuator):
                 now = time.time()
                 if now > timeout:
                     ctlrs = set(self._axis_to_cc[an][0] for an in moving_axes)
+                    logging.info("Stopping move due to timeout after %g s.", max_dur)
                     for controller in ctlrs:
                         controller.stopMotion()
                     raise TimeoutError("Move is not over after %g s, while "
