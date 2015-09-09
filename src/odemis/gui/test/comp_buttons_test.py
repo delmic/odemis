@@ -26,6 +26,7 @@ import wx
 
 from odemis.gui.img import data
 import odemis.gui.comp.buttons as buttons
+import odemis.gui.comp.nbuttons as nbuttons
 import odemis.gui.test as test
 from odemis.gui.test import gui_loop
 
@@ -148,6 +149,15 @@ class ButtonsTestCase(test.GuiTestCase):
             evt.Skip()
 
         self.view_button.Bind(wx.EVT_LEFT_DOWN, switch_image)
+
+
+class NButtonsTestCase(test.GuiTestCase):
+
+    frame_class = test.test_gui.xrcbutton_frame
+
+    def test_new_button(self):
+        btn = nbuttons.ImageButton(self.panel, -1, data.getbtn_48Bitmap())
+        self.add_control(btn, flags=wx.EXPAND|wx.ALL)
 
 
 if __name__ == "__main__":
