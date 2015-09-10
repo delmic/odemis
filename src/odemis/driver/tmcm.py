@@ -460,6 +460,22 @@ class TMCLController(model.Actuator):
         """
         self.SendInstruction(5, param, axis, val)
 
+    def RestoreAxisParam(self, axis, param):
+        """
+        Restore the axis/parameter setting from the EEPROM into the RAM
+        axis (0<=int<=5): axis number
+        param (0<=int<=255): parameter number
+        """
+        self.SendInstruction(8, param, axis)
+
+    def StoreAxisParam(self, axis, param):
+        """
+        Store the axis/parameter setting from the RAM into the EEPROM
+        axis (0<=int<=5): axis number
+        param (0<=int<=255): parameter number
+        """
+        self.SendInstruction(7, param, axis)
+
     def GetGlobalParam(self, bank, param):
         """
         Read the parameter setting from the RAM
@@ -478,6 +494,22 @@ class TMCLController(model.Actuator):
         val (int): the value to store
         """
         self.SendInstruction(9, param, bank, val)
+
+    def RestoreGlobalParam(self, axis, param):
+        """
+        Store the global parameter setting from the EEPROM into the RAM
+        bank (0<=int<=2): bank number
+        param (0<=int<=255): parameter number
+        """
+        self.SendInstruction(12, param, axis)
+
+    def StoreGlobalParam(self, axis, param):
+        """
+        Store the global parameter setting from the RAM into the EEPROM
+        bank (0<=int<=2): bank number
+        param (0<=int<=255): parameter number
+        """
+        self.SendInstruction(11, param, axis)
 
     def GetIO(self, bank, port):
         """
