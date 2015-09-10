@@ -129,42 +129,6 @@ for i, (name, handler) in enumerate(msvps):
     component.Manager.addXmlHandler(handler)
     component.Manager.setMenu(c, 'Delmic Viewport', name, name, 10 + i)
 
-
-### wx.lib.buttons.GenBitmapButton
-
-c = component.Component(
-    'wx.lib.buttons.GenBitmapButton',
-    ['control', 'tool'],
-    ['pos', 'size', 'default', 'bitmap', 'selected', 'focus', 'disabled'],
-    image=images.TreeBitmapButton.GetImage()
-)
-#c.addStyles()
-c.setParamClass('default', params.ParamBool)
-c.setSpecial('bitmap',  attribute.BitmapAttribute)
-
-c.setSpecial('selected',  attribute.BitmapAttribute)
-c.setParamClass('selected', params.ParamBitmap)
-
-c.setSpecial('focus',  attribute.BitmapAttribute)
-c.setParamClass('focus', params.ParamBitmap)
-
-c.setSpecial('disabled',  attribute.BitmapAttribute)
-c.setParamClass('disabled', params.ParamBitmap)
-
-
-c.addEvents('EVT_BUTTON')
-component.Manager.register(c)
-component.Manager.addXmlHandler(xh_delmic.GenBitmapButtonHandler)
-component.Manager.setMenu(
-    c,
-    'Delmic button',
-    'Generic Bitmap Button',
-    'wx.lib.buttons.GenBitmapButton',
-    1
-)
-component.Manager.setTool(c, 'Controls', pos=(1, 1))
-
-
 ### ImageButton
 
 c = component.Component(

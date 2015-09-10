@@ -23,10 +23,12 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from collections import OrderedDict
 import unittest
 import wx
+from wx.lib.buttons import ThemedGenBitmapButton
 
 from odemis.gui.img import data
 import odemis.gui.comp.buttons as buttons
 import odemis.gui.comp.nbuttons as nbuttons
+import wx.lib.buttons as genbuttons
 import odemis.gui.test as test
 from odemis.gui.test import gui_loop
 
@@ -156,8 +158,18 @@ class NButtonsTestCase(test.GuiTestCase):
     frame_class = test.test_gui.xrcbutton_frame
 
     def test_new_button(self):
-        btn = nbuttons.ImageButton(self.panel, -1, data.getbtn_48Bitmap())
+        btn = buttons.NImageButton(self.panel)
         self.add_control(btn, flags=wx.EXPAND|wx.ALL)
+
+        btn = buttons.NImageTextButton(self.panel, label="Hallo!", style=wx.RIGHT)
+        # btn.Disable()
+        self.add_control(btn, flags=wx.EXPAND|wx.ALL)
+
+        btn = genbuttons.GenBitmapTextButton(self.panel, bitmap=data.getbtn_48_aBitmap(),
+                                             label="Hallo!")
+        # btn.Disable()
+        self.add_control(btn, flags=wx.EXPAND|wx.ALL)
+
 
 
 if __name__ == "__main__":
