@@ -152,8 +152,12 @@ class FakeActuator(Actuator):
     @isasync
     def moveRel(self, shift):
         pass
+
     @isasync
     def moveAbs(self, pos):
+        pass
+
+    def stop(self, axes=None):
         pass
 
 

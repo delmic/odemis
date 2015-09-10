@@ -610,7 +610,7 @@ class MultixX(GenericxX):
         """
         super(MultixX, self).__init__(name, role, ports, **kwargs)
         # Hw version is different if multi-channel
-        self._hwVersion = "Omicron %s" % ", ". join(d.hwVersion for d in self._devices[0])
+        self._hwVersion = "Omicron %s" % ", ". join(d.hwVersion for d in self._devices)
 
     @classmethod
     def _getAvailableDevices(cls, ports):

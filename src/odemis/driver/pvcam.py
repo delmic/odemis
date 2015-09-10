@@ -50,7 +50,8 @@ from . import pvcam_h as pv
 # h2xml pvcam.h -c -I . -o pvcam_h.xml
 # xml2py pvcam_h.xml -o pvcam_h.py
 class PVCamError(Exception):
-    def __init__(self, errno, strerror):
+    def __init__(self, errno, strerror, *args, **kwargs):
+        super(PVCamError, self).__init__(errno, strerror, *args, **kwargs)
         self.args = (errno, strerror)
 
     def __str__(self):

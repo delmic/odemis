@@ -314,13 +314,13 @@ def estimateAutoFocusTime(exposure_time, steps=MAX_STEPS_NUMBER):
     return steps * exposure_time
 
 
-def AutoFocus(detector, scanner, focus, dfbkg=None):
+def AutoFocus(detector, emt, focus, dfbkg=None):
     """
     Wrapper for DoAutoFocus. It provides the ability to check the progress of autofocus 
     procedure or even cancel it.
     detector (model.DigitalCamera or model.Detector): Detector on which to
       improve the focus quality
-    scanner (None or model.Scanner): In case of a SED this is the scanner used
+    emt (None or model.Emitter): In case of a SED this is the scanner used
     focus (model.Actuator): The focus actuator
     dfbkg (model.DataFlow or None): If provided, will be used to start/stop
      the e-beam emission (it must be the dataflow of se- or bs-detector) in
@@ -332,11 +332,13 @@ def AutoFocus(detector, scanner, focus, dfbkg=None):
     """
     # Create ProgressiveFuture and update its state to RUNNING
     est_start = time.time() + 0.1
-    # Check if you focus the SEM or a digital camera
-    if scanner is not None:
-        et = scanner.dwellTime.value * numpy.prod(scanner.resolution.value)
+    # Check if the emitter is a scanner (focusing = SEM)
+    if hasattr(emt, "dwellTime") and isinstance(emt.dwellTime, model.VigilantAttributeBase):
+        et = emt.dwellTime.value * numpy.prod(emt.resolution.value)
     else:
         et = detector.exposureTime.value
+
+    # TODO: use the .depthOfField on detector or emitter
 
     # Set proper step and thres factor according to detector type
     thres_factor = INIT_THRES_FACTOR
@@ -351,10 +353,10 @@ def AutoFocus(detector, scanner, focus, dfbkg=None):
         max_stp_sz = 100 * detector.pixelSize.value[0]
     elif role == "ebeam-focus":  # SEM
         if detector.role == "ccd":
-            max_stp_sz = 7e04 * scanner.pixelSize.value[0]
+            max_stp_sz = 7e04 * emt.pixelSize.value[0]
             thres_factor = 10 * thres_factor
         else:
-            max_stp_sz = 5.5e03 * scanner.pixelSize.value[0]
+            max_stp_sz = 5.5e03 * emt.pixelSize.value[0]
             thres_factor = 5 * thres_factor
     else:
         logging.warning("Unknown focus %s, will try autofocus anyway.", role)

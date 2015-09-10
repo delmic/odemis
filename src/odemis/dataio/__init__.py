@@ -86,7 +86,7 @@ def get_converter(fmt):
         try:
             converter = importlib.import_module("." + module_name, "odemis.dataio")
         except (ValueError, TypeError, ImportError):
-            logging.exception("Import of converter failed for fmt %s", fmt)
+            logging.info("Import of converter %s failed", module_name, exc_info=True)
             continue  # module cannot be loaded
 
         if fmt == converter.FORMAT:
@@ -108,13 +108,14 @@ def find_fittest_exporter(filename, default=tiff):
     if basename == "":
         raise ValueError("Filename should have at least one letter: '%s'" % filename)
 
-    # make sure we pick the format with the longest fitting extention
+    # make sure we pick the format with the longest fitting extension
     best_len = 0
     best_fmt = default
     for module_name in __all__:
         try:
             exporter = importlib.import_module("." + module_name, "odemis.dataio")
         except Exception:  #pylint: disable=W0702
+            logging.info("Import of converter %s failed", module_name, exc_info=True)
             continue # module cannot be loaded
         for e in exporter.EXTENSIONS:
             if filename.endswith(e) and len(e) > best_len:

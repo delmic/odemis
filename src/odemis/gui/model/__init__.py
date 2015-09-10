@@ -807,7 +807,7 @@ class StreamView(View):
         # positive == opt lens goes up == closer from the sample
         # k is a magical constant that allows to ensure a small move has a small
         # effect, and a big move has a significant effect.
-        k = 5e-3  # 1/px
+        k = 50e-3  # 1/px
         val = dof * k * shift  # m
         assert(abs(val) < 0.01)  # a move of 1 cm is a clear sign of bug
         self._focus_queue.put((focuser, val))
@@ -879,7 +879,10 @@ class StreamView(View):
         """
         Called whenever a stage move is completed
         """
-        pass # only used in the children classes
+        ex = f.exception()
+        if ex:
+            # TODO: make it warning once it doesn't automatically pops up the panel
+            logging.info("Stage move failed: %s", ex)
 
     def getStreams(self):
         """
@@ -997,7 +1000,7 @@ class MicroscopeView(StreamView):
         """
         Called whenever a stage move is completed
         """
-
+        super(MicroscopeView, self)._on_stage_move_done(f)
         self._on_stage_pos(self.stage_pos.value)
 
 class ContentView(StreamView):

@@ -70,7 +70,8 @@ ERRORLENGTH = 64
 
 
 class ShamrockError(Exception):
-    def __init__(self, errno, strerror):
+    def __init__(self, errno, strerror, *args, **kwargs):
+        super(ShamrockError, self).__init__(errno, strerror, *args, **kwargs)
         self.args = (errno, strerror)
         self.errno = errno
         self.strerror = strerror
@@ -348,7 +349,7 @@ class Shamrock(model.Actuator):
             if self.FilterIsPresent():
                 if bands is None:  # User gave no info => fallback to what the hardware knows
                     # TODO: way to detect that a position has no filter?
-                    bands = dict((i, self.GetFilterInfo(i + 1)) for i in range(FILTERMAX))
+                    bands = dict((i, self.GetFilterInfo(i)) for i in range(FILTERMIN, FILTERMAX + 1))
                 else:  # Check the content
                     try:
                         for pos, band in bands.items():

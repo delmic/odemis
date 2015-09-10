@@ -514,16 +514,17 @@ class Stream(object):
                     mn = int(data.view(numpy.ndarray).min())
                     mx = int(data.view(numpy.ndarray).max())
                     # Try to find "round" values. Either:
-                    # * mn = 0, mx = max rounded to next power of 2
+                    # * mn = 0, mx = max rounded to next power of 2  -1
                     # * mn = min, width = width rounded to next power of 2
                     # => pick the one which gives the smallest width
                     diff = max(2, mx - mn)
                     diffrd = 1 << int(math.ceil(math.log(diff, 2)))  # next power of 2
-                    mxrd = 1 << int(math.ceil(math.log(max(2, mx), 2)))  # next power of 2
-                    if diffrd < mxrd:
+                    width0 = max(2, mx + 1)
+                    width0rd = 1 << int(math.ceil(math.log(width0, 2)))  # next power of 2
+                    if diffrd < width0rd:
                         drange = (mn, mn + diffrd - 1)
                     else:
-                        drange = (0, mxrd)
+                        drange = (0, width0rd - 1)
                     if self._drange is not None:
                         drange = (min(drange[0], self._drange[0]),
                                   max(drange[1], self._drange[1]))

@@ -12,7 +12,7 @@ odemis (2.2-1ubuntu1) precise; urgency=low
     - Support 'fuzzing' on spectrum stream to avoid aliasing (SPARC)
     - Option to save TIFF files as one file per stream
     - Support for blinkstick (for bright led, on SECOM)
-  * Main bug fixed and improvements:
+  * Main bugs fixed and improvements:
     - Bug report functionality in GUI menu and Ubuntu icon
     - In analysis tab, automatically shorten histogram width
     - Support for parabolic mirrors of various sizes (SPARC)
@@ -25,6 +25,9 @@ odemis (2.2-1ubuntu1) precise; urgency=low
     - Support for Omicron LedHub (SECOMv2)
     - Support for Andor Shamrock connected over USB (SPARC)
     - Support inversing contrast on semcomedi
+    - Skew correction is also applied in the SECOM
+    - In some cases two optical stream could play simultaneously (SECOM)
+    - Don't save all the anchor regions, because that could take too much memory (SPARC) 
 
  -- Éric Piel (Delmic) <piel@delmic.com>  Thu, 27 Aug 2015 15:49:20 +0200
 

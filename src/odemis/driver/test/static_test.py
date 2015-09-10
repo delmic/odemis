@@ -19,12 +19,12 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from odemis.driver import static
+from odemis.driver import static, simcam
 from odemis.util import timeout
 import unittest
 
-# Simple test cases, for the very simple static components
 
+# Simple test cases, for the very simple static components
 class TestLightFilter(unittest.TestCase):
     @timeout(1)
     def test_simple(self):
@@ -48,12 +48,14 @@ class TestLightFilter(unittest.TestCase):
         self.assertEqual({0: (band,)}, comp.axes["band"].choices)
         comp.terminate()
 
+
 class TestOpticalLens(unittest.TestCase):
     def test_simple(self):
         mag = 10.
         comp = static.OpticalLens("test", "lens", mag, pole_pos=(512.3, 400))
         self.assertEqual(mag, comp.magnification.value)
         comp.terminate()
+
 
 class TestSpectrograph(unittest.TestCase):
     @timeout(3)
@@ -62,21 +64,26 @@ class TestSpectrograph(unittest.TestCase):
         Just makes sure we more or less follow the behaviour of a spectrograph
         """
         wlp = [500e-9, 1/1e6]
-        sp = static.Spectrograph("test", "spectrograph", wlp=wlp)
-        self.assertEqual(wlp, sp.getPolyToWavelength())
-        
+        ccd = simcam.Camera("testcam", "ccd", image="andorcam2-fake-clara.tiff")
+        sp = static.Spectrograph("test", "spectrograph", wlp=wlp, children={"ccd": ccd})
+        ptw = sp.getPixelToWavelength()
+        self.assertGreater(wlp[0], ptw[0])
+        self.assertLess(wlp[0], ptw[-1])
+
         f = sp.moveAbs({"wavelength":300e-9})
         f.result()
         self.assertAlmostEqual(sp.position.value["wavelength"], 300e-9)
-        
+
         wlp[0] = 300e-9
-        self.assertEqual(wlp, sp.getPolyToWavelength())
+        ptw = sp.getPixelToWavelength()
+        self.assertGreater(wlp[0], ptw[0])
+        self.assertLess(wlp[0], ptw[-1])
 
         sp.stop()
-        
+
         self.assertTrue(sp.selfTest(), "self test failed.")
         sp.terminate()
-        
+
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']
     unittest.main()

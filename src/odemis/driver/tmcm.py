@@ -40,7 +40,8 @@ import time
 
 
 class TMCLError(Exception):
-    def __init__(self, status, value, cmd):
+    def __init__(self, status, value, cmd, *args, **kwargs):
+        super(TMCLError, self).__init__(status, value, cmd, *args, **kwargs)
         self.args = (status, value, cmd)
 
     def __str__(self):

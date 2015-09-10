@@ -38,9 +38,9 @@ import time
 import weakref
 
 
-
 class AndorV2Error(Exception):
-    def __init__(self, errno, strerror):
+    def __init__(self, errno, strerror, *args, **kwargs):
+        super(AndorV2Error, self).__init__(errno, strerror, *args, **kwargs)
         self.args = (errno, strerror)
         self.errno = errno
         self.strerror = strerror
@@ -48,11 +48,13 @@ class AndorV2Error(Exception):
     def __str__(self):
         return self.args[1]
 
+
 class CancelledError(Exception):
     """
     raise to indicate the acquisition is cancelled and must stop
     """
     pass
+
 
 class AndorCapabilities(Structure):
     _fields_ = [("Size", c_uint32), # the size of this structure

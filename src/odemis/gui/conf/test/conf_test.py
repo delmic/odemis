@@ -83,13 +83,16 @@ class GeneralConfigTest(ConfigTest, unittest.TestCase):
     def test_simple(self):
         conf = gui.conf.get_general_conf()
         path = conf.get_manual()
-        self.assertIsNone(path)
+        if path is not None:
+            self.assertTrue(os.path.exists(path))
 
         path = conf.get_manual("secom")
-        self.assertIsNone(path)
+        if path is not None:
+            self.assertTrue(os.path.exists(path))
 
         path = conf.get_dev_manual()
-        self.assertIsNone(path)
+        if path is not None:
+            self.assertTrue(os.path.exists(path))
 
     def test_save(self):
         conf = gui.conf.get_general_conf()
@@ -128,7 +131,7 @@ class AcquisitionConfigTest(ConfigTest, unittest.TestCase):
         conf = gui.conf.get_acqui_conf()
         self.assertIsInstance(conf.last_path, basestring)
         self.assertIsInstance(conf.last_format, basestring)
-        self.assertLess(len(conf.last_extension), 10)
+        self.assertLess(len(conf.last_extension), 12)
 
     def test_save(self):
         conf = gui.conf.get_acqui_conf()
@@ -161,12 +164,15 @@ class CalibrationConfigTest(ConfigTest, unittest.TestCase):
         srot = 0.1
         iscale = (13.1, 13.1)
         irot = 5.9606
+        iscale_xy = (1.01, 0.9)
+        ishear = 1.1
         resa = (8.09, 2.16)
         resb = (-157.5, -202.9)
         hfwa = (-0.953, -0.009)
         spotshift = (0.029, -2.90e-05)
 
-        orig_calib = htop, hbot, hfoc, strans, sscale, srot, iscale, irot, resa, resb, hfwa, spotshift
+        orig_calib = (htop, hbot, hfoc, strans, sscale, srot, iscale, irot,
+                      iscale_xy, ishear, resa, resb, hfwa, spotshift)
         conf.set_sh_calib(shid, *orig_calib)
 
         # read back from memory
