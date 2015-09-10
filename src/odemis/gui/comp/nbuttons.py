@@ -15,20 +15,52 @@ def resize_bmp(btn_size, bmp, bg_color):
         img_width, img_height = bmp.GetSize()
 
         if 0 < btn_width != img_width:
-            new_img = data.getbtn_48Image()
-            l = new_img.GetSubImage((0, 0, 3, 48)).ConvertToBitmap()
-            m = new_img.GetSubImage((3, 0, 3, 48)).Rescale(btn_width - 6, 48).ConvertToBitmap()
-            r = new_img.GetSubImage((6, 0, 3, 48)).ConvertToBitmap()
 
-            dst_bmp = wx.EmptyBitmap(btn_width, 48)
-            dst_dc = wx.MemoryDC()
-            dst_dc.SelectObject(dst_bmp)
-            dst_dc.SetBackground(wx.Brush(bg_color))
-            dst_dc.Clear()
+            if 1:
+                new_img = bmp.ConvertToImage()
+                l = new_img.GetSubImage((0, 0, 3, 48)).ConvertToBitmap()
+                m = new_img.GetSubImage((3, 0, 3, 48)).Rescale(btn_width - 6, 48).ConvertToBitmap()
+                r = new_img.GetSubImage((6, 0, 3, 48)).ConvertToBitmap()
 
-            dst_dc.DrawBitmap(l, 0, 0, True)
-            dst_dc.DrawBitmap(m, 3, 0, True)
-            dst_dc.DrawBitmap(r, btn_width - 3, 0)
+                src_dc = wx.MemoryDC()
+                src_dc.SelectObjectAsSource(bmp)
+
+                dst_bmp = wx.EmptyBitmap(btn_width, 48)
+                dst_dc = wx.MemoryDC()
+                dst_dc.SelectObject(dst_bmp)
+                dst_dc.SetBackground(wx.Brush(bg_color))
+                dst_dc.Clear()
+
+                dst_dc.DrawBitmap(l, 0, 0, True)
+                dst_dc.DrawBitmap(m, 3, 0, True)
+                dst_dc.DrawBitmap(r, btn_width - 3, 0)
+
+            else:
+                src_dc = wx.MemoryDC()
+                src_dc.SelectObjectAsSource(bmp)
+
+                dst_bmp = wx.EmptyBitmap(btn_width, 48, 32)
+                dst_dc = wx.MemoryDC()
+                dst_dc.SelectObject(dst_bmp)
+                dst_dc.SetBackground(wx.Brush(bg_color))
+                dst_dc.Clear()
+
+                dst_dc.Blit(0, 0,
+                            3, 48,
+                            src_dc,
+                            0, 0)
+
+                dst_dc.StretchBlit(3, 0,
+                                   btn_width - 3, 48,
+                                   src_dc,
+                                   3, 0,
+                                   3, 48)
+
+                dst_dc.Blit(btn_width - 3, 0,
+                            3, 48,
+                            src_dc,
+                            6, 0)
+
 
             dst_dc.SelectObject(wx.NullBitmap)
 
@@ -74,9 +106,15 @@ class ImageButton(GenBitmapButton):
 
     def OnSize(self, evt):
         super(GenBitmapButton, self).OnSize(evt)
+
         if not self.base_bmp:
             self.base_bmp = self.bmpLabel
+            self.base_sel_bmp = self.bmpSelected
+
         self.bmpLabel = resize_bmp(self.Size, self.base_bmp, self.Parent.GetBackgroundColour())
+
+        if self.base_sel_bmp:
+            self.bmpSelected = resize_bmp(self.Size, self.base_sel_bmp, self.Parent.GetBackgroundColour())
 
         # src_dc = wx.MemoryDC()
         # src_dc.SelectObjectAsSource(self.base_bmp)
@@ -113,11 +151,13 @@ class ImageButton(GenBitmapButton):
         # self.bmpLabel = dst_bmp
 
     def DrawLabel(self, dc, width, height, dx=0, dy=0):
-        """ Label drawing method called by the OnPaint event handler """
-
         bmp = self.bmpLabel
-        bw, bh = bmp.Size
 
-        hasMask = bmp.GetMask() != None
-        dc.Clear()
-        dc.DrawBitmap(self.bmpLabel, 0, 0, hasMask)
+        if self.bmpDisabled and not self.IsEnabled():
+            bmp = self.bmpDisabled
+        if self.bmpFocus and self.hasFocus:
+            bmp = self.bmpFocus
+        if self.bmpSelected and not self.up:
+            bmp = self.bmpSelected
+
+        dc.DrawBitmap(bmp, 0, 0)

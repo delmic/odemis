@@ -24791,6 +24791,21 @@ getbtn_128x48_hImage = btn_128x48_h.GetImage
 getbtn_128x48_hBitmap = btn_128x48_h.GetBitmap
 
 #----------------------------------------------------------------------
+btn_48_a = PyEmbeddedImage(
+    "iVBORw0KGgoAAAANSUhEUgAAAAkAAAAwCAYAAADD5FB1AAAAGXRFWHRTb2Z0d2FyZQBBZG9i"
+    "ZSBJbWFnZVJlYWR5ccllPAAAAQhJREFUeNrEVTuOgzAUHMMjIKCxCyRa6OBKm3LbdJsuF0iu"
+    "kC6Ho8t2LEJ89hnJWrTKx5EQGWls+TEaj8E2oizLDYAT84Op8Idv5oX5RdwcPc/bxXGMMAxB"
+    "RBBCYBxH2XXdrq7rH2LBNkkS5HmONE0RBIERoWkaVFX1SVEUqSzLUBQFlFJzJ7ATpJTKYdHk"
+    "wINJoKEFGno81V3Xhe/70L15OIeu07xwS6ThwAJkHO65TCIjeCiycrKe7tHK3hH8JadhGFbI"
+    "ZPeBTR6rTOsEt5vuTa9gxe27SKaFj/ly5+7p6tbNZL9VFnHSouvc7QavDjeXJ6Iz9X2/b9tW"
+    "cL/l21/+/5Vx/fArwACeOFayvo24awAAAABJRU5ErkJggg==")
+index.append('btn_48_a')
+catalog['btn_48_a'] = btn_48_a
+getbtn_48_aData = btn_48_a.GetData
+getbtn_48_aImage = btn_48_a.GetImage
+getbtn_48_aBitmap = btn_48_a.GetBitmap
+
+#----------------------------------------------------------------------
 btn_sem_orange_a = PyEmbeddedImage(
     "iVBORw0KGgoAAAANSUhEUgAAAFwAAAAwCAYAAACc2R15AAAFgklEQVR42u2bTWzcRBTH39he"
     "O4nopt0oVUSU5JLkxCWRkiAQVKhISUj5SO4cufbIjQvH3sqFSyWo+CgJpBRaUSGu3DmBRKVK"
@@ -25675,10 +25690,12 @@ getbtn_16x16Bitmap = btn_16x16.GetBitmap
 #----------------------------------------------------------------------
 btn_48 = PyEmbeddedImage(
     "iVBORw0KGgoAAAANSUhEUgAAAAkAAAAwCAYAAADD5FB1AAAAGXRFWHRTb2Z0d2FyZQBBZG9i"
-    "ZSBJbWFnZVJlYWR5ccllPAAAAK9JREFUeNrslcEKAiEQhsdlCD2uz1fHrnur275AvUK3fQ2f"
-    "abupoGgzkBRSi3QL/OGHAb/5VQRHGGN2UsorIu4BQMNL9xjj4r0/IRUXa+3knAOqIecMQgig"
-    "plEpNaWUHBJ54DYGihgMIZT6yEm6LNR6ghopDr6pNA7QoM2korakTwfu0I9Qy7P02/WDd+if"
-    "oeaPda0GT611IGjhLTd8QyLPZEHmQTS+jzLyQp4fAgwA4YvRPMxNr9wAAAAASUVORK5CYII=")
+    "ZSBJbWFnZVJlYWR5ccllPAAAAQdJREFUeNrUlTsOgkAQhmeXjaGVcDwtbe208wJ6BTvOwwko"
+    "aCgIATe8Q3g5Q7LGGB8UxqyTLAzsn28nzISfua67ME3zNAzDqu97CzDGcQTMZZ7nDq6dYIwd"
+    "y7LcJkkCdV0DikkHhmEsOefbKIpqgYJ1URSAd7gPJE1E3/c3om1bq6qq6cVjkBABliA8PbwK"
+    "2uMwIyaSKvZZUBnzSEr9jiTo8k40kT6JvkzSrPCb6FNbdPtO80lzhk7b3unWlh/37m+HTsO/"
+    "CqdZeiVSrsDRTy5d14E69n5JKclvLjwMQydNU2ia5rZJBDIkz/MAXeossizbB0HA4jheo88s"
+    "1dGYS8wd27YPVwEGAGwkwoGtLOTvAAAAAElFTkSuQmCC")
 index.append('btn_48')
 catalog['btn_48'] = btn_48
 getbtn_48Data = btn_48.GetData
