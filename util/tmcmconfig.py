@@ -50,7 +50,7 @@ AXIS_PARAMS = {
     154: "Pulse divisor",
     194: "Reference search speed",
     195: "Reference switch speed",
-    214: "Power down delay",
+    214: "Power down delay in ms",
 }
 
 # List of useful Global parameters: (bank, address) -> comment

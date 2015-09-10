@@ -135,6 +135,7 @@ class TMCLController(model.Actuator):
             raise ValueError("Reference procedure %s unknown" % (refproc, ))
         self._refproc = refproc
         self._refproc_cancelled = threading.Event()
+        self._refproc_lock = {}  # axis number -> lock
 
         self._ser_access = threading.Lock()
         self._serial, ra = self._findDevice(port, address)
@@ -248,6 +249,7 @@ class TMCLController(model.Actuator):
         # TODO: configure StallGuard properly
         self.MoveRelPos(axis, 0) # activate parameter with dummy move
 
+        self._refproc_lock[axis] = threading.Lock()
         if self._refproc == REFPROC_2XFF:
             # set up the programs needed for the referencing
 
@@ -671,7 +673,7 @@ class TMCLController(model.Actuator):
 #         status = self.GetGlobalParam(2, gparam)
 #         return (status == 1)
 
-    def _doInputReference(self, axis, speed):
+    def _doReferenceFF(self, axis, speed):
         """
         Run synchronously one reference search
         axis (int): axis number
@@ -699,10 +701,14 @@ class TMCLController(model.Actuator):
         # not processed)
         addr = 0 + 15 * axis
         endt = time.time() + timeout + 2 # +2 s to let the program first timeout
-        self.RunProgram(addr)
+        with self._refproc_lock[axis]:
+            if self._refproc_cancelled.is_set():
+                raise CancelledError("Reference search dir %d cancelled" % edge)
+            self.RunProgram(addr)
+
+            status = self.GetGlobalParam(2, gparam)
 
         # Wait until referenced
-        status = self.GetGlobalParam(2, gparam)
         while status == 0:
             if self._refproc_cancelled.wait(0.01):
                 break
@@ -722,6 +728,11 @@ class TMCLController(model.Actuator):
         return (edge == 1)
 
     # Special methods for referencing
+    # One of the couple run/stop methods will be picked at init based on the
+    # arguments. (so the referencing is the same for all the axes).
+    # For now, runReferencing is synchronous because 2xFF is much easier to
+    # handle this way. If really needed, we could have run/wait/stop and so
+    # run them asynchronously.
     def _runReferencing2xFF(self, axis):
         """
         Do the 2x final forward referencing (this is synchronous).
@@ -730,11 +741,11 @@ class TMCLController(model.Actuator):
             IOError: if timeout happen
             CancelledError: if cancelled
         """
+        self._refproc_cancelled.clear()
+
         logging.info("Starting referencing of axis %d", axis)
         if not self._isFullyPowered():
             raise IOError("Device is not powered, so motors cannot move")
-
-        self._refproc_cancelled.clear()
 
         # Procedure devised by NTS:
         # It requires the ref signal to be active for half the length. Like:
@@ -766,9 +777,9 @@ class TMCLController(model.Actuator):
             self._setInputInterrupt(axis)
 
             # TODO: be able to cancel (=> set a flag + call RFS STOP)
-            neg_dir = self._doInputReference(axis, 350) # fast (~0.5 mm/s)
+            neg_dir = self._doReferenceFF(axis, 350) # fast (~0.5 mm/s)
             if neg_dir: # always finish first by positive direction
-                self._doInputReference(axis, 350) # fast (~0.5 mm/s)
+                self._doReferenceFF(axis, 350) # fast (~0.5 mm/s)
 
             # Go back far enough that the slow referencing always need quite
             # a bit of move. This is not part of the official NTS procedure
@@ -782,12 +793,12 @@ class TMCLController(model.Actuator):
             else:
                 logging.warning("Relative move failed to finish in time")
 
-            neg_dir = self._doInputReference(axis, 50) # slow (~0.07 mm/s)
+            neg_dir = self._doReferenceFF(axis, 50) # slow (~0.07 mm/s)
             if not neg_dir: # if it was done in positive direction (unlikely), redo
                 logging.debug("Doing one last reference move, in negative dir")
                 # As it always waits for the edge to change, the second time
                 # should be positive
-                neg_dir = self._doInputReference(axis, 50)
+                neg_dir = self._doReferenceFF(axis, 50)
                 if not neg_dir:
                     logging.warning("Second reference search was again in positive direction")
         finally:
@@ -807,16 +818,20 @@ class TMCLController(model.Actuator):
 
     def _cancelReferencing2xFF(self, axis):
         """
-        Cancel the referencing.
+        Cancel the referencing. It's fine to call even if referencing is not
+         taking place.
+        axis (int)
         return (bool): True if the referencing was cancelled successfully
         """
         # TODO: protect with a lock the start of the referencing
         self._refproc_cancelled.set()
-        self.StopRefSearch(axis)
-        self.StopProgram()
-        self.MotorStop(axis)
-        gparam = 50 + axis
-        self.SetGlobalParam(2, gparam, 3)  # 3 => indicate cancelled
+        with self._refproc_lock[axis]:
+            self.StopRefSearch(axis)
+            self.StopProgram()
+            self.MotorStop(axis)
+            gparam = 50 + axis
+            self.SetGlobalParam(2, gparam, 3)  # 3 => indicate cancelled
+
         return True
 
     def _runReferencingLS(self, axis):
@@ -826,11 +841,11 @@ class TMCLController(model.Actuator):
         raise:
             IOError: if timeout happen
         """
+        self._refproc_cancelled.clear()
+
         logging.info("Starting referencing of axis %d", axis)
         if not self._isFullyPowered():
             raise IOError("Device is not powered, so motors cannot move")
-
-        self._refproc_cancelled.clear()
 
         # TODO: Untested code
         self.SetAxisParam(axis, 194, 350) # ref search speed
@@ -877,9 +892,13 @@ class TMCLController(model.Actuator):
         raise:
             IOError: if timeout happen
         """
+        self._refproc_cancelled.clear()
         logging.debug("Simulating referencing of axis %d", axis)
-        # For testing referencing failure, uncomment these lines
-#       time.sleep(1)
+
+        if self._refproc_cancelled.wait(1):
+            return
+
+        # For testing referencing failure, uncomment this line
 #       raise IOError("timeout")
         self.MotorStop(axis)
         self.SetAxisParam(axis, 1, 0)
@@ -889,7 +908,8 @@ class TMCLController(model.Actuator):
         Cancel the referencing.
         return (bool): True if the referencing was cancelled successfully
         """
-        return False  # Too fast to cancel
+        self._refproc_cancelled.set()
+        return True
 
     # high-level methods (interface)
     def _updatePosition(self, axes=None):
@@ -956,7 +976,7 @@ class TMCLController(model.Actuator):
         self.temperature1._value = t1
         self.temperature1.notify(t1)
 
-    def _createFuture(self):
+    def _createMoveFuture(self):
         """
         Return (CancellableFuture): a future that can be used to manage a move
         """
@@ -984,7 +1004,7 @@ class TMCLController(model.Actuator):
         if not shift:
             return model.InstantaneousFuture()
 
-        f = self._createFuture()
+        f = self._createMoveFuture()
         f = self._executor.submitf(f, self._doMoveRel, f, shift)
         return f
 
@@ -999,10 +1019,22 @@ class TMCLController(model.Actuator):
             if not self.referenced.value[a] and p != self.position.value[a]:
                 logging.warning("Absolute move on axis '%s' which has not be referenced", a)
 
-        f = self._createFuture()
-        f = self._executor.submitf(f, self._doMoveAbs, f, pos)
+        f = self._createMoveFuture()
+        self._executor.submitf(f, self._doMoveAbs, f, pos)
         return f
     moveAbs.__doc__ = model.Actuator.moveAbs.__doc__
+
+    def _createRefFuture(self):
+        """
+        Return (CancellableFuture): a future that can be used to manage referencing
+        """
+        f = CancellableFuture()
+        f._moving_lock = threading.Lock()  # taken while moving
+        f._must_stop = threading.Event()  # cancel of the current future requested
+        f._was_stopped = False  # if cancel was successful
+        f._current_axis = None  # (int or None) axis which is being referenced
+        f.task_canceller = self._cancelReference
+        return f
 
     @isasync
     def reference(self, axes):
@@ -1010,7 +1042,8 @@ class TMCLController(model.Actuator):
             return model.InstantaneousFuture()
         self._checkReference(axes)
 
-        f = self._executor.submit(self._doReference, axes)
+        f = self._createRefFuture()
+        self._executor.submitf(f, self._doReference, f, axes)
         return f
     reference.__doc__ = model.Actuator.reference.__doc__
 
@@ -1022,6 +1055,9 @@ class TMCLController(model.Actuator):
         Blocking and cancellable relative move
         future (Future): the future it handles
         pos (dict str -> float): axis name -> relative target position
+        raise:
+            PIGCSError: if the controller reported an error
+            CancelledError: if cancelled before the end of the move
         """
         with future._moving_lock:
             end = 0 # expected end
@@ -1043,6 +1079,9 @@ class TMCLController(model.Actuator):
         Blocking and cancellable absolute move
         future (Future): the future it handles
         pos (dict str -> float): axis name -> absolute target position
+        raise:
+            PIGCSError: if the controller reported an error
+            CancelledError: if cancelled before the end of the move
         """
         with future._moving_lock:
             end = 0 # expected end
@@ -1104,33 +1143,6 @@ class TMCLController(model.Actuator):
         finally:
             self._updatePosition() # update (all axes) with final position
 
-    def _doReference(self, axes):
-        """
-        Actually runs the referencing code
-        axes (set of str)
-        """
-        # Reset reference so that if it fails, it states the axes are not
-        # referenced (anymore)
-        for a in axes:
-            self.referenced._value[a] = False
-
-        try:
-            # do the referencing for each axis
-            for a in axes:
-                aid = self._name_to_axis[a]
-                self._runReferencing(aid)
-
-            # TODO: handle cancellation
-            # If not cancelled and successful, update .referenced
-            # We only notify after updating the position so that when a listener
-            # receives updates both values are already updated.
-            for a in axes:
-                self.referenced._value[a] = True
-        finally:
-            self._updatePosition(axes)  # all the referenced axes should be back to 0
-            # read-only so manually notify
-            self.referenced.notify(self.referenced.value)
-
     def _cancelCurrentMove(self, future):
         """
         Cancels the current move (both absolute or relative). Non-blocking.
@@ -1144,6 +1156,62 @@ class TMCLController(model.Actuator):
         logging.debug("Cancelling current move")
 
         future._must_stop.set() # tell the thread taking care of the move it's over
+        with future._moving_lock:
+            if not future._was_stopped:
+                logging.debug("Cancelling failed")
+            return future._was_stopped
+
+    def _doReference(self, future, axes):
+        """
+        Actually runs the referencing code
+        future (Future): the future it handles
+        axes (set of str)
+        raise:
+            IOError: if referencing failed due to hardware
+            CancelledError if was cancelled
+        """
+        # Reset reference so that if it fails, it states the axes are not
+        # referenced (anymore)
+        with future._moving_lock:
+            try:
+                # do the referencing for each axis sequentially
+                # (because each referencing is synchronous)
+                for a in axes:
+                    aid = self._name_to_axis[a]
+                    future._current_axis = a
+                    if future._must_stop.is_set():
+                        raise CancelledError()
+                    self.referenced._value[a] = False
+                    self._runReferencing(aid)  # block until it's over
+                    self.referenced._value[a] = True
+                    future._current_axis = None
+
+                # TODO: handle cancellation
+            except CancelledError:
+                logging.info("Referencing cancelled")
+                future._was_stopped = True
+                raise
+            finally:
+                # We only notify after updating the position so that when a listener
+                # receives updates both values are already updated.
+                self._updatePosition(axes)  # all the referenced axes should be back to 0
+                # read-only so manually notify
+                self.referenced.notify(self.referenced.value)
+
+    def _cancelReference(self, future):
+        # The difficulty is to synchronise correctly when:
+        #  * the task is just starting (not finished requesting axes to move)
+        #  * the task is finishing (about to say that it finished successfully)
+        logging.debug("Cancelling current referencing")
+
+        future._must_stop.set()  # tell the thread taking care of the referencing it's over
+        # TODO: take a lock on the referencing init
+        #  cancel the referencing on the current axis
+        a = future._current_axis
+        if a is not None:
+            self._cancelReferencing(a)  # It's ok to call this even if the axis is not referencing
+
+        # Synchronise with the ending of the future
         with future._moving_lock:
             if not future._was_stopped:
                 logging.debug("Cancelling failed")
