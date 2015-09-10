@@ -725,6 +725,19 @@ class OverlayStream(Stream):
         @wraps(f)
         def result_as_da(timeout=None):
             trans_val, (opt_md, sem_md) = f(timeout)
+            # In case the transformation values are extreme compared to the
+            # calibration values just abort them
+            f_scale = opt_md[model.MD_PIXEL_SIZE_COR]
+            f_rot = -opt_md[model.MD_ROTATION_COR] % (2 * math.pi)
+            c_scale = self._ccd.getMetadata()[model.MD_PIXEL_SIZE_COR]
+            c_rot = -self._emitter.getMetadata()[model.MD_ROTATION_COR] % (2 * math.pi)
+            rot_diff = abs(((f_rot - c_rot) + math.pi) % (2 * math.pi) - math.pi)
+            scale_diff = abs(f_scale[0] - c_scale[0])
+            if (rot_diff > math.radians(2) or scale_diff > 0.1):
+                raise ValueError("Overlay failure. There is a significant difference between the calibration "
+                                 "and fine alignment values (scale difference: %f, rotation difference: %f)",
+                                 scale_diff, rot_diff)
+
             # Create an empty DataArray with trans_md as the metadata
             return [model.DataArray([], opt_md), model.DataArray([], sem_md)]
 
