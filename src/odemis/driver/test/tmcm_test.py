@@ -343,6 +343,42 @@ class TestActuator(unittest.TestCase):
             self.assertTrue(self.dev.referenced.value[a])
             self.assertAlmostEqual(self.dev.position.value[a], 0)
 
+    def test_ref_cancel(self):
+        """
+        Try cancelling referencing
+        """
+        axes = set(self.dev.axes.keys())
+
+        # first try one by one => cancel during ref
+        for a in axes:
+            self.dev.moveRel({a:-1e-3})  # move a bit to make it a bit harder
+            f = self.dev.reference({a})
+            time.sleep(5e-3)
+            self.assertTrue(f.cancel())
+            self.assertFalse(self.dev.referenced.value[a])
+            self.assertTrue(f.cancelled())
+
+        # try cancelling too late (=> should do nothing)
+        for a in axes:
+            self.dev.moveRel({a:-1e-3})  # move a bit to make it a bit harder
+            f = self.dev.reference({a})
+            f.result()
+            self.assertFalse(f.cancel())
+            self.assertTrue(self.dev.referenced.value[a])
+            self.assertAlmostEqual(self.dev.position.value[a], 0)
+            self.assertFalse(f.cancelled())
+
+        # try all axes simultaneously, and cancel during ref
+        mv = dict((a, 1e-3) for a in axes)
+        self.dev.moveRel(mv)
+        f = self.dev.reference(axes)
+        time.sleep(5e-3)
+        self.assertTrue(f.cancel())
+        self.assertTrue(f.cancelled())
+        # Some axes might have had time to be referenced, but not all
+        self.assertFalse(all(self.dev.referenced.value.values()))
+
+
 if __name__ == "__main__":
     unittest.main()
 

@@ -313,6 +313,14 @@ class Instantiator(object):
                     # => we explicitly reuse it
                     init["children"][internal_role] = self._get_component_by_name(child_name)
 
+        # take care of power supplier argument
+        if "power_supplier" in init:
+            raise SemanticError("Error in microscope "
+                "file: component '%s' should not have a 'children' entry in the init." % name)
+        if "power_supplier" in attr:
+            psu_name = attr["power_supplier"]
+            init["power_supplier"] = self._get_component_by_name(psu_name)
+
         return init
 
     def is_leaf(self, name):
@@ -355,6 +363,12 @@ class Instantiator(object):
 
         logging.debug("Going to instantiate %s (%s) with args %s",
                       name, class_name, args)
+
+        # if the component is connected to a PowerSupplier we first need to turn
+        # it on before we instantiate it
+        if "power_supplier" in args:
+            f = args["power_supplier"].supply({name: True})
+            f.result()
 
         if self.dry_run and not class_name == "Microscope":
             # mock class for everything but Microscope (because it is safe)
@@ -518,8 +532,8 @@ class Instantiator(object):
     def get_instantiables(self, instantiated=None):
         """
         Find the components that are currently not yet instantiated, but 
-        could be directly (ie, all their children created explicitly are already
-        instantiated)
+        could be directly (ie, all their children or power_supplier created explicitly are
+        already instantiated)
         instantiated (None or set of str): the names of the components already
           instantiated. If it's None, it will use the list of all the components
           ever instantiated.
@@ -533,6 +547,13 @@ class Instantiator(object):
                 continue
             if "class" not in attrs: # created by delegation
                 continue
+            if "power_supplier" in attrs:
+                psuname = attrs["power_supplier"]
+                # psudata = self.ast[psuname]
+                logging.debug("%s has a power_supplier %s", n, psuname)
+                if not psuname in instantiated:
+                    logging.debug("Component %s is not instantiable yet", n)
+                    continue
             for cname in attrs.get("children", {}).values():
                 childat = self.ast[cname]
                 # the child must be either instantiated or instantiated via delegation
