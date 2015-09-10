@@ -5,8 +5,10 @@
 # The file to represent the memory is a tab-separated value with the following format:
 # bank/axis  address  value    # comment
 # bank/axis can be either G0 -> G3 and A0->A5
-# Address is between 0 and 255
-# Value a number (actual allowed values depend on the parameter)
+#            Address is between 0 and 255
+#                     Value a number (actual allowed values depend on the parameter)
+# The recommend file extension is '.tmcm.tsv'
+
 '''
 Created on September 2015
 
@@ -74,7 +76,7 @@ def read_param(ctrl, f):
         naxes = 64
 
     # Write the name of the board, for reference
-    f.write("# Parameters from %s\n" % ctrl.hwVersion)
+    f.write("# Parameters from %s, address %d\n" % (ctrl.hwVersion, ctrl._target))
     f.write("# Bank/Axis\tAddress\tDescription\n")
 
     # Read axes params
@@ -115,11 +117,11 @@ def write_param(ctrl, f):
         # comment or empty line?
         mc = re.match(r"\s*(#|$)", l)
         if mc:
-            logging.debug("Comment line skipped: '%s'", l)
+            logging.debug("Comment line skipped: '%s'", l.rstrip("\n\r"))
             continue
         m = re.match(r"(?P<type>[AG])(?P<num>[0-9]+)\t(?P<add>[0-9]+)\t(?P<value>[0-9]+)\s*(#.*)?$", l)
         if not m:
-            raise ValueError("Failed to parse line '%s'" % l)
+            raise ValueError("Failed to parse line '%s'" % l.rstrip("\n\r"))
         typ, num, add, val = m.group("type"), int(m.group("num")), int(m.group("add")), int(m.group("value"))
         if typ == "A":
             axis_params[(num, add)] = val
@@ -134,14 +136,14 @@ def write_param(ctrl, f):
     try:
         ctrl.GetAxisParam(max_axis, 1)  # current pos
     except tmcm.TMCLError:
-        raise ValueError("Board doesn't have up to %d axes", max_axis + 1)
+        raise ValueError("Board doesn't have up to %d axes" % (max_axis + 1,))
 
     # Write each parameters (in order, to be clearer in case of error)
     for ax, ad in sorted(axis_params.keys()):
         v = axis_params[(ax, ad)]
         try:
             ctrl.SetAxisParam(ax, ad, v)
-            # ctrl.StoreAxisParam(ax, ad)  # Save to EEPROM
+            ctrl.StoreAxisParam(ax, ad)  # Save to EEPROM
         except tmcm.TMCLError as ex:
             if ex.errno == 5:
                 logging.exception("Failed to write to EEPROM: locked")
@@ -156,7 +158,9 @@ def write_param(ctrl, f):
         v = global_params[(b, ad)]
         try:
             ctrl.SetGlobalParam(b, ad, v)
-            # ctrl.StoreGlobalParam(b, ad)  # Save to EEPROM
+            if b > 0:
+                # Bank 0 is automatically saved to EEPROM and doesn't support Store/Restore
+                ctrl.StoreGlobalParam(b, ad)  # Save to EEPROM
         except tmcm.TMCLError as ex:
             if ex.errno == 5:
                 logging.exception("Failed to write to EEPROM: locked")
