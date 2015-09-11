@@ -358,9 +358,9 @@ def MatchCoordinates(input_coordinates, electron_coordinates, guess_scale, max_a
     max_wrong_points = math.ceil(0.5 * math.sqrt(len(electron_coordinates)))
     for step in xrange(MAX_STEPS_NUMBER):
         # Calculate nearest point
-        estimated_coordinates, index1, e_wrong_points, total_shift = _MatchAndCalculate(transformed_coordinates,
-                                                                                        optical_coordinates,
-                                                                                        electron_coordinates)
+        estimated_coordinates, index1, e_wrong_points, o_wrong_points, total_shift = _MatchAndCalculate(transformed_coordinates,
+                                                                                                        optical_coordinates,
+                                                                                                        electron_coordinates)
 
         if not estimated_coordinates:
             logging.warning("Failed to get any coordinate match")
@@ -368,6 +368,7 @@ def MatchCoordinates(input_coordinates, electron_coordinates, guess_scale, max_a
 
         # Calculate succesful
         e_match_points = [not i for i in e_wrong_points]
+        o_match_points = [not i for i in o_wrong_points]
         e_coord_exp = [estimated_coordinates[i] for i in compress(index1, e_match_points)]
         e_coord_actual = list(compress(electron_coordinates, e_match_points))
 
@@ -406,7 +407,7 @@ def MatchCoordinates(input_coordinates, electron_coordinates, guess_scale, max_a
     if len(optical_coordinates) == len(known_ordered_coordinates):
         known_optical_coordinates = optical_coordinates
     else:
-        known_optical_coordinates = list(compress(optical_coordinates, e_match_points))
+        known_optical_coordinates = list(compress(optical_coordinates, o_match_points))
     return known_ordered_coordinates, known_optical_coordinates
 
 
@@ -460,6 +461,7 @@ def _MatchAndCalculate(transformed_coordinates, optical_coordinates, electron_co
     returns estimated_coordinates (List of tuples): Estimated optical coordinates
             index1 (List of integers): Indexes of nearest points in optical with respect to electron
             e_wrong_points (List of booleans): Electron coordinates that have no proper match
+            o_wrong_points (List of booleans): Optical coordinates that have no proper match
             total_shift (float): Calculated total shift
     """
     index1 = _KNNsearch(transformed_coordinates, electron_coordinates)
@@ -585,7 +587,7 @@ def _MatchAndCalculate(transformed_coordinates, optical_coordinates, electron_co
         logging.warning("Cannot perform matching..")
         return [], [], [], []
 
-    return estimated_coordinates, index1, e_wrong_points, total_shift
+    return estimated_coordinates, index1, e_wrong_points, o_wrong_points, total_shift
 
 
 def _FindOuterOutliers(x_coordinates):
