@@ -48,9 +48,14 @@ AXIS_PARAMS = {
     140: "Microstep resolution",
     153: "Ramp divisor",
     154: "Pulse divisor",
+    # These ones are not in EEPROM
+#     162: "Chopper blank time",
+#     163: "Chopper mode",
+#     167: "Chopper off time",
+    193: "Reference search mode",
     194: "Reference search speed",
     195: "Reference switch speed",
-    214: "Power down delay in ms",
+    214: "Power down delay (in 10ms)",
 }
 
 # List of useful Global parameters: (bank, address) -> comment
@@ -86,6 +91,9 @@ def read_param(ctrl, f):
             try:
                 # TODO: allow to select whether we first the reset the value from the ROM or not?
                 ctrl.RestoreAxisParam(axis, add)
+            except tmcm.TMCLError:
+                logging.warning("Failed to restore axis param A%d %d", axis, add)
+            try:
                 v = ctrl.GetAxisParam(axis, add)
                 f.write("A%d\t%d\t%d\t# %s\n" % (axis, add, v, c))
             except Exception:
@@ -192,9 +200,9 @@ def main(args):
                         help="Will write all the parameters as read from the file (use - for stdin)")
 
     parser.add_argument('--port', dest="port",
-                        help="Port name (ex: /dev/ttyACM0), if no address is given")
+                        help="Port name (ex: /dev/ttyACM0), required if no address is given")
     parser.add_argument('--address', dest="add", type=int,
-                        help="Controller address (as specified on the DIP), if no port is given")
+                        help="Controller address (as specified on the DIP), required if no port is given")
 
     options = parser.parse_args(args[1:])
 
