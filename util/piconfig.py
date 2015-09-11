@@ -31,8 +31,6 @@ import threading
 import time
 
 
-logging.getLogger().setLevel(logging.INFO)
-
 # Low-level serial connection (almost a direct copy of the code in odemis.driver.pigcs)
 
 def openPort(port, *args):
@@ -543,7 +541,9 @@ def main(args):
     parser = argparse.ArgumentParser(prog="piconfig",
                              description="Read/write parameters in a PI controller")
 
-    # TODO: read and write should take a file as argument
+    parser.add_argument("--log-level", dest="loglev", metavar="<level>", type=int,
+                        default=1, help="set verbosity level (0-2, default = 1)")
+
     parser.add_argument('--read', dest="read", type=argparse.FileType('w'),
                         help="Will read all the parameters and save them in a file (use - for stdout)")
     parser.add_argument('--write', dest="write", type=argparse.FileType('r'),
@@ -560,6 +560,14 @@ def main(args):
     # TODO: add way to turn on/off the error light (ex, send \x18 "STOP" and ERR?)
 
     options = parser.parse_args(args[1:])
+
+    # Set up logging before everything else
+    if options.loglev < 0:
+        logging.error("Log-level must be positive.")
+        return 127
+    loglev_names = (logging.WARNING, logging.INFO, logging.DEBUG)
+    loglev = loglev_names[min(len(loglev_names) - 1, options.loglev)]
+    logging.getLogger().setLevel(loglev)
 
     try:
         acc = openPort(options.port)
