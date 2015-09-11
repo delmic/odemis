@@ -41,6 +41,8 @@ def CalculateTransform(optical_coordinates, electron_coordinates, skew=False):
 
     # Make matrix X
     list_len = len(electron_coordinates)  # We assume that both lists have the same length
+    if optical_array.shape[0] != list_len:
+        raise ValueError("Mismatch between the number of expected and found coordinates.")
 
     if skew is False:
         x_array = numpy.zeros(shape=(2 * list_len, 4))
