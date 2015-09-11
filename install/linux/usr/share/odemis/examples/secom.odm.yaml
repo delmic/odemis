@@ -78,7 +78,11 @@ Spectra: {
 "Nikon Lens": {
     class: static.OpticalLens,
     role: lens,
-    init: {mag: 150.0}, # ratio (actually of the complete light path)
+    init: {
+       mag: 100.0, # ratio, (actually of the complete light path)
+       na: 0.95, # ratio, numerical aperture
+       ri: 1.0, # ratio, refractive index
+    },
     affects: [Clara]
 }
 

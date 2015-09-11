@@ -78,7 +78,11 @@ SECOMv2: {
 "Optical Objective": {
     class: static.OpticalLens,
     role: lens,
-    init: {mag: 60.0}, # ratio (actually of the complete light path)
+    init: {
+       mag: 40.0, # ratio, (actually of the complete light path)
+       na: 0.95, # ratio, numerical aperture
+       ri: 1.0, # ratio, refractive index
+    },
     affects: ["Camera"]
 }
 
