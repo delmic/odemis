@@ -46,6 +46,7 @@ AXIS_PARAMS = {
     6: "Absolute max current",
     7: "Standby current",
     140: "Microstep resolution",
+    149: "Soft stop flag",
     153: "Ramp divisor",
     154: "Pulse divisor",
     # These ones are not in EEPROM

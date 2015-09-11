@@ -44,7 +44,7 @@ KWARGS = dict(name="test", role="stage", port=PORT,
               temp=True,
               inverted=["x"])
 KWARGS_SIM = dict(KWARGS)
-KWARGS_SIM["refproc"] = "FakeReferencing" # simulator doesn't support running program (=> fancy referencing)
+KWARGS_SIM["refproc"] = "Standard"
 KWARGS_SIM["port"] = "/dev/fake6"
 
 if TEST_NOHW:
@@ -325,7 +325,7 @@ class TestActuator(unittest.TestCase):
         Try referencing each axis
         """
         axes = set(self.dev.axes.keys())
-        
+
         # first try one by one
         for a in axes:
             self.dev.moveRel({a: -1e-3}) # move a bit to make it a bit harder
@@ -333,7 +333,7 @@ class TestActuator(unittest.TestCase):
             f.result()
             self.assertTrue(self.dev.referenced.value[a])
             self.assertAlmostEqual(self.dev.position.value[a], 0)
-        
+
         # try all axes simultaneously
         mv = dict((a, 1e-3) for a in axes)
         self.dev.moveRel(mv)

@@ -203,7 +203,7 @@ SPARC2: {
         address: null,
         axes: ["l1", "l2", "cl-sel", "fw", "slit"],
         ustepsize: [5.9e-9, 5.9e-9, 5.9e-9, 5.9e-9, 5.9e-9], # m/µstep
-        refproc: "FakeReferencing", # referencing procedure for simulator
+        refproc: "Standard",
     },
 }
 
@@ -288,7 +288,7 @@ SPARC2: {
         address: null,
         axes: ["x", "y"],
         ustepsize: [5.9e-9, 5.9e-9], # m/µstep
-        refproc: "FakeReferencing", # referencing procedure for simulator
+        refproc: "Standard",
     },
 }
 
