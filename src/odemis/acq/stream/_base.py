@@ -510,9 +510,14 @@ class Stream(object):
                         drange = (idt.min, idt.max)
 
                 # If range is too big to be used as is => look really at the data
-                if drange[1] - drange[0] > 4095:
+                if (drange[1] - drange[0] > 4095 and
+                    (self._drange is None or self._drange[1] - self._drange[0] < 4096)):
                     mn = int(data.view(numpy.ndarray).min())
                     mx = int(data.view(numpy.ndarray).max())
+                    if self._drange is not None:
+                        # Only allow the range to expand, to avoid it constantly moving
+                        mn = min(mn, self._drange[0])
+                        mx = max(mx, self._drange[1])
                     # Try to find "round" values. Either:
                     # * mn = 0, mx = max rounded to next power of 2  -1
                     # * mn = min, width = width rounded to next power of 2
@@ -525,9 +530,6 @@ class Stream(object):
                         drange = (mn, mn + diffrd - 1)
                     else:
                         drange = (0, width0rd - 1)
-                    if self._drange is not None:
-                        drange = (min(drange[0], self._drange[0]),
-                                  max(drange[1], self._drange[1]))
             else: # float
                 # cast to ndarray to ensure a scalar (instead of a DataArray)
                 drange = (data.view(numpy.ndarray).min(),
