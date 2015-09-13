@@ -158,17 +158,28 @@ class NButtonsTestCase(test.GuiTestCase):
     frame_class = test.test_gui.xrcbutton_frame
 
     def test_new_button(self):
-        btn = buttons.NImageButton(self.panel)
-        self.add_control(btn, flags=wx.EXPAND|wx.ALL)
 
-        btn = buttons.NImageTextButton(self.panel, label="Hallo!", style=wx.RIGHT)
-        # btn.Disable()
-        self.add_control(btn, flags=wx.EXPAND|wx.ALL)
+        for h in (16, 24, 32, 48):
 
-        btn = genbuttons.GenBitmapTextButton(self.panel, bitmap=data.getbtn_48_aBitmap(),
-                                             label="Hallo!")
-        # btn.Disable()
-        self.add_control(btn, flags=wx.EXPAND|wx.ALL)
+            row_sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+            btn = buttons.NImageButton(self.panel, height=h)
+            btn.SetIcon(data.getico_eject_orangeBitmap())
+            row_sizer.Add(btn, flag=wx.LEFT|wx.RIGHT, border=2)
+
+            btn = buttons.NImageToggleButton(self.panel, height=h)
+            btn.SetIcon(data.getico_sem_greenBitmap())
+            row_sizer.Add(btn, flag=wx.LEFT|wx.RIGHT, border=2)
+
+            btn = buttons.NImageTextButton(self.panel, height=h, label="Daaaag!",
+                                           icon=data.getico_eject_orangeBitmap())
+            row_sizer.Add(btn, flag=wx.LEFT|wx.RIGHT, border=2)
+
+            btn = buttons.NImageTextToggleButton(self.panel, height=h, label="Daaaag!",
+                                           icon=data.getico_camBitmap())
+            row_sizer.Add(btn, flag=wx.LEFT|wx.RIGHT, border=2)
+
+            self.add_control(row_sizer, flags=wx.ALL, border=2)
 
 
 

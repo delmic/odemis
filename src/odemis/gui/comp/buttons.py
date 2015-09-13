@@ -37,7 +37,7 @@ from odemis.gui.img import data as imgdata
 from odemis.gui.util import img
 import wx
 from wx.lib.buttons import GenBitmapButton, GenBitmapToggleButton, GenBitmapTextToggleButton, \
-    GenBitmapTextButton
+    GenBitmapTextButton, __ToggleMixin
 
 import odemis.gui.img.data as imgdata
 
@@ -91,33 +91,76 @@ def darken_image(image, mltp=0.5):
 
 class BtnMixin(object):
 
-    labelDelta = 0
+    labelDelta = 1
     padding_x = 8
     padding_y = 1
 
+    btns = {
+        16: {
+            'on': imgdata.getbtn_16Bitmap,
+            'off': imgdata.getbtn_16_aBitmap,
+        },
+        24: {
+            'on': imgdata.getbtn_24Bitmap,
+            'off': imgdata.getbtn_24_aBitmap,
+        },
+        32: {
+            'on': imgdata.getbtn_32Bitmap,
+            'off': imgdata.getbtn_32_aBitmap,
+        },
+        48: {
+            'on': imgdata.getbtn_48Bitmap,
+            'off': imgdata.getbtn_48_aBitmap,
+        },
+    }
+
     def __init__(self, *args, **kwargs):
-        kwargs['style'] = kwargs.get('style', 0) | wx.NO_BORDER
-        kwargs['size'] = (-1, 48)
+        self.height = kwargs.pop('height', 32)
+        kwargs['style'] = kwargs.get('style', 0) | wx.NO_BORDER | wx.BU_EXACTFIT
         kwargs['bitmap'] = None
+        self.icon = kwargs.pop('icon', None)
+
         super(BtnMixin, self).__init__(*args, **kwargs)
 
         self.bmpHover = None
         self.hovering = None
         self.previous_size = (0, 0)
 
+    def SetIcon(self, icon):
+        self.icon = icon
+        self.SetBestSize(self.DoGetBestSize())
+        self.Refresh()
+
     def OnSize(self, evt):
         if self.Size != self.previous_size:
             self._assign_bitmaps()
             self.previous_size = self.Size
+
+    def _GetLabelSize(self):
+        """ used internally """
+
+        width = self.padding_x * 2
+        height = self.height - 2
+
+        label = self.GetLabel()
+
+        if label:
+            width += self.GetTextExtent(label)[0]
+
+        if self.icon:
+            width += (self.padding_x if label else 0) + self.icon.GetWidth()
+
+        return width, height, True if label else False
 
     @staticmethod
     def _create_bitmap(bmp, size, bg_color):
         btn_width, btn_height = size
 
         new_img = bmp.ConvertToImage()
-        l = new_img.GetSubImage((0, 0, 3, 48)).ConvertToBitmap()
-        m = new_img.GetSubImage((3, 0, 3, 48)).Rescale(btn_width - 6, 48).ConvertToBitmap()
-        r = new_img.GetSubImage((6, 0, 3, 48)).ConvertToBitmap()
+        l = new_img.GetSubImage((0, 0, 3, btn_height)).ConvertToBitmap()
+        m = new_img.GetSubImage((3, 0, 3, btn_height)).Rescale(btn_width - 6,
+                                                               btn_height).ConvertToBitmap()
+        r = new_img.GetSubImage((6, 0, 3, btn_height)).ConvertToBitmap()
 
         src_dc = wx.MemoryDC()
         src_dc.SelectObjectAsSource(bmp)
@@ -136,9 +179,9 @@ class BtnMixin(object):
 
     def _assign_bitmaps(self):
         bg_color = self.Parent.GetBackgroundColour()
-        size = (self.Size.x, 48)
+        size = (self.Size.x, self.height)
 
-        self.bmpLabel = self._create_bitmap(imgdata.getbtn_48Bitmap(), size, bg_color)
+        self.bmpLabel = self._create_bitmap(self.btns[self.height]['on'](), size, bg_color)
 
         image = imgdata.getbtn_48Image()
         darken_image(image, 1.2)
@@ -148,7 +191,7 @@ class BtnMixin(object):
         darken_image(image)
         self.bmpDisabled = self._create_bitmap(wx.BitmapFromImage(image), size, bg_color)
 
-        self.bmpSelected = self._create_bitmap(imgdata.getbtn_48_aBitmap(), size, bg_color)
+        self.bmpSelected = self._create_bitmap(self.btns[self.height]['off'](), size, bg_color)
 
     def InitOtherEvents(self):
         self.Bind(wx.EVT_ENTER_WINDOW, self.OnEnter)
@@ -179,19 +222,20 @@ class BtnMixin(object):
 
         dc.DrawBitmap(bmp, 0, 0)
 
+        self.DrawIco(dc, width, height)
+        self.DrawText(dc, width, height)
 
-class NImageButton(BtnMixin, GenBitmapButton):
-    pass
+    def DrawIco(self, dc, width, height, dx=0, dy=0):
+        if self.icon:
+            bw, bh = self.Size
+            if not self.up:
+                dx = dy = self.labelDelta
+            pos_x = (width - bw) // 2 + dx
+            pos_x += self.icon.GetWidth() + self.padding_x
+            pos_y = (height // 2) - (self.icon.GetHeight() // 2) - 2
+            dc.DrawBitmap(self.icon, self.padding_x + dx, pos_y + dy)
 
-
-class NImageTextButton(BtnMixin, GenBitmapTextButton):
-
-    def DrawLabel(self, dc, width, height, dx=0, dy=0):
-        BtnMixin.DrawLabel(self, dc, width, height)
-
-        self.DrawLabelText(dc, width, height)
-
-    def DrawLabelText(self, dc, width, height, dx=0, dy=0):
+    def DrawText(self, dc, width, height, dx=0, dy=0):
         # Determine font and font colour
         dc.SetFont(self.GetFont())
 
@@ -208,22 +252,42 @@ class NImageTextButton(BtnMixin, GenBitmapTextButton):
 
             # Determine the size of the text
             tw, th = dc.GetTextExtent(label)  # size of text
+
             if not self.up:
-                dx = dy = 1
+                dx = dy = self.labelDelta
 
             # Calculate the x position for the given background bitmap
             # The bitmap will be center within the button.
             pos_x = (width - bw) // 2 + dx
 
+            if self.icon:
+                pos_x += self.icon.GetWidth() + self.padding_x
+
             if self.HasFlag(wx.ALIGN_CENTER):
-                pos_x = pos_x + (bw - tw) // 2
+                pos_x += (bw - tw) // 2
             elif self.HasFlag(wx.ALIGN_RIGHT):
-                pos_x = pos_x + bw - tw - self.padding_x
+                pos_x += bw - tw - self.padding_x
             else:
-                pos_x = pos_x + self.padding_x
+                pos_x += self.padding_x
 
             # draw the text
-            dc.DrawText(label, pos_x, (height - th) // 2 + dy + self.padding_y)
+            dc.DrawText(label, pos_x, (height - th) // 2 + dy - 2)
+
+
+class NImageButton(BtnMixin, GenBitmapButton):
+    pass
+
+
+class NImageToggleButton(BtnMixin, GenBitmapTextToggleButton):
+    pass
+
+
+class NImageTextButton(BtnMixin, GenBitmapTextButton):
+   pass
+
+
+class NImageTextToggleButton(BtnMixin, GenBitmapTextToggleButton):
+   pass
 
 
 class ImageButton(GenBitmapButton):
