@@ -34,14 +34,18 @@ TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0) # Default to Hw testing
 if os.name == "nt":
     PORT = "COM1"
 else:
-    PORT = "/dev/ttyTMCM0" # "/dev/ttyACM0"
+    # that will catch pretty much any TMCM controller connected to the computer
+    PORT = "/dev/ttyTMCM*"  # "/dev/ttyACM0"
 
-CLASS = tmcm.TMCM3110
+CLASS = tmcm.TMCLController
 KWARGS = dict(name="test", role="stage", port=PORT,
               axes=["", "x", "y"],
               ustepsize=[0, 5.9e-9, 5.8e-9],
-              refproc="2xFinalForward",
-              temp=True,
+              # For the Delphi:
+              # refproc="2xFinalForward",
+              # temp=True,
+              # For the more standard configurations:
+              refproc="Standard",
               inverted=["x"])
 KWARGS_SIM = dict(KWARGS)
 KWARGS_SIM["refproc"] = "Standard"
