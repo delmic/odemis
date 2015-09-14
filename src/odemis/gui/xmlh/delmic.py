@@ -324,47 +324,6 @@ component.Manager.setMenu(
 )
 component.Manager.setTool(c, 'Controls', pos=(1, 1))
 
-
-### GraphicRadioButton
-
-c = component.Component(
-    'GraphicRadioButton', ['control', 'tool'],
-    ['pos', 'size', 'default', 'label', 'delta', 'bitmap', 'hover', 'selected', 'focus',
-     'disabled'],
-    image=images.TreeBitmapButton.GetImage()
-)
-c.addStyles('wxALIGN_LEFT', 'wxALIGN_RIGHT', 'wxALIGN_CENTRE')
-
-c.setParamClass('delta', params.ParamInt)
-
-c.setParamClass('default', params.ParamBool)
-c.setSpecial('bitmap',  attribute.BitmapAttribute)
-
-c.setSpecial('hover',  attribute.BitmapAttribute)
-c.setParamClass('hover', params.ParamBitmap)
-
-c.setSpecial('selected',  attribute.BitmapAttribute)
-c.setParamClass('selected', params.ParamBitmap)
-
-c.setSpecial('focus',  attribute.BitmapAttribute)
-c.setParamClass('focus', params.ParamBitmap)
-
-c.setSpecial('disabled',  attribute.BitmapAttribute)
-c.setParamClass('disabled', params.ParamBitmap)
-
-
-c.addEvents('EVT_BUTTON')
-component.Manager.register(c)
-component.Manager.addXmlHandler(xh_delmic.GraphicRadioButtonHandler)
-component.Manager.setMenu(
-    c,
-    'Delmic button',
-    'Graphic Radio Button',
-    'GraphicRadioButton',
-    4
-)
-component.Manager.setTool(c, 'Controls', pos=(1, 1))
-
 ### ViewButton
 
 c = component.Component(

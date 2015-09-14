@@ -1152,30 +1152,6 @@ class ViewButton(ImageTextToggleButton):
                           self.thumbnail_border,
                           True)
 
-
-class GraphicRadioButton(ImageTextToggleButton):
-    """ Simple graphical button that can be used to construct radio button sets
-    """
-
-    def __init__(self, *args, **kwargs):
-        self.value = kwargs.pop('value', None)
-        if 'label' not in kwargs:
-            kwargs['label'] = u"%g" % self.value
-        ImageTextToggleButton.__init__(self, *args, **kwargs)
-
-    def OnLeftDown(self, event):
-        """ This event handler is fired on left mouse button events, but it
-        ignores those events if the button is already active.
-        """
-        if not self.IsEnabled() or not self.up:
-            return
-        self.saveUp = self.up
-        self.up = not self.up
-        self.CaptureMouse()
-        self.SetFocus()
-        self.Refresh()
-
-
 class ColourButton(ImageButton):
     """ An ImageButton that has a single colour  background that can be altered.
     """
