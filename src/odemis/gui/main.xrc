@@ -159,13 +159,10 @@
           <object class="wxBoxSizer">
             <orient>wxHORIZONTAL</orient>
             <object class="sizeritem">
-              <object class="TabButton" name="btn_tab_secom_streams">
+              <object class="NTabButton" name="btn_tab_secom_streams">
                 <size>160,30</size>
+                <height>32</height>
                 <label>STREAMS</label>
-                <bitmap>img/tab_inactive.png</bitmap>
-                <hover>img/tab_hover.png</hover>
-                <selected>img/tab_active.png</selected>
-                <disabled>img/tab_hover.png</disabled>
                 <fg>#E5E5E5</fg>
                 <font>
                   <size>11</size>
@@ -183,13 +180,10 @@
               <border>20</border>
             </object>
             <object class="sizeritem">
-              <object class="TabButton" name="btn_tab_sparc_acqui">
+              <object class="NTabButton" name="btn_tab_sparc_acqui">
                 <size>160,30</size>
+                <height>32</height>
                 <label>ACQUISITION</label>
-                <bitmap>img/tab_inactive.png</bitmap>
-                <hover>img/tab_hover.png</hover>
-                <selected>img/tab_active.png</selected>
-                <disabled>img/tab_hover.png</disabled>
                 <fg>#E5E5E5</fg>
                 <font>
                   <size>11</size>
@@ -207,14 +201,10 @@
               <border>20</border>
             </object>
             <object class="sizeritem">
-              <object class="TabButton" name="btn_tab_inspection">
+              <object class="NTabButton" name="btn_tab_inspection">
                 <size>160,30</size>
+                <height>32</height>
                 <label>ANALYSIS</label>
-                <bitmap>img/tab_inactive.png</bitmap>
-                <hover>img/tab_hover.png</hover>
-                <selected>img/tab_active.png</selected>
-                <disabled>img/tab_hover.png</disabled>
-                <fg>#E5E5E5</fg>
                 <font>
                   <size>11</size>
                   <style>normal</style>
@@ -222,6 +212,7 @@
                   <underlined>0</underlined>
                   <face>Ubuntu</face>
                 </font>
+                <fg>#E5E5E5</fg>
                 <style>wxALIGN_CENTRE</style>
                 <XRCED>
                   <assign_var>1</assign_var>
@@ -235,15 +226,10 @@
               <flag>wxEXPAND</flag>
             </object>
             <object class="sizeritem">
-              <object class="TabButton" name="btn_tab_secom_align">
+              <object class="NTabButton" name="btn_tab_secom_align">
                 <size>160,30</size>
-                <default>1</default>
+                <height>32</height>
                 <label>LENS ALIGNMENT</label>
-                <bitmap>img/tab_inactive.png</bitmap>
-                <hover>img/tab_hover.png</hover>
-                <selected>img/tab_active.png</selected>
-                <disabled>img/tab_hover.png</disabled>
-                <fg>#E5E5E5</fg>
                 <font>
                   <size>11</size>
                   <style>normal</style>
@@ -251,6 +237,7 @@
                   <underlined>0</underlined>
                   <face>Ubuntu</face>
                 </font>
+                <fg>#E5E5E5</fg>
                 <style>wxALIGN_CENTRE</style>
                 <XRCED>
                   <assign_var>1</assign_var>
@@ -260,14 +247,10 @@
               <border>20</border>
             </object>
             <object class="sizeritem">
-              <object class="TabButton" name="btn_tab_sparc_chamber">
+              <object class="NTabButton" name="btn_tab_sparc_chamber">
                 <size>160,30</size>
-                <default>1</default>
+                <height>32</height>
                 <label>CHAMBER</label>
-                <bitmap>img/tab_inactive.png</bitmap>
-                <hover>img/tab_hover.png</hover>
-                <selected>img/tab_active.png</selected>
-                <disabled>img/tab_hover.png</disabled>
                 <fg>#E5E5E5</fg>
                 <font>
                   <size>11</size>
@@ -285,14 +268,10 @@
               <border>20</border>
             </object>
             <object class="sizeritem">
-              <object class="TabButton" name="btn_tab_sparc_align">
+              <object class="NTabButton" name="btn_tab_sparc_align">
                 <size>160,30</size>
+                <height>32</height>
                 <label>ALIGNMENT</label>
-                <bitmap>img/tab_inactive.png</bitmap>
-                <hover>img/tab_hover.png</hover>
-                <selected>img/tab_active.png</selected>
-                <disabled>img/tab_hover.png</disabled>
-                <fg>#E5E5E5</fg>
                 <font>
                   <size>11</size>
                   <style>normal</style>
@@ -300,6 +279,7 @@
                   <underlined>0</underlined>
                   <face>Ubuntu</face>
                 </font>
+                <fg>#E5E5E5</fg>
                 <style>wxALIGN_CENTRE</style>
                 <XRCED>
                   <assign_var>1</assign_var>
@@ -466,12 +446,10 @@
                     <cellpos>3,3</cellpos>
                   </object>
                   <object class="sizeritem">
-                    <object class="ImageTextButton" name="lens_align_btn_m_aligner_b">
+                    <object class="NImageTextButton" name="lens_align_btn_m_aligner_b">
+                      <size>64,-1</size>
+                      <height>48</height>
                       <label>↖</label>
-                      <delta>1</delta>
-                      <bitmap>img/button/btn_64x48.png</bitmap>
-                      <hover>img/button/btn_64x48_h.png</hover>
-                      <selected>img/button/btn_64x48_a.png</selected>
                       <font>
                         <size>24</size>
                         <style>normal</style>
@@ -489,12 +467,10 @@
                     <cellpos>1,1</cellpos>
                   </object>
                   <object class="sizeritem">
-                    <object class="ImageTextButton" name="lens_align_btn_p_aligner_a">
+                    <object class="NImageTextButton" name="lens_align_btn_p_aligner_a">
+                      <size>64,-1</size>
+                      <height>48</height>
                       <label>↗</label>
-                      <delta>1</delta>
-                      <bitmap>img/button/btn_64x48.png</bitmap>
-                      <hover>img/button/btn_64x48_h.png</hover>
-                      <selected>img/button/btn_64x48_a.png</selected>
                       <font>
                         <size>24</size>
                         <style>normal</style>
@@ -512,12 +488,10 @@
                     <cellpos>1,2</cellpos>
                   </object>
                   <object class="sizeritem">
-                    <object class="ImageTextButton" name="lens_align_btn_m_aligner_a">
+                    <object class="NImageTextButton" name="lens_align_btn_m_aligner_a">
+                      <size>64,-1</size>
+                      <height>48</height>
                       <label>↙</label>
-                      <delta>1</delta>
-                      <bitmap>img/button/btn_64x48.png</bitmap>
-                      <hover>img/button/btn_64x48_h.png</hover>
-                      <selected>img/button/btn_64x48_a.png</selected>
                       <font>
                         <size>24</size>
                         <style>normal</style>
@@ -535,12 +509,10 @@
                     <cellpos>2,1</cellpos>
                   </object>
                   <object class="sizeritem">
-                    <object class="ImageTextButton" name="lens_align_btn_p_aligner_b">
+                    <object class="NImageTextButton" name="lens_align_btn_p_aligner_b">
+                      <size>64,-1</size>
+                      <height>48</height>
                       <label>↘</label>
-                      <delta>1</delta>
-                      <bitmap>img/button/btn_64x48.png</bitmap>
-                      <hover>img/button/btn_64x48_h.png</hover>
-                      <selected>img/button/btn_64x48_a.png</selected>
                       <font>
                         <size>24</size>
                         <style>normal</style>
@@ -638,12 +610,10 @@
                     <cellpos>2,0</cellpos>
                   </object>
                   <object class="sizeritem">
-                    <object class="ImageTextButton" name="lens_align_btn_p_aligner_y">
+                    <object class="NImageTextButton" name="lens_align_btn_p_aligner_y">
+                      <size>64,-1</size>
+                      <height>48</height>
                       <label>↑</label>
-                      <delta>1</delta>
-                      <bitmap>img/button/btn_64x48.png</bitmap>
-                      <hover>img/button/btn_64x48_h.png</hover>
-                      <selected>img/button/btn_64x48_a.png</selected>
                       <font>
                         <size>24</size>
                         <style>normal</style>
@@ -661,12 +631,10 @@
                     <cellpos>1,2</cellpos>
                   </object>
                   <object class="sizeritem">
-                    <object class="ImageTextButton" name="lens_align_btn_m_aligner_y">
+                    <object class="NImageTextButton" name="lens_align_btn_m_aligner_y">
+                      <size>64,-1</size>
+                      <height>48</height>
                       <label>↓</label>
-                      <delta>1</delta>
-                      <bitmap>img/button/btn_64x48.png</bitmap>
-                      <hover>img/button/btn_64x48_h.png</hover>
-                      <selected>img/button/btn_64x48_a.png</selected>
                       <font>
                         <size>24</size>
                         <style>normal</style>
@@ -684,12 +652,10 @@
                     <cellpos>3,2</cellpos>
                   </object>
                   <object class="sizeritem">
-                    <object class="ImageTextButton" name="lens_align_btn_m_aligner_x">
+                    <object class="NImageTextButton" name="lens_align_btn_m_aligner_x">
+                      <size>64,-1</size>
+                      <height>48</height>
                       <label>←</label>
-                      <delta>1</delta>
-                      <bitmap>img/button/btn_64x48.png</bitmap>
-                      <hover>img/button/btn_64x48_h.png</hover>
-                      <selected>img/button/btn_64x48_a.png</selected>
                       <font>
                         <size>24</size>
                         <style>normal</style>
@@ -705,12 +671,10 @@
                     <cellpos>2,1</cellpos>
                   </object>
                   <object class="sizeritem">
-                    <object class="ImageTextButton" name="lens_align_btn_p_aligner_x">
+                    <object class="NImageTextButton" name="lens_align_btn_p_aligner_x">
+                      <size>64,-1</size>
+                      <height>48</height>
                       <label>→</label>
-                      <delta>1</delta>
-                      <bitmap>img/button/btn_64x48.png</bitmap>
-                      <hover>img/button/btn_64x48_h.png</hover>
-                      <selected>img/button/btn_64x48_a.png</selected>
                       <font>
                         <size>24</size>
                         <style>normal</style>
@@ -754,12 +718,9 @@
                         <flag>wxEXPAND</flag>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="lens_align_btn_to_center">
+                        <object class="NImageTextButton" name="lens_align_btn_to_center">
+                          <height>24</height>
                           <label>Move to center</label>
-                          <bitmap>img/button/btn_128x24.png</bitmap>
-                          <hover>img/button/btn_128x24_h.png</hover>
-                          <selected>img/button/btn_128x24_a.png</selected>
-                          <tooltip>Move the axes based on the dichotomy search result.</tooltip>
                           <style>wxALIGN_CENTRE</style>
                           <XRCED>
                             <assign_var>1</assign_var>
@@ -784,13 +745,9 @@
                       <object class="sizeritem">
                         <object class="wxBoxSizer">
                           <object class="sizeritem">
-                            <object class="ImageTextButton" name="btn_auto_center">
+                            <object class="NImageTextButton" name="btn_auto_center">
+                              <height>24</height>
                               <label>Auto centering...</label>
-                              <delta>1</delta>
-                              <bitmap>img/button/btn_128x24.png</bitmap>
-                              <hover>img/button/btn_128x24_h.png</hover>
-                              <selected>img/button/btn_128x24_a.png</selected>
-                              <tooltip>Automatically adjust image setting and mechanically center the optical lens on the spot.</tooltip>
                               <style>wxALIGN_CENTRE</style>
                               <XRCED>
                                 <assign_var>1</assign_var>
@@ -834,13 +791,9 @@
                       <object class="sizeritem">
                         <object class="wxBoxSizer">
                           <object class="sizeritem">
-                            <object class="ImageTextButton" name="btn_fine_align">
+                            <object class="NImageTextButton" name="btn_fine_align">
+                              <height>24</height>
                               <label>Fine alignment...</label>
-                              <delta>1</delta>
-                              <bitmap>img/button/btn_128x24.png</bitmap>
-                              <hover>img/button/btn_128x24_h.png</hover>
-                              <selected>img/button/btn_128x24_a.png</selected>
-                              <tooltip>Measure and apply software adjustment for the alignment using a spot grid.</tooltip>
                               <style>wxALIGN_CENTRE</style>
                               <XRCED>
                                 <assign_var>1</assign_var>
@@ -1138,12 +1091,11 @@
                 <object class="wxBoxSizer">
                   <orient>wxHORIZONTAL</orient>
                   <object class="sizeritem">
-                    <object class="GraphicRadioButton" name="btn_align_chamber">
-                      <label>             CHAMBER</label>
-                      <delta>1</delta>
-                      <bitmap>img/button/btn_chamber.png</bitmap>
-                      <hover>img/button/btn_chamber_h.png</hover>
-                      <selected>img/button/btn_chamber_green_a.png</selected>
+                    <object class="NGraphicRadioButton" name="btn_align_chamber">
+                      <icon>img/icon/ico_cam.png</icon>
+                      <icon_on>img/icon/ico_cam_green.png</icon_on>
+                      <height>48</height>
+                      <label>CHAMBER</label>
                       <fg>#1A1A1A</fg>
                       <font>
                         <size>11</size>
@@ -1152,7 +1104,6 @@
                         <underlined>0</underlined>
                         <face>Ubuntu</face>
                       </font>
-                      <style>wxALIGN_CENTRE</style>
                       <XRCED>
                         <assign_var>1</assign_var>
                       </XRCED>
@@ -1161,12 +1112,11 @@
                     <border>10</border>
                   </object>
                   <object class="sizeritem">
-                    <object class="GraphicRadioButton" name="btn_align_mirror">
-                      <label>            MIRROR</label>
-                      <delta>1</delta>
-                      <bitmap>img/button/btn_ar_normal.png</bitmap>
-                      <hover>img/button/btn_ar_normal_h.png</hover>
-                      <selected>img/button/btn_ar_green_a.png</selected>
+                    <object class="NGraphicRadioButton" name="btn_align_mirror">
+                      <icon>img/icon/ico_ang.png</icon>
+                      <icon_on>img/icon/ico_ang_green.png</icon_on>
+                      <height>48</height>
+                      <label>MIRROR</label>
                       <fg>#1A1A1A</fg>
                       <font>
                         <size>11</size>
@@ -1175,7 +1125,6 @@
                         <underlined>0</underlined>
                         <face>Ubuntu</face>
                       </font>
-                      <style>wxALIGN_CENTRE</style>
                       <XRCED>
                         <assign_var>1</assign_var>
                       </XRCED>
@@ -1184,12 +1133,11 @@
                     <border>10</border>
                   </object>
                   <object class="sizeritem">
-                    <object class="GraphicRadioButton" name="btn_align_fiber">
-                      <label>         OPTICAL FIBER</label>
-                      <delta>1</delta>
-                      <bitmap>img/button/btn_fiber.png</bitmap>
-                      <hover>img/button/btn_fiber_h.png</hover>
-                      <selected>img/button/btn_fiber_a.png</selected>
+                    <object class="NGraphicRadioButton" name="btn_align_fiber">
+                      <icon>img/icon/ico_fib.png</icon>
+                      <icon_on>img/icon/ico_fib_green.png</icon_on>
+                      <height>48</height>
+                      <label>OPTICAL FIBER</label>
                       <fg>#1A1A1A</fg>
                       <font>
                         <size>11</size>
@@ -1198,7 +1146,6 @@
                         <underlined>0</underlined>
                         <face>Ubuntu</face>
                       </font>
-                      <style>wxALIGN_CENTRE</style>
                       <XRCED>
                         <assign_var>1</assign_var>
                       </XRCED>
@@ -1352,12 +1299,10 @@
                         <cellpos>2,0</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_p_mirror_y">
+                        <object class="NImageTextButton" name="mirror_align_btn_p_mirror_y">
+                          <size>64,-1</size>
+                          <height>48</height>
                           <label>↑</label>
-                          <delta>1</delta>
-                          <bitmap>img/button/btn_64x48.png</bitmap>
-                          <hover>img/button/btn_64x48_h.png</hover>
-                          <selected>img/button/btn_64x48_a.png</selected>
                           <font>
                             <size>24</size>
                             <style>normal</style>
@@ -1375,12 +1320,10 @@
                         <cellpos>1,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_m_mirror_y">
+                        <object class="NImageTextButton" name="mirror_align_btn_m_mirror_y">
+                          <size>64,-1</size>
+                          <height>48</height>
                           <label>↓</label>
-                          <delta>1</delta>
-                          <bitmap>img/button/btn_64x48.png</bitmap>
-                          <hover>img/button/btn_64x48_h.png</hover>
-                          <selected>img/button/btn_64x48_a.png</selected>
                           <font>
                             <size>24</size>
                             <style>normal</style>
@@ -1398,12 +1341,10 @@
                         <cellpos>3,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_p_mirror_x">
+                        <object class="NImageTextButton" name="mirror_align_btn_p_mirror_x">
+                          <size>64,-1</size>
+                          <height>48</height>
                           <label>←</label>
-                          <delta>1</delta>
-                          <bitmap>img/button/btn_64x48.png</bitmap>
-                          <hover>img/button/btn_64x48_h.png</hover>
-                          <selected>img/button/btn_64x48_a.png</selected>
                           <font>
                             <size>24</size>
                             <style>normal</style>
@@ -1419,12 +1360,10 @@
                         <cellpos>2,1</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_m_mirror_x">
+                        <object class="NImageTextButton" name="mirror_align_btn_m_mirror_x">
+                          <size>64,-1</size>
+                          <height>48</height>
                           <label>→</label>
-                          <delta>1</delta>
-                          <bitmap>img/button/btn_64x48.png</bitmap>
-                          <hover>img/button/btn_64x48_h.png</hover>
-                          <selected>img/button/btn_64x48_a.png</selected>
                           <font>
                             <size>24</size>
                             <style>normal</style>
@@ -1567,12 +1506,10 @@
                         <cellpos>2,0</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_m_mirror_ry">
+                        <object class="NImageTextButton" name="mirror_align_btn_m_mirror_ry">
+                          <size>64,-1</size>
+                          <height>48</height>
                           <label>↑</label>
-                          <delta>1</delta>
-                          <bitmap>img/button/btn_64x48.png</bitmap>
-                          <hover>img/button/btn_64x48_h.png</hover>
-                          <selected>img/button/btn_64x48_a.png</selected>
                           <font>
                             <size>24</size>
                             <style>normal</style>
@@ -1590,12 +1527,10 @@
                         <cellpos>1,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_p_mirror_ry">
+                        <object class="NImageTextButton" name="mirror_align_btn_p_mirror_ry">
+                          <size>64,-1</size>
+                          <height>48</height>
                           <label>↓</label>
-                          <delta>1</delta>
-                          <bitmap>img/button/btn_64x48.png</bitmap>
-                          <hover>img/button/btn_64x48_h.png</hover>
-                          <selected>img/button/btn_64x48_a.png</selected>
                           <font>
                             <size>24</size>
                             <style>normal</style>
@@ -1613,12 +1548,10 @@
                         <cellpos>3,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_m_mirror_rz">
+                        <object class="NImageTextButton" name="mirror_align_btn_m_mirror_rz">
+                          <size>64,-1</size>
+                          <height>48</height>
                           <label>←</label>
-                          <delta>1</delta>
-                          <bitmap>img/button/btn_64x48.png</bitmap>
-                          <hover>img/button/btn_64x48_h.png</hover>
-                          <selected>img/button/btn_64x48_a.png</selected>
                           <font>
                             <size>24</size>
                             <style>normal</style>
@@ -1634,12 +1567,10 @@
                         <cellpos>2,1</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_p_mirror_rz">
+                        <object class="NImageTextButton" name="mirror_align_btn_p_mirror_rz">
+                          <size>64,-1</size>
+                          <height>48</height>
                           <label>→</label>
-                          <delta>1</delta>
-                          <bitmap>img/button/btn_64x48.png</bitmap>
-                          <hover>img/button/btn_64x48_h.png</hover>
-                          <selected>img/button/btn_64x48_a.png</selected>
                           <font>
                             <size>24</size>
                             <style>normal</style>
@@ -1783,12 +1714,10 @@
                         <cellpos>2,0</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_p_fibaligner_y">
+                        <object class="NImageTextButton" name="mirror_align_btn_p_fibaligner_y">
+                          <size>64,-1</size>
+                          <height>48</height>
                           <label>↑</label>
-                          <delta>1</delta>
-                          <bitmap>img/button/btn_64x48.png</bitmap>
-                          <hover>img/button/btn_64x48_h.png</hover>
-                          <selected>img/button/btn_64x48_a.png</selected>
                           <font>
                             <size>24</size>
                             <style>normal</style>
@@ -1806,12 +1735,10 @@
                         <cellpos>1,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_m_fibaligner_y">
+                        <object class="NImageTextButton" name="mirror_align_btn_m_fibaligner_y">
+                          <size>64,-1</size>
+                          <height>48</height>
                           <label>↓</label>
-                          <delta>1</delta>
-                          <bitmap>img/button/btn_64x48.png</bitmap>
-                          <hover>img/button/btn_64x48_h.png</hover>
-                          <selected>img/button/btn_64x48_a.png</selected>
                           <font>
                             <size>24</size>
                             <style>normal</style>
@@ -1829,12 +1756,10 @@
                         <cellpos>3,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_m_fibaligner_x">
+                        <object class="NImageTextButton" name="mirror_align_btn_m_fibaligner_x">
+                          <size>64,-1</size>
+                          <height>48</height>
                           <label>←</label>
-                          <delta>1</delta>
-                          <bitmap>img/button/btn_64x48.png</bitmap>
-                          <hover>img/button/btn_64x48_h.png</hover>
-                          <selected>img/button/btn_64x48_a.png</selected>
                           <font>
                             <size>24</size>
                             <style>normal</style>
@@ -1850,12 +1775,10 @@
                         <cellpos>2,1</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_p_fibaligner_x">
+                        <object class="NImageTextButton" name="mirror_align_btn_p_fibaligner_x">
+                          <size>64,-1</size>
+                          <height>48</height>
                           <label>→</label>
-                          <delta>1</delta>
-                          <bitmap>img/button/btn_64x48.png</bitmap>
-                          <hover>img/button/btn_64x48_h.png</hover>
-                          <selected>img/button/btn_64x48_a.png</selected>
                           <font>
                             <size>24</size>
                             <style>normal</style>
@@ -1993,15 +1916,12 @@
           <object class="wxBoxSizer">
             <orient>wxVERTICAL</orient>
             <object class="sizeritem">
-              <object class="ImageTextToggleButton" name="btn_park_mirror">
-                <label>        PARK MIR.</label>
-                <delta>1</delta>
-                <bitmap>img/button/btn_eject.png</bitmap>
-                <hover>img/button/btn_eject_h.png</hover>
-                <selected>img/button/btn_eject_a.png</selected>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
+              <object class="NImageTextToggleButton" name="btn_park_mirror">
+                <icon>img/icon/ico_eject.png</icon>
+                <icon_on>img/icon/ico_eject_orange.png</icon_on>
+                <height>48</height>
+                <label>PARK MIRROR</label>
+                <fg>#1A1A1A</fg>
               </object>
               <flag>wxALL</flag>
               <border>10</border>
@@ -2513,21 +2433,10 @@
         <object class="wxPanel">
           <object class="wxBoxSizer">
             <object class="sizeritem">
-              <object class="ImageTextButton" name="btn_open_image">
-                <size>180,24</size>
+              <object class="NImageTextButton" name="btn_open_image">
+                <height>24</height>
                 <label>Select image...</label>
-                <delta>1</delta>
-                <bitmap>img/button/btn_256x24.png</bitmap>
-                <hover>img/button/btn_256x24_h.png</hover>
-                <selected>img/button/btn_256x24_a.png</selected>
-                <fg>#000000</fg>
-                <font>
-                  <size>11</size>
-                  <style>normal</style>
-                  <weight>normal</weight>
-                  <underlined>0</underlined>
-                  <face>Ubuntu</face>
-                </font>
+                <fg>#1A1A1A</fg>
                 <style>wxALIGN_CENTRE</style>
                 <XRCED>
                   <assign_var>1</assign_var>
@@ -2852,9 +2761,6 @@
       <orient>wxHORIZONTAL</orient>
     </object>
     <bg>#333333</bg>
-    <XRCED>
-      <assign_var>1</assign_var>
-    </XRCED>
   </object>
   <object class="wxPanel" name="pnl_tab_secom_streams">
     <object class="wxBoxSizer">
@@ -3125,21 +3031,12 @@
                   <object class="sizeritem">
                     <object class="wxBoxSizer">
                       <object class="sizeritem">
-                        <object class="ImageTextToggleButton" name="live_btn_press">
-                          <size>110,48</size>
-                          <label>CHAMBER</label>
-                          <delta>1</delta>
-                          <bitmap>img/button/btn_press.png</bitmap>
-                          <hover>img/button/btn_press_h.png</hover>
-                          <selected>img/button/btn_press_orange_a.png</selected>
+                        <object class="NImageTextToggleButton" name="live_btn_press">
+                          <size>100,-1</size>
+                          <icon>img/icon/ico_press.png</icon>
+                          <height>48</height>
+                          <label>CHAMBERt</label>
                           <fg>#1A1A1A</fg>
-                          <font>
-                            <size>11</size>
-                            <style>normal</style>
-                            <weight>normal</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
-                          </font>
                           <style>wxALIGN_RIGHT</style>
                           <XRCED>
                             <assign_var>1</assign_var>
@@ -3152,22 +3049,12 @@
                         <option>1</option>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextToggleButton" name="live_btn_opt">
-                          <size>92,48</size>
+                        <object class="NImageTextToggleButton" name="live_btn_opt">
+                          <icon>img/icon/ico_optical.png</icon>
+                          <icon_on>img/icon/ico_optical_green.png</icon_on>
+                          <height>48</height>
                           <label>OPTICAL</label>
-                          <delta>1</delta>
-                          <bitmap>img/button/btn_opt.png</bitmap>
-                          <hover>img/button/btn_opt_h.png</hover>
-                          <selected>img/button/btn_opt_green_a.png</selected>
                           <fg>#1A1A1A</fg>
-                          <font>
-                            <size>11</size>
-                            <style>normal</style>
-                            <weight>normal</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
-                          </font>
-                          <style>wxALIGN_RIGHT</style>
                           <XRCED>
                             <assign_var>1</assign_var>
                           </XRCED>
@@ -3176,22 +3063,12 @@
                         <border>10</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextToggleButton" name="live_btn_sem">
-                          <size>92,48</size>
-                          <label>SEM      </label>
-                          <delta>1</delta>
-                          <bitmap>img/button/btn_sem.png</bitmap>
-                          <hover>img/button/btn_sem_h.png</hover>
-                          <selected>img/button/btn_sem_green_a.png</selected>
+                        <object class="NImageTextToggleButton" name="live_btn_sem">
+                          <icon>img/icon/ico_sem.png</icon>
+                          <icon_on>img/icon/ico_sem_green.png</icon_on>
+                          <height>48</height>
+                          <label>SEM</label>
                           <fg>#1A1A1A</fg>
-                          <font>
-                            <size>11</size>
-                            <style>normal</style>
-                            <weight>normal</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
-                          </font>
-                          <style>wxALIGN_RIGHT</style>
                           <XRCED>
                             <assign_var>1</assign_var>
                           </XRCED>

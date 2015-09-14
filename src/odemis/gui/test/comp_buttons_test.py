@@ -162,6 +162,7 @@ class NButtonsTestCase(test.GuiTestCase):
 
             btn = buttons.NImageButton(self.panel, height=h)
             btn.SetIcon(data.getico_eject_orangeBitmap())
+
             row_sizer.Add(btn, flag=wx.LEFT|wx.RIGHT, border=2)
 
             btn = buttons.NImageToggleButton(self.panel, height=h)
@@ -169,6 +170,7 @@ class NButtonsTestCase(test.GuiTestCase):
             row_sizer.Add(btn, flag=wx.LEFT|wx.RIGHT, border=2)
 
             btn = buttons.NImageTextButton(self.panel, height=h, label="Daaaag!", size=(150, -1),
+                                           style=wx.ALIGN_CENTER,
                                            icon=data.getico_eject_orangeBitmap())
             row_sizer.Add(btn, flag=wx.LEFT|wx.RIGHT, border=2)
 
@@ -177,6 +179,19 @@ class NButtonsTestCase(test.GuiTestCase):
             row_sizer.Add(btn, flag=wx.LEFT|wx.RIGHT, border=2)
 
             self.add_control(row_sizer, flags=wx.ALL, border=2)
+
+        btn = buttons.NImageTextToggleButton(self.panel, height=h, label="Test", size=(100, -1),
+                                             icon=data.getico_ang_greenBitmap())
+
+        self.add_control(btn, flags=wx.ALL, border=2)
+
+        btn = buttons.NTabButton(self.panel, height=h, label="Test", size=(160, 30))
+
+        self.add_control(btn, flags=wx.ALL, border=2)
+
+        test.gui_loop(1000)
+        btn.SetToggle(True)
+        btn.Refresh()
 
 
 if __name__ == "__main__":
