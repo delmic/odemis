@@ -138,22 +138,10 @@ class ChamberButtonController(HardwareButtonController):
         if 'pressure' in getVAs(main_data.chamber):
             main_data.chamber.pressure.subscribe(self._on_pressure_change, init=True)
 
-            self._btn_faces = {
-                'normal': {
-                    'normal': imgdata.btn_press.Bitmap,
-                    'hover': imgdata.btn_press_h.Bitmap,
-                    'active': imgdata.btn_press_a.Bitmap,
-                },
-                'working': {
-                    'normal': imgdata.btn_press_orange.Bitmap,
-                    'hover': imgdata.btn_press_orange_h.Bitmap,
-                    'active': imgdata.btn_press_orange_a.Bitmap,
-                },
-                'vacuum': {
-                    'normal': imgdata.btn_press_green.Bitmap,
-                    'hover': imgdata.btn_press_green_h.Bitmap,
-                    'active': imgdata.btn_press_green_a.Bitmap,
-                }
+            self._btn_icons = {
+                'normal': imgdata.ico_press.Bitmap,
+                'working': imgdata.ico_press_orange.Bitmap,
+                'vacuum': imgdata.ico_press_green.Bitmap,
             }
 
             self._tooltips = {
@@ -163,23 +151,12 @@ class ChamberButtonController(HardwareButtonController):
                 CHAMBER_VACUUM: "Vent the chamber",
             }
         else:
-            self.btn.SetLabel("LOAD      ")  # Extra spaces are needed for alignment
-            self._btn_faces = {
-                'normal': {
-                    'normal': imgdata.btn_eject.Bitmap,
-                    'hover': imgdata.btn_eject_h.Bitmap,
-                    'active': imgdata.btn_eject_a.Bitmap,
-                },
-                'working': {
-                    'normal': imgdata.btn_eject_orange.Bitmap,
-                    'hover': imgdata.btn_eject_orange_h.Bitmap,
-                    'active': imgdata.btn_eject_orange_a.Bitmap,
-                },
-                'vacuum': {
-                    'normal': imgdata.btn_eject_green.Bitmap,
-                    'hover': imgdata.btn_eject_green_h.Bitmap,
-                    'active': imgdata.btn_eject_green_a.Bitmap,
-                }
+            self.btn.SetLabel("LOAD")
+
+            self._btn_icons = {
+                'normal': imgdata.ico_eject.Bitmap,
+                'working': imgdata.ico_eject_orange.Bitmap,
+                'vacuum': imgdata.ico_eject_green.Bitmap,
             }
             self._tooltips = {
                 CHAMBER_PUMPING: "Loading...",
@@ -189,34 +166,20 @@ class ChamberButtonController(HardwareButtonController):
             }
 
     def _va_to_btn(self, state):
-        """ Change the button toggle state according to the given hardware state
-        """
+        """ Change the button toggle state according to the given hardware state """
         # When the chamber is pumping or venting, it's considered to be working
         if state in {CHAMBER_PUMPING, CHAMBER_VENTING}:
-            self.btn.SetBitmapLabel(self._btn_faces['working']['normal'])
-            self.btn.SetBitmaps(
-                bmp_h=self._btn_faces['working']['hover'],
-                bmp_sel=self._btn_faces['working']['active']
-            )
+            self.btn.SetIcon(self._btn_icons['working'])
         elif state == CHAMBER_VACUUM:
-            self.btn.SetBitmapLabel(self._btn_faces['vacuum']['normal'])
-            self.btn.SetBitmaps(
-                bmp_h=self._btn_faces['vacuum']['hover'],
-                bmp_sel=self._btn_faces['vacuum']['active']
-            )
-
-            self.btn.SetLabel("UNLOAD  ")  # Extra spaces are needed for alignment
+            self.btn.SetIcon(self._btn_icons['vacuum'])
+            self.btn.SetLabel("UNLOAD")
             # In case the GUI is launched with the chamber pump turned on already, we need to
             # toggle the button by code.
             self.btn.SetToggle(True)
         elif state in {CHAMBER_VENTED, CHAMBER_UNKNOWN}:
-            self.btn.SetBitmapLabel(self._btn_faces['normal']['normal'])
-            self.btn.SetBitmaps(
-                bmp_h=self._btn_faces['normal']['hover'],
-                bmp_sel=self._btn_faces['normal']['active']
-            )
+            self.btn.SetIcon(self._btn_icons['normal'])
             self.btn.SetToggle(False)
-            self.btn.SetLabel("LOAD      ")  # Extra spaces are needed for alignment
+            self.btn.SetLabel("LOAD")  # Extra spaces are needed for alignment
         else:
             logging.error("Unknown chamber state %d", state)
 

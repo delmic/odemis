@@ -28235,6 +28235,41 @@ getico_camImage = ico_cam.GetImage
 getico_camBitmap = ico_cam.GetBitmap
 
 #----------------------------------------------------------------------
+ico_fib_orange = PyEmbeddedImage(
+    "iVBORw0KGgoAAAANSUhEUgAAACYAAAArCAYAAAAUo/pwAAAFWUlEQVRYw71YS48cNRC2u3ve"
+    "s5ldsRKgcIBFwBEpFx4S4lcEIbjAhd+QC+SUFRKPA3AmF5AIUlhQcgABEjcOJBKH5IwUAojd"
+    "rMTOq3d6um2+6i1Pahx3Zt+jfOvptl31+aty2ZPIbqyqI0AvwKFtR6r6owOIGDGQMGpAHWgw"
+    "6vzO9cdiXshm8BMFyDjHcYVT970JtIEO0AWWBLrc1+JxDQ+SfCxIB4k5UglPbLFx5/SMhx5j"
+    "GVjhVqLnjV8SbZcX5EhLgnPEfFKOUE84WvGwvAArC+Y6km1BbqacJBYLpToBVWTb85ToelgS"
+    "CvUCc5cFuQ77rEvVoooQdivQYbQZzYocaohUaIt5oQV0PdXKTSEVS7izLSCTtx5AmcBbffPi"
+    "n/fM+8Dnd7fNe/+N7HNioT4kcUm+wfYiGcpIEJvbOXD6knD6Lpw+I7c++l8pjLq41NLP9zr6"
+    "8U5Dv5xm9oOdsX1alhiMe0HYucjk657iszyTtSUWdckp8WqF0zW3e6xVb59paY0xqtvUilqg"
+    "sTu1b7gxFeQ/2hnZZ32fvmJ+/SoJL3I6LVS7WdePNmtaxZgRwUqC2fTcSPSTC8nn9k3hd64I"
+    "R16Vd9/VNFedRU6TSKXAIPLKND1j7OY+yD9VdQo4kxYwssXk8SKnWisLaxvGzo+BQhYkNvZJ"
+    "3vl0/ksTET+4zpxRwGkRcsrLOIscWaWvrYb+Oi/UNWtnpFRh7Getuv6NnidT+wjZ9M0Qeah3"
+    "lXw5nwwjFXOkpkDGbQ6nX8HpFzAylOdWHKvV/tiuZ3lZmyyI3CzMXn9etvom/c1y28FGuQQC"
+    "K5IUFruJOR+2G/pX4TNjDsYPJb2cALtAyt+zeqK+hHqvw9hrcPoJBtp6ohWMnt0emAsgHYG8"
+    "csrCIb5bUiTaHtgLGPdEDePpFeZ/SnZA9C3Y+JF9pOxzIojNQmkEsTEw4nbXqQdjI+TKDyCx"
+    "QQmMUBHOgdz5vdDY+0vcKxHnqZ/G0Xiah/nf4/uAbToBxowJv7e+YgXLmTKxAbepkFnVEnUZ"
+    "Tm7RDoMaCKum0rGmtZ7FOs/VWoL3ZX9UkrpN81gAR8r5GApic4q5HCsCk/rcptxHG8LA+ccI"
+    "SVrDtm/XsbmiMjx7u40IavUOvad+Gkfj9f0c3mUyzv5QRMb4iknVJLl+aDIc/jst7BVbKoh6"
+    "VNPNmC0hXPT8GOWhLeuYvYLx/7DtibdoZ1cmfpBYlXIurBn3Kzj+tijUFilFpFwkuT6VpRv9"
+    "9zDuOxHCVKglSRVeHQve+X2CqdgMszwAoWlu7DehOqe5nlE/xk28/HXJHiT0MGJ+aGUZkbmg"
+    "arH+GapMQ5PpPfp/qihFU1lM9/NjpIrcVNQaZ5SOrRFUuWEfPJJIrRvU75UiGTr7MMeLiPml"
+    "ZOIbBolf/HDSM733Fpb5JeG4iOXyuHJhQHL/juNozgk90/sAsYUhPAgxP6TSOIVziGPozjwx"
+    "e4fee4uaW9BxE5M3gZkDY9QfLpzU0rMo3HO3lkUhPCgxn1whrkuUT3/Law89i365IHNSxIwH"
+    "yx2bUjH82/LGFwchdVBiKkDKOepLxfDZEf2hG+qxK2YryBnnk64/OJ6GFWPVSSlmvdAYkWdV"
+    "iyhOWjFVkTcmcJ9PvHHFaShWiO2fCwI+seIwZeIoOSYL7R7sA0Wzqtrbk1YsE4d6hvvYX1Dp"
+    "Oo6i62iv4U52l/smgpw56VDmglh5t+o09W382l4HwXW0l7pNfYv7UnFw29NUzF0iR3wjla1P"
+    "zJxGuciFYvL6PfCI7fv+dZzE5E+9YYDc+CD3r6MSU4E7lh/SsXfbPVViJvD/HZm3C/PDlAn3"
+    "+R9avKNfoeFh7wAAAABJRU5ErkJggg==")
+index.append('ico_fib_orange')
+catalog['ico_fib_orange'] = ico_fib_orange
+getico_fib_orangeData = ico_fib_orange.GetData
+getico_fib_orangeImage = ico_fib_orange.GetImage
+getico_fib_orangeBitmap = ico_fib_orange.GetBitmap
+
+#----------------------------------------------------------------------
 dialog_warning = PyEmbeddedImage(
     "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAByUlEQVR42qXOb0gTcRzH8d/J"
     "bmay2oq45yFB9DAIe+YT6Y+PFKwH9UxUMJgQRH/R4TOJHlSgrIfawgqs5vwz09HoUWwMWjYl"
@@ -28253,6 +28288,35 @@ getdialog_warningImage = dialog_warning.GetImage
 getdialog_warningBitmap = dialog_warning.GetBitmap
 
 #----------------------------------------------------------------------
+ico_press_green = PyEmbeddedImage(
+    "iVBORw0KGgoAAAANSUhEUgAAACAAAAAiCAYAAAA+stv/AAAELklEQVRYw6VXT4vkRBTPq0rS"
+    "qe7pYcwOuOBBYbztddevIDh3dz+CF0UvsooeBBE8it48eNMV9tosfgFBlz168g96WBy1p4em"
+    "p9OZJFVlVbYqvH5dmemeLXgkqUry+71X719BpKPnGdBz74cm140RXxMUC3MChIRywArda0om"
+    "vga4B+Tuey/czXuNpZMGiUSkdiYACDhxMjCSuvs4QKA2UiGpHRFvoSABCFw9eOzAUgfu5TIC"
+    "F04Y+mfjtyPuMS82MyPgmEDqJEbvYQINIucVwb4gYwTO0b4mSGI0F7pScOyEklgmQk5p18AT"
+    "8Np6jTInAwLE0Q8766Tn6YtiLu4yxe5ABC/oSJ8pUD+vDlYPqr3qKbKKok4JZhrcTz3w0Ihw"
+    "4glwJNgnYDgd3s6q7AMYQKZT/QcAHGmt/4QKXtYXuizT8tPisPjRvFsaKYwsnCytbzBkgcQR"
+    "sMAjR2SIrJFSs6fL9GYms/swBmE0/Wo2nr1j35iP5u/bZztv1j8yFnqJ+I9XChjSBhOgoFT7"
+    "doileBOGIJpB8zC5SN6wa6eD02PecGGe75r578x6Jgpxj1ixyxneBziK6y608r/yH9qV0DDz"
+    "IMwOxvq3eTr/hnH2rd1nXvPR6Gz0ST2sHy7SxSRv8js85q8Fogy8E0IgzFqGsA/PqISG+QI4"
+    "WFd6NZ/mk9nh7NhOj6fj91SmHi/Gi8mN2Y1Ja8+4dTgIpOuIRgE2D1hwY8L+3Gj82jjcrwb8"
+    "XT9VHBRfV6L6196f5qfH+UX+hfnjPilMXU0I5YHNwmKCZ8qmxxT/QB68zSV/XZyLW6u91S92"
+    "zoD/0/mImQcGRzKSjwh4V6BYoLptmEnX4Wpa6OJ785tSrMR9cSZu4TX7bOftepEUDxCwL1Iq"
+    "lIrD9pYbM+3HVVL9XcrysyzLPjRgn2dPs99VpE5YxG5CAkfGSaGMy4+rtDohBBpajPrBNxsM"
+    "hTSIltnyp5rXbw358B6T7Has4lfMRsatK+t2/UkgE3or6F37AYWqnC+ribHEiZEvvRKHzeHE"
+    "qqZXOurZ+wb7wLZDB6wgQ12OljrUiGlUJRWNgl1aMR+yCteEK3ymzxIdAX1Z47iefjYalzhI"
+    "4nIC+nmaUoYI6J5eYCtwagHavV5FwhOAHYCDFtABAtEWJHYNXSwbFsBe7b2U48qX/5dP2tby"
+    "qmGL135v7pBEyQ0CNUoUHQGT1Z79VG5BgLv312PC/7tGobu2BYr08OuNpC29A4iuORpyLlgj"
+    "4HvC1LVhe+46Qh0R3yHMaMJpUC9oe8Bzdy29PfEW1G4Be7hC3XCoUuIo0IG222q9cgRW7rnp"
+    "84GagPt9S0iywQeMy4qV39LSgZfuWfWFoWesHUt/rKKHD9gizWKnw2fDhoYhOC7Qc/Ll5Hh2"
+    "VexrsgWS1H+aazoCfWd/6DmsblMx+7LfGuL/iTfZdeDrqr4AAAAASUVORK5CYII=")
+index.append('ico_press_green')
+catalog['ico_press_green'] = ico_press_green
+getico_press_greenData = ico_press_green.GetData
+getico_press_greenImage = ico_press_green.GetImage
+getico_press_greenBitmap = ico_press_green.GetBitmap
+
+#----------------------------------------------------------------------
 ico_blending_spec = PyEmbeddedImage(
     "iVBORw0KGgoAAAANSUhEUgAAAAsAAAALCAYAAACprHcmAAAAuklEQVQY02O4e/cuAxoWAuLb"
     "QMyDLseARXEXEP8H4mpCiiWB+CtU8XsgFsSneApUIQy3oSiGASBHEYh/oin+AsTiDOgAKDgf"
@@ -28264,6 +28328,41 @@ catalog['ico_blending_spec'] = ico_blending_spec
 getico_blending_specData = ico_blending_spec.GetData
 getico_blending_specImage = ico_blending_spec.GetImage
 getico_blending_specBitmap = ico_blending_spec.GetBitmap
+
+#----------------------------------------------------------------------
+ico_fib_green = PyEmbeddedImage(
+    "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")
+index.append('ico_fib_green')
+catalog['ico_fib_green'] = ico_fib_green
+getico_fib_greenData = ico_fib_green.GetData
+getico_fib_greenImage = ico_fib_green.GetImage
+getico_fib_greenBitmap = ico_fib_green.GetBitmap
 
 #----------------------------------------------------------------------
 ico_play_h = PyEmbeddedImage(
@@ -28654,6 +28753,29 @@ getico_spec_orangeImage = ico_spec_orange.GetImage
 getico_spec_orangeBitmap = ico_spec_orange.GetBitmap
 
 #----------------------------------------------------------------------
+ico_fib = PyEmbeddedImage(
+    "iVBORw0KGgoAAAANSUhEUgAAACYAAAArCAYAAAAUo/pwAAACv0lEQVRYw+2YO28TQRDHE1yQ"
+    "CkIfRUp6JGhsy8aWbfl9futs+f32ldBGWEj0UNHlA6QkNRQp4CtAkUhBIFJQQZMgoUhk+f8j"
+    "n3WxouROln0rdMVqtTuzN7+bnZsZe0UIsSLjkBLKAXPAHLB5h8fjUfx+/0EgEDjG/Nbtdj9e"
+    "ONhtRn0+XyUej18UCgWhqqrI5/MiGo3+9nq9j+aBvxHKjNFEIvG1VquJfr8vBoOB6PV6olKp"
+    "UG/fKrxpsNuM4u3v0RBlmqZNB/Vg/NgKvGkwM0ZDodCdarX6czQaXdHhGZw9sAJvGsyMUY5y"
+    "ufx8OBxe0YFneG2KledYusrrjHKN/ZNgMLhBnXQ6vdpqtd7ohimv1+ua4QU3APZjFswIbxmM"
+    "RpvN5gsY+2UEg2ERi8WOELzr1CsWiwqvhvJOpyOy2ewm9ylH0B82Gg1hBIO3viHmGnPnMXho"
+    "FTD3YRRcwwtCMG7C4fB7fHGuVCqltNvtS6N4EQb1JqBckL+jHoOe53Be43MWkmBh+BW91u12"
+    "BTwlIpHImGC4zksweodguMIx5dSjPs69Xmjmz+VyLnjnA43RS4iTc3xdY91jBEMI5HCd59yb"
+    "6H3kuYWXpFKptIXrPKVRegrxckbPEIwwuPovBKScetDfXlqtxJe2Q8MckxiapgFCcuYe9ZZa"
+    "xDOZzF0E83djCtAHv0AOyE+gt7b07gJl5elsRjcmUMif2dL2KIqyDq/8uQ6M+5Tb1o8h8Pdn"
+    "szrX3Le1UUSuUhn8M+WGOU61FQzJ9QFSxF8jGNfct721xrV90q+TM8rOZyl6fiTUPT2PTbqP"
+    "PSnAUJZe6nHGmWspwFAXe3pJ4ox1XwowFO2sXsQ5s4hLAZZMJqdtD2esA1KA4VfQFIyNIrrW"
+    "J7KCRaUD4wwwRUowrqUAwy+mh8j+u+hWdzlz7fwN5YA5YP8b2D96cYc+GkAC9AAAAABJRU5E"
+    "rkJggg==")
+index.append('ico_fib')
+catalog['ico_fib'] = ico_fib
+getico_fibData = ico_fib.GetData
+getico_fibImage = ico_fib.GetImage
+getico_fibBitmap = ico_fib.GetBitmap
+
+#----------------------------------------------------------------------
 ico_spec = PyEmbeddedImage(
     "iVBORw0KGgoAAAANSUhEUgAAACcAAAAmCAYAAABH/4KQAAACkklEQVRYw+2YuYsTYRiHEw+U"
     "BQUtFLTZDYidTe77vu/7vo9tFjuxWdhKbAQrsRLsbAUL/wUrrey0EAsFEQRF8fz8vYMTJrOZ"
@@ -28746,6 +28868,24 @@ getico_semImage = ico_sem.GetImage
 getico_semBitmap = ico_sem.GetBitmap
 
 #----------------------------------------------------------------------
+ico_press = PyEmbeddedImage(
+    "iVBORw0KGgoAAAANSUhEUgAAACAAAAAiCAYAAAA+stv/AAAB0UlEQVRYw+2WO27CQBCGoU3D"
+    "BSLhSyABsgXiaV4SD/MGgYSwlFugNMkNCFdIkYvESZEThBTpQ0fjzf+jIFnIjpANocgWo/HM"
+    "jj3f7s7sOiSECF1SQhJAAkiA3wYXi8VREovFoslkcqlp2jqVSm2padO/jzkbQDwe1zOZzKZW"
+    "q9mGYbx0Oh0B/Uabfo6fDQAfV4rF4le73Ra9Xs+kbzQaicFgEKFNP8YJoZwFADNcIYmNpPeN"
+    "RuO1XC6H6a9Wq9fNZvMd/luOI27pC0BVVZFOp10ll8sJJBX9ft9iUsz0ihr7H8nn89yCG9pY"
+    "CQvPa18A9XqdCVxlOByKyWTC5RaVSkXsVwVF+FQqle74jMS7WNTE1hcAXzZN01Pm87kYj8fP"
+    "zm3JZrMKViC8t7ENFgpzHQhgNpsJtxrACqwQYxcKBc1tnH5sAbtjFQiAle2WADWgdLvdja7r"
+    "n4lEQnWO0aYfs2eLKoEAqL06odVq6ah0QtjYfwuF+0hNm22I2fs/B44B+IGIYqYP0B9ovy0T"
+    "c9VYqIFOwmMBDmU6ne4KlB1yEQDO/vC9PwVwe08CSIDAJyEuGM+b0SmMO3kX8C7gR71uRqcw"
+    "jvEnBfArgQHkb7kE+BcA3xjnr86yvvaFAAAAAElFTkSuQmCC")
+index.append('ico_press')
+catalog['ico_press'] = ico_press
+getico_pressData = ico_press.GetData
+getico_pressImage = ico_press.GetImage
+getico_pressBitmap = ico_press.GetBitmap
+
+#----------------------------------------------------------------------
 ico_pause = PyEmbeddedImage(
     "iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAAALklEQVQ4jWNgGAVkgTNnzuyH"
     "YXxixBj0H4bxiY0aNGoQXQw6d+6cPQzjExshAADB0dmreK3KPgAAAABJRU5ErkJggg==")
@@ -28813,6 +28953,35 @@ catalog['ico_eject_orange'] = ico_eject_orange
 getico_eject_orangeData = ico_eject_orange.GetData
 getico_eject_orangeImage = ico_eject_orange.GetImage
 getico_eject_orangeBitmap = ico_eject_orange.GetBitmap
+
+#----------------------------------------------------------------------
+ico_press_orange = PyEmbeddedImage(
+    "iVBORw0KGgoAAAANSUhEUgAAACAAAAAiCAYAAAA+stv/AAAEDklEQVRYw6VXPW8cVRQ99703"
+    "n2uvAjIiEg1S6Nwm/AAokOKe5CfQgKBBBkGBhJAoEXQUdBCkSKlWiD8QKSBKKj4kighDDFbi"
+    "tXd2Zt67FLw3un77xut1Rrqa8ax3z7nnfj7iezt4iotGnsPF0X3lMpcElaa8UUTCeWAnnjkm"
+    "Yy4BHgC1/34w7d8Hj623XpgVpDYmQAI481YAyP2zSRDoALTCOk8kKJQkQIl7ADceLPfgwc4j"
+    "sPSmxG/2IRxmRF4ps4rAJYHcmxH/Jwn0glxwROaCNQJci7hmwox4l7rH4DIJbaQMRFJaABQI"
+    "BG+DR6W3IgLS4gcHdeYNP//4hG85xg0AzwA4IsIPVyZ0Z6ukh0IVFyelieKbA6gBVN4CAS1M"
+    "5gQdHrvrbYf3ypzK3OB3IjzHjJO2x80np/xK0/LHO1N1X4SklTmhhAKZ97oCMPFEaqFGHst+"
+    "0vBVa7G/XVG1VeKL7YreyjQwKeld/3dlHT6YN/xClD/BKVLCG0kgBo29BwCcLPn1uqCqyOju"
+    "ssNNAFRktNdbVMsOt4qMvqkLKk+XfDtScegZIQe0qOuhtP545L7XlG4KWgNVTjAav+YGX2lF"
+    "XwPgrsfkaO4+qgu6mxvMeosbRtPLiSqjkISUKDMNQE1rQjHSqhQBWhF6xy8dPnGznanaA4DD"
+    "Y/dOmdGP2xXN/j3mWVUARqOP2vdKK1YJeagwQF3QaGtkBhj0y86U3g7vrkzoyyqnvwHg2W3a"
+    "W3b8mSZMo8E0zIRUH1gZLM4BSmEvJmAd3rSOX5s32N0q6WcAqHL6K3w+b3hXEa4B+C4CHwaU"
+    "Sky3FZk6y2MKfOscmsWS94/mvCs/O5rz7mLJ+47RZAZ3BHAYUi7VipN6W7fyygHgzOBP6/BJ"
+    "mdP7i5Y/ffgP/wbgAMDVzOBalRMZjQ9zQwcRgT4eRqPgiQXDCQ9Q5vRAW7yhFW5bh+uO8aIm"
+    "mMz8nyNlRj8lOmFQgTfdB5yYcmGsZpnGQabp8+BEbzEzGli0jJHY9zIHLnpxQgWb2nKs46FK"
+    "ou+zjP9lFhK5lDg5E9bkzJgSAwE+b3GU/SexuJgUiTUE+GmWUiUI8MgucCHwWIF4e11HIhCg"
+    "DYCTCnCCAC5AYtPSlbaigMzqkKV6mHwKePTYzZbderQiA6Y1jfUOGzm5QqATjWIgkGnCtD43"
+    "uyHJZmdnuBW/3YnSPRMCF+3wZxZJpYBCES559dG5IElA7vADeF3Qq9GExAbZbuuCegANgIW/"
+    "tykCEAo0UYY7sQ2nJqWsAk6s3a0HP/X3VhxKkgQkeFAli5qNPGCcN6xCSGMF3FgZBsbsWcqQ"
+    "mGiXW9dmZdLJs2E/VoYsYiPZ6+h4tq72OQqBjea/GytDHvGARg6rF5mYY93vTOj+A2M62uPu"
+    "3/j8AAAAAElFTkSuQmCC")
+index.append('ico_press_orange')
+catalog['ico_press_orange'] = ico_press_orange
+getico_press_orangeData = ico_press_orange.GetData
+getico_press_orangeImage = ico_press_orange.GetImage
+getico_press_orangeBitmap = ico_press_orange.GetBitmap
 
 #----------------------------------------------------------------------
 ma_goal_5_13_sensor_27839_20800 = PyEmbeddedImage(

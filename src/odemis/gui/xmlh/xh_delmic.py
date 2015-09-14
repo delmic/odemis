@@ -226,6 +226,8 @@ HANDLER_CLASS_LIST.append(StreamBarXmlHandler)
 
 class _ImageButtonHandler(xrc.XmlResourceHandler):
 
+    klass = None
+
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)
         # Standard styles
@@ -236,21 +238,26 @@ class _ImageButtonHandler(xrc.XmlResourceHandler):
         self.AddStyle('wxALIGN_CENTRE', wx.ALIGN_CENTRE)
 
     def CanHandle(self, node):
-        return self.IsOfClass(node, 'NImageButton')
+        return self.IsOfClass(node, self.klass.__name__)
 
     # Process XML parameters and create the object
     def DoCreateResource(self):
         assert self.GetInstance() is None
 
-        bmp = wx.NullBitmap
+        icon = wx.NullBitmap
         if self.GetParamNode("icon"):
-            bmp = self.GetBitmap("icon")
+            icon = self.GetBitmap("icon")
+
+        icon_on = wx.NullBitmap
+        if self.GetParamNode("icon_on"):
+            icon_on = self.GetBitmap("icon_on")
 
         if self.GetParamNode("label"):
             w = self.klass(
                 self.GetParentAsWindow(),
                 self.GetID(),
-                icon=bmp,
+                icon=icon,
+                icon_on=icon_on,
                 pos=self.GetPosition(),
                 size=self.GetSize(),
                 style=self.GetStyle(),
@@ -261,7 +268,8 @@ class _ImageButtonHandler(xrc.XmlResourceHandler):
             w = self.klass(
                 self.GetParentAsWindow(),
                 self.GetID(),
-                icon=bmp,
+                icon=icon,
+                icon_on=icon_on,
                 pos=self.GetPosition(),
                 size=self.GetSize(),
                 style=self.GetStyle(),
@@ -290,6 +298,16 @@ HANDLER_CLASS_LIST.append(NImageTextButtonHandler)
 class NImageTextToggleButtonHandler(_ImageButtonHandler):
     klass = btns.NImageTextToggleButton
 HANDLER_CLASS_LIST.append(NImageTextToggleButtonHandler)
+
+
+class NGraphicRadioButtonHandler(_ImageButtonHandler):
+    klass = btns.NGraphicRadioButton
+HANDLER_CLASS_LIST.append(NGraphicRadioButtonHandler)
+
+
+class NTabButtonHandler(_ImageButtonHandler):
+    klass = btns.NTabButton
+HANDLER_CLASS_LIST.append(NTabButtonHandler)
 
 
 ################################
@@ -553,17 +571,6 @@ class GraphicRadioButtonHandler(xrc.XmlResourceHandler):
         self.SetupWindow(w)
         return w
 HANDLER_CLASS_LIST.append(GraphicRadioButtonHandler)
-
-
-class TabButtonHandler(ImageTextToggleButtonHandler):
-
-    def __init__(self):
-        ImageTextToggleButtonHandler.__init__(self)
-        self.klass = btns.TabButton
-
-    def CanHandle(self, node):
-        return self.IsOfClass(node, 'TabButton')
-HANDLER_CLASS_LIST.append(TabButtonHandler)
 
 
 class ViewButtonHandler(ImageTextToggleButtonHandler):

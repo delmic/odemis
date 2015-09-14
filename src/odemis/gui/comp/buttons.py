@@ -97,20 +97,20 @@ class BtnMixin(object):
 
     btns = {
         16: {
-            'on': imgdata.getbtn_16Bitmap,
-            'off': imgdata.getbtn_16_aBitmap,
+            'off': imgdata.btn_16,
+            'on': imgdata.btn_16_a,
         },
         24: {
-            'on': imgdata.getbtn_24Bitmap,
-            'off': imgdata.getbtn_24_aBitmap,
+            'off': imgdata.btn_24,
+            'on': imgdata.btn_24_a,
         },
         32: {
-            'on': imgdata.getbtn_32Bitmap,
-            'off': imgdata.getbtn_32_aBitmap,
+            'off': imgdata.btn_32,
+            'on': imgdata.btn_32_a,
         },
         48: {
-            'on': imgdata.getbtn_48Bitmap,
-            'off': imgdata.getbtn_48_aBitmap,
+            'off': imgdata.btn_48,
+            'on': imgdata.btn_48_a,
         },
     }
 
@@ -119,6 +119,7 @@ class BtnMixin(object):
         kwargs['style'] = kwargs.get('style', 0) | wx.NO_BORDER | wx.BU_EXACTFIT
         kwargs['bitmap'] = None
         self.icon = kwargs.pop('icon', None)
+        self.icon_on = kwargs.pop('icon_on', None)
 
         super(BtnMixin, self).__init__(*args, **kwargs)
 
@@ -127,13 +128,26 @@ class BtnMixin(object):
         self.previous_size = (0, 0)
 
     def SetIcon(self, icon):
+        icon_set = self.icon is not None
         self.icon = icon
-        self.SetBestSize(self.DoGetBestSize())
+
+        if not icon_set:
+            self.SetBestSize(self.DoGetBestSize())
+
+        self.Refresh()
+
+    def SetIconOn(self, icon_on):
+        icon_set = self.icon_on is not None
+        self.icon_on = icon_on
+
+        if not icon_set:
+            self.SetBestSize(self.DoGetBestSize())
+
         self.Refresh()
 
     def OnSize(self, evt):
         if self.Size != self.previous_size:
-            self._assign_bitmaps()
+            self._reset_bitmaps()
             self.previous_size = self.Size
 
     def _GetLabelSize(self):
@@ -177,21 +191,41 @@ class BtnMixin(object):
 
         return dst_bmp
 
-    def _assign_bitmaps(self):
-        bg_color = self.Parent.GetBackgroundColour()
-        size = (self.Size.x, self.height)
+    def _reset_bitmaps(self):
+        self.bmpLabel = self._create_main_bitmap()
+        self.bmpHover = self.bmpDisabled = self.bmpSelected = None
 
-        self.bmpLabel = self._create_bitmap(self.btns[self.height]['on'](), size, bg_color)
+    def _create_main_bitmap(self):
+        return self._create_bitmap(
+            self.btns[self.height]['off'].GetBitmap(),
+            (self.Size.x, self.height),
+            self.Parent.GetBackgroundColour()
+        )
 
-        image = imgdata.getbtn_48Image()
-        darken_image(image, 1.2)
-        self.bmpHover = self._create_bitmap(wx.BitmapFromImage(image), size, bg_color)
+    def _create_hover_bitmap(self):
+        image = self.btns[self.height]['off'].GetImage()
+        darken_image(image, 1.1)
+        return self._create_bitmap(
+            wx.BitmapFromImage(image),
+            (self.Size.x, self.height),
+            self.Parent.GetBackgroundColour()
+        )
 
-        image = imgdata.getbtn_48Image()
+    def _create_disabled_bitmap(self):
+        image = self.btns[self.height]['off'].GetImage()
         darken_image(image)
-        self.bmpDisabled = self._create_bitmap(wx.BitmapFromImage(image), size, bg_color)
+        return self._create_bitmap(
+            wx.BitmapFromImage(image),
+            (self.Size.x, self.height),
+            self.Parent.GetBackgroundColour()
+        )
 
-        self.bmpSelected = self._create_bitmap(self.btns[self.height]['off'](), size, bg_color)
+    def _create_active_bitmap(self):
+        return self._create_bitmap(
+            self.btns[self.height]['on'].GetBitmap(),
+            (self.Size.x, self.height),
+            self.Parent.GetBackgroundColour()
+        )
 
     def InitOtherEvents(self):
         self.Bind(wx.EVT_ENTER_WINDOW, self.OnEnter)
@@ -199,26 +233,35 @@ class BtnMixin(object):
 
     def OnEnter(self, evt):
         """ Event handler that fires when the mouse cursor enters the button """
-        if self.bmpHover:
-            self.hovering = True
-            self.Refresh()
+        self.hovering = True
+        self.Refresh()
 
     def OnLeave(self, evt):
         """ Event handler that fires when the mouse cursor leaves the button """
-        if self.bmpHover:
-            self.hovering = False
-            self.Refresh()
+        self.hovering = False
+        self.Refresh()
 
     def DrawLabel(self, dc, width, height, dx=0, dy=0):
 
         bmp = self.bmpLabel
 
-        if self.bmpDisabled and not self.IsEnabled():
+        if not self.IsEnabled():
+            if not self.bmpDisabled:
+                self.bmpDisabled = self._create_disabled_bitmap()
             bmp = self.bmpDisabled
-        if self.bmpFocus and self.hasFocus:
-            bmp = self.bmpFocus
-        if self.bmpSelected and not self.up:
+        elif not self.up:
+            if not self.bmpSelected:
+                self.bmpSelected = self._create_active_bitmap()
             bmp = self.bmpSelected
+        elif self.hovering:
+            if not self.bmpHover:
+                self.bmpHover = self._create_hover_bitmap()
+            bmp = self.bmpHover
+
+        brush = self.GetBackgroundBrush(dc)
+        brush.SetColour(self.Parent.BackgroundColour)
+        dc.SetBackground(brush)
+        dc.Clear()
 
         dc.DrawBitmap(bmp, 0, 0)
 
@@ -226,21 +269,28 @@ class BtnMixin(object):
         self.DrawText(dc, width, height)
 
     def DrawIco(self, dc, width, height, dx=0, dy=0):
-        if self.icon:
-            bw, bh = self.Size
-            if not self.up:
-                dx = dy = self.labelDelta
-            pos_x = (width - bw) // 2 + dx
-            pos_x += self.icon.GetWidth() + self.padding_x
-            pos_y = (height // 2) - (self.icon.GetHeight() // 2) - 2
-            dc.DrawBitmap(self.icon, self.padding_x + dx, pos_y + dy)
+
+        if not self.up and self.icon_on:
+            icon = self.icon_on
+        elif self.icon:
+            icon = self.icon
+        else:
+            return
+
+        bw, bh = self.Size
+        if not self.up:
+            dx = dy = self.labelDelta
+        pos_x = (width - bw) // 2 + dx
+        pos_x += icon.GetWidth() + self.padding_x
+        pos_y = (height // 2) - (icon.GetHeight() // 2)
+        dc.DrawBitmap(icon, self.padding_x + dx, pos_y + dy)
 
     def DrawText(self, dc, width, height, dx=0, dy=0):
         # Determine font and font colour
         dc.SetFont(self.GetFont())
 
         if self.IsEnabled():
-            dc.SetTextForeground("#d4d4d4")
+            dc.SetTextForeground(self.GetForegroundColour())
         else:
             dc.SetTextForeground(wx.SystemSettings.GetColour(wx.SYS_COLOUR_GRAYTEXT))
 
@@ -264,14 +314,14 @@ class BtnMixin(object):
                 pos_x += self.icon.GetWidth() + self.padding_x
 
             if self.HasFlag(wx.ALIGN_CENTER):
-                pos_x += (bw - tw) // 2
+                pos_x = (bw - tw) // 2
             elif self.HasFlag(wx.ALIGN_RIGHT):
-                pos_x += bw - tw - self.padding_x
+                pos_x = bw - tw - self.padding_x
             else:
                 pos_x += self.padding_x
 
             # draw the text
-            dc.DrawText(label, pos_x, (height - th) // 2 + dy - 2)
+            dc.DrawText(label, pos_x, (height - th) // 2 + dy)
 
 
 class NImageButton(BtnMixin, GenBitmapButton):
@@ -283,11 +333,96 @@ class NImageToggleButton(BtnMixin, GenBitmapTextToggleButton):
 
 
 class NImageTextButton(BtnMixin, GenBitmapTextButton):
-   pass
+    pass
 
 
 class NImageTextToggleButton(BtnMixin, GenBitmapTextToggleButton):
-   pass
+    pass
+
+
+class NGraphicRadioButton(NImageTextToggleButton):
+    """ Simple graphical button that can be used to construct radio button sets
+    """
+
+    def __init__(self, *args, **kwargs):
+        self.value = kwargs.pop('value', None)
+        if 'label' not in kwargs:
+            kwargs['label'] = u"%g" % self.value
+        NImageTextToggleButton.__init__(self, *args, **kwargs)
+
+    def OnLeftDown(self, event):
+        """ This event handler is fired on left mouse button events, but it ignores those events
+        if the button is already active.
+        """
+        if not self.IsEnabled() or not self.up:
+            return
+        self.saveUp = self.up
+        self.up = not self.up
+        self.CaptureMouse()
+        self.SetFocus()
+        self.Refresh()
+
+
+class NTabButton(NGraphicRadioButton):
+    """ Simple graphical tab switching button """
+
+    labelDelta = 0
+
+    def __init__(self, *args, **kwargs):
+        super(NTabButton, self).__init__(*args, **kwargs)
+
+        self.Bind(wx.EVT_SET_FOCUS, self.on_focus)
+        self.Bind(wx.EVT_KILL_FOCUS, self.on_kill_focus)
+
+        self.fg_color_def = "#E5E5E5"
+        self.fg_color_high = "#FFFFFF"
+        self.fg_color_notify = FG_COLOUR_HIGHLIGHT
+
+        self.notification = False
+
+    def _highlight(self, on):
+        if on:
+            if self.notification:
+                self.SetForegroundColour(self.fg_color_notify)
+            else:
+                self.SetForegroundColour(self.fg_color_high)
+        else:
+            if self.notification:
+                self.SetForegroundColour(self.fg_color_notify)
+            else:
+                self.SetForegroundColour(self.fg_color_def)
+
+    def on_focus(self, evt):
+        if self.notification:
+            self.notification = False
+        self._highlight(True)
+        evt.Skip()
+
+    def on_kill_focus(self, evt):
+        self._highlight(False)
+        evt.Skip()
+
+    def notify(self, on):
+        """ Indicate a change to the button's related tab by visually altering it """
+        f = self.GetFont()
+
+        if on:
+            self.SetForegroundColour(self.fg_color_notify)
+            f.SetWeight(wx.BOLD)
+            self.notification = True
+        else:
+            self.SetForegroundColour(self.fg_color_def)
+            f.SetWeight(wx.NORMAL)
+            self.notification = False
+
+        self.SetFont(f)
+        self.Refresh()
+
+    def _reset_bitmaps(self):
+        self.bmpLabel = imgdata.tab_inactive.Bitmap
+        self.bmpHover = imgdata.tab_hover.Bitmap
+        self.bmpSelected = imgdata.tab_active.Bitmap
+        self.bmpDisabled = imgdata.tab_hover.Bitmap
 
 
 class ImageButton(GenBitmapButton):
@@ -1016,73 +1151,6 @@ class ViewButton(ImageTextToggleButton):
                           self.thumbnail_border,
                           self.thumbnail_border,
                           True)
-
-
-class TabButton(ImageTextToggleButton):
-    """ Simple graphical tab switching button """
-
-    def __init__(self, *args, **kwargs):
-        ImageTextToggleButton.__init__(self, *args, **kwargs)
-
-        self.Bind(wx.EVT_SET_FOCUS, self.on_focus)
-        self.Bind(wx.EVT_KILL_FOCUS, self.on_kill_focus)
-
-        self.fg_color_def = "#E5E5E5"
-        self.fg_color_high = "#FFFFFF"
-        self.fg_color_notify = FG_COLOUR_HIGHLIGHT
-
-        self.notification = False
-
-    def _highlight(self, on):
-        if on:
-            if self.notification:
-                self.SetForegroundColour(self.fg_color_notify)
-            else:
-                self.SetForegroundColour(self.fg_color_high)
-        else:
-            if self.notification:
-                self.SetForegroundColour(self.fg_color_notify)
-            else:
-                self.SetForegroundColour(self.fg_color_def)
-
-    def on_focus(self, evt):
-        if self.notification:
-            self.notification = False
-        self._highlight(True)
-        evt.Skip()
-
-    def on_kill_focus(self, evt):
-        self._highlight(False)
-        evt.Skip()
-
-    def OnLeftDown(self, event):
-        """ This event handler is fired on left mouse button events, but it
-        ignores those events if the button is already active.
-        """
-        if not self.IsEnabled() or not self.up:
-            return
-        self.saveUp = self.up
-        self.up = not self.up
-        self.CaptureMouse()
-        self.SetFocus()
-        self.Refresh()
-
-    def notify(self, on):
-        """ Indicate a change to the button's related tab by visually altering it """
-
-        f = self.GetFont()
-
-        if on:
-            self.SetForegroundColour(self.fg_color_notify)
-            f.SetWeight(wx.BOLD)
-            self.notification = True
-        else:
-            self.SetForegroundColour(self.fg_color_def)
-            f.SetWeight(wx.NORMAL)
-            self.notification = False
-
-        self.SetFont(f)
-        self.Refresh()
 
 
 class GraphicRadioButton(ImageTextToggleButton):
