@@ -24,7 +24,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 import logging
 from odemis import gui
-from odemis.gui.comp.buttons import GraphicRadioButton
+from odemis.gui.comp.buttons import NGraphicRadioButton
 import wx
 
 import odemis.gui.img.data as img
@@ -48,20 +48,10 @@ class GraphicalRadioButtonControl(wx.Panel):
         sizer = wx.BoxSizer(wx.HORIZONTAL)
 
         for choice, label in zip(self.choices, self.labels):
-            btn = GraphicRadioButton(self,
-                                     -1,
-                                     img.getbtn_32x16Bitmap(),
-                                     value=choice,
-                                     #size=(self.bnt_width, 16), TODO: Fix size handling
-                                     style=wx.ALIGN_CENTER,
-                                     label=label,
-                                     label_delta=1)
+            btn = NGraphicRadioButton(self, value=choice, style=wx.ALIGN_CENTER, label=label,
+                                      height=16)
 
             btn.SetForegroundColour("#111111")
-
-            btn.SetBitmaps(img.getbtn_32x16_hBitmap(),
-                           img.getbtn_32x16_aBitmap(),
-                           img.getbtn_32x16_aBitmap())
 
             self.buttons.append(btn)
 
