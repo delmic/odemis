@@ -282,7 +282,7 @@ class TMCLController(model.Actuator):
             # stops during the referencing the motor will always eventually stop.
             timeout = 20 # s (it can take up to 20 s to reach the home as fast speed)
             timeout_ticks = int(round(timeout * 100)) # 1 tick = 10 ms
-            gparam = 50 + axis
+            gparam = 128 + axis
             addr = 0 + 15 * axis # Max with 3 axes: ~40
             prog = [(9, gparam, 2, 0), # Set global param to 0 (=running)
                     (13, 0, axis), # RFS START, MotId
@@ -572,6 +572,10 @@ class TMCLController(model.Actuator):
         self.SendInstruction(13, 0, axis) # 0 = start
 
     def StopRefSearch(self, axis):
+        """
+        Can be called even if no referencing takes place (will never raise an
+          error)
+        """
         self.SendInstruction(13, 1, axis) # 1 = stop
 
     def GetStatusRefSearch(self, axis):
@@ -654,18 +658,6 @@ class TMCLController(model.Actuator):
         """
         self.SendInstruction(26, typ=id)
 
-    def _setInputInterrupt(self, axis):
-        """
-        Setup the input interrupt handler for stopping the reference search
-        axis (int): axis number
-        """
-        addr = 50 + 10 * axis  # at addr 50/60/70
-        intid = 40 + axis   # axis 0 = IN1 = 40
-        self.SetInterrupt(intid, addr)
-        self.SetGlobalParam(3, intid, 3) # configure the interrupt: look at both edges
-        self.EnableInterrupt(intid)
-        self.EnableInterrupt(255) # globally switch on interrupt processing
-
     def _isFullyPowered(self):
         """
         return (boolean): True if the device is "self-powered" (meaning the
@@ -687,6 +679,19 @@ class TMCLController(model.Actuator):
 #         time.sleep(0.01) # 10 ms should be more than enough to run one instruction
 #         status = self.GetGlobalParam(2, gparam)
 #         return (status == 1)
+
+    def _setInputInterrupt(self, axis):
+        """
+        Setup the input interrupt handler for stopping the reference search with
+         2xFF.
+        axis (int): axis number
+        """
+        addr = 50 + 10 * axis  # at addr 50/60/70
+        intid = 40 + axis  # axis 0 = IN1 = 40
+        self.SetInterrupt(intid, addr)
+        self.SetGlobalParam(3, intid, 3)  # configure the interrupt: look at both edges
+        self.EnableInterrupt(intid)
+        self.EnableInterrupt(255)  # globally switch on interrupt processing
 
     def _doReferenceFF(self, axis, speed):
         """
@@ -710,7 +715,7 @@ class TMCLController(model.Actuator):
         else: # Edge is low => go positive dir
             self.SetAxisParam(axis, 193, 8) # RFS with positive dir
 
-        gparam = 50 + axis
+        gparam = 128 + axis
         self.SetGlobalParam(2, gparam, 0)
         # Run the basic program (we need one, otherwise interrupt handlers are
         # not processed)
@@ -844,7 +849,7 @@ class TMCLController(model.Actuator):
             self.StopRefSearch(axis)
             self.StopProgram()
             self.MotorStop(axis)
-            gparam = 50 + axis
+            gparam = 128 + axis
             self.SetGlobalParam(2, gparam, 3)  # 3 => indicate cancelled
 
         return True
