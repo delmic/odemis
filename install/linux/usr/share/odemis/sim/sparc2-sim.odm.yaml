@@ -158,7 +158,7 @@ SPARC2: {
 # Provide the mirror (aka port selector) of the spectrograph as a separate component
 "Spec CCD Flipper": {
     class: actuator.MultiplexActuator,
-    role: "ccd-selector",
+    role: "spec-det-selector",
     children: {"rx": "Spectrograph"},
     init: {
         axes_map: {"rx": "flip-out"},

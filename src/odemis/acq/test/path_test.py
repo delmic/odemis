@@ -38,7 +38,7 @@ CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share
 SPARC_CONFIG = CONFIG_PATH + "sim/sparc-sim.odm.yaml"
 MONASH_CONFIG = CONFIG_PATH + "sim/sparc-pmts-sim.odm.yaml"
 SPEC_CONFIG = CONFIG_PATH + "sim/sparc-sim-spec.odm.yaml"
-OSLO_CONFIG = CONFIG_PATH + "sim/sparc2-sim.odm.yaml"
+SPARC2_CONFIG = CONFIG_PATH + "sim/sparc2-sim.odm.yaml"
 
 
 # @skip("faster")
@@ -361,7 +361,7 @@ class SpecPathTestCase(unittest.TestCase):
             guess = self.optmngr.guessMode(sems)
 
 # @skip("faster")
-class OsloPathTestCase(unittest.TestCase):
+class Sparc2PathTestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) SPARC2 (like in Oslo)
     """
@@ -370,7 +370,7 @@ class OsloPathTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         try:
-            test.start_backend(OSLO_CONFIG)
+            test.start_backend(SPARC2_CONFIG)
         except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
@@ -393,7 +393,7 @@ class OsloPathTestCase(unittest.TestCase):
         # cls.filter = model.getComponent(role="filter")
         cls.slit = model.getComponent(role="slit-in-big")
         cls.spec_det_sel = model.getComponent(role="spec-det-selector")
-        # cls.cl_det_sel = model.getComponent(role="cl-det-selector")
+        cls.cl_det_sel = model.getComponent(role="cl-det-selector")
         cls.optmngr = path.OpticalPathManager(cls.microscope)
 
     @classmethod
@@ -437,15 +437,35 @@ class OsloPathTestCase(unittest.TestCase):
         self.assertTrue((self.specgraph.position.value['grating'], self.find_dict_key(self.specgraph, path.SPARC2_MODES["ar"][1]["spectrograph"].items()[0][0], path.SPARC2_MODES["ar"][1]["spectrograph"].items()[0][1])['grating']) or
                         (0, self.specgraph.position.value['wavelength']))
 
+        # CL intensity mode
+        self.optmngr.setPath("cli")
+        # Assert that actuator was moved according to mode given
+        self.assertEqual(self.lenswitch.position.value,
+                         self.find_dict_key(self.lenswitch,
+                                            path.SPARC2_MODES["cli"][1]["lens-switch"].items()[0][0],
+                                            path.SPARC2_MODES["cli"][1]["lens-switch"].items()[0][1]))
+        self.assertEqual(self.cl_det_sel.position.value,
+                         self.find_dict_key(self.cl_det_sel,
+                                            path.SPARC2_MODES["cli"][1]["cl-det-selector"].items()[0][0],
+                                            path.SPARC2_MODES["cli"][1]["cl-det-selector"].items()[0][1]))
+
         # setting spectral
         self.optmngr.setPath("spectral-integrated")
         # Assert that actuator was moved according to mode given
         self.assertEqual(self.lenswitch.position.value, self.find_dict_key(self.lenswitch, path.SPARC2_MODES["spectral-integrated"][1]["lens-switch"].items()[0][0], path.SPARC2_MODES["spectral-integrated"][1]["lens-switch"].items()[0][1]))
         self.assertEqual(self.slit.position.value, self.find_dict_key(self.slit, path.SPARC2_MODES["spectral-integrated"][1]["slit-in-big"].items()[0][0], path.SPARC2_MODES["spectral-integrated"][1]["slit-in-big"].items()[0][1]))
         self.assertEqual(self.spec_det_sel.position.value, path.SPARC2_MODES["spectral-integrated"][1]["spec-det-selector"])
-        self.assertTrue(self.specgraph.position.value['grating'] != self.find_dict_key(self.specgraph, 'grating' , 'mirror')['grating'])
+        self.assertTrue(self.specgraph.position.value['grating'] != self.find_dict_key(self.specgraph, 'grating', 'mirror')['grating'])
 
         self.optmngr.setPath("spectral-dedicated")
+        # Assert that actuator was moved according to mode given
+        self.assertEqual(self.lenswitch.position.value, self.find_dict_key(self.lenswitch, path.SPARC2_MODES["spectral-dedicated"][1]["lens-switch"].items()[0][0], path.SPARC2_MODES["spectral-dedicated"][1]["lens-switch"].items()[0][1]))
+        self.assertEqual(self.slit.position.value, self.find_dict_key(self.slit, path.SPARC2_MODES["spectral-dedicated"][1]["slit-in-big"].items()[0][0], path.SPARC2_MODES["spectral-dedicated"][1]["slit-in-big"].items()[0][1]))
+        self.assertEqual(self.spec_det_sel.position.value, path.SPARC2_MODES["spectral-dedicated"][1]["spec-det-selector"])
+        self.assertTrue(self.specgraph.position.value['grating'] != self.find_dict_key(self.specgraph, 'grating', 'mirror')['grating'])
+
+        # spectral should be a shortcut to spectral-dedicated
+        self.optmngr.setPath("spectral")
         # Assert that actuator was moved according to mode given
         self.assertEqual(self.lenswitch.position.value, self.find_dict_key(self.lenswitch, path.SPARC2_MODES["spectral-dedicated"][1]["lens-switch"].items()[0][0], path.SPARC2_MODES["spectral-dedicated"][1]["lens-switch"].items()[0][1]))
         self.assertEqual(self.slit.position.value, self.find_dict_key(self.slit, path.SPARC2_MODES["spectral-dedicated"][1]["slit-in-big"].items()[0][0], path.SPARC2_MODES["spectral-dedicated"][1]["slit-in-big"].items()[0][1]))
@@ -499,10 +519,10 @@ class OsloPathTestCase(unittest.TestCase):
         sps = stream.SEMSpectrumMDStream("test sem-spec", sems, specs)
 
         guess = self.optmngr.guessMode(specs)
-        self.assertEqual(guess, "spectral-dedicated")
+        self.assertIn(guess, ("spectral", "spectral-dedicated"))
 
         guess = self.optmngr.guessMode(sps)
-        self.assertEqual(guess, "spectral-dedicated")
+        self.assertIn(guess, ("spectral", "spectral-dedicated"))
 
 if __name__ == "__main__":
     unittest.main()
