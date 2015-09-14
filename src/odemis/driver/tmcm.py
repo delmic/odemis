@@ -78,7 +78,7 @@ class TMCLController(model.Actuator):
     Note: it must be set to binary communication mode (that's the default).
     """
     def __init__(self, name, role, port, axes, ustepsize, address=None,
-                 refproc=None, temp=False, **kwargs):
+                 refproc=None, refswitch=None, temp=False, **kwargs):
         """
         port (str): port name. Can be a pattern, in which case all the ports
           fitting the pattern will be tried.
@@ -89,6 +89,9 @@ class TMCLController(model.Actuator):
           If an axis is not connected, put a "".
         ustepsize (list of float): size of a microstep in m (the smaller, the
           bigger will be a move for a given distance in m)
+        refswitch (dict str -> int): if an axis needs to have its reference
+          switch turn on during referencing, the digital output port is
+          indicated by the number.
         refproc (str or None): referencing (aka homing) procedure type. Use
           None to indicate it's not possible (no reference/limit switch) or the
           name of the procedure. For now only "2xFinalForward" or "LeftSwitch"
@@ -102,24 +105,26 @@ class TMCLController(model.Actuator):
         if not (address is None or 1 <= address <= 255):
             raise ValueError("Address must be None or between 1 and 255, but got %d" % (address,))
 
-        # TODO: allow any number or axes (>=1 and <= max ports): try GetAxisParameter and see if error is returned?
-
         if len(axes) != len(ustepsize):
             raise ValueError("Expecting %d ustepsize (got %s)" %
                              (len(axes), ustepsize))
 
         self._name_to_axis = {}  # str -> int: name -> axis number
-        self._refswitch = {}  # int -> None or int: axis number -> out port to turn on the ref switch
         for i, n in enumerate(axes):
-            if n == "":  # skip this non-connected axis
+            if not n:  # skip this non-connected axis
                 continue
             # sz is typically ~1µm, so > 1 cm is very fishy
             sz = ustepsize[i]
             if not (0 < sz <= 10e-3):
                 raise ValueError("ustepsize should be above 0 and < 10 mm, but got %g m" % (sz,))
             self._name_to_axis[n] = i
-            # TODO: either get the info from the arguments, or from the EEPROM
-            self._refswitch[i] = None
+
+        self._refswitch = refswitch or {}  # int -> None or int: axis number -> out port to turn on the ref switch
+        for a, s in self._refswitch.items():
+            if a not in self._name_to_axis:
+                raise ValueError("refswitch has unknown axis %s" % a)
+            if not (0 <= s <= 7):
+                raise ValueError("Output port for axis %s is must be between 0 and 7 (but is %d)" % (a, s))
 
         self._ustepsize = ustepsize
 
@@ -887,13 +892,13 @@ class TMCLController(model.Actuator):
             raise IOError("Device is not powered, so motors cannot move")
 
         # Turn on the ref switch
-        if self._refswitch[axis] is not None:
+        if self._refswitch.get(axis) is not None:
             self.SetIO(2, self._refswitch[axis], 1)
         try:
             self.StartRefSearch(axis)
         except Exception:
             # turn off the reference switch
-            if self._refswitch[axis] is not None:
+            if self._refswitch.get(axis) is not None:
                 self.SetIO(2, self._refswitch[axis], 0)
             raise
 
@@ -928,7 +933,7 @@ class TMCLController(model.Actuator):
             logging.debug("Changing referencing position by %d", oldpos)
         finally:
             # turn off the reference switch
-            if self._refswitch[axis] is not None:
+            if self._refswitch.get(axis) is not None:
                 self.SetIO(2, self._refswitch[axis], 0)
 
     def _cancelReferencingStd(self, axis):

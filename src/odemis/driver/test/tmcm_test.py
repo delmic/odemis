@@ -46,6 +46,7 @@ KWARGS = dict(name="test", role="stage", port=PORT,
               # temp=True,
               # For the more standard configurations:
               refproc="Standard",
+              # refswitch={"x": 0},
               inverted=["x"])
 KWARGS_SIM = dict(KWARGS)
 KWARGS_SIM["refproc"] = "Standard"
