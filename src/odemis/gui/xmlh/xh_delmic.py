@@ -224,6 +224,74 @@ class StreamBarXmlHandler(xrc.XmlResourceHandler):
 HANDLER_CLASS_LIST.append(StreamBarXmlHandler)
 
 
+class _ImageButtonHandler(xrc.XmlResourceHandler):
+
+    def __init__(self):
+        xrc.XmlResourceHandler.__init__(self)
+        # Standard styles
+        self.AddWindowStyles()
+        # Custom styles
+        self.AddStyle('wxALIGN_LEFT', wx.ALIGN_LEFT)
+        self.AddStyle('wxALIGN_RIGHT', wx.ALIGN_RIGHT)
+        self.AddStyle('wxALIGN_CENTRE', wx.ALIGN_CENTRE)
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, 'NImageButton')
+
+    # Process XML parameters and create the object
+    def DoCreateResource(self):
+        assert self.GetInstance() is None
+
+        bmp = wx.NullBitmap
+        if self.GetParamNode("icon"):
+            bmp = self.GetBitmap("icon")
+
+        if self.GetParamNode("label"):
+            w = self.klass(
+                self.GetParentAsWindow(),
+                self.GetID(),
+                icon=bmp,
+                pos=self.GetPosition(),
+                size=self.GetSize(),
+                style=self.GetStyle(),
+                label=self.GetText('label'),
+                height=int(self.GetText('height'))
+            )
+        else:
+            w = self.klass(
+                self.GetParentAsWindow(),
+                self.GetID(),
+                icon=bmp,
+                pos=self.GetPosition(),
+                size=self.GetSize(),
+                style=self.GetStyle(),
+                height=int(self.GetText('height'))
+            )
+
+        self.SetupWindow(w)
+        return w
+
+
+class NImageButtonHandler(_ImageButtonHandler):
+    klass = btns.NImageButton
+HANDLER_CLASS_LIST.append(NImageButtonHandler)
+
+
+class NImageToggleButtonHandler(_ImageButtonHandler):
+    klass = btns.NImageToggleButton
+HANDLER_CLASS_LIST.append(NImageToggleButtonHandler)
+
+
+class NImageTextButtonHandler(_ImageButtonHandler):
+    klass = btns.NImageTextButton
+HANDLER_CLASS_LIST.append(NImageTextButtonHandler)
+
+
+class NImageTextToggleButtonHandler(_ImageButtonHandler):
+    klass = btns.NImageTextToggleButton
+HANDLER_CLASS_LIST.append(NImageTextToggleButtonHandler)
+
+
 ################################
 # ImageButton sub class handlers
 ################################
