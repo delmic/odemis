@@ -23,12 +23,9 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from collections import OrderedDict
 import unittest
 import wx
-from wx.lib.buttons import ThemedGenBitmapButton
 
 from odemis.gui.img import data
 import odemis.gui.comp.buttons as buttons
-import odemis.gui.comp.nbuttons as nbuttons
-import wx.lib.buttons as genbuttons
 import odemis.gui.test as test
 from odemis.gui.test import gui_loop
 
@@ -171,16 +168,15 @@ class NButtonsTestCase(test.GuiTestCase):
             btn.SetIcon(data.getico_sem_greenBitmap())
             row_sizer.Add(btn, flag=wx.LEFT|wx.RIGHT, border=2)
 
-            btn = buttons.NImageTextButton(self.panel, height=h, label="Daaaag!",
+            btn = buttons.NImageTextButton(self.panel, height=h, label="Daaaag!", size=(150, -1),
                                            icon=data.getico_eject_orangeBitmap())
             row_sizer.Add(btn, flag=wx.LEFT|wx.RIGHT, border=2)
 
             btn = buttons.NImageTextToggleButton(self.panel, height=h, label="Daaaag!",
-                                           icon=data.getico_camBitmap())
+                                                 icon=data.getico_camBitmap())
             row_sizer.Add(btn, flag=wx.LEFT|wx.RIGHT, border=2)
 
             self.add_control(row_sizer, flags=wx.ALL, border=2)
-
 
 
 if __name__ == "__main__":

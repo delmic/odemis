@@ -154,6 +154,13 @@
     <object class="wxPanel" name="button_panel">
       <object class="wxBoxSizer">
         <orient>wxVERTICAL</orient>
+        <object class="sizeritem">
+          <object class="NImageButton">
+            <icon>../img/icon/ico_cam.png</icon>
+            <height>48</height>
+          </object>
+          <flag>wxEXPAND</flag>
+        </object>
       </object>
       <fg>#E6E6FA</fg>
       <bg>#4D4D4D</bg>

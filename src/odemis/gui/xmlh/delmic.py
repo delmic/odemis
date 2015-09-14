@@ -129,6 +129,42 @@ for i, (name, handler) in enumerate(msvps):
     component.Manager.addXmlHandler(handler)
     component.Manager.setMenu(c, 'Delmic Viewport', name, name, 10 + i)
 
+
+class ButtonSizesParam(params.RadioBox):
+    choices = {'16': '16', '24': '24', '32': '32', '48': '48'}
+    default = '48'
+
+
+### NImageButton
+
+buttons = [
+    ('NImageButton', xh_delmic.NImageButtonHandler,
+     'New button', 'Icon Button', False),
+    ('NImageToggleButton', xh_delmic.NImageToggleButtonHandler,
+     'New button', 'Icon Toggle Button', False),
+    ('NImageTextButton', xh_delmic.NImageTextButtonHandler,
+     'New button', 'Icon Text Button', True),
+    ('NImageTextToggleButton', xh_delmic.NImageTextToggleButtonHandler,
+     'New button', 'Icon Text Toggle Button', True),
+]
+
+for btn in buttons:
+    c = component.Component(
+        btn[0], ['control', 'tool'],
+        ['pos', 'size', 'icon', 'height'] + ['label'] if btn[4] else [] ,
+        image=images.TreeBitmapButton.GetImage()
+    )
+    c.setSpecial('icon',  attribute.BitmapAttribute)
+    c.setParamClass('icon', params.ParamBitmap)
+    c.setParamClass('height', ButtonSizesParam)
+
+    c.addEvents('EVT_BUTTON')
+    component.Manager.register(c)
+    component.Manager.addXmlHandler(btn[1])
+    component.Manager.setMenu(c, btn[2], btn[3], btn[0], 2)
+    component.Manager.setTool(c, 'Controls', pos=(1, 1))
+
+
 ### ImageButton
 
 c = component.Component(
