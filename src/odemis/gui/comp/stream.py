@@ -1298,14 +1298,13 @@ class StreamBar(wx.Panel):
         self.btn_add_stream = None
 
         if add_btn:
-            self.btn_add_stream = buttons.PopupImageButton(self, -1,
-                                                           bitmap=img.getstream_addBitmap(),
-                                                           label="ADD STREAM",
-                                                           style=wx.ALIGN_CENTER)
+            self.btn_add_stream = buttons.NPopupImageButton(
+                self, -1,
+                label="ADD STREAM",
+                style=wx.ALIGN_CENTER
+            )
 
             self.btn_add_stream.SetForegroundColour("#999999")
-            self.btn_add_stream.SetBitmaps(img.getstream_add_hBitmap(),
-                                           img.getstream_add_aBitmap())
             self._sz.Add(self.btn_add_stream, flag=wx.ALL, border=10)
 
             self._set_warning()

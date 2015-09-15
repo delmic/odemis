@@ -1225,11 +1225,19 @@ class ImageTextToggleButton(GenBitmapTextToggleButton):
             self.faceDnClr = self.GetParent().GetBackgroundColour()
 
 
-class PopupImageButton(ImageTextButton):
+class NPopupImageButton(NImageTextButton):
     """ This class describes a grahical button with an associated popup menu """
 
+    labelDelta = 0
+    
     def __init__(self, *args, **kwargs):
-        ImageTextButton.__init__(self, *args, **kwargs)
+        kwargs['size'] = imgdata.stream_add.Bitmap.Size
+        super(NPopupImageButton, self).__init__(*args, **kwargs)
+
+        self.bmpLabel = imgdata.stream_add.Bitmap
+        self.bmpSelected = imgdata.stream_add_a.Bitmap
+        self.bmpHover = imgdata.stream_add_h.Bitmap
+
         self.choices = {}
         self.menu = wx.Menu()
         self.Bind(wx.EVT_BUTTON, self.show_menu)
@@ -1295,3 +1303,21 @@ class PopupImageButton(ImageTextButton):
             if menu_item.GetId() == event_id:
                 logging.debug("Performing %s callback", label)
                 callback()
+
+    # def DrawLabel(self, dc, width, height, dx=0, dy=0):
+    #     """ Draw method called by the `OnPaint` event handler """
+    #
+    #     dc.SetBackground(wx.Brush(self.Parent.BackgroundColour))
+    #     dc.Clear()
+    #
+    #     if not self.GetToggle() and not self.hovering:
+    #         dc.DrawBitmap(imgdata.stream_add.Bitmap, 0, 0, True)
+    #     else:
+    #         dc.DrawBitmap(imgdata.stream_add_a.Bitmap, 0, 0, True)
+    #
+    #     self.bmpLabel = imgdata.stream_add.Bitmap
+    #
+    #     dc.DrawBitmap()
+
+    def _reset_bitmaps(self):
+        pass
