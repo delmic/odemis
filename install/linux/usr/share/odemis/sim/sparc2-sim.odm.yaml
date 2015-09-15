@@ -202,8 +202,10 @@ SPARC2: {
         port: "/dev/fake6",
         address: null,
         axes: ["l1", "l2", "cl-sel", "fw", "slit"],
-        ustepsize: [5.9e-9, 5.9e-9, 5.9e-9, 5.9e-9, 5.9e-9], # m/µstep
+        ustepsize: [25.1e-9, 25.1e-9, 5.9e-9, 5.9e-9, 5.9e-9], # m/µstep
         refproc: "Standard",
+        refswitch: {"l1": 0, "l2": 0},
+        inverted: ["l2"],
     },
 }
 
