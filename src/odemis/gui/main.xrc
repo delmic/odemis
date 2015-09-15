@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<resource version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<resource class="NViewButton" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -2003,10 +2003,8 @@
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="ViewButton" name="btn_sparc_view_all">
-                    <bitmap>img/preview_block.png</bitmap>
-                    <hover>img/preview_block_a.png</hover>
-                    <selected>img/preview_block_a.png</selected>
+                  <object class="NViewButton" name="btn_sparc_view_all">
+                    <height>48</height>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -2033,10 +2031,8 @@
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="ViewButton" name="btn_sparc_view_tl">
-                    <bitmap>img/preview_block.png</bitmap>
-                    <hover>img/preview_block_a.png</hover>
-                    <selected>img/preview_block_a.png</selected>
+                  <object class="NViewButton" name="btn_sparc_view_tl">
+                    <height>48</height>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -2063,10 +2059,8 @@
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="ViewButton" name="btn_sparc_view_tr">
-                    <bitmap>img/preview_block.png</bitmap>
-                    <hover>img/preview_block_a.png</hover>
-                    <selected>img/preview_block_a.png</selected>
+                  <object class="NViewButton" name="btn_sparc_view_tr">
+                    <height>48</height>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -2093,10 +2087,8 @@
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="ViewButton" name="btn_sparc_view_bl">
-                    <bitmap>img/preview_block.png</bitmap>
-                    <hover>img/preview_block_a.png</hover>
-                    <selected>img/preview_block_a.png</selected>
+                  <object class="NViewButton" name="btn_sparc_view_bl">
+                    <height>48</height>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -2123,10 +2115,8 @@
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="ViewButton" name="btn_sparc_view_br">
-                    <bitmap>img/preview_block.png</bitmap>
-                    <hover>img/preview_block_a.png</hover>
-                    <selected>img/preview_block_a.png</selected>
+                  <object class="NViewButton" name="btn_sparc_view_br">
+                    <height>48</height>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -2483,10 +2473,8 @@
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="ViewButton" name="btn_inspection_view_all">
-                    <bitmap>img/preview_block.png</bitmap>
-                    <hover>img/preview_block_a.png</hover>
-                    <selected>img/preview_block_a.png</selected>
+                  <object class="NViewButton" name="btn_inspection_view_all">
+                    <height>48</height>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -2513,10 +2501,8 @@
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="ViewButton" name="btn_inspection_view_tl">
-                    <bitmap>img/preview_block.png</bitmap>
-                    <hover>img/preview_block_a.png</hover>
-                    <selected>img/preview_block_a.png</selected>
+                  <object class="NViewButton" name="btn_inspection_view_tl">
+                    <height>48</height>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -2543,10 +2529,8 @@
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="ViewButton" name="btn_inspection_view_tr">
-                    <bitmap>img/preview_block.png</bitmap>
-                    <hover>img/preview_block_a.png</hover>
-                    <selected>img/preview_block_a.png</selected>
+                  <object class="NViewButton" name="btn_inspection_view_tr">
+                    <height>48</height>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -2573,10 +2557,8 @@
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="ViewButton" name="btn_inspection_view_bl">
-                    <bitmap>img/preview_block.png</bitmap>
-                    <hover>img/preview_block_a.png</hover>
-                    <selected>img/preview_block_a.png</selected>
+                  <object class="NViewButton" name="btn_inspection_view_bl">
+                    <height>48</height>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -2603,10 +2585,8 @@
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="ViewButton" name="btn_inspection_view_br">
-                    <bitmap>img/preview_block.png</bitmap>
-                    <hover>img/preview_block_a.png</hover>
-                    <selected>img/preview_block_a.png</selected>
+                  <object class="NViewButton" name="btn_inspection_view_br">
+                    <height>48</height>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -2789,10 +2769,8 @@
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="ViewButton" name="btn_secom_overview">
-                    <bitmap>img/preview_block.png</bitmap>
-                    <hover>img/preview_block_a.png</hover>
-                    <selected>img/preview_block_a.png</selected>
+                  <object class="NViewButton" name="btn_secom_overview">
+                    <height>48</height>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -2836,10 +2814,8 @@
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="ViewButton" name="btn_secom_view_all">
-                    <bitmap>img/preview_block.png</bitmap>
-                    <hover>img/preview_block_a.png</hover>
-                    <selected>img/preview_block_a.png</selected>
+                  <object class="NViewButton" name="btn_secom_view_all">
+                    <height>48</height>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -2866,10 +2842,8 @@
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="ViewButton" name="btn_secom_view_tl">
-                    <bitmap>img/preview_block.png</bitmap>
-                    <hover>img/preview_block_a.png</hover>
-                    <selected>img/preview_block_a.png</selected>
+                  <object class="NViewButton" name="btn_secom_view_tl">
+                    <height>48</height>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -2896,10 +2870,8 @@
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="ViewButton" name="btn_secom_view_tr">
-                    <bitmap>img/preview_block.png</bitmap>
-                    <hover>img/preview_block_a.png</hover>
-                    <selected>img/preview_block_a.png</selected>
+                  <object class="NViewButton" name="btn_secom_view_tr">
+                    <height>48</height>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -2926,10 +2898,8 @@
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="ViewButton" name="btn_secom_view_bl">
-                    <bitmap>img/preview_block.png</bitmap>
-                    <hover>img/preview_block_a.png</hover>
-                    <selected>img/preview_block_a.png</selected>
+                  <object class="NViewButton" name="btn_secom_view_bl">
+                    <height>48</height>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -2956,10 +2926,8 @@
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="ViewButton" name="btn_secom_view_br">
-                    <bitmap>img/preview_block.png</bitmap>
-                    <hover>img/preview_block_a.png</hover>
-                    <selected>img/preview_block_a.png</selected>
+                  <object class="NViewButton" name="btn_secom_view_br">
+                    <height>48</height>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>

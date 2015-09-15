@@ -310,6 +310,10 @@ class NTabButtonHandler(_ImageButtonHandler):
 HANDLER_CLASS_LIST.append(NTabButtonHandler)
 
 
+class NViewButtonHandler(_ImageButtonHandler):
+    klass = btns.NViewButton
+HANDLER_CLASS_LIST.append(NViewButtonHandler)
+
 ################################
 # ImageButton sub class handlers
 ################################
@@ -516,17 +520,6 @@ class ImageTextToggleButtonHandler(xrc.XmlResourceHandler):
         self.SetupWindow(w)
         return w
 HANDLER_CLASS_LIST.append(ImageTextToggleButtonHandler)
-
-
-class ViewButtonHandler(ImageTextToggleButtonHandler):
-
-    def __init__(self):
-        ImageTextToggleButtonHandler.__init__(self)
-        self.klass = btns.ViewButton
-
-    def CanHandle(self, node):
-        return self.IsOfClass(node, 'ViewButton')
-HANDLER_CLASS_LIST.append(ViewButtonHandler)
 
 
 class PopupImageButtonHandler(xrc.XmlResourceHandler):
