@@ -252,6 +252,8 @@ class _ImageButtonHandler(xrc.XmlResourceHandler):
         if self.GetParamNode("icon_on"):
             icon_on = self.GetBitmap("icon_on")
 
+        height = int(self.GetText('height')) if self.GetText('height') else None
+
         if self.GetParamNode("label"):
             w = self.klass(
                 self.GetParentAsWindow(),
@@ -262,7 +264,8 @@ class _ImageButtonHandler(xrc.XmlResourceHandler):
                 size=self.GetSize(),
                 style=self.GetStyle(),
                 label=self.GetText('label'),
-                height=int(self.GetText('height'))
+                face_colour=self.GetText('face_colour'),
+                height=height
             )
         else:
             w = self.klass(
@@ -273,7 +276,8 @@ class _ImageButtonHandler(xrc.XmlResourceHandler):
                 pos=self.GetPosition(),
                 size=self.GetSize(),
                 style=self.GetStyle(),
-                height=int(self.GetText('height'))
+                face_colour=self.GetText('face_colour'),
+                height=height
             )
 
         self.SetupWindow(w)
