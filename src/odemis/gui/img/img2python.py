@@ -42,6 +42,8 @@ if args.optimize:
                         os.rename('%s.opt' % ff, ff)
                     else:
                         print "    %s.opt not found!!" % ff
+                else:
+                    print ' - SKIPPING ', ff
 
 first = True
 

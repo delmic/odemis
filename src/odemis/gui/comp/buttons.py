@@ -31,14 +31,12 @@
 from __future__ import division
 
 import logging
-from wx.lib import imageutils
-from odemis.gui import FG_COLOUR_HIGHLIGHT
-from odemis.gui.img import data as imgdata
-from odemis.gui.util import img
 import wx
 from wx.lib.buttons import GenBitmapButton, GenBitmapToggleButton, GenBitmapTextToggleButton, \
-    GenBitmapTextButton, __ToggleMixin
+    GenBitmapTextButton
 
+from odemis.gui import FG_COLOUR_HIGHLIGHT
+from odemis.gui.util import img
 import odemis.gui.img.data as imgdata
 
 
@@ -97,25 +95,50 @@ class BtnMixin(object):
 
     btns = {
         16: {
-            'off': imgdata.btn_16,
-            'on': imgdata.btn_16_a,
+            'def': {
+                'off': imgdata.btn_def_16,
+                'on': imgdata.btn_def_16_a,
+            },
+            'blue': {
+                'off': imgdata.btn_blue_16,
+                'on': imgdata.btn_blue_16_a,
+            },
         },
         24: {
-            'off': imgdata.btn_24,
-            'on': imgdata.btn_24_a,
+            'def': {
+                'off': imgdata.btn_def_24,
+                'on': imgdata.btn_def_24_a,
+            },
+            'blue': {
+                'off': imgdata.btn_blue_24,
+                'on': imgdata.btn_blue_24_a,
+            },
         },
         32: {
-            'off': imgdata.btn_32,
-            'on': imgdata.btn_32_a,
+            'def': {
+                'off': imgdata.btn_def_32,
+                'on': imgdata.btn_def_32_a,
+            },
+            'blue': {
+                'off': imgdata.btn_blue_32,
+                'on': imgdata.btn_blue_32_a,
+            },
         },
         48: {
-            'off': imgdata.btn_48,
-            'on': imgdata.btn_48_a,
+            'def': {
+                'off': imgdata.btn_def_48,
+                'on': imgdata.btn_def_48_a,
+            },
+            'blue': {
+                'off': imgdata.btn_blue_48,
+                'on': imgdata.btn_blue_48_a,
+            },
         },
     }
 
     def __init__(self, *args, **kwargs):
-        self.height = kwargs.pop('height', 32)
+        self.height = kwargs.pop('height', None) or 48
+        self.face_colour = kwargs.pop('face_colour', 'def') or 'def'
         kwargs['style'] = kwargs.get('style', 0) | wx.NO_BORDER | wx.BU_EXACTFIT
         kwargs['bitmap'] = None
         self.icon = kwargs.pop('icon', None)
@@ -150,6 +173,10 @@ class BtnMixin(object):
             self._reset_bitmaps()
             self.previous_size = self.Size
 
+    def SetLabel(self, label):
+        super(BtnMixin, self).SetLabel(label)
+        self.Refresh()
+
     def _GetLabelSize(self):
         """ used internally """
 
@@ -168,26 +195,27 @@ class BtnMixin(object):
 
     @staticmethod
     def _create_bitmap(bmp, size, bg_color):
+        sw = 4
         btn_width, btn_height = size
 
         new_img = bmp.ConvertToImage()
-        l = new_img.GetSubImage((0, 0, 3, btn_height)).ConvertToBitmap()
-        m = new_img.GetSubImage((3, 0, 3, btn_height)).Rescale(btn_width - 6,
+        l = new_img.GetSubImage((0, 0, sw, btn_height)).ConvertToBitmap()
+        m = new_img.GetSubImage((sw, 0, sw, btn_height)).Rescale(btn_width - sw * 2,
                                                                btn_height).ConvertToBitmap()
-        r = new_img.GetSubImage((6, 0, 3, btn_height)).ConvertToBitmap()
+        r = new_img.GetSubImage((sw * 2, 0, sw, btn_height)).ConvertToBitmap()
 
         src_dc = wx.MemoryDC()
         src_dc.SelectObjectAsSource(bmp)
 
-        dst_bmp = wx.EmptyBitmap(btn_width, 48)
+        dst_bmp = wx.EmptyBitmap(btn_width, btn_height)
         dst_dc = wx.MemoryDC()
         dst_dc.SelectObject(dst_bmp)
         dst_dc.SetBackground(wx.Brush(bg_color))
         dst_dc.Clear()
 
         dst_dc.DrawBitmap(l, 0, 0, True)
-        dst_dc.DrawBitmap(m, 3, 0, True)
-        dst_dc.DrawBitmap(r, btn_width - 3, 0)
+        dst_dc.DrawBitmap(m, sw, 0, True)
+        dst_dc.DrawBitmap(r, btn_width - sw, 0)
 
         return dst_bmp
 
@@ -197,13 +225,13 @@ class BtnMixin(object):
 
     def _create_main_bitmap(self):
         return self._create_bitmap(
-            self.btns[self.height]['off'].GetBitmap(),
+            self.btns[self.height][self.face_colour]['off'].GetBitmap(),
             (self.Size.x, self.height),
             self.Parent.GetBackgroundColour()
         )
 
     def _create_hover_bitmap(self):
-        image = self.btns[self.height]['off'].GetImage()
+        image = self.btns[self.height][self.face_colour]['off'].GetImage()
         darken_image(image, 1.1)
         return self._create_bitmap(
             wx.BitmapFromImage(image),
@@ -212,8 +240,8 @@ class BtnMixin(object):
         )
 
     def _create_disabled_bitmap(self):
-        image = self.btns[self.height]['off'].GetImage()
-        darken_image(image)
+        image = self.btns[self.height][self.face_colour]['off'].GetImage()
+        darken_image(image, 0.9)
         return self._create_bitmap(
             wx.BitmapFromImage(image),
             (self.Size.x, self.height),
@@ -222,7 +250,7 @@ class BtnMixin(object):
 
     def _create_active_bitmap(self):
         return self._create_bitmap(
-            self.btns[self.height]['on'].GetBitmap(),
+            self.btns[self.height][self.face_colour]['on'].GetBitmap(),
             (self.Size.x, self.height),
             self.Parent.GetBackgroundColour()
         )
@@ -1229,7 +1257,7 @@ class NPopupImageButton(NImageTextButton):
     """ This class describes a grahical button with an associated popup menu """
 
     labelDelta = 0
-    
+
     def __init__(self, *args, **kwargs):
         kwargs['size'] = imgdata.stream_add.Bitmap.Size
         super(NPopupImageButton, self).__init__(*args, **kwargs)

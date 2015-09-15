@@ -158,8 +158,10 @@
           <object class="NImageButton">
             <icon>../img/icon/ico_cam.png</icon>
             <height>48</height>
+            <face_colour>def</face_colour>
           </object>
-          <flag>wxEXPAND</flag>
+          <flag>wxALL|wxEXPAND</flag>
+          <border>4</border>
         </object>
       </object>
       <fg>#E6E6FA</fg>
