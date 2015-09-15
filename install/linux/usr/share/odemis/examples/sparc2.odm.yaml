@@ -21,11 +21,7 @@ SPARC2: {
 
 #TODO add support for Power Control Unit
 
-
-# Can simulate a SEM connected to a DAQ board by using the comedi_test driver:
-# sudo modprobe comedi comedi_num_legacy_minors=4
-# sudo modprobe comedi_test
-# sudo comedi_config /dev/comedi0 comedi_test 1000000,1000000
+# Quanta SEM driven via external X/Y connection, using a DAQ board
 "SEM Scan Interface": {
     class: semcomedi.SEMComedi,
     role: null,
@@ -46,9 +42,9 @@ SPARC2: {
     # Internal child of SEM ExtXY, so no class
     role: e-beam,
     init: {
-        channels: [1, 0],
-        limits: [[0, 5], [0, 5]],  # V
-        park: [0, 0], # V
+        channels: [0, 1],
+        limits: [[-3.1754, 3.1754], [-3.7, 3.7]],  # V
+        park: [-5, -5], # V
         settle_time: 5.e-6, # s
         hfw_nomag: 0.25, # m
     },
@@ -65,8 +61,8 @@ SPARC2: {
     # Internal child of SEM Scan Interface, so no class
     role: se-detector,
     init: {
-        channel: 0, # 0-> sawtooth waves, 1-> square waves
-        limits: [-3, 3] # V
+        channel: 0,
+        limits: [-3, 3], # V
     },
 }
 
@@ -78,7 +74,7 @@ SPARC2: {
     creator: "SEM Scan Interface",
     role: null,
     init: {
-        channel: 1, # 0-> sawtooth waves, 1-> square waves
+        channel: 1,
         limits: [3, 0], # V, with contrast reversed
     },
 }
@@ -87,7 +83,7 @@ SPARC2: {
     class: pmtctrl.PMTControl,
     role: null,
     init: {
-        port: "/dev/fake", # for simulator
+        port: "/dev/ttyPMT*",
         prot_time: 0.0002,  # s
         prot_curr: 50.e-6,  # A
     }
@@ -96,6 +92,9 @@ SPARC2: {
 "CL Detector": {
     class: pmtctrl.PMT,
     role: cl-detector,
+    init: {
+        settle_time: 0.5,  # s, time for the gain to be fully active
+    },
     children: {
        "detector": "CL PMT",
        "pmt-control": "CL PMT control unit",
@@ -133,7 +132,7 @@ SPARC2: {
     role: spectrometer,
     children: {detector: "Spectral Camera", spectrograph: "Spectrograph"},
     properties: {
-        binning: [4, 16],
+        binning: [4, 256],
     },
 }
 
@@ -196,7 +195,7 @@ SPARC2: {
 }
 
 # Controller for the motors moving the various parts of the optical box
-# DIP must be configured with address 4 (= 0100000)
+# DIP must be configured with address 2 (= 0100000)
 "Optical Actuators": {
     class: tmcm.TMCLController,
     role: null,
@@ -207,7 +206,7 @@ SPARC2: {
         # These values only need to be roughly correct
         ustepsize: [25.1e-9, 25.1e-9, 5.9e-9, 5.9e-9, 5e-9], # m/µstep
         refproc: "Standard",
-        refswitch: {"l1": 0, "l2": 0},
+        refswitch: {"l1": 0, "l2": 0, "cl-sel": 4, "fw": 4},
         inverted: ["l2"],
     },
 }

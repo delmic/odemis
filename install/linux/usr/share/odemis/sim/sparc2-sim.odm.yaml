@@ -205,7 +205,7 @@ SPARC2: {
         # These values only need to be roughly correct
         ustepsize: [25.1e-9, 25.1e-9, 5.9e-9, 5.9e-9, 5e-9], # m/µstep
         refproc: "Standard",
-        refswitch: {"l1": 0, "l2": 0},
+        refswitch: {"l1": 0, "l2": 0, "cl-sel": 4, "fw": 4},
         inverted: ["l2"],
     },
 }
