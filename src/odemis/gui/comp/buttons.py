@@ -425,6 +425,80 @@ class NTabButton(NGraphicRadioButton):
         self.bmpDisabled = imgdata.tab_hover.Bitmap
 
 
+class NColourButton(NImageButton):
+    """ An ImageButton that has a single colour  background that can be altered.
+    """
+
+    # The default colour for the colour button
+    DEFAULT_COLOR = (0, 0, 0)
+
+    def __init__(self, *args, **kwargs):
+        self.colour = kwargs.pop('colour', None) or self.DEFAULT_COLOR
+        self.use_hover = kwargs.pop('use_hover', False)
+        super(NColourButton, self).__init__(*args, **kwargs)
+        self.set_colour(self.colour)
+
+    def set_colour(self, colour):
+        """ Change the background colour of the button.
+
+            :param colour: (3-tuple of 0<=int<=255) RGB values
+        """
+
+        if colour:
+            self.colour = colour
+
+        brush = wx.Brush(self.colour)
+        # TODO: Remove this little 'hack', which was put in place because of bg color issues,
+        # resulting from the use of 'SetBackgroundStyle' in StreamPanelHeader
+        if self.use_hover:
+            bg_brush = wx.Brush(self.Parent.Parent.GetBackgroundColour())
+        else:
+            bg_brush = wx.Brush(self.Parent.GetBackgroundColour())
+        pen = wx.Pen(self.colour)
+
+        bmp = wx.EmptyBitmap(18, 18)
+        mdc = wx.MemoryDC()
+        mdc.SelectObject(bmp)
+
+        mdc.SetBackground(bg_brush)
+        mdc.Clear()
+
+        mdc.SetBrush(brush)
+        mdc.SetPen(pen)
+        mdc.DrawRectangle(4, 4, 10, 10)
+        mdc.SelectObject(wx.NullBitmap)
+
+        self.bmpLabel = self.bmpSelected = bmp
+
+        if self.use_hover:
+            bmp = wx.EmptyBitmap(18, 18)
+            mdc = wx.MemoryDC()
+            mdc.SelectObject(bmp)
+
+            mdc.DrawBitmap(imgdata.empty_h.Bitmap, 0, 0)
+
+            mdc.SetBrush(brush)
+            mdc.SetPen(pen)
+            mdc.DrawRectangle(4, 4, 10, 10)
+            mdc.SelectObject(wx.NullBitmap)
+
+            self.bmpHover = bmp
+        else:
+            self.bmpHover = bmp
+
+        self.Refresh()
+
+    def get_colour(self):
+        """ Get the current background colour of the button
+
+        :rtype: (string) Hex colour value
+        """
+        return self.colour
+
+    def _reset_bitmaps(self):
+        pass
+
+
 class ImageButton(GenBitmapButton):
     """ Graphical button with hover effect.
 
@@ -1152,63 +1226,8 @@ class ViewButton(ImageTextToggleButton):
                           self.thumbnail_border,
                           True)
 
-class ColourButton(ImageButton):
-    """ An ImageButton that has a single colour  background that can be altered.
-    """
 
-    # The default colour for the colour button
-    DEFAULT_COLOR = (0, 0, 0)
 
-    def __init__(self, *args, **kwargs):
-        self.colour = kwargs.pop('colour', None) or self.DEFAULT_COLOR
-        self.use_hover = kwargs.pop('use_hover', False)
-        ImageButton.__init__(self, *args, **kwargs)
-        self.set_colour(self.colour)
-
-    def set_colour(self, colour):
-        """ Change the background colour of the button.
-
-            :param colour: (3-tuple of 0<=int<=255) RGB values
-        """
-
-        if colour:
-            self.colour = colour
-
-        BMP_EMPTY = imgdata.getemptyBitmap()
-
-        brush = wx.Brush(self.colour)
-        pen = wx.Pen(self.colour)
-        bmp = BMP_EMPTY.GetSubBitmap(wx.Rect(0, 0, BMP_EMPTY.GetWidth(), BMP_EMPTY.GetHeight()))
-        mdc = wx.MemoryDC()
-        mdc.SelectObject(bmp)
-        mdc.SetBrush(brush)
-        mdc.SetPen(pen)
-        mdc.DrawRectangle(4, 4, 10, 10)
-        mdc.SelectObject(wx.NullBitmap)
-
-        self.SetBitmapLabel(bmp)
-
-        if self.use_hover:
-            BMP_EMPTY_H = imgdata.getempty_hBitmap()
-            bmp = BMP_EMPTY_H.GetSubBitmap(
-                wx.Rect(0, 0, BMP_EMPTY.GetWidth(), BMP_EMPTY.GetHeight()))
-            mdc = wx.MemoryDC()
-            mdc.SelectObject(bmp)
-            mdc.SetBrush(brush)
-            mdc.SetPen(pen)
-            mdc.DrawRectangle(4, 4, 10, 10)
-            mdc.SelectObject(wx.NullBitmap)
-
-            self.SetBitmaps(bmp)
-
-        self.Refresh()
-
-    def get_colour(self):
-        """ Get the current background colour of the button
-
-        :rtype: (string) Hex colour value
-        """
-        return self.colour
 
 
 class PopupImageButton(ImageTextButton):

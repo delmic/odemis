@@ -88,7 +88,7 @@ class StreamPanelHeader(wx.Control):
     """
 
     BUTTON_SIZE = (18, 18)  # The pixel size of the button
-    BUTTON_BORDER_SIZE = 8  # Border space around the buttons
+    BUTTON_BORDER_SIZE = 9  # Border space around the buttons
 
     def __init__(self, parent, wid=wx.ID_ANY, pos=wx.DefaultPosition, size=wx.DefaultSize,
                  style=wx.NO_BORDER):
@@ -169,12 +169,10 @@ class StreamPanelHeader(wx.Control):
         if not hasattr(self.Parent.stream, "tint"):
             return None
 
-        tint_btn = buttons.ColourButton(
+        tint_btn = buttons.NColourButton(
             self, -1,
-            bitmap=img.getemptyBitmap(),
             size=self.BUTTON_SIZE,
             colour=self.Parent.stream.tint.value,
-            background_parent=self.Parent,
             use_hover=True
         )
         tint_btn.SetToolTipString("Select colour")
@@ -1118,10 +1116,8 @@ class StreamPanel(wx.Panel):
         # A button, but not clickable, just to show the wavelength
         # If a dye is selected, the colour of the peak is used, otherwise we
         # use the hardware setting
-        btn_color = buttons.ColourButton(self._panel, -1,
-                                         bitmap=img.getemptyBitmap(),
-                                         colour=center_wl_color,
-                                         background_parent=self._panel)
+        btn_color = buttons.NColourButton(self._panel, -1, colour=center_wl_color,
+                                          size=(18, 18))
         self.gb_sizer.Add(btn_color,
                           (self.num_rows, 2),
                           flag=wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL | wx.ALIGN_RIGHT,
