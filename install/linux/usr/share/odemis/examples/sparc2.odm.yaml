@@ -1,4 +1,4 @@
-# Configuration for a simulated SPARC v2 system
+# Configuration for the SPARC v2 system
 SPARC2: {
     class: Microscope,
     role: sparc2,
@@ -13,6 +13,7 @@ SPARC2: {
 
 # Light (lamp with known spectrum)
 "Calibration Light": {
+    # TODO: use light.Light
     class: simulated.Light,
     role: "calib-light",
     affects: ["Camera"],
@@ -195,12 +196,13 @@ SPARC2: {
 }
 
 # Controller for the motors moving the various parts of the optical box
+# DIP must be configured with address 4 (= 0100000)
 "Optical Actuators": {
     class: tmcm.TMCLController,
     role: null,
     init: {
-        port: "/dev/fake6",
-        address: null,
+        port: "/dev/ttyTMCM*",
+        address: 2,
         axes: ["l1", "l2", "cl-sel", "fw", "slit"],
         # These values only need to be roughly correct
         ustepsize: [25.1e-9, 25.1e-9, 5.9e-9, 5.9e-9, 5e-9], # m/µstep
@@ -283,12 +285,13 @@ SPARC2: {
 }
 
 # Controller for moving the 'Redux' stage
+# DIP must be configured with address 4 (= 0010000)
 "Mirror Actuators": {
     class: tmcm.TMCLController,
     role: "mirror",
     init: {
-        port: "/dev/fake6",
-        address: null,
+        port: "/dev/ttyTMCM*",
+        address: 4,
         axes: ["x", "y"],
         ustepsize: [5.9e-9, 5.9e-9], # m/µstep
         refproc: "Standard",
