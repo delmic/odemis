@@ -131,9 +131,13 @@ for i, (name, handler) in enumerate(msvps):
 
 
 class ButtonSizesParam(params.RadioBox):
-    choices = {'16': '16', '24': '24', '32': '32', '48': '48'}
-    default = '48'
+    choices = {'16': '16', '24': '24', '32': '32', '48': '48', 'None': None}
+    default = None
 
+
+class ButtonFaceColourParam(params.RadioBox):
+    choices = {'Grey': 'def', 'Blue': 'blue'}
+    default = 'def'
 
 ### NImageButton
 
@@ -155,9 +159,12 @@ buttons = [
 ]
 
 for btn in buttons:
+    attrs = ['pos', 'size', 'icon', 'icon_on', 'height', 'face_colour']
+    attrs += ['label'] if btn[4] else []
+
     c = component.Component(
         btn[0], ['control', 'tool'],
-        ['pos', 'size', 'icon', 'icon_on', 'height'] + ['label'] if btn[4] else [] ,
+        attrs,
         image=images.TreeBitmapButton.GetImage()
     )
     c.addStyles('wxALIGN_LEFT', 'wxALIGN_RIGHT', 'wxALIGN_CENTRE')
@@ -166,6 +173,7 @@ for btn in buttons:
     c.setSpecial('icon_on',  attribute.BitmapAttribute)
     c.setParamClass('icon_on', params.ParamBitmap)
     c.setParamClass('height', ButtonSizesParam)
+    c.setParamClass('face_colour', ButtonFaceColourParam)
 
     c.addEvents('EVT_BUTTON')
     component.Manager.register(c)
