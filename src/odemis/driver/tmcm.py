@@ -186,12 +186,11 @@ class TMCLController(model.Actuator):
             if not n:
                 continue
             sz = ustepsize[i]
-            pos = self.GetAxisParam(i, 1)
             if modl == 3110:
                 # Mov abs supports ±2³¹ but the actual position is only within ±2²³
-                rng = ((pos - 2 ** 23) * sz, (pos + 2 ** 23 - 1) * sz)
+                rng = ((-2 ** 23) * sz, (2 ** 23 - 1) * sz)
             else:
-                rng = ((pos - 2 ** 31) * sz, (pos + 2 ** 31 - 1) * sz)
+                rng = ((-2 ** 31) * sz, (2 ** 31 - 1) * sz)
             # Probably not that much, but there is no info unless the axis has
             # limit switches and we run a referencing
             axes_def[n] = model.Axis(range=rng, unit="m")

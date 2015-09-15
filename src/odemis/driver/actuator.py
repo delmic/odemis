@@ -766,6 +766,7 @@ class FixedPositionsActuator(model.Actuator):
         positions (set or dict value -> str): positions where the actuator is allowed to move
         cycle (float): if not None, it means the actuator does a cyclic move and this value represents a full cycle
         """
+        # TODO: forbid inverted
         if len(children) != 1:
             raise ValueError("FixedPositionsActuator needs precisely one child")
 
@@ -792,46 +793,50 @@ class FixedPositionsActuator(model.Actuator):
 
         ac = child.axes[axis_name]
         axes = {axis: model.Axis(choices=positions, unit=ac.unit)}  # TODO: allow the user to override the unit?
-        self._position[axis] = child.position.value[axis_name]
-
-        if (hasattr(child, "speed") and
-            isinstance(child.speed, model.VigilantAttributeBase) and
-            axis_name in child.speed.value):
-            self._speed[axis] = child.speed.value[axis_name]
-            self.speed = model.MultiSpeedVA(self._speed, [0., 10.], setter=self._setSpeed)
-            child.speed.subscribe(self.update_child_speed)
-        if (hasattr(child, "referenced") and
-            isinstance(child.referenced, model.VigilantAttributeBase) and
-            axis_name in child.referenced.value):
-            self._referenced[axis] = child.referenced.value[axis_name]
-            self.referenced = model.VigilantAttribute(self._referenced, readonly=True)
-            child.referenced.subscribe(self.update_child_ref)
+        self._position = {}
 
         model.Actuator.__init__(self, name, role, axes=axes, children=children,
                                 **kwargs)
 
         # position & speed: special VAs combining multiple VAs
-        self.position = model.VigilantAttribute(self._position, readonly=True)
+        self.position = model.VigilantAttribute({}, readonly=True)
 
         logging.debug("Subscribing to position of child %s", child.name)
-        child.position.subscribe(self.update_child_position)
+        child.position.subscribe(self._update_child_position, init=True)
+
+        if (hasattr(child, "speed") and
+            isinstance(child.speed, model.VigilantAttributeBase) and
+            axis_name in child.speed.value):
+            self._speed[axis] = child.speed.value[axis_name]
+            self.speed = model.MultiSpeedVA(self._speed, child.speed.range, setter=self._setSpeed)
+            child.speed.subscribe(self._update_child_speed)
+        if (hasattr(child, "referenced") and
+            isinstance(child.referenced, model.VigilantAttributeBase) and
+            axis_name in child.referenced.value):
+            self._referenced[axis] = child.referenced.value[axis_name]
+            self.referenced = model.VigilantAttribute(self._referenced, readonly=True)
+            child.referenced.subscribe(self._update_child_ref)
 
         # If the axis can be referenced => do it now (and move to a known position)
         if not self._referenced.get(axis, True):
             self.reference({axis}).result()
 
-    def update_child_position(self, value):
+        # If not at a known position => move to the closest known position
+        nearest = util.find_closest(self._child.position.value[self._axis_name], self._positions.keys())
+        self.moveAbs({self._axis: nearest}).result()
+
+    def _update_child_position(self, value):
         p = value[self._axis_name]
         if self._cycle is not None:
             p %= self._cycle
         self._position[self._axis] = p
         self._updatePosition()
 
-    def update_child_speed(self, value):
+    def _update_child_speed(self, value):
         self._speed[self._axis] = value[self._axis_name]
         self._updateSpeed()
 
-    def update_child_ref(self, value):
+    def _update_child_ref(self, value):
         self._referenced[self._axis] = value[self._axis_name]
         self._updateReferenced()
 
@@ -920,8 +925,9 @@ class FixedPositionsActuator(model.Actuator):
 
         # If we just did homing and ended up to an unsupported position, move to
         # the nearest supported position
-        if (self._child.position.value[self._axis_name] not in self._positions):
-            nearest = min(self._positions.keys(), key=lambda k: abs(k - self._child.position.value[self._axis_name]))
+        cp = self._child.position.value[self._axis_name]
+        if (cp not in self._positions):
+            nearest = util.find_closest(cp, self._positions.keys())
             f = self.moveAbs({self._axis: nearest})
             f.result()
 
@@ -954,3 +960,5 @@ class FixedPositionsActuator(model.Actuator):
             self.stop()
             self._executor.shutdown(wait=True)
             self._executor = None
+
+        self._child.position.unsubscribe(self._update_child_position)
