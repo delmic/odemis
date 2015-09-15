@@ -355,8 +355,10 @@ def __init_resources():
           <object class="NImageButton">
             <icon>___img_icon_ico_cam_png</icon>
             <height>48</height>
+            <face_colour>def</face_colour>
           </object>
-          <flag>wxEXPAND</flag>
+          <flag>wxALL|wxEXPAND</flag>
+          <border>4</border>
         </object>
       </object>
       <fg>#E6E6FA</fg>

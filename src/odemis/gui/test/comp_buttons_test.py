@@ -156,7 +156,7 @@ class NButtonsTestCase(test.GuiTestCase):
 
     def test_new_button(self):
 
-        for h in (16, 24, 32, 48):
+        for i, h in enumerate((16, 24, 32, 48)):
 
             row_sizer = wx.BoxSizer(wx.HORIZONTAL)
 
@@ -171,7 +171,8 @@ class NButtonsTestCase(test.GuiTestCase):
 
             btn = buttons.NImageTextButton(self.panel, height=h, label="Daaaag!", size=(150, -1),
                                            style=wx.ALIGN_CENTER,
-                                           icon=data.getico_eject_orangeBitmap())
+                                           icon=data.getico_acquiBitmap(),
+                                           face_colour='blue')
             row_sizer.Add(btn, flag=wx.LEFT|wx.RIGHT, border=2)
 
             btn = buttons.NImageTextToggleButton(self.panel, height=h, label="Daaaag!",

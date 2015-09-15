@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<resource class="NViewButton" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<resource version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -893,22 +893,12 @@
                 <object class="wxBoxSizer">
                   <orient>wxHORIZONTAL</orient>
                   <object class="sizeritem">
-                    <object class="ImageTextToggleButton" name="lens_align_btn_sem">
-                      <size>92,48</size>
+                    <object class="NImageTextToggleButton" name="lens_align_btn_sem">
+                      <icon>img/icon/ico_sem.png</icon>
+                      <icon_on>img/icon/ico_sem_green.png</icon_on>
+                      <height>48</height>
+                      <face_colour>def</face_colour>
                       <label>SEM      </label>
-                      <delta>1</delta>
-                      <bitmap>img/button/btn_sem.png</bitmap>
-                      <hover>img/button/btn_sem_h.png</hover>
-                      <selected>img/button/btn_sem_orange_a.png</selected>
-                      <fg>#1A1A1A</fg>
-                      <font>
-                        <size>11</size>
-                        <style>normal</style>
-                        <weight>normal</weight>
-                        <underlined>0</underlined>
-                        <face>Ubuntu</face>
-                      </font>
-                      <style>wxALIGN_RIGHT</style>
                       <XRCED>
                         <assign_var>1</assign_var>
                       </XRCED>
@@ -917,22 +907,12 @@
                     <border>10</border>
                   </object>
                   <object class="sizeritem">
-                    <object class="ImageTextToggleButton" name="lens_align_btn_opt">
-                      <size>92,48</size>
+                    <object class="NImageTextToggleButton" name="lens_align_btn_opt">
+                      <icon>img/icon/ico_optical.png</icon>
+                      <icon_on>img/icon/ico_optical_green.png</icon_on>
+                      <height>48</height>
+                      <face_colour>def</face_colour>
                       <label>OPTICAL</label>
-                      <delta>1</delta>
-                      <bitmap>img/button/btn_opt.png</bitmap>
-                      <hover>img/button/btn_opt_h.png</hover>
-                      <selected>img/button/btn_opt_orange_a.png</selected>
-                      <fg>#1A1A1A</fg>
-                      <font>
-                        <size>11</size>
-                        <style>normal</style>
-                        <weight>normal</weight>
-                        <underlined>0</underlined>
-                        <face>Ubuntu</face>
-                      </font>
-                      <style>wxALIGN_RIGHT</style>
                       <XRCED>
                         <assign_var>1</assign_var>
                       </XRCED>
@@ -1095,6 +1075,7 @@
                       <icon>img/icon/ico_cam.png</icon>
                       <icon_on>img/icon/ico_cam_green.png</icon_on>
                       <height>48</height>
+                      <face_colour>def</face_colour>
                       <label>CHAMBER</label>
                       <fg>#1A1A1A</fg>
                       <font>
@@ -2254,26 +2235,16 @@
                                   <border>2</border>
                                 </object>
                                 <object class="sizeritem">
-                                  <object class="ImageTextButton" name="btn_sparc_change_file">
-                                    <size>64,18</size>
+                                  <object class="NImageTextButton" name="btn_sparc_change_file">
+                                    <height>24</height>
+                                    <face_colour>def</face_colour>
                                     <label>change…</label>
-                                    <delta>1</delta>
-                                    <bitmap>img/button/btn_64x16.png</bitmap>
-                                    <hover>img/button/btn_64x16_h.png</hover>
-                                    <selected>img/button/btn_64x16_a.png</selected>
-                                    <fg>#111111</fg>
-                                    <font>
-                                      <size>9</size>
-                                      <style>normal</style>
-                                      <weight>normal</weight>
-                                      <underlined>0</underlined>
-                                      <face>Ubuntu</face>
-                                    </font>
-                                    <tooltip>Choose a filename and destination of the next scan</tooltip>
                                     <XRCED>
                                       <assign_var>1</assign_var>
                                     </XRCED>
                                   </object>
+                                  <flag>wxTOP</flag>
+                                  <border>2</border>
                                 </object>
                                 <orient>wxHORIZONTAL</orient>
                               </object>
@@ -2345,20 +2316,11 @@
                               <border>16</border>
                             </object>
                             <object class="sizeritem">
-                              <object class="ImageTextButton" name="btn_sparc_cancel">
+                              <object class="NImageTextButton" name="btn_sparc_cancel">
+                                <height>24</height>
+                                <face_colour>def</face_colour>
                                 <label>Cancel</label>
-                                <delta>1</delta>
-                                <bitmap>img/button/btn_128x24.png</bitmap>
-                                <hover>img/button/btn_128x24_h.png</hover>
-                                <selected>img/button/btn_128x24_a.png</selected>
                                 <fg>#1A1A1A</fg>
-                                <font>
-                                  <size>14</size>
-                                  <style>normal</style>
-                                  <weight>normal</weight>
-                                  <underlined>0</underlined>
-                                  <face>Ubuntu</face>
-                                </font>
                                 <hidden>1</hidden>
                                 <style>wxALIGN_CENTRE</style>
                                 <XRCED>
@@ -2379,14 +2341,12 @@
                     <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
-                    <object class="ImageTextButton" name="btn_sparc_acquire">
+                    <object class="NImageTextButton" name="btn_sparc_acquire">
+                      <icon>img/icon/ico_acqui.png</icon>
+                      <height>48</height>
+                      <face_colour>blue</face_colour>
                       <label>START</label>
-                      <delta>1</delta>
-                      <bitmap>img/button/btn_acquire_image.png</bitmap>
-                      <hover>img/button/btn_acquire_image_h.png</hover>
-                      <selected>img/button/btn_acquire_image_a.png</selected>
-                      <disabled>img/button/btn_acquire_image_d.png</disabled>
-                      <fg>#E5E5E5</fg>
+                      <fg>#FFFFFF</fg>
                       <font>
                         <size>15</size>
                         <style>normal</style>
@@ -2394,13 +2354,12 @@
                         <underlined>0</underlined>
                         <face>Ubuntu</face>
                       </font>
-                      <enabled>0</enabled>
                       <style>wxALIGN_CENTRE</style>
                       <XRCED>
                         <assign_var>1</assign_var>
                       </XRCED>
                     </object>
-                    <flag>wxALL</flag>
+                    <flag>wxALL|wxEXPAND</flag>
                     <border>10</border>
                   </object>
                 </object>
@@ -3235,15 +3194,13 @@
                 <object class="wxBoxSizer">
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
-                    <object class="ImageTextButton" name="btn_secom_acquire">
+                    <object class="NImageTextButton" name="btn_secom_acquire">
                       <size>382,-1</size>
+                      <icon>img/icon/ico_acqui.png</icon>
+                      <height>48</height>
+                      <face_colour>blue</face_colour>
                       <label>ACQUIRE IMAGE</label>
-                      <delta>1</delta>
-                      <bitmap>img/button/btn_acquire_image.png</bitmap>
-                      <hover>img/button/btn_acquire_image_h.png</hover>
-                      <selected>img/button/btn_acquire_image_a.png</selected>
-                      <disabled>img/button/btn_acquire_image_d.png</disabled>
-                      <fg>#E5E5E5</fg>
+                      <fg>#FFFFFF</fg>
                       <font>
                         <size>14</size>
                         <style>normal</style>
@@ -3251,7 +3208,6 @@
                         <underlined>0</underlined>
                         <face>Ubuntu</face>
                       </font>
-                      <enabled>0</enabled>
                       <style>wxALIGN_CENTRE</style>
                       <XRCED>
                         <assign_var>1</assign_var>
@@ -3341,14 +3297,17 @@
                             <flag>wxEXPAND</flag>
                           </object>
                           <object class="sizeritem">
-                            <object class="ImageTextButton" name="btn_change_file">
+                            <object class="NImageTextButton" name="btn_change_file">
+                              <height>16</height>
                               <label>change…</label>
-                              <delta>1</delta>
-                              <bitmap>img/button/btn_64x16.png</bitmap>
-                              <hover>img/button/btn_64x16_h.png</hover>
-                              <selected>img/button/btn_64x16_a.png</selected>
-                              <fg>#111111</fg>
-                              <tooltip>Change the filename and destination of the next scan</tooltip>
+                              <fg>#1A1A1A</fg>
+                              <font>
+                                <size>9</size>
+                                <style>normal</style>
+                                <weight>normal</weight>
+                                <underlined>0</underlined>
+                                <face>Ubuntu</face>
+                              </font>
                               <XRCED>
                                 <assign_var>1</assign_var>
                               </XRCED>
@@ -3515,13 +3474,10 @@
         <object class="wxPanel">
           <object class="wxBoxSizer">
             <object class="sizeritem">
-              <object class="ImageTextButton" name="btn_cancel">
+              <object class="NImageTextButton" name="btn_cancel">
+                <height>48</height>
+                <face_colour>def</face_colour>
                 <label>Close</label>
-                <delta>1</delta>
-                <bitmap>img/button/btn_128x48.png</bitmap>
-                <hover>img/button/btn_128x48_h.png</hover>
-                <selected>img/button/btn_128x48_a.png</selected>
-                <fg>#1A1A1A</fg>
                 <font>
                   <size>14</size>
                   <style>normal</style>
@@ -3534,22 +3490,21 @@
                   <assign_var>1</assign_var>
                 </XRCED>
               </object>
-              <flag>wxTOP|wxBOTTOM|wxLEFT</flag>
+              <option>1</option>
+              <flag>wxTOP|wxBOTTOM|wxLEFT|wxEXPAND</flag>
               <border>10</border>
             </object>
             <orient>wxHORIZONTAL</orient>
             <object class="sizeritem">
-              <object class="ImageTextButton" name="btn_secom_acquire">
+              <object class="NImageTextButton" name="btn_secom_acquire">
                 <size>242,48</size>
+                <icon>img/icon/ico_acqui.png</icon>
+                <height>48</height>
+                <face_colour>blue</face_colour>
                 <label>START</label>
-                <delta>1</delta>
-                <bitmap>img/button/btn_acq_img_sml.png</bitmap>
-                <hover>img/button/btn_acq_img_sml_h.png</hover>
-                <selected>img/button/btn_acq_img_sml_a.png</selected>
-                <disabled>img/button/btn_acq_img_sml_d.png</disabled>
-                <fg>#E5E5E5</fg>
+                <fg>#FFFFFF</fg>
                 <font>
-                  <size>15</size>
+                  <size>14</size>
                   <style>normal</style>
                   <weight>normal</weight>
                   <underlined>0</underlined>
@@ -3560,7 +3515,8 @@
                   <assign_var>1</assign_var>
                 </XRCED>
               </object>
-              <flag>wxALL</flag>
+              <option>2</option>
+              <flag>wxALL|wxEXPAND</flag>
               <border>10</border>
             </object>
           </object>
