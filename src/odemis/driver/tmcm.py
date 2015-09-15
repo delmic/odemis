@@ -1580,6 +1580,15 @@ class TMCMSimulator(object):
             else:
                 self._sendReply(inst, status=3) # wrong type
                 return
+        elif inst == 14:  # Set IO
+            if mot not in (0, 2):
+                self._sendReply(inst, status=4)  # invalid value
+                return
+            if not 0 <= typ <= 7:
+                self._sendReply(inst, status=3)  # wrong type
+                return
+            # Nothing actually to do
+            self._sendReply(inst)
         elif inst == 15: # Get IO
             if not 0 <= mot <= 2:
                 self._sendReply(inst, status=4) # invalid value
