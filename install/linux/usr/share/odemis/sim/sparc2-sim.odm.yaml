@@ -15,11 +15,23 @@ SPARC2: {
 "Calibration Light": {
     class: simulated.Light,
     role: "calib-light",
+    power_supplier: "Power Control Unit",
     affects: ["Camera"],
 }
 
-#TODO add support for Power Control Unit
-
+"Power Control Unit": {
+    class: powerctrl.PowerControlUnit,
+    role: "power-control",
+    init: {
+        port: "/dev/fake", # for simulator
+        pin_map: {"Calibration Light": 0, "CL PMT control unit": 1,
+                 "Camera": 2, "Spectral Camera": 3, "Spectrograph": 4,
+                 "Optical Actuators": 7},
+        powered: ["Calibration Light", "CL PMT control unit",
+                  "Camera", "Spectral Camera", "Spectrograph",
+                  "Optical Actuators"]
+    }
+}
 
 # Can simulate a SEM connected to a DAQ board by using the comedi_test driver:
 # sudo modprobe comedi comedi_num_legacy_minors=4
@@ -85,6 +97,7 @@ SPARC2: {
 "CL PMT control unit": {
     class: pmtctrl.PMTControl,
     role: null,
+    power_supplier: "Power Control Unit",
     init: {
         port: "/dev/fake", # for simulator
         prot_time: 0.0002,  # s
@@ -106,6 +119,7 @@ SPARC2: {
 "Camera": {
     class: andorcam2.AndorCam2,
     role: ccd,
+    power_supplier: "Power Control Unit",
     init: {
        device: "fake",
        image: "sparc-ar-mirror-align.h5", # only for simulator
@@ -117,6 +131,7 @@ SPARC2: {
 "Spectral Camera": {
     class: andorcam2.AndorCam2,
     role: sp-ccd,
+    power_supplier: "Power Control Unit",
     init: {
        device: "fake",
        transpose: [1, -2], # if mirrored on X axis (due to a Odemis bug, it's the second dim which has the -)
@@ -139,6 +154,7 @@ SPARC2: {
 "Spectrograph": {
     class: andorshrk.Shamrock,
     role: spectrograph,
+    power_supplier: "Power Control Unit",
     children: {"ccd": "Spectral Camera"},
     init: {
         device: "fake",
@@ -198,12 +214,13 @@ SPARC2: {
 "Optical Actuators": {
     class: tmcm.TMCLController,
     role: null,
+    power_supplier: "Power Control Unit",
     init: {
         port: "/dev/fake6",
         address: null,
         axes: ["l1", "l2", "cl-sel", "fw", "slit"],
         # These values only need to be roughly correct
-        ustepsize: [25.1e-9, 25.1e-9, 5.9e-9, 5.9e-9, 5e-9], # m/µstep
+        ustepsize: [25.1e-9, 25.1e-9, 5.9e-9, 5.9e-9, 5.e-9], # m/µstep
         refproc: "Standard",
         refswitch: {"l1": 0, "l2": 0, "cl-sel": 4, "fw": 4},
         inverted: ["l2"],
@@ -229,7 +246,7 @@ SPARC2: {
     init: {
         axis_name: "l2",
         positions: {
-            -4e-3: "on",
+            -4.e-3: "on",
             -0.045: "off", # completely out of the path
         },
     },
