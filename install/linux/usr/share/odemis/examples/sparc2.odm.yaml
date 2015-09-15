@@ -309,7 +309,7 @@ SPARC2: {
     init: {
         port: "/dev/ttyTMCM*",
         address: 4,
-        axes: ["x", "y"],
+        axes: ["y", "x"],
         ustepsize: [5.9e-9, 5.9e-9], # m/µstep
         refproc: "Standard",
     },
