@@ -401,7 +401,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource class="NViewButton" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -2405,10 +2405,8 @@ def __init_resources():
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="ViewButton" name="btn_sparc_view_all">
-                    <bitmap>img_preview_block_png</bitmap>
-                    <hover>img/preview_block_a.png</hover>
-                    <selected>img/preview_block_a.png</selected>
+                  <object class="NViewButton" name="btn_sparc_view_all">
+                    <height>48</height>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -2435,10 +2433,8 @@ def __init_resources():
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="ViewButton" name="btn_sparc_view_tl">
-                    <bitmap>img_preview_block_png</bitmap>
-                    <hover>img/preview_block_a.png</hover>
-                    <selected>img/preview_block_a.png</selected>
+                  <object class="NViewButton" name="btn_sparc_view_tl">
+                    <height>48</height>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -2465,10 +2461,8 @@ def __init_resources():
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="ViewButton" name="btn_sparc_view_tr">
-                    <bitmap>img_preview_block_png</bitmap>
-                    <hover>img/preview_block_a.png</hover>
-                    <selected>img/preview_block_a.png</selected>
+                  <object class="NViewButton" name="btn_sparc_view_tr">
+                    <height>48</height>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -2495,10 +2489,8 @@ def __init_resources():
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="ViewButton" name="btn_sparc_view_bl">
-                    <bitmap>img_preview_block_png</bitmap>
-                    <hover>img/preview_block_a.png</hover>
-                    <selected>img/preview_block_a.png</selected>
+                  <object class="NViewButton" name="btn_sparc_view_bl">
+                    <height>48</height>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -2525,10 +2517,8 @@ def __init_resources():
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="ViewButton" name="btn_sparc_view_br">
-                    <bitmap>img_preview_block_png</bitmap>
-                    <hover>img/preview_block_a.png</hover>
-                    <selected>img/preview_block_a.png</selected>
+                  <object class="NViewButton" name="btn_sparc_view_br">
+                    <height>48</height>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -2885,10 +2875,8 @@ def __init_resources():
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="ViewButton" name="btn_inspection_view_all">
-                    <bitmap>img_preview_block_png</bitmap>
-                    <hover>img/preview_block_a.png</hover>
-                    <selected>img/preview_block_a.png</selected>
+                  <object class="NViewButton" name="btn_inspection_view_all">
+                    <height>48</height>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -2915,10 +2903,8 @@ def __init_resources():
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="ViewButton" name="btn_inspection_view_tl">
-                    <bitmap>img_preview_block_png</bitmap>
-                    <hover>img/preview_block_a.png</hover>
-                    <selected>img/preview_block_a.png</selected>
+                  <object class="NViewButton" name="btn_inspection_view_tl">
+                    <height>48</height>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -2945,10 +2931,8 @@ def __init_resources():
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="ViewButton" name="btn_inspection_view_tr">
-                    <bitmap>img_preview_block_png</bitmap>
-                    <hover>img/preview_block_a.png</hover>
-                    <selected>img/preview_block_a.png</selected>
+                  <object class="NViewButton" name="btn_inspection_view_tr">
+                    <height>48</height>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -2975,10 +2959,8 @@ def __init_resources():
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="ViewButton" name="btn_inspection_view_bl">
-                    <bitmap>img_preview_block_png</bitmap>
-                    <hover>img/preview_block_a.png</hover>
-                    <selected>img/preview_block_a.png</selected>
+                  <object class="NViewButton" name="btn_inspection_view_bl">
+                    <height>48</height>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -3005,10 +2987,8 @@ def __init_resources():
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="ViewButton" name="btn_inspection_view_br">
-                    <bitmap>img_preview_block_png</bitmap>
-                    <hover>img/preview_block_a.png</hover>
-                    <selected>img/preview_block_a.png</selected>
+                  <object class="NViewButton" name="btn_inspection_view_br">
+                    <height>48</height>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -3191,10 +3171,8 @@ def __init_resources():
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="ViewButton" name="btn_secom_overview">
-                    <bitmap>img_preview_block_png</bitmap>
-                    <hover>img/preview_block_a.png</hover>
-                    <selected>img/preview_block_a.png</selected>
+                  <object class="NViewButton" name="btn_secom_overview">
+                    <height>48</height>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -3238,10 +3216,8 @@ def __init_resources():
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="ViewButton" name="btn_secom_view_all">
-                    <bitmap>img_preview_block_png</bitmap>
-                    <hover>img/preview_block_a.png</hover>
-                    <selected>img/preview_block_a.png</selected>
+                  <object class="NViewButton" name="btn_secom_view_all">
+                    <height>48</height>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -3268,10 +3244,8 @@ def __init_resources():
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="ViewButton" name="btn_secom_view_tl">
-                    <bitmap>img_preview_block_png</bitmap>
-                    <hover>img/preview_block_a.png</hover>
-                    <selected>img/preview_block_a.png</selected>
+                  <object class="NViewButton" name="btn_secom_view_tl">
+                    <height>48</height>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -3298,10 +3272,8 @@ def __init_resources():
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="ViewButton" name="btn_secom_view_tr">
-                    <bitmap>img_preview_block_png</bitmap>
-                    <hover>img/preview_block_a.png</hover>
-                    <selected>img/preview_block_a.png</selected>
+                  <object class="NViewButton" name="btn_secom_view_tr">
+                    <height>48</height>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -3328,10 +3300,8 @@ def __init_resources():
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="ViewButton" name="btn_secom_view_bl">
-                    <bitmap>img_preview_block_png</bitmap>
-                    <hover>img/preview_block_a.png</hover>
-                    <selected>img/preview_block_a.png</selected>
+                  <object class="NViewButton" name="btn_secom_view_bl">
+                    <height>48</height>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -3358,10 +3328,8 @@ def __init_resources():
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="ViewButton" name="btn_secom_view_br">
-                    <bitmap>img_preview_block_png</bitmap>
-                    <hover>img/preview_block_a.png</hover>
-                    <selected>img/preview_block_a.png</selected>
+                  <object class="NViewButton" name="btn_secom_view_br">
+                    <height>48</height>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -4255,23 +4223,6 @@ w\xb9C\xa1\xf5\xd20\x8cD\xeb\x02\xb8\x08[c\xca\xa1\xd9\xcf\x0dZ\xa9TNUU\
 \x94\x09\x8a\xe2\x98\xb5\xc2b\xe4\xad\x12\xd6b\xc5\xcf\xa1\x80\xfe?\xe8\
 \x17J\xe1\xc2;\xcb\xe1\x15G\x00\x00\x00\x00IEND\xaeB`\x82'''
 
-    img_preview_block_png = '''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\xb4\x00\x00\x00x\x08\x06\x00\x00\x00[\
-\xe7\xd8\xfd\x00\x00\x00\xfeIDATx\xda\xed\xd2Q\x09\x00@\x08\x05A\xb1\xbb\
-\x17\xe8.\x84?"3\xb0\x0d\xb6\x93<iK5\xd4\x05\x87\x18\x1aC\x83\xa1\xc1\xd0\
-`h\x0c\x0d\x86\x06C\x83\xa1\xc1\xd0\x18\x1a\x0c\x0d\x86\x06C\x83\xa114\x18\
-\x1a\x0c\x0d\x86\x06Cch04\x18\x1a\x0c\x0d\x86\xc6\xd0`h04\x18\x1a\x0c\x8d\
-\xa1\xc1\xd0`h04\x18\x1aC\x83\xa1\xc1\xd0`h\x0c\x0d\x86\x06C\x83\xa1\xc1\
-\xd0\x18\x1a\x0c\x0d\x86\x06C\x83\xa114\x18\x1a\x0c\x0d\x86\x06Cch04\x18\
-\x1a\x0c\x0d\x86\xc6\xd0`h04\x18\x1a\x0c\x8d\xa1\xc1\xd0`h04\x18\x1aC\x83\
-\xa1\xc1\xd0`h04\x86\x06C\x83\xa1\xc1\xd0\x18\x1a\x0c\x0d\x86\x06C\x83\xa1\
-14\x18\x1a\x0c\x0d\x86\x06Cch04\x18\x1a\x0c\x0d\x86\xc6\xd0`h04\x18\x1a\
-\x0c\x8d\xa1\xc1\xd0`h04\x18\x1aC\x83\xa1\xc1\xd0`h04\x86\x06C\x83\xa1\xc1\
-\xd0\x18\x1a\x0c\x0d\x86\x06C\x83\xa114\\\xf0\x01\xc6\x009\xef\xf8(o\xb6\
-\x00\x00\x00\x00IEND\xaeB`\x82'''
-
     img_button_btn_64x16_png = '''\
 \x89PNG\x0d
 \x1a
@@ -4600,7 +4551,6 @@ J\xf7%\xd2\x99\x0c\xf9h\x1bT\xb2\x9f\xeb1\x0d\xd9\x17\x1e\x133\xbbr*\x11
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_ang_png', img_icon_ico_ang_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_fib_png', img_icon_ico_fib_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_eject_png', img_icon_ico_eject_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_preview_block_png', img_preview_block_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_button_btn_64x16_png', img_button_btn_64x16_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_button_btn_128x24_png', img_button_btn_128x24_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_button_btn_acquire_image_png', img_button_btn_acquire_image_png)

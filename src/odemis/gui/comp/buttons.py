@@ -346,7 +346,7 @@ class NGraphicRadioButton(NImageTextToggleButton):
 
     def __init__(self, *args, **kwargs):
         self.value = kwargs.pop('value', None)
-        if 'label' not in kwargs:
+        if 'label' not in kwargs and self.value:
             kwargs['label'] = u"%g" % self.value
         NImageTextToggleButton.__init__(self, *args, **kwargs)
 
@@ -494,6 +494,94 @@ class NColourButton(NImageButton):
         :rtype: (string) Hex colour value
         """
         return self.colour
+
+    def _reset_bitmaps(self):
+        pass
+
+
+class NViewButton(NGraphicRadioButton):
+    """ The ViewButton class describes a toggle button that has an image overlay
+    that depicts a thumbnail view of one of the view panels.
+
+    Since the aspect ratio of views is dynamic, the ratio of the ViewButton will
+    also need to be dynamic, but it will be limited to the height only, so the
+    width will remain static.
+
+    """
+
+    def __init__(self, *args, **kwargs):
+        """
+        :param parent: (wx.Window) parent window
+        :param id: (int) button id (optional)
+        :param bitmap: (wx.Bitmap) default button face. Use `SetBitmaps` to set
+                the other faces (e.g. hover, active)
+        :param pos: (int, int)) button position
+        :param size: (int, int) button size
+
+        :param background_parent: (wx.Window) any parent higher up in the
+                hierarchy from which to pick the background colour. (optional)
+        :param label_delta: (int) the number of pixels to move button text down
+                and to the right when it is pressed, to create an indentation
+                effect. (This is used by subclasses that allow text to be
+                displayed)
+        """
+        kwargs['size'] = imgdata.preview_block_a.Bitmap.Size
+        super(NViewButton, self).__init__(*args, **kwargs)
+
+        self.thumbnail_bmp = None
+
+        # The number of pixels from the right that need to be kept clear so the
+        # 'arrow pointer' is visible.
+        self.pointer_offset = 16
+
+        # The border that will be kept clear.
+        self.thumbnail_border = 2
+        self.thumbnail_size = wx.Size()
+
+        self._calc_overlay_size()
+
+    def _calc_overlay_size(self):
+        btn_width, btn_height = imgdata.preview_block_a.Bitmap.Size
+        total_border = self.thumbnail_border * 2
+        self.thumbnail_size.x = max(1, btn_width - total_border - self.pointer_offset)
+        self.thumbnail_size.y = max(1, btn_height - total_border)
+
+    def set_overlay_image(self, image):
+        """ Scales and updates the image on the button
+
+        :param image: (wx.Image or None) Image to be displayed or a default stock image.
+
+        """
+
+        if image:
+            # image doesn't have the same aspect ratio as the actual thumbnail
+            # => rescale and crop on the center
+            scaled_img = img.wxImageScaleKeepRatio(image, self.thumbnail_size,
+                                                   wx.IMAGE_QUALITY_HIGH)
+        else:
+            # black image
+            scaled_img = wx.EmptyImage(*self.thumbnail_size)
+
+        self.thumbnail_bmp = wx.BitmapFromImage(scaled_img)
+        self.Refresh()
+
+    def DrawLabel(self, dc, width, height, dx=0, dy=0):
+        """ Draw method called by the `OnPaint` event handler """
+
+        dc.SetBackground(wx.Brush(self.Parent.BackgroundColour))
+        dc.Clear()
+
+        if not self.GetToggle() and not self.hovering:
+            dc.DrawBitmap(imgdata.preview_block.Bitmap, 0, 0, True)
+        else:
+            dc.DrawBitmap(imgdata.preview_block_a.Bitmap, 0, 0, True)
+
+        if self.thumbnail_bmp is not None:
+            # logging.debug("Painting overlay")
+            dc.DrawBitmap(self.thumbnail_bmp,
+                          self.thumbnail_border,
+                          self.thumbnail_border,
+                          True)
 
     def _reset_bitmaps(self):
         pass
@@ -1135,99 +1223,6 @@ class ImageTextToggleButton(GenBitmapTextToggleButton):
             self.faceDnClr = self.background_parent.GetBackgroundColour()
         else:
             self.faceDnClr = self.GetParent().GetBackgroundColour()
-
-
-class ViewButton(ImageTextToggleButton):
-    """ The ViewButton class describes a toggle button that has an image overlay
-    that depicts a thumbnail view of one of the view panels.
-
-    Since the aspect ratio of views is dynamic, the ratio of the ViewButton will
-    also need to be dynamic, but it will be limited to the height only, so the
-    width will remain static.
-
-    """
-
-    def __init__(self, *args, **kwargs):
-        """
-        :param parent: (wx.Window) parent window
-        :param id: (int) button id (optional)
-        :param bitmap: (wx.Bitmap) default button face. Use `SetBitmaps` to set
-                the other faces (e.g. hover, active)
-        :param pos: (int, int)) button position
-        :param size: (int, int) button size
-
-        :param background_parent: (wx.Window) any parent higher up in the
-                hierarchy from which to pick the background colour. (optional)
-        :param label_delta: (int) the number of pixels to move button text down
-                and to the right when it is pressed, to create an indentation
-                effect. (This is used by subclasses that allow text to be
-                displayed)
-        """
-        ImageTextToggleButton.__init__(self, *args, **kwargs)
-
-        self.thumbnail_bmp = None
-
-        # The number of pixels from the right that need to be kept clear so the
-        # 'arrow pointer' is visible.
-        self.pointer_offset = 16
-
-        # The border that will be kept clear.
-        self.thumbnail_border = 2
-        self.thumbnail_size = wx.Size()
-
-        self._calc_overlay_size()
-
-    def _calc_overlay_size(self):
-        btn_width, btn_height = self.GetSize()
-        total_border = self.thumbnail_border * 2
-        self.thumbnail_size.x = btn_width - total_border - self.pointer_offset
-        self.thumbnail_size.y = btn_height - total_border
-
-    def OnLeftDown(self, event):
-        """ This event handler is fired on left mouse button events, but it
-        ignores those events if the button is already active.
-        """
-        if not self.IsEnabled() or not self.up:
-            logging.debug("ViewButton already active")
-            return
-        self.saveUp = self.up
-        self.up = not self.up
-        self.CaptureMouse()
-        self.SetFocus()
-        self.Refresh()
-
-    def set_overlay_image(self, image):
-        """ Scales and updates the image on the button
-
-        :param image: (wx.Image or None) Image to be displayed or a default stock image.
-
-        """
-
-        if image:
-            # image doesn't have the same aspect ratio as the actual thumbnail
-            # => rescale and crop on the center
-            scaled_img = img.wxImageScaleKeepRatio(image, self.thumbnail_size,
-                                                   wx.IMAGE_QUALITY_HIGH)
-        else:
-            # black image
-            scaled_img = wx.EmptyImage(*self.thumbnail_size)
-
-        self.thumbnail_bmp = wx.BitmapFromImage(scaled_img)
-        self.Refresh()
-
-    def DrawLabel(self, dc, width, height, dx=0, dy=0):
-        """ Draw method called by the `OnPaint` event handler """
-        ImageTextToggleButton.DrawLabel(self, dc, width, height, dx, dy)
-
-        if self.thumbnail_bmp is not None:
-            # logging.debug("Painting overlay")
-            dc.DrawBitmap(self.thumbnail_bmp,
-                          self.thumbnail_border,
-                          self.thumbnail_border,
-                          True)
-
-
-
 
 
 class PopupImageButton(ImageTextButton):
