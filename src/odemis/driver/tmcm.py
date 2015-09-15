@@ -94,7 +94,7 @@ class TMCLController(model.Actuator):
           indicated by the number.
         refproc (str or None): referencing (aka homing) procedure type. Use
           None to indicate it's not possible (no reference/limit switch) or the
-          name of the procedure. For now only "2xFinalForward" or "LeftSwitch"
+          name of the procedure. For now only "2xFinalForward" or "Standard"
           is accepted.
         temp (bool): if True, will read the temperature from the analogue input
          (10 mV <-> 1 °C)
@@ -119,12 +119,15 @@ class TMCLController(model.Actuator):
                 raise ValueError("ustepsize should be above 0 and < 10 mm, but got %g m" % (sz,))
             self._name_to_axis[n] = i
 
-        self._refswitch = refswitch or {}  # int -> None or int: axis number -> out port to turn on the ref switch
-        for a, s in self._refswitch.items():
-            if a not in self._name_to_axis:
-                raise ValueError("refswitch has unknown axis %s" % a)
+        self._refswitch = {} # int -> None or int: axis number -> out port to turn on the ref switch
+        for a, s in (refswitch or {}).items():
             if not (0 <= s <= 7):
-                raise ValueError("Output port for axis %s is must be between 0 and 7 (but is %d)" % (a, s))
+                raise ValueError("Output port for axis %s is must be between 0 and 7 (but is %s)" % (a, s))
+            try:
+                aid = self._name_to_axis[a]
+                self._refswitch[aid] = s
+            except KeyError:
+                raise ValueError("refswitch has unknown axis %s" % a)
 
         self._ustepsize = ustepsize
 
@@ -246,18 +249,17 @@ class TMCLController(model.Actuator):
         Initialise the given axis with "good" values for our needs (Delphi)
         axis (int): axis number
         """
-        # TODO: Read them out of a memory blob saved in the bank 2
-        self.SetAxisParam(axis, 163, 0)  # chopper mode (0 is default)
-        self.SetAxisParam(axis, 162, 2)  # Chopper blank time (1 = for low current applications, 2 is default)
-        self.SetAxisParam(axis, 167, 3)  # Chopper off time (2 = minimum)
         # TODO: configure StallGuard properly
-
         self.MoveRelPos(axis, 0) # activate parameter with dummy move
 
         self._refproc_cancelled[axis] = threading.Event()
         self._refproc_lock[axis] = threading.Lock()
 
         if self._refproc == REFPROC_2XFF:
+            # TODO: Read them out of a memory blob saved in the bank 2
+            self.SetAxisParam(axis, 163, 0)  # chopper mode (0 is default)
+            self.SetAxisParam(axis, 162, 2)  # Chopper blank time (1 = for low current applications, 2 is default)
+            self.SetAxisParam(axis, 167, 3)  # Chopper off time (2 = minimum)
             # TODO: get rid of this once all the hardware have been updated with
             # the right EEPROM config (using tmcmconfig)
             self.SetAxisParam(axis, 4, 1398)  # maximum velocity to 1398 == 2 mm/s
@@ -1052,7 +1054,8 @@ class TMCLController(model.Actuator):
         pos = self._applyInversionAbs(pos)
 
         for a, p in pos.items():
-            if not self.referenced.value[a] and p != self.position.value[a]:
+            if (hasattr(self, "referenced") and
+                not self.referenced.value[a] and p != self.position.value[a]):
                 logging.warning("Absolute move on axis '%s' which has not be referenced", a)
 
         f = self._createMoveFuture()
@@ -1220,7 +1223,7 @@ class TMCLController(model.Actuator):
                         if future._must_stop.is_set():
                             raise CancelledError()
                         aid = self._name_to_axis[a]
-                        future._current_axis = a
+                        future._current_axis = aid
                         self.referenced._value[a] = False
                         self._startReferencing(aid)
                     self._waitReferencing(aid)  # block until it's over
@@ -1246,9 +1249,9 @@ class TMCLController(model.Actuator):
         future._must_stop.set()  # tell the thread taking care of the referencing it's over
         with future._init_lock:
             # cancel the referencing on the current axis
-            a = future._current_axis
-            if a is not None:
-                self._cancelReferencing(a)  # It's ok to call this even if the axis is not referencing
+            aid = future._current_axis
+            if aid is not None:
+                self._cancelReferencing(aid)  # It's ok to call this even if the axis is not referencing
 
         # Synchronise with the ending of the future
         with future._moving_lock:
