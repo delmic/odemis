@@ -24,7 +24,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 import logging
 from odemis import gui
-from odemis.gui.comp.buttons import NGraphicRadioButton
+from odemis.gui.comp.buttons import GraphicRadioButton
 import wx
 
 import odemis.gui.img.data as img
@@ -48,7 +48,7 @@ class GraphicalRadioButtonControl(wx.Panel):
         sizer = wx.BoxSizer(wx.HORIZONTAL)
 
         for choice, label in zip(self.choices, self.labels):
-            btn = NGraphicRadioButton(self, value=choice, style=wx.ALIGN_CENTER, label=label,
+            btn = GraphicRadioButton(self, value=choice, style=wx.ALIGN_CENTER, label=label,
                                       height=16)
 
             btn.SetForegroundColour("#111111")
