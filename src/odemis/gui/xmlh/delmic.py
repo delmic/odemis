@@ -24,6 +24,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # XRCED Component plugin for custom Delmic wxPython classes
 # Important: Create a symbolic link to this and the xh_delmic module within
 #            XRCED's plugins folder.
+from collections import OrderedDict
 
 from wx.tools.XRCed import component, params, images, attribute
 from wx.tools.XRCed.globals import TRACE
@@ -131,7 +132,9 @@ for i, (name, handler) in enumerate(msvps):
 
 
 class ButtonSizesParam(params.RadioBox):
-    choices = {'16': '16', '24': '24', '32': '32', '48': '48', 'None': None}
+    choices = OrderedDict(
+        (('16', '16'), ('24', '24'), ('32', '32'), ('48', '48'), ('None', None))
+    )
     default = None
 
 

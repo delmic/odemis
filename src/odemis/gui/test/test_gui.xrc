@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<resource version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<resource class="NImageButton" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="text_frame">
     <object_ref ref="menu_bar"/>
     <object class="wxPanel" name="text_panel">
@@ -154,15 +154,7 @@
     <object class="wxPanel" name="button_panel">
       <object class="wxBoxSizer">
         <orient>wxVERTICAL</orient>
-        <object class="sizeritem">
-          <object class="NImageButton">
-            <icon>../img/icon/ico_cam.png</icon>
-            <height>48</height>
-            <face_colour>def</face_colour>
-          </object>
-          <flag>wxALL|wxEXPAND</flag>
-          <border>4</border>
-        </object>
+      
       </object>
       <fg>#E6E6FA</fg>
       <bg>#4D4D4D</bg>
