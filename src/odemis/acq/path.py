@@ -74,45 +74,52 @@ SPARC_MODES = {'ar': ("ccd",
                 }),
          }
 
-SPARC2_MODES = {'ar': ("ccd",
+SPARC2_MODES = {
+            'ar': ("ccd",
                 {'lens-switch': {'x': 'on'},
-                 'slit-in-big': {'x': 'on'},
+                 'slit-in-big': {'x': 'on'},  # fully opened
                  'spectrograph': {'grating': 'mirror'},
                  'cl-det-selector': {'x': 'off'},
                  'spec-det-selector': {'rx': 0},
                 }),
-         'spectral-integrated': ("spectrometer",
+            'cli': ("cl-detector",
+                {'lens-switch': {'x': 'on'},
+                 'cl-det-selector': {'x': 'on'},
+                 # there is also the cl-filter, but that's just up to the user
+                }),
+            'spectral-integrated': ("spectrometer",
                 {'lens-switch': {'x': 'off'},
-                 'slit-in-big': {'x': 'off'},
+                 'slit-in-big': {'x': 'off'},  # opened according to spec.slit-in
+                 # TODO: need to restore slit-in to the current position?
                  'cl-det-selector': {'x': 'off'},
                  'spec-det-selector': {'rx': 0},
                  'spectrograph': {'grating': GRATING_NOT_MIRROR},
                 }),
-         'spectral-dedicated': ("spectrometer",  # Only in case sp-ccd is present
+            'spectral-dedicated': ("spectrometer",  # Only in case sp-ccd is present
                 {'lens-switch': {'x': 'off'},
-                 'slit-in-big': {'x': 'off'},
+                 'slit-in-big': {'x': 'off'},  # opened according to spec.slit-in
                  'cl-det-selector': {'x': 'off'},
                  'spec-det-selector': {'rx': math.radians(90)},
                  'spectrograph': {'grating': GRATING_NOT_MIRROR},
                 }),
-         'mirror-align': ("ccd",  # Also used for lens alignment
+            'mirror-align': ("ccd",  # Also used for lens alignment
                 {'lens-switch': {'x': 'off'},
                  'slit-in-big': {'x': 'on'},
                  'spectrograph': {'grating': 'mirror'},
                  'cl-det-selector': {'x': 'off'},
                  'spec-det-selector': {'rx': 0},
                 }),
-         'chamber-view': ("ccd",  # Same as AR but SEM is disabled and a light may be used
+            'chamber-view': ("ccd",  # Same as AR but SEM is disabled and a light may be used
                 {'lens-switch': {'x': 'on'},
                  'slit-in-big': {'x': 'on'},
                  'spectrograph': {'grating': 'mirror'},
                  'cl-det-selector': {'x': 'off'},
                  'spec-det-selector': {'rx': 0},
                 }),
-         'spec-focus': ("ccd",
+            'spec-focus': ("ccd",
                 {'lens-switch': {'x': 'off'},
                  'slit-in-big': {'x': 'off'},
-                 'spectrograph': {'slit-in': 10e-6, 'grating': 'mirror'},  # min
+                 'spectrograph': {'slit-in': 10e-6, 'grating': 'mirror'},  # slit to the minimum
                  'cl-det-selector': {'x': 'off'},
                  'spec-det-selector': {'rx': 0},
                 }),
@@ -145,7 +152,7 @@ class OpticalPathManager(object):
         for m in ALIGN_MODES:
             try:
                 del self.guessed[m]
-            except Exception:
+            except KeyError:
                 pass  # Mode to delete is just not there
 
         # keep list of already accessed components, to avoid creating new proxys
@@ -168,11 +175,13 @@ class OpticalPathManager(object):
         if self.microscope.role == "sparc2":
             for comp in model.getComponents():
                 if comp.role == "sp-ccd":
-                    del self.guessed["spectral-integrated"]
+                    self.guessed['spectral'] = self.guessed["spectral-dedicated"]
+                    self._modes['spectral'] = self._modes["spectral-dedicated"]
                     break
             else:
                 del self.guessed["spectral-dedicated"]
-
+                self.guessed['spectral'] = self.guessed['spectral-integrated']
+                self._modes['spectral'] = self._modes["spectral-integrated"]
 
     def _getComponent(self, role):
         """
@@ -236,27 +245,44 @@ class OpticalPathManager(object):
                         # GRATING_NOT_MIRROR we either use the last known
                         # grating or the first grating that is not mirror.
                         choices = comp.axes[axis].choices
-                        for key, value in choices.items():
-                            if value == pos:  # Can be true only in case of mirror
-                                pos = key
-                                # Just to store current grating (if we use one
-                                # at the moment) to restore it once we set
-                                # grating again
-                                if choices[comp.position.value[axis]] != "mirror":
-                                    self._stored[axis] = comp.position.value[axis]
-                                break
-                        else:
-                            if pos == "mirror":
-                                # zero order
+                        if pos == "mirror":
+                            # Store current grating (if we use one at the moment)
+                            # to restore it once we use a normal grating again
+                            if choices[comp.position.value[axis]] != "mirror":
+                                self._stored[axis] = comp.position.value[axis]
+                                self._stored['wavelength'] = comp.position.value['wavelength']
+                            # Use the special "mirror" grating, if it exists
+                            for key, value in choices.items():
+                                if value == "mirror":
+                                    pos = key
+                                    break
+                            else:
+                                # Fallback to zero order (aka "low-quality mirror")
                                 axis = 'wavelength'
                                 pos = 0
-                            else:
+                        elif pos == GRATING_NOT_MIRROR:
+                            if choices[comp.position.value[axis]] == "mirror":
                                 # if there is a grating stored use this one
                                 # otherwise find the non-mirror grating
                                 if axis in self._stored:
                                     pos = self._stored[axis]
                                 else:
                                     pos = self.findNonMirror(choices)
+                                if 'wavelength' in self._stored:
+                                    mv['wavelength'] = self._stored['wavelength']
+                            else:
+                                pos = comp.position.value[axis]  # no change
+                            try:
+                                del self._stored[axis]
+                            except KeyError:
+                                pass
+                            try:
+                                del self._stored['wavelength']
+                            except KeyError:
+                                pass
+                        else:
+                            logging.debug("Using grating position as-is: '%s'", pos)
+                            pass  # use pos as-is
                     elif axis == "slit-in":
                         if self._last_mode not in ALIGN_MODES:
                             self._stored[axis] = comp.position.value[axis]

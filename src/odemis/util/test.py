@@ -21,6 +21,7 @@ from odemis import model
 import odemis
 from odemis.util import driver
 import os
+import resource
 import subprocess
 import time
 
@@ -29,6 +30,12 @@ import time
 # -m doesn't work when run from PyDev... not entirely sure why
 ODEMISD_CMD = ["/usr/bin/python2", os.path.dirname(odemis.__file__) + "/odemisd/main.py"]
 ODEMISD_ARG = ["--log-level=2" , "--log-target=testdaemon.log", "--daemonize"]
+
+def setlimits():
+    # Increase the maximum number of files openable, as needed if many remote
+    # objects are created
+    print "Setting resource limit in child (pid %d)" % os.getpid()
+    resource.setrlimit(resource.RLIMIT_NOFILE, (3092, 3092))
 
 def start_backend(config):
     """
@@ -46,7 +53,7 @@ def start_backend(config):
     # run the backend as a daemon
     # we cannot run it normally as the child would also think he's in a unittest
     cmd = ODEMISD_CMD + ODEMISD_ARG + [config]
-    ret = subprocess.call(cmd)
+    ret = subprocess.call(cmd, preexec_fn=setlimits)
     if ret != 0:
         raise IOError("Failed starting backend with '%s' (returned %d)" % (cmd, ret))
 

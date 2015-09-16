@@ -10,7 +10,7 @@ SPARC: {
 # Quanta SEM driven via external X/Y connection, using a DAQ board
 "SEM Scan Interface": {
     class: semcomedi.SEMComedi,
-    role: none,
+    role: null,
     init: {device: "/dev/comedi0"},
     # more detectors can be added, if necessary
     children: {scanner: "SEM E-beam", detector0: "SEM Detector"}

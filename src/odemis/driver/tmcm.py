@@ -65,8 +65,8 @@ TMCL_ERR_STATUS = {
 }
 
 REFPROC_2XFF = "2xFinalForward" # fast then slow, always finishing by forward move
-REFPROC_FAKE = "FakeReferencing" # assign the current position as the reference
-REFPROC_LS = "LeftSwitch" # Fast to left switch, then slowly go out and go again to left switch
+REFPROC_STD = "Standard"  # Use the standard reference search built in the controller (depends on the axis parameters)
+REFPROC_FAKE = "FakeReferencing"  # was used for simulator when it didn't support referencing
 
 # Model number (int) of devices tested
 KNOWN_MODELS = {3110, 6110}
@@ -78,7 +78,7 @@ class TMCLController(model.Actuator):
     Note: it must be set to binary communication mode (that's the default).
     """
     def __init__(self, name, role, port, axes, ustepsize, address=None,
-                 refproc=None, temp=False, **kwargs):
+                 refproc=None, refswitch=None, temp=False, **kwargs):
         """
         port (str): port name. Can be a pattern, in which case all the ports
           fitting the pattern will be tried.
@@ -89,9 +89,12 @@ class TMCLController(model.Actuator):
           If an axis is not connected, put a "".
         ustepsize (list of float): size of a microstep in m (the smaller, the
           bigger will be a move for a given distance in m)
+        refswitch (dict str -> int): if an axis needs to have its reference
+          switch turn on during referencing, the digital output port is
+          indicated by the number.
         refproc (str or None): referencing (aka homing) procedure type. Use
           None to indicate it's not possible (no reference/limit switch) or the
-          name of the procedure. For now only "2xFinalForward" or "LeftSwitch"
+          name of the procedure. For now only "2xFinalForward" or "Standard"
           is accepted.
         temp (bool): if True, will read the temperature from the analogue input
          (10 mV <-> 1 °C)
@@ -102,15 +105,13 @@ class TMCLController(model.Actuator):
         if not (address is None or 1 <= address <= 255):
             raise ValueError("Address must be None or between 1 and 255, but got %d" % (address,))
 
-        # TODO: allow any number or axes (>=1 and <= max ports): try GetAxisParameter and see if error is returned?
-
         if len(axes) != len(ustepsize):
             raise ValueError("Expecting %d ustepsize (got %s)" %
                              (len(axes), ustepsize))
 
         self._name_to_axis = {}  # str -> int: name -> axis number
         for i, n in enumerate(axes):
-            if n == "":  # skip this non-connected axis
+            if not n:  # skip this non-connected axis
                 continue
             # sz is typically ~1µm, so > 1 cm is very fishy
             sz = ustepsize[i]
@@ -118,23 +119,33 @@ class TMCLController(model.Actuator):
                 raise ValueError("ustepsize should be above 0 and < 10 mm, but got %g m" % (sz,))
             self._name_to_axis[n] = i
 
+        self._refswitch = {} # int -> None or int: axis number -> out port to turn on the ref switch
+        for a, s in (refswitch or {}).items():
+            if not (0 <= s <= 7):
+                raise ValueError("Output port for axis %s is must be between 0 and 7 (but is %s)" % (a, s))
+            try:
+                aid = self._name_to_axis[a]
+                self._refswitch[aid] = s
+            except KeyError:
+                raise ValueError("refswitch has unknown axis %s" % a)
+
         self._ustepsize = ustepsize
 
         if refproc == REFPROC_2XFF:
-            self._runReferencing = self._runReferencing2xFF
+            self._startReferencing = self._startReferencing2xFF
+            self._waitReferencing = self._waitReferencing2xFF
             self._cancelReferencing = self._cancelReferencing2xFF
-        elif refproc == REFPROC_LS:
-            self._runReferencing = self._runReferencingLS
-            self._cancelReferencing = self._cancelReferencingLS
-        elif refproc == REFPROC_FAKE:
-            self._runReferencing = self._runReferencingFake
-            self._cancelReferencing = self._cancelReferencingFake
+        elif refproc == REFPROC_STD or refproc == REFPROC_FAKE:
+            self._startReferencing = self._startReferencingStd
+            self._waitReferencing = self._waitReferencingStd
+            self._cancelReferencing = self._cancelReferencingStd
         elif refproc is None:
             pass
         else:
             raise ValueError("Reference procedure %s unknown" % (refproc, ))
         self._refproc = refproc
-        self._refproc_cancelled = threading.Event()
+        self._refproc_cancelled = {}  # axis number -> event
+        self._refproc_lock = {}  # axis number -> lock
 
         self._ser_access = threading.Lock()
         self._serial, ra = self._findDevice(port, address)
@@ -172,11 +183,14 @@ class TMCLController(model.Actuator):
 
         axes_def = {}
         for n, i in self._name_to_axis.items():
-            sz = ustepsize[i]
             if not n:
                 continue
-            # Mov abs supports ±2³¹ but the actual position is only within ±2²³
-            rng = ((-2 ** 23) * sz, (2 ** 23 - 1) * sz)
+            sz = ustepsize[i]
+            if modl == 3110:
+                # Mov abs supports ±2³¹ but the actual position is only within ±2²³
+                rng = ((-2 ** 23) * sz, (2 ** 23 - 1) * sz)
+            else:
+                rng = ((-2 ** 31) * sz, (2 ** 31 - 1) * sz)
             # Probably not that much, but there is no info unless the axis has
             # limit switches and we run a referencing
             axes_def[n] = model.Axis(range=rng, unit="m")
@@ -234,21 +248,29 @@ class TMCLController(model.Actuator):
         Initialise the given axis with "good" values for our needs (Delphi)
         axis (int): axis number
         """
-        self.SetAxisParam(axis, 4, 1398) # maximum velocity to 1398 == 2 mm/s
-        self.SetAxisParam(axis, 5, 7)    # maximum acc to 7 == 20 mm/s2
-        self.SetAxisParam(axis, 140, 8)  # number of usteps ==2^8 =256 per fullstep
-        self.SetAxisParam(axis, 6, 15)   # maximum RMS-current to 15 == 15/255 x 2.8 = 165mA
-        self.SetAxisParam(axis, 7, 0)    # standby current to 0
-        self.SetAxisParam(axis, 204, 100) # power off after 100 ms standstill
-        self.SetAxisParam(axis, 154, 0)  # step divider to 0 ==2^0 ==1
-        self.SetAxisParam(axis, 153, 0)  # acc divider to 0 ==2^0 ==1
-        self.SetAxisParam(axis, 163, 0)  # chopper mode
-        self.SetAxisParam(axis, 162, 2)  # Chopper blank time (1 = for low current applications)
-        self.SetAxisParam(axis, 167, 3)  # Chopper off time (2 = minimum)
         # TODO: configure StallGuard properly
         self.MoveRelPos(axis, 0) # activate parameter with dummy move
 
+        self._refproc_cancelled[axis] = threading.Event()
+        self._refproc_lock[axis] = threading.Lock()
+
         if self._refproc == REFPROC_2XFF:
+            # TODO: Read them out of a memory blob saved in the bank 2
+            self.SetAxisParam(axis, 163, 0)  # chopper mode (0 is default)
+            self.SetAxisParam(axis, 162, 2)  # Chopper blank time (1 = for low current applications, 2 is default)
+            self.SetAxisParam(axis, 167, 3)  # Chopper off time (2 = minimum)
+            # TODO: get rid of this once all the hardware have been updated with
+            # the right EEPROM config (using tmcmconfig)
+            self.SetAxisParam(axis, 4, 1398)  # maximum velocity to 1398 == 2 mm/s
+            self.SetAxisParam(axis, 5, 7)  # maximum acc to 7 == 20 mm/s2
+            self.SetAxisParam(axis, 140, 8)  # number of usteps ==2^8 =256 per fullstep
+            self.SetAxisParam(axis, 6, 15)  # maximum RMS-current to 15 == 15/255 x 2.8 = 165mA
+            self.SetAxisParam(axis, 7, 0)  # standby current to 0
+            self.SetAxisParam(axis, 204, 100)  # power off after 1 s standstill
+            self.SetAxisParam(axis, 154, 0)  # step divider to 0 ==2^0 ==1
+            self.SetAxisParam(axis, 153, 0)  # acc divider to 0 ==2^0 ==1
+            self.MoveRelPos(axis, 0)  # activate parameter with dummy move
+
             # set up the programs needed for the referencing
 
             # Interrupt: stop the referencing
@@ -274,7 +296,7 @@ class TMCLController(model.Actuator):
             # stops during the referencing the motor will always eventually stop.
             timeout = 20 # s (it can take up to 20 s to reach the home as fast speed)
             timeout_ticks = int(round(timeout * 100)) # 1 tick = 10 ms
-            gparam = 50 + axis
+            gparam = 128 + axis
             addr = 0 + 15 * axis # Max with 3 axes: ~40
             prog = [(9, gparam, 2, 0), # Set global param to 0 (=running)
                     (13, 0, axis), # RFS START, MotId
@@ -460,6 +482,22 @@ class TMCLController(model.Actuator):
         """
         self.SendInstruction(5, param, axis, val)
 
+    def RestoreAxisParam(self, axis, param):
+        """
+        Restore the axis/parameter setting from the EEPROM into the RAM
+        axis (0<=int<=5): axis number
+        param (0<=int<=255): parameter number
+        """
+        self.SendInstruction(8, param, axis)
+
+    def StoreAxisParam(self, axis, param):
+        """
+        Store the axis/parameter setting from the RAM into the EEPROM
+        axis (0<=int<=5): axis number
+        param (0<=int<=255): parameter number
+        """
+        self.SendInstruction(7, param, axis)
+
     def GetGlobalParam(self, bank, param):
         """
         Read the parameter setting from the RAM
@@ -478,6 +516,31 @@ class TMCLController(model.Actuator):
         val (int): the value to store
         """
         self.SendInstruction(9, param, bank, val)
+
+    def RestoreGlobalParam(self, axis, param):
+        """
+        Store the global parameter setting from the EEPROM into the RAM
+        bank (0<=int<=2): bank number
+        param (0<=int<=255): parameter number
+        """
+        self.SendInstruction(12, param, axis)
+
+    def StoreGlobalParam(self, axis, param):
+        """
+        Store the global parameter setting from the RAM into the EEPROM
+        bank (0<=int<=2): bank number
+        param (0<=int<=255): parameter number
+        """
+        self.SendInstruction(11, param, axis)
+
+    def SetIO(self, bank, port, value):
+        """
+        Write the output value
+        bank (0 or 2): bank number
+        port (0<=int<=255): port number
+        value (0 or 1): value to write
+        """
+        self.SendInstruction(14, port, bank, value)
 
     def GetIO(self, bank, port):
         """
@@ -523,6 +586,10 @@ class TMCLController(model.Actuator):
         self.SendInstruction(13, 0, axis) # 0 = start
 
     def StopRefSearch(self, axis):
+        """
+        Can be called even if no referencing takes place (will never raise an
+          error)
+        """
         self.SendInstruction(13, 1, axis) # 1 = stop
 
     def GetStatusRefSearch(self, axis):
@@ -605,18 +672,6 @@ class TMCLController(model.Actuator):
         """
         self.SendInstruction(26, typ=id)
 
-    def _setInputInterrupt(self, axis):
-        """
-        Setup the input interrupt handler for stopping the reference search
-        axis (int): axis number
-        """
-        addr = 50 + 10 * axis  # at addr 50/60/70
-        intid = 40 + axis   # axis 0 = IN1 = 40
-        self.SetInterrupt(intid, addr)
-        self.SetGlobalParam(3, intid, 3) # configure the interrupt: look at both edges
-        self.EnableInterrupt(intid)
-        self.EnableInterrupt(255) # globally switch on interrupt processing
-
     def _isFullyPowered(self):
         """
         return (boolean): True if the device is "self-powered" (meaning the
@@ -628,18 +683,31 @@ class TMCLController(model.Actuator):
         val = self.GetIO(1, 8)  # 1 <-> 0.1 V
         v_supply = 0.1 * val
         logging.debug("Supply power reported is %.1f V", v_supply)
-        return (10.8 <= v_supply)  # check if supply is >= 12V - 10%
+        return (v_supply >= 10.8)  # check if supply is >= 12V - 10%
 
         # Old method was to use a strange fact that programs will not run if the
         # device is not self-powered.
-#         gparam = 50
+#         gparam = 100
 #         self.SetGlobalParam(2, gparam, 0)
 #         self.RunProgram(80) # our stupid program address
 #         time.sleep(0.01) # 10 ms should be more than enough to run one instruction
 #         status = self.GetGlobalParam(2, gparam)
 #         return (status == 1)
 
-    def _doInputReference(self, axis, speed):
+    def _setInputInterrupt(self, axis):
+        """
+        Setup the input interrupt handler for stopping the reference search with
+         2xFF.
+        axis (int): axis number
+        """
+        addr = 50 + 10 * axis  # at addr 50/60/70
+        intid = 40 + axis  # axis 0 = IN1 = 40
+        self.SetInterrupt(intid, addr)
+        self.SetGlobalParam(3, intid, 3)  # configure the interrupt: look at both edges
+        self.EnableInterrupt(intid)
+        self.EnableInterrupt(255)  # globally switch on interrupt processing
+
+    def _doReferenceFF(self, axis, speed):
         """
         Run synchronously one reference search
         axis (int): axis number
@@ -661,18 +729,22 @@ class TMCLController(model.Actuator):
         else: # Edge is low => go positive dir
             self.SetAxisParam(axis, 193, 8) # RFS with positive dir
 
-        gparam = 50 + axis
+        gparam = 128 + axis
         self.SetGlobalParam(2, gparam, 0)
         # Run the basic program (we need one, otherwise interrupt handlers are
         # not processed)
         addr = 0 + 15 * axis
         endt = time.time() + timeout + 2 # +2 s to let the program first timeout
-        self.RunProgram(addr)
+        with self._refproc_lock[axis]:
+            if self._refproc_cancelled[axis].is_set():
+                raise CancelledError("Reference search dir %d cancelled" % edge)
+            self.RunProgram(addr)
+
+            status = self.GetGlobalParam(2, gparam)
 
         # Wait until referenced
-        status = self.GetGlobalParam(2, gparam)
         while status == 0:
-            if self._refproc_cancelled.wait(0.01):
+            if self._refproc_cancelled[axis].wait(0.01):
                 break
             status = self.GetGlobalParam(2, gparam)
             if time.time() > endt:
@@ -681,7 +753,7 @@ class TMCLController(model.Actuator):
                 self.MotorStop(axis)
                 raise IOError("Timeout during reference search from device")
 
-        if self._refproc_cancelled.is_set() or status == 3:
+        if self._refproc_cancelled[axis].is_set() or status == 3:
             raise CancelledError("Reference search dir %d cancelled" % edge)
         elif status == 2:
             # if timed out raise
@@ -690,20 +762,35 @@ class TMCLController(model.Actuator):
         return (edge == 1)
 
     # Special methods for referencing
-    def _runReferencing2xFF(self, axis):
+    # One of the couple run/stop methods will be picked at init based on the
+    # arguments. (so the referencing is the same for all the axes).
+    # For now, runReferencing is synchronous because 2xFF is much easier to
+    # handle this way. If really needed, we could have run/wait/stop and so
+    # run them asynchronously.
+
+    def _startReferencing2xFF(self, axis):
         """
-        Do the 2x final forward referencing (this is synchronous).
+        Do the 2x final forward referencing.
         The current implementation only supports one axis referencing at a time.
         raise:
             IOError: if timeout happen
             CancelledError: if cancelled
         """
+        self._refproc_cancelled[axis].clear()
+
         logging.info("Starting referencing of axis %d", axis)
         if not self._isFullyPowered():
             raise IOError("Device is not powered, so motors cannot move")
 
-        self._refproc_cancelled.clear()
-
+    def _waitReferencing2xFF(self, axis):
+        """
+        Do actual 2x final forward referencing (this is synchronous).
+        The current implementation only supports one axis referencing at a time.
+        axis (int)
+        raise:
+            IOError: if timeout happen
+            CancelledError: if cancelled
+        """
         # Procedure devised by NTS:
         # It requires the ref signal to be active for half the length. Like:
         #                      ___________________ 1
@@ -733,34 +820,37 @@ class TMCLController(model.Actuator):
         try:
             self._setInputInterrupt(axis)
 
-            # TODO: be able to cancel (=> set a flag + call RFS STOP)
-            neg_dir = self._doInputReference(axis, 350) # fast (~0.5 mm/s)
-            if neg_dir: # always finish first by positive direction
-                self._doInputReference(axis, 350) # fast (~0.5 mm/s)
+            neg_dir = self._doReferenceFF(axis, 350)  # fast (~0.5 mm/s)
+            if neg_dir:  # always finish first by positive direction
+                self._doReferenceFF(axis, 350)  # fast (~0.5 mm/s)
 
             # Go back far enough that the slow referencing always need quite
             # a bit of move. This is not part of the official NTS procedure
             # but without that, the final reference position is affected by
             # the original position.
-            self.MoveRelPos(axis, -20000) # ~ 100µm
+            with self._refproc_lock[axis]:
+                if self._refproc_cancelled[axis]:
+                    raise CancelledError("Reference search cancelled before backward move")
+                self.MoveRelPos(axis, -20000)  # ~ 100µm
             for i in range(100):
-                time.sleep(0.01)
+                if self._refproc_cancelled[axis].wait(0.01):
+                    raise CancelledError("Reference search cancelled during backward move")
                 if self._isOnTarget(axis):
                     break
             else:
                 logging.warning("Relative move failed to finish in time")
 
-            neg_dir = self._doInputReference(axis, 50) # slow (~0.07 mm/s)
-            if not neg_dir: # if it was done in positive direction (unlikely), redo
+            neg_dir = self._doReferenceFF(axis, 50)  # slow (~0.07 mm/s)
+            if not neg_dir:  # if it was done in positive direction (unlikely), redo
                 logging.debug("Doing one last reference move, in negative dir")
                 # As it always waits for the edge to change, the second time
                 # should be positive
-                neg_dir = self._doInputReference(axis, 50)
+                neg_dir = self._doReferenceFF(axis, 50)
                 if not neg_dir:
                     logging.warning("Second reference search was again in positive direction")
         finally:
             # Disable interrupt
-            intid = 40 + axis   # axis 0 = IN1 = 40
+            intid = 40 + axis  # axis 0 = IN1 = 40
             self.DisableInterrupt(intid)
             # TODO: to support multiple axes referencing simultaneously,
             # only this global interrupt would need to be handle globally
@@ -775,89 +865,88 @@ class TMCLController(model.Actuator):
 
     def _cancelReferencing2xFF(self, axis):
         """
-        Cancel the referencing.
-        return (bool): True if the referencing was cancelled successfully
+        Cancel the referencing. Should only be called after the referencing
+          has been started.
+        axis (int)
         """
-        # TODO: protect with a lock the start of the referencing
-        self._refproc_cancelled.set()
-        self.StopRefSearch(axis)
-        self.StopProgram()
-        self.MotorStop(axis)
-        gparam = 50 + axis
-        self.SetGlobalParam(2, gparam, 3)  # 3 => indicate cancelled
-        return True
+        self._refproc_cancelled[axis].set()
+        with self._refproc_lock[axis]:
+            self.StopRefSearch(axis)
+            self.StopProgram()
+            self.MotorStop(axis)
+            gparam = 128 + axis
+            self.SetGlobalParam(2, gparam, 3)  # 3 => indicate cancelled
 
-    def _runReferencingLS(self, axis):
+    def _startReferencingStd(self, axis):
         """
-        Do the left-switch referencing (this is synchronous).
+        Start standard referencing procedure. The exact behaviour depends on the
+          configuration of the controller.
         The current implementation only supports one axis referencing at a time.
+        axis (int)
         raise:
             IOError: if timeout happen
         """
+        self._refproc_cancelled[axis].clear()
+
         logging.info("Starting referencing of axis %d", axis)
         if not self._isFullyPowered():
             raise IOError("Device is not powered, so motors cannot move")
 
-        self._refproc_cancelled.clear()
+        # Turn on the ref switch
+        if self._refswitch.get(axis) is not None:
+            self.SetIO(2, self._refswitch[axis], 1)
+        try:
+            self.StartRefSearch(axis)
+        except Exception:
+            # turn off the reference switch
+            if self._refswitch.get(axis) is not None:
+                self.SetIO(2, self._refswitch[axis], 0)
+            raise
 
-        # TODO: Untested code
-        self.SetAxisParam(axis, 194, 350) # ref search speed
-        self.SetAxisParam(axis, 195, 50) # ref switch speed (going back and forth again slowly)
-        self.SetAxisParam(axis, 149, 0) # soft stop disabled (will stop quicly when detecting the switch)
-        self.SetAxisParam(axis, 193, 1) # left switch referencing
-        self.GetAxisParam(axis, 11) # read current left switch value
-
-        self.StartRefSearch(axis)
-        # wait 30 s max
-        for i in range(3000):
-            if self._refproc_cancelled.wait(0.01):
-                break
-            if not self.GetStatusRefSearch(axis):
-                logging.debug("Referencing procedure ended")
-                break
-        else:
-            self.StopRefSearch(axis)
-            logging.warning("Reference search failed to finish in time")
-
-        if self._refproc_cancelled.is_set():
-            logging.debug("Referencing for axis %d cancelled while running", axis)
-            raise CancelledError("Referencing cancelled")
-
-        # Position 0 is automatically set to the left switch coordinate
-        # and the axis stops there. Axis param 197 contains position in the
-        # old coordinates.
-        oldpos = self.GetAxisParam(axis, 197)
-        logging.debug("Changing referencing position by %d", oldpos)
-
-    def _cancelReferencingLS(self, axis):
+    def _waitReferencingStd(self, axis):
         """
-        Cancel the referencing.
-        return (bool): True if the referencing was cancelled successfully
-        """
-        self._refproc_cancelled.set()
-        self.StopRefSearch(axis)
-        return not self.GetStatusRefSearch(axis)
-
-    def _runReferencingFake(self, axis):
-        """
-        Do the fake referencing (this is almost instantaneous).
-        The current implementation only supports one axis referencing at a time.
+        Wait for referencing to be finished.
+        axis (int)
         raise:
             IOError: if timeout happen
         """
-        logging.debug("Simulating referencing of axis %d", axis)
-        # For testing referencing failure, uncomment these lines
-#       time.sleep(1)
-#       raise IOError("timeout")
-        self.MotorStop(axis)
-        self.SetAxisParam(axis, 1, 0)
+        try:
+            # wait 30 s max
+            for i in range(3000):
+                if self._refproc_cancelled[axis].wait(0.01):
+                    break
+                if not self.GetStatusRefSearch(axis):
+                    logging.debug("Referencing procedure ended")
+                    break
+            else:
+                self.StopRefSearch(axis)
+                logging.warning("Reference search failed to finish in time")
+                raise IOError("Timeout after 30s when referencing axis %d" % axis)
 
-    def _cancelReferencingFake(self, axis):
+            if self._refproc_cancelled[axis].is_set():
+                logging.debug("Referencing for axis %d cancelled while running", axis)
+                raise CancelledError("Referencing cancelled")
+
+            # Position 0 is automatically set as the current coordinate
+            # and the axis stops there. Axis param 197 contains position in the
+            # old coordinates.
+            oldpos = self.GetAxisParam(axis, 197)
+            logging.debug("Changing referencing position by %d", oldpos)
+        finally:
+            # turn off the reference switch
+            if self._refswitch.get(axis) is not None:
+                self.SetIO(2, self._refswitch[axis], 0)
+
+    def _cancelReferencingStd(self, axis):
         """
-        Cancel the referencing.
-        return (bool): True if the referencing was cancelled successfully
+        Cancel the referencing. Should only be called after the referencing
+          has been started.
+        axis (int)
         """
-        return False  # Too fast to cancel
+        self._refproc_cancelled[axis].set()
+        self.StopRefSearch(axis)
+        if self.GetStatusRefSearch(axis):
+            logging.warning("Referencing on axis %d still happening after cancelling it", axis)
 
     # high-level methods (interface)
     def _updatePosition(self, axes=None):
@@ -924,7 +1013,7 @@ class TMCLController(model.Actuator):
         self.temperature1._value = t1
         self.temperature1.notify(t1)
 
-    def _createFuture(self):
+    def _createMoveFuture(self):
         """
         Return (CancellableFuture): a future that can be used to manage a move
         """
@@ -952,7 +1041,7 @@ class TMCLController(model.Actuator):
         if not shift:
             return model.InstantaneousFuture()
 
-        f = self._createFuture()
+        f = self._createMoveFuture()
         f = self._executor.submitf(f, self._doMoveRel, f, shift)
         return f
 
@@ -964,13 +1053,27 @@ class TMCLController(model.Actuator):
         pos = self._applyInversionAbs(pos)
 
         for a, p in pos.items():
-            if not self.referenced.value[a] and p != self.position.value[a]:
+            if (hasattr(self, "referenced") and
+                not self.referenced.value[a] and p != self.position.value[a]):
                 logging.warning("Absolute move on axis '%s' which has not be referenced", a)
 
-        f = self._createFuture()
-        f = self._executor.submitf(f, self._doMoveAbs, f, pos)
+        f = self._createMoveFuture()
+        self._executor.submitf(f, self._doMoveAbs, f, pos)
         return f
     moveAbs.__doc__ = model.Actuator.moveAbs.__doc__
+
+    def _createRefFuture(self):
+        """
+        Return (CancellableFuture): a future that can be used to manage referencing
+        """
+        f = CancellableFuture()
+        f._init_lock = threading.Lock()  # taken when starting a new axis
+        f._moving_lock = threading.Lock()  # taken while moving
+        f._must_stop = threading.Event()  # cancel of the current future requested
+        f._was_stopped = False  # if cancel was successful
+        f._current_axis = None  # (int or None) axis which is being referenced
+        f.task_canceller = self._cancelReference
+        return f
 
     @isasync
     def reference(self, axes):
@@ -978,7 +1081,8 @@ class TMCLController(model.Actuator):
             return model.InstantaneousFuture()
         self._checkReference(axes)
 
-        f = self._executor.submit(self._doReference, axes)
+        f = self._createRefFuture()
+        self._executor.submitf(f, self._doReference, f, axes)
         return f
     reference.__doc__ = model.Actuator.reference.__doc__
 
@@ -990,6 +1094,9 @@ class TMCLController(model.Actuator):
         Blocking and cancellable relative move
         future (Future): the future it handles
         pos (dict str -> float): axis name -> relative target position
+        raise:
+            PIGCSError: if the controller reported an error
+            CancelledError: if cancelled before the end of the move
         """
         with future._moving_lock:
             end = 0 # expected end
@@ -1011,6 +1118,9 @@ class TMCLController(model.Actuator):
         Blocking and cancellable absolute move
         future (Future): the future it handles
         pos (dict str -> float): axis name -> absolute target position
+        raise:
+            PIGCSError: if the controller reported an error
+            CancelledError: if cancelled before the end of the move
         """
         with future._moving_lock:
             end = 0 # expected end
@@ -1072,33 +1182,6 @@ class TMCLController(model.Actuator):
         finally:
             self._updatePosition() # update (all axes) with final position
 
-    def _doReference(self, axes):
-        """
-        Actually runs the referencing code
-        axes (set of str)
-        """
-        # Reset reference so that if it fails, it states the axes are not
-        # referenced (anymore)
-        for a in axes:
-            self.referenced._value[a] = False
-
-        try:
-            # do the referencing for each axis
-            for a in axes:
-                aid = self._name_to_axis[a]
-                self._runReferencing(aid)
-
-            # TODO: handle cancellation
-            # If not cancelled and successful, update .referenced
-            # We only notify after updating the position so that when a listener
-            # receives updates both values are already updated.
-            for a in axes:
-                self.referenced._value[a] = True
-        finally:
-            self._updatePosition(axes)  # all the referenced axes should be back to 0
-            # read-only so manually notify
-            self.referenced.notify(self.referenced.value)
-
     def _cancelCurrentMove(self, future):
         """
         Cancels the current move (both absolute or relative). Non-blocking.
@@ -1112,6 +1195,64 @@ class TMCLController(model.Actuator):
         logging.debug("Cancelling current move")
 
         future._must_stop.set() # tell the thread taking care of the move it's over
+        with future._moving_lock:
+            if not future._was_stopped:
+                logging.debug("Cancelling failed")
+            return future._was_stopped
+
+    def _doReference(self, future, axes):
+        """
+        Actually runs the referencing code
+        future (Future): the future it handles
+        axes (set of str)
+        raise:
+            IOError: if referencing failed due to hardware
+            CancelledError if was cancelled
+        """
+        # Reset reference so that if it fails, it states the axes are not
+        # referenced (anymore)
+        with future._moving_lock:
+            try:
+                # do the referencing for each axis sequentially
+                # (because each referencing is synchronous)
+                # TODO: with the "standard" referencing, we could run them
+                # simultaneously
+                for a in axes:
+                    with future._init_lock:
+                        if future._must_stop.is_set():
+                            raise CancelledError()
+                        aid = self._name_to_axis[a]
+                        future._current_axis = aid
+                        self.referenced._value[a] = False
+                        self._startReferencing(aid)
+                    self._waitReferencing(aid)  # block until it's over
+                    self.referenced._value[a] = True
+                    future._current_axis = None
+            except CancelledError:
+                logging.info("Referencing cancelled")
+                future._was_stopped = True
+                raise
+            finally:
+                # We only notify after updating the position so that when a listener
+                # receives updates both values are already updated.
+                self._updatePosition(axes)  # all the referenced axes should be back to 0
+                # read-only so manually notify
+                self.referenced.notify(self.referenced.value)
+
+    def _cancelReference(self, future):
+        # The difficulty is to synchronise correctly when:
+        #  * the task is just starting (about to request axes to move)
+        #  * the task is finishing (about to say that it finished successfully)
+        logging.debug("Cancelling current referencing")
+
+        future._must_stop.set()  # tell the thread taking care of the referencing it's over
+        with future._init_lock:
+            # cancel the referencing on the current axis
+            aid = future._current_axis
+            if aid is not None:
+                self._cancelReferencing(aid)  # It's ok to call this even if the axis is not referencing
+
+        # Synchronise with the ending of the future
         with future._moving_lock:
             if not future._was_stopped:
                 logging.debug("Cancelling failed")
@@ -1266,6 +1407,7 @@ class TMCMSimulator(object):
                            4: 1024, # maximum positioning speed
                            8: 1, # target reached? (unused directly)
                            154: 3, # pulse div
+                           197: 10,  # previous position before referencing (unused directly)
                            }
         self._astates = [dict(orig_axis_state) for i in range(self._naxes)]
 #         self._ustepsize = [1e-6] * 3 # m/µstep
@@ -1273,6 +1415,9 @@ class TMCMSimulator(object):
         # (float, float, int) for each axis
         # start, end, start position of a move
         self._axis_move = [(0, 0, 0)] * self._naxes
+
+        # time at which the referencing ends
+        self._ref_move = [0] * self._naxes
 
     def _getCurrentPos(self, axis):
         """
@@ -1356,7 +1501,7 @@ class TMCMSimulator(object):
 
         # decode the instruction
         if inst == 3: # Motor stop
-            if not 0 <= mot <= self._naxes:
+            if not 0 <= mot < self._naxes:
                 self._sendReply(inst, status=4) # invalid value
                 return
             # Note: the target position in axis param is not changed (in the
@@ -1364,7 +1509,7 @@ class TMCMSimulator(object):
             self._axis_move[mot] = (0, 0, 0)
             self._sendReply(inst)
         elif inst == 4: # Move to position
-            if not 0 <= mot <= self._naxes:
+            if not 0 <= mot < self._naxes:
                 self._sendReply(inst, status=4) # invalid value
                 return
             if typ not in (0, 1, 2):
@@ -1383,7 +1528,7 @@ class TMCMSimulator(object):
             self._axis_move[mot] = (now, end, pos)
             self._sendReply(inst, val=val)
         elif inst == 5: # Set axis parameter
-            if not 0 <= mot <= self._naxes:
+            if not 0 <= mot < self._naxes:
                 self._sendReply(inst, status=4) # invalid value
                 return
             if not 0 <= typ <= 255:
@@ -1396,7 +1541,7 @@ class TMCMSimulator(object):
                 self._astates[mot][typ] = val
             self._sendReply(inst, val=val)
         elif inst == 6: # Get axis parameter
-            if not 0 <= mot <= self._naxes:
+            if not 0 <= mot < self._naxes:
                 self._sendReply(inst, status=4) # invalid value
                 return
             if not 0 <= typ <= 255:
@@ -1410,6 +1555,40 @@ class TMCMSimulator(object):
             else:
                 rval = self._astates[mot].get(typ, 0) # default to 0
             self._sendReply(inst, val=rval)
+        elif inst == 13: # ref search-related instructions
+            if not 0 <= mot < self._naxes:
+                self._sendReply(inst, status=4) # invalid value
+                return
+            if typ == 0:  # start
+                self._ref_move[mot] = time.time() + 5  # s, duration of ref search
+                self._sendReply(inst)
+            elif typ == 1: # stop
+                self._ref_move[mot] = 0
+                self._sendReply(inst)
+            elif typ == 2:  # status
+                if self._ref_move[mot] > time.time():
+                    rval = 1  # still running
+                else:
+                    # Hack: it needs to set position to 0 once finished.
+                    # Instead of using a timer, hope there will be a status
+                    # check within a second.
+                    if self._ref_move[mot] + 1 > time.time():
+                        self._astates[mot][0] = 0
+                        self._astates[mot][1] = 0
+                    rval = 0
+                self._sendReply(inst, val=rval)
+            else:
+                self._sendReply(inst, status=3) # wrong type
+                return
+        elif inst == 14:  # Set IO
+            if mot not in (0, 2):
+                self._sendReply(inst, status=4)  # invalid value
+                return
+            if not 0 <= typ <= 7:
+                self._sendReply(inst, status=3)  # wrong type
+                return
+            # Nothing actually to do
+            self._sendReply(inst)
         elif inst == 15: # Get IO
             if not 0 <= mot <= 2:
                 self._sendReply(inst, status=4) # invalid value

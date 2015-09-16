@@ -1846,6 +1846,7 @@ class ChamberPressure(model.Actuator):
         ch_id = self._pressure_device.OpenEventChannel(eventSpecArray)
 
         api_frames = 0
+        nc_frames = 0
         while(True):
             logging.debug("Device wait function about to read event...")
             expected_event = self._pressure_device.ReadEventChannel(ch_id)
@@ -1862,7 +1863,11 @@ class ChamberPressure(model.Actuator):
                     if api_frames >= 25:
                         break
                 elif (newEvent == eventID2):
-                    break
+                    nc_frames += 1
+                    # just a workaround for the unexpected navcam image event when
+                    # loading to SEM
+                    if nc_frames >= 2:
+                        break
                 else:
                     logging.warning("Unexpected event received")
         self._pressure_device.CloseEventChannel(ch_id)
