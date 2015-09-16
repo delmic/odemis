@@ -32,7 +32,7 @@ import wx
 import wx.lib.newevent
 
 import odemis.gui
-from .buttons import ImageTextButton, ImageButton
+from .buttons import NImageTextButton, NImageButton
 from odemis.gui.img import data
 
 FileSelectEvent, EVT_FILE_SELECT = wx.lib.newevent.NewEvent()
@@ -88,25 +88,15 @@ class FileBrowser(wx.Panel):
         box.Add(self.text_ctrl, 1)
 
         if clear_btn:
-            self._btn_clear = ImageButton(self,
-                                          wx.ID_ANY,
-                                          data.getico_clearBitmap(),
-                                          (10, 8),
-                                          (18, 18),
-                                          background_parent=parent)
-            self._btn_clear.SetBitmaps(data.getico_clear_hBitmap())
+            self._btn_clear = NImageButton(self, bitmap=data.getico_clearBitmap(), pos=(10, 8))
+            self._btn_clear.bmpHover = data.getico_clear_hBitmap()
+
             self._btn_clear.SetToolTipString("Clear calibration")  # FIXME: do not hard code
             self._btn_clear.Hide()
             self._btn_clear.Bind(wx.EVT_BUTTON, self._on_clear)
             box.Add(self._btn_clear, 0, wx.LEFT, 10)
 
-        self.btn_ctrl = ImageTextButton(self, -1, data.getbtn_64x16Bitmap(),
-                                        label_delta=1,
-                                        style=wx.ALIGN_CENTER)
-        self.btn_ctrl.SetBitmaps(data.getbtn_64x16_hBitmap(),
-                                 data.getbtn_64x16_aBitmap())
-        self.btn_ctrl.SetForegroundColour("#000000")
-        self.btn_ctrl.SetLabel("change...")
+        self.btn_ctrl = NImageTextButton(self, label="change...", height=16, style=wx.ALIGN_CENTER)
         self.btn_ctrl.Bind(wx.EVT_BUTTON, self._on_browse)
 
         box.Add(self.btn_ctrl, 0, wx.LEFT, 5)

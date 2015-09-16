@@ -1,4 +1,4 @@
-autogenerate=0
+autogenerate=1
 embedResource=1
 filename=main_xrc.py
 genGettext=0

@@ -133,14 +133,9 @@ class StreamPanelHeader(wx.Control):
 
     def _add_remove_btn(self):
         """ Add a button for stream removal """
-        btn_rem = buttons.ImageButton(
-            self,
-            wx.ID_ANY,
-            img.getico_rem_strBitmap(),
-            size=self.BUTTON_SIZE,
-            background_parent=self.Parent
-        )
-        btn_rem.SetBitmaps(img.getico_rem_str_hBitmap())
+        btn_rem = buttons.NImageButton(self.Parent, bitmap=img.getico_rem_strBitmap(),
+                                       size=self.BUTTON_SIZE)
+        btn_rem.bmpHover = img.getico_rem_str_hBitmap()
         btn_rem.SetToolTipString("Remove stream")
         self._add_ctrl(btn_rem)
         return btn_rem
@@ -186,34 +181,23 @@ class StreamPanelHeader(wx.Control):
 
     def _add_visibility_btn(self):
         """ Add the visibility toggle button to the stream panel header """
-        visibility_btn = buttons.ImageToggleButton(
-            self, -1,
-            bitmap=img.getico_eye_closedBitmap(),
-            size=self.BUTTON_SIZE,
-            background_parent=self.Parent
-        )
-        visibility_btn.SetBitmaps(
-            img.getico_eye_closed_hBitmap(),
-            img.getico_eye_openBitmap(),
-            img.getico_eye_open_hBitmap()
-        )
+        visibility_btn = buttons.NImageToggleButton(self.Parent,
+                                                    bitmap=img.getico_eye_closedBitmap())
+        visibility_btn.bmpHover = img.getico_eye_closed_hBitmap()
+        visibility_btn.bmpSelected = img.getico_eye_openBitmap()
+        visibility_btn.bmpSelectedHover = img.getico_eye_open_hBitmap()
+
         visibility_btn.SetToolTipString("Show stream")
         self._add_ctrl(visibility_btn)
         return visibility_btn
 
     def _add_update_btn(self):
         """ Add a button for (de)activation of the stream """
-        update_btn = buttons.ImageToggleButton(
-            self, -1,
-            bitmap=img.getico_pauseBitmap(),
-            size=self.BUTTON_SIZE,
-            background_parent=self.Parent
-        )
-        update_btn.SetBitmaps(
-            img.getico_pause_hBitmap(),
-            img.getico_playBitmap(),
-            img.getico_play_hBitmap()
-        )
+        update_btn = buttons.NImageToggleButton(self.Parent,  bitmap=img.getico_pauseBitmap())
+        update_btn.bmpHover = img.getico_pause_hBitmap()
+        update_btn.bmpSelected = img.getico_playBitmap()
+        update_btn.bmpSelectedHover = img.getico_play_hBitmap()
+
         update_btn.SetToolTipString("Update stream")
 
         self._vac_updated = VigilantAttributeConnector(
@@ -710,15 +694,10 @@ class StreamPanel(wx.Panel):
     def add_autobc_ctrls(self):
         """ Create and return controls needed for (auto) brightness and contrast manipulation """
 
-        btn_autobc = buttons.ImageTextToggleButton(self._panel, wx.ID_ANY,
-                                                   img.getbtn_contrastBitmap(),
-                                                   label="Auto", label_delta=1,
-                                                   style=wx.ALIGN_RIGHT)
-
+        btn_autobc = buttons.NImageTextToggleButton(self._panel, height=24,
+                                                    icon=img.ico_contrast.Bitmap,
+                                                    label="Auto")
         btn_autobc.SetToolTipString("Toggle auto brightness and contrast")
-        btn_autobc.SetBitmaps(bmp_h=img.getbtn_contrast_hBitmap(),
-                              bmp_sel=img.getbtn_contrast_aBitmap())
-        btn_autobc.SetForegroundColour("#000000")
 
         lbl_bc_outliers = wx.StaticText(self._panel, -1, "Outliers")
         sld_bc_outliers = UnitFloatSlider(
@@ -1135,16 +1114,10 @@ class StreamPanel(wx.Panel):
 
         """
 
-        btn_fit_rgb = buttons.ImageTextToggleButton(
-            self._panel, wx.ID_ANY,
-            img.getbtn_spectrumBitmap(),
-            label="RGB", label_delta=1, style=wx.ALIGN_RIGHT
-        )
-        tooltip = "Toggle sub-bandwidths to Blue/Green/Red display"
-        btn_fit_rgb.SetToolTipString(tooltip)
-        btn_fit_rgb.SetBitmaps(bmp_h=img.getbtn_spectrum_hBitmap(),
-                               bmp_sel=img.getbtn_spectrum_aBitmap())
-        btn_fit_rgb.SetForegroundColour("#000000")
+        btn_fit_rgb = buttons.NImageTextToggleButton(self._panel, height=24,
+                                                     icon=img.ico_bgr.Bitmap, label="RGB")
+        btn_fit_rgb.SetToolTipString("Toggle sub-bandwidths to Blue/Green/Red display")
+
         self.gb_sizer.Add(btn_fit_rgb, (self.num_rows, 0), flag=wx.LEFT | wx.TOP | wx.BOTTOM,
                           border=5)
 

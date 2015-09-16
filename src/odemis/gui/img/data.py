@@ -155,24 +155,6 @@ getcanvasbgImage = canvasbg.GetImage
 getcanvasbgBitmap = canvasbg.GetBitmap
 
 #----------------------------------------------------------------------
-contrast_label = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAADIAAAASCAYAAAAZk42HAAABwUlEQVRIx+2Wv0vEMBTHDzzl"
-    "RLCIuAnioIIIzk43Oh1OgrjkD3DoIv6YuqjodJOgk3+AQx3URfRAF7e6iApCB0WcjJOiS/xG"
-    "XuURmp6546AnPvjQ5L1Hkm/T5LVQ+OPmAQECA0GxtjAfSKAsSMrJtQVpiw+CQPm+rzzP4/4g"
-    "ryKEbRcSk1J+C2IxkTcRQxmfkjJNCMHjQ1kDVyqVaaD002VByH9qREjVRYi2crmcxKt1FnQM"
-    "dsCRoxDViJDYVUgYhkk8zljMGHgGXeAGjGYtlvdpF38gXxFsAEmsgQ4+hnIVoo3l2ITsgiq1"
-    "F8C2i5CU8ZbBCRgkzsBiS4Vggn7wBiap3wMeQF8TQm7BOOtPaB/Pka5C4jjmdSVNyCq4Mnxb"
-    "YKUJIfrFlFi/pH08J3QVomsLxcOUCYv09lUKjzpOea+g2yLkQ58tY9y7ejsiXIREUZRZSzD4"
-    "HPgEAymxfR2n9iGYB52g1xByDWa1UDDCdpmfkVOwZM5R+40QfVuxCl+zfFaX4MASm9Jxag+D"
-    "c/pkXhI/qz/34B1ckE8L3mS31nqyu+aPYmQTos+EUQijvP9A7tW7xSinLWzGcgGEFPu3VtkX"
-    "zQ8ZXzE8HOQAAAAASUVORK5CYII=")
-index.append('contrast_label')
-catalog['contrast_label'] = contrast_label
-getcontrast_labelData = contrast_label.GetData
-getcontrast_labelImage = contrast_label.GetImage
-getcontrast_labelBitmap = contrast_label.GetBitmap
-
-#----------------------------------------------------------------------
 spot_marker = PyEmbeddedImage(
     "iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAABPUlEQVRIx72Wuw2DQAyGDxQo"
     "UqCMcFKUGRBbIGWFtFngFqGlYAeULdJRpWMIqIgj2dEv64C8LsUnhPHjbN+dMbeiMAscCEdc"
@@ -785,34 +767,6 @@ getbtn_def_32Image = btn_def_32.GetImage
 getbtn_def_32Bitmap = btn_def_32.GetBitmap
 
 #----------------------------------------------------------------------
-btn_256x24_h = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAAQAAAAAYCAYAAAAVgCMkAAAA7ElEQVR42u3cMWqFQBAG4MUi"
-    "N0iV4+UYCYRA6twgkPtYCR7hFQ8tLFVc3TiQdwn3K75my4F/mBnEpm3bp67rvvq+v50KcHm3"
-    "yHxkv9n3/XNZlrdpml7GcUzDMAAXFRmPrEfmI/vNPM+vp7Suazof0nEcwEVFxiPrkfnIfpNz"
-    "ft62TXGgIpH5yH7zeCilAJV45L7RDaFecQRMQJ1MAFDzBKAIYAUArABAVRNAzjkBdTIBgBsA"
-    "UOUNQBHAERCwAgAmAMCXgIAVALACAJebAEopox8kQJXGmAB+dEKo0m80gI/T9+muIFCF+3/m"
-    "3/8AGM2uVASHAqEAAAAASUVORK5CYII=")
-index.append('btn_256x24_h')
-catalog['btn_256x24_h'] = btn_256x24_h
-getbtn_256x24_hData = btn_256x24_h.GetData
-getbtn_256x24_hImage = btn_256x24_h.GetImage
-getbtn_256x24_hBitmap = btn_256x24_h.GetBitmap
-
-#----------------------------------------------------------------------
-btn_128x24_h = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAAIAAAAAYCAYAAAAyC/XlAAAA2ElEQVRo3u3Y0WnDQBCE4f/Q"
-    "ch0IAu7MTwE3YUhIsPsw+CnNqI6AwQVInG5v85QmvPOVMMzNCtmyLLXW+jVN0ztwQDL4dfd7"
-    "a+1q7n7Ztu3cWqP3TkQonhdWSsHMDrXWj4iYbF3XUymF3rvSScLdcXci4mS99xnQy09m33eA"
-    "2cYYSiOh/wevAiRn7q4UMhdAC6ACKAWdANECSM4C6AeQFkAp6BtAVADRCRAtgGgBRAUQnQDR"
-    "AkiGAkTEE5gVRUpPG2PcgLOySOluY4xvoAJH4E2ZpPAAfoDPP0dlfOCeUQKEAAAAAElFTkSu"
-    "QmCC")
-index.append('btn_128x24_h')
-catalog['btn_128x24_h'] = btn_128x24_h
-getbtn_128x24_hData = btn_128x24_h.GetData
-getbtn_128x24_hImage = btn_128x24_h.GetImage
-getbtn_128x24_hBitmap = btn_128x24_h.GetBitmap
-
-#----------------------------------------------------------------------
 btn_def_16 = PyEmbeddedImage(
     "iVBORw0KGgoAAAANSUhEUgAAAAwAAAAQCAYAAAAiYZ4HAAAA1klEQVQoz52SPQ6DMAyFHbDK"
     "xEDOV8audKJbL9BeoRsH4hwwtCAhhX/6zFgQhFp6iiK9L7Zjc5qmJ9d1n9M0nSFNKzGO46fr"
@@ -825,19 +779,6 @@ catalog['btn_def_16'] = btn_def_16
 getbtn_def_16Data = btn_def_16.GetData
 getbtn_def_16Image = btn_def_16.GetImage
 getbtn_def_16Bitmap = btn_def_16.GetBitmap
-
-#----------------------------------------------------------------------
-btn_64x16_h = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAAEAAAAAQCAYAAACm53kpAAAAp0lEQVRYCeXPIQqEUACE4Ume"
-    "fEFYEMQgGAwGg8EgGFTQYBExCR5BWPASs2/CXmJn4CvTfhzHEZ3n+bqu6w5o4laz2rFtW7zv"
-    "O9d15bIsnOf5r6lRrWpWO8Lx6JymyYqa1Y5xHCnDMFj5daPvezpD13V0hrZt6QxN09AZ6rqm"
-    "M1RVRWcoy5LOUBQFnSHPczpDlmVPQFMP0jSNA5p6I0mSKNA+AU2oVYu+MWfULUrEp8cAAAAA"
-    "SUVORK5CYII=")
-index.append('btn_64x16_h')
-catalog['btn_64x16_h'] = btn_64x16_h
-getbtn_64x16_hData = btn_64x16_h.GetData
-getbtn_64x16_hImage = btn_64x16_h.GetImage
-getbtn_64x16_hBitmap = btn_64x16_h.GetBitmap
 
 #----------------------------------------------------------------------
 btn_blue_48 = PyEmbeddedImage(
@@ -855,17 +796,6 @@ getbtn_blue_48Image = btn_blue_48.GetImage
 getbtn_blue_48Bitmap = btn_blue_48.GetBitmap
 
 #----------------------------------------------------------------------
-btn_sml_a = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAADAAAAAQCAYAAABQrvyxAAAARUlEQVRIx+3SQQ0AMAxCUQ61"
-    "Ul/1r6Et87AdFhJw8PIJAITwoqogDchMbUB3awN214CvgJlxARfwhQzwhe4BJF3ABR52AG1n"
-    "KXL6jJxCAAAAAElFTkSuQmCC")
-index.append('btn_sml_a')
-catalog['btn_sml_a'] = btn_sml_a
-getbtn_sml_aData = btn_sml_a.GetData
-getbtn_sml_aImage = btn_sml_a.GetImage
-getbtn_sml_aBitmap = btn_sml_a.GetBitmap
-
-#----------------------------------------------------------------------
 btn_def_24_a = PyEmbeddedImage(
     "iVBORw0KGgoAAAANSUhEUgAAAAwAAAAYCAYAAADOMhxqAAABFklEQVQ4jbVTy26DMBBcm+Up"
     "BAoC8TN8SnPMNbfm1h9of6E3/q85loeA7qC4cmlK4ZCVRrbMrGdWZlRVVd40TW+O4zwJMq01"
@@ -879,103 +809,6 @@ catalog['btn_def_24_a'] = btn_def_24_a
 getbtn_def_24_aData = btn_def_24_a.GetData
 getbtn_def_24_aImage = btn_def_24_a.GetImage
 getbtn_def_24_aBitmap = btn_def_24_a.GetBitmap
-
-#----------------------------------------------------------------------
-btn_64x24_h = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAAEAAAAAYCAYAAABKtPtEAAAAw0lEQVRYw+2YsQnDMBBFjyuy"
-    "QaqMlzESCIHU2SCQfVwJPIILYxUqZWPJl/tgQ/AIviteo+5J/5+EuGmaUwjh1bZtp4gROjjD"
-    "nWutz3EcbymlS4yRhmE4NHCEK5zhzjnnq0LTNJEu0LIshwaOcIUz3LmUcp7n+fDie+AMd94W"
-    "RMQUmzdbO/k9GIJkGU+AV8ArYDwBeheSZTwB5meAD0GvgCfAX4JeAa+A4QSISLT2GfJHRAI+"
-    "hhPwxQY8lLfSGxLvV+f7DzRh8OrQSGYQAAAAAElFTkSuQmCC")
-index.append('btn_64x24_h')
-catalog['btn_64x24_h'] = btn_64x24_h
-getbtn_64x24_hData = btn_64x24_h.GetData
-getbtn_64x24_hImage = btn_64x24_h.GetImage
-getbtn_64x24_hBitmap = btn_64x24_h.GetBitmap
-
-#----------------------------------------------------------------------
-btn_16x16_h = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAApElEQVQ4jWM8ffo0GxDUMTMz"
-    "JzAwMEgzEAee/v37d8GvX7+aWP78+dP479+/ip8/fzIA2Qz////Hq5ORkZGBhYVFmp2dvRqo"
-    "j5nl+/fvySAJkGZiAUgtVH0yy+/fv0VBLEI2owOgPhAlygJlkA1YgIFBmQGk+H3UAFoZQI1o"
-    "fA2kRcnU/5oJmCHmAjEDmXgByAv1QJPYgDgKiCWItPkFEC8D4hoAkZ2K+Plz7MkAAAAASUVO"
-    "RK5CYII=")
-index.append('btn_16x16_h')
-catalog['btn_16x16_h'] = btn_16x16_h
-getbtn_16x16_hData = btn_16x16_h.GetData
-getbtn_16x16_hImage = btn_16x16_h.GetImage
-getbtn_16x16_hBitmap = btn_16x16_h.GetBitmap
-
-#----------------------------------------------------------------------
-btn_32x16 = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAACAAAAAQCAYAAAB3AH1ZAAAAp0lEQVRIx+2QQQqCUBRFz6en"
-    "6AKEwJ01CtxEUBS1j8BRq3A7QeBUVHzv/9+8udrAs4Fz75GmadIsy64icgRKluFtZvU4jg8x"
-    "s3vf96dhGFBVYoyzmp1zJElS5nl+DiHspOu6yjmHqrIUZoaZEWOsRFULYPbnv0zTBFCImbEm"
-    "4r1fd8BWYCuwFfiHAS1QrORvxXv/BE4rDaglhHADUuAA7BcSf4AXcPkCdMVhiuT6aasAAAAA"
-    "SUVORK5CYII=")
-index.append('btn_32x16')
-catalog['btn_32x16'] = btn_32x16
-getbtn_32x16Data = btn_32x16.GetData
-getbtn_32x16Image = btn_32x16.GetImage
-getbtn_32x16Bitmap = btn_32x16.GetBitmap
-
-#----------------------------------------------------------------------
-btn_64x48_a = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAAEAAAAAwCAYAAAChS3wfAAABG0lEQVRo3u2YQYqDUBBE20bi"
-    "ShBBBEdd6QVceKEcYwaGgVnPDQbmcFkEcgTRn18h2SQwB7CqoRZ/+Yru6lYfhuEQ9R11igok"
-    "Ot2ZD56m6Vee5+91Xb/FsrZtdy0wghXMYPeyLI/jONo0TTbPM4XACmawe9d1FR5931vTNBQC"
-    "K5jB7lVVWVEUFtvBUCGEXQsFVjCD3bMsM3ffPfizwHxjhyNJkhhbPZjdyMvZWv9lFBiC779A"
-    "VAfIABmgEOQOQd0B7COwbZsxSyOgLaBTWCHIHYLKAG2BQNv++hiSATJABugSpF+DugSVAboE"
-    "1QH6H6BDSAbIAK1B1jWoO0AjoDvgQtwBFxjwyzr/kf3Pl2X5XNf1J77PROxnMEf2jysNsSIk"
-    "qYpgDAAAAABJRU5ErkJggg==")
-index.append('btn_64x48_a')
-catalog['btn_64x48_a'] = btn_64x48_a
-getbtn_64x48_aData = btn_64x48_a.GetData
-getbtn_64x48_aImage = btn_64x48_a.GetImage
-getbtn_64x48_aBitmap = btn_64x48_a.GetBitmap
-
-#----------------------------------------------------------------------
-btn_64x16 = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAAEAAAAAQCAYAAACm53kpAAAAqElEQVRYCeXPIQqEABRF0Zdc"
-    "t8iIMjIGwSAYBEEFNdhEjAYXIghu4s3/YTYxL5xy28W+78FxHK/zPC9DEZc/+zvWdU22beOy"
-    "LJymieM4/jV/9Fd/9ndYeOZ55jAMUvzZ39H3PV3XdVJ+32jblsrQNA2Voa5rKkNVVVSGsiyp"
-    "DEVRUBnyPKcyZFlGZUjTlMoQx/FjKOpBFEWJoag3wjAMzMfchiL81Z+DL9FfGwWxou7cAAAA"
-    "AElFTkSuQmCC")
-index.append('btn_64x16')
-catalog['btn_64x16'] = btn_64x16
-getbtn_64x16Data = btn_64x16.GetData
-getbtn_64x16Image = btn_64x16.GetImage
-getbtn_64x16Bitmap = btn_64x16.GetBitmap
-
-#----------------------------------------------------------------------
-btn_128x48_a = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAAIAAAAAwCAYAAADZ9HK+AAABUklEQVR42u2aQWqEQBBFy0LG"
-    "lSCCCEZd6QVceKEcI4EQyDo3CORwsxiYI4iarpBcYv778Ba9rV9WV5Xt0zRdEh+Ja+IECa5/"
-    "nl88z/P3sixf2rZ9SrK+7+GBCY/D6/A8vPe6rp/nebZlWWxdVxAgvA7Pw3sfhqGJwziO1nUd"
-    "CBBeh+fhvTdNY1VVWSoHFjrPEx6YUHgdnof3XhSFuTvBESM8//U+MiLLMkNa+vfcCYW2nHIo"
-    "fhXQ+Gk3hFQA9QpAEEgAAkECAE0gaDaBTMLsAfgalK+A4zgMdOEK4AqgDDIFEAhWwUATCIpN"
-    "IF8BPQBSnwIohZrwMwhIABKAIJAAwCYQeA+AJMdAxiE2gZRDNoGI9wDAFAC8BwAWQUACAAkA"
-    "jIFIYQwkBOwBKIXsAQiE8h7gTjBkuUcCfHETaip5/+3btr3t+/6ZzjdCIqNbeJ68f/0BzLVz"
-    "m/5XGewAAAAASUVORK5CYII=")
-index.append('btn_128x48_a')
-catalog['btn_128x48_a'] = btn_128x48_a
-getbtn_128x48_aData = btn_128x48_a.GetData
-getbtn_128x48_aImage = btn_128x48_a.GetImage
-getbtn_128x48_aBitmap = btn_128x48_a.GetBitmap
-
-#----------------------------------------------------------------------
-btn_128x48_h = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAAIAAAAAwCAYAAADZ9HK+AAABC0lEQVR42u3XXUrDQBiF4QkZ"
-    "uoOA0J15JXQTBUXRfQi9cjNZhyB0A/mP34guws7zwkeS9u7knTOZ3Pf9IXhu2/YhpXRMqIHP"
-    "dV0v0zS95bh5HYbhHA9pWZa077t4bpimaVLO+RiL/jHedZvHcTyVH8vLx+1TFvg8zz/XmFNp"
-    "gO7vD9TD74Lv8rZt0qi0CQrZyq8bAtQugAg0gBQIAAKgTgEcAzWAFAgAAoAAIACcAqABQAAQ"
-    "AL4BQADYAkAA2AKgAUAA2AKgAUAAEAC+AaABQAAQAAQAAeAUAA0AAoAA+BcCiEADSIEAqFmA"
-    "a1w7UVTJtQjwHjdnWVTJpXwEvsQcYu5j7mRSBV8xHzFP334Wv0DrK/TtAAAAAElFTkSuQmCC")
-index.append('btn_128x48_h')
-catalog['btn_128x48_h'] = btn_128x48_h
-getbtn_128x48_hData = btn_128x48_h.GetData
-getbtn_128x48_hImage = btn_128x48_h.GetImage
-getbtn_128x48_hBitmap = btn_128x48_h.GetBitmap
 
 #----------------------------------------------------------------------
 btn_def_16_a = PyEmbeddedImage(
@@ -992,33 +825,6 @@ getbtn_def_16_aImage = btn_def_16_a.GetImage
 getbtn_def_16_aBitmap = btn_def_16_a.GetBitmap
 
 #----------------------------------------------------------------------
-btn_128x24 = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAAIAAAAAYCAYAAAAyC/XlAAAA0ElEQVRo3u3aMQqDQBCF4WWL"
-    "3CBVjpdjJBACqXODQA5iaeFBVhBtFUXRyT6Il3D+4mu2nPecVTAWRXEqy/JVVVXKDC4kZa7s"
-    "47quz3Ecb23bXuq6DiklHJgyVtbKXNnHYRiufd+HaZpCPgjbtuHAlLGyVubKPi7Lcp7nmeE4"
-    "o8yVfdwPzAyO7LlHngbfKAAFYAgUAH4LoM8C+MUG4ApgCFwB4AoAGwBsAPASCAoACgAKAAoA"
-    "FwXoGIRbXTSzD3/IuPXVBnhk76zhiXCj+Wd+/wFRucc4p7vUeQAAAABJRU5ErkJggg==")
-index.append('btn_128x24')
-catalog['btn_128x24'] = btn_128x24
-getbtn_128x24Data = btn_128x24.GetData
-getbtn_128x24Image = btn_128x24.GetImage
-getbtn_128x24Bitmap = btn_128x24.GetBitmap
-
-#----------------------------------------------------------------------
-btn_128x24_a = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAAIAAAAAYCAYAAAAyC/XlAAABBklEQVRo3u2WTYqDUBCE21be"
-    "TlAwCEZx4wFceKMcYwZCIOu5wUAOl0UgNxB/5tWQXCJVDd/CbX/9rPJhGELkGrlHdkHB/eU8"
-    "eJZllzzPv+q6Psaxtm3FBwPHcA3ncO9lWZ7iJdg4jjZNkyAAruEc7r3rugM++r63pmkEAXAN"
-    "53DvVVVZURSWpqlh9n0XHwwGruEc7j2EYEmS2LZtggg4h3t/X4aWwsXbu0s+9xG4cpEb10vg"
-    "RhHAHgHruprgRR1AHWDTSyDlvwMoC1UCtQjmEqhF6A+gMsRcAhUBigAtgzkCtATyAzCzp2lY"
-    "54k/wK9eAi03n+f5vCzLTywED7ViGh5wHt1//wFafIQwdqMYiwAAAABJRU5ErkJggg==")
-index.append('btn_128x24_a')
-catalog['btn_128x24_a'] = btn_128x24_a
-getbtn_128x24_aData = btn_128x24_a.GetData
-getbtn_128x24_aImage = btn_128x24_a.GetImage
-getbtn_128x24_aBitmap = btn_128x24_a.GetBitmap
-
-#----------------------------------------------------------------------
 btn_def_32_a = PyEmbeddedImage(
     "iVBORw0KGgoAAAANSUhEUgAAAAwAAAAgCAYAAAAmG5mqAAABIklEQVQ4y71US07EMAx1W/er"
     "fjRVK/UwPQqzZDusYMcF4Arser9hST9qy3NEUDQM0CAVS1bS2O/ZjtLHbdsG67o+e553Ay9d"
@@ -1032,223 +838,6 @@ catalog['btn_def_32_a'] = btn_def_32_a
 getbtn_def_32_aData = btn_def_32_a.GetData
 getbtn_def_32_aImage = btn_def_32_a.GetImage
 getbtn_def_32_aBitmap = btn_def_32_a.GetBitmap
-
-#----------------------------------------------------------------------
-btn_128x48 = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAAIAAAAAwCAYAAADZ9HK+AAABC0lEQVR42u3YQUrEQBCF4ddY"
-    "GZIDBIS5mSthLjEwoug9hFl5ilxHEOYAFdKdLjd6CK3/22b3+FNkxpZlOYzj+Gxmj5KOQgaf"
-    "rbXruq5vtu/7q7uf3V21VkUE8/xjpRQNw3CcpunSe78zdz+VUlRrZZ0EIkLbtikiFBEna63N"
-    "vw+Qx88LP1vvnTWSXgJJMqbIjQuQPQAmSB4AH38EwAoEAAIAAYAAQAAgABAAkgTAX8FcAFYg"
-    "ABAACAAEAH4FgAsAAgABgADARyC4ACAAEAAIAAQAAgABgABAACAAEAAIAAQAAgAB4M8FwARc"
-    "gJukmSlSullEvEs6s0VKV5P0Iukg6UHSPZuk8CXpQ9LTNyCmvAox68/cAAAAAElFTkSuQmCC")
-index.append('btn_128x48')
-catalog['btn_128x48'] = btn_128x48
-getbtn_128x48Data = btn_128x48.GetData
-getbtn_128x48Image = btn_128x48.GetImage
-getbtn_128x48Bitmap = btn_128x48.GetBitmap
-
-#----------------------------------------------------------------------
-btn_256x48_a = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAAQAAAAAwCAYAAAD+f6R/AAABdklEQVR42u3dTWoCQRAG0Kb9"
-    "AVcuNCBkoSCu9ARu9C45RgIhkHVuEMjhXAiewIVOpkA8RNf74F1g4Ctquiembrfbce+7d+p1"
-    "QPNOj86P62g0+ppOp++vfZbLZVmtVkCjouPR9eh8dL/O5/O33W5X9vt9ORwO5Xg8Ao2KjkfX"
-    "o/PR/bper1/6VaBsNpvnhADaFB2Prkfno/t1sViU2WxWhsNhiXRdBzQqEl2Pzkf362QyKYPB"
-    "wMOBRKLz0f1aHvFQINcmEHkOABHJl2oaQl4GABgAgAEA5BoAbgAg702ADQC8AgAGAGAAAIkG"
-    "wP1+B5KxAYANwEOA1N8BiEjSPwbyLgR5OQQEh4CAQ0DAdwCAVwDANaCIuAYE2rwGBNwCAH4S"
-    "DEjzk2Deg8AZAOAaUET8azDAISDg/wIArW4ATkLBLQDgDABwBgD4DkBEfAcA2ABEpMUN4GIS"
-    "QkqXGAC/HgSk9Fev1+vn7Xb76beBs4VIJEXO0fm++x//f0dKLnp+YGAAAAAASUVORK5CYII=")
-index.append('btn_256x48_a')
-catalog['btn_256x48_a'] = btn_256x48_a
-getbtn_256x48_aData = btn_256x48_a.GetData
-getbtn_256x48_aImage = btn_256x48_a.GetImage
-getbtn_256x48_aBitmap = btn_256x48_a.GetBitmap
-
-#----------------------------------------------------------------------
-btn_64x24 = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAAEAAAAAYCAYAAABKtPtEAAAAvklEQVRYw+2YsQnDMBBFxRXZ"
-    "IFXGyxgJhEDqbBDIICpdeBAZjN3aWNhYZ32IIXgE3S9eo+49nSSQeO9PVVW96roOGTVCgDPc"
-    "ZV3X5zRNt67rLk3TuBBC0cARrnCGu4zjeB2GwcUYXV5wKaWigSNc4Qx3WZblPM9z8eJH4Ax3"
-    "2RdU1RS7t1jb+SMMwADWA+BZsAwngEeAR4ATwAngJcgADMAADGA4QG84QC+q+rH2G/THFxPw"
-    "yLwzraGdb3/O9w3SKOcqtC9VCAAAAABJRU5ErkJggg==")
-index.append('btn_64x24')
-catalog['btn_64x24'] = btn_64x24
-getbtn_64x24Data = btn_64x24.GetData
-getbtn_64x24Image = btn_64x24.GetImage
-getbtn_64x24Bitmap = btn_64x24.GetBitmap
-
-#----------------------------------------------------------------------
-btn_contrast_h = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAAEIAAAAYCAYAAABOQSt5AAACxElEQVRYw+VYTUtiYRR+uJoV"
-    "VJYQEtNKDIKihW7aGgRt/ANSkMxWf8EMDMGsZ91mYFZu20aJoPiRtFExiohoIWWkKNKizI+5"
-    "z2Fui7DG66KutwMPXLzv0XOe93yqHB4e2uLx+M9kMllS0f1kKNH3g4MDm9LpdHYeHx+/1ev1"
-    "L9VqFZVK5VOAvtJn+t7tdncU9eHrw8MDnp6e0G63oRLzLlB//ENBG+gzfScHiur8LAnQXn4W"
-    "IjTQ91arNUsiniPhtcO1Wg3pdBqRSAS7u7sCPqdSKXk36I0YAZrvylvGqkwhk8lgb28PiUQC"
-    "Nzc3mJmZgdfrFSiKgv39fSGJZ41yy4NAee2W6Fg2m0U+n0c0GsX19TWmpqawuLiI1dVV+P1+"
-    "BINBbG1twWq14ujoSHSGLTWeiXjN0IuLC1xeXiIWi6HZbGJkZERgsVjEcZKytLQEn8+HQCCA"
-    "ubk50TFKyOtFTyLu7+9RLpeh9ldh6y0hIS6XCxsbG6y+ojv0RGhhovZXnJ6eSmvpR0iG0+mE"
-    "x+MR3WEqls9E9DKOlfT8/Bx6ZHJyUuqHqWrE2NgYbm9vdRExPj6O+fl5jI6ODn9qaDMFnWJr"
-    "ZHHsV3h+YmJCdLXveQuGI6KXcTabDW63W25XjzQaDdHtd5AxEnoWS7ZHzgrMez3CWYO6pimW"
-    "bINra2vSCThJ9iMcpq6urkTXNMWSAxQHp+3tbSwsLMDhcPyXiFwuJ6lBXdMMVAT3ddaJcDiM"
-    "9fV1mSKZKiSIhZHQIqFYLEqXoY4pJsuXacJQn56eRigUwubmpqTL8vKyjNMkolQq4eTkRM4R"
-    "ekLe0DWi167OfePs7Ax2ux0rKysSJYwKklAoFHB8fCxntP80TLd9vtw9OGly3eYmykWM6zk/"
-    "G3S3MGKxvPsI4wyWGneMiN+ace8pBouIPyTih4pfKsrDnOMDovzP9+9/AYKMT+fjX2VsAAAA"
-    "AElFTkSuQmCC")
-index.append('btn_contrast_h')
-catalog['btn_contrast_h'] = btn_contrast_h
-getbtn_contrast_hData = btn_contrast_h.GetData
-getbtn_contrast_hImage = btn_contrast_h.GetImage
-getbtn_contrast_hBitmap = btn_contrast_h.GetBitmap
-
-#----------------------------------------------------------------------
-btn_256x24 = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAAQAAAAAYCAYAAAAVgCMkAAAA40lEQVR42u3cMWqEQBQGYJki"
-    "N0iV4+UYCYRA6twgkINYWngQhcVtFcVFZ32QPUScr/iaKQf+n/dGMNV1/dQ0zVfbtt0hA6fX"
-    "ReYj+2nbts95nt+GYXjp+77qug44qch4ZD0yH9lP0zS9juNYLctSHQfVvu/ASUXGI+uR+ch+"
-    "ut1uz+u6uhwoSGQ+sp8eBzlnoBCP3CdtCOVSAKAAAAUAlFUA8VkAKJMJAKwAgBUAsAIAJgDA"
-    "BAB4BAQUAKAAAAUAKADg3xbA1UVAka4p5/zjDylQpN+YAD4O34eLRoQiXP4y/34HT1yHVAWT"
-    "ImoAAAAASUVORK5CYII=")
-index.append('btn_256x24')
-catalog['btn_256x24'] = btn_256x24
-getbtn_256x24Data = btn_256x24.GetData
-getbtn_256x24Image = btn_256x24.GetImage
-getbtn_256x24Bitmap = btn_256x24.GetBitmap
-
-#----------------------------------------------------------------------
-btn_contr_wide_a = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAAGgAAAAYCAYAAAAWPrhgAAAC2klEQVRo3u2YzUuiURTGH14/"
-    "QtDoSygM+9xpi0SkReAi17pyI9GmXdRfMAPDwKznPxiYjbS2dhEEkq1SqCxEcSFGBpEVLqKy"
-    "nPc51DCLyQ94LRf3wMP7+t57XNzfPfeec7Tp6Wmrrh+6znU1lHpC569MrJrJZPput9u/OJ1O"
-    "1+joKMbGxpQ+UWRAFmRCNtrAwMDq1NQU5ubmMD8/r9QDIgsyIRvN5XI59VDC+Pi40FP6fJEF"
-    "mZCNNjQ0BIfDAU3T0Gg08PLyovSJIgOyIBOy0axW6184zVSr1ZDNZrG7u4tEIiHi+8nJiYy1"
-    "8lfqTGQibPBq7018fn7G6ekpkskkjo+PcXd3h5GRESwsLCAYDGJ4eBiHh4cyh3PV4hqjN9Oa"
-    "hVu9XsfZ2RmKxSIymQyq1aqE3szMDPx+PyKRCNbX17GxsYH+/n6ZSx91VBknrRnFi4sLUTqd"
-    "xtPTE8xms4jhxyeheDweLC0tYW1tTTIPzlcRYOBR915icH9/LxHD46uVERSjKhaLyZ/SV+1+"
-    "gxKGZklBqVTC4+Mj2jFCYoq4uLiokgYjI6gZwXK5jE6M95PP51O73+g76H8DFosFNzc3HQGy"
-    "2WyYnJwUX7W4Bh1x7w329fVJMsDFbtfeCiz6qgXucgRxkScmJuTZiV1fXytAH5EksIpl044R"
-    "0YkVCgXxVRd8l5MEpsqBQICtbwwODrYFhxkfOwoqzf6AQvXh4UEWPRwOY3Z2Vhp3zYw+e3t7"
-    "UjvRV+3+LheqVKVSkdb3ysoKQqEQvF6v1DvsIphMJhGNXYZUKiV1E33Uzv+AO+jfRinvlOXl"
-    "ZUSjUQHFWsftdgucfD6P/f196cOx260apl2IoFaQjo6OcHBwIEB43LHnxu+5XE663Ds7OzJH"
-    "welOknDVTrjd3t5K03RrawvxeBybm5vY3t6WbxxTR1JXdMUI+qV2as/qt6anxt/q9fpP/cel"
-    "WpCe0SWZ6Gy+/gEsu0TEgJ1eKgAAAABJRU5ErkJggg==")
-index.append('btn_contr_wide_a')
-catalog['btn_contr_wide_a'] = btn_contr_wide_a
-getbtn_contr_wide_aData = btn_contr_wide_a.GetData
-getbtn_contr_wide_aImage = btn_contr_wide_a.GetImage
-getbtn_contr_wide_aBitmap = btn_contr_wide_a.GetBitmap
-
-#----------------------------------------------------------------------
-btn_64x48 = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAAEAAAAAwCAYAAAChS3wfAAAA40lEQVRo3u3aPQrCMBjG8ZDB"
-    "Gzh5PI+hIIKzNxA8SMcOPUgKpd0T6FfMI+rgEfr+Aw8UOj0/8iYd6quq2tV1fWuaJpRkIwnq"
-    "rO5+WZZrSunU9/2hbVsXQth01FFd1VndfXk4xhjdOI4u5+y2vtRRXdVZ3f08z/tpmt4vLEWd"
-    "1d2v6+oUawDf3t4ZX78dYDXsAGuz/x8AAAAAAAAAAMAwgPlPYUYAAAAA4BbgFmAEAACAQ5BD"
-    "kBEAAAAAAAAAAAAAAAAAAAAAwAoAP0nlPBjeAYMAHoYBnhqBS8m9pDO087tP5/MLhXNAO6zX"
-    "jrkAAAAASUVORK5CYII=")
-index.append('btn_64x48')
-catalog['btn_64x48'] = btn_64x48
-getbtn_64x48Data = btn_64x48.GetData
-getbtn_64x48Image = btn_64x48.GetImage
-getbtn_64x48Bitmap = btn_64x48.GetBitmap
-
-#----------------------------------------------------------------------
-btn_32x24_a = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAACAAAAAYCAYAAACbU/80AAAA4UlEQVRIie2WMQqDQBBFx1G2"
-    "ExQMglFsPICFN8oxEgiB1LlBIIezELyBqJv5IUK6VO5YOPAKq/d35hdyVVVGuAutYB3Rfp2G"
-    "gyC4hWF4TtP0KEN5nq8KHHDBCTfHcXySJFTXNTVN4wS44ISbi6I44KMsS8qyzAlwwQk3J0lC"
-    "URSR7/uEsdauCgYuOOFmYwx5nkfzPDsFTrh5SeY6wOJlDflvCF775v9grdcv6J9gmibSZBsd"
-    "0Hr9pwN7CTexAdUS7idQDyD/Bz3pTY8NPBU38OJhGK7jOD6kEJ3D9ndwivvyBpRXSubbNtEF"
-    "AAAAAElFTkSuQmCC")
-index.append('btn_32x24_a')
-catalog['btn_32x24_a'] = btn_32x24_a
-getbtn_32x24_aData = btn_32x24_a.GetData
-getbtn_32x24_aImage = btn_32x24_a.GetImage
-getbtn_32x24_aBitmap = btn_32x24_a.GetBitmap
-
-#----------------------------------------------------------------------
-btn_spectrum = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAAEIAAAAYCAYAAABOQSt5AAADD0lEQVRYw+WYTU8TYRDH/+3u"
-    "dvvC0hYstS2F0kZsgoYEqREPBg9Eb5686MWEg34EEo1Gv4cJJy9+AU2MiR48KMHXFFr6AoUa"
-    "ygItfaMtbOs8a7wYKL3u7iST3Wx2Jnl+M/PMPA+/tLRksVqtTzudzoN2ux2gJ4wgZrOZaf7o"
-    "6GixWq2+4CuVyvNisbhQLpdBH2EUEDzPw263B2w222NFUTieIMzTiwrBSMLWS0mARqPBgj/P"
-    "N5tND5UEjCgsAdjaCYSHPz4+PtOgVCohkUggl8upFJlIkoRgMIhoNAqXy6X9UumWDYzY8vIy"
-    "kpksNp0tbM9soDyWhqdmQmjNifaaFxvZNYTC45iamgLHcdoFcdrmyABRR0H8dxOfHCNoXd0F"
-    "bm8AYQVCGej7vgc/twfpawrVbBNfCFosFlN3Y11lRCaTwbrswoeyD53JFjCsAE6KuAUwCYAg"
-    "AR4fEMq3YPv2ESneQTaDCIfD+gFxeHiInZ0G3q/OoBOijBELpzqwEZiAtQP/53d4c86HmtcL"
-    "akn6AEEtFSvZCTTagxT6+plOHJQoNqWFK6urSIyOQhRFfYBg31K5ccoECjfqPTnqMwETqRRW"
-    "5uagxXZ8IggWUbk4DPgPenZkJRDu/aJqqxsQrMbNnB0CX0Wv86aZRlaJOhCz1SQINiv8LxaL"
-    "BZGRCjY5U88gTKIVpXBAtdXiuH5iRrDBKDZZQCnjRrVXEH0Sti5Nq7Y0tusDBFvIjWt5/Ci6"
-    "0bAJKJ7lRHJDEYeQnp1Fk1qvbvYIBkKSKrh/cwuv1+1I2UXsn+LA4hiAGIggcfkuDmif0GI2"
-    "dJ0sZVlGJNKPRz4Bb2t+JF1B5MwuKhWRDZfo5yX4PEF4hXGU3Lewyzkhp9Oavc/oeuhK0VwQ"
-    "iXTwcMyPtDCNZFvEbjuKAR646BhCJHABFn8Y+cI+0vSvlo/zfLcIso6STCbhyOfVI/ed1nU4"
-    "Cn8Hpnq9rmbNr82fqNVq+j6G/xN2BxGPx1XVqzAQMj09MLbIrDRe0suCwUEsMhDPoN4y4B7p"
-    "eYMB2CZ9RfrkD5qAhHELO2UDAAAAAElFTkSuQmCC")
-index.append('btn_spectrum')
-catalog['btn_spectrum'] = btn_spectrum
-getbtn_spectrumData = btn_spectrum.GetData
-getbtn_spectrumImage = btn_spectrum.GetImage
-getbtn_spectrumBitmap = btn_spectrum.GetBitmap
-
-#----------------------------------------------------------------------
-btn_16x16 = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAo0lEQVQ4je2TPQoCMRhEw1d4"
-    "AyuP5zEURLD2BoIHSZki90iKDVsmJJA/zYBYiCwbd0uL14R5kwnsEud8I4S4SCl14zETDQcu"
-    "5ZzP3vuDMWantWZKqUmQQRYOXHLO7a21LITA2gErpUyCDLJw4FJKaRtjZLXWLuDAxRNm3fxt"
-    "CaBe8ZP3gl/5L1hjwRoF44KCEQW3BQV3at/1qXFtDB3/wvByjk8hff8pp037sgAAAABJRU5E"
-    "rkJggg==")
-index.append('btn_16x16')
-catalog['btn_16x16'] = btn_16x16
-getbtn_16x16Data = btn_16x16.GetData
-getbtn_16x16Image = btn_16x16.GetImage
-getbtn_16x16Bitmap = btn_16x16.GetBitmap
-
-#----------------------------------------------------------------------
-btn_32x16_h = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAACAAAAAQCAYAAAB3AH1ZAAAApUlEQVRIx+2TQQqCUBBAnzh8"
-    "TyAE3qxV4CWEoqh7BK66jOcIAg8g+mfGNrVp77eFbzW794ZhpOu6EEI453l+ACrS8DSzdpqm"
-    "m6jq1d2bcRxRVeZ5XtScZRkiUhVFcXT3XIZhqAFUlVSo6tdXS4yxBBbf/JcYI0Apn2E1xMzW"
-    "DUh5+y1gC/jPgH94wx4oV/L34u53oFkpoBUzuwAB2AO7ROIX8ABObxNKXs9lGg+aAAAAAElF"
-    "TkSuQmCC")
-index.append('btn_32x16_h')
-catalog['btn_32x16_h'] = btn_32x16_h
-getbtn_32x16_hData = btn_32x16_h.GetData
-getbtn_32x16_hImage = btn_32x16_h.GetImage
-getbtn_32x16_hBitmap = btn_32x16_h.GetBitmap
-
-#----------------------------------------------------------------------
-btn_32x24 = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAACAAAAAYCAYAAACbU/80AAAAsUlEQVRIx+2WMQrDMAxFjYbe"
-    "oFOP12O0UAqde4NCD+LRgw9iQ3DWGJsY2/WHBkr2OB00vEXL+5IQiKSUB6XUQ2ttGrUTBk64"
-    "Ked8DyFcnHMna60wxmwKHHDBCTd578/TNIkYo2gFUUrZFDjgghNuSikd53neXLwGTrhpKdRa"
-    "u7J4qXfnazjA/gFwFnvCK+AV8AQ4AAf4iwDjjgFGat/Jq/c39MMbE7g1no2hY+fD13n9AJI5"
-    "9yP4i2r8AAAAAElFTkSuQmCC")
-index.append('btn_32x24')
-catalog['btn_32x24'] = btn_32x24
-getbtn_32x24Data = btn_32x24.GetData
-getbtn_32x24Image = btn_32x24.GetImage
-getbtn_32x24Bitmap = btn_32x24.GetBitmap
-
-#----------------------------------------------------------------------
-btn_contr_wide_h = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAAGgAAAAYCAYAAAAWPrhgAAAC5klEQVRo3u1Zz0tiURT+eJkZ"
-    "9EOFkKhVFARGi9y0VQja+A9EgTHb/AtmYAhmPes2A7Ny2zYyBEWtaFOiJCHSQkwpUcKF/XTe"
-    "d5g3DIM26vgaF/fABw/fPU843z3nfudcLRwOW6PR6Jd4PF7Q0VQYCBTIyeHhoVV7fX3dfXh4"
-    "+Fir1WYqlQru7u4U/iPIAbkgJ81mc1fTHz40Gg08PT3h5eUFOmF9h/5HCh2C8SIX5ITcaDop"
-    "UyTGeKkIGgyQk+fn5ykS9Ctz2i2uVqtIJpMIhULY29sT8DmRSMi7TnaFQncwONHeCqzOII6P"
-    "j7G/v49YLIabmxs4HA54PB6Bpmk4ODgQ8rhW7fz+Q2u30xnw09NTXFxc4OjoCMViERMTE1hc"
-    "XMTq6ir8fj+2t7extbUFi8WCk5MT8VElrs8EtUuxXC6HfD6PSCSCx8dHDA8PC4aGhoQQkuV2"
-    "u+H1erGxsYHp6WnxUeWpv2hJUL1eR6lUgq7DhcW3jETNzc1hfX2dqkN8VWBNIshIK12H4/Ly"
-    "UqReJ0aSXC4XVlZWxFeJhD4S1CqQVBBXV1foxsbHx+V8UmfQO5xBNpsN5XK5K4JGR0cxOzuL"
-    "kZERtfPNKnFGT8RgU0JTFHRqXD82Nia+xnd+77EUeiSoVSCtVivm5+clG7qx+/t78W3VdCn0"
-    "hpYigTKavQ7PlW6MvRJ9lUgwWSRQLvt8PlFmnBx0YmxSr6+vxVeJBJNFAhtTNqSBQAALCwtw"
-    "Op1/Jej8/FxKHH3Vzje5USV4L8FzKBgMYm1tTaYGLHkkjoKAMDInnU6L6qOPCuo7NKpGuWPJ"
-    "stvt2NnZwebmppS9paUlGeuQoEKhgEwmI+uIduVMBbpPZ1CrOwnO47LZLCYnJ7G8vCxZxSwi"
-    "OalUCmdnZ7LGuFNSeKdp9p+zOU4WeK3AyTYHqLyG4G+dzN5UoP9NJNyaHUhVqnrGLTPomxFI"
-    "s0xlQs/4ToI+6/iqo6QCMjAo/eTk0w/D0gIwtJCxygAAAABJRU5ErkJggg==")
-index.append('btn_contr_wide_h')
-catalog['btn_contr_wide_h'] = btn_contr_wide_h
-getbtn_contr_wide_hData = btn_contr_wide_h.GetData
-getbtn_contr_wide_hImage = btn_contr_wide_h.GetImage
-getbtn_contr_wide_hBitmap = btn_contr_wide_h.GetBitmap
 
 #----------------------------------------------------------------------
 btn_def_48_a = PyEmbeddedImage(
@@ -1308,122 +897,6 @@ getbtn_def_48Image = btn_def_48.GetImage
 getbtn_def_48Bitmap = btn_def_48.GetBitmap
 
 #----------------------------------------------------------------------
-btn_contr_wide = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAAGgAAAAYCAYAAAAWPrhgAAACvklEQVRo3u2ZT0tiYRTGj3kz"
-    "NQoXCkqGZRsh3Chu+wJ+g9wMtLCPEMwww8z3GGg1LVq7CCSIoI3iQkTRTPxLQwr5lxKz5n0O"
-    "M7MYmFLoqovzwIsvL/fcxfl5zn3uuVoymTSZzebPLy8vH56fnzfUL4nmp6WlJazGaDQ67vf7"
-    "37Rer/f1/v7+qNvtkjokATRfaZpGVqt1w2KxfByPx0ZNwTlQG4Yjmr/AQRUNPT4+olgOtOFw"
-    "6FCtTTKzQELBgIkC5NCenp7eDGi325TP56larTJdaG1tjTY3N8nn85HNZpOs6iTtteoByVQq"
-    "RYVCgZrNJq2srDCU7e1tWl9fp1arRfF4nM8CgQAZjUbJ6HsD+p8pADjl8CibzdLV1RXZ7Xby"
-    "+/1cMYCxs7PDjuP6+pouLy8pkUhQKBTiM9EMKqhUKlG5XKaLiwt2dsvLy7xQJXAaqCCPx8PV"
-    "s7W1RbFYjGO8Xq9kVW9ADw8PdHd3R+fn52/aboAClHA4TCcnJzQYDEhZRMmsnoCU9aZcLsdW"
-    "bxIBktPppGAwyGYCzyqRjoBwViwWp7oRXN3u7i6DFduuMyBUAFzbNEJbc7vdHCuAdAaEZMON"
-    "wRRMOmHA9agixAqgdwSEd51/ZTKZ2EbXarWpRkB4oUWsjI10riBYabzTIOH9fn/im9XrdY4d"
-    "DoeSWT0BIcF7e3uUTqfZycHVvSVUzc3NDcdKi5sBIDxPIpEInZ6eTuToMHXodDpSPbMABMHF"
-    "4Tl0eHhIZ2dnPCQFNLSw3x+V+DoMWzOZDN3e3nKMfE+aESAIlQNI0WiUGo0GTxgcDge5XC4y"
-    "GAxUqVQYCn7R3qS16QDotX88HB4m2aurq3+n2NgDBOZ0gAOnh/GOaA4V9Edob5hqY4lmDwgj"
-    "A4ekYiHVRIv7rjZHkouF1DEAfVEbk1r7ajklJwuhn2r9UOvTLyBzkmy4iYxtAAAAAElFTkSu"
-    "QmCC")
-index.append('btn_contr_wide')
-catalog['btn_contr_wide'] = btn_contr_wide
-getbtn_contr_wideData = btn_contr_wide.GetData
-getbtn_contr_wideImage = btn_contr_wide.GetImage
-getbtn_contr_wideBitmap = btn_contr_wide.GetBitmap
-
-#----------------------------------------------------------------------
-btn_contrast_a = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAAEIAAAAYCAYAAABOQSt5AAACuElEQVRYw+VYz0tiYRQ9PM0I"
-    "LLQUCiOz3JkLRcJF0CLXtWoT0WZ2kn/BDAwDs57/YGA20brciSCItkrBSomkRRQVRD+khfh7"
-    "3rnkrMaXwizmywuH53vfvQ/Oefe7371qCwsLFh3fddzo6AwZbt64WzSTyfTNarV+djqdrunp"
-    "aczMzAwFyJWcyZ0aaDab7ZPH44Hf70cgEBgqkDO5UwPN5XI59dTA7OysqDRMIGdypwba5OQk"
-    "xsfHoWkaOp0O2u32UIBcyZncqYFmsVj+iGCE19dXnJ2dIZlM4uDgQMDfp6ensvZe/P8KchcN"
-    "8Ga9HFutForFItLpNE5OTlCpVOBwOBAOh7G6uoqpqSkcHx+LD31VE6JrmlH6NJtNlEolXF5e"
-    "Ip/P4+npSVJpcXERoVAIGxsb2N3dRSwWw8TEhPgyRsWtohmpdXt7K8jlcmg0GjCbzQKmE68k"
-    "7/P5sLa2hmg0KhWY/kpukV4FslqtSgYw7d8zCsIs2drakpcyVrnCaVQcr66uUK/X0Y9RDB5J"
-    "KysrShZPwxpxfX2NQYz1IxgMqlsj/rYwMjKC5+fngYQYGxvD/Py8xCq3NXotjo6OSlEkqX6t"
-    "26Aw9sNkBMm43W65DmKPj4/KCWFYLNltcSjhFx7EyuWyxH6YYskjcHl5maMq7HZ7XyLwhGGH"
-    "qdrxadhQ1Wo1Ibe+vg6v1yuDiZExJpVKSe/B2A/TUBF3d3cyqu7s7CASiWBpaUn6BXaVJpNJ"
-    "QGPXmc1mpe9gjJKTqJFK3YGLe357exubm5siCHuFubk5EeHi4gKZTEbmDE6nKg5e7wrRFaNQ"
-    "KODo6EiIc5twpuDz8/NzmUoTiYT4qCpCt1g+9JM+Ly8vMnwdHh5ib28P+/v7iMfj8oxriv9R"
-    "88CM+KnqV/yH+KXpR97XZrP5Q7+5H0IB7sld1+DLb7wjCPe4vaGeAAAAAElFTkSuQmCC")
-index.append('btn_contrast_a')
-catalog['btn_contrast_a'] = btn_contrast_a
-getbtn_contrast_aData = btn_contrast_a.GetData
-getbtn_contrast_aImage = btn_contrast_a.GetImage
-getbtn_contrast_aBitmap = btn_contrast_a.GetBitmap
-
-#----------------------------------------------------------------------
-btn_spectrum_a = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAAEIAAAAYCAYAAABOQSt5AAADGUlEQVRYw+WYzU8TQRjGn862"
-    "u9h2tS0s2doiFJTEYEPqBxw0RAwmxsSSEC8kRDQ9efemiTHx7H9g4oVwBq7EDw6gQiG1FEnE"
-    "UEI/iK1Q2gih3bbObKgnu+3Bg0uneZK2M2+T57ezz75T0tnZyVO9pIpRlRtMsWPvPOE47oXV"
-    "an0qSZJLlmU4nc6GEPPKPDPvjAGx2WwBj8cDr9cLn8/XUGKemXfGgLhcLoluDbjdbpVSI4l5"
-    "Zt4ZA+JwOCCKIgghKJfLKJVKDSHmlXlm3hkDwvP8HwhayuVyWF1dxezsLKamplSx9+FwWJ2r"
-    "Vf+/inlXGeB4VFtYLBYRiUQwt/ARnwtJrNyOY+XJCmKPQzjo+4LdX0v4tDCnrmFr9QaiMojW"
-    "9lEUBWtra/ieLmNZ7kF0QEbuPofSSAn8sALbnQy6fJu4ag3CuLOhrmU1erxViBatRCKBRLYV"
-    "QQyg0HYBcNuBMxzAAwYTYBIByQlclBXczS7DnU6oNbq8RaoF5OHhIXb3FCzFbwEW6lZoQrVx"
-    "ioJx0el764sop9Nqre6CUysct5LXkEcLvfRm1BoWulFaSwXciEZ1GZ6aGbH94xLAWVDvsBqA"
-    "y/G4fjPibxMmkwl7OQ+NU6FuEE0UREc2q9bq7taoNikIAghnhsnI1Q2CGI0Q6Y+y2hOzI5iZ"
-    "dtceBN5QNwgDDdSf7e26A6EZlqzb8nZvQTST+kFYRXzr6VFrT0xYskdgX+8GJFsJdqupJgSj"
-    "aEfRLiHS36+7x6dmQ3V0dET77n34r3zFedkMh7l6aPIWBwRXFxYH/dilvTurPTENFVMymaTN"
-    "ZAoPvPsY8pyFz9aGZmKDQF881WljC5ySD1L3EGLXx5GQ29QaXZ5EtShVDlz8wTbGJA6BJi/G"
-    "C36MFkfh50ZxU3gIT3MAhY4xRAu8ejrV48GrJogKjFAohPn37yCspzAU7kVgIYDh5Uc4tzWI"
-    "xKaAtx/m1TV6hVAJy1Q92yeTySAYDGJ6ehoTExOYnJzEzMyM+h2b0/kfNSm2I17r9Sr+Q70h"
-    "+Xz+uaIor+iHnQYEsMO8UwbPfgMhGAv3lJvSBAAAAABJRU5ErkJggg==")
-index.append('btn_spectrum_a')
-catalog['btn_spectrum_a'] = btn_spectrum_a
-getbtn_spectrum_aData = btn_spectrum_a.GetData
-getbtn_spectrum_aImage = btn_spectrum_a.GetImage
-getbtn_spectrum_aBitmap = btn_spectrum_a.GetBitmap
-
-#----------------------------------------------------------------------
-btn_64x24_a = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAAEAAAAAYCAYAAABKtPtEAAAA6ElEQVRYw+2UMQqDQBBFx1G2"
-    "ExQMglFsPICFN8oxEgiB1LlBIIezELyBqJv9IUK69P4deMWW7+/M16ZpjOPu6B2WhP7rbDSK"
-    "olscx+c8z49upCzLXQNHuMIZ7pqm6cklIW3bStd1FMAVznDXqqoOeNR1LUVRUABXOMNdsyyT"
-    "JEkkDEPBWGt3DQaucIa7GmMkCAJZ15UKOMNdt2TYAti8lVH+NwTd+83/Q1l/f8OfwLIswozv"
-    "AKwC6+9/OsCXIHsJ+g1gL0F/AuwnQB+AiIzCOyM24Em8AS+dpuk6z/PDFcJA1P4DnJ375Q3B"
-    "PLNPi/hFtgAAAABJRU5ErkJggg==")
-index.append('btn_64x24_a')
-catalog['btn_64x24_a'] = btn_64x24_a
-getbtn_64x24_aData = btn_64x24_a.GetData
-getbtn_64x24_aImage = btn_64x24_a.GetImage
-getbtn_64x24_aBitmap = btn_64x24_a.GetBitmap
-
-#----------------------------------------------------------------------
-btn_big = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAAFAAAAAsCAYAAADy8T8XAAAB+UlEQVRo3u3by0oCURzH8T+z"
-    "cDU6+AgiojvdiD5CEBRE0BuEirl0oY9RtHJWPUGQlPQeQSC6ELzgjcYrXju/wYGgyTJaxe/A"
-    "19GZ3YdznBGOWrlclkqlItFo9ET1qNqyvT2ojmEGO2273Uo+n8/qun6fy+WOSqWSmKbJXIJN"
-    "Nps9VlYPyiwtamjFYlH3eDzXmUxGAoGAWJYlw+GQuQSbYDAoqVRKlNltoVDQNYWYTiQSYhiG"
-    "jEYj6ff70uv1mEuwgZHf75d4PI4JeAnA81AoJLPZTObzuaxWK8GyZp+DDYxgFYlEAHgBwLDP"
-    "57MvbjYb4dg/YAQrr9eLj2EAGni3Xq/ti5xp+4MRrHbD0Bw8RKCf5XjZd2G8EOV3EZCABPw/"
-    "gIQ8DI4zkEuYgAQkIAH/BhC/79jhcQZyCROQgATcAfKmcFicgVzCBOSDNB+kOQO5hAlIQAIS"
-    "g4AEJCAB2e8Bna1t3N72fY7Tx91ZY+y4XC6X3OL2g2AEq+l0Cr83AL50u11xEIm0PxjBCvul"
-    "1XgFoNlqtezN05PJRBaLBffxfjFgAyNYNZtNnDIBeDcYDKTT6Qgg6/W6VKtV5hJsAAcrmMFO"
-    "SyaTM/WleNVoNGxAHGu1GnMJNu122z7CDHb2XTgWi92oE2eWZT3jzyTj8Zi5BBvVk7I6hRns"
-    "3gEYQBnMp8O/MQAAAABJRU5ErkJggg==")
-index.append('btn_big')
-catalog['btn_big'] = btn_big
-getbtn_bigData = btn_big.GetData
-getbtn_bigImage = btn_big.GetImage
-getbtn_bigBitmap = btn_big.GetBitmap
-
-#----------------------------------------------------------------------
-btn_64x48_h = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAAEAAAAAwCAYAAAChS3wfAAAA5ElEQVRo3u2avQ3CMBhELRds"
-    "QMV4jAESQqJmAyT2SWUpI6SI4sKto/wYHyINI+R7ka5K9Z5858a+aZpDCOHRtm1XU4ykE7PY"
-    "/bIs95zzJaV0ijG6YRh2HTGKVcxi9+M4nmvcNE2ulOL2/olRrGIWu07AcZ7n7w9LEbPY/bqu"
-    "TrEmYOP21sD/gwBn/OMEIMC6gO06sBpOAAIQgABuAW4BKoAANsDsBjCCbAAbQAWoABWgAlQA"
-    "AWwAG0AFEIAABHALcAtQAQTwRIYnMlTAloBoWECUgJdhAW+N4K3mWdMb2r7+x3z9ABoyCgoi"
-    "YFKjAAAAAElFTkSuQmCC")
-index.append('btn_64x48_h')
-catalog['btn_64x48_h'] = btn_64x48_h
-getbtn_64x48_hData = btn_64x48_h.GetData
-getbtn_64x48_hImage = btn_64x48_h.GetImage
-getbtn_64x48_hBitmap = btn_64x48_h.GetBitmap
-
-#----------------------------------------------------------------------
 btn_blue_16_a = PyEmbeddedImage(
     "iVBORw0KGgoAAAANSUhEUgAAAAwAAAAQCAYAAAAiYZ4HAAABFUlEQVQoU42SO07DUBBFz8wb"
     "P9vB+Vkoa6BhBbQsA7aQDjo2AFugy/pICooIK35DYUO+hFzpdudoZqQRbu4int4I9oBojSog"
@@ -1437,19 +910,6 @@ catalog['btn_blue_16_a'] = btn_blue_16_a
 getbtn_blue_16_aData = btn_blue_16_a.GetData
 getbtn_blue_16_aImage = btn_blue_16_a.GetImage
 getbtn_blue_16_aBitmap = btn_blue_16_a.GetBitmap
-
-#----------------------------------------------------------------------
-btn_32x24_h = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAACAAAAAYCAYAAACbU/80AAAAtElEQVRIx+2WPQoDIRBGxSI3"
-    "SJXj5RgJhEDq3CCQ+1gJHmGLRQtLFf8yH+xC2F5tLF4zzdNvZmC4EOIkpXwppRaidmKBE26e"
-    "c35672/W2osxhmmtmwIHXHDCzZ1zV4KFEBgVWCmlKXDABSfcPKV0jjE2Fx+BE26+F2qtXdm9"
-    "vPfPj2AI2UjGJzBbMDwB2kU2kjkDcwhnArMF4xOg48D0Pkb+MEjgMzCBLx7wIN7E2lG8bs77"
-    "D2dA/APEGwIiAAAAAElFTkSuQmCC")
-index.append('btn_32x24_h')
-catalog['btn_32x24_h'] = btn_32x24_h
-getbtn_32x24_hData = btn_32x24_h.GetData
-getbtn_32x24_hImage = btn_32x24_h.GetImage
-getbtn_32x24_hBitmap = btn_32x24_h.GetBitmap
 
 #----------------------------------------------------------------------
 btn_down = PyEmbeddedImage(
@@ -1467,72 +927,6 @@ getbtn_downImage = btn_down.GetImage
 getbtn_downBitmap = btn_down.GetBitmap
 
 #----------------------------------------------------------------------
-btn_spectrum_h = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAAEIAAAAYCAYAAABOQSt5AAADKklEQVRYw+VYS0wTURQ9nXZm"
-    "+tVSWgoWopGCRFmAJmiUuJB0ZSIqK1moCSyRGLaaGBLXrtmYuGJL4mdh2xQwQGGlGKikQK2k"
-    "wRZKS7Bo//W9icOCtFK6gGl5zUkmnXen95z7mXfLOBwObnJy8uXU1FSAIHfCEKDc7XY7x2Sz"
-    "2eFEIvFse3vbsrW1hXA4fCJAuVLOlHsulxtmyEVfPB5HKpVCJpMBEeZIQH78WEF9oJwpd6oB"
-    "Q8ibqADizZMihAjKPZ1Om6gQe5lQaHM0GsXMzAxGR0cxMjIigF5PT08L90qNiBQgcmf+5yxR"
-    "Cm63G2Pv3uPjhgcTHYsY7x/HwoMJ/LzwCb6AAx/ejgki0b1SiXIpYApFiRKbm5vD/I9dOJVn"
-    "sHhFh0g3SaV7GbB30tB0hWFuXkBjxonE6jxmZ2cFm3IrjT0hCjm6srICX0gHV7QVSYsVqK8C"
-    "TssBDpCxAKsDTHVAS00S19fGYQz4BBuppPxhkVeIWCyGYOgP7AttyGkIW16JQktFhLEoc+h0"
-    "25FYXxdsy14IMU3I+xXffBcRz1aT0Ktx0NKQRDGmE7js8Qi25dQs94TI5xztpN7vjYBcg2KX"
-    "VkbKZHm5snqEUqlEKGIBGL5oIZREiPpIBDzPl39piGcKlUoFRq4Gq5AXLQSjUEBLnkFtxef8"
-    "D5ITIp9zHMfBem4XPCcrWggZaag7VqtgW+xBRkrI2ywVJLrX2jehUzPFC6HVYb2jQ7CtmGZJ"
-    "hhDcuhGE2QBUadkDRVDoqpCtNsPf1SXYVkyzTCaTkDMxPLaF0FSrhkFduGlyGgN4cuBa7XmE"
-    "HZYVbCvmQEVB53Vr3S886QRs5y1o1zegmtGDJx+O4JTCiDpTO8wtNsRuDyJytkmwqYiT5f4y"
-    "8fv90MsiGGg2YsBwFX25++jN9qJb0Qubth+XGgahaRvABqsX9h4m5SXdI/LN6j6fD0vzX1Ab"
-    "TKFn7SaGPEN4uPoUrdG7+B2tweevS8Ie8T+Nips+988eXq9XGLedTidcLpcwntPvSp0tpNgs"
-    "N4/DOYmVxibNiNeic0e5JJYRb6gQLwheEQTLucZLRPAf9+d/Ab9uVufanO7mAAAAAElFTkSu"
-    "QmCC")
-index.append('btn_spectrum_h')
-catalog['btn_spectrum_h'] = btn_spectrum_h
-getbtn_spectrum_hData = btn_spectrum_h.GetData
-getbtn_spectrum_hImage = btn_spectrum_h.GetImage
-getbtn_spectrum_hBitmap = btn_spectrum_h.GetBitmap
-
-#----------------------------------------------------------------------
-btn_32x16_a = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAACAAAAAQCAYAAAB3AH1ZAAAA0klEQVRIie3TMQqDQBCF4XGQ"
-    "7SwUguiKzdrbeKMcI4EQSJ0bBHI4C8ELiKibeRJDirTuNin+xuZ7jshVVSnpJrWSdVT7NhWH"
-    "YXiNouiUpqnO85y01rsGAxZM2BzH8VGWUF3X1DSNk2DBhM1FURyMMVSWJWVZ5iRYMGFzkiQk"
-    "56AgCGhZFprneddgwIIJm5VSH9xlMGHz9mDvN/91CcQ+8O8R7AvfWgdM0+SldcD/E1hrnf+C"
-    "W7Bxgd7jBXpc4IElnnryMAyXcRzvsqZz+OYdTLHPLyBBsKlH7JbtAAAAAElFTkSuQmCC")
-index.append('btn_32x16_a')
-catalog['btn_32x16_a'] = btn_32x16_a
-getbtn_32x16_aData = btn_32x16_a.GetData
-getbtn_32x16_aImage = btn_32x16_a.GetImage
-getbtn_32x16_aBitmap = btn_32x16_a.GetBitmap
-
-#----------------------------------------------------------------------
-btn_256x48_h = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAAQAAAAAwCAYAAAD+f6R/AAABLElEQVR42u3ZXUrDQBSA0QkZ"
-    "uoOA0J35JHQTBUXRfQh9cjNZhyB0A/lr4h3RLfiQOQeGpu3bQL7cJLnv+0N4btv2IaV0TMDe"
-    "fd5ut8s0TW85Dl6HYTjHl7QsS9q2zfbATjVNk3LOx7joP8a53uZxHE/lx3LyA/tWLvDzPP98"
-    "xjqVCaD7+wOow+8Fv8vrutoNqHASKLIrP9RLAKDmANgCMAEAAgAIAFBHALwGBBMAIACAAAAC"
-    "AAgAsNcAeAsAJgBAAAABADwDAAQAcAsACADgFgAwAQACALgFAEwAgAAAAgB4BgCYAAABAAQA"
-    "EABAAIB/DoC3AGACAAQAEACgjgDYAjABAAIA1BaAa3x2tgKqcy0BeI+Ds72A6lzKQ8CXWIdY"
-    "97Hu7Ans3lesj1hP3/vlv0DdNAxWAAAAAElFTkSuQmCC")
-index.append('btn_256x48_h')
-catalog['btn_256x48_h'] = btn_256x48_h
-getbtn_256x48_hData = btn_256x48_h.GetData
-getbtn_256x48_hImage = btn_256x48_h.GetImage
-getbtn_256x48_hBitmap = btn_256x48_h.GetBitmap
-
-#----------------------------------------------------------------------
-btn_16x16_a = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAA0ElEQVQ4jcWRMQqDQBREvx/Z"
-    "zkIhiK7YaG/jjXKMBEIgdW4QyOEsBC8gom7+SAwpgtFNkeI1y7zZWZbzPFfCRagEs5Lq6Sh2"
-    "Xffsed4hDEMdxzFprRdBBlk4cNn3/b00UVEUVJblKpCFA5eTJNllWUZpmlIURatAFg5cDoKA"
-    "ZA45jkPjONIwDIsggywcuKyUeslbgAOX54NvN39aAthGfi9hW3lmKuj73oqp4P9PMMZs/sIZ"
-    "uFjQ/LCgwYIbmiy5c9u2p67rrtJWb7i5hiPu8QHuT0yLLm+SWAAAAABJRU5ErkJggg==")
-index.append('btn_16x16_a')
-catalog['btn_16x16_a'] = btn_16x16_a
-getbtn_16x16_aData = btn_16x16_a.GetData
-getbtn_16x16_aImage = btn_16x16_a.GetImage
-getbtn_16x16_aBitmap = btn_16x16_a.GetBitmap
-
-#----------------------------------------------------------------------
 btn_blue_32_a = PyEmbeddedImage(
     "iVBORw0KGgoAAAANSUhEUgAAAAwAAAAgCAYAAAAmG5mqAAABQUlEQVQ4y7WUTVICQQxGX9KZ"
     "H3AAmVLO4MoLuPUYegV2uvMCegV3nE9YuEAHnLiYQWFAZCj9qrJL+uXrdEe4uIrx8olgN4jm"
@@ -1546,91 +940,6 @@ catalog['btn_blue_32_a'] = btn_blue_32_a
 getbtn_blue_32_aData = btn_blue_32_a.GetData
 getbtn_blue_32_aImage = btn_blue_32_a.GetImage
 getbtn_blue_32_aBitmap = btn_blue_32_a.GetBitmap
-
-#----------------------------------------------------------------------
-btn_64x16_a = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAAEAAAAAQCAYAAACm53kpAAAA20lEQVRYw+3VMQqDQBCF4XGQ"
-    "7SwUguiKzdrbeKMcI4EQSJ0bBHI4C8ELiKibeRJDipzASfE3232zsyxXVWWkm9RKXknt22w4"
-    "DMNrFEWnNE1tnudkrd11MMIKM+wcx/FRJkF1XVPTNCqCFWbYuSiKg3OOyrKkLMtUBCvMsHOS"
-    "JCTrQEEQ0LIsNM/zroMRVphhZ2PMB68pmGHn7WDvN/9rExBrxH8PgbXit9YBTNOksnUA/yeg"
-    "/Ql479V9gVuwYwN6xRvQYwMemITSnjwMw2Ucx7tMo1N08x3MYj+/AAaUePTes9+aAAAAAElF"
-    "TkSuQmCC")
-index.append('btn_64x16_a')
-catalog['btn_64x16_a'] = btn_64x16_a
-getbtn_64x16_aData = btn_64x16_a.GetData
-getbtn_64x16_aImage = btn_64x16_a.GetImage
-getbtn_64x16_aBitmap = btn_64x16_a.GetBitmap
-
-#----------------------------------------------------------------------
-btn_256x24_a = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAAQAAAAAYCAYAAAAVgCMkAAABHklEQVR42u3YQWqEQBCF4bKU"
-    "3gkKBsEobjyAC280x0ggBLLODQI53CwG5gaidrrCzCWsv+BbuG14hfV0mqaQfCXXJAI4vesj"
-    "80GLovgsy/KtbdvXNNL3PYCTsoxb1i3zln2t6/qSNoHM8yzLsgA4Ocu6Zd6yr8MwvNjHOI7S"
-    "dR2Ak7OsW+Yt+9o0jVRVJXmei02MEcBJ2VjWLfOWfQ0hSJZlchwHACcs85Z9fW4GHgXw45l7"
-    "JfyA3yWg3EWAX8omBPziBAA8nwD7vgsAn+gAAO8dAJsQ8Oe/A+AWAigBAXgsAXkIwPkfAACn"
-    "JSAnAMAJAMDjCcAjAI4XgIjchWEYj3O3P4AfNiHg0q+u6/qxbdt3jPFGKwq4cLPMp+y//wGK"
-    "mCXy/8ILmgAAAABJRU5ErkJggg==")
-index.append('btn_256x24_a')
-catalog['btn_256x24_a'] = btn_256x24_a
-getbtn_256x24_aData = btn_256x24_a.GetData
-getbtn_256x24_aImage = btn_256x24_a.GetImage
-getbtn_256x24_aBitmap = btn_256x24_a.GetBitmap
-
-#----------------------------------------------------------------------
-btn_sml = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAADAAAAAQCAYAAABQrvyxAAAAQUlEQVRIx+3WQQ0AQAgDQR74"
-    "t4ULlAA9D/drsnUw2QdkVSmMl90d1gBJ3oDd9QbcHQUAAHAGzAwFAHDIKMAz970H8FovwHuR"
-    "KXwAAAAASUVORK5CYII=")
-index.append('btn_sml')
-catalog['btn_sml'] = btn_sml
-getbtn_smlData = btn_sml.GetData
-getbtn_smlImage = btn_sml.GetImage
-getbtn_smlBitmap = btn_sml.GetBitmap
-
-#----------------------------------------------------------------------
-btn_big_a = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAAFAAAAAsCAYAAADy8T8XAAAC1UlEQVRo3u2Zz4tSURTHr89R"
-    "R8dfKKjjonGhawMhaDvof1AE7doErdsELYII2rXtD4jathxFyIUyULQVTNy0CEYlf0D4I/zR"
-    "/b44cn2+N6YzFPHOhQ+ed+c5cD+cc+69M1o+nxeFQkFks9mI5KnkXPKZMeWj5KXkBpzBnSaH"
-    "6HQ6pw6H43sgEHgRj8dvJxKJ3PHxcS6ZTDISuIAT6eZWMBh8Il19lc7uw50mH4Qcj6LRqABH"
-    "R0fC7/frSKE68ku2hNYPyEkkEhGxWExIb2/b7bZbu7i4OD08PLwTCoWE2+0WHo9HyGfh9Xr1"
-    "T5/Pp8d2hNYODwBuAEmV46GG7AuHwxvy6BcQyEw7oa5dFQlPABkqxz0IzMEmiaMvUAlT6toZ"
-    "o1TKQjluQmCEzBol2jHzrDKRqpLKGcg+6IdA4XK5VvWtvqD2A3XeDpj1RHIEX0DfhUkgoPo2"
-    "Nk27yTNbP8Xk6ODgAOp+C3Q6nfoESVRjQILthipL9YDnNYFIRZokeeqLdgcukGTkBDFYE2gG"
-    "XrL6mV0gB6oLilcCcRthdmdNoNlYLpeCh7WflUCIMsqiOWYdS4EsbT+RmrFcjS+xLHN59MkZ"
-    "uGPGmWYgJhaLBfMHqK42NhFm96xkgVfciTU+ulxjBrLEKwg0a5LM5ZvJxjmQ2e04Y3kOZKHX"
-    "sAuzxO1ONnog9789eyBnF9+F/20PZHn7ZZ9pCbNMvgv/lR2YBV7TYVoz+0cSwyXMAv+7m4h6"
-    "G7F6Zjb/ZgCBP+bzOR9htqBedZUr7xwCv0wmE9P7MGfh+vrVGM7gDgLf9Pt9FrZFnnF+OBxC"
-    "4HsIfDcYDMRoNBIoZWI2m+mosd2wWvt0OhXdbhcCX2snJyc/pdXHrVZL9Ho9FneJRMTIvGaz"
-    "ifh5KpX6pmEynU6/klbvNhqND7VaTVQqFVEul0WpVBJnZ2e2plgs6i7gpFqtinq9/mk8Hj/I"
-    "ZDLP4O4Xk7+LdlfUonsAAAAASUVORK5CYII=")
-index.append('btn_big_a')
-catalog['btn_big_a'] = btn_big_a
-getbtn_big_aData = btn_big_a.GetData
-getbtn_big_aImage = btn_big_a.GetImage
-getbtn_big_aBitmap = btn_big_a.GetBitmap
-
-#----------------------------------------------------------------------
-btn_contrast = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAAEIAAAAYCAYAAABOQSt5AAACnUlEQVRYw+VYTWtaURAd9fmN"
-    "koWCEoMf2QjBTcRt/oD/IG4KWcSfEGhpaf9HIau6cO1CEEEEN5EsRBSTKH6SooIaDSrG2HuG"
-    "touSGl2+9waGd7m8eTDnzp1z5knFYtFgMpk+bzabD6+vr4fiSWowrVYL761Wq+vZbPZNmk6n"
-    "X0ej0dXT0xOJTVILEJIkkcViOTSbzR/X67VOEiBciAWDoCZDvqIIaLFY4PAvpOVy6RRXgtRo"
-    "KADkLoBwSi8vL+8GjMdjqtVq1G63GUWYzWajo6MjCgaDdHBwIP+rsq0agNjt7S3d3d3RYDAg"
-    "o9HIyfv9frLb7TQcDimTyfDe6ekp6XQ6+QLxv+YIgASjUKVSoUKhQA6Hg0KhEFcAkj4+PubO"
-    "e39/T/l8nm5ubigSifCeoiqi0WhQs9mkXC7HTKLX69lx6ui4qAiv18vV4PP5KJVKcUwgEFAO"
-    "EPP5nPr9PmWz2XfpFIAg+Wg0SolEgp6fn0lQkjKAEJRK1WqVqWUXAxgul4vC4TA3VfQSRQCB"
-    "vYeHh70+BBY5OTlhAOVIx28CgRMFS+xjuA4ej4djFQMEkkL3R3PcVXHifVQFYmUJBLTCv2Yw"
-    "GJgeO53OXtIbwguxcpTrb1YEKBKaAImJyWznj3W7XY4Vsl0ZQCCRs7MzKpVKzBxgkV2GmHq9"
-    "zrGK6RFIBvc9FotRMpnciUGgQieTiSyrYauyBGugT8TjcUqn0zxsARyU/u+fGvwehrZyuUyP"
-    "j48cI9f/GVuHLlQCwLi8vKRer8eK0+l0ktvtJo1GQ61Wi5PHE9dCzuO8tO0EwSiYPK1W69+p"
-    "E2skjDkEIIBZIKsVPYb/MVwLTKFwpRqAgIR0krptgKvxXSyuVA7ENYD4AjEp/Fy4S2UA/BT+"
-    "Q/inX0mpkmwUmZesAAAAAElFTkSuQmCC")
-index.append('btn_contrast')
-catalog['btn_contrast'] = btn_contrast
-getbtn_contrastData = btn_contrast.GetData
-getbtn_contrastImage = btn_contrast.GetImage
-getbtn_contrastBitmap = btn_contrast.GetBitmap
 
 #----------------------------------------------------------------------
 btn_blue_16 = PyEmbeddedImage(
@@ -1647,63 +956,6 @@ getbtn_blue_16Image = btn_blue_16.GetImage
 getbtn_blue_16Bitmap = btn_blue_16.GetBitmap
 
 #----------------------------------------------------------------------
-btn_spec = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAAJwAAAAwCAYAAADkZhPYAAADiklEQVR42u2cO0/bUBiGTwzk"
-    "wmUo/4SVLQv5FR27duzWpWO3du7Gz4CRgQUpUkS4hPtNRJAECAETMKmfUxwZkVBCbKuq3k96"
-    "hIFcpOPX7/m+7xzbWVxcTC8tLf1YXl6u+XSEiIE6GltYWEg7Dw8P329ubj5Xq9Xp4+Njc3R0"
-    "JERkoClfWx/QmOd53xzXdT/6v5h2u20eHx9Np9MRIjLQFNpCY77WPuFw0z5GoYgz0Bhac1Cg"
-    "nE0k4XTgaDBEkjgye0WSIYcTyTqcBkFIcEKCE+KfFJxaLCJRwa2vr5v9/X0NrohfcJ7nmVKp"
-    "ZIrFogZXxC+4zc1NMzIyYu7v7+VyIl7BsVaG4CYnJy3lcln5nIhPcBsbG8ZxHJNOp00mk7E7"
-    "BPb29jTIInrBMYVubW2ZbDZrp1SENz4+bgsI8joNtOgKLljFHwaENTo6at2NSKVS9hix7ezs"
-    "mCi+Q/wfDO1wTJ27u7sml8tZZ+su0vrH/K1SqSiXE9FNqbgbbjY2NvZsV0DgcgTTrQZbDC04"
-    "13XN4eGhzd3C7hYE+Rwut729batYDbhw4nC3cPA/xIjoNODi3UUDN0WcnJy8yN36uRx5HtWs"
-    "EmcVDe/uuzGVUp3+LXBBXkcBoatcU+rAb8LdqtVq39ztxbbip4qVfI+qVgMvwQ3sbgjoLe4W"
-    "zuVwOlWsEtxAb2g2m+b8/NwuX/VyN17Tz+VwRO7Evru70+CraHgbLNDjbr0q09vbW7O2tmYd"
-    "EFH1cjmEGjSDhYqGV7m6ujIXFxfWqWjshl3t9PTUig3RXV9f290iOGEvlyP/o4enK15T6quQ"
-    "f7EoH87dEA6OxlQZnk5RM3vicDPaIWGXQ3Tqy0lwr4Kz4XBMiYG74VQ4WavV6lss8J7V1VVT"
-    "r9efudzZ2Zl1Q50ECa4nOFLgbuRnuBqPY+pXJISDXSM0foMlLj4D0alileB6gjvRe8PdyMtw"
-    "NfK0QQOXxO0uLy+t4BqNhnVHnQgJ7hm4E7kXPw8ODmx+Nsxjm9gjhzvSl+NYJ0JtkS61Ws3m"
-    "agiDHlxUgbshYNZj+Vy1DNQWsaysrNhKlBtjpqamImViYsJOzbqtUFNql9nZWTM3N2fy+Xws"
-    "FAoFMzMzo5Mhwf2BQoH8jcoyDoLVB50MPZBQodADCYXuSxVCghMSnBASnEi+Sq2rdlIkFHUc"
-    "bl5XnkiIXzjcF5+fLG/qAlTEFI0njX39DYBtDGbmoy+2AAAAAElFTkSuQmCC")
-index.append('btn_spec')
-catalog['btn_spec'] = btn_spec
-getbtn_specData = btn_spec.GetData
-getbtn_specImage = btn_spec.GetImage
-getbtn_specBitmap = btn_spec.GetBitmap
-
-#----------------------------------------------------------------------
-btn_opt = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAAFwAAAAwCAYAAACc2R15AAACKElEQVR42u2avW7CQBCElwOM"
-    "+Mcu+KnhtVKmTZkuTcp0SYu78BZQUvAgUFAEOoQQxvGgnGQpYIfYd0UyK40E4kTx3Xp2b31q"
-    "Nps58/n8dbFYfEQKKSPagPF0OnXU8Xh82e12D+v12lutVrJcLqkcBaYRWxeMgyB4Vvv9/i76"
-    "IofDQU6nk4RhSOUoMAVbMI5Y3yPDvUjCMBtgDNYKO8DMtpPpkCIMu1J82O0GM9x2hhMCgRM4"
-    "ReB/Gzia9vF4LL7vpwrrJpMJ4WYBrpSS4XAo/X5fBoNBorBmNBoRblZL6fV6Uq/XpdlsJqpW"
-    "q0m32yXcrMA7nY4EQZDa2GON53mEmxU4IGIWkBblcvn8JBBuRuDFYlGq1er587XAhsBWCDYB"
-    "uJ5i/UStVisxy2En7XZbbvnP/6ab+nDATPJx/Oa6LjM5r4MPYCZleKlUOncpBJsTcACtVCoX"
-    "fRwb0Wg0CDXvoz2gXspy2AkLZs5FU3ch14CjV2dhzLFoah+/9NIZbSP924Cl4GDjOM43/+Zh"
-    "x+B4FnDjtsKCaRg44Mb7cVgMDkUEaqBo6hNnHDjGt/BvFkUDRRNCL44iqe2ExdLCKzYMsvSu"
-    "sWBaAA7IsBX4Nw88FoADMoAXCgVaii1LQegZOWXhmgSKJ4FbaAu1AFsPsyiDbWF8rkL/tmwp"
-    "hMirbryQz+CFfFoKgVMETuDUr7qUDXsHa7FBhr8z86zJR4Y/RnqLtGUCGovtF+OnT8WtjJUO"
-    "6+06AAAAAElFTkSuQmCC")
-index.append('btn_opt')
-catalog['btn_opt'] = btn_opt
-getbtn_optData = btn_opt.GetData
-getbtn_optImage = btn_opt.GetImage
-getbtn_optBitmap = btn_opt.GetBitmap
-
-#----------------------------------------------------------------------
-btn_sml_h = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAADAAAAAQCAYAAABQrvyxAAAAQklEQVRIx+3WQQ0AAAgCQB/2"
-    "r2QkC6gYwzGhwQ0eeETAiOOZadQAANyAmRHgFNDdAmhCrxuoKk1IE3oNoL8SauA4C1WEL+e9"
-    "r19TAAAAAElFTkSuQmCC")
-index.append('btn_sml_h')
-catalog['btn_sml_h'] = btn_sml_h
-getbtn_sml_hData = btn_sml_h.GetData
-getbtn_sml_hImage = btn_sml_h.GetImage
-getbtn_sml_hBitmap = btn_sml_h.GetBitmap
-
-#----------------------------------------------------------------------
 btn_blue_24_a = PyEmbeddedImage(
     "iVBORw0KGgoAAAANSUhEUgAAAAwAAAAYCAYAAADOMhxqAAABPklEQVQ4jZWUS1ICQRBEX1XX"
     "zMDwETDkDK68gFuPoVdgpzsvoFdwx/mEhQuUT5eLHuQjwTAZkdGbzMrs6ogWbu9zPL4T7BHR"
@@ -1717,21 +969,6 @@ catalog['btn_blue_24_a'] = btn_blue_24_a
 getbtn_blue_24_aData = btn_blue_24_a.GetData
 getbtn_blue_24_aImage = btn_blue_24_a.GetImage
 getbtn_blue_24_aBitmap = btn_blue_24_a.GetBitmap
-
-#----------------------------------------------------------------------
-btn_256x48 = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAAQAAAAAwCAYAAAD+f6R/AAABLUlEQVR42u3aP0rEQBTA4WEK"
-    "b2Dl8TyGggjW3kDwIClT5CAJLNk+gfw1T3RPsFXme/DBwnaB92NmN7mqqoe6rj+apmkPO3B6"
-    "bex87H5e1/V9HMeXvu+fuq5LbdsCJxU7HrseOx+7n48Pz8MwpGma0r7vyRhz3okdj12PnY/d"
-    "z8uyPM7z/PsFUIbY+dj9vG1bCh4KlON/77NDkTHlzu0EAJTHCcCYkk8A7kNQLgEAAQAEABAA"
-    "QAAAAQAEABAA4EQB8DokFPwqsAqCKwAgAIAAAAIA+BcA8C8A4AoACAAgAIAfAQE/AgKuAIAA"
-    "AAIACAAgAIAAAAIACAAgAIAAAAIACAAgAIAAAPcMQDLGFDtxArgqIRTpGgH48iCgSN9xBXg7"
-    "fB4uDkTGFDGXv51//QHcNaLbuMhgvAAAAABJRU5ErkJggg==")
-index.append('btn_256x48')
-catalog['btn_256x48'] = btn_256x48
-getbtn_256x48Data = btn_256x48.GetData
-getbtn_256x48Image = btn_256x48.GetImage
-getbtn_256x48Bitmap = btn_256x48.GetBitmap
 
 #----------------------------------------------------------------------
 btn_blue_32 = PyEmbeddedImage(
@@ -1921,6 +1158,24 @@ catalog['ico_ang_orange'] = ico_ang_orange
 getico_ang_orangeData = ico_ang_orange.GetData
 getico_ang_orangeImage = ico_ang_orange.GetImage
 getico_ang_orangeBitmap = ico_ang_orange.GetBitmap
+
+#----------------------------------------------------------------------
+ico_bgr = PyEmbeddedImage(
+    "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABtElEQVQ4EZXBQUtUURzG4d89"
+    "d7BCdy3aBQlB6iIhWgYhQ2iJ1ba1YUEQ80VsFSHZZ2glzGJwEWHRLhSpIDPIFl7NHGece889"
+    "5/92AxduROd5EkkcN/MwG+2Mfp3dufVhyt9cuaKL61z7vrtxu2nNibdh8Xqrvc4xNY5MP8gG"
+    "0pR5wdMimGuXBbm1Mfboxv2REGojqPacoaHXeN/A+x6VGpXp+9mAcyyVJfW8Jzq9gLdAxABh"
+    "REIIWJ44inQO6SppOkWM3vFfwosyqH54aJRBnEiCGEGaODCbp+LuzmRjMWquyCFGTieBRIQn"
+    "WZKMOTPNxkhaBnFmEhcgbcOsk5gMgb6dAwqYdGYMxyD6JaCAYSeBib55wIN3Zmwgo19twMNP"
+    "Z6YmiaNfO4CHljPjDRClkrP6A2xDFCy6d8uX1szyhRh7SJHTdIFvwD4s1KU1RyXGbiOGg1Yo"
+    "95BKTtIOsApswfJ5aFBxVD6+H/Uk7l5RbL3sdr9Y2clQUUIQyoXfgd9b8PkA24CFQZi+I3kq"
+    "NY58Whn3wLPxG0uv8t3Nx371x2TId4c16P3fX2xm27QuG4uPpDWO+QfKhQu8i7UjWAAAAABJ"
+    "RU5ErkJggg==")
+index.append('ico_bgr')
+catalog['ico_bgr'] = ico_bgr
+getico_bgrData = ico_bgr.GetData
+getico_bgrImage = ico_bgr.GetImage
+getico_bgrBitmap = ico_bgr.GetBitmap
 
 #----------------------------------------------------------------------
 ico_optical = PyEmbeddedImage(
