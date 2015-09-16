@@ -137,7 +137,7 @@ class BtnMixin(object):
     }
 
     def __init__(self, *args, **kwargs):
-        self.height = kwargs.pop('height', None) or 48
+        self.height = kwargs.pop('height', None)
         self.face_colour = kwargs.pop('face_colour', 'def') or 'def'
         kwargs['style'] = kwargs.get('style', 0) | wx.NO_BORDER | wx.BU_EXACTFIT
         kwargs['bitmap'] = None
@@ -220,8 +220,9 @@ class BtnMixin(object):
         return dst_bmp
 
     def _reset_bitmaps(self):
-        self.bmpLabel = self._create_main_bitmap()
-        self.bmpHover = self.bmpDisabled = self.bmpSelected = None
+        if self.height:
+            self.bmpLabel = self._create_main_bitmap()
+            self.bmpHover = self.bmpDisabled = self.bmpSelected = None
 
     def _create_main_bitmap(self):
         return self._create_bitmap(
@@ -240,11 +241,11 @@ class BtnMixin(object):
         )
 
     def _create_disabled_bitmap(self):
-        image = self.btns[self.height][self.face_colour]['off'].GetImage()
-        darken_image(image, 0.9)
+        image = self.bmpLabel.ConvertToImage()
+        darken_image(image, 0.8)
         return self._create_bitmap(
             wx.BitmapFromImage(image),
-            (self.Size.x, self.height),
+            (self.Size.x, self.height or self.Size.y),
             self.Parent.GetBackgroundColour()
         )
 
@@ -1265,6 +1266,9 @@ class NPopupImageButton(NImageTextButton):
         self.bmpLabel = imgdata.stream_add.Bitmap
         self.bmpSelected = imgdata.stream_add_a.Bitmap
         self.bmpHover = imgdata.stream_add_h.Bitmap
+        img = imgdata.stream_add.GetImage()
+        darken_image(img, 0.8)
+        self.bmpDisabled = wx.BitmapFromImage(img)
 
         self.choices = {}
         self.menu = wx.Menu()
