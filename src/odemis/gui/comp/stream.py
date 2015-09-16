@@ -133,7 +133,7 @@ class StreamPanelHeader(wx.Control):
 
     def _add_remove_btn(self):
         """ Add a button for stream removal """
-        btn_rem = buttons.NImageButton(self.Parent, bitmap=img.getico_rem_strBitmap(),
+        btn_rem = buttons.ImageButton(self.Parent, bitmap=img.getico_rem_strBitmap(),
                                        size=self.BUTTON_SIZE)
         btn_rem.bmpHover = img.getico_rem_str_hBitmap()
         btn_rem.SetToolTipString("Remove stream")
@@ -164,7 +164,7 @@ class StreamPanelHeader(wx.Control):
         if not hasattr(self.Parent.stream, "tint"):
             return None
 
-        tint_btn = buttons.NColourButton(
+        tint_btn = buttons.ColourButton(
             self, -1,
             size=self.BUTTON_SIZE,
             colour=self.Parent.stream.tint.value,
@@ -181,7 +181,7 @@ class StreamPanelHeader(wx.Control):
 
     def _add_visibility_btn(self):
         """ Add the visibility toggle button to the stream panel header """
-        visibility_btn = buttons.NImageToggleButton(self.Parent,
+        visibility_btn = buttons.ImageToggleButtonImageButton(self.Parent,
                                                     bitmap=img.getico_eye_closedBitmap())
         visibility_btn.bmpHover = img.getico_eye_closed_hBitmap()
         visibility_btn.bmpSelected = img.getico_eye_openBitmap()
@@ -193,7 +193,7 @@ class StreamPanelHeader(wx.Control):
 
     def _add_update_btn(self):
         """ Add a button for (de)activation of the stream """
-        update_btn = buttons.NImageToggleButton(self.Parent,  bitmap=img.getico_pauseBitmap())
+        update_btn = buttons.ImageToggleButtonImageButton(self.Parent,  bitmap=img.getico_pauseBitmap())
         update_btn.bmpHover = img.getico_pause_hBitmap()
         update_btn.bmpSelected = img.getico_playBitmap()
         update_btn.bmpSelectedHover = img.getico_play_hBitmap()
@@ -694,7 +694,7 @@ class StreamPanel(wx.Panel):
     def add_autobc_ctrls(self):
         """ Create and return controls needed for (auto) brightness and contrast manipulation """
 
-        btn_autobc = buttons.NImageTextToggleButton(self._panel, height=24,
+        btn_autobc = buttons.ImageTextToggleButton(self._panel, height=24,
                                                     icon=img.ico_contrast.Bitmap,
                                                     label="Auto")
         btn_autobc.SetToolTipString("Toggle auto brightness and contrast")
@@ -1095,7 +1095,7 @@ class StreamPanel(wx.Panel):
         # A button, but not clickable, just to show the wavelength
         # If a dye is selected, the colour of the peak is used, otherwise we
         # use the hardware setting
-        btn_color = buttons.NColourButton(self._panel, -1, colour=center_wl_color,
+        btn_color = buttons.ColourButton(self._panel, -1, colour=center_wl_color,
                                           size=(18, 18))
         self.gb_sizer.Add(btn_color,
                           (self.num_rows, 2),
@@ -1114,7 +1114,7 @@ class StreamPanel(wx.Panel):
 
         """
 
-        btn_fit_rgb = buttons.NImageTextToggleButton(self._panel, height=24,
+        btn_fit_rgb = buttons.ImageTextToggleButton(self._panel, height=24,
                                                      icon=img.ico_bgr.Bitmap, label="RGB")
         btn_fit_rgb.SetToolTipString("Toggle sub-bandwidths to Blue/Green/Red display")
 
@@ -1271,7 +1271,7 @@ class StreamBar(wx.Panel):
         self.btn_add_stream = None
 
         if add_btn:
-            self.btn_add_stream = buttons.NPopupImageButton(
+            self.btn_add_stream = buttons.PopupImageButton(
                 self, -1,
                 label="ADD STREAM",
                 style=wx.ALIGN_CENTER

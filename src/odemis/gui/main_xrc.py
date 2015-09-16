@@ -20,12 +20,12 @@ class xrcfr_main(wx.Frame):
 #!XRCED:begin-block:xrcfr_main.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcfr_main.PreCreate
 
     def __init__(self, parent):
@@ -70,12 +70,12 @@ class xrcpnl_tab_secom_align(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_secom_align.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcpnl_tab_secom_align.PreCreate
 
     def __init__(self, parent):
@@ -126,12 +126,12 @@ class xrcpnl_tab_sparc_align(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_sparc_align.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcpnl_tab_sparc_align.PreCreate
 
     def __init__(self, parent):
@@ -177,12 +177,12 @@ class xrcpnl_tab_sparc_chamber(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_sparc_chamber.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcpnl_tab_sparc_chamber.PreCreate
 
     def __init__(self, parent):
@@ -201,12 +201,12 @@ class xrcpnl_tab_sparc_acqui(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_sparc_acqui.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcpnl_tab_sparc_acqui.PreCreate
 
     def __init__(self, parent):
@@ -250,12 +250,12 @@ class xrcpnl_tab_inspection(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_inspection.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcpnl_tab_inspection.PreCreate
 
     def __init__(self, parent):
@@ -297,12 +297,12 @@ class xrcpnl_tab_secom_streams(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_secom_streams.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcpnl_tab_secom_streams.PreCreate
 
     def __init__(self, parent):
@@ -357,12 +357,12 @@ class xrcfr_acq(wx.Dialog):
 #!XRCED:begin-block:xrcfr_acq.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcfr_acq.PreCreate
 
     def __init__(self, parent):
@@ -561,7 +561,7 @@ def __init_resources():
           <object class="wxBoxSizer">
             <orient>wxHORIZONTAL</orient>
             <object class="sizeritem">
-              <object class="NTabButton" name="btn_tab_secom_streams">
+              <object class="TabButton" name="btn_tab_secom_streams">
                 <size>160,30</size>
                 <face_colour>def</face_colour>
                 <label>STREAMS</label>
@@ -582,7 +582,7 @@ def __init_resources():
               <border>20</border>
             </object>
             <object class="sizeritem">
-              <object class="NTabButton" name="btn_tab_sparc_acqui">
+              <object class="TabButton" name="btn_tab_sparc_acqui">
                 <size>160,30</size>
                 <face_colour>def</face_colour>
                 <label>ACQUISITION</label>
@@ -603,7 +603,7 @@ def __init_resources():
               <border>20</border>
             </object>
             <object class="sizeritem">
-              <object class="NTabButton" name="btn_tab_inspection">
+              <object class="TabButton" name="btn_tab_inspection">
                 <size>160,30</size>
                 <face_colour>def</face_colour>
                 <label>ANALYSIS</label>
@@ -628,7 +628,7 @@ def __init_resources():
               <flag>wxEXPAND</flag>
             </object>
             <object class="sizeritem">
-              <object class="NTabButton" name="btn_tab_secom_align">
+              <object class="TabButton" name="btn_tab_secom_align">
                 <size>160,30</size>
                 <face_colour>def</face_colour>
                 <label>LENS ALIGNMENT</label>
@@ -649,7 +649,7 @@ def __init_resources():
               <border>20</border>
             </object>
             <object class="sizeritem">
-              <object class="NTabButton" name="btn_tab_sparc_chamber">
+              <object class="TabButton" name="btn_tab_sparc_chamber">
                 <size>160,30</size>
                 <face_colour>def</face_colour>
                 <label>CHAMBER</label>
@@ -670,7 +670,7 @@ def __init_resources():
               <border>20</border>
             </object>
             <object class="sizeritem">
-              <object class="NTabButton" name="btn_tab_sparc_align">
+              <object class="TabButton" name="btn_tab_sparc_align">
                 <size>160,30</size>
                 <face_colour>def</face_colour>
                 <label>ALIGNMENT</label>
@@ -848,7 +848,7 @@ def __init_resources():
                     <cellpos>3,3</cellpos>
                   </object>
                   <object class="sizeritem">
-                    <object class="NImageTextButton" name="lens_align_btn_m_aligner_b">
+                    <object class="ImageTextButton" name="lens_align_btn_m_aligner_b">
                       <size>64,-1</size>
                       <height>48</height>
                       <label>↖</label>
@@ -869,7 +869,7 @@ def __init_resources():
                     <cellpos>1,1</cellpos>
                   </object>
                   <object class="sizeritem">
-                    <object class="NImageTextButton" name="lens_align_btn_p_aligner_a">
+                    <object class="ImageTextButton" name="lens_align_btn_p_aligner_a">
                       <size>64,-1</size>
                       <height>48</height>
                       <label>↗</label>
@@ -890,7 +890,7 @@ def __init_resources():
                     <cellpos>1,2</cellpos>
                   </object>
                   <object class="sizeritem">
-                    <object class="NImageTextButton" name="lens_align_btn_m_aligner_a">
+                    <object class="ImageTextButton" name="lens_align_btn_m_aligner_a">
                       <size>64,-1</size>
                       <height>48</height>
                       <label>↙</label>
@@ -911,7 +911,7 @@ def __init_resources():
                     <cellpos>2,1</cellpos>
                   </object>
                   <object class="sizeritem">
-                    <object class="NImageTextButton" name="lens_align_btn_p_aligner_b">
+                    <object class="ImageTextButton" name="lens_align_btn_p_aligner_b">
                       <size>64,-1</size>
                       <height>48</height>
                       <label>↘</label>
@@ -1012,7 +1012,7 @@ def __init_resources():
                     <cellpos>2,0</cellpos>
                   </object>
                   <object class="sizeritem">
-                    <object class="NImageTextButton" name="lens_align_btn_p_aligner_y">
+                    <object class="ImageTextButton" name="lens_align_btn_p_aligner_y">
                       <size>64,-1</size>
                       <height>48</height>
                       <label>↑</label>
@@ -1033,7 +1033,7 @@ def __init_resources():
                     <cellpos>1,2</cellpos>
                   </object>
                   <object class="sizeritem">
-                    <object class="NImageTextButton" name="lens_align_btn_m_aligner_y">
+                    <object class="ImageTextButton" name="lens_align_btn_m_aligner_y">
                       <size>64,-1</size>
                       <height>48</height>
                       <label>↓</label>
@@ -1054,7 +1054,7 @@ def __init_resources():
                     <cellpos>3,2</cellpos>
                   </object>
                   <object class="sizeritem">
-                    <object class="NImageTextButton" name="lens_align_btn_m_aligner_x">
+                    <object class="ImageTextButton" name="lens_align_btn_m_aligner_x">
                       <size>64,-1</size>
                       <height>48</height>
                       <label>←</label>
@@ -1073,7 +1073,7 @@ def __init_resources():
                     <cellpos>2,1</cellpos>
                   </object>
                   <object class="sizeritem">
-                    <object class="NImageTextButton" name="lens_align_btn_p_aligner_x">
+                    <object class="ImageTextButton" name="lens_align_btn_p_aligner_x">
                       <size>64,-1</size>
                       <height>48</height>
                       <label>→</label>
@@ -1120,7 +1120,7 @@ def __init_resources():
                         <flag>wxEXPAND</flag>
                       </object>
                       <object class="sizeritem">
-                        <object class="NImageTextButton" name="lens_align_btn_to_center">
+                        <object class="ImageTextButton" name="lens_align_btn_to_center">
                           <height>24</height>
                           <label>Move to center</label>
                           <style>wxALIGN_CENTRE</style>
@@ -1147,7 +1147,7 @@ def __init_resources():
                       <object class="sizeritem">
                         <object class="wxBoxSizer">
                           <object class="sizeritem">
-                            <object class="NImageTextButton" name="btn_auto_center">
+                            <object class="ImageTextButton" name="btn_auto_center">
                               <height>24</height>
                               <label>Auto centering...</label>
                               <style>wxALIGN_CENTRE</style>
@@ -1193,7 +1193,7 @@ def __init_resources():
                       <object class="sizeritem">
                         <object class="wxBoxSizer">
                           <object class="sizeritem">
-                            <object class="NImageTextButton" name="btn_fine_align">
+                            <object class="ImageTextButton" name="btn_fine_align">
                               <height>24</height>
                               <label>Fine alignment...</label>
                               <style>wxALIGN_CENTRE</style>
@@ -1295,7 +1295,7 @@ def __init_resources():
                 <object class="wxBoxSizer">
                   <orient>wxHORIZONTAL</orient>
                   <object class="sizeritem">
-                    <object class="NImageTextToggleButton" name="lens_align_btn_sem">
+                    <object class="ImageTextToggleButton" name="lens_align_btn_sem">
                       <icon>img_icon_ico_sem_png</icon>
                       <icon_on>img/icon/ico_sem_green.png</icon_on>
                       <height>48</height>
@@ -1309,7 +1309,7 @@ def __init_resources():
                     <border>10</border>
                   </object>
                   <object class="sizeritem">
-                    <object class="NImageTextToggleButton" name="lens_align_btn_opt">
+                    <object class="ImageTextToggleButton" name="lens_align_btn_opt">
                       <icon>img_icon_ico_optical_png</icon>
                       <icon_on>img/icon/ico_optical_green.png</icon_on>
                       <height>48</height>
@@ -1473,7 +1473,7 @@ def __init_resources():
                 <object class="wxBoxSizer">
                   <orient>wxHORIZONTAL</orient>
                   <object class="sizeritem">
-                    <object class="NGraphicRadioButton" name="btn_align_chamber">
+                    <object class="GraphicRadioButton" name="btn_align_chamber">
                       <icon>img_icon_ico_cam_png</icon>
                       <icon_on>img/icon/ico_cam_green.png</icon_on>
                       <height>48</height>
@@ -1495,7 +1495,7 @@ def __init_resources():
                     <border>10</border>
                   </object>
                   <object class="sizeritem">
-                    <object class="NGraphicRadioButton" name="btn_align_mirror">
+                    <object class="GraphicRadioButton" name="btn_align_mirror">
                       <icon>img_icon_ico_ang_png</icon>
                       <icon_on>img/icon/ico_ang_green.png</icon_on>
                       <height>48</height>
@@ -1516,7 +1516,7 @@ def __init_resources():
                     <border>10</border>
                   </object>
                   <object class="sizeritem">
-                    <object class="NGraphicRadioButton" name="btn_align_fiber">
+                    <object class="GraphicRadioButton" name="btn_align_fiber">
                       <icon>img_icon_ico_fib_png</icon>
                       <icon_on>img/icon/ico_fib_green.png</icon_on>
                       <height>48</height>
@@ -1682,7 +1682,7 @@ def __init_resources():
                         <cellpos>2,0</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="NImageTextButton" name="mirror_align_btn_p_mirror_y">
+                        <object class="ImageTextButton" name="mirror_align_btn_p_mirror_y">
                           <size>64,-1</size>
                           <height>48</height>
                           <label>↑</label>
@@ -1703,7 +1703,7 @@ def __init_resources():
                         <cellpos>1,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="NImageTextButton" name="mirror_align_btn_m_mirror_y">
+                        <object class="ImageTextButton" name="mirror_align_btn_m_mirror_y">
                           <size>64,-1</size>
                           <height>48</height>
                           <label>↓</label>
@@ -1724,7 +1724,7 @@ def __init_resources():
                         <cellpos>3,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="NImageTextButton" name="mirror_align_btn_p_mirror_x">
+                        <object class="ImageTextButton" name="mirror_align_btn_p_mirror_x">
                           <size>64,-1</size>
                           <height>48</height>
                           <label>←</label>
@@ -1743,7 +1743,7 @@ def __init_resources():
                         <cellpos>2,1</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="NImageTextButton" name="mirror_align_btn_m_mirror_x">
+                        <object class="ImageTextButton" name="mirror_align_btn_m_mirror_x">
                           <size>64,-1</size>
                           <height>48</height>
                           <label>→</label>
@@ -1889,7 +1889,7 @@ def __init_resources():
                         <cellpos>2,0</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="NImageTextButton" name="mirror_align_btn_m_mirror_ry">
+                        <object class="ImageTextButton" name="mirror_align_btn_m_mirror_ry">
                           <size>64,-1</size>
                           <height>48</height>
                           <label>↑</label>
@@ -1910,7 +1910,7 @@ def __init_resources():
                         <cellpos>1,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="NImageTextButton" name="mirror_align_btn_p_mirror_ry">
+                        <object class="ImageTextButton" name="mirror_align_btn_p_mirror_ry">
                           <size>64,-1</size>
                           <height>48</height>
                           <label>↓</label>
@@ -1931,7 +1931,7 @@ def __init_resources():
                         <cellpos>3,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="NImageTextButton" name="mirror_align_btn_m_mirror_rz">
+                        <object class="ImageTextButton" name="mirror_align_btn_m_mirror_rz">
                           <size>64,-1</size>
                           <height>48</height>
                           <label>←</label>
@@ -1950,7 +1950,7 @@ def __init_resources():
                         <cellpos>2,1</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="NImageTextButton" name="mirror_align_btn_p_mirror_rz">
+                        <object class="ImageTextButton" name="mirror_align_btn_p_mirror_rz">
                           <size>64,-1</size>
                           <height>48</height>
                           <label>→</label>
@@ -2097,7 +2097,7 @@ def __init_resources():
                         <cellpos>2,0</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="NImageTextButton" name="mirror_align_btn_p_fibaligner_y">
+                        <object class="ImageTextButton" name="mirror_align_btn_p_fibaligner_y">
                           <size>64,-1</size>
                           <height>48</height>
                           <label>↑</label>
@@ -2118,7 +2118,7 @@ def __init_resources():
                         <cellpos>1,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="NImageTextButton" name="mirror_align_btn_m_fibaligner_y">
+                        <object class="ImageTextButton" name="mirror_align_btn_m_fibaligner_y">
                           <size>64,-1</size>
                           <height>48</height>
                           <label>↓</label>
@@ -2139,7 +2139,7 @@ def __init_resources():
                         <cellpos>3,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="NImageTextButton" name="mirror_align_btn_m_fibaligner_x">
+                        <object class="ImageTextButton" name="mirror_align_btn_m_fibaligner_x">
                           <size>64,-1</size>
                           <height>48</height>
                           <label>←</label>
@@ -2158,7 +2158,7 @@ def __init_resources():
                         <cellpos>2,1</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="NImageTextButton" name="mirror_align_btn_p_fibaligner_x">
+                        <object class="ImageTextButton" name="mirror_align_btn_p_fibaligner_x">
                           <size>64,-1</size>
                           <height>48</height>
                           <label>→</label>
@@ -2299,7 +2299,7 @@ def __init_resources():
           <object class="wxBoxSizer">
             <orient>wxVERTICAL</orient>
             <object class="sizeritem">
-              <object class="NImageTextToggleButton" name="btn_park_mirror">
+              <object class="ImageTextToggleButton" name="btn_park_mirror">
                 <icon>img_icon_ico_eject_png</icon>
                 <icon_on>img/icon/ico_eject_orange.png</icon_on>
                 <height>48</height>
@@ -2386,7 +2386,7 @@ def __init_resources():
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="NViewButton" name="btn_sparc_view_all">
+                  <object class="ViewButton" name="btn_sparc_view_all">
                     <face_colour>def</face_colour>
                     <XRCED>
                       <assign_var>1</assign_var>
@@ -2414,7 +2414,7 @@ def __init_resources():
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="NViewButton" name="btn_sparc_view_tl">
+                  <object class="ViewButton" name="btn_sparc_view_tl">
                     <face_colour>def</face_colour>
                     <XRCED>
                       <assign_var>1</assign_var>
@@ -2442,7 +2442,7 @@ def __init_resources():
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="NViewButton" name="btn_sparc_view_tr">
+                  <object class="ViewButton" name="btn_sparc_view_tr">
                     <face_colour>def</face_colour>
                     <XRCED>
                       <assign_var>1</assign_var>
@@ -2470,7 +2470,7 @@ def __init_resources():
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="NViewButton" name="btn_sparc_view_bl">
+                  <object class="ViewButton" name="btn_sparc_view_bl">
                     <face_colour>def</face_colour>
                     <XRCED>
                       <assign_var>1</assign_var>
@@ -2498,7 +2498,7 @@ def __init_resources():
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="NViewButton" name="btn_sparc_view_br">
+                  <object class="ViewButton" name="btn_sparc_view_br">
                     <face_colour>def</face_colour>
                     <XRCED>
                       <assign_var>1</assign_var>
@@ -2637,7 +2637,7 @@ def __init_resources():
                                   <border>2</border>
                                 </object>
                                 <object class="sizeritem">
-                                  <object class="NImageTextButton" name="btn_sparc_change_file">
+                                  <object class="ImageTextButton" name="btn_sparc_change_file">
                                     <height>24</height>
                                     <face_colour>def</face_colour>
                                     <label>change…</label>
@@ -2718,7 +2718,7 @@ def __init_resources():
                               <border>16</border>
                             </object>
                             <object class="sizeritem">
-                              <object class="NImageTextButton" name="btn_sparc_cancel">
+                              <object class="ImageTextButton" name="btn_sparc_cancel">
                                 <height>24</height>
                                 <face_colour>def</face_colour>
                                 <label>Cancel</label>
@@ -2743,7 +2743,7 @@ def __init_resources():
                     <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
-                    <object class="NImageTextButton" name="btn_sparc_acquire">
+                    <object class="ImageTextButton" name="btn_sparc_acquire">
                       <icon>img_icon_ico_acqui_png</icon>
                       <height>48</height>
                       <face_colour>blue</face_colour>
@@ -2784,7 +2784,7 @@ def __init_resources():
         <object class="wxPanel">
           <object class="wxBoxSizer">
             <object class="sizeritem">
-              <object class="NImageTextButton" name="btn_open_image">
+              <object class="ImageTextButton" name="btn_open_image">
                 <height>24</height>
                 <face_colour>def</face_colour>
                 <label>Select image...</label>
@@ -2835,7 +2835,7 @@ def __init_resources():
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="NViewButton" name="btn_inspection_view_all">
+                  <object class="ViewButton" name="btn_inspection_view_all">
                     <face_colour>def</face_colour>
                     <XRCED>
                       <assign_var>1</assign_var>
@@ -2863,7 +2863,7 @@ def __init_resources():
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="NViewButton" name="btn_inspection_view_tl">
+                  <object class="ViewButton" name="btn_inspection_view_tl">
                     <face_colour>def</face_colour>
                     <XRCED>
                       <assign_var>1</assign_var>
@@ -2891,7 +2891,7 @@ def __init_resources():
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="NViewButton" name="btn_inspection_view_tr">
+                  <object class="ViewButton" name="btn_inspection_view_tr">
                     <face_colour>def</face_colour>
                     <XRCED>
                       <assign_var>1</assign_var>
@@ -2919,7 +2919,7 @@ def __init_resources():
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="NViewButton" name="btn_inspection_view_bl">
+                  <object class="ViewButton" name="btn_inspection_view_bl">
                     <face_colour>def</face_colour>
                     <XRCED>
                       <assign_var>1</assign_var>
@@ -2947,7 +2947,7 @@ def __init_resources():
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="NViewButton" name="btn_inspection_view_br">
+                  <object class="ViewButton" name="btn_inspection_view_br">
                     <face_colour>def</face_colour>
                     <XRCED>
                       <assign_var>1</assign_var>
@@ -3131,7 +3131,7 @@ def __init_resources():
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="NViewButton" name="btn_secom_overview">
+                  <object class="ViewButton" name="btn_secom_overview">
                     <face_colour>def</face_colour>
                     <XRCED>
                       <assign_var>1</assign_var>
@@ -3176,7 +3176,7 @@ def __init_resources():
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="NViewButton" name="btn_secom_view_all">
+                  <object class="ViewButton" name="btn_secom_view_all">
                     <face_colour>def</face_colour>
                     <XRCED>
                       <assign_var>1</assign_var>
@@ -3204,7 +3204,7 @@ def __init_resources():
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="NViewButton" name="btn_secom_view_tl">
+                  <object class="ViewButton" name="btn_secom_view_tl">
                     <face_colour>def</face_colour>
                     <XRCED>
                       <assign_var>1</assign_var>
@@ -3232,7 +3232,7 @@ def __init_resources():
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="NViewButton" name="btn_secom_view_tr">
+                  <object class="ViewButton" name="btn_secom_view_tr">
                     <face_colour>def</face_colour>
                     <XRCED>
                       <assign_var>1</assign_var>
@@ -3260,7 +3260,7 @@ def __init_resources():
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="NViewButton" name="btn_secom_view_bl">
+                  <object class="ViewButton" name="btn_secom_view_bl">
                     <face_colour>def</face_colour>
                     <XRCED>
                       <assign_var>1</assign_var>
@@ -3288,7 +3288,7 @@ def __init_resources():
                   <border>18</border>
                 </object>
                 <object class="sizeritem">
-                  <object class="NViewButton" name="btn_secom_view_br">
+                  <object class="ViewButton" name="btn_secom_view_br">
                     <face_colour>def</face_colour>
                     <XRCED>
                       <assign_var>1</assign_var>
@@ -3361,7 +3361,7 @@ def __init_resources():
                   <object class="sizeritem">
                     <object class="wxBoxSizer">
                       <object class="sizeritem">
-                        <object class="NImageTextToggleButton" name="live_btn_press">
+                        <object class="ImageTextToggleButton" name="live_btn_press">
                           <size>100,-1</size>
                           <icon>img_icon_ico_press_png</icon>
                           <height>48</height>
@@ -3379,7 +3379,7 @@ def __init_resources():
                         <option>1</option>
                       </object>
                       <object class="sizeritem">
-                        <object class="NImageTextToggleButton" name="live_btn_opt">
+                        <object class="ImageTextToggleButton" name="live_btn_opt">
                           <icon>img_icon_ico_optical_png</icon>
                           <icon_on>img/icon/ico_optical_green.png</icon_on>
                           <height>48</height>
@@ -3393,7 +3393,7 @@ def __init_resources():
                         <border>10</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="NImageTextToggleButton" name="live_btn_sem">
+                        <object class="ImageTextToggleButton" name="live_btn_sem">
                           <icon>img_icon_ico_sem_png</icon>
                           <icon_on>img/icon/ico_sem_green.png</icon_on>
                           <height>48</height>
@@ -3597,7 +3597,7 @@ def __init_resources():
                 <object class="wxBoxSizer">
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
-                    <object class="NImageTextButton" name="btn_secom_acquire">
+                    <object class="ImageTextButton" name="btn_secom_acquire">
                       <size>382,-1</size>
                       <icon>img_icon_ico_acqui_png</icon>
                       <height>48</height>
@@ -3700,7 +3700,7 @@ def __init_resources():
                             <flag>wxEXPAND</flag>
                           </object>
                           <object class="sizeritem">
-                            <object class="NImageTextButton" name="btn_change_file">
+                            <object class="ImageTextButton" name="btn_change_file">
                               <height>16</height>
                               <label>change…</label>
                               <fg>#1A1A1A</fg>
@@ -3877,7 +3877,7 @@ def __init_resources():
         <object class="wxPanel">
           <object class="wxBoxSizer">
             <object class="sizeritem">
-              <object class="NImageTextButton" name="btn_cancel">
+              <object class="ImageTextButton" name="btn_cancel">
                 <height>48</height>
                 <face_colour>def</face_colour>
                 <label>Close</label>
@@ -3899,7 +3899,7 @@ def __init_resources():
             </object>
             <orient>wxHORIZONTAL</orient>
             <object class="sizeritem">
-              <object class="NImageTextButton" name="btn_secom_acquire">
+              <object class="ImageTextButton" name="btn_secom_acquire">
                 <size>242,48</size>
                 <icon>img_icon_ico_acqui_png</icon>
                 <height>48</height>

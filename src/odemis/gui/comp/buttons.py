@@ -448,23 +448,23 @@ class BtnMixin(object):
             dc.DrawText(label, pos_x, (height - th) // 2 + dy)
 
 
-class NImageButton(BtnMixin, wxbuttons.GenBitmapButton):
+class ImageButton(BtnMixin, wxbuttons.GenBitmapButton):
     pass
 
 
-class NImageToggleButton(BtnMixin, wxbuttons.GenBitmapTextToggleButton):
+class ImageToggleButtonImageButton(BtnMixin, wxbuttons.GenBitmapTextToggleButton):
     pass
 
 
-class NImageTextButton(BtnMixin, wxbuttons.GenBitmapTextButton):
+class ImageTextButton(BtnMixin, wxbuttons.GenBitmapTextButton):
     pass
 
 
-class NImageTextToggleButton(BtnMixin, wxbuttons.GenBitmapTextToggleButton):
+class ImageTextToggleButton(BtnMixin, wxbuttons.GenBitmapTextToggleButton):
     pass
 
 
-class NGraphicRadioButton(NImageTextToggleButton):
+class GraphicRadioButton(ImageTextToggleButton):
     """ Simple graphical button that can be used to construct radio button sets
     """
 
@@ -472,7 +472,7 @@ class NGraphicRadioButton(NImageTextToggleButton):
         self.value = kwargs.pop('value', None)
         if 'label' not in kwargs and self.value:
             kwargs['label'] = u"%g" % self.value
-        NImageTextToggleButton.__init__(self, *args, **kwargs)
+        ImageTextToggleButton.__init__(self, *args, **kwargs)
 
     def OnLeftDown(self, event):
         """ This event handler is fired on left mouse button events, but it ignores those events
@@ -487,7 +487,7 @@ class NGraphicRadioButton(NImageTextToggleButton):
         self.Refresh()
 
 
-class NTabButton(NGraphicRadioButton):
+class TabButton(GraphicRadioButton):
     """ Simple graphical tab switching button """
 
     labelDelta = 0
@@ -497,7 +497,7 @@ class NTabButton(NGraphicRadioButton):
         kwargs['style'] = kwargs.get('style', 0) | wx.ALIGN_CENTER
         kwargs['bitmap'] = imgdata.tab_inactive.Bitmap
 
-        super(NTabButton, self).__init__(*args, **kwargs)
+        super(TabButton, self).__init__(*args, **kwargs)
 
         self.bmpHover = imgdata.tab_hover.Bitmap
         self.bmpSelected = imgdata.tab_active.Bitmap
@@ -551,7 +551,7 @@ class NTabButton(NGraphicRadioButton):
         self.Refresh()
 
 
-class NColourButton(NImageButton):
+class ColourButton(ImageButton):
     """ An ImageButton that has a single colour background that can be altered """
 
     # The default colour for the colour button
@@ -566,7 +566,7 @@ class NColourButton(NImageButton):
         kwargs['size'] = kwargs.get('size', None) or (18, 18)
         kwargs['bitmap'] = imgdata.empty.Bitmap
 
-        super(NColourButton, self).__init__(*args, **kwargs)
+        super(ColourButton, self).__init__(*args, **kwargs)
 
         self.set_colour(self.colour)
 
@@ -629,7 +629,7 @@ class NColourButton(NImageButton):
         return self.colour
 
 
-class NViewButton(NGraphicRadioButton):
+class ViewButton(GraphicRadioButton):
     """ The ViewButton class describes a toggle button that has an image overlay
     that depicts a thumbnail view of the view panels.
 
@@ -649,7 +649,7 @@ class NViewButton(NGraphicRadioButton):
 
         kwargs['bitmap'] = imgdata.preview_block.Bitmap
 
-        super(NViewButton, self).__init__(*args, **kwargs)
+        super(ViewButton, self).__init__(*args, **kwargs)
 
         self.bmpHover = imgdata.preview_block_a.Bitmap
         self.bmpSelected = imgdata.preview_block_a.Bitmap
@@ -692,7 +692,7 @@ class NViewButton(NGraphicRadioButton):
         """ Draw method called by the `OnPaint` event handler """
 
         # Draw the base button
-        super(NViewButton, self).DrawLabel(dc, width, height, dx, dy)
+        super(ViewButton, self).DrawLabel(dc, width, height, dx, dy)
 
         # Draw the overlay image
         if self.thumbnail_bmp is not None:
@@ -703,7 +703,7 @@ class NViewButton(NGraphicRadioButton):
                           False)
 
 
-class NPopupImageButton(NImageTextButton):
+class PopupImageButton(ImageTextButton):
     """ This class describes a grahical button with an associated popup menu """
 
     labelDelta = 0
@@ -712,7 +712,7 @@ class NPopupImageButton(NImageTextButton):
 
         kwargs['bitmap'] = imgdata.stream_add.Bitmap
 
-        super(NPopupImageButton, self).__init__(*args, **kwargs)
+        super(PopupImageButton, self).__init__(*args, **kwargs)
 
         self.bmpSelected = imgdata.stream_add_a.Bitmap
         self.bmpHover = imgdata.stream_add_h.Bitmap

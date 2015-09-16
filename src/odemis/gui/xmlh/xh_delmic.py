@@ -288,39 +288,39 @@ class _ImageButtonHandler(xrc.XmlResourceHandler):
         return w
 
 
-class NImageButtonHandler(_ImageButtonHandler):
-    klass = btns.NImageButton
-HANDLER_CLASS_LIST.append(NImageButtonHandler)
+class ImageButtonHandler(_ImageButtonHandler):
+    klass = btns.ImageButton
+HANDLER_CLASS_LIST.append(ImageButtonHandler)
 
 
-class NImageToggleButtonHandler(_ImageButtonHandler):
-    klass = btns.NImageToggleButton
-HANDLER_CLASS_LIST.append(NImageToggleButtonHandler)
+class ImageToggleButtonImageButtonHandler(_ImageButtonHandler):
+    klass = btns.ImageToggleButtonImageButton
+HANDLER_CLASS_LIST.append(ImageToggleButtonImageButtonHandler)
 
 
-class NImageTextButtonHandler(_ImageButtonHandler):
-    klass = btns.NImageTextButton
-HANDLER_CLASS_LIST.append(NImageTextButtonHandler)
+class ImageTextButtonHandler(_ImageButtonHandler):
+    klass = btns.ImageTextButton
+HANDLER_CLASS_LIST.append(ImageTextButtonHandler)
 
 
-class NImageTextToggleButtonHandler(_ImageButtonHandler):
-    klass = btns.NImageTextToggleButton
-HANDLER_CLASS_LIST.append(NImageTextToggleButtonHandler)
+class ImageTextToggleButtonHandler(_ImageButtonHandler):
+    klass = btns.ImageTextToggleButton
+HANDLER_CLASS_LIST.append(ImageTextToggleButtonHandler)
 
 
-class NGraphicRadioButtonHandler(_ImageButtonHandler):
-    klass = btns.NGraphicRadioButton
-HANDLER_CLASS_LIST.append(NGraphicRadioButtonHandler)
+class GraphicRadioButtonHandler(_ImageButtonHandler):
+    klass = btns.GraphicRadioButton
+HANDLER_CLASS_LIST.append(GraphicRadioButtonHandler)
 
 
-class NTabButtonHandler(_ImageButtonHandler):
-    klass = btns.NTabButton
-HANDLER_CLASS_LIST.append(NTabButtonHandler)
+class TabButtonHandler(_ImageButtonHandler):
+    klass = btns.TabButton
+HANDLER_CLASS_LIST.append(TabButtonHandler)
 
 
-class NViewButtonHandler(_ImageButtonHandler):
-    klass = btns.NViewButton
-HANDLER_CLASS_LIST.append(NViewButtonHandler)
+class ViewButtonHandler(_ImageButtonHandler):
+    klass = btns.ViewButton
+HANDLER_CLASS_LIST.append(ViewButtonHandler)
 
 
 class SuggestTextCtrlHandler(xrc.XmlResourceHandler):

@@ -142,22 +142,22 @@ class ButtonFaceColourParam(params.RadioBox):
     choices = {'Grey': 'def', 'Blue': 'blue'}
     default = 'def'
 
-### NImageButton
+### ImageButton
 
 buttons = [
-    ('NImageButton', xh_delmic.NImageButtonHandler,
+    ('ImageButton', xh_delmic.ImageButtonHandler,
      'New button', 'Icon Button', False),
-    ('NImageToggleButton', xh_delmic.NImageToggleButtonHandler,
+    ('ImageToggleButtonImageButton', xh_delmic.ImageToggleButtonImageButtonHandler,
      'New button', 'Icon Toggle Button', False),
-    ('NImageTextButton', xh_delmic.NImageTextButtonHandler,
+    ('ImageTextButton', xh_delmic.ImageTextButtonHandler,
      'New button', 'Icon Text Button', True),
-    ('NImageTextToggleButton', xh_delmic.NImageTextToggleButtonHandler,
+    ('ImageTextToggleButton', xh_delmic.ImageTextToggleButtonHandler,
      'New button', 'Icon Text Toggle Button', True),
-    ('NGraphicRadioButton', xh_delmic.NGraphicRadioButtonHandler,
+    ('GraphicRadioButton', xh_delmic.GraphicRadioButtonHandler,
      'New button', 'Icon Text Toggle Group Button', True),
-    ('NTabButton', xh_delmic.NTabButtonHandler,
+    ('TabButton', xh_delmic.TabButtonHandler,
      'New button', 'Tab Button', True),
-    ('NViewButton', xh_delmic.NViewButtonHandler,
+    ('ViewButton', xh_delmic.ViewButtonHandler,
      'New button', 'View Button', True),
 ]
 

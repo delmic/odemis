@@ -32,7 +32,7 @@ import collections
 import logging
 from odemis import model, util
 import odemis.dataio
-from odemis.gui.comp.buttons import NImageTextToggleButton
+from odemis.gui.comp.buttons import ImageTextToggleButton
 from odemis.gui.comp.file import EVT_FILE_SELECT
 from odemis.gui.comp.settings import SettingsPanel
 from odemis.gui.conf.data import get_hw_settings_config
@@ -216,7 +216,7 @@ class SettingsController(object):
 
         # Create the widgets
 
-        btn_autoadjust = NImageTextToggleButton(self.panel, height=24, label="Auto adjust",
+        btn_autoadjust = ImageTextToggleButton(self.panel, height=24, label="Auto adjust",
                                                 icon=img.ico_contrast.Bitmap)
 
         gb_sizer.Add(btn_autoadjust, (0, 0), (2, 1), border=10,

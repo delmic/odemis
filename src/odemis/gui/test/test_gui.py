@@ -20,12 +20,12 @@ class xrctext_frame(wx.Frame):
 #!XRCED:begin-block:xrctext_frame.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrctext_frame.PreCreate
 
     def __init__(self, parent):
@@ -48,12 +48,12 @@ class xrcstream_frame(wx.Frame):
 #!XRCED:begin-block:xrcstream_frame.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcstream_frame.PreCreate
 
     def __init__(self, parent):
@@ -74,12 +74,12 @@ class xrcbutton_frame(wx.Frame):
 #!XRCED:begin-block:xrcbutton_frame.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcbutton_frame.PreCreate
 
     def __init__(self, parent):
@@ -98,12 +98,12 @@ class xrccanvas_frame(wx.Frame):
 #!XRCED:begin-block:xrccanvas_frame.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrccanvas_frame.PreCreate
 
     def __init__(self, parent):
@@ -122,12 +122,12 @@ class xrcfpb_frame(wx.Frame):
 #!XRCED:begin-block:xrcfpb_frame.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcfpb_frame.PreCreate
 
     def __init__(self, parent):
@@ -150,12 +150,12 @@ class xrcgrid_frame(wx.Frame):
 #!XRCED:begin-block:xrcgrid_frame.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcgrid_frame.PreCreate
 
     def __init__(self, parent):
@@ -180,7 +180,7 @@ class xrcmenu_bar(wx.MenuBar):
     def __init__(self):
         pre = get_resources().LoadMenuBar("menu_bar")
         self.PostCreate(pre)
-        
+
         # Define variables for the menu items
 
 
@@ -196,7 +196,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     test_gui_xrc = '''\
-<?xml version="1.0" ?><resource class="NImageButton" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource class="ImageButton" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="text_frame">
     <object_ref ref="menu_bar"/>
     <object class="wxPanel" name="text_panel">
@@ -351,7 +351,7 @@ def __init_resources():
     <object class="wxPanel" name="button_panel">
       <object class="wxBoxSizer">
         <orient>wxVERTICAL</orient>
-      
+
       </object>
       <fg>#E6E6FA</fg>
       <bg>#4D4D4D</bg>
