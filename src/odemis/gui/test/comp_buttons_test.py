@@ -27,7 +27,6 @@ import wx
 from odemis.gui.img import data
 import odemis.gui.comp.buttons as buttons
 import odemis.gui.test as test
-from odemis.gui.test import gui_loop
 
 
 test.goto_manual()
@@ -41,106 +40,96 @@ class ButtonsTestCase(test.GuiTestCase):
     @classmethod
     def setUpClass(cls):
         super(ButtonsTestCase, cls).setUpClass()
-        cls.frame.SetSize((400, 600))
+        cls.frame.SetSize((400, 800))
 
-        cls.buttons = OrderedDict()
-        panel = cls.app.panel_finder()
+    def test_image_button(self):
+        btn = buttons.NImageButton(self.panel, height=16)
+        self.add_control(btn, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
 
-        cls.buttons['ImageButton'] = buttons.ImageButton(panel, -1, data.getbtn_128x24Bitmap())
+        btn = buttons.NImageButton(self.panel, height=16, size=(100, -1))
+        self.assertEqual(btn.GetSizeTuple(), (100, 16))
+        self.add_control(btn, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
 
-        cls.buttons['ImageButton'].SetBitmaps(data.getbtn_128x24_hBitmap())
+        btn = buttons.NImageButton(self.panel, height=32,
+                                   icon=data.ico_acqui.Bitmap,
+                                   icon_on=data.ico_cam.Bitmap)
+        self.add_control(btn, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
 
-        cls.buttons['ImageTextButton'] = buttons.ImageTextButton(panel,
-                                                                 -1,
-                                                                 data.getbtn_128x24Bitmap(),
-                                                                 "ImageTextButton",
-                                                                 label_delta=1)
+        btn = buttons.NImageButton(self.panel, bitmap=data.ico_press_green.Bitmap)
+        btn.bmpHover = data.ico_press_orange.Bitmap
+        self.add_control(btn, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
 
-        cls.buttons['ImageTextButton'].SetBitmaps(data.getbtn_128x24_hBitmap(),
-                                                  data.getbtn_128x24_aBitmap())
+        test.gui_loop()
 
-        cls.buttons['ImageToggleButton'] = buttons.ImageToggleButton(panel,
-                                                                     -1,
-                                                                     data.getbtn_128x24Bitmap(),
-                                                                     label_delta=10)
+    def test__text_buttons(self):
 
-        cls.buttons['ImageToggleButton'].SetBitmaps(data.getbtn_128x24_hBitmap(),
-                                                    data.getbtn_128x24_aBitmap())
+        self.assertRaises(ValueError, buttons.NImageTextButton, self.panel, {'label': "blah"})
 
-        cls.buttons['ImageTextToggleButton'] = buttons.ImageTextToggleButton(
-            panel, -1,
-            data.getbtn_256x24_hBitmap(),
-            "ImageTextToggleButton",
-            label_delta=1,
-            style=wx.ALIGN_CENTER)
+        btn = buttons.NImageTextButton(self.panel, height=32)
+        self.add_control(btn, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
 
-        cls.buttons['ImageTextToggleButton'].SetBitmaps(data.getbtn_256x24_hBitmap(),
-                                                        data.getbtn_256x24_aBitmap())
+        btn = buttons.NImageTextToggleButton(self.panel, height=32, label="Toggle")
+        self.add_control(btn, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
 
-        cls.buttons['ViewButton'] = buttons.ViewButton(panel,
-                                                       -1,
-                                                       data.getpreview_blockBitmap(),
-                                                       label_delta=1,
-                                                       style=wx.ALIGN_CENTER)
-        cls.buttons['ViewButton'].set_overlay_image(data.gettest_10x10Image())
+        btn = buttons.NImageTextButton(self.panel, size=(300, -1), height=32, label="Wider!")
+        self.add_control(btn, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
 
-        cls.buttons['ViewButton'].SetBitmaps(data.getpreview_block_aBitmap())
+        btn = buttons.NImageTextButton(self.panel, size=(300, -1), height=32, label="Icon!")
+        btn.SetIcon(data.ico_ang.Bitmap)
+        self.add_control(btn, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
 
-        cls.buttons['ColourButton'] = buttons.ColourButton(panel, -1, data.getbtn_128x24Bitmap())
-
-        cls.buttons['PopupImageButton'] = buttons.PopupImageButton(panel,
-                                                                   -1,
-                                                                   data.getbtn_128x24Bitmap(),
-                                                                   r"\/",
-                                                                   style=wx.ALIGN_CENTER)
-
-        cls.buttons['PopupImageButton'].SetBitmaps(data.getbtn_128x24_hBitmap())
-
-        cls.buttons['TabButton'] = buttons.TabButton(panel,
-                                                     -1,
-                                                     data.gettab_inactiveBitmap(),
-                                                     "Tab Test",
-                                                     style=wx.ALIGN_CENTER)
-        cls.buttons['TabButton'].SetBitmaps(data.gettab_hoverBitmap(), data.gettab_activeBitmap())
-        cls.buttons['TabButton'].Enable()
-
-        for btn in cls.buttons.values():
-            cls.add_control(btn, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
+        test.gui_loop()
 
     def test_tab_button(self):
-        self.buttons['TabButton'].notify(True)
-        gui_loop()
-
-    def test_buttons(self):
-        # colour button
-        cb = self.buttons['ColourButton']
-        red = (255, 0, 0)
-        cb.set_colour(red)
+        btn = buttons.NTabButton(self.panel, label="Tab Test")
+        self.add_control(btn, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
         test.gui_loop()
-        self.assertEqual(red, cb.get_colour())
-        test.gui_loop()
+        test.gui_loop(500)
+        btn.SetToggle(True)
 
-        # PopupImageButton
-        pib = self.buttons['PopupImageButton']
+    def test_popup_button(self):
+        btn = buttons.NPopupImageButton(self.panel, label="Drop it!", style=wx.ALIGN_CENTER)
+        self.add_control(btn, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
+
         nb_options = 5
         for i in range(nb_options):
             def tmp(option=i):
                 print "option %s chosen" % option
 
-            pib.add_choice("option %s" % i, tmp)
+            btn.add_choice("option %s" % i, tmp)
 
         test.gui_loop()
-        self.assertEqual(len(pib.choices), nb_options)
-        self.assertEqual(pib.menu.MenuItemCount, nb_options)
-        pib.remove_choice("option 0")
+        self.assertEqual(len(btn.choices), nb_options)
+        self.assertEqual(btn.menu.MenuItemCount, nb_options)
+        btn.remove_choice("option 0")
         test.gui_loop()
-        self.assertEqual(len(pib.choices), nb_options - 1)
-        self.assertEqual(pib.menu.MenuItemCount, nb_options - 1)
+        self.assertEqual(len(btn.choices), nb_options - 1)
+        self.assertEqual(btn.menu.MenuItemCount, nb_options - 1)
         test.gui_loop()
+
+    def test_colour_button(self):
+        btn = buttons.NColourButton(self.panel, colour=wx.RED)
+        self.add_control(btn, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
+
+        self.btn = buttons.NColourButton(self.panel, colour=wx.BLUE, use_hover=True)
+        self.add_control(self.btn, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
+
+        test.gui_loop()
+
+        def switch_image(_):
+            self.btn.set_colour("#FF44FF")
+
+        self.btn.Bind(wx.EVT_LEFT_DOWN, switch_image)
 
     def test_view_button(self):
-        self.view_button = self.buttons['ViewButton']
-        self.imgs = (data.gettest_5x10Image(), data.gettest_10x5Image(), data.gettest_10x10Image())
+        self.view_button = buttons.NViewButton(self.panel)
+        self.add_control(self.view_button, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
+
+        img_5_10 = wx.Image("test_5x10.png", wx.BITMAP_TYPE_PNG)
+        img_10_5 = wx.Image("test_10x5.png", wx.BITMAP_TYPE_PNG)
+        img_10_10 = wx.Image("test_10x10.png", wx.BITMAP_TYPE_PNG)
+
+        self.imgs = (img_5_10, img_10_5, img_10_10)
 
         def switch_image(evt):
             self.view_button.set_overlay_image(self.imgs[0])
@@ -148,51 +137,6 @@ class ButtonsTestCase(test.GuiTestCase):
             evt.Skip()
 
         self.view_button.Bind(wx.EVT_LEFT_DOWN, switch_image)
-
-
-class NButtonsTestCase(test.GuiTestCase):
-
-    frame_class = test.test_gui.xrcbutton_frame
-
-    def test_new_button(self):
-
-        for i, h in enumerate((16, 24, 32, 48)):
-
-            row_sizer = wx.BoxSizer(wx.HORIZONTAL)
-
-            btn = buttons.NImageButton(self.panel, height=h)
-            btn.SetIcon(data.getico_eject_orangeBitmap())
-
-            row_sizer.Add(btn, flag=wx.LEFT|wx.RIGHT, border=2)
-
-            btn = buttons.NImageToggleButton(self.panel, height=h)
-            btn.SetIcon(data.getico_sem_greenBitmap())
-            row_sizer.Add(btn, flag=wx.LEFT|wx.RIGHT, border=2)
-
-            btn = buttons.NImageTextButton(self.panel, height=h, label="Daaaag!", size=(150, -1),
-                                           style=wx.ALIGN_CENTER,
-                                           icon=data.getico_acquiBitmap(),
-                                           face_colour='blue')
-            row_sizer.Add(btn, flag=wx.LEFT|wx.RIGHT, border=2)
-
-            btn = buttons.NImageTextToggleButton(self.panel, height=h, label="Daaaag!",
-                                                 icon=data.getico_camBitmap())
-            row_sizer.Add(btn, flag=wx.LEFT|wx.RIGHT, border=2)
-
-            self.add_control(row_sizer, flags=wx.ALL, border=2)
-
-        btn = buttons.NImageTextToggleButton(self.panel, height=h, label="Test", size=(100, -1),
-                                             icon=data.getico_ang_greenBitmap())
-
-        self.add_control(btn, flags=wx.ALL, border=2)
-
-        btn = buttons.NTabButton(self.panel, height=h, label="Test", size=(160, 30))
-
-        self.add_control(btn, flags=wx.ALL, border=2)
-
-        test.gui_loop(1000)
-        btn.SetToggle(True)
-        btn.Refresh()
 
 
 if __name__ == "__main__":

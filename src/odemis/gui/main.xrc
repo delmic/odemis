@@ -1985,7 +1985,7 @@
                 </object>
                 <object class="sizeritem">
                   <object class="NViewButton" name="btn_sparc_view_all">
-                    <height>48</height>
+                    <face_colour>def</face_colour>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -2013,7 +2013,7 @@
                 </object>
                 <object class="sizeritem">
                   <object class="NViewButton" name="btn_sparc_view_tl">
-                    <height>48</height>
+                    <face_colour>def</face_colour>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -2041,7 +2041,7 @@
                 </object>
                 <object class="sizeritem">
                   <object class="NViewButton" name="btn_sparc_view_tr">
-                    <height>48</height>
+                    <face_colour>def</face_colour>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -2069,7 +2069,7 @@
                 </object>
                 <object class="sizeritem">
                   <object class="NViewButton" name="btn_sparc_view_bl">
-                    <height>48</height>
+                    <face_colour>def</face_colour>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -2097,7 +2097,7 @@
                 </object>
                 <object class="sizeritem">
                   <object class="NViewButton" name="btn_sparc_view_br">
-                    <height>48</height>
+                    <face_colour>def</face_colour>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -2384,6 +2384,7 @@
             <object class="sizeritem">
               <object class="NImageTextButton" name="btn_open_image">
                 <height>24</height>
+                <face_colour>def</face_colour>
                 <label>Select image...</label>
                 <fg>#1A1A1A</fg>
                 <style>wxALIGN_CENTRE</style>
@@ -2433,7 +2434,7 @@
                 </object>
                 <object class="sizeritem">
                   <object class="NViewButton" name="btn_inspection_view_all">
-                    <height>48</height>
+                    <face_colour>def</face_colour>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -2461,7 +2462,7 @@
                 </object>
                 <object class="sizeritem">
                   <object class="NViewButton" name="btn_inspection_view_tl">
-                    <height>48</height>
+                    <face_colour>def</face_colour>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -2489,7 +2490,7 @@
                 </object>
                 <object class="sizeritem">
                   <object class="NViewButton" name="btn_inspection_view_tr">
-                    <height>48</height>
+                    <face_colour>def</face_colour>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -2517,7 +2518,7 @@
                 </object>
                 <object class="sizeritem">
                   <object class="NViewButton" name="btn_inspection_view_bl">
-                    <height>48</height>
+                    <face_colour>def</face_colour>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -2545,7 +2546,7 @@
                 </object>
                 <object class="sizeritem">
                   <object class="NViewButton" name="btn_inspection_view_br">
-                    <height>48</height>
+                    <face_colour>def</face_colour>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -2729,7 +2730,7 @@
                 </object>
                 <object class="sizeritem">
                   <object class="NViewButton" name="btn_secom_overview">
-                    <height>48</height>
+                    <face_colour>def</face_colour>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -2774,7 +2775,7 @@
                 </object>
                 <object class="sizeritem">
                   <object class="NViewButton" name="btn_secom_view_all">
-                    <height>48</height>
+                    <face_colour>def</face_colour>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -2802,7 +2803,7 @@
                 </object>
                 <object class="sizeritem">
                   <object class="NViewButton" name="btn_secom_view_tl">
-                    <height>48</height>
+                    <face_colour>def</face_colour>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -2830,7 +2831,7 @@
                 </object>
                 <object class="sizeritem">
                   <object class="NViewButton" name="btn_secom_view_tr">
-                    <height>48</height>
+                    <face_colour>def</face_colour>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -2858,7 +2859,7 @@
                 </object>
                 <object class="sizeritem">
                   <object class="NViewButton" name="btn_secom_view_bl">
-                    <height>48</height>
+                    <face_colour>def</face_colour>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
@@ -2886,7 +2887,7 @@
                 </object>
                 <object class="sizeritem">
                   <object class="NViewButton" name="btn_secom_view_br">
-                    <height>48</height>
+                    <face_colour>def</face_colour>
                     <XRCED>
                       <assign_var>1</assign_var>
                     </XRCED>
