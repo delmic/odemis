@@ -563,7 +563,7 @@ def __init_resources():
             <object class="sizeritem">
               <object class="NTabButton" name="btn_tab_secom_streams">
                 <size>160,30</size>
-                <height>32</height>
+                <face_colour>def</face_colour>
                 <label>STREAMS</label>
                 <fg>#E5E5E5</fg>
                 <font>
@@ -584,7 +584,7 @@ def __init_resources():
             <object class="sizeritem">
               <object class="NTabButton" name="btn_tab_sparc_acqui">
                 <size>160,30</size>
-                <height>32</height>
+                <face_colour>def</face_colour>
                 <label>ACQUISITION</label>
                 <fg>#E5E5E5</fg>
                 <font>
@@ -605,8 +605,9 @@ def __init_resources():
             <object class="sizeritem">
               <object class="NTabButton" name="btn_tab_inspection">
                 <size>160,30</size>
-                <height>32</height>
+                <face_colour>def</face_colour>
                 <label>ANALYSIS</label>
+                <fg>#E5E5E5</fg>
                 <font>
                   <size>11</size>
                   <style>normal</style>
@@ -614,7 +615,6 @@ def __init_resources():
                   <underlined>0</underlined>
                   <face>Ubuntu</face>
                 </font>
-                <fg>#E5E5E5</fg>
                 <style>wxALIGN_CENTRE</style>
                 <XRCED>
                   <assign_var>1</assign_var>
@@ -630,8 +630,9 @@ def __init_resources():
             <object class="sizeritem">
               <object class="NTabButton" name="btn_tab_secom_align">
                 <size>160,30</size>
-                <height>32</height>
+                <face_colour>def</face_colour>
                 <label>LENS ALIGNMENT</label>
+                <fg>#E5E5E5</fg>
                 <font>
                   <size>11</size>
                   <style>normal</style>
@@ -639,7 +640,6 @@ def __init_resources():
                   <underlined>0</underlined>
                   <face>Ubuntu</face>
                 </font>
-                <fg>#E5E5E5</fg>
                 <style>wxALIGN_CENTRE</style>
                 <XRCED>
                   <assign_var>1</assign_var>
@@ -651,7 +651,7 @@ def __init_resources():
             <object class="sizeritem">
               <object class="NTabButton" name="btn_tab_sparc_chamber">
                 <size>160,30</size>
-                <height>32</height>
+                <face_colour>def</face_colour>
                 <label>CHAMBER</label>
                 <fg>#E5E5E5</fg>
                 <font>
@@ -672,8 +672,9 @@ def __init_resources():
             <object class="sizeritem">
               <object class="NTabButton" name="btn_tab_sparc_align">
                 <size>160,30</size>
-                <height>32</height>
+                <face_colour>def</face_colour>
                 <label>ALIGNMENT</label>
+                <fg>#E5E5E5</fg>
                 <font>
                   <size>11</size>
                   <style>normal</style>
@@ -681,7 +682,6 @@ def __init_resources():
                   <underlined>0</underlined>
                   <face>Ubuntu</face>
                 </font>
-                <fg>#E5E5E5</fg>
                 <style>wxALIGN_CENTRE</style>
                 <XRCED>
                   <assign_var>1</assign_var>
