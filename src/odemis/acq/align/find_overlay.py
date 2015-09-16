@@ -228,8 +228,8 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan,
         logging.debug("Calculating transformation...")
         try:
             ret = transform.CalculateTransform(known_ec, known_oc, skew)
-        except ValueError, e:
-            raise ValueError("Overlay failure. %s", str(e))
+        except ValueError as exp:
+            raise ValueError("Overlay failure: %s" % (exp,))
 
         if future._find_overlay_state == CANCELLED:
             raise CancelledError()
