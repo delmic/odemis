@@ -2365,6 +2365,7 @@
                 </object>
                 <bg>#4D4D4D</bg>
               </object>
+              <flag>wxEXPAND</flag>
             </object>
           </object>
           <size>400,-1</size>
