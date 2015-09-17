@@ -109,6 +109,8 @@ class TMCLController(model.Actuator):
             raise ValueError("Expecting %d ustepsize (got %s)" %
                              (len(axes), ustepsize))
 
+        # TODO: allow to specify the unit of the axis
+
         self._name_to_axis = {}  # str -> int: name -> axis number
         for i, n in enumerate(axes):
             if not n:  # skip this non-connected axis
@@ -176,7 +178,7 @@ class TMCLController(model.Actuator):
         if not self._isFullyPowered():
             # Only a warning, as the power can be connected afterwards
             logging.warning("Device %s has no power, the motor will not move", name)
-        # TODO: add a .powerSupply readonly VA ?
+        # TODO: add a .powerSupply readonly VA ? Only if not already provided by HwComponent.
 
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1) # one task at a time
@@ -212,6 +214,10 @@ class TMCLController(model.Actuator):
             # str -> boolean. Indicates whether an axis has already been referenced
             axes_ref = dict((a, False) for a in axes)
             self.referenced = model.VigilantAttribute(axes_ref, readonly=True)
+
+        # TODO: move this to user-defined area of the EEPROM?
+        # Activate the pull-ups for the limit switches
+        self.SetIO(0, 0, 3)  # 3 = active for ports 0,1,2 and 3,4,5 (=default)
 
         # Note: if multiple instances of the driver are running simultaneously,
         # the temperature reading will cause mayhem even if one of the instances
