@@ -61,6 +61,8 @@ AXIS_PARAMS = {
 
 # List of useful Global parameters: (bank, address) -> comment
 GLOBAL_PARAMS = {
+#     (0, 64): "EEPROM reset",  # Anything different from 228 (or 66?) will cause reset on next reboot
+#     (0, 73): "EEPROM locked",  # Reads 0/1, but needs to be written either 1234 or 4321
     (0, 79): "End switch polarity",
     (0, 84): "Coordinate storage",
 }
@@ -141,11 +143,12 @@ def write_param(ctrl, f):
     logging.debug("Parsed global parameters as:\n%s", global_params)
 
     # Does the board have enough axes?
-    max_axis = max(ax for ax, ad in axis_params.keys())
-    try:
-        ctrl.GetAxisParam(max_axis, 1)  # current pos
-    except tmcm.TMCLError:
-        raise ValueError("Board doesn't have up to %d axes" % (max_axis + 1,))
+    if axis_params:
+        max_axis = max(ax for ax, ad in axis_params.keys())
+        try:
+            ctrl.GetAxisParam(max_axis, 1)  # current pos
+        except tmcm.TMCLError:
+            raise ValueError("Board doesn't have up to %d axes" % (max_axis + 1,))
 
     # Write each parameters (in order, to be clearer in case of error)
     for ax, ad in sorted(axis_params.keys()):
