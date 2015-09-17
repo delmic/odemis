@@ -787,7 +787,8 @@ class FixedPositionsActuator(model.Actuator):
             raise ValueError("Child %s is not an actuator." % child.name)
 
         if cycle is not None:
-            self._offset = cycle / 50  # just an offset to reference switch position
+            # just an offset to reference switch position
+            self._offset = self._cycle / len(self._positions)
             if not all(0 <= p < cycle for p in positions.keys()):
                 raise ValueError("Positions must be between 0 and %s (non inclusive)" % (cycle,))
 
@@ -892,7 +893,7 @@ class FixedPositionsActuator(model.Actuator):
                     move_to_ref = (self._cycle - cur_pos) % self._cycle + self._offset
                     self._child.moveRel({self._axis_name: move_to_ref}).result()
                     self._child.reference({self._axis_name}).result()
-                    move = {self._axis_name: mod1 - move_to_ref}
+                    move = {self._axis_name: distance}
                 else:
                     move = {self._axis_name: mod1}
             else:
