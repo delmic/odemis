@@ -44,10 +44,12 @@ def get_cairo_dlls():
 
     raise ImportError("Could not find Libtiff files!")
 
+
 def get_version():
     import odemis
     with open('version.txt', 'w') as f:
-        f.write(odemis._get_version())
+        long_version = '.'.join(odemis._get_version().split('-')[:2])
+        f.write(long_version)
     return [('version.txt', 'version.txt', 'DATA')]
 
 a = Analysis(['viewer.py'],
