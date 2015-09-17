@@ -1,5 +1,5 @@
 autogenerate=1
-embedResource=1
+embedResource=0
 filename=test_gui.py
 genGettext=0
 makeXRS=0
