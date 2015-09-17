@@ -65,7 +65,7 @@ class ButtonsTestCase(test.GuiTestCase):
 
         test.gui_loop()
 
-    def test__text_buttons(self):
+    def test_text_buttons(self):
 
         self.assertRaises(ValueError, buttons.ImageTextButton, self.panel, {'label': "blah"})
 
@@ -75,11 +75,14 @@ class ButtonsTestCase(test.GuiTestCase):
         btn = buttons.ImageTextToggleButton(self.panel, height=32, label="Toggle")
         self.add_control(btn, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
 
-        btn = buttons.ImageTextButton(self.panel, size=(300, -1), height=32, label="Wider!")
+        btn = buttons.ImageTextButton(self.panel, size=(300, -1), face_colour= 'blue',
+                                      height=32, label="Wider!")
+        btn.Disable()
         self.add_control(btn, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
 
         btn = buttons.ImageTextButton(self.panel, size=(300, -1), height=32, label="Icon!")
         btn.SetIcon(data.ico_ang.Bitmap)
+        btn.Disable()
         self.add_control(btn, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
 
         test.gui_loop()
