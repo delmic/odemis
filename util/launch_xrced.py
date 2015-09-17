@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+
 """ This custom XRCED launcher allows a small wx function to be wrapped
 so it provides a little extra needed functionality.
 
@@ -16,21 +17,22 @@ the content is an PNG image.
 import os
 import sys
 
-#pylint: disable=W0105
 from wx.tools.XRCed.globals import set_debug
 
 
 if __name__ == '__main__':
+
     try:
-        from wx.tools.XRCed.xrced import main
-        set_debug(True)
+        from XRCed.xrced import main
     except ImportError:
+        print >> sys.stderr, 'XRCed parent directory must be in PYTHONPATH'
         try:
-            from XRCed.xrced import main
+            from wx.tools.XRCed.xrced import main
+            set_debug(True)
         except ImportError:
-            print >> sys.stderr, 'XRCed parent directory must be in PYTHONPATH'
             raise
-        sys.modules['wx.tools.XRCed'] = sys.modules['XRCed']
+
+    sys.modules['wx.tools.XRCed'] = sys.modules['XRCed']
 
     from wx.tools import pywxrc
 
@@ -45,13 +47,10 @@ if __name__ == '__main__':
 
     def ncf_decorator(ncf):
         def wrapper(self, node):
-            if (
-                node.firstChild and
-                node.firstChild.nodeType == 3 and
-                node.firstChild.nodeValue.lower().endswith(".png")
-            ):
-                # print node.firstChild.nodeValue
-                return True
+            if node.firstChild and node.firstChild.nodeType == 3:
+                if node.firstChild.nodeValue.lower().endswith((".png", ".jpg")):
+                    # print node.firstChild.nodeValue
+                    return True
             return ncf(self, node)
         return wrapper
 
