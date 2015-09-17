@@ -961,7 +961,7 @@ class TMCLController(model.Actuator):
                 # param 1 = current position
                 pos[n] = self.GetAxisParam(i, 1) * self._ustepsize[i]
 
-        pos = self._applyInversionAbs(pos)
+        pos = self._applyInversion(pos)
 
         # it's read-only, so we change it via _value
         self.position._value = pos
@@ -1027,7 +1027,7 @@ class TMCLController(model.Actuator):
     @isasync
     def moveRel(self, shift):
         self._checkMoveRel(shift)
-        shift = self._applyInversionRel(shift)
+        shift = self._applyInversion(shift)
 
         # Check if the distance is big enough to make sense
         for an, v in shift.items():
@@ -1050,7 +1050,7 @@ class TMCLController(model.Actuator):
         if not pos:
             return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
-        pos = self._applyInversionAbs(pos)
+        pos = self._applyInversion(pos)
 
         for a, p in pos.items():
             if (hasattr(self, "referenced") and

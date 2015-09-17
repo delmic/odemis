@@ -886,7 +886,7 @@ class StageRedStone(model.Actuator):
             for axis, (controller, channel) in self._axis_to_child.items():
                 position[axis] = controller.getPosition(channel)
 
-        return self._applyInversionAbs(position)
+        return self._applyInversion(position)
 
     # TODO needs to be triggered by end of action, or directly controller?
     # maybe whenever a controller updates it's position?
@@ -920,7 +920,7 @@ class StageRedStone(model.Actuator):
         shift dict(string-> float): name of the axis and shift in m
         returns (Future): future that control the asynchronous move
         """
-        shift = self._applyInversionRel(shift)
+        shift = self._applyInversion(shift)
         # converts the request into one action (= a dict controller -> channels + distance)
         action_axes = {}
         for axis, distance in shift.items():

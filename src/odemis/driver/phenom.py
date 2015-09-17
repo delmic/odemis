@@ -1076,7 +1076,7 @@ class Stage(model.Actuator):
 
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
         self.position = model.VigilantAttribute(
-                                    self._applyInversionAbs(self._position),
+                                    self._applyInversion(self._position),
                                     unit="m", readonly=True)
 
     def _updatePosition(self):
@@ -1088,7 +1088,7 @@ class Stage(model.Actuator):
         self._position["y"] = mode_pos.position.y
 
         # it's read-only, so we change it via _value
-        self.position._value = self._applyInversionAbs(self._position)
+        self.position._value = self._applyInversion(self._position)
         self.position.notify(self.position.value)
 
     def _doMoveAbs(self, pos):
@@ -1128,7 +1128,7 @@ class Stage(model.Actuator):
             return model.InstantaneousFuture()
         self._checkMoveRel(shift)
 
-        shift = self._applyInversionRel(shift)
+        shift = self._applyInversion(shift)
         return self._executor.submit(self._doMoveRel, shift)
 
     @isasync
@@ -1136,7 +1136,7 @@ class Stage(model.Actuator):
         if not pos:
             return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
-        pos = self._applyInversionAbs(pos)
+        pos = self._applyInversion(pos)
 
         # self._doMove(pos)
         return self._executor.submit(self._doMoveAbs, pos)
@@ -1202,7 +1202,7 @@ class PhenomFocus(model.Actuator):
         pos = {"z": wd}
 
         # it's read-only, so we change it via _value
-        self.position._value = self._applyInversionAbs(pos)
+        self.position._value = self._applyInversion(pos)
         self.position.notify(self.position.value)
 
     def _checkQueue(self):
@@ -1235,7 +1235,7 @@ class PhenomFocus(model.Actuator):
         if not shift:
             return model.InstantaneousFuture()
         self._checkMoveRel(shift)
-        shift = self._applyInversionRel(shift)
+        shift = self._applyInversion(shift)
         logging.debug("Submit relative move of %s...", shift)
         self._moves_queue.append(("moveRel", shift))
         return self._executor.submit(self._checkQueue)
@@ -1245,7 +1245,7 @@ class PhenomFocus(model.Actuator):
         if not pos:
             return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
-        pos = self._applyInversionAbs(pos)
+        pos = self._applyInversion(pos)
         logging.info("Submit absolute move of %s...", pos)
         self._moves_queue.append(("moveAbs", pos))
         return self._executor.submit(self._checkQueue)

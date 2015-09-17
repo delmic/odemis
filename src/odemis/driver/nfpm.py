@@ -391,7 +391,7 @@ class PM8742(model.Actuator):
             if axes is None or n in axes:
                 pos[n] = self.GetPosition(i) * self._stepsize[i - 1]
 
-        pos = self._applyInversionAbs(pos)
+        pos = self._applyInversion(pos)
 
         # it's read-only, so we change it via _value
         self.position._value = pos
@@ -440,7 +440,7 @@ class PM8742(model.Actuator):
     @isasync
     def moveRel(self, shift):
         self._checkMoveRel(shift)
-        shift = self._applyInversionRel(shift)
+        shift = self._applyInversion(shift)
 
         # Check if the distance is big enough to make sense
         for an, v in shift.items():
@@ -463,7 +463,7 @@ class PM8742(model.Actuator):
         if not pos:
             return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
-        pos = self._applyInversionAbs(pos)
+        pos = self._applyInversion(pos)
 
         f = self._createFuture()
         f = self._executor.submitf(f, self._doMoveAbs, f, pos)

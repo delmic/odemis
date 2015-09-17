@@ -101,7 +101,7 @@ class Stage(model.Actuator):
         update the position VA
         """
         # it's read-only, so we change it via _value
-        self.position._value = self._applyInversionAbs(self._position)
+        self.position._value = self._applyInversion(self._position)
         self.position.notify(self.position.value)
 
     @isasync
@@ -109,7 +109,7 @@ class Stage(model.Actuator):
         if not shift:
             return model.InstantaneousFuture()
         self._checkMoveRel(shift)
-        shift = self._applyInversionRel(shift)
+        shift = self._applyInversion(shift)
 
         maxtime = 0
         for axis, change in shift.items():
@@ -131,7 +131,7 @@ class Stage(model.Actuator):
         if not pos:
             return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
-        pos = self._applyInversionAbs(pos)
+        pos = self._applyInversion(pos)
 
         maxtime = 0
         for axis, new_pos in pos.items():
