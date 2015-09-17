@@ -771,6 +771,7 @@ class FixedPositionsActuator(model.Actuator):
             raise ValueError("FixedPositionsActuator needs precisely one child")
 
         self._cycle = cycle
+        self._move_sum = 0
         self._position = {}
         self._referenced = {}
         axis, child = children.items()[0]
@@ -787,6 +788,7 @@ class FixedPositionsActuator(model.Actuator):
             raise ValueError("Child %s is not an actuator." % child.name)
 
         if cycle is not None:
+            self._offset = cycle / 50  # just an offset to reference switch position
             if not all(0 <= p < cycle for p in positions.keys()):
                 raise ValueError("Positions must be between 0 and %s (non inclusive)" % (cycle,))
 
@@ -811,7 +813,8 @@ class FixedPositionsActuator(model.Actuator):
             child.referenced.subscribe(self._update_child_ref)
 
         # If the axis can be referenced => do it now (and move to a known position)
-        if not self._referenced.get(axis, True):
+        # In case of cyclic move always reference
+        if (not self._referenced.get(axis, True)) or (self._cycle and (axis in self._referenced)):
             self.reference({axis}).result()
 
         # If not at a known position => move to the closest known position
@@ -875,14 +878,28 @@ class FixedPositionsActuator(model.Actuator):
             f = self._child.moveAbs(move)
         else:
             # Optimize by moving through the closest way
-            vector1 = distance - self._child.position.value[self._axis_name]
+            cur_pos = self._child.position.value[self._axis_name]
+            vector1 = distance - cur_pos
             mod1 = vector1 % self._cycle
-            vector2 = self._child.position.value[self._axis_name] - distance
+            vector2 = cur_pos - distance
             mod2 = vector2 % self._cycle
             if abs(mod1) < abs(mod2):
-                move = {self._axis_name:mod1}
+                self._move_sum += mod1
+                if self._move_sum >= self._cycle:
+                    # Once we are about to complete a full cycle, reference again
+                    # to get rid of accumulated error
+                    self._move_sum = 0
+                    # move to the reference switch
+                    move_to_ref = (self._cycle - cur_pos) % self._cycle + self._offset
+                    self._child.moveRel({self._axis_name: move_to_ref}).result()
+                    self._child.reference({self._axis_name}).result()
+                    move = {self._axis_name: mod1 - move_to_ref}
+                else:
+                    move = {self._axis_name: mod1}
             else:
                 move = {self._axis_name:-mod2}
+                self._move_sum -= mod2
+
             f = self._child.moveRel(move)
 
         return f
