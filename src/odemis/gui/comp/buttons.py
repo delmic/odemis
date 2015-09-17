@@ -34,6 +34,7 @@ import logging
 from operator import xor
 import wx
 import wx.lib.buttons as wxbuttons
+from wx.lib.colourutils import AdjustColour
 
 from odemis.gui import FG_COLOUR_HIGHLIGHT
 from odemis.gui.util.img import wxImageScaleKeepRatio
@@ -100,6 +101,7 @@ class BtnMixin(object):
     btns = {
         'def': {
             'text_colour': "#1A1A1A",
+            'text_col_dis': "#676767",
             16: {
                 'off': imgdata.btn_def_16,
                 'on': imgdata.btn_def_16_a,
@@ -119,6 +121,7 @@ class BtnMixin(object):
         },
         'blue': {
             'text_colour': wx.WHITE,
+            'text_col_dis': "#AAAAAA",
             16: {
                 'off': imgdata.btn_blue_16,
                 'on': imgdata.btn_blue_16_a,
@@ -410,13 +413,15 @@ class BtnMixin(object):
         # Determine font and font colour
         dc.SetFont(self.GetFont())
 
-        if self.IsEnabled():
-            if self.colour_set:
-                dc.SetTextForeground(self.GetForegroundColour())
-            else:
-                dc.SetTextForeground(self.btns[self.face_colour]['text_colour'])
+        if self.colour_set:
+            text_colour = self.GetForegroundColour()
         else:
-            dc.SetTextForeground(wx.SystemSettings.GetColour(wx.SYS_COLOUR_GRAYTEXT))
+            if self.IsEnabled():
+                text_colour = self.btns[self.face_colour]['text_colour']
+            else:
+                text_colour = self.btns[self.face_colour]['text_col_dis']
+
+        dc.SetTextForeground(text_colour)
 
         # Get the label text
         label = self.GetLabel()
@@ -507,6 +512,7 @@ class TabButton(GraphicRadioButton):
         self.Bind(wx.EVT_KILL_FOCUS, self.on_kill_focus)
 
         self.fg_color_def = "#E5E5E5"
+        self.SetForegroundColour(self.fg_color_def)
         self.fg_color_high = "#FFFFFF"
         self.fg_color_notify = FG_COLOUR_HIGHLIGHT
 
@@ -713,6 +719,8 @@ class PopupImageButton(ImageTextButton):
         kwargs['bitmap'] = imgdata.stream_add.Bitmap
 
         super(PopupImageButton, self).__init__(*args, **kwargs)
+
+        self.SetForegroundColour(wx.WHITE)
 
         self.bmpSelected = imgdata.stream_add_a.Bitmap
         self.bmpHover = imgdata.stream_add_h.Bitmap
