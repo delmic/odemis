@@ -154,7 +154,6 @@
     <object class="wxPanel" name="button_panel">
       <object class="wxBoxSizer">
         <orient>wxVERTICAL</orient>
-
       </object>
       <fg>#E6E6FA</fg>
       <bg>#4D4D4D</bg>
@@ -163,6 +162,13 @@
       </XRCED>
     </object>
     <size>400,400</size>
+    <font>
+      <size>9</size>
+      <style>normal</style>
+      <weight>normal</weight>
+      <underlined>0</underlined>
+      <face>Ubuntu</face>
+    </font>
   </object>
   <object class="wxFrame" name="canvas_frame">
     <object_ref ref="menu_bar"/>

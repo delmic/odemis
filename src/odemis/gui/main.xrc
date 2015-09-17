@@ -898,7 +898,7 @@
                       <icon_on>img/icon/ico_sem_green.png</icon_on>
                       <height>48</height>
                       <face_colour>def</face_colour>
-                      <label>SEM      </label>
+                      <label>SEM</label>
                       <XRCED>
                         <assign_var>1</assign_var>
                       </XRCED>
