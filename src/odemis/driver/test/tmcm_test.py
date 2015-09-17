@@ -337,7 +337,7 @@ class TestActuator(unittest.TestCase):
             f = self.dev.reference({a})
             f.result()
             self.assertTrue(self.dev.referenced.value[a])
-            self.assertAlmostEqual(self.dev.position.value[a], 0)
+            self.assertEqual(self.dev.position.value[a], 0)
 
         # try all axes simultaneously
         mv = dict((a, 1e-3) for a in axes)
@@ -346,7 +346,7 @@ class TestActuator(unittest.TestCase):
         f.result()
         for a in axes:
             self.assertTrue(self.dev.referenced.value[a])
-            self.assertAlmostEqual(self.dev.position.value[a], 0)
+            self.assertEqual(self.dev.position.value[a], 0)
 
     def test_ref_cancel(self):
         """
@@ -370,7 +370,7 @@ class TestActuator(unittest.TestCase):
             f.result()
             self.assertFalse(f.cancel())
             self.assertTrue(self.dev.referenced.value[a])
-            self.assertAlmostEqual(self.dev.position.value[a], 0)
+            self.assertEqual(self.dev.position.value[a], 0)
             self.assertFalse(f.cancelled())
 
         # try all axes simultaneously, and cancel during ref

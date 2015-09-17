@@ -87,6 +87,15 @@ def read_param(ctrl, f):
     f.write("# Parameters from %s, address %d\n" % (ctrl.hwVersion, ctrl._target))
     f.write("# Bank/Axis\tAddress\tDescription\n")
 
+    # FIXME: it seems that if the board is connected to a power source but not
+    # getting any current from there, it will not load some of the axis parameters
+    # In such a case, velocity and accel are read as -1 (which is quite a feat
+    # for a values > 0). We should warn the user about this.
+    # Once the power source is sending enough current, it will read the values
+    # out of the EEPROM happily.
+    # Also we need to check if writing to these parameters in such conditions
+    # work.
+
     # Read axes params
     for axis in range(naxes + 1):
         for add in sorted(AXIS_PARAMS.keys()):

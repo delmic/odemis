@@ -654,7 +654,7 @@ class Stage(model.Actuator):
 
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
         self.position = model.VigilantAttribute(
-                                    self._applyInversionAbs(self._position),
+                                    self._applyInversion(self._position),
                                     unit="m", readonly=True)
 
     def _updatePosition(self):
@@ -662,7 +662,7 @@ class Stage(model.Actuator):
         update the position VA
         """
         # it's read-only, so we change it via _value
-        self.position._value = self._applyInversionAbs(self._position)
+        self.position._value = self._applyInversion(self._position)
         self.position.notify(self.position.value)
 
     def _doMove(self, pos):
@@ -693,7 +693,7 @@ class Stage(model.Actuator):
             return model.InstantaneousFuture()
         self._checkMoveRel(shift)
 
-        shift = self._applyInversionRel(shift)
+        shift = self._applyInversion(shift)
 
         for axis, change in shift.items():
             self._position[axis] += change
@@ -706,7 +706,7 @@ class Stage(model.Actuator):
         if not pos:
             return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
-        pos = self._applyInversionAbs(pos)
+        pos = self._applyInversion(pos)
 
         for axis, new_pos in pos.items():
             self._position[axis] = new_pos
@@ -754,7 +754,7 @@ class EbeamFocus(model.Actuator):
 
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
         self.position = model.VigilantAttribute(
-                                    self._applyInversionAbs(self._position),
+                                    self._applyInversion(self._position),
                                     unit="m", readonly=True)
 
         # will take care of executing axis move asynchronously
@@ -765,7 +765,7 @@ class EbeamFocus(model.Actuator):
         update the position VA
         """
         # it's read-only, so we change it via _value
-        self.position._value = self._applyInversionAbs(self._position)
+        self.position._value = self._applyInversion(self._position)
         self.position.notify(self.position.value)
 
     def _doMove(self, pos):
@@ -792,7 +792,7 @@ class EbeamFocus(model.Actuator):
             return model.InstantaneousFuture()
         self._checkMoveRel(shift)
 
-        shift = self._applyInversionRel(shift)
+        shift = self._applyInversion(shift)
 
         for axis, change in shift.items():
             self._position[axis] += change
@@ -805,7 +805,7 @@ class EbeamFocus(model.Actuator):
         if not pos:
             return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
-        pos = self._applyInversionAbs(pos)
+        pos = self._applyInversion(pos)
 
         for axis, new_pos in pos.items():
             self._position[axis] = new_pos

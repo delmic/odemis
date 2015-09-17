@@ -620,6 +620,9 @@ class Axis(object):
         """
         self.canAbs = canAbs
 
+        # TODO: add a way to store some "favorite" positions (at least possible
+        # to define at init, and maybe also update online?)
+
         assert isinstance(unit, (type(None), basestring))
         self.unit = unit  # always defined, just sometimes is None
 
@@ -684,13 +687,14 @@ class Actuator(HwComponent):
         """
         axes (dict of str -> Axis): names of the axes and their static information.
         inverted (set of string): sub-set of axes with the name of all axes which
-          are to be inverted (move in opposite direction). Note that wrt
-          absolute positions, an "inverted" axis means that the range stays
-          identical but the reported position is reflected on the center of the
-          range. For instance, if an axis has a range of 1 -> 11, and is
-          inverted, it will still be advertized as having a range of 1 -> 11.
-          However, when the actual position is at 2, the reported position will
-          be 10.
+          are to be inverted (move in opposite direction).
+          Note that wrt absolute positions, an "inverted" axis means that the
+          range is inverted and the reported position is also inverted. For
+          instance , if an axis has a range of 1 -> 11, and is inverted, it will
+          be advertised as having a range of -11 -> -1. When the actual position
+          is at 2, the reported position will be -2.
+          The range of the axis will be automatically inverted if the axis is
+          inverted.
         """
         HwComponent.__init__(self, name, role, **kwargs)
 
@@ -705,11 +709,15 @@ class Actuator(HwComponent):
             raise ValueError("Actuator %s has non-existing inverted axes: %s." %
                              (name, ", ".join(non_existing)))
         for an, a in axes.items():
-            # FIXME: an enumerated axis could be inverted if the choices are
-            # sortable.
+            # TODO: an enumerated axis could be inverted if the choices are
+            # real numbers.
             if hasattr(a, "choices") and an in inverted:
                 raise ValueError("Axis %s of actuator %s cannot be inverted." %
                                  (an, name))
+            elif hasattr(a, "range") and an in inverted:
+                # We invert the range here, so that the child class doesn't have
+                # to care about the 'inverted' argument.
+                a.range = (-a.range[1], -a.range[0])
 
         # it should also have a .position VA
         # it can also have .speed and .referenced VAs
@@ -745,7 +753,9 @@ class Actuator(HwComponent):
     @isasync
     def reference(self, axes):
         """
-        Start the referencing (aka homing) of the given axes
+        Start the referencing (aka homing) of the given axes. Note: it is
+        usual, but not required, that after a successful referencing the
+        position of the axis is 0 at the reference point.
         axes (set of str): axes to be referenced
         returns (Future): object to control the reference request
         """
@@ -762,11 +772,12 @@ class Actuator(HwComponent):
         pass
 
     # helper methods
-    def _applyInversionRel(self, shift):
+    def _applyInversion(self, shift):
         """
-        Convert from external relative position to internal position and
-        vice-versa. (It's an involutary function, so it works in both ways)
-        shift (dict string -> float): the shift for a moveRel()
+        Convert from external position to internal position and vice-versa.
+        (It's an involutary function, so it works in both ways)
+        shift (dict string -> float): the shift for a moveRel() or pos for a
+         moveAbs()
         return (dict string -> float): the shift with inversion of axes applied
         """
         ret = dict(shift)
@@ -775,18 +786,21 @@ class Actuator(HwComponent):
                 ret[a] = -ret[a]
         return ret
 
-    def _applyInversionAbs(self, pos):
-        """
-        Convert from external absolute position to internal position and
-        vice-versa. (It's an involutary function, so it works in both ways)
-        pos (dict string -> float): the new position for a moveAbs()
-        return (dict string -> float): the position with inversion of axes applied
-        """
-        ret = dict(pos)
-        for a in self._inverted:
-            if a in ret:
-                ret[a] = self._axes[a].range[0] + self._axes[a].range[1] - ret[a]
-        return ret
+#     def _applyInversionAbs(self, pos):
+#         """
+#         Convert from _absolute_ external position to internal position and
+#         vice-versa, if the axis range needs to stay identical between the
+#         internal device range the external range. For instance if an axis
+#         range is 1 -> 11, and the internal position is 2, then it becomes 10.
+#         (It's an involutary function, so it works in both ways)
+#         pos (dict string -> float): the new position for a moveAbs()
+#         return (dict string -> float): the position with inversion of axes applied
+#         """
+#         ret = dict(pos)
+#         for a in self._inverted:
+#             if a in ret:
+#                 ret[a] = self._axes[a].range[0] + self._axes[a].range[1] - ret[a]
+#         return ret
 
     def _checkMoveRel(self, shift):
         """
@@ -839,6 +853,7 @@ class Actuator(HwComponent):
         nonref = axes - referenceable
         if nonref:
             raise ValueError("Cannot reference the following axes: %s" % (nonref,))
+
 
 class PowerSupplier(HwComponent):
     """
