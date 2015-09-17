@@ -99,6 +99,12 @@ class BtnMixin(object):
 
     # Default button faces
     btns = {
+        'font_size': {
+            16: 8,
+            24: 10,
+            32: 11,
+            48: 15,
+        },
         'def': {
             'text_colour': "#1A1A1A",
             'text_col_dis': "#676767",
@@ -194,6 +200,14 @@ class BtnMixin(object):
         # Previous size, used to check if bitmaps should be recreated
         self.previous_size = (0, 0)
         self.colour_set = False
+
+        # Set the font size to the default. This will be overridden if another font (size) is
+        # defined in the XRC file
+        if self.height:
+            font = self.GetFont()
+            # print font.GetNativeFontInfoDesc()
+            font.SetPointSize(self.btns['font_size'][self.height])
+            self.SetFont(font)
 
     def SetForegroundColour(self, color):
         super(BtnMixin, self).SetForegroundColour(color)

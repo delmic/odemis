@@ -65,6 +65,13 @@ class ButtonsTestCase(test.GuiTestCase):
 
         test.gui_loop()
 
+    def test_image_button_font(self):
+
+        for height in (16, 24, 32, 48):
+            btn = buttons.ImageTextButton(self.panel, height=height, label="Big brown fox")
+            self.add_control(btn, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
+        test.gui_loop()
+
     def test_text_buttons(self):
 
         self.assertRaises(ValueError, buttons.ImageTextButton, self.panel, {'label': "blah"})
