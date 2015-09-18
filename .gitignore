@@ -18,6 +18,7 @@ build
 /install/windows/bin
 eggs
 parts
+/pretty-data
 var
 sdist
 develop-eggs

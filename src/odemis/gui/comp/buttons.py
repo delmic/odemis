@@ -34,7 +34,6 @@ import logging
 from operator import xor
 import wx
 import wx.lib.buttons as wxbuttons
-from wx.lib.colourutils import AdjustColour
 
 from odemis.gui import FG_COLOUR_HIGHLIGHT
 from odemis.gui.util.img import wxImageScaleKeepRatio
@@ -698,6 +697,7 @@ class ViewButton(GraphicRadioButton):
         """
 
         if image:
+            # image.SaveFile('dummy.png', wx.BITMAP_TYPE_PNG)
             # image doesn't have the same aspect ratio as the actual thumbnail
             # => rescale and crop on the center
             scaled_img = wxImageScaleKeepRatio(image, self.thumbnail_size, wx.IMAGE_QUALITY_HIGH)

@@ -752,7 +752,9 @@ class BufferedCanvas(wx.Panel):
             return None
 
         # new bitmap to copy the DC
-        bitmap = wx.EmptyBitmap(*self.ClientSize)
+        # On Windows, the bitmap was made partly transparent because the depth was 32 bit by
+        # default. This cause weird colours and parts of the thumbnail being completely transparent.
+        bitmap = wx.EmptyBitmap(*self.ClientSize, depth=24)
         dc = wx.MemoryDC()
         dc.SelectObject(bitmap)
 
