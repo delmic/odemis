@@ -964,7 +964,7 @@ class TMCLController(model.Actuator):
             # but without that, the final reference position is affected by
             # the original position.
             with self._refproc_lock[axis]:
-                if self._refproc_cancelled[axis]:
+                if self._refproc_cancelled[axis].is_set():
                     raise CancelledError("Reference search cancelled before backward move")
                 self.MoveRelPos(axis, -20000)  # ~ 100µm
             for i in range(100):
@@ -1363,9 +1363,12 @@ class TMCLController(model.Actuator):
                     self._waitReferencing(aid)  # block until it's over
                     self.referenced._value[a] = True
                     future._current_axis = None
-            except CancelledError:
-                logging.info("Referencing cancelled")
+            except CancelledError as ex:
+                logging.info("Referencing cancelled: %s", ex)
                 future._was_stopped = True
+                raise
+            except Exception:
+                logging.exception("Referencing failure")
                 raise
             finally:
                 # We only notify after updating the position so that when a listener
