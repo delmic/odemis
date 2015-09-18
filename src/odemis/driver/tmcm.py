@@ -22,6 +22,7 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 
+from collections import OrderedDict
 from concurrent.futures import CancelledError
 import fcntl
 import glob
@@ -70,6 +71,26 @@ REFPROC_FAKE = "FakeReferencing"  # was used for simulator when it didn't suppor
 
 # Model number (int) of devices tested
 KNOWN_MODELS = {3110, 6110}
+
+# Info for storing config data that is not directly recordable in EEPROM
+UC_FORMAT = 1  # Version number
+# Contains also the number of axes
+# Axis param number -> size (in bits) + un/signed (negative if signed)
+UC_APARAM = OrderedDict((
+    # Chopper (for each axis)
+    (162, 2),  # Chopper blank time (1 = for low current applications, 2 is default)
+    (163, 1),  # Chopper mode (0 is default)
+    (167, 4),  # Chopper off time (2 = minimum)
+
+    # Stallguard
+    (174, -7),  # stallGuard2 threshold
+    (181, 1),  # Stop on stall
+))
+
+# Bank/add -> size of value (in bits)
+UC_OUT = OrderedDict((
+    ((0, 0), 2),  # Pull-ups for limit switches
+))
 
 
 class TMCLController(model.Actuator):
@@ -215,9 +236,13 @@ class TMCLController(model.Actuator):
             axes_ref = dict((a, False) for a in axes)
             self.referenced = model.VigilantAttribute(axes_ref, readonly=True)
 
-        # TODO: move this to user-defined area of the EEPROM?
-        # Activate the pull-ups for the limit switches
-        self.SetIO(0, 0, 3)  # 3 = active for ports 0,1,2 and 3,4,5 (=default)
+        try:
+            axis_params, io_config = self.extract_config()
+        except TypeError as ex:
+            logging.warning("Failed to extract user config: %s", ex)
+        else:
+            logging.debug("Extracted config %s", axis_params)
+            self.apply_config(axis_params, io_config)
 
         # Note: if multiple instances of the driver are running simultaneously,
         # the temperature reading will cause mayhem even if one of the instances
@@ -254,19 +279,17 @@ class TMCLController(model.Actuator):
         Initialise the given axis with "good" values for our needs (Delphi)
         axis (int): axis number
         """
-        # TODO: configure StallGuard properly
         self.MoveRelPos(axis, 0) # activate parameter with dummy move
 
         self._refproc_cancelled[axis] = threading.Event()
         self._refproc_lock[axis] = threading.Lock()
 
         if self._refproc == REFPROC_2XFF:
-            # TODO: Read them out of a memory blob saved in the bank 2
+            # TODO: get rid of this once all the hardware have been updated with
+            # the right EEPROM config (using tmcmconfig)
             self.SetAxisParam(axis, 163, 0)  # chopper mode (0 is default)
             self.SetAxisParam(axis, 162, 2)  # Chopper blank time (1 = for low current applications, 2 is default)
             self.SetAxisParam(axis, 167, 3)  # Chopper off time (2 = minimum)
-            # TODO: get rid of this once all the hardware have been updated with
-            # the right EEPROM config (using tmcmconfig)
             self.SetAxisParam(axis, 4, 1398)  # maximum velocity to 1398 == 2 mm/s
             self.SetAxisParam(axis, 5, 7)  # maximum acc to 7 == 20 mm/s2
             self.SetAxisParam(axis, 140, 8)  # number of usteps ==2^8 =256 per fullstep
@@ -284,8 +307,8 @@ class TMCLController(model.Actuator):
             # later on move back to there. Now, we just stop ASAP, and hope it
             # takes always the same time to stop. This allows to read how far from
             # a previous referencing position we were during the testing.
-            prog = [# (6, 1, axis), # GAP 1, Motid # read pos
-                    # (35, 60 + axis, 2), # AGP 60, 2 # save pos to 2/60
+            prog = [# (6, 1, axis), # GAP 1, Motid // read pos
+                    # (35, 60 + axis, 2), # AGP 60, 2 // save pos to 2/60
 
                     # (32, 10 + axis, axis), # CCO 10, Motid // Save the current position # doesn't work??
 
@@ -383,6 +406,112 @@ class TMCLController(model.Actuator):
                 logging.debug("Device replied unexpected message: %s", res.encode('string_escape'))
 
             raise IOError("Device did not answer correctly to any sync message")
+
+    # The next three methods are to handle the extra configuration saved in user
+    # memory (global param, bank 2)
+    # Note: there is no way to read the config from the live memory because it
+    # is not possible to read the current output values (written by SetIO()).
+
+    def apply_config(self, axis_params, io_config):
+        """
+        Configure the device according to the given 'user configuration'.
+        axis_params (dict (int, int) -> int): axis number/param number -> value
+        io_config (dict (int, int) -> int): bank/port -> value to pass to SetIO
+        """
+        for (ax, ad), v in axis_params.items():
+            self.SetAxisParam(ax, ad, v)
+        for (b, p), v in io_config.items():
+            self.SetIO(b, p, v)
+
+    def write_config(self, axis_params, io_config):
+        """
+        Converts the 'user configuration' into a packed data and store into the
+        'user' EEPROM area (bank 2).
+        axis_params (dict (int, int) -> int): axis number/param number -> value
+          Note: all axes of the device must be present, and all the parameters
+          defined in UC_APARAM must be present.
+        io_config (dict (int, int) -> int): bank/port -> value to pass to SetIO
+          Note that all the data in UC_OUT must be defined
+        """
+        naxes = max(ax for ax, ad in axis_params.keys()) + 1
+
+        # Pack IO, then axes
+        sd = struct.pack("B", io_config[(0, 0)])
+        for i in range(naxes):
+            # So far, everything can be saved as a signed 8-bit, so keep it simple
+            # If needed later, it could be much more packed
+            v = [axis_params[(i, p)] for p in UC_APARAM.keys()]
+            sd += struct.pack("%db" % len(v), *v)
+
+        # pad enough 0's to be a multiple of 4 (= uint32)
+        sd += b"\x00" * (-len(sd) % 4)
+
+        # Compute checksum (= sum of everything on 16 bits)
+        hpres = numpy.frombuffer(sd, dtype=numpy.uint16)
+        checksum = numpy.sum(hpres, dtype=numpy.uint16)
+
+        # Compute header
+        s = struct.pack(">HBB", checksum, UC_FORMAT, len(sd) // 4) + sd
+
+        logging.debug("Encoded user config as '%s'", s.encode('string_escape'))
+
+        # Write s as a series of uint32 into the user area
+        assert(len(s) // 4 <= 56)
+        for i, v in enumerate(struct.unpack(">%di" % (len(s) // 4), s)):
+            logging.debug("Writing on %d, 0x%08x", i, v)
+            self.SetGlobalParam(2, i, v)
+
+    def extract_config(self):
+        """
+        Read the configuration stored in 'user' area and convert it to a python
+        representation.
+        return:
+            axis_params (dict (int, int) -> int): axis number/param number -> value
+            io_config (dict (int, int) -> int): bank/port -> value to pass to SetIO
+        raise:
+            TypeError: the configuration saved doesn't appear to be valid
+        """
+        # Read header (and check it makes sense)
+        h = self.GetGlobalParam(2, 0)
+        sh = struct.pack(">I", h)
+        chks, fv, l = struct.unpack(">HBB", sh)
+        if fv != UC_FORMAT:
+            raise TypeError("User config format claim to be unsupported v%d" % fv)
+        if not 2 <= l <= 55:
+            raise TypeError("Impossible length of %d" % l)
+
+        # Read the rest of the data
+        s = ""
+        for i in range(l):
+            d = self.GetGlobalParam(2, i + 1)
+            s += struct.pack(">i", d)
+
+        logging.debug("Read user config as '%s%s'", sh.encode('string_escape'), s.encode('string_escape'))
+
+        # Compute checksum (= sum of everything on 16 bits)
+        hpres = numpy.frombuffer(s, dtype=numpy.uint16)
+        act_chks = numpy.sum(hpres, dtype=numpy.uint16)
+        if act_chks != chks:
+            raise TypeError("User config has wrong checksum (expected %d)" % act_chks)
+
+        # Decode
+        lad = len(UC_APARAM.keys())
+        assert(lad >= 4)
+        naxes = (len(s) - 1) // lad # works because lad >= 4
+        assert(naxes > 0)
+        s = s[:1 + lad * naxes]  # discard the padding
+        fmt = ">B" + ("%db" % lad) * naxes
+        ud = struct.unpack(fmt, s)
+
+        io_config = {}
+        io_config[(0, 0)] = ud[0]
+
+        axis_params = {}
+        for i in range(naxes):
+            for j, p in enumerate(UC_APARAM.keys()):
+                axis_params[(i, p)] = ud[i * lad + j]
+
+        return axis_params, io_config
 
     # TODO: finish this method and use where possible
     def SendInstructionRecoverable(self, n, typ=0, mot=0, val=0):
