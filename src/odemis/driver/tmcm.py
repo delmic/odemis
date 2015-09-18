@@ -83,8 +83,9 @@ UC_APARAM = OrderedDict((
     (167, 4),  # Chopper off time (2 = minimum)
 
     # Stallguard
+    (173, 1),  # stallGuard2 filter
     (174, -7),  # stallGuard2 threshold
-    (181, 1),  # Stop on stall
+    (181, 11),  # Stop on stall
 ))
 
 # Bank/add -> size of value (in bits)
@@ -240,6 +241,8 @@ class TMCLController(model.Actuator):
             axis_params, io_config = self.extract_config()
         except TypeError as ex:
             logging.warning("Failed to extract user config: %s", ex)
+        except Exception:
+            logging.exception("Error during user config extraction")
         else:
             logging.debug("Extracted config %s", axis_params)
             self.apply_config(axis_params, io_config)
@@ -438,10 +441,10 @@ class TMCLController(model.Actuator):
         # Pack IO, then axes
         sd = struct.pack("B", io_config[(0, 0)])
         for i in range(naxes):
-            # So far, everything can be saved as a signed 8-bit, so keep it simple
-            # If needed later, it could be much more packed
-            v = [axis_params[(i, p)] for p in UC_APARAM.keys()]
-            sd += struct.pack("%db" % len(v), *v)
+            for p, l in UC_APARAM.items():
+                v = axis_params[(i, p)]
+                fmt = ">b" if abs(l) <= 7 else ">h"
+                sd += struct.pack(fmt, v)
 
         # pad enough 0's to be a multiple of 4 (= uint32)
         sd += b"\x00" * (-len(sd) % 4)
@@ -495,21 +498,26 @@ class TMCLController(model.Actuator):
             raise TypeError("User config has wrong checksum (expected %d)" % act_chks)
 
         # Decode
-        lad = len(UC_APARAM.keys())
+        afmt = ""
+        for p, l in UC_APARAM.items():
+            afmt += "b" if abs(l) <= 7 else "h"
+        lad = struct.calcsize(">" + afmt)
         assert(lad >= 4)
         naxes = (len(s) - 1) // lad # works because lad >= 4
         assert(naxes > 0)
-        s = s[:1 + lad * naxes]  # discard the padding
-        fmt = ">B" + ("%db" % lad) * naxes
+        fmt = ">B" + afmt * naxes
+        s = s[:struct.calcsize(fmt)]  # discard the padding
         ud = struct.unpack(fmt, s)
 
         io_config = {}
         io_config[(0, 0)] = ud[0]
 
+        i = 1
         axis_params = {}
-        for i in range(naxes):
-            for j, p in enumerate(UC_APARAM.keys()):
-                axis_params[(i, p)] = ud[i * lad + j]
+        for ax in range(naxes):
+            for p in UC_APARAM.keys():
+                axis_params[(ax, p)] = ud[i]
+                i += 1
 
         return axis_params, io_config
 

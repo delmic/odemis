@@ -58,6 +58,7 @@ AXIS_PARAMS = {
     162: "Chopper blank time",
     163: "Chopper mode",
     167: "Chopper off time",
+    173: "StallGuard2 filter",
     174: "StallGuard2 threshold",
     181: "Stop on stall",
 }
