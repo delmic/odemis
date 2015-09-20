@@ -189,11 +189,20 @@ class OdemisGUIApp(wx.App):
                     "label": "ALIGNMENT",
                     "roles": {
                         "sparc": {},
-                        "sparc2": {"default": True},
                     },
                     "controller": tabs.MirrorAlignTab,
                     "button": self.main_frame.btn_tab_sparc_align,
                     "panel": main_xrc.xrcpnl_tab_sparc_align
+                },
+                {
+                    "name": "sparc2_align",
+                    "label": "ALIGNMENT",
+                    "roles": {
+                        "sparc2": {"default": True},
+                    },
+                    "controller": tabs.MultiAlignTab,
+                    "button": self.main_frame.btn_tab_sparc2_align,
+                    "panel": main_xrc.xrcpnl_tab_sparc2_align
                 },
                 {
                     "name": "sparc_acqui",

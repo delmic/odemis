@@ -2048,6 +2048,16 @@ class MirrorAlignTab(Tab):
                 s.is_active.value = False
 
 
+class MultiAlignTab(Tab):
+    """
+    Tab for the mirror alignment calibration on the Sparc 2
+    """
+
+    def __init__(self, name, button, panel, main_frame, main_data):
+        tab_data = guimod.ActuatorGUIData(main_data)
+        super(MultiAlignTab, self).__init__(name, button, panel, main_frame, tab_data)
+
+
 class TabBarController(object):
     def __init__(self, tab_defs, main_frame, main_data):
         """
@@ -2133,7 +2143,6 @@ class TabBarController(object):
 
         for tab_def in tab_defs:
             if role in tab_def["roles"]:
-
                 tpnl = tab_def["panel"](self.main_frame)
                 main_sizer.Insert(index, tpnl, flag=wx.EXPAND, proportion=1)
                 index += 1
