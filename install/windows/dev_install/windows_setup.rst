@@ -75,7 +75,9 @@ https://www.microsoft.com/en-us/download/details.aspx?id=44266
 This is a simple compiler distribution from Microsoft, specifically made for Python.
 
 After installation, use the `setup.py` file from the `install/windows` folder to build the *.pyd
-files.
+files:
+
+`python setup.py build_ext --inplace`
 
 **IMPORTANT**: It will be necessary to update the `productdir` path in the `setup.py` file!
 
