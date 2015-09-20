@@ -466,7 +466,7 @@ class MFF(model.Actuator):
                 return # don't change position
 
         # it's read-only, so we change it via _value
-        self.position._value = self._applyInversionAbs(pos)
+        self.position._value = self._applyInversion(pos)
         self.position.notify(self.position.value)
 
     def _waitNoMotion(self, timeout=None):
@@ -493,7 +493,7 @@ class MFF(model.Actuator):
         if not shift:
             return model.InstantaneousFuture()
         self._checkMoveRel(shift)
-        shift = self._applyInversionRel(shift)
+        shift = self._applyInversion(shift)
 
         # TODO move to the +N next position? (and modulo number of axes)
         raise NotImplementedError("Relative move on enumerated axis not supported")
@@ -503,7 +503,7 @@ class MFF(model.Actuator):
         if not pos:
             return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
-        pos = self._applyInversionAbs(pos)
+        pos = self._applyInversion(pos)
 
         return self._executor.submit(self._doMovePos, pos.values()[0])
 

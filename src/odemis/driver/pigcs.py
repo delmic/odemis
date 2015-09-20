@@ -2242,13 +2242,13 @@ class Bus(model.Actuator):
             pos = {}
         else:
             # uses the current values (converted to internal representation)
-            pos = self._applyInversionAbs(self.position.value)
+            pos = self._applyInversion(self.position.value)
 
         for a, (controller, channel) in self._axis_to_cc.items():
             if axes is None or a in axes:
                 pos[a] = controller.getPosition(channel)
 
-        pos = self._applyInversionAbs(pos)
+        pos = self._applyInversion(pos)
         logging.debug("Reporting new position at %s", pos)
 
         # it's read-only, so we change it via _value
@@ -2285,7 +2285,7 @@ class Bus(model.Actuator):
         if not shift:
             return model.InstantaneousFuture()
         self._checkMoveRel(shift)
-        shift = self._applyInversionRel(shift)
+        shift = self._applyInversion(shift)
 
         # TODO: drop an axis if the distance is too small to make sense
 
@@ -2299,7 +2299,7 @@ class Bus(model.Actuator):
         if not pos:
             return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
-        pos = self._applyInversionAbs(pos)
+        pos = self._applyInversion(pos)
 
         f = self._createFuture()
         f = self._executor.submitf(f, self._doMoveAbs, f, pos)

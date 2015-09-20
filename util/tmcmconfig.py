@@ -4,7 +4,7 @@
 # TMCL-based controllers.
 # The file to represent the memory is a tab-separated value with the following format:
 # bank/axis  address  value    # comment
-# bank/axis can be either G0 -> G3 and A0->A5
+# bank/axis can be either G0 -> G3 (global: bank), A0->A5 (axis: number), or O0 -> 02 (output: bank)
 #            Address is between 0 and 255
 #                     Value a number (actual allowed values depend on the parameter)
 # The recommend file extension is '.tmcm.tsv'
@@ -49,14 +49,18 @@ AXIS_PARAMS = {
     149: "Soft stop flag",
     153: "Ramp divisor",
     154: "Pulse divisor",
-    # These ones are not in EEPROM
-#     162: "Chopper blank time",
-#     163: "Chopper mode",
-#     167: "Chopper off time",
     193: "Reference search mode",
     194: "Reference search speed",
     195: "Reference switch speed",
     214: "Power down delay (in 10ms)",
+
+    # These ones are not saved in EEPROM (but save in user config)
+    162: "Chopper blank time",
+    163: "Chopper mode",
+    167: "Chopper off time",
+    173: "StallGuard2 filter",
+    174: "StallGuard2 threshold",
+    181: "Stop on stall",
 }
 
 # List of useful Global parameters: (bank, address) -> comment
@@ -67,10 +71,21 @@ GLOBAL_PARAMS = {
     (0, 84): "Coordinate storage",
 }
 
+OUT_CONFIG = {  # Saved in user config
+    (0, 0): "Pull-ups for reference switches",
+}
 
-# The functions available to the user
-def read_param(ctrl, f):
-    # Find out how many axes there are
+OUT_CONFIG_DEFAULT = {
+    (0, 0): 3,
+}
+
+
+def _get_naxes(ctrl):
+    """
+    Count the number of axes that the device supports
+    return (0 < int)
+    """
+    # Try to read an simple axis param and see if the device complains
     for i in range(64):
         try:
             ctrl.GetAxisParam(i, 1)  # current pos
@@ -83,9 +98,25 @@ def read_param(ctrl, f):
         logging.warning("Reporting 64 axes... might be wrong!")
         naxes = 64
 
+    return naxes
+
+
+# The functions available to the user
+def read_param(ctrl, f):
+    naxes = _get_naxes(ctrl)
+
     # Write the name of the board, for reference
     f.write("# Parameters from %s, address %d\n" % (ctrl.hwVersion, ctrl._target))
     f.write("# Bank/Axis\tAddress\tDescription\n")
+
+    # FIXME: it seems that if the board is connected to a power source but not
+    # getting any current from there, it will not load some of the axis parameters
+    # In such a case, velocity and accel are read as -1 (which is quite a feat
+    # for a values > 0). We should warn the user about this.
+    # Once the power source is sending enough current, it will read the values
+    # out of the EEPROM happily.
+    # Also we need to check if writing to these parameters in such conditions
+    # work.
 
     # Read axes params
     for axis in range(naxes + 1):
@@ -93,7 +124,8 @@ def read_param(ctrl, f):
             c = AXIS_PARAMS[add]
             try:
                 # TODO: allow to select whether we first the reset the value from the ROM or not?
-                ctrl.RestoreAxisParam(axis, add)
+                if add not in tmcm.UC_APARAM:
+                    ctrl.RestoreAxisParam(axis, add)
             except tmcm.TMCLError:
                 logging.warning("Failed to restore axis param A%d %d", axis, add)
             try:
@@ -114,6 +146,17 @@ def read_param(ctrl, f):
         except Exception:
             logging.exception("Failed to read global param G%d %d", bank, add)
 
+    # Cannot read current output config, but attempt to extract it from user config
+    try:
+        axis_params, io_config = ctrl.extract_config()
+    except TypeError as ex:
+        logging.warning("Failed to extract user config: %s", ex)
+        io_config = OUT_CONFIG_DEFAULT
+
+    for (bank, add), v in io_config.items():
+        c = OUT_CONFIG[(bank, add)]
+        f.write("O%d\t%d\t%d\t# %s\n" % (bank, add, v, c))
+
     f.close()
 
 
@@ -121,7 +164,9 @@ def write_param(ctrl, f):
     # First parse the file to check if it completely makes sense before actually
     # writing it.
     axis_params = {}  # (axis/add) -> val (int)
+    axis_params_user = {}  # (axis/add) -> val (int)
     global_params = {}  # (bank/add) -> val (int)
+    io_config = OUT_CONFIG_DEFAULT.copy()  # (bank/add) -> val (int)
 
     # read the parameters "database" from stdin
     for l in f:
@@ -130,17 +175,24 @@ def write_param(ctrl, f):
         if mc:
             logging.debug("Comment line skipped: '%s'", l.rstrip("\n\r"))
             continue
-        m = re.match(r"(?P<type>[AG])(?P<num>[0-9]+)\t(?P<add>[0-9]+)\t(?P<value>[0-9]+)\s*(#.*)?$", l)
+        m = re.match(r"(?P<type>[AGO])(?P<num>[0-9]+)\t(?P<add>[0-9]+)\t(?P<value>[0-9]+)\s*(#.*)?$", l)
         if not m:
             raise ValueError("Failed to parse line '%s'" % l.rstrip("\n\r"))
         typ, num, add, val = m.group("type"), int(m.group("num")), int(m.group("add")), int(m.group("value"))
         if typ == "A":
-            axis_params[(num, add)] = val
-        else:
+            if add in tmcm.UC_APARAM:
+                axis_params_user[(num, add)] = val
+            else:
+                axis_params[(num, add)] = val
+        elif typ == "G":
             global_params[(num, add)] = val
+        else:
+            io_config[(num, add)] = val
 
     logging.debug("Parsed axis parameters as:\n%s", axis_params)
+    logging.debug("Parsed user axis parameters as:\n%s", axis_params_user)
     logging.debug("Parsed global parameters as:\n%s", global_params)
+    logging.debug("Parsed output config as:\n%s", io_config)
 
     # Does the board have enough axes?
     if axis_params:
@@ -183,6 +235,19 @@ def write_param(ctrl, f):
             logging.exception("Failed to write parameter G%d %d to %d", b, ad, v)
             raise
 
+    # Apply immediately so that the board is directly correctly configured
+    ctrl.apply_config(axis_params_user, io_config)
+
+    # For axis_params_user, all the axes/param must be defined
+    # => if not present, just read the current value from the memory
+    naxes = _get_naxes(ctrl)
+    for ax in range(naxes):
+        for add in tmcm.UC_APARAM.keys():
+            if (ax, add) not in axis_params_user:
+                axis_params_user[(ax, add)] = ctrl.GetAxisParam(ax, add)
+
+    ctrl.write_config(axis_params_user, io_config)
+
 
 def main(args):
     """
@@ -193,7 +258,7 @@ def main(args):
 
     # arguments handling
     parser = argparse.ArgumentParser(prog="tmcmconfig",
-                             description="Read/write parameters in a TMCM controller")
+                        description="Read/write parameters in a TMCM controller")
 
     parser.add_argument("--log-level", dest="loglev", metavar="<level>", type=int,
                         default=1, help="set verbosity level (0-2, default = 1)")

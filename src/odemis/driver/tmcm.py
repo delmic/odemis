@@ -22,6 +22,7 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 
+from collections import OrderedDict
 from concurrent.futures import CancelledError
 import fcntl
 import glob
@@ -71,6 +72,27 @@ REFPROC_FAKE = "FakeReferencing"  # was used for simulator when it didn't suppor
 # Model number (int) of devices tested
 KNOWN_MODELS = {3110, 6110}
 
+# Info for storing config data that is not directly recordable in EEPROM
+UC_FORMAT = 1  # Version number
+# Contains also the number of axes
+# Axis param number -> size (in bits) + un/signed (negative if signed)
+UC_APARAM = OrderedDict((
+    # Chopper (for each axis)
+    (162, 2),  # Chopper blank time (1 = for low current applications, 2 is default)
+    (163, 1),  # Chopper mode (0 is default)
+    (167, 4),  # Chopper off time (2 = minimum)
+
+    # Stallguard
+    (173, 1),  # stallGuard2 filter
+    (174, -7),  # stallGuard2 threshold
+    (181, 11),  # Stop on stall
+))
+
+# Bank/add -> size of value (in bits)
+UC_OUT = OrderedDict((
+    ((0, 0), 2),  # Pull-ups for limit switches
+))
+
 
 class TMCLController(model.Actuator):
     """
@@ -108,6 +130,8 @@ class TMCLController(model.Actuator):
         if len(axes) != len(ustepsize):
             raise ValueError("Expecting %d ustepsize (got %s)" %
                              (len(axes), ustepsize))
+
+        # TODO: allow to specify the unit of the axis
 
         self._name_to_axis = {}  # str -> int: name -> axis number
         for i, n in enumerate(axes):
@@ -176,7 +200,7 @@ class TMCLController(model.Actuator):
         if not self._isFullyPowered():
             # Only a warning, as the power can be connected afterwards
             logging.warning("Device %s has no power, the motor will not move", name)
-        # TODO: add a .powerSupply readonly VA ?
+        # TODO: add a .powerSupply readonly VA ? Only if not already provided by HwComponent.
 
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1) # one task at a time
@@ -213,6 +237,16 @@ class TMCLController(model.Actuator):
             axes_ref = dict((a, False) for a in axes)
             self.referenced = model.VigilantAttribute(axes_ref, readonly=True)
 
+        try:
+            axis_params, io_config = self.extract_config()
+        except TypeError as ex:
+            logging.warning("Failed to extract user config: %s", ex)
+        except Exception:
+            logging.exception("Error during user config extraction")
+        else:
+            logging.debug("Extracted config %s", axis_params)
+            self.apply_config(axis_params, io_config)
+
         # Note: if multiple instances of the driver are running simultaneously,
         # the temperature reading will cause mayhem even if one of the instances
         # does nothing.
@@ -248,19 +282,17 @@ class TMCLController(model.Actuator):
         Initialise the given axis with "good" values for our needs (Delphi)
         axis (int): axis number
         """
-        # TODO: configure StallGuard properly
         self.MoveRelPos(axis, 0) # activate parameter with dummy move
 
         self._refproc_cancelled[axis] = threading.Event()
         self._refproc_lock[axis] = threading.Lock()
 
         if self._refproc == REFPROC_2XFF:
-            # TODO: Read them out of a memory blob saved in the bank 2
+            # TODO: get rid of this once all the hardware have been updated with
+            # the right EEPROM config (using tmcmconfig)
             self.SetAxisParam(axis, 163, 0)  # chopper mode (0 is default)
             self.SetAxisParam(axis, 162, 2)  # Chopper blank time (1 = for low current applications, 2 is default)
             self.SetAxisParam(axis, 167, 3)  # Chopper off time (2 = minimum)
-            # TODO: get rid of this once all the hardware have been updated with
-            # the right EEPROM config (using tmcmconfig)
             self.SetAxisParam(axis, 4, 1398)  # maximum velocity to 1398 == 2 mm/s
             self.SetAxisParam(axis, 5, 7)  # maximum acc to 7 == 20 mm/s2
             self.SetAxisParam(axis, 140, 8)  # number of usteps ==2^8 =256 per fullstep
@@ -278,8 +310,8 @@ class TMCLController(model.Actuator):
             # later on move back to there. Now, we just stop ASAP, and hope it
             # takes always the same time to stop. This allows to read how far from
             # a previous referencing position we were during the testing.
-            prog = [# (6, 1, axis), # GAP 1, Motid # read pos
-                    # (35, 60 + axis, 2), # AGP 60, 2 # save pos to 2/60
+            prog = [# (6, 1, axis), # GAP 1, Motid // read pos
+                    # (35, 60 + axis, 2), # AGP 60, 2 // save pos to 2/60
 
                     # (32, 10 + axis, axis), # CCO 10, Motid // Save the current position # doesn't work??
 
@@ -377,6 +409,117 @@ class TMCLController(model.Actuator):
                 logging.debug("Device replied unexpected message: %s", res.encode('string_escape'))
 
             raise IOError("Device did not answer correctly to any sync message")
+
+    # The next three methods are to handle the extra configuration saved in user
+    # memory (global param, bank 2)
+    # Note: there is no way to read the config from the live memory because it
+    # is not possible to read the current output values (written by SetIO()).
+
+    def apply_config(self, axis_params, io_config):
+        """
+        Configure the device according to the given 'user configuration'.
+        axis_params (dict (int, int) -> int): axis number/param number -> value
+        io_config (dict (int, int) -> int): bank/port -> value to pass to SetIO
+        """
+        for (ax, ad), v in axis_params.items():
+            self.SetAxisParam(ax, ad, v)
+        for (b, p), v in io_config.items():
+            self.SetIO(b, p, v)
+
+    def write_config(self, axis_params, io_config):
+        """
+        Converts the 'user configuration' into a packed data and store into the
+        'user' EEPROM area (bank 2).
+        axis_params (dict (int, int) -> int): axis number/param number -> value
+          Note: all axes of the device must be present, and all the parameters
+          defined in UC_APARAM must be present.
+        io_config (dict (int, int) -> int): bank/port -> value to pass to SetIO
+          Note that all the data in UC_OUT must be defined
+        """
+        naxes = max(ax for ax, ad in axis_params.keys()) + 1
+
+        # Pack IO, then axes
+        sd = struct.pack("B", io_config[(0, 0)])
+        for i in range(naxes):
+            for p, l in UC_APARAM.items():
+                v = axis_params[(i, p)]
+                fmt = ">b" if abs(l) <= 7 else ">h"
+                sd += struct.pack(fmt, v)
+
+        # pad enough 0's to be a multiple of 4 (= uint32)
+        sd += b"\x00" * (-len(sd) % 4)
+
+        # Compute checksum (= sum of everything on 16 bits)
+        hpres = numpy.frombuffer(sd, dtype=numpy.uint16)
+        checksum = numpy.sum(hpres, dtype=numpy.uint16)
+
+        # Compute header
+        s = struct.pack(">HBB", checksum, UC_FORMAT, len(sd) // 4) + sd
+
+        logging.debug("Encoded user config as '%s'", s.encode('string_escape'))
+
+        # Write s as a series of uint32 into the user area
+        assert(len(s) // 4 <= 56)
+        for i, v in enumerate(struct.unpack(">%di" % (len(s) // 4), s)):
+            logging.debug("Writing on %d, 0x%08x", i, v)
+            self.SetGlobalParam(2, i, v)
+
+    def extract_config(self):
+        """
+        Read the configuration stored in 'user' area and convert it to a python
+        representation.
+        return:
+            axis_params (dict (int, int) -> int): axis number/param number -> value
+            io_config (dict (int, int) -> int): bank/port -> value to pass to SetIO
+        raise:
+            TypeError: the configuration saved doesn't appear to be valid
+        """
+        # Read header (and check it makes sense)
+        h = self.GetGlobalParam(2, 0)
+        sh = struct.pack(">I", h)
+        chks, fv, l = struct.unpack(">HBB", sh)
+        if fv != UC_FORMAT:
+            raise TypeError("User config format claim to be unsupported v%d" % fv)
+        if not 2 <= l <= 55:
+            raise TypeError("Impossible length of %d" % l)
+
+        # Read the rest of the data
+        s = ""
+        for i in range(l):
+            d = self.GetGlobalParam(2, i + 1)
+            s += struct.pack(">i", d)
+
+        logging.debug("Read user config as '%s%s'", sh.encode('string_escape'), s.encode('string_escape'))
+
+        # Compute checksum (= sum of everything on 16 bits)
+        hpres = numpy.frombuffer(s, dtype=numpy.uint16)
+        act_chks = numpy.sum(hpres, dtype=numpy.uint16)
+        if act_chks != chks:
+            raise TypeError("User config has wrong checksum (expected %d)" % act_chks)
+
+        # Decode
+        afmt = ""
+        for p, l in UC_APARAM.items():
+            afmt += "b" if abs(l) <= 7 else "h"
+        lad = struct.calcsize(">" + afmt)
+        assert(lad >= 4)
+        naxes = (len(s) - 1) // lad # works because lad >= 4
+        assert(naxes > 0)
+        fmt = ">B" + afmt * naxes
+        s = s[:struct.calcsize(fmt)]  # discard the padding
+        ud = struct.unpack(fmt, s)
+
+        io_config = {}
+        io_config[(0, 0)] = ud[0]
+
+        i = 1
+        axis_params = {}
+        for ax in range(naxes):
+            for p in UC_APARAM.keys():
+                axis_params[(ax, p)] = ud[i]
+                i += 1
+
+        return axis_params, io_config
 
     # TODO: finish this method and use where possible
     def SendInstructionRecoverable(self, n, typ=0, mot=0, val=0):
@@ -829,7 +972,7 @@ class TMCLController(model.Actuator):
             # but without that, the final reference position is affected by
             # the original position.
             with self._refproc_lock[axis]:
-                if self._refproc_cancelled[axis]:
+                if self._refproc_cancelled[axis].is_set():
                     raise CancelledError("Reference search cancelled before backward move")
                 self.MoveRelPos(axis, -20000)  # ~ 100µm
             for i in range(100):
@@ -961,7 +1104,7 @@ class TMCLController(model.Actuator):
                 # param 1 = current position
                 pos[n] = self.GetAxisParam(i, 1) * self._ustepsize[i]
 
-        pos = self._applyInversionAbs(pos)
+        pos = self._applyInversion(pos)
 
         # it's read-only, so we change it via _value
         self.position._value = pos
@@ -1027,7 +1170,7 @@ class TMCLController(model.Actuator):
     @isasync
     def moveRel(self, shift):
         self._checkMoveRel(shift)
-        shift = self._applyInversionRel(shift)
+        shift = self._applyInversion(shift)
 
         # Check if the distance is big enough to make sense
         for an, v in shift.items():
@@ -1050,7 +1193,7 @@ class TMCLController(model.Actuator):
         if not pos:
             return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
-        pos = self._applyInversionAbs(pos)
+        pos = self._applyInversion(pos)
 
         for a, p in pos.items():
             if (hasattr(self, "referenced") and
@@ -1228,9 +1371,12 @@ class TMCLController(model.Actuator):
                     self._waitReferencing(aid)  # block until it's over
                     self.referenced._value[a] = True
                     future._current_axis = None
-            except CancelledError:
-                logging.info("Referencing cancelled")
+            except CancelledError as ex:
+                logging.info("Referencing cancelled: %s", ex)
                 future._was_stopped = True
+                raise
+            except Exception:
+                logging.exception("Referencing failure")
                 raise
             finally:
                 # We only notify after updating the position so that when a listener

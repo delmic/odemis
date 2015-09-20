@@ -47,7 +47,8 @@ class TestStatic(unittest.TestCase):
     """
     def test_scan(self):
         devices = CLASS.scan()
-        self.assertGreater(len(devices), 0)
+        if not TEST_NOHW:
+            self.assertGreater(len(devices), 0)
 
         for name, kwargs in devices:
             print "opening", name

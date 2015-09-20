@@ -1076,7 +1076,7 @@ class Stage(model.Actuator):
 
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
         self.position = model.VigilantAttribute(
-                                    self._applyInversionAbs(self._position),
+                                    self._applyInversion(self._position),
                                     unit="m", readonly=True)
 
     def _updatePosition(self):
@@ -1088,7 +1088,7 @@ class Stage(model.Actuator):
         self._position["y"] = mode_pos.position.y
 
         # it's read-only, so we change it via _value
-        self.position._value = self._applyInversionAbs(self._position)
+        self.position._value = self._applyInversion(self._position)
         self.position.notify(self.position.value)
 
     def _doMoveAbs(self, pos):
@@ -1128,7 +1128,7 @@ class Stage(model.Actuator):
             return model.InstantaneousFuture()
         self._checkMoveRel(shift)
 
-        shift = self._applyInversionRel(shift)
+        shift = self._applyInversion(shift)
         return self._executor.submit(self._doMoveRel, shift)
 
     @isasync
@@ -1136,7 +1136,7 @@ class Stage(model.Actuator):
         if not pos:
             return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
-        pos = self._applyInversionAbs(pos)
+        pos = self._applyInversion(pos)
 
         # self._doMove(pos)
         return self._executor.submit(self._doMoveAbs, pos)
@@ -1202,7 +1202,7 @@ class PhenomFocus(model.Actuator):
         pos = {"z": wd}
 
         # it's read-only, so we change it via _value
-        self.position._value = self._applyInversionAbs(pos)
+        self.position._value = self._applyInversion(pos)
         self.position.notify(self.position.value)
 
     def _checkQueue(self):
@@ -1235,7 +1235,7 @@ class PhenomFocus(model.Actuator):
         if not shift:
             return model.InstantaneousFuture()
         self._checkMoveRel(shift)
-        shift = self._applyInversionRel(shift)
+        shift = self._applyInversion(shift)
         logging.debug("Submit relative move of %s...", shift)
         self._moves_queue.append(("moveRel", shift))
         return self._executor.submit(self._checkQueue)
@@ -1245,7 +1245,7 @@ class PhenomFocus(model.Actuator):
         if not pos:
             return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
-        pos = self._applyInversionAbs(pos)
+        pos = self._applyInversion(pos)
         logging.info("Submit absolute move of %s...", pos)
         self._moves_queue.append(("moveAbs", pos))
         return self._executor.submit(self._checkQueue)
@@ -1578,6 +1578,11 @@ class ChamberPressure(model.Actuator):
         # VA used for the sample holder registration
         self.registeredSampleHolder = model.BooleanVA(False, readonly=True)
 
+        # VA connected to the door status, True if door is open
+        door_status = self._pressure_device.GetDoorStatus()
+        self._opened = (door_status == 'STAGE-DOOR-STATUS-OPEN')
+        self.opened = model.BooleanVA(self._opened, readonly=True)
+
         self._updatePosition()
         self._updateSampleHolder()
 
@@ -1654,6 +1659,16 @@ class ChamberPressure(model.Actuator):
         self.registeredSampleHolder._value = registered
         self.sampleHolder.notify(val)
         self.registeredSampleHolder.notify(registered)
+
+    def _updateOpened(self):
+        """
+        update the opened VA
+        """
+        door_status = self._pressure_device.GetDoorStatus()
+        self._opened = (door_status == 'STAGE-DOOR-STATUS-OPEN')
+
+        self.opened._value = self._opened
+        self.opened.notify(self._opened)
 
     @isasync
     def moveRel(self, shift):
@@ -1892,7 +1907,13 @@ class ChamberPressure(model.Actuator):
         eventSpec2.eventID = eventID2
         eventSpec2.compressed = False
 
-        eventSpecArray.item = [eventSpec1, eventSpec2]
+        # Event for door status change
+        eventID3 = "DOOR-STATUS-CHANGED-ID"
+        eventSpec3 = self.parent._objects.create('ns0:EventSpec')
+        eventSpec3.eventID = eventID3
+        eventSpec3.compressed = False
+
+        eventSpecArray.item = [eventSpec1, eventSpec2, eventSpec3]
         ch_id = self._chamber_device.OpenEventChannel(eventSpecArray)
         try:
             while not self._chamber_must_stop.is_set():
@@ -1922,6 +1943,9 @@ class ChamberPressure(model.Actuator):
                     elif (newEvent == eventID2):
                         logging.debug("Sample holder insertion, about to update sample holder id if needed")
                         self._updateSampleHolder()  # in case new sample holder was loaded
+                    elif (newEvent == eventID3):
+                        logging.debug("Door status changed")
+                        self._updateOpened()  # in case new sample holder was loaded
                     else:
                         logging.warning("Unexpected event received")
         except Exception as e:

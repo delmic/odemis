@@ -23,6 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import collections
+import copy
 import logging
 import math
 import numbers
@@ -35,7 +36,7 @@ import threading
 
 class MultiplexActuator(model.Actuator):
     """
-    An object representing an actuator made of several (real actuators)=
+    An object representing an actuator made of several (real actuators)
      = a set of axes that can be moved and optionally report their position.
     """
 
@@ -52,7 +53,6 @@ class MultiplexActuator(model.Actuator):
         if set(children.keys()) != set(axes_map.keys()):
             raise ValueError("MultiplexActuator needs the same keys in children and axes_map")
 
-
         self._axis_to_child = {} # axis name => (Actuator, axis name)
         self._position = {}
         self._speed = {}
@@ -68,7 +68,7 @@ class MultiplexActuator(model.Actuator):
                 raise ValueError("Child %s is not a component." % (child,))
             if not hasattr(child, "axes") or not isinstance(child.axes, dict):
                 raise ValueError("Child %s is not an actuator." % child.name)
-            axes[axis] = child.axes[caxis]
+            axes[axis] = copy.deepcopy(child.axes[caxis])
             self._position[axis] = child.position.value[axes_map[axis]]
             if (hasattr(child, "speed") and
                 isinstance(child.speed, model.VigilantAttributeBase) and
@@ -79,10 +79,9 @@ class MultiplexActuator(model.Actuator):
                 caxis in child.referenced.value):
                 self._referenced[axis] = child.referenced.value[caxis]
 
-        # TODO: test/finish conversion to Axis
         # this set ._axes and ._children
         model.Actuator.__init__(self, name, role, axes=axes,
-                          children=children, **kwargs)
+                                children=children, **kwargs)
 
         # keep a reference to the subscribers so that they are not
         # automatically garbage collected
@@ -146,7 +145,7 @@ class MultiplexActuator(model.Actuator):
         update the position VA
         """
         # it's read-only, so we change it via _value
-        pos = self._applyInversionAbs(self._position)
+        pos = self._applyInversion(self._position)
         logging.debug("reporting position %s", pos)
         self.position._value = pos
         self.position.notify(pos)
@@ -194,7 +193,7 @@ class MultiplexActuator(model.Actuator):
         if not shift:
             return model.InstantaneousFuture()
         self._checkMoveRel(shift)
-        shift = self._applyInversionRel(shift)
+        shift = self._applyInversion(shift)
 
         # merge multiple axes for the same children
         child_to_move = collections.defaultdict(dict) # child -> moveRel argument
@@ -223,7 +222,7 @@ class MultiplexActuator(model.Actuator):
         if not pos:
             return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
-        pos = self._applyInversionAbs(pos)
+        pos = self._applyInversion(pos)
 
         child_to_move = collections.defaultdict(dict) # child -> moveAbs argument
         for axis, distance in pos.items():
@@ -388,7 +387,7 @@ class CoupledStage(model.Actuator):
         self._position["y"] = mode_pos['y']
 
         # it's read-only, so we change it via _value
-        self.position._value = self._applyInversionAbs(self._position)
+        self.position._value = self._applyInversion(self._position)
         self.position.notify(self.position.value)
 
     def _onChildReferenced(self, ref):
@@ -451,7 +450,7 @@ class CoupledStage(model.Actuator):
             shift = {"x": 0, "y": 0}
         self._checkMoveRel(shift)
 
-        shift = self._applyInversionRel(shift)
+        shift = self._applyInversion(shift)
         return self._executor.submit(self._doMoveRel, shift)
 
     @isasync
@@ -459,7 +458,7 @@ class CoupledStage(model.Actuator):
         if not pos:
             pos = self.position.value
         self._checkMoveAbs(pos)
-        pos = self._applyInversionAbs(pos)
+        pos = self._applyInversion(pos)
 
         return self._executor.submit(self._doMoveAbs, pos)
 
@@ -771,6 +770,7 @@ class FixedPositionsActuator(model.Actuator):
             raise ValueError("FixedPositionsActuator needs precisely one child")
 
         self._cycle = cycle
+        self._move_sum = 0
         self._position = {}
         self._referenced = {}
         axis, child = children.items()[0]
@@ -787,6 +787,8 @@ class FixedPositionsActuator(model.Actuator):
             raise ValueError("Child %s is not an actuator." % child.name)
 
         if cycle is not None:
+            # just an offset to reference switch position
+            self._offset = self._cycle / len(self._positions)
             if not all(0 <= p < cycle for p in positions.keys()):
                 raise ValueError("Positions must be between 0 and %s (non inclusive)" % (cycle,))
 
@@ -811,7 +813,8 @@ class FixedPositionsActuator(model.Actuator):
             child.referenced.subscribe(self._update_child_ref)
 
         # If the axis can be referenced => do it now (and move to a known position)
-        if not self._referenced.get(axis, True):
+        # In case of cyclic move always reference
+        if (not self._referenced.get(axis, True)) or (self._cycle and (axis in self._referenced)):
             self.reference({axis}).result()
 
         # If not at a known position => move to the closest known position
@@ -836,7 +839,7 @@ class FixedPositionsActuator(model.Actuator):
         # if it is an unsupported position report the nearest supported one
         nearest = util.find_closest(self._position[self._axis], self._positions.keys())
         # it's read-only, so we change it via _value
-        pos = self._applyInversionAbs({self._axis: nearest})
+        pos = self._applyInversion({self._axis: nearest})
         logging.debug("reporting position %s", pos)
         self.position._value = pos
         self.position.notify(pos)
@@ -865,7 +868,7 @@ class FixedPositionsActuator(model.Actuator):
         if not pos:
             return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
-        pos = self._applyInversionAbs(pos)
+        pos = self._applyInversion(pos)
 
         axis, distance = pos.items()[0]
         logging.debug("Moving axis %s (-> %s) to %g", self._axis, self._axis_name, distance)
@@ -875,14 +878,28 @@ class FixedPositionsActuator(model.Actuator):
             f = self._child.moveAbs(move)
         else:
             # Optimize by moving through the closest way
-            vector1 = distance - self._child.position.value[self._axis_name]
+            cur_pos = self._child.position.value[self._axis_name]
+            vector1 = distance - cur_pos
             mod1 = vector1 % self._cycle
-            vector2 = self._child.position.value[self._axis_name] - distance
+            vector2 = cur_pos - distance
             mod2 = vector2 % self._cycle
             if abs(mod1) < abs(mod2):
-                move = {self._axis_name:mod1}
+                self._move_sum += mod1
+                if self._move_sum >= self._cycle:
+                    # Once we are about to complete a full cycle, reference again
+                    # to get rid of accumulated error
+                    self._move_sum = 0
+                    # move to the reference switch
+                    move_to_ref = (self._cycle - cur_pos) % self._cycle + self._offset
+                    self._child.moveRel({self._axis_name: move_to_ref}).result()
+                    self._child.reference({self._axis_name}).result()
+                    move = {self._axis_name: distance}
+                else:
+                    move = {self._axis_name: mod1}
             else:
                 move = {self._axis_name:-mod2}
+                self._move_sum -= mod2
+
             f = self._child.moveRel(move)
 
         return f
