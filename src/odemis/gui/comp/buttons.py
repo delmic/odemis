@@ -338,11 +338,10 @@ class BtnMixin(object):
         )
 
     def _create_disabled_bitmap(self):
-
         if not self.height:
             return self.bmpLabel
 
-        image = self.bmpLabel.ConvertToImage()
+        image = self.btns[self.face_colour][self.height]['off'].GetBitmap().ConvertToImage()
         darken_image(image, 0.8)
         return self._create_bitmap(
             wx.BitmapFromImage(image),
