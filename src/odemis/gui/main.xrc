@@ -793,6 +793,7 @@
                           <object class="sizeritem">
                             <object class="ImageTextButton" name="btn_fine_align">
                               <height>24</height>
+                              <face_colour>def</face_colour>
                               <label>Fine alignment...</label>
                               <style>wxALIGN_CENTRE</style>
                               <XRCED>
@@ -1892,8 +1893,6 @@
     <object class="wxBoxSizer">
       <object class="sizeritem">
         <object class="wxPanel">
-          <size>200,-1</size>
-          <bg>#333333</bg>
           <object class="wxBoxSizer">
             <orient>wxVERTICAL</orient>
             <object class="sizeritem">
@@ -1901,15 +1900,93 @@
                 <icon>img/icon/ico_eject.png</icon>
                 <icon_on>img/icon/ico_eject_orange.png</icon_on>
                 <height>48</height>
-                <label>PARK MIRROR</label>
+                <face_colour>def</face_colour>
+                <label>Park mirror</label>
                 <fg>#1A1A1A</fg>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
               </object>
-              <flag>wxALL</flag>
+              <flag>wxALL|wxEXPAND</flag>
+              <border>10</border>
+            </object>
+            <object class="sizeritem">
+              <object class="wxPanel" name="pnl_mirror_cancel">
+                <object class="wxBoxSizer">
+                  <object class="sizeritem">
+                    <object class="wxGauge" name="gauge_fine_align">
+                      <size>-1,10</size>
+                      <range>100</range>
+                      <value>0</value>
+                      <style>wxGA_SMOOTH</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <option>1</option>
+                    <flag>wxTOP|wxBOTTOM|wxEXPAND</flag>
+                    <border>7</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="ImageTextButton" name="btn_park_mirror_cancel">
+                      <height>24</height>
+                      <face_colour>def</face_colour>
+                      <label>Cancel</label>
+                      <style>wxALIGN_CENTRE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxLEFT</flag>
+                    <border>10</border>
+                  </object>
+                  <orient>wxHORIZONTAL</orient>
+                </object>
+                <bg>#333333</bg>
+                <enabled>0</enabled>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALL|wxEXPAND</flag>
+              <border>10</border>
+            </object>
+            <object class="sizeritem">
+              <object class="wxPanel" name="pnl_mirror_msg">
+                <object class="wxBoxSizer">
+                  <object class="sizeritem">
+                    <object class="wxStaticBitmap">
+                      <bitmap>img/icon/dialog_warning.png</bitmap>
+                    </object>
+                    <flag>wxRIGHT</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxStaticText">
+                      <size>-1,54</size>
+                      <label>Parking the mirror at least once is required in order to reference the actuators.</label>
+                      <fg>#E5E5E5</fg>
+                    </object>
+                    <option>1</option>
+                    <flag>wxEXPAND|wxGROW</flag>
+                  </object>
+                  <orient>wxHORIZONTAL</orient>
+                </object>
+                <bg>#333333</bg>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALL|wxEXPAND</flag>
               <border>10</border>
             </object>
           </object>
+          <size>300,-1</size>
+          <bg>#333333</bg>
         </object>
-        <flag>wxEXPAND</flag>
+        <flag>wxALL|wxEXPAND</flag>
+        <border>10</border>
       </object>
       <object class="sizeritem">
         <object class="CameraViewport" name="vp_chamber">
@@ -1925,6 +2002,43 @@
           <size>400,-1</size>
           <bg>#333333</bg>
           <style>wxBORDER_NONE</style>
+          <object class="wxBoxSizer">
+            <object class="sizeritem">
+              <object class="wxScrolledWindow" name="scr_win_right">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="FoldPanelBar">
+                      <object class="FoldPanelItem" name="fp_chamber_optical">
+                        <label>OPTICAL</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <spacing>0</spacing>
+                      <leftspacing>0</leftspacing>
+                      <rightspacing>0</rightspacing>
+                      <bg>#333333</bg>
+
+                    </object>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                </object>
+                <size>400,-1</size>
+                <bg>#333333</bg>
+                <style>wxVSCROLL</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+              <minsize>400,400</minsize>
+            </object>
+            <orient>wxVERTICAL</orient>
+          </object>
         </object>
         <flag>wxEXPAND</flag>
       </object>

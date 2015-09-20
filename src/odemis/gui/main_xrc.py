@@ -193,7 +193,14 @@ class xrcpnl_tab_sparc_chamber(wx.Panel):
         self.PostCreate(pre)
 
         # Define variables for the controls, bind event handlers
+        self.btn_park_mirror = xrc.XRCCTRL(self, "btn_park_mirror")
+        self.pnl_mirror_cancel = xrc.XRCCTRL(self, "pnl_mirror_cancel")
+        self.gauge_fine_align = xrc.XRCCTRL(self, "gauge_fine_align")
+        self.btn_park_mirror_cancel = xrc.XRCCTRL(self, "btn_park_mirror_cancel")
+        self.pnl_mirror_msg = xrc.XRCCTRL(self, "pnl_mirror_msg")
         self.vp_chamber = xrc.XRCCTRL(self, "vp_chamber")
+        self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
+        self.fp_chamber_optical = xrc.XRCCTRL(self, "fp_chamber_optical")
 
 
 
@@ -1195,6 +1202,7 @@ def __init_resources():
                           <object class="sizeritem">
                             <object class="ImageTextButton" name="btn_fine_align">
                               <height>24</height>
+                              <face_colour>def</face_colour>
                               <label>Fine alignment...</label>
                               <style>wxALIGN_CENTRE</style>
                               <XRCED>
@@ -2294,8 +2302,6 @@ def __init_resources():
     <object class="wxBoxSizer">
       <object class="sizeritem">
         <object class="wxPanel">
-          <size>200,-1</size>
-          <bg>#333333</bg>
           <object class="wxBoxSizer">
             <orient>wxVERTICAL</orient>
             <object class="sizeritem">
@@ -2303,15 +2309,93 @@ def __init_resources():
                 <icon>img_icon_ico_eject_png</icon>
                 <icon_on>img_icon_ico_eject_orange_png</icon_on>
                 <height>48</height>
-                <label>PARK MIRROR</label>
+                <face_colour>def</face_colour>
+                <label>Park mirror</label>
                 <fg>#1A1A1A</fg>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
               </object>
-              <flag>wxALL</flag>
+              <flag>wxALL|wxEXPAND</flag>
+              <border>10</border>
+            </object>
+            <object class="sizeritem">
+              <object class="wxPanel" name="pnl_mirror_cancel">
+                <object class="wxBoxSizer">
+                  <object class="sizeritem">
+                    <object class="wxGauge" name="gauge_fine_align">
+                      <size>-1,10</size>
+                      <range>100</range>
+                      <value>0</value>
+                      <style>wxGA_SMOOTH</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <option>1</option>
+                    <flag>wxTOP|wxBOTTOM|wxEXPAND</flag>
+                    <border>7</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="ImageTextButton" name="btn_park_mirror_cancel">
+                      <height>24</height>
+                      <face_colour>def</face_colour>
+                      <label>Cancel</label>
+                      <style>wxALIGN_CENTRE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxLEFT</flag>
+                    <border>10</border>
+                  </object>
+                  <orient>wxHORIZONTAL</orient>
+                </object>
+                <bg>#333333</bg>
+                <enabled>0</enabled>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALL|wxEXPAND</flag>
+              <border>10</border>
+            </object>
+            <object class="sizeritem">
+              <object class="wxPanel" name="pnl_mirror_msg">
+                <object class="wxBoxSizer">
+                  <object class="sizeritem">
+                    <object class="wxStaticBitmap">
+                      <bitmap>img_icon_dialog_warning_png</bitmap>
+                    </object>
+                    <flag>wxRIGHT</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxStaticText">
+                      <size>-1,54</size>
+                      <label>Parking the mirror at least once is required in order to reference the actuators.</label>
+                      <fg>#E5E5E5</fg>
+                    </object>
+                    <option>1</option>
+                    <flag>wxEXPAND|wxGROW</flag>
+                  </object>
+                  <orient>wxHORIZONTAL</orient>
+                </object>
+                <bg>#333333</bg>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALL|wxEXPAND</flag>
               <border>10</border>
             </object>
           </object>
+          <size>300,-1</size>
+          <bg>#333333</bg>
         </object>
-        <flag>wxEXPAND</flag>
+        <flag>wxALL|wxEXPAND</flag>
+        <border>10</border>
       </object>
       <object class="sizeritem">
         <object class="CameraViewport" name="vp_chamber">
@@ -2327,6 +2411,43 @@ def __init_resources():
           <size>400,-1</size>
           <bg>#333333</bg>
           <style>wxBORDER_NONE</style>
+          <object class="wxBoxSizer">
+            <object class="sizeritem">
+              <object class="wxScrolledWindow" name="scr_win_right">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="FoldPanelBar">
+                      <object class="FoldPanelItem" name="fp_chamber_optical">
+                        <label>OPTICAL</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <spacing>0</spacing>
+                      <leftspacing>0</leftspacing>
+                      <rightspacing>0</rightspacing>
+                      <bg>#333333</bg>
+
+                    </object>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                </object>
+                <size>400,-1</size>
+                <bg>#333333</bg>
+                <style>wxVSCROLL</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+              <minsize>400,400</minsize>
+            </object>
+            <orient>wxVERTICAL</orient>
+          </object>
         </object>
         <flag>wxEXPAND</flag>
       </object>
@@ -4431,6 +4552,31 @@ Ty\xb4\x1c{\x9f\xa4\x83b\x27\xda\x94\xc8\xdaP\xfd\xed\x10\xa7m\xa9|S\x27\
 \x00e\x9fK\x1d\xef*\xad\xc5\x0bX\xf4d#n\xea\x04E\xd4\x12\xc7]\xa0R\x97\xec\
 \x08\x9b\xff\x1f\xcd\xae\x1b\xe7SD`&\x00\x00\x00\x00IEND\xaeB`\x82'''
 
+    img_icon_dialog_warning_png = '''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x10\x00\x00\x00\x10\x08\x06\x00\x00\x00\
+\x1f\xf3\xffa\x00\x00\x01\xc9IDATx\xda\xa5\xceoH\x13q\x1c\xc7\xf1\xdf\xc9\
+nf\xb2\xda\x8a\xb8\xe7!A\xf40\x08{\xe6\x13\xe9\x8f\x8f\x14\xac\x07\xf5L\
+T0\x98\x10D\xd1\xe13\x89\x1eT\xa0\xac\x87\xda\xc2
+\xac\xe6\xfc3\xd3\xd1\xe8Ql\x0cZ6%\x17D\xd3\xfd\xb9&\xed\x1fw\xde\xddv\
+\x9f\xbe\xdd\xc6"\x0c\xdb\xf4\xc1\xfb\xc1\xe7\x8e\xef\xeb\x8e\x01\xd8W\xbb\
+\xbeT\xdd|O\xf1\x8d\xb9{O@\xd1\xcb_\xd6\xbcm\xba\xe6\xeb\x82\xb2\xc0_\xad\
+\x1b\xd0f,\x09\xac\xbe\x84\xfe\xc9\x05u\xba9U\x17P\xf26\\+\xd2\x97\xf1e\
+\x1a\x88\xb8P|{\x11\xea\x1c?X3\xa0\xceZ\xd2\x08?@`\xb0\x15\x01\xfb\x19\xe8\
+\x81[P\xdcM[5\x01\xda\xbc\xe9\xae\xe6?\x0f\x84\x1dX:w\xc4\x08\xc1~h\xcb\
+\xadP<\xa6\xa1\xff\x02\xb2\xc7\x96\xd5\xc3\x03\x04\xf4\xe2\xfd\x85\xa3F\
+\x08u\xd0_\xb4C~m\xc9\xed
+\xc8nnT\xf5\x9f\x06>w\x02\x91.\x04/\x1dG\xe8\xcaI\xdam\xc0\xcaY(\xfeS\x90\
+^q\xf7\xff\x0d8\x19_xq@\xd2?\xf0@\x88\x01\x1f\x19\xbe\xde8\x86\xe8\xf5\xc3\
+\x84\xd1^e\xd0W\x1a\x91{n\x96\x10d\xfc\x0e ?\xc99\xe5E+\xb0F3J}\xa3\xbe\
+S\x1b\xd4f\xa5\x18\x83\xfc\xce\x8a\xfcSn\xfco`\x825g\x9e\x1cR\xf5(_>HR[\
+\x0c\xf1a\xab\x11\xf2\xb4\xb3\xe5gz\xbc\x09\x19\xe7A5I7U \xf3\x88MIKB\xf9\
+X\xa4~R\x05\x06q\xd8\x06\xd1a\x03d\xda9\x030p\xc9\x27 \xf3\x90=\xab\x02\
+\xa9\x9bL,\xad\xb5\x00q\x81b@\x8aJW\x0e\xd2\x154A\xc5~\x27\xa0\xb4~\x02\
+\xe2=\x93\xf8\x07\xb8\xd30\xf6c\xc4\xbc\xbd\xd9\xc7\xe4Z\x8a\xdb\xcdR\xf2\
+6{\\\x05\xf6\xd3/\xf21\xd2V@\x80\x978\x00\x00\x00\x00IEND\xaeB`\x82'''
+
     img_icon_ico_acqui_png = '''\
 \x89PNG\x0d
 \x1a
@@ -4551,31 +4697,6 @@ x\x9el\x04Ek\xc6$\x01O\xa0$E\x89\x9b\x8et\x80\x8e\xf7z\x1a\xa4fIR\xf0\xce\
 \x0cT\xe9\xd4+\xfc\x8d\xfe\xc8\xa2\xf27\x12\xb3R\xcd\x1fj\xeah/\xc8\xb3\
 \xae\x00\x00\x00\x00IEND\xaeB`\x82'''
 
-    img_icon_dialog_warning_png = '''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x10\x00\x00\x00\x10\x08\x06\x00\x00\x00\
-\x1f\xf3\xffa\x00\x00\x01\xc9IDATx\xda\xa5\xceoH\x13q\x1c\xc7\xf1\xdf\xc9\
-nf\xb2\xda\x8a\xb8\xe7!A\xf40\x08{\xe6\x13\xe9\x8f\x8f\x14\xac\x07\xf5L\
-T0\x98\x10D\xd1\xe13\x89\x1eT\xa0\xac\x87\xda\xc2
-\xac\xe6\xfc3\xd3\xd1\xe8Ql\x0cZ6%\x17D\xd3\xfd\xb9&\xed\x1fw\xde\xddv\
-\x9f\xbe\xdd\xc6"\x0c\xdb\xf4\xc1\xfb\xc1\xe7\x8e\xef\xeb\x8e\x01\xd8W\xbb\
-\xbeT\xdd|O\xf1\x8d\xb9{O@\xd1\xcb_\xd6\xbcm\xba\xe6\xeb\x82\xb2\xc0_\xad\
-\x1b\xd0f,\x09\xac\xbe\x84\xfe\xc9\x05u\xba9U\x17P\xf26\\+\xd2\x97\xf1e\
-\x1a\x88\xb8P|{\x11\xea\x1c?X3\xa0\xceZ\xd2\x08?@`\xb0\x15\x01\xfb\x19\xe8\
-\x81[P\xdcM[5\x01\xda\xbc\xe9\xae\xe6?\x0f\x84\x1dX:w\xc4\x08\xc1~h\xcb\
-\xadP<\xa6\xa1\xff\x02\xb2\xc7\x96\xd5\xc3\x03\x04\xf4\xe2\xfd\x85\xa3F\
-\x08u\xd0_\xb4C~m\xc9\xed
-\xc8nnT\xf5\x9f\x06>w\x02\x91.\x04/\x1dG\xe8\xcaI\xdam\xc0\xcaY(\xfeS\x90\
-^q\xf7\xff\x0d8\x19_xq@\xd2?\xf0@\x88\x01\x1f\x19\xbe\xde8\x86\xe8\xf5\xc3\
-\x84\xd1^e\xd0W\x1a\x91{n\x96\x10d\xfc\x0e ?\xc99\xe5E+\xb0F3J}\xa3\xbe\
-S\x1b\xd4f\xa5\x18\x83\xfc\xce\x8a\xfcSn\xfco`\x825g\x9e\x1cR\xf5(_>HR[\
-\x0c\xf1a\xab\x11\xf2\xb4\xb3\xe5gz\xbc\x09\x19\xe7A5I7U \xf3\x88MIKB\xf9\
-X\xa4~R\x05\x06q\xd8\x06\xd1a\x03d\xda9\x030p\xc9\x27 \xf3\x90=\xab\x02\
-\xa9\x9bL,\xad\xb5\x00q\x81b@\x8aJW\x0e\xd2\x154A\xc5~\x27\xa0\xb4~\x02\
-\xe2=\x93\xf8\x07\xb8\xd30\xf6c\xc4\xbc\xbd\xd9\xc7\xe4Z\x8a\xdb\xcdR\xf2\
-6{\\\x05\xf6\xd3/\xf21\xd2V@\x80\x978\x00\x00\x00\x00IEND\xaeB`\x82'''
-
     img_icon_dialog_error_png = '''\
 \x89PNG\x0d
 \x1a
@@ -4622,10 +4743,10 @@ U\x8a\xf3\x13\x13\x84\xf18A\xa9\xc4J_\x1fa"\xc1\xd5l\x16\xa7\xa3\x83\x93\
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_fib_green_png', img_icon_ico_fib_green_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_eject_png', img_icon_ico_eject_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_eject_orange_png', img_icon_ico_eject_orange_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_dialog_warning_png', img_icon_dialog_warning_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_acqui_png', img_icon_ico_acqui_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_press_png', img_icon_ico_press_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_dialog_info_png', img_icon_dialog_info_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_dialog_warning_png', img_icon_dialog_warning_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_dialog_error_png', img_icon_dialog_error_png)
     __res.Load('memory:XRC/main/main_xrc')
 
