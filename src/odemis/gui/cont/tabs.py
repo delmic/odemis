@@ -1348,8 +1348,8 @@ class AnalysisTab(Tab):
             self.tab_data_model.viewLayout.value = guimod.VIEW_LAYOUT_22
 
 
-class LensAlignTab(Tab):
-    """ Tab for the lens alignment on the Secom platform
+class SecomAlignTab(Tab):
+    """ Tab for the lens alignment on the SECOM and SECOMv2 platform
     The streams are automatically active when the tab is shown
     It provides three ways to move the "aligner" (= optical lens position):
      * raw (via the A/B or X/Y buttons)
@@ -1359,7 +1359,7 @@ class LensAlignTab(Tab):
 
     def __init__(self, name, button, panel, main_frame, main_data):
         tab_data = guimod.ActuatorGUIData(main_data)
-        super(LensAlignTab, self).__init__(name, button, panel, main_frame, tab_data)
+        super(SecomAlignTab, self).__init__(name, button, panel, main_frame, tab_data)
 
         # TODO: we should actually display the settings of the streams (...once they have it)
         self._settings_controller = settings.LensAlignSettingsController(
@@ -1535,7 +1535,7 @@ class LensAlignTab(Tab):
             main_data.is_acquiring.unsubscribe(self._on_acquisition)
 
     def terminate(self):
-        super(LensAlignTab, self).terminate()
+        super(SecomAlignTab, self).terminate()
         # make sure the streams are stopped
         for s in self.tab_data_model.streams.value:
             s.is_active.value = False
@@ -1745,9 +1745,9 @@ class LensAlignTab(Tab):
         self._sem_view.mpp.value = best_mpp
 
 
-class MirrorAlignTab(Tab):
+class SparcAlignTab(Tab):
     """
-    Tab for the mirror alignment calibration on the Sparc
+    Tab for the mirror/fiber alignment on the SPARC
     """
     # TODO: If this tab is not initially hidden in the XRC file, gtk error
     # will show up when the GUI is launched. Even further (odemis) errors may
@@ -1755,7 +1755,7 @@ class MirrorAlignTab(Tab):
 
     def __init__(self, name, button, panel, main_frame, main_data):
         tab_data = guimod.ActuatorGUIData(main_data)
-        super(MirrorAlignTab, self).__init__(name, button, panel, main_frame, tab_data)
+        super(SparcAlignTab, self).__init__(name, button, panel, main_frame, tab_data)
 
         self._ccd_stream = None
         self._goal_stream = None
@@ -2048,14 +2048,15 @@ class MirrorAlignTab(Tab):
                 s.is_active.value = False
 
 
-class MultiAlignTab(Tab):
+class Sparc2AlignTab(Tab):
     """
-    Tab for the mirror alignment calibration on the Sparc 2
+    Tab for the mirror/fiber alignment on the SPARCv2. Note that the basic idea
+    is similar to the SPARC(v1), but the actual procedure is entirely different.
     """
 
     def __init__(self, name, button, panel, main_frame, main_data):
         tab_data = guimod.ActuatorGUIData(main_data)
-        super(MultiAlignTab, self).__init__(name, button, panel, main_frame, tab_data)
+        super(Sparc2AlignTab, self).__init__(name, button, panel, main_frame, tab_data)
 
         # Documentation text on the left panel
         doc_path = pkg_resources.resource_filename("odemis.gui", "doc/sparc2_align.html")

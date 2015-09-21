@@ -180,7 +180,7 @@ class OdemisGUIApp(wx.App):
                     "roles": {
                         "secom": {},
                     },
-                    "controller": tabs.LensAlignTab,
+                    "controller": tabs.SecomAlignTab,
                     "button": self.main_frame.btn_tab_secom_align,
                     "panel": main_xrc.xrcpnl_tab_secom_align
                 },
@@ -190,7 +190,7 @@ class OdemisGUIApp(wx.App):
                     "roles": {
                         "sparc": {},
                     },
-                    "controller": tabs.MirrorAlignTab,
+                    "controller": tabs.SparcAlignTab,
                     "button": self.main_frame.btn_tab_sparc_align,
                     "panel": main_xrc.xrcpnl_tab_sparc_align
                 },
@@ -200,7 +200,7 @@ class OdemisGUIApp(wx.App):
                     "roles": {
                         "sparc2": {"default": True},
                     },
-                    "controller": tabs.MultiAlignTab,
+                    "controller": tabs.Sparc2AlignTab,
                     "button": self.main_frame.btn_tab_sparc2_align,
                     "panel": main_xrc.xrcpnl_tab_sparc2_align
                 },
