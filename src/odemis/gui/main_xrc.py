@@ -453,7 +453,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource class="" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource class="wxPanel" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -3130,13 +3130,6 @@ def __init_resources():
       <orient>wxHORIZONTAL</orient>
     </object>
     <bg>#333333</bg>
-    <font>
-      <size>11</size>
-      <style>normal</style>
-      <weight>normal</weight>
-      <underlined>0</underlined>
-      <face>Ubuntu</face>
-    </font>
   </object>
   <object class="wxPanel" name="pnl_tab_sparc_acqui">
     <object class="wxBoxSizer">
@@ -4160,12 +4153,20 @@ def __init_resources():
                     <object class="wxBoxSizer">
                       <object class="sizeritem">
                         <object class="ImageTextToggleButton" name="live_btn_press">
-                          <size>100,-1</size>
+                          <size>114,-1</size>
                           <icon>img_icon_ico_press_png</icon>
                           <height>48</height>
-                          <label>CHAMBERt</label>
+                          <face_colour>def</face_colour>
+                          <label>CHAMBER</label>
                           <fg>#1A1A1A</fg>
-                          <style>wxALIGN_RIGHT</style>
+                          <font>
+                            <size>11</size>
+                            <style>normal</style>
+                            <weight>normal</weight>
+                            <underlined>0</underlined>
+                            <face>Ubuntu</face>
+                          </font>
+                          <style>wxALIGN_LEFT</style>
                           <XRCED>
                             <assign_var>1</assign_var>
                           </XRCED>
@@ -4181,8 +4182,16 @@ def __init_resources():
                           <icon>img_icon_ico_optical_png</icon>
                           <icon_on>img_icon_ico_optical_green_png</icon_on>
                           <height>48</height>
+                          <face_colour>def</face_colour>
                           <label>OPTICAL</label>
                           <fg>#1A1A1A</fg>
+                          <font>
+                            <size>11</size>
+                            <style>normal</style>
+                            <weight>normal</weight>
+                            <underlined>0</underlined>
+                            <face>Ubuntu</face>
+                          </font>
                           <XRCED>
                             <assign_var>1</assign_var>
                           </XRCED>
@@ -4195,8 +4204,16 @@ def __init_resources():
                           <icon>img_icon_ico_sem_png</icon>
                           <icon_on>img_icon_ico_sem_green_png</icon_on>
                           <height>48</height>
+                          <face_colour>def</face_colour>
                           <label>SEM</label>
                           <fg>#1A1A1A</fg>
+                          <font>
+                            <size>11</size>
+                            <style>normal</style>
+                            <weight>normal</weight>
+                            <underlined>0</underlined>
+                            <face>Ubuntu</face>
+                          </font>
                           <XRCED>
                             <assign_var>1</assign_var>
                           </XRCED>
@@ -4402,13 +4419,6 @@ def __init_resources():
                       <face_colour>blue</face_colour>
                       <label>ACQUIRE IMAGE</label>
                       <fg>#FFFFFF</fg>
-                      <font>
-                        <size>14</size>
-                        <style>normal</style>
-                        <weight>normal</weight>
-                        <underlined>0</underlined>
-                        <face>Ubuntu</face>
-                      </font>
                       <style>wxALIGN_CENTRE</style>
                       <XRCED>
                         <assign_var>1</assign_var>
@@ -4680,7 +4690,7 @@ def __init_resources():
                 <face_colour>def</face_colour>
                 <label>Close</label>
                 <font>
-                  <size>14</size>
+                  <size>11</size>
                   <style>normal</style>
                   <weight>normal</weight>
                   <underlined>0</underlined>
@@ -4704,13 +4714,6 @@ def __init_resources():
                 <face_colour>blue</face_colour>
                 <label>START</label>
                 <fg>#FFFFFF</fg>
-                <font>
-                  <size>14</size>
-                  <style>normal</style>
-                  <weight>normal</weight>
-                  <underlined>0</underlined>
-                  <face>Ubuntu</face>
-                </font>
                 <style>wxALIGN_CENTRE</style>
                 <XRCED>
                   <assign_var>1</assign_var>
@@ -5177,61 +5180,19 @@ m\xd1v\xe0\xc4\x00\x00\x00\x00IEND\xaeB`\x82'''
   </head>
   <body text="#BBBBBB" bgcolor="#333333">
 
-        <h3>Quick alignment tips</h3>
-        
         <font size="2">
-        <b><font size="4">Dichotomy mode</font></b>
+        <b><font size="4">Mirror alignment procedure</font></b>
         <ol>
-            <li>Adjust SEM to 100x magnification, 30kV and medium curr\
-ent
-                (spot size 3).</li>
-            <li>Adjust SEM and optical focus</li>
-            <li>Report current SEM magnification, set dwell time to 10\
-\xc2\xb5s 
-                and scale to 8.</li>
-            <li>Adjust optical settings until the e-beam is visible in\
- the
-                optical image.</li>
-            <li>Disable the auto brightness/contrast.</li>
-            <li>Use \xe2\x80\x9cDichotomy mode\xe2\x80\x9d to select s\
-maller and smaller sub-areas
-                that move the e-beam closer to the center of the optic\
-al
-                image.</li>
-            <li>Click on \xe2\x80\x9cmove to center\xe2\x80\x9d.</li>
-            <li>Select \xe2\x80\x9cSpot mode\xe2\x80\x9d to verify tha\
-t the e-beam can be seen
-                in the optical image.</li>
+            <li>Turn off all the lights in the chamber</li>
+            <li>Blank the beam</li>
+            <li>Acquire background image</li>
+            <li>Unblank the beam</li>
+            <li>Move X and Y axis to position the brightest point (mom\
+ent of inertia) at the
+            center</li>
+            <li>Move Z axis to increase the moment of inertia and redu\
+ce spot size</li>
         </ol>
-        
-\x09&nbsp;<br>
-\x09
-        <b><font size="4">Spot mode</font></b>
-        <ol>
-            <li>Set binning of camera to 1</li>
-            <li>Adjust optical settings and modify the brightness/cont\
-rast
-                until the e-beam is clearly visible.</li>
-            <li>Double click on the center of the e-beam until it is i\
-n the
-                center of the optical image.</li>
-            <li>Increase SEM magnification to desired level and repeat
-                alignment.</li>
-        </ol>
-
-\x09&nbsp;<br>
-\x09
-        <b><font size="4">Fine alignment</font></b>
-        <ol>
-            <li>Ensure the SEM field of view is approximately the same\
- as the
-            optical field of view.</li>
-            <li>Report the SEM magnification.</li>
-            <li>Click on \xe2\x80\x9cFine alignment...\xe2\x80\x9d to \
-perform automatic
-            scaling and sub-pixel alignment.</li>
-        </ol>
-
       </font>
 
   </body>

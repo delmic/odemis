@@ -103,7 +103,7 @@ class BtnMixin(object):
             16: 8,
             24: 10,
             32: 11,
-            48: 15,
+            48: 14,
         },
         'def': {
             'text_colour': "#1A1A1A",
@@ -623,7 +623,7 @@ class ColourButton(ImageButton):
 
         self.colour = colour
 
-        self.bmpLabel = self.bmpSelected = self._create_colour_bitmap()
+        self.bmpLabel = self.bmpSelected = self.bmpDisabled = self._create_colour_bitmap()
 
         if self.use_hover:
             bmp = wx.EmptyBitmap(*self.Size)
