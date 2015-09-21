@@ -550,6 +550,7 @@ class SecomStateController(MicroscopeStateController):
             logging.info("Pressure position unknown: %s", currentp)
             # self._main_data.chamberState.value = CHAMBER_UNKNOWN
 
+    @call_in_wx_main
     def on_door_opened(self, value):
         """
         Disable the load button when the chamber door is open.
@@ -1055,14 +1056,14 @@ class DelphiStateController(SecomStateController):
 
             if future._delphi_load_state == CANCELLED:
                 return
-            self._press_btn.Enable(False)
+            wx.CallAfter(self._press_btn.Enable, False)
             # move further to fully under vacuum (should do nothing if already there)
             future._actions_time.pop(0)
             pf = self._main_data.chamber.moveAbs({"pressure": self._vacuum_pressure})
             future._delphi_load_state = pf
             pf.add_update_callback(self._update_load_time)
             pf.result()
-            self._press_btn.Enable(True)
+            wx.CallAfter(self._press_btn.Enable, True)
 
         finally:
             with future._delphi_load_lock:
