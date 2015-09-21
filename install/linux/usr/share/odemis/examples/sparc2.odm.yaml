@@ -291,12 +291,15 @@ SPARC2: {
     children: {"band": "Optical Actuators"},
     init: {
         axis_name: "fw",
+        # It supports up to 8 filters
         positions: {
-            0: [420.e-9, 460.e-9], # pos -> m,m
-            1: [500.e-9, 550.e-9],
-            2: "polariser",
-            5: "pass-through"},
-        cycle: 6, # number of positions on this wheel
+            # pos (rad) -> m,m
+            0: [420.e-9, 460.e-9],        # 1
+            0.785398: [500.e-9, 550.e-9], # 2
+            1.570796: "polariser",        # 3
+            3.9269908: "pass-through",    # 5
+        },
+        cycle: 6.283185, # position of ref switch (0) after a full turn
     },
     affects: ["CL Detector"],
 }
