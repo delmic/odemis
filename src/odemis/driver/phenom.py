@@ -362,8 +362,14 @@ class Scanner(model.Emitter):
         self.accelVoltage.subscribe(self._onVoltage)
 
         # Directly set spot size instead of probe current due to Phenom API
-        spot_rng = SPOT_RANGE
-        self._spotSize = numpy.mean(SPOT_RANGE)
+        try:
+            self._spotSize = parent._device.SEMGetSpotSize()
+            res = parent._device.SEMGetSpotSizeRange()
+            spot_rng = res.min, res.max
+        except suds.WebFault:
+            logging.info("Failed to read init spot size, will read it later")
+            spot_rng = SPOT_RANGE
+            self._spotSize = numpy.mean(SPOT_RANGE)
         self.spotSize = model.FloatContinuous(self._spotSize, spot_rng,
                                               setter=self._setSpotSize)
 
