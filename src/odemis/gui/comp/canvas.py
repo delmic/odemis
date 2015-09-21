@@ -859,7 +859,7 @@ class BitmapCanvas(BufferedCanvas):
         """
 
         # Don't draw anything if the canvas is disabled, leave the current buffer intact.
-        if not self.IsEnabled():
+        if not self.IsEnabled() or 0 in self.GetClientSizeTuple():
             return
 
         ctx = wxcairo.ContextFromDC(self._dc_buffer)

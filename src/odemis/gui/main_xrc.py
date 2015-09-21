@@ -453,7 +453,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource class="" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -2387,6 +2387,7 @@ def __init_resources():
                         <weight>normal</weight>
                         <underlined>0</underlined>
                         <face>Ubuntu</face>
+                        <encoding>UTF-8</encoding>
                       </font>
                       <XRCED>
                         <assign_var>1</assign_var>
@@ -2887,18 +2888,23 @@ def __init_resources():
               <flag>wxEXPAND</flag>
             </object>
             <orient>wxVERTICAL</orient>
+            <object class="sizeritem">
+              <object class="wxHtmlWindow" name="html_alignment_doc">
+                <size>-1,400</size>
+                <url>__doc_sparc2_align_html</url>
+                <fg>#BBBBBB</fg>
+                <bg>#333333</bg>
+                <style>wxHW_SCROLLBAR_NEVER|wxHW_NO_SELECTION</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALL|wxEXPAND|wxALIGN_BOTTOM|wxALIGN_CENTRE_VERTICAL</flag>
+              <border>10</border>
+            </object>
           </object>
           <fg>#E5E5E5</fg>
           <bg>#333333</bg>
-          <object class="wxHtmlWindow" name="html_alignment_doc">
-            <size>-1,400</size>
-            <fg>#BBBBBB</fg>
-            <bg>#333333</bg>
-            <style>wxHW_SCROLLBAR_NEVER|wxHW_NO_SELECTION</style>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
         </object>
         <flag>wxEXPAND</flag>
       </object>
@@ -2923,7 +2929,7 @@ def __init_resources():
                   <object class="sizeritem">
                     <object class="FoldPanelBar">
                       <object class="FoldPanelItem" name="fp_optical_settings">
-                        <label>Optical</label>
+                        <label>OPTICAL</label>
                         <fg>#1A1A1A</fg>
                         <bg>#555555</bg>
                         <XRCED>
@@ -2974,8 +2980,15 @@ def __init_resources():
                 <icon_on>img_icon_ico_eject_orange_png</icon_on>
                 <height>48</height>
                 <face_colour>def</face_colour>
-                <label>Park mirror</label>
+                <label>PARK MIRROR</label>
                 <fg>#1A1A1A</fg>
+                <font>
+                  <size>11</size>
+                  <style>normal</style>
+                  <weight>normal</weight>
+                  <underlined>0</underlined>
+                  <face>Ubuntu</face>
+                </font>
                 <style>wxALIGN_CENTRE</style>
                 <XRCED>
                   <assign_var>1</assign_var>
@@ -5156,6 +5169,75 @@ e\xe8\xe0\x16g\xe91}\x89L\xd5\x8d\x14\xb7&1~\x16\xe5\xa2B\x1e\xc3\xd7\xef\
 \xcc\x90\xee\x19\xb7\xdd3%\xc6-\xffw\x14\xc6.\xac\x8eS&\xf4\xf3?3\xf0\x9d\
 m\xd1v\xe0\xc4\x00\x00\x00\x00IEND\xaeB`\x82'''
 
+    __doc_sparc2_align_html = '''\
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"\
+>
+  </head>
+  <body text="#BBBBBB" bgcolor="#333333">
+
+        <h3>Quick alignment tips</h3>
+        
+        <font size="2">
+        <b><font size="4">Dichotomy mode</font></b>
+        <ol>
+            <li>Adjust SEM to 100x magnification, 30kV and medium curr\
+ent
+                (spot size 3).</li>
+            <li>Adjust SEM and optical focus</li>
+            <li>Report current SEM magnification, set dwell time to 10\
+\xc2\xb5s 
+                and scale to 8.</li>
+            <li>Adjust optical settings until the e-beam is visible in\
+ the
+                optical image.</li>
+            <li>Disable the auto brightness/contrast.</li>
+            <li>Use \xe2\x80\x9cDichotomy mode\xe2\x80\x9d to select s\
+maller and smaller sub-areas
+                that move the e-beam closer to the center of the optic\
+al
+                image.</li>
+            <li>Click on \xe2\x80\x9cmove to center\xe2\x80\x9d.</li>
+            <li>Select \xe2\x80\x9cSpot mode\xe2\x80\x9d to verify tha\
+t the e-beam can be seen
+                in the optical image.</li>
+        </ol>
+        
+\x09&nbsp;<br>
+\x09
+        <b><font size="4">Spot mode</font></b>
+        <ol>
+            <li>Set binning of camera to 1</li>
+            <li>Adjust optical settings and modify the brightness/cont\
+rast
+                until the e-beam is clearly visible.</li>
+            <li>Double click on the center of the e-beam until it is i\
+n the
+                center of the optical image.</li>
+            <li>Increase SEM magnification to desired level and repeat
+                alignment.</li>
+        </ol>
+
+\x09&nbsp;<br>
+\x09
+        <b><font size="4">Fine alignment</font></b>
+        <ol>
+            <li>Ensure the SEM field of view is approximately the same\
+ as the
+            optical field of view.</li>
+            <li>Report the SEM magnification.</li>
+            <li>Click on \xe2\x80\x9cFine alignment...\xe2\x80\x9d to \
+perform automatic
+            scaling and sub-pixel alignment.</li>
+        </ol>
+
+      </font>
+
+  </body>
+</html>
+'''
+
     img_icon_ico_eject_png = '''\
 \x89PNG\x0d
 \x1a
@@ -5404,6 +5486,7 @@ U\x8a\xf3\x13\x13\x84\xf18A\xa9\xc4J_\x1fa"\xc1\xd5l\x16\xa7\xa3\x83\x93\
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_ang_green_png', img_icon_ico_ang_green_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_fib_png', img_icon_ico_fib_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_fib_green_png', img_icon_ico_fib_green_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/__doc_sparc2_align_html', __doc_sparc2_align_html)
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_eject_png', img_icon_ico_eject_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_eject_orange_png', img_icon_ico_eject_orange_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_dialog_warning_png', img_icon_dialog_warning_png)

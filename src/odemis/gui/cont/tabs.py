@@ -2057,6 +2057,11 @@ class MultiAlignTab(Tab):
         tab_data = guimod.ActuatorGUIData(main_data)
         super(MultiAlignTab, self).__init__(name, button, panel, main_frame, tab_data)
 
+        # Documentation text on the left panel
+        doc_path = pkg_resources.resource_filename("odemis.gui", "doc/sparc2_align.html")
+        panel.html_alignment_doc.SetBorders(0)  # sizer already give us borders
+        panel.html_alignment_doc.LoadPage(doc_path)
+
 
 class TabBarController(object):
     def __init__(self, tab_defs, main_frame, main_data):
