@@ -155,8 +155,6 @@ class FoldPanelItem(wx.Panel):
 
         self.Bind(EVT_CAPTIONBAR, self.on_caption_press)
 
-        print self.GetFont().GetPointSize()
-
     def on_caption_press(self, evt):
         evt.set_tag(self)
         evt.Skip()
