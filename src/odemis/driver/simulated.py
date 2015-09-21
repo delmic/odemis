@@ -204,6 +204,11 @@ class Chamber(model.Actuator):
         else:
             self._press_timer = None
 
+        # Indicates whether the chamber is opened or not
+        # Just pretend it's always closed, and allow the user to change that
+        # for instance via CLI.
+        self.opened = model.BooleanVA(False)
+
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
 
