@@ -817,6 +817,11 @@ class ChamberTab(Tab):
         tab_data = guimod.ChamberGUIData(main_data)
         super(ChamberTab, self).__init__(name, button, panel, main_frame, tab_data)
 
+        # If referencing still needs to happen, or if the mirror is parked, make this tab the
+        # default
+        if True:  # TODO: Replace with checks on main_data values
+            self.make_default()
+
 
 class AnalysisTab(Tab):
     """ Handle the loading and displaying of acquisition files
@@ -2277,9 +2282,16 @@ class TabBarController(object):
         for tab in tab_list:
             tab.button.Bind(wx.EVT_BUTTON, self.on_click)
 
-        # Enumerated VA is picky and wants to have choices/value fitting
-        # To bootstrap, we set the new value without check
-        self._tabs._value = default_tab or tab_list[0]
+        # When setting a value for an Enumerated VA, the value must be part of its choices, and
+        # when setting it's choices its current value must be one of them. Therefore, we first set
+        # the current tab using the `._value` attribute, so that the check will not occur. We can
+        # then set the `choices` normally.
+        # Note: One of the created Tab controllers might have concluded that it should be default
+        # tab. In that case, the current tab value will already have been set, overriding the tab
+        # definition passed to this class.
+        if not self._tabs.value:
+            self._tabs._value = default_tab or tab_list[0]
+
         # Choices is a dict tab -> name of the tab
         choices = {t: t.name for t in tab_list}
         self._tabs.choices = choices
