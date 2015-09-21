@@ -17,22 +17,19 @@ the content is an PNG image.
 import os
 import sys
 
-from wx.tools.XRCed.globals import set_debug
-
-
 if __name__ == '__main__':
-
     try:
+        # XRCed is sometimes installed standalone
         from XRCed.xrced import main
+        sys.modules['wx.tools.XRCed'] = sys.modules['XRCed']
     except ImportError:
-        print >> sys.stderr, 'XRCed parent directory must be in PYTHONPATH'
         try:
             from wx.tools.XRCed.xrced import main
+            from wx.tools.XRCed.globals import set_debug
             set_debug(True)
         except ImportError:
+            print >> sys.stderr, 'Check that XRCed is installed and is in PYTHONPATH'
             raise
-
-    sys.modules['wx.tools.XRCed'] = sys.modules['XRCed']
 
     from wx.tools import pywxrc
 
