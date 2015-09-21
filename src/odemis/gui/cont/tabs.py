@@ -1843,7 +1843,7 @@ class SparcAlignTab(Tab):
         # Switch between alignment modes
         # * chamber-view: see the mirror and the sample in the chamber
         # * mirror-align: move x, y, yaw, and pitch with AR feedback
-        # * fiber-align: move yaw, pitch and x/Y of fiber with scount feedback
+        # * fiber-align: move yaw, pitch and x/y of fiber with scount feedback
         self._alignbtn_to_mode = {panel.btn_align_chamber: "chamber-view",
                                   panel.btn_align_mirror: "mirror-align",
                                   panel.btn_align_fiber: "fiber-align"}
@@ -2062,6 +2062,192 @@ class Sparc2AlignTab(Tab):
         doc_path = pkg_resources.resource_filename("odemis.gui", "doc/sparc2_align.html")
         panel.html_alignment_doc.SetBorders(0)  # sizer already give us borders
         panel.html_alignment_doc.LoadPage(doc_path)
+
+        # TODO: add streams:
+        # * MomentOfInertia stream (moi): used to align the mirror. Used both
+        #   for the spatial image and the spot size measurement, and for the
+        #   chronograph of the MoI at center.
+        # * ebeam spot (spot): Used to force the ebeam to spot mode in lens
+        #   and center alignment.
+        # * spectrograph line (spec_line): used for focusing/showing a line in
+        #   lens alignment.
+        # * AR CCD (ccd): Used to show CL spot during the alignment of the lens1,
+        #   and to show the mirror shadow in center alignment
+        # TODO: have a special stream that does CCD + ebeam spot?
+
+
+        # TODO: add stream bar controller
+
+
+        # The mirror center (with the lens set) is defined as pole position
+        # in the microscope configuration file.
+        goal_im = self._getGoalImage(main_data)
+        self._goal_stream = acqstream.RGBStream("Goal", goal_im)
+
+        # Force a spot at the center of the FoV
+        # Not via stream controller, so we can avoid the scheduler
+        spot_stream = acqstream.SpotSEMStream("SpotSEM", main_data.sed,
+                                              main_data.sed.data, main_data.ebeam)
+        self._spot_stream = spot_stream
+
+        # Switch between alignment modes
+        # * mirror-align: move x, y of mirror with moment of inertia feedback
+        # * lens-align: first auto-focus spectrograph, then align lens1
+        # * goal-align: find the center of the AR image using a "Goal" image
+        self._alignbtn_to_mode = {panel.btn_align_mirror: "mirror-align",
+                                  panel.btn_align_lens: "lens-align",
+                                  panel.btn_align_centering: "center-align"}
+        # The GUI mode to the optical path mode
+        self._mode_to_opm = {"mirror-align": "mirror-align",
+                             "lens-align": "mirror-align",  # if autofocus is needed: spec-focus (first)
+                             "center-align": "ar",
+                             }
+
+        for btn in self._alignbtn_to_mode:
+            btn.Bind(wx.EVT_BUTTON, self._onClickAlignButton)
+
+        tab_data.align_mode.subscribe(self._onAlignMode, init=True)
+
+        self._actuator_controller = ActuatorController(tab_data, panel, "")
+
+        # Bind keys
+        self._actuator_controller.bind_keyboard(panel)
+
+    def _onClickAlignButton(self, evt):
+        """
+        Called when one of the Mirror/Optical fiber button is pushed
+        Note: in practice they can never be unpushed by the user, so this happens
+          only when the button is toggled on.
+        """
+        btn = evt.GetEventObject()
+        if not btn.GetToggle():
+            logging.warning("Got event from button being untoggled")
+            return
+
+        try:
+            mode = self._alignbtn_to_mode[btn]
+        except KeyError:
+            logging.warning("Unknown button %s pressed", btn)
+            return
+        # untoggling the other button will be done when the VA is updated
+        self.tab_data_model.align_mode.value = mode
+
+    @call_in_wx_main
+    def _onAlignMode(self, mode):
+        """
+        Called when the align_mode changes (because the user selected a new one)
+        Takes care of setting the right optical path, and updating the GUI widgets
+         displayed
+        mode (str): the new alignment mode
+        """
+        # Ensure the toggle buttons are correctly set
+        for btn, m in self._alignbtn_to_mode.items():
+            btn.SetToggle(mode == m)
+
+        # Disable controls/streams which are useless (to guide the user)
+        if mode == "mirror-align":
+            # TODO: show the vp_mirror_align & play the MoI stream & stop the other streams
+            # self._moi_stream.should_update.value = True
+            self.panel.pnl_mirror.Enable(True)
+            self.panel.html_alignment_doc.Show(True)
+            self.panel.pnl_lens_mover.Enable(False)
+            self.panel.pnl_focus.Enable(False)
+        elif mode == "lens-align":
+            # TODO: show the vp_lens_align & play CCD stream + spot stream
+            self.panel.pnl_mirror.Enable(False)
+            self.panel.html_alignment_doc.Show(False)
+            self.panel.pnl_lens_mover.Enable(True)
+            self.panel.pnl_focus.Enable(False)
+            # TODO: in this mode, if focus change, update the focus image once
+            # (by going to spec-focus mode, turning the light, and acquiring an
+            # AR image)
+        else:  # "center-align"
+            # TODO Show the vp_center_align & play CCD stream + spot stream
+            self.panel.pnl_mirror.Enable(False)
+            self.panel.html_alignment_doc.Show(False)
+            self.panel.pnl_lens_mover.Enable(False)
+            self.panel.pnl_focus.Enable(True)
+
+        # This is blocking on the hardware => run in a separate thread
+        op_mode = self._mode_to_opm[mode]
+        # TODO: if the spec_focus has never been focused yet (for this GUI session),
+        # first go to "spec-focus" mode and run auto-focus on the spectrograph/focus axis
+        threading.Thread(target=self.tab_data_model.main.opm.setPath,
+                         args=(op_mode,)).start()
+
+    # TODO: share with SparcAlignTab
+    def _getGoalImage(self, main_data):
+        """
+        main_data (model.MainGUIData)
+        returns (model.DataArray): RGBA DataArray of the goal image for the
+          current hardware
+        """
+        ccd = main_data.ccd
+        lens = main_data.lens
+
+        # TODO: automatically generate the image? Shouldn't be too hard with
+        # cairo, it's just 3 circles and a line.
+
+        # The goal image depends on the physical size of the CCD, so we have
+        # a file for each supported sensor size.
+        pxs = ccd.pixelSize.value
+        ccd_res = ccd.shape[0:2]
+        ccd_sz = tuple(int(round(p * l * 1e6)) for p, l in zip(pxs, ccd_res))
+        try:
+            goal_rs = pkg_resources.resource_stream("odemis.gui.img",
+                                                    "calibration/ma_goal_5_13_sensor_%d_%d.png" % ccd_sz)
+        except IOError:
+            logging.warning(u"Failed to find a fitting goal image for sensor "
+                            u"of %dx%d µm" % ccd_sz)
+            # pick a known file, it's better than nothing
+            goal_rs = pkg_resources.resource_stream("odemis.gui.img",
+                                                    "calibration/ma_goal_5_13_sensor_13312_13312.png")
+        goal_im = model.DataArray(scipy.misc.imread(goal_rs))
+        # No need to swap bytes for goal_im. Alpha needs to be fixed though
+        goal_im = scale_to_alpha(goal_im)
+        # It should be displayed at the same scale as the actual image.
+        # In theory, it would be direct, but as the backend doesn't know when
+        # the lens is on or not, it's considered always on, and so the optical
+        # image get the pixel size multiplied by the magnification.
+
+        # The resolution is the same as the maximum sensor resolution, if not,
+        # we adapt the pixel size
+        im_res = (goal_im.shape[1], goal_im.shape[0])  # pylint: disable=E1101,E1103
+        scale = ccd_res[0] / im_res[0]
+        if scale != 1:
+            logging.warning("Goal image has resolution %s while CCD has %s",
+                            im_res, ccd_res)
+
+        # Pxs = sensor pxs / lens mag
+        mag = lens.magnification.value
+        goal_md = {model.MD_PIXEL_SIZE: (scale * pxs[0] / mag, scale * pxs[1] / mag),  # m
+                   model.MD_POS: (0, 0),
+                   model.MD_DIMS: "YXC", }
+
+        goal_im.metadata = goal_md
+        return goal_im
+
+    def Show(self, show=True):
+        Tab.Show(self, show=show)
+
+        # TODO: pause/resume the right streams
+        self._spot_stream.is_active.value = show
+
+        # Select the right optical path mode
+        if show:
+            # TODO: just call self._onAlignMode(mode)?
+            mode = self.tab_data_model.align_mode.value
+            op_mode = self._mode_to_opm[mode]
+            threading.Thread(target=self.tab_data_model.main.opm.setPath,
+                             args=(op_mode,)).start()
+        # when hidden, the new tab shown is in charge to request the right
+        # optical path mode, if needed.
+
+    def terminate(self):
+        # TODO: delete/stop all the streams
+        for s in (self._spot_stream,):
+            if s:
+                s.is_active.value = False
 
 
 class TabBarController(object):

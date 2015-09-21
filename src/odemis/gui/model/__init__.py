@@ -115,8 +115,7 @@ class MainGUIData(object):
         "mirror": "mirror",
         "align": "aligner",
         "fiber-aligner": "fibaligner",
-        "lens-switch": "lens_switch",
-        "ar-spec-selector": "ar_spec_sel",
+        "lens-mover": "lens_mover",  # lens1 of SPARCv2
         "chamber": "chamber",
         "light": "light",
         "brightlight": "brightlight",
@@ -157,9 +156,7 @@ class MainGUIData(object):
         self.spectrometer = None  # 1D detector that returns a spectrum
         self.spectrograph = None  # actuator to change the wavelength
         self.monochromator = None  # 0D detector behind the spectrograph
-        # TODO: the next two should not be needed anymore
-        self.ar_spec_sel = None  # actuator to select AR/Spectrometer (SPARC)
-        self.lens_switch = None  # actuator to (de)activate the lens (SPARC)
+        self.lens_mover = None  # actuator to align the lens1 (SPARCv2)
         self.chamber = None  # actuator to control the chamber (has vacuum, pumping etc.)
         self.chamber_ccd = None  # view of inside the chamber
         self.chamber_light = None   # Light illuminating the chamber
@@ -484,7 +481,7 @@ class ActuatorGUIData(MicroscopyGUIData):
     """
     Represent an interface used to move the actuators of a microscope. It might
     also display one or more views, but it's not required.
-    => Used for the lens (SECOM) and mirror (SPARC) alignment tabs
+    => Used for the SECOM and SPARC(v2) alignment tabs
     """
     def __init__(self, main):
         assert main.microscope is not None
@@ -496,12 +493,22 @@ class ActuatorGUIData(MicroscopyGUIData):
                   # "focus": (100e-9, [10e-9, 1e-4], "focus", None),
                   "aligner": (1e-6, [100e-9, 1e-4], "aligner", None),
                   "fibaligner": (50e-6, [5e-6, 500e-6], "fibaligner", None),
-                  # Mirror is a bit more complicated as it has 4 axes and Y
-                  # usually needs to be 10x bigger than X
-                  "mirror_x": (1e-6, [100e-9, 1e-3], "mirror", ("x",)),
-                  "mirror_y": (10e-6, [100e-9, 1e-3], "mirror", ("y",)),
-                  "mirror_r": (10e-6, [100e-9, 1e-3], "mirror", ("ry", "rz"))
+                  "lens_mover": (50e-6, [5e-6, 500e-6], "lens_mover", None),
+                  "spec_focus": (1e-6, [1e-6, 1000e-6], "spectrograph", ("focus",)),
                   }
+        if main.role == "sparc":
+            # Mirror on SPARC is a bit more complicated as it has 4 axes and Y
+            # usually needs to be 10x bigger than X
+            ss_def.update({
+                "mirror_x": (1e-6, [100e-9, 1e-3], "mirror", ("x",)),
+                "mirror_y": (10e-6, [100e-9, 1e-3], "mirror", ("y",)),
+                "mirror_r": (10e-6, [100e-9, 1e-3], "mirror", ("ry", "rz"))
+            })
+        elif main.role == "sparc2":
+            ss_def.update({
+                "mirror": (10e-6, [100e-9, 1e-3], "mirror", None),
+            })
+
         # str -> VA: name (as the name of the attribute) -> step size (m)
         self.stepsizes = {}
 
@@ -530,10 +537,16 @@ class ActuatorGUIData(MicroscopyGUIData):
         # For dichotomic mode (SECOM)
         self.dicho_seq = model.ListVA()  # list of 4 enumerated for each corner
 
-        # For the SPARC, the current alignment mode. Same values than the modes
-        # of the OpticalPathManager
+        # For the SPARC/SPARCv2, the current alignment mode.
         # TODO: move to subclass
-        self.align_mode = StringEnumerated("chamber-view", choices={"chamber-view", "mirror-align", "fiber-align"})
+        if main.role == "sparc":
+            # Same values than the modes of the OpticalPathManager
+            self.align_mode = StringEnumerated("chamber-view",
+                                               choices={"chamber-view", "mirror-align", "fiber-align"})
+        elif main.role == "sparc2":
+            # Mode values are different from the one from OpticalPathManager
+            self.align_mode = StringEnumerated("mirror-align",
+                                   choices={"mirror-align", "lens-align", "center-align"})
 
     def step(self, actuator, axis, factor, sync=False):
         """

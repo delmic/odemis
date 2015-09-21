@@ -198,21 +198,21 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.btn_align_mirror = xrc.XRCCTRL(self, "btn_align_mirror")
         self.btn_align_lens = xrc.XRCCTRL(self, "btn_align_lens")
         self.btn_align_centering = xrc.XRCCTRL(self, "btn_align_centering")
-        self.pnl_translation = xrc.XRCCTRL(self, "pnl_translation")
-        self.sld_trans_step_size = xrc.XRCCTRL(self, "sld_trans_step_size")
-        self.btn_trans_m_y = xrc.XRCCTRL(self, "btn_trans_m_y")
-        self.btn_trans_p_y = xrc.XRCCTRL(self, "btn_trans_p_y")
-        self.btn_trans_m_x = xrc.XRCCTRL(self, "btn_trans_m_x")
-        self.btn_trans_p_x = xrc.XRCCTRL(self, "btn_trans_p_x")
-        self.pnl_lens_translation = xrc.XRCCTRL(self, "pnl_lens_translation")
-        self.sld_lens_step_size = xrc.XRCCTRL(self, "sld_lens_step_size")
-        self.btn_trans_lens_m_x = xrc.XRCCTRL(self, "btn_trans_lens_m_x")
-        self.btn_trans_lens_p_x = xrc.XRCCTRL(self, "btn_trans_lens_p_x")
+        self.pnl_mirror = xrc.XRCCTRL(self, "pnl_mirror")
+        self.slider_mirror = xrc.XRCCTRL(self, "slider_mirror")
+        self.btn_m_mirror_y = xrc.XRCCTRL(self, "btn_m_mirror_y")
+        self.btn_p_mirror_y = xrc.XRCCTRL(self, "btn_p_mirror_y")
+        self.btn_m_mirror_x = xrc.XRCCTRL(self, "btn_m_mirror_x")
+        self.btn_p_mirror_x = xrc.XRCCTRL(self, "btn_p_mirror_x")
+        self.pnl_lens_mover = xrc.XRCCTRL(self, "pnl_lens_mover")
+        self.slider_lens_mover = xrc.XRCCTRL(self, "slider_lens_mover")
+        self.btn_m_lens_mover_x = xrc.XRCCTRL(self, "btn_m_lens_mover_x")
+        self.btn_p_lens_mover_x = xrc.XRCCTRL(self, "btn_p_lens_mover_x")
         self.pnl_focus = xrc.XRCCTRL(self, "pnl_focus")
-        self.sld_focus = xrc.XRCCTRL(self, "sld_focus")
+        self.slider_focus = xrc.XRCCTRL(self, "slider_focus")
         self.gauge_autofocus = xrc.XRCCTRL(self, "gauge_autofocus")
         self.html_alignment_doc = xrc.XRCCTRL(self, "html_alignment_doc")
-        self.vp_sparc_align = xrc.XRCCTRL(self, "vp_sparc_align")
+        self.vp_center_align = xrc.XRCCTRL(self, "vp_center_align")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fp_optical_settings = xrc.XRCCTRL(self, "fp_optical_settings")
 
@@ -2451,7 +2451,7 @@ def __init_resources():
               <border>5</border>
             </object>
             <object class="sizeritem">
-              <object class="wxPanel" name="pnl_translation">
+              <object class="wxPanel" name="pnl_mirror">
                 <object class="wxBoxSizer">
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
@@ -2476,7 +2476,7 @@ def __init_resources():
                     <border>5</border>
                   </object>
                   <object class="sizeritem">
-                    <object class="UnitFloatSlider" name="sld_trans_step_size">
+                    <object class="UnitFloatSlider" name="slider_mirror">
                       <size>-1,20</size>
                       <value>0.000001</value>
                       <min>0.0000001</min>
@@ -2561,7 +2561,7 @@ def __init_resources():
                         <cellpos>2,0</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_trans_m_y">
+                        <object class="ImageTextButton" name="btn_m_mirror_y">
                           <size>64,-1</size>
                           <height>48</height>
                           <face_colour>def</face_colour>
@@ -2583,7 +2583,7 @@ def __init_resources():
                         <cellpos>1,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_trans_p_y">
+                        <object class="ImageTextButton" name="btn_p_mirror_y">
                           <size>64,-1</size>
                           <height>48</height>
                           <face_colour>def</face_colour>
@@ -2605,7 +2605,7 @@ def __init_resources():
                         <cellpos>3,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_trans_m_x">
+                        <object class="ImageTextButton" name="btn_m_mirror_x">
                           <size>64,-1</size>
                           <height>48</height>
                           <face_colour>def</face_colour>
@@ -2625,7 +2625,7 @@ def __init_resources():
                         <cellpos>2,1</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_trans_p_x">
+                        <object class="ImageTextButton" name="btn_p_mirror_x">
                           <size>64,-1</size>
                           <height>48</height>
                           <face_colour>def</face_colour>
@@ -2662,7 +2662,7 @@ def __init_resources():
               <border>5</border>
             </object>
             <object class="sizeritem">
-              <object class="wxPanel" name="pnl_lens_translation">
+              <object class="wxPanel" name="pnl_lens_mover">
                 <object class="wxBoxSizer">
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
@@ -2688,7 +2688,7 @@ def __init_resources():
                     <border>5</border>
                   </object>
                   <object class="sizeritem">
-                    <object class="UnitFloatSlider" name="sld_lens_step_size">
+                    <object class="UnitFloatSlider" name="slider_lens_mover">
                       <size>-1,20</size>
                       <value>0.000001</value>
                       <min>0.0000001</min>
@@ -2707,7 +2707,7 @@ def __init_resources():
                   <object class="sizeritem">
                     <object class="wxGridBagSizer">
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_prz">
+                        <object class="wxStaticText" name="lbl_p_lens">
                           <label>+X</label>
                           <fg>#E5E5E5</fg>
                           <font>
@@ -2724,7 +2724,7 @@ def __init_resources():
                         <cellpos>0,4</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_mrz">
+                        <object class="wxStaticText" name="lbl_m_lens">
                           <label>-X</label>
                           <fg>#E5E5E5</fg>
                           <font>
@@ -2740,7 +2740,7 @@ def __init_resources():
                         <cellpos>0,0</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_trans_lens_m_x">
+                        <object class="ImageTextButton" name="btn_m_lens_mover_x">
                           <size>64,-1</size>
                           <height>48</height>
                           <face_colour>def</face_colour>
@@ -2760,7 +2760,7 @@ def __init_resources():
                         <cellpos>0,1</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_trans_lens_p_x">
+                        <object class="ImageTextButton" name="btn_p_lens_mover_x">
                           <size>64,-1</size>
                           <height>48</height>
                           <face_colour>def</face_colour>
@@ -2827,13 +2827,13 @@ def __init_resources():
                         <cellpos>0,0</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="UnitFloatSlider" name="sld_focus">
+                        <object class="UnitFloatSlider" name="slider_focus">
                           <size>-1,20</size>
                           <value>0.00001</value>
                           <min>0.0000001</min>
                           <max>0.001</max>
                           <unit>m</unit>
-                          <scale>log</scale>
+                          <scale>linear</scale>
                           <accuracy>2</accuracy>
                           <style>wxBORDER_NONE</style>
                           <XRCED>
@@ -2909,7 +2909,7 @@ def __init_resources():
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">
-        <object class="ARLiveViewport" name="vp_sparc_align">
+        <object class="ARLiveViewport" name="vp_center_align">
           <size>400,-1</size>
           <XRCED>
             <assign_var>1</assign_var>
