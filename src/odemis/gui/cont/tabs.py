@@ -995,36 +995,42 @@ class AnalysisTab(Tab):
             return False
 
         # Detect the format to use
-        fn = dialog.GetPath()
-        logging.debug("Current file set to %s", fn)
+        filename = dialog.GetPath()
+        logging.debug("Current file set to %s", filename)
 
         fmt = formats[dialog.GetFilterIndex()]
-        if fmt is None:
-            # Try to guess from the extension
-            for f, exts in formats_to_ext.items():
-                if any([fn.endswith(e) for e in exts]):
-                    fmt = f
-                    break
-            else:
-                # pick a random format hoping it's the right one
-                fmt = formats[1]
-                logging.warning("Couldn't guess format from filename '%s', will use %s.", fn, fmt)
 
         Message.show_message(self.main_frame, "Opening file")
-        self.load_data(fmt, fn)
+        self.load_data(fmt, filename)
         return True
 
     def on_file_open_button(self, evt):
         self.select_acq_file()
 
-    def load_data(self, fmt, fn):
+    def load_data(self, filename, fmt=None):
+
+        if fmt is None:
+            formats_to_ext = dataio.get_available_formats(os.O_RDONLY)
+            _, formats = guiutil.formats_to_wildcards(formats_to_ext, include_all=True)
+
+            # Try to guess from the extension
+            for f, exts in formats_to_ext.items():
+                if any([filename.endswith(e) for e in exts]):
+                    fmt = f
+                    break
+            else:
+                # pick a random format hoping it's the right one
+                fmt = formats[1]
+                logging.warning("Couldn't guess format from filename '%s', will use %s.",
+                                filename, fmt)
+
         converter = dataio.get_converter(fmt)
         try:
-            data = converter.read_data(fn)
+            data = converter.read_data(filename)
         except Exception:
-            logging.exception("Failed to open file '%s' with format %s", fn, fmt)
+            logging.exception("Failed to open file '%s' with format %s", filename, fmt)
 
-        self.display_new_data(fn, data)
+        self.display_new_data(filename, data)
 
     @call_in_wx_main
     def display_new_data(self, filename, data):

@@ -64,6 +64,9 @@ class AcquisitionDialog(xrcfr_acq):
         self.filename = model.StringVA(self._get_default_filename())
         self.filename.subscribe(self._onFilename, init=True)
 
+        # The name of the last file that got written to disk (used for auto viewing on close)
+        self.last_saved_file = None
+
         # a ProgressiveFuture if the acquisition is going on
         self.acq_future = None
         self._acq_future_connector = None
@@ -501,6 +504,7 @@ class AcquisitionDialog(xrcfr_acq):
             exporter = dataio.get_converter(self.conf.last_format)
             exporter.export(filename, data, thumb)
             logging.info("Acquisition saved as file '%s'.", filename)
+            self.last_saved_file = filename
         except Exception:
             logging.exception("Saving acquisition failed")
             self.btn_secom_acquire.Enable()
