@@ -199,7 +199,7 @@ class MainGUIData(object):
             # Optical path manager (for now, only used on the SPARC)
             # Used to control the actuators so that the ligth goes to the right
             # detector (in the right way).
-            if microscope.role == "sparc":
+            if microscope.role in ("sparc", "sparc2"):
                 self.opm = path.OpticalPathManager(microscope)
 
         # Chamber is complex so we provide a "simplified state"
