@@ -317,12 +317,12 @@ SPARC2: {
 
 # Controller for moving the 'Deltabot' stage
 # "Mirror Actuators": {
-#     class: tmcm.TMCM3110,
+#     class: tmcm.TMCLController,
 #     role: mirror,
 #     init: {
 #         port: "/dev/fake",
-#         axes: ["x", "y", "z"],
+#         axes: ["a", "b", "c"],
 #         ustepsize: [5.9e-9, 5.9e-9, 5.9e-9], # m/µstep
-#         refproc: "FakeReferencing", # referencing procedure for simulator
+#         refproc: "Standard",
 #     },
 #}

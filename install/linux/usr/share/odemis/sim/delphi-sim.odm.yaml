@@ -46,6 +46,7 @@ DELPHI: {
        wd: 7.e-3, # m
     },
     properties: {
+        # accelVoltage: 5300,  # V
         dwellTime: 10.e-6, # s
     },
     affects: ["BSED Phenom", "Camera"] # affects the CCD in case of cathodoluminescence

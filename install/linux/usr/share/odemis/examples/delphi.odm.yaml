@@ -53,6 +53,10 @@ DELPHI: {
     # Internal child of SEM Phenom, so no class
     role: e-beam,
     init: {},
+    properties: {
+        # spotSize: 2.1,  # Mostly to make sure it doesn't default to some weird value
+        # accelVoltage: 5300,  # V
+    },
     affects: ["BSED Phenom", "Camera"], # affects the CCD in case of cathodoluminescence
 }
 
@@ -197,7 +201,7 @@ DELPHI: {
         #port: "/dev/fake",
         axes: ["x", "y", "z"],
         ustepsize: [5.9e-9, 5.9e-9, 0.302e-9], # m/µstep
-        #refproc: "FakeReferencing", # referencing procedure for simulator
+        #refproc: "Standard", # referencing procedure for simulator
         refproc: "2xFinalForward", # official referencing procedure for the Delphi
         temp: True,
         # inverted: ["y"],
