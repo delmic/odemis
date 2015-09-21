@@ -817,9 +817,6 @@ class ChamberTab(Tab):
         tab_data = guimod.ChamberGUIData(main_data)
         super(ChamberTab, self).__init__(name, button, panel, main_frame, tab_data)
 
-        # Perfom tests to determine if the chamber tab should be opened on launch
-        self.make_default()
-
 
 class AnalysisTab(Tab):
     """ Handle the loading and displaying of acquisition files
@@ -2282,8 +2279,7 @@ class TabBarController(object):
 
         # Enumerated VA is picky and wants to have choices/value fitting
         # To bootstrap, we set the new value without check
-        if not self._tabs.value:
-            self._tabs._value = default_tab or tab_list[0]
+        self._tabs._value = default_tab or tab_list[0]
         # Choices is a dict tab -> name of the tab
         choices = {t: t.name for t in tab_list}
         self._tabs.choices = choices
