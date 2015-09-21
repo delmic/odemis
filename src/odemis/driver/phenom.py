@@ -1945,7 +1945,7 @@ class ChamberPressure(model.Actuator):
                         self._updateSampleHolder()  # in case new sample holder was loaded
                     elif (newEvent == eventID3):
                         logging.debug("Door status changed")
-                        self._updateOpened()  # in case new sample holder was loaded
+                        self._updateOpened()  # in case door status is changed
                     else:
                         logging.warning("Unexpected event received")
         except Exception as e:
