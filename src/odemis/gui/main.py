@@ -68,7 +68,7 @@ class OdemisGUIApp(wx.App):
 
         self.main_data = None
         self.main_frame = None
-        self._tab_controller = None
+        self.tab_controller = None
         self._is_standalone = standalone
         self._snapshot_controller = None
         self._menu_controller = None
@@ -245,7 +245,7 @@ class OdemisGUIApp(wx.App):
 
             # Create the main tab controller and store a global reference
             # in the odemis.gui.cont package
-            self._tab_controller = tabs.TabBarController(tab_defs, self.main_frame, self.main_data)
+            self.tab_controller = tabs.TabBarController(tab_defs, self.main_frame, self.main_data)
 
             self._menu_controller = MenuController(self.main_data, self.main_frame)
             # Menu events
@@ -304,7 +304,7 @@ class OdemisGUIApp(wx.App):
             pub.unsubAll()
 
             # let all the tabs know we are stopping
-            self._tab_controller.terminate()
+            self.tab_controller.terminate()
         except Exception:
             logging.exception("Error during GUI shutdown")
 
