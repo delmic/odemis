@@ -237,11 +237,11 @@ class SecomStateController(MicroscopeStateController):
         self._main_data = tab_data.main
         self._stream_controller = st_ctrl
 
-        # Event for pumping and venting in progress
-        self._pumping_in_progress = threading.Event()
-        self._pumping_in_progress.set()
-        self._venting_in_progress = threading.Event()
-        self._venting_in_progress.set()
+        # Event for indicating sample reached overview position and phenom GUI
+        # loading
+        self._in_overview = threading.Event()
+        self._phenom_load_done = threading.Event()
+        self._phenom_load_done.set()
 
         # Just to be able to disable the buttons when the chamber is vented
         self._sem_btn = getattr(tab_panel, btn_prefix + "sem")
@@ -308,7 +308,7 @@ class SecomStateController(MicroscopeStateController):
             ch_pos = self._main_data.chamber.position
             ch_pos.subscribe(self.on_chamber_pressure, init=True)
             ch_opened = self._main_data.chamber.opened
-            ch_opened.subscribe(self.on_door_opened, init=True)
+            ch_opened.subscribe(self.on_door_opened, init=False)
 
             # at init, if chamber is in overview position, start by pumping
             # (which will indirectly first acquire an image)
@@ -469,6 +469,7 @@ class SecomStateController(MicroscopeStateController):
         elif state == CHAMBER_VENTING:
             self._chamber_pump_future.cancel()
             self._main_data.chamber.stop()
+            self._phenom_load_done.wait()  # wait in case of loading done by Phenom GUI
             self._start_chamber_venting()
 
     def _start_chamber_pumping(self):
@@ -534,20 +535,21 @@ class SecomStateController(MicroscopeStateController):
         if currentp <= self._vacuum_pressure:
             # Vacuum reached
             self._main_data.chamberState.value = CHAMBER_VACUUM
+            self._in_overview.clear()
         elif currentp >= self._vented_pressure:
             # Chamber is opened
             self._main_data.chamberState.value = CHAMBER_VENTED
+            self._in_overview.clear()
         elif currentp == self._overview_pressure:
             # It's all fine, it should automatically reach vacuum eventually
             # The advantage of not putting the call to _start_overview_acquisition()
             # here is that if the previous pressure was identical, we are not
             # doing it twice.
-            # In the case of Delphi we check if pumping is in progress otherwise we
-            # initiate pumping now.
-            self._on_overview_pressure()
+            self._in_overview.set()
         else:
             # This can happen at initialisation if the chamber pressure is changing
             logging.info("Pressure position unknown: %s", currentp)
+            self._in_overview.clear()
             # self._main_data.chamberState.value = CHAMBER_UNKNOWN
 
     @call_in_wx_main
@@ -559,10 +561,9 @@ class SecomStateController(MicroscopeStateController):
             self._press_btn.Enable(False)
         else:
             self._press_btn.Enable(True)
-
-    @call_in_wx_main
-    def _on_overview_pressure(self):
-        pass
+            self._press_btn.SetToggle(True)
+            self._phenom_load_done.clear()
+            self._main_data.chamberState.value = CHAMBER_PUMPING
 
     def _on_overview_position(self, unused):
         logging.debug("Overview position reached")
@@ -678,7 +679,6 @@ class DelphiStateController(SecomStateController):
         """
         Note: must be called in the main GUI thread
         """
-        self._pumping_in_progress.clear()
         # Warning: if the sample holder is not yet registered, the Phenom will
         # not accept to even load it to the overview. That's why checking for
         # calibration/registration must be done immediately. Annoyingly, the
@@ -727,23 +727,15 @@ class DelphiStateController(SecomStateController):
             dlg.Destroy()
             # Eject the sample holder
             self._main_data.chamberState.value = CHAMBER_VENTING
-            self._pumping_in_progress.set()
             return False
 
         super(DelphiStateController, self)._on_vacuum(future)
         self._show_progress_indicators(False, True)
-        self._pumping_in_progress.set()
-
-    @call_in_wx_main
-    def _on_overview_pressure(self):
-        if self._pumping_in_progress.isSet() and self._venting_in_progress.isSet():
-            self._main_data.chamberState.value = CHAMBER_PUMPING
 
     def _start_chamber_venting(self):
         """
         Note: must be called in the main GUI thread
         """
-        self._venting_in_progress.clear()
         # On the DELPHI, we also move the optical stage to 0,0 (= reference
         # position), so that referencing will be faster on next load.
         # We just need to be careful that the axis is referenced
@@ -761,7 +753,6 @@ class DelphiStateController(SecomStateController):
     def _on_vented(self, future):
         super(DelphiStateController, self)._on_vented(future)
         self._show_progress_indicators(False, False)
-        self._venting_in_progress.set()
 
     def _load_holder_calib(self):
         """
@@ -1004,6 +995,15 @@ class DelphiStateController(SecomStateController):
         try:
             if future._delphi_load_state == CANCELLED:
                 return
+
+            # If door was just closed, then wait for the Phenom GUI to complete
+            # the move to overview. Then continue as usual.
+            # FIXME: Maybe we can get rid of this once Phenom GUI can be disabled
+            if not self._phenom_load_done.isSet():
+                logging.debug("Waiting for Phenom GUI to move to overview position...")
+                self._in_overview.wait()
+                self._phenom_load_done.set()
+
             # _on_overview_position() will take care of going further
             future._actions_time.pop(0)
             pf = self._main_data.chamber.moveAbs({"pressure": self._overview_pressure})
@@ -1013,7 +1013,8 @@ class DelphiStateController(SecomStateController):
 
             if future._delphi_load_state == CANCELLED:
                 return
-            # Reference the (optical) stage
+
+            # Reference the (optical) stages
             future._actions_time.pop(0)
             f = self._main_data.stage.reference({"x", "y"})
             future._delphi_load_state = f

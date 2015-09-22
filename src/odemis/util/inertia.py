@@ -27,6 +27,7 @@ def CalculateMomentOfInertia(raw_data, background):
     returns (float): moment of inertia
     """
     # TODO: better background substraction
+    # 1.3 corresponds to 3 times the noise
     data = numpy.clip(raw_data - 1.3 * background, 0, numpy.inf)
     rows, cols = data.shape
     x = numpy.linspace(1, cols, num=cols)
