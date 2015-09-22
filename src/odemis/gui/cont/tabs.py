@@ -1001,10 +1001,10 @@ class AnalysisTab(Tab):
         fmt = formats[dialog.GetFilterIndex()]
 
         Message.show_message(self.main_frame, "Opening file")
-        self.load_data(fmt, filename)
+        self.load_data(filename, fmt)
         return True
 
-    def on_file_open_button(self, evt):
+    def on_file_open_button(self, _):
         self.select_acq_file()
 
     def load_data(self, filename, fmt=None):
@@ -2321,9 +2321,11 @@ class TabBarController(object):
         for tab in self._tabs.choices:
             if tab.name == tab_name:
                 self._tabs.value = tab
-                break
+                return tab
         else:
             logging.warn("Could not open tab '%s", tab_name)
+
+        return None
 
     def on_acquisition(self, is_acquiring):
         for tab in self._tabs.choices:
