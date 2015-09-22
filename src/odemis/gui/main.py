@@ -55,7 +55,7 @@ class OdemisGUIApp(wx.App):
     """ This is Odemis' main GUI application class
     """
 
-    def __init__(self, standalone=False):
+    def __init__(self, standalone=False, file_name=None):
         """
         standalone (boolean): do not try to connect to the backend
         """
@@ -68,7 +68,7 @@ class OdemisGUIApp(wx.App):
 
         self.main_data = None
         self.main_frame = None
-        self._tab_controller = None
+        self.tab_controller = None
         self._is_standalone = standalone
         self._snapshot_controller = None
         self._menu_controller = None
@@ -90,6 +90,10 @@ class OdemisGUIApp(wx.App):
         # be called
         # and it needs the attributes defined in this constructor!
         wx.App.__init__(self, redirect=True)
+
+        if file_name:
+            tab = self.tab_controller.open_tab('analysis')
+            wx.CallLater(500, tab.load_data, file_name)
 
     def OnInit(self):
         """ Initialize the GUI
@@ -245,7 +249,7 @@ class OdemisGUIApp(wx.App):
 
             # Create the main tab controller and store a global reference
             # in the odemis.gui.cont package
-            self._tab_controller = tabs.TabBarController(tab_defs, self.main_frame, self.main_data)
+            self.tab_controller = tabs.TabBarController(tab_defs, self.main_frame, self.main_data)
 
             self._menu_controller = MenuController(self.main_data, self.main_frame)
             # Menu events
@@ -304,7 +308,7 @@ class OdemisGUIApp(wx.App):
             pub.unsubAll()
 
             # let all the tabs know we are stopping
-            self._tab_controller.terminate()
+            self.tab_controller.terminate()
         except Exception:
             logging.exception("Error during GUI shutdown")
 
@@ -391,6 +395,8 @@ def main(args):
     parser = argparse.ArgumentParser(prog="odemis-gui",
                                      description=odemis.__fullname__)
 
+    parser.add_argument('-f', '--file', dest="file_name",
+                        help="File to display")
     parser.add_argument('--version', dest="version", action='store_true',
                         help="show program's version number and exit")
     parser.add_argument('--standalone', dest="standalone", action='store_true',
@@ -432,7 +438,8 @@ def main(args):
             logging.info("Failed to set WM_CLASS")
 
     # Create application
-    app = OdemisGUIApp(standalone=options.standalone)
+    app = OdemisGUIApp(standalone=options.standalone, file_name=options.file_name)
+
     # Change exception hook so unexpected exception
     # get caught by the logger
     backup_excepthook, sys.excepthook = sys.excepthook, app.excepthook

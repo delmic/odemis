@@ -54,7 +54,7 @@ def get_available_formats(mode=os.O_RDWR, allowlossy=False):
     for module_name in __all__:
         try:
             exporter = importlib.import_module("." + module_name, "odemis.dataio")
-        except Exception: #pylint: disable=W0703
+        except Exception:
             logging.info("Skipping exporter %s, which failed to load", module_name)
             continue # module cannot be loaded
         if not allowlossy and hasattr(exporter, "LOSSY") and exporter.LOSSY:
