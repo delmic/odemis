@@ -17,6 +17,8 @@ You should have received a copy of the GNU General Public License along with Ode
 from __future__ import division
 
 import numpy
+from odemis import model
+from odemis.util import img
 
 
 def CalculateMomentOfInertia(raw_data, background):
@@ -26,9 +28,14 @@ def CalculateMomentOfInertia(raw_data, background):
     background (model.DataArray): Background image that we use for substraction
     returns (float): moment of inertia
     """
+    # depth = 2 ** background.metadata.get(model.MD_BPP, background.dtype.itemsize * 8)
+    # hist, edges = img.histogram(background, (0, depth - 1))
+    # range_max = img.findOptimalRange(hist, edges, outliers=1e-06)[1]
     # TODO: better background substraction
     # 1.3 corresponds to 3 times the noise
     data = numpy.clip(raw_data - 1.3 * background, 0, numpy.inf)
+    # alternative background substraction
+    # data = numpy.clip(raw_data - range_max, 0, numpy.inf)
     rows, cols = data.shape
     x = numpy.linspace(1, cols, num=cols)
     y = numpy.linspace(1, rows, num=rows)
