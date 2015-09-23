@@ -34,7 +34,6 @@ import logging
 from operator import xor
 import wx
 import wx.lib.buttons as wxbuttons
-from wx.lib.colourutils import AdjustColour
 
 from odemis.gui import FG_COLOUR_HIGHLIGHT
 from odemis.gui.util.img import wxImageScaleKeepRatio
@@ -553,7 +552,7 @@ class TabButton(GraphicRadioButton):
         self._highlight(False)
         evt.Skip()
 
-    def notify(self, on):
+    def highlight(self, on):
         """ Indicate a change to the button's related tab by visually altering it """
         f = self.GetFont()
 
