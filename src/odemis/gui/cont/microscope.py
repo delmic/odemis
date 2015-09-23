@@ -240,8 +240,7 @@ class SecomStateController(MicroscopeStateController):
         # Event for indicating sample reached overview position and phenom GUI
         # loading
         self._in_overview = threading.Event()
-        self._phenom_load_done = threading.Event()
-        self._phenom_load_done.set()
+        self._phenom_load_done = True
 
         # Just to be able to disable the buttons when the chamber is vented
         self._sem_btn = getattr(tab_panel, btn_prefix + "sem")
@@ -469,7 +468,6 @@ class SecomStateController(MicroscopeStateController):
         elif state == CHAMBER_VENTING:
             self._chamber_pump_future.cancel()
             self._main_data.chamber.stop()
-            self._phenom_load_done.wait()  # wait in case of loading done by Phenom GUI
             self._start_chamber_venting()
 
     def _start_chamber_pumping(self):
@@ -535,21 +533,18 @@ class SecomStateController(MicroscopeStateController):
         if currentp <= self._vacuum_pressure:
             # Vacuum reached
             self._main_data.chamberState.value = CHAMBER_VACUUM
-            self._in_overview.clear()
         elif currentp >= self._vented_pressure:
             # Chamber is opened
             self._main_data.chamberState.value = CHAMBER_VENTED
-            self._in_overview.clear()
         elif currentp == self._overview_pressure:
             # It's all fine, it should automatically reach vacuum eventually
             # The advantage of not putting the call to _start_overview_acquisition()
             # here is that if the previous pressure was identical, we are not
             # doing it twice.
-            self._in_overview.set()
+            pass
         else:
             # This can happen at initialisation if the chamber pressure is changing
             logging.info("Pressure position unknown: %s", currentp)
-            self._in_overview.clear()
             # self._main_data.chamberState.value = CHAMBER_UNKNOWN
 
     @call_in_wx_main
@@ -562,7 +557,7 @@ class SecomStateController(MicroscopeStateController):
         else:
             self._press_btn.Enable(True)
             self._press_btn.SetToggle(True)
-            self._phenom_load_done.clear()
+            self._phenom_load_done = False
             self._main_data.chamberState.value = CHAMBER_PUMPING
 
     def _on_overview_position(self, unused):
@@ -944,6 +939,10 @@ class DelphiStateController(SecomStateController):
         calib_dialog.Center()
         calib_dialog.ShowModal()
 
+    def _pressure_changed(self, value):
+        if value["pressure"] == self._overview_pressure:
+            self._in_overview.set()
+
     # Rough approximation of the times of each loading action:
     # * 5 sec to load to NavCam (will be much longer if Phenom is in stand-by)
     # * 2 s for moving to the stage center
@@ -993,16 +992,20 @@ class DelphiStateController(SecomStateController):
         logging.debug("Delphi loading...")
 
         try:
-            if future._delphi_load_state == CANCELLED:
-                return
 
             # If door was just closed, then wait for the Phenom GUI to complete
             # the move to overview. Then continue as usual.
             # FIXME: Maybe we can get rid of this once Phenom GUI can be disabled
-            if not self._phenom_load_done.isSet():
+            if not self._phenom_load_done:
                 logging.debug("Waiting for Phenom GUI to move to overview position...")
+                self._main_data.chamber.position.subscribe(self._pressure_changed)
                 self._in_overview.wait()
-                self._phenom_load_done.set()
+                self._phenom_load_done = True
+                self._main_data.chamber.position.unsubscribe(self._pressure_changed)
+                self._in_overview.clear()
+
+            if future._delphi_load_state == CANCELLED:
+                return
 
             # _on_overview_position() will take care of going further
             future._actions_time.pop(0)
@@ -1077,6 +1080,12 @@ class DelphiStateController(SecomStateController):
         Canceller of _DoDelphiLoading task.
         """
         logging.debug("Cancelling Delphi loading...")
+
+        # wait to avoid unloading while Phenom GUI is still loading
+        if not self._phenom_load_done:
+            self._in_overview.wait()
+            # FIXME: remove this asap
+            time.sleep(1)
 
         with future._delphi_load_lock:
             state = future._delphi_load_state
