@@ -1106,6 +1106,8 @@ class TMCLController(model.Actuator):
 
         pos = self._applyInversion(pos)
 
+        logging.debug("Updated position to %s", pos)
+
         # it's read-only, so we change it via _value
         self.position._value = pos
         self.position.notify(self.position.value)
@@ -1650,8 +1652,10 @@ class TMCMSimulator(object):
             if not 0 <= mot < self._naxes:
                 self._sendReply(inst, status=4) # invalid value
                 return
-            # Note: the target position in axis param is not changed (in the
-            # real controller)
+            # Note: the target position in axis param is not changed in the
+            # real controller, but to more easily simulate half-way stop, we
+            # update the target position to the current pos.
+            self._astates[mot][0] = self._getCurrentPos(mot)
             self._axis_move[mot] = (0, 0, 0)
             self._sendReply(inst)
         elif inst == 4: # Move to position
@@ -1701,6 +1705,14 @@ class TMCMSimulator(object):
             else:
                 rval = self._astates[mot].get(typ, 0) # default to 0
             self._sendReply(inst, val=rval)
+        elif inst == 10:  # Get global param
+            if not 0 <= mot < self._naxes:
+                self._sendReply(inst, status=4)  # invalid value
+                return
+            if not 0 <= typ <= 255:
+                self._sendReply(inst, status=3)  # wrong type
+                return
+            self._sendReply(inst, val=0)  # very simple simulation for now: all param == 0
         elif inst == 13: # ref search-related instructions
             if not 0 <= mot < self._naxes:
                 self._sendReply(inst, status=4) # invalid value
@@ -1759,7 +1771,9 @@ class TMCMSimulator(object):
             if typ == 0: # string
                 raise NotImplementedError("Can't simulated GFV string")
             elif typ == 1: # binary
-                self._sendReply(inst, val=0x0c260109) # 3110 v1.09
+                modl = (self._naxes * 1000 + 110)
+                val = (modl << 16) + 0x0109  # eg: 3110 v1.09
+                self._sendReply(inst, val=val)
             else:
                 self._sendReply(inst, status=3) # wrong type
         elif inst == 138: # Request Target Position Reached Event

@@ -216,6 +216,8 @@ class TestActuator(unittest.TestCase):
         f.cancel()
         self.assertTrue(f.cancelled())
         self.assertTrue(f.done())
+        pos = self.dev.position.value
+        self.assertNotAlmostEqual(move_forth["x"], pos["x"])
 
         # test cancel in queue
         f1 = self.dev.moveRel(move_forth)
