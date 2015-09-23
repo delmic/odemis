@@ -2,7 +2,7 @@
 """
 :created: 2012-10-01
 :author: Rinze de Laat
-:copyright: © 2012-2013 Rinze de Laat and Éric Piel, Delmic
+:copyright: © 2012-2015 Rinze de Laat and Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -22,16 +22,11 @@ This file is part of Odemis.
 
 from __future__ import division
 
-import collections
 import logging
-from odemis.acq.stream import OpticalStream, EMStream, SpectrumStream, ARStream, \
-    CLStream
-from odemis.acq.stream import RGBCameraStream, BrightfieldStream, ARSettingsStream, \
-    CLSettingsStream, MonochromatorSettingsStream
+from odemis.acq.stream import EMStream
+
 from odemis.gui import model
 from odemis.gui.comp.grid import ViewportGrid
-from odemis.gui.comp.viewport import MicroscopeViewport, AngularResolvedViewport, PlotViewport, \
-    SpatialSpectrumViewport
 from odemis.gui.cont import tools
 from odemis.gui.util import call_in_wx_main, img
 from odemis.model import MD_PIXEL_SIZE
