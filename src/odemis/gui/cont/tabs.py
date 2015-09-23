@@ -25,6 +25,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import collections
+from concurrent.futures import CancelledError
 import logging
 import math
 import numpy
@@ -47,16 +48,17 @@ from odemis.gui.cont.microscope import SecomStateController, DelphiStateControll
 from odemis.gui.cont.streams import StreamController
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.img import scale_to_alpha
+from odemis.gui.util.widgets import ProgressiveFutureConnector
 from odemis.util import units
 import os.path
 import pkg_resources
 import scipy.misc
 import threading
 import weakref
-import wx
 # IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
 # file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
 # This is not related to any particular wxPython version and is most likely permanent.
+import wx
 import wx.html
 
 import odemis.acq.stream as acqstream
@@ -96,7 +98,7 @@ class Tab(object):
             self._connect_22view_event()
             self._connect_crosshair_event()
 
-            self.clear_notification()
+            self.highlight(False)
 
         self.panel.Show(show)
 
@@ -189,23 +191,16 @@ class Tab(object):
     def get_label(self):
         return self.button.GetLabel()
 
-    def notify(self):
+    def highlight(self, on=True):
         """ Put the tab in 'notification' mode to indicate a change has occurred """
-        if not self.notification:
-            self.button.notify(True)
-            self.notification = True
-
-    def clear_notification(self):
-        """ Clear the notification mode if it's active """
-        if self.notification:
-            self.button.notify(False)
-            self.notification = False
+        if self.notification != on:
+            self.button.highlight(on)
+            self.notification = on
 
     def make_default(self):
         """ Try and make the current tab the default
 
         This will only work when no tab has been set.
-
         """
 
         if not self.tab_data_model.main.tab.value:
@@ -810,17 +805,221 @@ class SparcAcquisitionTab(Tab):
             s.is_active.value = False
 
 
+# Different states of the mirror stage positions
+MIRROR_NOT_REFD = 0
+MIRROR_PARKED = 1
+MIRROR_BAD = 2  # not parked, but not fully engaged either
+MIRROR_ENGAGED = 3
+
+# Position of the mirror to be under the e-beam, when we don't know better
+# Note: the exact position is reached by mirror alignment procedure
+# FIXME: Use a better way to allow easy config of the default engaged pos (save in config file?)
+MIRROR_POS_DEFAULT_ENGAGED = {"x": 200e-3, "y": 10e-3}
+MIRROR_POS_PARKED = {"x": 0, "y": 0} # (Hopefully) constant, and same as reference position
+MIRROR_ONPOS_RADIUS = 5e-3  # m, distance from a position that is still considered that position
+
+
 class ChamberTab(Tab):
     def __init__(self, name, button, panel, main_frame, main_data):
-        """ Sparc2 Chamber tab """
+        """ SPARC2 chamber view tab """
 
         tab_data = guimod.ChamberGUIData(main_data)
         super(ChamberTab, self).__init__(name, button, panel, main_frame, tab_data)
 
-        # If referencing still needs to happen, or if the mirror is parked, make this tab the
-        # default
-        if True:  # TODO: Replace with checks on main_data values
+        # future to handle the move
+        self._move_future = model.InstantaneousFuture()
+
+        # Position to where to go when requested to be engaged
+        self._pos_engaged = MIRROR_POS_DEFAULT_ENGAGED
+
+        mstate = self._get_mirror_state()
+        # If mirror stage not engaged, make this tab the default
+        if mstate != MIRROR_ENGAGED:
             self.make_default()
+        else:  # Mirror is engaged
+            # Save that the current position as a "better" engaged position
+            self._pos_engaged = main_data.mirror.position.value
+
+        self._update_mirror_status()
+
+        # Create stream & view
+        self._stream_controller = streamcont.StreamBarController(
+            tab_data,
+            panel.pnl_streams,
+            locked=True
+        )
+
+        # create a view on the microscope model
+        vpv = collections.OrderedDict((
+            (self.panel.vp_chamber,
+                {
+                    "name": "Chamber view",
+                    # TODO: ensure it cannot move/zoom/focus
+                }
+            ),
+        ))
+        self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
+        view = self.tab_data_model.focussedView.value
+        view.show_crosshair.value = False
+
+        # With the lens, the image must be flipped to keep the mirror at the
+        # top and the sample at the bottom.
+        self.panel.vp_chamber.canvas.flip = wx.VERTICAL
+
+        # Just one stream: chamber view
+        self._ccd_stream = acqstream.CameraStream("Chamber view",
+                                      main_data.ccd, main_data.ccd.data, None,
+                                      detvas=get_hw_settings(main_data.ccd))
+        ccd_spe = self._stream_controller.addStream(self._ccd_stream)
+        ccd_spe.stream_panel.flatten()  # No need for the stream name
+        self._ccd_stream.should_update.value = True
+
+        panel.btn_switch_mirror.Bind(wx.EVT_BUTTON, self._on_switch_btn)
+        panel.btn_cancel.Bind(wx.EVT_BUTTON, self._on_cancel)
+
+    def _get_mirror_state(self):
+        """
+        Return the state of the mirror stage (in term of position)
+        Note: need self._pos_engaged
+        return (MIRROR_*)
+        """
+        mirror = self.tab_data_model.main.mirror
+        if not all(mirror.referenced.value.values()):
+            return MIRROR_NOT_REFD
+
+        pos = mirror.position.value
+        dist_parked = math.hypot(pos["x"] - MIRROR_POS_PARKED["x"],
+                                 pos["y"] - MIRROR_POS_PARKED["y"])
+        dist_engaged = math.hypot(pos["x"] - self._pos_engaged["x"],
+                                  pos["y"] - self._pos_engaged["y"])
+        if dist_parked <= MIRROR_ONPOS_RADIUS:
+            return MIRROR_PARKED
+        elif dist_engaged <= MIRROR_ONPOS_RADIUS:
+            return MIRROR_ENGAGED
+        else:
+            return MIRROR_BAD
+
+    def _on_switch_btn(self, evt):
+        """
+        Called when the Park/Engage button is pressed.
+          Start move either for referencing/parking, or for putting the mirror in position
+        """
+        if not evt.isDown:
+            # just got unpressed -> that means we need to stop the current move
+            return self._on_cancel(evt)
+
+        # Decide which move to do
+        mstate = self._get_mirror_state()
+        mirror = self.tab_data_model.main.mirror
+        if mstate == MIRROR_NOT_REFD:
+            # => Reference
+            f = mirror.reference(set(MIRROR_POS_PARKED.keys()))
+            btn_text = "PARKING MIRROR"
+        elif mstate == MIRROR_PARKED:
+            # => Engage
+            f = mirror.moveAbs(self._pos_engaged)
+            btn_text = "ENGAGING MIRROR"
+        else:
+            # => Park
+            f = mirror.moveAbs(MIRROR_POS_PARKED)
+            btn_text = "PARKING MIRROR"
+
+        self._move_future = f
+        # TODO: connect future to gauge... but the future is not progressive
+        # => wrap the future into a progressive future with some idea of the time
+        # or just allow the progressive future connector to get a standard future
+        # and an estimated time? Update based on current position?
+        self._mf_connector = ProgressiveFutureConnector(f, self.panel.gauge_move)
+        f.add_done_callback(self._on_move_done)
+
+        self.tab_data_model.main.is_acquiring.value = True
+
+        self.panel.btn_cancel.Enable()
+        self.panel.btn_switch_mirror.SetLabel(btn_text)
+
+    def _on_cancel(self, evt):
+        """
+        Called when the cancel button is pressed, or the
+        """
+        if not self._move_future.cancel():
+            # It should only happen if user tries to cancel at the very end,
+            # when the move is actually already completed.
+            logging.info("Failed to cancel the mirror move")
+        else:
+            logging.info("Mirror move cancelled")
+
+    @call_in_wx_main
+    def _on_move_done(self, future):
+        """
+        Called when a move is over (either successfully or not)
+        """
+        try:
+            future.result()
+        except CancelledError:
+            pass
+        except Exception as ex:
+            logging.warning("Failed to move mirror: %s", ex)
+
+        # It's a toggle button, and the user toggled down, so need to untoggle it
+        self.panel.btn_switch_mirror.SetValue(False)
+        self.panel.btn_cancel.Disable()
+        self.tab_data_model.main.is_acquiring.value = False
+        self._update_mirror_status()
+
+    def _update_mirror_status(self):
+        """
+        Check the current hardware status and update the button text and info
+        text based on this.
+        Note: must be called within the main GUI thread
+        """
+        mstate = self._get_mirror_state()
+
+        if mstate == MIRROR_NOT_REFD:
+            txt_warning = ("Parking the mirror at least once is required in order "
+                           "to reference the actuators.")
+        elif mstate == MIRROR_BAD:
+            txt_warning = "The mirror is neither fully parked nor entirely engaged."
+        else:
+            txt_warning = None
+
+        self.panel.pnl_ref_msg.Show(txt_warning is not None)
+        if txt_warning:
+            self.panel.txt_warning.SetLabel(txt_warning)
+            self.panel.txt_warning.Wrap(self.panel.pnl_ref_msg.Size[0] - 16)
+
+        if mstate == MIRROR_PARKED:
+            btn_text = "ENGAGE MIRROR"
+        else:
+            btn_text = "PARK MIRROR"
+
+        self.panel.btn_switch_mirror.SetLabel(btn_text)
+
+        # If the mirror is parked, we still allow the user to go to acquisition
+        # but it's unlikely to be a good idea => indicate that something needs
+        # to be done here first. Note: alignment tab disables itself when the
+        # mirror is no engaged.
+        # TODO: how to let the other tabs check the position? => just disable alignment tab from here?
+        self.highlight(mstate != MIRROR_ENGAGED)
+
+    def Show(self, show=True):
+        Tab.Show(self, show=show)
+
+        # Start chamber view when tab is displayed, and otherwise, stop it
+        self._ccd_stream.should_update.value = show
+
+        # If there is an actuator, disable the lens
+        if show:
+            threading.Thread(target=self.tab_data_model.main.opm.setPath,
+                             args=("chamber-view",)).start()
+            # just in case the mirror was moved from another client (eg, cli)
+            self._update_mirror_status()
+            # TODO: also update _pos_engaged?
+
+        # When hidden, the new tab shown is in charge to request the right
+        # optical path mode, if needed.
+
+    def terminate(self):
+        self._ccd_stream.is_active.value = False
 
 
 class AnalysisTab(Tab):
@@ -1551,12 +1750,9 @@ class SecomAlignTab(Tab):
     @call_in_wx_main
     def on_chamber_state(self, state):
         # Lock or enable lens alignment
-        if state in {guimod.CHAMBER_VACUUM, guimod.CHAMBER_UNKNOWN}:
-            self.button.Enable()
-            self.notify()
-        else:
-            self.button.Disable()
-            self.clear_notification()
+        in_vacuum = state in {guimod.CHAMBER_VACUUM, guimod.CHAMBER_UNKNOWN}
+        self.button.Enable(in_vacuum)
+        self.highlight(in_vacuum)
 
     @call_in_wx_main
     def _onTool(self, tool):
@@ -1796,8 +1992,7 @@ class SparcAlignTab(Tab):
 
             # create a view on the microscope model
             vpv = collections.OrderedDict([
-                (
-                    panel.vp_sparc_align,
+                (panel.vp_sparc_align,
                     {
                         "name": "Optical",
                         "stream_classes": None,  # everything is good
@@ -2120,6 +2315,9 @@ class Sparc2AlignTab(Tab):
 
         # Bind keys
         self._actuator_controller.bind_keyboard(panel)
+
+        # TODO: listen to mirror pos, and disable ourself if the mirror is not
+        # engaged
 
     def _onClickAlignButton(self, evt):
         """

@@ -238,14 +238,15 @@ class xrcpnl_tab_sparc_chamber(wx.Panel):
         self.PostCreate(pre)
 
         # Define variables for the controls, bind event handlers
-        self.btn_park_mirror = xrc.XRCCTRL(self, "btn_park_mirror")
-        self.pnl_mirror_cancel = xrc.XRCCTRL(self, "pnl_mirror_cancel")
-        self.gauge_fine_align = xrc.XRCCTRL(self, "gauge_fine_align")
-        self.btn_park_mirror_cancel = xrc.XRCCTRL(self, "btn_park_mirror_cancel")
-        self.pnl_mirror_msg = xrc.XRCCTRL(self, "pnl_mirror_msg")
+        self.btn_switch_mirror = xrc.XRCCTRL(self, "btn_switch_mirror")
+        self.pnl_move = xrc.XRCCTRL(self, "pnl_move")
+        self.gauge_move = xrc.XRCCTRL(self, "gauge_move")
+        self.btn_cancel = xrc.XRCCTRL(self, "btn_cancel")
+        self.pnl_ref_msg = xrc.XRCCTRL(self, "pnl_ref_msg")
+        self.txt_warning = xrc.XRCCTRL(self, "txt_warning")
         self.vp_chamber = xrc.XRCCTRL(self, "vp_chamber")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
-        self.fp_chamber_optical = xrc.XRCCTRL(self, "fp_chamber_optical")
+        self.pnl_streams = xrc.XRCCTRL(self, "pnl_streams")
 
 
 
@@ -2975,7 +2976,7 @@ def __init_resources():
           <object class="wxBoxSizer">
             <orient>wxVERTICAL</orient>
             <object class="sizeritem">
-              <object class="ImageTextToggleButton" name="btn_park_mirror">
+              <object class="ImageTextToggleButton" name="btn_switch_mirror">
                 <icon>img_icon_ico_eject_png</icon>
                 <icon_on>img_icon_ico_eject_orange_png</icon_on>
                 <height>48</height>
@@ -2998,10 +2999,10 @@ def __init_resources():
               <border>10</border>
             </object>
             <object class="sizeritem">
-              <object class="wxPanel" name="pnl_mirror_cancel">
+              <object class="wxPanel" name="pnl_move">
                 <object class="wxBoxSizer">
                   <object class="sizeritem">
-                    <object class="wxGauge" name="gauge_fine_align">
+                    <object class="wxGauge" name="gauge_move">
                       <size>-1,10</size>
                       <range>100</range>
                       <value>0</value>
@@ -3015,10 +3016,11 @@ def __init_resources():
                     <border>7</border>
                   </object>
                   <object class="sizeritem">
-                    <object class="ImageTextButton" name="btn_park_mirror_cancel">
+                    <object class="ImageTextButton" name="btn_cancel">
                       <height>24</height>
                       <face_colour>def</face_colour>
                       <label>Cancel</label>
+                      <enabled>0</enabled>
                       <style>wxALIGN_CENTRE</style>
                       <XRCED>
                         <assign_var>1</assign_var>
@@ -3030,7 +3032,6 @@ def __init_resources():
                   <orient>wxHORIZONTAL</orient>
                 </object>
                 <bg>#333333</bg>
-                <enabled>0</enabled>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
@@ -3039,7 +3040,7 @@ def __init_resources():
               <border>10</border>
             </object>
             <object class="sizeritem">
-              <object class="wxPanel" name="pnl_mirror_msg">
+              <object class="wxPanel" name="pnl_ref_msg">
                 <object class="wxBoxSizer">
                   <object class="sizeritem">
                     <object class="wxStaticBitmap">
@@ -3049,10 +3050,12 @@ def __init_resources():
                     <border>5</border>
                   </object>
                   <object class="sizeritem">
-                    <object class="wxStaticText">
+                    <object class="wxStaticText" name="txt_warning">
                       <size>-1,54</size>
-                      <label>Parking the mirror at least once is required in order to reference the actuators.</label>
                       <fg>#E5E5E5</fg>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
                     </object>
                     <option>1</option>
                     <flag>wxEXPAND|wxGROW</flag>
@@ -3075,7 +3078,7 @@ def __init_resources():
         <border>10</border>
       </object>
       <object class="sizeritem">
-        <object class="CameraViewport" name="vp_chamber">
+        <object class="ARAcquiViewport" name="vp_chamber">
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
@@ -3095,13 +3098,18 @@ def __init_resources():
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
                     <object class="FoldPanelBar">
-                      <object class="FoldPanelItem" name="fp_chamber_optical">
+                      <object class="FoldPanelItem">
+                        <object class="StreamBar" name="pnl_streams">
+                          <size>300,-1</size>
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
                         <label>OPTICAL</label>
                         <fg>#1A1A1A</fg>
                         <bg>#555555</bg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
                       </object>
                       <spacing>0</spacing>
                       <leftspacing>0</leftspacing>

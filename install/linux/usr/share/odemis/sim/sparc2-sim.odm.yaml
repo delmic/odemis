@@ -310,7 +310,7 @@ SPARC2: {
         port: "/dev/fake6",
         address: null,
         axes: ["y", "x"],
-        ustepsize: [5.9e-9, 5.9e-9], # m/µstep
+        ustepsize: [2.e-6, 2.e-6], # m/µstep
         refproc: "Standard",
     },
 }

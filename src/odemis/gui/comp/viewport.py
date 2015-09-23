@@ -3,7 +3,7 @@
 Created on 8 Feb 2012
 
 :author: Éric Piel
-:copyright: © 2012 Éric Piel, Delmic
+:copyright: © 2012-2015 Éric Piel, Delmic
 
 .. license::
 
@@ -634,7 +634,7 @@ class ARLiveViewport(LiveViewport):
         show = len(self._microscope_view.stream_tree) > 0
         self.canvas.play_overlay.show = show
 
-
+# TODO: rename to something more generic? RawLiveViewport?
 class ARAcquiViewport(ARLiveViewport):
     """
     Same as ARLiveViewport, but without legend
