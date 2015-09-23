@@ -1,10 +1,16 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import StringIO
 import argparse
+import glob
 import os
-import shutil
 import subprocess
+import sys
+from wx.tools.img2py import img2py
+
+# Directories that contain images to embed into data.py
+img_dirs = (".", "button", "icon", "menu")
 
 
 def cmd_exists(cmd):
@@ -45,21 +51,22 @@ if args.optimize:
                 else:
                     print ' - SKIPPING ', ff
 
+# Image embedding
 first = True
+fakeoutput = StringIO.StringIO()  # for img2py
 
 if not cmd_exists('img2py'):
     print "Img2py not found, can't generate python file!"
 else:
     outpy = os.path.join(base_dir, 'data.py')
-    for dirpath, dirnames, filenames in os.walk(base_dir):
+    for idir in img_dirs:
+        dirpath = os.path.join(base_dir, idir)
         print "** Packaging", dirpath
 
-        for f in [fn for fn in filenames if fn[-4:] == '.png']:
-            ff = os.path.join(dirpath, f)
-            print ' - ', ff
+        for f in glob.glob(os.path.join(dirpath, "*.png")):
+            print ' - ', f
 
-            if first:
-                subprocess.call(['img2py', '-c', '-f', ff, outpy], stdout=subprocess.PIPE)
-                first = False
-            else:
-                subprocess.call(['img2py', '-c', '-a', '-f', ff, outpy], stdout=subprocess.PIPE)
+            sys.stdout = fakeoutput  # because img2py prints useless info uncontrollably
+            img2py(f, outpy, append=(not first), catalog=True, functionCompatible=True)
+            first = False
+            sys.stdout = sys.__stdout__
