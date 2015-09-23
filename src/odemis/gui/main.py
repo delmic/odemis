@@ -264,8 +264,7 @@ class OdemisGUIApp(wx.App):
                                                                        self.main_frame)
 
             if self.main_data.role == "delphi":
-                from odemis.gui.img.data import getlogo_delphiBitmap
-                self.main_frame.logo.SetBitmap(getlogo_delphiBitmap())
+                self.main_frame.logo.SetBitmap(imgdata.getlogo_delphiBitmap())
 
             self.main_frame.Maximize()  # must be done before Show()
             # making it very late seems to make it smoother
