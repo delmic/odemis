@@ -443,6 +443,8 @@ class Scanner(model.Emitter):
         # This should never happen
         if ((new_tilt.aX, new_tilt.aY) != TILT_BLANK):
             self.parent._detector._tilt_unblank = (new_tilt.aX, new_tilt.aY)
+            logging.debug("For voltage %f V and spot size %f, the source tilt is %s",
+                          volt, self.spotSize.value, self.parent._detector._tilt_unblank)
         if ((current_tilt.aX, current_tilt.aY) == TILT_BLANK):
             self.parent._device.SetSEMSourceTilt(current_tilt.aX, current_tilt.aY, False)
         # Brightness and contrast have to be adjusted just once
@@ -459,6 +461,8 @@ class Scanner(model.Emitter):
             # This should never happen
             if ((new_tilt.aX, new_tilt.aY) != TILT_BLANK):
                 self.parent._detector._tilt_unblank = (new_tilt.aX, new_tilt.aY)
+                logging.debug("For voltage %f V and spot size %f, the source tilt is %s",
+                              self.accelVoltage.value, value, self.parent._detector._tilt_unblank)
             if ((current_tilt.aX, current_tilt.aY) == TILT_BLANK):
                 self.parent._device.SetSEMSourceTilt(current_tilt.aX, current_tilt.aY, False)
             return self._spotSize
@@ -814,6 +818,8 @@ class Detector(model.Detector):
                 self.parent._device.SetSEMSourceTilt(TILT_BLANK[0], TILT_BLANK[1], False)
             else:
                 self.parent._device.SetSEMSourceTilt(self._tilt_unblank[0], self._tilt_unblank[1], False)
+                logging.debug("For voltage %f V and spot size %f, the source tilt is %s",
+                              self.parent._scanner.accelVoltage.value, self.parent._scanner.spotSize.value, self._tilt_unblank)
 
     def stop_acquire(self):
         with self._acquisition_lock:

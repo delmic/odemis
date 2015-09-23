@@ -379,7 +379,7 @@ class SecomAcquiController(object):
             acq_dialog.ShowModal()
 
             if acq_dialog.last_saved_file:
-                wx.GetApp()._tab_controller.open_tab('analysis')
+                wx.GetApp().tab_controller.open_tab('analysis')
                 self._tab_data_model.main.tab.value.load_data(acq_dialog.last_saved_file)
         finally:
             streambar_controller.resumeStreams(paused_streams)

@@ -504,6 +504,7 @@ class AcquisitionDialog(xrcfr_acq):
             exporter = dataio.get_converter(self.conf.last_format)
             exporter.export(filename, data, thumb)
             logging.info("Acquisition saved as file '%s'.", filename)
+            self.btn_cancel.SetLabel("View")
             self.last_saved_file = filename
         except Exception:
             logging.exception("Saving acquisition failed")

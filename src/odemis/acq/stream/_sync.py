@@ -1178,8 +1178,13 @@ def CalculateSpotSize(raw_data, background):
     background (model.DataArray): Background image that we use for substraction
     returns (float): spot size estimation
     """
-    # TODO: better background substraction
-    data = numpy.clip(raw_data - 1.3 * background, 0, numpy.inf)
+    depth = 2 ** background.metadata.get(model.MD_BPP, background.dtype.itemsize * 8)
+    hist, edges = img.histogram(background, (0, depth - 1))
+    range_max = img.findOptimalRange(hist, edges, outliers=1e-06)[1]
+    # 1.3 corresponds to 3 times the noise
+    # data = numpy.clip(raw_data - 1.3 * background, 0, numpy.inf)
+    # alternative background substraction
+    data = numpy.clip(raw_data - range_max, 0, numpy.inf)
     total = data.sum()
     # center of mass
     offset = FindCenterCoordinates([data])[0]
