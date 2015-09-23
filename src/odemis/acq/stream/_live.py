@@ -141,22 +141,6 @@ class LiveStream(Stream):
             self._updateHistogram()
             tend = time.time()
 
-            # # if histogram is different from previous one, update image
-            # if self.auto_bc.value:
-            #     prev_irange = self.intensityRange.value
-            #     irange = img.findOptimalRange(self.histogram._full_hist,
-            #                                   self.histogram._edges,
-            #                                   self.auto_bc_outliers.value / 100)
-            #     # TODO: also skip it if the ranges are _almost_ identical
-            #     inter_rng = (max(irange[0], prev_irange[0]), min(irange[1], prev_irange[1]))
-            #     inter_width = inter_rng[1] - inter_rng[0]
-            #     irange_width = irange[1] - irange[0]
-            #     prev_width = prev_irange[1] - prev_irange[0]
-            #     if (irange != prev_irange and
-            #         (inter_width < 0)): #or (prev_width - inter_width / prev_width)
-            #         self.intensityRange.value = tuple(irange)
-            #         self._updateImage()
-
             # sleep as much, to ensure we are not using too much CPU
             tsleep = max(0.2, tend - tstart) # max 5 Hz
             time.sleep(tsleep)
