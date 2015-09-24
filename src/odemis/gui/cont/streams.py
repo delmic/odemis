@@ -174,6 +174,9 @@ class StreamController(object):
         for entry in [e for _, e in self.entries.iteritems() if e.value_ctrl]:
             entry.value_ctrl.Enable(enabled)
 
+    def add_hw_setting_control(self, name):
+        pass
+
     def _add_hw_setting_controls(self):
         """ Add local version of linked hardware setting VAs """
         # Get the emitter and detector configurations if they exist
@@ -189,9 +192,22 @@ class StreamController(object):
 
         add_divider = False
 
+        # Process the hardware VAs first (emitter and detector hardware VAs are combined into one
+        # attribute called 'hw_vas'
+        vas_names = util.sorted_according_to(self.stream.hw_vas.keys(), emitter_conf.keys())
+
+        for name in vas_names:
+            va = self.stream.hw_vas[name]
+            conf = emitter_conf.get(name, detector_conf.get(name, None))
+            if conf is not None:
+                logging.debug("%s hardware configuration found for %s", name)
+
+            se = create_setting_entry(self.stream_panel, name, va, self.stream.emitter, conf)
+            self.entries[se.name] = se
+
         # Process the emitter VAs first
-        vas_names = util.sorted_according_to(self.stream.emt_vas.keys(),
-                                             emitter_conf.keys())
+        vas_names = util.sorted_according_to(self.stream.emt_vas.keys(), emitter_conf.keys())
+
         for name in vas_names:
             va = self.stream.emt_vas[name]
             conf = emitter_conf.get(name)
@@ -199,14 +215,13 @@ class StreamController(object):
                 logging.debug("%s emitter configuration found for %s", name,
                               self.stream.emitter.role)
 
-            se = create_setting_entry(self.stream_panel, name, va, self.stream.emitter,
-                                      conf)
+            se = create_setting_entry(self.stream_panel, name, va, self.stream.emitter, conf)
             self.entries[se.name] = se
             add_divider = True
 
         # Then process the detector
-        vas_names = util.sorted_according_to(self.stream.det_vas.keys(),
-                                             detector_conf.keys())
+        vas_names = util.sorted_according_to(self.stream.det_vas.keys(), detector_conf.keys())
+
         for name in vas_names:
             va = self.stream.det_vas[name]
             conf = detector_conf.get(name)
@@ -214,8 +229,7 @@ class StreamController(object):
                 logging.debug("%s detector configuration found for %s", name,
                               self.stream.detector.role)
 
-            se = create_setting_entry(self.stream_panel, name, va, self.stream.detector,
-                                      conf)
+            se = create_setting_entry(self.stream_panel, name, va, self.stream.detector, conf)
             self.entries[se.name] = se
             add_divider = True
 
