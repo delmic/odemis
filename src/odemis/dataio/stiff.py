@@ -26,7 +26,7 @@ from odemis.dataio import tiff
 # User-friendly name
 FORMAT = "Serialized TIFF"
 # list of file-name extensions possible, the first one is the default when saving a file
-EXTENSIONS = [u".s.ome.tiff"]
+EXTENSIONS = [u".0.ome.tiff"]
 
 # An almost identical OME-XML metadata block is inserted into the first IFD of
 # each constituent OME-TIFF file. This is for redundancy purposes: if only a

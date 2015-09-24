@@ -47,7 +47,7 @@ class TestTiffIO(unittest.TestCase):
     def tearDown(self):
         # clean up
         try:
-            tokens = FILENAME.split(".s.", 1)
+            tokens = FILENAME.split(".0.", 1)
             for file_index in range(self.no_of_images):
                 fname = tokens[0] + "." + str(file_index) + "." + tokens[1]
                 os.remove(fname)
@@ -70,7 +70,7 @@ class TestTiffIO(unittest.TestCase):
         # export
         stiff.export(FILENAME, ldata)
         
-        tokens = FILENAME.split(".s.", 1)
+        tokens = FILENAME.split(".0.", 1)
         self.no_of_images = 1
         # Iterate through the files generated
         for file_index in range(self.no_of_images):
@@ -107,7 +107,7 @@ class TestTiffIO(unittest.TestCase):
         # export
         stiff.export(FILENAME, ldata)
 
-        tokens = FILENAME.split(".s.", 1)
+        tokens = FILENAME.split(".0.", 1)
         self.no_of_images = 1
         # Iterate through the files generated
         for file_index in range(self.no_of_images):
@@ -182,7 +182,7 @@ class TestTiffIO(unittest.TestCase):
         # export
         stiff.export(FILENAME, ldata)
 
-        tokens = FILENAME.split(".s.", 1)
+        tokens = FILENAME.split(".0.", 1)
         fname = tokens[0] + "." + str(0) + "." + tokens[1]
         # check it's here
         st = os.stat(fname)  # this test also that the file is created
@@ -256,7 +256,7 @@ class TestTiffIO(unittest.TestCase):
         stiff.export(FILENAME, ldata)
 
         # check 3D data
-        tokens = FILENAME.split(".s.", 1)
+        tokens = FILENAME.split(".0.", 1)
         self.no_of_images = 2
         # Iterate through the files generated
         for file_index in range(self.no_of_images):
@@ -313,7 +313,7 @@ class TestTiffIO(unittest.TestCase):
         # export
         stiff.export(FILENAME, ldata, thumbnail)
 
-        tokens = FILENAME.split(".s.", 1)
+        tokens = FILENAME.split(".0.", 1)
         # Iterate through the files generated
         for file_index in range(num):
             fname = tokens[0] + "." + str(file_index) + "." + tokens[1]
@@ -379,7 +379,7 @@ class TestTiffIO(unittest.TestCase):
         # export
         stiff.export(FILENAME, ldata, thumbnail)
 
-        tokens = FILENAME.split(".s.", 1)
+        tokens = FILENAME.split(".0.", 1)
         self.no_of_images = 2
         # Iterate through the files generated
         for file_index in range(self.no_of_images):
@@ -482,7 +482,7 @@ class TestTiffIO(unittest.TestCase):
         # export
         stiff.export(FILENAME, ldata, thumbnail)
 
-        tokens = FILENAME.split(".s.", 1)
+        tokens = FILENAME.split(".0.", 1)
         self.no_of_images = 2
         # Iterate through the files generated
         for file_index in range(self.no_of_images):
@@ -601,7 +601,7 @@ class TestTiffIO(unittest.TestCase):
         # export
         stiff.export(FILENAME, ldata, thumbnail)
 
-        tokens = FILENAME.split(".s.", 1)
+        tokens = FILENAME.split(".0.", 1)
         self.no_of_images = 4
         # Iterate through the files generated
         for file_index in range(self.no_of_images):

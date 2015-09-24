@@ -397,9 +397,8 @@ def _convertToOMEMD(images, multiple_files=False, findex=None, fname=None, uuids
     for ifd, g in groups.items():
         if multiple_files:
             # Remove path from filename
-            drive, path = os.path.splitdrive(fname)
-            path, file = os.path.split(path)
-            tokens = file.split(".s.", 1)
+            path, bname = os.path.split(fname)
+            tokens = bname.split(".0.", 1)
             part_fname = tokens[0] + "." + str(fname_index) + "." + tokens[1]
             _addImageElement(root, g, ifd, rois, part_fname, uuids[fname_index])
             fname_index += 1
@@ -1326,7 +1325,7 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_fil
     """
     if multiple_files:
         # Add index
-        tokens = filename.split(".s.", 1)
+        tokens = filename.split(".0.", 1)  # FIXME: should be more careful to pick only 0.ome.tiff
         orig_filename = tokens[0] + "." + str(file_index) + "." + tokens[1]
         f = TIFF.open(orig_filename, mode='w')
     else:
