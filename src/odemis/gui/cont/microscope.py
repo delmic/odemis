@@ -513,7 +513,7 @@ class SecomStateController(MicroscopeStateController):
 
     def _on_vented(self, future):
         self.on_chamber_pressure(self._main_data.chamber.position.value)
-        self._press_btn.Enable(True)
+        wx.CallAfter(self._press_btn.Enable, True)
 
     # TODO: have multiple versions of this method depending on the type of chamber?
     # TODO: have a special states for CHAMBER_OVERVIEW_PRE_VACUUM and CHAMBER_OVERVIEW_POST_VACUUM?
