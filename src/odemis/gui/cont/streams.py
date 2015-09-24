@@ -174,9 +174,6 @@ class StreamController(object):
         for entry in [e for _, e in self.entries.iteritems() if e.value_ctrl]:
             entry.value_ctrl.Enable(enabled)
 
-    def add_hw_setting_control(self, name):
-        pass
-
     def _add_hw_setting_controls(self):
         """ Add local version of linked hardware setting VAs """
         # Get the emitter and detector configurations if they exist
@@ -200,7 +197,7 @@ class StreamController(object):
             va = self.stream.hw_vas[name]
             conf = emitter_conf.get(name, detector_conf.get(name, None))
             if conf is not None:
-                logging.debug("%s hardware configuration found for %s", name)
+                logging.debug("%s hardware configuration found", name)
 
             se = create_setting_entry(self.stream_panel, name, va, self.stream.emitter, conf)
             self.entries[se.name] = se

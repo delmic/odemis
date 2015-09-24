@@ -728,7 +728,6 @@ class SparcAcquisitionTab(Tab):
 
         # The sem stream is always visible, so add it by default
         sem_stream_cont = self._stream_controller.addStream(sem_stream, add_to_all_views=True)
-        sem_stream_cont.add_hw_setting_control('magnification')
         sem_stream_cont.stream_panel.show_remove_btn(False)
         sem_stream_cont.stream_panel.show_visible_btn(False)
 
