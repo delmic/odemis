@@ -880,6 +880,15 @@ class ChamberTab(Tab):
         panel.btn_switch_mirror.Bind(wx.EVT_BUTTON, self._on_switch_btn)
         panel.btn_cancel.Bind(wx.EVT_BUTTON, self._on_cancel)
 
+        # Show position of the stage via the progress bar
+        # Note: we could have used the progress bar to represent the progress of
+        # the move. However, it's a lot of work because the future is not a
+        # progressive future, so the progress would need to be guessed based on
+        # time or position. In addition, it would not give any cue to the user
+        # about the current position of the mirror when no move is happening.
+        main_data.mirror.position.subscribe(self._update_progress_bar, init=True)
+        self._pulse_timer = wx.PyTimer(self._pulse_progress_bar)  # only used during referencing
+
     def _get_mirror_state(self):
         """
         Return the state of the mirror stage (in term of position)
@@ -902,6 +911,52 @@ class ChamberTab(Tab):
         else:
             return MIRROR_BAD
 
+    @call_in_wx_main
+    def _update_progress_bar(self, pos):
+        """
+        Update the progress bar, based on the current position/state of the mirror.
+        Called when the position of the mirror changes.
+        pos (dict str->float): current position of the mirror stage
+        """
+        # If not yet referenced, the position is pretty much meaning less
+        # => just say it's "somewhere in the middle".
+        mirror = self.tab_data_model.main.mirror
+        if not all(mirror.referenced.value.values()):
+            # In case it pulses, wxGauge still holds the old value, so it might
+            # think it doesn't need to refresh unless the value changes.
+            self.panel.gauge_move.Value = 0
+            self.panel.gauge_move.Value = 50  # Range is 100 => 50%
+            return
+
+        # We map the position between Parked -> Engaged. The basic is simple,
+        # we could just map the current position on the segment. But we also
+        # want to show a position "somewhere in the middle" when the mirror is
+        # at a random bad position.
+        dist_parked = math.hypot(pos["x"] - MIRROR_POS_PARKED["x"],
+                                 pos["y"] - MIRROR_POS_PARKED["y"])
+        dist_engaged = math.hypot(pos["x"] - self._pos_engaged["x"],
+                                  pos["y"] - self._pos_engaged["y"])
+        tot_dist = math.hypot(MIRROR_POS_PARKED["x"] - self._pos_engaged["x"],
+                              MIRROR_POS_PARKED["y"] - self._pos_engaged["y"])
+        ratio_to_engaged = dist_engaged / tot_dist
+        ratio_to_parked = dist_parked / tot_dist
+        if ratio_to_parked < ratio_to_engaged:
+            val = ratio_to_parked * 100
+        else:
+            val = (1 - ratio_to_engaged) * 100
+
+        val = min(max(0, int(round(val))), 100)
+        logging.debug("dist (%f/%f) over %f m -> %d %%", dist_parked, dist_engaged,
+                      tot_dist, val)
+        self.panel.gauge_move.Value = val
+
+    def _pulse_progress_bar(self):
+        """
+        Stupid method that changes the progress bar. Used to indicate something
+         is happening (during referencing).
+        """
+        self.panel.gauge_move.Pulse()
+
     def _on_switch_btn(self, evt):
         """
         Called when the Park/Engage button is pressed.
@@ -918,6 +973,8 @@ class ChamberTab(Tab):
             # => Reference
             f = mirror.reference(set(MIRROR_POS_PARKED.keys()))
             btn_text = "PARKING MIRROR"
+            # position doesn't change during referencing, so just pulse
+            self._pulse_timer.Start(250.0)  # 4 Hz
         elif mstate == MIRROR_PARKED:
             # => Engage
             f = mirror.moveAbs(self._pos_engaged)
@@ -928,11 +985,6 @@ class ChamberTab(Tab):
             btn_text = "PARKING MIRROR"
 
         self._move_future = f
-        # TODO: connect future to gauge... but the future is not progressive
-        # => wrap the future into a progressive future with some idea of the time
-        # or just allow the progressive future connector to get a standard future
-        # and an estimated time? Update based on current position?
-        self._mf_connector = ProgressiveFutureConnector(f, self.panel.gauge_move)
         f.add_done_callback(self._on_move_done)
 
         self.tab_data_model.main.is_acquiring.value = True
@@ -962,6 +1014,9 @@ class ChamberTab(Tab):
             pass
         except Exception as ex:
             logging.warning("Failed to move mirror: %s", ex)
+
+        # In case it was referencing
+        self._pulse_timer.Stop()
 
         # It's a toggle button, and the user toggled down, so need to untoggle it
         self.panel.btn_switch_mirror.SetValue(False)
