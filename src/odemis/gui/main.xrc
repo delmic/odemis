@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<resource class="wxPanel" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<resource class="" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -4243,7 +4243,7 @@
                 <face_colour>def</face_colour>
                 <label>Close</label>
                 <font>
-                  <size>11</size>
+                  <size>14</size>
                   <style>normal</style>
                   <weight>normal</weight>
                   <underlined>0</underlined>

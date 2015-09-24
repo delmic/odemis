@@ -454,7 +454,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource class="wxPanel" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource class="" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -4698,7 +4698,7 @@ def __init_resources():
                 <face_colour>def</face_colour>
                 <label>Close</label>
                 <font>
-                  <size>11</size>
+                  <size>14</size>
                   <style>normal</style>
                   <weight>normal</weight>
                   <underlined>0</underlined>

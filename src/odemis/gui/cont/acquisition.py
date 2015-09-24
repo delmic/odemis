@@ -28,7 +28,6 @@ of microscope images.
 """
 
 from __future__ import division
-import platform
 
 from concurrent import futures
 from concurrent.futures._base import CancelledError
@@ -376,11 +375,7 @@ class SecomAcquiController(object):
         try:
             acq_dialog.SetSize(parent_size)
             acq_dialog.Center()
-            acq_dialog.ShowModal()
-
-            if acq_dialog.last_saved_file:
-                wx.GetApp().tab_controller.open_tab('analysis')
-                self._tab_data_model.main.tab.value.load_data(acq_dialog.last_saved_file)
+            action = acq_dialog.ShowModal()
         finally:
             streambar_controller.resumeStreams(paused_streams)
 
@@ -394,6 +389,10 @@ class SecomAcquiController(object):
 
             # Make sure that the acquisition button is enabled again.
             self._tab_panel.btn_secom_acquire.Enable()
+
+        if action == wx.ID_OPEN:
+            wx.GetApp().tab_controller.open_tab('analysis')
+            self._tab_data_model.main.tab.value.load_data(acq_dialog.last_saved_file)
 
 
 class SparcAcquiController(object):

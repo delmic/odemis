@@ -360,6 +360,9 @@ class AcquisitionDialog(xrcfr_acq):
         new_name = ShowAcquisitionFileDialog(self, self.filename.value)
         if new_name is not None:
             self.filename.value = new_name
+            # It means the user wants to do a new acquisition
+            self.btn_secom_acquire.SetLabel("START")
+            self.last_saved_file = None
 
     def on_close(self, evt):
         """ Close event handler that executes various cleanup actions
@@ -377,7 +380,20 @@ class AcquisitionDialog(xrcfr_acq):
         pub.unsubscribe(self.on_setting_change, 'setting.changed')
         self._view.lastUpdate.unsubscribe(self.on_streams_changed)
 
-        self.Destroy()
+        self.EndModal(wx.ID_CANCEL)
+
+    def _view_file(self):
+        """
+        Called to open the file which was just acquired
+        """
+
+        self.remove_all_streams()
+        # stop listening to events
+        pub.unsubscribe(self.on_setting_change, 'setting.changed')
+        self._view.lastUpdate.unsubscribe(self.on_streams_changed)
+
+        self.EndModal(wx.ID_OPEN)
+        logging.debug("My return code is %d", self.GetReturnCode())
 
     def _pause_settings(self):
         """ Pause the settings of the GUI and save the values for restoring them later """
@@ -414,6 +430,9 @@ class AcquisitionDialog(xrcfr_acq):
 
     def on_acquire(self, evt):
         """ Start the actual acquisition """
+        if self.last_saved_file:  # This means the button is actually "View"
+            self._view_file()
+            return
 
         logging.info("Acquire button clicked, starting acquisition")
 
@@ -504,7 +523,8 @@ class AcquisitionDialog(xrcfr_acq):
             exporter = dataio.get_converter(self.conf.last_format)
             exporter.export(filename, data, thumb)
             logging.info("Acquisition saved as file '%s'.", filename)
-            self.btn_cancel.SetLabel("View")
+            # Allow to see the acquisition
+            self.btn_secom_acquire.SetLabel("VIEW")
             self.last_saved_file = filename
         except Exception:
             logging.exception("Saving acquisition failed")
@@ -520,7 +540,6 @@ class AcquisitionDialog(xrcfr_acq):
             self.btn_cancel.SetLabel("Close")
 
         # Make sure the file is not overridden
-        self.filename.value = self._get_default_filename()
         self.btn_secom_acquire.Enable()
 
 

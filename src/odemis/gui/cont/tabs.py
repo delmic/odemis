@@ -1272,7 +1272,7 @@ class AnalysisTab(Tab):
 
             # Try to guess from the extension
             for f, exts in formats_to_ext.items():
-                if any([filename.endswith(e) for e in exts]):
+                if any(filename.endswith(e) for e in exts):
                     fmt = f
                     break
             else:
