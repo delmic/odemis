@@ -55,7 +55,7 @@ class Stream(object):
     SETUP_OVERHEAD = 0.1
 
     def __init__(self, name, detector, dataflow, emitter, focuser=None,
-                 detvas=None, emtvas=None, raw=None):
+                 hwdetvas=None,  hwemtvas=None, detvas=None, emtvas=None, raw=None):
         """
         name (string): user-friendly name of this stream
         detector (Detector): the detector which has the dataflow
@@ -63,6 +63,10 @@ class Stream(object):
         emitter (Emitter): the emitter
         focuser (Actuator or None): an actuator with a 'z' axis that allows to change
           the focus
+        hwdetvas (None or set of str): names of all detector hardware VAs to be controlled by this
+            Stream
+        hwemtvas (None or set of str): names of all emitter hardware VAs to be controlled by this
+            Stream
         detvas (None or set of str): names of all the detector VigilantAttributes
           (VAs) to be duplicated on the stream. They will be named .detOriginalName
         emtvas (None or set of str): names of all the emitter VAs to be
@@ -107,6 +111,11 @@ class Stream(object):
         self.should_update = model.BooleanVA(False)
         # is_active set to True will keep the acquisition going on
         self.is_active = model.BooleanVA(False, setter=self._is_active_setter)
+
+        # Hardware VA that the stream is directly linked to
+        self.hw_vas = {}
+        self.hw_vas.update(self._getVAs(detector, hwdetvas or set()))
+        self.hw_vas.update(self._getVAs(emitter, hwemtvas or set()))
 
         # Duplicate VA if requested
         self._hwvas = {}  # str (name of the proxied VA) -> original Hw VA
@@ -189,12 +198,34 @@ class Stream(object):
     def __str__(self):
         return "%s %s" % (self.__class__.__name__, self.name.value)
 
-    def _duplicateVAs(self, comp, prefix, vas):
+    def _getVAs(self, comp, va_names):
+        if not isinstance(va_names, set):
+            raise ValueError("vas should be a set but got %s" % (va_names,))
+
+        vas = {}
+
+        for vaname in va_names:
+            try:
+                va = getattr(comp, vaname)
+            except AttributeError:
+                raise LookupError("Component %s has not attribute %s" %
+                                  (comp.name, vaname))
+            if not isinstance(va, VigilantAttributeBase):
+                raise LookupError("Component %s attribute %s is not a VA: %s" %
+                                  (comp.name, vaname, va.__class__.__name__))
+
+            setattr(self, vaname, va)
+
+            vas[vaname] = va
+
+        return vas
+
+    def _duplicateVAs(self, comp, prefix, va_names):
         """ Duplicate all the given VAs of the given component and rename them with the prefix
 
         :param comp: (Component) the component on which to find the VAs
         :param prefix: (str) prefix to put before the name of each VA
-        :param vas: (set of str) names of all the VAs
+        :param va_names: (set of str) names of all the VAs
 
         :raise:
             LookupError: if the component doesn't have a listed VA
@@ -203,12 +234,15 @@ class Stream(object):
             Dictionary (str -> VA): original va name -> duplicated va
 
         """
-        if not isinstance(vas, set):
-            raise ValueError("vas should be a set but got %s" % (vas,))
+        if not isinstance(va_names, set):
+            raise ValueError("vas should be a set but got %s" % (va_names,))
 
         dup_vas = {}
 
-        for vaname in vas:
+        for vaname in va_names:
+            # Skip the duplication if the VA is already linked as a direct hardware VA
+            if vaname in self.hw_vas:
+                break
             try:
                 va = getattr(comp, vaname)
             except AttributeError:
@@ -370,13 +404,13 @@ class Stream(object):
         # via the hardware VA, and it causes confusion in some cases if the
         # hardware settings are changed temporarily for some reason.
         # make sure the local VA value is synchronised
-#         for vaname, hwva in self._hwvas.items():
-#             if hwva.readonly:
-#                 continue
-#             lva = getattr(self, vaname)
-#             updater = functools.partial(self._va_sync_from_hw, lva)
-#             self._lvaupdaters[vaname] = updater
-#             hwva.subscribe(updater, init=True)
+        # for vaname, hwva in self._hwvas.items():
+        #     if hwva.readonly:
+        #         continue
+        #     lva = getattr(self, vaname)
+        #     updater = functools.partial(self._va_sync_from_hw, lva)
+        #     self._lvaupdaters[vaname] = updater
+        #     hwva.subscribe(updater, init=True)
 
     def _unlinkHwVAs(self):
         for vaname, updater in self._lvaupdaters.items():
