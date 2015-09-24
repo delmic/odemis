@@ -420,15 +420,17 @@ def get_stream_settings_config():
 
 # TODO: currently used only to find the VAs to be used as stream local VAs.
 # => Rename and/or check the function make sense?
-def get_hw_settings(hw_comp):
-    """
-    Find all the VAs of a component which have a configuration defined
-    hw_comp (HwComponent)
+def get_hw_settings(hw_comp, hidden=None):
+    """ Find all the VAs of a component which have a configuration defined
+
+    :param hw_comp: (HwComponent)
+    :param hidden: (set) Name of VAs to ignore
+
     return (set of str): all the names for the given comp
     """
 
     config = get_hw_settings_config()
-    hidden_vas = {"children", "affects", "state"}
+    hidden_vas = {"children", "affects", "state"} | (hidden or set())
 
     comp_vas = list(getVAs(hw_comp).items())
     config_vas = config.get(hw_comp.role, {}) # OrderedDict or dict

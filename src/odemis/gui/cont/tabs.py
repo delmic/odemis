@@ -605,9 +605,12 @@ class SparcAcquisitionTab(Tab):
             main_data.sed.data,
             main_data.ebeam,
             focuser=main_data.ebeam_focus,
+            hwemtvas={'magnification'},  # Hardware VAs will not be duplicated as ent/det VAs
+            hwdetvas=None,
             emtvas=get_hw_settings(main_data.ebeam),
             detvas=get_hw_settings(main_data.sed),
         )
+
         # TODO: do not put local magnification/hfw VA, but just the global one,
         # so that if SEM is not playing, but CLi (or other stream with e-beam as
         # emitter) is, then it's possible to change it.
@@ -723,6 +726,7 @@ class SparcAcquisitionTab(Tab):
 
         # The sem stream is always visible, so add it by default
         sem_stream_cont = self._stream_controller.addStream(sem_stream, add_to_all_views=True)
+        sem_stream_cont.add_hw_setting_control('magnification')
         sem_stream_cont.stream_panel.show_remove_btn(False)
         sem_stream_cont.stream_panel.show_visible_btn(False)
 
