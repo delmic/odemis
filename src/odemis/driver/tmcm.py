@@ -463,6 +463,7 @@ class TMCLController(model.Actuator):
         for i, v in enumerate(struct.unpack(">%di" % (len(s) // 4), s)):
             logging.debug("Writing on %d, 0x%08x", i, v)
             self.SetGlobalParam(2, i, v)
+            self.StoreGlobalParam(2, i)
 
     def extract_config(self):
         """
