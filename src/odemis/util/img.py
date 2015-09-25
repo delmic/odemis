@@ -231,6 +231,31 @@ def histogram(data, irange=None):
 
     return hist, edges
 
+def guessDRange(data):
+    """
+    Guess the drange of the data given.
+    data (None or DataArray): data on which to base the guess
+    """
+    if data.dtype.kind in "biu":
+        try:
+            depth = 2 ** data.metadata[model.MD_BPP]
+            if depth <= 1:
+                logging.warning("Data reports a BPP of %d",
+                                data.metadata[model.MD_BPP])
+                raise ValueError()
+
+            if data.dtype.kind == "i":
+                drange = (-depth // 2, depth // 2 - 1)
+            else:
+                drange = (0, depth - 1)
+        except (KeyError, ValueError):
+                idt = numpy.iinfo(data.dtype)
+                drange = (idt.min, idt.max)
+    else:
+        raise TypeError("Cannot guess drange for data of kind %s", data.dtype.kind)
+
+    return drange
+
 # TODO: try to do cumulative histogram value mapping (=histogram equalization)?
 # => might improve the greys, but might be "too" clever
 def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):

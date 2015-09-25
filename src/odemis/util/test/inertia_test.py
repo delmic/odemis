@@ -19,6 +19,7 @@ from __future__ import division
 from odemis.dataio import tiff
 from odemis.util import inertia
 import unittest
+from odemis.util import img
 
 class TestPolarConversion(unittest.TestCase):
     """
@@ -33,8 +34,10 @@ class TestPolarConversion(unittest.TestCase):
     def test_precomputed(self):
         data = self.data
         background = self.background
-        mi = inertia.CalculateMomentOfInertia(data[0], background[0])
-        self.assertAlmostEqual(mi, 262.8800483)
+        drange = img.guessDRange(data[0])
+        mi, valid = inertia.CalculateMomentOfInertia(data[0], background[0], drange)
+        self.assertAlmostEqual(mi, 112.005654085)
+        self.assertEqual(valid, True)
 
 
 if __name__ == "__main__":
