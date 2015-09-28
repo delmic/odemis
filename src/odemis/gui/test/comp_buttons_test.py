@@ -20,7 +20,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
-from collections import OrderedDict
 import unittest
 import wx
 
@@ -71,6 +70,23 @@ class ButtonsTestCase(test.GuiTestCase):
             btn = buttons.ImageTextButton(self.panel, height=height, label="Big brown fox")
             self.add_control(btn, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
         test.gui_loop()
+
+    def test_image_button_align(self):
+        # btn = buttons.ImageButton(self.panel, height=16, size=(100, -1),
+        #                           icon=data.ico_chevron_down.Bitmap)
+        # self.add_control(btn, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
+
+        btn = buttons.ImageButton(self.panel, height=32, size=(100, -1),
+                                  icon=data.ico_acqui.Bitmap, style=wx.ALIGN_LEFT)
+        self.add_control(btn, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
+
+        btn = buttons.ImageButton(self.panel, height=32, size=(100, -1),
+                                  icon=data.ico_acqui.Bitmap, style=wx.ALIGN_CENTER)
+        self.add_control(btn, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
+
+        btn = buttons.ImageButton(self.panel, height=32, size=(100, -1),
+                                  icon=data.ico_acqui.Bitmap, style=wx.ALIGN_RIGHT)
+        self.add_control(btn, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
 
     def test_text_buttons(self):
 

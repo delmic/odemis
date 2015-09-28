@@ -29,6 +29,7 @@ from __future__ import division
 import wx.combo
 
 import odemis.gui
+from odemis.gui.comp.buttons import ImageButton
 import odemis.gui.img.data as img
 
 
@@ -62,7 +63,10 @@ class ComboBox(wx.combo.OwnerDrawnComboBox):
         self.SetForegroundColour(odemis.gui.FG_COLOUR_EDIT)
         # Even those this colour sets the right
         self.SetBackgroundColour(self.Parent.GetBackgroundColour())
-        self.SetButtonBitmaps(img.getbtn_downBitmap(), pushButtonBg=False)
+
+        btn_combobox = ImageButton(self.Parent, size=(16,16), height=16)
+        self.SetButtonBitmaps(btn_combobox, pushButtonBg=False)
+        btn_combobox.Destroy()
 
         # self.Bind(wx.EVT_KEY_DOWN, self.on_key)
         self.Bind(wx.EVT_PAINT, self.on_paint)

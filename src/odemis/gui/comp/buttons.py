@@ -312,7 +312,7 @@ class BtnMixin(object):
         return dst_bmp
 
     def _reset_bitmaps(self):
-        if self.height:
+        if self.height and self.Size.x:
             self.bmpLabel = self._create_main_bitmap()
             self.bmpHover = self.bmpDisabled = self.bmpSelected = None
 
@@ -399,7 +399,6 @@ class BtnMixin(object):
         dc.Clear()
 
         dc.DrawBitmap(bmp, 0, 0, True)
-
         self.DrawIco(dc, width, height)
         self.DrawText(dc, width, height)
 
@@ -416,10 +415,17 @@ class BtnMixin(object):
         if not self.up:
             dx = dy = self.labelDelta
 
-        pos_x = (width - bw) // 2 + dx
-        pos_x += icon.GetWidth() + self.padding_x
+        if self.GetLabel():
+            pos_x = self.padding_x
+        elif self.HasFlag(wx.ALIGN_CENTER):
+            pos_x = bw // 2 - icon.GetWidth() // 2
+        elif self.HasFlag(wx.ALIGN_RIGHT):
+            pos_x = width - self.padding_x - icon.GetWidth()
+        else:
+            pos_x = self.padding_x
+
         pos_y = (height // 2) - (icon.GetHeight() // 2)
-        dc.DrawBitmap(icon, self.padding_x + dx, pos_y + dy)
+        dc.DrawBitmap(icon, pos_x + dx, pos_y + dy)
 
     def DrawText(self, dc, width, height, dx=0, dy=0):
         # Determine font and font colour
