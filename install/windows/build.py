@@ -6,7 +6,7 @@ import odemis
 cpy_command = ["python", "setup.py", "build_ext", "--inplace"]
 pyi_command = ["pyinstaller", "-y", "viewer.spec"]
 nsis_command = [r"C:\Program Files (x86)\NSIS\makensis",
-                "/DPRODUCT_VERSION=" + odemis._get_version(),
+                "/DPRODUCT_VERSION=" + '.'.join(odemis._get_version().split('-')[:2]),
                 "setup.nsi"]
 
 
@@ -17,7 +17,7 @@ def run_command(cmd):
         print line.rstrip()
     return p.wait()
 
-print "Building OdemisViewer", odemis._get_version()
+print "Building OdemisViewer", '.'.join(odemis._get_version().split('-')[:2])
 
 os.chdir(os.path.dirname(__file__) or '.')
 
