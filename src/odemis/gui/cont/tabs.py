@@ -1758,6 +1758,7 @@ class SecomAlignTab(Tab):
 
         self._fa_controller = acqcont.FineAlignController(self.tab_data_model,
                                                           panel,
+                                                          main_frame,
                                                           self._settings_controller)
 
         self._ac_controller = acqcont.AutoCenterController(self.tab_data_model,
