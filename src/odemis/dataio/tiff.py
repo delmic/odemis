@@ -58,6 +58,8 @@ FORMAT = "TIFF"
 # list of file-name extensions possible, the first one is the default when saving a file
 EXTENSIONS = [u".ome.tiff", u".ome.tif", u".tiff", u".tif"]
 
+STIFF_SPLIT = ".0."  # pattern to replace with the "stiff" multiple file
+
 # We try to make it as much as possible looking like a normal (multi-page) TIFF,
 # with as much metadata as possible saved in the known TIFF tags. In addition,
 # we ensure it's compatible with OME-TIFF, which support much more metadata, and
@@ -398,7 +400,7 @@ def _convertToOMEMD(images, multiple_files=False, findex=None, fname=None, uuids
         if multiple_files:
             # Remove path from filename
             path, bname = os.path.split(fname)
-            tokens = bname.split(".0.", 1)
+            tokens = bname.rsplit(STIFF_SPLIT, 1)
             part_fname = tokens[0] + "." + str(fname_index) + "." + tokens[1]
             _addImageElement(root, g, ifd, rois, part_fname, uuids[fname_index])
             fname_index += 1
@@ -1325,7 +1327,9 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_fil
     """
     if multiple_files:
         # Add index
-        tokens = filename.split(".0.", 1)  # FIXME: should be more careful to pick only 0.ome.tiff
+        tokens = filename.rsplit(STIFF_SPLIT, 1)
+        if len(tokens) < 2:
+            raise ValueError("The filename '%s' doesn't contain '%s'." % (filename, STIFF_SPLIT))
         orig_filename = tokens[0] + "." + str(file_index) + "." + tokens[1]
         f = TIFF.open(orig_filename, mode='w')
     else:
