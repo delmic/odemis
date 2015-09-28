@@ -113,7 +113,7 @@ class TestTiffIO(unittest.TestCase):
         for file_index in range(self.no_of_images):
             fname = tokens[0] + "." + str(file_index) + "." + tokens[1]
             
-            fmt_mng = dataio.find_fittest_exporter(fname)
+            fmt_mng = dataio.find_fittest_converter(fname, mode=os.O_RDONLY)
             self.assertEqual(fmt_mng.FORMAT, "TIFF",
                    "For '%s', expected format TIFF but got %s" % (fname, fmt_mng.FORMAT))
             rdata = fmt_mng.read_data(fname)

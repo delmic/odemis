@@ -2072,8 +2072,8 @@ class FakeAndorV2DLL(object):
                 # will be copied when asked for an image
                 # to ensure relative path is from this file
                 os.chdir(os.path.dirname(unicode(__file__)))
-                exporter = dataio.find_fittest_exporter(image)
-                self._data = img.ensure2DImage(exporter.read_data(image)[0])
+                converter = dataio.find_fittest_converter(image, mode=os.O_RDONLY)
+                self._data = img.ensure2DImage(converter.read_data(image)[0])
                 self.shape = self._data.shape[::-1]
                 self.bpp = 16
                 if model.MD_PIXEL_SIZE in self._data.metadata:

@@ -25,7 +25,7 @@ import logging
 import numpy
 from odemis import model, util, dataio
 from odemis.model import isasync
-import os.path
+import os
 from scipy import ndimage
 import time
 
@@ -51,8 +51,8 @@ class Camera(model.DigitalCamera):
         image = unicode(image)
         # change to this directory to ensure relative path is from this file
         os.chdir(os.path.dirname(unicode(__file__)))
-        exporter = dataio.find_fittest_exporter(image)
-        self._img = exporter.read_data(image)[0] # can be RGB or greyscale
+        converter = dataio.find_fittest_converter(image, mode=os.O_RDONLY)
+        self._img = converter.read_data(image)[0]  # can be RGB or greyscale
 
         # we will fill the set of children with Components later in ._children
         model.DigitalCamera.__init__(self, name, role, daemon=daemon, **kwargs)

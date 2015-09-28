@@ -1472,7 +1472,7 @@ class AnalysisTab(Tab):
                 cdata = None
             else:
                 logging.debug("Loading AR background data")
-                converter = dataio.find_fittest_exporter(fn)
+                converter = dataio.find_fittest_converter(fn, mode=os.O_RDONLY)
                 data = converter.read_data(fn)
                 # will raise exception if doesn't contain good calib data
                 cdata = calibration.get_ar_data(data)
@@ -1511,7 +1511,7 @@ class AnalysisTab(Tab):
                 cdata = None
             else:
                 logging.debug("Loading spectrum background")
-                converter = dataio.find_fittest_exporter(fn)
+                converter = dataio.find_fittest_converter(fn, mode=os.O_RDONLY)
                 data = converter.read_data(fn)
                 # will raise exception if doesn't contain good calib data
                 cdata = calibration.get_spectrum_data(data) # FIXME
@@ -1547,7 +1547,7 @@ class AnalysisTab(Tab):
                 cdata = None
             else:
                 logging.debug("Loading spectrum efficiency compensation")
-                converter = dataio.find_fittest_exporter(fn)
+                converter = dataio.find_fittest_converter(fn, mode=os.O_RDONLY)
                 data = converter.read_data(fn)
                 # will raise exception if doesn't contain good calib data
                 cdata = calibration.get_spectrum_efficiency(data)

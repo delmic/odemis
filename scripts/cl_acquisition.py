@@ -180,5 +180,5 @@ if __name__ == '__main__':
     s = spect_data.shape
     spect_data.shape = (s[0], 1, 1, s[1], s[2])
     
-    exporter = dataio.find_fittest_exporter(filename)
+    exporter = dataio.find_fittest_converter(filename)
     exporter.export(filename, [sed_data, spect_data])

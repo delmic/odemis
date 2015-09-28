@@ -156,7 +156,7 @@ class Acquirer(object):
 
         data = self.assemble_cube(shape, spec_data)
         # save the file
-        exporter = dataio.find_fittest_exporter(filename)
+        exporter = dataio.find_fittest_converter(filename)
         exporter.export(filename, data)
 
     def assemble_cube(self, shape, specs):

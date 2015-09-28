@@ -52,7 +52,7 @@ def acquire_timelapse(num, filename):
         images.append(ccd.data.get())
     
     # save the file
-    exporter = dataio.find_fittest_exporter(filename)
+    exporter = dataio.find_fittest_converter(filename)
     exporter.export(filename, images)
 
 def main(args):
