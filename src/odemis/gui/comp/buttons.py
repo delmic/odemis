@@ -466,11 +466,11 @@ class BtnMixin(object):
 
 
 class ImageButton(BtnMixin, wxbuttons.GenBitmapButton):
-    pass
+    padding_x = 0
 
 
 class ImageToggleButtonImageButton(BtnMixin, wxbuttons.GenBitmapTextToggleButton):
-    pass
+    padding_x = 0
 
 
 class ImageTextButton(BtnMixin, wxbuttons.GenBitmapTextButton):
