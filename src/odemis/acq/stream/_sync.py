@@ -1008,6 +1008,10 @@ class MomentOfInertiaStream(SEMCCDMDStream):
         # convert into a RGB DataArray
         if self.raw:
             im = img.DataArray2RGB(self.raw[1])
+            for (x, y), valid in numpy.ndenumerate(self._valid_array):
+                if not valid:
+                    # Just keep the red for non valid pixels
+                    im[x, y] = [im[x, y, 0], 0, 0]
             self.image.value = im
 
     def on_done(self, future):
@@ -1031,6 +1035,7 @@ class MomentOfInertiaStream(SEMCCDMDStream):
                                 "supposed to update")
             self._mif = []
             self._image_n = 1
+            self._bg_image = self.background.value
             # approx. the index of the center image
             self._center_image = numpy.prod(self._rep_stream.repetition.value) // 2
             self._acquire_f = self.acquire()
@@ -1041,16 +1046,19 @@ class MomentOfInertiaStream(SEMCCDMDStream):
     def _ssOnRepetitionImage(self, df, data):
         logging.debug("Repetition stream data received")
         self._rep_data = model.DataArray(numpy.empty(shape=data.shape))
-        bg_image = self.background.value
-        if bg_image is None:
-            bg_image = numpy.empty(shape=data.shape)
-            # at least substract the baseline
-            md = self._rep_det.getMetadata()
-            bg_image.fill(md.get(model.MD_BASELINE, 0))
+        if self._image_n == 1:
+            # No need to calculate the drange every time:
+            self._drange = img.guessDRange(data)
+            # also create bg image if none is provided
+            if self._bg_image is None:
+                self._bg_image = numpy.empty(shape=data.shape)
+                # at least substract the baseline
+                md = self._rep_det.getMetadata()
+                self._bg_image.fill(md.get(model.MD_BASELINE, 0))
         ss = False
         if self._image_n == self._center_image:
             ss = True
-        self._mif.append(MomentOfInertia(data, bg_image, ss))
+        self._mif.append(MomentOfInertia(data, self._bg_image, self._drange, ss))
         self._acq_rep_complete.set()
         self._image_n += 1
 
@@ -1061,20 +1069,24 @@ class MomentOfInertiaStream(SEMCCDMDStream):
 
         # Wait for the moment of inertia calculation results
         mif_results = []
+        valid_results = []
         for f in self._mif:
             try:
                 mir = f.result()
-                if isinstance(mir, tuple):
-                    mi, self._spot_size = mir
+                if len(mir) == 3:
+                    mi, valid, self._spot_size = mir
                 else:
-                    mi = mir
+                    mi, valid = mir
                 mif_results.append(mi)
+                valid_results.append(valid)
             except Exception as e:
                 logging.debug("Moment of inertia calculation failed, %s", e)
         self._mif = []
         # convert the list into array
         moment_array = numpy.array(mif_results)
         moment_array = moment_array.reshape(repetition)
+        valid_array = numpy.array(valid_results)
+        self._valid_array = valid_array.reshape(repetition)
         self._rep_raw = [model.DataArray(moment_array)]
         self._main_raw = [main_data]
 
@@ -1083,13 +1095,14 @@ class MomentOfInertiaStream(SEMCCDMDStream):
 
 # rough estimation
 MI_DURATION = 0.3  # s
-def _DoMomentOfInertia(future, data, background, spot_size=False):
+def _DoMomentOfInertia(future, data, background, drange, spot_size=False):
     """
     It performs the moment of inertia calculation.
     future (model.ProgressiveFuture): Progressive future provided by the wrapper
     data (model.DataArray): The optical image
     background (model.DataArray): Background image that we use for substraction
     spot_size (boolean): if True also calculate the spot size.
+    drange (tuple of floats): drange of data
     returns (float or tuple of floats): moment of inertia and spot size if asked.
     raises:
         CancelledError() if cancelled
@@ -1100,11 +1113,11 @@ def _DoMomentOfInertia(future, data, background, spot_size=False):
         if future._mi_state == CANCELLED:
             raise CancelledError()
         try:
-            moment_of_inertia = inertia.CalculateMomentOfInertia(data, background)
+            moment_of_inertia, valid = inertia.CalculateMomentOfInertia(data, background, drange)
             if spot_size:
                 spot_estimation = CalculateSpotSize(data, background)
-                return moment_of_inertia, spot_estimation
-            return moment_of_inertia
+                return moment_of_inertia, valid, spot_estimation
+            return moment_of_inertia, valid
         except Exception as e:
             raise e
     finally:
@@ -1114,7 +1127,7 @@ def _DoMomentOfInertia(future, data, background, spot_size=False):
             future._mi_state = FINISHED
 
 
-def MomentOfInertia(data, background, spot_size=False):
+def MomentOfInertia(data, background, drange, spot_size=False):
     """
     Wrapper for DoMomentOfInertia. It provides the ability to check the
     progress of moment of inertia calculation procedure or even cancel it.
@@ -1122,6 +1135,7 @@ def MomentOfInertia(data, background, spot_size=False):
     background (model.DataArray): Background image that we use for
     substraction
     spot_size (boolean): if True also calculate the spot size.
+    drange (tuple of floats): drange of data
     returns (model.ProgressiveFuture):  Progress of DoMomentOfInertia, whose
     result() will return:
             moment of inertia (float) and spot size (float) if asked
@@ -1141,7 +1155,7 @@ def MomentOfInertia(data, background, spot_size=False):
     mi_thread = threading.Thread(target=executeTask,
                                            name="Delphi Calibration",
                                            args=(f, _DoMomentOfInertia, f, data,
-                                                 background, spot_size))
+                                                 background, drange, spot_size))
 
     mi_thread.start()
     return f
@@ -1178,8 +1192,7 @@ def CalculateSpotSize(raw_data, background):
     background (model.DataArray): Background image that we use for substraction
     returns (float): spot size estimation
     """
-    depth = 2 ** background.metadata.get(model.MD_BPP, background.dtype.itemsize * 8)
-    hist, edges = img.histogram(background, (0, depth - 1))
+    hist, edges = img.histogram(background)
     range_max = img.findOptimalRange(hist, edges, outliers=1e-06)[1]
     # 1.3 corresponds to 3 times the noise
     # data = numpy.clip(raw_data - 1.3 * background, 0, numpy.inf)

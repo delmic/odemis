@@ -21,15 +21,21 @@ from odemis import model
 from odemis.util import img
 
 
-def CalculateMomentOfInertia(raw_data, background):
+def CalculateMomentOfInertia(raw_data, background, drange):
     """
     Calculates the moment of inertia for a given optical image
     raw_data (model.DataArray): The optical image
     background (model.DataArray): Background image that we use for substraction
-    returns (float): moment of inertia
+    drange (tuple of floats): drange of raw_data
+    returns (float, boolean): moment of inertia, True if it is valid
     """
-    depth = 2 ** background.metadata.get(model.MD_BPP, background.dtype.itemsize * 8)
-    hist, edges = img.histogram(background, (0, depth - 1))
+    # Return valid=False in case of clipping pixels found
+    hist, edges = img.histogram(raw_data, drange)
+    valid = True
+    if hist[-1] > 0:
+        valid = False
+
+    hist, edges = img.histogram(background)
     range_max = img.findOptimalRange(hist, edges, outliers=1e-06)[1]
     # 1.3 corresponds to 3 times the noise
     # data = numpy.clip(raw_data - 1.3 * background, 0, numpy.inf)
@@ -54,4 +60,4 @@ def CalculateMomentOfInertia(raw_data, background):
     totDist = numpy.sqrt(diff)
     rmsDist = data * totDist
     Mdist = rmsDist.sum() / data_sum
-    return Mdist
+    return Mdist, valid
