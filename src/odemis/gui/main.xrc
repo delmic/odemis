@@ -337,7 +337,7 @@
                 <object class="sizeritem">
                   <object class="ImageButton">
                     <size>12,-1</size>
-                    <icon>img/icon/chevron_up.png</icon>
+                    <icon>img/icon/ico_chevron_up.png</icon>
                     <height>16</height>
                     <face_colour>def</face_colour>
                     <style>wxALIGN_CENTRE</style>

@@ -794,7 +794,7 @@ def __init_resources():
                 <object class="sizeritem">
                   <object class="ImageButton">
                     <size>12,-1</size>
-                    <icon>img_icon_chevron_up_png</icon>
+                    <icon>img_icon_ico_chevron_up_png</icon>
                     <height>16</height>
                     <face_colour>def</face_colour>
                     <style>wxALIGN_CENTRE</style>
@@ -4863,15 +4863,14 @@ z~:\xbb\xc1\xd5|\xdeK1\xc1\xa2qtQ\xfb<\x0f\xe0\xe7\\f\x8af~\xf5\xf3\xa8\
 \xd1\xf2Q\xdd\x18\xb5\xf0\x91j\x06/\x06\xed_\x89pz\x15\xed\xfbW\x08\x00\
 \x00\x00\x00IEND\xaeB`\x82'''
 
-    img_icon_chevron_up_png = '''\
+    img_icon_ico_chevron_up_png = '''\
 \x89PNG\x0d
 \x1a
 \x00\x00\x00\x0dIHDR\x00\x00\x00\x08\x00\x00\x00
-\x08\x06\x00\x00\x00\x89\xc7\x1f\x80\x00\x00\x00\x19tEXtSoftware\x00Ad\
-obe ImageReadyq\xc9e<\x00\x00\x00RIDATx\xdab`@\x05\x12P\x8c\x15\x80$^B1\
-\\\x11#\x94f\x06\xe2\xdd@|\x10*f\x0b\xc4n@\xfc\x17\xa6\xb0\x11\x88\xf7@\
-\x152C\xd9\x0d0Im ~\x82d?\x0c?\x81\xca\x81\x818\x167\x88\xd3\xc6\x0d\xc8\
-^\xc6p\x03:\x00\x8b\x01\x04\x18\x00\xdf\xa0\x14]\xcdw\xe3\xfe\x00\x00\x00\
+\x08\x06\x00\x00\x00\x89\xc7\x1f\x80\x00\x00\x00KIDAT\x18\x95c`@\x05\x12\
+P\x8c\x15\x80$^B1\x86"f \xde\x07\xc4\xf5@\xdc\x00\xc4{\xa1bp\xd0\x08\xc4\
+{\xa0\x82\xccPv\x03LR\x1b\x88\x9f \xd9\x0f\xc3O\xa0r` \x8e\xc5\x0d\xe2\xb4\
+q\x03\xb2\x971\xdc\x80\x0e\xc0b\x00B\x1c\x13[\x27\xbc\x9a\xd0\x00\x00\x00\
 \x00IEND\xaeB`\x82'''
 
     img_icon_ico_sem_png = '''\
@@ -5475,7 +5474,7 @@ U\x8a\xf3\x13\x13\x84\xf18A\xa9\xc4J_\x1fa"\xc1\xd5l\x16\xa7\xa3\x83\x93\
 
     wx.MemoryFSHandler.AddFile('XRC/main/main_xrc', main_xrc)
     wx.MemoryFSHandler.AddFile('XRC/main/img_logo_h30_png', img_logo_h30_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_chevron_up_png', img_icon_chevron_up_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_chevron_up_png', img_icon_ico_chevron_up_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_sem_png', img_icon_ico_sem_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_sem_green_png', img_icon_ico_sem_green_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_optical_png', img_icon_ico_optical_png)

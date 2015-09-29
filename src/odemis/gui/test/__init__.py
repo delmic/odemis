@@ -187,9 +187,7 @@ class GuiTestCase(unittest.TestCase):
 
     @classmethod
     def remove_all(cls):
-        for child in cls.sizer.GetChildren():
-            cls.sizer.Remove(child.Window)
-            child.Window.Destroy()
+        cls.sizer.DeleteWindows()
         cls.sizer.Layout()
 
     def create_simple_tab_model(self):
