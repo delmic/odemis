@@ -1,3 +1,16 @@
+odemis (2.2.1-1ubuntu1) precise; urgency=low
+
+  * New version: 2.2.1
+  * Bug fixed and improvements:
+    - SEM magnification applies to all streams (SPARC)
+    - No strange spot size at start (DELPHI)
+    - Fine alignment will not be accepted if it seems to be wrong (DELPHI)
+    - Support for PI E861 closed loop (SECOMv2)
+    - Simplify focus behaviour in GUI (DELPHI)
+    - Never extend the histogram range above the capabitilies of the hardware
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Tue, 29 Sep 2015 15:10:05 +0200
+
 odemis (2.2-1ubuntu1) precise; urgency=low
 
   * New version: 2.2
