@@ -606,7 +606,7 @@ class FileInfo(object):
         # Might be per stream
         self.metadata = metadata or {}
 
-        if not model.MD_ACQ_DATE in self.metadata and self.file_name:
+        if model.MD_ACQ_DATE not in self.metadata and self.file_name:
             # try to auto fill acquisition time (seconds from epoch)
             try:
                 acq_date = os.stat(self.file_name).st_ctime
@@ -1020,6 +1020,7 @@ class MicroscopeView(StreamView):
         super(MicroscopeView, self)._on_stage_move_done(f)
         self._on_stage_pos(self.stage_pos.value)
 
+
 class ContentView(StreamView):
     """
     Represents a view from a microscope but (almost) always centered on the
@@ -1046,6 +1047,7 @@ class ContentView(StreamView):
     # only be reset on the next image after the end of the move (if it ever
     # comes). This is done on purpose to clearly show that the image displayed
     # is not yet at the place where the move finished.
+
 
 class OverviewView(StreamView):
     """
