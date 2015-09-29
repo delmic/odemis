@@ -29,7 +29,7 @@ from odemis.gui.util import AttrDict
 
 
 class ViewportGrid(wx.Panel):
-    """ Display short messages and warning to the user """
+    """ Place multiple viewports on a grid and allow to swap or hide some of them """
 
     def __init__(self, *args, **kwargs):
         super(ViewportGrid, self).__init__(*args, **kwargs)
@@ -138,7 +138,9 @@ class ViewportGrid(wx.Panel):
         if self.viewports is None:
             self.viewports = list(self.Children)
             if len(self.viewports) < 4:
-                raise ValueError("There should be at least 4 viewports present!")
+                # Cannot put them on a grid => default to full screen for the 1st one
+                self.visible_viewports = self.viewports[:1]
+
             else:
                 self.visible_viewports = self.viewports[:4]
 
@@ -191,6 +193,7 @@ class ViewportGrid(wx.Panel):
               in the first four positions of the 2x2 grid
         >=X - The rule of thumb we use is, that we iterate over the visible viewports in order and
               they will expand into the space of any invisible neighbour.
+              (That's the point of forcing the first 4 viewports to be 'special')
 
         """
 
@@ -210,64 +213,63 @@ class ViewportGrid(wx.Panel):
             # TODO: Make invisible ones small!
         else:
             gvps = self.viewports[:4]
-            num_vis_grid = len([vp for vp in gvps if vp in vvps])
-
+            num_vis_grid = sum(vp in vvps for vp in gvps)
             if num_vis_grid != num_vis_total:
                 raise ValueError("If multiple viewports are visible, they should all reside in the "
                                  "2x2 grid! (%d shown, %d in grid)" % (num_vis_total, num_vis_grid))
-            else:
-                tl, tr, bl, br = gvps
-                tlv, trv, blv, brv = [vp in vvps for vp in gvps]
 
-                gl = self.grid_layout
+            tl, tr, bl, br = gvps
+            tlv, trv, blv, brv = [vp in vvps for vp in gvps]
 
-                if tl in vvps:
-                    pos = gl.tl.pos
-                    size = (gl.tl.size.x + (gl.tr.size.x if not trv else 0),
-                            gl.tl.size.y + (gl.bl.size.y if not blv and not brv and trv else 0))
+            gl = self.grid_layout
 
-                    tl.SetPosition(pos)
-                    tl.SetSize(size)
-                    logging.debug("Layout top left: %s, %s", pos, size)
-                elif tl.Size != self.hidden_size:
-                    tl.SetSize(self.hidden_size)
+            if tlv:
+                pos = gl.tl.pos
+                size = (gl.tl.size.x + (gl.tr.size.x if not trv else 0),
+                        gl.tl.size.y + (gl.bl.size.y if not blv and not brv and trv else 0))
 
-                if tr in vvps:
-                    pos = (gl.tr.pos[0] - (gl.tr.size.x if not tlv else 0), 0)
-                    size = (gl.tr.size.x + (gl.tl.size.x if not tlv else 0),
-                            gl.tr.size.y + (gl.br.size.y if not brv and not blv and tlv else 0))
+                tl.SetPosition(pos)
+                tl.SetSize(size)
+                logging.debug("Layout top left: %s, %s", pos, size)
+            elif tl.Size != self.hidden_size:
+                tl.SetSize(self.hidden_size)
 
-                    tr.SetPosition(pos)
-                    tr.SetSize(size)
-                    logging.debug("Layout top right: %s, %s", pos, size)
-                elif tr.Size != self.hidden_size:
-                    tr.SetSize(self.hidden_size)
+            if trv:
+                pos = (gl.tr.pos[0] - (gl.tr.size.x if not tlv else 0), 0)
+                size = (gl.tr.size.x + (gl.tl.size.x if not tlv else 0),
+                        gl.tr.size.y + (gl.br.size.y if not brv and not blv and tlv else 0))
 
-                if bl in vvps:
-                    pos = (0, gl.bl.pos[1] - (gl.tl.size.y if not tlv and not trv else 0))
-                    size = (gl.bl.size.x + (gl.br.size.x if not brv else 0),
-                            gl.bl.size.y + (gl.tl.size.y if not tlv and not trv and brv else 0))
+                tr.SetPosition(pos)
+                tr.SetSize(size)
+                logging.debug("Layout top right: %s, %s", pos, size)
+            elif tr.Size != self.hidden_size:
+                tr.SetSize(self.hidden_size)
 
-                    bl.SetPosition(pos)
-                    bl.SetSize(size)
-                    logging.debug("Layout bottom left (%s): %s, %s", bl, pos, size)
-                elif bl.Size != self.hidden_size:
-                    bl.SetSize(self.hidden_size)
+            if blv:
+                pos = (0, gl.bl.pos[1] - (gl.tl.size.y if not tlv and not trv else 0))
+                size = (gl.bl.size.x + (gl.br.size.x if not brv else 0),
+                        gl.bl.size.y + (gl.tl.size.y if not tlv and not trv and brv else 0))
 
-                if br in vvps:
-                    pos = (gl.br.pos[0] - (gl.bl.size.x if not blv else 0),
-                           gl.br.pos[1] - (gl.tr.size.y if not trv and not tlv and blv else 0))
-                    size = (gl.br.size.x + (gl.bl.size.x if not blv else 0),
-                            gl.br.size.y + (gl.tr.size.y if not trv and not tlv and blv else 0))
+                bl.SetPosition(pos)
+                bl.SetSize(size)
+                logging.debug("Layout bottom left (%s): %s, %s", bl, pos, size)
+            elif bl.Size != self.hidden_size:
+                bl.SetSize(self.hidden_size)
 
-                    br.SetPosition(pos)
-                    br.SetSize(size)
-                    logging.debug("Layout bottom right: %s, %s", pos, size)
-                elif br.Size != self.hidden_size:
-                    br.SetSize(self.hidden_size)
+            if brv:
+                pos = (gl.br.pos[0] - (gl.bl.size.x if not blv else 0),
+                       gl.br.pos[1] - (gl.tr.size.y if not trv and not tlv and blv else 0))
+                size = (gl.br.size.x + (gl.bl.size.x if not blv else 0),
+                        gl.br.size.y + (gl.tr.size.y if not trv and not tlv and blv else 0))
+
+                br.SetPosition(pos)
+                br.SetSize(size)
+                logging.debug("Layout bottom right: %s, %s", pos, size)
+            elif br.Size != self.hidden_size:
+                br.SetSize(self.hidden_size)
 
     def _swap_viewports(self, vpa, vpb):
-        if vpa == vpb:
+        if vpa is vpb:
             return
         a, b = self.viewports.index(vpa), self.viewports.index(vpb)
         self.viewports[a], self.viewports[b] = self.viewports[b], self.viewports[a]
@@ -279,7 +281,7 @@ class ViewportGrid(wx.Panel):
     def set_visible_viewports(self, vis_viewports):
         """ Set the viewports to be shown
 
-        This method will movie the viewports to be shown to the front of the viewport list (in
+        This method will move the viewports to be shown to the front of the viewport list (in
         order) and will show them while hiding all others.
 
         """
