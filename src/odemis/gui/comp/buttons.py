@@ -231,7 +231,7 @@ class BtnMixin(object):
 
         self.Refresh()
 
-    def OnSize(self, evt):
+    def OnSize(self, _):
         if self.Size != self.previous_size and self.height:
             self._reset_bitmaps()
             self.previous_size = self.Size
@@ -468,8 +468,8 @@ class BtnMixin(object):
             else:
                 icon_x = self.padding_x
 
-            pos_y = (height // 2) - (icon.GetHeight() // 2)
-            dc.DrawBitmap(icon, icon_x + dx, pos_y + dy)
+            icon_y = (height // 2) - (icon.GetHeight() // 2)
+            dc.DrawBitmap(icon, icon_x + dx, icon_y + dy)
 
 
 class ImageButton(BtnMixin, wxbuttons.GenBitmapButton):

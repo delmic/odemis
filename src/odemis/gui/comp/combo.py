@@ -29,7 +29,7 @@ from __future__ import division
 import wx.combo
 
 import odemis.gui
-from odemis.gui.comp.buttons import ImageButton
+from odemis.gui.comp.buttons import ImageButton, BtnMixin, darken_image
 import odemis.gui.img.data as img
 
 
@@ -64,9 +64,27 @@ class ComboBox(wx.combo.OwnerDrawnComboBox):
         # Even those this colour sets the right
         self.SetBackgroundColour(self.Parent.GetBackgroundColour())
 
-        btn_combobox = ImageButton(self.Parent, size=(16,16), height=16)
-        self.SetButtonBitmaps(btn_combobox, pushButtonBg=False)
-        btn_combobox.Destroy()
+        icon = img.arr_down_s.Bitmap
+        icon_x = 16 // 2 - icon.GetWidth() // 2
+        icon_y = (16 // 2) - (icon.GetHeight() // 2) - 1
+
+        bmpLabel = ImageButton._create_bitmap(img.btn_def_16.Bitmap, (16, 16),
+                                              self.GetBackgroundColour())
+        dc = wx.MemoryDC()
+        dc.SelectObject(bmpLabel)
+        dc.DrawBitmap(icon, icon_x, icon_y)
+        dc.SelectObject(wx.NullBitmap)
+
+        hover_image = bmpLabel.ConvertToImage()
+        darken_image(hover_image, 1.1)
+
+        dis_iamge = bmpLabel.ConvertToImage()
+        darken_image(dis_iamge, 0.8)
+
+        self.SetButtonBitmaps(bmpLabel,
+                              bmpHover=hover_image.ConvertToBitmap(),
+                              bmpDisabled=dis_iamge.ConvertToBitmap(),
+                              pushButtonBg=False)
 
         # self.Bind(wx.EVT_KEY_DOWN, self.on_key)
         self.Bind(wx.EVT_PAINT, self.on_paint)
