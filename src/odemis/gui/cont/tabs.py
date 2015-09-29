@@ -48,7 +48,6 @@ from odemis.gui.cont.microscope import SecomStateController, DelphiStateControll
 from odemis.gui.cont.streams import StreamController
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.img import scale_to_alpha
-from odemis.gui.util.widgets import ProgressiveFutureConnector
 from odemis.util import units
 import os.path
 import pkg_resources
@@ -1623,7 +1622,7 @@ class SecomAlignTab(Tab):
     """
 
     def __init__(self, name, button, panel, main_frame, main_data):
-        tab_data = guimod.ActuatorGUIData(main_data)
+        tab_data = guimod.SecomAlignGUIData(main_data)
         super(SecomAlignTab, self).__init__(name, button, panel, main_frame, tab_data)
 
         # TODO: we should actually display the settings of the streams (...once they have it)
@@ -2017,7 +2016,7 @@ class SparcAlignTab(Tab):
     # occur. The reason for this is still unknown.
 
     def __init__(self, name, button, panel, main_frame, main_data):
-        tab_data = guimod.ActuatorGUIData(main_data)
+        tab_data = guimod.SparcAlignGUIData(main_data)
         super(SparcAlignTab, self).__init__(name, button, panel, main_frame, tab_data)
 
         self._ccd_stream = None
@@ -2317,7 +2316,7 @@ class Sparc2AlignTab(Tab):
     """
 
     def __init__(self, name, button, panel, main_frame, main_data):
-        tab_data = guimod.ActuatorGUIData(main_data)
+        tab_data = guimod.Sparc2AlignGUIData(main_data)
         super(Sparc2AlignTab, self).__init__(name, button, panel, main_frame, tab_data)
 
         # Documentation text on the left panel
@@ -2335,14 +2334,45 @@ class Sparc2AlignTab(Tab):
         #   lens alignment.
         # * AR CCD (ccd): Used to show CL spot during the alignment of the lens1,
         #   and to show the mirror shadow in center alignment
-        # TODO: have a special stream that does CCD + ebeam spot?
+        # * RGB stream (goal image): To show the goal image in center alignment
+        # TODO: have a special stream that does CCD + ebeam spot? (to avoid the ebeam spot)
 
 
-        # TODO: add stream bar controller
+        # Create stream & view
+        self._stream_controller = streamcont.StreamBarController(
+            tab_data,
+            panel.pnl_streams,
+            locked=True
+        )
 
+        # create a view on the microscope model
+        vpv = collections.OrderedDict((
+            (self.panel.vp_moi,
+                {
+                    "cls": guimod.ContentView,
+                    "name": "Moment of Inertia",
+                }
+            ),
+            (self.panel.vp_align_lens,
+                {
+                    "cls": guimod.ContentView,
+                    "name": "Lens alignment",
+                }
+            ),
+            (self.panel.vp_align_center,
+                {
+                    "cls": guimod.ContentView,
+                    "name": "Center alignment",
+                }
+            ),
+        ))
+        self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
+        self.panel.vp_align_lens.microscope_view.show_crosshair.value = False
+        self.panel.vp_align_center.microscope_view.show_crosshair.value = False
 
         # The mirror center (with the lens set) is defined as pole position
         # in the microscope configuration file.
+        # TODO: use an overlay, instead of a stream? We need to allow dragging it around
         goal_im = self._getGoalImage(main_data)
         self._goal_stream = acqstream.RGBStream("Goal", goal_im)
 

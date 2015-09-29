@@ -347,7 +347,7 @@ class MicroscopyGUIData(object):
         # See class docstring for more info.
         self.focussedView = VigilantAttribute(None)
 
-        layouts = set([VIEW_LAYOUT_ONE, VIEW_LAYOUT_22, VIEW_LAYOUT_FULLSCREEN])
+        layouts = {VIEW_LAYOUT_ONE, VIEW_LAYOUT_22, VIEW_LAYOUT_FULLSCREEN}
         self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_22, choices=layouts)
 
         # The subset of views taken from `views` that *can* actually displayed,
@@ -368,7 +368,7 @@ class LiveViewGUIData(MicroscopyGUIData):
         MicroscopyGUIData.__init__(self, main)
 
         # Current tool selected (from the toolbar)
-        tools = set([TOOL_NONE, TOOL_ZOOM, TOOL_ROI])
+        tools = {TOOL_NONE, TOOL_ZOOM, TOOL_ROI}
         self.tool = IntEnumerated(TOOL_NONE, choices=tools)
 
         # Represent the global state of the microscopes. Mostly indicating
@@ -432,7 +432,11 @@ class ScannedAcquisitionGUIData(MicroscopyGUIData):
 
 
 class ChamberGUIData(MicroscopyGUIData):
-    pass
+
+    def __init__(self, main):
+        MicroscopyGUIData.__init__(self, main)
+        self.tool = IntEnumerated(TOOL_NONE, choices={TOOL_NONE})
+        self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_ONE, choices={VIEW_LAYOUT_ONE})
 
 
 class AnalysisGUIData(MicroscopyGUIData):
@@ -446,7 +450,7 @@ class AnalysisGUIData(MicroscopyGUIData):
         self._conf = get_general_conf()
 
         # only tool to zoom and pick point/line
-        tools = set([TOOL_NONE, TOOL_ZOOM, TOOL_POINT, TOOL_LINE])
+        tools = {TOOL_NONE, TOOL_ZOOM, TOOL_POINT, TOOL_LINE}
         self.tool = IntEnumerated(TOOL_NONE, choices=tools)
 
         # The current file it displays. If None, it means there is no file
@@ -530,24 +534,6 @@ class ActuatorGUIData(MicroscopyGUIData):
         # set of (str, str): actuator name, axis name
         self.axes = frozenset(self._axis_to_act_ss.keys())
 
-        # Tools are for lens alignment (mirror alignment actually needs none)
-        tools = {TOOL_NONE, TOOL_DICHO, TOOL_SPOT}
-        self.tool = IntEnumerated(TOOL_NONE, choices=tools)
-
-        # For dichotomic mode (SECOM)
-        self.dicho_seq = model.ListVA()  # list of 4 enumerated for each corner
-
-        # For the SPARC/SPARCv2, the current alignment mode.
-        # TODO: move to subclass
-        if main.role == "sparc":
-            # Same values than the modes of the OpticalPathManager
-            self.align_mode = StringEnumerated("chamber-view",
-                                               choices={"chamber-view", "mirror-align", "fiber-align"})
-        elif main.role == "sparc2":
-            # Mode values are different from the one from OpticalPathManager
-            self.align_mode = StringEnumerated("mirror-align",
-                                   choices={"mirror-align", "lens-align", "center-align"})
-
     def step(self, actuator, axis, factor, sync=False):
         """
         Moves a given axis by a one step (of stepsizes).
@@ -574,6 +560,41 @@ class ActuatorGUIData(MicroscopyGUIData):
 
         if sync:
             f.result()  # wait until the future is complete
+
+
+class SecomAlignGUIData(ActuatorGUIData):
+    def __init__(self, main):
+        ActuatorGUIData.__init__(self, main)
+        # Tools are for lens alignment (mirror alignment actually needs none)
+        tools = {TOOL_NONE, TOOL_DICHO, TOOL_SPOT}
+        self.tool = IntEnumerated(TOOL_NONE, choices=tools)
+
+        self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_ONE, choices={VIEW_LAYOUT_ONE})
+
+        # For dichotomic mode
+        self.dicho_seq = model.ListVA()  # list of 4 enumerated for each corner
+
+
+class SparcAlignGUIData(ActuatorGUIData):
+    def __init__(self, main):
+        ActuatorGUIData.__init__(self, main)
+        self.tool = IntEnumerated(TOOL_NONE, choices={TOOL_NONE})
+        self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_ONE, choices={VIEW_LAYOUT_ONE})
+
+        # Same values than the modes of the OpticalPathManager
+        self.align_mode = StringEnumerated("chamber-view",
+                                   choices={"chamber-view", "mirror-align", "fiber-align"})
+
+
+class Sparc2AlignGUIData(ActuatorGUIData):
+    def __init__(self, main):
+        ActuatorGUIData.__init__(self, main)
+        self.tool = IntEnumerated(TOOL_NONE, choices={TOOL_NONE})
+        self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_ONE, choices={VIEW_LAYOUT_ONE})
+
+        # Mode values are different from the modes of the OpticalPathManager
+        self.align_mode = StringEnumerated("mirror-align",
+                               choices={"mirror-align", "lens-align", "center-align"})
 
 
 class FileInfo(object):

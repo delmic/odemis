@@ -194,7 +194,7 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.PostCreate(pre)
 
         # Define variables for the controls, bind event handlers
-        self.pnl_alignment_btns = xrc.XRCCTRL(self, "pnl_alignment_btns")
+        self.pnl_mode_btns = xrc.XRCCTRL(self, "pnl_mode_btns")
         self.btn_align_mirror = xrc.XRCCTRL(self, "btn_align_mirror")
         self.btn_align_lens = xrc.XRCCTRL(self, "btn_align_lens")
         self.btn_align_centering = xrc.XRCCTRL(self, "btn_align_centering")
@@ -212,9 +212,12 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.slider_focus = xrc.XRCCTRL(self, "slider_focus")
         self.gauge_autofocus = xrc.XRCCTRL(self, "gauge_autofocus")
         self.html_alignment_doc = xrc.XRCCTRL(self, "html_alignment_doc")
-        self.vp_center_align = xrc.XRCCTRL(self, "vp_center_align")
+        self.pnl_vp_grid = xrc.XRCCTRL(self, "pnl_vp_grid")
+        self.vp_moi = xrc.XRCCTRL(self, "vp_moi")
+        self.vp_align_lens = xrc.XRCCTRL(self, "vp_align_lens")
+        self.vp_align_center = xrc.XRCCTRL(self, "vp_align_center")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
-        self.fp_optical_settings = xrc.XRCCTRL(self, "fp_optical_settings")
+        self.pnl_streams = xrc.XRCCTRL(self, "pnl_streams")
 
 
 
@@ -2371,7 +2374,7 @@ def __init_resources():
         <object class="wxPanel">
           <object class="wxBoxSizer">
             <object class="sizeritem">
-              <object class="wxPanel" name="pnl_alignment_btns">
+              <object class="wxPanel" name="pnl_mode_btns">
                 <object class="wxBoxSizer">
                   <orient>wxHORIZONTAL</orient>
                   <object class="sizeritem">
@@ -2892,7 +2895,6 @@ def __init_resources():
             <object class="sizeritem">
               <object class="wxHtmlWindow" name="html_alignment_doc">
                 <size>-1,400</size>
-                <url>__doc_sparc2_align_html</url>
                 <fg>#BBBBBB</fg>
                 <bg>#333333</bg>
                 <style>wxHW_SCROLLBAR_NEVER|wxHW_NO_SELECTION</style>
@@ -2910,15 +2912,29 @@ def __init_resources():
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">
-        <object class="ARLiveViewport" name="vp_center_align">
-          <size>400,-1</size>
+        <object class="ViewportGrid" name="pnl_vp_grid">
+          <object class="ARLiveViewport" name="vp_moi">
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="ARLiveViewport" name="vp_align_lens">
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="ARLiveViewport" name="vp_align_center">
+            <size>400,-1</size>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
         </object>
         <option>1</option>
         <flag>wxEXPAND</flag>
-        <ratio>1</ratio>
       </object>
       <object class="sizeritem">
         <object class="wxPanel">
@@ -2929,13 +2945,18 @@ def __init_resources():
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
                     <object class="FoldPanelBar">
-                      <object class="FoldPanelItem" name="fp_optical_settings">
+                      <object class="FoldPanelItem">
+                        <object class="StreamBar" name="pnl_streams">
+                          <size>300,-1</size>
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
                         <label>OPTICAL</label>
                         <fg>#1A1A1A</fg>
                         <bg>#555555</bg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
                       </object>
                       <spacing>0</spacing>
                       <leftspacing>0</leftspacing>
@@ -2957,6 +2978,14 @@ def __init_resources():
               <minsize>400,400</minsize>
             </object>
             <orient>wxVERTICAL</orient>
+            <object class="sizeritem">
+              <object class="wxPanel">
+                <object class="wxButton" name="btn_bkg_acquire">
+                  <label>Acquire background</label>
+                </object>
+              </object>
+              <flag>wxEXPAND</flag>
+            </object>
           </object>
           <size>400,-1</size>
           <bg>#333333</bg>
@@ -5180,33 +5209,6 @@ e\xe8\xe0\x16g\xe91}\x89L\xd5\x8d\x14\xb7&1~\x16\xe5\xa2B\x1e\xc3\xd7\xef\
 \xcc\x90\xee\x19\xb7\xdd3%\xc6-\xffw\x14\xc6.\xac\x8eS&\xf4\xf3?3\xf0\x9d\
 m\xd1v\xe0\xc4\x00\x00\x00\x00IEND\xaeB`\x82'''
 
-    __doc_sparc2_align_html = '''\
-<html>
-  <head>
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"\
->
-  </head>
-  <body text="#BBBBBB" bgcolor="#333333">
-
-        <font size="2">
-        <b><font size="4">Mirror alignment procedure</font></b>
-        <ol>
-            <li>Turn off all the lights in the chamber</li>
-            <li>Blank the beam</li>
-            <li>Acquire background image</li>
-            <li>Unblank the beam</li>
-            <li>Move X and Y axis to position the brightest point (mom\
-ent of inertia) at the
-            center</li>
-            <li>Move Z axis to increase the moment of inertia and redu\
-ce spot size</li>
-        </ol>
-      </font>
-
-  </body>
-</html>
-'''
-
     img_icon_ico_eject_png = '''\
 \x89PNG\x0d
 \x1a
@@ -5455,7 +5457,6 @@ U\x8a\xf3\x13\x13\x84\xf18A\xa9\xc4J_\x1fa"\xc1\xd5l\x16\xa7\xa3\x83\x93\
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_ang_green_png', img_icon_ico_ang_green_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_fib_png', img_icon_ico_fib_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_fib_green_png', img_icon_ico_fib_green_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/__doc_sparc2_align_html', __doc_sparc2_align_html)
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_eject_png', img_icon_ico_eject_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_eject_orange_png', img_icon_ico_eject_orange_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_dialog_warning_png', img_icon_dialog_warning_png)
