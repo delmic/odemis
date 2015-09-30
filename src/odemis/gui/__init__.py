@@ -72,3 +72,11 @@ BLEND_SCREEN = 15  # CAIRO_OPERATOR_SCREEN
 
 icon = None  # Will be set to a wxIcon at init
 name = None  # str of the name to display of the user, will be set at init
+
+DYE_LICENCE = """
+The dye database is provided as-is, from the Fluorobase consortium.
+The Fluorobase consortium provides this data and software in good faith, but
+makes no warranty, expressed or implied, nor assumes any legal liability or
+responsibility for any purpose for which they are used. For further information
+see http://www.fluorophores.org/disclaimer/.
+"""

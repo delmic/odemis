@@ -340,6 +340,7 @@
                     <icon>img/icon/ico_chevron_up.png</icon>
                     <height>16</height>
                     <face_colour>def</face_colour>
+                    <tooltip>Toggle log message window</tooltip>
                     <style>wxALIGN_CENTRE</style>
                     <XRCED>
                       <assign_var>1</assign_var>
@@ -378,6 +379,17 @@
                     </XRCED>
                   </object>
                   <flag>wxEXPAND</flag>
+                </object>
+                <object class="sizeritem">
+                  <object class="wxStaticText" name="txt_error">
+                    <size>-1,20</size>
+                    <fg>#1A1A1A</fg>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxTOP|wxLEFT|wxEXPAND</flag>
+                  <border>4</border>
                 </object>
               </object>
               <bg>#1A1A1A</bg>

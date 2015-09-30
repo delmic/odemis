@@ -65,6 +65,7 @@ class xrcfr_main(wx.Frame):
         self.btn_log = xrc.XRCCTRL(self, "btn_log")
         self.pnl_log = xrc.XRCCTRL(self, "pnl_log")
         self.txt_log = xrc.XRCCTRL(self, "txt_log")
+        self.txt_error = xrc.XRCCTRL(self, "txt_error")
 
 
 
@@ -799,6 +800,7 @@ def __init_resources():
                     <icon>img_icon_ico_chevron_up_png</icon>
                     <height>16</height>
                     <face_colour>def</face_colour>
+                    <tooltip>Toggle log message window</tooltip>
                     <style>wxALIGN_CENTRE</style>
                     <XRCED>
                       <assign_var>1</assign_var>
@@ -837,6 +839,17 @@ def __init_resources():
                     </XRCED>
                   </object>
                   <flag>wxEXPAND</flag>
+                </object>
+                <object class="sizeritem">
+                  <object class="wxStaticText" name="txt_error">
+                    <size>-1,20</size>
+                    <fg>#1A1A1A</fg>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxTOP|wxLEFT|wxEXPAND</flag>
+                  <border>4</border>
                 </object>
               </object>
               <bg>#1A1A1A</bg>

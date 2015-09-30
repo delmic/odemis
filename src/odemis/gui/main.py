@@ -7,18 +7,18 @@ Copyright © 2012-2014 Rinze de Laat, Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the
-terms of the GNU General Public License version 2 as published by the Free
-Software Foundation.
+Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU
+General Public License version 2 as published by the Free Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
-WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
-PARTICULAR PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even
+the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
+Public License for more details.
 
-You should have received a copy of the GNU General Public License along with
-Odemis. If not, see http://www.gnu.org/licenses/.
+You should have received a copy of the GNU General Public License along with Odemis. If not,
+see http://www.gnu.org/licenses/.
 
 """
+
 from __future__ import division
 
 import Pyro4.errors
@@ -155,6 +155,7 @@ class OdemisGUIApp(wx.App):
             self.main_data.debug.subscribe(self.on_debug_va, init=True)
 
             self.main_frame.btn_log.Bind(wx.EVT_BUTTON, self.on_log_button)
+            self.main_frame.txt_error.Bind(wx.EVT_LEFT_UP, self.on_log_button)
 
             # List of all possible tabs used in Odemis' main GUI
             # microscope role(s), internal name, class, tab btn, tab panel
@@ -285,6 +286,7 @@ class OdemisGUIApp(wx.App):
         opening the log panel. """
 
         self.main_frame.txt_log.Show(enabled)
+        self.main_frame.txt_error.Show(not enabled)
 
         if enabled:
             self.main_frame.pnl_log.SetBackgroundColour(BG_COLOUR_LEGEND)
@@ -304,7 +306,7 @@ class OdemisGUIApp(wx.App):
         """ Update the debug VA according to the menu"""
         self.main_data.debug.value = not self.main_data.debug.value
 
-    def on_close_window(self, evt=None): #pylint: disable=W0613
+    def on_close_window(self, evt=None):
         """ This method cleans up and closes the Odemis GUI. """
         logging.info("Exiting Odemis")
 
@@ -332,7 +334,7 @@ class OdemisGUIApp(wx.App):
 
         self.main_frame.Destroy()
 
-    def excepthook(self, etype, value, trace): #pylint: disable=W0622
+    def excepthook(self, etype, value, trace):
         """ Method to intercept unexpected errors that are not caught
         anywhere else and redirects them to the logger.
         Note that exceptions caught and logged will appear in the text pane,
@@ -355,13 +357,17 @@ class OdemisGUIApp(wx.App):
                 if not isinstance(value, NotImplementedError):
                     try:
                         self.main_frame.pnl_log.SetBackgroundColour(BG_COLOUR_ERROR)
+                        self.main_frame.txt_error.SetLabel(exc[-1])
+                        self.main_frame.txt_error.Parent.Layout()
                     except:
                         pass
             finally:
                 # put us back
                 sys.excepthook = self.excepthook
-        else: # python is ending... can't rely on anything
+        # python is ending... can't rely on anything
+        else:
             print etype, value, trace
+
 
 class OdemisOutputWindow(object):
     """ Helper class which allows ``wx`` to display uncaught
@@ -440,7 +446,8 @@ def main(args):
         try:
             # Also possible via Xlib, but more complicated
             import gtk
-            # without it, it will crash cf https://groups.google.com/forum/#!topic/wxpython-users/KO_hmLxeDKA
+            # Without it, it will crash cf. See:
+            # https://groups.google.com/forum/#!topic/wxpython-users/KO_hmLxeDKA
             gtk.remove_log_handlers()
             # Must be done before the first window is displayed
             name = odemis.__shortname__
