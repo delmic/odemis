@@ -812,7 +812,7 @@ class PointSpectrumViewport(PlotViewport):
 
     def _on_new_data(self, data):
         """
-        Called when a new data is available.
+        Called when a new data is available (in a live stream)
         data (1D DataArray)
         """
         if data.size:
@@ -839,7 +839,11 @@ class PointSpectrumViewport(PlotViewport):
         self.Refresh()
 
     def _on_pixel_select(self, pixel):
-        """ Pixel selection event handler """
+        """
+        Pixel selection event handler.
+        Called when the user picks a new point to display on a 2D spectrum.
+        pixel (int, int): position of the point (in px, px) on the stream
+        """
         if pixel == (None, None):
             # TODO: handle more graciously when pixel is unselected?
             logging.debug("No pixel selected")
