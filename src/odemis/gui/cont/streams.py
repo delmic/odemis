@@ -494,13 +494,13 @@ class StreamController(object):
             else:
                 mins, maxs = gspec.min(), gspec.max()
 
-            base = mins # for spectrum, 0 has little sense, just care of the min
-            try:
-                coef = 1 / (maxs - base)
-            except ZeroDivisionError:
+            # for spectrum, 0 has little sense, just care of the min
+            if mins > maxs:
+                coef = 1 / (maxs - mins)
+            else:  # division by 0
                 coef = 1
 
-            gspec = (gspec - base) * coef
+            gspec = (gspec - mins) * coef
             # TODO: use decorator for this (call_in_wx_main_wrapper), once this code is stable
             wx.CallAfter(dead_object_wrapper(sld_spec.SetContent), gspec.tolist())
 
