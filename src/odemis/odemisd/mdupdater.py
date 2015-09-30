@@ -214,24 +214,25 @@ class MetadataUpdater(model.Component):
     def observeLight(self, light, comp):
 
         def updateInputWL(emissions, light=light, comp=comp):
-            # indexes of the wavelengths activated
-            em_on = [i for i, e in enumerate(emissions) if e > 0]
-            if not em_on: # No light
-                wl = (0, 0)
-            elif len(em_on) == 1: # just one light
-                wl = light.spectra.value[em_on[0]]
-            else: # multiple wavelengths
-                # compute the min/max from the emissions which are not 0
-                miniwl = 1 # 1m is huge
-                maxiwl = 0
+            # MD_IN_WL expects just min/max => if multiple sources, we need to combine
+            spectra = light.spectra.value
+            wls = []
+            for i, intens in enumerate(emissions):
+                if intens > 0:
+                    wls.append((spectra[i][0], spectra[i][-1]))
 
-                for i, e in enumerate(emissions):
-                    if e > 0:
-                        miniwl = min(miniwl, light.spectra.value[i][2])
-                        maxiwl = max(maxiwl, light.spectra.value[i][4])
-                wl = (miniwl, maxiwl)
+            if wls:
+                wl_range = (min(w[0] for w in wls),
+                            max(w[1] for w in wls))
+            else:
+                wl_range = (0, 0)
 
-            md = {model.MD_IN_WL: wl}
+            # FIXME: not sure how to combine
+            power = light.power.value
+            p = power * numpy.sum(emissions)
+
+            md = {model.MD_IN_WL: wl_range,
+                  model.MD_LIGHT_POWER: p}
             comp.updateMetadata(md)
 
         def updateLightPower(power, light=light, comp=comp):
