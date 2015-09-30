@@ -67,9 +67,7 @@ def init_logger(level=logging.DEBUG):
     file_format = logging.Formatter(frm)
 
     # Max 5 log files of 10Mb
-    file_handler = RotatingFileHandler(logfile_path,
-                                       maxBytes=10 * (2 ** 20),
-                                       backupCount=5)
+    file_handler = RotatingFileHandler(logfile_path, maxBytes=10 * (2 ** 20), backupCount=5)
 
     file_handler.setFormatter(file_format)
     log.addHandler(file_handler)
@@ -128,7 +126,6 @@ class TextFieldHandler(logging.Handler):
     def setTextField(self, textfield):
         self.textfield = textfield
         self.textfield.Clear()
-        self.textfield.SetBackgroundColour(BG_COLOUR_LEGEND)
 
     def setErrorVA(self, error_va):
         self.error_va = error_va

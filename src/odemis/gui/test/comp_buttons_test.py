@@ -20,7 +20,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
-from collections import OrderedDict
 import unittest
 import wx
 
@@ -30,7 +29,9 @@ import odemis.gui.test as test
 
 
 test.goto_manual()
-# test.goto_inspect()
+
+BTN_SIZES = (16, 24, 32, 48)
+BTN_WIDTHS = (-1, 32, 64, 128)
 
 
 class ButtonsTestCase(test.GuiTestCase):
@@ -40,30 +41,258 @@ class ButtonsTestCase(test.GuiTestCase):
     @classmethod
     def setUpClass(cls):
         super(ButtonsTestCase, cls).setUpClass()
-        cls.frame.SetSize((400, 800))
+        cls.frame.SetSize((400, 1000))
+        cls.frame.Center()
+
+    def setUp(self):
+        self.remove_all()
+        super(ButtonsTestCase, self).setUp()
+
+    def tearDown(self):
+        test.gui_loop(1000)
+        super(ButtonsTestCase, self).tearDown()
 
     def test_image_button(self):
-        btn = buttons.ImageButton(self.panel, height=16)
-        self.add_control(btn, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
 
-        btn = buttons.ImageButton(self.panel, height=16, size=(100, -1))
-        self.assertEqual(btn.GetSizeTuple(), (100, 16))
-        self.add_control(btn, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
+        # No icon
 
-        btn = buttons.ImageButton(self.panel, height=32,
-                                   icon=data.ico_acqui.Bitmap,
-                                   icon_on=data.ico_cam.Bitmap)
-        self.add_control(btn, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
+        for i, h in enumerate(BTN_SIZES):
 
-        btn = buttons.ImageButton(self.panel, bitmap=data.ico_press_green.Bitmap)
-        btn.bmpHover = data.ico_press_orange.Bitmap
-        self.add_control(btn, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
+            row_sizer = wx.BoxSizer(wx.HORIZONTAL)
 
-        btn = buttons.ImageButton(self.panel, bitmap=data.getico_rem_strBitmap(), size=(18, 18))
-        btn.bmpHover = data.getico_rem_str_hBitmap()
-        self.add_control(btn, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
+            # Without explicit size
 
-        test.gui_loop()
+            btn = buttons.ImageButton(self.panel, height=h)
+            btn.SetToolTipString("No width defined")
+
+            row_sizer.Add(btn, flag=wx.LEFT | wx.RIGHT, border=2)
+
+            for w in BTN_WIDTHS:
+                btn = buttons.ImageButton(self.panel, height=h, size=(w, -1))
+                btn.SetToolTipString("Width set to %d" % w)
+
+                row_sizer.Add(btn, flag=wx.LEFT | wx.RIGHT, border=2)
+
+            self.add_control(row_sizer, flags=wx.ALL | wx.EXPAND, border=2)
+
+        btn = buttons.ImageButton(self.panel, height=h)
+        btn.SetToolTipString("Expand")
+        self.add_control(btn, flags=wx.ALL | wx.EXPAND, border=2)
+
+        # With icon
+
+        for i, h in enumerate(BTN_SIZES):
+
+            row_sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+            # Without explicit size
+
+            btn = buttons.ImageButton(self.panel, height=h,
+                                      icon=data.ico_chevron_down.Bitmap)
+            btn.SetToolTipString("No width defined")
+
+            row_sizer.Add(btn, flag=wx.LEFT | wx.RIGHT, border=2)
+
+            for w in BTN_WIDTHS:
+                btn = buttons.ImageButton(self.panel, height=h, size=(w, -1),
+                                          icon=data.ico_chevron_down.Bitmap)
+                btn.SetToolTipString("Width set to %d" % w)
+
+                row_sizer.Add(btn, flag=wx.LEFT | wx.RIGHT, border=2)
+
+            self.add_control(row_sizer, flags=wx.ALL | wx.EXPAND, border=2)
+
+        btn = buttons.ImageButton(self.panel, height=h, icon=data.ico_chevron_down.Bitmap)
+        btn.SetToolTipString("Expand")
+        self.add_control(btn, flags=wx.ALL | wx.EXPAND, border=2)
+
+        # With icon, CENTER ALIGNED
+
+        for i, h in enumerate(BTN_SIZES):
+
+            row_sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+            # Without explicit size
+
+            btn = buttons.ImageButton(self.panel, height=h,
+                                      icon=data.ico_chevron_down.Bitmap, style=wx.ALIGN_CENTER)
+            btn.SetToolTipString("No width defined")
+            btn.SetIcon(data.ico_chevron_down.Bitmap)
+
+            row_sizer.Add(btn, flag=wx.LEFT | wx.RIGHT, border=2)
+
+            for w in BTN_WIDTHS:
+                btn = buttons.ImageButton(self.panel, height=h, size=(w, -1),
+                                          icon=data.ico_chevron_down.Bitmap, style=wx.ALIGN_CENTER)
+                btn.SetToolTipString("Width set to %d" % w)
+
+                row_sizer.Add(btn, flag=wx.LEFT | wx.RIGHT, border=2)
+
+            self.add_control(row_sizer, flags=wx.ALL | wx.EXPAND, border=2)
+
+        btn = buttons.ImageButton(self.panel, height=h, size=(w, -1),
+                                  icon=data.ico_chevron_down.Bitmap, style=wx.ALIGN_CENTER)
+        btn.SetToolTipString("Expand")
+        self.add_control(btn, flags=wx.ALL | wx.EXPAND, border=2)
+
+        # With icon, RIGHT ALIGNED
+
+        for i, h in enumerate(BTN_SIZES):
+
+            row_sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+            # Without explicit size
+
+            btn = buttons.ImageButton(self.panel, height=h,
+                                      icon=data.ico_chevron_down.Bitmap, style=wx.ALIGN_RIGHT)
+            btn.SetToolTipString("No width defined")
+            btn.SetIcon(data.ico_chevron_down.Bitmap)
+
+            row_sizer.Add(btn, flag=wx.LEFT | wx.RIGHT, border=2)
+
+            for w in BTN_WIDTHS:
+                btn = buttons.ImageButton(self.panel, height=h, size=(w, -1),
+                                          icon=data.ico_chevron_down.Bitmap, style=wx.ALIGN_RIGHT)
+                btn.SetToolTipString("Width set to %d" % w)
+
+                row_sizer.Add(btn, flag=wx.LEFT | wx.RIGHT, border=2)
+
+            self.add_control(row_sizer, flags=wx.ALL | wx.EXPAND, border=2)
+
+        btn = buttons.ImageButton(self.panel, height=h,
+                                  icon=data.ico_chevron_down.Bitmap, style=wx.ALIGN_RIGHT)
+        btn.SetToolTipString("Expand")
+        self.add_control(btn, flags=wx.ALL | wx.EXPAND, border=2)
+
+    def test_image_text_button(self):
+
+        # No icon
+        self.add_control(wx.StaticText(self.panel, label="No icon, no alignment"),
+                         flags=wx.ALL | wx.EXPAND, border=2)
+
+        for i, h in enumerate(BTN_SIZES):
+
+            row_sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+            # Without explicit size
+
+            btn = buttons.ImageTextButton(self.panel, label="Hoger", height=h)
+            btn.SetToolTipString("No width defined")
+
+            row_sizer.Add(btn, flag=wx.LEFT | wx.RIGHT, border=2)
+
+            for w in BTN_WIDTHS:
+                btn = buttons.ImageTextButton(self.panel, label="Hoger", height=h, size=(w, -1))
+                btn.SetToolTipString("Width set to %d" % w)
+
+                row_sizer.Add(btn, flag=wx.LEFT | wx.RIGHT, border=2)
+
+            self.add_control(row_sizer, flags=wx.ALL | wx.EXPAND, border=2)
+
+        btn = buttons.ImageTextButton(self.panel, label="Hoger", height=h, size=(w, -1))
+        btn.SetToolTipString("Expand")
+        self.add_control(btn, flags=wx.ALL | wx.EXPAND, border=2)
+
+        # With icon
+        self.add_control(wx.StaticText(self.panel, label="With icon, no alignment"),
+                         flags=wx.ALL | wx.EXPAND, border=2)
+        for i, h in enumerate(BTN_SIZES):
+
+            row_sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+            # Without explicit size
+
+            btn = buttons.ImageTextButton(
+                self.panel, label="Hoger", height=h,
+                icon=data.ico_chevron_down.Bitmap)
+            btn.SetToolTipString("No width defined")
+
+            row_sizer.Add(btn, flag=wx.LEFT | wx.RIGHT, border=2)
+
+            for w in BTN_WIDTHS:
+                btn = buttons.ImageTextButton(
+                    self.panel, label="Hoger", height=h, size=(w, -1),
+                    icon=data.ico_chevron_down.Bitmap)
+                btn.SetToolTipString("Width set to %d" % w)
+
+                row_sizer.Add(btn, flag=wx.LEFT | wx.RIGHT, border=2)
+
+            self.add_control(row_sizer, flags=wx.ALL | wx.EXPAND, border=2)
+
+        btn = buttons.ImageTextButton(
+            self.panel, label="Hoger", height=h, size=(w, -1),
+            icon=data.ico_chevron_down.Bitmap)
+        btn.SetToolTipString("Expand")
+        self.add_control(btn, flags=wx.ALL | wx.EXPAND, border=2)
+
+        # With icon, CENTER ALIGNED
+        self.add_control(wx.StaticText(self.panel, label="With icon, center alignment"),
+                         flags=wx.ALL | wx.EXPAND, border=2)
+
+        for i, h in enumerate(BTN_SIZES):
+
+            row_sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+            # Without explicit size
+
+            btn = buttons.ImageTextButton(
+                self.panel, label="Hoger", height=h,
+                icon=data.ico_chevron_down.Bitmap, style=wx.ALIGN_CENTER)
+            btn.SetToolTipString("No width defined")
+            btn.SetIcon(data.ico_chevron_down.Bitmap)
+
+            row_sizer.Add(btn, flag=wx.LEFT | wx.RIGHT, border=2)
+
+            for w in BTN_WIDTHS:
+                btn = buttons.ImageTextButton(
+                    self.panel, label="Hoger", height=h, size=(w, -1),
+                    icon=data.ico_chevron_down.Bitmap, style=wx.ALIGN_CENTER)
+                btn.SetToolTipString("Width set to %d" % w)
+
+                row_sizer.Add(btn, flag=wx.LEFT | wx.RIGHT, border=2)
+
+            self.add_control(row_sizer, flags=wx.ALL | wx.EXPAND, border=2)
+
+        btn = buttons.ImageTextButton(
+            self.panel, label="Hoger", height=h, size=(w, -1),
+            icon=data.ico_chevron_down.Bitmap, style=wx.ALIGN_CENTER)
+        btn.SetToolTipString("Expand")
+        self.add_control(btn, flags=wx.ALL | wx.EXPAND, border=2)
+
+        # With icon, RIGHT ALIGNED
+        self.add_control(wx.StaticText(self.panel, label="With icon, right alignment"),
+                         flags=wx.ALL | wx.EXPAND, border=2)
+
+        for i, h in enumerate(BTN_SIZES):
+
+            row_sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+            # Without explicit size
+
+            btn = buttons.ImageTextButton(
+                self.panel, label="Hoger", height=h,
+                icon=data.ico_chevron_down.Bitmap, style=wx.ALIGN_RIGHT)
+            btn.SetToolTipString("No width defined")
+            btn.SetIcon(data.ico_chevron_down.Bitmap)
+
+            row_sizer.Add(btn, flag=wx.LEFT | wx.RIGHT, border=2)
+
+            for w in BTN_WIDTHS:
+                btn = buttons.ImageTextButton(
+                    self.panel, label="Hoger", height=h, size=(w, -1),
+                    icon=data.ico_chevron_down.Bitmap, style=wx.ALIGN_RIGHT)
+                btn.SetToolTipString("Width set to %d" % w)
+
+                row_sizer.Add(btn, flag=wx.LEFT | wx.RIGHT, border=2)
+
+            self.add_control(row_sizer, flags=wx.ALL | wx.EXPAND, border=2)
+
+        btn = buttons.ImageTextButton(
+            self.panel, label="Hoger", height=h, size=(w, -1),
+            icon=data.ico_chevron_down.Bitmap, style=wx.ALIGN_RIGHT)
+        btn.SetToolTipString("Expand")
+        self.add_control(btn, flags=wx.ALL | wx.EXPAND, border=2)
+
 
     def test_image_button_font(self):
 
@@ -71,6 +300,23 @@ class ButtonsTestCase(test.GuiTestCase):
             btn = buttons.ImageTextButton(self.panel, height=height, label="Big brown fox")
             self.add_control(btn, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
         test.gui_loop()
+
+    def test_image_button_align(self):
+        # btn = buttons.ImageButton(self.panel, height=16, size=(100, -1),
+        #                           icon=data.ico_chevron_down.Bitmap)
+        # self.add_control(btn, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
+
+        btn = buttons.ImageButton(self.panel, height=32, size=(100, -1),
+                                  icon=data.ico_acqui.Bitmap, style=wx.ALIGN_LEFT)
+        self.add_control(btn, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
+
+        btn = buttons.ImageButton(self.panel, height=32, size=(100, -1),
+                                  icon=data.ico_acqui.Bitmap, style=wx.ALIGN_CENTER)
+        self.add_control(btn, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
+
+        btn = buttons.ImageButton(self.panel, height=32, size=(100, -1),
+                                  icon=data.ico_acqui.Bitmap, style=wx.ALIGN_RIGHT)
+        self.add_control(btn, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
 
     def test_text_buttons(self):
 

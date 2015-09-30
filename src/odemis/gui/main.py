@@ -33,7 +33,7 @@ import os
 
 from odemis import model, gui
 import odemis
-from odemis.gui import main_xrc, log
+from odemis.gui import main_xrc, log, BG_COLOUR_ERROR, BG_COLOUR_LEGEND
 from odemis.gui.cont import acquisition
 from odemis.gui.cont.menu import MenuController
 from odemis.gui.util import call_in_wx_main
@@ -153,6 +153,8 @@ class OdemisGUIApp(wx.App):
             self.main_frame.SetIcons(ib)
 
             self.main_data.debug.subscribe(self.on_debug_va, init=True)
+
+            self.main_frame.btn_log.Bind(wx.EVT_BUTTON, self.on_log_button)
 
             # List of all possible tabs used in Odemis' main GUI
             # microscope role(s), internal name, class, tab btn, tab panel
@@ -279,9 +281,17 @@ class OdemisGUIApp(wx.App):
 
     @call_in_wx_main
     def on_debug_va(self, enabled):
-        """ This method (un)sets the application into debug mode, setting the
-        log level and opening the log panel. """
-        self.main_frame.pnl_log.Show(enabled)
+        """ This method (un)sets the application into debug mode, setting the log level and
+        opening the log panel. """
+
+        self.main_frame.txt_log.Show(enabled)
+
+        if enabled:
+            self.main_frame.pnl_log.SetBackgroundColour(BG_COLOUR_LEGEND)
+            self.main_frame.btn_log.SetIcon(imgdata.ico_chevron_down.Bitmap)
+        else:
+            self.main_frame.btn_log.SetIcon(imgdata.ico_chevron_up.Bitmap)
+
         l = logging.getLogger()
         if enabled:
             self.log_level = l.getEffectiveLevel()
@@ -289,6 +299,10 @@ class OdemisGUIApp(wx.App):
         else:
             l.setLevel(self.log_level)
         self.main_frame.Layout()
+
+    def on_log_button(self, evt):
+        """ Update the debug VA according to the menu"""
+        self.main_data.debug.value = not self.main_data.debug.value
 
     def on_close_window(self, evt=None): #pylint: disable=W0613
         """ This method cleans up and closes the Odemis GUI. """
@@ -340,7 +354,7 @@ class OdemisGUIApp(wx.App):
                 # When an exception occurs, automatically got to debug mode.
                 if not isinstance(value, NotImplementedError):
                     try:
-                        self.main_data.debug.value = True
+                        self.main_frame.pnl_log.SetBackgroundColour(BG_COLOUR_ERROR)
                     except:
                         pass
             finally:

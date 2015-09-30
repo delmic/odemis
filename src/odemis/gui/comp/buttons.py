@@ -34,6 +34,7 @@ import logging
 from operator import xor
 import wx
 import wx.lib.buttons as wxbuttons
+import math
 
 from odemis.gui import FG_COLOUR_HIGHLIGHT
 from odemis.gui.util.img import wxImageScaleKeepRatio
@@ -178,7 +179,7 @@ class BtnMixin(object):
 
         # Only height or bitmap must be provided, not both
         if not xor(self.height is None, bmpLabel is None):
-            raise ValueError("Either 'height' or 'bitmap' must be provided! Not both of neither.")
+            raise ValueError("Either 'height' or 'bitmap' must be provided! Not both or neither.")
 
         # Fetch the button face colour
         self.face_colour = kwargs.pop('face_colour', 'def') or 'def'
@@ -230,7 +231,7 @@ class BtnMixin(object):
 
         self.Refresh()
 
-    def OnSize(self, evt):
+    def OnSize(self, _):
         if self.Size != self.previous_size and self.height:
             self._reset_bitmaps()
             self.previous_size = self.Size
@@ -288,7 +289,7 @@ class BtnMixin(object):
         m = new_img.GetSubImage(
             (section_width, 0, section_width, btn_height)
         ).Rescale(
-            btn_width - section_width * 2,
+            max(btn_width - section_width * 2, 1),
             btn_height
         ).ConvertToBitmap()
 
@@ -312,7 +313,7 @@ class BtnMixin(object):
         return dst_bmp
 
     def _reset_bitmaps(self):
-        if self.height:
+        if self.height and self.Size.x:
             self.bmpLabel = self._create_main_bitmap()
             self.bmpHover = self.bmpDisabled = self.bmpSelected = None
 
@@ -399,29 +400,10 @@ class BtnMixin(object):
         dc.Clear()
 
         dc.DrawBitmap(bmp, 0, 0, True)
-
-        self.DrawIco(dc, width, height)
         self.DrawText(dc, width, height)
 
-    def DrawIco(self, dc, width, height, dx=0, dy=0):
-
-        if not self.up and self.icon_on:
-            icon = self.icon_on
-        elif self.icon:
-            icon = self.icon
-        else:
-            return
-
-        bw, bh = self.Size
-        if not self.up:
-            dx = dy = self.labelDelta
-
-        pos_x = (width - bw) // 2 + dx
-        pos_x += icon.GetWidth() + self.padding_x
-        pos_y = (height // 2) - (icon.GetHeight() // 2)
-        dc.DrawBitmap(icon, self.padding_x + dx, pos_y + dy)
-
     def DrawText(self, dc, width, height, dx=0, dy=0):
+
         # Determine font and font colour
         dc.SetFont(self.GetFont())
 
@@ -435,42 +417,67 @@ class BtnMixin(object):
 
         dc.SetTextForeground(text_colour)
 
+        icon = None
+
+        if not self.up and self.icon_on:
+            icon = self.icon_on
+        elif self.icon:
+            icon = self.icon
+
         # Get the label text
         label = self.GetLabel()
 
+        if not self.up:
+            dx = dy = self.labelDelta
+
         if label:
-            bw, bh = self.Size
-
             # Determine the size of the text
-            tw, th = dc.GetTextExtent(label)  # size of text
-
-            if not self.up:
-                dx = dy = self.labelDelta
-
-            # Calculate the x position for the given background bitmap
-            # The bitmap will be center within the button.
-            pos_x = (width - bw) // 2 + dx
-
-            if self.icon:
-                pos_x += self.icon.GetWidth() + self.padding_x
+            text_width, text_height = dc.GetTextExtent(label)  # size of text
 
             if self.HasFlag(wx.ALIGN_CENTER):
-                pos_x = (bw - tw) // 2
+                text_x = (width - text_width) // 2
             elif self.HasFlag(wx.ALIGN_RIGHT):
-                pos_x = bw - tw - self.padding_x
+                text_x = width - text_width - self.padding_x
             else:
-                pos_x += self.padding_x
+                text_x = self.padding_x
+
+            if icon:
+                if self.HasFlag(wx.ALIGN_CENTER):
+                    half = (icon.GetWidth() + self.padding_x) // 2
+                    icon_x = text_x - half
+                    text_x += half
+                elif self.HasFlag(wx.ALIGN_RIGHT):
+                    icon_x = width - icon.GetWidth() - self.padding_x
+                    text_x -= icon.GetWidth() + self.padding_x
+                else:
+                    icon_x = self.padding_x
+                    text_x += icon_x + icon.GetWidth()
+
+                icon_y = (height // 2) - (icon.GetHeight() // 2)
+                dc.DrawBitmap(icon, icon_x + dx, icon_y + dy)
 
             # draw the text
-            dc.DrawText(label, pos_x, (height - th) // 2 + dy)
+            text_y = math.ceil((height - text_height) / 2)
+            dc.DrawText(label, text_x + dx, text_y + dy)
+
+        elif icon:
+            if self.HasFlag(wx.ALIGN_CENTER):
+                icon_x = width // 2 - icon.GetWidth() // 2
+            elif self.HasFlag(wx.ALIGN_RIGHT):
+                icon_x = width - self.padding_x - icon.GetWidth()
+            else:
+                icon_x = self.padding_x
+
+            icon_y = (height // 2) - (icon.GetHeight() // 2)
+            dc.DrawBitmap(icon, icon_x + dx, icon_y + dy)
 
 
 class ImageButton(BtnMixin, wxbuttons.GenBitmapButton):
-    pass
+    padding_x = 2
 
 
 class ImageToggleButtonImageButton(BtnMixin, wxbuttons.GenBitmapTextToggleButton):
-    pass
+    padding_x = 2
 
 
 class ImageTextButton(BtnMixin, wxbuttons.GenBitmapTextButton):

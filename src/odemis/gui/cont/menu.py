@@ -369,19 +369,19 @@ see http://www.fluorophores.org/disclaimer/ .
     def _on_inspect(self, evt):
         from wx.lib.inspection import InspectionTool
         InspectionTool().Show()
-#
-#     def on_htmldoc(self, evt):
-#         """ Launch Python's SimpleHTTPServer in a separate process and have it
-#         serve the source code documentation as created by Sphinx
-#         """
-#         self.http_proc = subprocess.Popen(
-#             ["python", "-m", "SimpleHTTPServer"],
-#             stderr=subprocess.STDOUT,
-#             stdout=subprocess.PIPE,
-#             cwd=os.path.dirname(odemis.gui.conf.get_general_conf().html_dev_doc))
-#
-#         import webbrowser
-#         webbrowser.open('http://localhost:8000')
+    #
+    # def on_htmldoc(self, evt):
+    #     """ Launch Python's SimpleHTTPServer in a separate process and have it
+    #     serve the source code documentation as created by Sphinx
+    #     """
+    #     self.http_proc = subprocess.Popen(
+    #         ["python", "-m", "SimpleHTTPServer"],
+    #         stderr=subprocess.STDOUT,
+    #         stdout=subprocess.PIPE,
+    #         cwd=os.path.dirname(odemis.gui.conf.get_general_conf().html_dev_doc))
+    #
+    #     import webbrowser
+    #     webbrowser.open('http://localhost:8000')
 
 
     @call_in_wx_main
