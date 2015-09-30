@@ -593,8 +593,8 @@ class Sparc2AlignGUIData(ActuatorGUIData):
         self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_ONE, choices={VIEW_LAYOUT_ONE})
 
         # Mode values are different from the modes of the OpticalPathManager
-        self.align_mode = StringEnumerated("mirror-align",
-                               choices={"mirror-align", "lens-align", "center-align"})
+        self.align_mode = StringEnumerated("lens-align",
+                               choices={"lens-align", "mirror-align", "center-align"})
 
 
 class FileInfo(object):

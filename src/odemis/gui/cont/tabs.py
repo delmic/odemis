@@ -2347,16 +2347,16 @@ class Sparc2AlignTab(Tab):
 
         # create a view on the microscope model
         vpv = collections.OrderedDict((
-            (self.panel.vp_moi,
-                {
-                    "cls": guimod.ContentView,
-                    "name": "Moment of Inertia",
-                }
-            ),
             (self.panel.vp_align_lens,
                 {
                     "cls": guimod.ContentView,
                     "name": "Lens alignment",
+                }
+            ),
+            (self.panel.vp_moi,
+                {
+                    "cls": guimod.ContentView,
+                    "name": "Moment of Inertia",
                 }
             ),
             (self.panel.vp_align_center,
@@ -2386,8 +2386,8 @@ class Sparc2AlignTab(Tab):
         # * mirror-align: move x, y of mirror with moment of inertia feedback
         # * lens-align: first auto-focus spectrograph, then align lens1
         # * goal-align: find the center of the AR image using a "Goal" image
-        self._alignbtn_to_mode = {panel.btn_align_mirror: "mirror-align",
-                                  panel.btn_align_lens: "lens-align",
+        self._alignbtn_to_mode = {panel.btn_align_lens: "lens-align",
+                                  panel.btn_align_mirror: "mirror-align",
                                   panel.btn_align_centering: "center-align"}
         # The GUI mode to the optical path mode
         self._mode_to_opm = {"mirror-align": "mirror-align",
@@ -2440,28 +2440,29 @@ class Sparc2AlignTab(Tab):
             btn.SetToggle(mode == m)
 
         # Disable controls/streams which are useless (to guide the user)
-        if mode == "mirror-align":
+        if mode == "lens-align":
+            # TODO: show the vp_lens_align & play CCD stream + spot stream
+            self.panel.pnl_mirror.Enable(False)
+            self.panel.html_alignment_doc.Show(False)
+            self.panel.pnl_lens_mover.Enable(True)
+            self.panel.pnl_focus.Enable(True)
+            # TODO: in this mode, if focus change, update the focus image once
+            # (by going to spec-focus mode, turning the light, and acquiring an
+            # AR image)
+        elif mode == "mirror-align":
             # TODO: show the vp_mirror_align & play the MoI stream & stop the other streams
             # self._moi_stream.should_update.value = True
             self.panel.pnl_mirror.Enable(True)
             self.panel.html_alignment_doc.Show(True)
             self.panel.pnl_lens_mover.Enable(False)
             self.panel.pnl_focus.Enable(False)
-        elif mode == "lens-align":
-            # TODO: show the vp_lens_align & play CCD stream + spot stream
-            self.panel.pnl_mirror.Enable(False)
-            self.panel.html_alignment_doc.Show(False)
-            self.panel.pnl_lens_mover.Enable(True)
-            self.panel.pnl_focus.Enable(False)
-            # TODO: in this mode, if focus change, update the focus image once
-            # (by going to spec-focus mode, turning the light, and acquiring an
-            # AR image)
+            self.panel.html_alignment_doc.Parent.Layout()
         else:  # "center-align"
             # TODO Show the vp_center_align & play CCD stream + spot stream
             self.panel.pnl_mirror.Enable(False)
             self.panel.html_alignment_doc.Show(False)
             self.panel.pnl_lens_mover.Enable(False)
-            self.panel.pnl_focus.Enable(True)
+            self.panel.pnl_focus.Enable(False)
 
         # This is blocking on the hardware => run in a separate thread
         op_mode = self._mode_to_opm[mode]
