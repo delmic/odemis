@@ -152,10 +152,6 @@ class TextFieldHandler(logging.Handler):
             # with the GUI drawing process.
             wx.CallAfter(self.write_to_field, record, colour)
 
-        # Will typically ensure that the text field is displayed
-        if self.error_va is not None and record.levelno >= logging.ERROR:
-            self.error_va.value = True
-
     def write_to_field(self, record, colour):
         nb_lines = self.textfield.GetNumberOfLines()
         nb_old = nb_lines - LOG_LINES
