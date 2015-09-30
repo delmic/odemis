@@ -44,6 +44,31 @@ class xrctext_frame(wx.Frame):
 
 
 
+class xrclog_frame(wx.Frame):
+#!XRCED:begin-block:xrclog_frame.PreCreate
+    def PreCreate(self, pre):
+        """ This function is called during the class's initialization.
+        
+        Override it for custom setup before the window is created usually to
+        set additional window styles using SetWindowStyle() and SetExtraStyle().
+        """
+        pass
+        
+#!XRCED:end-block:xrclog_frame.PreCreate
+
+    def __init__(self, parent):
+        # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
+        pre = wx.PreFrame()
+        self.PreCreate(pre)
+        get_resources().LoadOnFrame(pre, parent, "log_frame")
+        self.PostCreate(pre)
+
+        # Define variables for the controls, bind event handlers
+        self.text_panel = xrc.XRCCTRL(self, "text_panel")
+        self.txt_log = xrc.XRCCTRL(self, "txt_log")
+
+
+
 class xrcstream_frame(wx.Frame):
 #!XRCED:begin-block:xrcstream_frame.PreCreate
     def PreCreate(self, pre):

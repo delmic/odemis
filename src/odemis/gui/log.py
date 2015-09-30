@@ -24,6 +24,7 @@ from odemis.gui import FG_COLOUR_ERROR, FG_COLOUR_WARNING, FG_COLOUR_DIS, \
 import os.path
 import sys
 import wx
+from odemis.gui.util import wxlimit_invocation
 
 
 LOG_FILE = "odemis-gui.log"
@@ -116,11 +117,24 @@ def stop_gui_logger():
 
 class TextFieldHandler(logging.Handler):
     """ Custom log handler, used to output log entries to a text field. """
+    TEXT_STYLES = (
+        wx.TextAttr(FG_COLOUR_ERROR, None),
+        wx.TextAttr(FG_COLOUR_WARNING, None),
+        wx.TextAttr(FG_COLOUR_MAIN, None),
+        wx.TextAttr(FG_COLOUR_DIS, None),
+    )
+
     def __init__(self):
         """ Call the parent constructor and initialize the handler """
         logging.Handler.__init__(self)
         self.textfield = None
         self.error_va = None
+        self.cache = {
+            0: [],
+            1: []
+        }
+        self.current_cache = 0
+        self._locked = False
 
     def setTextField(self, textfield):
         self.textfield = textfield
@@ -133,14 +147,13 @@ class TextFieldHandler(logging.Handler):
         """ Write a record, in colour, to a text field. """
         if self.textfield is not None:
             if record.levelno >= logging.ERROR:
-                colour = FG_COLOUR_ERROR
+                text_style = self.TEXT_STYLES[0]
             elif record.levelno == logging.WARNING:
-                colour = FG_COLOUR_WARNING
-
+                text_style = self.TEXT_STYLES[1]
             elif record.levelno == logging.INFO:
-                colour = FG_COLOUR_MAIN
+                text_style = self.TEXT_STYLES[2]
             else:
-                colour = FG_COLOUR_DIS
+                text_style = self.TEXT_STYLES[3]
 
             # FIXME: still seems to be possible to completely hog the GUI by
             # logging too much. A way to fix it would be to run the textfield
@@ -149,21 +162,38 @@ class TextFieldHandler(logging.Handler):
 
             # Do the actual writing in a CallAfter, so logging won't interfere
             # with the GUI drawing process.
-            wx.CallAfter(self.write_to_field, record, colour)
+            self.cache[self.current_cache].append((record, text_style))
+            self.write_to_field()
 
-    def write_to_field(self, record, colour):
-        nb_lines = self.textfield.GetNumberOfLines()
-        nb_old = nb_lines - LOG_LINES
-        if nb_old > 0:
-            # Removes the characters from position 0 up to and including the
-            # Nth line break
-            first_new = 0
-            txt = self.textfield.Value
-            for i in range(nb_old):
-                first_new = txt.find('\n', first_new) + 1
+    @wxlimit_invocation(0.1)
+    def write_to_field(self):
 
-            self.textfield.Remove(0, first_new)
+        if self._locked:
+            return
+        self._locked = True
+        self.current_cache = int(not self.current_cache)
 
-        self.textfield.SetDefaultStyle(wx.TextAttr(colour, None))
-        self.textfield.AppendText("\n" + self.format(record))
+        cache = self.cache[int(not self.current_cache)]
+        prev_style = None
 
+        # Process at most the latest 'LOG_LINES' messasges
+        for record, text_style in cache[-LOG_LINES:]:
+            nb_lines = self.textfield.GetNumberOfLines()
+            nb_old = nb_lines - LOG_LINES
+            if nb_old > 0:
+                # Removes the characters from position 0 up to and including the Nth line break
+                first_new = 0
+                txt = self.textfield.Value
+                for i in range(nb_old):
+                    first_new = txt.find('\n', first_new) + 1
+
+                self.textfield.Remove(0, first_new)
+
+            if prev_style != text_style:
+                self.textfield.SetDefaultStyle(text_style)
+                prev_style = text_style
+            self.textfield.AppendText("\n" + self.format(record))
+
+        self.cache[int(not self.current_cache)] = []
+        self._locked = False
+        self.textfield.Refresh()
