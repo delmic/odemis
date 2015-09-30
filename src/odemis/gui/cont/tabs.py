@@ -954,7 +954,9 @@ class ChamberTab(Tab):
         Stupid method that changes the progress bar. Used to indicate something
          is happening (during referencing).
         """
-        self.panel.gauge_move.Pulse()
+        mirror = self.tab_data_model.main.mirror
+        if not all(mirror.referenced.value.values()):
+            self.panel.gauge_move.Pulse()
 
     def _on_switch_btn(self, evt):
         """
@@ -1022,6 +1024,8 @@ class ChamberTab(Tab):
         self.panel.btn_cancel.Disable()
         self.tab_data_model.main.is_acquiring.value = False
         self._update_mirror_status()
+        # Just in case the referencing updated position before the pulse was stopped
+        self._update_progress_bar(self.tab_data_model.main.mirror.position.value)
 
     def _update_mirror_status(self):
         """
