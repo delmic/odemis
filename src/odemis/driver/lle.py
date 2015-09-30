@@ -171,26 +171,6 @@ class LLE(model.Emitter):
                                                "LLE temperature update")
         self._temp_timer.start()
 
-    def getMetadata(self):
-        metadata = {}
-        # MD_IN_WL expects just min/max => if multiple sources, we need to combine
-        power = 0
-        wls = []
-        for i, intens in enumerate(self._intensities):
-            if intens > 0:
-                wls.append((self.spectra.value[i][0], self.spectra.value[i][4]))
-                # FIXME: not sure how to combine
-                power += intens
-        
-        if wls:
-            wl_range = (min(w[0] for w in wls),
-                        max(w[1] for w in wls))
-        else:
-            wl_range = (0, 0)
-        metadata[model.MD_IN_WL] = wl_range
-        metadata[model.MD_LIGHT_POWER] = power
-        return metadata
-
     def _sendCommand(self, com):
         """
         Send a command which does not expect any report back
