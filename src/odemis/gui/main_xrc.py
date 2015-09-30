@@ -220,6 +220,8 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.vp_align_center = xrc.XRCCTRL(self, "vp_align_center")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.pnl_streams = xrc.XRCCTRL(self, "pnl_streams")
+        self.btn_bkg_acquire = xrc.XRCCTRL(self, "btn_bkg_acquire")
+        self.html_bkg_acq_doc = xrc.XRCCTRL(self, "html_bkg_acq_doc")
 
 
 
@@ -459,7 +461,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource class="ImageTextButton" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -2986,7 +2988,6 @@ def __init_resources():
             <object class="sizeritem">
               <object class="wxScrolledWindow" name="scr_win_right">
                 <object class="wxBoxSizer">
-                  <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
                     <object class="FoldPanelBar">
                       <object class="FoldPanelItem">
@@ -3009,6 +3010,40 @@ def __init_resources():
                     </object>
                     <flag>wxEXPAND</flag>
                   </object>
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="wxPanel">
+                      <object class="wxBoxSizer">
+                        <orient>wxVERTICAL</orient>
+                        <object class="sizeritem">
+                          <object class="ImageTextButton" name="btn_bkg_acquire">
+                            <height>24</height>
+                            <face_colour>def</face_colour>
+                            <label>Acquire Background</label>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                          </object>
+                          <flag>wxALL</flag>
+                          <border>10</border>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="wxHtmlWindow" name="html_bkg_acq_doc">
+                            <fg>#BBBBBB</fg>
+                            <bg>#333333</bg>
+                            <style>wxHW_SCROLLBAR_NEVER|wxHW_NO_SELECTION</style>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                          </object>
+                          <flag>wxALL|wxEXPAND|wxALIGN_BOTTOM|wxALIGN_CENTRE_VERTICAL</flag>
+                          <border>10</border>
+                        </object>
+                      </object>
+                      <bg>#333333</bg>
+                    </object>
+                    <flag>wxEXPAND</flag>
+                  </object>
                 </object>
                 <size>400,-1</size>
                 <bg>#333333</bg>
@@ -3022,14 +3057,7 @@ def __init_resources():
               <minsize>400,400</minsize>
             </object>
             <orient>wxVERTICAL</orient>
-            <object class="sizeritem">
-              <object class="wxPanel">
-                <object class="wxButton" name="btn_bkg_acquire">
-                  <label>Acquire background</label>
-                </object>
-              </object>
-              <flag>wxEXPAND</flag>
-            </object>
+          
           </object>
           <size>400,-1</size>
           <bg>#333333</bg>
