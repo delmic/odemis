@@ -17,7 +17,8 @@ You should have received a copy of the GNU General Public License along with Ode
 
 # Driver for Trinamic motion controller devices with TMCL firmware.
 # Currently TMCM-3110 (3 axis stepper controller) and TMCM-6110 are supported.
-# The documentation is available on trinamic.com (TMCM-3110_TMCL_firmware_manual.pdf).
+# The documentation is available on trinamic.com (TMCM-3110_TMCL_firmware_manual.pdf,
+# and TMCL_reference.pdf).
 
 
 from __future__ import division
