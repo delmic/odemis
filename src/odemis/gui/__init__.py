@@ -7,6 +7,7 @@ BG_COLOUR_MAIN = "#333333"      # Default dark background
 BG_COLOUR_STREAM = "#4D4D4D"    # Stream panel background
 BG_COLOUR_LEGEND = "#1A1A1A"    # Legend background
 BG_COLOUR_NOTIFY = "#FFF3A2"    # For the pop-up notification messages
+BG_COLOUR_ERROR = "#701818"
 
 # Foreground (i.e text) colours
 FG_COLOUR_MAIN = "#DDDDDD"       # Default foreground colour

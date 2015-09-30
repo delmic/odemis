@@ -335,20 +335,25 @@
               <object class="wxBoxSizer">
                 <orient>wxVERTICAL</orient>
                 <object class="sizeritem">
-                  <object class="ImageButton">
+                  <object class="ImageButton" name="btn_log">
                     <size>12,-1</size>
                     <icon>img/icon/ico_chevron_up.png</icon>
                     <height>16</height>
                     <face_colour>def</face_colour>
                     <style>wxALIGN_CENTRE</style>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
                   </object>
                   <flag>wxALL</flag>
                   <border>4</border>
                 </object>
               </object>
-              <bg>#4D4D4D</bg>
+              <size>20,-1</size>
+              <bg>#1A1A1A</bg>
             </object>
-            <flag>wxEXPAND</flag>
+            <flag>wxTOP|wxRIGHT|wxEXPAND</flag>
+            <border>2</border>
           </object>
           <object class="sizeritem">
             <object class="wxPanel" name="pnl_log">
@@ -366,6 +371,7 @@
                       <underlined>0</underlined>
                       <face>Monospace</face>
                     </font>
+                    <hidden>1</hidden>
                     <style>wxBORDER_NONE|wxTE_MULTILINE</style>
                     <XRCED>
                       <assign_var>1</assign_var>
@@ -374,13 +380,12 @@
                   <flag>wxEXPAND</flag>
                 </object>
               </object>
-              <size>-1,200</size>
-              <bg>#4D4D4D</bg>
+              <bg>#1A1A1A</bg>
               <XRCED>
                 <assign_var>1</assign_var>
               </XRCED>
             </object>
-            <option>1</option>
+            <option>2</option>
             <flag>wxTOP|wxEXPAND</flag>
             <border>2</border>
           </object>

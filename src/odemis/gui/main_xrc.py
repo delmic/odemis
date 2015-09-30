@@ -62,6 +62,7 @@ class xrcfr_main(wx.Frame):
         self.btn_tab_sparc_align = xrc.XRCCTRL(self, "btn_tab_sparc_align")
         self.btn_tab_sparc2_align = xrc.XRCCTRL(self, "btn_tab_sparc2_align")
         self.logo = xrc.XRCCTRL(self, "logo")
+        self.btn_log = xrc.XRCCTRL(self, "btn_log")
         self.pnl_log = xrc.XRCCTRL(self, "pnl_log")
         self.txt_log = xrc.XRCCTRL(self, "txt_log")
 
@@ -793,20 +794,25 @@ def __init_resources():
               <object class="wxBoxSizer">
                 <orient>wxVERTICAL</orient>
                 <object class="sizeritem">
-                  <object class="ImageButton">
+                  <object class="ImageButton" name="btn_log">
                     <size>12,-1</size>
                     <icon>img_icon_ico_chevron_up_png</icon>
                     <height>16</height>
                     <face_colour>def</face_colour>
                     <style>wxALIGN_CENTRE</style>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
                   </object>
                   <flag>wxALL</flag>
                   <border>4</border>
                 </object>
               </object>
-              <bg>#4D4D4D</bg>
+              <size>20,-1</size>
+              <bg>#1A1A1A</bg>
             </object>
-            <flag>wxEXPAND</flag>
+            <flag>wxTOP|wxRIGHT|wxEXPAND</flag>
+            <border>2</border>
           </object>
           <object class="sizeritem">
             <object class="wxPanel" name="pnl_log">
@@ -824,6 +830,7 @@ def __init_resources():
                       <underlined>0</underlined>
                       <face>Monospace</face>
                     </font>
+                    <hidden>1</hidden>
                     <style>wxBORDER_NONE|wxTE_MULTILINE</style>
                     <XRCED>
                       <assign_var>1</assign_var>
@@ -832,13 +839,12 @@ def __init_resources():
                   <flag>wxEXPAND</flag>
                 </object>
               </object>
-              <size>-1,200</size>
-              <bg>#4D4D4D</bg>
+              <bg>#1A1A1A</bg>
               <XRCED>
                 <assign_var>1</assign_var>
               </XRCED>
             </object>
-            <option>1</option>
+            <option>2</option>
             <flag>wxTOP|wxEXPAND</flag>
             <border>2</border>
           </object>
