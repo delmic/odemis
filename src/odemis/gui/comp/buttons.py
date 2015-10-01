@@ -190,6 +190,9 @@ class BtnMixin(object):
         self.icon = kwargs.pop('icon', None)
         self.icon_on = kwargs.pop('icon_on', None)
 
+        self.fg_colour_set = False
+        self.bg_colour_set = False
+
         # Call the super class constructor
         super(BtnMixin, self).__init__(*args, **kwargs)
 
@@ -199,7 +202,6 @@ class BtnMixin(object):
 
         # Previous size, used to check if bitmaps should be recreated
         self.previous_size = (0, 0)
-        self.colour_set = False
 
         # Set the font size to the default. This will be overridden if another font (size) is
         # defined in the XRC file
@@ -211,7 +213,17 @@ class BtnMixin(object):
 
     def SetForegroundColour(self, color):
         super(BtnMixin, self).SetForegroundColour(color)
-        self.colour_set = True
+        self.fg_colour_set = True
+
+    def SetBackgroundColour(self, color):
+        super(BtnMixin, self).SetBackgroundColour(color)
+        self.bg_colour_set = True
+
+    def GetBackgroundColour(self):
+        if self.bg_colour_set:
+            return super(BtnMixin, self).GetBackgroundColour()
+        else:
+            return self.Parent.GetBackgroundColour()
 
     def SetIcon(self, icon):
         icon_set = self.icon is not None
@@ -321,7 +333,7 @@ class BtnMixin(object):
         return self._create_bitmap(
             self.btns[self.face_colour][self.height]['off'].GetBitmap(),
             (self.Size.x, self.height),
-            self.Parent.GetBackgroundColour()
+            self.GetBackgroundColour()
         )
 
     def _create_hover_bitmap(self):
@@ -334,7 +346,7 @@ class BtnMixin(object):
         return self._create_bitmap(
             wx.BitmapFromImage(image),
             (self.Size.x, self.height),
-            self.Parent.GetBackgroundColour()
+            self.GetBackgroundColour()
         )
 
     def _create_disabled_bitmap(self):
@@ -346,7 +358,7 @@ class BtnMixin(object):
         return self._create_bitmap(
             wx.BitmapFromImage(image),
             (self.Size.x, self.height or self.Size.y),
-            self.Parent.GetBackgroundColour()
+            self.GetBackgroundColour()
         )
 
     def _create_active_bitmap(self):
@@ -357,7 +369,7 @@ class BtnMixin(object):
         return self._create_bitmap(
             self.btns[self.face_colour][self.height]['on'].GetBitmap(),
             (self.Size.x, self.height),
-            self.Parent.GetBackgroundColour()
+            self.GetBackgroundColour()
         )
 
     def InitOtherEvents(self):
@@ -407,7 +419,7 @@ class BtnMixin(object):
         # Determine font and font colour
         dc.SetFont(self.GetFont())
 
-        if self.colour_set:
+        if self.fg_colour_set:
             text_colour = self.GetForegroundColour()
         else:
             if self.IsEnabled():

@@ -34,6 +34,7 @@ import os
 from odemis import model, gui
 import odemis
 from odemis.gui import main_xrc, log, BG_COLOUR_ERROR, BG_COLOUR_LEGEND
+from odemis.gui.comp.buttons import ImageButton
 from odemis.gui.cont import acquisition
 from odemis.gui.cont.menu import MenuController
 from odemis.gui.util import call_in_wx_main
@@ -143,8 +144,7 @@ class OdemisGUIApp(wx.App):
         return True
 
     def init_gui(self):
-        """ This method binds events to menu items and initializes
-        GUI controls """
+        """ This method binds events to menu items and initializes GUI controls """
 
         try:
             # Add frame icon
@@ -251,6 +251,13 @@ class OdemisGUIApp(wx.App):
             # in the odemis.gui.cont package
             self.tab_controller = tabs.TabBarController(tab_defs, self.main_frame, self.main_data)
 
+            def toggle_log_panel(_):
+                self.main_data.debug.value = not self.main_frame.txt_log.IsShown()
+
+            for tab in self.tab_controller.get_tabs():
+                if hasattr(tab.panel, 'btn_log'):
+                    tab.panel.btn_log.Bind(wx.EVT_BUTTON, toggle_log_panel)
+
             self._menu_controller = MenuController(self.main_data, self.main_frame)
             # Menu events
             wx.EVT_MENU(self.main_frame,
@@ -269,7 +276,7 @@ class OdemisGUIApp(wx.App):
             self.main_frame.Maximize()  # must be done before Show()
             # making it very late seems to make it smoother
             wx.CallAfter(self.main_frame.Show)
-            logging.debug("Frame will be displayed soon")
+
         except Exception:
             self.excepthook(*sys.exc_info())
             # Re-raise the exception, so the program will exit. If this is not
@@ -288,7 +295,13 @@ class OdemisGUIApp(wx.App):
         if enabled:
             self.log_level = l.getEffectiveLevel()
             l.setLevel(logging.DEBUG)
+            for tab in self.tab_controller.get_tabs():
+                if hasattr(tab.panel, 'btn_log'):
+                    tab.panel.btn_log.SetIcon(imgdata.ico_chevron_down.Bitmap)
         else:
+            for tab in self.tab_controller.get_tabs():
+                if hasattr(tab.panel, 'btn_log'):
+                    tab.panel.btn_log.SetIcon(imgdata.ico_chevron_up.Bitmap)
             l.setLevel(self.log_level)
         self.main_frame.Layout()
 

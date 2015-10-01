@@ -108,6 +108,7 @@ class xrcpnl_tab_secom_align(wx.Panel):
         self.lbl_fine_align = xrc.XRCCTRL(self, "lbl_fine_align")
         self.gauge_fine_align = xrc.XRCCTRL(self, "gauge_fine_align")
         self.html_alignment_doc = xrc.XRCCTRL(self, "html_alignment_doc")
+        self.btn_log = xrc.XRCCTRL(self, "btn_log")
         self.vp_align_ccd = xrc.XRCCTRL(self, "vp_align_ccd")
         self.lens_align_btn_sem = xrc.XRCCTRL(self, "lens_align_btn_sem")
         self.lens_align_btn_opt = xrc.XRCCTRL(self, "lens_align_btn_opt")
@@ -165,6 +166,7 @@ class xrcpnl_tab_sparc_align(wx.Panel):
         self.mirror_align_btn_m_fibaligner_y = xrc.XRCCTRL(self, "mirror_align_btn_m_fibaligner_y")
         self.mirror_align_btn_m_fibaligner_x = xrc.XRCCTRL(self, "mirror_align_btn_m_fibaligner_x")
         self.mirror_align_btn_p_fibaligner_x = xrc.XRCCTRL(self, "mirror_align_btn_p_fibaligner_x")
+        self.btn_log = xrc.XRCCTRL(self, "btn_log")
         self.vp_sparc_align = xrc.XRCCTRL(self, "vp_sparc_align")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fp_ma_settings_ar = xrc.XRCCTRL(self, "fp_ma_settings_ar")
@@ -211,6 +213,7 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.btn_m_mirror_x = xrc.XRCCTRL(self, "btn_m_mirror_x")
         self.btn_p_mirror_x = xrc.XRCCTRL(self, "btn_p_mirror_x")
         self.html_alignment_doc = xrc.XRCCTRL(self, "html_alignment_doc")
+        self.btn_log = xrc.XRCCTRL(self, "btn_log")
         self.pnl_vp_grid = xrc.XRCCTRL(self, "pnl_vp_grid")
         self.vp_moi = xrc.XRCCTRL(self, "vp_moi")
         self.vp_align_lens = xrc.XRCCTRL(self, "vp_align_lens")
@@ -248,6 +251,7 @@ class xrcpnl_tab_sparc_chamber(wx.Panel):
         self.btn_cancel = xrc.XRCCTRL(self, "btn_cancel")
         self.pnl_ref_msg = xrc.XRCCTRL(self, "pnl_ref_msg")
         self.txt_warning = xrc.XRCCTRL(self, "txt_warning")
+        self.btn_log = xrc.XRCCTRL(self, "btn_log")
         self.vp_chamber = xrc.XRCCTRL(self, "vp_chamber")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.pnl_streams = xrc.XRCCTRL(self, "pnl_streams")
@@ -285,6 +289,7 @@ class xrcpnl_tab_sparc_acqui(wx.Panel):
         self.btn_sparc_view_bl = xrc.XRCCTRL(self, "btn_sparc_view_bl")
         self.lbl_sparc_view_br = xrc.XRCCTRL(self, "lbl_sparc_view_br")
         self.btn_sparc_view_br = xrc.XRCCTRL(self, "btn_sparc_view_br")
+        self.btn_log = xrc.XRCCTRL(self, "btn_log")
         self.pnl_sparc_grid = xrc.XRCCTRL(self, "pnl_sparc_grid")
         self.vp_sparc_tl = xrc.XRCCTRL(self, "vp_sparc_tl")
         self.vp_sparc_tr = xrc.XRCCTRL(self, "vp_sparc_tr")
@@ -335,6 +340,7 @@ class xrcpnl_tab_inspection(wx.Panel):
         self.btn_inspection_view_bl = xrc.XRCCTRL(self, "btn_inspection_view_bl")
         self.lbl_inspection_view_br = xrc.XRCCTRL(self, "lbl_inspection_view_br")
         self.btn_inspection_view_br = xrc.XRCCTRL(self, "btn_inspection_view_br")
+        self.btn_log = xrc.XRCCTRL(self, "btn_log")
         self.pnl_inspection_grid = xrc.XRCCTRL(self, "pnl_inspection_grid")
         self.vp_inspection_tl = xrc.XRCCTRL(self, "vp_inspection_tl")
         self.vp_inspection_tr = xrc.XRCCTRL(self, "vp_inspection_tr")
@@ -383,6 +389,7 @@ class xrcpnl_tab_secom_streams(wx.Panel):
         self.btn_secom_view_bl = xrc.XRCCTRL(self, "btn_secom_view_bl")
         self.lbl_secom_view_br = xrc.XRCCTRL(self, "lbl_secom_view_br")
         self.btn_secom_view_br = xrc.XRCCTRL(self, "btn_secom_view_br")
+        self.btn_log = xrc.XRCCTRL(self, "btn_log")
         self.pnl_secom_grid = xrc.XRCCTRL(self, "pnl_secom_grid")
         self.vp_secom_tl = xrc.XRCCTRL(self, "vp_secom_tl")
         self.vp_secom_tr = xrc.XRCCTRL(self, "vp_secom_tr")
@@ -787,7 +794,6 @@ def __init_resources():
         <flag>wxEXPAND</flag>
         <minsize>-1,40</minsize>
       </object>
-
       <orient>wxVERTICAL</orient>
       <object class="sizeritem">
         <object class="wxTextCtrl" name="txt_log">
@@ -1333,6 +1339,20 @@ def __init_resources():
               </object>
               <flag>wxTOP|wxEXPAND|wxALIGN_BOTTOM|wxALIGN_CENTRE_VERTICAL</flag>
               <border>24</border>
+            </object>
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="ImageButton" name="btn_log">
+                <icon>img_icon_ico_chevron_up_png</icon>
+                <height>16</height>
+                <face_colour>def</face_colour>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
             </object>
           </object>
           <size>300,-1</size>
@@ -2260,6 +2280,22 @@ def __init_resources():
               <flag>wxEXPAND</flag>
             </object>
             <orient>wxVERTICAL</orient>
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="ImageButton" name="btn_log">
+                <icon>img_icon_ico_chevron_up_png</icon>
+                <height>16</height>
+                <face_colour>def</face_colour>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALL</flag>
+              <border>10</border>
+            </object>
           </object>
           <fg>#E5E5E5</fg>
           <bg>#333333</bg>
@@ -2894,6 +2930,22 @@ def __init_resources():
               <flag>wxALL|wxEXPAND|wxALIGN_BOTTOM|wxALIGN_CENTRE_VERTICAL</flag>
               <border>10</border>
             </object>
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="ImageButton" name="btn_log">
+                <icon>img_icon_ico_chevron_up_png</icon>
+                <height>16</height>
+                <face_colour>def</face_colour>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALL</flag>
+              <border>10</border>
+            </object>
           </object>
           <fg>#E5E5E5</fg>
           <bg>#333333</bg>
@@ -3112,6 +3164,20 @@ def __init_resources():
               </object>
               <flag>wxALL|wxEXPAND</flag>
               <border>10</border>
+            </object>
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="ImageButton" name="btn_log">
+                <icon>img_icon_ico_chevron_up_png</icon>
+                <height>16</height>
+                <face_colour>def</face_colour>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
             </object>
           </object>
           <size>300,-1</size>
@@ -3352,6 +3418,22 @@ def __init_resources():
               <option>1</option>
               <flag>wxBOTTOM|wxEXPAND</flag>
               <border>44</border>
+            </object>
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="ImageButton" name="btn_log">
+                <icon>img_icon_ico_chevron_up_png</icon>
+                <height>16</height>
+                <face_colour>def</face_colour>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALL</flag>
+              <border>10</border>
             </object>
           </object>
           <size>200,-1</size>
@@ -3804,6 +3886,22 @@ def __init_resources():
               <border>44</border>
             </object>
             <orient>wxVERTICAL</orient>
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="ImageButton" name="btn_log">
+                <icon>img_icon_ico_chevron_up_png</icon>
+                <height>16</height>
+                <face_colour>def</face_colour>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALL</flag>
+              <border>10</border>
+            </object>
           </object>
           <size>200,-1</size>
           <bg>#333333</bg>
@@ -4143,6 +4241,22 @@ def __init_resources():
               <option>1</option>
               <flag>wxBOTTOM|wxEXPAND</flag>
               <border>44</border>
+            </object>
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="ImageButton" name="btn_log">
+                <icon>img_icon_ico_chevron_up_png</icon>
+                <height>16</height>
+                <face_colour>def</face_colour>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALL</flag>
+              <border>10</border>
             </object>
           </object>
           <size>200,-1</size>
@@ -4860,6 +4974,16 @@ z~:\xbb\xc1\xd5|\xdeK1\xc1\xa2qtQ\xfb<\x0f\xe0\xe7\\f\x8af~\xf5\xf3\xa8\
 \xd1\xf2Q\xdd\x18\xb5\xf0\x91j\x06/\x06\xed_\x89pz\x15\xed\xfbW\x08\x00\
 \x00\x00\x00IEND\xaeB`\x82'''
 
+    img_icon_ico_chevron_up_png = '''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x08\x00\x00\x00
+\x08\x06\x00\x00\x00\x89\xc7\x1f\x80\x00\x00\x00KIDAT\x18\x95c`@\x05\x12\
+P\x8c\x15\x80$^B1\x86"f \xde\x07\xc4\xf5@\xdc\x00\xc4{\xa1bp\xd0\x08\xc4\
+{\xa0\x82\xccPv\x03LR\x1b\x88\x9f \xd9\x0f\xc3O\xa0r` \x8e\xc5\x0d\xe2\xb4\
+q\x03\xb2\x971\xdc\x80\x0e\xc0b\x00B\x1c\x13[\x27\xbc\x9a\xd0\x00\x00\x00\
+\x00IEND\xaeB`\x82'''
+
     img_icon_ico_sem_png = '''\
 \x89PNG\x0d
 \x1a
@@ -5461,6 +5585,7 @@ U\x8a\xf3\x13\x13\x84\xf18A\xa9\xc4J_\x1fa"\xc1\xd5l\x16\xa7\xa3\x83\x93\
 
     wx.MemoryFSHandler.AddFile('XRC/main/main_xrc', main_xrc)
     wx.MemoryFSHandler.AddFile('XRC/main/img_logo_h30_png', img_logo_h30_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_chevron_up_png', img_icon_ico_chevron_up_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_sem_png', img_icon_ico_sem_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_sem_green_png', img_icon_ico_sem_green_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_optical_png', img_icon_ico_optical_png)

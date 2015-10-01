@@ -2625,6 +2625,9 @@ class TabBarController(object):
 
         self.main_data.is_acquiring.subscribe(self.on_acquisition)
 
+    def get_tabs(self):
+        return self._tabs.choices
+
     def open_tab(self, tab_name):
         for tab in self._tabs.choices:
             if tab.name == tab_name:
