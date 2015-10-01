@@ -229,6 +229,54 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
             {
                 "control_type": odemis.gui.CONTROL_READONLY,
             },
+            # TODO: show the temperature in the alignment tab?
+            "temperature": {
+                "control_type": odemis.gui.CONTROL_NONE,
+            },
+        },
+        "e-beam":
+        {
+            "dwellTime":
+            {
+                "range": (1e-9, 10.0),  # TODO: actually only useful for the monochromator settings
+            },
+            # TODO: need better stream GUI with crop ratio (aka ROI) + resolution based on scale + ROI
+            "resolution":  # Read-only because ROI override it
+            {
+                "control_type": odemis.gui.CONTROL_READONLY,
+            },
+        },
+        "spectrometer":
+        {
+            "resolution":  # Read-only it shouldn't be changed by the user
+            {
+                "control_type": odemis.gui.CONTROL_READONLY,
+            },
+            "temperature": {
+                "control_type": odemis.gui.CONTROL_NONE,
+            },
+        },
+        "filter":
+        {
+            "band":  # to select the filter used
+            {
+                "label": "Filter",
+                "control_type": odemis.gui.CONTROL_COMBO,
+            },
+        },
+    },
+    "sparc2": {
+        "ccd":
+        {
+            "exposureTime":
+            {
+                "range": (0.01, 500.0),  # Typically much longer than on a SECOM
+            },
+            # TODO: need better stream GUI with crop ratio (aka ROI) + resolution based on scale + ROI
+            "resolution":  # Read-only because cropping is useless for the user
+            {
+                "control_type": odemis.gui.CONTROL_READONLY,
+            },
             "temperature": {
                 "control_type": odemis.gui.CONTROL_NONE,
             },
