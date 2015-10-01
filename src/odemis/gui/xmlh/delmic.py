@@ -139,7 +139,7 @@ class ButtonSizesParam(params.RadioBox):
 
 
 class ButtonFaceColourParam(params.RadioBox):
-    choices = {'Grey': 'def', 'Blue': 'blue'}
+    choices = {'Grey': 'def', 'Blue': 'blue', 'Red': 'red', 'Orange': 'orange'}
     default = 'def'
 
 ### ImageButton

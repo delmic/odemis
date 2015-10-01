@@ -216,6 +216,7 @@ class MainGUIData(object):
         # Like path/file format
         # Set to True to request debug info to be displayed
         self.debug = model.BooleanVA(False)
+        self.level = model.IntVA(0)
 
         # Current tab (+ all available tabs in choices as a dict tab -> name)
         # Fully set and managed later by the TabBarController.

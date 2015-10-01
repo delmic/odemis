@@ -108,42 +108,34 @@ class BtnMixin(object):
         'def': {
             'text_colour': "#1A1A1A",
             'text_col_dis': "#676767",
-            16: {
-                'off': imgdata.btn_def_16,
-                'on': imgdata.btn_def_16_a,
-            },
-            24: {
-                'off': imgdata.btn_def_24,
-                'on': imgdata.btn_def_24_a,
-            },
-            32: {
-                'off': imgdata.btn_def_32,
-                'on': imgdata.btn_def_32_a,
-            },
-            48: {
-                'off': imgdata.btn_def_48,
-                'on': imgdata.btn_def_48_a,
-            },
+            16: {'off': imgdata.btn_def_16, 'on': imgdata.btn_def_16_a},
+            24: {'off': imgdata.btn_def_24, 'on': imgdata.btn_def_24_a},
+            32: {'off': imgdata.btn_def_32, 'on': imgdata.btn_def_32_a},
+            48: {'off': imgdata.btn_def_48, 'on': imgdata.btn_def_48_a},
         },
         'blue': {
             'text_colour': wx.WHITE,
             'text_col_dis': "#AAAAAA",
-            16: {
-                'off': imgdata.btn_blue_16,
-                'on': imgdata.btn_blue_16_a,
-            },
-            24: {
-                'off': imgdata.btn_blue_24,
-                'on': imgdata.btn_blue_24_a,
-            },
-            32: {
-                'off': imgdata.btn_blue_32,
-                'on': imgdata.btn_blue_32_a,
-            },
-            48: {
-                'off': imgdata.btn_blue_48,
-                'on': imgdata.btn_blue_48_a,
-            },
+            16: {'off': imgdata.btn_blue_16, 'on': imgdata.btn_blue_16_a},
+            24: {'off': imgdata.btn_blue_24, 'on': imgdata.btn_blue_24_a},
+            32: {'off': imgdata.btn_blue_32, 'on': imgdata.btn_blue_32_a},
+            48: {'off': imgdata.btn_blue_48, 'on': imgdata.btn_blue_48_a},
+        },
+        'red': {
+            'text_colour': wx.WHITE,
+            'text_col_dis': "#AAAAAA",
+            16: {'off': imgdata.btn_red_16, 'on': imgdata.btn_red_16_a},
+            24: {'off': imgdata.btn_red_24, 'on': imgdata.btn_red_24_a},
+            32: {'off': imgdata.btn_red_32, 'on': imgdata.btn_red_32_a},
+            48: {'off': imgdata.btn_red_48, 'on': imgdata.btn_red_48_a},
+        },
+        'orange': {
+            'text_colour': wx.WHITE,
+            'text_col_dis': "#AAAAAA",
+            16: {'off': imgdata.btn_orange_16, 'on': imgdata.btn_orange_16_a},
+            24: {'off': imgdata.btn_orange_24, 'on': imgdata.btn_orange_24_a},
+            32: {'off': imgdata.btn_orange_32, 'on': imgdata.btn_orange_32_a},
+            48: {'off': imgdata.btn_orange_48, 'on': imgdata.btn_orange_48_a},
         },
     }
 
@@ -210,6 +202,14 @@ class BtnMixin(object):
             # print font.GetNativeFontInfoDesc()
             font.SetPointSize(self.btns['font_size'][self.height])
             self.SetFont(font)
+
+    def set_face_colour(self, color):
+        if color in self.btns:
+            self.face_colour = color
+            self._reset_bitmaps()
+            self.Refresh()
+        else:
+            raise ValueError("Uknown button colour")
 
     def SetForegroundColour(self, color):
         super(BtnMixin, self).SetForegroundColour(color)

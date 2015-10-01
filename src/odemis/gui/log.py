@@ -73,19 +73,22 @@ def init_logger(level=logging.DEBUG):
     log.addHandler(file_handler)
 
 
-def create_gui_logger(log_field, error_va=None):
+def create_gui_logger(log_field, debug_va=None, level_va=None):
     """
     Connect the log output to the text field instead of the standard output
     log_field (wx text field)
-    error_va (Boolean VigilantAttribute)
+    debug_va (Boolean VigilantAttribute)
     """
     # Create gui handler
     frm = "%(asctime)s %(levelname)-7s %(module)-15s: %(message)s"
     gui_format = logging.Formatter(frm, '%H:%M:%S')
     text_field_handler = TextFieldHandler()
     text_field_handler.setTextField(log_field)
-    if error_va is not None:
-        text_field_handler.setErrorVA(error_va)
+    if debug_va is not None:
+        text_field_handler.setDebugVA(debug_va)
+    if level_va is not None:
+        text_field_handler.setLevelVA(level_va)
+
     text_field_handler.setFormatter(gui_format)
     logging.debug("Switching to GUI logger")
 
@@ -128,7 +131,8 @@ class TextFieldHandler(logging.Handler):
         """ Call the parent constructor and initialize the handler """
         logging.Handler.__init__(self)
         self.textfield = None
-        self.error_va = None
+        self.debug_va = None
+        self.level_va = None
         self.cache = {
             0: [],
             1: []
@@ -140,8 +144,11 @@ class TextFieldHandler(logging.Handler):
         self.textfield = textfield
         self.textfield.Clear()
 
-    def setErrorVA(self, error_va):
-        self.error_va = error_va
+    def setDebugVA(self, debug_va):
+        self.debug_va = debug_va
+
+    def setLevelVA(self, level_va):
+        self.level_va = level_va
 
     def emit(self, record):
         """ Write a record, in colour, to a text field. """
@@ -154,6 +161,9 @@ class TextFieldHandler(logging.Handler):
                 text_style = self.TEXT_STYLES[2]
             else:
                 text_style = self.TEXT_STYLES[3]
+
+            if self.level_va and record.levelno > self.level_va.value:
+                self.level_va.value = record.levelno
 
             # FIXME: still seems to be possible to completely hog the GUI by
             # logging too much. A way to fix it would be to run the textfield

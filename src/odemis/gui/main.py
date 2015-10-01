@@ -138,7 +138,7 @@ class OdemisGUIApp(wx.App):
         self.main_frame = main_xrc.xrcfr_main(None)
 
         self.init_gui()
-        log.create_gui_logger(self.main_frame.txt_log, self.main_data.debug)
+        log.create_gui_logger(self.main_frame.txt_log, self.main_data.debug, self.main_data.level)
 
         # Application successfully launched
         return True
@@ -153,6 +153,7 @@ class OdemisGUIApp(wx.App):
             self.main_frame.SetIcons(ib)
 
             self.main_data.debug.subscribe(self.on_debug_va, init=True)
+            self.main_data.level.subscribe(self.on_level_va, init=False)
 
             # List of all possible tabs used in Odemis' main GUI
             # microscope role(s), internal name, class, tab btn, tab panel
@@ -298,12 +299,29 @@ class OdemisGUIApp(wx.App):
             for tab in self.tab_controller.get_tabs():
                 if hasattr(tab.panel, 'btn_log'):
                     tab.panel.btn_log.SetIcon(imgdata.ico_chevron_down.Bitmap)
+                    # Reset highest log level
+                    self.main_data.level.value = 0
         else:
             for tab in self.tab_controller.get_tabs():
                 if hasattr(tab.panel, 'btn_log'):
                     tab.panel.btn_log.SetIcon(imgdata.ico_chevron_up.Bitmap)
             l.setLevel(self.log_level)
         self.main_frame.Layout()
+
+    @call_in_wx_main
+    def on_level_va(self, log_level):
+        """ Set the log button color """
+        colour = 'def'
+
+        if log_level >= logging.ERROR:
+            colour = 'red'
+        elif log_level >= logging.WARNING:
+            colour = 'orange'
+
+        for tab in self.tab_controller.get_tabs():
+            if hasattr(tab.panel, 'btn_log'):
+                tab.panel.btn_log.set_face_colour(colour)
+
 
     def on_close_window(self, evt=None):
         """ This method cleans up and closes the Odemis GUI. """
