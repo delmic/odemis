@@ -1937,8 +1937,8 @@
                   <orient>wxHORIZONTAL</orient>
                   <object class="sizeritem">
                     <object class="GraphicRadioButton" name="btn_align_lens">
-                      <icon>img/icon/ico_ang.png</icon>
-                      <icon_on>img/icon/ico_ang_green.png</icon_on>
+                      <icon>img/icon/ico_lens.png</icon>
+                      <icon_on>img/icon/ico_lens_green.png</icon_on>
                       <height>48</height>
                       <face_colour>def</face_colour>
                       <label>LENS</label>
@@ -1959,8 +1959,8 @@
                   </object>
                   <object class="sizeritem">
                     <object class="GraphicRadioButton" name="btn_align_mirror">
-                      <icon>img/icon/ico_ang.png</icon>
-                      <icon_on>img/icon/ico_ang_green.png</icon_on>
+                      <icon>img/icon/ico_mirror.png</icon>
+                      <icon_on>img/icon/ico_mirror_green.png</icon_on>
                       <height>48</height>
                       <face_colour>def</face_colour>
                       <label>MIRROR</label>
