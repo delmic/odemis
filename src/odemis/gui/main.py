@@ -154,9 +154,6 @@ class OdemisGUIApp(wx.App):
 
             self.main_data.debug.subscribe(self.on_debug_va, init=True)
 
-            self.main_frame.btn_log.Bind(wx.EVT_BUTTON, self.on_log_button)
-            self.main_frame.txt_error.Bind(wx.EVT_LEFT_UP, self.on_log_button)
-
             # List of all possible tabs used in Odemis' main GUI
             # microscope role(s), internal name, class, tab btn, tab panel
             # order matters, as the first matching tab is be the default one
@@ -286,13 +283,6 @@ class OdemisGUIApp(wx.App):
         opening the log panel. """
 
         self.main_frame.txt_log.Show(enabled)
-        self.main_frame.txt_error.Show(not enabled)
-
-        if enabled:
-            self.main_frame.pnl_log.SetBackgroundColour(BG_COLOUR_LEGEND)
-            self.main_frame.btn_log.SetIcon(imgdata.ico_chevron_down.Bitmap)
-        else:
-            self.main_frame.btn_log.SetIcon(imgdata.ico_chevron_up.Bitmap)
 
         l = logging.getLogger()
         if enabled:
@@ -301,10 +291,6 @@ class OdemisGUIApp(wx.App):
         else:
             l.setLevel(self.log_level)
         self.main_frame.Layout()
-
-    def on_log_button(self, evt):
-        """ Update the debug VA according to the menu"""
-        self.main_data.debug.value = not self.main_data.debug.value
 
     def on_close_window(self, evt=None):
         """ This method cleans up and closes the Odemis GUI. """
@@ -353,14 +339,6 @@ class OdemisGUIApp(wx.App):
                     rmt_exc = ""
                 logging.error("".join(exc) + rmt_exc)
 
-                # When an exception occurs, automatically got to debug mode.
-                if not isinstance(value, NotImplementedError):
-                    try:
-                        self.main_frame.pnl_log.SetBackgroundColour(BG_COLOUR_ERROR)
-                        self.main_frame.txt_error.SetLabel(exc[-1])
-                        self.main_frame.txt_error.Parent.Layout()
-                    except:
-                        pass
             finally:
                 # put us back
                 sys.excepthook = self.excepthook

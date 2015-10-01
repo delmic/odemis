@@ -6,22 +6,21 @@ Copyright © 2012 Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms
-of the GNU General Public License version 2 as published by the Free Software
-Foundation.
+Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU
+General Public License version 2 as published by the Free Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
-PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even
+the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
+Public License for more details.
 
-You should have received a copy of the GNU General Public License along with
-Odemis. If not, see http://www.gnu.org/licenses/. """
+You should have received a copy of the GNU General Public License along with Odemis. If not,
+see http://www.gnu.org/licenses/. """
 
 from __future__ import division
 import logging
 from logging.handlers import RotatingFileHandler
 from odemis.gui import FG_COLOUR_ERROR, FG_COLOUR_WARNING, FG_COLOUR_DIS, \
-    FG_COLOUR_MAIN, BG_COLOUR_LEGEND
+    FG_COLOUR_MAIN
 import os.path
 import sys
 import wx

@@ -62,10 +62,7 @@ class xrcfr_main(wx.Frame):
         self.btn_tab_sparc_align = xrc.XRCCTRL(self, "btn_tab_sparc_align")
         self.btn_tab_sparc2_align = xrc.XRCCTRL(self, "btn_tab_sparc2_align")
         self.logo = xrc.XRCCTRL(self, "logo")
-        self.btn_log = xrc.XRCCTRL(self, "btn_log")
-        self.pnl_log = xrc.XRCCTRL(self, "pnl_log")
         self.txt_log = xrc.XRCCTRL(self, "txt_log")
-        self.txt_error = xrc.XRCCTRL(self, "txt_error")
 
 
 
@@ -461,7 +458,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource class="ImageTextButton" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -790,84 +787,29 @@ def __init_resources():
         <flag>wxEXPAND</flag>
         <minsize>-1,40</minsize>
       </object>
-      <object class="sizeritem">
-        <object class="wxBoxSizer">
-          <object class="sizeritem">
-            <object class="wxPanel">
-              <object class="wxBoxSizer">
-                <orient>wxVERTICAL</orient>
-                <object class="sizeritem">
-                  <object class="ImageButton" name="btn_log">
-                    <size>12,-1</size>
-                    <icon>img_icon_ico_chevron_up_png</icon>
-                    <height>16</height>
-                    <face_colour>def</face_colour>
-                    <tooltip>Toggle log message window</tooltip>
-                    <style>wxALIGN_CENTRE</style>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                  </object>
-                  <flag>wxALL</flag>
-                  <border>4</border>
-                </object>
-              </object>
-              <size>20,-1</size>
-              <bg>#1A1A1A</bg>
-            </object>
-            <flag>wxTOP|wxRIGHT|wxEXPAND</flag>
-            <border>2</border>
-          </object>
-          <object class="sizeritem">
-            <object class="wxPanel" name="pnl_log">
-              <object class="wxBoxSizer">
-                <orient>wxVERTICAL</orient>
-                <object class="sizeritem">
-                  <object class="wxTextCtrl" name="txt_log">
-                    <size>-1,200</size>
-                    <value>Log message panel</value>
-                    <bg>#1A1A1A</bg>
-                    <font>
-                      <size>10</size>
-                      <style>normal</style>
-                      <weight>normal</weight>
-                      <underlined>0</underlined>
-                      <face>Monospace</face>
-                    </font>
-                    <hidden>1</hidden>
-                    <style>wxBORDER_NONE|wxTE_MULTILINE</style>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                  </object>
-                  <flag>wxEXPAND</flag>
-                </object>
-                <object class="sizeritem">
-                  <object class="wxStaticText" name="txt_error">
-                    <size>-1,20</size>
-                    <fg>#1A1A1A</fg>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                  </object>
-                  <flag>wxTOP|wxLEFT|wxEXPAND</flag>
-                  <border>4</border>
-                </object>
-              </object>
-              <bg>#1A1A1A</bg>
-              <XRCED>
-                <assign_var>1</assign_var>
-              </XRCED>
-            </object>
-            <option>2</option>
-            <flag>wxTOP|wxEXPAND</flag>
-            <border>2</border>
-          </object>
-          <orient>wxHORIZONTAL</orient>
-        </object>
-        <flag>wxEXPAND</flag>
-      </object>
+
       <orient>wxVERTICAL</orient>
+      <object class="sizeritem">
+        <object class="wxTextCtrl" name="txt_log">
+          <size>-1,200</size>
+          <value>Log message panel</value>
+          <bg>#1A1A1A</bg>
+          <font>
+            <size>10</size>
+            <style>normal</style>
+            <weight>normal</weight>
+            <underlined>0</underlined>
+            <face>Monospace</face>
+          </font>
+          <hidden>1</hidden>
+          <style>wxBORDER_NONE|wxTE_MULTILINE</style>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <flag>wxTOP|wxLEFT|wxRIGHT|wxEXPAND</flag>
+        <border>2</border>
+      </object>
     </object>
     <title>Odemis</title>
     <centered>1</centered>
@@ -3058,7 +3000,6 @@ def __init_resources():
               <minsize>400,400</minsize>
             </object>
             <orient>wxVERTICAL</orient>
-          
           </object>
           <size>400,-1</size>
           <bg>#333333</bg>
@@ -4919,16 +4860,6 @@ z~:\xbb\xc1\xd5|\xdeK1\xc1\xa2qtQ\xfb<\x0f\xe0\xe7\\f\x8af~\xf5\xf3\xa8\
 \xd1\xf2Q\xdd\x18\xb5\xf0\x91j\x06/\x06\xed_\x89pz\x15\xed\xfbW\x08\x00\
 \x00\x00\x00IEND\xaeB`\x82'''
 
-    img_icon_ico_chevron_up_png = '''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x08\x00\x00\x00
-\x08\x06\x00\x00\x00\x89\xc7\x1f\x80\x00\x00\x00KIDAT\x18\x95c`@\x05\x12\
-P\x8c\x15\x80$^B1\x86"f \xde\x07\xc4\xf5@\xdc\x00\xc4{\xa1bp\xd0\x08\xc4\
-{\xa0\x82\xccPv\x03LR\x1b\x88\x9f \xd9\x0f\xc3O\xa0r` \x8e\xc5\x0d\xe2\xb4\
-q\x03\xb2\x971\xdc\x80\x0e\xc0b\x00B\x1c\x13[\x27\xbc\x9a\xd0\x00\x00\x00\
-\x00IEND\xaeB`\x82'''
-
     img_icon_ico_sem_png = '''\
 \x89PNG\x0d
 \x1a
@@ -5530,7 +5461,6 @@ U\x8a\xf3\x13\x13\x84\xf18A\xa9\xc4J_\x1fa"\xc1\xd5l\x16\xa7\xa3\x83\x93\
 
     wx.MemoryFSHandler.AddFile('XRC/main/main_xrc', main_xrc)
     wx.MemoryFSHandler.AddFile('XRC/main/img_logo_h30_png', img_logo_h30_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_chevron_up_png', img_icon_ico_chevron_up_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_sem_png', img_icon_ico_sem_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_sem_green_png', img_icon_ico_sem_green_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_optical_png', img_icon_ico_optical_png)
