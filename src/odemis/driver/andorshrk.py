@@ -375,8 +375,8 @@ class Shamrock(model.Actuator):
                 logging.info("Filter wheel added as 'band'")
             else:
                 if bands is not None:
-                    raise ValueError("Device %d has no filter wheel, but 'bands'"
-                                     " argument provided." % (bands,))
+                    raise ValueError("Device %s has no filter wheel, but 'bands'"
+                                     " argument provided." % (device,))
                 logging.info("Filter wheel is not present")
 
             # add slits which are available
