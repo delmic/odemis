@@ -42,9 +42,9 @@ class TestLogWindow(test.GuiTestCase):
         log.create_gui_logger(self.frame.txt_log)
 
         def log_msg():
-            for i in xrange(5000):
+            for i in xrange(50000):
                 random.choice(LOG_FUNCTIONS)("WEEEEEE %d" % i)
-                # threading._sleep(0.001)
+                threading._sleep(0.0001)
 
         t = threading.Thread(target=log_msg)
         # Setting Daemon to True, will cause the thread to exit when the parent does

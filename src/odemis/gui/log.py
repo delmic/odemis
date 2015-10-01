@@ -165,35 +165,38 @@ class TextFieldHandler(logging.Handler):
             self.cache[self.current_cache].append((record, text_style))
             self.write_to_field()
 
-    @wxlimit_invocation(0.1)
+    @wxlimit_invocation(0.2)
     def write_to_field(self):
 
         if self._locked:
             return
         self._locked = True
+        # Cache that we are going to write
+        write_cache = self.current_cache
+        # Swap caches, so new messages get added to the other cache
         self.current_cache = int(not self.current_cache)
 
-        cache = self.cache[int(not self.current_cache)]
+        cache = self.cache[write_cache]
         prev_style = None
 
         # Process at most the latest 'LOG_LINES' messasges
         for record, text_style in cache[-LOG_LINES:]:
-            nb_lines = self.textfield.GetNumberOfLines()
-            nb_old = nb_lines - LOG_LINES
-            if nb_old > 0:
-                # Removes the characters from position 0 up to and including the Nth line break
-                first_new = 0
-                txt = self.textfield.Value
-                for i in range(nb_old):
-                    first_new = txt.find('\n', first_new) + 1
-
-                self.textfield.Remove(0, first_new)
-
             if prev_style != text_style:
                 self.textfield.SetDefaultStyle(text_style)
                 prev_style = text_style
             self.textfield.AppendText("\n" + self.format(record))
 
-        self.cache[int(not self.current_cache)] = []
+        nb_lines = self.textfield.GetNumberOfLines()
+        nb_old = nb_lines - LOG_LINES
+        if nb_old > 0:
+            # Removes the characters from position 0 up to and including the Nth line break
+            first_new = 0
+            txt = self.textfield.Value
+            for i in range(nb_old):
+                first_new = txt.find('\n', first_new) + 1
+
+            self.textfield.Remove(0, first_new)
+
+        self.cache[write_cache] = []
         self._locked = False
         self.textfield.Refresh()
