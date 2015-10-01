@@ -608,10 +608,6 @@ class SparcAcquisitionTab(Tab):
             detvas=get_hw_settings(main_data.sed),
         )
 
-        # TODO: do not put local magnification/hfw VA, but just the global one,
-        # so that if SEM is not playing, but CLi (or other stream with e-beam as
-        # emitter) is, then it's possible to change it.
-        self._sem_live_stream = sem_stream
         sem_stream.should_update.value = True  # TODO: put it in _streams_to_restart instead?
         self.tab_data_model.acquisitionView.addStream(sem_stream)  # it should also be saved
 
@@ -748,6 +744,11 @@ class SparcAcquisitionTab(Tab):
             self.stream_controller,
         )
 
+        # Force SEM view fit to content when magnification is updated
+        if not (hasattr(main_data.ebeam, "horizontalFoV")
+                and isinstance(main_data.ebeam.horizontalFoV, model.VigilantAttributeBase)):
+            main_data.ebeam.magnification.subscribe(self._onSEMMag)
+
     @property
     def stream_controller(self):
         return self._stream_controller
@@ -777,6 +778,21 @@ class SparcAcquisitionTab(Tab):
             assert all(0 <= p <= 1 for p in pos)
             # Just use the same value for LT and RB points
             self.tab_data_model.spotStream.roi.value = (pos + pos)
+
+    def _onSEMMag(self, mag):
+        """
+        Called when user enters a new SEM magnification
+        """
+        # Restart the stream and fit view to content when we get a new image
+        cur_stream = self.tab_data_model.streams.value[0]
+        ebeam = self.tab_data_model.main.ebeam
+        if cur_stream.is_active.value and cur_stream.emitter is ebeam:
+            # Restarting is nice because it will get a new image faster, but
+            # the main advantage is that it avoids receiving one last image
+            # with the old magnification, which would confuse fit_view_to_next_image.
+            cur_stream.is_active.value = False
+            cur_stream.is_active.value = True
+        self.panel.vp_sparc_tl.canvas.fit_view_to_next_image = True
 
     def on_acquisition(self, is_acquiring):
         # TODO: Make sure nothing can be modified during acquisition
