@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# To rebuild just the cython modules, use this command:
+# To rebuild just the cython modules, use these commands:
+# sudo apt-get install python-setuptools cython
 # python setup.py build_ext --inplace
 
 from setuptools import setup, find_packages
