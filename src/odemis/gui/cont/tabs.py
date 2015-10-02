@@ -2344,20 +2344,6 @@ class Sparc2AlignTab(Tab):
         panel.html_alignment_doc.SetBorders(0)  # sizer already give us borders
         panel.html_alignment_doc.LoadPage(doc_path)
 
-        # TODO: add streams:
-        # * MomentOfInertia stream (moi): used to align the mirror. Used both
-        #   for the spatial image and the spot size measurement, and for the
-        #   chronograph of the MoI at center.
-        # * ebeam spot (spot): Used to force the ebeam to spot mode in lens
-        #   and center alignment.
-        # * spectrograph line (spec_line): used for focusing/showing a line in
-        #   lens alignment.
-        # * AR CCD (ccd): Used to show CL spot during the alignment of the lens1,
-        #   and to show the mirror shadow in center alignment
-        # * RGB stream (goal image): To show the goal image in center alignment
-        # TODO: have a special stream that does CCD + ebeam spot? (to avoid the ebeam spot)
-
-
         # Create stream & view
         self._stream_controller = streamcont.StreamBarController(
             tab_data,
@@ -2371,24 +2357,53 @@ class Sparc2AlignTab(Tab):
                 {
                     "cls": guimod.ContentView,
                     "name": "Lens alignment",
+                    "stream_classes": acqstream.CameraStream,
                 }
             ),
             (self.panel.vp_moi,
                 {
                     "cls": guimod.ContentView,
                     "name": "Moment of Inertia",
+                    "stream_classes": acqstream.MomentOfInertiaStream,
                 }
             ),
             (self.panel.vp_align_center,
                 {
                     "cls": guimod.ContentView,
                     "name": "Center alignment",
+                    "stream_classes": (acqstream.CameraStream, acqstream.RGBStream),
                 }
             ),
         ))
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
         self.panel.vp_align_lens.microscope_view.show_crosshair.value = False
         self.panel.vp_align_center.microscope_view.show_crosshair.value = False
+
+        # TODO: add streams:
+        # * MomentOfInertia stream (moi): used to align the mirror. Used both
+        #   for the spatial image and the spot size measurement, and for the
+        #   chronograph of the MoI at center.
+        # * ebeam spot (spot): Used to force the ebeam to spot mode in lens
+        #   and center alignment.
+        # * spectrograph line (spec_line): used for focusing/showing a line in
+        #   lens alignment.
+        # * AR CCD (ccd): Used to show CL spot during the alignment of the lens1,
+        #   and to show the mirror shadow in center alignment
+        # * RGB stream (goal image): To show the goal image in center alignment
+        # TODO: have a special stream that does CCD + ebeam spot? (to avoid the ebeam spot)
+
+        # MomentOfInertiaStream needs an SEM stream and a CCD stream
+        moisem = acqstream.SEMStream("SEM for MoI", main_data.sed, main_data.sed.data, main_data.ebeam)
+        moiccd = acqstream.ARSettingsStream("CCD for MoI", main_data.ccd, main_data.ccd.data, main_data.ebeam)
+                                            # TODO: add det_vas, for all ccd vas, and initialise at good values
+        moiccd.roi.value = (0.1, 0.1, 0.9, 0.9)  # TODO: or full view?
+        moiccd.repetition.value = (9, 9)
+        mois = acqstream.MomentOfInertiaStream("MoI", moisem, moiccd)
+        # TODO: or shall we show the moiccd entry ? Or we need a MomentOfInertiaStream which is more self-contained?
+        mois_spe = self._stream_controller.addStream(mois, add_to_all_views=True)
+        mois_spe.stream_panel.flatten()  # No need for the stream name
+        self._mois = mois
+
 
         # The mirror center (with the lens set) is defined as pole position
         # in the microscope configuration file.
@@ -2471,7 +2486,8 @@ class Sparc2AlignTab(Tab):
             # AR image)
         elif mode == "mirror-align":
             # TODO: show the vp_mirror_align & play the MoI stream & stop the other streams
-            # self._moi_stream.should_update.value = True
+            self._mois.should_update.value = True
+            self.tab_data_model.focussedView.value = self.panel.vp_moi.microscope_view
             self.panel.pnl_mirror.Enable(True)
             self.panel.html_alignment_doc.Show(True)
             self.panel.pnl_lens_mover.Enable(False)

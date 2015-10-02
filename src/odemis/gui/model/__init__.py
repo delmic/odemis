@@ -1058,7 +1058,7 @@ class ContentView(StreamView):
             # Move the center's view to the center of this new image
             try:
                 pos = im.metadata[MD_POS]
-            except IndexError:
+            except KeyError:
                 pass
             else:
                 self.view_pos.value = pos

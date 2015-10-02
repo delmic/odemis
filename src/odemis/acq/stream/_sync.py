@@ -988,6 +988,13 @@ class MomentOfInertiaStream(SEMCCDMDStream):
 
     def __init__(self, name, main_stream, rep_stream):
         super(MomentOfInertiaStream, self).__init__(name, main_stream, rep_stream)
+        # They are needed to look like a LiveStream
+        self._detector = rep_stream.detector
+        self._emitter = rep_stream.emitter
+        self._focuser = rep_stream.focuser
+        self.hw_vas = {}
+        self._det_vas = {}
+        self._emt_vas = {}
 
         self.is_active.subscribe(self._onActive)
 
@@ -1001,7 +1008,7 @@ class MomentOfInertiaStream(SEMCCDMDStream):
         self._image_n = 1
         # DataArray or None: RGB projection of the raw data
         self.image = model.VigilantAttribute(None)
-        self.image.value = model.DataArray([])  # start with an empty array
+        # self.image.value = model.DataArray([])  # start with an empty array
 
     @limit_invocation(0.1)
     def _updateImage(self):
