@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<resource class="ImageTextButton" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<resource version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -328,84 +328,28 @@
         <flag>wxEXPAND</flag>
         <minsize>-1,40</minsize>
       </object>
-      <object class="sizeritem">
-        <object class="wxBoxSizer">
-          <object class="sizeritem">
-            <object class="wxPanel">
-              <object class="wxBoxSizer">
-                <orient>wxVERTICAL</orient>
-                <object class="sizeritem">
-                  <object class="ImageButton" name="btn_log">
-                    <size>12,-1</size>
-                    <icon>img/icon/ico_chevron_up.png</icon>
-                    <height>16</height>
-                    <face_colour>def</face_colour>
-                    <tooltip>Toggle log message window</tooltip>
-                    <style>wxALIGN_CENTRE</style>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                  </object>
-                  <flag>wxALL</flag>
-                  <border>4</border>
-                </object>
-              </object>
-              <size>20,-1</size>
-              <bg>#1A1A1A</bg>
-            </object>
-            <flag>wxTOP|wxRIGHT|wxEXPAND</flag>
-            <border>2</border>
-          </object>
-          <object class="sizeritem">
-            <object class="wxPanel" name="pnl_log">
-              <object class="wxBoxSizer">
-                <orient>wxVERTICAL</orient>
-                <object class="sizeritem">
-                  <object class="wxTextCtrl" name="txt_log">
-                    <size>-1,200</size>
-                    <value>Log message panel</value>
-                    <bg>#1A1A1A</bg>
-                    <font>
-                      <size>10</size>
-                      <style>normal</style>
-                      <weight>normal</weight>
-                      <underlined>0</underlined>
-                      <face>Monospace</face>
-                    </font>
-                    <hidden>1</hidden>
-                    <style>wxBORDER_NONE|wxTE_MULTILINE</style>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                  </object>
-                  <flag>wxEXPAND</flag>
-                </object>
-                <object class="sizeritem">
-                  <object class="wxStaticText" name="txt_error">
-                    <size>-1,20</size>
-                    <fg>#1A1A1A</fg>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                  </object>
-                  <flag>wxTOP|wxLEFT|wxEXPAND</flag>
-                  <border>4</border>
-                </object>
-              </object>
-              <bg>#1A1A1A</bg>
-              <XRCED>
-                <assign_var>1</assign_var>
-              </XRCED>
-            </object>
-            <option>2</option>
-            <flag>wxTOP|wxEXPAND</flag>
-            <border>2</border>
-          </object>
-          <orient>wxHORIZONTAL</orient>
-        </object>
-        <flag>wxEXPAND</flag>
-      </object>
       <orient>wxVERTICAL</orient>
+      <object class="sizeritem">
+        <object class="wxTextCtrl" name="txt_log">
+          <size>-1,200</size>
+          <value>Log message panel</value>
+          <bg>#1A1A1A</bg>
+          <font>
+            <size>10</size>
+            <style>normal</style>
+            <weight>normal</weight>
+            <underlined>0</underlined>
+            <face>Monospace</face>
+          </font>
+          <hidden>1</hidden>
+          <style>wxBORDER_NONE|wxTE_MULTILINE</style>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <flag>wxTOP|wxLEFT|wxRIGHT|wxEXPAND</flag>
+        <border>2</border>
+      </object>
     </object>
     <title>Odemis</title>
     <centered>1</centered>
@@ -929,6 +873,20 @@
               </object>
               <flag>wxTOP|wxEXPAND|wxALIGN_BOTTOM|wxALIGN_CENTRE_VERTICAL</flag>
               <border>24</border>
+            </object>
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="ImageButton" name="btn_log">
+                <icon>img/icon/ico_chevron_up.png</icon>
+                <height>16</height>
+                <face_colour>def</face_colour>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
             </object>
           </object>
           <size>300,-1</size>
@@ -1856,6 +1814,22 @@
               <flag>wxEXPAND</flag>
             </object>
             <orient>wxVERTICAL</orient>
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="ImageButton" name="btn_log">
+                <icon>img/icon/ico_chevron_up.png</icon>
+                <height>16</height>
+                <face_colour>def</face_colour>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALL</flag>
+              <border>10</border>
+            </object>
           </object>
           <fg>#E5E5E5</fg>
           <bg>#333333</bg>
@@ -1963,8 +1937,8 @@
                   <orient>wxHORIZONTAL</orient>
                   <object class="sizeritem">
                     <object class="GraphicRadioButton" name="btn_align_lens">
-                      <icon>img/icon/ico_ang.png</icon>
-                      <icon_on>img/icon/ico_ang_green.png</icon_on>
+                      <icon>img/icon/ico_lens.png</icon>
+                      <icon_on>img/icon/ico_lens_green.png</icon_on>
                       <height>48</height>
                       <face_colour>def</face_colour>
                       <label>LENS</label>
@@ -1985,8 +1959,8 @@
                   </object>
                   <object class="sizeritem">
                     <object class="GraphicRadioButton" name="btn_align_mirror">
-                      <icon>img/icon/ico_ang.png</icon>
-                      <icon_on>img/icon/ico_ang_green.png</icon_on>
+                      <icon>img/icon/ico_mirror.png</icon>
+                      <icon_on>img/icon/ico_mirror_green.png</icon_on>
                       <height>48</height>
                       <face_colour>def</face_colour>
                       <label>MIRROR</label>
@@ -2490,6 +2464,22 @@
               <flag>wxALL|wxEXPAND|wxALIGN_BOTTOM|wxALIGN_CENTRE_VERTICAL</flag>
               <border>10</border>
             </object>
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="ImageButton" name="btn_log">
+                <icon>img/icon/ico_chevron_up.png</icon>
+                <height>16</height>
+                <face_colour>def</face_colour>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALL</flag>
+              <border>10</border>
+            </object>
           </object>
           <fg>#E5E5E5</fg>
           <bg>#333333</bg>
@@ -2596,7 +2586,6 @@
               <minsize>400,400</minsize>
             </object>
             <orient>wxVERTICAL</orient>
-          
           </object>
           <size>400,-1</size>
           <bg>#333333</bg>
@@ -2709,6 +2698,20 @@
               </object>
               <flag>wxALL|wxEXPAND</flag>
               <border>10</border>
+            </object>
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="ImageButton" name="btn_log">
+                <icon>img/icon/ico_chevron_up.png</icon>
+                <height>16</height>
+                <face_colour>def</face_colour>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
             </object>
           </object>
           <size>300,-1</size>
@@ -2949,6 +2952,22 @@
               <option>1</option>
               <flag>wxBOTTOM|wxEXPAND</flag>
               <border>44</border>
+            </object>
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="ImageButton" name="btn_log">
+                <icon>img/icon/ico_chevron_up.png</icon>
+                <height>16</height>
+                <face_colour>def</face_colour>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALL</flag>
+              <border>10</border>
             </object>
           </object>
           <size>200,-1</size>
@@ -3401,6 +3420,22 @@
               <border>44</border>
             </object>
             <orient>wxVERTICAL</orient>
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="ImageButton" name="btn_log">
+                <icon>img/icon/ico_chevron_up.png</icon>
+                <height>16</height>
+                <face_colour>def</face_colour>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALL</flag>
+              <border>10</border>
+            </object>
           </object>
           <size>200,-1</size>
           <bg>#333333</bg>
@@ -3740,6 +3775,22 @@
               <option>1</option>
               <flag>wxBOTTOM|wxEXPAND</flag>
               <border>44</border>
+            </object>
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="ImageButton" name="btn_log">
+                <icon>img/icon/ico_chevron_up.png</icon>
+                <height>16</height>
+                <face_colour>def</face_colour>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALL</flag>
+              <border>10</border>
             </object>
           </object>
           <size>200,-1</size>

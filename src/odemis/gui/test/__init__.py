@@ -99,9 +99,6 @@ class GuiTestApp(wx.App):
 
     def OnInit(self):
         self.test_frame = self.test_frame(None)  # odemis.gui.test.test_gui.xrccanvas_frame(None)
-        self.test_frame.SetSize((400, 400))
-        self.test_frame.Center()
-        self.test_frame.Layout()
 
         # Process menu items if any
         menu_bar = self.test_frame.GetMenuBar()
@@ -147,6 +144,7 @@ class GuiTestCase(unittest.TestCase):
 
     frame_class = None
     app_class = None
+    frame_size = (400, 400)
 
     @classmethod
     def setUpClass(cls):
@@ -155,6 +153,9 @@ class GuiTestCase(unittest.TestCase):
         cls.app_class = cls.app_class or GuiTestApp
         cls.app = cls.app_class(cls.frame_class)
         cls.frame = cls.app.test_frame
+        cls.frame.SetSize(cls.frame_size)
+        cls.frame.Center()
+        cls.frame.Layout()
         cls.panel = cls.app.panel_finder(cls.app.test_frame)
         cls.sizer = cls.panel.GetSizer()
 
