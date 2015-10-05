@@ -90,10 +90,10 @@ class TestAutofocus(unittest.TestCase):
         """
         input = self.fake_img
 
-        prev_res = autofocus.MeasureImageFocus(input)
+        prev_res = autofocus.MeasureSEMFocus(input)
         for i in range(1, 10, 1):
             input = ndimage.gaussian_filter(input, sigma=i)
-            res = autofocus.MeasureImageFocus(input)
+            res = autofocus.MeasureSEMFocus(input)
             self.assertGreater(prev_res, res)
             prev_res = res
 
