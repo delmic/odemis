@@ -1,3 +1,14 @@
+odemis (2.2.2-1ubuntu1) precise; urgency=low
+
+  * New version: 2.2.2
+  * Bug fixed and improvements:
+    - SEM acquisition could freeze if cancelled while a big area was acquired (1024x1024+)
+    - Light power information was not saved in the file metadata (SECOM/DELPHI)
+    - Automatically resize the SEM view if the SEM magnification is updated (SPARC)
+    - GUI would freeze if attempting to display a spectrum with all the same intensities (SPARC)
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Mon, 05 Oct 2015 08:57:46 +0200
+
 odemis (2.2.1-1ubuntu1) precise; urgency=low
 
   * New version: 2.2.1
