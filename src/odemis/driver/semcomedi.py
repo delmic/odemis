@@ -2378,7 +2378,7 @@ class Writer(Accesser):
         if self.thread and self.thread.isAlive():
             # It could be due to the write being cancelled
             # => check the thread is ending well
-            self.thread.join(0.5)
+            self.thread.join(0.6)
             if self.thread.isAlive():
                 self.cancel()  # maybe that helps?
                 raise IOError("Write timeout while device is idle")
@@ -2420,22 +2420,20 @@ class Writer(Accesser):
                 # is sufficient, but for being sure we set a good rest position,
                 # we write both channels.
                 time.sleep(0.01)  # necessary, for even less clear reasons
-                if not self.thread.isAlive():
-                    return
                 pos, channels, ranges = self.parent._scanner.get_resting_point_data()
-                logging.debug("Cancelling by setting to rest position at %s", pos)
-                for i, p in enumerate(pos):
-                    comedi.data_write(self._device, self._subdevice,
-                            channels[i], ranges[i], comedi.AREF_GROUND, int(p))
+                # In a loop because sometimes the sleep is not long enough, and
+                # so we need to convince comedi again to unblock the write()
+                for i in range(5):
+                    if not self.thread.isAlive():
+                        return
+                    logging.debug("Cancelling by setting to rest position at %s", pos)
+                    for i, p in enumerate(pos):
+                        comedi.data_write(self._device, self._subdevice,
+                                channels[i], ranges[i], comedi.AREF_GROUND, int(p))
 
-                self.thread.join(0.5)
-                if self.thread.isAlive():
+                    self.thread.join(0.1)
+                else:
                     logging.warning("Writer thread seems blocked after cancel")
-                    # Maybe the first sleep was not enough? Sometimes another
-                    # write() helps.
-                    comedi.data_write(self._device, self._subdevice,
-                            channels[0], ranges[0], comedi.AREF_GROUND, int(pos[0]))
-                    self.thread.join(0.5)
         except comedi.ComediError:
             logging.debug("Failed to cancel write")
 
