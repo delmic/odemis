@@ -189,6 +189,7 @@ def _DoAutoFocus(future, detector, min_step, et, focus, dfbkg):
             f = focus.moveAbs({"z": pos_max})
             f.result()
             step_cntr += 1
+        return focus.position.value.get('z'), best_fm
 
     except CancelledError:
         pos = focus.position.value.get('z')
