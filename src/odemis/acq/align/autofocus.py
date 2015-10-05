@@ -270,7 +270,7 @@ def AutoFocus(detector, emt, focus, dfbkg=None):
     # use the .depthOfField on detector or emitter as maximum stepsize
     avail_depths = (detector, emt)
     if focus.role == "ebeam-focus":
-        avail_depths = (emt)
+        avail_depths = (emt, detector)
     for c in avail_depths:
         if hasattr(c, "depthOfField") and isinstance(c.depthOfField, model.VigilantAttributeBase):
             dof = c.depthOfField.value
