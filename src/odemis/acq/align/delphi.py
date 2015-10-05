@@ -294,10 +294,10 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
             escan.shift.value = (0, 0)
             escan.dwellTime.value = 5e-06
             det_dataflow = detector.data
+            ccd.binning.value = min((8, 8), ccd.binning.range[1])
             f = autofocus.AutoFocus(ccd, escan, ebeam_focus, dfbkg=det_dataflow)
             f.result()
             # Re-apply optical autofocus to be safe in case of inaccuracy
-            ccd.binning.value = min((8, 8), ccd.binning.range[1])
             f = autofocus.AutoFocus(ccd, escan, focus, dfbkg=det_dataflow)
             f.result()
             ccd.binning.value = (1, 1)
