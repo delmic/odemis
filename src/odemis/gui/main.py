@@ -33,8 +33,7 @@ import os
 
 from odemis import model, gui
 import odemis
-from odemis.gui import main_xrc, log, BG_COLOUR_ERROR, BG_COLOUR_LEGEND
-from odemis.gui.comp.buttons import ImageButton
+from odemis.gui import main_xrc, log
 from odemis.gui.cont import acquisition
 from odemis.gui.cont.menu import MenuController
 from odemis.gui.util import call_in_wx_main
@@ -423,7 +422,9 @@ def main(args):
     parser = argparse.ArgumentParser(prog="odemis-gui",
                                      description=odemis.__fullname__)
 
-    parser.add_argument('-f', '--file', dest="file_name",
+    # nargs="?" to allow to pass just -f without argument, for the Linux desktop
+    # file to work easily.
+    parser.add_argument('-f', '--file', dest="file_name", nargs="?", default=None,
                         help="File to display")
     parser.add_argument('--version', dest="version", action='store_true',
                         help="show program's version number and exit")
