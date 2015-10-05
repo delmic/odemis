@@ -256,8 +256,10 @@ def main(args):
         escan.shift.value = (0, 0)
         escan.dwellTime.value = 5e-06
         det_dataflow = detector.data
+        ccd.binning.value = min((8, 8), ccd.binning.range[1])
         f = autofocus.AutoFocus(ccd, escan, ebeam_focus, dfbkg=det_dataflow)
         f.result()
+        ccd.binning.value = (1, 1)
 
         # Refocus the SEM
         escan.resolution.value = (512, 512)

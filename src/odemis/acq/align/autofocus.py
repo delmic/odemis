@@ -268,7 +268,10 @@ def AutoFocus(detector, emt, focus, dfbkg=None):
         et = detector.exposureTime.value
 
     # use the .depthOfField on detector or emitter as maximum stepsize
-    for c in (detector, emt):
+    avail_depths = (detector, emt)
+    if focus.role == "ebeam-focus":
+        avail_depths = (emt)
+    for c in avail_depths:
         if hasattr(c, "depthOfField") and isinstance(c.depthOfField, model.VigilantAttributeBase):
             dof = c.depthOfField.value
             break
