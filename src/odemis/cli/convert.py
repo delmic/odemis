@@ -42,7 +42,7 @@ def open_acq(fn):
         list of the data in the file
         thumbnail (if available, might be empty)
     """
-    fmt_mng = dataio.find_fittest_exporter(fn, default=None)
+    fmt_mng = dataio.find_fittest_converter(fn, default=None, mode=os.O_RDONLY)
     if fmt_mng is None:
         logging.warning("Failed to find a fitting importer for file %s", fn)
         # TODO: try all the formats?
@@ -96,7 +96,7 @@ def save_acq(fn, data, thumbs):
     """
     Saves to a file the data and thumbnail
     """
-    exporter = dataio.find_fittest_exporter(fn)
+    exporter = dataio.find_fittest_converter(fn)
 
     # For now the exporter supports only one thumbnail
     if thumbs:

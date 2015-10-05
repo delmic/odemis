@@ -476,7 +476,7 @@ class Acquirer(object):
         data (model.DataArray or list of model.DataArray): the data to save
         fn (unicode): filename of the file to save
         """
-        exporter = dataio.find_fittest_exporter(fn)
+        exporter = dataio.find_fittest_converter(fn)
         
         # TODO: put the first data in a StaticStream to get a thumbnail
     

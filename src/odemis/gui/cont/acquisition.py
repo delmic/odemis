@@ -745,9 +745,8 @@ class FineAlignController(object):
     # TODO: make the max diff dependant on the optical FoV?
     OVRL_MAX_DIFF = 10e-06  # m, don't be too picky
     OVRL_REPETITION = (4, 4)  # Not too many, to keep it fast
-    # OVRL_REPETITION = (7, 7)  # DEBUG (for compatibility with fake image)
 
-    def __init__(self, tab_data, tab_panel, settings_controller):
+    def __init__(self, tab_data, tab_panel, main_frame, settings_controller):
         """
         tab_data (MicroscopyGUIData): the representation of the microscope GUI
         tab_panel: (wx.Panel): the tab that containts the viewports
@@ -756,6 +755,7 @@ class FineAlignController(object):
         self._tab_data_model = tab_data
         self._main_data_model = tab_data.main
         self._tab_panel = tab_panel
+        self._main_frame = main_frame
         self._settings_controller = settings_controller
         self._sizer = self._tab_panel.pnl_align_tools.GetSizer()
 
@@ -916,7 +916,7 @@ class FineAlignController(object):
             self._tab_panel.lbl_fine_align.Label = "Failed"
         else:
             self._tab_panel.lbl_fine_align.Label = "Successful"
-            self._tab_panel.menu_item_reset_finealign.Enable(True)
+            self._main_frame.menu_item_reset_finealign.Enable(True)
             # Temporary info until the GUI can actually rotate the images
             rot = math.degrees(opt_md.get(model.MD_ROTATION_COR, 0))
             shear = sem_md.get(model.MD_SHEAR_COR, 0)

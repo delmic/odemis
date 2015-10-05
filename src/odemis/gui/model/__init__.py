@@ -216,6 +216,7 @@ class MainGUIData(object):
         # Like path/file format
         # Set to True to request debug info to be displayed
         self.debug = model.BooleanVA(False)
+        self.level = model.IntVA(0)
 
         # Current tab (+ all available tabs in choices as a dict tab -> name)
         # Fully set and managed later by the TabBarController.
@@ -347,7 +348,7 @@ class MicroscopyGUIData(object):
         # See class docstring for more info.
         self.focussedView = VigilantAttribute(None)
 
-        layouts = set([VIEW_LAYOUT_ONE, VIEW_LAYOUT_22, VIEW_LAYOUT_FULLSCREEN])
+        layouts = {VIEW_LAYOUT_ONE, VIEW_LAYOUT_22, VIEW_LAYOUT_FULLSCREEN}
         self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_22, choices=layouts)
 
         # The subset of views taken from `views` that *can* actually displayed,
@@ -368,7 +369,7 @@ class LiveViewGUIData(MicroscopyGUIData):
         MicroscopyGUIData.__init__(self, main)
 
         # Current tool selected (from the toolbar)
-        tools = set([TOOL_NONE, TOOL_ZOOM, TOOL_ROI])
+        tools = {TOOL_NONE, TOOL_ZOOM, TOOL_ROI}
         self.tool = IntEnumerated(TOOL_NONE, choices=tools)
 
         # Represent the global state of the microscopes. Mostly indicating
@@ -432,7 +433,11 @@ class ScannedAcquisitionGUIData(MicroscopyGUIData):
 
 
 class ChamberGUIData(MicroscopyGUIData):
-    pass
+
+    def __init__(self, main):
+        MicroscopyGUIData.__init__(self, main)
+        self.tool = IntEnumerated(TOOL_NONE, choices={TOOL_NONE})
+        self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_ONE, choices={VIEW_LAYOUT_ONE})
 
 
 class AnalysisGUIData(MicroscopyGUIData):
@@ -446,7 +451,7 @@ class AnalysisGUIData(MicroscopyGUIData):
         self._conf = get_general_conf()
 
         # only tool to zoom and pick point/line
-        tools = set([TOOL_NONE, TOOL_ZOOM, TOOL_POINT, TOOL_LINE])
+        tools = {TOOL_NONE, TOOL_ZOOM, TOOL_POINT, TOOL_LINE}
         self.tool = IntEnumerated(TOOL_NONE, choices=tools)
 
         # The current file it displays. If None, it means there is no file
@@ -530,24 +535,6 @@ class ActuatorGUIData(MicroscopyGUIData):
         # set of (str, str): actuator name, axis name
         self.axes = frozenset(self._axis_to_act_ss.keys())
 
-        # Tools are for lens alignment (mirror alignment actually needs none)
-        tools = {TOOL_NONE, TOOL_DICHO, TOOL_SPOT}
-        self.tool = IntEnumerated(TOOL_NONE, choices=tools)
-
-        # For dichotomic mode (SECOM)
-        self.dicho_seq = model.ListVA()  # list of 4 enumerated for each corner
-
-        # For the SPARC/SPARCv2, the current alignment mode.
-        # TODO: move to subclass
-        if main.role == "sparc":
-            # Same values than the modes of the OpticalPathManager
-            self.align_mode = StringEnumerated("chamber-view",
-                                               choices={"chamber-view", "mirror-align", "fiber-align"})
-        elif main.role == "sparc2":
-            # Mode values are different from the one from OpticalPathManager
-            self.align_mode = StringEnumerated("mirror-align",
-                                   choices={"mirror-align", "lens-align", "center-align"})
-
     def step(self, actuator, axis, factor, sync=False):
         """
         Moves a given axis by a one step (of stepsizes).
@@ -574,6 +561,41 @@ class ActuatorGUIData(MicroscopyGUIData):
 
         if sync:
             f.result()  # wait until the future is complete
+
+
+class SecomAlignGUIData(ActuatorGUIData):
+    def __init__(self, main):
+        ActuatorGUIData.__init__(self, main)
+        # Tools are for lens alignment (mirror alignment actually needs none)
+        tools = {TOOL_NONE, TOOL_DICHO, TOOL_SPOT}
+        self.tool = IntEnumerated(TOOL_NONE, choices=tools)
+
+        self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_ONE, choices={VIEW_LAYOUT_ONE})
+
+        # For dichotomic mode
+        self.dicho_seq = model.ListVA()  # list of 4 enumerated for each corner
+
+
+class SparcAlignGUIData(ActuatorGUIData):
+    def __init__(self, main):
+        ActuatorGUIData.__init__(self, main)
+        self.tool = IntEnumerated(TOOL_NONE, choices={TOOL_NONE})
+        self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_ONE, choices={VIEW_LAYOUT_ONE})
+
+        # Same values than the modes of the OpticalPathManager
+        self.align_mode = StringEnumerated("chamber-view",
+                                   choices={"chamber-view", "mirror-align", "fiber-align"})
+
+
+class Sparc2AlignGUIData(ActuatorGUIData):
+    def __init__(self, main):
+        ActuatorGUIData.__init__(self, main)
+        self.tool = IntEnumerated(TOOL_NONE, choices={TOOL_NONE})
+        self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_ONE, choices={VIEW_LAYOUT_ONE})
+
+        # Mode values are different from the modes of the OpticalPathManager
+        self.align_mode = StringEnumerated("lens-align",
+                               choices={"lens-align", "mirror-align", "center-align"})
 
 
 class FileInfo(object):
@@ -606,7 +628,7 @@ class FileInfo(object):
         # Might be per stream
         self.metadata = metadata or {}
 
-        if not model.MD_ACQ_DATE in self.metadata and self.file_name:
+        if model.MD_ACQ_DATE not in self.metadata and self.file_name:
             # try to auto fill acquisition time (seconds from epoch)
             try:
                 acq_date = os.stat(self.file_name).st_ctime
@@ -1020,6 +1042,7 @@ class MicroscopeView(StreamView):
         super(MicroscopeView, self)._on_stage_move_done(f)
         self._on_stage_pos(self.stage_pos.value)
 
+
 class ContentView(StreamView):
     """
     Represents a view from a microscope but (almost) always centered on the
@@ -1035,7 +1058,7 @@ class ContentView(StreamView):
             # Move the center's view to the center of this new image
             try:
                 pos = im.metadata[MD_POS]
-            except IndexError:
+            except KeyError:
                 pass
             else:
                 self.view_pos.value = pos
@@ -1046,6 +1069,7 @@ class ContentView(StreamView):
     # only be reset on the next image after the end of the move (if it ever
     # comes). This is done on purpose to clearly show that the image displayed
     # is not yet at the place where the move finished.
+
 
 class OverviewView(StreamView):
     """

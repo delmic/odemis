@@ -15,12 +15,14 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
+
 from odemis import dataio
 from odemis.dataio import get_available_formats, get_converter, \
-    find_fittest_exporter
-from unittest.case import skip
+    find_fittest_converter
 import os
 import unittest
+from unittest.case import skip
+
 
 class TestDataIO(unittest.TestCase):
 
@@ -44,7 +46,7 @@ class TestDataIO(unittest.TestCase):
             fmt_mng = get_converter(fmt)
             self.assertGreaterEqual(fmt_mng.EXTENSIONS, 1)
 
-    def test_find_fittest_exporter(self):
+    def test_find_fittest_converter_write(self):
         # input args -> format name
         test_io = [(("coucou.h5",), "HDF5"),
                    (("coucou.le monde.hdf5",), "HDF5"),
@@ -55,9 +57,28 @@ class TestDataIO(unittest.TestCase):
                    (("a/b/d.h5",), "HDF5"),
                    (("a/b/d.b",), "TIFF"), # fallback to tiff
                    (("d.hdf5",), "HDF5"),
+                   (("a/b/d.0.ome.tiff",), "Serialized TIFF"),
                    ]
         for args, fmt_exp in test_io:
-            fmt_mng = find_fittest_exporter(*args)
+            fmt_mng = find_fittest_converter(*args)
+            self.assertEqual(fmt_mng.FORMAT, fmt_exp,
+                   "For '%s', expected format %s but got %s" % (args[0], fmt_exp, fmt_mng.FORMAT))
+
+    def test_find_fittest_converter_read(self):
+        # input args -> format name
+        test_io = [(("coucou.h5",), "HDF5"),
+                   (("coucou.le monde.hdf5",), "HDF5"),
+                   (("some/fancy/../path/file.tiff",), "TIFF"),
+                   (("some/fancy/../.hdf5/h5.ome.tiff",), "TIFF"),
+                   (("a/b/d.tiff",), "TIFF"),
+                   (("a/b/d.ome.tiff",), "TIFF"),
+                   (("a/b/d.h5",), "HDF5"),
+                   (("a/b/d.b",), "TIFF"),  # fallback to tiff
+                   (("d.hdf5",), "HDF5"),
+                   (("a/b/d.0.ome.tiff",), "TIFF"),  # Serialised TIFF must be opened by TIFF
+                   ]
+        for args, fmt_exp in test_io:
+            fmt_mng = find_fittest_converter(*args, mode=os.O_RDONLY)
             self.assertEqual(fmt_mng.FORMAT, fmt_exp,
                    "For '%s', expected format %s but got %s" % (args[0], fmt_exp, fmt_mng.FORMAT))
 

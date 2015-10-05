@@ -65,7 +65,7 @@ def acquire_timelapse(num, period, filename):
         logging.exception("Failed to acquire all the images, will try to save anyway")
     
     # save the file
-    exporter = dataio.find_fittest_exporter(filename)
+    exporter = dataio.find_fittest_converter(filename)
     exporter.export(filename, images)
 
 def main(args):

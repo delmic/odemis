@@ -26,12 +26,11 @@ from __future__ import division
 
 import cairo
 import logging
-import math
 from odemis.acq import stream
 from odemis.gui import FG_COLOUR_DIS
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.slider import Slider
-from odemis.gui.util import call_in_wx_main, wxlimit_invocation
+from odemis.gui.util import wxlimit_invocation
 from odemis.util import limit_invocation
 from odemis.util.conversion import wxcol_to_frgb
 import wx
@@ -393,13 +392,23 @@ class AxisLegend(wx.Panel):
         # Get the horizontal/vertical space in pixels
         self._pixel_space = self.ClientSize[self._orientation != wx.HORIZONTAL]
 
+        if self._orientation == wx.HORIZONTAL:
+            min_pixel = 0
+        else:
+            # Don't display ticks too close from the left border
+            min_pixel = 10
+
         # Range width
         value_space = max_val - min_val
         if value_space == 0:
-            logging.info("Trying to compute legend tick with range %s", self._value_range)
+            logging.info("Trying to compute legend tick with empty range %s", self._value_range)
             self._vtp_ratio = None
-        else:
-            self._vtp_ratio = self._pixel_space / value_space
+            # Just one tick, at the origin
+            pixel = max(min_pixel, self.value_to_pixel(min_val))
+            self._tick_list = [(pixel, min_val)]
+            return
+
+        self._vtp_ratio = self._pixel_space / value_space
 
         num_ticks = self._pixel_space // self._tick_spacing
         # Calculate the best step size in powers of 10, so it will cover at
@@ -428,12 +437,6 @@ class AxisLegend(wx.Panel):
         while cur_val < max_val:
             tick_values.append(cur_val)
             cur_val += value_step
-
-        if self._orientation == wx.HORIZONTAL:
-            min_pixel = 0
-        else:
-            # Don't display ticks too close from the left border
-            min_pixel = 10
 
         ticks = []
         for tick_value in tick_values:

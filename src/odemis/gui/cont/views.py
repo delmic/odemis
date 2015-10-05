@@ -70,8 +70,12 @@ class ViewPortController(object):
 
         # subscribe to layout and view changes
         tab_data.visible_views.subscribe(self._on_visible_views)
-        tab_data.viewLayout.subscribe(self._on_view_layout, init=True)
-        tab_data.focussedView.subscribe(self._on_focussed_view, init=True)
+        self._grid_panel = self._viewports[0].Parent
+        if isinstance(self._grid_panel, ViewportGrid):
+            tab_data.viewLayout.subscribe(self._on_view_layout, init=True)
+            tab_data.focussedView.subscribe(self._on_focussed_view, init=True)
+        elif len(self._viewports) != 1:
+            logging.warning("Multiple viewports, but no ViewportGrid to manage them")
 
         # TODO: just let the viewport do that?
         # Track the mpp of the SEM view in order to set the magnification
@@ -181,16 +185,15 @@ class ViewPortController(object):
 
         logging.debug("Changing focus to view %s", view.name.value)
 
-        grid_panel = self._viewports[0].Parent
-
-        try:
-            viewport = [vp for vp in self._viewports if vp.microscope_view == view][0]
-        except IndexError:
-            logging.exception("No associated ViewPort found for view %s", view)
-            raise
+        for vp in self._viewports:
+            if vp.microscope_view is view:
+                viewport = vp
+                break
+        else:
+            raise ValueError("No associated ViewPort found for view %s" % (view,))
 
         if self._data_model.viewLayout.value == model.VIEW_LAYOUT_ONE:
-            grid_panel.set_shown_viewports(viewport)
+            self._grid_panel.set_shown_viewports(viewport)
             # Enable/disable ZOOM_FIT tool according to view ability
             if self._toolbar:
                 can_fit = hasattr(viewport.canvas, "fit_view_to_content")
@@ -210,21 +213,18 @@ class ViewPortController(object):
 
         """
 
-        grid_panel = self._viewports[0].Parent
-
         if layout == model.VIEW_LAYOUT_ONE:
             logging.debug("Displaying single viewport")
             for viewport in self._viewports:
                 if viewport.microscope_view == self._data_model.focussedView.value:
-                    grid_panel.set_shown_viewports(viewport)
+                    self._grid_panel.set_shown_viewports(viewport)
                     break
             else:
                 raise ValueError("No focussed view found!")
 
         elif layout == model.VIEW_LAYOUT_22:
             logging.debug("Displaying 2x2 viewport grid")
-            if isinstance(grid_panel, ViewportGrid):
-                grid_panel.show_grid_viewports()
+            self._grid_panel.show_grid_viewports()
 
         elif layout == model.VIEW_LAYOUT_FULLSCREEN:
             raise NotImplementedError()

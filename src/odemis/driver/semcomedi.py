@@ -2308,6 +2308,10 @@ class Writer(Accesser):
             dev_buf_size = comedi.get_buffer_size(self._device, self._subdevice)
             self._preload_size = dev_buf_size / buf.itemsize
             logging.debug("Going to preload %d bytes", buf[:self._preload_size].nbytes)
+            # It can block if we preload too much
+            # TODO: write in non-blocking mode, and raise an error if not everything
+            # was written (because it's a sign there were some other data still
+            # in the buffer)
             buf[:self._preload_size].tofile(self.file)
 
             if len(buf) <= self._preload_size:
@@ -2317,8 +2321,6 @@ class Writer(Accesser):
                 logging.debug("Not running writter thread, as buffer is small")
             else:
                 self.thread = threading.Thread(name="SEMComedi writer", target=self._thread)
-
-            self.file.flush() # it can block here if we preload too much
 
     def run(self):
         self._begin = time.time()
@@ -2333,18 +2335,22 @@ class Writer(Accesser):
         if self.cancelled:
             return
         try:
+            # Note: self.file.write(self.buf...) seems to do the job as well
+            logging.debug("Writing rest of data")
             self.buf[self._preload_size:].tofile(self.file)
             if self.cancelled:
                 return
             self.file.flush()
         except (IOError, comedi.ComediError, ValueError):
-            # old versions of numpy raised ValueError instead of IOError
+            # Old versions of numpy raise ValueError instead of IOError
             # see https://github.com/numpy/numpy/issues/2312
             # TODO: remove it when numpy v1.9+ is used
             # probably due to a cancel
             logging.debug("Write ended before the end")
-        except:
+        except Exception:
             logging.exception("Unhandled error in writing thread")
+        else:
+            logging.debug("All data pushed successfuly")
 
     def wait(self, timeout=None):
         now = time.time()
@@ -2366,12 +2372,16 @@ class Writer(Accesser):
                 time.sleep(0) # just yield
 
             if time.time() > max_time:
-                comedi.cancel(self._device, self._subdevice)
+                self.cancel()
                 raise IOError("Write timeout while device is still generating data")
 
         if self.thread and self.thread.isAlive():
-            comedi.cancel(self._device, self._subdevice)
-            raise IOError("Write timeout while device is idle")
+            # It could be due to the write being cancelled
+            # => check the thread is ending well
+            self.thread.join(0.6)
+            if self.thread.isAlive():
+                self.cancel()  # maybe that helps?
+                raise IOError("Write timeout while device is idle")
 
         if self.cancelled:
             raise CancelledError("Writer thread was cancelled")
@@ -2400,9 +2410,30 @@ class Writer(Accesser):
                 logging.debug("Write cmd cancel sent")
 
             if self.thread:
-                if not self.thread.isAlive():
-                    return
-                self.thread.join(0.5)
+                # That means the thread is (probably) blocked on the write,
+                # waiting for the buffer to empty until more writes can be done.
+                # However the cancel() doesn't unblock that write. So it's stuck
+                # there forever... until we unblock it.
+                # I don't know of any 'clean' way to unblock a write. The less
+                # horrible is to do a new write. What to write? Rest position
+                # sounds like a good possible value. Note: writting one channel
+                # is sufficient, but for being sure we set a good rest position,
+                # we write both channels.
+                time.sleep(0.01)  # necessary, for even less clear reasons
+                pos, channels, ranges = self.parent._scanner.get_resting_point_data()
+                # In a loop because sometimes the sleep is not long enough, and
+                # so we need to convince comedi again to unblock the write()
+                for i in range(5):
+                    if not self.thread.isAlive():
+                        return
+                    logging.debug("Cancelling by setting to rest position at %s", pos)
+                    for i, p in enumerate(pos):
+                        comedi.data_write(self._device, self._subdevice,
+                                channels[i], ranges[i], comedi.AREF_GROUND, int(p))
+
+                    self.thread.join(0.1)
+                else:
+                    logging.warning("Writer thread seems blocked after cancel")
         except comedi.ComediError:
             logging.debug("Failed to cancel write")
 

@@ -27,7 +27,7 @@ import math
 import numpy
 from odemis import model, util, dataio
 from odemis.util import img
-import os.path
+import os
 from scipy import ndimage
 import threading
 import time
@@ -59,8 +59,8 @@ class SimSEM(model.HwComponent):
         image = unicode(image)
         # change to this directory to ensure relative path is from this file
         os.chdir(os.path.dirname(unicode(__file__)))
-        exporter = dataio.find_fittest_exporter(image)
-        self.fake_img = img.ensure2DImage(exporter.read_data(image)[0])
+        converter = dataio.find_fittest_converter(image, mode=os.O_RDONLY)
+        self.fake_img = img.ensure2DImage(converter.read_data(image)[0])
 
         self._drift_period = drift_period
 

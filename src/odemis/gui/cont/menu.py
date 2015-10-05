@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 2 Jul 2014
 
 @author: Éric Piel
@@ -8,29 +8,34 @@ Copyright © 2014 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License version 2 as published by the Free Software Foundation.
+Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU
+General Public License version 2 as published by the Free Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even
+the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
+Public License for more details.
 
-You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+You should have received a copy of the GNU General Public License along with Odemis. If not,
+see http://www.gnu.org/licenses/.
+"""
+
 from __future__ import division
 
-import logging
-from odemis import model, gui
-from odemis.acq import stream
-from odemis.gui.comp.popup import Message
-import odemis.gui.conf
-from odemis.gui.model.dye import DyeDatabase
-from odemis.gui.util import call_in_wx_main, align
 import subprocess
 import sys
 import wx
 
-import odemis.gui.img.data as imgdata
+from odemis import model, gui
+from odemis.acq import stream
+from odemis.gui import DYE_LICENCE
+from odemis.gui.comp.popup import Message
+import odemis.gui.conf
+from odemis.gui.model.dye import DyeDatabase
+from odemis.gui.util import call_in_wx_main
 
 
 # Menu controller:
+# noinspection PyArgumentList
 class MenuController(object):
     """ This controller handles (some of) the menu actions.
     Some other actions are directly handled by the main class or the specific
@@ -333,7 +338,6 @@ class MenuController(object):
         subprocess.Popen("odemis-bug-report")
 
     def _on_about(self, evt):
-
         info = wx.AboutDialogInfo()
         info.SetIcon(gui.icon)
         info.Name = gui.name
@@ -349,13 +353,7 @@ class MenuController(object):
 
         if DyeDatabase:
             info.Developers += ["", "Dye database from http://fluorophores.org"]
-            info.Licence += ("""
-The dye database is provided as-is, from the Fluorobase consortium.
-The Fluorobase consortium provides this data and software in good faith, but
-makes no warranty, expressed or implied, nor assumes any legal liability or
-responsibility for any purpose for which they are used. For further information
-see http://www.fluorophores.org/disclaimer/ .
-""")
+            info.Licence += DYE_LICENCE
         wx.AboutBox(info)
 
     def _on_manual(self, evt):
@@ -369,19 +367,19 @@ see http://www.fluorophores.org/disclaimer/ .
     def _on_inspect(self, evt):
         from wx.lib.inspection import InspectionTool
         InspectionTool().Show()
-#
-#     def on_htmldoc(self, evt):
-#         """ Launch Python's SimpleHTTPServer in a separate process and have it
-#         serve the source code documentation as created by Sphinx
-#         """
-#         self.http_proc = subprocess.Popen(
-#             ["python", "-m", "SimpleHTTPServer"],
-#             stderr=subprocess.STDOUT,
-#             stdout=subprocess.PIPE,
-#             cwd=os.path.dirname(odemis.gui.conf.get_general_conf().html_dev_doc))
-#
-#         import webbrowser
-#         webbrowser.open('http://localhost:8000')
+
+    # def on_htmldoc(self, evt):
+    #     """ Launch Python's SimpleHTTPServer in a separate process and have it
+    #     serve the source code documentation as created by Sphinx
+    #     """
+    #     self.http_proc = subprocess.Popen(
+    #         ["python", "-m", "SimpleHTTPServer"],
+    #         stderr=subprocess.STDOUT,
+    #         stdout=subprocess.PIPE,
+    #         cwd=os.path.dirname(odemis.gui.conf.get_general_conf().html_dev_doc))
+    #
+    #     import webbrowser
+    #     webbrowser.open('http://localhost:8000')
 
 
     @call_in_wx_main

@@ -34,9 +34,10 @@ import os
 #  * FORMAT (string): user friendly name of the format
 #  * EXTENSIONS (list of strings): possible file-name extensions
 #  * export (callable): write model.DataArray into a file
-#  * get_data (callable): read a file into model.DataArray
+#  * read_data (callable): read a file into model.DataArray
+#  * read_thumbnail (callable): read the thumbnail(s) of a file
 #  if it doesn't support writing, then is has no .export(), and if it doesn't
-#  support reading, then it has not get_data().
+#  support reading, then it has not read_data().
 __all__ = ["tiff", "stiff", "hdf5", "png"]
 
 
@@ -44,9 +45,11 @@ def get_available_formats(mode=os.O_RDWR, allowlossy=False):
     """
     Find the available file formats
 
-    :param mode: (os.O_RDONLY, os.O_WRONLY, or os.O_RDWR): whether only list
+    mode (os.O_RDONLY, os.O_WRONLY, or os.O_RDWR): whether only list
         formats which can be read, which can be written, or all of them.
-    :returns: (dict string -> list of strings): name of each format -> list of
+    allowlossy (bool): If True, will also return the formats that can lose some
+      of the original information (when writting the data to a file)
+    return (dict string -> list of strings): name of each format -> list of
         extensions
     """
     formats = {}
@@ -95,12 +98,14 @@ def get_converter(fmt):
     raise ValueError("No converter for format %s found" % fmt)
 
 
-def find_fittest_exporter(filename, default=tiff):
+def find_fittest_converter(filename, default=tiff, mode=os.O_WRONLY, allowlossy=False):
     """
     Find the most fitting exporter according to a filename (actually, its extension)
     filename (string): (path +) filename with extension
     default (dataio. Module): default exporter to pick if no really fitting
       exporter is found
+    mode: cf get_available_formats()
+    allowlossy: cf get_available_formats()
     returns (dataio. Module): the right exporter
     """
     # Find the extension of the file
@@ -110,19 +115,18 @@ def find_fittest_exporter(filename, default=tiff):
 
     # make sure we pick the format with the longest fitting extension
     best_len = 0
-    best_fmt = default
-    for module_name in __all__:
-        try:
-            exporter = importlib.import_module("." + module_name, "odemis.dataio")
-        except Exception:  #pylint: disable=W0702
-            logging.info("Import of converter %s failed", module_name, exc_info=True)
-            continue # module cannot be loaded
-        for e in exporter.EXTENSIONS:
+    best_fmt = None
+    for fmt, exts in get_available_formats(mode, allowlossy).items():
+        for e in exts:
             if filename.endswith(e) and len(e) > best_len:
                 best_len = len(e)
-                best_fmt = exporter
+                best_fmt = fmt
 
-    if best_len > 0:
+    if best_fmt is not None:
         logging.debug("Determined that '%s' corresponds to %s format",
-                      basename, best_fmt.FORMAT)
-    return best_fmt
+                      basename, best_fmt)
+        conv = get_converter(best_fmt)
+    else:
+        conv = default
+
+    return conv

@@ -39,7 +39,7 @@ class HRAcquirer(object):
         self.ccd = model.getComponent(role="ccd")
 
         # prepare the data export
-        self.exporter = dataio.find_fittest_exporter(fn)
+        self.exporter = dataio.find_fittest_converter(fn)
         
         # Make the name "fn" -> "~/Pictures + fn + fn-XXXX.ext"
         path, base = os.path.split(fn)

@@ -546,24 +546,6 @@ class GenericxX(model.Emitter):
         if self._master:
             self._master.terminate()
 
-    def getMetadata(self):
-        metadata = {}
-        # MD_IN_WL expects just min/max => if multiple sources, we need to combine
-        wl_range = (None, None) # min, max in m
-        power = 0
-        for i, intens in enumerate(self.emissions.value):
-            if intens > 0:
-                wl_range = (min(wl_range[0], self.spectra.value[i][1]),
-                            max(wl_range[1], self.spectra.value[i][3]))
-                # FIXME: not sure how to combine
-                power += intens * self.power.value
-
-        if wl_range == (None, None):
-            wl_range = (0, 0) # TODO: needed?
-        metadata[model.MD_IN_WL] = wl_range
-        metadata[model.MD_LIGHT_POWER] = power
-        return metadata
-
     def _updateIntensities(self, power, intensities):
         # set the actual values
         for d, intens in zip(self._devices, intensities):

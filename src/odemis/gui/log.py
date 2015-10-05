@@ -6,25 +6,25 @@ Copyright © 2012 Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms
-of the GNU General Public License version 2 as published by the Free Software
-Foundation.
+Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU
+General Public License version 2 as published by the Free Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
-PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even
+the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
+Public License for more details.
 
-You should have received a copy of the GNU General Public License along with
-Odemis. If not, see http://www.gnu.org/licenses/. """
+You should have received a copy of the GNU General Public License along with Odemis. If not,
+see http://www.gnu.org/licenses/. """
 
 from __future__ import division
 import logging
 from logging.handlers import RotatingFileHandler
 from odemis.gui import FG_COLOUR_ERROR, FG_COLOUR_WARNING, FG_COLOUR_DIS, \
-    FG_COLOUR_MAIN, BG_COLOUR_LEGEND
+    FG_COLOUR_MAIN
 import os.path
 import sys
 import wx
+from odemis.gui.util import wxlimit_invocation
 
 
 LOG_FILE = "odemis-gui.log"
@@ -67,27 +67,28 @@ def init_logger(level=logging.DEBUG):
     file_format = logging.Formatter(frm)
 
     # Max 5 log files of 10Mb
-    file_handler = RotatingFileHandler(logfile_path,
-                                       maxBytes=10 * (2 ** 20),
-                                       backupCount=5)
+    file_handler = RotatingFileHandler(logfile_path, maxBytes=10 * (2 ** 20), backupCount=5)
 
     file_handler.setFormatter(file_format)
     log.addHandler(file_handler)
 
 
-def create_gui_logger(log_field, error_va=None):
+def create_gui_logger(log_field, debug_va=None, level_va=None):
     """
     Connect the log output to the text field instead of the standard output
     log_field (wx text field)
-    error_va (Boolean VigilantAttribute)
+    debug_va (Boolean VigilantAttribute)
     """
     # Create gui handler
     frm = "%(asctime)s %(levelname)-7s %(module)-15s: %(message)s"
     gui_format = logging.Formatter(frm, '%H:%M:%S')
     text_field_handler = TextFieldHandler()
     text_field_handler.setTextField(log_field)
-    if error_va is not None:
-        text_field_handler.setErrorVA(error_va)
+    if debug_va is not None:
+        text_field_handler.setDebugVA(debug_va)
+    if level_va is not None:
+        text_field_handler.setLevelVA(level_va)
+
     text_field_handler.setFormatter(gui_format)
     logging.debug("Switching to GUI logger")
 
@@ -119,32 +120,50 @@ def stop_gui_logger():
 
 class TextFieldHandler(logging.Handler):
     """ Custom log handler, used to output log entries to a text field. """
+    TEXT_STYLES = (
+        wx.TextAttr(FG_COLOUR_ERROR, None),
+        wx.TextAttr(FG_COLOUR_WARNING, None),
+        wx.TextAttr(FG_COLOUR_MAIN, None),
+        wx.TextAttr(FG_COLOUR_DIS, None),
+    )
+
     def __init__(self):
         """ Call the parent constructor and initialize the handler """
         logging.Handler.__init__(self)
         self.textfield = None
-        self.error_va = None
+        self.debug_va = None
+        self.level_va = None
+        self.cache = {
+            0: [],
+            1: []
+        }
+        self.current_cache = 0
+        self._locked = False
 
     def setTextField(self, textfield):
         self.textfield = textfield
         self.textfield.Clear()
-        self.textfield.SetBackgroundColour(BG_COLOUR_LEGEND)
 
-    def setErrorVA(self, error_va):
-        self.error_va = error_va
+    def setDebugVA(self, debug_va):
+        self.debug_va = debug_va
+
+    def setLevelVA(self, level_va):
+        self.level_va = level_va
 
     def emit(self, record):
         """ Write a record, in colour, to a text field. """
         if self.textfield is not None:
             if record.levelno >= logging.ERROR:
-                colour = FG_COLOUR_ERROR
+                text_style = self.TEXT_STYLES[0]
             elif record.levelno == logging.WARNING:
-                colour = FG_COLOUR_WARNING
-
+                text_style = self.TEXT_STYLES[1]
             elif record.levelno == logging.INFO:
-                colour = FG_COLOUR_MAIN
+                text_style = self.TEXT_STYLES[2]
             else:
-                colour = FG_COLOUR_DIS
+                text_style = self.TEXT_STYLES[3]
+
+            if self.level_va and record.levelno > self.level_va.value:
+                self.level_va.value = record.levelno
 
             # FIXME: still seems to be possible to completely hog the GUI by
             # logging too much. A way to fix it would be to run the textfield
@@ -153,18 +172,34 @@ class TextFieldHandler(logging.Handler):
 
             # Do the actual writing in a CallAfter, so logging won't interfere
             # with the GUI drawing process.
-            wx.CallAfter(self.write_to_field, record, colour)
+            self.cache[self.current_cache].append((record, text_style))
+            self.write_to_field()
 
-        # Will typically ensure that the text field is displayed
-        if self.error_va is not None and record.levelno >= logging.ERROR:
-            self.error_va.value = True
+    @wxlimit_invocation(0.2)
+    def write_to_field(self):
 
-    def write_to_field(self, record, colour):
+        if self._locked:
+            return
+        self._locked = True
+        # Cache that we are going to write
+        write_cache = self.current_cache
+        # Swap caches, so new messages get added to the other cache
+        self.current_cache = int(not self.current_cache)
+
+        cache = self.cache[write_cache]
+        prev_style = None
+
+        # Process at most the latest 'LOG_LINES' messasges
+        for record, text_style in cache[-LOG_LINES:]:
+            if prev_style != text_style:
+                self.textfield.SetDefaultStyle(text_style)
+                prev_style = text_style
+            self.textfield.AppendText("\n" + self.format(record))
+
         nb_lines = self.textfield.GetNumberOfLines()
         nb_old = nb_lines - LOG_LINES
         if nb_old > 0:
-            # Removes the characters from position 0 up to and including the
-            # Nth line break
+            # Removes the characters from position 0 up to and including the Nth line break
             first_new = 0
             txt = self.textfield.Value
             for i in range(nb_old):
@@ -172,6 +207,6 @@ class TextFieldHandler(logging.Handler):
 
             self.textfield.Remove(0, first_new)
 
-        self.textfield.SetDefaultStyle(wx.TextAttr(colour, None))
-        self.textfield.AppendText("\n" + self.format(record))
-
+        self.cache[write_cache] = []
+        self._locked = False
+        self.textfield.Refresh()

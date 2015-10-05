@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 26 Feb 2013
 
 @author: Éric Piel
@@ -18,7 +18,9 @@ PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+
+"""
+
 # Various helper functions that have a generic usefulness
 # Warning: do not put anything that has dependencies on non default python modules
 
@@ -26,24 +28,24 @@ from __future__ import division, absolute_import
 
 import Queue
 import collections
-from decorator import decorator
-import errno
 from functools import wraps
 import inspect
 import logging
 import math
-import os
 import signal
 import threading
 import time
-from . import weak
 import weakref
 
+from decorator import decorator
+
+from . import weak
+
+
 def find_closest(val, l):
-    """
-    finds in a list the closest existing value from a given value
-    """
-    return min(l, key=lambda x:abs(x - val))
+    """ finds in a list the closest existing value from a given value """
+    return min(l, key=lambda x: abs(x - val))
+
 
 def index_closest(val, l):
     """
@@ -54,6 +56,7 @@ def index_closest(val, l):
         return min(l.items(), key=lambda x:abs(x[1] - val))[0]
     else:
         return min(enumerate(l), key=lambda x:abs(x[1] - val))[0]
+
 
 def almost_equal(a, b, atol=1e-18, rtol=1e-7):
     """
@@ -71,6 +74,7 @@ def almost_equal(a, b, atol=1e-18, rtol=1e-7):
         return True
 
     return False
+
 
 def recursive_dict_update(d, other):
     """ Recursively update the values of the first dictionary with the values of the second
@@ -328,7 +332,9 @@ def limit_invocation(delay_s):
     Note that the method might be called in a separate thread. In wxPython, you
     might need to decorate it by @call_in_wx_main to ensure it is called in the GUI
     thread.
+
     """
+
     if delay_s > 5:
         logging.warn("Warning! Long delay interval. Please consider using "
                      "an interval of 5 or less seconds")
@@ -419,6 +425,7 @@ def timeout(seconds):
             signal.signal(signal.SIGALRM, prev_handler)
 
     return decorator(wrapper)
+
 
 class RepeatingTimer(threading.Thread):
     """

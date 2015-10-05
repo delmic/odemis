@@ -7,18 +7,18 @@ Copyright © 2012-2014 Rinze de Laat, Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the
-terms of the GNU General Public License version 2 as published by the Free
-Software Foundation.
+Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU
+General Public License version 2 as published by the Free Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
-WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
-PARTICULAR PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even
+the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
+Public License for more details.
 
-You should have received a copy of the GNU General Public License along with
-Odemis. If not, see http://www.gnu.org/licenses/.
+You should have received a copy of the GNU General Public License along with Odemis. If not,
+see http://www.gnu.org/licenses/.
 
 """
+
 from __future__ import division
 
 import Pyro4.errors
@@ -33,7 +33,8 @@ import os
 
 from odemis import model, gui
 import odemis
-from odemis.gui import main_xrc, log
+from odemis.gui import main_xrc, log, BG_COLOUR_ERROR, BG_COLOUR_LEGEND
+from odemis.gui.comp.buttons import ImageButton
 from odemis.gui.cont import acquisition
 from odemis.gui.cont.menu import MenuController
 from odemis.gui.util import call_in_wx_main
@@ -137,14 +138,13 @@ class OdemisGUIApp(wx.App):
         self.main_frame = main_xrc.xrcfr_main(None)
 
         self.init_gui()
-        log.create_gui_logger(self.main_frame.txt_log, self.main_data.debug)
+        log.create_gui_logger(self.main_frame.txt_log, self.main_data.debug, self.main_data.level)
 
         # Application successfully launched
         return True
 
     def init_gui(self):
-        """ This method binds events to menu items and initializes
-        GUI controls """
+        """ This method binds events to menu items and initializes GUI controls """
 
         try:
             # Add frame icon
@@ -153,6 +153,7 @@ class OdemisGUIApp(wx.App):
             self.main_frame.SetIcons(ib)
 
             self.main_data.debug.subscribe(self.on_debug_va, init=True)
+            self.main_data.level.subscribe(self.on_level_va, init=False)
 
             # List of all possible tabs used in Odemis' main GUI
             # microscope role(s), internal name, class, tab btn, tab panel
@@ -251,6 +252,13 @@ class OdemisGUIApp(wx.App):
             # in the odemis.gui.cont package
             self.tab_controller = tabs.TabBarController(tab_defs, self.main_frame, self.main_data)
 
+            def toggle_log_panel(_):
+                self.main_data.debug.value = not self.main_frame.txt_log.IsShown()
+
+            for tab in self.tab_controller.get_tabs():
+                if hasattr(tab.panel, 'btn_log'):
+                    tab.panel.btn_log.Bind(wx.EVT_BUTTON, toggle_log_panel)
+
             self._menu_controller = MenuController(self.main_data, self.main_frame)
             # Menu events
             wx.EVT_MENU(self.main_frame,
@@ -269,7 +277,7 @@ class OdemisGUIApp(wx.App):
             self.main_frame.Maximize()  # must be done before Show()
             # making it very late seems to make it smoother
             wx.CallAfter(self.main_frame.Show)
-            logging.debug("Frame will be displayed soon")
+
         except Exception:
             self.excepthook(*sys.exc_info())
             # Re-raise the exception, so the program will exit. If this is not
@@ -279,18 +287,43 @@ class OdemisGUIApp(wx.App):
 
     @call_in_wx_main
     def on_debug_va(self, enabled):
-        """ This method (un)sets the application into debug mode, setting the
-        log level and opening the log panel. """
-        self.main_frame.pnl_log.Show(enabled)
+        """ This method (un)sets the application into debug mode, setting the log level and
+        opening the log panel. """
+
+        self.main_frame.txt_log.Show(enabled)
+
         l = logging.getLogger()
         if enabled:
             self.log_level = l.getEffectiveLevel()
             l.setLevel(logging.DEBUG)
+            for tab in self.tab_controller.get_tabs():
+                if hasattr(tab.panel, 'btn_log'):
+                    tab.panel.btn_log.SetIcon(imgdata.ico_chevron_down.Bitmap)
+                    # Reset highest log level
+                    self.main_data.level.value = 0
         else:
+            for tab in self.tab_controller.get_tabs():
+                if hasattr(tab.panel, 'btn_log'):
+                    tab.panel.btn_log.SetIcon(imgdata.ico_chevron_up.Bitmap)
             l.setLevel(self.log_level)
         self.main_frame.Layout()
 
-    def on_close_window(self, evt=None): #pylint: disable=W0613
+    @call_in_wx_main
+    def on_level_va(self, log_level):
+        """ Set the log button color """
+        colour = 'def'
+
+        if log_level >= logging.ERROR:
+            colour = 'red'
+        elif log_level >= logging.WARNING:
+            colour = 'orange'
+
+        for tab in self.tab_controller.get_tabs():
+            if hasattr(tab.panel, 'btn_log'):
+                tab.panel.btn_log.set_face_colour(colour)
+
+
+    def on_close_window(self, evt=None):
         """ This method cleans up and closes the Odemis GUI. """
         logging.info("Exiting Odemis")
 
@@ -318,7 +351,7 @@ class OdemisGUIApp(wx.App):
 
         self.main_frame.Destroy()
 
-    def excepthook(self, etype, value, trace): #pylint: disable=W0622
+    def excepthook(self, etype, value, trace):
         """ Method to intercept unexpected errors that are not caught
         anywhere else and redirects them to the logger.
         Note that exceptions caught and logged will appear in the text pane,
@@ -337,17 +370,13 @@ class OdemisGUIApp(wx.App):
                     rmt_exc = ""
                 logging.error("".join(exc) + rmt_exc)
 
-                # When an exception occurs, automatically got to debug mode.
-                if not isinstance(value, NotImplementedError):
-                    try:
-                        self.main_data.debug.value = True
-                    except:
-                        pass
             finally:
                 # put us back
                 sys.excepthook = self.excepthook
-        else: # python is ending... can't rely on anything
+        # python is ending... can't rely on anything
+        else:
             print etype, value, trace
+
 
 class OdemisOutputWindow(object):
     """ Helper class which allows ``wx`` to display uncaught
@@ -426,7 +455,8 @@ def main(args):
         try:
             # Also possible via Xlib, but more complicated
             import gtk
-            # without it, it will crash cf https://groups.google.com/forum/#!topic/wxpython-users/KO_hmLxeDKA
+            # Without it, it will crash cf. See:
+            # https://groups.google.com/forum/#!topic/wxpython-users/KO_hmLxeDKA
             gtk.remove_log_handlers()
             # Must be done before the first window is displayed
             name = odemis.__shortname__

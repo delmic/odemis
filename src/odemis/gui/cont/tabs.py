@@ -48,7 +48,6 @@ from odemis.gui.cont.microscope import SecomStateController, DelphiStateControll
 from odemis.gui.cont.streams import StreamController
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.img import scale_to_alpha
-from odemis.gui.util.widgets import ProgressiveFutureConnector
 from odemis.util import units
 import os.path
 import pkg_resources
@@ -611,10 +610,6 @@ class SparcAcquisitionTab(Tab):
             detvas=get_hw_settings(main_data.sed),
         )
 
-        # TODO: do not put local magnification/hfw VA, but just the global one,
-        # so that if SEM is not playing, but CLi (or other stream with e-beam as
-        # emitter) is, then it's possible to change it.
-        self._sem_live_stream = sem_stream
         sem_stream.should_update.value = True  # TODO: put it in _streams_to_restart instead?
         self.tab_data_model.acquisitionView.addStream(sem_stream)  # it should also be saved
 
@@ -746,6 +741,11 @@ class SparcAcquisitionTab(Tab):
             self.stream_controller
         )
 
+        # Force SEM view fit to content when magnification is updated
+        if not (hasattr(main_data.ebeam, "horizontalFoV")
+                and isinstance(main_data.ebeam.horizontalFoV, model.VigilantAttributeBase)):
+            main_data.ebeam.magnification.subscribe(self._onSEMMag)
+
     @property
     def stream_controller(self):
         return self._stream_controller
@@ -775,6 +775,21 @@ class SparcAcquisitionTab(Tab):
             assert all(0 <= p <= 1 for p in pos)
             # Just use the same value for LT and RB points
             self.tab_data_model.spotStream.roi.value = (pos + pos)
+
+    def _onSEMMag(self, mag):
+        """
+        Called when user enters a new SEM magnification
+        """
+        # Restart the stream and fit view to content when we get a new image
+        cur_stream = self.tab_data_model.streams.value[0]
+        ebeam = self.tab_data_model.main.ebeam
+        if cur_stream.is_active.value and cur_stream.emitter is ebeam:
+            # Restarting is nice because it will get a new image faster, but
+            # the main advantage is that it avoids receiving one last image
+            # with the old magnification, which would confuse fit_view_to_next_image.
+            cur_stream.is_active.value = False
+            cur_stream.is_active.value = True
+        self.panel.vp_sparc_tl.canvas.fit_view_to_next_image = True
 
     def on_acquisition(self, is_acquiring):
         # TODO: Make sure nothing can be modified during acquisition
@@ -955,7 +970,9 @@ class ChamberTab(Tab):
         Stupid method that changes the progress bar. Used to indicate something
          is happening (during referencing).
         """
-        self.panel.gauge_move.Pulse()
+        mirror = self.tab_data_model.main.mirror
+        if not all(mirror.referenced.value.values()):
+            self.panel.gauge_move.Pulse()
 
     def _on_switch_btn(self, evt):
         """
@@ -1023,6 +1040,8 @@ class ChamberTab(Tab):
         self.panel.btn_cancel.Disable()
         self.tab_data_model.main.is_acquiring.value = False
         self._update_mirror_status()
+        # Just in case the referencing updated position before the pulse was stopped
+        self._update_progress_bar(self.tab_data_model.main.mirror.position.value)
 
     def _update_mirror_status(self):
         """
@@ -1472,7 +1491,7 @@ class AnalysisTab(Tab):
                 cdata = None
             else:
                 logging.debug("Loading AR background data")
-                converter = dataio.find_fittest_exporter(fn)
+                converter = dataio.find_fittest_converter(fn, mode=os.O_RDONLY)
                 data = converter.read_data(fn)
                 # will raise exception if doesn't contain good calib data
                 cdata = calibration.get_ar_data(data)
@@ -1511,7 +1530,7 @@ class AnalysisTab(Tab):
                 cdata = None
             else:
                 logging.debug("Loading spectrum background")
-                converter = dataio.find_fittest_exporter(fn)
+                converter = dataio.find_fittest_converter(fn, mode=os.O_RDONLY)
                 data = converter.read_data(fn)
                 # will raise exception if doesn't contain good calib data
                 cdata = calibration.get_spectrum_data(data) # FIXME
@@ -1547,7 +1566,7 @@ class AnalysisTab(Tab):
                 cdata = None
             else:
                 logging.debug("Loading spectrum efficiency compensation")
-                converter = dataio.find_fittest_exporter(fn)
+                converter = dataio.find_fittest_converter(fn, mode=os.O_RDONLY)
                 data = converter.read_data(fn)
                 # will raise exception if doesn't contain good calib data
                 cdata = calibration.get_spectrum_efficiency(data)
@@ -1623,7 +1642,7 @@ class SecomAlignTab(Tab):
     """
 
     def __init__(self, name, button, panel, main_frame, main_data):
-        tab_data = guimod.ActuatorGUIData(main_data)
+        tab_data = guimod.SecomAlignGUIData(main_data)
         super(SecomAlignTab, self).__init__(name, button, panel, main_frame, tab_data)
 
         # TODO: we should actually display the settings of the streams (...once they have it)
@@ -1758,6 +1777,7 @@ class SecomAlignTab(Tab):
 
         self._fa_controller = acqcont.FineAlignController(self.tab_data_model,
                                                           panel,
+                                                          main_frame,
                                                           self._settings_controller)
 
         self._ac_controller = acqcont.AutoCenterController(self.tab_data_model,
@@ -2016,7 +2036,7 @@ class SparcAlignTab(Tab):
     # occur. The reason for this is still unknown.
 
     def __init__(self, name, button, panel, main_frame, main_data):
-        tab_data = guimod.ActuatorGUIData(main_data)
+        tab_data = guimod.SparcAlignGUIData(main_data)
         super(SparcAlignTab, self).__init__(name, button, panel, main_frame, tab_data)
 
         self._ccd_stream = None
@@ -2316,13 +2336,48 @@ class Sparc2AlignTab(Tab):
     """
 
     def __init__(self, name, button, panel, main_frame, main_data):
-        tab_data = guimod.ActuatorGUIData(main_data)
+        tab_data = guimod.Sparc2AlignGUIData(main_data)
         super(Sparc2AlignTab, self).__init__(name, button, panel, main_frame, tab_data)
 
         # Documentation text on the left panel
         doc_path = pkg_resources.resource_filename("odemis.gui", "doc/sparc2_align.html")
         panel.html_alignment_doc.SetBorders(0)  # sizer already give us borders
         panel.html_alignment_doc.LoadPage(doc_path)
+
+        # Create stream & view
+        self._stream_controller = streamcont.StreamBarController(
+            tab_data,
+            panel.pnl_streams,
+            locked=True
+        )
+
+        # create a view on the microscope model
+        vpv = collections.OrderedDict((
+            (self.panel.vp_align_lens,
+                {
+                    "cls": guimod.ContentView,
+                    "name": "Lens alignment",
+                    "stream_classes": acqstream.CameraStream,
+                }
+            ),
+            (self.panel.vp_moi,
+                {
+                    "cls": guimod.ContentView,
+                    "name": "Moment of Inertia",
+                    "stream_classes": acqstream.MomentOfInertiaStream,
+                }
+            ),
+            (self.panel.vp_align_center,
+                {
+                    "cls": guimod.ContentView,
+                    "name": "Center alignment",
+                    "stream_classes": (acqstream.CameraStream, acqstream.RGBStream),
+                }
+            ),
+        ))
+        self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
+        self.panel.vp_align_lens.microscope_view.show_crosshair.value = False
+        self.panel.vp_align_center.microscope_view.show_crosshair.value = False
 
         # TODO: add streams:
         # * MomentOfInertia stream (moi): used to align the mirror. Used both
@@ -2334,14 +2389,25 @@ class Sparc2AlignTab(Tab):
         #   lens alignment.
         # * AR CCD (ccd): Used to show CL spot during the alignment of the lens1,
         #   and to show the mirror shadow in center alignment
-        # TODO: have a special stream that does CCD + ebeam spot?
+        # * RGB stream (goal image): To show the goal image in center alignment
+        # TODO: have a special stream that does CCD + ebeam spot? (to avoid the ebeam spot)
 
-
-        # TODO: add stream bar controller
+        # MomentOfInertiaStream needs an SEM stream and a CCD stream
+        moisem = acqstream.SEMStream("SEM for MoI", main_data.sed, main_data.sed.data, main_data.ebeam)
+        moiccd = acqstream.ARSettingsStream("CCD for MoI", main_data.ccd, main_data.ccd.data, main_data.ebeam)
+                                            # TODO: add det_vas, for all ccd vas, and initialise at good values
+        moiccd.roi.value = (0.1, 0.1, 0.9, 0.9)  # TODO: or full view?
+        moiccd.repetition.value = (9, 9)
+        mois = acqstream.MomentOfInertiaStream("MoI", moisem, moiccd)
+        # TODO: or shall we show the moiccd entry ? Or we need a MomentOfInertiaStream which is more self-contained?
+        mois_spe = self._stream_controller.addStream(mois, add_to_all_views=True)
+        mois_spe.stream_panel.flatten()  # No need for the stream name
+        self._mois = mois
 
 
         # The mirror center (with the lens set) is defined as pole position
         # in the microscope configuration file.
+        # TODO: use an overlay, instead of a stream? We need to allow dragging it around
         goal_im = self._getGoalImage(main_data)
         self._goal_stream = acqstream.RGBStream("Goal", goal_im)
 
@@ -2355,8 +2421,8 @@ class Sparc2AlignTab(Tab):
         # * mirror-align: move x, y of mirror with moment of inertia feedback
         # * lens-align: first auto-focus spectrograph, then align lens1
         # * goal-align: find the center of the AR image using a "Goal" image
-        self._alignbtn_to_mode = {panel.btn_align_mirror: "mirror-align",
-                                  panel.btn_align_lens: "lens-align",
+        self._alignbtn_to_mode = {panel.btn_align_lens: "lens-align",
+                                  panel.btn_align_mirror: "mirror-align",
                                   panel.btn_align_centering: "center-align"}
         # The GUI mode to the optical path mode
         self._mode_to_opm = {"mirror-align": "mirror-align",
@@ -2409,28 +2475,30 @@ class Sparc2AlignTab(Tab):
             btn.SetToggle(mode == m)
 
         # Disable controls/streams which are useless (to guide the user)
-        if mode == "mirror-align":
-            # TODO: show the vp_mirror_align & play the MoI stream & stop the other streams
-            # self._moi_stream.should_update.value = True
-            self.panel.pnl_mirror.Enable(True)
-            self.panel.html_alignment_doc.Show(True)
-            self.panel.pnl_lens_mover.Enable(False)
-            self.panel.pnl_focus.Enable(False)
-        elif mode == "lens-align":
+        if mode == "lens-align":
             # TODO: show the vp_lens_align & play CCD stream + spot stream
             self.panel.pnl_mirror.Enable(False)
             self.panel.html_alignment_doc.Show(False)
             self.panel.pnl_lens_mover.Enable(True)
-            self.panel.pnl_focus.Enable(False)
+            self.panel.pnl_focus.Enable(True)
             # TODO: in this mode, if focus change, update the focus image once
             # (by going to spec-focus mode, turning the light, and acquiring an
             # AR image)
+        elif mode == "mirror-align":
+            # TODO: show the vp_mirror_align & play the MoI stream & stop the other streams
+            self._mois.should_update.value = True
+            self.tab_data_model.focussedView.value = self.panel.vp_moi.microscope_view
+            self.panel.pnl_mirror.Enable(True)
+            self.panel.html_alignment_doc.Show(True)
+            self.panel.pnl_lens_mover.Enable(False)
+            self.panel.pnl_focus.Enable(False)
+            self.panel.html_alignment_doc.Parent.Layout()
         else:  # "center-align"
             # TODO Show the vp_center_align & play CCD stream + spot stream
             self.panel.pnl_mirror.Enable(False)
             self.panel.html_alignment_doc.Show(False)
             self.panel.pnl_lens_mover.Enable(False)
-            self.panel.pnl_focus.Enable(True)
+            self.panel.pnl_focus.Enable(False)
 
         # This is blocking on the hardware => run in a separate thread
         op_mode = self._mode_to_opm[mode]
@@ -2572,6 +2640,9 @@ class TabBarController(object):
         main_frame.SetMinSize((1400, 550))
 
         self.main_data.is_acquiring.subscribe(self.on_acquisition)
+
+    def get_tabs(self):
+        return self._tabs.choices
 
     def open_tab(self, tab_name):
         for tab in self._tabs.choices:

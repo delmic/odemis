@@ -261,14 +261,11 @@ at 10 different dwell times, and save them in one HDF5 file.
     import sys
 
     filename = sys.argv[1]
-    exporter = dataio.find_fittest_exporter(filename)
+    exporter = dataio.find_fittest_converter(filename)
 
     # find components by their role
-    for c in model.getComponents():
-        if c.role == "e-beam":
-            escan = c
-        elif c.role == "se-detector":
-            sed = c
+    escan = model.getComponent(role="e-beam")
+    sed = model.getComponent(role="se-detector")
 
     data = []
     for i in range(1, 11): # 10 acquisitions

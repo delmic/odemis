@@ -650,7 +650,7 @@ def acquire(comp_name, dataflow_names, filename):
         except Exception as exc:
             logging.exception("Failed to read image information.")
 
-    exporter = dataio.find_fittest_exporter(filename)
+    exporter = dataio.find_fittest_converter(filename)
     try:
         exporter.export(filename, images)
     except IOError as exc:

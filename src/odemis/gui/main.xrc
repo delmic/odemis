@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<resource class="" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<resource version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -328,42 +328,28 @@
         <flag>wxEXPAND</flag>
         <minsize>-1,40</minsize>
       </object>
+      <orient>wxVERTICAL</orient>
       <object class="sizeritem">
-        <object class="wxPanel" name="pnl_log">
-          <object class="wxBoxSizer">
-            <orient>wxVERTICAL</orient>
-            <object class="sizeritem">
-              <object class="wxTextCtrl" name="txt_log">
-                <size>-1,200</size>
-                <fg>#4D4D4D</fg>
-                <bg>#BFBFBF</bg>
-                <font>
-                  <size>10</size>
-                  <style>normal</style>
-                  <weight>normal</weight>
-                  <underlined>0</underlined>
-                  <face>Monospace</face>
-                </font>
-                <style>wxBORDER_NONE|wxTE_MULTILINE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxALL|wxEXPAND</flag>
-              <border>2</border>
-            </object>
-          </object>
+        <object class="wxTextCtrl" name="txt_log">
           <size>-1,200</size>
-          <bg>#4D4D4D</bg>
+          <value>Log message panel</value>
+          <bg>#1A1A1A</bg>
+          <font>
+            <size>10</size>
+            <style>normal</style>
+            <weight>normal</weight>
+            <underlined>0</underlined>
+            <face>Monospace</face>
+          </font>
           <hidden>1</hidden>
+          <style>wxBORDER_NONE|wxTE_MULTILINE</style>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
         </object>
-        <flag>wxTOP|wxEXPAND</flag>
+        <flag>wxTOP|wxLEFT|wxRIGHT|wxEXPAND</flag>
         <border>2</border>
       </object>
-      <orient>wxVERTICAL</orient>
     </object>
     <title>Odemis</title>
     <centered>1</centered>
@@ -887,6 +873,20 @@
               </object>
               <flag>wxTOP|wxEXPAND|wxALIGN_BOTTOM|wxALIGN_CENTRE_VERTICAL</flag>
               <border>24</border>
+            </object>
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="ImageButton" name="btn_log">
+                <icon>img/icon/ico_chevron_up.png</icon>
+                <height>16</height>
+                <face_colour>def</face_colour>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
             </object>
           </object>
           <size>300,-1</size>
@@ -1814,6 +1814,22 @@
               <flag>wxEXPAND</flag>
             </object>
             <orient>wxVERTICAL</orient>
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="ImageButton" name="btn_log">
+                <icon>img/icon/ico_chevron_up.png</icon>
+                <height>16</height>
+                <face_colour>def</face_colour>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALL</flag>
+              <border>10</border>
+            </object>
           </object>
           <fg>#E5E5E5</fg>
           <bg>#333333</bg>
@@ -1916,13 +1932,35 @@
         <object class="wxPanel">
           <object class="wxBoxSizer">
             <object class="sizeritem">
-              <object class="wxPanel" name="pnl_alignment_btns">
+              <object class="wxPanel" name="pnl_mode_btns">
                 <object class="wxBoxSizer">
                   <orient>wxHORIZONTAL</orient>
                   <object class="sizeritem">
+                    <object class="GraphicRadioButton" name="btn_align_lens">
+                      <icon>img/icon/ico_lens.png</icon>
+                      <icon_on>img/icon/ico_lens_green.png</icon_on>
+                      <height>48</height>
+                      <face_colour>def</face_colour>
+                      <label>LENS</label>
+                      <fg>#1A1A1A</fg>
+                      <font>
+                        <size>11</size>
+                        <style>normal</style>
+                        <weight>normal</weight>
+                        <underlined>0</underlined>
+                        <face>Ubuntu</face>
+                      </font>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxALL</flag>
+                    <border>10</border>
+                  </object>
+                  <object class="sizeritem">
                     <object class="GraphicRadioButton" name="btn_align_mirror">
-                      <icon>img/icon/ico_ang.png</icon>
-                      <icon_on>img/icon/ico_ang_green.png</icon_on>
+                      <icon>img/icon/ico_mirror.png</icon>
+                      <icon_on>img/icon/ico_mirror_green.png</icon_on>
                       <height>48</height>
                       <face_colour>def</face_colour>
                       <label>MIRROR</label>
@@ -1934,28 +1972,6 @@
                         <underlined>0</underlined>
                         <face>Ubuntu</face>
                         <encoding>UTF-8</encoding>
-                      </font>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <flag>wxALL</flag>
-                    <border>10</border>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="GraphicRadioButton" name="btn_align_lens">
-                      <icon>img/icon/ico_ang.png</icon>
-                      <icon_on>img/icon/ico_ang_green.png</icon_on>
-                      <height>48</height>
-                      <face_colour>def</face_colour>
-                      <label>LENS</label>
-                      <fg>#1A1A1A</fg>
-                      <font>
-                        <size>11</size>
-                        <style>normal</style>
-                        <weight>normal</weight>
-                        <underlined>0</underlined>
-                        <face>Ubuntu</face>
                       </font>
                       <XRCED>
                         <assign_var>1</assign_var>
@@ -1997,12 +2013,239 @@
               <border>5</border>
             </object>
             <object class="sizeritem">
+              <object class="wxPanel" name="pnl_focus">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="wxStaticText">
+                      <label>Focus</label>
+                      <fg>#E5E5E5</fg>
+                      <font>
+                        <size>16</size>
+                        <style>normal</style>
+                        <weight>normal</weight>
+                        <underlined>0</underlined>
+                        <face>Ubuntu</face>
+                      </font>
+                    </object>
+                    <flag>wxBOTTOM|wxALL</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxGridBagSizer">
+                      <object class="sizeritem">
+                        <object class="wxStaticText">
+                          <label>Position</label>
+                        </object>
+                        <flag>wxLEFT</flag>
+                        <border>5</border>
+                        <cellpos>0,0</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="UnitFloatSlider" name="slider_focus">
+                          <size>-1,20</size>
+                          <value>0.00001</value>
+                          <min>0.0000001</min>
+                          <max>0.001</max>
+                          <unit>m</unit>
+                          <scale>linear</scale>
+                          <accuracy>2</accuracy>
+                          <style>wxBORDER_NONE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <option>1</option>
+                        <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
+                        <border>5</border>
+                        <cellpos>0,1</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton">
+                          <height>24</height>
+                          <face_colour>def</face_colour>
+                          <label>Auto focus</label>
+                        </object>
+                        <flag>wxLEFT</flag>
+                        <border>5</border>
+                        <cellpos>1,0</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxGauge" name="gauge_autofocus">
+                          <size>-1,10</size>
+                          <range>100</range>
+                          <value>0</value>
+                          <style>wxGA_SMOOTH</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <option>1</option>
+                        <flag>wxALL|wxEXPAND</flag>
+                        <border>7</border>
+                        <cellpos>1,1</cellpos>
+                      </object>
+                      <vgap>5</vgap>
+                      <hgap>5</hgap>
+                      <growablecols>1</growablecols>
+                      <growablerows/>
+                    </object>
+                    <flag>wxBOTTOM|wxEXPAND|wxALIGN_CENTRE</flag>
+                    <border>10</border>
+                  </object>
+                </object>
+                <fg>#E5E5E5</fg>
+                <bg>#444444</bg>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxBOTTOM|wxEXPAND</flag>
+              <border>5</border>
+            </object>
+            <object class="sizeritem">
+              <object class="wxPanel" name="pnl_lens_mover">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="wxStaticText">
+                      <label>Lens translation</label>
+                      <fg>#E5E5E5</fg>
+                      <font>
+                        <size>16</size>
+                        <style>normal</style>
+                        <weight>normal</weight>
+                        <underlined>0</underlined>
+                        <face>Ubuntu</face>
+                      </font>
+                    </object>
+                    <flag>wxBOTTOM|wxALL</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxStaticText">
+                      <label>Step size</label>
+                    </object>
+                    <flag>wxLEFT</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="UnitFloatSlider" name="slider_lens_mover">
+                      <size>-1,20</size>
+                      <value>0.000001</value>
+                      <min>0.0000001</min>
+                      <max>0.001</max>
+                      <unit>m</unit>
+                      <scale>log</scale>
+                      <accuracy>2</accuracy>
+                      <style>wxBORDER_NONE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxGridBagSizer">
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_p_lens">
+                          <label>+X</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <style>normal</style>
+                            <weight>bold</weight>
+                            <underlined>0</underlined>
+                            <face>Ubuntu</face>
+                          </font>
+                          <style>wxALIGN_LEFT</style>
+                        </object>
+                        <flag>wxLEFT|wxALIGN_CENTRE_VERTICAL</flag>
+                        <border>5</border>
+                        <cellpos>0,4</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_m_lens">
+                          <label>-X</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <style>normal</style>
+                            <weight>bold</weight>
+                            <underlined>0</underlined>
+                            <face>Ubuntu</face>
+                          </font>
+                        </object>
+                        <flag>wxRIGHT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
+                        <border>5</border>
+                        <cellpos>0,0</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="btn_m_lens_mover_x">
+                          <size>64,-1</size>
+                          <height>48</height>
+                          <face_colour>def</face_colour>
+                          <label>←</label>
+                          <font>
+                            <size>24</size>
+                            <style>normal</style>
+                            <weight>bold</weight>
+                            <underlined>0</underlined>
+                            <face>Ubuntu</face>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <cellpos>0,1</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="btn_p_lens_mover_x">
+                          <size>64,-1</size>
+                          <height>48</height>
+                          <face_colour>def</face_colour>
+                          <label>→</label>
+                          <font>
+                            <size>24</size>
+                            <style>normal</style>
+                            <weight>bold</weight>
+                            <underlined>0</underlined>
+                            <face>Ubuntu</face>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <cellpos>0,3</cellpos>
+                      </object>
+                      <vgap>0</vgap>
+                      <hgap>5</hgap>
+                      <growablecols/>
+                      <growablerows/>
+                    </object>
+                    <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                    <border>10</border>
+                  </object>
+                </object>
+                <fg>#E5E5E5</fg>
+                <bg>#444444</bg>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxBOTTOM|wxEXPAND</flag>
+              <border>5</border>
+            </object>
+            <object class="sizeritem">
               <object class="wxPanel" name="pnl_mirror">
                 <object class="wxBoxSizer">
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
                     <object class="wxStaticText">
-                      <label>Translation</label>
+                      <label>Mirror translation</label>
                       <font>
                         <size>16</size>
                         <style>normal</style>
@@ -2207,237 +2450,10 @@
               <flag>wxBOTTOM|wxEXPAND</flag>
               <border>5</border>
             </object>
-            <object class="sizeritem">
-              <object class="wxPanel" name="pnl_lens_mover">
-                <object class="wxBoxSizer">
-                  <orient>wxVERTICAL</orient>
-                  <object class="sizeritem">
-                    <object class="wxStaticText">
-                      <label>Lens translation</label>
-                      <fg>#E5E5E5</fg>
-                      <font>
-                        <size>16</size>
-                        <style>normal</style>
-                        <weight>normal</weight>
-                        <underlined>0</underlined>
-                        <face>Ubuntu</face>
-                      </font>
-                    </object>
-                    <flag>wxBOTTOM|wxALL</flag>
-                    <border>5</border>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxStaticText">
-                      <label>Step size</label>
-                    </object>
-                    <flag>wxLEFT</flag>
-                    <border>5</border>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="UnitFloatSlider" name="slider_lens_mover">
-                      <size>-1,20</size>
-                      <value>0.000001</value>
-                      <min>0.0000001</min>
-                      <max>0.001</max>
-                      <unit>m</unit>
-                      <scale>log</scale>
-                      <accuracy>2</accuracy>
-                      <style>wxBORDER_NONE</style>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
-                    <border>5</border>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxGridBagSizer">
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_p_lens">
-                          <label>+X</label>
-                          <fg>#E5E5E5</fg>
-                          <font>
-                            <size>16</size>
-                            <style>normal</style>
-                            <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
-                          </font>
-                          <style>wxALIGN_LEFT</style>
-                        </object>
-                        <flag>wxLEFT|wxALIGN_CENTRE_VERTICAL</flag>
-                        <border>5</border>
-                        <cellpos>0,4</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_m_lens">
-                          <label>-X</label>
-                          <fg>#E5E5E5</fg>
-                          <font>
-                            <size>16</size>
-                            <style>normal</style>
-                            <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
-                          </font>
-                        </object>
-                        <flag>wxRIGHT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
-                        <border>5</border>
-                        <cellpos>0,0</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_m_lens_mover_x">
-                          <size>64,-1</size>
-                          <height>48</height>
-                          <face_colour>def</face_colour>
-                          <label>←</label>
-                          <font>
-                            <size>24</size>
-                            <style>normal</style>
-                            <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
-                          </font>
-                          <style>wxALIGN_CENTRE</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <cellpos>0,1</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_p_lens_mover_x">
-                          <size>64,-1</size>
-                          <height>48</height>
-                          <face_colour>def</face_colour>
-                          <label>→</label>
-                          <font>
-                            <size>24</size>
-                            <style>normal</style>
-                            <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <face>Ubuntu</face>
-                          </font>
-                          <style>wxALIGN_CENTRE</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <cellpos>0,3</cellpos>
-                      </object>
-                      <vgap>0</vgap>
-                      <hgap>5</hgap>
-                      <growablecols/>
-                      <growablerows/>
-                    </object>
-                    <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
-                    <border>10</border>
-                  </object>
-                </object>
-                <fg>#E5E5E5</fg>
-                <bg>#444444</bg>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxBOTTOM|wxEXPAND</flag>
-              <border>5</border>
-            </object>
-            <object class="sizeritem">
-              <object class="wxPanel" name="pnl_focus">
-                <object class="wxBoxSizer">
-                  <orient>wxVERTICAL</orient>
-                  <object class="sizeritem">
-                    <object class="wxStaticText">
-                      <label>Focus</label>
-                      <fg>#E5E5E5</fg>
-                      <font>
-                        <size>16</size>
-                        <style>normal</style>
-                        <weight>normal</weight>
-                        <underlined>0</underlined>
-                        <face>Ubuntu</face>
-                      </font>
-                    </object>
-                    <flag>wxBOTTOM|wxALL</flag>
-                    <border>5</border>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxGridBagSizer">
-                      <object class="sizeritem">
-                        <object class="wxStaticText">
-                          <label>Position</label>
-                        </object>
-                        <flag>wxLEFT</flag>
-                        <border>5</border>
-                        <cellpos>0,0</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="UnitFloatSlider" name="slider_focus">
-                          <size>-1,20</size>
-                          <value>0.00001</value>
-                          <min>0.0000001</min>
-                          <max>0.001</max>
-                          <unit>m</unit>
-                          <scale>linear</scale>
-                          <accuracy>2</accuracy>
-                          <style>wxBORDER_NONE</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <option>1</option>
-                        <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
-                        <border>5</border>
-                        <cellpos>0,1</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="ImageTextButton">
-                          <height>24</height>
-                          <face_colour>def</face_colour>
-                          <label>Auto focus</label>
-                        </object>
-                        <flag>wxLEFT</flag>
-                        <border>5</border>
-                        <cellpos>1,0</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="wxGauge" name="gauge_autofocus">
-                          <size>-1,10</size>
-                          <range>100</range>
-                          <value>0</value>
-                          <style>wxGA_SMOOTH</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <option>1</option>
-                        <flag>wxALL|wxEXPAND</flag>
-                        <border>7</border>
-                        <cellpos>1,1</cellpos>
-                      </object>
-                      <vgap>5</vgap>
-                      <hgap>5</hgap>
-                      <growablecols>1</growablecols>
-                      <growablerows/>
-                    </object>
-                    <flag>wxBOTTOM|wxEXPAND|wxALIGN_CENTRE</flag>
-                    <border>10</border>
-                  </object>
-                </object>
-                <fg>#E5E5E5</fg>
-                <bg>#444444</bg>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxEXPAND</flag>
-            </object>
             <orient>wxVERTICAL</orient>
             <object class="sizeritem">
               <object class="wxHtmlWindow" name="html_alignment_doc">
                 <size>-1,400</size>
-                <url>./doc/sparc2_align.html</url>
                 <fg>#BBBBBB</fg>
                 <bg>#333333</bg>
                 <style>wxHW_SCROLLBAR_NEVER|wxHW_NO_SELECTION</style>
@@ -2448,6 +2464,22 @@
               <flag>wxALL|wxEXPAND|wxALIGN_BOTTOM|wxALIGN_CENTRE_VERTICAL</flag>
               <border>10</border>
             </object>
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="ImageButton" name="btn_log">
+                <icon>img/icon/ico_chevron_up.png</icon>
+                <height>16</height>
+                <face_colour>def</face_colour>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALL</flag>
+              <border>10</border>
+            </object>
           </object>
           <fg>#E5E5E5</fg>
           <bg>#333333</bg>
@@ -2455,15 +2487,29 @@
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">
-        <object class="ARLiveViewport" name="vp_center_align">
-          <size>400,-1</size>
+        <object class="ViewportGrid" name="pnl_vp_grid">
+          <object class="ARLiveViewport" name="vp_moi">
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="ARLiveViewport" name="vp_align_lens">
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="ARLiveViewport" name="vp_align_center">
+            <size>400,-1</size>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
         </object>
         <option>1</option>
         <flag>wxEXPAND</flag>
-        <ratio>1</ratio>
       </object>
       <object class="sizeritem">
         <object class="wxPanel">
@@ -2471,20 +2517,58 @@
             <object class="sizeritem">
               <object class="wxScrolledWindow" name="scr_win_right">
                 <object class="wxBoxSizer">
-                  <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
                     <object class="FoldPanelBar">
-                      <object class="FoldPanelItem" name="fp_optical_settings">
+                      <object class="FoldPanelItem">
+                        <object class="StreamBar" name="pnl_streams">
+                          <size>300,-1</size>
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
                         <label>OPTICAL</label>
                         <fg>#1A1A1A</fg>
                         <bg>#555555</bg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
                       </object>
                       <spacing>0</spacing>
                       <leftspacing>0</leftspacing>
                       <rightspacing>0</rightspacing>
+                      <bg>#333333</bg>
+                    </object>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="wxPanel">
+                      <object class="wxBoxSizer">
+                        <orient>wxVERTICAL</orient>
+                        <object class="sizeritem">
+                          <object class="ImageTextButton" name="btn_bkg_acquire">
+                            <height>24</height>
+                            <face_colour>def</face_colour>
+                            <label>Acquire Background</label>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                          </object>
+                          <flag>wxALL</flag>
+                          <border>10</border>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="wxHtmlWindow" name="html_bkg_acq_doc">
+                            <fg>#BBBBBB</fg>
+                            <bg>#333333</bg>
+                            <style>wxHW_SCROLLBAR_NEVER|wxHW_NO_SELECTION</style>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                          </object>
+                          <flag>wxALL|wxEXPAND|wxALIGN_BOTTOM|wxALIGN_CENTRE_VERTICAL</flag>
+                          <border>10</border>
+                        </object>
+                      </object>
                       <bg>#333333</bg>
                     </object>
                     <flag>wxEXPAND</flag>
@@ -2614,6 +2698,20 @@
               </object>
               <flag>wxALL|wxEXPAND</flag>
               <border>10</border>
+            </object>
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="ImageButton" name="btn_log">
+                <icon>img/icon/ico_chevron_up.png</icon>
+                <height>16</height>
+                <face_colour>def</face_colour>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
             </object>
           </object>
           <size>300,-1</size>
@@ -2854,6 +2952,22 @@
               <option>1</option>
               <flag>wxBOTTOM|wxEXPAND</flag>
               <border>44</border>
+            </object>
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="ImageButton" name="btn_log">
+                <icon>img/icon/ico_chevron_up.png</icon>
+                <height>16</height>
+                <face_colour>def</face_colour>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALL</flag>
+              <border>10</border>
             </object>
           </object>
           <size>200,-1</size>
@@ -3306,6 +3420,22 @@
               <border>44</border>
             </object>
             <orient>wxVERTICAL</orient>
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="ImageButton" name="btn_log">
+                <icon>img/icon/ico_chevron_up.png</icon>
+                <height>16</height>
+                <face_colour>def</face_colour>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALL</flag>
+              <border>10</border>
+            </object>
           </object>
           <size>200,-1</size>
           <bg>#333333</bg>
@@ -3645,6 +3775,22 @@
               <option>1</option>
               <flag>wxBOTTOM|wxEXPAND</flag>
               <border>44</border>
+            </object>
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="ImageButton" name="btn_log">
+                <icon>img/icon/ico_chevron_up.png</icon>
+                <height>16</height>
+                <face_colour>def</face_colour>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALL</flag>
+              <border>10</border>
             </object>
           </object>
           <size>200,-1</size>
