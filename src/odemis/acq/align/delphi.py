@@ -297,7 +297,7 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
             f = autofocus.AutoFocus(ccd, escan, ebeam_focus, dfbkg=det_dataflow)
             f.result()
             # Re-apply optical autofocus to be safe in case of inaccuracy
-            ccd.binning.value = (8, 8)
+            ccd.binning.value = min((8, 8), ccd.binning.range[1])
             f = autofocus.AutoFocus(ccd, escan, focus, dfbkg=det_dataflow)
             f.result()
             ccd.binning.value = (1, 1)
@@ -648,8 +648,10 @@ def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, fo
                     spot_coordinates = spot.FindSpot(image)
                 except ValueError:
                     # If failed to find spot, try first to focus
+                    ccd.binning.value = min((8, 8), ccd.binning.range[1])
                     f = autofocus.AutoFocus(ccd, escan, focus, dfbkg=det_dataflow)
                     f.result()
+                    ccd.binning.value = (1, 1)
                     image = AcquireNoBackground(ccd, det_dataflow)
                     try:
                         spot_coordinates = spot.FindSpot(image)
@@ -1440,8 +1442,10 @@ def _DoSpotShiftFactor(future, ccd, detector, escan, focus):
             spot_no_rot = spot.FindSpot(image)
         except ValueError:
             # If failed to find spot, try first to focus
+            ccd.binning.value = min((8, 8), ccd.binning.range[1])
             f = autofocus.AutoFocus(ccd, escan, focus, dfbkg=det_dataflow)
             f.result()
+            ccd.binning.value = (1, 1)
             image = AcquireNoBackground(ccd, det_dataflow)
             try:
                 spot_no_rot = spot.FindSpot(image)
@@ -1455,8 +1459,10 @@ def _DoSpotShiftFactor(future, ccd, detector, escan, focus):
             spot_rot_pi = spot.FindSpot(image)
         except ValueError:
             # If failed to find spot, try first to focus
+            ccd.binning.value = min((8, 8), ccd.binning.range[1])
             f = autofocus.AutoFocus(ccd, escan, focus, dfbkg=det_dataflow)
             f.result()
+            ccd.binning.value = (1, 1)
             image = AcquireNoBackground(ccd, det_dataflow)
             try:
                 spot_rot_pi = spot.FindSpot(image)
