@@ -201,6 +201,7 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.btn_align_centering = xrc.XRCCTRL(self, "btn_align_centering")
         self.pnl_focus = xrc.XRCCTRL(self, "pnl_focus")
         self.slider_focus = xrc.XRCCTRL(self, "slider_focus")
+        self.btn_autofocus = xrc.XRCCTRL(self, "btn_autofocus")
         self.gauge_autofocus = xrc.XRCCTRL(self, "gauge_autofocus")
         self.pnl_lens_mover = xrc.XRCCTRL(self, "pnl_lens_mover")
         self.slider_lens_mover = xrc.XRCCTRL(self, "slider_lens_mover")
@@ -220,8 +221,9 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.vp_align_center = xrc.XRCCTRL(self, "vp_align_center")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.pnl_streams = xrc.XRCCTRL(self, "pnl_streams")
+        self.pnl_moi_settings = xrc.XRCCTRL(self, "pnl_moi_settings")
         self.btn_bkg_acquire = xrc.XRCCTRL(self, "btn_bkg_acquire")
-        self.html_bkg_acq_doc = xrc.XRCCTRL(self, "html_bkg_acq_doc")
+        self.html_moi_doc = xrc.XRCCTRL(self, "html_moi_doc")
 
 
 
@@ -2527,10 +2529,13 @@ def __init_resources():
                         <cellpos>0,1</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton">
+                        <object class="ImageTextButton" name="btn_autofocus">
                           <height>24</height>
                           <face_colour>def</face_colour>
                           <label>Auto focus</label>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
                         </object>
                         <flag>wxLEFT</flag>
                         <border>5</border>
@@ -3007,7 +3012,7 @@ def __init_resources():
                   </object>
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
-                    <object class="wxPanel">
+                    <object class="wxPanel" name="pnl_moi_settings">
                       <object class="wxBoxSizer">
                         <orient>wxVERTICAL</orient>
                         <object class="sizeritem">
@@ -3023,7 +3028,7 @@ def __init_resources():
                           <border>10</border>
                         </object>
                         <object class="sizeritem">
-                          <object class="wxHtmlWindow" name="html_bkg_acq_doc">
+                          <object class="wxHtmlWindow" name="html_moi_doc">
                             <fg>#BBBBBB</fg>
                             <bg>#333333</bg>
                             <style>wxHW_SCROLLBAR_NEVER|wxHW_NO_SELECTION</style>
@@ -3036,6 +3041,10 @@ def __init_resources():
                         </object>
                       </object>
                       <bg>#333333</bg>
+                      <hidden>1</hidden>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
                     </object>
                     <flag>wxEXPAND</flag>
                   </object>

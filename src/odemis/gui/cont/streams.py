@@ -1249,11 +1249,11 @@ class StreamBarController(object):
                                                 no_bc=no_bc)
 
             # TODO: make StreamTree a VA-like and remove this
-            logging.debug("Sending stream.ctrl.added message")
-            pub.sendMessage('stream.ctrl.added',
-                            streams_present=True,
-                            streams_visible=self._has_visible_streams(),
-                            tab=self._tab_data_model)
+#             logging.debug("Sending stream.ctrl.added message")
+#             pub.sendMessage('stream.ctrl.added',
+#                             streams_present=True,
+#                             streams_visible=self._has_visible_streams(),
+#                             tab=self._tab_data_model)
 
             return stream_cont
         else:
