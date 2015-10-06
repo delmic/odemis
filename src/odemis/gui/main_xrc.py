@@ -2402,7 +2402,6 @@ def __init_resources():
             <object class="sizeritem">
               <object class="wxPanel" name="pnl_mode_btns">
                 <object class="wxBoxSizer">
-                  <orient>wxHORIZONTAL</orient>
                   <object class="sizeritem">
                     <object class="GraphicRadioButton" name="btn_align_lens">
                       <icon>img_icon_ico_lens_png</icon>
@@ -2470,6 +2469,7 @@ def __init_resources():
                     <flag>wxALL</flag>
                     <border>10</border>
                   </object>
+                  <orient>wxHORIZONTAL</orient>
                 </object>
                 <fg>#E5E5E5</fg>
                 <bg>#444444</bg>
@@ -2533,6 +2533,7 @@ def __init_resources():
                           <height>24</height>
                           <face_colour>def</face_colour>
                           <label>Auto focus</label>
+                          <style>wxALIGN_CENTRE</style>
                           <XRCED>
                             <assign_var>1</assign_var>
                           </XRCED>
@@ -3029,6 +3030,7 @@ def __init_resources():
                         </object>
                         <object class="sizeritem">
                           <object class="wxHtmlWindow" name="html_moi_doc">
+                            <size>-1,400</size>
                             <fg>#BBBBBB</fg>
                             <bg>#333333</bg>
                             <style>wxHW_SCROLLBAR_NEVER|wxHW_NO_SELECTION</style>

@@ -48,6 +48,7 @@ from odemis.gui.cont.microscope import SecomStateController, DelphiStateControll
 from odemis.gui.cont.streams import StreamController
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.img import scale_to_alpha
+from odemis.gui.util.widgets import ProgressiveFutureConnector, AxisConnector
 from odemis.util import units
 import os.path
 import pkg_resources
@@ -67,7 +68,6 @@ import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
 import odemis.gui.util.align as align
-from odemis.gui.util.widgets import ProgressiveFutureConnector
 
 
 class Tab(object):
@@ -2339,10 +2339,13 @@ class Sparc2AlignTab(Tab):
         tab_data = guimod.Sparc2AlignGUIData(main_data)
         super(Sparc2AlignTab, self).__init__(name, button, panel, main_frame, tab_data)
 
-        # Documentation text on the left panel
-        doc_path = pkg_resources.resource_filename("odemis.gui", "doc/sparc2_align.html")
+        # Documentation text on the left & right panel for mirror alignement
+        doc_path = pkg_resources.resource_filename("odemis.gui", "doc/sparc2_moi_procedure.html")
         panel.html_alignment_doc.SetBorders(0)  # sizer already give us borders
         panel.html_alignment_doc.LoadPage(doc_path)
+        doc_path = pkg_resources.resource_filename("odemis.gui", "doc/sparc2_moi_goals.html")
+        panel.html_moi_doc.SetBorders(0)
+        panel.html_moi_doc.LoadPage(doc_path)
 
         # Create stream & view
         self._stream_controller = streamcont.StreamBarController(
@@ -2379,6 +2382,9 @@ class Sparc2AlignTab(Tab):
         self.panel.vp_align_lens.microscope_view.show_crosshair.value = False
         self.panel.vp_align_center.microscope_view.show_crosshair.value = False
 
+        # TODO: make the legend display a merge slider (currently not happening
+        # because both streams are optical)
+
         # TODO: add streams:
         # * MomentOfInertia stream (moi): used to align the mirror. Used both
         #   for the spatial image and the spot size measurement, and for the
@@ -2408,34 +2414,45 @@ class Sparc2AlignTab(Tab):
         # * MoI at center
         # * Spot size at center
 
-        specline_stream = acqstream.CameraStream(
+        # Ideally, we'd like to have the same settings for the specline and ccd
+        # streams (but different from the MoI stream). That kind of works by
+        # always playing the ccd stream first, and using global settings for the
+        # specline.
+        specline_stream = acqstream.BrightfieldStream(
                             "Spectrograph line",
                             main_data.ccd,
                             main_data.ccd.data,
                             main_data.brightlight,
-                            focuser=main_data.focus)
+                            focuser=main_data.focus,
+                            forcemd={model.MD_PIXEL_SIZE: (10e-5, 10e-5)},  # DEBUG
+                            )
         self._specline_stream = specline_stream
 
         # TODO: have a special stream that does CCD + ebeam spot? (to avoid the ebeam spot)
-        # Focuser here too so that menu controller beleives it's possible to autofocus
+        # Focuser here too so that it's possible to focus with right mouse button,
+        # and also menu controller beleives it's possible to autofocus.
         ccd_stream = acqstream.CameraStream(
                             "Angle-resolved sensor",
                             main_data.ccd,
                             main_data.ccd.data,
                             main_data.ebeam,
-                            focuser=main_data.focus)
+                            focuser=main_data.focus,
+                            detvas=get_hw_settings(main_data.ccd))
         self._ccd_stream = ccd_stream
 
-        # TODO: just use the same settings for all of the CCD streams? How?
-        sp_spe = self._stream_controller.addStream(specline_stream, visible=False)
         ccd_spe = self._stream_controller.addStream(ccd_stream)
+        ccd_spe.stream_panel.flatten()
+        # Add it as second stream, so that it's displayed with the default 0.3 merge ratio
+        self._stream_controller.addStream(specline_stream, visible=False)
 
-        # The center align view share the same CCD stream
-        self.panel.vp_align_center.microscope_view.addStream(ccd_stream)
+        # The center align view share the same CCD stream (and settings)
+        # self.panel.vp_align_center.microscope_view.addStream(ccd_stream)
+        self.panel.vp_align_center.microscope_view.addStream(specline_stream)
 
         # The mirror center (with the lens set) is defined as pole position
         # in the microscope configuration file.
         # TODO: use an overlay, instead of a stream? We need to allow dragging it around
+        # + connect it to the .polePosition VA of lens
         goal_im = self._getGoalImage(main_data)
         self._goal_stream = acqstream.RGBStream("Goal", goal_im)
 
@@ -2467,14 +2484,24 @@ class Sparc2AlignTab(Tab):
         self._actuator_controller = ActuatorController(tab_data, panel, "")
         self._actuator_controller.bind_keyboard(panel)
 
-        # TODO: focus position axis -> AxisConnector
+        if main_data.focus:
+            # TODO: focus position axis -> AxisConnector
+            z = main_data.focus.axes["z"]
+            self.panel.slider_focus.SetRange(z.range[0], z.range[1])
+            self._ac_focus = AxisConnector("z", main_data.focus, self.panel.slider_focus,
+                                           events=wx.EVT_SCROLL_CHANGED)
 
-        # Bind autofocus (the complex part is to get the menu entry working too)
-        self.panel.btn_autofocus.Bind(wx.EVT_BUTTON, self._onClickFocus)
-        self._autofocus_f = model.InstantaneousFuture()
-        self._pfc_autofocus = None
-        self._autofocused = False  # to force autofocus on the first trial
-        tab_data.autofocus_active.subscribe(self._onAutofocus)
+            # Bind autofocus (the complex part is to get the menu entry working too)
+            self.panel.btn_autofocus.Bind(wx.EVT_BUTTON, self._onClickFocus)
+            self._autofocus_f = model.InstantaneousFuture()
+            self._pfc_autofocus = None
+            self._autofocused = False  # to force autofocus on the first trial
+            tab_data.autofocus_active.subscribe(self._onAutofocus)
+
+            # Prepare the calibration light
+            emissions = [0.] * len(main_data.brightlight.emissions.value)
+            main_data.brightlight.emissions.value = emissions
+            main_data.brightlight.power.value = main_data.brightlight.power.range[1]
 
         # Bind MoI background acquisition
         self.panel.btn_bkg_acquire.Bind(wx.EVT_BUTTON, self._onBkgAcquire)
@@ -2541,11 +2568,12 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_moi_settings.Show(True)
             self.panel.html_alignment_doc.Parent.Layout()
             self.panel.pnl_moi_settings.Parent.Layout()
+            self.panel.html_moi_doc.Parent.Layout()
         else:  # "center-align"
-            # TODO Show the vp_center_align & play CCD stream + spot stream
             self.tab_data_model.focussedView.value = self.panel.vp_align_center.microscope_view
             self._spot_stream.is_active.value = True
-            self._ccd_stream.should_update.value = True
+            # self._ccd_stream.should_update.value = True
+            self._specline_stream.should_update.value = True
             self.panel.pnl_mirror.Enable(False)
             self.panel.html_alignment_doc.Show(False)
             self.panel.pnl_lens_mover.Enable(False)
@@ -2566,7 +2594,7 @@ class Sparc2AlignTab(Tab):
         Called when the autofocus button is pressed.
         It will start auto focus procedure... or stop it (if it's currently active)
         """
-        self.tab_data_model.autofocus_active.value = not self.tab_data_model.autofocus_active.value 
+        self.tab_data_model.autofocus_active.value = not self.tab_data_model.autofocus_active.value
 
     @call_in_wx_main
     def _onAutofocus(self, active):
@@ -2575,16 +2603,17 @@ class Sparc2AlignTab(Tab):
                 logging.info("Autofocus requested outside of lens alignment mode, not doing anything")
                 return
 
+            self.panel.btn_autofocus.SetLabel("Cancel")
+
             # Go to the special focus mode (=> close the slit & turn on the lamp)
             self._stream_controller.pauseStreams()
-            self.tab_data_model.main.opm.setPath("spec-focus")
             s = self._specline_stream
-            s.should_update.value = True
+            s.should_update.value = True  # To turn on the light
+            self.tab_data_model.main.opm.setPath("spec-focus")
             self._autofocus_f = AutoFocus(s.detector, s.emitter, s.focuser)
             self._autofocus_f.add_done_callback(self._on_autofocus_done)
 
             # Update GUI
-            self.panel.btn_autofocus.SetLabel("Cancel")
             self._pfc_autofocus = ProgressiveFutureConnector(self._autofocus_f, self.panel.gauge_autofocus)
         else:
             self._autofocus_f.cancel()
@@ -2677,10 +2706,13 @@ class Sparc2AlignTab(Tab):
             # optical path mode, if needed.
             self._stream_controller.pauseStreams()
             self._spot_stream.is_active.value = False
+            # Cancel autofocus (if it happens to run)
+            self.tab_data_model.autofocus_active.value = False
 
     def terminate(self):
         self._stream_controller.pauseStreams()
         self._spot_stream.is_active.value = False
+        self.tab_data_model.autofocus_active.value = False
 
 
 class TabBarController(object):
