@@ -187,7 +187,7 @@ class CamFocus(model.Actuator):
     # Duplicate of simsem.EbeamFocus
     def __init__(self, name, role, **kwargs):
         self._good_focus = 0.006
-        axes_def = {"z": model.Axis(unit="m", range=[-0.3, 0.3])}
+        axes_def = {"z": model.Axis(unit="m", range=(-0.01, 0.01))}
         self._position = {"z": self._good_focus}
 
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
