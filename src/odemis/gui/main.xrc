@@ -330,25 +330,51 @@
       </object>
       <orient>wxVERTICAL</orient>
       <object class="sizeritem">
-        <object class="wxTextCtrl" name="txt_log">
-          <size>-1,200</size>
-          <value>Log message panel</value>
+        <object class="wxPanel" name="pnl_log">
+          <object class="wxBoxSizer">
+            <object class="sizeritem">
+              <object class="ImageButton" name="btn_log">
+                <icon>img/icon/ico_chevron_down.png</icon>
+                <height>16</height>
+                <face_colour>def</face_colour>
+                <tooltip>Close log panel</tooltip>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALL|wxALIGN_BOTTOM</flag>
+              <border>10</border>
+            </object>
+            <object class="sizeritem">
+              <object class="wxTextCtrl" name="txt_log">
+                <size>-1,200</size>
+                <value>Log message panel</value>
+                <bg>#1A1A1A</bg>
+                <font>
+                  <size>10</size>
+                  <style>normal</style>
+                  <weight>normal</weight>
+                  <underlined>0</underlined>
+                  <face>Monospace</face>
+                </font>
+                <style>wxBORDER_NONE|wxTE_MULTILINE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <orient>wxHORIZONTAL</orient>
+          </object>
           <bg>#1A1A1A</bg>
-          <font>
-            <size>10</size>
-            <style>normal</style>
-            <weight>normal</weight>
-            <underlined>0</underlined>
-            <face>Monospace</face>
-          </font>
           <hidden>1</hidden>
-          <style>wxBORDER_NONE|wxTE_MULTILINE</style>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
         </object>
-        <flag>wxTOP|wxLEFT|wxRIGHT|wxEXPAND</flag>
-        <border>2</border>
+        <flag>wxEXPAND</flag>
       </object>
     </object>
     <title>Odemis</title>
@@ -883,6 +909,7 @@
                 <icon>img/icon/ico_chevron_up.png</icon>
                 <height>16</height>
                 <face_colour>def</face_colour>
+                <tooltip>Open log panel</tooltip>
                 <style>wxALIGN_CENTRE</style>
                 <XRCED>
                   <assign_var>1</assign_var>
@@ -1824,6 +1851,7 @@
                 <icon>img/icon/ico_chevron_up.png</icon>
                 <height>16</height>
                 <face_colour>def</face_colour>
+                <tooltip>Open log panel</tooltip>
                 <style>wxALIGN_CENTRE</style>
                 <XRCED>
                   <assign_var>1</assign_var>
@@ -2478,6 +2506,7 @@
                 <icon>img/icon/ico_chevron_up.png</icon>
                 <height>16</height>
                 <face_colour>def</face_colour>
+                <tooltip>Open log panel</tooltip>
                 <style>wxALIGN_CENTRE</style>
                 <XRCED>
                   <assign_var>1</assign_var>
@@ -2718,6 +2747,7 @@
                 <icon>img/icon/ico_chevron_up.png</icon>
                 <height>16</height>
                 <face_colour>def</face_colour>
+                <tooltip>Open log panel</tooltip>
                 <style>wxALIGN_CENTRE</style>
                 <XRCED>
                   <assign_var>1</assign_var>
@@ -2970,6 +3000,7 @@
                 <icon>img/icon/ico_chevron_up.png</icon>
                 <height>16</height>
                 <face_colour>def</face_colour>
+                <tooltip>Open log panel</tooltip>
                 <style>wxALIGN_CENTRE</style>
                 <XRCED>
                   <assign_var>1</assign_var>
@@ -3435,6 +3466,7 @@
                 <icon>img/icon/ico_chevron_up.png</icon>
                 <height>16</height>
                 <face_colour>def</face_colour>
+                <tooltip>Open log panel</tooltip>
                 <style>wxALIGN_CENTRE</style>
                 <XRCED>
                   <assign_var>1</assign_var>
@@ -3789,6 +3821,7 @@
                 <icon>img/icon/ico_chevron_up.png</icon>
                 <height>16</height>
                 <face_colour>def</face_colour>
+                <tooltip>Open log panel</tooltip>
                 <style>wxALIGN_CENTRE</style>
                 <XRCED>
                   <assign_var>1</assign_var>

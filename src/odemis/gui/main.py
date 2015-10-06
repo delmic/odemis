@@ -252,11 +252,12 @@ class OdemisGUIApp(wx.App):
             self.tab_controller = tabs.TabBarController(tab_defs, self.main_frame, self.main_data)
 
             def toggle_log_panel(_):
-                self.main_data.debug.value = not self.main_frame.txt_log.IsShown()
+                self.main_data.debug.value = not self.main_frame.pnl_log.IsShown()
 
             for tab in self.tab_controller.get_tabs():
                 if hasattr(tab.panel, 'btn_log'):
                     tab.panel.btn_log.Bind(wx.EVT_BUTTON, toggle_log_panel)
+            self.main_frame.btn_log.Bind(wx.EVT_BUTTON, toggle_log_panel)
 
             self._menu_controller = MenuController(self.main_data, self.main_frame)
             # Menu events
@@ -289,7 +290,7 @@ class OdemisGUIApp(wx.App):
         """ This method (un)sets the application into debug mode, setting the log level and
         opening the log panel. """
 
-        self.main_frame.txt_log.Show(enabled)
+        self.main_frame.pnl_log.Show(enabled)
 
         l = logging.getLogger()
         if enabled:
