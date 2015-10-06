@@ -2,7 +2,7 @@
 SPARC2: {
     class: Microscope,
     role: sparc2,
-    children: ["SEM E-beam", "SEM Detector",
+    children: ["SEM E-beam", "SEM Detector","Calibration Light",
                "Optical Path Properties",
                "Camera", "Spectrometer", "CL Detector",
                "Spec Filter Wheel", "Spec CCD Flipper", "Spectrograph focus",
@@ -15,7 +15,7 @@ SPARC2: {
 "Calibration Light": {
     # TODO: use light.Light
     class: simulated.Light,
-    role: "calib-light",
+    role: "brightlight",
     power_supplier: "Power Control Unit",
     affects: ["Camera"],
 }
