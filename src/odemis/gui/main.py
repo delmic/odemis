@@ -252,11 +252,12 @@ class OdemisGUIApp(wx.App):
             self.tab_controller = tabs.TabBarController(tab_defs, self.main_frame, self.main_data)
 
             def toggle_log_panel(_):
-                self.main_data.debug.value = not self.main_frame.txt_log.IsShown()
+                self.main_data.debug.value = not self.main_frame.pnl_log.IsShown()
 
             for tab in self.tab_controller.get_tabs():
                 if hasattr(tab.panel, 'btn_log'):
                     tab.panel.btn_log.Bind(wx.EVT_BUTTON, toggle_log_panel)
+            self.main_frame.btn_log.Bind(wx.EVT_BUTTON, toggle_log_panel)
 
             self._menu_controller = MenuController(self.main_data, self.main_frame)
             # Menu events
@@ -289,7 +290,7 @@ class OdemisGUIApp(wx.App):
         """ This method (un)sets the application into debug mode, setting the log level and
         opening the log panel. """
 
-        self.main_frame.txt_log.Show(enabled)
+        self.main_frame.pnl_log.Show(enabled)
 
         l = logging.getLogger()
         if enabled:
@@ -297,19 +298,20 @@ class OdemisGUIApp(wx.App):
             l.setLevel(logging.DEBUG)
             for tab in self.tab_controller.get_tabs():
                 if hasattr(tab.panel, 'btn_log'):
-                    tab.panel.btn_log.SetIcon(imgdata.ico_chevron_down.Bitmap)
+                    tab.panel.btn_log.Hide()
                     # Reset highest log level
                     self.main_data.level.value = 0
         else:
             for tab in self.tab_controller.get_tabs():
                 if hasattr(tab.panel, 'btn_log'):
-                    tab.panel.btn_log.SetIcon(imgdata.ico_chevron_up.Bitmap)
+                    tab.panel.btn_log.Show()
             l.setLevel(self.log_level)
         self.main_frame.Layout()
 
     @call_in_wx_main
     def on_level_va(self, log_level):
         """ Set the log button color """
+
         colour = 'def'
 
         if log_level >= logging.ERROR:
@@ -320,7 +322,6 @@ class OdemisGUIApp(wx.App):
         for tab in self.tab_controller.get_tabs():
             if hasattr(tab.panel, 'btn_log'):
                 tab.panel.btn_log.set_face_colour(colour)
-
 
     def on_close_window(self, evt=None):
         """ This method cleans up and closes the Odemis GUI. """
