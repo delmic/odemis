@@ -297,19 +297,20 @@ class OdemisGUIApp(wx.App):
             l.setLevel(logging.DEBUG)
             for tab in self.tab_controller.get_tabs():
                 if hasattr(tab.panel, 'btn_log'):
-                    tab.panel.btn_log.SetIcon(imgdata.ico_chevron_down.Bitmap)
+                    tab.panel.btn_log.Hide()
                     # Reset highest log level
                     self.main_data.level.value = 0
         else:
             for tab in self.tab_controller.get_tabs():
                 if hasattr(tab.panel, 'btn_log'):
-                    tab.panel.btn_log.SetIcon(imgdata.ico_chevron_up.Bitmap)
+                    tab.panel.btn_log.Show()
             l.setLevel(self.log_level)
         self.main_frame.Layout()
 
     @call_in_wx_main
     def on_level_va(self, log_level):
         """ Set the log button color """
+
         colour = 'def'
 
         if log_level >= logging.ERROR:
@@ -320,7 +321,6 @@ class OdemisGUIApp(wx.App):
         for tab in self.tab_controller.get_tabs():
             if hasattr(tab.panel, 'btn_log'):
                 tab.panel.btn_log.set_face_colour(colour)
-
 
     def on_close_window(self, evt=None):
         """ This method cleans up and closes the Odemis GUI. """

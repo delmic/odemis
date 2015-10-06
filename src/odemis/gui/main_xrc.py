@@ -1351,6 +1351,7 @@ def __init_resources():
                 <icon>img_icon_ico_chevron_up_png</icon>
                 <height>16</height>
                 <face_colour>def</face_colour>
+                <style>wxALIGN_CENTRE</style>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
@@ -2291,6 +2292,7 @@ def __init_resources():
                 <icon>img_icon_ico_chevron_up_png</icon>
                 <height>16</height>
                 <face_colour>def</face_colour>
+                <style>wxALIGN_CENTRE</style>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
@@ -2944,6 +2946,7 @@ def __init_resources():
                 <icon>img_icon_ico_chevron_up_png</icon>
                 <height>16</height>
                 <face_colour>def</face_colour>
+                <style>wxALIGN_CENTRE</style>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
@@ -3183,6 +3186,7 @@ def __init_resources():
                 <icon>img_icon_ico_chevron_up_png</icon>
                 <height>16</height>
                 <face_colour>def</face_colour>
+                <style>wxALIGN_CENTRE</style>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
@@ -3426,22 +3430,20 @@ def __init_resources():
               </object>
               <option>1</option>
               <flag>wxBOTTOM|wxEXPAND</flag>
-              <border>44</border>
+              <border>10</border>
             </object>
-            <object class="spacer">
-              <option>1</option>
-              <flag>wxEXPAND</flag>
-            </object>
+            
             <object class="sizeritem">
               <object class="ImageButton" name="btn_log">
                 <icon>img_icon_ico_chevron_up_png</icon>
                 <height>16</height>
                 <face_colour>def</face_colour>
+                <style>wxALIGN_CENTRE</style>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
               </object>
-              <flag>wxALL</flag>
+              <flag>wxBOTTOM|wxLEFT|wxRIGHT</flag>
               <border>10</border>
             </object>
           </object>
@@ -3890,25 +3892,23 @@ def __init_resources():
                 </object>
                 <orient>wxVERTICAL</orient>
               </object>
-              <option>0</option>
+              <option>1</option>
               <flag>wxBOTTOM|wxEXPAND</flag>
-              <border>44</border>
+              <border>10</border>
             </object>
             <orient>wxVERTICAL</orient>
-            <object class="spacer">
-              <option>1</option>
-              <flag>wxEXPAND</flag>
-            </object>
+            
             <object class="sizeritem">
               <object class="ImageButton" name="btn_log">
                 <icon>img_icon_ico_chevron_up_png</icon>
                 <height>16</height>
                 <face_colour>def</face_colour>
+                <style>wxALIGN_CENTRE</style>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
               </object>
-              <flag>wxALL</flag>
+              <flag>wxBOTTOM|wxLEFT|wxRIGHT</flag>
               <border>10</border>
             </object>
           </object>
@@ -4249,22 +4249,20 @@ def __init_resources():
               </object>
               <option>1</option>
               <flag>wxBOTTOM|wxEXPAND</flag>
-              <border>44</border>
+              <border>10</border>
             </object>
-            <object class="spacer">
-              <option>1</option>
-              <flag>wxEXPAND</flag>
-            </object>
+            
             <object class="sizeritem">
               <object class="ImageButton" name="btn_log">
                 <icon>img_icon_ico_chevron_up_png</icon>
                 <height>16</height>
                 <face_colour>def</face_colour>
+                <style>wxALIGN_CENTRE</style>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
               </object>
-              <flag>wxALL</flag>
+              <flag>wxBOTTOM|wxLEFT|wxRIGHT</flag>
               <border>10</border>
             </object>
           </object>

@@ -883,6 +883,7 @@
                 <icon>img/icon/ico_chevron_up.png</icon>
                 <height>16</height>
                 <face_colour>def</face_colour>
+                <style>wxALIGN_CENTRE</style>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
@@ -1823,6 +1824,7 @@
                 <icon>img/icon/ico_chevron_up.png</icon>
                 <height>16</height>
                 <face_colour>def</face_colour>
+                <style>wxALIGN_CENTRE</style>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
@@ -2476,6 +2478,7 @@
                 <icon>img/icon/ico_chevron_up.png</icon>
                 <height>16</height>
                 <face_colour>def</face_colour>
+                <style>wxALIGN_CENTRE</style>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
@@ -2715,6 +2718,7 @@
                 <icon>img/icon/ico_chevron_up.png</icon>
                 <height>16</height>
                 <face_colour>def</face_colour>
+                <style>wxALIGN_CENTRE</style>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
@@ -2958,22 +2962,20 @@
               </object>
               <option>1</option>
               <flag>wxBOTTOM|wxEXPAND</flag>
-              <border>44</border>
+              <border>10</border>
             </object>
-            <object class="spacer">
-              <option>1</option>
-              <flag>wxEXPAND</flag>
-            </object>
+            
             <object class="sizeritem">
               <object class="ImageButton" name="btn_log">
                 <icon>img/icon/ico_chevron_up.png</icon>
                 <height>16</height>
                 <face_colour>def</face_colour>
+                <style>wxALIGN_CENTRE</style>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
               </object>
-              <flag>wxALL</flag>
+              <flag>wxBOTTOM|wxLEFT|wxRIGHT</flag>
               <border>10</border>
             </object>
           </object>
@@ -3422,25 +3424,23 @@
                 </object>
                 <orient>wxVERTICAL</orient>
               </object>
-              <option>0</option>
+              <option>1</option>
               <flag>wxBOTTOM|wxEXPAND</flag>
-              <border>44</border>
+              <border>10</border>
             </object>
             <orient>wxVERTICAL</orient>
-            <object class="spacer">
-              <option>1</option>
-              <flag>wxEXPAND</flag>
-            </object>
+            
             <object class="sizeritem">
               <object class="ImageButton" name="btn_log">
                 <icon>img/icon/ico_chevron_up.png</icon>
                 <height>16</height>
                 <face_colour>def</face_colour>
+                <style>wxALIGN_CENTRE</style>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
               </object>
-              <flag>wxALL</flag>
+              <flag>wxBOTTOM|wxLEFT|wxRIGHT</flag>
               <border>10</border>
             </object>
           </object>
@@ -3781,22 +3781,20 @@
               </object>
               <option>1</option>
               <flag>wxBOTTOM|wxEXPAND</flag>
-              <border>44</border>
+              <border>10</border>
             </object>
-            <object class="spacer">
-              <option>1</option>
-              <flag>wxEXPAND</flag>
-            </object>
+            
             <object class="sizeritem">
               <object class="ImageButton" name="btn_log">
                 <icon>img/icon/ico_chevron_up.png</icon>
                 <height>16</height>
                 <face_colour>def</face_colour>
+                <style>wxALIGN_CENTRE</style>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
               </object>
-              <flag>wxALL</flag>
+              <flag>wxBOTTOM|wxLEFT|wxRIGHT</flag>
               <border>10</border>
             </object>
           </object>
