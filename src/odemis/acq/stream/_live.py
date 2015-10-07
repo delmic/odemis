@@ -638,32 +638,27 @@ class CameraStream(LiveStream):
 class BrightfieldStream(CameraStream):
     """ Stream containing images obtained via optical brightfield illumination.
 
-    It basically knows how to select white light and disable any filter.
+    It basically knows how to select white light.
+    It either gets an "brightlight" emitter (with only one light channel for
+      all the spectrum), or a "light" emitter (with multiple channels, for
+      various spectra). To activate the light, it just turns on all the channels.
     """
 
     def _onActive(self, active):
         if active:
             self._setup_excitation()
-            # TODO: do we need to have a special command to disable filter??
-            # or should it be disabled automatically by the other streams not
-            # using it?
-            # self._setup_emission()
             super(BrightfieldStream, self)._onActive(active)
         else:
             super(BrightfieldStream, self)._onActive(active)
             self._stop_light()
 
-    # def _setup_emission(self):
-    #     if not self._filter.band.readonly:
-    #         raise NotImplementedError("Do not know how to change filter band")
-
     def _setup_excitation(self):
         if self._emitter is None:
             return
-        # TODO: how to select white light??? We need a brightlight hardware?
-        # Turn on all the sources? Does this always mean white?
-        # At least we should set a warning if the final emission range is quite
-        # different from the normal white spectrum
+
+        # Turn everything to the maximum
+        # TODO: display a warning if the final emission range is quite thinner
+        # than a typical white spectrum?
         em = [1.] * len(self._emitter.emissions.value)
         self._emitter.emissions.value = em
 

@@ -597,6 +597,8 @@ class Sparc2AlignGUIData(ActuatorGUIData):
         self.align_mode = StringEnumerated("lens-align",
                                choices={"lens-align", "mirror-align", "center-align"})
 
+        # VA for autofocus procedure mode
+        self.autofocus_active = BooleanVA(False)
 
 class FileInfo(object):
     """

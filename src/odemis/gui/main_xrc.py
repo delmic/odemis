@@ -62,6 +62,8 @@ class xrcfr_main(wx.Frame):
         self.btn_tab_sparc_align = xrc.XRCCTRL(self, "btn_tab_sparc_align")
         self.btn_tab_sparc2_align = xrc.XRCCTRL(self, "btn_tab_sparc2_align")
         self.logo = xrc.XRCCTRL(self, "logo")
+        self.pnl_log = xrc.XRCCTRL(self, "pnl_log")
+        self.btn_log = xrc.XRCCTRL(self, "btn_log")
         self.txt_log = xrc.XRCCTRL(self, "txt_log")
 
 
@@ -201,6 +203,7 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.btn_align_centering = xrc.XRCCTRL(self, "btn_align_centering")
         self.pnl_focus = xrc.XRCCTRL(self, "pnl_focus")
         self.slider_focus = xrc.XRCCTRL(self, "slider_focus")
+        self.btn_autofocus = xrc.XRCCTRL(self, "btn_autofocus")
         self.gauge_autofocus = xrc.XRCCTRL(self, "gauge_autofocus")
         self.pnl_lens_mover = xrc.XRCCTRL(self, "pnl_lens_mover")
         self.slider_lens_mover = xrc.XRCCTRL(self, "slider_lens_mover")
@@ -220,8 +223,9 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.vp_align_center = xrc.XRCCTRL(self, "vp_align_center")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.pnl_streams = xrc.XRCCTRL(self, "pnl_streams")
+        self.pnl_moi_settings = xrc.XRCCTRL(self, "pnl_moi_settings")
         self.btn_bkg_acquire = xrc.XRCCTRL(self, "btn_bkg_acquire")
-        self.html_bkg_acq_doc = xrc.XRCCTRL(self, "html_bkg_acq_doc")
+        self.html_moi_doc = xrc.XRCCTRL(self, "html_moi_doc")
 
 
 
@@ -796,25 +800,51 @@ def __init_resources():
       </object>
       <orient>wxVERTICAL</orient>
       <object class="sizeritem">
-        <object class="wxTextCtrl" name="txt_log">
-          <size>-1,200</size>
-          <value>Log message panel</value>
+        <object class="wxPanel" name="pnl_log">
+          <object class="wxBoxSizer">
+            <object class="sizeritem">
+              <object class="ImageButton" name="btn_log">
+                <icon>img_icon_ico_chevron_down_png</icon>
+                <height>16</height>
+                <face_colour>def</face_colour>
+                <tooltip>Close log panel</tooltip>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALL|wxALIGN_BOTTOM</flag>
+              <border>10</border>
+            </object>
+            <object class="sizeritem">
+              <object class="wxTextCtrl" name="txt_log">
+                <size>-1,200</size>
+                <value>Log message panel</value>
+                <bg>#1A1A1A</bg>
+                <font>
+                  <size>10</size>
+                  <style>normal</style>
+                  <weight>normal</weight>
+                  <underlined>0</underlined>
+                  <face>Monospace</face>
+                </font>
+                <style>wxBORDER_NONE|wxTE_MULTILINE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <orient>wxHORIZONTAL</orient>
+          </object>
           <bg>#1A1A1A</bg>
-          <font>
-            <size>10</size>
-            <style>normal</style>
-            <weight>normal</weight>
-            <underlined>0</underlined>
-            <face>Monospace</face>
-          </font>
           <hidden>1</hidden>
-          <style>wxBORDER_NONE|wxTE_MULTILINE</style>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
         </object>
-        <flag>wxTOP|wxLEFT|wxRIGHT|wxEXPAND</flag>
-        <border>2</border>
+        <flag>wxEXPAND</flag>
       </object>
     </object>
     <title>Odemis</title>
@@ -1349,6 +1379,8 @@ def __init_resources():
                 <icon>img_icon_ico_chevron_up_png</icon>
                 <height>16</height>
                 <face_colour>def</face_colour>
+                <tooltip>Open log panel</tooltip>
+                <style>wxALIGN_CENTRE</style>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
@@ -2289,6 +2321,8 @@ def __init_resources():
                 <icon>img_icon_ico_chevron_up_png</icon>
                 <height>16</height>
                 <face_colour>def</face_colour>
+                <tooltip>Open log panel</tooltip>
+                <style>wxALIGN_CENTRE</style>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
@@ -2400,7 +2434,6 @@ def __init_resources():
             <object class="sizeritem">
               <object class="wxPanel" name="pnl_mode_btns">
                 <object class="wxBoxSizer">
-                  <orient>wxHORIZONTAL</orient>
                   <object class="sizeritem">
                     <object class="GraphicRadioButton" name="btn_align_lens">
                       <icon>img_icon_ico_lens_png</icon>
@@ -2468,6 +2501,7 @@ def __init_resources():
                     <flag>wxALL</flag>
                     <border>10</border>
                   </object>
+                  <orient>wxHORIZONTAL</orient>
                 </object>
                 <fg>#E5E5E5</fg>
                 <bg>#444444</bg>
@@ -2527,10 +2561,14 @@ def __init_resources():
                         <cellpos>0,1</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton">
+                        <object class="ImageTextButton" name="btn_autofocus">
                           <height>24</height>
                           <face_colour>def</face_colour>
                           <label>Auto focus</label>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
                         </object>
                         <flag>wxLEFT</flag>
                         <border>5</border>
@@ -2939,6 +2977,8 @@ def __init_resources():
                 <icon>img_icon_ico_chevron_up_png</icon>
                 <height>16</height>
                 <face_colour>def</face_colour>
+                <tooltip>Open log panel</tooltip>
+                <style>wxALIGN_CENTRE</style>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
@@ -3007,7 +3047,7 @@ def __init_resources():
                   </object>
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
-                    <object class="wxPanel">
+                    <object class="wxPanel" name="pnl_moi_settings">
                       <object class="wxBoxSizer">
                         <orient>wxVERTICAL</orient>
                         <object class="sizeritem">
@@ -3023,7 +3063,8 @@ def __init_resources():
                           <border>10</border>
                         </object>
                         <object class="sizeritem">
-                          <object class="wxHtmlWindow" name="html_bkg_acq_doc">
+                          <object class="wxHtmlWindow" name="html_moi_doc">
+                            <size>-1,400</size>
                             <fg>#BBBBBB</fg>
                             <bg>#333333</bg>
                             <style>wxHW_SCROLLBAR_NEVER|wxHW_NO_SELECTION</style>
@@ -3036,6 +3077,10 @@ def __init_resources():
                         </object>
                       </object>
                       <bg>#333333</bg>
+                      <hidden>1</hidden>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
                     </object>
                     <flag>wxEXPAND</flag>
                   </object>
@@ -3174,6 +3219,8 @@ def __init_resources():
                 <icon>img_icon_ico_chevron_up_png</icon>
                 <height>16</height>
                 <face_colour>def</face_colour>
+                <tooltip>Open log panel</tooltip>
+                <style>wxALIGN_CENTRE</style>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
@@ -3417,22 +3464,21 @@ def __init_resources():
               </object>
               <option>1</option>
               <flag>wxBOTTOM|wxEXPAND</flag>
-              <border>44</border>
+              <border>10</border>
             </object>
-            <object class="spacer">
-              <option>1</option>
-              <flag>wxEXPAND</flag>
-            </object>
+            
             <object class="sizeritem">
               <object class="ImageButton" name="btn_log">
                 <icon>img_icon_ico_chevron_up_png</icon>
                 <height>16</height>
                 <face_colour>def</face_colour>
+                <tooltip>Open log panel</tooltip>
+                <style>wxALIGN_CENTRE</style>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
               </object>
-              <flag>wxALL</flag>
+              <flag>wxBOTTOM|wxLEFT|wxRIGHT</flag>
               <border>10</border>
             </object>
           </object>
@@ -3881,25 +3927,24 @@ def __init_resources():
                 </object>
                 <orient>wxVERTICAL</orient>
               </object>
-              <option>0</option>
+              <option>1</option>
               <flag>wxBOTTOM|wxEXPAND</flag>
-              <border>44</border>
+              <border>10</border>
             </object>
             <orient>wxVERTICAL</orient>
-            <object class="spacer">
-              <option>1</option>
-              <flag>wxEXPAND</flag>
-            </object>
+            
             <object class="sizeritem">
               <object class="ImageButton" name="btn_log">
                 <icon>img_icon_ico_chevron_up_png</icon>
                 <height>16</height>
                 <face_colour>def</face_colour>
+                <tooltip>Open log panel</tooltip>
+                <style>wxALIGN_CENTRE</style>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
               </object>
-              <flag>wxALL</flag>
+              <flag>wxBOTTOM|wxLEFT|wxRIGHT</flag>
               <border>10</border>
             </object>
           </object>
@@ -4240,22 +4285,21 @@ def __init_resources():
               </object>
               <option>1</option>
               <flag>wxBOTTOM|wxEXPAND</flag>
-              <border>44</border>
+              <border>10</border>
             </object>
-            <object class="spacer">
-              <option>1</option>
-              <flag>wxEXPAND</flag>
-            </object>
+            
             <object class="sizeritem">
               <object class="ImageButton" name="btn_log">
                 <icon>img_icon_ico_chevron_up_png</icon>
                 <height>16</height>
                 <face_colour>def</face_colour>
+                <tooltip>Open log panel</tooltip>
+                <style>wxALIGN_CENTRE</style>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
               </object>
-              <flag>wxALL</flag>
+              <flag>wxBOTTOM|wxLEFT|wxRIGHT</flag>
               <border>10</border>
             </object>
           </object>
@@ -4973,6 +5017,16 @@ z~:\xbb\xc1\xd5|\xdeK1\xc1\xa2qtQ\xfb<\x0f\xe0\xe7\\f\x8af~\xf5\xf3\xa8\
 \x0f.Pl\xc3&\xb6K\x15[)\x88\x9b\xca\xe2\xa7\xa8\xb4\x19k\xe4\xf2\xfeU\xc3\
 \xd1\xf2Q\xdd\x18\xb5\xf0\x91j\x06/\x06\xed_\x89pz\x15\xed\xfbW\x08\x00\
 \x00\x00\x00IEND\xaeB`\x82'''
+
+    img_icon_ico_chevron_down_png = '''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x08\x00\x00\x00
+\x08\x06\x00\x00\x00\x89\xc7\x1f\x80\x00\x00\x00MIDAT\x18\xd3c`\x80\x00\
+q\x06L\x00\x17\xd3\x06\xe2\x27@,\x81$)\x01\x15\xd3\x86\x094\x00\xf1\x1e\
+ f\x86b\x10\xbb\x11\xd98\x90\xe0^\xa8\xc2z \xde\x07\x15C\xb1\x0fd\xecK(\
+\x96\xc0\xe5\x06dLe70`q\x03V \x81.\x09\x00y\xd6\x13[\xd8\xccPb\x00\x00\x00\
+\x00IEND\xaeB`\x82'''
 
     img_icon_ico_chevron_up_png = '''\
 \x89PNG\x0d
@@ -5740,6 +5794,7 @@ U\x8a\xf3\x13\x13\x84\xf18A\xa9\xc4J_\x1fa"\xc1\xd5l\x16\xa7\xa3\x83\x93\
 
     wx.MemoryFSHandler.AddFile('XRC/main/main_xrc', main_xrc)
     wx.MemoryFSHandler.AddFile('XRC/main/img_logo_h30_png', img_logo_h30_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_chevron_down_png', img_icon_ico_chevron_down_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_chevron_up_png', img_icon_ico_chevron_up_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_sem_png', img_icon_ico_sem_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_sem_green_png', img_icon_ico_sem_green_png)

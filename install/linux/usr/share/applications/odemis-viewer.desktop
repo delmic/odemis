@@ -1,15 +1,14 @@
 [Desktop Entry]
 Name=Odemis Viewer
 GenericName=Microscope image viewer
-Comment=Open Delmic Microscope Software acquistion viewer
+Comment=Open Delmic Microscope Software acquisition viewer
 Keywords=Delmic;
-Exec=odemis-gui --standalone
+Exec=odemis-gui --standalone --file %f
 Terminal=false
 Type=Application
-#Icon=/usr/share/icons/hicolor/128x128/apps/odemis.png
 Icon=odemis-viewer
 Categories=Utility;
 #StartupWMClass=main.py
 StartupWMClass=Odemis-standalone
 StartupNotify=true
-
+MimeType=image/tiff;application/x-hdf;

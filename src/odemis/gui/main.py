@@ -33,8 +33,7 @@ import os
 
 from odemis import model, gui
 import odemis
-from odemis.gui import main_xrc, log, BG_COLOUR_ERROR, BG_COLOUR_LEGEND
-from odemis.gui.comp.buttons import ImageButton
+from odemis.gui import main_xrc, log
 from odemis.gui.cont import acquisition
 from odemis.gui.cont.menu import MenuController
 from odemis.gui.util import call_in_wx_main
@@ -253,11 +252,12 @@ class OdemisGUIApp(wx.App):
             self.tab_controller = tabs.TabBarController(tab_defs, self.main_frame, self.main_data)
 
             def toggle_log_panel(_):
-                self.main_data.debug.value = not self.main_frame.txt_log.IsShown()
+                self.main_data.debug.value = not self.main_frame.pnl_log.IsShown()
 
             for tab in self.tab_controller.get_tabs():
                 if hasattr(tab.panel, 'btn_log'):
                     tab.panel.btn_log.Bind(wx.EVT_BUTTON, toggle_log_panel)
+            self.main_frame.btn_log.Bind(wx.EVT_BUTTON, toggle_log_panel)
 
             self._menu_controller = MenuController(self.main_data, self.main_frame)
             # Menu events
@@ -290,7 +290,7 @@ class OdemisGUIApp(wx.App):
         """ This method (un)sets the application into debug mode, setting the log level and
         opening the log panel. """
 
-        self.main_frame.txt_log.Show(enabled)
+        self.main_frame.pnl_log.Show(enabled)
 
         l = logging.getLogger()
         if enabled:
@@ -298,19 +298,20 @@ class OdemisGUIApp(wx.App):
             l.setLevel(logging.DEBUG)
             for tab in self.tab_controller.get_tabs():
                 if hasattr(tab.panel, 'btn_log'):
-                    tab.panel.btn_log.SetIcon(imgdata.ico_chevron_down.Bitmap)
+                    tab.panel.btn_log.Hide()
                     # Reset highest log level
                     self.main_data.level.value = 0
         else:
             for tab in self.tab_controller.get_tabs():
                 if hasattr(tab.panel, 'btn_log'):
-                    tab.panel.btn_log.SetIcon(imgdata.ico_chevron_up.Bitmap)
+                    tab.panel.btn_log.Show()
             l.setLevel(self.log_level)
         self.main_frame.Layout()
 
     @call_in_wx_main
     def on_level_va(self, log_level):
         """ Set the log button color """
+
         colour = 'def'
 
         if log_level >= logging.ERROR:
@@ -321,7 +322,6 @@ class OdemisGUIApp(wx.App):
         for tab in self.tab_controller.get_tabs():
             if hasattr(tab.panel, 'btn_log'):
                 tab.panel.btn_log.set_face_colour(colour)
-
 
     def on_close_window(self, evt=None):
         """ This method cleans up and closes the Odemis GUI. """
@@ -423,7 +423,9 @@ def main(args):
     parser = argparse.ArgumentParser(prog="odemis-gui",
                                      description=odemis.__fullname__)
 
-    parser.add_argument('-f', '--file', dest="file_name",
+    # nargs="?" to allow to pass just -f without argument, for the Linux desktop
+    # file to work easily.
+    parser.add_argument('-f', '--file', dest="file_name", nargs="?", default=None,
                         help="File to display")
     parser.add_argument('--version', dest="version", action='store_true',
                         help="show program's version number and exit")

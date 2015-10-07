@@ -1111,8 +1111,10 @@ class SparcARCanvas(DblMicroscopeCanvas):
         Same as the overridden method, but ensures the goal image keeps the alpha
         and is displayed second. Also force the mpp to be the one of the sensor.
         """
-        ims = [None]
         streams = self.microscope_view.getStreams()
+        images_opt = []
+        images_goal = []
+
         # order and display the images
         for s in streams:
             if not s:
@@ -1142,17 +1144,16 @@ class SparcARCanvas(DblMicroscopeCanvas):
                 wim = format_rgba_darray(rgbim)
 
             keepalpha = (rgbim.shape[2] == 4)
-
             scale = rgbim.metadata[model.MD_PIXEL_SIZE]
             pos = (0, 0)  # the sensor image should be centered on the sensor center
 
             if s.name.value == "Goal":
-                # goal image => add at the end
-                ims.append((wim, pos, scale, keepalpha, None, None, self.flip, None, s.name.value))
+                images_goal.append((wim, pos, scale, keepalpha, None, None, self.flip, None, s.name.value))
             else:
-                # add at the beginning
-                ims[0] = (wim, pos, scale, keepalpha, None, None, self.flip, None, s.name.value)
+                images_opt.append((wim, pos, scale, keepalpha, None, None, self.flip, None, s.name.value))
 
+        # normal images at the beginning, goal image at the end
+        ims = images_opt + images_goal
         self.set_images(ims)
 
         # set merge_ratio

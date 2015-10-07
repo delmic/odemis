@@ -21,10 +21,11 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
+import Queue
 import logging
 import numpy
 from odemis import model, util, dataio
-from odemis.model import isasync
+from odemis.model import isasync, oneway
 import os
 from scipy import ndimage
 import time
@@ -113,6 +114,8 @@ class Camera(model.DigitalCamera):
         # there are subscribers, they'll receive it.
         self.data = SimpleDataFlow(self)
         self._generator = None
+        # Convenience event for the user to connect and fire
+        self.softwareTrigger = model.Event()
 
     def terminate(self):
         """
@@ -141,6 +144,7 @@ class Camera(model.DigitalCamera):
         current drift.
         """
         timer = self._generator  # might be replaced by None afterwards, so keep a copy
+        self.data._waitSync()
         metadata = dict(self._img.metadata)
         metadata.update(self._metadata)
 
@@ -171,13 +175,49 @@ class SimpleDataFlow(model.DataFlow):
     def __init__(self, ccd):
         super(SimpleDataFlow, self).__init__()
         self._ccd = ccd
+        self._sync_event = None
+        self._evtq = None  # a Queue to store received events (= float, time of the event)
 
     def start_generate(self):
         self._ccd._start_generate()
 
     def stop_generate(self):
         self._ccd._stop_generate()
+        if self._sync_event:
+            self._evtq.put(None)  # in case it was waiting for an event
 
+    def synchronizedOn(self, event):
+        if self._sync_event == event:
+            return
+        if self._sync_event:
+            self._sync_event.unsubscribe(self)
+            if not event:
+                self._evtq.put(None)  # in case it was waiting for this event
+
+        self._sync_event = event
+        if self._sync_event:
+            event.subscribe(self)
+            self._evtq = Queue.Queue()  # to be sure it's empty
+
+    @oneway
+    def onEvent(self):
+        """
+        Called by the Event when it is triggered
+        """
+        if not self._evtq.empty():
+            logging.warning("Received synchronization event but already %d queued",
+                            self._evtq.qsize())
+
+        self._evtq.put(time.time())
+
+    def _waitSync(self):
+        """
+        Block until the Event on which the dataflow is synchronised has been
+          received. If the DataFlow is not synchronised on any event, this
+          method immediatly returns
+        """
+        if self._sync_event:
+            self._evtq.get()
 
 class CamFocus(model.Actuator):
     """
@@ -187,7 +227,7 @@ class CamFocus(model.Actuator):
     # Duplicate of simsem.EbeamFocus
     def __init__(self, name, role, **kwargs):
         self._good_focus = 0.006
-        axes_def = {"z": model.Axis(unit="m", range=[-0.3, 0.3])}
+        axes_def = {"z": model.Axis(unit="m", range=(-0.01, 0.01))}
         self._position = {"z": self._good_focus}
 
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)

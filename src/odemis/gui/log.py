@@ -189,7 +189,7 @@ class TextFieldHandler(logging.Handler):
         cache = self.cache[write_cache]
         prev_style = None
 
-        # Process at most the latest 'LOG_LINES' messasges
+        # Process at most the latest 'LOG_LINES' messages
         for record, text_style in cache[-LOG_LINES:]:
             if prev_style != text_style:
                 self.textfield.SetDefaultStyle(text_style)

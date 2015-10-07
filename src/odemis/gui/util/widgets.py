@@ -127,7 +127,7 @@ class AxisConnector(object):
         """
         axis (string): the name of the axis to connect with
         comp (Actuator): the component that contains the axis
-        ctrl (wx.Window): a wx widget to connect to
+        value_ctrl (wx.Window): a wx widget to connect to
         pos_2_ctrl (None or callable ((value) -> None)): a function to be called
             when the position is updated, to update the widget. If None, try to use
             the default SetValue().
