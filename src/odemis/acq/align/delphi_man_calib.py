@@ -202,6 +202,10 @@ def main(args):
 
         f = opt_stage.moveAbs({"x": 0, "y": 0})
         f.result()
+
+        if hole_focus is not None:
+            f = ebeam_focus.moveAbs({"z": hole_focus})
+            f.result()
         # Set min fov
         # We want to be as close as possible to the center when we are zoomed in
         escan.horizontalFoV.value = escan.horizontalFoV.range[0]
@@ -234,7 +238,6 @@ def main(args):
                     align_offset = align_offsetf.result()
                     center_focus = focus.position.value.get('z')
 
-                    print "\033[1;30mCalculating rotation and scaling, please wait...\033[1;m"
                     rotation_scalingf = aligndelphi.RotationAndScaling(ccd, detector, escan, sem_stage,
                                                                        opt_stage, focus, align_offset, manual=True)
                     acc_offset, new_rotation, new_scaling = rotation_scalingf.result()

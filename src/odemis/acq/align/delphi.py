@@ -612,6 +612,7 @@ def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, fo
         # Move Phenom sample stage to each spot
         sem_spots = []
         opt_spots = []
+        pos_ind = 1
         for pos in ROTATION_SPOTS:
             if future._rotation_scaling_state == CANCELLED:
                 raise CancelledError()
@@ -635,8 +636,10 @@ def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, fo
             steps = 0
             if manual:
                 det_dataflow.subscribe(_discard_data)
-                msg = "Please turn on the Optical stream, set Power to 0 Watt and focus the image so you have a clearly visible spot. Then turn off the stream and press Enter ..."
+                msg = "\033[1;34mPlease turn on the Optical stream, set Power to 0 Watt and focus the image so you have a clearly visible spot. Then turn off the stream and press Enter ...\033[1;m"
                 raw_input(msg)
+                print "\033[1;30mCalculating rotation and scaling (" + str(pos_ind) + "/4), please wait...\033[1;m"
+                pos_ind += 1
                 det_dataflow.unsubscribe(_discard_data)
             while True:
                 if future._rotation_scaling_state == CANCELLED:
