@@ -99,9 +99,14 @@ def main(args):
         shid, sht = chamber.sampleHolder.value
         calib_values = calibconf.get_sh_calib(shid)
         if calib_values is None:
-            first_hole = second_hole = hole_focus = offset = scaling = rotation = iscale = irot = iscale_xy = ishear = resa = resb = hfwa = spotshift = None
+            first_hole = second_hole = offset = resa = resb = hfwa = spotshift = (0, 0)
+            scaling = iscale = iscale_xy = (1, 1)
+            hole_focus = rotation = irot = ishear = 0
+            print "\033[1;31mCalibration values missing! All the steps will be performed anyway...\033[1;m"
+            force_calib = True
         else:
             first_hole, second_hole, hole_focus, offset, scaling, rotation, iscale, irot, iscale_xy, ishear, resa, resb, hfwa, spotshift = calib_values
+            force_calib = False
         print '\033[1;36m'
         print "**Delphi Manual Calibration steps**"
         print "1.Sample holder hole detection"
@@ -123,7 +128,7 @@ def main(args):
         print "                    scale-xy: " + str(iscale_xy)
         print "                    shear: " + str(ishear)
         print '\033[1;m'
-        print "\033[1;31mNote that you should not perform any stage move during the process. \nInstead, you may zoom in/out while focusing.\033[1;m"
+        print "\033[1;33mNote that you should not perform any stage move during the process. \nInstead, you may zoom in/out while focusing.\033[1;m"
         print "\033[1;30mNow initializing, please wait...\033[1;m"
 
         # Move to the overview position first
@@ -161,7 +166,7 @@ def main(args):
             while (ans not in ["y", "n", "Y", "N", '']):
                 msg = "\033[1;35mDo you want to execute the sample holder hole detection? [Y/n]\033[1;m"
                 ans = raw_input(msg)
-            if ans in ["Y", "y", '']:
+            if (ans in ["Y", "y", '']) or force_calib:
                 # Compute stage calibration values
                 # Detect the holes/markers of the sample holder
                 # Move Phenom sample stage to expected hole position
@@ -186,7 +191,7 @@ def main(args):
                     while (ans not in ["y", "n", "Y", "N", '']):
                         msg = "\033[1;35mDo you want to update the calibration file with these values? [Y/n]\033[1;m"
                         ans = raw_input(msg)
-                    if ans in ["Y", "y", '']:
+                    if (ans in ["Y", "y", '']) or force_calib:
                         first_hole, second_hole, hole_focus = new_first_hole, new_second_hole, new_hole_focus
                         calibconf.set_sh_calib(shid, first_hole, second_hole, hole_focus, offset,
                                scaling, rotation, iscale, irot, iscale_xy, ishear,
@@ -217,7 +222,7 @@ def main(args):
             while (ans not in ["y", "n", "Y", "N", '']):
                 msg = "\033[1;35mDo you want to execute the twin stage calibration? [Y/n]\033[1;m"
                 ans = raw_input(msg)
-            if ans in ["Y", "y", '']:
+            if (ans in ["Y", "y", '']) or force_calib:
                 # Configure CCD and e-beam to write CL spots
                 ccd.binning.value = (1, 1)
                 ccd.resolution.value = ccd.resolution.range[1]
@@ -256,7 +261,7 @@ def main(args):
                     while (ans not in ["y", "n", "Y", "N", '']):
                         msg = "\033[1;35mDo you want to update the calibration file with these values? [Y/n]\033[1;m"
                         ans = raw_input(msg)
-                    if ans in ["Y", "y", '']:
+                    if (ans in ["Y", "y", '']) or force_calib:
                         offset, scaling, rotation = new_offset, new_scaling, new_rotation
                         calibconf.set_sh_calib(shid, first_hole, second_hole, hole_focus, offset,
                                scaling, rotation, iscale, irot, iscale_xy, ishear,
@@ -272,7 +277,7 @@ def main(args):
             while (ans not in ["y", "n", "Y", "N", '']):
                 msg = "\033[1;35mDo you want to execute the SEM image calibration? [Y/n]\033[1;m"
                 ans = raw_input(msg)
-            if ans in ["Y", "y", '']:
+            if (ans in ["Y", "y", '']) or force_calib:
                 f = opt_stage.moveAbs({"x": 0, "y": 0})
                 f.result()
                 if pure_offset is not None:
@@ -325,7 +330,7 @@ def main(args):
                     while (ans not in ["y", "n", "Y", "N", '']):
                         msg = "\033[1;35mDo you want to update the calibration file with these values? [Y/n]\033[1;m"
                         ans = raw_input(msg)
-                    if ans in ["Y", "y", '']:
+                    if (ans in ["Y", "y", '']) or force_calib:
                         resa, resb, hfwa, spotshift = new_resa, new_resb, new_hfwa, new_spotshift
                         calibconf.set_sh_calib(shid, first_hole, second_hole, hole_focus, offset,
                                scaling, rotation, iscale, irot, iscale_xy, ishear,
@@ -341,7 +346,7 @@ def main(args):
             while (ans not in ["y", "n", "Y", "N", '']):
                 msg = "\033[1;35mDo you want to execute the fine alignment? [Y/n]\033[1;m"
                 ans = raw_input(msg)
-            if ans in ["Y", "y", '']:
+            if (ans in ["Y", "y", '']) or force_calib:
                 # Return to the center so fine alignment can be executed just after calibration
                 f = opt_stage.moveAbs({"x": 0, "y": 0})
                 f.result()
@@ -418,7 +423,7 @@ def main(args):
                     while (ans not in ["y", "n", "Y", "N", '']):
                         msg = "\033[1;35mDo you want to update the calibration file with these values? [Y/n]\033[1;m"
                         ans = raw_input(msg)
-                    if ans in ["Y", "y", '']:
+                    if (ans in ["Y", "y", '']) or force_calib:
                         iscale, irot, iscale_xy, ishear = new_iscale, new_irot, new_iscale_xy, new_ishear
                         calibconf.set_sh_calib(shid, first_hole, second_hole, hole_focus, offset,
                                scaling, rotation, iscale, irot, iscale_xy, ishear,
