@@ -99,6 +99,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # Passive overlays that only display information, but offer no interaction
         self._crosshair_ol = None
         self._spotmode_ol = None
+        self._mirror_ol = None
         self._fps_ol = None
         self._focus_overlay = None
 
@@ -1098,6 +1099,9 @@ class SparcARCanvas(DblMicroscopeCanvas):
         # same as flip argument of set_images(): int with wx.VERTICAL or wx.HORIZONTAL
         self.flip = wx.VERTICAL  # TODO: default to 0 (and change in Viewport)
 
+        self._mirror_ol = world_overlay.MirrorArcOverlay(self)
+        self.add_world_overlay(self._mirror_ol)
+
         self._goal_im_ref = None
         self._goal_wim = None
 
@@ -1148,9 +1152,11 @@ class SparcARCanvas(DblMicroscopeCanvas):
             pos = (0, 0)  # the sensor image should be centered on the sensor center
 
             if s.name.value == "Goal":
-                images_goal.append((wim, pos, scale, keepalpha, None, None, self.flip, None, s.name.value))
+                images_goal.append((wim, pos, scale, keepalpha, None,
+                                    None, self.flip, None, s.name.value))
             else:
-                images_opt.append((wim, pos, scale, keepalpha, None, None, self.flip, None, s.name.value))
+                images_opt.append((wim, pos, scale, keepalpha, None,
+                                   None, self.flip, None, s.name.value))
 
         # normal images at the beginning, goal image at the end
         ims = images_opt + images_goal
