@@ -26,14 +26,18 @@ from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
     RUNNING
 import logging
 import math
+import numpy
 from odemis import model
+import odemis.util.spot as uspot
 from odemis.acq._futures import executeTask
 import threading
 import time
-import numpy
-import coordinates
-from . import autofocus
+
 from autofocus import AcquireNoBackground
+import coordinates
+
+from . import autofocus
+
 
 ROUGH_MOVE = 1  # Number of max steps to reach the center in rough move
 FINE_MOVE = 10  # Number of max steps to reach the center in fine move
@@ -264,7 +268,7 @@ def FindSpot(image, sensitivity_limit=100):
     if subimages == []:
         raise ValueError("No spot detected")
 
-    spot_coordinates = coordinates.FindCenterCoordinates(subimages)
+    spot_coordinates = [uspot.FindCenterCoordinates(i) for i in subimages]
     optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates)
 
     # Too many spots detected

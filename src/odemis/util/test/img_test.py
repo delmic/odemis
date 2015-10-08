@@ -564,6 +564,9 @@ class TestEnsureYXC(unittest.TestCase):
         self.assertEqual(newim.shape, (512, 256, 3))
         self.assertEqual(newim.metadata[model.MD_DIMS], "YXC")
 
+# TODO: test isClipping()
+
+# TODO: test guessDRange()
 
 if __name__ == "__main__":
     unittest.main()

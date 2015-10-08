@@ -21,6 +21,7 @@ You should have received a copy of the GNU General Public License along with Ode
 from __future__ import division
 
 from abc import ABCMeta, abstractmethod
+from concurrent import futures
 from concurrent.futures._base import RUNNING, FINISHED, CANCELLED, TimeoutError, \
     CancelledError
 import logging
@@ -29,9 +30,9 @@ from odemis import model
 from odemis.acq import _futures
 from odemis.acq import drift
 from odemis.acq._futures import executeTask
-from odemis.acq.align.coordinates import FindCenterCoordinates
 from odemis.model import MD_POS, MD_DESCRIPTION, MD_PIXEL_SIZE, MD_ACQ_DATE, MD_AD_LIST
-from odemis.util import inertia, limit_invocation, img
+from odemis.util import img
+from odemis.util import spot
 import threading
 import time
 
@@ -41,6 +42,14 @@ from ._base import Stream, UNDEFINED_ROI
 # Tile resolution in case of fuzzing
 TILE_SHAPE = (4, 4)
 
+# On the SPARC, it's possible that both the AR and Spectrum are acquired in the
+# same acquisition, but it doesn't make much sense to acquire them
+# simultaneously because the two optical detectors need the same light, and a
+# mirror is used to select which path is taken. In addition, the AR stream will
+# typically have a lower repetition (even if it has same ROI). So it's easier
+# and faster to acquire them sequentially. The only trick is that if drift
+# correction is used, the same correction must be used for the entire
+# acquisition.
 
 class MultipleDetectorStream(Stream):
     """
@@ -222,8 +231,8 @@ class MultipleDetectorStream(Stream):
                 return False  # too late
             self._acq_state = CANCELLED
 
-        msg = ("Cancelling acquisition of components %s and %s")
-        logging.debug(msg, self._main_det.name, self._rep_det.name)
+        logging.debug("Cancelling acquisition of components %s and %s",
+                      self._emitter.name, self._rep_det.name)
 
         # Do it in any case, to be sure
         self._main_df.unsubscribe(self._ssOnMainImage)
@@ -979,243 +988,6 @@ class SEMSpectrumMDStream(SEMCCDMDStream):
         return model.DataArray(spec_data, metadata=md)
 
 
-class MomentOfInertiaStream(SEMCCDMDStream):
-    """
-    Multiple detector Stream made of SEM + CCD.
-    Provides the live display in the mirror alignment mode for SPARC v2.
-    Assembles the CCD images into a big image representing the moment of inertia.
-    """
-
-    def __init__(self, name, main_stream, rep_stream):
-        super(MomentOfInertiaStream, self).__init__(name, main_stream, rep_stream)
-        # They are needed to look like a LiveStream
-        self._detector = rep_stream.detector
-        self._emitter = rep_stream.emitter
-        self._focuser = rep_stream.focuser
-        self.hw_vas = {}
-        self._det_vas = {}
-        self._emt_vas = {}
-
-        self.is_active.subscribe(self._onActive)
-
-        # The background data (typically, an acquisition without ebeam).
-        # It is subtracted from the acquisition data.
-        # If set to None, zero background is subtracted.
-        self.background = model.VigilantAttribute(None)
-
-        self._acquire_f = None
-        self._spot_size = None
-        self._image_n = 1
-        # DataArray or None: RGB projection of the raw data
-        self.image = model.VigilantAttribute(None)
-        # self.image.value = model.DataArray([])  # start with an empty array
-
-    @limit_invocation(0.1)
-    def _updateImage(self):
-        # convert into a RGB DataArray
-        if self.raw:
-            im = img.DataArray2RGB(self.raw[1])
-            for (x, y), valid in numpy.ndenumerate(self._valid_array):
-                if not valid:
-                    # Just keep the red for non valid pixels
-                    im[x, y] = [im[x, y, 0], 0, 0]
-            self.image.value = im
-
-    def on_done(self, future):
-        self._updateImage()
-
-        # start the new one
-        if self._acq_state != CANCELLED:
-            self._mif = []
-            self._image_n = 1
-            self._center_image = numpy.prod(self._rep_stream.repetition.value) // 2
-            self._acquire_f = self.acquire()
-            self._acquire_f.add_done_callback(self.on_done)
-
-    def _onActive(self, active):
-        """ Called when the Stream is activated or deactivated by setting the
-        is_active attribute
-        """
-        if active:
-            if not self.should_update.value:
-                logging.warning("Trying to activate stream while it's not "
-                                "supposed to update")
-            self._mif = []
-            self._image_n = 1
-            self._bg_image = self.background.value
-            # approx. the index of the center image
-            self._center_image = numpy.prod(self._rep_stream.repetition.value) // 2
-            self._acquire_f = self.acquire()
-            self._acquire_f.add_done_callback(self.on_done)
-        else:
-            self._acquire_f.cancel()
-
-    def _ssOnRepetitionImage(self, df, data):
-        logging.debug("Repetition stream data received")
-        self._rep_data = model.DataArray(numpy.empty(shape=data.shape))
-        if self._image_n == 1:
-            # No need to calculate the drange every time:
-            self._drange = img.guessDRange(data)
-            # also create bg image if none is provided
-            if self._bg_image is None:
-                self._bg_image = numpy.empty(shape=data.shape)
-                # at least substract the baseline
-                md = self._rep_det.getMetadata()
-                self._bg_image.fill(md.get(model.MD_BASELINE, 0))
-        ss = False
-        if self._image_n == self._center_image:
-            ss = True
-        self._mif.append(MomentOfInertia(data, self._bg_image, self._drange, ss))
-        self._acq_rep_complete.set()
-        self._image_n += 1
-
-    def _onMultipleDetectorData(self, main_data, rep_data, repetition):
-        """
-        cf SEMCCDMDStream._onMultipleDetectorData()
-        """
-
-        # Wait for the moment of inertia calculation results
-        mif_results = []
-        valid_results = []
-        for f in self._mif:
-            try:
-                mir = f.result()
-                if len(mir) == 3:
-                    mi, valid, self._spot_size = mir
-                else:
-                    mi, valid = mir
-                mif_results.append(mi)
-                valid_results.append(valid)
-            except Exception as e:
-                logging.debug("Moment of inertia calculation failed, %s", e)
-        self._mif = []
-        # convert the list into array
-        moment_array = numpy.array(mif_results)
-        moment_array = moment_array.reshape(repetition)
-        valid_array = numpy.array(valid_results)
-        self._valid_array = valid_array.reshape(repetition)
-        self._rep_raw = [model.DataArray(moment_array)]
-        self._main_raw = [main_data]
-
-    def getSpotSize(self):
-        return self._spot_size
-
-# rough estimation
-MI_DURATION = 0.3  # s
-def _DoMomentOfInertia(future, data, background, drange, spot_size=False):
-    """
-    It performs the moment of inertia calculation.
-    future (model.ProgressiveFuture): Progressive future provided by the wrapper
-    data (model.DataArray): The optical image
-    background (model.DataArray): Background image that we use for substraction
-    spot_size (boolean): if True also calculate the spot size.
-    drange (tuple of floats): drange of data
-    returns (float or tuple of floats): moment of inertia and spot size if asked.
-    raises:
-        CancelledError() if cancelled
-    """
-    logging.debug("Moment of inertia calculation...")
-
-    try:
-        if future._mi_state == CANCELLED:
-            raise CancelledError()
-        try:
-            moment_of_inertia, valid = inertia.CalculateMomentOfInertia(data, background, drange)
-            if spot_size:
-                spot_estimation = CalculateSpotSize(data, background)
-                return moment_of_inertia, valid, spot_estimation
-            return moment_of_inertia, valid
-        except Exception as e:
-            raise e
-    finally:
-        with future._mi_lock:
-            if future._mi_state == CANCELLED:
-                raise CancelledError()
-            future._mi_state = FINISHED
-
-
-def MomentOfInertia(data, background, drange, spot_size=False):
-    """
-    Wrapper for DoMomentOfInertia. It provides the ability to check the
-    progress of moment of inertia calculation procedure or even cancel it.
-    data (model.DataArray): The optical image
-    background (model.DataArray): Background image that we use for
-    substraction
-    spot_size (boolean): if True also calculate the spot size.
-    drange (tuple of floats): drange of data
-    returns (model.ProgressiveFuture):  Progress of DoMomentOfInertia, whose
-    result() will return:
-            moment of inertia (float) and spot size (float) if asked
-    """
-    # Create ProgressiveFuture and update its state to RUNNING
-    est_start = time.time() + 0.1
-
-    f = model.ProgressiveFuture(start=est_start,
-                                end=est_start + estimateMomentOfInertiaTime())
-    f._mi_state = RUNNING
-
-    # Task to run
-    f.task_canceller = _CancelMomentOfInertia
-    f._mi_lock = threading.Lock()
-
-    # Run in separate thread
-    mi_thread = threading.Thread(target=executeTask,
-                                           name="Delphi Calibration",
-                                           args=(f, _DoMomentOfInertia, f, data,
-                                                 background, drange, spot_size))
-
-    mi_thread.start()
-    return f
-
-
-def _CancelMomentOfInertia(future):
-    """
-    Canceller of _DoMomentOfInertia task.
-    """
-    logging.debug("Cancelling moment of inertia calculation...")
-
-    with future._mi_lock:
-        if future._mi_state == FINISHED:
-            return False
-        future._mi_state = CANCELLED
-        logging.debug("Moment of inertia calculation cancelled.")
-
-    return True
-
-
-def estimateMomentOfInertiaTime():
-    """
-    Estimates calculation procedure duration
-    """
-    return MI_DURATION
-
-
-def CalculateSpotSize(raw_data, background):
-    """
-    Gives an estimation of the spot size given the optical and background image.
-    Rather than an actual spot size measurement, it provides a ratio that is
-    comparable to the same measurement for another image.
-    raw_data (model.DataArray): The optical image
-    background (model.DataArray): Background image that we use for substraction
-    returns (float): spot size estimation
-    """
-    hist, edges = img.histogram(background)
-    range_max = img.findOptimalRange(hist, edges, outliers=1e-06)[1]
-    # 1.3 corresponds to 3 times the noise
-    # data = numpy.clip(raw_data - 1.3 * background, 0, numpy.inf)
-    # alternative background substraction
-    data = numpy.clip(raw_data - range_max, 0, numpy.inf)
-    total = data.sum()
-    # center of mass
-    offset = FindCenterCoordinates([data])[0]
-    im_center = (data.shape[1] / 2, data.shape[0] / 2)
-    center = tuple(a + b for a, b in zip(im_center, offset))
-    neighborhood = data[(center[1] - 1):(center[1] + 2),
-                        (center[0] - 1):(center[0] + 2)]
-    spot_size = neighborhood.sum() / total
-    return spot_size
-
-
 class SEMARMDStream(SEMCCDMDStream):
     """
     Multiple detector Stream made of SEM + AR.
@@ -1240,11 +1012,96 @@ class SEMARMDStream(SEMCCDMDStream):
         self._main_raw = [main_data]
 
 
-# On the SPARC, it's possible that both the AR and Spectrum are acquired in the
-# same acquisition, but it doesn't make much sense to acquire them
-# simultaneously because the two optical detectors need the same light, and a
-# mirror is used to select which path is taken. In addition, the AR stream will
-# typically have a lower repetition (even if it has same ROI). So it's easier
-# and faster to acquire them sequentially. The only trick is that if drift
-# correction is used, the same correction must be used for the entire
-# acquisition.
+class MomentOfInertiaMDStream(SEMCCDMDStream):
+    """
+    Multiple detector Stream made of SEM + CCD.
+    Provides the live display in the mirror alignment mode for SPARC v2.
+    Assembles the CCD images into a big image representing the moment of inertia.
+    .raw actually contains: SEM data, moment of inertia, valid array, spot size at center
+    """
+
+    def __init__(self, name, main_stream, rep_stream):
+        super(MomentOfInertiaMDStream, self).__init__(name, main_stream, rep_stream)
+
+        self.background = model.VigilantAttribute(None)  # None or 2D DataArray
+
+        self._image_n = 1  # current image acquired
+        self._center_image_n = 0  # image number at the center (for spot size)
+
+        # For computing the moment of inertia in background
+        # TODO: More than one thread useful? Use processes instead? + based on number of CPUs
+        self._executor = futures.ThreadPoolExecutor(4)
+        self._mif = []  # All the futures for MoI computation
+
+    def acquire(self):
+        if self._current_future is not None and not self._current_future.done():
+            raise IOError("Cannot do multiple acquisitions simultaneously")
+
+        # Reset some data
+        self._mif = []
+        self._image_n = 1
+        self._center_image_n = numpy.prod(self._rep_stream.repetition.value) // 2
+        return super(MomentOfInertiaMDStream, self).acquire()
+
+    def _ssOnRepetitionImage(self, df, data):
+        logging.debug("Repetition stream data received")
+        # To make the standard acquisition procedure happy
+        self._rep_data = model.DataArray([])
+
+        if self._image_n == 1:
+            # No need to calculate the drange every time:
+            self._drange = img.guessDRange(data)
+
+        # Compute spot size only for the center image
+        ss = (self._image_n == self._center_image_n)
+
+        f = self._executor.submit(self.ComputeMoI, data, self.background.value, self._drange, ss)
+        self._mif.append(f)
+        self._image_n += 1
+        self._acq_rep_complete.set()
+
+    def _onMultipleDetectorData(self, main_data, rep_data, repetition):
+        """
+        cf SEMCCDMDStream._onMultipleDetectorData()
+        """
+        # Wait for the moment of inertia calculation results
+        mi_results = []
+        valid_results = []
+        spot_size = None
+        for f in self._mif:
+            mi, valid, ss = f.result()
+            if ss is not None:
+                spot_size = ss
+            mi_results.append(mi)
+            valid_results.append(valid)
+
+        # convert the list into array
+        moment_array = numpy.array(mi_results)
+        moment_array.shape = repetition
+        valid_array = numpy.array(valid_results)
+        valid_array.shape = repetition
+        self._rep_raw = [model.DataArray(moment_array), model.DataArray(valid_array), spot_size]
+        self._main_raw = [main_data]
+
+    def ComputeMoI(self, data, background, drange, spot_size=False):
+        """
+        It performs the moment of inertia calculation (and a bit more)
+        data (model.DataArray): The AR optical image
+        background (None or model.DataArray): Background image that we use for subtraction
+        drange (tuple of floats): drange of data
+        spot_size (bool): if True also calculate the spot size
+        returns:
+           moi (float): moment of inertia
+           valid (bool): False if some pixels are clipped (which probably means
+             the computed moment of inertia is invalid)
+           spot size (None or float): spot size if was asked, otherwise None
+        """
+        logging.debug("Moment of inertia calculation...")
+
+        moment_of_inertia = spot.MomentOfInertia(data, background)
+        valid = not img.isClipping(data, drange)
+        if spot_size:
+            spot_estimation = spot.SpotSize(data, background)
+        else:
+            spot_estimation = None
+        return moment_of_inertia, valid, spot_estimation

@@ -24,18 +24,20 @@ from __future__ import division
 
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
     RUNNING
+import heapq
 import logging
 import math
 import numpy
 from odemis import model
-from odemis.dataio import hdf5
-import heapq
-import os
-import time
 from odemis.acq._futures import executeTask
+from odemis.dataio import hdf5
+from odemis.util import spot
+import os
 import threading
-from .images import GridScanner
+import time
+
 from . import coordinates, transform
+from .images import GridScanner
 
 
 MAX_TRIALS_NUMBER = 2  # Maximum number of scan grid repetitions
@@ -163,7 +165,7 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan,
             if future._find_overlay_state == CANCELLED:
                 raise CancelledError()
             logging.debug("Finding spot centers with %d subimages...", len(subimages))
-            spot_coordinates = coordinates.FindCenterCoordinates(subimages)
+            spot_coordinates = [spot.FindCenterCoordinates(i) for i in subimages]
 
             # Reconstruct the optical coordinates
             if future._find_overlay_state == CANCELLED:

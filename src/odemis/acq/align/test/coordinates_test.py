@@ -21,49 +21,19 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import logging
 import math
-import numpy
 from numpy import random
+import numpy
+from numpy.random import shuffle
+from numpy.random import uniform
 from odemis.acq.align import coordinates
 from odemis.acq.align import transform
 from odemis.dataio import hdf5
+from odemis.util import spot
 import operator
-from numpy.random import shuffle
-from numpy.random import uniform
 import unittest
 
 
 logging.getLogger().setLevel(logging.DEBUG)
-
-# @unittest.skip("skip")
-class TestFindCenterCoordinates(unittest.TestCase):
-    """
-    Test FindCenterCoordinates
-    """
-    def test_find_center(self):
-        """
-        Test FindCenterCoordinates
-        """
-        data = []
-        subimages = []
-
-        for i in xrange(10):
-            data.append(hdf5.read_data("image" + str(i+1) + ".h5"))
-            C, T, Z, Y, X = data[i][0].shape
-            data[i][0].shape = Y, X
-            subimages.append(data[i][0])
-
-        spot_coordinates = coordinates.FindCenterCoordinates(subimages)
-        expected_coordinates = [(-0.00019439548586790034, -0.023174120210179554),
-                                (0.41813787193469681, -0.77556146879261101),
-                                (0.05418032832973009, -0.046573726263258203),
-                                (0.15117173005078957, 0.20813259555303279),
-                                (0.15372338817998937, -0.071307409462406962),
-                                (0.22214464176322843, 1.5448851668913044),
-                                (-1.3567379189595801, 0.20634334863259929),
-                                (-0.068717256379618827, 0.76902400758882417),
-                                (-0.064496044288789064, 0.14000630665134439),
-                                (0.020941736978718473, -0.0071056828496776324)]
-        numpy.testing.assert_almost_equal(spot_coordinates, expected_coordinates, 3)
 
 # @unittest.skip("skip")
 class TestDivideInNeighborhoods(unittest.TestCase):
@@ -84,7 +54,7 @@ class TestDivideInNeighborhoods(unittest.TestCase):
 
         subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(grid_data[0], (10, 10), 40)
 
-        spot_coordinates = coordinates.FindCenterCoordinates(subimages)
+        spot_coordinates = [spot.FindCenterCoordinates(i) for i in subimages]
         optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates)
 
         self.assertEqual(len(subimages), 100)
@@ -105,7 +75,7 @@ class TestDivideInNeighborhoods(unittest.TestCase):
 
         subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(noisy_grid_data, (10, 10), 40)
 
-        spot_coordinates = coordinates.FindCenterCoordinates(subimages)
+        spot_coordinates = [spot.FindCenterCoordinates(i) for i in subimages]
         optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates)
 
         self.assertEqual(len(subimages), 100)
@@ -126,7 +96,7 @@ class TestDivideInNeighborhoods(unittest.TestCase):
 
         subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(noisy_grid_data, (10, 10), 40)
 
-        spot_coordinates = coordinates.FindCenterCoordinates(subimages)
+        spot_coordinates = [spot.FindCenterCoordinates(i) for i in subimages]
         optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates)
 
         self.assertEqual(len(subimages), 99)
@@ -148,7 +118,7 @@ class TestDivideInNeighborhoods(unittest.TestCase):
 
         subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(noisy_grid_data, (10, 10), 40)
 
-        spot_coordinates = coordinates.FindCenterCoordinates(subimages)
+        spot_coordinates = [spot.FindCenterCoordinates(i) for i in subimages]
         optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates)
 
         self.assertEqual(len(subimages), 99)
@@ -170,7 +140,7 @@ class TestDivideInNeighborhoods(unittest.TestCase):
 
         subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(noisy_grid_data, (10, 10), 40)
 
-        spot_coordinates = coordinates.FindCenterCoordinates(subimages)
+        spot_coordinates = [spot.FindCenterCoordinates(i) for i in subimages]
         optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates)
 
         self.assertEqual(len(subimages), 99)

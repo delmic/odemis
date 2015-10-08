@@ -1123,16 +1123,15 @@ class SPARCTestCase(unittest.TestCase):
         """
         # Create the stream
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
-        ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam)
-        mas = stream.MomentOfInertiaStream("test sem-ar", sems, ars)
+        mas = stream.MomentOfInertiaLiveStream("test moi", self.ccd, self.ccd.data, self.ebeam, sems,
+                                               detvas={"exposureTime", "binning"})
 
-        ars.roi.value = (0.1, 0.1, 0.8, 0.8)
-        self.ccd.binning.value = (4, 4)  # hopefully always supported
+        mas.detExposureTime.value = mas.detExposureTime.clip(1)
+        mas.detBinning.value = (4, 4)  # hopefully always supported
 
-        self.ccd.exposureTime.value = 1  # s
-        exp = self.ccd.exposureTime.value
-        ars.repetition.value = (2, 2)
-        num_ar = numpy.prod(ars.repetition.value)
+        exp = mas.detExposureTime.value
+        mas.repetition.value = (2, 2)
+        num_ar = numpy.prod(mas.repetition.value)
         res = self.ccd.resolution.value
         rot = numpy.prod(res) / self.ccd.readoutRate.value
         dur = num_ar * (exp + rot)
@@ -1145,10 +1144,13 @@ class SPARCTestCase(unittest.TestCase):
         mas.is_active.value = False
         im = mas.image.value
         X, Y, Z = im.shape
-        self.assertEqual((X, Y), ars.repetition.value)
+        self.assertEqual((X, Y), mas.repetition.value)
 
-        ars.repetition.value = (3, 3)
-        num_ar = numpy.prod(ars.repetition.value)
+        mas.detExposureTime.value = mas.detExposureTime.clip(0.1)
+        exp = mas.detExposureTime.value
+        mas.roi.value = (0.1, 0.1, 0.8, 0.8)
+        mas.repetition.value = (3, 3)
+        num_ar = numpy.prod(mas.repetition.value)
         dur = num_ar * (exp + rot)
         mas.is_active.value = True
 
@@ -1156,7 +1158,7 @@ class SPARCTestCase(unittest.TestCase):
         mas.is_active.value = False
         im = mas.image.value
         X, Y, Z = im.shape
-        self.assertEqual((X, Y), ars.repetition.value)
+        self.assertEqual((X, Y), mas.repetition.value)
 
 
 # @skip("faster")

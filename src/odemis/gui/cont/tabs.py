@@ -2367,7 +2367,7 @@ class Sparc2AlignTab(Tab):
                 {
                     "cls": guimod.ContentView,
                     "name": "Moment of Inertia",
-                    "stream_classes": acqstream.MomentOfInertiaStream,
+                    "stream_classes": acqstream.MomentOfInertiaLiveStream,
                 }
             ),
             (self.panel.vp_align_center,
@@ -2399,11 +2399,16 @@ class Sparc2AlignTab(Tab):
 
         # MomentOfInertiaStream needs an SEM stream and a CCD stream
         moisem = acqstream.SEMStream("SEM for MoI", main_data.sed, main_data.sed.data, main_data.ebeam)
-        moiccd = acqstream.ARSettingsStream("CCD for MoI", main_data.ccd, main_data.ccd.data, main_data.ebeam,
-                                            detvas=get_hw_settings(main_data.ccd))
+        mois = acqstream.MomentOfInertiaLiveStream("MoI",
+                           main_data.ccd, main_data.ccd.data, main_data.ebeam,
+                           moisem,
+                           detvas=get_hw_settings(main_data.ccd))
         # moiccd.roi.value = (0.1, 0.1, 0.9, 0.9)  # TODO: or full view?
-        moiccd.repetition.value = (9, 9)
-        mois = acqstream.MomentOfInertiaStream("MoI", moisem, moiccd)
+        # Pick some typically good settings
+        mois.repetition.value = (9, 9)
+        mois.detExposureTime.value = mois.detExposureTime.clip(0.1)
+        mois.detBinning.value = mois.detBinning.clip((8, 8))
+        # TODO: ensure full res too?
         self._mois = mois
         # TODO: or shall we show the moiccd entry ? Or we need a MomentOfInertiaStream which is more self-contained?
         # TODO: instead of add_to_all_views, have a way to ask to add to a specific view (or none at all)
