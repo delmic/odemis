@@ -670,6 +670,30 @@ class OverlayTestCase(test.GuiTestCase):
         # point = omodel.VAEnumerated(phys_points[0], choices=frozenset([(50 / 1.0e5, 50 / 1.0e5)]))
         # pol.set_point(point)
 
+    def test_mirror_arc_overlay(self):
+        cnvs = miccanvas.SparcARCanvas(self.panel)
+        cnvs.scale = 15000
+        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
+
+        # Manually add the overlay
+        mol = wol.MirrorArcOverlay(cnvs)
+        cnvs.add_world_overlay(mol)
+        mol.activate()
+        cnvs.update_drawing()
+
+        def flip(evt):
+            if cnvs.flip == wx.VERTICAL:
+                cnvs.flip = 0
+            else:
+                cnvs.flip = wx.VERTICAL
+            cnvs.update_drawing()
+            evt.Skip()
+
+        cnvs.Bind(wx.EVT_LEFT_UP, flip)
+
+        test.gui_loop()
+
+
     # END World overlay test cases
 
 
