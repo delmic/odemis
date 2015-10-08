@@ -32,6 +32,8 @@ import weakref
 from odemis.util import TimeoutError
 from tescan import sem, CancelledError
 import re
+from odemis.model import HwError
+
 
 class TescanSEM(model.HwComponent):
     '''
@@ -55,7 +57,9 @@ class TescanSEM(model.HwComponent):
         logging.info("Going to connect to host")
         result = self._device.Connect(host, 8300)
         if result < 0:
-            raise IOError()
+            raise HwError("Failed to connect to TESCAN server '%s'. "
+                          "Check that the ip address is correct and TESCAN server "
+                          "connected to the network." % (host,))
         logging.info("Connected")
 
         # Lock in order to synchronize all the child component functions
