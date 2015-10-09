@@ -495,7 +495,7 @@ class StreamController(object):
                 mins, maxs = gspec.min(), gspec.max()
 
             # for spectrum, 0 has little sense, just care of the min
-            if mins > maxs:
+            if mins < maxs:
                 coef = 1 / (maxs - mins)
             else:  # division by 0
                 coef = 1
