@@ -230,7 +230,7 @@ class StreamController(object):
             self.entries[se.name] = se
             add_divider = True
 
-        if add_divider:
+        if add_divider:  # TODO: only do so, if some other controls are displayed
             self.stream_panel.add_divider()
 
     def add_setting_entry(self, name, va, hw_comp, conf=None):

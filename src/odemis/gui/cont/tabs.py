@@ -2403,6 +2403,7 @@ class Sparc2AlignTab(Tab):
                            main_data.ccd, main_data.ccd.data, main_data.ebeam,
                            moisem,
                            detvas=get_hw_settings(main_data.ccd))
+        # TODO: need SEM mag (or set HFW to a good value)
         # moiccd.roi.value = (0.1, 0.1, 0.9, 0.9)  # TODO: or full view?
         # Pick some typically good settings
         mois.repetition.value = (9, 9)
