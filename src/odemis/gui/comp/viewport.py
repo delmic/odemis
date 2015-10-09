@@ -476,6 +476,7 @@ class MicroscopeViewport(ViewPort):
         The canvas calculates the new hfw value.
         """
 
+        # TODO: also don't feedback mpp value if it was just set via HFW changing
         logging.info("Calculating hfw from mpp for viewport %s" % self)
         hfw = self.canvas.horizontal_field_width
 
