@@ -67,7 +67,7 @@ SCHED_ALL = 2  # All the streams which are in the should_update stream
 class StreamController(object):
     """ Manage a stream and its accompanying stream panel """
 
-    def __init__(self, stream_bar, stream, tab_data_model, show_panel=True, no_bc=False):
+    def __init__(self, stream_bar, stream, tab_data_model, show_panel=True):
 
         self.stream = stream
         self.stream_bar = stream_bar
@@ -127,7 +127,7 @@ class StreamController(object):
             self._add_emission_ctrl()
 
         # TODO: Change the way in which BC controls are hidden (Use config in data.py)
-        if hasattr(stream, "auto_bc") and hasattr(stream, "intensityRange") and not no_bc:
+        if hasattr(stream, "auto_bc") and hasattr(stream, "intensityRange"):
             self._add_brightnesscontrast_ctrls()
             self._add_outliers_ctrls()
 
@@ -1189,7 +1189,7 @@ class StreamBarController(object):
         """
         return self._add_stream(stream, **kwargs)
 
-    def _add_stream(self, stream, add_to_all_views=False, visible=True, play=None, no_bc=False):
+    def _add_stream(self, stream, add_to_all_views=False, visible=True, play=None):
         """ Add the given stream to the tab data model and appropriate views
 
         Args:
@@ -1245,8 +1245,7 @@ class StreamBarController(object):
             stream_cont = self._add_stream_cont(stream,
                                                 show_panel,
                                                 locked=self.locked_mode,
-                                                static=self.static_mode,
-                                                no_bc=no_bc)
+                                                static=self.static_mode)
 
             # TODO: make StreamTree a VA-like and remove this
 #             logging.debug("Sending stream.ctrl.added message")
@@ -1268,7 +1267,7 @@ class StreamBarController(object):
 
         return self._add_stream_cont(stream, show_panel=True, static=True)
 
-    def _add_stream_cont(self, stream, show_panel=True, locked=False, static=False, no_bc=False):
+    def _add_stream_cont(self, stream, show_panel=True, locked=False, static=False):
         """ Create and add a stream controller for the given stream
 
         :return: (StreamController)
@@ -1276,7 +1275,7 @@ class StreamBarController(object):
         """
 
         stream_cont = StreamController(self._stream_bar, stream, self._tab_data_model,
-                                       show_panel, no_bc)
+                                       show_panel)
 
         if locked:
             stream_cont.to_locked_mode()
@@ -1874,7 +1873,6 @@ class SparcStreamsController(StreamBarController):
                                         "grating": main_data.spectrograph,
                                         "slit-in": main_data.spectrograph,
                                         },
-                                  no_bc=True
                                   )
 
     def addMonochromator(self):
@@ -1903,7 +1901,6 @@ class SparcStreamsController(StreamBarController):
                                         "slit-in": main_data.spectrograph,
                                         "slit-monochromator": main_data.spectrograph,
                                         },
-                                  no_bc=True,
                                   play=False
                                   )
 

@@ -385,6 +385,11 @@ class SpectrumSettingsStream(CCDSettingsStream):
         # For SPARC: typical user wants density a bit lower than SEM
         self.pixelSize.value *= 6
 
+        # B/C and histogram are meaningless on a spectrum
+        del self.auto_bc
+        del self.auto_bc_outliers
+        del self.histogram
+
         # Contains one 1D spectrum (start with an empty array)
         self.image.value = model.DataArray([])
 
@@ -431,6 +436,12 @@ class MonochromatorSettingsStream(PMTSettingsStream):
         # Fuzzing is not handled for SEM/SEM streams (and doesn't make much
         # sense as it's the same as software-binning
         del self.fuzzing
+
+        # B/C and histogram are meaningless on a chronogram
+        del self.auto_bc
+        del self.auto_bc_outliers
+        del self.histogram
+
 
         # .raw is an array of floats with time on the first dim, and count/date
         # on the second dim.
