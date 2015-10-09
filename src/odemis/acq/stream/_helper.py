@@ -667,6 +667,11 @@ class MomentOfInertiaLiveStream(CCDSettingsStream):
         # Fuzzing should not be needed
         del self.fuzzing
 
+        # B/C is fixed to min/max, and histogram is pretty much useless
+        del self.auto_bc
+        del self.auto_bc_outliers
+        del self.histogram
+
         # The background data (typically, an acquisition without ebeam).
         # It is subtracted from the acquisition data.
         # If set to None, baseline is used
@@ -684,39 +689,46 @@ class MomentOfInertiaLiveStream(CCDSettingsStream):
         self._acq_stream.background.value = data
         return data
 
+    def _projectMoI2RGB(self, data, valid):
+        """
+        Project a 2D spatial DataArray into a RGB representation
+        data (DataArray): 2D DataArray
+        valid (numpy.ndarray of bool)
+        return (DataArray): 3D DataArray
+        """
+        rgbim = img.DataArray2RGB(data)
+        # Just keep the red level for non valid/clipping pixels
+        for (x, y), v in numpy.ndenumerate(valid):
+            if not v:
+                rgbim[x, y, 1:] = 0
+        rgbim.flags.writeable = False
+        md = self._find_metadata(data.metadata)
+        md[model.MD_DIMS] = "YXC"  # RGB format
+        return model.DataArray(rgbim, md)
+
     @limit_invocation(0.1)
     def _updateImage(self):
-        # convert into a RGB DataArray
-        if self._acq_stream.raw:
-            moi, valid = self._acq_stream.raw[1:3]  # 2nd and 3rd data are useful for us
-            im = img.DataArray2RGB(moi)
-            # Just keep the red level for non valid/clipping pixels
-            for (x, y), v in numpy.ndenumerate(valid):
-                if not v:
-                    # im[x, y] = [im[x, y, 0], 0, 0]
-                    im[x, y, 1:] = 0
-
-            self.image.value = im
+        if self.raw:
+            moi, valid = self.raw[1:3]  # 2nd and 3rd data are useful for us
+            self.image.value = self._projectMoI2RGB(moi, valid)
 
     def _on_acq_done(self, future):
+        # Pretty much the same as _onNewData(), but also relaunch an acquisition
         try:
             logging.debug("MoI acquisition finished")
             try:
-                # .result() returns the data, but we can also access it via self._acq_stream.raw, so we don't care.
-                # Pretty much the same as _onNewData(), but also relaunch an acquisition
-                future.result()
+                self.raw = future.result()  # sem, moi, valid, spot size
                 if not future.cancelled():
                     self._updateImage()
             except CancelledError:
                 pass
-
-            # start the next acquisition
-            if self.is_active.value:
-                self._acquire_f = self._acq_stream.acquire()
-                self._acquire_f.add_done_callback(self._on_acq_done)
         except Exception:
             logging.exception("Failed to acquire data")
-            raise
+
+        # start the next acquisition
+        if self.is_active.value:
+            self._acquire_f = self._acq_stream.acquire()
+            self._acquire_f.add_done_callback(self._on_acq_done)
 
     def _onActive(self, active):
         """ Called when the Stream is activated or deactivated by setting the

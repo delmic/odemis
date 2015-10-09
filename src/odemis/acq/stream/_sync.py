@@ -33,6 +33,7 @@ from odemis.acq._futures import executeTask
 from odemis.model import MD_POS, MD_DESCRIPTION, MD_PIXEL_SIZE, MD_ACQ_DATE, MD_AD_LIST
 from odemis.util import img
 from odemis.util import spot
+import random
 import threading
 import time
 
@@ -68,7 +69,6 @@ class MultipleDetectorStream(Stream):
         # Don't use the .raw of the substreams, because that is used for live view
         self._main_raw = []
         self._rep_raw = []
-        self._mif = []
         self._anchor_raw = []  # data of the anchor region
 
         assert main_stream._emitter == rep_stream._emitter
@@ -307,6 +307,17 @@ class MultipleDetectorStream(Stream):
         self._rep_data = data
         self._acq_rep_complete.set()
 
+    def _preprocessRepData(self, data, i):
+        """
+        Preprocess the raw repetition data.
+        Note: this version just return the data as is.
+        data (DataArray): the data as received from the repetition detector, from
+          _ssOnRepetitionImage(), and with MD_POS updated
+        i (int, int): iteration number in X, Y
+        return (value): value as needed by _onMultipleDetectorData
+        """
+        return data
+
     def _assembleMainData(self, rep, roi, data_list):
         """
         Take all the data received from the main stream and assemble it in a
@@ -360,6 +371,7 @@ class MultipleDetectorStream(Stream):
         center_tl = datatl.metadata[MD_POS]
         pxs_tl = datatl.metadata[MD_PIXEL_SIZE]
         if pxs != pxs_tl:
+            # TODO: check that this is still valid. Do we really set the SEM scale to the right one?
             # For e-beam data, they should be the same. If datatl is from a CCD
             # then they have no reason to be identical
             logging.warning("Computed global pxs %s is different from acquisition pxs %s",
@@ -559,7 +571,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
             self._rep_df.subscribe(self._ssOnRepetitionImage)
 
             tot_num = numpy.prod(rep)
-            n = 0
+            n = 0  # number of images acquires since last drift correction
 
             # Translate dc_period to a number of pixels
             if self._dc_estimator is not None:
@@ -600,13 +612,14 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     trigger.notify()
 
                     if not self._acq_rep_complete.wait(rep_time * 4 + 5):
+                        # TODO: try again
                         raise TimeoutError("Acquisition of repetition stream for pixel %s timed out after %g s"
                                            % (i, rep_time * 4 + 5))
                     if self._acq_state == CANCELLED:
                         raise CancelledError()
                     dur = time.time() - start
                     if dur < rep_time:
-                        logging.warning("Repetition stream acquisition took less than %g s: %g s",
+                        logging.warning("Repetition stream acquisition took less than %g s: %g s, will try again",
                                         rep_time, dur)
                         failures += 1
                         if failures >= 3:
@@ -636,11 +649,11 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
                     # MD_POS default to the center of the stage, but it needs to be
                     # the position of the e-beam (corrected for drift)
-                    rep_data = self._rep_data
                     raw_pos = self._main_data[-1].metadata[MD_POS]
-                    rep_data.metadata[MD_POS] = (raw_pos[0] + drift_shift[0] * main_pxs[0],
-                                                 raw_pos[1] - drift_shift[1] * main_pxs[1])  # Y is upside down
-                    rep_buf.append(rep_data)
+                    cor_pos = (raw_pos[0] + drift_shift[0] * main_pxs[0],
+                               raw_pos[1] - drift_shift[1] * main_pxs[1])  # Y is upside down
+                    self._rep_data.metadata[MD_POS] = cor_pos
+                    rep_buf.append(self._preprocessRepData(self._rep_data, i))
 
                     n += 1
                     # guess how many drift anchors to acquire
@@ -1014,9 +1027,11 @@ class SEMARMDStream(SEMCCDMDStream):
 
 class MomentOfInertiaMDStream(SEMCCDMDStream):
     """
-    Multiple detector Stream made of SEM + CCD.
-    Provides the live display in the mirror alignment mode for SPARC v2.
-    Assembles the CCD images into a big image representing the moment of inertia.
+    Multiple detector Stream made of SEM + CCD, with direct computation of the
+    moment of inertia (MoI) and spot size of the CCD images. The MoI is
+    assembled into one big image for the CCD.
+    Used by the MomentOfInertiaLiveStream to provide display in the mirror
+    alignment mode for SPARCv2.
     .raw actually contains: SEM data, moment of inertia, valid array, spot size at center
     """
 
@@ -1025,40 +1040,35 @@ class MomentOfInertiaMDStream(SEMCCDMDStream):
 
         self.background = model.VigilantAttribute(None)  # None or 2D DataArray
 
-        self._image_n = 1  # current image acquired
-        self._center_image_n = 0  # image number at the center (for spot size)
+        self._center_image_i = (0, 0)  # iteration at the center (for spot size)
 
         # For computing the moment of inertia in background
         # TODO: More than one thread useful? Use processes instead? + based on number of CPUs
         self._executor = futures.ThreadPoolExecutor(4)
-        self._mif = []  # All the futures for MoI computation
 
     def acquire(self):
         if self._current_future is not None and not self._current_future.done():
             raise IOError("Cannot do multiple acquisitions simultaneously")
 
         # Reset some data
-        self._mif = []
-        self._image_n = 1
-        self._center_image_n = numpy.prod(self._rep_stream.repetition.value) // 2
+        self._center_image_i = tuple(v // 2 for v in self._rep_stream.repetition.value)
         return super(MomentOfInertiaMDStream, self).acquire()
 
-    def _ssOnRepetitionImage(self, df, data):
-        logging.debug("Repetition stream data received")
-        # To make the standard acquisition procedure happy
-        self._rep_data = model.DataArray([])
+    def _preprocessRepData(self, data, i):
+        """
+        return (Future)
+        """
+        # Instead of storing the actual data, we queue the MoI comptation in a future
+        logging.debug("Queueing MoI computation")
 
-        if self._image_n == 1:
+        if i == (0, 0):
             # No need to calculate the drange every time:
             self._drange = img.guessDRange(data)
 
         # Compute spot size only for the center image
-        ss = (self._image_n == self._center_image_n)
+        ss = (i == self._center_image_i)
 
-        f = self._executor.submit(self.ComputeMoI, data, self.background.value, self._drange, ss)
-        self._mif.append(f)
-        self._image_n += 1
-        self._acq_rep_complete.set()
+        return self._executor.submit(self.ComputeMoI, data, self.background.value, self._drange, ss)
 
     def _onMultipleDetectorData(self, main_data, rep_data, repetition):
         """
@@ -1068,7 +1078,7 @@ class MomentOfInertiaMDStream(SEMCCDMDStream):
         mi_results = []
         valid_results = []
         spot_size = None
-        for f in self._mif:
+        for f in rep_data:
             mi, valid, ss = f.result()
             if ss is not None:
                 spot_size = ss
@@ -1076,11 +1086,13 @@ class MomentOfInertiaMDStream(SEMCCDMDStream):
             valid_results.append(valid)
 
         # convert the list into array
-        moment_array = numpy.array(mi_results)
-        moment_array.shape = repetition
+        moi_array = numpy.array(mi_results)
+        moi_array.shape = repetition
+        moi_da = model.DataArray(moi_array, main_data.metadata)
         valid_array = numpy.array(valid_results)
         valid_array.shape = repetition
-        self._rep_raw = [model.DataArray(moment_array), model.DataArray(valid_array), spot_size]
+        valid_da = model.DataArray(valid_array, main_data.metadata)
+        self._rep_raw = [moi_da, valid_da, spot_size]
         self._main_raw = [main_data]
 
     def ComputeMoI(self, data, background, drange, spot_size=False):
@@ -1098,10 +1110,18 @@ class MomentOfInertiaMDStream(SEMCCDMDStream):
         """
         logging.debug("Moment of inertia calculation...")
 
-        moment_of_inertia = spot.MomentOfInertia(data, background)
-        valid = not img.isClipping(data, drange)
-        if spot_size:
-            spot_estimation = spot.SpotSize(data, background)
-        else:
-            spot_estimation = None
-        return moment_of_inertia, valid, spot_estimation
+        try:
+            moment_of_inertia = spot.MomentOfInertia(data, background)
+            # moment_of_inertia += random.uniform(0, 10)  # DEBUG
+            valid = not img.isClipping(data, drange)
+            # valid = random.choice((True, False))  # DEBUG
+            if spot_size:
+                spot_estimation = spot.SpotSize(data, background)
+            else:
+                spot_estimation = None
+            return moment_of_inertia, valid, spot_estimation
+        except Exception:
+            # This is a future running in a future... a pain to get the traceback
+            # in case of exception, so drop it immediately on the log too
+            logging.exception("Failure to compute moment of inertia")
+            raise
