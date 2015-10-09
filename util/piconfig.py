@@ -56,6 +56,7 @@ def openPort(port, *args):
         sock = openIPSocket(host, ipport)
         return IPBusAccesser(sock)
 
+
 def scanIPMasters():
     """
     Scans the IP network for master controllers
@@ -112,6 +113,7 @@ def scanIPMasters():
 
     return list(found)
 
+
 def openSerialPort(port, baudrate=38400):
     """
     Opens the given serial port the right way for the PI controllers.
@@ -134,6 +136,7 @@ def openSerialPort(port, baudrate=38400):
 
     return ser
 
+
 def openIPSocket(host, port=50000):
     """
     Opens a socket connection to an PI master controller over IP.
@@ -149,6 +152,7 @@ def openIPSocket(host, port=50000):
                             " on, and correctly configured." % (host, port))
     sock.settimeout(1.0) # s
     return sock
+
 
 class SerialBusAccesser(object):
     """
@@ -285,8 +289,8 @@ class IPBusAccesser(object):
         Send a command and return its report (raw)
         addr (None or 1<=int<=16): address of the controller
         com (string): the command to send (without address prefix but with \n)
-        return (string or list of strings): the report without prefix 
-           (e.g.,"0 1") nor newline. 
+        return (string or list of strings): the report without prefix
+           (e.g.,"0 1") nor newline.
            If answer is multiline: returns a list of each line
         raise:
            HwError: if error communicating with the hardware, probably due to
@@ -319,7 +323,7 @@ class IPBusAccesser(object):
                 if not data:
                     if time.time() > end_time:
                         raise IOError("Master controller not answering. "
-                                            "It might be already connected with another client.")
+                                      "It might be already connected with another client.")
                     time.sleep(0.01)
                     continue
 
@@ -331,8 +335,8 @@ class IPBusAccesser(object):
                 # An answer ends with \n (and not " \n", which indicates multi-
                 # line).
                 if (ans[-1] == "\n" and (
-                     ans[-2:-1] != " " or  # multiline: "... \n"
-                     re.match(r"0 \d+ $", ans))):  # excepted empty line "0 1 \n"
+                    ans[-2:-1] != " " or  # multiline: "... \n"
+                    re.match(r"0 \d+ $", ans))):  # excepted empty line "0 1 \n"
                     break
 
         logging.debug("Received: '%s'", ans.encode('string_escape'))
@@ -363,29 +367,15 @@ class IPBusAccesser(object):
         else:
             return lines
 
+
 # Mapping of the useful commands in PI GCS
 
-def GetAvailableParameters(acc, addr):
-    """
-    Returns the available parameters
-    return (dict param -> list of strings): parameter number and strings 
-     used to describe it (typically: 0, 1, FLOAT, description)
-    """
-    #HPA? (Get List Of Available Parameters)
-    lines = acc.sendQueryCommand(addr, "HPA?\n")
-    lines[0] = lines[0].lstrip("\x00")
-    params = {}
-    # first and last lines are typically just user-friendly text
-    # look for something like '0x412=\t0\t1\tINT\tmotorcontroller\tI term 1'
-    # (and old firmwares report like: '0x412 XXX')
-    for l in lines:
-        m = re.match(r"0x(?P<param>[0-9A-Fa-f]+)[= ]\w*(?P<desc>(\t?\S+)+)", l)
-        if not m:
-            logging.debug("Line doesn't seem to be a parameter: '%s'", l)
-            continue
-        param, desc = int(m.group("param"), 16), m.group("desc")
-        params[param] = tuple(filter(bool, desc.split("\t")))
-    return params
+def GetIdentification(acc, addr):
+    # *IDN? (Get Device Identification):
+    # ex: 0 2 (c)2010 Physik Instrumente(PI) Karlsruhe,E-861 Version 7.2.0
+    version = acc.sendQueryCommand(addr, "*IDN?\n")
+    return version
+
 
 def GetErrorNum(acc, addr):
     """
@@ -397,9 +387,38 @@ def GetErrorNum(acc, addr):
     error = int(answer)
     return error
 
+
+def GetAvailableParameters(acc, addr):
+    """
+    Returns the available parameters
+    return (dict param -> list of strings): parameter number and strings
+     used to describe it (typically: 0, 1, FLOAT, description)
+    """
+    # HPA? (Get List Of Available Parameters)
+    lines = acc.sendQueryCommand(addr, "HPA?\n")
+    lines[0] = lines[0].lstrip("\x00")
+    params = {}
+    # first and last lines are typically just user-friendly text
+    # look for something like '0x412=\t0\t1\tINT\tmotorcontroller\tI term 1'
+    # (and old firmwares report like: '0x412 XXX')
+    for l in lines:
+        m = re.match(r"0x(?P<param>[0-9A-Fa-f]+)[= ]\s*(?P<desc>.+)", l)
+        if not m:
+            logging.debug("Line doesn't seem to be a parameter: '%s'", l)
+            continue
+        param, desc = int(m.group("param"), 16), m.group("desc")
+        m = re.match(r"\S+\t\S+\t(?P<typ>\S+)\s(?P<fdesc>.+)", desc)
+        if not m:
+            logging.debug("Failed to match %s", desc)
+            params[param] = desc
+        else:
+            params[param] = "%s (%s)" % (m.group("fdesc"), m.group("typ"))
+    return params
+
+
 def GetParameters(acc, addr, axis):
     """
-    returns (string): the string representing this parameter 
+    returns (string): the string representing this parameter
     """
     # We could use SEP? to read directly from flash mem, but it's typically more
     # convenient to read the current value (and the user can just reboot the
@@ -422,11 +441,12 @@ def GetParameters(acc, addr, axis):
         params[param] = value
     return params
 
+
 def GetParameter(acc, addr, axis, param):
     """
     axis (1<int<16): axis number
     param (0<int): parameter id (cf p.35)
-    returns (string): the string representing this parameter 
+    returns (string): the string representing this parameter
     """
     # SPA? (Get Volatile Memory Parameters)
     assert((1 <= axis) and (axis <= 16))
@@ -442,6 +462,7 @@ def GetParameter(acc, addr, axis, param):
         # no "=" => means the parameter is unknown
         raise ValueError("Parameter %d %d unknown" % (axis, param))
     return value
+
 
 def SetParameter(acc, addr, axis, param, val):
     """
@@ -459,20 +480,27 @@ def SetParameter(acc, addr, axis, param, val):
         raise ValueError("Error %d: setting param 0x%X with val %s failed." %
                          (err, param, val), err)
 
+
 # The functions available to the user
 def read_param(acc, addr, f):
-    # params = GetAvailableParameters(ser, addr)
+    # Write the controller, for reference
+    idn = GetIdentification(acc, addr)
+    f.write("# Parameters from controller %d - %s\n" % (addr, idn))
+    f.write("# Param\tAddress\tDescription\n")
+
+    params_desc = GetAvailableParameters(acc, addr)
     params = GetParameters(acc, addr, 1)
     for p in sorted(params.keys()):
+        # v = GetParameter(ser, addr, 1, p)
         v = params[p]
         try:
-            # Note: it seems it's possible to use just "SPA?" to get all the parameters
-            # v = GetParameters(ser, addr, 1, p)
+            desc = params_desc[p]
+            f.write("0x%x\t%s\t# %s\n" % (p, v, desc))
+        except KeyError:
             f.write("0x%x\t%s\n" % (p, v))
-        except Exception:
-            logging.exception("Failed to read param 0x%x", p)
-    
+
     f.close()
+
 
 def write_param(acc, addr, f):
     params = {} # int -> str = param num -> value
@@ -485,7 +513,12 @@ def write_param(acc, addr, f):
 
     # read the parameters "database" from stdin
     for l in f:
-        m = re.match(r"0x(?P<param>[0-9A-Fa-f]+)\t(?P<value>(\S+))", l)
+        # comment or empty line?
+        mc = re.match(r"\s*(#|$)", l)
+        if mc:
+            logging.debug("Comment line skipped: '%s'", l.rstrip("\n\r"))
+            continue
+        m = re.match(r"0x(?P<param>[0-9A-Fa-f]+)\t(?P<value>(\S+))\s*(#.*)?$", l)
         if not m:
             logging.debug("Line skipped: '%s'", l)
             continue
@@ -523,12 +556,14 @@ def write_param(acc, addr, f):
     # save to flash
     acc.sendOrderCommand(addr, "WPA 100\n")
 
+
 def reboot(acc, addr):
     acc.sendOrderCommand(addr, "RBT\n")
 
     # make sure it's fully rebooted and recovered
     time.sleep(2)
     GetErrorNum(acc, addr)
+
 
 def main(args):
     """
@@ -539,7 +574,7 @@ def main(args):
 
     # arguments handling
     parser = argparse.ArgumentParser(prog="piconfig",
-                             description="Read/write parameters in a PI controller")
+                                     description="Read/write parameters in a PI controller")
 
     parser.add_argument("--log-level", dest="loglev", metavar="<level>", type=int,
                         default=1, help="set verbosity level (0-2, default = 1)")
