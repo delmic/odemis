@@ -1271,6 +1271,37 @@ class PointsOverlay(base.WorldOverlay):
         self.cursor_over_point = w_cursor_over
 
 
+class Vec(tuple):
+
+    def __new__ (cls, a, b=None):
+        if b is not None:
+            return super(Vec, cls).__new__(cls, tuple((a, b)))
+        else:
+            return super(Vec, cls).__new__(cls, tuple(a))
+
+    def __add__(self, a):
+        # TODO: check lengths are compatable.
+        return Vec(x + y for x, y in zip(self, a))
+
+    def __sub__(self, a):
+        # TODO: check lengths are compatable.
+        return Vec(x - y for x, y in zip(self, a))
+
+    def __mul__(self, c):
+        return Vec(x * c for x in self)
+
+    def __rmul__(self, c):
+        return Vec(c * x for x in self)
+
+    @property
+    def x(self):
+        return self[0]
+
+    @property
+    def y(self):
+        return self[1]
+
+
 class MirrorArcOverlay(base.WorldOverlay):
     """ Overlay showing a mirror arc that the user can position over a mirror camera feed """
 
@@ -1300,61 +1331,89 @@ class MirrorArcOverlay(base.WorldOverlay):
         self.rad_offset = math.atan2(self.symmetry_offset_y, self.parabole_cut_radius)
 
         # The world coordinates around which the arc is drawn
-        self.center = (0, 0)
+        self.center = Vec(0, 0)
 
     def set_center(self, center):
         """ Set the center of the mirror in world coordinates """
-        self.center = center
+        self.center = Vec(center)
         self.cnvs.update_drawing()
 
     def set_hole_position(self, hole_pos):
         """ Set the center of the mirror ihole n world coordinates """
         if self.cnvs.flip == wx.VERTICAL:
-            self.center = (hole_pos[0], hole_pos[1] + (self.mirror_center_y - self.hole_y))
+            self.center = Vec(hole_pos[0], hole_pos[1] + (self.mirror_center_y - self.hole_y))
         else:
             self.center = (hole_pos[0], hole_pos[1] - (self.mirror_center_y - self.hole_y))
         self.cnvs.update_drawing()
 
     def draw(self, ctx, shift=(0, 0), scale=1.0):
 
-        b_center_x, b_center_y = self.cnvs.get_half_buffer_size()
+        center_x_b, center_y_b = self.cnvs.get_half_buffer_size()
 
         # DEBUG Lines Buffer Center
-        # ctx.set_line_width(1)
-        # ctx.set_source_rgba(1.0, 0.0, 0.0, 0.5)
-        #
-        # ctx.move_to(b_center_x, 0)
-        # ctx.line_to(b_center_x, 2 * b_center_y)
-        #
-        # ctx.move_to(0, b_center_y)
-        # ctx.line_to(2 * b_center_x, b_center_y)
-        #
-        # ctx.stroke()
+        ctx.set_line_width(1)
+        ctx.set_source_rgba(1.0, 0.0, 0.0, 0.5)
+
+        ctx.move_to(center_x_b, 0)
+        ctx.line_to(center_x_b, 2 * center_y_b)
+
+        ctx.move_to(0, center_y_b)
+        ctx.line_to(2 * center_x_b, center_y_b)
+
+        ctx.stroke()
         # END DEBUG Lines Buffer Center
 
         ctx.save()
 
-        if self.cnvs.flip == wx.VERTICAL:
-            flip_y = b_center_y - self.mirror_center_y * scale
-            flip_matrix = cairo.Matrix(1.0, 0.0, 0.0, -1.0)
+        # if self.cnvs.flip == wx.VERTICAL:
+        #     flip_y = b_center_y - self.mirror_center_y * scale
+        #     flip_matrix = cairo.Matrix(1.0, 0.0, 0.0, -1.0)
+        #
+        #     # Align the center of the Arc with the center of the buffer (The overlay itself is drawn
+        #     # with the parabola symmetry line on y=0)
+        #     ctx.translate(
+        #         self.center[0] * scale,
+        #         (self.center[1] + (self.mirror_height * 0.5) + self.symmetry_offset_y) * scale
+        #     )
+        #
+        #     ctx.translate(0, flip_y)
+        #     ctx.transform(flip_matrix)
+        #     ctx.translate(0, -flip_y)
+        # else:
+        #     # Align the center of the Arc with the center of the buffer (The overlay itself is drawn
+        #     # with the parabola symmetry line on y=0)
+        #     ctx.translate(
+        #         self.center[0] * scale,
+        #         (self.center[1] + (self.mirror_height * 0.5) + self.symmetry_offset_y) * scale
+        #     )
 
-            # Align the center of the Arc with the center of the buffer (The overlay itself is drawn
-            # with the parabola symmetry line on y=0)
-            ctx.translate(
-                self.center[0] * scale,
-                (self.center[1] + (self.mirror_height * 0.5) + self.symmetry_offset_y) * scale
-            )
+        # Move the origin from the top left to the center of the buffer
+        offset = Vec(self.cnvs.get_half_buffer_size())
+        ctx.translate(*offset)
 
-            ctx.translate(0, flip_y)
-            ctx.transform(flip_matrix)
-            ctx.translate(0, -flip_y)
-        else:
-            # Align the center of the Arc with the center of the buffer (The overlay itself is drawn
-            # with the parabola symmetry line on y=0)
-            ctx.translate(
-                self.center[0] * scale,
-                (self.center[1] + (self.mirror_height * 0.5) + self.symmetry_offset_y) * scale
-            )
+        # Calculate base line position
+
+        base_start_w = Vec(-self.parabole_cut_radius * 1.1, -self.symmetry_offset_y)
+        base_end_w = Vec(self.parabole_cut_radius * 1.1, -self.symmetry_offset_y)
+        base_start_b = scale * base_start_w
+        base_end_b = scale * base_end_w
+
+        # Calculate cross line
+
+        cross_start_w = Vec(0, -self.symmetry_offset_y + 1e-3)
+        cross_end_w = Vec(0, -self.symmetry_offset_y - 1e-3)
+        cross_start_b = scale * cross_start_w
+        cross_end_b = scale * cross_end_w
+
+        # Calculate Mirror Arc
+
+        mirror_radius_b = scale * self.parabole_cut_radius
+        arc_rads = (math.pi + self.rad_offset, 2 * math.pi - self.rad_offset)
+
+        # Calculate mirror hole
+
+        hole_radius_b = self.hole_radius * scale
+        hole_pos_b = Vec(0, -scale * self.hole_y)
 
         for lw, colour in [(4, (0.0, 0.0, 0.0, 0.5)), (2, self.colour)]:
             ctx.set_line_width(lw)
@@ -1362,44 +1421,36 @@ class MirrorArcOverlay(base.WorldOverlay):
 
             # Draw base line
 
-            ctx.move_to(b_center_x - (self.parabole_cut_radius * 1.1 * scale),
-                        b_center_y - self.symmetry_offset_y * scale)
-            ctx.line_to(b_center_x + (self.parabole_cut_radius * 1.1 * scale),
-                        b_center_y - self.symmetry_offset_y * scale)
+            ctx.move_to(*base_start_b)
+            ctx.line_to(*base_end_b)
             ctx.stroke()
 
             # Draw cross line
 
-            ctx.move_to(b_center_x,
-                        b_center_y - (self.symmetry_offset_y - 1e-3) * scale)
-            ctx.line_to(b_center_x,
-                        b_center_y - (self.symmetry_offset_y + 1e-3) * scale)
+            ctx.move_to(*cross_start_b)
+            ctx.line_to(*cross_end_b)
             ctx.stroke()
 
             # Draw mirror arc
 
-            ctx.arc(b_center_x, b_center_y,
-                    self.parabole_cut_radius * scale,
-                    math.pi + self.rad_offset, 2 * math.pi - self.rad_offset)
+            ctx.arc(0, 0, mirror_radius_b, *arc_rads)
             ctx.stroke()
 
             # Draw mirror hole
 
-            ctx.arc(b_center_x, b_center_y - self.hole_y * scale,
-                    self.hole_radius * scale,
-                    0, 2 * math.pi)
+            ctx.arc(hole_pos_b.x, hole_pos_b.y, hole_radius_b, 0, 2 * math.pi)
             ctx.stroke()
 
         # DEBUG Lines Mirror Center
-        # ctx.set_line_width(1)
-        # ctx.set_source_rgba(0.0, 1.0, 0.0, 0.5)
-        #
-        # ctx.move_to(b_center_x, b_center_y - self.symmetry_offset_y * scale)
-        # ctx.line_to(b_center_x, b_center_y - self.parabole_cut_radius * scale)
-        #
-        # ctx.move_to(0, b_center_y - self.mirror_center_y * scale)
-        # ctx.line_to(2 * b_center_x, b_center_y - self.mirror_center_y * scale)
-        # ctx.stroke()
+        ctx.set_line_width(1)
+        ctx.set_source_rgba(0.0, 1.0, 0.0, 0.5)
+
+        ctx.move_to(0, -self.symmetry_offset_y * scale)
+        ctx.line_to(0, -self.parabole_cut_radius * scale)
+
+        ctx.move_to(base_start_b.x, -self.mirror_center_y * scale)
+        ctx.line_to(base_end_b.x, -self.mirror_center_y * scale)
+        ctx.stroke()
         # END DEBUG Lines Mirror Center
 
         ctx.restore()
