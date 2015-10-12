@@ -61,7 +61,7 @@ class TescanSEM(model.HwComponent):
                           "Check that the ip address is correct and TESCAN server "
                           "connected to the network." % (host,))
         logging.info("Connected")
-
+                   
         # Lock in order to synchronize all the child component functions
         # that acquire data from the SEM while we continuously acquire images
         self._acquisition_init_lock = threading.Lock()
@@ -123,9 +123,10 @@ class TescanSEM(model.HwComponent):
         try:
             kwargs = children["pressure"]
         except (KeyError, TypeError):
-            raise KeyError("TescanSEM was not given a 'pressure' child")
-        self._pressure = ChamberPressure(parent=self, daemon=daemon, **kwargs)
-        self.children.value.add(self._pressure)
+            logging.info("TescanSEM was not given a 'pressure' child")
+        else:
+            self._pressure = ChamberPressure(parent=self, daemon=daemon, **kwargs)
+            self.children.value.add(self._pressure)
 
     def terminate(self):
         """
@@ -171,9 +172,9 @@ class Scanner(model.Emitter):
         self.parent._device.SetViewField(self._hfw_nomag * 1e03 / mag)
         self.magnification = model.VigilantAttribute(mag, unit="", readonly=True)
 
-        self.horizontalFOV = model.FloatContinuous(fov, range=fov_range, unit="m",
+        self.horizontalFoV = model.FloatContinuous(fov, range=fov_range, unit="m",
                                                    setter=self._setHorizontalFOV)
-        self.horizontalFOV.subscribe(self._onHorizontalFOV)  # to update metadata
+        self.horizontalFoV.subscribe(self._onHorizontalFOV)  # to update metadata
 
         # pixelSize is the same as MD_PIXEL_SIZE, with scale == 1
         # == smallest size/ between two different ebeam positions
@@ -241,7 +242,6 @@ class Scanner(model.Emitter):
         self.probeCurrent = model.FloatEnumerated(self._probeCurrent, pc_choices, unit="A",
                                   setter=self._setPC)
 
-
     # we share metadata with our parent
     def updateMetadata(self, md):
         self.parent.updateMetadata(md)
@@ -253,12 +253,12 @@ class Scanner(model.Emitter):
         # Update current pixelSize and magnification
         self._updatePixelSize()
         self._updateMagnification()
-        
+
     def updateHorizontalFOV(self):
         with self.parent._acquisition_init_lock:
             new_fov = self.parent._device.GetViewField()
         # self._setHorizontalFOV(new_fov * 1e-03)
-        self.horizontalFOV.value = new_fov * 1e-03
+        self.horizontalFoV.value = new_fov * 1e-03
         # Update current pixelSize and magnification
         self._updatePixelSize()
         self._updateMagnification()
@@ -279,7 +279,7 @@ class Scanner(model.Emitter):
     def _updateMagnification(self):
 
         # it's read-only, so we change it only via _value
-        mag = self._hfw_nomag / self.horizontalFOV.value
+        mag = self._hfw_nomag / self.horizontalFoV.value
         self.magnification._value = mag
         self.magnification.notify(mag)
 
@@ -351,7 +351,7 @@ class Scanner(model.Emitter):
         """
         Update the pixel size using the scale, HFWNoMag and magnification
         """
-        fov = self.horizontalFOV.value
+        fov = self.horizontalFoV.value
 
         pxs = (fov / self._shape[0],
                fov / self._shape[1])
@@ -534,18 +534,15 @@ class Detector(model.Detector):
             r = l + res[0] - 1
             b = t + res[1] - 1
 
-            # Prevent scanning via the standard UI (as it prevents us from
-            # getting the acquisition result), and tell the user why.
-            self.parent._device.ProgressShow("Odemis scanning",
-                        "Odemis scanning in progress, pause Odemis acquisition "
-                        "to access this interface.",
-                        0, 1, 0, 100)
             dt = self.parent._scanner.dwellTime.value * 1e9
+            logging.debug("Acquiring SEM image of %s with dwell time %f ns", res, dt)
             self.parent._device.ScScanXY(0, scaled_shape[0], scaled_shape[1],
                                  l, t, r, b, 1, dt)
             # fetch the image (blocking operation), ndarray is returned
             sem_img = self.parent._device.FetchArray(0, res[0] * res[1])
             sem_img.shape = res[::-1]
+            # Change endianess
+            sem_img.byteswap(True)
 
             # we must stop the scanning even after single scan
             self.parent._device.ScStopScan()
@@ -778,10 +775,10 @@ class EbeamFocus(model.Actuator):
         """
         # Perform move through Tescan API
         # Position from m to mm and inverted
-        self.parent._device.SetWD(self._position["z"] * 1e03)
-
-        # Obtain the finally reached position after move is performed.
         with self.parent._acquisition_init_lock:
+            self.parent._device.SetWD(self._position["z"] * 1e03)
+
+            # Obtain the finally reached position after move is performed.
             wd = self.parent._device.GetWD()
             self._position["z"] = wd * 1e-3
 
