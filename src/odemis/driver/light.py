@@ -34,7 +34,7 @@ class Light(model.Emitter):
         model.Emitter.__init__(self, name, role, **kwargs)
 
         self._shape = ()
-        self.power = model.FloatEnumerated(0., {0., 10.}, unit="W")
+        self.power = model.FloatContinuous(0., {0., 10.}, unit="W")
         self.power.subscribe(self._updatePower)
         # just one band: white
         # emissions is list of 0 <= floats <= 1. Always 1.0: cannot lower it.
