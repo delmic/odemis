@@ -590,15 +590,19 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     start = time.time()
                     trigger.notify()
 
-                    if not self._acq_rep_complete.wait(rep_time * 4 + 5):
-                        raise TimeoutError("Acquisition of repetition stream for pixel %s timed out after %g s"
-                                           % (i, rep_time * 4 + 5))
+                    timedout = not self._acq_rep_complete.wait(rep_time * 4 + 5)
                     if self._acq_state == CANCELLED:
                         raise CancelledError()
+
+                    # Check whether it went fine
                     dur = time.time() - start
-                    if dur < rep_time:
-                        logging.warning("Repetition stream acquisition took less than %g s: %g s",
-                                        rep_time, dur)
+                    if timedout or dur < rep_time:
+                        if timedout:
+                            logging.warning("Acquisition of repetition stream for pixel %s timed out after %g s, will try again",
+                                            i, rep_time * 4 + 5)
+                        else: # too fast to be possible
+                            logging.warning("Repetition stream acquisition took less than %g s: %g s, will try again",
+                                            rep_time, dur)
                         failures += 1
                         if failures >= 3:
                             # In three failures we just give up
@@ -608,6 +612,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                             # Stop and restart the acquisition, hoping this time we will synchronize
                             # properly
                             self._rep_df.unsubscribe(self._ssOnRepetitionImage)
+                            time.sleep(1)
                             self._rep_df.subscribe(self._ssOnRepetitionImage)
                             continue
 
