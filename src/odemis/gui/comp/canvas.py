@@ -145,26 +145,23 @@ from __future__ import division
 
 from abc import ABCMeta, abstractmethod
 import cairo
-import copy
-from decorator import decorator
 import logging
 import math
-import numpy
+import os
+import wx
+import wx.lib.wxcairo as wxcairo
+import wx.lib.newevent
+
+from decorator import decorator
+
 from odemis import util
-from odemis.gui import BLEND_DEFAULT, BLEND_SCREEN
+from odemis.gui import BLEND_DEFAULT, BLEND_SCREEN, BufferSizeEvent
 from odemis.gui.comp.overlay.base import WorldOverlay, ViewOverlay
-from odemis.gui.util import call_in_wx_main, wxlimit_invocation
+from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.img import add_alpha_byte
-from odemis.model import DataArray
 from odemis.util import intersect
 from odemis.util.conversion import wxcol_to_frgb
-import os
-import threading
-import wx
-
 import odemis.gui.img.data as imgdata
-import wx.lib.wxcairo as wxcairo
-
 
 # Special abilities that a canvas might possess
 CAN_DRAG = 1    # Content can be dragged
@@ -528,6 +525,8 @@ class BufferedCanvas(wx.Panel):
         self._dc_buffer.SelectObject(self._bmp_buffer)
         # On Linux necessary after every 'SelectObject'
         self._dc_buffer.SetBackground(wx.Brush(self.BackgroundColour, wx.BRUSHSTYLE_SOLID))
+
+        wx.PostEvent(self, BufferSizeEvent())
 
     def request_drawing_update(self, delay=0.1):
         """ Schedule an update of the buffer if the timer is not already running

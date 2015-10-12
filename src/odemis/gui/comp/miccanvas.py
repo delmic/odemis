@@ -1100,6 +1100,7 @@ class SparcARCanvas(DblMicroscopeCanvas):
         self.flip = wx.VERTICAL  # TODO: default to 0 (and change in Viewport)
 
         self._mirror_ol = world_overlay.MirrorArcOverlay(self)
+        self._mirror_ol.activate()
         self.add_world_overlay(self._mirror_ol)
 
         self._goal_im_ref = None

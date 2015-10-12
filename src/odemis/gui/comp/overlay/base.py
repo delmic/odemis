@@ -40,6 +40,7 @@ import cairo
 import wx
 
 import odemis.gui as gui
+from odemis.gui import EVT_BUFFER_SIZE
 import odemis.util as util
 import odemis.util.conversion as conversion
 
@@ -113,6 +114,38 @@ class Label(object):
     def _clear_cache(self):
         self.render_pos = None
         self.text_size = None
+
+
+class Vec(tuple):
+    """ Simple vector class for easy vector addition and multiplication """
+
+    def __new__(cls, a, b=None):
+        if b is not None:
+            return super(Vec, cls).__new__(cls, tuple((a, b)))
+        else:
+            return super(Vec, cls).__new__(cls, tuple(a))
+
+    def __add__(self, a):
+        # TODO: check lengths are compatable.
+        return Vec(x + y for x, y in zip(self, a))
+
+    def __sub__(self, a):
+        # TODO: check lengths are compatable.
+        return Vec(x - y for x, y in zip(self, a))
+
+    def __mul__(self, c):
+        return Vec(x * c for x in self)
+
+    def __rmul__(self, c):
+        return Vec(c * x for x in self)
+
+    @property
+    def x(self):
+        return self[0]
+
+    @property
+    def y(self):
+        return self[1]
 
 
 class Overlay(object):
@@ -1029,6 +1062,15 @@ class ViewOverlay(Overlay):
 class WorldOverlay(Overlay):
     """ This class displays an overlay on the buffer.
     It's updated only every time the entire buffer is redrawn."""
+
+    def __init__(self, *args, **kwargs):
+        super(WorldOverlay, self).__init__(*args, **kwargs)
+        self.cnvs.Bind(EVT_BUFFER_SIZE, self.on_buffer_size)
+        self.offset_b = Vec(self.cnvs.get_half_buffer_size())
+
+    def on_buffer_size(self, _):
+        self.offset_b = Vec(self.cnvs.get_half_buffer_size())
+        self.cnvs.update_drawing()
 
     @abstractmethod
     def draw(self, ctx, shift=(0, 0), scale=1.0):
