@@ -940,7 +940,7 @@ class VisualRangeSlider(BaseSlider):
                 self.Refresh()
         else:
             self._calc_drag(x)
-            self._send_slider_update_event() # FIXME: need to update the value, otherwise it's pointless
+            self._send_slider_update_event()
 
     def OnLeftDown(self, event):
         if self.Enabled:
