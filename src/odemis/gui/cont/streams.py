@@ -877,7 +877,7 @@ class StreamBarController(object):
         # If any stream already present: listen to them in the scheduler (but
         # don't display)
         for s in self._tab_data_model.streams.value:
-            logging.debug("Scheduling stream present at init: %s", s)
+            logging.debug("Adding stream present at init to scheduler: %s", s)
             self._scheduleStream(s)
 
     def pause(self):
