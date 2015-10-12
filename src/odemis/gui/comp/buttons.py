@@ -508,7 +508,7 @@ class GraphicRadioButton(ImageTextToggleButton):
         self.value = kwargs.pop('value', None)
         if 'label' not in kwargs and self.value:
             kwargs['label'] = u"%g" % self.value
-        ImageTextToggleButton.__init__(self, *args, **kwargs)
+        super(GraphicRadioButton, self).__init__(*args, **kwargs)
 
     def OnLeftDown(self, event):
         """ This event handler is fired on left mouse button events, but it ignores those events
@@ -537,56 +537,40 @@ class TabButton(GraphicRadioButton):
 
         self.bmpHover = imgdata.tab_hover.Bitmap
         self.bmpSelected = imgdata.tab_active.Bitmap
-        self.bmpDisabled = imgdata.tab_hover.Bitmap
+        self.bmpDisabled = imgdata.tab_disabled.Bitmap
 
-        self.Bind(wx.EVT_SET_FOCUS, self.on_focus)
-        self.Bind(wx.EVT_KILL_FOCUS, self.on_kill_focus)
+        self.fg_color_normal = "#FFFFFF"
+        self.fg_color_dis = "#E0E0E0"
+        self.SetForegroundColour(self.fg_color_normal)
 
-        self.fg_color_def = "#E5E5E5"
-        self.SetForegroundColour(self.fg_color_def)
-        self.fg_color_high = "#FFFFFF"
-        self.fg_color_notify = FG_COLOUR_HIGHLIGHT
+        self.highlighted = False
 
-        self.notification = False
-
-    def _highlight(self, on):
-        if on:
-            if self.notification:
-                self.SetForegroundColour(self.fg_color_notify)
+    def Enable(self, enable):
+        if enable:
+            if self.highlighted:
+                self.SetForegroundColour(FG_COLOUR_HIGHLIGHT)
             else:
-                self.SetForegroundColour(self.fg_color_high)
+                self.SetForegroundColour(self.fg_color_normal)
         else:
-            if self.notification:
-                self.SetForegroundColour(self.fg_color_notify)
-            else:
-                self.SetForegroundColour(self.fg_color_def)
-
-    def on_focus(self, evt):
-        if self.notification:
-            self.notification = False
-        self._highlight(True)
-        evt.Skip()
-
-    def on_kill_focus(self, evt):
-        self._highlight(False)
-        evt.Skip()
+            self.SetForegroundColour(self.fg_color_dis)
+        return super(TabButton, self).Enable(enable)
 
     def highlight(self, on):
         """ Indicate a change to the button's related tab by visually altering it """
-        f = self.GetFont()
+        self.highlighted = on
 
+        f = self.GetFont()
         if on:
-            self.SetForegroundColour(self.fg_color_notify)
             f.SetWeight(wx.BOLD)
-            self.notification = True
         else:
-            self.SetForegroundColour(self.fg_color_def)
             f.SetWeight(wx.NORMAL)
-            self.notification = False
 
         self.SetFont(f)
+        self.Enable(self.IsEnabled())  # update label colour
         self.Refresh()
 
+    def DrawLabel(self, *args, **kwargs):
+        super(TabButton, self).DrawLabel(*args, **kwargs)
 
 class ColourButton(ImageButton):
     """ An ImageButton that has a single colour background that can be altered """
