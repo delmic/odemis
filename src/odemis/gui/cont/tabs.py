@@ -90,7 +90,7 @@ class Tab(object):
         self.panel = panel
         self.main_frame = main_frame
         self.tab_data_model = tab_data
-        self.notification = False
+        self.highlighted = False
 
     def Show(self, show=True):
         self.button.SetToggle(show)
@@ -192,10 +192,10 @@ class Tab(object):
         return self.button.GetLabel()
 
     def highlight(self, on=True):
-        """ Put the tab in 'notification' mode to indicate a change has occurred """
-        if self.notification != on:
+        """ Put the tab in 'highlighted' mode to indicate a change has occurred """
+        if self.highlighted != on:
             self.button.highlight(on)
-            self.notification = on
+            self.highlighted = on
 
     def make_default(self):
         """ Try and make the current tab the default
@@ -1073,10 +1073,15 @@ class ChamberTab(Tab):
 
         # If the mirror is parked, we still allow the user to go to acquisition
         # but it's unlikely to be a good idea => indicate that something needs
-        # to be done here first. Note: alignment tab disables itself when the
-        # mirror is no engaged.
-        # TODO: how to let the other tabs check the position? => just disable alignment tab from here?
+        # to be done here first. Also prevent to use alignment tab, as we don't
+        # want to let the use move the mirror all around the chamber.
         self.highlight(mstate != MIRROR_ENGAGED)
+
+        try:
+            tab_align = self.tab_data_model.main.getTabByName("sparc2_align")
+            tab_align.button.Enable(mstate == MIRROR_ENGAGED)
+        except LookupError:
+            logging.debug("Failed to find the alignment tab")
 
     def Show(self, show=True):
         Tab.Show(self, show=show)
@@ -2430,7 +2435,7 @@ class Sparc2AlignTab(Tab):
                             main_data.ccd.data,
                             main_data.brightlight,
                             focuser=main_data.focus,
-                            forcemd={model.MD_PIXEL_SIZE: (10e-5, 10e-5)},  # DEBUG
+                            # forcemd={model.MD_PIXEL_SIZE: (10e-5, 10e-5)},  # DEBUG
                             )
         self._specline_stream = specline_stream
 
@@ -2511,9 +2516,6 @@ class Sparc2AlignTab(Tab):
 
         # Bind MoI background acquisition
         self.panel.btn_bkg_acquire.Bind(wx.EVT_BUTTON, self._onBkgAcquire)
-
-        # TODO: listen to mirror pos, and disable ourself if the mirror is not
-        # engaged
 
     def _onClickAlignButton(self, evt):
         """
