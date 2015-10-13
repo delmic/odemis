@@ -1105,7 +1105,7 @@ class SparcARCanvas(DblMicroscopeCanvas):
         self._goal_im_ref = None
         self._goal_wim = None
 
-    def _reset_goal_im(self):
+    def _reset_goal_im(self, obj):
         """ Called when the goal_im is dereferenced """
         self._goal_wim = None
 
