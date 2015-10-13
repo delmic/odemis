@@ -116,27 +116,27 @@ SPARC2: {
 
 # In reality, this is a Zyla, but you need libandor3-dev to simulate an AndorCam3
 # Depending exactly on the configuration, it might also be used for spectrometer
-# "Camera": {
-#     class: andorcam2.AndorCam2,
-#     role: ccd,
-#     power_supplier: "Power Control Unit",
-#     init: {
-#        device: "fake",
-#        image: "sparc-ar-mirror-align.h5", # only for simulator
-#     },
-# }
-
 "Camera": {
-    class: simcam.Camera,
+    class: andorcam2.AndorCam2,
     role: ccd,
     power_supplier: "Power Control Unit",
     init: {
-        image: "sparc-ar-mirror-align.h5", # only for simulator
-    },
-    children: {
-        focus: "Spectrograph focus",
+       device: "fake",
+       image: "sparc-ar-mirror-align.h5", # only for simulator
     },
 }
+
+# "Camera": {
+#     class: simcam.Camera,
+#     role: ccd,
+#     power_supplier: "Power Control Unit",
+#     init: {
+#         image: "sparc-ar-mirror-align.h5", # only for simulator
+#     },
+#     children: {
+#         focus: "Spectrograph focus",
+#     },
+# }
 
 # On some configuration, there is a dedicated camera for the acquisition of the
 # spectra, otherwise 'Camera' is used.
@@ -184,22 +184,22 @@ SPARC2: {
     affects: ["Camera", "Spectral Camera"],
 }
 
-# "Spectrograph focus": {
-#     class: actuator.MultiplexActuator,
-#     role: "focus",
-#     children: {"z": "Spectrograph"},
-#     init: {
-#         axes_map: {"z": "focus"},
-#     },
-#     affects: ["Camera", "Spectral Camera"],
-# }
-
-
 "Spectrograph focus": {
-    # Normally child of Spectrograph, but for the simulator: child of Camera
+    class: actuator.MultiplexActuator,
     role: "focus",
+    children: {"z": "Spectrograph"},
+    init: {
+        axes_map: {"z": "focus"},
+    },
     affects: ["Camera", "Spectral Camera"],
 }
+
+
+# "Spectrograph focus": {
+#     # Normally child of Spectrograph, but for the simulator: child of Camera
+#     role: "focus",
+#     affects: ["Camera", "Spectral Camera"],
+# }
 
 # Provide the mirror (aka port selector) of the spectrograph as a separate component
 "Spec CCD Flipper": {
