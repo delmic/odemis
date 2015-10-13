@@ -686,7 +686,15 @@ class OverlayTestCase(test.GuiTestCase):
             cnvs.update_drawing()
             evt.Skip()
 
-        cnvs.Bind(wx.EVT_RIGHT_UP, flip)
+        def zoom(evt):
+            if evt.GetWheelRotation() > 0:
+                cnvs.scale *= 1.1
+            else:
+                cnvs.scale *= 0.9
+            cnvs.update_drawing()
+
+        cnvs.Bind(wx.EVT_LEFT_DCLICK, flip)
+        cnvs.Bind(wx.EVT_MOUSEWHEEL, zoom)
 
         test.gui_loop()
 

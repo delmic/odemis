@@ -410,31 +410,31 @@ class DragMixin(object):
     def _on_left_down(self, evt):
         """ Start a left drag if no right drag is in progress """
         if not self.right_dragging:
+            self.drag_v_start_pos = self.drag_v_end_pos = Vec(evt.GetPositionTuple())
             self._left_dragging = True
-            self.drag_v_start_pos = evt.GetPositionTuple()
 
     def _on_left_up(self, evt):
         """ End a left drag if no right drag is in progress """
         if not self.right_dragging:
             self._left_dragging = False
-            self.drag_v_end_pos = evt.GetPositionTuple()
+            self.drag_v_end_pos = Vec(evt.GetPositionTuple())
 
     def _on_right_down(self, evt):
         """ Start a right drag if no left drag is in progress """
         if not self.left_dragging:
+            self.drag_v_start_pos = self.drag_v_end_pos = Vec(evt.GetPositionTuple())
             self._right_dragging = True
-            self.drag_v_start_pos = evt.GetPositionTuple()
 
     def _on_right_up(self, evt):
         """ End a right drag if no left drag is in progress """
         if not self.left_dragging:
             self._right_dragging = False
-            self.drag_v_end_pos = evt.GetPositionTuple()
+            self.drag_v_end_pos = Vec(evt.GetPositionTuple())
 
     def _on_motion(self, evt):
         """ Update the drag end position if a drag movement is in progress """
         if self.dragging:
-            self.drag_v_end_pos = evt.GetPositionTuple()
+            self.drag_v_end_pos = Vec(evt.GetPositionTuple())
 
     def _on_focus_lost(self, evt):
         """ Cancel any drag when the parent canvas loses focus """
@@ -468,6 +468,13 @@ class DragMixin(object):
         """ Boolean value indicating whether actual movement has occurred during dragging """
         return ((None, None) != (self.drag_v_start_pos, self.drag_v_end_pos) and
                 self.drag_v_start_pos != self.drag_v_end_pos)
+
+    @property
+    def delta_v(self):
+        if self.drag_v_end_pos and self.drag_v_start_pos:
+            return self.drag_v_end_pos - self.drag_v_start_pos
+        else:
+            return Vec(0, 0)
 
 # Modes for creating, changing and dragging selections
 SEL_MODE_NONE = 0

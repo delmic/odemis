@@ -31,7 +31,7 @@ import wx
 from odemis.acq.stream import UNDEFINED_ROI
 import odemis.gui as gui
 from odemis.gui.comp.overlay.base import Vec, WorldOverlay, SelectionMixin, DragMixin, \
-    PixelDataMixin
+    PixelDataMixin, SEL_MODE_EDIT, SEL_MODE_CREATE, EDIT_MODE_BOX, EDIT_MODE_POINT
 import odemis.gui.img.data as img
 from odemis.gui.util.raster import rasterize_line
 from odemis.model import TupleVA
@@ -1308,26 +1308,45 @@ class MirrorArcOverlay(WorldOverlay, DragMixin):
         self.hole_pos_w = Vec(hole_pos_w)
         self.cnvs.update_drawing()
 
+    def get_hole_position(self):
+        return self.hole_pos_w
+        
     def on_left_down(self, evt):
         if self.active:
             DragMixin._on_left_down(self, evt)
+            self.cnvs.set_dynamic_cursor(wx.CURSOR_SIZENESW)  # = closed hand
         else:
             WorldOverlay.on_left_down(self, evt)
+
+    def on_enter(self, evt):
+        if self.active:
+            self.cnvs.set_default_cursor(wx.CURSOR_HAND)
+        else:
+            WorldOverlay.on_enter(self, evt)
+
+    def on_leave(self, evt):
+        if self.active:
+            self.cnvs.reset_default_cursor()
+        else:
+            WorldOverlay.on_leave(self, evt)
 
     def on_left_up(self, evt):
         if self.active:
             DragMixin._on_left_up(self, evt)
-            offset = self.cnvs.get_half_buffer_size()
-            self.set_hole_position(self.cnvs.view_to_world(evt.GetPositionTuple(), offset))
+            # Convert the final delta value to world coordinates and add it to the hole position
+            self.hole_pos_w += self.cnvs.buffer_to_world(self.delta_v)
+            self.clear_drag()
+            self.cnvs.update_drawing()
+            self.cnvs.reset_dynamic_cursor()
         else:
             WorldOverlay.on_left_up(self, evt)
 
     def on_motion(self, evt):
         if self.active and self.left_dragging:
-            offset = self.cnvs.get_half_buffer_size()
-            self.set_hole_position(self.cnvs.view_to_world(evt.GetPositionTuple(), offset))
+            DragMixin._on_motion(self, evt)
+            self.cnvs.update_drawing()
         else:
-            WorldOverlay.on_left_up(self, evt)
+            WorldOverlay.on_motion(self, evt)
 
     def draw(self, ctx, shift=(0, 0), scale=1.0):
 
@@ -1335,30 +1354,30 @@ class MirrorArcOverlay(WorldOverlay, DragMixin):
         ctx.translate(*self.offset_b)
 
         # DEBUG Lines Buffer Center
-        ctx.set_line_width(1)
-        ctx.set_source_rgba(1.0, 0.0, 0.0, 0.5)
-
-        ctx.move_to(0.5, -10 + 0.5)
-        ctx.line_to(0.5, 10 + 0.5)
-
-        ctx.move_to(-10 + 0.5, 0.5)
-        ctx.line_to(10 + 0.5, 0.5)
-
-        ctx.stroke()
+        # ctx.set_line_width(1)
+        # ctx.set_source_rgba(1.0, 0.0, 0.0, 0.5)
+        #
+        # ctx.move_to(0.5, -30 + 0.5)
+        # ctx.line_to(0.5, 30 + 0.5)
+        #
+        # ctx.move_to(-30 + 0.5, 0.5)
+        # ctx.line_to(30 + 0.5, 0.5)
+        #
+        # ctx.stroke()
         # END DEBUG Lines Buffer Center
 
         if self.cnvs.flip == wx.VERTICAL:
             ctx.transform(cairo.Matrix(1.0, 0.0, 0.0, -1.0))
-            # ctx.translate(
-            #     self.center_w.x * scale,
-            #     (self.center_w.y + (self.mirror_height * 0.5) + self.symmetry_offset_y) * scale
-            # )
+            hole_offset = scale * (Vec(self.hole_pos_w.x, -self.hole_pos_w.y) + (0, self.hole_y))
+            hole_offset += (self.delta_v.x, -self.delta_v.y)
+        else:
+            hole_offset = scale * (self.hole_pos_w + (0, self.hole_y))
+            hole_offset += self.delta_v
+
+        ctx.translate(*hole_offset)
 
         # Align the center of the Arc with the center of the buffer (The overlay itself is drawn
         # with the parabola symmetry line on y=0)
-
-        hole_offset = scale * (self.hole_pos_w + (0, self.symmetry_offset_y)) + (0, self.mirror_height // 2)
-        ctx.translate(*hole_offset)
 
         # Calculate base line position
 
@@ -1410,13 +1429,13 @@ class MirrorArcOverlay(WorldOverlay, DragMixin):
             ctx.stroke()
 
         # DEBUG Lines Mirror Center
-        ctx.set_line_width(1)
-        ctx.set_source_rgba(0.0, 1.0, 0.0, 0.5)
-
-        ctx.move_to(0.5, -self.symmetry_offset_y * scale + 0.5)
-        ctx.line_to(0.5, -self.parabole_cut_radius * scale + 0.5)
-
-        ctx.move_to(-hole_radius_b * 2 + 0.5, hole_pos_b.y + 0.5)
-        ctx.line_to(hole_radius_b * 2 + 0.5, hole_pos_b.y + 0.5)
-        ctx.stroke()
+        # ctx.set_line_width(1)
+        # ctx.set_source_rgba(0.0, 1.0, 0.0, 0.5)
+        #
+        # ctx.move_to(0.5, -self.symmetry_offset_y * scale + 0.5)
+        # ctx.line_to(0.5, -self.parabole_cut_radius * scale + 0.5)
+        #
+        # ctx.move_to(-hole_radius_b * 2 + 0.5, hole_pos_b.y + 0.5)
+        # ctx.line_to(hole_radius_b * 2 + 0.5, hole_pos_b.y + 0.5)
+        # ctx.stroke()
         # END DEBUG Lines Mirror Center

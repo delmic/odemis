@@ -629,7 +629,7 @@ class BufferedCanvas(wx.Panel):
                 (w_pos[1] - w_buff_center[1]) * scale + offset[1])
 
     @classmethod
-    def buffer_to_world_pos(cls, b_pos, w_buffer_center, scale, offset=None):
+    def buffer_to_world_pos(cls, b_pos, w_buffer_center, scale, offset=(0, 0)):
         """ Convert a position from buffer coordinates into world coordinates
 
         :param b_pos: (int, int) the buffer coordinates
@@ -693,7 +693,7 @@ class BufferedCanvas(wx.Panel):
 
     # View <-> World
     @classmethod
-    def view_to_world_pos(cls, v_pos, w_buff_cent, margins, scale, offset=None):
+    def view_to_world_pos(cls, v_pos, w_buff_cent, margins, scale, offset=(0, 0)):
         """ Convert a position in view coordinates into world coordinates
 
         See `view_to_buffer_pos` and `buffer_to_world_pos` for more details
@@ -1246,7 +1246,7 @@ class BitmapCanvas(BufferedCanvas):
             offset
         )
 
-    def view_to_world(self, pos, offset=None):
+    def view_to_world(self, pos, offset=(0, 0)):
         return super(BitmapCanvas, self).view_to_world_pos(
             pos,
             self.w_buffer_center,
