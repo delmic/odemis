@@ -100,7 +100,9 @@ class VigilantAttributeBase(object):
             try:
                 l(v)
             except WeakRefLostError:
-                self.unsubscribe(l)
+                # self.unsubscribe(l)
+                logging.debug("Not notifying listener which has been dereferenced")
+                self._listeners.discard(l)
             except Exception:
                 logging.exception("Subscriber %r raised exception when "
                                   "receiving value %s", l, v)
