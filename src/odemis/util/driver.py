@@ -49,6 +49,41 @@ def getSerialDriver(name):
         return "Unknown"
 
 
+# From http://code.activestate.com/recipes/286222/
+_SCALE = {'kB': 2 ** 10, 'mB': 2 ** 20,
+          'KB': 2 ** 10, 'MB': 2 ** 20}
+
+def _VmB(VmKey):
+    """
+    Read the memory usage for a given type
+    Note: only supported on Linux
+    return (int): memory used in bytes
+    """
+    proc_status = '/proc/%d/status' % os.getpid()
+    # get pseudo file  /proc/<pid>/status
+    try:
+        t = open(proc_status)
+        v = t.read()
+        t.close()
+    except Exception:
+        raise NotImplementedError("Non POSIX system not supported")
+    # get VmKey line e.g. 'VmRSS:  9999  kB\n ...'
+    i = v.index(VmKey + ":")
+    v = v[i:].split(None, 3)  # whitespaces, 4 parts
+    if len(v) < 3:
+        return NotImplementedError("Not supporting to read memory %s" % (v,))
+
+    # convert to bytes
+    return int(v[1]) * _SCALE[v[2]]
+
+
+def readMemoryUsage():
+    """
+    return (int) memory usage in bytes.
+    """
+    return _VmB('VmSize')  # VmSize is the current total memory used (on Linux)
+
+
 def estimateMoveDuration(distance, speed, accel):
     """
     Compute the theoretical duration of a move given the maximum speed and

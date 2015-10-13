@@ -24,7 +24,7 @@ import logging
 from odemis import model
 import odemis
 from odemis.util import test
-from odemis.util.driver import getSerialDriver, speedUpPyroConnect
+from odemis.util.driver import getSerialDriver, speedUpPyroConnect, readMemoryUsage
 import os
 import time
 import unittest
@@ -34,6 +34,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 SECOM_CONFIG = CONFIG_PATH + "sim/secom-sim.odm.yaml"
+
 
 class TestDriver(unittest.TestCase):
     """
@@ -63,6 +64,11 @@ class TestDriver(unittest.TestCase):
         time.sleep(2)
         if need_stop:
             test.stop_backend()
+
+    def test_memoryUsage(self):
+        m = readMemoryUsage()
+        self.assertGreater(1, m)
+
 
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']
