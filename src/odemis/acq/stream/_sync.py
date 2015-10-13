@@ -1045,7 +1045,7 @@ class MomentOfInertiaMDStream(SEMCCDMDStream):
     assembled into one big image for the CCD.
     Used by the MomentOfInertiaLiveStream to provide display in the mirror
     alignment mode for SPARCv2.
-    .raw actually contains: SEM data, moment of inertia, valid array, spot size at center
+    .raw actually contains: SEM data, moment of inertia, valid array, spot size at center (array of 0 dim)
     """
 
     def __init__(self, name, main_stream, rep_stream):
@@ -1105,7 +1105,8 @@ class MomentOfInertiaMDStream(SEMCCDMDStream):
         valid_array = numpy.array(valid_results)
         valid_array.shape = repetition
         valid_da = model.DataArray(valid_array, main_data.metadata)
-        self._rep_raw = [moi_da, valid_da, spot_size]
+        # Ensure spot size is a (0-dim) array because .raw must only contains arrays
+        self._rep_raw = [moi_da, valid_da, model.DataArray(spot_size)]
         self._main_raw = [main_data]
 
     def ComputeMoI(self, data, background, drange, spot_size=False):
