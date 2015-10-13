@@ -672,13 +672,10 @@ class OverlayTestCase(test.GuiTestCase):
 
     def test_mirror_arc_overlay(self):
         cnvs = miccanvas.SparcARCanvas(self.panel)
-        cnvs.scale = 15000
+        cnvs.scale = 20000
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
-        # Manually add the overlay
-        mol = wol.MirrorArcOverlay(cnvs)
-        cnvs.add_world_overlay(mol)
-        mol.activate()
+        cnvs.flip = 0
         cnvs.update_drawing()
 
         def flip(evt):
@@ -689,10 +686,17 @@ class OverlayTestCase(test.GuiTestCase):
             cnvs.update_drawing()
             evt.Skip()
 
-        cnvs.Bind(wx.EVT_LEFT_UP, flip)
+        def zoom(evt):
+            if evt.GetWheelRotation() > 0:
+                cnvs.scale *= 1.1
+            else:
+                cnvs.scale *= 0.9
+            cnvs.update_drawing()
+
+        cnvs.Bind(wx.EVT_LEFT_DCLICK, flip)
+        cnvs.Bind(wx.EVT_MOUSEWHEEL, zoom)
 
         test.gui_loop()
-
 
     # END World overlay test cases
 
