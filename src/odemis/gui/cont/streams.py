@@ -47,11 +47,11 @@ from wx.lib.pubsub import pub
 import odemis.acq.stream as acqstream
 import odemis.gui.model as guimodel
 
+
 # There are two kinds of controllers:
 # * Stream controller: links 1 stream <-> stream panel (cont/stream/StreamPanel)
 # * StreamBar controller: links .streams VA <-> stream bar (cont/stream/StreamBar)
 #   The StreamBar controller is also in charge of the scheduling of the streams.
-
 
 # Stream scheduling policies: decides which streams which are with .should_update get .is_active
 SCHED_LAST_ONE = 1  # Last stream which got added to the should_update set
@@ -85,7 +85,9 @@ class StreamController(object):
             label_edit = True
 
         self.stream_panel = StreamPanel(stream_bar, stream, label_edit)
-        self.stream_panel.Bind(wx.EVT_WINDOW_DESTROY, self._on_stream_panel_destroy)
+        # Detect when the panel is destroyed (but _not_ any of the children)
+        self.stream_panel.Bind(wx.EVT_WINDOW_DESTROY, self._on_stream_panel_destroy,
+                               source=self.stream_panel)
 
         self.tab_data_model = tab_data_model
 
@@ -201,6 +203,7 @@ class StreamController(object):
 
             se = create_setting_entry(self.stream_panel, name, va, self.stream.emitter, conf)
             self.entries[se.name] = se
+            add_divider = True
 
         # Process the emitter VAs first
         vas_names = util.sorted_according_to(self.stream.emt_vas.keys(), emitter_conf.keys())
@@ -269,6 +272,7 @@ class StreamController(object):
         being the main class responsible for it.
 
         """
+        logging.debug("Stream panel %s destroyed", self.stream.name.value)
 
         # Destroy references to this controller in even handlers
         # (More references are present, see getrefcount
