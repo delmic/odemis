@@ -619,8 +619,17 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     dur = time.time() - start
                     if timedout or dur < rep_time:
                         if timedout:
-                            logging.warning("Acquisition of repetition stream for pixel %s timed out after %g s, will try again",
-                                            i, rep_time * 4 + 5)
+                            # Note: it can happen we don't receive the data if there
+                            # no more memory left (without any other warning).
+                            # So we log the memory usage here too.
+                            # TODO: Support also for Windows
+                            import odemis.util.driver as udriver
+                            memu = udriver.readMemoryUsage()
+                            # Too bad, need to use VmSize to get any good value
+                            logging.warning("Acquisition of repetition stream for "
+                                            "pixel %s timed out after %g s. "
+                                            "Memory usage is %d. Will try again",
+                                            i, rep_time * 4 + 5, memu)
                         else: # too fast to be possible
                             logging.warning("Repetition stream acquisition took less than %g s: %g s, will try again",
                                             rep_time, dur)
