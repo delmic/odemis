@@ -1,3 +1,14 @@
+odemis (2.2.3-1ubuntu1) precise; urgency=low
+
+  * New version: 2.2.3
+  * Bugs fixed:
+    - Estimated time in progress bar was incorrect if using drift correction (SPARC)
+    - CCD resolution would sometimes not update when changing binning (SPARC)
+    - Try harder during acqusition if CCD hardware fails (SPARC)
+    - Stream spectrogram in analisys tab is completely full (SPARC)
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Wed, 14 Oct 2015 15:46:35 +0200
+
 odemis (2.2.2-1ubuntu1) precise; urgency=low
 
   * New version: 2.2.2
