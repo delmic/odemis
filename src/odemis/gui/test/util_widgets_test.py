@@ -18,8 +18,10 @@ This file is part of Odemis.
     see http://www.gnu.org/licenses/.
 
 """
+from __future__ import division
 
 from odemis.gui.comp.slider import UnitFloatSlider
+import time
 import unittest
 import wx
 
@@ -28,7 +30,7 @@ import odemis.gui.util.widgets as widgets
 import odemis.model as model
 
 
-test.goto_manual()
+# test.goto_manual()
 
 
 class ConnectorTestCase(test.GuiTestCase):
@@ -90,6 +92,62 @@ class ConnectorTestCase(test.GuiTestCase):
         con.resume()
         test.gui_loop(200)
         self.assertEqual(slider.GetValue(), 0.1)
+
+    def test_pf_connector(self):
+        """
+        Test ProgressiveFutureConnector
+        """
+        # Add a gauge (progress bar) and label for testing
+        gauge = wx.Gauge(self.panel)
+        stxt = wx.StaticText(self.panel)
+        self.add_control(gauge, flags=wx.EXPAND | wx.ALL)
+        self.add_control(stxt, flags=wx.EXPAND | wx.ALL)
+
+        test.gui_loop(200)
+
+        # Create the ProgressiveFuture
+        now = time.time()
+        pf = model.ProgressiveFuture(now, now + 60)  # one min
+        # future.task_canceller = self.cancel_task
+
+        # Create the connector
+        pfc = widgets.ProgressiveFutureConnector(pf, bar=gauge, label=stxt)
+        test.gui_loop(300)  # need to wait at least 0.25 s
+
+        # Check ratio at beginning
+        r1 = gauge.Value / gauge.Range
+        self.assertLessEqual(r1, 0.1)
+        self.assertGreater(len(stxt.LabelText), 6)
+
+        # wait 2 s and see if the progress increased
+        test.gui_loop(2000)
+        r2 = gauge.Value / gauge.Range
+        self.assertGreater(r2, r1)
+
+        # Make it look a lot longer => should update backwards
+        pf.set_progress(end=now + 120)
+        test.gui_loop(300)  # need to wait at least 0.25 s
+        r3 = gauge.Value / gauge.Range
+        self.assertLess(r3, r2)
+
+        # wait 2 s and see if the progress increased
+        test.gui_loop(2000)
+        r4 = gauge.Value / gauge.Range
+        self.assertGreater(r4, r3)
+
+        # Make it look a little longer => should not update
+        pf.set_progress(end=now + 121)
+        test.gui_loop(300)  # need to wait at least 0.25 s
+        r5 = gauge.Value / gauge.Range
+        self.assertEqual(r5, r4)
+
+        # TODO: support cancelling the task
+        # End the task (early)
+#         pf.cancel()
+#         test.gui_loop(300)  # need to wait at least 0.25 s
+#         r6 = gauge.Value / gauge.Range
+#         self.assertEqual(r6, 1)
+
 
 if __name__ == "__main__":
     unittest.main()
