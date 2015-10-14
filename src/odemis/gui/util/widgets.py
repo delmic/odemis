@@ -238,6 +238,7 @@ class ProgressiveFutureConnector(object):
         self._start, self._end = future.get_progress()
         self._end = None
         self._prev_left = None
+        self._last_update = 0  # when was the last GUI update
 
         # a repeating timer, always called in the GUI thread
         self._timer = wx.PyTimer(self._update_progress)
@@ -276,8 +277,9 @@ class ProgressiveFutureConnector(object):
         left = max(0, self._end - now)
         prev_left = self._prev_left
 
+        # Avoid back and forth estimation (but at least every 10 s)
         can_update = True
-        if prev_left is not None: # Avoid back and forth estimation
+        if prev_left is not None and self._last_update + 10 > now:
             # Don't update gauge if ratio reduces (a bit)
             try:
                 ratio = past / (past + left)
@@ -295,6 +297,8 @@ class ProgressiveFutureConnector(object):
                           "vs old %g s, and current ratio %g vs old %g.",
                           left, prev_left, ratio * 100, prev_ratio * 100)
             return
+        else:
+            self._last_update = now
 
         # progress bar: past / past+left
         logging.debug("updating the progress bar to %f/%f", past, past + left)
