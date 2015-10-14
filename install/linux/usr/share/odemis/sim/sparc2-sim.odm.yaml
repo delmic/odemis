@@ -179,7 +179,7 @@ SPARC2: {
             4: "polariser",
             6: "pass-through"
         },
-        fstepsize: 8.e-9, # m, size of one focus step
+        fstepsize: 10.9e-6, # m, size of one focus step
     },
     affects: ["Camera", "Spectral Camera"],
 }
@@ -250,7 +250,7 @@ SPARC2: {
         address: null,
         axes: ["l1", "l2", "cl-sel", "fw", "slit"],
         # These values are adapted to make the simulator roughly the same speed
-        ustepsize: [25.1e-9, 250.1e-9, 26.1e-9, 3.392e-5, 5.e-9], # m/µstep, excepted for the fw: rad/µstep
+        ustepsize: [25.1e-9, 25.1e-9, 26.1e-9, 3.392e-5, 5.e-9], # m/µstep, excepted for the fw: rad/µstep
         refproc: "Standard",
         refswitch: {"l1": 0, "l2": 0, "cl-sel": 4, "fw": 4},
         inverted: ["l2"],

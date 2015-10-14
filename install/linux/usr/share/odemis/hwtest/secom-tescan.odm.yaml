@@ -1,11 +1,11 @@
 SimTescanSECOM: {
     class: Microscope,
     role: secom,
-    emitters: [Spectra, "Nikon Super Duper", "FW102C", "EBeam ExtXY"],
-    detectors: ["Andor SimCam", "SED ExtXY"#, "ChamberCam"
+    emitters: [Spectra, "Nikon Super Duper", "FW102C", "EBeam ExtXY", "Chamber Light"],
+    detectors: ["Andor SimCam", "SED ExtXY", "ChamberCam"
                 ],
     actuators: ["SEM-Optical Alignment", "OpticalZ actuator",
-                "OLStage", "Ebeam-focus actuator", "ChamberPressure"],
+                "OLStage", "Ebeam-focus actuator"],
 }
 
 #Light: {
@@ -44,14 +44,15 @@ Spectra: {
 "SEM ExtXY": {
     class: tescan_sem.TescanSEM,
     role: none,
-    init: {host: "192.168.92.91"},
+    init: {host: "192.168.92.116"},
     # more detectors can be added, if necessary
     children: {scanner: "EBeam ExtXY",
                detector: "SED ExtXY",
                stage: "OLStage",
                focus: "Ebeam-focus actuator",
-               # camera: "ChamberCam", # comment out if using the simulator
-               pressure: "ChamberPressure"
+               camera: "ChamberCam", # comment out if using the simulator
+               #pressure: "ChamberPressure",
+               light: "Chamber Light"
     }
 }
 
@@ -132,13 +133,19 @@ Spectra: {
     affects: ["Andor SimCam", "EBeam ExtXY"]
 }
 
-# "ChamberCam": {
-#     role: chamber-ccd,
-#     init: {}
-# }
+"ChamberCam": {
+    role: chamber-ccd,
+    init: {}
+}
 
-"ChamberPressure": {
-    role: chamber,
+#"ChamberPressure": {
+#    role: chamber,
+#    init: {},
+#}
+
+# Light (lamp with known spectrum)
+"Chamber Light": {
+    role: light,
     init: {},
 }
 
