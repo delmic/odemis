@@ -277,7 +277,7 @@ class Overlay(object):
                 y = max(min(y, self.view_height - self.canvas_padding), self.canvas_padding)
 
             # Cairo renders text from the bottom left, but we want to treat
-            # the top left as the origin. So we need to add the hight (lower the
+            # the top left as the origin. So we need to add the height (lower the
             # render point), to make the given position align with the top left.
             y += lh
 
@@ -306,7 +306,6 @@ class Overlay(object):
                     x = width - lw - self.canvas_padding
                 elif x < self.canvas_padding:
                     x = self.canvas_padding
-
                 if y + self.canvas_padding > height:
                     y = height - lh
                 elif y < lh:
@@ -533,9 +532,20 @@ class SelectionMixin(DragMixin):
         self.center = center
 
     @staticmethod
-    def _normalize_rect(rect):
-        """ Normalize the given rectangle by making sure top/left etc. is actually top left """
-        return util.normalize_rect(rect)
+    def _normalize_rect(rect_or_start, end=None):
+        """ Normalize the given rectangle by making sure top/left etc. is actually top left
+
+        :param rect_or_start: (int, int, <int, int>) Left, top, right, and bottom
+        :param end: (None or (int, int)) Right and bottom
+
+        """
+
+        if end is not None:
+            rect_or_start = (rect_or_start[0], rect_or_start[1], end[0], end[1])
+            rect = util.normalize_rect(rect_or_start)
+            return Vec(rect[:2]), Vec(rect[2:4])
+        else:
+            return util.normalize_rect(rect_or_start)
 
     # #### selection methods  #####
 
@@ -551,7 +561,7 @@ class SelectionMixin(DragMixin):
         """ Update the selection to reflect the given mouse position """
 
         # Cast to list, because we need to be able to alter the x and y separately
-        self.select_v_end_pos = self.cnvs.clip_to_viewport(self.drag_v_end_pos)
+        self.select_v_end_pos = Vec(self.cnvs.clip_to_viewport(self.drag_v_end_pos))
 
     def stop_selection(self):
         """ End the creation of the current selection """
@@ -566,10 +576,10 @@ class SelectionMixin(DragMixin):
             # respectively.
 
             if isinstance(self.select_v_start_pos, list):
-                self.select_v_start_pos = tuple(self.select_v_start_pos)
+                self.select_v_start_pos = Vec(self.select_v_start_pos)
                 logging.warn("'select_v_start_pos' is still set as a list somewhere!")
             if isinstance(self.select_v_end_pos, list):
-                self.select_v_end_pos = tuple(self.select_v_end_pos)
+                self.select_v_end_pos = Vec(self.select_v_end_pos)
                 logging.warn("'select_v_end_pos' is still set as a list somewhere!")
 
             self._calc_edges()
@@ -606,17 +616,17 @@ class SelectionMixin(DragMixin):
 
     def update_edit(self):
         """ Adjust the selection according to the given position and the current edit action """
-        current_pos = self.cnvs.clip_to_viewport(self.drag_v_end_pos)
+        current_pos = Vec(self.cnvs.clip_to_viewport(self.drag_v_end_pos))
 
         if self.edit_mode == EDIT_MODE_BOX:
             if gui.HOVER_TOP_EDGE == self.edit_hover & gui.HOVER_TOP_EDGE:
-                self.select_v_start_pos = (self.select_v_start_pos[0], current_pos[1])
+                self.select_v_start_pos = Vec(self.select_v_start_pos.x, current_pos.y)
             if gui.HOVER_BOTTOM_EDGE == self.edit_hover & gui.HOVER_BOTTOM_EDGE:
-                self.select_v_end_pos = (self.select_v_end_pos[0], current_pos[1])
+                self.select_v_end_pos = Vec(self.select_v_end_pos.x, current_pos.y)
             if gui.HOVER_LEFT_EDGE == self.edit_hover & gui.HOVER_LEFT_EDGE:
-                self.select_v_start_pos = (current_pos[0], self.select_v_start_pos[1])
+                self.select_v_start_pos = Vec(current_pos.x, self.select_v_start_pos.y)
             if gui.HOVER_RIGHT_EDGE == self.edit_hover & gui.HOVER_RIGHT_EDGE:
-                self.select_v_end_pos = (current_pos[0], self.select_v_end_pos[1])
+                self.select_v_end_pos = Vec(current_pos.x, self.select_v_end_pos.y)
         elif self.edit_mode == EDIT_MODE_POINT:
             if self.edit_hover == gui.HOVER_START:
                 self.select_v_start_pos = current_pos
@@ -636,13 +646,13 @@ class SelectionMixin(DragMixin):
         self.selection_mode = SEL_MODE_DRAG
 
     def update_drag(self):
-        current_pos = self.cnvs.clip_to_viewport(self.drag_v_end_pos)
-        diff = (current_pos[0] - self.edit_v_start_pos[0],
-                current_pos[1] - self.edit_v_start_pos[1])
-        self.select_v_start_pos = (self.select_v_start_pos[0] + diff[0],
-                                   self.select_v_start_pos[1] + diff[1])
-        self.select_v_end_pos = (self.select_v_end_pos[0] + diff[0],
-                                 self.select_v_end_pos[1] + diff[1])
+        current_pos = Vec(self.cnvs.clip_to_viewport(self.drag_v_end_pos))
+        diff = Vec(current_pos.x - self.edit_v_start_pos.x,
+                   current_pos.y - self.edit_v_start_pos.y)
+        self.select_v_start_pos = Vec(self.select_v_start_pos.x + diff.x,
+                                      self.select_v_start_pos.y + diff.y)
+        self.select_v_end_pos = Vec(self.select_v_end_pos.x + diff.x,
+                                    self.select_v_end_pos.y + diff.y)
         self.edit_v_start_pos = current_pos
 
     def stop_drag(self):
@@ -650,7 +660,7 @@ class SelectionMixin(DragMixin):
 
     # #### END drag methods  #####
 
-    def update_from_buffer(self, b_start_pos, b_end_pos, shiftscale):
+    def update_projection(self, b_start_pos, b_end_pos, shiftscale):
         """ Update the view positions of the selection if the cnvs view has shifted or scaled
         compared to the last time this method was called
 
@@ -659,8 +669,8 @@ class SelectionMixin(DragMixin):
         if self._last_shiftscale != shiftscale:
             logging.debug("Updating view position of selection %s", shiftscale)
             self._last_shiftscale = shiftscale
-            self.select_v_start_pos = list(self.cnvs.buffer_to_view(b_start_pos))
-            self.select_v_end_pos = list(self.cnvs.buffer_to_view(b_end_pos))
+            self.select_v_start_pos = Vec(self.cnvs.buffer_to_view(b_start_pos))
+            self.select_v_end_pos = Vec(self.cnvs.buffer_to_view(b_end_pos))
             self._calc_edges()
 
     def _calc_edges(self):
@@ -865,13 +875,13 @@ class SelectionMixin(DragMixin):
         """ Return the width of the selection in view pixels or None if there is no selection """
         if None in (self.select_v_start_pos, self.select_v_end_pos):
             return None
-        return abs(self.select_v_start_pos[0] - self.select_v_end_pos[0])
+        return abs(self.select_v_start_pos.x - self.select_v_end_pos.x)
 
     def get_height(self):
         """ Return the height of the selection in view pixels """
         if None in (self.select_v_start_pos, self.select_v_end_pos):
             return None
-        return abs(self.select_v_start_pos[1] - self.select_v_end_pos[1])
+        return abs(self.select_v_start_pos.y - self.select_v_end_pos.y)
 
     def get_size(self):
         """ Return the size of the selection in view pixels """
@@ -960,21 +970,21 @@ class PixelDataMixin(object):
 
         """
 
-        self._data_resolution = resolution
+        self._data_resolution = Vec(resolution)
 
         # We calculate the world size of the data. Even though world and physical data are in a
         # 1 to 1 relation, we still do it the 'correct' way by calling 'physical_to_world_pos'.
-        w_size = (self._data_resolution[0] * mpp, self._data_resolution[1] * mpp)
+        w_size = self._data_resolution * mpp
 
         # Get the top left corner of the pixel data
         # Remember that in physical coordinates, up is positive!
-        w_center = self.cnvs.physical_to_world_pos(physical_center)
+        w_center = Vec(self.cnvs.physical_to_world_pos(physical_center))
 
         self._pixel_data_w_rect = (
-            w_center[0] - w_size[0] / 2.0,
-            w_center[1] - w_size[1] / 2.0,
-            w_center[0] + w_size[0] / 2.0,
-            w_center[1] + w_size[1] / 2.0,
+            w_center.x - w_size.x / 2.0,
+            w_center.y - w_size.y / 2.0,
+            w_center.x + w_size.x / 2.0,
+            w_center.y + w_size.y / 2.0,
         )
 
         logging.debug("Physical top left of Spectrum data: %s", physical_center)
@@ -986,14 +996,13 @@ class PixelDataMixin(object):
         return None not in (self._data_resolution, self._pixel_data_w_rect, self._data_mpp)
 
     def _on_motion(self, evt):
-        self._mouse_vpos = evt.GetPositionTuple()
+        self._mouse_vpos = Vec(evt.GetPositionTuple())
 
     def is_over_pixel_data(self, v_pos=None):
         """ Check if the mouse cursor is over an area containing pixel data """
 
         if self._mouse_vpos or v_pos:
-            offset = self.cnvs.get_half_buffer_size()
-            w_pos = self.cnvs.view_to_world(self._mouse_vpos or v_pos, offset)
+            w_pos = self.cnvs.view_to_world(self._mouse_vpos or v_pos, self.offset_b)
             return (self._pixel_data_w_rect[0] < w_pos[0] < self._pixel_data_w_rect[2] and
                     self._pixel_data_w_rect[1] < w_pos[1] < self._pixel_data_w_rect[3])
 
@@ -1007,8 +1016,7 @@ class PixelDataMixin(object):
         """
 
         # The offset, in pixels, to the center of the world coordinates
-        offset = self.cnvs.get_half_buffer_size()
-        w_pos = self.cnvs.view_to_world(v_pos, offset)
+        w_pos = self.cnvs.view_to_world(v_pos, self.offset_b)
 
         # Calculate the distance to the top left in world units
         dist = (w_pos[0] - self._pixel_data_w_rect[0], w_pos[1] - self._pixel_data_w_rect[1])
@@ -1021,9 +1029,8 @@ class PixelDataMixin(object):
 
         w_x = self._pixel_data_w_rect[0] + (data_pixel[0] + 0.5) * self._data_mpp
         w_y = self._pixel_data_w_rect[1] + (data_pixel[1] + 0.5) * self._data_mpp
-        offset = self.cnvs.get_half_buffer_size()
 
-        return self.cnvs.world_to_view((w_x, w_y), offset)
+        return self.cnvs.world_to_view((w_x, w_y), self.offset_b)
 
     def pixel_to_rect(self, pixel, scale):
         """ Return a rectangle, in buffer coordinates, describing the given data pixel
@@ -1048,8 +1055,7 @@ class PixelDataMixin(object):
         w_top_left = (self._pixel_data_w_rect[0] + offset_x, self._pixel_data_w_rect[1] + offset_y)
 
         # No need for an explicit Y flip here, since `physical_to_world_pos` takes care of that
-        offset = self.cnvs.get_half_buffer_size()
-        b_top_left = self.cnvs.world_to_buffer(w_top_left, offset)
+        b_top_left = self.cnvs.world_to_buffer(w_top_left, self.offset_b)
         b_pixel_size = (self._data_mpp * scale + 0.5, self._data_mpp * scale + 0.5)
 
         return b_top_left + b_pixel_size

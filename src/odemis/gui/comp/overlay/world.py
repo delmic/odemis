@@ -81,22 +81,19 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         """ Update the world position to reflect the view position """
 
         if self.select_v_start_pos and self.select_v_end_pos:
-            offset = [v // 2 for v in self.cnvs.buffer_size]
-            w_pos = (self.cnvs.view_to_world(self.select_v_start_pos, offset) +
-                     self.cnvs.view_to_world(self.select_v_end_pos, offset))
-            self.w_start_pos = w_pos[:2]
-            self.w_end_pos = w_pos[2:4]
+            wsp = self.cnvs.view_to_world(self.select_v_start_pos, self.offset_b)
+            wep = self.cnvs.view_to_world(self.select_v_end_pos, self.offset_b)
+            self.w_start_pos = wsp
+            self.w_end_pos = wep
 
     def _world_to_view(self):
         """ Update the view position to reflect the world position """
 
         if self.w_start_pos and self.w_end_pos:
-            offset = [v // 2 for v in self.cnvs.buffer_size]
-            v_pos = (self.cnvs.world_to_view(self.w_start_pos, offset) +
-                     self.cnvs.world_to_view(self.w_end_pos, offset))
-            # v_pos = list(self._normalize(v_pos))
-            self.select_v_start_pos = v_pos[:2]
-            self.select_v_end_pos = v_pos[2:4]
+            vsp = self.cnvs.world_to_view(self.w_start_pos, self.offset_b)
+            vep = self.cnvs.world_to_view(self.w_end_pos, self.offset_b)
+            self.select_v_start_pos = Vec(vsp)
+            self.select_v_end_pos = Vec(vep)
             self._calc_edges()
 
     def get_physical_sel(self):
@@ -134,17 +131,23 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         """ Draw the selection as a rectangle """
 
         if self.w_start_pos and self.w_end_pos:
+
+            # translate the origin to the middle of the buffer
+            ctx.translate(*self.offset_b)
+
             # Important: We need to use the world positions, in order to draw everything at the
             # right scale.
-            offset = self.cnvs.get_half_buffer_size()
-            b_pos = (self.cnvs.world_to_buffer(self.w_start_pos, offset) +
-                     self.cnvs.world_to_buffer(self.w_end_pos, offset))
-            b_pos = self._normalize_rect(b_pos)
-            self.update_from_buffer(b_pos[:2], b_pos[2:4], shift + (scale,))
+            b_start_pos = self.cnvs.world_to_buffer(self.w_start_pos)
+            b_end_pos = self.cnvs.world_to_buffer(self.w_end_pos)
+            b_start_pos, b_end_pos = self._normalize_rect(b_start_pos, b_end_pos)
+
+            self.update_projection(b_start_pos, b_end_pos, shift + (scale,))
 
             # logging.warn("%s %s", shift, world_to_buffer_pos(shift))
-            rect = (b_pos[0] + 0.5, b_pos[1] + 0.5,
-                    b_pos[2] - b_pos[0], b_pos[3] - b_pos[1])
+            rect = (b_start_pos.x,
+                    b_start_pos.y,
+                    b_end_pos.x - b_start_pos.x,
+                    b_end_pos.y - b_start_pos.y)
 
             # draws a light black background for the rectangle
             ctx.set_line_width(4)
@@ -154,7 +157,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
             # draws the dotted line
             ctx.set_line_width(2)
-            ctx.set_dash([3])
+            ctx.set_dash([2])
             ctx.set_line_join(cairo.LINE_JOIN_MITER)
             ctx.set_source_rgba(*self.colour)
             ctx.rectangle(*rect)
@@ -168,8 +171,8 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
                 h = units.readable_str(h, 'm', sig=2)
                 size_lbl = u"{} x {}".format(w, h)
 
-                pos = (b_pos[2] + 8, b_pos[3] - 10)
-
+                pos = Vec(b_end_pos.x + 8, b_end_pos.y - 10)
+                print pos
                 self.position_label.pos = pos
                 self.position_label.text = size_lbl
                 self._write_labels(ctx)
@@ -663,7 +666,7 @@ class LineSelectOverlay(WorldSelectOverlay):
             b_start = (b_pos[0] - 0.5, b_pos[1] - 0.5)
             b_pos = self.cnvs.world_to_buffer(self.w_end_pos, offset)
             b_end = (b_pos[0] + 0.5, b_pos[1] + 0.5)
-            self.update_from_buffer(b_start, b_end, shift + (scale,))
+            self.update_projection(b_start, b_end, shift + (scale,))
 
             # Calculate unit vector
             dx, dy = (self.w_start_pos[0] - self.w_end_pos[0],
@@ -809,10 +812,10 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, PixelDataMixin):
 
             if (None, None) not in selected_line:
                 v_pos = self.data_pixel_to_view(self.start_pixel)
-                self.drag_v_start_pos = self.select_v_start_pos = v_pos
+                self.drag_v_start_pos = self.select_v_start_pos = Vec(v_pos)
 
                 v_pos = self.data_pixel_to_view(self.end_pixel)
-                self.drag_v_end_pos = self.select_v_end_pos = v_pos
+                self.drag_v_end_pos = self.select_v_end_pos = Vec(v_pos)
 
                 self._view_to_world()
 
@@ -913,14 +916,14 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, PixelDataMixin):
         if self.select_v_start_pos:
             self.start_pixel = self.view_to_data_pixel(self.select_v_start_pos)
             v_pos = self.data_pixel_to_view(self.start_pixel)
-            self.drag_v_start_pos = self.select_v_start_pos = v_pos
+            self.drag_v_start_pos = self.select_v_start_pos = Vec(v_pos)
         else:
             self.start_pixel = (None, None)
 
         if self.select_v_end_pos:
             self.end_pixel = self.view_to_data_pixel(self.select_v_end_pos)
             v_pos = self.data_pixel_to_view(self.end_pixel)
-            self.drag_v_end_pos = self.select_v_end_pos = v_pos
+            self.drag_v_end_pos = self.select_v_end_pos = Vec(v_pos)
         else:
             self.end_pixel = (None, None)
 
@@ -1310,7 +1313,7 @@ class MirrorArcOverlay(WorldOverlay, DragMixin):
 
     def get_hole_position(self):
         return self.hole_pos_w
-        
+
     def on_left_down(self, evt):
         if self.active:
             DragMixin._on_left_down(self, evt)
