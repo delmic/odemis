@@ -214,7 +214,8 @@ class MultipleDetectorStream(Stream):
         left = self._prog_sum * ratio
         time_assemble = 0.001 * tot  # very rough approximation
         # add some overhead for the end of the acquisition
-        future.set_end_time(time.time() + left + time_assemble + bonus + 0.1)
+        tot_left = left + time_assemble + bonus + 0.1
+        future.set_end_time(time.time() + tot_left)
 
     def _ssCancelAcquisition(self, future):
         with self._acq_lock:
@@ -550,7 +551,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
             self._rep_df.subscribe(self._ssOnRepetitionImage)
 
             tot_num = numpy.prod(rep)
-            n = 0
+            n = 0  # number of points acquired so far
 
             # Translate dc_period to a number of pixels
             if self._dc_estimator is not None:
@@ -559,14 +560,17 @@ class SEMCCDMDStream(MultipleDetectorStream):
                                         self._main_stream.dcPeriod.value,
                                         rep_time_psmt,
                                         rep)
-                cur_dc_period = pxs_dc_period.next()
+                # number of points left to acquire until next drift correction
+                n_til_dc = pxs_dc_period.next()
                 dc_acq_time = self._dc_estimator.estimateAcquisitionTime()
 
                 # First acquisition of anchor area
                 self._dc_estimator.acquire()
             else:
                 dc_acq_time = 0
-                cur_dc_period = tot_num
+                n_til_dc = tot_num
+
+            dc_period = n_til_dc  # approx. (just for time estimation)
 
             for i in numpy.ndindex(*rep[::-1]):  # last dim (X) iterates first
                 trans = (spot_pos[i[::-1]][0], spot_pos[i[::-1]][1])
@@ -640,13 +644,14 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
                     n += 1
                     # guess how many drift anchors to acquire
-                    n_anchor = (tot_num - n) // cur_dc_period
+                    n_anchor = (tot_num - n) // dc_period
                     anchor_time = n_anchor * dc_acq_time
                     self._updateProgress(future, time.time() - start, n, tot_num, anchor_time)
 
                     # Check if it is time for drift correction
-                    if self._dc_estimator is not None and n >= cur_dc_period:
-                        cur_dc_period = pxs_dc_period.next()
+                    n_til_dc -= 1
+                    if self._dc_estimator is not None and n_til_dc <= 0:
+                        n_til_dc = pxs_dc_period.next()
 
                         # Cannot cancel during this time, but hopefully it's short
                         # Acquisition of anchor area
@@ -661,8 +666,6 @@ class SEMCCDMDStream(MultipleDetectorStream):
                         spot_pos[:, :, 1] -= shift[1]
                         drift_shift = (drift_shift[0] + shift[0],
                                        drift_shift[1] + shift[1])
-
-                        n = 0
                     # Since we reached this point means everything went fine, so
                     # no need to retry
                     break
