@@ -23,6 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # ===============================================================================
 # Test module for Odemis' gui.comp.text module
 # ===============================================================================
+from __future__ import division
 
 import locale
 import unittest

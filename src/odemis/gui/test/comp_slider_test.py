@@ -24,6 +24,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Test module for Odemis' gui.comp.text module
 #===============================================================================
 
+from __future__ import division
+
 from odemis.gui import test
 import odemis.gui.comp.slider as slidecomp
 import odemis.gui.test as test

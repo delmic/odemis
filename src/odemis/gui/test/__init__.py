@@ -20,21 +20,23 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
+from __future__ import division
 
-# Common configuration and code for the GUI test cases
 import logging
-import random
-import os.path
-import unittest
 import numpy
-
+from odemis.gui.xmlh import odemis_get_test_resources
+import os.path
+import random
+import time
+import unittest
 import wx
 
-import test_gui
 import odemis.gui.model as gmodel
 import odemis.model as omodel
-from odemis.gui.xmlh import odemis_get_test_resources
+import test_gui
 
+
+# Common configuration and code for the GUI test cases
 MANUAL = False
 INSPECT = False
 
@@ -54,21 +56,23 @@ def goto_inspect():
     INSPECT = True
 
 
-def gui_loop(slp=None):
+def gui_loop(slp=0):
     """
     Execute the main loop for the GUI until all the current events are processed
     """
+    # TODO: take slp in seconds
+    start = time.time()
     app = wx.GetApp()
     if app is None:
         return
 
-    while True:
+    while time.time() < (start + slp / 1000):
         wx.CallAfter(app.ExitMainLoop)
         app.MainLoop()
-        if not app.Pending():
-            break
+#         if not app.Pending():
+#             break
 
-    wx.MilliSleep(slp or SLEEP_TIME)
+#     wx.MilliSleep(slp or SLEEP_TIME)
 
 
 def sleep(ms=None):

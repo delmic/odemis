@@ -20,6 +20,7 @@ This file is part of Odemis.
     Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
+from __future__ import division
 
 from odemis.gui.comp.settings import SettingsPanel
 from odemis.gui.cont.settings import SettingsController

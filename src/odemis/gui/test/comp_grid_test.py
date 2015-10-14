@@ -20,12 +20,12 @@ This file is part of Odemis.
     Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
+from __future__ import division
 
 import logging
 import unittest
 
 import wx
-from odemis.gui.cont.views import ViewPortController
 
 import odemis.gui.test as test
 from odemis.gui.test import gui_loop
