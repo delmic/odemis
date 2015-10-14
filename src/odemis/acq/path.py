@@ -210,6 +210,8 @@ class OpticalPathManager(object):
         if mode not in self._modes:
             raise ValueError("Mode '%s' does not exist" % (mode,))
 
+        logging.debug("Going to optical path '%s'", mode)
+
         modeconf = self._modes[mode][1]
         fmoves = []  # moves in progress
         for comp_role, conf in modeconf.items():

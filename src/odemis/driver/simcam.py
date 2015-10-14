@@ -145,7 +145,11 @@ class Camera(model.DigitalCamera):
         """
         timer = self._generator  # might be replaced by None afterwards, so keep a copy
         self.data._waitSync()
-        metadata = dict(self._img.metadata)
+        if self.data._sync_event:
+            # If sync event, we need to simulate period after event (not efficient, but works)
+            time.sleep(self.exposureTime.value)
+
+        metadata = self._img.metadata.copy()
         metadata.update(self._metadata)
 
         # update fake output metadata
@@ -218,6 +222,7 @@ class SimpleDataFlow(model.DataFlow):
         """
         if self._sync_event:
             self._evtq.get()
+
 
 class CamFocus(model.Actuator):
     """

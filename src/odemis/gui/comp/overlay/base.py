@@ -40,6 +40,7 @@ import cairo
 import wx
 
 import odemis.gui as gui
+from odemis.gui import EVT_BUFFER_SIZE
 import odemis.util as util
 import odemis.util.conversion as conversion
 
@@ -113,6 +114,38 @@ class Label(object):
     def _clear_cache(self):
         self.render_pos = None
         self.text_size = None
+
+
+class Vec(tuple):
+    """ Simple vector class for easy vector addition and multiplication """
+
+    def __new__(cls, a, b=None):
+        if b is not None:
+            return super(Vec, cls).__new__(cls, tuple((a, b)))
+        else:
+            return super(Vec, cls).__new__(cls, tuple(a))
+
+    def __add__(self, a):
+        # TODO: check lengths are compatable.
+        return Vec(x + y for x, y in zip(self, a))
+
+    def __sub__(self, a):
+        # TODO: check lengths are compatable.
+        return Vec(x - y for x, y in zip(self, a))
+
+    def __mul__(self, c):
+        return Vec(x * c for x in self)
+
+    def __rmul__(self, c):
+        return Vec(c * x for x in self)
+
+    @property
+    def x(self):
+        return self[0]
+
+    @property
+    def y(self):
+        return self[1]
 
 
 class Overlay(object):
@@ -377,31 +410,31 @@ class DragMixin(object):
     def _on_left_down(self, evt):
         """ Start a left drag if no right drag is in progress """
         if not self.right_dragging:
+            self.drag_v_start_pos = self.drag_v_end_pos = Vec(evt.GetPositionTuple())
             self._left_dragging = True
-            self.drag_v_start_pos = evt.GetPositionTuple()
 
     def _on_left_up(self, evt):
         """ End a left drag if no right drag is in progress """
         if not self.right_dragging:
             self._left_dragging = False
-            self.drag_v_end_pos = evt.GetPositionTuple()
+            self.drag_v_end_pos = Vec(evt.GetPositionTuple())
 
     def _on_right_down(self, evt):
         """ Start a right drag if no left drag is in progress """
         if not self.left_dragging:
+            self.drag_v_start_pos = self.drag_v_end_pos = Vec(evt.GetPositionTuple())
             self._right_dragging = True
-            self.drag_v_start_pos = evt.GetPositionTuple()
 
     def _on_right_up(self, evt):
         """ End a right drag if no left drag is in progress """
         if not self.left_dragging:
             self._right_dragging = False
-            self.drag_v_end_pos = evt.GetPositionTuple()
+            self.drag_v_end_pos = Vec(evt.GetPositionTuple())
 
     def _on_motion(self, evt):
         """ Update the drag end position if a drag movement is in progress """
         if self.dragging:
-            self.drag_v_end_pos = evt.GetPositionTuple()
+            self.drag_v_end_pos = Vec(evt.GetPositionTuple())
 
     def _on_focus_lost(self, evt):
         """ Cancel any drag when the parent canvas loses focus """
@@ -435,6 +468,13 @@ class DragMixin(object):
         """ Boolean value indicating whether actual movement has occurred during dragging """
         return ((None, None) != (self.drag_v_start_pos, self.drag_v_end_pos) and
                 self.drag_v_start_pos != self.drag_v_end_pos)
+
+    @property
+    def delta_v(self):
+        if self.drag_v_end_pos and self.drag_v_start_pos:
+            return self.drag_v_end_pos - self.drag_v_start_pos
+        else:
+            return Vec(0, 0)
 
 # Modes for creating, changing and dragging selections
 SEL_MODE_NONE = 0
@@ -617,7 +657,7 @@ class SelectionMixin(DragMixin):
         """
 
         if self._last_shiftscale != shiftscale:
-            logging.warn("Updating view position of selection %s", shiftscale)
+            logging.debug("Updating view position of selection %s", shiftscale)
             self._last_shiftscale = shiftscale
             self.select_v_start_pos = list(self.cnvs.buffer_to_view(b_start_pos))
             self.select_v_end_pos = list(self.cnvs.buffer_to_view(b_end_pos))
@@ -1029,6 +1069,15 @@ class ViewOverlay(Overlay):
 class WorldOverlay(Overlay):
     """ This class displays an overlay on the buffer.
     It's updated only every time the entire buffer is redrawn."""
+
+    def __init__(self, *args, **kwargs):
+        super(WorldOverlay, self).__init__(*args, **kwargs)
+        self.cnvs.Bind(EVT_BUFFER_SIZE, self.on_buffer_size)
+        self.offset_b = Vec(self.cnvs.get_half_buffer_size())
+
+    def on_buffer_size(self, _):
+        self.offset_b = Vec(self.cnvs.get_half_buffer_size())
+        self.cnvs.update_drawing()
 
     @abstractmethod
     def draw(self, ctx, shift=(0, 0), scale=1.0):

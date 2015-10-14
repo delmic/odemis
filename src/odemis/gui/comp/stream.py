@@ -1024,7 +1024,7 @@ class StreamPanel(wx.Panel):
         if readonly:
             value_ctrl.SetForegroundColour(gui.FG_COLOUR_DIS)
         else:
-            value_ctrl.SetForegroundColour  (gui.FG_COLOUR_EDIT)
+            value_ctrl.SetForegroundColour(gui.FG_COLOUR_EDIT)
         value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
         self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
                           flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
@@ -1033,7 +1033,7 @@ class StreamPanel(wx.Panel):
 
     @control_bookkeeper
     def add_divider(self):
-        """ Add a divigin line to the stream panel """
+        """ Add a dividing line to the stream panel """
         line_ctrl = wx.StaticLine(self._panel, size=(-1, 1))
         self.gb_sizer.Add(line_ctrl, (self.num_rows, 0), span=(1, 3),
                           flag=wx.ALL | wx.EXPAND, border=5)

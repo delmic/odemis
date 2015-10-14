@@ -141,6 +141,7 @@ def findOptimalRange(hist, edges, outliers=0):
     # convert index into intensity values
     a = edges[0]
     b = (edges[1] - edges[0]) / (hist.size - 1)
+    # TODO: rng should be the same type as edges
     rng = (a + b * idxrng[0], a + b * idxrng[1])
     return rng
 
@@ -231,10 +232,12 @@ def histogram(data, irange=None):
 
     return hist, edges
 
+
 def guessDRange(data):
     """
-    Guess the drange of the data given.
+    Guess the data range of the data given.
     data (None or DataArray): data on which to base the guess
+    return (2 values)
     """
     if data.dtype.kind in "biu":
         try:
@@ -256,13 +259,28 @@ def guessDRange(data):
 
     return drange
 
+
+def isClipping(data, drange=None):
+    """
+    Check whether the given image has clipping pixels. Clipping is detected
+    by checking if a pixel value is the maximum value possible.
+    data (numpy.ndarray): image to check
+    drange (None or tuple of 2 values): min/max possible values contained.
+      If None, it will try to guess it.
+    return (bool): True if there are some clipping pixels
+    """
+    if drange is None:
+        drange = guessDRange(data)
+    return (drange[1] in data)
+
+
 # TODO: try to do cumulative histogram value mapping (=histogram equalization)?
 # => might improve the greys, but might be "too" clever
 def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
     """
     :param data: (numpy.ndarray of unsigned int) 2D image greyscale (unsigned
         float might work as well)
-    :param irange: (None or tuple of 2 unsigned int) min/max intensities mapped
+    :param irange: (None or tuple of 2 values) min/max intensities mapped
         to black/white
         None => auto (min, max are from the data);
         0, max val of data => whole range is mapped.
@@ -461,7 +479,7 @@ def Subtract(a, b):
     """
     Subtract 2 images, with clipping if needed
     a (DataArray)
-    b (DataArray)
+    b (DataArray or scalar)
     return (DataArray): a - b, with same dtype and metadata as a
     """
     # TODO: see if it is more useful to upgrade the type to a bigger if overflow

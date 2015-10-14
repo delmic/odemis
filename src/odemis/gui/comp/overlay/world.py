@@ -30,7 +30,8 @@ import wx
 
 from odemis.acq.stream import UNDEFINED_ROI
 import odemis.gui as gui
-import odemis.gui.comp.overlay.base as base
+from odemis.gui.comp.overlay.base import Vec, WorldOverlay, SelectionMixin, DragMixin, \
+    PixelDataMixin, SEL_MODE_EDIT, SEL_MODE_CREATE, EDIT_MODE_BOX, EDIT_MODE_POINT
 import odemis.gui.img.data as img
 from odemis.gui.util.raster import rasterize_line
 from odemis.model import TupleVA
@@ -39,11 +40,11 @@ import odemis.util.conversion as conversion
 import odemis.util.units as units
 
 
-class WorldSelectOverlay(base.WorldOverlay, base.SelectionMixin):
+class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
     def __init__(self, cnvs, colour=gui.SELECTION_COLOUR, center=(0, 0)):
-        base.WorldOverlay.__init__(self, cnvs)
-        base.SelectionMixin.__init__(self, colour, center, base.EDIT_MODE_BOX)
+        WorldOverlay.__init__(self, cnvs)
+        SelectionMixin.__init__(self, colour, center, EDIT_MODE_BOX)
 
         self._w_start_pos = None
         self._w_end_pos = None
@@ -72,7 +73,7 @@ class WorldSelectOverlay(base.WorldOverlay, base.SelectionMixin):
 
     def clear_selection(self):
         """ Clear the current selection """
-        base.SelectionMixin.clear_selection(self)
+        SelectionMixin.clear_selection(self)
         self.w_start_pos = None
         self.w_end_pos = None
 
@@ -160,7 +161,7 @@ class WorldSelectOverlay(base.WorldOverlay, base.SelectionMixin):
             ctx.stroke()
 
             # Label
-            if (self.selection_mode in (base.SEL_MODE_EDIT, base.SEL_MODE_CREATE) and
+            if (self.selection_mode in (SEL_MODE_EDIT, SEL_MODE_CREATE) and
                     self.cnvs.microscope_view):
                 w, h = self.cnvs.selection_to_real_size(self.w_start_pos, self.w_end_pos)
                 w = units.readable_str(w, 'm', sig=2)
@@ -180,32 +181,32 @@ class WorldSelectOverlay(base.WorldOverlay, base.SelectionMixin):
     def on_left_down(self, evt):
         """ Start drag action if enabled, otherwise call super method so event will propagate """
         if self.active:
-            base.SelectionMixin._on_left_down(self, evt)
+            SelectionMixin._on_left_down(self, evt)
             self._view_to_world()
             self.cnvs.update_drawing()
         else:
-            base.WorldOverlay.on_left_down(self, evt)
+            WorldOverlay.on_left_down(self, evt)
 
     def on_left_up(self, evt):
         """ End drag action if enabled, otherwise call super method so event will propagate """
         if self.active:
-            base.SelectionMixin._on_left_up(self, evt)
+            SelectionMixin._on_left_up(self, evt)
             self._view_to_world()
             self.cnvs.update_drawing()
         else:
-            base.WorldOverlay.on_left_up(self, evt)
+            WorldOverlay.on_left_up(self, evt)
 
     def on_enter(self, evt):
         if self.active:
             self.cnvs.set_default_cursor(wx.CURSOR_CROSS)
         else:
-            base.WorldOverlay.on_enter(self, evt)
+            WorldOverlay.on_enter(self, evt)
 
     def on_leave(self, evt):
         if self.active:
             self.cnvs.reset_default_cursor()
         else:
-            base.WorldOverlay.on_leave(self, evt)
+            WorldOverlay.on_leave(self, evt)
 
     def on_motion(self, evt):
         """ Process drag motion if enabled, otherwise call super method so event will propagate """
@@ -233,7 +234,7 @@ class WorldSelectOverlay(base.WorldOverlay, base.SelectionMixin):
             # buffer.
             self.cnvs.request_drawing_update()
         else:
-            base.WorldOverlay.on_motion(self, evt)
+            WorldOverlay.on_motion(self, evt)
 
     # END Event Handlers
 
@@ -480,16 +481,16 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
         if self.w_start_pos and self.w_end_pos and 0 not in self.repetition:
             if self.fill == self.FILL_POINT:
                 self._draw_points(ctx)
-                self.selection_mode = base.SEL_MODE_EDIT
+                self.selection_mode = SEL_MODE_EDIT
             elif self.fill == self.FILL_GRID:
                 self._draw_grid(ctx)
-                self.selection_mode = base.SEL_MODE_EDIT
+                self.selection_mode = SEL_MODE_EDIT
 
         WorldSelectOverlay.draw(self, ctx, shift, scale)
         self.selection_mode = mode_cache
 
 
-class SpotModeOverlay(base.WorldOverlay, base.DragMixin):
+class SpotModeOverlay(WorldOverlay, DragMixin):
     """ Render the spot mode indicator in the center of the view
 
     If a position is provided, the spot will be drawn there.
@@ -499,8 +500,8 @@ class SpotModeOverlay(base.WorldOverlay, base.DragMixin):
     """
 
     def __init__(self, cnvs, spot_va=None):
-        base.WorldOverlay.__init__(self, cnvs)
-        base.DragMixin.__init__(self)
+        WorldOverlay.__init__(self, cnvs)
+        DragMixin.__init__(self)
 
         self.colour = conversion.hex_to_frgb(gui.FG_COLOUR_EDIT)
         self.highlight = conversion.hex_to_frgb(gui.FG_COLOUR_HIGHLIGHT)
@@ -521,7 +522,7 @@ class SpotModeOverlay(base.WorldOverlay, base.DragMixin):
 
     def on_size(self, evt):
         self._r_to_w()
-        base.WorldOverlay.on_size(self, evt)
+        WorldOverlay.on_size(self, evt)
 
     def _w_to_r(self):
         if self.w_pos is None:
@@ -587,19 +588,19 @@ class SpotModeOverlay(base.WorldOverlay, base.DragMixin):
 
     def on_left_down(self, evt):
         if self.active:
-            base.DragMixin._on_left_down(self, evt)
+            DragMixin._on_left_down(self, evt)
         else:
-            base.WorldOverlay.on_left_down(self, evt)
+            WorldOverlay.on_left_down(self, evt)
 
     def on_left_up(self, evt):
         if self.active:
-            base.DragMixin._on_left_up(self, evt)
+            DragMixin._on_left_up(self, evt)
             offset = self.cnvs.get_half_buffer_size()
             self.w_pos = self.cnvs.view_to_world(evt.GetPositionTuple(), offset)
             self._w_to_r()
             self.cnvs.update_drawing()
         else:
-            base.WorldOverlay.on_left_up(self, evt)
+            WorldOverlay.on_left_up(self, evt)
 
     def on_motion(self, evt):
         if self.active and self.left_dragging:
@@ -608,27 +609,27 @@ class SpotModeOverlay(base.WorldOverlay, base.DragMixin):
             self._w_to_r()
             self.cnvs.update_drawing()
         else:
-            base.WorldOverlay.on_left_up(self, evt)
+            WorldOverlay.on_left_up(self, evt)
 
     def on_enter(self, evt):
         if self.active:
             self.cnvs.set_default_cursor(wx.CROSS_CURSOR)
         else:
-            base.WorldOverlay.on_enter(self, evt)
+            WorldOverlay.on_enter(self, evt)
 
     def on_leave(self, evt):
         if self.active:
             self.cnvs.reset_default_cursor()
         else:
-            base.WorldOverlay.on_leave(self, evt)
+            WorldOverlay.on_leave(self, evt)
 
     def activate(self):
         self._r_to_w()
-        base.WorldOverlay.activate(self)
+        WorldOverlay.activate(self)
 
     def deactivate(self):
         self.w_pos = None
-        base.WorldOverlay.deactivate(self)
+        WorldOverlay.deactivate(self)
 
 
 class LineSelectOverlay(WorldSelectOverlay):
@@ -636,7 +637,7 @@ class LineSelectOverlay(WorldSelectOverlay):
 
     def __init__(self, cnvs):
         WorldSelectOverlay.__init__(self, cnvs)
-        self.edit_mode = base.EDIT_MODE_POINT
+        self.edit_mode = EDIT_MODE_POINT
 
     @property
     def length(self):
@@ -770,7 +771,7 @@ class LineSelectOverlay(WorldSelectOverlay):
             WorldSelectOverlay.on_motion(self, evt)
 
 
-class SpectrumLineSelectOverlay(LineSelectOverlay, base.PixelDataMixin):
+class SpectrumLineSelectOverlay(LineSelectOverlay, PixelDataMixin):
     """
     Selection overlay that allows for the selection of a line in world coordinates
     and displays a specific point/circle over this line (if requested).
@@ -778,7 +779,7 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, base.PixelDataMixin):
 
     def __init__(self, cnvs):
         LineSelectOverlay.__init__(self, cnvs)
-        base.PixelDataMixin.__init__(self)
+        PixelDataMixin.__init__(self)
 
         self.start_pixel = (None, None)
         self.end_pixel = (None, None)
@@ -941,13 +942,13 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, base.PixelDataMixin):
             LineSelectOverlay.on_motion(self, evt)
 
 
-class PixelSelectOverlay(base.WorldOverlay, base.PixelDataMixin, base.DragMixin):
+class PixelSelectOverlay(WorldOverlay, PixelDataMixin, DragMixin):
     """ Selection overlay that allows the selection of a pixel in a data set """
 
     def __init__(self, cnvs):
-        base.WorldOverlay.__init__(self, cnvs)
-        base.PixelDataMixin.__init__(self)
-        base.DragMixin.__init__(self)
+        WorldOverlay.__init__(self, cnvs)
+        PixelDataMixin.__init__(self)
+        DragMixin.__init__(self)
 
         self._selected_pixel_va = None
         self._selected_width_va = None
@@ -971,7 +972,7 @@ class PixelSelectOverlay(base.WorldOverlay, base.PixelDataMixin, base.DragMixin)
     def deactivate(self):
         """ Clear the hover pixel when the overlay is deactivated """
         self._pixel_pos = None
-        base.WorldOverlay.deactivate(self)
+        WorldOverlay.deactivate(self)
         wx.CallAfter(self.cnvs.update_drawing)
 
     # Event handlers
@@ -982,15 +983,15 @@ class PixelSelectOverlay(base.WorldOverlay, base.PixelDataMixin, base.DragMixin)
             self._pixel_pos = None
             wx.CallAfter(self.cnvs.update_drawing)
 
-        base.WorldOverlay.on_leave(self, evt)
+        WorldOverlay.on_leave(self, evt)
 
     def on_motion(self, evt):
         """ Update the current mouse position """
 
         if self.active:
             v_pos = evt.GetPositionTuple()
-            base.PixelDataMixin._on_motion(self, evt)
-            base.DragMixin._on_motion(self, evt)
+            PixelDataMixin._on_motion(self, evt)
+            DragMixin._on_motion(self, evt)
 
             if self.data_properties_are_set and self.is_over_pixel_data(v_pos):
                 self.cnvs.set_dynamic_cursor(wx.CROSS_CURSOR)
@@ -1007,14 +1008,14 @@ class PixelSelectOverlay(base.WorldOverlay, base.PixelDataMixin, base.DragMixin)
             else:
                 self.cnvs.reset_dynamic_cursor()
         else:
-            base.WorldOverlay.on_motion(self, evt)
+            WorldOverlay.on_motion(self, evt)
 
     def on_left_down(self, evt):
         if self.active:
             if self.data_properties_are_set:
-                base.DragMixin._on_left_down(self, evt)
+                DragMixin._on_left_down(self, evt)
 
-        base.WorldOverlay.on_left_down(self, evt)
+        WorldOverlay.on_left_down(self, evt)
 
     def on_left_up(self, evt):
         """ Set the selected pixel, if a pixel position is known """
@@ -1025,9 +1026,9 @@ class PixelSelectOverlay(base.WorldOverlay, base.PixelDataMixin, base.DragMixin)
                     self._selected_pixel_va.value = self._pixel_pos
                     self.cnvs.update_drawing()
                     logging.debug("Pixel %s selected", self._selected_pixel_va.value)
-            base.DragMixin._on_left_up(self, evt)
+            DragMixin._on_left_up(self, evt)
 
-        base.WorldOverlay.on_left_up(self, evt)
+        WorldOverlay.on_left_up(self, evt)
 
     # END Event handlers
 
@@ -1083,14 +1084,14 @@ class PixelSelectOverlay(base.WorldOverlay, base.PixelDataMixin, base.DragMixin)
                     ctx.fill()
 
 
-class PointsOverlay(base.WorldOverlay):
+class PointsOverlay(WorldOverlay):
     """ Overlay showing the available points and allowing the selection of one of them """
 
     MAX_DOT_RADIUS = 25.5
     MIN_DOT_RADIUS = 3.5
 
     def __init__(self, cnvs):
-        base.WorldOverlay.__init__(self, cnvs)
+        WorldOverlay.__init__(self, cnvs)
 
         # A VA tracking the selected point
         self.point = None
@@ -1142,7 +1143,7 @@ class PointsOverlay(base.WorldOverlay):
                 self.cursor_over_point = None
                 self.b_hover_box = None
 
-        base.WorldOverlay.on_left_up(self, evt)
+        WorldOverlay.on_left_up(self, evt)
 
     def on_wheel(self, evt):
         """ Clear the hover when the canvas is zooming """
@@ -1150,7 +1151,7 @@ class PointsOverlay(base.WorldOverlay):
             self.cursor_over_point = None
             self.b_hover_box = None
 
-        base.WorldOverlay.on_wheel(self, evt)
+        WorldOverlay.on_wheel(self, evt)
 
     def on_motion(self, evt):
         """ Detect when the cursor hovers over a dot """
@@ -1182,7 +1183,7 @@ class PointsOverlay(base.WorldOverlay):
             else:
                 self.cnvs.reset_dynamic_cursor()
 
-        base.WorldOverlay.on_motion(self, evt)
+        WorldOverlay.on_motion(self, evt)
 
     def _calc_choices(self):
         """ Create a mapping between world coordinates and physical points
@@ -1269,3 +1270,172 @@ class PointsOverlay(base.WorldOverlay):
             # ctx.stroke()
 
         self.cursor_over_point = w_cursor_over
+
+
+class MirrorArcOverlay(WorldOverlay, DragMixin):
+    """ Overlay showing a mirror arc that the user can position over a mirror camera feed """
+
+    def __init__(self, cnvs):
+        WorldOverlay.__init__(self, cnvs)
+        DragMixin.__init__(self)
+
+        self.colour = conversion.hex_to_frgb(gui.FG_COLOUR_EDIT)
+
+        # Values are derived from technical drawing, in mm
+
+        # The mirror is cut horizontally just above the symmetry line
+        self.symmetry_offset_y = 0.5e-3
+        # The radius of the circle shaped edge facing the detector
+        self.parabole_cut_radius = 11.5e-3
+
+        self.mirror_height = self.parabole_cut_radius - self.symmetry_offset_y
+
+        # The focus distance of the parabola (i.e. the origin)
+        focus_x = 2.5e-3
+        # The distance from the symmetry line  of the parabola to the center of the hole
+        self.hole_y = (focus_x * 2)
+        # The radius of the hole through which the electron beam enters
+        self.hole_radius = 0.3e-3
+
+        # The number of radians to remove from the left and right of the semi-circle
+        self.rad_offset = math.atan2(self.symmetry_offset_y, self.parabole_cut_radius)
+
+        # The world position of the hole in the mirror
+        self.hole_pos_w = Vec(0, 0)
+
+    def set_hole_position(self, hole_pos_w):
+        """ Set the center of the mirror ihole n world coordinates """
+        self.hole_pos_w = Vec(hole_pos_w)
+        self.cnvs.update_drawing()
+
+    def get_hole_position(self):
+        return self.hole_pos_w
+        
+    def on_left_down(self, evt):
+        if self.active:
+            DragMixin._on_left_down(self, evt)
+            self.cnvs.set_dynamic_cursor(wx.CURSOR_SIZENESW)  # = closed hand
+        else:
+            WorldOverlay.on_left_down(self, evt)
+
+    def on_enter(self, evt):
+        if self.active:
+            self.cnvs.set_default_cursor(wx.CURSOR_HAND)
+        else:
+            WorldOverlay.on_enter(self, evt)
+
+    def on_leave(self, evt):
+        if self.active:
+            self.cnvs.reset_default_cursor()
+        else:
+            WorldOverlay.on_leave(self, evt)
+
+    def on_left_up(self, evt):
+        if self.active:
+            DragMixin._on_left_up(self, evt)
+            # Convert the final delta value to world coordinates and add it to the hole position
+            self.hole_pos_w += self.cnvs.buffer_to_world(self.delta_v)
+            self.clear_drag()
+            self.cnvs.update_drawing()
+            self.cnvs.reset_dynamic_cursor()
+        else:
+            WorldOverlay.on_left_up(self, evt)
+
+    def on_motion(self, evt):
+        if self.active and self.left_dragging:
+            DragMixin._on_motion(self, evt)
+            self.cnvs.update_drawing()
+        else:
+            WorldOverlay.on_motion(self, evt)
+
+    def draw(self, ctx, shift=(0, 0), scale=1.0):
+
+        # Move the origin from the top left to the center of the buffer
+        ctx.translate(*self.offset_b)
+
+        # DEBUG Lines Buffer Center
+        # ctx.set_line_width(1)
+        # ctx.set_source_rgba(1.0, 0.0, 0.0, 0.5)
+        #
+        # ctx.move_to(0.5, -30 + 0.5)
+        # ctx.line_to(0.5, 30 + 0.5)
+        #
+        # ctx.move_to(-30 + 0.5, 0.5)
+        # ctx.line_to(30 + 0.5, 0.5)
+        #
+        # ctx.stroke()
+        # END DEBUG Lines Buffer Center
+
+        if self.cnvs.flip == wx.VERTICAL:
+            ctx.transform(cairo.Matrix(1.0, 0.0, 0.0, -1.0))
+            hole_offset = scale * (Vec(self.hole_pos_w.x, -self.hole_pos_w.y) + (0, self.hole_y))
+            hole_offset += (self.delta_v.x, -self.delta_v.y)
+        else:
+            hole_offset = scale * (self.hole_pos_w + (0, self.hole_y))
+            hole_offset += self.delta_v
+
+        ctx.translate(*hole_offset)
+
+        # Align the center of the Arc with the center of the buffer (The overlay itself is drawn
+        # with the parabola symmetry line on y=0)
+
+        # Calculate base line position
+
+        base_start_w = Vec(-self.parabole_cut_radius * 1.1, -self.symmetry_offset_y)
+        base_end_w = Vec(self.parabole_cut_radius * 1.1, -self.symmetry_offset_y)
+        base_start_b = scale * base_start_w
+        base_end_b = scale * base_end_w
+
+        # Calculate cross line
+
+        cross_start_w = Vec(0, -self.symmetry_offset_y + 1e-3)
+        cross_end_w = Vec(0, -self.symmetry_offset_y - 1e-3)
+        cross_start_b = scale * cross_start_w
+        cross_end_b = scale * cross_end_w
+
+        # Calculate Mirror Arc
+
+        mirror_radius_b = scale * self.parabole_cut_radius
+        arc_rads = (math.pi + self.rad_offset, 2 * math.pi - self.rad_offset)
+
+        # Calculate mirror hole
+
+        hole_radius_b = self.hole_radius * scale
+        hole_pos_b = Vec(0, -scale * self.hole_y)
+
+        for lw, colour in [(4, (0.0, 0.0, 0.0, 0.5)), (2, self.colour)]:
+            ctx.set_line_width(lw)
+            ctx.set_source_rgba(*colour)
+
+            # Draw base line
+
+            ctx.move_to(*base_start_b)
+            ctx.line_to(*base_end_b)
+            ctx.stroke()
+
+            # Draw cross line
+            ctx.move_to(*cross_start_b)
+            ctx.line_to(*cross_end_b)
+            ctx.stroke()
+
+            # Draw mirror arc
+
+            ctx.arc(0, 0, mirror_radius_b, *arc_rads)
+            ctx.stroke()
+
+            # Draw mirror hole
+
+            ctx.arc(hole_pos_b.x, hole_pos_b.y, hole_radius_b, 0, 2 * math.pi)
+            ctx.stroke()
+
+        # DEBUG Lines Mirror Center
+        # ctx.set_line_width(1)
+        # ctx.set_source_rgba(0.0, 1.0, 0.0, 0.5)
+        #
+        # ctx.move_to(0.5, -self.symmetry_offset_y * scale + 0.5)
+        # ctx.line_to(0.5, -self.parabole_cut_radius * scale + 0.5)
+        #
+        # ctx.move_to(-hole_radius_b * 2 + 0.5, hole_pos_b.y + 0.5)
+        # ctx.line_to(hole_radius_b * 2 + 0.5, hole_pos_b.y + 0.5)
+        # ctx.stroke()
+        # END DEBUG Lines Mirror Center

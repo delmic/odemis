@@ -251,6 +251,7 @@ class OdemisGUIApp(wx.App):
             # in the odemis.gui.cont package
             self.tab_controller = tabs.TabBarController(tab_defs, self.main_frame, self.main_data)
 
+            # Connect the log panel button of each tab
             def toggle_log_panel(_):
                 self.main_data.debug.value = not self.main_frame.pnl_log.IsShown()
 

@@ -83,6 +83,7 @@ class Tab(object):
         :type label: str or None
 
         """
+        logging.debug("Initialising tab %s", name)
 
         self.name = name
         self.label = label
@@ -90,7 +91,7 @@ class Tab(object):
         self.panel = panel
         self.main_frame = main_frame
         self.tab_data_model = tab_data
-        self.notification = False
+        self.highlighted = False
 
     def Show(self, show=True):
         self.button.SetToggle(show)
@@ -192,10 +193,10 @@ class Tab(object):
         return self.button.GetLabel()
 
     def highlight(self, on=True):
-        """ Put the tab in 'notification' mode to indicate a change has occurred """
-        if self.notification != on:
+        """ Put the tab in 'highlighted' mode to indicate a change has occurred """
+        if self.highlighted != on:
             self.button.highlight(on)
-            self.notification = on
+            self.highlighted = on
 
     def make_default(self):
         """ Try and make the current tab the default
@@ -1073,10 +1074,15 @@ class ChamberTab(Tab):
 
         # If the mirror is parked, we still allow the user to go to acquisition
         # but it's unlikely to be a good idea => indicate that something needs
-        # to be done here first. Note: alignment tab disables itself when the
-        # mirror is no engaged.
-        # TODO: how to let the other tabs check the position? => just disable alignment tab from here?
+        # to be done here first. Also prevent to use alignment tab, as we don't
+        # want to let the use move the mirror all around the chamber.
         self.highlight(mstate != MIRROR_ENGAGED)
+
+        try:
+            tab_align = self.tab_data_model.main.getTabByName("sparc2_align")
+            tab_align.button.Enable(mstate == MIRROR_ENGAGED)
+        except LookupError:
+            logging.debug("Failed to find the alignment tab")
 
     def Show(self, show=True):
         Tab.Show(self, show=show)
@@ -2145,7 +2151,7 @@ class SparcAlignTab(Tab):
             for btn in self._alignbtn_to_mode:
                 btn.Bind(wx.EVT_BUTTON, self._onClickAlignButton)
 
-        tab_data.align_mode.subscribe(self._onAlignMode, init=True)
+        tab_data.align_mode.subscribe(self._onAlignMode)
 
         self._actuator_controller = ActuatorController(tab_data, panel, "mirror_align_")
 
@@ -2317,9 +2323,7 @@ class SparcAlignTab(Tab):
 
         # If there is an actuator, disable the lens
         if show:
-            mode = self.tab_data_model.align_mode.value
-            threading.Thread(target=self.tab_data_model.main.opm.setPath,
-                             args=(mode,)).start()
+            self._onAlignMode(self.tab_data_model.align_mode.value)
         # when hidden, the new tab shown is in charge to request the right
         # optical path mode, if needed.
 
@@ -2367,7 +2371,7 @@ class Sparc2AlignTab(Tab):
                 {
                     "cls": guimod.ContentView,
                     "name": "Moment of Inertia",
-                    "stream_classes": acqstream.MomentOfInertiaStream,
+                    "stream_classes": acqstream.MomentOfInertiaLiveStream,
                 }
             ),
             (self.panel.vp_align_center,
@@ -2385,49 +2389,21 @@ class Sparc2AlignTab(Tab):
         # TODO: make the legend display a merge slider (currently not happening
         # because both streams are optical)
 
-        # TODO: add streams:
-        # * MomentOfInertia stream (moi): used to align the mirror. Used both
+        # The streams:
+        # * MomentOfInertia stream (mois): used to align the mirror. Used both
         #   for the spatial image and the spot size measurement, and for the
         #   chronograph of the MoI at center.
-        # * ebeam spot (spot): Used to force the ebeam to spot mode in lens
-        #   and center alignment.
-        # * spectrograph line (spec_line): used for focusing/showing a line in
+        # * spectrograph line (specline): used for focusing/showing a line in
         #   lens alignment.
         # * AR CCD (ccd): Used to show CL spot during the alignment of the lens1,
-        #   and to show the mirror shadow in center alignment
-        # * RGB stream (goal image): To show the goal image in center alignment
-
-        # MomentOfInertiaStream needs an SEM stream and a CCD stream
-        moisem = acqstream.SEMStream("SEM for MoI", main_data.sed, main_data.sed.data, main_data.ebeam)
-        moiccd = acqstream.ARSettingsStream("CCD for MoI", main_data.ccd, main_data.ccd.data, main_data.ebeam,
-                                            detvas=get_hw_settings(main_data.ccd))
-        # moiccd.roi.value = (0.1, 0.1, 0.9, 0.9)  # TODO: or full view?
-        moiccd.repetition.value = (9, 9)
-        mois = acqstream.MomentOfInertiaStream("MoI", moisem, moiccd)
-        self._mois = mois
-        # TODO: or shall we show the moiccd entry ? Or we need a MomentOfInertiaStream which is more self-contained?
-        # TODO: instead of add_to_all_views, have a way to ask to add to a specific view (or none at all)
-        mois_spe = self._stream_controller.addStream(mois, add_to_all_views=True)
-        mois_spe.stream_panel.flatten()  # No need for the stream name
-        # TODO: add ways to show:
-        # * Chronograph of the MoI at the center
-        # * MoI at center
-        # * Spot size at center
+        #   _and_ to show the mirror shadow in center alignment
+        # * ebeam spot (spot): Used to force the ebeam to spot mode in lens
+        #   and center alignment.
 
         # Ideally, we'd like to have the same settings for the specline and ccd
         # streams (but different from the MoI stream). That kind of works by
         # always playing the ccd stream first, and using global settings for the
         # specline.
-        specline_stream = acqstream.BrightfieldStream(
-                            "Spectrograph line",
-                            main_data.ccd,
-                            main_data.ccd.data,
-                            main_data.brightlight,
-                            focuser=main_data.focus,
-                            forcemd={model.MD_PIXEL_SIZE: (10e-5, 10e-5)},  # DEBUG
-                            )
-        self._specline_stream = specline_stream
-
         # TODO: have a special stream that does CCD + ebeam spot? (to avoid the ebeam spot)
         # Focuser here too so that it's possible to focus with right mouse button,
         # and also menu controller beleives it's possible to autofocus.
@@ -2442,19 +2418,48 @@ class Sparc2AlignTab(Tab):
 
         ccd_spe = self._stream_controller.addStream(ccd_stream)
         ccd_spe.stream_panel.flatten()
+
+        specline_stream = acqstream.BrightfieldStream(
+                            "Spectrograph line",
+                            main_data.ccd,
+                            main_data.ccd.data,
+                            main_data.brightlight,
+                            focuser=main_data.focus,
+                            # forcemd={model.MD_PIXEL_SIZE: (10e-5, 10e-5)},  # DEBUG
+                            )
+        self._specline_stream = specline_stream
         # Add it as second stream, so that it's displayed with the default 0.3 merge ratio
         self._stream_controller.addStream(specline_stream, visible=False)
 
+        # MomentOfInertiaStream needs an SEM stream and a CCD stream
+        moisem = acqstream.SEMStream("SEM for MoI", main_data.sed, main_data.sed.data, main_data.ebeam)
+        mois = acqstream.MomentOfInertiaLiveStream("MoI",
+                           main_data.ccd, main_data.ccd.data, main_data.ebeam,
+                           moisem,
+                           detvas=get_hw_settings(main_data.ccd))
+        # TODO: need SEM mag (or set HFW to a good value)
+        # moiccd.roi.value = (0.1, 0.1, 0.9, 0.9)  # TODO: or full view?
+        # Pick some typically good settings
+        mois.repetition.value = (9, 9)
+        mois.detExposureTime.value = mois.detExposureTime.clip(0.1)
+        mois.detBinning.value = mois.detBinning.clip((8, 8))
+        # TODO: ensure full res too?
+        self._moi_stream = mois
+        # TODO: instead of add_to_all_views, have a way to ask to add to a specific view (or none at all)
+        mois_spe = self._stream_controller.addStream(mois, add_to_all_views=True)
+        mois_spe.stream_panel.flatten()  # No need for the stream name
+        # TODO: add ways to show:
+        # * Chronograph of the MoI at the center
+        # * MoI at center
+        # * Spot size at center
+
         # The center align view share the same CCD stream (and settings)
-        # self.panel.vp_align_center.microscope_view.addStream(ccd_stream)
-        self.panel.vp_align_center.microscope_view.addStream(specline_stream)
+        self.panel.vp_align_center.microscope_view.addStream(ccd_stream)
 
         # The mirror center (with the lens set) is defined as pole position
         # in the microscope configuration file.
         # TODO: use an overlay, instead of a stream? We need to allow dragging it around
         # + connect it to the .polePosition VA of lens
-        goal_im = self._getGoalImage(main_data)
-        self._goal_stream = acqstream.RGBStream("Goal", goal_im)
 
         # Force a spot at the center of the FoV
         # Not via stream controller, so we can avoid the scheduler
@@ -2478,7 +2483,7 @@ class Sparc2AlignTab(Tab):
 
         for btn in self._alignbtn_to_mode:
             btn.Bind(wx.EVT_BUTTON, self._onClickAlignButton)
-        tab_data.align_mode.subscribe(self._onAlignMode, init=True)
+        tab_data.align_mode.subscribe(self._onAlignMode)
 
         # Bind moving buttons & keys
         self._actuator_controller = ActuatorController(tab_data, panel, "")
@@ -2505,9 +2510,6 @@ class Sparc2AlignTab(Tab):
 
         # Bind MoI background acquisition
         self.panel.btn_bkg_acquire.Bind(wx.EVT_BUTTON, self._onBkgAcquire)
-
-        # TODO: listen to mirror pos, and disable ourself if the mirror is not
-        # engaged
 
     def _onClickAlignButton(self, evt):
         """
@@ -2540,8 +2542,15 @@ class Sparc2AlignTab(Tab):
         for btn, m in self._alignbtn_to_mode.items():
             btn.SetToggle(mode == m)
 
+        assert(self.IsShown())
+
         # Disable controls/streams which are useless (to guide the user)
         self._stream_controller.pauseStreams()
+
+        # This is blocking on the hardware => run in a separate thread
+        op_mode = self._mode_to_opm[mode]
+        threading.Thread(target=self.tab_data_model.main.opm.setPath,
+                         args=(op_mode,)).start()
 
         if mode == "lens-align":
             # TODO: show the vp_lens_align & play CCD stream + spot stream
@@ -2556,10 +2565,12 @@ class Sparc2AlignTab(Tab):
             # TODO: in this mode, if focus change, update the focus image once
             # (by going to spec-focus mode, turning the light, and acquiring an
             # AR image)
+            # Or not??? Now there is a button for that anyway, and as it's the
+            # default mode, it automatically turn on the lamp and autofocus
         elif mode == "mirror-align":
             # TODO: show the vp_mirror_align & play the MoI stream & stop the other streams
             self._spot_stream.is_active.value = False
-            self._mois.should_update.value = True
+            self._moi_stream.should_update.value = True
             self.tab_data_model.focussedView.value = self.panel.vp_moi.microscope_view
             self.panel.pnl_mirror.Enable(True)
             self.panel.html_alignment_doc.Show(True)
@@ -2572,22 +2583,12 @@ class Sparc2AlignTab(Tab):
         else:  # "center-align"
             self.tab_data_model.focussedView.value = self.panel.vp_align_center.microscope_view
             self._spot_stream.is_active.value = True
-            # self._ccd_stream.should_update.value = True
-            self._specline_stream.should_update.value = True
+            self._ccd_stream.should_update.value = True
             self.panel.pnl_mirror.Enable(False)
             self.panel.html_alignment_doc.Show(False)
             self.panel.pnl_lens_mover.Enable(False)
             self.panel.pnl_focus.Enable(False)
             self.panel.pnl_moi_settings.Show(False)
-
-        # This is blocking on the hardware => run in a separate thread
-        op_mode = self._mode_to_opm[mode]
-        # TODO: if the spec_focus has never been focused yet (for this GUI session),
-        # first go to "spec-focus" mode and run auto-focus on the spectrograph/focus axis
-        # Or not??? Now there is a button for that anyway, and as it's the
-        # default mode, it automatically turn on the lamp and autofocus
-        threading.Thread(target=self.tab_data_model.main.opm.setPath,
-                         args=(op_mode,)).start()
 
     def _onClickFocus(self, evt):
         """
@@ -2638,61 +2639,9 @@ class Sparc2AlignTab(Tab):
         """
         # Stop the acqusition, and pass that data to the MoI stream
         df.unsubscribe(self._on_bkg_data)
-        self._mois.background.value = data
+        self._moi_stream.background.value = data
 
         wx.CallAfter(self.panel.btn_bkg_acquire.Enable)
-
-    # TODO: share with SparcAlignTab
-    def _getGoalImage(self, main_data):
-        """
-        main_data (model.MainGUIData)
-        returns (model.DataArray): RGBA DataArray of the goal image for the
-          current hardware
-        """
-        ccd = main_data.ccd
-        lens = main_data.lens
-
-        # TODO: automatically generate the image? Shouldn't be too hard with
-        # cairo, it's just 3 circles and a line.
-
-        # The goal image depends on the physical size of the CCD, so we have
-        # a file for each supported sensor size.
-        pxs = ccd.pixelSize.value
-        ccd_res = ccd.shape[0:2]
-        ccd_sz = tuple(int(round(p * l * 1e6)) for p, l in zip(pxs, ccd_res))
-        try:
-            goal_rs = pkg_resources.resource_stream("odemis.gui.img",
-                                                    "calibration/ma_goal_5_13_sensor_%d_%d.png" % ccd_sz)
-        except IOError:
-            logging.warning(u"Failed to find a fitting goal image for sensor "
-                            u"of %dx%d µm" % ccd_sz)
-            # pick a known file, it's better than nothing
-            goal_rs = pkg_resources.resource_stream("odemis.gui.img",
-                                                    "calibration/ma_goal_5_13_sensor_13312_13312.png")
-        goal_im = model.DataArray(scipy.misc.imread(goal_rs))
-        # No need to swap bytes for goal_im. Alpha needs to be fixed though
-        goal_im = scale_to_alpha(goal_im)
-        # It should be displayed at the same scale as the actual image.
-        # In theory, it would be direct, but as the backend doesn't know when
-        # the lens is on or not, it's considered always on, and so the optical
-        # image get the pixel size multiplied by the magnification.
-
-        # The resolution is the same as the maximum sensor resolution, if not,
-        # we adapt the pixel size
-        im_res = (goal_im.shape[1], goal_im.shape[0])  # pylint: disable=E1101,E1103
-        scale = ccd_res[0] / im_res[0]
-        if scale != 1:
-            logging.warning("Goal image has resolution %s while CCD has %s",
-                            im_res, ccd_res)
-
-        # Pxs = sensor pxs / lens mag
-        mag = lens.magnification.value
-        goal_md = {model.MD_PIXEL_SIZE: (scale * pxs[0] / mag, scale * pxs[1] / mag),  # m
-                   model.MD_POS: (0, 0),
-                   model.MD_DIMS: "YXC", }
-
-        goal_im.metadata = goal_md
-        return goal_im
 
     def Show(self, show=True):
         Tab.Show(self, show=show)

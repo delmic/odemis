@@ -29,11 +29,13 @@ import numbers
 import numpy
 from odemis import model
 from odemis.acq import align
-from odemis.util import limit_invocation
+from odemis.acq.stream._sync import MomentOfInertiaMDStream
+from odemis.util import limit_invocation, img
 import time
 
 from ._base import Stream, UNDEFINED_ROI
 from ._live import LiveStream
+from concurrent.futures._base import CancelledError
 
 
 class RepetitionStream(LiveStream):
@@ -383,6 +385,11 @@ class SpectrumSettingsStream(CCDSettingsStream):
         # For SPARC: typical user wants density a bit lower than SEM
         self.pixelSize.value *= 6
 
+        # B/C and histogram are meaningless on a spectrum
+        del self.auto_bc
+        del self.auto_bc_outliers
+        del self.histogram
+
         # Contains one 1D spectrum (start with an empty array)
         self.image.value = model.DataArray([])
 
@@ -429,6 +436,12 @@ class MonochromatorSettingsStream(PMTSettingsStream):
         # Fuzzing is not handled for SEM/SEM streams (and doesn't make much
         # sense as it's the same as software-binning
         del self.fuzzing
+
+        # B/C and histogram are meaningless on a chronogram
+        del self.auto_bc
+        del self.auto_bc_outliers
+        del self.histogram
+
 
         # .raw is an array of floats with time on the first dim, and count/date
         # on the second dim.
@@ -644,6 +657,118 @@ class CLSettingsStream(PMTSettingsStream):
         # protection = self._detector.protection.value
         # And update the stream status if protection was triggered
         super(CLSettingsStream, self)._onNewData(dataflow, data)
+
+
+class MomentOfInertiaLiveStream(CCDSettingsStream):
+    """
+    Special stream to acquire AR view and display moment of inertia live.
+    Also provides spot size information.
+    Needs a SEMStream.
+    Note: internally it uses MomentOfInertiaSyncStream to actually acquire data.
+    """
+
+    def __init__(self, name, detector, dataflow, emitter, sem_stream, **kwargs):
+        """
+        sem_stream (SEMStream): an SEM stream with the same emitter
+        """
+        super(MomentOfInertiaLiveStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
+        # Initialise to some typical value: small so that it's fast
+        self.repetition.value = (9, 9)
+
+        # Fuzzing should not be needed
+        del self.fuzzing
+
+        # B/C is fixed to min/max, and histogram is pretty much useless
+        del self.auto_bc
+        del self.auto_bc_outliers
+        del self.histogram
+
+        # The background data (typically, an acquisition without ebeam).
+        # It is subtracted from the acquisition data.
+        # If set to None, baseline is used
+        self.background = model.VigilantAttribute(None, setter=self._setBackground)
+
+        # Future of the acquisition
+        self._acq_stream = MomentOfInertiaMDStream("MoI acq", sem_stream, self)
+        self._acquire_f = None
+
+    def _setBackground(self, data):
+        """
+        Setter for the .background VA
+        Synchronises the background VA with the VA of the acquisition stream
+        """
+        self._acq_stream.background.value = data
+        return data
+
+    def _projectMoI2RGB(self, data, valid):
+        """
+        Project a 2D spatial DataArray into a RGB representation
+        data (DataArray): 2D DataArray
+        valid (numpy.ndarray of bool)
+        return (DataArray): 3D DataArray
+        """
+        rgbim = img.DataArray2RGB(data)
+        # Just keep the red level for non valid/clipping pixels
+        for (x, y), v in numpy.ndenumerate(valid):
+            if not v:
+                rgbim[x, y, 1:] = 0
+        rgbim.flags.writeable = False
+        md = self._find_metadata(data.metadata)
+        md[model.MD_DIMS] = "YXC"  # RGB format
+        return model.DataArray(rgbim, md)
+
+    @limit_invocation(0.1)
+    def _updateImage(self):
+        if self.raw:
+            moi, valid = self.raw[1:3]  # 2nd and 3rd data are useful for us
+            self.image.value = self._projectMoI2RGB(moi, valid)
+
+    def _on_acq_done(self, future):
+        # Pretty much the same as _onNewData(), but also relaunch an acquisition
+        try:
+            logging.debug("MoI acquisition finished")
+            try:
+                self.raw = future.result()  # sem, moi, valid, spot size
+                if not future.cancelled():
+                    self._updateImage()
+            except CancelledError:
+                pass
+        except Exception:
+            logging.exception("Failed to acquire data")
+
+        # start the next acquisition
+        if self.is_active.value:
+            self._acquire_f = self._acq_stream.acquire()
+            self._acquire_f.add_done_callback(self._on_acq_done)
+
+    def _onActive(self, active):
+        """ Called when the Stream is activated or deactivated by setting the
+        is_active attribute
+        """
+        if active:
+            # Convert the .acquire() future into a live acquisition
+            if not self.should_update.value:
+                logging.warning("Trying to activate stream while it's not "
+                                "supposed to update")
+            self._bg_image = self.background.value
+            # approx. the index of the center image
+
+            self._acquire_f = self._acq_stream.acquire()
+            self._acquire_f.add_done_callback(self._on_acq_done)
+        else:
+            self._acquire_f.cancel()
+
+    # TODO: take as argument the pixel position?
+    def getSpotSize(self):
+        """
+        return (0<float): spot size (in px)
+        """
+        raw = self._acq_stream.raw
+        if len(raw) >= 3:
+            return raw[3]
+        else:
+            # Nothing yet
+            return None
 
 
 # Maximum allowed overlay difference in electron coordinates.

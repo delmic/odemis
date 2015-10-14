@@ -488,7 +488,7 @@ class SubscribeProxyThread(threading.Thread):
         self._data.connect("ipc://" + uri)
         # TODO find out if it does something and if it does, depend on max_discard
 #        self.data.hwm = 1 # drop message silently if there is already one in the queue
-        self._data.hwm = 0 # FIXME currently set to 1 in order to avoid discarding when not wanted
+        self._data.hwm = 0  # FIXME currently set to 0 in order to avoid discarding when not wanted
 
         # TODO: we need a more advance support for max_discards to be able to
         # ensure all the data is received when the client needs it.
@@ -535,10 +535,12 @@ class SubscribeProxyThread(threading.Thread):
                     array_format = self._data.recv_pyobj()
                     array_md = self._data.recv_pyobj()
                     array_buf = self._data.recv(copy=False)
+                    # logging.debug("Received new DataArray over ZMQ for %s", self.uri)
                     # more fresh data already?
                     if (self._data.getsockopt(zmq.EVENTS) & zmq.POLLIN and
                         discarded < self.max_discard):
                         discarded += 1
+                        # logging.debug("Discarding object received as a newer one is available")
                         continue
                     # TODO: only log the accumulated number every second, to avoid log flooding
 #                     if discarded:

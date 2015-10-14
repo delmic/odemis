@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+import wx.lib.newevent
+
 # Colour definitions
 
 # Background colours
@@ -80,3 +82,5 @@ makes no warranty, expressed or implied, nor assumes any legal liability or
 responsibility for any purpose for which they are used. For further information
 see http://www.fluorophores.org/disclaimer/.
 """
+
+BufferSizeEvent, EVT_BUFFER_SIZE = wx.lib.newevent.NewEvent()

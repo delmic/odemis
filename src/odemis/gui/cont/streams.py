@@ -47,11 +47,11 @@ from wx.lib.pubsub import pub
 import odemis.acq.stream as acqstream
 import odemis.gui.model as guimodel
 
+
 # There are two kinds of controllers:
 # * Stream controller: links 1 stream <-> stream panel (cont/stream/StreamPanel)
 # * StreamBar controller: links .streams VA <-> stream bar (cont/stream/StreamBar)
 #   The StreamBar controller is also in charge of the scheduling of the streams.
-
 
 # Stream scheduling policies: decides which streams which are with .should_update get .is_active
 SCHED_LAST_ONE = 1  # Last stream which got added to the should_update set
@@ -67,7 +67,7 @@ SCHED_ALL = 2  # All the streams which are in the should_update stream
 class StreamController(object):
     """ Manage a stream and its accompanying stream panel """
 
-    def __init__(self, stream_bar, stream, tab_data_model, show_panel=True, no_bc=False):
+    def __init__(self, stream_bar, stream, tab_data_model, show_panel=True):
 
         self.stream = stream
         self.stream_bar = stream_bar
@@ -85,7 +85,9 @@ class StreamController(object):
             label_edit = True
 
         self.stream_panel = StreamPanel(stream_bar, stream, label_edit)
-        self.stream_panel.Bind(wx.EVT_WINDOW_DESTROY, self._on_stream_panel_destroy)
+        # Detect when the panel is destroyed (but _not_ any of the children)
+        self.stream_panel.Bind(wx.EVT_WINDOW_DESTROY, self._on_stream_panel_destroy,
+                               source=self.stream_panel)
 
         self.tab_data_model = tab_data_model
 
@@ -127,7 +129,7 @@ class StreamController(object):
             self._add_emission_ctrl()
 
         # TODO: Change the way in which BC controls are hidden (Use config in data.py)
-        if hasattr(stream, "auto_bc") and hasattr(stream, "intensityRange") and not no_bc:
+        if hasattr(stream, "auto_bc") and hasattr(stream, "intensityRange"):
             self._add_brightnesscontrast_ctrls()
             self._add_outliers_ctrls()
 
@@ -201,6 +203,7 @@ class StreamController(object):
 
             se = create_setting_entry(self.stream_panel, name, va, self.stream.emitter, conf)
             self.entries[se.name] = se
+            add_divider = True
 
         # Process the emitter VAs first
         vas_names = util.sorted_according_to(self.stream.emt_vas.keys(), emitter_conf.keys())
@@ -230,7 +233,7 @@ class StreamController(object):
             self.entries[se.name] = se
             add_divider = True
 
-        if add_divider:
+        if add_divider:  # TODO: only do so, if some other controls are displayed
             self.stream_panel.add_divider()
 
     def add_setting_entry(self, name, va, hw_comp, conf=None):
@@ -269,6 +272,7 @@ class StreamController(object):
         being the main class responsible for it.
 
         """
+        logging.debug("Stream panel %s destroyed", self.stream.name.value)
 
         # Destroy references to this controller in even handlers
         # (More references are present, see getrefcount
@@ -495,7 +499,7 @@ class StreamController(object):
                 mins, maxs = gspec.min(), gspec.max()
 
             # for spectrum, 0 has little sense, just care of the min
-            if mins > maxs:
+            if mins < maxs:
                 coef = 1 / (maxs - mins)
             else:  # division by 0
                 coef = 1
@@ -877,7 +881,7 @@ class StreamBarController(object):
         # If any stream already present: listen to them in the scheduler (but
         # don't display)
         for s in self._tab_data_model.streams.value:
-            logging.debug("Scheduling stream present at init: %s", s)
+            logging.debug("Adding stream present at init to scheduler: %s", s)
             self._scheduleStream(s)
 
     def pause(self):
@@ -1189,7 +1193,7 @@ class StreamBarController(object):
         """
         return self._add_stream(stream, **kwargs)
 
-    def _add_stream(self, stream, add_to_all_views=False, visible=True, play=None, no_bc=False):
+    def _add_stream(self, stream, add_to_all_views=False, visible=True, play=None):
         """ Add the given stream to the tab data model and appropriate views
 
         Args:
@@ -1245,8 +1249,7 @@ class StreamBarController(object):
             stream_cont = self._add_stream_cont(stream,
                                                 show_panel,
                                                 locked=self.locked_mode,
-                                                static=self.static_mode,
-                                                no_bc=no_bc)
+                                                static=self.static_mode)
 
             # TODO: make StreamTree a VA-like and remove this
 #             logging.debug("Sending stream.ctrl.added message")
@@ -1268,7 +1271,7 @@ class StreamBarController(object):
 
         return self._add_stream_cont(stream, show_panel=True, static=True)
 
-    def _add_stream_cont(self, stream, show_panel=True, locked=False, static=False, no_bc=False):
+    def _add_stream_cont(self, stream, show_panel=True, locked=False, static=False):
         """ Create and add a stream controller for the given stream
 
         :return: (StreamController)
@@ -1276,7 +1279,7 @@ class StreamBarController(object):
         """
 
         stream_cont = StreamController(self._stream_bar, stream, self._tab_data_model,
-                                       show_panel, no_bc)
+                                       show_panel)
 
         if locked:
             stream_cont.to_locked_mode()
@@ -1874,7 +1877,6 @@ class SparcStreamsController(StreamBarController):
                                         "grating": main_data.spectrograph,
                                         "slit-in": main_data.spectrograph,
                                         },
-                                  no_bc=True
                                   )
 
     def addMonochromator(self):
@@ -1903,7 +1905,6 @@ class SparcStreamsController(StreamBarController):
                                         "slit-in": main_data.spectrograph,
                                         "slit-monochromator": main_data.spectrograph,
                                         },
-                                  no_bc=True,
                                   play=False
                                   )
 

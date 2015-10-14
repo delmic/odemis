@@ -670,6 +670,34 @@ class OverlayTestCase(test.GuiTestCase):
         # point = omodel.VAEnumerated(phys_points[0], choices=frozenset([(50 / 1.0e5, 50 / 1.0e5)]))
         # pol.set_point(point)
 
+    def test_mirror_arc_overlay(self):
+        cnvs = miccanvas.SparcARCanvas(self.panel)
+        cnvs.scale = 20000
+        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
+
+        cnvs.flip = 0
+        cnvs.update_drawing()
+
+        def flip(evt):
+            if cnvs.flip == wx.VERTICAL:
+                cnvs.flip = 0
+            else:
+                cnvs.flip = wx.VERTICAL
+            cnvs.update_drawing()
+            evt.Skip()
+
+        def zoom(evt):
+            if evt.GetWheelRotation() > 0:
+                cnvs.scale *= 1.1
+            else:
+                cnvs.scale *= 0.9
+            cnvs.update_drawing()
+
+        cnvs.Bind(wx.EVT_LEFT_DCLICK, flip)
+        cnvs.Bind(wx.EVT_MOUSEWHEEL, zoom)
+
+        test.gui_loop()
+
     # END World overlay test cases
 
 

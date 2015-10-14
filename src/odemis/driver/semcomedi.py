@@ -844,7 +844,8 @@ class SEMComedi(model.HwComponent):
 
     def setup_timed_command(self, subdevice, channels, ranges, period_ns,
                             start_src=comedi.TRIG_INT, start_arg=0,
-                            stop_src=comedi.TRIG_COUNT, stop_arg=1):
+                            stop_src=comedi.TRIG_COUNT, stop_arg=1,
+                            aref=comedi.AREF_GROUND):
         """
         Creates and sends a command to a subdevice.
         subdevice (0<int): subdevice id
@@ -854,20 +855,22 @@ class SEMComedi(model.HwComponent):
          on the same channel)
         start_src, start_arg, stop_src, stop_arg: same meaning as the fields of
           a command.
+        aref (AREF*): analog reference type
         Raises:
             IOError: if the device didn't accept the command at all.
-            ErrorValue: if the device didn't accept the command with precisely
-              the given arguments. The command is sent to the subdevice.
+            # ValueError: if the device didn't accept the command with precisely
+              the given arguments.
         """
         nchans = len(channels)
         assert(0 < period_ns)
+        # TODO: pass channel/range/aref via some object?
 
         # create a command
         cmd = comedi.cmd_struct()
         comedi.get_cmd_generic_timed(self._device, subdevice, cmd, nchans, period_ns)
         clist = comedi.chanlist(nchans)
         for i in range(nchans):
-            clist[i] = comedi.cr_pack(channels[i], ranges[i], comedi.AREF_GROUND)
+            clist[i] = comedi.cr_pack(channels[i], ranges[i], aref)
         cmd.chanlist = clist
         cmd.chanlist_len = nchans
         cmd.start_src = start_src
@@ -1241,7 +1244,7 @@ class SEMComedi(model.HwComponent):
                           "channels %r/%r", nwscans, wchannels, rchannels)
             # create a command for reading, with a period osr times smaller than the write
             self.setup_timed_command(self._ai_subdevice, rchannels, rranges,
-                                     rperiod_ns, stop_arg=nrscans)
+                                     rperiod_ns, stop_arg=nrscans, aref=comedi.AREF_DIFF)
             # prepare to read
             self._reader.prepare(nrscans * nrchans, expected_time)
 
