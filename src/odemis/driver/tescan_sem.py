@@ -64,7 +64,7 @@ class TescanSEM(model.HwComponent):
                    
         # Lock in order to synchronize all the child component functions
         # that acquire data from the SEM while we continuously acquire images
-        self._acquisition_init_lock = threading.Lock()
+        self._acq_progress_lock = threading.Lock()
 
         # important: stop the scanning before we start scanning or before automatic
         # procedures, even before we configure the detectors
@@ -128,6 +128,15 @@ class TescanSEM(model.HwComponent):
             self._pressure = ChamberPressure(parent=self, daemon=daemon, **kwargs)
             self.children.value.add(self._pressure)
 
+        # create the light child
+        try:
+            kwargs = children["light"]
+        except (KeyError, TypeError):
+            logging.info("TescanSEM was not given a 'light' child")
+        else:
+            self._light = Light(parent=self, daemon=daemon, **kwargs)
+            self.children.value.add(self._light)
+
     def terminate(self):
         """
         Must be called at the end of the usage. Can be called multiple times,
@@ -141,6 +150,7 @@ class TescanSEM(model.HwComponent):
         self._pressure.terminate()
         # finish
         self._device.Disconnect()
+
 
 class Scanner(model.Emitter):
     """
@@ -255,7 +265,7 @@ class Scanner(model.Emitter):
         self._updateMagnification()
 
     def updateHorizontalFOV(self):
-        with self.parent._acquisition_init_lock:
+        with self.parent._acq_progress_lock:
             new_fov = self.parent._device.GetViewField()
         # self._setHorizontalFOV(new_fov * 1e-03)
         self.horizontalFoV.value = new_fov * 1e-03
@@ -270,7 +280,7 @@ class Scanner(model.Emitter):
         # Ensure fov odemis field always shows the right value
         # Also useful in case fov value that we try to set is
         # out of range
-        with self.parent._acquisition_init_lock:
+        with self.parent._acq_progress_lock:
             cur_fov = self.parent._device.GetViewField() * 1e-03
             value = cur_fov
 
@@ -286,14 +296,12 @@ class Scanner(model.Emitter):
     def _onDwellTime(self, dt):
         # TODO interrupt current scanning when dwell time is changed
         # ScStopScan does not work this way
-        self.parent._device.CancelRecv()
-        self.parent._device.ScStopScan()
         pass
 
     def _onVoltage(self, volt):
         self.parent._device.HVSetVoltage(volt)
         # Adjust brightness and contrast
-        with self.parent._acquisition_init_lock:
+        with self.parent._acq_progress_lock:
             self.parent._device.DtAutoSignal(self.parent._detector._channel)
 
     def _setPower(self, value):
@@ -315,7 +323,7 @@ class Scanner(model.Emitter):
         # Set the corresponding current index to Tescan SEM
         self.parent._device.SetPCIndex(self._indexCurrent + 1)
         # Adjust brightness and contrast
-        with self.parent._acquisition_init_lock:
+        with self.parent._acq_progress_lock:
             self.parent._device.DtAutoSignal(self.parent._detector._channel)
 
         return self._probeCurrent
@@ -435,6 +443,7 @@ class Scanner(model.Emitter):
         phy_pos = (px_pos[0] * pxs[0], -px_pos[1] * pxs[1])  # - to invert Y
         return phy_pos
 
+
 MAX_FAILURES = 5  # maximum allowed number of acquisition failures in a row
 class Detector(model.Detector):
     """
@@ -454,9 +463,6 @@ class Detector(model.Detector):
         self.parent._device.DtSelect(self._channel, 0)
         self.parent._device.DtEnable(self._channel, 1, 16)  # 16 bits
         self.acq_shape = self.parent._scanner._shape
-        # now tell the engine to wait for scanning inactivity and auto procedure finish,
-        # see the docs for details
-        self.parent._device.SetWaitFlags(1 << 3)  # SEM auto procedure
 
         # adjust brightness and contrast
         self.parent._device.DtAutoSignal(self._channel)
@@ -465,7 +471,7 @@ class Detector(model.Detector):
         self._acquisition_thread = None
         self._acquisition_lock = threading.Lock()
         self._failures = 0
-        # self._acquisition_init_lock = threading.Lock()
+        self._acquisition_init_lock = threading.Lock()
         self._acquisition_must_stop = threading.Event()
 
         # The shape is just one point, the depth
@@ -482,9 +488,10 @@ class Detector(model.Detector):
 
     def stop_acquire(self):
         with self._acquisition_lock:
-            self.parent._device.CancelRecv()
-            self.parent._device.ScStopScan()
-            self._acquisition_must_stop.set()
+            with self._acquisition_init_lock:
+                self.parent._device.CancelRecv()
+                self.parent._device.ScStopScan()
+                self._acquisition_must_stop.set()
 
     def _wait_acquisition_stopped(self):
         """
@@ -507,7 +514,7 @@ class Detector(model.Detector):
         current drift.
         """
 
-        with self.parent._acquisition_init_lock:
+        with self.parent._acq_progress_lock:
             pxs = self.parent._scanner.pixelSize.value  # m/px
 
             pxs_pos = self.parent._scanner.translation.value
@@ -536,10 +543,24 @@ class Detector(model.Detector):
 
             dt = self.parent._scanner.dwellTime.value * 1e9
             logging.debug("Acquiring SEM image of %s with dwell time %f ns", res, dt)
-            self.parent._device.ScScanXY(0, scaled_shape[0], scaled_shape[1],
-                                 l, t, r, b, 1, dt)
-            # fetch the image (blocking operation), ndarray is returned
-            sem_img = self.parent._device.FetchArray(0, res[0] * res[1])
+            while self._failures < MAX_FAILURES:
+                try:
+                    # Check if spot mode is required
+                    if res == (1, 1):
+                        # FIXME: Maybe just use ScScanXY
+                        self.parent._device.ScScanLine(0, scaled_shape[0], scaled_shape[1],
+                                             l + 1, t + 1, r + 1, b + 1, dt, 1, 0)
+                    else:
+                        self.parent._device.ScScanXY(0, scaled_shape[0], scaled_shape[1],
+                                             l, t, r, b, 1, dt)
+                    # fetch the image (blocking operation), ndarray is returned
+                    sem_img = self.parent._device.FetchArray(0, res[0] * res[1])
+                    break
+                except Exception:
+                    logging.warning("Acquisition failure, retry to acquire...")
+                    self._failures += 1
+            else:
+                raise IOError("Image acquisition failed")
             sem_img.shape = res[::-1]
             # Change endianess
             sem_img.byteswap(True)
@@ -557,25 +578,20 @@ class Detector(model.Detector):
         center (e-beam) position based on the translation and provides the new 
         generated output to the Dataflow. 
         """
-        while True:
-            try:
-                while not self._acquisition_must_stop.is_set():
-                    callback(self._acquire_image())
-                break
-            except CancelledError:
-                # Waiting to fetch image is cancelled
-                pass
-            except Exception:
-                self._failures += 1
-                if self._failures >= MAX_FAILURES:
-                    logging.exception("Image acquisition failed")
-                    break
-                else:
-                    logging.warning("Acquisition failure, retry to acquire...")
-                    pass
-            finally:
-                logging.debug("Acquisition thread closed")
-                self._acquisition_must_stop.clear()
+        try:
+            while not self._acquisition_must_stop.is_set():
+                with self._acquisition_init_lock:
+                    if self._acquisition_must_stop.is_set():
+                        break
+                callback(self._acquire_image())
+        except CancelledError:
+            # Waiting to fetch image is cancelled
+            pass
+        except Exception:
+            logging.exception("Image acquisition failed")
+        finally:
+            logging.debug("Acquisition thread closed")
+            self._acquisition_must_stop.clear()
 
     # we share metadata with our parent
     def updateMetadata(self, md):
@@ -615,6 +631,7 @@ class SEMDataFlow(model.DataFlow):
             # sem/component has been deleted, it's all fine, we'll be GC'd soon
             pass
 
+
 class Stage(model.Actuator):
     """
     This is an extension of the model.Actuator class. It provides functions for
@@ -637,12 +654,12 @@ class Stage(model.Actuator):
             logging.warning("Stage was not calibrated. We are performing calibration now.")
             parent._device.StgCalibrate()
 
-        #Wait for stage to be stable after calibration
+        # Wait for stage to be stable after calibration
         while parent._device.StgIsBusy() != 0:
             # If the stage is busy (movement is in progress), current position is
             # updated approximately every 500 ms
             time.sleep(0.5)
-            
+
         x, y, z, rot, tilt = parent._device.StgGetPosition()
         self._position["x"] = -x * 1e-3
         self._position["y"] = -y * 1e-3
@@ -670,23 +687,27 @@ class Stage(model.Actuator):
         """
         move to the position 
         """
-        # Perform move through Tescan API
-        # Position from m to mm and inverted
-        self.parent._device.StgMoveTo(-pos["x"] * 1e3,
-                                    - pos["y"] * 1e3,
-                                    - pos["z"] * 1e3)
+        with self.parent._acq_progress_lock:
+            # Perform move through Tescan API
+            # Position from m to mm and inverted
+            self.parent._device.StgMoveTo(-pos["x"] * 1e3,
+                                        - pos["y"] * 1e3,
+                                        - pos["z"] * 1e3)
 
-        # Obtain the finally reached position after move is performed.
-        # This is mainly in order to keep the correct position in case the
-        # move we tried to perform was greater than the maximum possible
-        # one.
-        with self.parent._acquisition_init_lock:
+            # Wait until move is completed
+            while self.parent._device.StgIsBusy():
+                time.sleep(0.2)
+
+            # Obtain the finally reached position after move is performed.
+            # This is mainly in order to keep the correct position in case the
+            # move we tried to perform was greater than the maximum possible
+            # one.
             x, y, z, rot, tilt = self.parent._device.StgGetPosition()
             self._position["x"] = -x * 1e-3
             self._position["y"] = -y * 1e-3
             self._position["z"] = -z * 1e-3
 
-        self._updatePosition()
+            self._updatePosition()
 
     @isasync
     def moveRel(self, shift):
@@ -725,6 +746,7 @@ class Stage(model.Actuator):
             self.stop()
             self._executor.shutdown()
             self._executor = None
+
 
 class EbeamFocus(model.Actuator):
     """
@@ -771,21 +793,19 @@ class EbeamFocus(model.Actuator):
 
     def _doMove(self, pos):
         """
-        move to the position 
+        move to the position
         """
         # Perform move through Tescan API
         # Position from m to mm and inverted
-        with self.parent._acquisition_init_lock:
+        with self.parent._acq_progress_lock:
             self.parent._device.SetWD(self._position["z"] * 1e03)
-
             # Obtain the finally reached position after move is performed.
             wd = self.parent._device.GetWD()
             self._position["z"] = wd * 1e-3
 
+            self._updatePosition()
         # Changing WD results to change in fov
         self.parent._scanner.updateHorizontalFOV()
-
-        self._updatePosition()
 
     @isasync
     def moveRel(self, shift):
@@ -824,6 +844,7 @@ class EbeamFocus(model.Actuator):
             self.stop()
             self._executor.shutdown()
             self._executor = None
+
 
 class ChamberView(model.DigitalCamera):
     """
@@ -869,7 +890,7 @@ class ChamberView(model.DigitalCamera):
         """
         return int: chamber camera status, 0 - off, 1 - on
         """
-        with self.parent._acquisition_init_lock:
+        with self.parent._acq_progress_lock:
             status = self.parent._device.CameraGetStatus(0)  # channel 0, reserved
         return status[0]
 
@@ -879,7 +900,8 @@ class ChamberView(model.DigitalCamera):
         callback (callable (DataArray) no return):
          function called for each image acquired
         """
-        self.parent._device.CameraEnable(0, 1, 5, 0)
+        with self.parent._acq_progress_lock:
+            self.parent._device.CameraEnable(0, 1, 5, 0)
 
         # if there is a very quick unsubscribe(), subscribe(), the previous
         # thread might still be running
@@ -902,7 +924,11 @@ class ChamberView(model.DigitalCamera):
         """
         assert not self.acquire_must_stop.is_set()
         self.acquire_must_stop.set()
-        self.parent._device.CancelRecv()
+        # self.parent._device.CancelRecv()
+        with self.parent._acq_progress_lock:
+            # self.parent._device.CameraDisable()
+            # self.parent._device.ScStopScan()
+            self.parent._device.CameraDisable()
 
     def _acquire_thread_continuous(self, callback):
         """
@@ -910,10 +936,11 @@ class ChamberView(model.DigitalCamera):
         """
         try:
             while not self.acquire_must_stop.is_set():
-                with self.parent._acquisition_init_lock:
+                with self.parent._acq_progress_lock:
                     width, height, img_str = self.parent._device.FetchCameraImage(0)
                 sem_img = numpy.frombuffer(img_str, dtype=numpy.uint8)
                 sem_img.shape = (height, width)
+                logging.debug("Acquiring chamber image of %s", sem_img.shape)
                 array = model.DataArray(sem_img)
                 # update resolution
                 self.resolution._value = sem_img.shape
@@ -922,8 +949,6 @@ class ChamberView(model.DigitalCamera):
                 # while detecting requests for stop
                 # If the Chamber view is just enabled it may take several seconds
                 # to get the first image.
-                if self.acquire_must_stop.wait(10):
-                    break
 
                 callback(self._transposeDAToUser(array))
 
@@ -953,6 +978,7 @@ class ChamberView(model.DigitalCamera):
         """
         self.Shutdown()
 
+
 class ChamberDataFlow(model.DataFlow):
     def __init__(self, camera):
         """
@@ -971,7 +997,8 @@ class ChamberDataFlow(model.DataFlow):
         comp = self.component()
         if comp is None:
             return
-        comp.req_stop_flow() # FIXME
+        comp.req_stop_flow()  # FIXME
+
 
 PRESSURE_VENTED = 1e05  # Pa
 PRESSURE_PUMPED = 1e-02  # Pa
@@ -1015,7 +1042,7 @@ class ChamberPressure(model.Actuator):
             3 vacuum off (pumps are switched off, valves are closed)
             4 chamber open
         """
-        with self.parent._acquisition_init_lock:
+        with self.parent._acq_progress_lock:
             status = self.parent._device.VacGetStatus()  # channel 0, reserved
         return status
 
@@ -1079,3 +1106,33 @@ class ChamberPressure(model.Actuator):
     def stop(self, axes=None):
         self._executor.cancel()
         logging.warning("Stopped pressure change")
+
+
+class Light(model.Emitter):
+    """
+    Chamber illumination LED component.
+    """
+    def __init__(self, name, role, parent, **kwargs):
+        model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
+
+        self._shape = ()
+        self.power = model.FloatContinuous(10., {0., 10.}, unit="W")
+        # turn on when initializing
+        self.parent._device.ChamberLed(1)
+        self.power.subscribe(self._updatePower)
+        # just one band: white
+        # emissions is list of 0 <= floats <= 1. Always 1.0: cannot lower it.
+        self.emissions = model.ListVA([1.0], unit="", setter=lambda x: [1.0])
+        # TODO: update spectra VA to support the actual spectra of the lamp
+        self.spectra = model.ListVA([(380e-9, 390e-9, 560e-9, 730e-9, 740e-9)],
+                                    unit="m", readonly=True)
+        self._metadata[model.MD_IN_WL] = (380e-9, 740e-9)
+
+    def _updatePower(self, value):
+        # Switch the chamber LED based on the power value (On in case of max,
+        # off in case of min)
+        if value == self.power.range[1]:
+            self.parent._device.ChamberLed(1)
+        else:
+            self.parent._device.ChamberLed(0)
+        self._metadata[model.MD_LIGHT_POWER] = self.power.value
