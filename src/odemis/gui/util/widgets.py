@@ -222,7 +222,7 @@ class ProgressiveFutureConnector(object):
 
         future (ProgressiveFuture)
         bar (gauge): the progress bar widget
-        label (TextLabel or None): if given, will also update a the text with
+        label (StaticText or None): if given, will also update a the text with
           the time left.
         full (bool): If True, the time remaining will be displaying in full text
         otherwise a short text will displayed (eg, "1 min and 2 s")
@@ -282,16 +282,16 @@ class ProgressiveFutureConnector(object):
             try:
                 ratio = past / (past + left)
                 prev_ratio = self._bar.Value / self._bar.Range
-                if prev_ratio - 0.1 < ratio < prev_ratio:
+                if 1 > prev_ratio / ratio > 1.1:  # decrease < 10 %
                     can_update = False
             except ZeroDivisionError:
                 pass
-            # Or if the time left in absolute value slighty increases (< 5s)
+            # Or if the time left in absolute value slightly increases (< 5s)
             if 0 < left - prev_left < 5:
                 can_update = False
 
         if not can_update:
-            logging.debug("No updating progress as new estimation is %g s left "
+            logging.debug("Not updating progress as new estimation is %g s left "
                           "vs old %g s, and current ratio %g vs old %g.",
                           left, prev_left, ratio * 100, prev_ratio * 100)
             return
