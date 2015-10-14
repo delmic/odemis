@@ -218,7 +218,7 @@ class FW102c(model.Actuator):
             while True:
                 char = self._serial.read() # empty if timeout
                 if not char: # should always finish by a "> "
-                    raise IOError("Controller timeout, after receiving %s" % line)
+                    raise IOError("Controller timeout, after receiving '%s'" % line.encode('string_escape'))
 
                 # normal char
                 line += char
