@@ -65,11 +65,9 @@ class TestStatic(unittest.TestCase):
         Check that we can do a scan network. It can pass only if we are
         connected to at least one controller.
         """
-        if TEST_NOHW:
-            self.skipTest("TEST_NOHW set")
-
         devices = CLASS.scan()
-        self.assertGreater(len(devices), 0)
+        if not TEST_NOHW:
+            self.assertGreater(len(devices), 0)
 
         for name, kwargs in devices:
             print "opening", name
