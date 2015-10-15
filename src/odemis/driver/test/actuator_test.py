@@ -49,14 +49,23 @@ class MultiplexTest(unittest.TestCase, simulated_test.ActuatorTest):
     def setUp(self):
         # create 2 children and then combine one axis each with MultiplexActuator
         self.child1 = simulated.Stage("sstage1", "test", {"a", "b"})
-        self.child2 = simulated.Stage("sstage2", "test", {"c", "d"})
+        self.child2 = simulated.Stage("sstage2", "test", {"cccc", "ddd"})
         self.dev = self.actuator_type("stage", "stage",
                                       {"x": self.child1, "y": self.child2},
-                                      {"x": "a", "y": "d"})
+                                      {"x": "a", "y": "ddd"})
 
     # force to not use the default method from TestCase
     def tearDown(self):
         super(MultiplexTest, self).tearDown()
+
+    def test_speed(self):
+        self.dev.speed.value = {"x": 0.1, "y": 0.1}
+        self.assertEqual(self.child2.speed.value["ddd"], 0.1)
+
+        sc2 = self.child2.speed.value.copy()
+        sc2["ddd"] = 2
+        self.child2.speed.value = sc2
+        self.assertEqual(self.dev.speed.value["y"], 2)
 
 
 class FixedPositionsTest(unittest.TestCase):

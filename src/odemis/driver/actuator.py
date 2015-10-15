@@ -114,13 +114,12 @@ class MultiplexActuator(model.Actuator):
         # TODO: change the speed range to a dict of speed ranges
         self.speed = model.MultiSpeedVA(self._speed, [0., 10.], setter=self._setSpeed)
         for axis in self._speed.keys():
-            child, ax = self._axis_to_child[axis]
-            def update_speed_per_child(value, ax=ax):
-                for a in ax:
-                    try:
-                        self._speed[a] = value[axes_map[a]]
-                    except KeyError:
-                        logging.error("Child %s is not reporting speed of axis %s", c.name, a)
+            c, ca = self._axis_to_child[axis]
+            def update_speed_per_child(value, a=axis, ca=ca, cname=c.name):
+                try:
+                    self._speed[a] = value[ca]
+                except KeyError:
+                    logging.error("Child %s is not reporting speed of axis %s (%s): %s", cname, a, ca, value)
                 self._updateSpeed()
             c.speed.subscribe(update_speed_per_child)
             self._subfun.append(update_speed_per_child)
@@ -128,13 +127,12 @@ class MultiplexActuator(model.Actuator):
         # whether the axes are referenced
         self.referenced = model.VigilantAttribute(self._referenced, readonly=True)
         for axis in self._referenced.keys():
-            child, ax = self._axis_to_child[axis]
-            def update_ref_per_child(value, ax=ax):
-                for a in ax:
-                    try:
-                        self._referenced[a] = value[axes_map[a]]
-                    except KeyError:
-                        logging.error("Child %s is not reporting reference of axis %s", c.name, a)
+            c, ca = self._axis_to_child[axis]
+            def update_ref_per_child(value, a=axis, ca=ca, cname=c.name):
+                try:
+                    self._referenced[a] = value[ca]
+                except KeyError:
+                    logging.error("Child %s is not reporting reference of axis %s (%s)", cname, a, ca)
                 self._updateReferenced()
             c.referenced.subscribe(update_ref_per_child)
             self._subfun.append(update_ref_per_child)
