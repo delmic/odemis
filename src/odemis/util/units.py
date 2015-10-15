@@ -6,7 +6,7 @@ Created on 20 Feb 2012
 
 Various utility functions for displaying numbers (with and without units).
 
-Copyright © 2012 Éric Piel, Delmic
+Copyright © 2012-2015 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -68,7 +68,7 @@ def get_si_scale(x):
     value x.
     Returns a (float, string) tuple: (divisor , SI prefix)
     """
-    if x == 0:
+    if x == 0 or math.isnan(x) or math.isinf(x):
         return (1, u"")
 
     most_significant = math.floor(math.log10(abs(x)))
@@ -104,13 +104,23 @@ def to_string_si_prefix(x, sig=None):
 def to_string_pretty(x, sig=None, unit=None):
     """ Convert a number to a string as int or float as most appropriate
 
-    :param sig: (int) The number of significant decimals
-
+    :param sig: (int or None) The number of significant figures.
+    :param unit: (None or string): unit of the values.
+    return (str): the decimal representation of the number with possibly a
+      unit prefix to indicate the magnitude (but _not_ the unit).
+      It can also return "unknown" or "∞" for NaN and inf.
     """
 
     if x == 0:
         # don't consider this a float
         return u"0"
+    elif math.isnan(x):
+        return "unknown"
+    elif math.isinf(x):
+        if x < 0:
+            return u"-∞"
+        else:
+            return u"∞"
 
     if sig is not None:
         x = round_significant(x, sig)
@@ -158,7 +168,9 @@ def readable_str(value, unit=None, sig=None):
     :param value: (number or [number...]): value(s) to display
     :param unit: (None or string): unit of the values. If necessary a SI prefix
         will be used to make the value more readable, unless None is given.
-    :param sig: (int or None) The number of significant numbers
+    :param sig: (int or None) The number of significant figures. If None, it
+      will use not round the value (and just limit the display to a certain
+      number of decimals)
 
     return (string)
     """

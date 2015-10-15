@@ -90,6 +90,7 @@ class TestUnits(unittest.TestCase):
                   (([0.0001236, 0.00014], "m"), u"123.6 x 140 µm"),
                   (([0.0001236, 12.0], "m"), "0.0001236 x 12 m"),
                   (([1200, 1000], "px"), "1200 x 1000 px"), # special non-prefix unit
+                  (([-float("inf"), float("NaN")], "m"), u"-∞ x unknown m"),
                   ]
         for (i, eo) in values:
             o = units.readable_str(*i)
