@@ -20,11 +20,17 @@ from concurrent import futures
 import logging
 import math
 from odemis.driver import nfpm
+import os
 import time
 import unittest
 from unittest.case import skip
 
+
 logging.getLogger().setLevel(logging.DEBUG)
+
+# Export TEST_NOHW=1 to force using only the simulator and skipping test cases
+# needing real hardware
+TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 
 CLASS = nfpm.PM8742
 KWARGS = dict(name="test", role="fiber-align", address="autoip",
@@ -33,7 +39,9 @@ KWARGS = dict(name="test", role="fiber-align", address="autoip",
               inverted=["x"])
 KWARGS_SIM = dict(KWARGS)
 KWARGS_SIM["address"] = "fake"
-KWARGS = KWARGS_SIM # uncomment to force using only the simulator
+
+if TEST_NOHW:
+    KWARGS = KWARGS_SIM
 
 # @skip("faster")
 class TestStatic(unittest.TestCase):
@@ -46,7 +54,8 @@ class TestStatic(unittest.TestCase):
         connected to at least one controller.
         """
         devices = CLASS.scan()
-        self.assertGreater(len(devices), 0)
+        if not TEST_NOHW:
+            self.assertGreater(len(devices), 0)
 
         for name, kwargs in devices:
             print "opening", name
