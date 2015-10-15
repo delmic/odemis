@@ -114,6 +114,9 @@ Clara: {
     },
     properties: {
         speed: {'z': 0.01} #m/s
+    },
+    metadata: {
+        FAV_POS_ACTIVE: {'z': 0.06},
     }
 }
 

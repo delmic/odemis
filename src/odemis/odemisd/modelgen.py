@@ -482,6 +482,32 @@ class Instantiator(object):
                                      "%s.%s = '%s' failed due to '%s'" %
                                      (name, prop_name, value, exp))
 
+    def _update_metadata(self, name):
+        """
+        Update the metadata as defined in the "metadata" section of the component
+
+        name (str): name of the component for which to set the metadata
+        """
+        attrs = self.ast[name]
+        if "metadata" in attrs:
+            comp = self._get_component_by_name(name)
+            compmd = {}
+            for md_name, value in attrs["metadata"].items():
+                # To indicate the metadata name:
+                # UPPER_CASE_NAME -> use model.MD_UPPER_CASE_NAME
+                # We could also accept the actual MD string, but it'd get more
+                # complicated and not really help anyone.
+                try:
+                    fullname = "MD_" + md_name
+                    md = getattr(model, fullname)
+                except AttributeError:
+                    raise SemanticError("Error in microscope file: "
+                        "Component '%s' has unknown metadata '%s'." % (name, md_name))
+
+                compmd[md] = value
+
+            comp.updateMetadata(compmd)  # Ought to work
+
     def _update_affects(self, name):
         """
         Update .affects of the given component, and of all the components which
@@ -525,6 +551,7 @@ class Instantiator(object):
         newcmps = self.get_children(comp) # that includes comp itself
         for c in newcmps:
             self._update_properties(c.name)
+            self._update_metadata(c.name)
             self._update_affects(c.name)
         newchildren = set(c for c in newcmps if c.name in mchildren)
         self.microscope.children.value = self.microscope.children.value | newchildren
