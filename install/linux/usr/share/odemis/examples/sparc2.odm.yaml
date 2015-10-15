@@ -246,6 +246,10 @@ SPARC2: {
     init: {
         axes_map: {"x": "l1"}
     },
+    metadata: {
+        # Default position of the lens (can be improved by user)
+        FAV_POS_ACTIVE: {"x": -0.045} # m
+    },
     affects: ["Camera", "Spectral Camera"],
 }
 
@@ -324,6 +328,10 @@ SPARC2: {
         axes: ["y", "x"],
         ustepsize: [5.9e-9, 5.9e-9], # m/µstep
         refproc: "Standard",
+    },
+    metadata: {
+        # Default position of the mirror engaged (will be improved during alignment)
+        FAV_POS_ACTIVE: {"x": 200.e-3, "y": 10.e-3},  # m, m
     },
 }
 

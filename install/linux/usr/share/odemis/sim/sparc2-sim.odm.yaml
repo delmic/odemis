@@ -267,7 +267,7 @@ SPARC2: {
     },
     metadata: {
         # Default position of the lens (can be improved by user)
-        FAV_POS_ACTIVE: {"x": -0.045} # m
+        FAV_POS_ACTIVE: {"x": -0.0045} # m
     },
     affects: ["Camera", "Spectral Camera"],
 }
