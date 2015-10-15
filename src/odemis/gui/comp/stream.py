@@ -972,41 +972,6 @@ class StreamPanel(wx.Panel):
         return lbl_ctrl, value_ctrl
 
     @control_bookkeeper
-    def add_exposure_time_ctrl(self, value=None, conf=None):
-        """ Add exposure time controls to the stream panel
-
-        :param value: (float) Current value of the exposure time
-        :param conf: (dict) Configuration options for the UnitFloatSlider
-
-        :return: (wx.StaticText, UnitFloatSlider)
-
-        """
-
-        lbl_ctrl = self._add_side_label("Exposure time")
-        value_ctrl = UnitFloatSlider(self._panel, value=value, **conf if conf else {})
-        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 3),
-                          flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
-
-        return lbl_ctrl, value_ctrl
-
-    @control_bookkeeper
-    def add_light_power_ctrl(self, value=None, conf=None):
-        """ Add controls to adjust the light power for the stream
-
-        :param value: (float) The current value of the light wattage
-        :param conf: (dict) Configurtion values for the UnitFloatSlider
-
-        :return: :return: (wx.StaticText, UnitFloatSlider)
-
-        """
-
-        lbl_ctrl = self._add_side_label("Power")
-        value_ctrl = UnitFloatSlider(self._panel, value=value, **conf if conf else {})
-        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 3),
-                          flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.ALL, border=5)
-        return lbl_ctrl, value_ctrl
-
-    @control_bookkeeper
     def add_text_field(self, label_text, value=None, readonly=False):
         """ Add a label and text control to the settings panel
 
