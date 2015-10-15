@@ -758,14 +758,28 @@ class MomentOfInertiaLiveStream(CCDSettingsStream):
         else:
             self._acquire_f.cancel()
 
+    def getRawValue(self, pos):
+        """
+        pos (int, int): position on the array
+        return (0<float or None): raw value of the moment of inertia
+        raises:
+             IndexError if pos is incorrect
+        """
+        raw = self.raw
+        if len(raw) >= 3:
+            return raw[1][pos]
+        else:
+            # Nothing yet
+            return None
+
     # TODO: take as argument the pixel position?
     def getSpotSize(self):
         """
         return (0<float): spot size (in px)
         """
-        raw = self._acq_stream.raw
+        raw = self.raw
         if len(raw) >= 3:
-            return raw[3]
+            return raw[3][()]
         else:
             # Nothing yet
             return None

@@ -68,6 +68,7 @@ import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
 import odemis.gui.util.align as align
+import odemis.gui
 
 
 class Tab(object):
@@ -2438,10 +2439,9 @@ class Sparc2AlignTab(Tab):
                            moisem,
                            detvas=get_hw_settings(main_data.ccd))
         # TODO: need SEM mag (or set HFW to a good value)
-        # moiccd.roi.value = (0.1, 0.1, 0.9, 0.9)  # TODO: or full view?
         # Pick some typically good settings
         mois.repetition.value = (9, 9)
-        mois.detExposureTime.value = mois.detExposureTime.clip(0.1)
+        mois.detExposureTime.value = mois.detExposureTime.clip(0.01)
         mois.detBinning.value = mois.detBinning.clip((8, 8))
         # TODO: ensure full res too?
         self._moi_stream = mois
@@ -2452,6 +2452,8 @@ class Sparc2AlignTab(Tab):
         # * Chronograph of the MoI at the center
         # * MoI at center
         # * Spot size at center
+        self._addMoIEntries(mois_spe.stream_panel)
+        mois.image.subscribe(self._onNewMoI)
 
         # The center align view share the same CCD stream (and settings)
         self.panel.vp_align_center.microscope_view.addStream(ccd_stream)
@@ -2510,6 +2512,40 @@ class Sparc2AlignTab(Tab):
 
         # Bind MoI background acquisition
         self.panel.btn_bkg_acquire.Bind(wx.EVT_BUTTON, self._onBkgAcquire)
+
+    def _addMoIEntries(self, cont):
+        """
+        Add the chronogram, MoI value entry and spot size entry
+        :param stream_cont: (Container aka StreamPanel)
+
+        """
+        # Add a intensity/time graph
+#         self.spec_graph = hist.Histogram(setting_cont.panel, size=(-1, 40))
+#         self.spec_graph.SetBackgroundColour("#000000")
+#         setting_cont.add_widgets(self.spec_graph)
+
+        # the "MoI" value bellow the chronogram
+        lbl_moi, txt_moi = cont.add_text_field("Moment of inertia", readonly=True)
+        tooltip_txt = "Moment of inertia at the center"
+        lbl_moi.SetToolTipString(tooltip_txt)
+        txt_moi.SetToolTipString(tooltip_txt)
+        # Change font size and colour
+        f = txt_moi.GetFont()
+        f.PointSize = 12
+        txt_moi.SetFont(f)
+        txt_moi.SetForegroundColour(odemis.gui.FG_COLOUR_MAIN)
+        self._txt_moi = txt_moi
+
+        lbl_ss, txt_ss = cont.add_text_field("Spot size", readonly=True)
+        tooltip_txt = "Spot size at the center"
+        lbl_ss.SetToolTipString(tooltip_txt)
+        txt_ss.SetToolTipString(tooltip_txt)
+        # Change font size and colour
+        f = txt_ss.GetFont()
+        f.PointSize = 12
+        txt_ss.SetFont(f)
+        txt_ss.SetForegroundColour(odemis.gui.FG_COLOUR_MAIN)
+        self._txt_ss = txt_ss
 
     def _onClickAlignButton(self, evt):
         """
@@ -2642,6 +2678,27 @@ class Sparc2AlignTab(Tab):
         self._moi_stream.background.value = data
 
         wx.CallAfter(self.panel.btn_bkg_acquire.Enable)
+
+    @call_in_wx_main
+    def _onNewMoI(self, rgbim):
+        """
+        Called when a new MoI image is available.
+        We actually don't use the RGB image, but it's a sign that there is new
+        MoI and spot size info to display.
+        rgbim (DataArray): RGB image of the MoI
+        """
+        if rgbim is None:
+            return
+
+        # Note: center position is typically 4,4 as the repetition is fixed to 9x9.
+        # To be sure, we recompute it every time
+        center = rgbim.shape[-1] // 2, rgbim.shape[-2] // 2  # px
+        moi = self._moi_stream.getRawValue(center)
+        ss = self._moi_stream.getSpotSize()
+
+        # If value is None => text is ""
+        self._txt_moi.SetValue(units.readable_str(moi, sig=3))
+        self._txt_ss.SetValue(units.readable_str(ss, unit="px", sig=3))
 
     def Show(self, show=True):
         Tab.Show(self, show=show)
