@@ -265,6 +265,10 @@ SPARC2: {
     init: {
         axes_map: {"x": "l1"}
     },
+    metadata: {
+        # Default position of the lens (can be improved by user)
+        FAV_POS_ACTIVE: {"x": -0.045} # m
+    },
     affects: ["Camera", "Spectral Camera"],
 }
 
@@ -340,8 +344,12 @@ SPARC2: {
         port: "/dev/fake6",
         address: null,
         axes: ["y", "x"],
-        ustepsize: [2.e-6, 2.e-6], # m/µstep
+        ustepsize: [2.e-6, 2.e-6], # m/µstep (big, for the simulator to move fast)
         refproc: "Standard",
+    },
+    metadata: {
+        # Default position of the mirror engaged (will be improved during alignment)
+        FAV_POS_ACTIVE: {"x": 200.e-3, "y": 10.e-3},  # m, m
     },
 }
 

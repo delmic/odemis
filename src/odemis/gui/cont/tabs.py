@@ -833,8 +833,6 @@ MIRROR_ENGAGED = 3
 
 # Position of the mirror to be under the e-beam, when we don't know better
 # Note: the exact position is reached by mirror alignment procedure
-# FIXME: Use a better way to allow easy config of the default engaged pos (save in config file?)
-MIRROR_POS_DEFAULT_ENGAGED = {"x": 200e-3, "y": 10e-3}
 MIRROR_POS_PARKED = {"x": 0, "y": 0} # (Hopefully) constant, and same as reference position
 MIRROR_ONPOS_RADIUS = 5e-3  # m, distance from a position that is still considered that position
 
@@ -850,7 +848,10 @@ class ChamberTab(Tab):
         self._move_future = model.InstantaneousFuture()
 
         # Position to where to go when requested to be engaged
-        self._pos_engaged = MIRROR_POS_DEFAULT_ENGAGED
+        try:
+            self._pos_engaged = main_data.mirror.getMetadata()[model.MD_FAV_POS_ACTIVE]
+        except KeyError:
+            logging.exception("Mirror actuator has not metadata FAV_POS_ACTIVE")
 
         mstate = self._get_mirror_state()
         # If mirror stage not engaged, make this tab the default
@@ -2490,6 +2491,8 @@ class Sparc2AlignTab(Tab):
         # Bind moving buttons & keys
         self._actuator_controller = ActuatorController(tab_data, panel, "")
         self._actuator_controller.bind_keyboard(panel)
+
+        # TODO: update MD_FAV_POS_ACTIVE of lens-mover and mirror
 
         if main_data.focus:
             # TODO: focus position axis -> AxisConnector
