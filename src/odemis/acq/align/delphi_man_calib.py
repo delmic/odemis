@@ -35,16 +35,92 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+import collections
 import logging
+import math
 from odemis import model
-import odemis.acq.align.delphi as aligndelphi
-import sys
 from odemis.acq import align
 from odemis.gui.conf import get_calib_conf
-import math
-from odemis.acq.align import autofocus
+import sys
+import tty
+import termios
+import threading
+
+import odemis.acq.align.delphi as aligndelphi
+
 
 logging.getLogger().setLevel(logging.WARNING)
+
+
+
+def getch():
+    """
+    Get character from keyboard
+    """
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setraw(sys.stdin.fileno())
+        ch = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return ch
+
+
+class ArrowFocus():
+    """
+    Use keyboard arrows to move focus actuators by stepsize.
+    """
+    def __init__(self, opt_focus, ebeam_focus, opt_stepsize, ebeam_stepsize):
+        self.opt_focus = opt_focus
+        self.ebeam_focus = ebeam_focus
+        self.opt_stepsize = opt_stepsize
+        self.ebeam_stepsize = ebeam_stepsize
+        # Queue maintaining moves to be done
+        self._moves_ebeam = collections.deque()
+        self._moves_opt = collections.deque()
+        self._acc_move_opt = 0
+        self._move_must_stop = threading.Event()
+
+    def _move_focus(self):
+        while not self._move_must_stop.is_set():
+            if not self._moves_ebeam:
+                pass
+            else:
+                mov = self._moves_ebeam.popleft()
+                f = self.ebeam_focus.moveRel({'z': mov})
+                f.result()
+            if not self._moves_opt:
+                pass
+            else:
+                mov = self._moves_opt.popleft()
+                f = self.opt_focus.moveRel({'z': mov})
+                f.result()
+
+    def focusByArrow(self):
+        target = self._move_focus
+        self._focus_thread = threading.Thread(target=target,
+                name="Arrow focus thread")
+        self._focus_thread.start()
+        while True:
+            c = getch()
+            # check for ESC char
+            if c == '\x1b':
+                unused = getch()
+                c = getch()
+                if c == 'A':
+                    self._moves_ebeam.append(self.ebeam_stepsize)
+                elif c == 'B':
+                    self._moves_ebeam.append(-self.ebeam_stepsize)
+                elif c == 'C':
+                    self._moves_opt.append(self.opt_stepsize)
+                elif c == 'D':
+                    self._moves_opt.append(-self.opt_stepsize)
+            # break when Enter is pressed
+            elif ord(c) == 13:
+                self._move_must_stop.set()
+                self._focus_thread.join(10)
+                break
 
 
 def main(args):
@@ -182,7 +258,7 @@ def main(args):
                                                                 ebeam_focus, known_focus=None, manual=True)
                     new_first_hole, new_second_hole, new_hole_focus = hole_detectionf.result()
                     new_hole_focus = ebeam_focus.position.value.get('z')
-                    print '\033[1;35m'
+                    print '\033[1;36m'
                     print "Values computed: 1st hole: " + str(new_first_hole)
                     print "                 2st hole: " + str(new_second_hole)
                     print "                 hole focus: " + str(new_hole_focus)
@@ -252,7 +328,7 @@ def main(args):
                     pure_offset = acc_offset
                     new_offset = ((acc_offset[0] / new_scaling[0]), (acc_offset[1] / new_scaling[1]))
 
-                    print '\033[1;35m'
+                    print '\033[1;36m'
                     print "Values computed: offset: " + str(new_offset)
                     print "                 scaling: " + str(new_scaling)
                     print "                 rotation: " + str(new_rotation)
@@ -320,7 +396,7 @@ def main(args):
                     hfw_shiftf = aligndelphi.HFWShiftFactor(detector, escan, sem_stage, ebeam_focus, hole_focus)
                     new_hfwa = hfw_shiftf.result()
 
-                    print '\033[1;35m'
+                    print '\033[1;36m'
                     print "Values computed: resolution-a: " + str(new_resa)
                     print "                 resolution-b: " + str(new_resb)
                     print "                 hfw-a: " + str(new_hfwa)
@@ -363,7 +439,8 @@ def main(args):
                     f = focus.moveAbs({"z": center_focus})
                     f.result()
 
-                # Focus the CL spot using SEM focus
+                # Run the optical fine alignment
+                # TODO: reuse the exposure time
                 # Configure CCD and e-beam to write CL spots
                 ccd.binning.value = (1, 1)
                 ccd.resolution.value = ccd.resolution.range[1]
@@ -374,27 +451,11 @@ def main(args):
                 escan.translation.value = (0, 0)
                 escan.shift.value = (0, 0)
                 escan.dwellTime.value = 5e-06
-                det_dataflow = detector.data
-
-                # Refocus the SEM
-                escan.resolution.value = (512, 512)
-                msg = "\033[1;34mPlease turn on the SEM stream and focus the SEM image if needed. Then turn off the stream and press Enter ...\033[1;m"
-                raw_input(msg)
-
-                # Run the optical fine alignment
-                # TODO: reuse the exposure time
-                # Configure CCD and e-beam to write CL spots
-                ccd.binning.value = (1, 1)
-                ccd.resolution.value = ccd.resolution.range[1]
-                ccd.exposureTime.value = 900e-03
-                escan.scale.value = (1, 1)
-                escan.resolution.value = (1, 1)
-                escan.translation.value = (0, 0)
-                escan.shift.value = (0, 0)
-                escan.dwellTime.value = 5e-06
                 detector.data.subscribe(_discard_data)
-                msg = "\033[1;34mPlease turn on the Optical stream, set Power to 0 Watt and focus the image so you have a clearly visible spot. Then turn off the stream and press Enter...\033[1;m"
-                raw_input(msg)
+                print "\033[1;34mPlease turn on the Optical stream, set Power to 0 Watt and focus the image so you have a clearly visible spot.\033[1;m"
+                print "\033[1;34mUse the up and down arrows to move the optical focus and right and left arrows to move the SEM focus. Then turn off the stream and press Enter ...\033[1;m"
+                ar = ArrowFocus(focus, ebeam_focus, ccd.depthOfField.value, escan.depthOfField.value)
+                ar.focusByArrow()
                 print "\033[1;30mFine alignment in progress, please wait...\033[1;m"
                 detector.data.unsubscribe(_discard_data)
                 try:
@@ -413,7 +474,7 @@ def main(args):
                     new_irot = -trans_md[model.MD_ROTATION_COR] % (2 * math.pi)
                     new_ishear = skew_md[model.MD_SHEAR_COR]
                     new_iscale_xy = skew_md[model.MD_PIXEL_SIZE_COR]
-                    print '\033[1;35m'
+                    print '\033[1;36m'
                     print "Values computed: scale: " + str(new_iscale)
                     print "                 rotation: " + str(new_irot)
                     print "                 scale-xy: " + str(new_iscale_xy)
@@ -429,8 +490,8 @@ def main(args):
                                scaling, rotation, iscale, irot, iscale_xy, ishear,
                                resa, resb, hfwa, spotshift)
                     break
-                except IOError:
-                    print "\033[1;31mSEM image calibration failed.\033[1;m"
+                except ValueError:
+                    print "\033[1;31mFine alignment failed.\033[1;m"
             else:
                 break
 
