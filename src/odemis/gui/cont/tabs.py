@@ -2537,7 +2537,7 @@ class Sparc2AlignTab(Tab):
 
         # the "MoI" value bellow the chronogram
         lbl_moi, txt_moi = cont.add_text_field("Moment of inertia", readonly=True)
-        tooltip_txt = "Moment of inertia at the center"
+        tooltip_txt = "Moment of inertia at the center (smaller is better)"
         lbl_moi.SetToolTipString(tooltip_txt)
         txt_moi.SetToolTipString(tooltip_txt)
         # Change font size and colour
@@ -2547,8 +2547,8 @@ class Sparc2AlignTab(Tab):
         txt_moi.SetForegroundColour(odemis.gui.FG_COLOUR_MAIN)
         self._txt_moi = txt_moi
 
-        lbl_ss, txt_ss = cont.add_text_field("Spot size", readonly=True)
-        tooltip_txt = "Spot size at the center"
+        lbl_ss, txt_ss = cont.add_text_field("Spot intensity", readonly=True)
+        tooltip_txt = "Spot intensity at the center (bigger is better)"
         lbl_ss.SetToolTipString(tooltip_txt)
         txt_ss.SetToolTipString(tooltip_txt)
         # Change font size and colour
@@ -2720,11 +2720,11 @@ class Sparc2AlignTab(Tab):
         # To be sure, we recompute it every time
         center = rgbim.shape[-1] // 2, rgbim.shape[-2] // 2  # px
         moi = self._moi_stream.getRawValue(center)
-        ss = self._moi_stream.getSpotSize()
+        ss = self._moi_stream.getSpotIntensity()
 
         # If value is None => text is ""
         self._txt_moi.SetValue(units.readable_str(moi, sig=3))
-        self._txt_ss.SetValue(units.readable_str(ss, unit="px", sig=3))
+        self._txt_ss.SetValue(units.readable_str(ss, sig=3))
 
     def Show(self, show=True):
         Tab.Show(self, show=show)

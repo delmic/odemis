@@ -79,20 +79,20 @@ def MomentOfInertia(data, background=None):
     return Mdist
 
 
-def SpotSize(data, background=None):
+def SpotIntensity(data, background=None):
     """
-    Gives an estimation of the spot size given the optical and background image.
-    The smaller the size is, the more "spotty" the spot is.
-    Rather than an actual spot size measurement, it provides a ratio that is
-    comparable to the same measurement for another image.
+    Gives an estimation of the spot intensity given the optical and background image.
+    The bigger the value is, the more "spotty" the spot is.
+    It provides a ratio that is comparable to the same measurement for another
+    image, but it is not possible to compare images with different dimensions (binning).
     data (model.DataArray): The optical image
     background (None or model.DataArray): Background image that we use for subtraction
-    returns (0<float): spot size estimation (in px)
+    returns (0<=float<=1): spot intensity estimation
     """
     data0 = _SubtractBackground(data, background)
     total = data0.sum()
     if total == 0:
-        return float("inf")  # No data, no spot => same as hugely spread spot
+        return 0  # No data, no spot => same as hugely spread spot
 
     # center of mass
     offset = FindCenterCoordinates(data0)
@@ -100,8 +100,8 @@ def SpotSize(data, background=None):
     center = tuple(a + b for a, b in zip(im_center, offset))
     neighborhood = data0[(center[1] - 1):(center[1] + 2),
                          (center[0] - 1):(center[0] + 2)]
-    spot_size = neighborhood.sum() / total
-    return spot_size
+    intens = neighborhood.sum() / total
+    return intens
 
 
 # def FindSubCenterCoordinates(subimages):

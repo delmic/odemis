@@ -708,7 +708,13 @@ class MomentOfInertiaLiveStream(CCDSettingsStream):
         return (DataArray): 3D DataArray
         """
         rgbim = img.DataArray2RGB(data)
+        # Inverse the contrast, because the smallest the MoI, the brighter the
+        # pixel should be.
+        rgbim = 255 - rgbim
+
         # Just keep the red level for non valid/clipping pixels
+        # Note that when there is clipping, typically the MoI will be small, so
+        # the pixel will be bright, so the red will be visible.
         for (x, y), v in numpy.ndenumerate(valid):
             if not v:
                 rgbim[x, y, 1:] = 0
@@ -773,9 +779,9 @@ class MomentOfInertiaLiveStream(CCDSettingsStream):
             return None
 
     # TODO: take as argument the pixel position?
-    def getSpotSize(self):
+    def getSpotIntensity(self):
         """
-        return (0<float): spot size (in px)
+        return (0<=float<=1): spot intensity
         """
         raw = self.raw
         if len(raw) >= 3:
