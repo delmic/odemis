@@ -65,6 +65,7 @@ class TestCommandLine(unittest.TestCase):
                    "semantic-error-2.odm.yaml",
                    # This one can only be detected on a real instantiation
                    # "semantic-error-3.odm.yaml",
+                   "semantic-error-md.odm.yaml",
                    ]
 
         i = 0

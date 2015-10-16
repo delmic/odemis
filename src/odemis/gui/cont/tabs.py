@@ -833,8 +833,6 @@ MIRROR_ENGAGED = 3
 
 # Position of the mirror to be under the e-beam, when we don't know better
 # Note: the exact position is reached by mirror alignment procedure
-# FIXME: Use a better way to allow easy config of the default engaged pos (save in config file?)
-MIRROR_POS_DEFAULT_ENGAGED = {"x": 200e-3, "y": 10e-3}
 MIRROR_POS_PARKED = {"x": 0, "y": 0} # (Hopefully) constant, and same as reference position
 MIRROR_ONPOS_RADIUS = 5e-3  # m, distance from a position that is still considered that position
 
@@ -850,7 +848,10 @@ class ChamberTab(Tab):
         self._move_future = model.InstantaneousFuture()
 
         # Position to where to go when requested to be engaged
-        self._pos_engaged = MIRROR_POS_DEFAULT_ENGAGED
+        try:
+            self._pos_engaged = main_data.mirror.getMetadata()[model.MD_FAV_POS_ACTIVE]
+        except KeyError:
+            logging.exception("Mirror actuator has no metadata FAV_POS_ACTIVE")
 
         mstate = self._get_mirror_state()
         # If mirror stage not engaged, make this tab the default
@@ -2344,6 +2345,14 @@ class Sparc2AlignTab(Tab):
         tab_data = guimod.Sparc2AlignGUIData(main_data)
         super(Sparc2AlignTab, self).__init__(name, button, panel, main_frame, tab_data)
 
+        # Reference and move the lens to its default position
+        if not main_data.lens_mover.referenced.value["x"]:
+            # TODO: have the actuator automatically reference on init?
+            f = main_data.lens_mover.reference({"x"})
+            f.add_done_callback(self._moveLensToActive)
+        else:
+            self._moveLensToActive()
+
         # Documentation text on the left & right panel for mirror alignement
         doc_path = pkg_resources.resource_filename("odemis.gui", "doc/sparc2_moi_procedure.html")
         panel.html_alignment_doc.SetBorders(0)  # sizer already give us borders
@@ -2491,6 +2500,8 @@ class Sparc2AlignTab(Tab):
         self._actuator_controller = ActuatorController(tab_data, panel, "")
         self._actuator_controller.bind_keyboard(panel)
 
+        # TODO: update MD_FAV_POS_ACTIVE of lens-mover and mirror
+
         if main_data.focus:
             # TODO: focus position axis -> AxisConnector
             z = main_data.focus.axes["z"]
@@ -2546,6 +2557,21 @@ class Sparc2AlignTab(Tab):
         txt_ss.SetFont(f)
         txt_ss.SetForegroundColour(odemis.gui.FG_COLOUR_MAIN)
         self._txt_ss = txt_ss
+
+    def _moveLensToActive(self, f=None):
+        """
+        Move the first lens (lens-mover) to its default active position
+        f (future): future of the referencing
+        """
+        if f:
+            f.result()  # to fail & log if the referencing failed
+
+        lm = self.tab_data_model.main.lens_mover
+        try:
+            lpos = lm.getMetadata()[model.MD_FAV_POS_ACTIVE]
+        except KeyError:
+            logging.exception("Lens-mover actuator has no metadata FAV_POS_ACTIVE")
+        lm.moveAbs(lpos)
 
     def _onClickAlignButton(self, evt):
         """

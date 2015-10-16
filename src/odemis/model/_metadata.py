@@ -94,3 +94,7 @@ MD_RESOLUTION_SLOPE = "Resolution slope"  # (float, float) resolution related SE
 MD_RESOLUTION_INTERCEPT = "Resolution intercept"  # (float, float) resolution related SEM image shift, intercept of linear fit
 MD_HFW_SLOPE = "HFW slope"  # (float, float) HFW related SEM image shift, slope of linear fit
 MD_SPOT_SHIFT = "Spot shift"  # (float, float), SEM spot shift in percentage of HFW
+
+# The following metadata is used to store specific known positions for the
+# actuators.
+MD_FAV_POS_ACTIVE = "Favourite position active"  # dict of str -> float representing a good position for being "active" (eg, mirror engaged, lens in use)

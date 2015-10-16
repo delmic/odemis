@@ -386,7 +386,9 @@ class PM8742(model.Actuator):
         axes (set of str): names of the axes to update or None if all should be
           updated
         """
-        pos = self.position.value.copy()
+        # uses the current values (converted to internal representation)
+        pos = self._applyInversion(self.position.value)
+
         for n, i in self._name_to_axis.items():
             if axes is None or n in axes:
                 pos[n] = self.GetPosition(i) * self._stepsize[i - 1]

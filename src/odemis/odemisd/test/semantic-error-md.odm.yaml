@@ -1,0 +1,29 @@
+Optical: {
+    class: Microscope,
+    role: epifluorescent,
+    emitters: [Light],
+    detectors: ["Andor SimCam"],
+    actuators: ["Stage"],
+}
+
+Light: {
+    class: simulated.Light,
+    role: brightlight,
+    affects: ["Andor SimCam"]
+}
+
+"Andor SimCam": {
+    class: andorcam3.AndorCam3,
+    role: ccd,
+    init: {device: 1} # 1 is almost always SimCam
+}
+
+"Stage": {
+    class: simulated.Stage,
+    role: stage,
+    init: {axes: ["x", "y"]},
+    affects: ["Andor SimCam"],
+    metadata: {
+        BAD_NAME: {'z': 0.06},
+    }
+}
