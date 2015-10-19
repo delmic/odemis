@@ -101,7 +101,8 @@ class TMCLController(model.Actuator):
     Note: it must be set to binary communication mode (that's the default).
     """
     def __init__(self, name, role, port, axes, ustepsize, address=None,
-                 refproc=None, refswitch=None, temp=False, **kwargs):
+                 refproc=None, refswitch=None, temp=False,
+                 minpower=10.8, **kwargs):
         """
         port (str): port name. Can be a pattern, in which case all the ports
           fitting the pattern will be tried.
@@ -121,6 +122,8 @@ class TMCLController(model.Actuator):
           is accepted.
         temp (bool): if True, will read the temperature from the analogue input
          (10 mV <-> 1 °C)
+        minpower (0<=float): minimum voltage supplied to be functional. If the
+          device receives less than this, an error will be reported at initialisation.
         inverted (set of str): names of the axes which are inverted (IOW, either
          empty or the name of the axis)
         """
@@ -198,9 +201,9 @@ class TMCLController(model.Actuator):
         if name is None and role is None: # For scan only
             return
 
+        self._minpower = minpower
         if not self._isFullyPowered():
-            # Only a warning, as the power can be connected afterwards
-            logging.warning("Device %s has no power, the motor will not move", name)
+            raise model.HwError("Device %s has no power, check the power supply input" % name)
         # TODO: add a .powerSupply readonly VA ? Only if not already provided by HwComponent.
 
         # will take care of executing axis move asynchronously
@@ -283,7 +286,18 @@ class TMCLController(model.Actuator):
         Initialise the given axis with "good" values for our needs (Delphi)
         axis (int): axis number
         """
-        self.MoveRelPos(axis, 0) # activate parameter with dummy move
+        # On the TMCM-6110, if there is a power supply connected, but it's not
+        # actually giving power, the board will boot (with the USB power) and
+        # only restore some values. When the power supply is turned on, most of
+        # the values are then correctly set... but not all. Seems to only affect
+        # acceleration and soft stop flag, but to be safe, we restore everything
+        # known to matter.
+        # Bug reported to Trinamic 2015-10-19.
+        for p in (4, 5, 6, 7, 140, 149, 153, 154, 193, 194, 214):
+            try:
+                self.RestoreAxisParam(axis, p)
+            except TMCLError:
+                logging.warning("Failed to restore axis param A%d %d", axis, p)
 
         self._refproc_cancelled[axis] = threading.Event()
         self._refproc_lock[axis] = threading.Lock()
@@ -828,7 +842,7 @@ class TMCLController(model.Actuator):
         val = self.GetIO(1, 8)  # 1 <-> 0.1 V
         v_supply = 0.1 * val
         logging.debug("Supply power reported is %.1f V", v_supply)
-        return (v_supply >= 10.8)  # check if supply is >= 12V - 10%
+        return (v_supply >= self._minpower)
 
         # Old method was to use a strange fact that programs will not run if the
         # device is not self-powered.

@@ -296,7 +296,8 @@ def main(args):
         # Number of axes doesn't matter
         ctrl = tmcm.TMCLController("TMCL controller", "config",
                                    port=port, address=options.add,
-                                   axes=["a"], ustepsize=[1e-9])
+                                   axes=["a"], ustepsize=[1e-9],
+                                   minpower=1)  # No need for external power supply
         logging.info("Connected to %s", ctrl.hwVersion)
 
         if options.read:
