@@ -1,0 +1,4 @@
+# Allow standard user to read the Griffin powermate (= fancy scroll wheel)
+
+# Griffin powermate
+SUBSYSTEMS=="usb", ATTRS{idProduct}=="0410", ATTRS{idVendor}=="077d", GROUP="odemis", MODE="660"
