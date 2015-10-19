@@ -255,7 +255,7 @@ def guessDRange(data):
                 idt = numpy.iinfo(data.dtype)
                 drange = (idt.min, idt.max)
     else:
-        raise TypeError("Cannot guess drange for data of kind %s", data.dtype.kind)
+        raise TypeError("Cannot guess drange for data of kind %s" % data.dtype.kind)
 
     return drange
 
