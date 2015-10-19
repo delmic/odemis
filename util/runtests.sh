@@ -12,6 +12,9 @@ export NOMANUAL=1
 # This environment variable (should) make the driver test not try to use real hardware (only simulator)
 export TEST_NOHW=1
 
+echo "Total number of lines of code (not including test cases):"
+find src/ -name "*.py" -a -not -name "*_test.py" -print0 | wc -l --files0-from=- | tail -1
+
 # Not related to tests, but to QA in general: Expections usually take only 1 argument
 # So a comma is probably a sign of syntax error and should be replace by a %
 echo "These files might have syntax error when raising an exception:"
