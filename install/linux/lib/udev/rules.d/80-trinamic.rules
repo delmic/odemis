@@ -6,3 +6,5 @@
 SUBSYSTEMS=="usb", ATTRS{idProduct}=="06cc", ATTRS{idVendor}=="16d0", KERNEL=="ttyACM[0-9]*", SYMLINK="ttyTMCM%n", GROUP="odemis"
 # TMCM-6110
 SUBSYSTEMS=="usb", ATTRS{idProduct}=="0650", ATTRS{idVendor}=="16d0", KERNEL=="ttyACM[0-9]*", SYMLINK="ttyTMCM%n", GROUP="odemis"
+# TMCM-6110 v1.35
+SUBSYSTEMS=="usb", ATTRS{idProduct}=="0100", ATTRS{idVendor}=="2a3c", KERNEL=="ttyACM[0-9]*", SYMLINK="ttyTMCM%n", GROUP="odemis"
