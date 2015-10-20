@@ -53,7 +53,6 @@ KB_SECOM = {
 }
 
 KB_SPARC = {
-    # TODO: check this works => doesn't it need to be called mirror_x|y|r ?
     wx.WXK_LEFT: ("mirror", "x", -1),  # so that image goes in same direction
     wx.WXK_RIGHT: ("mirror", "x", 1),
     wx.WXK_DOWN: ("mirror", "y", 1),
@@ -73,17 +72,17 @@ KB_SPARC = {
 }
 
 KB_SPARC2 = {
-    wx.WXK_LEFT: ("mirror", "x", -1), # so that image goes in same direction
-    wx.WXK_RIGHT: ("mirror", "x", 1),
-    wx.WXK_DOWN: ("mirror", "y", 1),
-    wx.WXK_UP: ("mirror", "y", -1),
+    wx.WXK_LEFT: ("mirror_xy", "x", -1),
+    wx.WXK_RIGHT: ("mirror_xy", "x", 1),
+    wx.WXK_DOWN: ("mirror_xy", "y", 1),
+    wx.WXK_UP: ("mirror_xy", "y", -1),
     wx.WXK_NUMPAD_LEFT: ("lens_mover", "x", -1),
     wx.WXK_NUMPAD_RIGHT: ("lens_mover", "x", 1),
     # same but with NumLock
     wx.WXK_NUMPAD4: ("lens_mover", "x", -1),
     wx.WXK_NUMPAD6: ("lens_mover", "x", 1),
-    wx.WXK_PAGEDOWN: ("spec_focus", "focus", -1),
-    wx.WXK_PAGEUP: ("spec_focus", "focus", 1),
+    wx.WXK_PAGEDOWN: ("spectrograph", "focus", -1),
+    wx.WXK_PAGEUP: ("spectrograph", "focus", 1),
 }
 
 KEY_BINDINGS = {

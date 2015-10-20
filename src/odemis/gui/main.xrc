@@ -2384,7 +2384,7 @@
                         <cellpos>2,0</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_m_mirror_y">
+                        <object class="ImageTextButton" name="btn_m_mirror_xy_y">
                           <size>64,-1</size>
                           <height>48</height>
                           <face_colour>def</face_colour>
@@ -2406,7 +2406,7 @@
                         <cellpos>1,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_p_mirror_y">
+                        <object class="ImageTextButton" name="btn_p_mirror_xy_y">
                           <size>64,-1</size>
                           <height>48</height>
                           <face_colour>def</face_colour>
@@ -2428,7 +2428,7 @@
                         <cellpos>3,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_m_mirror_x">
+                        <object class="ImageTextButton" name="btn_m_mirror_xy_x">
                           <size>64,-1</size>
                           <height>48</height>
                           <face_colour>def</face_colour>
@@ -2448,7 +2448,7 @@
                         <cellpos>2,1</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_p_mirror_x">
+                        <object class="ImageTextButton" name="btn_p_mirror_xy_x">
                           <size>64,-1</size>
                           <height>48</height>
                           <face_colour>def</face_colour>
@@ -2996,7 +2996,6 @@
               <flag>wxBOTTOM|wxEXPAND</flag>
               <border>10</border>
             </object>
-            
             <object class="sizeritem">
               <object class="ImageButton" name="btn_log">
                 <icon>img/icon/ico_chevron_up.png</icon>
@@ -3462,7 +3461,6 @@
               <border>10</border>
             </object>
             <orient>wxVERTICAL</orient>
-            
             <object class="sizeritem">
               <object class="ImageButton" name="btn_log">
                 <icon>img/icon/ico_chevron_up.png</icon>
@@ -3817,7 +3815,6 @@
               <flag>wxBOTTOM|wxEXPAND</flag>
               <border>10</border>
             </object>
-            
             <object class="sizeritem">
               <object class="ImageButton" name="btn_log">
                 <icon>img/icon/ico_chevron_up.png</icon>

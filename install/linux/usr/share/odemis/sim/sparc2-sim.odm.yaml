@@ -6,8 +6,8 @@ SPARC2: {
                "Optical Path Properties",
                "Camera", "Spectrometer", "CL Detector",
                "Spec Filter Wheel", "Spec CCD Flipper", "Spectrograph focus",
-               "Mirror Actuators", "Slit",
-               "CL Selector", "CL Filter Wheel",
+               "Mirror Actuators", "Mirror Actuators in XY referential",
+               "Slit", "CL Selector", "CL Filter Wheel",
                "Lens1 Mover", "Lens2 Switch"],
 }
 
@@ -337,19 +337,33 @@ SPARC2: {
 }
 
 # Controller for moving the 'Redux' stage
+# Note: the S axis can _only_ be moved when the l axis is near the active/engaged position
 "Mirror Actuators": {
     class: tmcm.TMCLController,
     role: "mirror",
     init: {
         port: "/dev/fake6",
         address: null,
-        axes: ["y", "x"],
-        ustepsize: [2.e-6, 2.e-6], # m/µstep (big, for the simulator to move fast)
+        axes: ["s", "l"],
+        ustepsize: [1.e-6, 1.e-6], # m/µstep (big, for the simulator to move fast)
         refproc: "Standard",
     },
     metadata: {
         # Default position of the mirror engaged (will be improved during alignment)
-        FAV_POS_ACTIVE: {"x": 200.e-3, "y": 10.e-3},  # m, m
+        FAV_POS_ACTIVE: {"l": 70.e-3, "s": 5.e-3},  # m, m
+    },
+}
+
+# Internal component to convert between the referential of the mirror actuators
+# and the X/Y referential of the SEM. Used by the mirror alignment functions.
+"Mirror Actuators in XY referential": {
+    class: actuator.ConvertStage,
+    role: "mirror-xy",
+    children: {"orig": "Mirror Actuators"},
+    init: {
+        axes: ["s", "l"], # mapped respectively to X, Y
+        rotation: 1.04719755, # rad (= 60°)
+        # Note: if you want to use absolute moves, add a "translation" too
     },
 }
 

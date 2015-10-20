@@ -1066,7 +1066,7 @@ class MomentOfInertiaMDStream(SEMCCDMDStream):
             raise IOError("Cannot do multiple acquisitions simultaneously")
 
         # Reset some data
-        self._center_image_i = tuple(v // 2 for v in self._rep_stream.repetition.value)
+        self._center_image_i = tuple((v - 1) // 2 for v in self._rep_stream.repetition.value)
         return super(MomentOfInertiaMDStream, self).acquire()
 
     def _preprocessRepData(self, data, i):

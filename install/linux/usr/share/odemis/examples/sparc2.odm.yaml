@@ -2,12 +2,12 @@
 SPARC2: {
     class: Microscope,
     role: sparc2,
-    children: ["SEM E-beam", "SEM Detector","Calibration Light",
+    children: ["SEM E-beam", "SEM Detector", "Calibration Light",
                "Optical Path Properties",
                "Camera", "Spectrometer", "CL Detector",
                "Spec Filter Wheel", "Spec CCD Flipper", "Spectrograph focus",
-               "Mirror Actuators", "Slit",
-               "CL Selector", "CL Filter Wheel",
+               "Mirror Actuators", "Mirror Actuators in XY referential",
+               "Slit", "CL Selector", "CL Filter Wheel",
                "Lens1 Mover", "Lens2 Switch"],
 }
 
@@ -69,25 +69,25 @@ SPARC2: {
     affects: ["SEM Detector", "Spectrometer", "Angular Camera"] # affects the CCD in case of cathodoluminescence
 }
 
-# Must be connected on AI 0/AI GND
+# Must be connected on AI1/AI9 (differential)
 "SEM Detector": { # aka ETD
     # Internal child of SEM Scan Interface, so no class
     role: se-detector,
     init: {
-        channel: 0,
+        channel: 1,
         limits: [-3, 3], # V
     },
 }
 
 # CL PMT: composed of the control unit + the PMT output connected to the DAQ board
 
-# Must be connected on AI 1/AI GND
+# Must be connected on AI0/AI8 (differential)
 "CL PMT": { # the raw detector of the PMT
     # Internal child of SEM Scan Interface, so no class but instead a creator
     creator: "SEM Scan Interface",
     role: null,
     init: {
-        channel: 1,
+        channel: 0,
         limits: [3, 0], # V, with contrast reversed
     },
 }
@@ -156,7 +156,7 @@ SPARC2: {
     power_supplier: "Power Control Unit",
     children: {"ccd": "Spectral Camera"},
     init: {
-        device: "fake",
+        device: 0,
         slits: {1: "slit-in", # INPUT_SIDE
         },
         bands: { # The filters in the filter-wheel
@@ -166,7 +166,7 @@ SPARC2: {
             4: "polariser",
             6: "pass-through"
         },
-        fstepsize: 8.e-9, # m, size of one focus step
+        fstepsize: 10.9e-6, # m, size of one focus step
     },
     affects: ["Camera", "Spectral Camera"],
 }
@@ -261,8 +261,8 @@ SPARC2: {
     init: {
         axis_name: "l2",
         positions: {
-            -4.e-3: "on",
-            -0.045: "off", # completely out of the path
+            0.0031124: "on",
+            -0.048192: "off", # completely out of the path
         },
     },
     affects: ["Camera", "Spectral Camera"],
@@ -277,7 +277,7 @@ SPARC2: {
         axis_name: "slit",
         positions: {
             0: "on", # fully opened
-            -0.0012: "off", # opening based on the small slit
+            0.0012: "off", # opening based on the small slit
         },
     },
     affects: ["Camera", "Spectral Camera"],
@@ -325,13 +325,26 @@ SPARC2: {
     init: {
         port: "/dev/ttyTMCM*",
         address: 4,
-        axes: ["y", "x"],
+        axes: ["s", "l"],
         ustepsize: [5.9e-9, 5.9e-9], # m/µstep
         refproc: "Standard",
     },
     metadata: {
         # Default position of the mirror engaged (will be improved during alignment)
-        FAV_POS_ACTIVE: {"x": 200.e-3, "y": 10.e-3},  # m, m
+        FAV_POS_ACTIVE: {"x": 0.069007226, "y": 0.0027454942},  # m, m
+    },
+}
+
+# Internal component to convert between the referential of the mirror actuators
+# and the X/Y referential of the SEM. Used by the mirror alignment functions.
+"Mirror Actuators in XY referential": {
+    class: actuator.ConvertStage,
+    role: "mirror-xy",
+    children: {"orig": "Mirror Actuators"},
+    init: {
+        axes: ["s", "l"], # mapped respectively to X, Y
+        rotation: 1.04719755, # rad (= 60°)
+        # Note: if you want to use absolute moves, add a "translation" too
     },
 }
 

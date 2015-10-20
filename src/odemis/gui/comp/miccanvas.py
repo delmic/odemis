@@ -1096,7 +1096,7 @@ class SparcARCanvas(DblMicroscopeCanvas):
     def __init__(self, *args, **kwargs):
         super(SparcARCanvas, self).__init__(*args, **kwargs)
         self.abilities -= {CAN_ZOOM, CAN_DRAG}
-        # same as flip argument of set_images(): int with wx.VERTICAL or wx.HORIZONTAL
+        # same as flip argument of set_images(): int with wx.VERTICAL or wx.HORIZONTAL or just use MD_FLIP
         self.flip = wx.VERTICAL  # TODO: default to 0 (and change in Viewport)
 
         self._mirror_ol = world_overlay.MirrorArcOverlay(self)

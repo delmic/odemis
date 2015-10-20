@@ -211,10 +211,10 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.btn_p_lens_mover_x = xrc.XRCCTRL(self, "btn_p_lens_mover_x")
         self.pnl_mirror = xrc.XRCCTRL(self, "pnl_mirror")
         self.slider_mirror = xrc.XRCCTRL(self, "slider_mirror")
-        self.btn_m_mirror_y = xrc.XRCCTRL(self, "btn_m_mirror_y")
-        self.btn_p_mirror_y = xrc.XRCCTRL(self, "btn_p_mirror_y")
-        self.btn_m_mirror_x = xrc.XRCCTRL(self, "btn_m_mirror_x")
-        self.btn_p_mirror_x = xrc.XRCCTRL(self, "btn_p_mirror_x")
+        self.btn_m_mirror_xy_y = xrc.XRCCTRL(self, "btn_m_mirror_xy_y")
+        self.btn_p_mirror_xy_y = xrc.XRCCTRL(self, "btn_p_mirror_xy_y")
+        self.btn_m_mirror_xy_x = xrc.XRCCTRL(self, "btn_m_mirror_xy_x")
+        self.btn_p_mirror_xy_x = xrc.XRCCTRL(self, "btn_p_mirror_xy_x")
         self.html_alignment_doc = xrc.XRCCTRL(self, "html_alignment_doc")
         self.btn_log = xrc.XRCCTRL(self, "btn_log")
         self.pnl_vp_grid = xrc.XRCCTRL(self, "pnl_vp_grid")
@@ -2854,7 +2854,7 @@ def __init_resources():
                         <cellpos>2,0</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_m_mirror_y">
+                        <object class="ImageTextButton" name="btn_m_mirror_xy_y">
                           <size>64,-1</size>
                           <height>48</height>
                           <face_colour>def</face_colour>
@@ -2876,7 +2876,7 @@ def __init_resources():
                         <cellpos>1,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_p_mirror_y">
+                        <object class="ImageTextButton" name="btn_p_mirror_xy_y">
                           <size>64,-1</size>
                           <height>48</height>
                           <face_colour>def</face_colour>
@@ -2898,7 +2898,7 @@ def __init_resources():
                         <cellpos>3,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_m_mirror_x">
+                        <object class="ImageTextButton" name="btn_m_mirror_xy_x">
                           <size>64,-1</size>
                           <height>48</height>
                           <face_colour>def</face_colour>
@@ -2918,7 +2918,7 @@ def __init_resources():
                         <cellpos>2,1</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_p_mirror_x">
+                        <object class="ImageTextButton" name="btn_p_mirror_xy_x">
                           <size>64,-1</size>
                           <height>48</height>
                           <face_colour>def</face_colour>
@@ -3466,7 +3466,6 @@ def __init_resources():
               <flag>wxBOTTOM|wxEXPAND</flag>
               <border>10</border>
             </object>
-            
             <object class="sizeritem">
               <object class="ImageButton" name="btn_log">
                 <icon>img_icon_ico_chevron_up_png</icon>
@@ -3932,7 +3931,6 @@ def __init_resources():
               <border>10</border>
             </object>
             <orient>wxVERTICAL</orient>
-            
             <object class="sizeritem">
               <object class="ImageButton" name="btn_log">
                 <icon>img_icon_ico_chevron_up_png</icon>
@@ -4287,7 +4285,6 @@ def __init_resources():
               <flag>wxBOTTOM|wxEXPAND</flag>
               <border>10</border>
             </object>
-            
             <object class="sizeritem">
               <object class="ImageButton" name="btn_log">
                 <icon>img_icon_ico_chevron_up_png</icon>

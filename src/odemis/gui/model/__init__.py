@@ -113,6 +113,7 @@ class MainGUIData(object):
         "ebeam-focus": "ebeam_focus",
         "overview-focus": "overview_focus",
         "mirror": "mirror",
+        "mirror-xy": "mirror_xy",
         "align": "aligner",
         "fiber-aligner": "fibaligner",
         "lens-mover": "lens_mover",  # lens1 of SPARCv2
@@ -143,6 +144,7 @@ class MainGUIData(object):
         self.focus = None  # actuator to change the camera focus
         self.aligner = None  # actuator to align ebeam/ccd (SECOM)
         self.mirror = None  # actuator to change the mirror position (SPARC)
+        self.mirror_xy = None  # mirror in X/Y referential (SPARCv2)
         self.fibaligner = None  # actuator to move/calibrate the fiber (SPARC)
         self.light = None  # epi-fluorescence light (SECOM/DELPHI)
         self.brightlight = None  # brightlight (no hardware has this yet)
@@ -511,7 +513,7 @@ class ActuatorGUIData(MicroscopyGUIData):
             })
         elif main.role == "sparc2":
             ss_def.update({
-                "mirror": (10e-6, [100e-9, 1e-3], "mirror", None),
+                "mirror": (10e-6, [100e-9, 1e-3], "mirror_xy", None),
             })
 
         # str -> VA: name (as the name of the attribute) -> step size (m)

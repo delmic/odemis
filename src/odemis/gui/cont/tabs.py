@@ -833,8 +833,8 @@ MIRROR_ENGAGED = 3
 
 # Position of the mirror to be under the e-beam, when we don't know better
 # Note: the exact position is reached by mirror alignment procedure
-MIRROR_POS_PARKED = {"x": 0, "y": 0} # (Hopefully) constant, and same as reference position
-MIRROR_ONPOS_RADIUS = 5e-3  # m, distance from a position that is still considered that position
+MIRROR_POS_PARKED = {"l": 0, "s": 0}  # (Hopefully) constant, and same as reference position
+MIRROR_ONPOS_RADIUS = 2e-3  # m, distance from a position that is still considered that position
 
 
 class ChamberTab(Tab):
@@ -918,10 +918,10 @@ class ChamberTab(Tab):
             return MIRROR_NOT_REFD
 
         pos = mirror.position.value
-        dist_parked = math.hypot(pos["x"] - MIRROR_POS_PARKED["x"],
-                                 pos["y"] - MIRROR_POS_PARKED["y"])
-        dist_engaged = math.hypot(pos["x"] - self._pos_engaged["x"],
-                                  pos["y"] - self._pos_engaged["y"])
+        dist_parked = math.hypot(pos["l"] - MIRROR_POS_PARKED["l"],
+                                 pos["s"] - MIRROR_POS_PARKED["s"])
+        dist_engaged = math.hypot(pos["l"] - self._pos_engaged["l"],
+                                  pos["s"] - self._pos_engaged["s"])
         if dist_parked <= MIRROR_ONPOS_RADIUS:
             return MIRROR_PARKED
         elif dist_engaged <= MIRROR_ONPOS_RADIUS:
@@ -950,12 +950,12 @@ class ChamberTab(Tab):
         # we could just map the current position on the segment. But we also
         # want to show a position "somewhere in the middle" when the mirror is
         # at a random bad position.
-        dist_parked = math.hypot(pos["x"] - MIRROR_POS_PARKED["x"],
-                                 pos["y"] - MIRROR_POS_PARKED["y"])
-        dist_engaged = math.hypot(pos["x"] - self._pos_engaged["x"],
-                                  pos["y"] - self._pos_engaged["y"])
-        tot_dist = math.hypot(MIRROR_POS_PARKED["x"] - self._pos_engaged["x"],
-                              MIRROR_POS_PARKED["y"] - self._pos_engaged["y"])
+        dist_parked = math.hypot(pos["l"] - MIRROR_POS_PARKED["l"],
+                                 pos["s"] - MIRROR_POS_PARKED["s"])
+        dist_engaged = math.hypot(pos["l"] - self._pos_engaged["l"],
+                                  pos["s"] - self._pos_engaged["s"])
+        tot_dist = math.hypot(MIRROR_POS_PARKED["l"] - self._pos_engaged["l"],
+                              MIRROR_POS_PARKED["s"] - self._pos_engaged["s"])
         ratio_to_engaged = dist_engaged / tot_dist
         ratio_to_parked = dist_parked / tot_dist
         if ratio_to_parked < ratio_to_engaged:
@@ -987,25 +987,32 @@ class ChamberTab(Tab):
             return self._on_cancel(evt)
 
         # Decide which move to do
+        # Note: s axis can only be moved when near engaged pos. So:
+        #  * when parking/referencing => move s first, then l
+        #  * when engaging => move l first, then s
         mstate = self._get_mirror_state()
         mirror = self.tab_data_model.main.mirror
         if mstate == MIRROR_NOT_REFD:
             # => Reference
-            f = mirror.reference(set(MIRROR_POS_PARKED.keys()))
+            # f = mirror.reference(set(MIRROR_POS_PARKED.keys()))
+            f1 = mirror.reference({"s"})
+            f2 = mirror.reference({"l"})
             btn_text = "PARKING MIRROR"
             # position doesn't change during referencing, so just pulse
             self._pulse_timer.Start(250.0)  # 4 Hz
         elif mstate == MIRROR_PARKED:
             # => Engage
-            f = mirror.moveAbs(self._pos_engaged)
+            f1 = mirror.moveAbs({"l": self._pos_engaged["l"]})
+            f2 = mirror.moveAbs({"s": self._pos_engaged["s"]})
             btn_text = "ENGAGING MIRROR"
         else:
             # => Park
-            f = mirror.moveAbs(MIRROR_POS_PARKED)
+            f1 = mirror.moveAbs({"l": MIRROR_POS_PARKED["l"]})
+            f2 = mirror.moveAbs({"s": MIRROR_POS_PARKED["s"]})
             btn_text = "PARKING MIRROR"
 
-        self._move_future = f
-        f.add_done_callback(self._on_move_done)
+        self._move_future = f2
+        f2.add_done_callback(self._on_move_done)
 
         self.tab_data_model.main.is_acquiring.value = True
 
@@ -2502,6 +2509,9 @@ class Sparc2AlignTab(Tab):
 
         # TODO: update MD_FAV_POS_ACTIVE of lens-mover and mirror
 
+        # TODO: warn user if the mirror stage is too far from the official engaged
+        # position. => The S axis will fail!
+
         if main_data.focus:
             # TODO: focus position axis -> AxisConnector
             z = main_data.focus.axes["z"]
@@ -2718,7 +2728,7 @@ class Sparc2AlignTab(Tab):
 
         # Note: center position is typically 4,4 as the repetition is fixed to 9x9.
         # To be sure, we recompute it every time
-        center = rgbim.shape[-1] // 2, rgbim.shape[-2] // 2  # px
+        center = (rgbim.shape[-1] - 1) // 2, (rgbim.shape[-2] - 1) // 2  # px
         moi = self._moi_stream.getRawValue(center)
         ss = self._moi_stream.getSpotIntensity()
 
