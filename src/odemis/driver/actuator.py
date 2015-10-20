@@ -88,7 +88,7 @@ class MultiplexActuator(model.Actuator):
         self._subfun = []
 
         children_axes = {} # dict actuator -> set of string (our axes)
-        for axis, (child, axis_mapped) in self._axis_to_child.items():
+        for axis, (child, ca) in self._axis_to_child.items():
             logging.debug("adding axis %s to child %s", axis, child.name)
             if child in children_axes:
                 children_axes[child].add(axis)
@@ -145,8 +145,7 @@ class MultiplexActuator(model.Actuator):
         # it's read-only, so we change it via _value
         pos = self._applyInversion(self._position)
         logging.debug("reporting position %s", pos)
-        self.position._value = pos
-        self.position.notify(pos)
+        self.position._set_value(pos, force_write=True)
 
     def _updateSpeed(self):
         """
@@ -160,9 +159,7 @@ class MultiplexActuator(model.Actuator):
         """
         update the referenced VA
         """
-        # it's read-only, so we change it via _value
-        self.referenced._value = self._referenced
-        self.referenced.notify(self._referenced)
+        self.referenced._set_value(self._referenced, force_write=True)
 
     def _setSpeed(self, value):
         """
@@ -209,7 +206,7 @@ class MultiplexActuator(model.Actuator):
             return futures[0]
         else:
             # TODO return future composed of multiple futures
-            return futures[0]
+            return futures[-1]
 
     @isasync
     def moveAbs(self, pos):
@@ -237,7 +234,7 @@ class MultiplexActuator(model.Actuator):
             return futures[0]
         else:
             # TODO return future composed of multiple futures
-            return futures[0]
+            return futures[-1]
 
     @isasync
     def reference(self, axes):
@@ -287,11 +284,10 @@ class MultiplexActuator(model.Actuator):
                 logging.warning("Stopping child actuator of '%s' is taking more than 1s", self.name)
 
 
-
 class CoupledStage(model.Actuator):
     """
-    Wrapper stage that takes as children the SEM sample stage and the 
-    ConvertStage. For each move to be performed CoupledStage moves, at the same 
+    Wrapper stage that takes as children the SEM sample stage and the
+    ConvertStage. For each move to be performed CoupledStage moves, at the same
     time, both stages.
     """
     def __init__(self, name, role, children, **kwargs):
@@ -370,7 +366,7 @@ class CoupledStage(model.Actuator):
                     scale=self._metadata.get(MD_PIXEL_SIZE_COR, (1, 1)),
                     rotation=self._metadata.get(MD_ROTATION_COR, 0),
                     translation=self._metadata.get(MD_POS_COR, (0, 0)))
-        
+
 #         if set(self._metadata.keys()) & {MD_PIXEL_SIZE_COR, MD_ROTATION_COR, MD_POS_COR}:
 #             # Schedule a null relative move, just to ensure the stages are
 #             # synchronised again (if some metadata is provided)
@@ -412,12 +408,12 @@ class CoupledStage(model.Actuator):
 
     def _doMoveAbs(self, pos):
         """
-        move to the position 
+        move to the position
         """
         f = self._master.moveAbs(pos)
         try:
             f.result()
-        finally: # synchornise slave position even if move failed
+        finally:  # synchronise slave position even if move failed
             # TODO: Move simultaneously based on the expected position, and
             # only if the final master position is different, move again.
             mpos = self._master.position.value
@@ -504,14 +500,14 @@ class CoupledStage(model.Actuator):
 
 class ConvertStage(model.Actuator):
     """
-    Stage wrapper component with X/Y axis that converts the target sample stage 
-    position coordinates to the objective lens position based one a given scale, 
-    offset and rotation. This way it takes care of maintaining the alignment of 
-    the two stages, as for each SEM stage move it is able to perform the 
+    Stage wrapper component with X/Y axis that converts the target sample stage
+    position coordinates to the objective lens position based one a given scale,
+    offset and rotation. This way it takes care of maintaining the alignment of
+    the two stages, as for each SEM stage move it is able to perform the
     corresponding “compensate” move in objective lens.
     """
     def __init__(self, name, role, children, axes,
-                 rotation=0, scale=None, translation=None):
+                 rotation=0, scale=None, translation=None, **kwargs):
         """
         children (dict str -> actuator): name to objective lens actuator
         axes (list of 2 strings): names of the axes for x and y
@@ -532,7 +528,7 @@ class ConvertStage(model.Actuator):
         # TODO: range of axes could at least be updated with scale + translation
         axes_def = {"x": self._child.axes[axes[0]],
                     "y": self._child.axes[axes[1]]}
-        model.Actuator.__init__(self, name, role, axes=axes_def)
+        model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
 
         # Rotation * scaling for convert back/forth between exposed and child
         self._MtoChild = numpy.array(
@@ -546,16 +542,13 @@ class ConvertStage(model.Actuator):
         # Offset between origins of the coordinate systems
         self._O = numpy.array([translation[0], translation[1]], dtype=numpy.float)
 
-
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
-        self.position = model.VigilantAttribute(
-                                    {"x": 0, "y": 0},
-                                    unit="m", readonly=True)
+        self.position = model.VigilantAttribute({"x": 0, "y": 0},
+                                                unit="m", readonly=True)
         # it's just a conversion from the child's position
         self._child.position.subscribe(self._updatePosition, init=True)
 
-        # No speed, not needed
-        # self.speed = model.MultiSpeedVA(init_speed, [0., 10.], "m/s")
+        # Speed & reference: it's complicated => user should look at the child
 
     def _convertPosFromChild(self, pos_child, absolute=True):
         # Object lens position vector
@@ -671,7 +664,6 @@ class AntiBacklashActuator(model.Actuator):
             isinstance(self._child.speed, model.VigilantAttributeBase)):
             self.speed = self._child.speed
 
-
     def terminate(self):
         if self._executor:
             self.stop()
@@ -774,7 +766,7 @@ class FixedPositionsActuator(model.Actuator):
         axis, child = children.items()[0]
         self._axis = axis
         self._child = child
-        self._axis_name = axis_name
+        self._caxis = axis_name
         self._positions = positions
         # Executor used to reference and move to nearest position
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
@@ -792,12 +784,10 @@ class FixedPositionsActuator(model.Actuator):
 
         ac = child.axes[axis_name]
         axes = {axis: model.Axis(choices=positions, unit=ac.unit)}  # TODO: allow the user to override the unit?
+
+        model.Actuator.__init__(self, name, role, axes=axes, children=children, **kwargs)
+
         self._position = {}
-
-        model.Actuator.__init__(self, name, role, axes=axes, children=children,
-                                **kwargs)
-
-        # position: special VA combining multiple VAs
         self.position = model.VigilantAttribute({}, readonly=True)
 
         logging.debug("Subscribing to position of child %s", child.name)
@@ -812,22 +802,23 @@ class FixedPositionsActuator(model.Actuator):
 
         # If the axis can be referenced => do it now (and move to a known position)
         # In case of cyclic move always reference
-        if (not self._referenced.get(axis, True)) or (self._cycle and (axis in self._referenced)):
+        if not self._referenced.get(axis, True) or (self._cycle and axis in self._referenced):
+            # The initialisation will fail if the referencing fails
             self.reference({axis}).result()
 
         # If not at a known position => move to the closest known position
-        nearest = util.find_closest(self._child.position.value[self._axis_name], self._positions.keys())
+        nearest = util.find_closest(self._child.position.value[self._caxis], self._positions.keys())
         self.moveAbs({self._axis: nearest}).result()
 
     def _update_child_position(self, value):
-        p = value[self._axis_name]
+        p = value[self._caxis]
         if self._cycle is not None:
             p %= self._cycle
         self._position[self._axis] = p
         self._updatePosition()
 
     def _update_child_ref(self, value):
-        self._referenced[self._axis] = value[self._axis_name]
+        self._referenced[self._axis] = value[self._caxis]
         self._updateReferenced()
 
     def _updatePosition(self):
@@ -835,20 +826,20 @@ class FixedPositionsActuator(model.Actuator):
         update the position VA
         """
         # if it is an unsupported position report the nearest supported one
-        nearest = util.find_closest(self._position[self._axis], self._positions.keys())
-        # it's read-only, so we change it via _value
-        pos = self._applyInversion({self._axis: nearest})
+        real_pos = self._position[self._axis]
+        nearest = util.find_closest(real_pos, self._positions.keys())
+        if not util.almost_equal(real_pos, nearest):
+            logging.warning("Reporting axis %s @ %s (known position), while physical axis %s @ %s",
+                            self._axis, nearest, self._caxis, real_pos)
+        pos = {self._axis: nearest}
         logging.debug("reporting position %s", pos)
-        self.position._value = pos
-        self.position.notify(pos)
+        self.position._set_value(pos, force_write=True)
 
     def _updateReferenced(self):
         """
         update the referenced VA
         """
-        # it's read-only, so we change it via _value
-        self.referenced._value = self._referenced
-        self.referenced.notify(self._referenced)
+        self.referenced._set_value(self._referenced, force_write=True)
 
     @isasync
     def moveRel(self, shift):
@@ -869,14 +860,14 @@ class FixedPositionsActuator(model.Actuator):
         pos = self._applyInversion(pos)
 
         axis, distance = pos.items()[0]
-        logging.debug("Moving axis %s (-> %s) to %g", self._axis, self._axis_name, distance)
+        logging.debug("Moving axis %s (-> %s) to %g", self._axis, self._caxis, distance)
 
         if self._cycle is None:
-            move = {self._axis_name: distance}
+            move = {self._caxis: distance}
             f = self._child.moveAbs(move)
         else:
             # Optimize by moving through the closest way
-            cur_pos = self._child.position.value[self._axis_name]
+            cur_pos = self._child.position.value[self._caxis]
             vector1 = distance - cur_pos
             mod1 = vector1 % self._cycle
             vector2 = cur_pos - distance
@@ -889,13 +880,13 @@ class FixedPositionsActuator(model.Actuator):
                     self._move_sum = 0
                     # move to the reference switch
                     move_to_ref = (self._cycle - cur_pos) % self._cycle + self._offset
-                    self._child.moveRel({self._axis_name: move_to_ref}).result()
-                    self._child.reference({self._axis_name}).result()
-                    move = {self._axis_name: distance}
+                    self._child.moveRel({self._caxis: move_to_ref}).result()
+                    self._child.reference({self._caxis}).result()
+                    move = {self._caxis: distance}
                 else:
-                    move = {self._axis_name: mod1}
+                    move = {self._caxis: mod1}
             else:
-                move = {self._axis_name:-mod2}
+                move = {self._caxis:-mod2}
                 self._move_sum -= mod2
 
             f = self._child.moveRel(move)
@@ -903,13 +894,13 @@ class FixedPositionsActuator(model.Actuator):
         return f
 
     def _doReference(self, axes):
-        logging.debug("Referencing axis %s (-> %s)", self._axis, self._axis_name)
-        f = self._child.reference({self._axis_name})
+        logging.debug("Referencing axis %s (-> %s)", self._axis, self._caxis)
+        f = self._child.reference({self._caxis})
         f.result()
 
         # If we just did homing and ended up to an unsupported position, move to
         # the nearest supported position
-        cp = self._child.position.value[self._axis_name]
+        cp = self._child.position.value[self._caxis]
         if (cp not in self._positions):
             nearest = util.find_closest(cp, self._positions.keys())
             f = self.moveAbs({self._axis: nearest})
@@ -931,7 +922,7 @@ class FixedPositionsActuator(model.Actuator):
         axes (iterable or None): list of axes to stop, or None if all should be stopped
         """
         # it's synchronous, but we want to stop it as soon as possible
-        thread = threading.Thread(name="stopping axis", target=self._child.stop, args=(self._axis_name,))
+        thread = threading.Thread(name="stopping axis", target=self._child.stop, args=(self._caxis,))
         thread.start()
 
         # wait for completion
