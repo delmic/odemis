@@ -1,3 +1,13 @@
+odemis (2.2.4-1ubuntu1) precise; urgency=low
+
+  * New version: 2.2.4
+  * Bugs fixed:
+    - Don't fail acquisition if CCD hardware had timeout (SPARC)
+    - Add support for new firmware of TMCM-6110 (SPARC)
+    - Fix wrong position reported in tmcm and nfpm driver if axis is inverted (SPARC/DELPHI)
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Tue, 20 Oct 2015 14:33:41 +0200
+
 odemis (2.2.3-1ubuntu1) precise; urgency=low
 
   * New version: 2.2.3
