@@ -25,7 +25,7 @@ from __future__ import division
 from Pyro4.core import oneway
 import collections
 from ctypes import *
-import ctypes # for fake AndorV2DLL
+import ctypes  # for fake AndorV2DLL
 import gc
 import logging
 import numpy
@@ -33,6 +33,7 @@ from odemis import model, util, dataio
 from odemis.model import HwError
 from odemis.util import img
 import os
+import random
 import threading
 import time
 import weakref
@@ -2324,7 +2325,7 @@ class FakeAndorV2DLL(object):
         res = ((self.roi[1] - self.roi[0] + 1) // self.binning[0],
                (self.roi[3] - self.roi[2] + 1) // self.binning[1])
         nb_pixels = res[0] * res[1]
-        return self.pixelReadouts[self.hsspeed] * nb_pixels #s
+        return self.pixelReadouts[self.hsspeed] * nb_pixels  # s
 
     def GetAcquisitionTimings(self, p_exposure, p_accumulate, p_kinetic):
         exposure = _deref(p_exposure, c_float)
@@ -2339,6 +2340,8 @@ class FakeAndorV2DLL(object):
         self.status = AndorV2DLL.DRV_ACQUIRING
         duration = self.exposure + self._getReadout()
         self.acq_end = time.time() + duration
+#         if random.randint(0, 10) == 0:  # DEBUG
+#             self.acq_end += 15
 
     def _WaitForAcquisition(self, timeout=None):
         left = self.acq_end - time.time()
