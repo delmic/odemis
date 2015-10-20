@@ -642,6 +642,8 @@ class SEMCCDMDStream(MultipleDetectorStream):
                             raise IOError("Repetition stream acquisition repeatedly fails to synchronize")
                         else:
                             self._main_df.unsubscribe(self._ssOnMainImage)
+                            # Ensure we don't keep the SEM data for this run
+                            self._main_data = self._main_data[:n]
                             # Stop and restart the acquisition, hoping this time we will synchronize
                             # properly
                             self._rep_df.unsubscribe(self._ssOnRepetitionImage)
