@@ -1070,8 +1070,8 @@ class TMCLController(model.Actuator):
             IOError: if timeout happen
         """
         try:
-            # wait 30 s max
-            for i in range(3000):
+            # wait 60 s max
+            for i in range(6000):
                 if self._refproc_cancelled[axis].wait(0.01):
                     break
                 if not self.GetStatusRefSearch(axis):
