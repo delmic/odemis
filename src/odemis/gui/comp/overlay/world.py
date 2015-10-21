@@ -658,13 +658,11 @@ class LineSelectOverlay(WorldSelectOverlay):
             start_radius = 3
             arrow_size = 12
 
-            # Important: We need to use the world positions, in order to draw everything at the
-            # right scale.
-            offset = self.cnvs.get_half_buffer_size()
+            ctx.translate(*self.offset_b)
             # Calculate buffer start and end positions
-            b_pos = self.cnvs.world_to_buffer(self.w_start_pos, offset)
+            b_pos = self.cnvs.world_to_buffer(self.w_start_pos)
             b_start = (b_pos[0] - 0.5, b_pos[1] - 0.5)
-            b_pos = self.cnvs.world_to_buffer(self.w_end_pos, offset)
+            b_pos = self.cnvs.world_to_buffer(self.w_end_pos)
             b_end = (b_pos[0] + 0.5, b_pos[1] + 0.5)
             self.update_projection(b_start, b_end, shift + (scale,))
 
@@ -1261,15 +1259,13 @@ class PointsOverlay(WorldOverlay):
             ctx.set_source_rgb(*self.point_colour)
             ctx.fill()
 
-            # Draw hitboxes (for debugging purposes)
+            # Draw hit boxes (for debugging purposes)
             # ctx.set_line_width(1)
             # ctx.set_source_rgb(1.0, 1.0, 1.0)
-
             # ctx.rectangle(b_x - self.dot_size * 0.95,
             #               b_y - self.dot_size * 0.95,
             #               self.dot_size * 1.9,
             #               self.dot_size * 1.9)
-
             # ctx.stroke()
 
         self.cursor_over_point = w_cursor_over
