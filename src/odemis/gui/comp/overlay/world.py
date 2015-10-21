@@ -49,7 +49,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         self._w_start_pos = None
         self._w_end_pos = None
 
-        self.position_label = self.add_label("", colour=(0.8, 0.8, 0.8))
+        self.position_label = self.add_label("", colour=(0.8, 0.8, 0.8), align=wx.ALIGN_RIGHT)
 
     @property
     def w_start_pos(self):
@@ -163,6 +163,8 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
             ctx.rectangle(*rect)
             ctx.stroke()
 
+            self._debug_draw_edges(ctx, True)
+
             # Label
             if (self.selection_mode in (SEL_MODE_EDIT, SEL_MODE_CREATE) and
                     self.cnvs.microscope_view):
@@ -171,13 +173,11 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
                 h = units.readable_str(h, 'm', sig=2)
                 size_lbl = u"{} x {}".format(w, h)
 
-                pos = Vec(b_end_pos.x + 8, b_end_pos.y - 10)
-                print pos
+                pos = Vec(b_end_pos.x - 8, b_end_pos.y + 5)
+
                 self.position_label.pos = pos
                 self.position_label.text = size_lbl
                 self._write_labels(ctx)
-
-            self._debug_draw_edges(ctx, True)
 
     # Event Handlers
 

@@ -298,18 +298,16 @@ class Overlay(object):
                 if isinstance(self, ViewOverlay):
                     width = self.view_width
                     height = self.view_height
-                else:
-                    width, height = self.cnvs.buffer_size
 
-                # Prevent the text from running off screen
-                if x + lw + self.canvas_padding > width:
-                    x = width - lw - self.canvas_padding
-                elif x < self.canvas_padding:
-                    x = self.canvas_padding
-                if y + self.canvas_padding > height:
-                    y = height - lh
-                elif y < lh:
-                    y = lh
+                    # Prevent the text from running off screen
+                    if x + lw + self.canvas_padding > width:
+                        x = width - lw - self.canvas_padding
+                    elif x < self.canvas_padding:
+                        x = self.canvas_padding
+                    if y + self.canvas_padding > height:
+                        y = height - lh
+                    elif y < lh:
+                        y = lh
             l.render_pos = (x, y)
             l.text_size = (lw, lh)
 
