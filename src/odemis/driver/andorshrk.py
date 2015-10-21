@@ -648,7 +648,7 @@ class Shamrock(model.Actuator):
 
     def GetCCDLimits(self, port):
         """
-        No idea what it really does
+        Gets the upper and lower accessible wavelength through the port.
         return (float, float): low/high wavelength in m
         """
         low = c_float()
@@ -677,6 +677,7 @@ class Shamrock(model.Actuator):
 #self._dll.ShamrockGetNumberPixels(self._device, int* NumberPixels)
 
     # Focus mirror management
+    # Note: the focus is automatically saved/changed after changing grating
     def SetFocusMirror(self, steps):
         """
         Relative move on the focus
@@ -812,13 +813,24 @@ class Shamrock(model.Actuator):
             self._dll.ShamrockShutterIsPresent(self._device, byref(present))
         return (present.value != 0)
 
-# Mirror flipper management
+    # Mirror flipper management
     def SetFlipperMirror(self, flipper, port):
         assert(FLIPPER_INDEX_MIN <= flipper <= FLIPPER_INDEX_MAX)
         assert(0 <= port <= 1)
 
+        # Sometimes, the SR-193 gets a bit confused and if changing to the same
+        # value, it will move the focus. So avoid changing to the current value.
+        if self.GetFlipperMirror(flipper) == port:
+            logging.info("Not changing again flipper %d to current pos %d", flipper, port)
+
         with self._hw_access:
+            if "focus" in self.axes:
+                cf = self.GetFocusMirror()
+
             self._dll.ShamrockSetFlipperMirror(self._device, flipper, port)
+
+            if "focus" in self.axes and cf != self.GetFocusMirror():
+                logging.warning("Focus mirror changed unexpectedly after moving flipper %d to %d", flipper, port)
 
     def GetFlipperMirror(self, flipper):
         assert(FLIPPER_INDEX_MIN <= flipper <= FLIPPER_INDEX_MAX)
@@ -917,8 +929,7 @@ class Shamrock(model.Actuator):
             pos["flip-out"] = userv
 
         # it's read-only, so we change it via _value
-        self.position._value = pos
-        self.position.notify(self.position.value)
+        self.position._set_value(pos, force_write=True)
 
     def getPixelToWavelength(self):
         """
