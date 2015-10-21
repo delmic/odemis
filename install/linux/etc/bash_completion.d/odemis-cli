@@ -30,7 +30,7 @@ _odemis_cli()
             COMPREPLY=( $(compgen -W '--help --log-level --machine \
                 --kill --check --scan --list --list-prop --set-attr \
                 --update-metadata --move --position --reference --stop \
-                --acquire --output --live --version' -- "$cur") )
+                --acquire --output --live --version --big-distance' -- "$cur") )
             return 0
             ;;
     esac

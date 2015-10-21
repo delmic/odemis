@@ -434,10 +434,12 @@ def merge_moves(actions):
     return moves
 
 MAX_DISTANCE = 0.01 # m
-def move(comp_name, moves):
+def move(comp_name, moves, check_distance=True):
     """
     move (relatively) the axis of the given component by the specified amount of µm
     comp_name (str): name of the component
+    check_distance (bool): if the axis is in meters, check that the move is not
+      too big.
     moves (dict str -> str): axis -> distance (as text, and in µm for distances)
     """
     # for safety reason, we use µm instead of meters, as it's harder to type a
@@ -460,8 +462,8 @@ def move(comp_name, moves):
                 raise ValueError("Distance '%s' cannot be converted to a number" %
                                  str_distance)
 
-            if abs(distance) > MAX_DISTANCE:
-                raise IOError("Distance of %f m is too big (> %f m)" %
+            if check_distance and abs(distance) > MAX_DISTANCE:
+                raise IOError("Distance of %f m is too big (> %f m), use '--big-distance' to allow the move." %
                               (abs(distance), MAX_DISTANCE))
         else:
             distance = convertToObject(str_distance)
@@ -472,16 +474,23 @@ def move(comp_name, moves):
 
     try:
         m = component.moveRel(act_mv)
-        m.result(120)
+        try:
+            m.result(120)
+        except KeyboardInterrupt:
+            logging.warning("Cancelling relative move of component %s", comp_name)
+            m.cancel()
+            raise
     except Exception as exc:
         raise IOError("Failed to move component %s by %s: %s" %
                       (comp_name, act_mv, exc))
 
 
-def move_abs(comp_name, moves):
+def move_abs(comp_name, moves, check_distance=True):
     """
     move (in absolute) the axis of the given component to the specified position
     comp_name (str): name of the component
+    check_distance (bool): if the axis is in meters, check that the move is not
+      too big.
     moves (dict str -> str): axis -> position (as text)
     """
     component = get_component(comp_name)
@@ -503,8 +512,8 @@ def move_abs(comp_name, moves):
 
             # compare to the current position, to see if the new position sounds reasonable
             cur_pos = component.position.value[axis_name]
-            if abs(cur_pos - position) > MAX_DISTANCE:
-                raise IOError("Distance of %f m is too big (> %f m)" %
+            if check_distance and abs(cur_pos - position) > MAX_DISTANCE:
+                raise IOError("Distance of %f m is too big (> %f m), use '--big-distance' to allow the move." %
                               (abs(cur_pos - position), MAX_DISTANCE))
         else:
             position = convertToObject(str_position)
@@ -525,7 +534,12 @@ def move_abs(comp_name, moves):
 
     try:
         m = component.moveAbs(act_mv)
-        m.result(120)
+        try:
+            m.result(120)
+        except KeyboardInterrupt:
+            logging.warning("Cancelling absolute move of component %s", comp_name)
+            m.cancel()
+            raise
     except Exception as exc:
         raise IOError("Failed to move component %s to %s: %s" %
                       (comp_name, act_mv, exc))
@@ -545,17 +559,21 @@ def reference(comp_name, axis_name):
 
     try:
         if axis_name not in component.referenced.value:
-            raise ValueError("Axis %s of actuator %s cannot be referenced" % (axis_name, comp_name))
+            raise AttributeError()  # immediately caught
     except (TypeError, AttributeError):
         raise ValueError("Axis %s of actuator %s cannot be referenced" % (axis_name, comp_name))
 
     try:
         m = component.reference({axis_name})
-        m.result(360)
+        try:
+            m.result(360)
+        except KeyboardInterrupt:
+            logging.warning("Cancelling referencing of axis %s", axis_name)
+            m.cancel()
+            raise
     except Exception as exc:
         raise IOError("Failed to reference axis %s of component %s: %s" %
                       (axis_name, comp_name, exc))
-
 
 def stop_move():
     """
@@ -734,6 +752,8 @@ def main(args):
                          default=0, help="set verbosity level (0-2, default = 0)")
     opt_grp.add_argument("--machine", dest="machine", action="store_true", default=False,
                          help="display in a machine-friendly way (i.e., no pretty printing)")
+    opt_grp.add_argument("--big-distance", dest="bigdist", action="store_true", default=False,
+                         help=u"flag needed to allow any move bigger than 10 mm.")
     dm_grp = parser.add_argument_group('Microscope management')
     dm_grpe = dm_grp.add_mutually_exclusive_group()
     dm_grpe.add_argument("--kill", "-k", dest="kill", action="store_true", default=False,
@@ -882,11 +902,11 @@ def main(args):
         elif options.position is not None:
             moves = merge_moves(options.position)
             for c, m in moves.items():
-                move_abs(c, m)
+                move_abs(c, m, check_distance=(not options.bigdist))
         elif options.move is not None:
             moves = merge_moves(options.move)
             for c, m in moves.items():
-                move(c, m)
+                move(c, m, check_distance=(not options.bigdist))
         elif options.stop:
             stop_move()
         elif options.acquire is not None:
@@ -906,6 +926,9 @@ def main(args):
             else:
                 raise ValueError("Live command accepts only one data-flow")
             live_display(component, dataflow)
+    except KeyboardInterrupt:
+        logging.info("Interrupted before the end of the execution")
+        return 1
     except ValueError as exp:
         logging.error("%s", exp)
         return 127
