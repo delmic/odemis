@@ -1058,6 +1058,7 @@ class MomentOfInertiaMDStream(SEMCCDMDStream):
         self.background = model.VigilantAttribute(None)  # None or 2D DataArray
 
         self._center_image_i = (0, 0)  # iteration at the center (for spot size)
+        self._center_raw = None  # raw data at the center
 
         # For computing the moment of inertia in background
         # TODO: More than one thread useful? Use processes instead? + based on number of CPUs
@@ -1069,6 +1070,8 @@ class MomentOfInertiaMDStream(SEMCCDMDStream):
 
         # Reset some data
         self._center_image_i = tuple((v - 1) // 2 for v in self._rep_stream.repetition.value)
+        self._center_raw = None
+
         return super(MomentOfInertiaMDStream, self).acquire()
 
     def _preprocessRepData(self, data, i):
@@ -1084,6 +1087,8 @@ class MomentOfInertiaMDStream(SEMCCDMDStream):
 
         # Compute spot size only for the center image
         ss = (i == self._center_image_i)
+        if i == self._center_image_i:
+            self._center_raw = data
 
         return self._executor.submit(self.ComputeMoI, data, self.background.value, self._drange, ss)
 
@@ -1110,7 +1115,7 @@ class MomentOfInertiaMDStream(SEMCCDMDStream):
         valid_array.shape = repetition
         valid_da = model.DataArray(valid_array, main_data.metadata)
         # Ensure spot size is a (0-dim) array because .raw must only contains arrays
-        self._rep_raw = [moi_da, valid_da, model.DataArray(spot_size)]
+        self._rep_raw = [moi_da, valid_da, model.DataArray(spot_size), self._center_raw]
         self._main_raw = [main_data]
 
     def ComputeMoI(self, data, background, drange, spot_size=False):

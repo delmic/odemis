@@ -406,6 +406,10 @@ class SpectrumSettingsStream(CCDSettingsStream):
 
         self.image.value = self.raw[0][0]
 
+    # No histogram => no need to do anything to update it
+    def _histogram_thread(self):
+        pass
+
 
 class MonochromatorSettingsStream(PMTSettingsStream):
     """
@@ -734,7 +738,7 @@ class MomentOfInertiaLiveStream(CCDSettingsStream):
         try:
             logging.debug("MoI acquisition finished")
             try:
-                self.raw = future.result()  # sem, moi, valid, spot size
+                self.raw = future.result()  # sem, moi, valid, spot int., raw CCD center
                 if not future.cancelled():
                     self._updateImage()
             except CancelledError:
@@ -766,17 +770,40 @@ class MomentOfInertiaLiveStream(CCDSettingsStream):
 
     def getRawValue(self, pos):
         """
+        Return the raw value at the given position and the maxima
         pos (int, int): position on the array
-        return (0<float or None): raw value of the moment of inertia
+        return:
+            (0<float or None): raw value of the moment of inertia
+            (None or tuple of floats): min/max raw values
         raises:
              IndexError if pos is incorrect
         """
         raw = self.raw
         if len(raw) >= 3:
-            return raw[1][pos]
+            data = raw[1].view(numpy.ndarray)  # To ensure we get floats
+            return data[pos], (data.min(), data.max())
         else:
             # Nothing yet
+            return None, None
+
+    # TODO: take as argument the pixel position?
+    def getImageCCD(self):
+        """
+        Return the CCD image at the center
+        return (DataArray or None): raw CCD data
+        """
+        raw = self.raw
+        if len(raw) < 5:
+            # Nothing yet
             return None
+
+        data = raw[4]
+        # TODO: find spot center and crop around it?
+        rgbim = img.DataArray2RGB(data)
+        rgbim.flags.writeable = False
+        md = self._find_metadata(data.metadata)
+        md[model.MD_DIMS] = "YXC"  # RGB format
+        return model.DataArray(rgbim, md)
 
     # TODO: take as argument the pixel position?
     def getSpotIntensity(self):
@@ -784,7 +811,7 @@ class MomentOfInertiaLiveStream(CCDSettingsStream):
         return (0<=float<=1): spot intensity
         """
         raw = self.raw
-        if len(raw) >= 3:
+        if len(raw) >= 4:
             return raw[3][()]
         else:
             # Nothing yet

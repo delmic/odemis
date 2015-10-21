@@ -2547,7 +2547,7 @@ class Sparc2AlignTab(Tab):
 
         # the "MoI" value bellow the chronogram
         lbl_moi, txt_moi = cont.add_text_field("Moment of inertia", readonly=True)
-        tooltip_txt = "Moment of inertia at the center (smaller is better)"
+        tooltip_txt = "Moment of inertia at the center (smaller is better), and range"
         lbl_moi.SetToolTipString(tooltip_txt)
         txt_moi.SetToolTipString(tooltip_txt)
         # Change font size and colour
@@ -2729,11 +2729,16 @@ class Sparc2AlignTab(Tab):
         # Note: center position is typically 4,4 as the repetition is fixed to 9x9.
         # To be sure, we recompute it every time
         center = (rgbim.shape[-1] - 1) // 2, (rgbim.shape[-2] - 1) // 2  # px
-        moi = self._moi_stream.getRawValue(center)
+        moi, moi_mm = self._moi_stream.getRawValue(center)
         ss = self._moi_stream.getSpotIntensity()
 
         # If value is None => text is ""
-        self._txt_moi.SetValue(units.readable_str(moi, sig=3))
+        txt_moi = units.readable_str(moi, sig=3)
+        if moi_mm is not None:
+            mn, mx = moi_mm
+            txt_moi += u" (%s → %s)" % (units.readable_str(mn, sig=3), units.readable_str(mx, sig=3))
+        self._txt_moi.SetValue(txt_moi)
+
         self._txt_ss.SetValue(units.readable_str(ss, sig=3))
 
     def Show(self, show=True):
