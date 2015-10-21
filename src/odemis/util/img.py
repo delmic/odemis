@@ -316,9 +316,9 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
             # trick to ensure B&W if there is only one value allowed
             if irange[0] >= irange[1]:
                 if irange[0] > idt.min:
-                    irange = [irange[1] - 1, irange[1]]
+                    irange = (irange[1] - 1, irange[1])
                 else:
-                    irange = [irange[0], irange[0] + 1]
+                    irange = (irange[0], irange[0] + 1)
             if img_fast:
                 try:
                     # only (currently) supports uint16
