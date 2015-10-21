@@ -734,6 +734,7 @@ class SparcAcquisitionTab(Tab):
             None,  # component
             get_stream_settings_config()[acqstream.SEMStream]["dcPeriod"]
         )
+        semcl_stream.dcRegion.subscribe(self._onDCRegion, init=True)
 
         main_data.is_acquiring.subscribe(self.on_acquisition)
 
@@ -805,6 +806,16 @@ class SparcAcquisitionTab(Tab):
         Use the sem stream dwell time as the anchor dwell time
         """
         self.tab_data_model.semStream.dcDwellTime.value = dt
+
+    @call_in_wx_main
+    def _onDCRegion(self, roi):
+        """
+        Called when the Anchor region changes.
+        Used to enable/disable the drift correction period control
+        """
+        enabled = (roi != acqstream.UNDEFINED_ROI)
+        self.sem_dcperiod_ent.lbl_ctrl.Enable(enabled)
+        self.sem_dcperiod_ent.value_ctrl.Enable(enabled)
 
     def Show(self, show=True):
         assert (show != self.IsShown())  # we assume it's only called when changed
@@ -2629,7 +2640,7 @@ class Sparc2AlignTab(Tab):
             self._ccd_stream.should_update.value = True
             self._spot_stream.is_active.value = True
             self.tab_data_model.focussedView.value = self.panel.vp_align_lens.microscope_view
-            self.panel.pnl_mirror.Enable(False)
+            self.panel.pnl_mirror.Enable(True)  # also allow to move the mirror here
             self.panel.html_alignment_doc.Show(False)
             self.panel.pnl_lens_mover.Enable(True)
             self.panel.pnl_focus.Enable(True)
