@@ -2739,7 +2739,7 @@ class Sparc2AlignTab(Tab):
 
         # Note: center position is typically 4,4 as the repetition is fixed to 9x9.
         # To be sure, we recompute it every time
-        center = (rgbim.shape[-1] - 1) // 2, (rgbim.shape[-2] - 1) // 2  # px
+        center = (rgbim.shape[1] - 1) // 2, (rgbim.shape[0] - 1) // 2  # px
         moi, moi_mm = self._moi_stream.getRawValue(center)
         ss = self._moi_stream.getSpotIntensity()
 
