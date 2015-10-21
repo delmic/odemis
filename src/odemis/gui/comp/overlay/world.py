@@ -550,8 +550,8 @@ class SpotModeOverlay(WorldOverlay, DragMixin):
 
         r, g, b = self.highlight
 
-        offset = self.cnvs.get_half_buffer_size()
-        bx, by = self.cnvs.world_to_buffer(self.w_pos, offset)
+        ctx.translate(*self.offset_b)
+        bx, by = self.cnvs.world_to_buffer(self.w_pos)
 
         width = self._spot_radius / 6.0
 
