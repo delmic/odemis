@@ -669,11 +669,11 @@ class LineSelectOverlay(WorldSelectOverlay):
             start_radius = 3
             arrow_size = 12
 
-            ctx.translate(*self.offset_b)
+            offset = self.cnvs.get_half_buffer_size()
             # Calculate buffer start and end positions
-            b_pos = self.cnvs.world_to_buffer(self.w_start_pos)
+            b_pos = self.cnvs.world_to_buffer(self.w_start_pos, offset)
             b_start = (b_pos[0] - 0.5, b_pos[1] - 0.5)
-            b_pos = self.cnvs.world_to_buffer(self.w_end_pos)
+            b_pos = self.cnvs.world_to_buffer(self.w_end_pos, offset)
             b_end = (b_pos[0] + 0.5, b_pos[1] + 0.5)
             self.update_projection(b_start, b_end, shift + (scale,))
 
