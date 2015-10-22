@@ -881,14 +881,14 @@ class ChamberTab(Tab):
         view = self.tab_data_model.focussedView.value
         view.show_crosshair.value = False
 
-        # With the lens, the image must be flipped to keep the mirror at the
-        # top and the sample at the bottom.
-        self.panel.vp_chamber.canvas.flip = wx.VERTICAL
+        # With the lens, the image must be flipped to keep the mirror at the top and the sample
+        # at the bottom.
+        self.panel.vp_chamber.flip(wx.VERTICAL)
 
         # Just one stream: chamber view
         self._ccd_stream = acqstream.CameraStream("Chamber view",
-                                      main_data.ccd, main_data.ccd.data, None,
-                                      detvas=get_hw_settings(main_data.ccd))
+                                                  main_data.ccd, main_data.ccd.data, None,
+                                                  detvas=get_hw_settings(main_data.ccd))
         ccd_spe = self._stream_controller.addStream(self._ccd_stream)
         ccd_spe.stream_panel.flatten()  # No need for the stream name
         self._ccd_stream.should_update.value = True
@@ -2191,7 +2191,9 @@ class SparcAlignTab(Tab):
         if mode == "chamber-view":
             # With the lens, the image must be flipped to keep the mirror at the
             # top and the sample at the bottom.
-            self.panel.vp_sparc_align.canvas.flip = wx.VERTICAL
+            self.panel.vp_sparc_align.flip(wx.VERTICAL)
+            # FIXME: where and when do we allow manipulation?
+            self.panel.vp_sparc_align.activate_mirror_overlay()
             # Hide goal image
             self._stream_controller.removeStream(self._goal_stream)
             self._ccd_stream.should_update.value = True
@@ -2199,7 +2201,7 @@ class SparcAlignTab(Tab):
             self.panel.pnl_sparc_fib.Enable(False)
         elif mode == "mirror-align":
             # Show image normally
-            self.panel.vp_sparc_align.canvas.flip = 0
+            self.panel.vp_sparc_align.flip(None)
             # Show the goal image (= add it, if it's not already there)
             streams = self.panel.vp_sparc_align.microscope_view.getStreams()
             if self._goal_stream not in streams:

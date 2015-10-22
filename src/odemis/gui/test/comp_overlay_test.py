@@ -691,8 +691,6 @@ class OverlayTestCase(test.GuiTestCase):
 
         test.gui_loop()
 
-
-
     # END World overlay test cases
 
 

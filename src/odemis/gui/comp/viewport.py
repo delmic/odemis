@@ -39,7 +39,6 @@ from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.raster import rasterize_line
 from odemis.model import NotApplicableError
 from odemis.util import units, spectrum
-import random
 import wx
 
 
@@ -629,11 +628,27 @@ class ARLiveViewport(LiveViewport):
         microscope_view.lastUpdate.subscribe(self._on_stream_update, init=True)
 
     def _on_stream_update(self, _):
-        """
-        Hide the play icon overlay if no stream are present
-        """
+        """ Hide the play icon overlay if no stream are present """
         show = len(self._microscope_view.stream_tree) > 0
         self.canvas.play_overlay.show = show
+
+    def flip(self, orientation):
+        """ Flip the canvas in the given direction
+
+        :param orientation: (int) wx.VERTICAL, wx.HORIZONTAL or None for no flipping
+
+        """
+
+        self.canvas.flip = orientation or 0
+
+    def activate_mirror_overlay(self):
+        """ Activate the mirror overlay to enable user manipulation """
+        self.canvas.mirror_ol.activate()
+
+    def deactivate_mirror_overlay(self):
+        """ Deactivate the mirror overlay to disable user manipulation """
+        self.canvas.mirror_ol.deactivate()
+
 
 # TODO: rename to something more generic? RawLiveViewport?
 class ARAcquiViewport(ARLiveViewport):
@@ -834,7 +849,9 @@ class PointSpectrumViewport(PlotViewport):
             self.bottom_legend.range = (spectrum_range[0], spectrum_range[-1])
             self.left_legend.range = (min(data), max(data))
             # For testing
-            # self.left_legend.range = (min(data) + random.randint(0, 100), max(data) + random.randint(-100, 100))
+            # import random
+            # self.left_legend.range = (min(data) + random.randint(0, 100),
+            #                           max(data) + random.randint(-100, 100))
         else:
             self.clear()
         self.Refresh()
