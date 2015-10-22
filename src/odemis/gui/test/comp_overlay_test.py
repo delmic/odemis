@@ -428,8 +428,8 @@ class OverlayTestCase(test.GuiTestCase):
         tol.add_label("Right click to toggle tool")
         cnvs.add_view_overlay(tol)
 
-        wsol.w_start_pos = (-2e-05, -2e-05)
-        wsol.w_end_pos = (2e-05, 2e-05)
+        # wsol.w_start_pos = (-2e-05, -2e-05)
+        # wsol.w_end_pos = (2e-05, 2e-05)
 
         test.gui_loop()
 

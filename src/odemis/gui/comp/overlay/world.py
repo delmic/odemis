@@ -132,13 +132,24 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
         if self.w_start_pos and self.w_end_pos:
 
+            # FIXME: The following version of the code does noto worok. Update_projection is causing
+            # the start position to be drawn at the top left of the buffer and the calculation of
+            # the edges is all wrong.
+
             # translate the origin to the middle of the buffer
-            ctx.translate(*self.offset_b)
+            # ctx.translate(*self.offset_b)
+            #
+            # # Important: We need to use the world positions, in order to draw everything at the
+            # # right scale.
+            # b_start_pos = self.cnvs.world_to_buffer(self.w_start_pos)
+            # b_end_pos = self.cnvs.world_to_buffer(self.w_end_pos)
+            # b_start_pos, b_end_pos = self._normalize_rect(b_start_pos, b_end_pos)
 
             # Important: We need to use the world positions, in order to draw everything at the
             # right scale.
-            b_start_pos = self.cnvs.world_to_buffer(self.w_start_pos)
-            b_end_pos = self.cnvs.world_to_buffer(self.w_end_pos)
+            offset = self.cnvs.get_half_buffer_size()
+            b_start_pos = self.cnvs.world_to_buffer(self.w_start_pos, offset)
+            b_end_pos = self.cnvs.world_to_buffer(self.w_end_pos, offset)
             b_start_pos, b_end_pos = self._normalize_rect(b_start_pos, b_end_pos)
 
             self.update_projection(b_start_pos, b_end_pos, shift + (scale,))
