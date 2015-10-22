@@ -1,3 +1,10 @@
+odemis (2.2.5-1ubuntu1) precise; urgency=low
+
+  * New version: 2.2.5
+  Fixes brown paper bag bug introduced by "fix wrong position reported..."
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Thu, 22 Oct 2015 09:12:40 +0200
+
 odemis (2.2.4-1ubuntu1) precise; urgency=low
 
   * New version: 2.2.4
