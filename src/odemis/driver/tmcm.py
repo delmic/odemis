@@ -867,7 +867,7 @@ class TMCLController(model.Actuator):
           updated
         """
         # uses the current values (converted to internal representation)
-        pos = self._applyInversion(self.position.value)
+        pos = self._applyInversionAbs(self.position.value)
 
         for n, i in self._name_to_axis.items():
             if axes is None or n in axes:
