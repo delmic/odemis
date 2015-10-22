@@ -625,8 +625,8 @@ class BufferedCanvas(wx.Panel):
 
         """
 
-        return ((w_pos[0] - w_buff_center[0]) * scale + offset[0],
-                (w_pos[1] - w_buff_center[1]) * scale + offset[1])
+        return (round((w_pos[0] - w_buff_center[0]) * scale + offset[0]),
+                round((w_pos[1] - w_buff_center[1]) * scale + offset[1]))
 
     @classmethod
     def buffer_to_world_pos(cls, b_pos, w_buffer_center, scale, offset=(0, 0)):
