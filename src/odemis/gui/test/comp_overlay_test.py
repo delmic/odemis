@@ -21,10 +21,8 @@
     Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
-from __future__ import division
 
 import math
-import threading
 from odemis.gui.cont.tools import TOOL_LINE
 from odemis.gui.model import TOOL_POINT
 
@@ -689,47 +687,16 @@ class OverlayTestCase(test.GuiTestCase):
             evt.Skip()
 
         def zoom(evt):
-
-            mi, ma = 1000, 80000
-            abs_val = abs(evt.value)
-
-            if evt.value > 0:
-                print "bigger"
-                cnvs.scale *= 1.1 / abs_val
-                if not mi <= cnvs.scale <= ma:
-                    cnvs.scale = ma
-            elif evt.value < 0:
-                print "smaller"
-                cnvs.scale *= 0.9 / abs_val
-                if not mi <= cnvs.scale <= ma:
-                    cnvs.scale = mi
-
-            if not mi <= cnvs.scale <= ma:
-                print cnvs.scale
-
-            wx.CallAfter(cnvs.update_drawing)
-
-        from evdev import InputDevice, categorize, ecodes
-        dev = InputDevice('/dev/input/event16')
-
-        def listen():
-            for event in dev.read_loop():
-                if event.type == ecodes.EV_REL:
-                    zoom(event)
-                    wx.CallAfter(self.frame.Refresh)
-                elif event.type == ecodes.EV_KEY and event.value == 01:
-                    print dev.leds(verbose=True)
-
-        knob_thread = threading.Thread(target=listen)
-        knob_thread.daemon = True
-        knob_thread.start()
+            if evt.GetWheelRotation() > 0:
+                cnvs.scale *= 1.1
+            else:
+                cnvs.scale *= 0.9
+            cnvs.update_drawing()
 
         cnvs.Bind(wx.EVT_LEFT_DCLICK, flip)
-        # cnvs.Bind(wx.EVT_MOUSEWHEEL, zoom)
+        cnvs.Bind(wx.EVT_MOUSEWHEEL, zoom)
 
         test.gui_loop()
-
-
 
     # END World overlay test cases
 

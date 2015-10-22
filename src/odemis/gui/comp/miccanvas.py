@@ -99,7 +99,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # Passive overlays that only display information, but offer no interaction
         self._crosshair_ol = None
         self._spotmode_ol = None
-        self._mirror_ol = None
+        self.mirror_ol = None
         self._fps_ol = None
         self._focus_overlay = None
 
@@ -1099,9 +1099,8 @@ class SparcARCanvas(DblMicroscopeCanvas):
         # same as flip argument of set_images(): int with wx.VERTICAL and/or wx.HORIZONTAL or just use MD_FLIP
         self.flip = 0
 
-        self._mirror_ol = world_overlay.MirrorArcOverlay(self)
-        self._mirror_ol.activate()  # TODO: make activation configurable (inactggive = no dragging)
-        self.add_world_overlay(self._mirror_ol)
+        self.mirror_ol = world_overlay.MirrorArcOverlay(self)
+        self.add_world_overlay(self.mirror_ol)
 
         self._goal_im_ref = None
         self._goal_wim = None
