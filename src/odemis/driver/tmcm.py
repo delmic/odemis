@@ -94,6 +94,12 @@ UC_OUT = OrderedDict((
     ((0, 0), 2),  # Pull-ups for limit switches
 ))
 
+# Addresses and shift (for each axis) for the 2xFF referencing routines
+ADD_2XFF_ROUT = 80  # Routine to start referencing
+SHIFT_2XFF_ROUT = 15  # Each routine must be < 15 instructions
+ADD_2XFF_INT = 50  # Interrupt handler for the referencing
+SHIFT_2XFF_INT = 10  # Each interrupt handler must be < 10 instructions
+
 
 class TMCLController(model.Actuator):
     """
@@ -335,7 +341,7 @@ class TMCLController(model.Actuator):
                     (13, 1, axis), # RFS STOP, MotId   // Stop the reference search
                     (38,), # RETI
                     ]
-            addr = 50 + 10 * axis  # at addr 50/60/70
+            addr = ADD_2XFF_INT + SHIFT_2XFF_INT * axis  # at addr 50/60/70
             self.UploadProgram(prog, addr)
 
             # Program: start and wait for referencing
@@ -344,7 +350,7 @@ class TMCLController(model.Actuator):
             timeout = 20 # s (it can take up to 20 s to reach the home as fast speed)
             timeout_ticks = int(round(timeout * 100)) # 1 tick = 10 ms
             gparam = 128 + axis
-            addr = 0 + 15 * axis # Max with 3 axes: ~40
+            addr = ADD_2XFF_ROUT + SHIFT_2XFF_ROUT * axis  # Max with 3 axes: 80->120
             prog = [(9, gparam, 2, 0), # Set global param to 0 (=running)
                     (13, 0, axis), # RFS START, MotId
                     (27, 4, axis, timeout_ticks), # WAIT RFS until timeout
@@ -853,13 +859,13 @@ class TMCLController(model.Actuator):
 #         status = self.GetGlobalParam(2, gparam)
 #         return (status == 1)
 
-    def _setInputInterrupt(self, axis):
+    def _setInputInterruptFF(self, axis):
         """
         Setup the input interrupt handler for stopping the reference search with
          2xFF.
         axis (int): axis number
         """
-        addr = 50 + 10 * axis  # at addr 50/60/70
+        addr = ADD_2XFF_INT + SHIFT_2XFF_INT * axis  # at addr 50/60/70
         intid = 40 + axis  # axis 0 = IN1 = 40
         self.SetInterrupt(intid, addr)
         self.SetGlobalParam(3, intid, 3)  # configure the interrupt: look at both edges
@@ -892,7 +898,7 @@ class TMCLController(model.Actuator):
         self.SetGlobalParam(2, gparam, 0)
         # Run the basic program (we need one, otherwise interrupt handlers are
         # not processed)
-        addr = 0 + 15 * axis
+        addr = ADD_2XFF_ROUT + SHIFT_2XFF_ROUT * axis
         endt = time.time() + timeout + 2 # +2 s to let the program first timeout
         with self._refproc_lock[axis]:
             if self._refproc_cancelled[axis].is_set():
@@ -977,7 +983,7 @@ class TMCLController(model.Actuator):
         # speed.
 
         try:
-            self._setInputInterrupt(axis)
+            self._setInputInterruptFF(axis)
 
             neg_dir = self._doReferenceFF(axis, 350)  # fast (~0.5 mm/s)
             if neg_dir:  # always finish first by positive direction
