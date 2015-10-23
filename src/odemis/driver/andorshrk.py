@@ -914,6 +914,7 @@ class Shamrock(model.Actuator):
               }
 
         if "focus" in self.axes:
+            # Note: can change after changing the grating
             pos["focus"] = self.GetFocusMirror() * self._focus_step_size
 
         if "band" in self.axes:
@@ -928,7 +929,6 @@ class Shamrock(model.Actuator):
             userv = [k for k, v in FLIPPER_TO_PORT.items() if v == val][0]
             pos["flip-out"] = userv
 
-        # it's read-only, so we change it via _value
         self.position._set_value(pos, force_write=True)
 
     def getPixelToWavelength(self):

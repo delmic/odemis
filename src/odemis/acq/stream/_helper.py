@@ -798,7 +798,7 @@ class MomentOfInertiaLiveStream(CCDSettingsStream):
             return None
 
         data = raw[4]
-        # TODO: find spot center and crop around it?
+        # TODO: find spot center and crop around it? Also apply background subtraction?
         rgbim = img.DataArray2RGB(data)
         rgbim.flags.writeable = False
         md = self._find_metadata(data.metadata)
