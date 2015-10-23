@@ -142,7 +142,7 @@ class OdemisGUIApp(wx.App):
         if os.name == 'nt' and getattr(sys, 'frozen', False):
             import odemis.gui.util.updater as updater
             u = updater.WindowsUpdater()
-            wx.FutureCall(500, u.check_for_update)
+            wx.CallLater(500, u.check_for_update)
 
         # Application successfully launched
         return True
