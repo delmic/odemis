@@ -8,7 +8,6 @@
 #            Address is between 0 and 255
 #                     Value a number (actual allowed values depend on the parameter)
 # The recommend file extension is '.tmcm.tsv'
-
 '''
 Created on September 2015
 
@@ -28,13 +27,12 @@ You should have received a copy of the GNU General Public License along with
 tmcmconfig. If not, see http://www.gnu.org/licenses/.
 '''
 
-# TODO: make it independent from Odemis?
-
 import argparse
 import logging
 from odemis.driver import tmcm
 import re
 import sys
+import time
 
 
 # List of useful Axis parameters: address -> comment
@@ -45,6 +43,8 @@ AXIS_PARAMS = {
     5: "Maximum acceleration",
     6: "Absolute max current",
     7: "Standby current",
+    12: "Right limit switch disable",
+    13: "Left limit switch disable",
     140: "Microstep resolution",
     149: "Soft stop flag",
     153: "Ramp divisor",
@@ -52,6 +52,7 @@ AXIS_PARAMS = {
     193: "Reference search mode",
     194: "Reference search speed",
     195: "Reference switch speed",
+    204: "Free wheeling delay (in ms)",
     214: "Power down delay (in 10ms)",
 
     # These ones are not saved in EEPROM (but save in user config)
@@ -67,6 +68,8 @@ AXIS_PARAMS = {
 GLOBAL_PARAMS = {
 #     (0, 64): "EEPROM reset",  # Anything different from 228 (or 66?) will cause reset on next reboot
 #     (0, 73): "EEPROM locked",  # Reads 0/1, but needs to be written either 1234 or 4321
+
+    (0, 77): "Autostart mode (on main power supply)",
     (0, 79): "End switch polarity",
     (0, 84): "Coordinate storage",
 }
@@ -90,9 +93,9 @@ def _get_naxes(ctrl):
         try:
             ctrl.GetAxisParam(i, 1)  # current pos
         except tmcm.TMCLError:
-            if i == 1:
+            if i == 0:
                 raise IOError("Failed to read data from first axis")
-            naxes = i - 1
+            naxes = i
             break
     else:
         logging.warning("Reporting 64 axes... might be wrong!")
@@ -119,7 +122,7 @@ def read_param(ctrl, f):
     # work.
 
     # Read axes params
-    for axis in range(naxes + 1):
+    for axis in range(naxes):
         for add in sorted(AXIS_PARAMS.keys()):
             c = AXIS_PARAMS[add]
             try:
@@ -248,6 +251,42 @@ def write_param(ctrl, f):
 
     ctrl.write_config(axis_params_user, io_config)
 
+    # Workaround bug in 6110
+    modl, vmaj, vmin = ctrl.GetVersion()
+    if modl == 6110:
+        upload_reset_routine(ctrl)
+
+
+def upload_reset_routine(ctrl):
+    """
+    Upload a routine that reset all the values from the eeprom and configure
+    to automatically start at "init" (also when the power supply is turned on)
+    Needed as it seems there is a bug in the TMCM-6110 that doesn't correctly
+    set the values from eeprom if it starts with the power supply connected but
+    off.
+    """
+    addr = 0 # address of the routine. Must be 0 for autostart
+    # Max accel and soft stop flag seems to not recover correctly
+    naxes = _get_naxes(ctrl)
+
+    prog = []
+    for axis in range(naxes):
+        # prog.append((5, 5, axis, 42))  # SAP  max accel 42 # DEBUG only!
+        prog.append((8, 5, axis))  # RSAP  Max accel
+        prog.append((8, 149, axis))  # RSAP  soft stop flag
+    prog.append((28,))  # STOP
+
+    logging.info("Uploading reset routine of %d instructions", len(prog))
+    ctrl.UploadProgram(prog, addr)
+    ctrl.SetGlobalParam(0, 77, 1)  # Autostart mode
+
+
+def reset_mem(ctrl):
+    """
+    Reset the memory to the default ones
+    """
+    ctrl.ResetMemory(1234)
+
 
 def main(args):
     """
@@ -263,6 +302,8 @@ def main(args):
     parser.add_argument("--log-level", dest="loglev", metavar="<level>", type=int,
                         default=1, help="set verbosity level (0-2, default = 1)")
 
+    parser.add_argument('--reset', dest="reset", action="store_true", default=False,
+                        help="Reset the memory to the factory defaults")
     parser.add_argument('--read', dest="read", type=argparse.FileType('w'),
                         help="Will read all the parameters and save them in a file (use - for stdout)")
     parser.add_argument('--write', dest="write", type=argparse.FileType('r'),
@@ -297,14 +338,26 @@ def main(args):
         ctrl = tmcm.TMCLController("TMCL controller", "config",
                                    port=port, address=options.add,
                                    axes=["a"], ustepsize=[1e-9],
-                                   minpower=1)  # No need for external power supply
+                                   minpower=0.1)  # No need for external power supply
         logging.info("Connected to %s", ctrl.hwVersion)
+
+        if options.reset:  # Allow to do it before writing
+            reset_mem(ctrl)
+            # Reconnection needed
+            ctrl.terminate()
+            logging.info("Reconnecting to the controller...")
+            time.sleep(5)
+            ctrl = tmcm.TMCLController("TMCL controller", "config",
+                                   port=port, address=options.add,
+                                   axes=["a"], ustepsize=[1e-9],
+                                   minpower=0.1)  # No need for external power supply
+            logging.info("Connected to %s", ctrl.hwVersion)
 
         if options.read:
             read_param(ctrl, options.read)
         elif options.write:
             write_param(ctrl, options.write)
-        else:
+        elif not options.reset:
             raise ValueError("Need to specify either read or write")
 
         ctrl.terminate()

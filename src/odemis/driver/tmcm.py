@@ -20,6 +20,14 @@ You should have received a copy of the GNU General Public License along with Ode
 # The documentation is available on trinamic.com (TMCM-3110_TMCL_firmware_manual.pdf,
 # and TMCL_reference.pdf).
 
+# On the TMCM-6110 (v1.31 and v1.35), if there is a power supply connected, but
+# it's not actually giving power, the board will boot (with the USB power) and
+# only restore some values. When the power supply is turned on, most of
+# the values are then correctly set... but not all. Seems to only affect
+# acceleration and soft stop flag. Currently we work around this by loading
+# a routine that reset that values and put it to autostart (when actuator power
+# is connected)
+# Bug reported to Trinamic 2015-10-19. => They don't really seem to believe it.
 
 from __future__ import division
 
@@ -292,19 +300,6 @@ class TMCLController(model.Actuator):
         Initialise the given axis with "good" values for our needs (Delphi)
         axis (int): axis number
         """
-        # On the TMCM-6110, if there is a power supply connected, but it's not
-        # actually giving power, the board will boot (with the USB power) and
-        # only restore some values. When the power supply is turned on, most of
-        # the values are then correctly set... but not all. Seems to only affect
-        # acceleration and soft stop flag, but to be safe, we restore everything
-        # known to matter.
-        # Bug reported to Trinamic 2015-10-19.
-        for p in (4, 5, 6, 7, 140, 149, 153, 154, 193, 194, 214):
-            try:
-                self.RestoreAxisParam(axis, p)
-            except TMCLError:
-                logging.warning("Failed to restore axis param A%d %d", axis, p)
-
         self._refproc_cancelled[axis] = threading.Event()
         self._refproc_lock[axis] = threading.Lock()
 
@@ -836,6 +831,18 @@ class TMCLController(model.Actuator):
         id (int): interrupt number
         """
         self.SendInstruction(26, typ=id)
+
+    def ResetMemory(self, check):
+        """
+        Reset the EEPROM values to factory default
+        Note: it needs about 5 seconds to recover, and a new connection must be
+        initiated.
+        check (int): must be 1234 to work
+        """
+        try:
+            self.SendInstruction(137, val=check)
+        except IOError:
+            logging.debug("Timeout after memory reset, as expected")
 
     def _isFullyPowered(self):
         """
