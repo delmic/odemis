@@ -47,7 +47,7 @@ KWARGS = dict(name="test", role="stage", port=PORT,
               # For the more standard configurations:
               refproc="Standard",
               # refswitch={"x": 0},
-              # minpower=1.3, # For working without external power supply
+              # minpower=1.3,  # For working without external power supply
               inverted=["x"])
 KWARGS_SIM = dict(KWARGS)
 KWARGS_SIM["refproc"] = "Standard"
