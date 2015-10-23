@@ -795,6 +795,7 @@ def create_axis_entry(container, name, comp, conf=None):
         if isinstance(choices, dict):
             # it's then already value -> string (user-friendly display)
             choices_fmt = choices.items()
+            unit = None
         elif (unit and len(choices) > 1 and
               all([isinstance(c, numbers.Real) for c in choices])):
             # TODO: need same update as add_value
