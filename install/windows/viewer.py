@@ -10,15 +10,12 @@ if getattr(sys, 'frozen', False):
 else:
     os.environ['PATH'] = os.environ['PATH'] + ';' + os.path.dirname(sys.argv[0])
 
-# sys.path.append(os.path.abspath('../src'))
-# print "\n".join(sys.path)
-
 from odemis.gui import log
 from odemis.gui.main import OdemisGUIApp, installThreadExcepthook
 
 installThreadExcepthook()
 
-log.init_logger(logging.WARNING)
+log.init_logger(logging.INFO)
 app = OdemisGUIApp(standalone=True)
 
 # Change exception hook so unexpected exception

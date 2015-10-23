@@ -20,12 +20,12 @@ class xrcfr_main(wx.Frame):
 #!XRCED:begin-block:xrcfr_main.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcfr_main.PreCreate
 
     def __init__(self, parent):
@@ -181,12 +181,12 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_sparc2_align.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcpnl_tab_sparc2_align.PreCreate
 
     def __init__(self, parent):
@@ -828,7 +828,7 @@ def __init_resources():
                   <underlined>0</underlined>
                   <face>Monospace</face>
                 </font>
-                <style>wxBORDER_NONE|wxTE_MULTILINE</style>
+                <style>wxBORDER_NONE|wxTE_MULTILINE|wxTE_RICH</style>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>

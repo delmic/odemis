@@ -95,6 +95,8 @@ class StreamPanelHeader(wx.Control):
         assert(isinstance(parent, StreamPanel))
         super(StreamPanelHeader, self).__init__(parent, wid, pos, size, style)
 
+        self.SetBackgroundColour(self.Parent.BackgroundColour)
+
         # This style enables us to draw the background with our own paint event handler
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
 
@@ -181,8 +183,8 @@ class StreamPanelHeader(wx.Control):
 
     def _add_visibility_btn(self):
         """ Add the visibility toggle button to the stream panel header """
-        visibility_btn = buttons.ImageToggleButtonImageButton(self.Parent,
-                                                    bitmap=img.getico_eye_closedBitmap())
+        visibility_btn = buttons.ImageToggleButtonImageButton(self,
+                                                              bitmap=img.getico_eye_closedBitmap())
         visibility_btn.bmpHover = img.getico_eye_closed_hBitmap()
         visibility_btn.bmpSelected = img.getico_eye_openBitmap()
         visibility_btn.bmpSelectedHover = img.getico_eye_open_hBitmap()
@@ -193,7 +195,8 @@ class StreamPanelHeader(wx.Control):
 
     def _add_update_btn(self):
         """ Add a button for (de)activation of the stream """
-        update_btn = buttons.ImageToggleButtonImageButton(self.Parent,  bitmap=img.getico_pauseBitmap())
+        update_btn = buttons.ImageToggleButtonImageButton(self,
+                                                          bitmap=img.getico_pauseBitmap())
         update_btn.bmpHover = img.getico_pause_hBitmap()
         update_btn.bmpSelected = img.getico_playBitmap()
         update_btn.bmpSelectedHover = img.getico_play_hBitmap()

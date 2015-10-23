@@ -358,7 +358,7 @@
                   <underlined>0</underlined>
                   <face>Monospace</face>
                 </font>
-                <style>wxBORDER_NONE|wxTE_MULTILINE</style>
+                <style>wxBORDER_NONE|wxTE_MULTILINE|wxTE_RICH</style>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>

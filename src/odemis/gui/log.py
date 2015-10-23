@@ -1,4 +1,5 @@
-#-*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
+
 """
 @author: Rinze de Laat
 
@@ -19,13 +20,11 @@ see http://www.gnu.org/licenses/. """
 from __future__ import division
 import logging
 from logging.handlers import RotatingFileHandler
-from odemis.gui import FG_COLOUR_ERROR, FG_COLOUR_WARNING, FG_COLOUR_DIS, \
-    FG_COLOUR_MAIN
+from odemis.gui import FG_COLOUR_ERROR, FG_COLOUR_WARNING, FG_COLOUR_DIS, FG_COLOUR_MAIN
 import os.path
 import sys
 import wx
 from odemis.gui.util import wxlimit_invocation
-
 
 LOG_FILE = "odemis-gui.log"
 
@@ -34,7 +33,7 @@ log = logging.getLogger()  # for compatibility only
 
 
 def logging_remote_exception(msg, *args):
-    """ Same as logging.expection, but also display remote exception info from Pyro """
+    """ Same as logging.exception, but also display remote exception info from Pyro """
     logging.error(msg, exc_info=1, *args)
 
     try:
@@ -194,7 +193,7 @@ class TextFieldHandler(logging.Handler):
             if prev_style != text_style:
                 self.textfield.SetDefaultStyle(text_style)
                 prev_style = text_style
-            self.textfield.AppendText("\n" + self.format(record))
+            self.textfield.AppendText(self.format(record) + "\n")
 
         nb_lines = self.textfield.GetNumberOfLines()
         nb_old = nb_lines - LOG_LINES

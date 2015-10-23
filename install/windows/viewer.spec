@@ -47,10 +47,11 @@ def get_cairo_dlls():
 
 def get_version():
     import odemis
-    with open('version.txt', 'w') as f:
+
+    with open('dist/version.txt', 'w') as f:
         long_version = '.'.join(odemis._get_version().split('-')[:2])
-        f.write(long_version)
-    return [('version.txt', 'version.txt', 'DATA')]
+        f.write(long_version + '\n')
+    return [('version.txt', 'dist/version.txt', 'DATA')]
 
 a = Analysis(['viewer.py'],
              pathex=['.'],
