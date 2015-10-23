@@ -139,6 +139,11 @@ class OdemisGUIApp(wx.App):
         self.init_gui()
         log.create_gui_logger(self.main_frame.txt_log, self.main_data.debug, self.main_data.level)
 
+        if os.name == 'nt' and getattr(sys, 'frozen', False):
+            import odemis.gui.util.updater as updater
+            u = updater.WindowsUpdater()
+            wx.FutureCall(500, u.check_for_update)
+
         # Application successfully launched
         return True
 
@@ -401,9 +406,11 @@ def installThreadExcepthook():
     Call once from ``__main__`` before creating any threads.
     """
     init_old = threading.Thread.__init__
+
     def init(self, *args, **kwargs):
         init_old(self, *args, **kwargs)
         run_old = self.run
+
         def run_with_except_hook(*args, **kw):
             try:
                 run_old(*args, **kw)
@@ -411,6 +418,7 @@ def installThreadExcepthook():
                 raise
             except Exception:
                 sys.excepthook(*sys.exc_info())
+
         self.run = run_with_except_hook
     threading.Thread.__init__ = init
 
