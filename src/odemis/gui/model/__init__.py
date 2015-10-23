@@ -121,6 +121,7 @@ class MainGUIData(object):
         "light": "light",
         "brightlight": "brightlight",
         "filter": "light_filter",
+        "cl-filter": "cl_filter",
         "lens": "lens",
         "e-beam": "ebeam",
         "chamber-light": "chamber_light",
@@ -149,6 +150,7 @@ class MainGUIData(object):
         self.light = None  # epi-fluorescence light (SECOM/DELPHI)
         self.brightlight = None  # brightlight (no hardware has this yet)
         self.light_filter = None  # emission light filter for SECOM/output filter for SPARC
+        self.cl_filter = None  # light filter for SPARCv2 on the CL components
         self.lens = None  # Optical lens for SECOM/focus lens for the SPARC
         self.ebeam = None
         self.ebeam_focus = None  # change the e-beam focus
