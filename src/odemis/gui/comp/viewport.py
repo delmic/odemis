@@ -632,14 +632,14 @@ class ARLiveViewport(LiveViewport):
         show = len(self._microscope_view.stream_tree) > 0
         self.canvas.play_overlay.show = show
 
-    def flip(self, orientation):
+    def SetFlip(self, orientation):
         """ Flip the canvas in the given direction
 
         :param orientation: (int) wx.VERTICAL, wx.HORIZONTAL or None for no flipping
 
         """
 
-        self.canvas.flip = orientation or 0
+        self.canvas.SetFlip = orientation or 0
 
     def activate_mirror_overlay(self):
         """ Activate the mirror overlay to enable user manipulation """
