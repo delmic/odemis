@@ -2466,6 +2466,7 @@ class Sparc2AlignTab(Tab):
         mois = acqstream.MomentOfInertiaLiveStream("MoI",
                            main_data.ccd, main_data.ccd.data, main_data.ebeam,
                            moisem,
+                           hwemtvas={'magnification'},  # Hardware VAs will not be duplicated as ent/det VAs
                            detvas=get_hw_settings(main_data.ccd))
         # TODO: need SEM mag (or set HFW to a good value)
         # Pick some typically good settings
