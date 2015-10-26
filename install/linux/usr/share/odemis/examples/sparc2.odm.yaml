@@ -13,8 +13,7 @@ SPARC2: {
 
 # Light (lamp with known spectrum)
 "Calibration Light": {
-    # TODO: use light.Light
-    class: simulated.Light,
+    class: light.Light,
     role: "brightlight",
     power_supplier: "Power Control Unit",
     affects: ["Camera"],
