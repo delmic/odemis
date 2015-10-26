@@ -2,7 +2,11 @@
 
 # PMT Control devices are connected via serial over USB
 # => add a symlink which _could_ be a PMT Control device
+# Version with software USB implementation
 SUBSYSTEMS=="usb", ATTRS{idProduct}=="0002", ATTRS{idVendor}=="1cbe", KERNEL=="ttyACM[0-9]*", SYMLINK="ttyPMT%n", GROUP="odemis"
+
+# Version with the hardware USB implementation
+SUBSYSTEMS=="usb", ATTRS{idProduct}=="00fd", ATTRS{idVendor}=="1cbe", KERNEL=="ttyACM[0-9]*", SYMLINK="ttyPMT%n", GROUP="odemis"
 
 # If a reset of the power relay is needed, add this line (without the #) to a
 # new file named /etc/udev/rules.d/99-pmtctrl-relay-reset.rules
