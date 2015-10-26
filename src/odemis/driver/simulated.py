@@ -59,8 +59,6 @@ class Light(model.Emitter):
         else:
             logging.info("Light is on")
 
-        self._metadata[model.MD_LIGHT_POWER] = self.power.value
-
 
 class Stage(model.Actuator):
     """
