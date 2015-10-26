@@ -2491,6 +2491,17 @@ class Sparc2AlignTab(Tab):
         # in the microscope configuration file.
         # TODO: use an overlay, instead of a stream? We need to allow dragging it around
         # + connect it to the .polePosition VA of lens
+        mirror_ol = self.panel.vp_align_center.canvas.mirror_ol
+        lens = main_data.lens
+        try:
+            mirror_ol.set_mirror_dimensions(lens.parabolaF.value,
+                                            lens.xMax.value,
+                                            lens.focusDistance.value,
+                                            lens.holeDiameter.value)
+        except (AttributeError, TypeError) as ex:
+            logging.warning("Failed to get mirror dimensions: %s", ex)
+        mirror_ol.set_hole_position(tab_data.polePositionPhysical)
+        self.panel.vp_align_center.activate_mirror_overlay()
 
         # Force a spot at the center of the FoV
         # Not via stream controller, so we can avoid the scheduler
