@@ -42,7 +42,7 @@ Spectra: {
 #}
 
 "SEM ExtXY": {
-    class: tescan_sem.TescanSEM,
+    class: tescan.SEM,
     role: none,
     init: {host: "192.168.92.116"},
     # more detectors can be added, if necessary
