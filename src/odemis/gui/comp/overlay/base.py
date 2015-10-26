@@ -126,11 +126,11 @@ class Vec(tuple):
             return super(Vec, cls).__new__(cls, tuple(a))
 
     def __add__(self, a):
-        # TODO: check lengths are compatable.
+        # TODO: check lengths are compatible.
         return Vec(x + y for x, y in zip(self, a))
 
     def __sub__(self, a):
-        # TODO: check lengths are compatable.
+        # TODO: check lengths are compatible.
         return Vec(x - y for x, y in zip(self, a))
 
     def __mul__(self, c):

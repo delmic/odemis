@@ -1395,10 +1395,10 @@ class MirrorArcOverlay(WorldOverlay, DragMixin):
 
         if self.cnvs.flip == wx.VERTICAL:
             ctx.transform(cairo.Matrix(1.0, 0.0, 0.0, -1.0))
-            hole_offset = scale * (Vec(hole_pos_w.x, -hole_pos_w.y) + (0, self.hole_y))
+            hole_offset = scale * (Vec(hole_pos_w.x, -hole_pos_w.y) + (0, -self.hole_y))
             hole_offset += (self.delta_v.x, -self.delta_v.y)
         else:
-            hole_offset = scale * (hole_pos_w + (0, self.hole_y))
+            hole_offset = scale * (hole_pos_w + (0, -self.hole_y))
             hole_offset += self.delta_v
 
         ctx.translate(*hole_offset)
@@ -1407,28 +1407,26 @@ class MirrorArcOverlay(WorldOverlay, DragMixin):
         # with the parabola symmetry line on y=0)
 
         # Calculate base line position
-
-        base_start_w = Vec(-self.parabole_cut_radius * 1.1, -self.cut_offset_y)
-        base_end_w = Vec(self.parabole_cut_radius * 1.1, -self.cut_offset_y)
+        base_start_w = Vec(-self.parabole_cut_radius * 1.1, self.cut_offset_y)
+        base_end_w = Vec(self.parabole_cut_radius * 1.1, self.cut_offset_y)
         base_start_b = scale * base_start_w
         base_end_b = scale * base_end_w
 
         # Calculate cross line
-
-        cross_start_w = Vec(0, -self.cut_offset_y + 1e-3)
-        cross_end_w = Vec(0, -self.cut_offset_y - 1e-3)
+        cross_start_w = Vec(0, self.cut_offset_y + 1e-3)
+        cross_end_w = Vec(0, self.cut_offset_y - 1e-3)
         cross_start_b = scale * cross_start_w
         cross_end_b = scale * cross_end_w
 
         # Calculate Mirror Arc
 
         mirror_radius_b = scale * self.parabole_cut_radius
-        arc_rads = (math.pi + self.rad_offset, 2 * math.pi - self.rad_offset)
+        arc_rads = (2 * math.pi + self.rad_offset, math.pi - self.rad_offset)
 
         # Calculate mirror hole
 
         hole_radius_b = (self.hole_diam / 2) * scale
-        hole_pos_b = Vec(0, -scale * self.hole_y)
+        hole_pos_b = Vec(0, scale * self.hole_y)
 
         # Do it twice: once the shadow, then the real image
         for lw, colour in ((4, (0.0, 0.0, 0.0, 0.5)), (2, self.colour)):
@@ -1457,10 +1455,10 @@ class MirrorArcOverlay(WorldOverlay, DragMixin):
         # ctx.set_line_width(1)
         # ctx.set_source_rgba(0.0, 1.0, 0.0, 0.5)
         #
-        # ctx.move_to(0.5, -self.cut_offset_y * scale + 0.5)
-        # ctx.line_to(0.5, -self.parabole_cut_radius * scale + 0.5)
+        # ctx.move_to(0, self.cut_offset_y * scale)
+        # ctx.line_to(0, self.parabole_cut_radius * scale)
         #
-        # ctx.move_to(-hole_radius_b * 2 + 0.5, hole_pos_b.y + 0.5)
-        # ctx.line_to(hole_radius_b * 2 + 0.5, hole_pos_b.y + 0.5)
+        # ctx.move_to(-hole_radius_b * 2, hole_pos_b.y)
+        # ctx.line_to(hole_radius_b * 2, hole_pos_b.y)
         # ctx.stroke()
         # END DEBUG Lines Mirror Center
