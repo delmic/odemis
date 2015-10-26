@@ -1100,7 +1100,6 @@ class SparcARCanvas(DblMicroscopeCanvas):
         self.flip = 0
 
         self.mirror_ol = world_overlay.MirrorArcOverlay(self)
-        self.add_world_overlay(self.mirror_ol)
 
         self._goal_im_ref = None
         self._goal_wim = None
@@ -1109,7 +1108,6 @@ class SparcARCanvas(DblMicroscopeCanvas):
         """ Called when the goal_im is dereferenced """
         self._goal_wim = None
 
-    # noinspection PyTypeChecker
     def _convert_streams_to_images(self):
         """
         Same as the overridden method, but ensures the goal image keeps the alpha

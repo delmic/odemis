@@ -1847,9 +1847,17 @@ class SparcStreamsController(StreamBarController):
         sem_stream = self._tab_data_model.semStream
         sem_cli_stream = acqstream.SEMMDStream("SEM CLi", sem_stream, cli_stream)
 
+        # Need to pick the right filter wheel (if there is one)
+        axes = {}
+        for fw in (main_data.cl_filter, main_data.light_filter):
+            if fw is None:
+                continue
+            if main_data.cld.name in fw.affects.value:
+                axes["band"] = fw
+
         return self._addRepStream(cli_stream, sem_cli_stream,
                                   vas=("repetition", "pixelSize"),
-                                  axes={"band": main_data.light_filter},
+                                  axes=axes,
                                   play=False
                                   )
 

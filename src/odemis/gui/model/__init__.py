@@ -121,6 +121,7 @@ class MainGUIData(object):
         "light": "light",
         "brightlight": "brightlight",
         "filter": "light_filter",
+        "cl-filter": "cl_filter",
         "lens": "lens",
         "e-beam": "ebeam",
         "chamber-light": "chamber_light",
@@ -149,6 +150,7 @@ class MainGUIData(object):
         self.light = None  # epi-fluorescence light (SECOM/DELPHI)
         self.brightlight = None  # brightlight (no hardware has this yet)
         self.light_filter = None  # emission light filter for SECOM/output filter for SPARC
+        self.cl_filter = None  # light filter for SPARCv2 on the CL components
         self.lens = None  # Optical lens for SECOM/focus lens for the SPARC
         self.ebeam = None
         self.ebeam_focus = None  # change the e-beam focus
@@ -601,6 +603,96 @@ class Sparc2AlignGUIData(ActuatorGUIData):
 
         # VA for autofocus procedure mode
         self.autofocus_active = BooleanVA(False)
+
+        if (main.lens and hasattr(main.lens, "polePosition") and
+            isinstance(main.lens.polePosition, model.VigilantAttributeBase)):
+            # Position of the hole from the center of the AR image (in m)
+            # This is different from the polePosition of the lens, which is in
+            # pixels from the top-left corner of the AR image.
+            self.polePositionPhysical = model.TupleContinuous((0, 0),
+                                           ((-1, -1), (1, 1)), unit="m",
+                                           cls=(int, long, float),
+                                           setter=self._setPolePosPhysical)
+
+            main.lens.polePosition.subscribe(self._onPolePosCCD, init=True)
+
+    def _posToCCD(self, posphy):
+        """
+        Convert position from physical coordinates to CCD coordinates (top-left
+         pixel is 0, 0).
+        Note: it will clip the coordinates to fit within the CCD
+        posphy (float, float)
+        return (0<=int, 0<=int)
+        """
+        # We need to convert to the _image_ pixel size (not sensor), and they
+        # are different due to the lens magnification.
+        md = self.main.ccd.getMetadata()
+        try:
+            pxs = md[model.MD_PIXEL_SIZE]
+        except KeyError:
+            pxs = self.main.ccd.pixelSize.value
+        pos = md.get(model.MD_POS, (0, 0))
+        # Pole position is always expressed considering there is no binning
+        res = self.main.ccd.shape[0:2]
+
+        # pole pos in the referential with the CCD center as origin
+        posc = (posphy[0] - pos[0], posphy[1] - pos[1])
+        # Convert into px referential (Y is inverted)
+        posc_px = (posc[0] / pxs[0], -posc[1] / pxs[1])
+        # Convert into the referential with the top-left corner as origin
+        posccd = (posc_px[0] + (res[0] - 1) / 2, posc_px[1] + (res[1] - 1) / 2)
+
+        # Round to int, and clip to within CCD
+        posccd = (max(0, min(int(round(posccd[0])), res[0] - 1)),
+                  max(0, min(int(round(posccd[1])), res[1] - 1)))
+
+        if not 0 <= posccd[0] < res[0] or not 0 <= posccd[1] < res[1]:
+            logging.warning("Pos %s out of the CCD", posccd)
+
+        return posccd
+
+    def _posToPhysical(self, posccd):
+        """
+        Convert position from CCD coordinates to physical coordinates.
+        posccd (int, int)
+        return (float, float)
+        """
+        md = self.main.ccd.getMetadata()
+        try:
+            pxs = md[model.MD_PIXEL_SIZE]
+        except KeyError:
+            pxs = self.main.ccd.pixelSize.value
+        pos = md.get(model.MD_POS, (0, 0))
+        # position is always expressed considering there is no binning
+        res = self.main.ccd.shape[0:2]
+
+        # Convert into the referential with the center as origin
+        posc_px = (posccd[0] - (res[0] - 1) / 2, posccd[1] - (res[1] - 1) / 2)
+        # Convert into px referential (Y is inverted)
+        posc = (posc_px[0] * pxs[0], -posc_px[1] * pxs[1])
+        # Convert into world referential
+        posw = (posc[0] + pos[0], posc[1] + pos[1])
+        return posw
+
+    def _setPolePosPhysical(self, posphy):
+        posccd = self._posToCCD(posphy)
+
+        logging.debug("Updated CCD polepos to %s px (= %s m)", posccd, posphy)
+
+        self.main.lens.polePosition.unsubscribe(self._onPolePosCCD)
+        self.main.lens.polePosition.value = posccd
+        self.main.lens.polePosition.subscribe(self._onPolePosCCD)
+
+        return self._posToPhysical(posccd)
+
+    def _onPolePosCCD(self, posccd):
+        posw = self._posToPhysical(posccd)
+        logging.debug("Updated world polepos to %s m (= %s px)", posw, posccd)
+
+        # Update without calling the setter
+        self.polePositionPhysical._value = posw
+        self.polePositionPhysical.notify(posw)
+
 
 class FileInfo(object):
     """

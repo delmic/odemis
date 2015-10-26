@@ -896,7 +896,7 @@ class ChamberTab(Tab):
 
         # With the lens, the image must be flipped to keep the mirror at the top and the sample
         # at the bottom.
-        self.panel.vp_chamber.flip(wx.VERTICAL)
+        self.panel.vp_chamber.SetFlip(wx.VERTICAL)
 
         # Just one stream: chamber view
         self._ccd_stream = acqstream.CameraStream("Chamber view",
@@ -2211,7 +2211,7 @@ class SparcAlignTab(Tab):
         if mode == "chamber-view":
             # With the lens, the image must be flipped to keep the mirror at the
             # top and the sample at the bottom.
-            self.panel.vp_sparc_align.flip(wx.VERTICAL)
+            self.panel.vp_sparc_align.SetFlip(wx.VERTICAL)
             # FIXME: where and when do we allow manipulation?
             self.panel.vp_sparc_align.activate_mirror_overlay()
             # Hide goal image
@@ -2221,7 +2221,7 @@ class SparcAlignTab(Tab):
             self.panel.pnl_sparc_fib.Enable(False)
         elif mode == "mirror-align":
             # Show image normally
-            self.panel.vp_sparc_align.flip(None)
+            self.panel.vp_sparc_align.SetFlip(None)
             # Show the goal image (= add it, if it's not already there)
             streams = self.panel.vp_sparc_align.microscope_view.getStreams()
             if self._goal_stream not in streams:
@@ -2491,6 +2491,17 @@ class Sparc2AlignTab(Tab):
         # in the microscope configuration file.
         # TODO: use an overlay, instead of a stream? We need to allow dragging it around
         # + connect it to the .polePosition VA of lens
+        mirror_ol = self.panel.vp_align_center.canvas.mirror_ol
+        lens = main_data.lens
+        try:
+            mirror_ol.set_mirror_dimensions(lens.parabolaF.value,
+                                            lens.xMax.value,
+                                            lens.focusDistance.value,
+                                            lens.holeDiameter.value)
+        except (AttributeError, TypeError) as ex:
+            logging.warning("Failed to get mirror dimensions: %s", ex)
+        mirror_ol.set_hole_position(tab_data.polePositionPhysical)
+        self.panel.vp_align_center.activate_mirror_overlay()
 
         # Force a spot at the center of the FoV
         # Not via stream controller, so we can avoid the scheduler

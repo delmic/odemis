@@ -632,22 +632,23 @@ class ARLiveViewport(LiveViewport):
         show = len(self._microscope_view.stream_tree) > 0
         self.canvas.play_overlay.show = show
 
-    def flip(self, orientation):
+    def SetFlip(self, orientation):
         """ Flip the canvas in the given direction
 
-        :param orientation: (int) wx.VERTICAL, wx.HORIZONTAL or None for no flipping
-
+        :param orientation: (None or int) wx.VERTICAL (logical or) wx.HORIZONTAL,
+         or None for no flipping
         """
-
         self.canvas.flip = orientation or 0
 
     def activate_mirror_overlay(self):
         """ Activate the mirror overlay to enable user manipulation """
+        self.canvas.add_world_overlay(self.canvas.mirror_ol)
         self.canvas.mirror_ol.activate()
 
     def deactivate_mirror_overlay(self):
         """ Deactivate the mirror overlay to disable user manipulation """
         self.canvas.mirror_ol.deactivate()
+        self.canvas.remove_world_overlay(self.canvas.mirror_ol)
 
 
 # TODO: rename to something more generic? RawLiveViewport?

@@ -281,7 +281,7 @@ SPARC2: {
         axis_name: "l2",
         positions: {
             -4.e-3: "on",
-            -0.045: "off", # completely out of the path
+            -0.02: "off", # completely out of the path
         },
     },
     affects: ["Camera", "Spectral Camera"],
@@ -310,7 +310,7 @@ SPARC2: {
     init: {
         axis_name: "cl-sel",
         positions: {
-            0: "on",
+            0.003: "on",
             0.01: "off"
         },
     },
@@ -329,7 +329,7 @@ SPARC2: {
             0: [420.e-9, 460.e-9],        # 1
             0.785398: [500.e-9, 550.e-9], # 2
             1.570796: "polariser",        # 3
-            3.9269908: "pass-through",    # 5
+            3.9269908: "pass-through",    # 6
         },
         cycle: 6.283185, # position of ref switch (0) after a full turn
     },

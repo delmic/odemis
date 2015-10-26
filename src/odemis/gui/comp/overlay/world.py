@@ -23,19 +23,20 @@ This file is part of Odemis.
 
 from __future__ import division
 
+import cairo
 import logging
 import math
-import cairo
-import wx
-
+from odemis import model
 from odemis.acq.stream import UNDEFINED_ROI
-import odemis.gui as gui
 from odemis.gui.comp.overlay.base import Vec, WorldOverlay, SelectionMixin, DragMixin, \
     PixelDataMixin, SEL_MODE_EDIT, SEL_MODE_CREATE, EDIT_MODE_BOX, EDIT_MODE_POINT
-import odemis.gui.img.data as img
 from odemis.gui.util.raster import rasterize_line
 from odemis.model import TupleVA
 from odemis.util import clip_line
+import wx
+
+import odemis.gui as gui
+import odemis.gui.img.data as img
 import odemis.util.conversion as conversion
 import odemis.util.units as units
 
@@ -1248,7 +1249,7 @@ class PointsOverlay(WorldOverlay):
             b_x, b_y = self.cnvs.world_to_buffer(w_pos, offset)
 
             ctx.new_sub_path()
-            ctx.arc(b_x, b_y, self.dot_size, 0, 2*math.pi)
+            ctx.arc(b_x, b_y, self.dot_size, 0, 2 * math.pi)
 
             # If the mouse is hovering over a dot (and we are not dragging)
             if (self.b_hover_box and (b_l <= b_x <= b_r and b_t <= b_y <= b_b) and
@@ -1262,11 +1263,11 @@ class PointsOverlay(WorldOverlay):
 
             ctx.fill()
 
-            ctx.arc(b_x, b_y, 2.0, 0, 2*math.pi)
+            ctx.arc(b_x, b_y, 2.0, 0, 2 * math.pi)
             ctx.set_source_rgb(0.0, 0.0, 0.0)
             ctx.fill()
 
-            ctx.arc(b_x, b_y, 1.5, 0, 2*math.pi)
+            ctx.arc(b_x, b_y, 1.5, 0, 2 * math.pi)
             ctx.set_source_rgb(*self.point_colour)
             ctx.fill()
 
@@ -1291,35 +1292,47 @@ class MirrorArcOverlay(WorldOverlay, DragMixin):
 
         self.colour = conversion.hex_to_frgb(gui.FG_COLOUR_EDIT)
 
-        # Values are derived from technical drawing, in mm
+        # The world position of the hole in the mirror (starts with a non-used VA)
+        self.hole_pos_va = model.TupleContinuous((0, 0), ((-1, -1), (1, 1)))
+
+        # Default values using the standard mirror size, in m
+        self.set_mirror_dimensions(2.5e-3, 13.25e-3, 0.5e-3, 0.6e-3)
+
+    def set_mirror_dimensions(self, parabola_f, cut_x, cut_offset_y, hole_diam):
+        """
+        Updates the dimensions of the mirror
+        parabola_f (float): focal length of the parabola in m
+        cut_x (float): cut of the parabola from the origin
+        cut_offset_y (float): Distance from the center of the circle that is cut
+           horizontally in m. (Also called "focus distance")
+        hole_diam (float): diameter the hole in the mirror in m
+        """
+        # The radius of the circle shaped edge facing the detector
+        # We don't care about cut_x, but "cut_y"
+        # Use the formula y = x²/4f
+        self.parabole_cut_radius = 2 * math.sqrt(parabola_f * cut_x)
 
         # The mirror is cut horizontally just above the symmetry line
-        self.symmetry_offset_y = 0.5e-3
-        # The radius of the circle shaped edge facing the detector
-        self.parabole_cut_radius = 11.5e-3
+        self.cut_offset_y = cut_offset_y
 
-        self.mirror_height = self.parabole_cut_radius - self.symmetry_offset_y
-
-        # The focus distance of the parabola (i.e. the origin)
-        focus_x = 2.5e-3
-        # The distance from the symmetry line  of the parabola to the center of the hole
-        self.hole_y = (focus_x * 2)
-        # The radius of the hole through which the electron beam enters
-        self.hole_radius = 0.3e-3
-
+        self.mirror_height = self.parabole_cut_radius - self.cut_offset_y
         # The number of radians to remove from the left and right of the semi-circle
-        self.rad_offset = math.atan2(self.symmetry_offset_y, self.parabole_cut_radius)
+        self.rad_offset = math.atan2(self.cut_offset_y, self.parabole_cut_radius)
 
-        # The world position of the hole in the mirror
-        self.hole_pos_w = Vec(0, 0)
+        # The radius of the hole through which the electron beam enters
+        self.hole_diam = hole_diam
+        # The distance from the symmetry line  of the parabola to the center of the hole
+        self.hole_y = (parabola_f * 2)
 
-    def set_hole_position(self, hole_pos_w):
-        """ Set the center of the mirror ihole n world coordinates """
-        self.hole_pos_w = Vec(hole_pos_w)
         self.cnvs.update_drawing()
 
-    def get_hole_position(self):
-        return self.hole_pos_w
+    def set_hole_position(self, hole_pos_va):
+        """
+        Set the VA containing the coordinates of the center of the mirror
+         (in physical coordinates)
+        """
+        self.hole_pos_va = hole_pos_va
+        self.cnvs.update_drawing()
 
     def on_left_down(self, evt):
         if self.active:
@@ -1344,7 +1357,9 @@ class MirrorArcOverlay(WorldOverlay, DragMixin):
         if self.active:
             DragMixin._on_left_up(self, evt)
             # Convert the final delta value to world coordinates and add it to the hole position
-            self.hole_pos_w += self.cnvs.buffer_to_world(self.delta_v)
+            d = self.cnvs.world_to_physical_pos(self.cnvs.buffer_to_world(self.delta_v))
+            hole_pos_p = Vec(self.hole_pos_va.value) + Vec(d)
+            self.hole_pos_va.value = (hole_pos_p.x, hole_pos_p.y)
             self.clear_drag()
             self.cnvs.update_drawing()
             self.cnvs.reset_dynamic_cursor()
@@ -1376,12 +1391,14 @@ class MirrorArcOverlay(WorldOverlay, DragMixin):
         # ctx.stroke()
         # END DEBUG Lines Buffer Center
 
+        hole_pos_w = Vec(self.cnvs.physical_to_world_pos(self.hole_pos_va.value))
+
         if self.cnvs.flip == wx.VERTICAL:
             ctx.transform(cairo.Matrix(1.0, 0.0, 0.0, -1.0))
-            hole_offset = scale * (Vec(self.hole_pos_w.x, -self.hole_pos_w.y) + (0, self.hole_y))
+            hole_offset = scale * (Vec(hole_pos_w.x, -hole_pos_w.y) + (0, -self.hole_y))
             hole_offset += (self.delta_v.x, -self.delta_v.y)
         else:
-            hole_offset = scale * (self.hole_pos_w + (0, self.hole_y))
+            hole_offset = scale * (hole_pos_w + (0, -self.hole_y))
             hole_offset += self.delta_v
 
         ctx.translate(*hole_offset)
@@ -1390,35 +1407,33 @@ class MirrorArcOverlay(WorldOverlay, DragMixin):
         # with the parabola symmetry line on y=0)
 
         # Calculate base line position
-
-        base_start_w = Vec(-self.parabole_cut_radius * 1.1, -self.symmetry_offset_y)
-        base_end_w = Vec(self.parabole_cut_radius * 1.1, -self.symmetry_offset_y)
+        base_start_w = Vec(-self.parabole_cut_radius * 1.1, self.cut_offset_y)
+        base_end_w = Vec(self.parabole_cut_radius * 1.1, self.cut_offset_y)
         base_start_b = scale * base_start_w
         base_end_b = scale * base_end_w
 
         # Calculate cross line
-
-        cross_start_w = Vec(0, -self.symmetry_offset_y + 1e-3)
-        cross_end_w = Vec(0, -self.symmetry_offset_y - 1e-3)
+        cross_start_w = Vec(0, self.cut_offset_y + 1e-3)
+        cross_end_w = Vec(0, self.cut_offset_y - 1e-3)
         cross_start_b = scale * cross_start_w
         cross_end_b = scale * cross_end_w
 
         # Calculate Mirror Arc
 
         mirror_radius_b = scale * self.parabole_cut_radius
-        arc_rads = (math.pi + self.rad_offset, 2 * math.pi - self.rad_offset)
+        arc_rads = (2 * math.pi + self.rad_offset, math.pi - self.rad_offset)
 
         # Calculate mirror hole
 
-        hole_radius_b = self.hole_radius * scale
-        hole_pos_b = Vec(0, -scale * self.hole_y)
+        hole_radius_b = (self.hole_diam / 2) * scale
+        hole_pos_b = Vec(0, scale * self.hole_y)
 
-        for lw, colour in [(4, (0.0, 0.0, 0.0, 0.5)), (2, self.colour)]:
+        # Do it twice: once the shadow, then the real image
+        for lw, colour in ((4, (0.0, 0.0, 0.0, 0.5)), (2, self.colour)):
             ctx.set_line_width(lw)
             ctx.set_source_rgba(*colour)
 
             # Draw base line
-
             ctx.move_to(*base_start_b)
             ctx.line_to(*base_end_b)
             ctx.stroke()
@@ -1429,12 +1444,10 @@ class MirrorArcOverlay(WorldOverlay, DragMixin):
             ctx.stroke()
 
             # Draw mirror arc
-
             ctx.arc(0, 0, mirror_radius_b, *arc_rads)
             ctx.stroke()
 
             # Draw mirror hole
-
             ctx.arc(hole_pos_b.x, hole_pos_b.y, hole_radius_b, 0, 2 * math.pi)
             ctx.stroke()
 
@@ -1442,10 +1455,10 @@ class MirrorArcOverlay(WorldOverlay, DragMixin):
         # ctx.set_line_width(1)
         # ctx.set_source_rgba(0.0, 1.0, 0.0, 0.5)
         #
-        # ctx.move_to(0.5, -self.symmetry_offset_y * scale + 0.5)
-        # ctx.line_to(0.5, -self.parabole_cut_radius * scale + 0.5)
+        # ctx.move_to(0, self.cut_offset_y * scale)
+        # ctx.line_to(0, self.parabole_cut_radius * scale)
         #
-        # ctx.move_to(-hole_radius_b * 2 + 0.5, hole_pos_b.y + 0.5)
-        # ctx.line_to(hole_radius_b * 2 + 0.5, hole_pos_b.y + 0.5)
+        # ctx.move_to(-hole_radius_b * 2, hole_pos_b.y)
+        # ctx.line_to(hole_radius_b * 2, hole_pos_b.y)
         # ctx.stroke()
         # END DEBUG Lines Mirror Center
