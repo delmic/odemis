@@ -55,7 +55,7 @@ class Stream(object):
     SETUP_OVERHEAD = 0.1
 
     def __init__(self, name, detector, dataflow, emitter, focuser=None,
-                 hwdetvas=None,  hwemtvas=None, detvas=None, emtvas=None, raw=None):
+                 hwdetvas=None, hwemtvas=None, detvas=None, emtvas=None, raw=None):
         """
         name (string): user-friendly name of this stream
         detector (Detector): the detector which has the dataflow
@@ -167,7 +167,12 @@ class Stream(object):
         # Tuple of (int, str) or (None, None): loglevel and message
         self.status = model.VigilantAttribute((None, None), readonly=True)
 
+        self.tint = model.ListVA((255, 255, 255), unit="RGB")  # 3-int R,G,B
+        # Don't call at init, so don't set metadata if default value
+        self.tint.subscribe(self.onTint)
+
         # if there is already some data, update image with it
+        # TODO: have this done by the child class, if needed.
         if self.raw:
             self._updateHistogram(self.raw[0])
             self._onNewData(None, self.raw[0])
@@ -479,6 +484,13 @@ class Stream(object):
         self.status._value = (level, message)
         self.status.notify(self.status.value)
 
+    def onTint(self, value):
+        if self.raw:
+            data = self.raw[0]
+            data.metadata[model.MD_USER_TINT] = value
+
+        self._updateImage()
+
     def _is_active_setter(self, active):
         """
         Called just before the Stream becomes (in)active
@@ -686,7 +698,7 @@ class Stream(object):
     # Note: if overriding this method, the decorator must be copied iff this
     # parent method is _not_ called.
     @limit_invocation(0.1) # Max 10 Hz
-    def _updateImage(self, tint=(255, 255, 255)):
+    def _updateImage(self):
         """ Recomputes the image with all the raw data available
 
         tint ((int, int, int)): colouration of the image, in RGB. Only used by
@@ -702,7 +714,7 @@ class Stream(object):
 
         try:
             self._running_upd_img = True
-            self.image.value = self._projectXY2RGB(self.raw[0], tint)
+            self.image.value = self._projectXY2RGB(self.raw[0], self.tint.value)
         except Exception:
             logging.exception("Updating %s image", self.__class__.__name__)
         finally:

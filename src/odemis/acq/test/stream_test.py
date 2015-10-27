@@ -1381,6 +1381,39 @@ class StaticStreamsTestCase(unittest.TestCase):
     Test static streams, which don't need any backend running
     """
 
+    def test_fluo(self):
+        """Test StaticFluoStream"""
+        md = {
+            model.MD_DESCRIPTION: "green dye",
+            model.MD_BPP: 12,
+            model.MD_BINNING: (1, 1), # px, px
+            model.MD_PIXEL_SIZE: (1e-6, 1e-6), # m/px
+            model.MD_POS: (13.7e-3, -30e-3), # m
+            model.MD_EXP_TIME: 1, # s
+            model.MD_IN_WL: (600e-9, 620e-9), # m
+            model.MD_OUT_WL: (620e-9, 650e-9), # m
+            model.MD_USER_TINT: (0, 0, 255),  # RGB (blue)
+            model.MD_ROTATION: 0.1, # rad
+            model.MD_SHEAR: 0,
+        }
+
+        # DataArray
+        da = model.DataArray(numpy.zeros((512, 1024), dtype=numpy.uint16), md)
+        da[12] = 2 ** 11
+        da[15] = 2 ** 10
+
+        fls = stream.StaticFluoStream(md[model.MD_DESCRIPTION], da)
+
+        self.assertEqual(fls.excitation.value, md[model.MD_IN_WL])
+        self.assertEqual(fls.emission.value, md[model.MD_OUT_WL])
+        self.assertEqual(tuple(fls.tint.value), md[model.MD_USER_TINT])
+
+        time.sleep(0.5)  # wait a bit for the image to update
+        im = fls.image.value
+        self.assertEqual(im.shape, (512, 1024, 3))
+        numpy.testing.assert_equal(im[0, 0], [0, 0, 0])
+        numpy.testing.assert_equal(im[12, 1], md[model.MD_USER_TINT])
+
     def test_cl(self):
         """Test StaticCLStream"""
         # AR background data

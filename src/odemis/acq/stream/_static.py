@@ -45,7 +45,7 @@ class StaticStream(Stream):
         raw (None or list of DataArrays): raw data to be used at initialisation
           by default, it will contain no data.(None or list of DataArrays)
         """
-        Stream.__init__(self, name, None, None, None, raw=raw)
+        super(StaticStream, self).__init__(name, None, None, None, raw=raw)
 
 
 class RGBStream(StaticStream):
@@ -157,6 +157,9 @@ class StaticFluoStream(Static2DStream):
           contain at least MD_POS and MD_PIXEL_SIZE. It should also contain
           MD_IN_WL and MD_OUT_WL.
         """
+        # Note: it will update the image, and changing the tint will do it again
+        super(StaticFluoStream, self).__init__(name, image)
+
         # Wavelengths
         try:
             exc_range = image.metadata[model.MD_IN_WL]
@@ -177,17 +180,7 @@ class StaticFluoStream(Static2DStream):
 
         # colouration of the image
         tint = image.metadata.get(model.MD_USER_TINT, default_tint)
-        self.tint = model.ListVA(tint, unit="RGB") # 3-tuple R,G,B
-        self.tint.subscribe(self.onTint)
-
-        # Do it at the end, as it forces it the update of the image
-        Static2DStream.__init__(self, name, image)
-
-    def _updateImage(self): # pylint: disable=W0221
-        Stream._updateImage(self, self.tint.value)
-
-    def onTint(self, value):
-        self._updateImage()
+        self.tint.value = tint
 
 
 class StaticARStream(StaticStream):
