@@ -203,7 +203,7 @@ class VigilantAttribute(VigilantAttributeBase):
         # only notify if the value has changed (or is different from requested)
         try:
             if must_notify:
-                pass # no need to check for more
+                pass  # no need to check for more
             elif isinstance(value, numpy.ndarray):
                 # For numpy arrays, it's not possible to use !=
                 # => just check it's the same object

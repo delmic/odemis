@@ -696,11 +696,12 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
         def cb_set(value, ctrl=value_ctrl, u=unit):
             for i in range(ctrl.Count):
                 if ctrl.GetClientData(i) == value:
-                    logging.debug("Setting ComboBox value to %s", ctrl.Items[i])
+                    logging.debug("Setting combobox value to %s", ctrl.Items[i])
                     ctrl.SetSelection(i)
                     break
             else:
-                logging.debug("No existing label found for value %s", value)
+                logging.debug("No existing label found for value %s in combobox ctrl %d",
+                              value, id(ctrl))
                 # entering value as free text
                 txt = readable_str(value, u, sig=accuracy)
                 return ctrl.SetValue(txt)
@@ -714,10 +715,11 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
             # Warning: if the text contains an unknown value, GetSelection will
             # not return wx.NOT_FOUND (as expected), but the last selection value
             if i != wx.NOT_FOUND and ctrl.Items[i] == value:
-                logging.debug("Getting CB value %s", ctrl.GetClientData(i))
+                logging.debug("Getting item value %s from combobox control",
+                              ctrl.GetClientData(i))
                 return ctrl.GetClientData(i)
             else:
-                logging.debug("Trying to parse CB free value %s", value)
+                logging.debug("Parsing combobox free text value %s", value)
                 cur_val = va.value
                 # Try to find a good corresponding value inside the string
                 new_val = reproduceTypedValue(cur_val, value)
@@ -725,8 +727,8 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
                     # be less picky, by shortening the number of values if it's too many
                     new_val = new_val[:len(cur_val)]
 
-                # if it ends up being the same value as before the CB will
-                # not update, so force it now
+                # if it ends up being the same value as before the combobox will not update, so
+                # force it now
                 if cur_val == new_val:
                     cb_set(cur_val)
                 return new_val
