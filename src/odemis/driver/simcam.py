@@ -86,6 +86,8 @@ class Camera(model.DigitalCamera):
         # TODO: don't provide range? or don't make it readonly?
         self.resolution = model.ResolutionVA(res, (res, res))  # , readonly=True)
         # TODO: support (simulated) binning
+        # Could use something like that:
+        # data0 = data0.reshape(shape[0]//b0, b0, shape[1]//b1, b1).mean(3).mean(1)
         self.binning = model.ResolutionVA((1, 1), ((1, 1), (1, 1)))
 
         exp = self._img.metadata.get(model.MD_EXP_TIME, 0.1) # s
