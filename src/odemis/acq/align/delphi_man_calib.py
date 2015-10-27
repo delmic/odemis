@@ -32,7 +32,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # odemisd --log-level 2 install/linux/usr/share/odemis/delphi.odm.yaml
 
 
-
 from __future__ import division
 
 import collections
@@ -51,6 +50,8 @@ import odemis.acq.align.delphi as aligndelphi
 
 logging.getLogger().setLevel(logging.WARNING)
 
+YES_CHARS = {"Y", "y", ''}
+YES_NO_CHARS = {"Y", "y", "N", "n", ''}
 
 
 def getch():
@@ -169,7 +170,7 @@ def main(args):
                     overview_pressure = p
                     break
             else:
-                overview_pressure = None
+                raise IOError("Failed to find the overview pressure in %s" % (pressures,))
 
         calibconf = get_calib_conf()
         shid, sht = chamber.sampleHolder.value
@@ -239,10 +240,10 @@ def main(args):
 
         while True:
             ans = None
-            while (ans not in ["y", "n", "Y", "N", '']):
+            while ans not in YES_NO_CHARS:
                 msg = "\033[1;35mDo you want to execute the sample holder hole detection? [Y/n]\033[1;m"
                 ans = raw_input(msg)
-            if (ans in ["Y", "y", '']) or force_calib:
+            if ans in YES_CHARS or force_calib:
                 # Compute stage calibration values
                 # Detect the holes/markers of the sample holder
                 # Move Phenom sample stage to expected hole position
@@ -264,10 +265,10 @@ def main(args):
                     print "                 hole focus: " + str(new_hole_focus)
                     print '\033[1;m'
                     ans = None
-                    while (ans not in ["y", "n", "Y", "N", '']):
+                    while ans not in YES_NO_CHARS:
                         msg = "\033[1;35mDo you want to update the calibration file with these values? [Y/n]\033[1;m"
                         ans = raw_input(msg)
-                    if (ans in ["Y", "y", '']) or force_calib:
+                    if ans in YES_CHARS or force_calib:
                         first_hole, second_hole, hole_focus = new_first_hole, new_second_hole, new_hole_focus
                         calibconf.set_sh_calib(shid, first_hole, second_hole, hole_focus, offset,
                                scaling, rotation, iscale, irot, iscale_xy, ishear,
@@ -295,10 +296,10 @@ def main(args):
 
         while True:
             ans = None
-            while (ans not in ["y", "n", "Y", "N", '']):
+            while ans not in YES_NO_CHARS:
                 msg = "\033[1;35mDo you want to execute the twin stage calibration? [Y/n]\033[1;m"
                 ans = raw_input(msg)
-            if (ans in ["Y", "y", '']) or force_calib:
+            if ans in YES_CHARS or force_calib:
                 # Configure CCD and e-beam to write CL spots
                 ccd.binning.value = (1, 1)
                 ccd.resolution.value = ccd.resolution.range[1]
@@ -334,10 +335,10 @@ def main(args):
                     print "                 rotation: " + str(new_rotation)
                     print '\033[1;m'
                     ans = None
-                    while (ans not in ["y", "n", "Y", "N", '']):
+                    while ans not in YES_NO_CHARS:
                         msg = "\033[1;35mDo you want to update the calibration file with these values? [Y/n]\033[1;m"
                         ans = raw_input(msg)
-                    if (ans in ["Y", "y", '']) or force_calib:
+                    if ans in YES_CHARS or force_calib:
                         offset, scaling, rotation = new_offset, new_scaling, new_rotation
                         calibconf.set_sh_calib(shid, first_hole, second_hole, hole_focus, offset,
                                scaling, rotation, iscale, irot, iscale_xy, ishear,
@@ -350,10 +351,10 @@ def main(args):
 
         while True:
             ans = None
-            while (ans not in ["y", "n", "Y", "N", '']):
+            while ans not in YES_NO_CHARS:
                 msg = "\033[1;35mDo you want to execute the SEM image calibration? [Y/n]\033[1;m"
                 ans = raw_input(msg)
-            if (ans in ["Y", "y", '']) or force_calib:
+            if ans in YES_CHARS or force_calib:
                 f = opt_stage.moveAbs({"x": 0, "y": 0})
                 f.result()
                 if pure_offset is not None:
@@ -403,10 +404,10 @@ def main(args):
                     print "                 spot shift: " + str(new_spotshift)
                     print '\033[1;m'
                     ans = None
-                    while (ans not in ["y", "n", "Y", "N", '']):
+                    while ans not in YES_NO_CHARS:
                         msg = "\033[1;35mDo you want to update the calibration file with these values? [Y/n]\033[1;m"
                         ans = raw_input(msg)
-                    if (ans in ["Y", "y", '']) or force_calib:
+                    if ans in YES_CHARS or force_calib:
                         resa, resb, hfwa, spotshift = new_resa, new_resb, new_hfwa, new_spotshift
                         calibconf.set_sh_calib(shid, first_hole, second_hole, hole_focus, offset,
                                scaling, rotation, iscale, irot, iscale_xy, ishear,
@@ -419,10 +420,10 @@ def main(args):
 
         while True:
             ans = None
-            while (ans not in ["y", "n", "Y", "N", '']):
+            while ans not in YES_NO_CHARS:
                 msg = "\033[1;35mDo you want to execute the fine alignment? [Y/n]\033[1;m"
                 ans = raw_input(msg)
-            if (ans in ["Y", "y", '']) or force_calib:
+            if ans in YES_CHARS or force_calib:
                 # Return to the center so fine alignment can be executed just after calibration
                 f = opt_stage.moveAbs({"x": 0, "y": 0})
                 f.result()
@@ -481,10 +482,10 @@ def main(args):
                     print "                 shear: " + str(new_ishear)
                     print '\033[1;m'
                     ans = None
-                    while (ans not in ["y", "n", "Y", "N", '']):
+                    while ans not in YES_NO_CHARS:
                         msg = "\033[1;35mDo you want to update the calibration file with these values? [Y/n]\033[1;m"
                         ans = raw_input(msg)
-                    if (ans in ["Y", "y", '']) or force_calib:
+                    if ans in YES_CHARS or force_calib:
                         iscale, irot, iscale_xy, ishear = new_iscale, new_irot, new_iscale_xy, new_ishear
                         calibconf.set_sh_calib(shid, first_hole, second_hole, hole_focus, offset,
                                scaling, rotation, iscale, irot, iscale_xy, ishear,

@@ -930,9 +930,6 @@ class DelphiStateController(SecomStateController):
         calib_dialog = CalibrationProgressDialog(
             self._tab_panel.Parent,
             self._main_data,
-            self._overview_pressure,
-            self._vacuum_pressure,
-            self._vented_pressure,
             self._calibconf,
             shid
         )

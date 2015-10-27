@@ -107,14 +107,12 @@ class CalibrationProgressDialog(xrcprogress_dialog):
     """ Wrapper class responsible for the connection between delphi calibration
     future and the xrcprogress_dialog.
     """
-    def __init__(self, parent, main_data, overview_pressure, vacuum_pressure, vented_pressure,
-                 calibconf, shid):
+    def __init__(self, parent, main_data, calibconf, shid):
         xrcprogress_dialog.__init__(self, parent)
 
         # ProgressiveFuture for the ongoing calibration
         self._calibconf = calibconf
         self._main_data = main_data
-        self._vented_pressure = vented_pressure
         self._shid = shid
         self.calib_future = None
         self._calib_future_connector = None
@@ -124,8 +122,7 @@ class CalibrationProgressDialog(xrcprogress_dialog):
         self.info_txt.SetLabel("Calibration of the sample holder in progress")
         self.Fit()
         # self.Layout()  # to put the gauge at the right place
-        self.calib_future = DelphiCalibration(main_data, overview_pressure, vacuum_pressure,
-                                              vented_pressure)
+        self.calib_future = DelphiCalibration(main_data)
         self._calib_future_connector = ProgressiveFutureConnector(self.calib_future,
                                                                   self.gauge,
                                                                   self.time_txt)
@@ -202,7 +199,7 @@ class CalibrationProgressDialog(xrcprogress_dialog):
 #         self.update_calibration_time(left)
 
 
-def DelphiCalibration(main_data, overview_pressure, vacuum_pressure, vented_pressure,
+def DelphiCalibration(main_data,
                       first_insertion=True, known_first_hole_f=None, known_second_hole_f=None,
                       known_focus_f=None, known_offset_f=None, known_rotation_f=None,
                       known_scaling_f=None):
@@ -210,9 +207,6 @@ def DelphiCalibration(main_data, overview_pressure, vacuum_pressure, vented_pres
     Wrapper for DoDelphiCalibration. It provides the ability to check the
     progress of the procedure.
     main_data (odemis.gui.model.MainGUIData)
-    overview_pressure (float): NavCam pressure value
-    vacuum_pressure (float): Pressure under vacuum
-    vented_pressure (float): Pressure when vented
     first_insertion (Boolean): If True it is the first insertion of this sample
                                 holder
     known_first_hole (tuple of floats): Hole coordinates found in the calibration file
@@ -236,8 +230,7 @@ def DelphiCalibration(main_data, overview_pressure, vacuum_pressure, vented_pres
     # Run in separate thread
     delphi_calib_thread = threading.Thread(target=executeTask,
                                            name="Delphi Calibration",
-                                           args=(f, _DoDelphiCalibration, f, main_data, overview_pressure,
-                                                 vacuum_pressure, vented_pressure, first_insertion,
+                                           args=(f, _DoDelphiCalibration, f, main_data, first_insertion,
                                                  known_first_hole_f, known_second_hole_f, known_focus_f,
                                                  known_offset_f, known_rotation_f, known_scaling_f))
 
@@ -245,8 +238,7 @@ def DelphiCalibration(main_data, overview_pressure, vacuum_pressure, vented_pres
     return f
 
 
-def _DoDelphiCalibration(future, main_data, overview_pressure, vacuum_pressure,
-                         vented_pressure, first_insertion=True, known_first_hole_f=None,
+def _DoDelphiCalibration(future, main_data, first_insertion=True, known_first_hole_f=None,
                          known_second_hole_f=None, known_focus_f=None, known_offset_f=None,
                          known_rotation_f=None, known_scaling_f=None):
     """
@@ -254,9 +246,6 @@ def _DoDelphiCalibration(future, main_data, overview_pressure, vacuum_pressure,
     the conversion metadata update and the fine alignment.
     future (model.ProgressiveFuture): Progressive future provided by the wrapper
     main_data (odemis.gui.model.MainGUIData)
-    overview_pressure (float): NavCam pressure value
-    vacuum_pressure (float): Pressure under vacuum
-    vented_pressure (float): Pressure when vented
     first_insertion (Boolean): If True it is the first insertion of this sample
                                 holder
     known_first_hole (tuple of floats): Hole coordinates found in the calibration file
@@ -283,6 +272,16 @@ def _DoDelphiCalibration(future, main_data, overview_pressure, vacuum_pressure,
     logging.debug("Delphi calibration...")
 
     try:
+        pressures = main_data.chamber.axes["pressure"].choices
+        vacuum_pressure = min(pressures.keys())  # Pressure to go to SEM mode
+        # vented_pressure = max(pressures.keys())
+        for p, pn in pressures.items():
+            if pn == "overview":
+                overview_pressure = p  # Pressure to go to overview mode
+                break
+        else:
+            raise IOError("Failed to find the overview pressure in %s" % (pressures,))
+
         if future._delphi_calib_state == CANCELLED:
             raise CancelledError()
 
