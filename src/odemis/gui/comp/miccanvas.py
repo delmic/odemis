@@ -535,37 +535,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.scale = 1 / mpp
         wx.CallAfter(self.request_drawing_update)
 
-    # TODO: move to viewport?
-    @property
-    def horizontal_field_width(self):
-        """ Return the field width of the canvas in meters
-
-        :return: (None or float) Field width in meters
-        """
-
-        width = self.ClientSize.x
-        height = self.ClientSize.y
-        # trick: we actually return the smallest of the FoV dimensions, so
-        # that we are sure the microscope image will fit fully (if it's square)
-        if self.microscope_view and width:
-            return self.microscope_view.mpp.value * min(width, height)
-
-        return None
-
-    @horizontal_field_width.setter
-    def horizontal_field_width(self, hfw):
-        """ Set the mpp of the microscope view according to the given HFW """
-
-        # Trick: we use the smallest of the canvas dimensions to be sure the image
-        # will fit.
-        size = min(self.ClientSize)
-        # TODO: return both FoV dimensions, and move this cleverness to the
-        # controller, so that it can do the right thing even if the image is not
-        # square.
-        if self.microscope_view and size > 0:
-            mpp = self.microscope_view.mpp.clip(hfw / size)
-            self.microscope_view.mpp.value = mpp
-
     def on_size(self, event):
         new_size = event.Size
 

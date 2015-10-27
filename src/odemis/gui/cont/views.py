@@ -75,12 +75,12 @@ class ViewPortController(object):
             tab_data.viewLayout.subscribe(self._on_view_layout, init=True)
             tab_data.focussedView.subscribe(self._on_focussed_view, init=True)
         elif len(self._viewports) != 1:
-            logging.warning("Multiple viewports, but no ViewportGrid to manage them")
+            logging.info("Multiple viewports, but no ViewportGrid to manage them")
 
         # TODO: just let the viewport do that?
         # Track the mpp of the SEM view in order to set the magnification
         ebeam = self._main_data_model.ebeam
-        if (ebeam and isinstance(ebeam.horizontalFoV, VigilantAttributeBase)):
+        if ebeam and isinstance(ebeam.horizontalFoV, VigilantAttributeBase):
             # => Link the SEM FoV with the mpp of the live SEM viewport
             for vp in self.viewports:
                 if vp.microscope_view.stream_classes == EMStream:  # For SEM only views
