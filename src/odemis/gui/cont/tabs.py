@@ -2458,6 +2458,7 @@ class Sparc2AlignTab(Tab):
                             focuser=main_data.focus,
                             # forcemd={model.MD_PIXEL_SIZE: (10e-5, 10e-5)},  # DEBUG
                             )
+        specline_stream.tint.value = (0, 64, 255)  # colour it blue
         self._specline_stream = specline_stream
         # Add it as second stream, so that it's displayed with the default 0.3 merge ratio
         self._stream_controller.addStream(specline_stream, visible=False)

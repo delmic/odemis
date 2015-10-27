@@ -1153,8 +1153,9 @@ class SparcARCanvas(DblMicroscopeCanvas):
                 images_goal.append((wim, pos, scale, keepalpha, None,
                                     None, self.flip, None, s.name.value))
             else:
+                # TODO: make the blending mode an option
                 images_opt.append((wim, pos, scale, keepalpha, None,
-                                   None, self.flip, None, s.name.value))
+                                   None, self.flip, BLEND_SCREEN, s.name.value))
 
         # normal images at the beginning, goal image at the end
         ims = images_opt + images_goal
