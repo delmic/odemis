@@ -1297,7 +1297,7 @@ class MirrorArcOverlay(WorldOverlay, DragMixin):
         self.colour = conversion.hex_to_frgb(gui.FG_COLOUR_EDIT)
 
         # The world position of the hole in the mirror (starts with a non-used VA)
-        self.hole_pos_va = model.TupleContinuous((0, 0), ((-1, -1), (1, 1)))
+        self.hole_pos_va = model.TupleContinuous((0.0, 0.0), ((-1.0, -1.0), (1.0, 1.0)))
 
         # Mirror arc rendering parameters
         self.parabole_cut_radius = None
