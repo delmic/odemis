@@ -687,6 +687,14 @@ class MomentOfInertiaLiveStream(CCDSettingsStream):
         del self.auto_bc_outliers
         del self.histogram
 
+        # Region of interest as left, top, right, bottom (in ratio from the
+        # whole area of the emitter => between 0 and 1) that defines the region
+        # to be acquired for the MoI compution.
+        # This is expected to be centered to the lens pole position.
+        self.detROI = model.TupleContinuous((0, 0, 1, 1),
+                                         range=((0, 0, 0, 0), (1, 1, 1, 1)),
+                                         cls=(int, long, float), setter=self._setDetROI)
+
         # The background data (typically, an acquisition without ebeam).
         # It is subtracted from the acquisition data.
         # If set to None, baseline is used
@@ -695,6 +703,14 @@ class MomentOfInertiaLiveStream(CCDSettingsStream):
         # Future of the acquisition
         self._acq_stream = MomentOfInertiaMDStream("MoI acq", sem_stream, self)
         self._acquire_f = None
+
+    def _setDetROI(self, roi):
+        """
+        Setter for the .detROI VA
+        Synchronises the detROI VA with the VA of the acquisition stream
+        """
+        self._acq_stream.detROI.value = roi
+        return roi
 
     def _setBackground(self, data):
         """

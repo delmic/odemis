@@ -1056,6 +1056,14 @@ class MomentOfInertiaMDStream(SEMCCDMDStream):
     def __init__(self, name, main_stream, rep_stream):
         super(MomentOfInertiaMDStream, self).__init__(name, main_stream, rep_stream)
 
+        # Region of interest as left, top, right, bottom (in ratio from the
+        # whole area of the emitter => between 0 and 1) that defines the region
+        # to be acquired for the MoI compution.
+        # This is expected to be centered to the lens pole position.
+        self.detROI = model.TupleContinuous((0, 0, 1, 1),
+                                         range=((0, 0, 0, 0), (1, 1, 1, 1)),
+                                         cls=(int, long, float))
+
         self.background = model.VigilantAttribute(None)  # None or 2D DataArray
 
         self._center_image_i = (0, 0)  # iteration at the center (for spot size)
@@ -1064,6 +1072,35 @@ class MomentOfInertiaMDStream(SEMCCDMDStream):
         # For computing the moment of inertia in background
         # TODO: More than one thread useful? Use processes instead? + based on number of CPUs
         self._executor = futures.ThreadPoolExecutor(4)
+
+    def _ssAdjustHardwareSettings(self):
+        """
+        Set the CCD settings to crop the FoV around the pole position to
+        optimize the speed of the MoI computation.
+        return (float): estimated time for a whole CCD image
+        """
+        # We should remove res setting from the GUI when this ROI is used.
+        roi = self.detROI.value
+        center = ((roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2)
+        width = (roi[2] - roi[0], roi[3] - roi[1])
+
+        shape = self._rep_det.shape
+        binning = self._rep_det.binning.value
+        res = (max(1, int(round(shape[0] * width[0] / binning[0]))),
+               max(1, int(round(shape[1] * width[1] / binning[1]))))
+        # translation is distance from center (situated at 0.5, 0.5), can be floats
+        trans = (shape[0] * (center[0] - 0.5), shape[1] * (center[1] - 0.5))
+        # clip translation so ROI remains in bounds
+        bin_trans = (trans[0] / binning[0], trans[1] / binning[1])
+        half_res = (int(round(res[0] / 2)), int(round(res[1] / 2)))
+        cur_res = (shape[0] / binning[0], shape[1] / binning[1])
+        bin_trans = (numpy.clip(bin_trans[0], -(cur_res[0] / 2) + half_res[0], (cur_res[0] / 2) - half_res[0]),
+                     numpy.clip(bin_trans[1], -(cur_res[1] / 2) + half_res[1], (cur_res[1] / 2) - half_res[1]))
+        trans = (int(bin_trans[0] * binning[0]), int(bin_trans[1] * binning[1]))
+        # always in this order
+        self._rep_det.resolution.value = res
+        self._rep_det.translation.value = trans
+        return super(MomentOfInertiaMDStream, self)._ssAdjustHardwareSettings()
 
     def acquire(self):
         if self._current_future is not None and not self._current_future.done():

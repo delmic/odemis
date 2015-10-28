@@ -2368,6 +2368,9 @@ class SparcAlignTab(Tab):
                 s.is_active.value = False
 
 
+# Moment of inertia ROI width
+MOI_ROI_WIDTH = 0.5  # => take half of the full frame (in each dimension)
+
 class Sparc2AlignTab(Tab):
     """
     Tab for the mirror/fiber alignment on the SPARCv2. Note that the basic idea
@@ -2483,7 +2486,8 @@ class Sparc2AlignTab(Tab):
                            main_data.ccd, main_data.ccd.data, main_data.ebeam,
                            moisem,
                            hwemtvas={'magnification'},  # Hardware VAs will not be duplicated as ent/det VAs
-                           detvas=get_hw_settings(main_data.ccd))
+                           # we don't want resolution to mess up with detROI
+                           detvas=get_hw_settings(main_data.ccd, hidden={"resolution"}))
         # Pick some typically good settings
         mois.repetition.value = (9, 9)
         mois.detExposureTime.value = mois.detExposureTime.clip(0.01)
@@ -2493,6 +2497,8 @@ class Sparc2AlignTab(Tab):
         except AttributeError:
             mois.detReadoutRate.value = max(mois.detReadoutRate.choices)
         self._moi_stream = mois
+        # Update ROI based on the lens pole position
+        main_data.lens.polePosition.subscribe(self._onPolePosition, init=True)
         # TODO: instead of add_to_all_views, have a way to ask to add to a specific view (or none at all)
         mois_spe = self._stream_controller.addStream(mois, add_to_all_views=True)
         mois_spe.stream_panel.flatten()  # No need for the stream name
@@ -2574,6 +2580,19 @@ class Sparc2AlignTab(Tab):
         if not (hasattr(main_data.ebeam, "horizontalFoV")
                 and isinstance(main_data.ebeam.horizontalFoV, model.VigilantAttributeBase)):
             main_data.ebeam.magnification.subscribe(self._onSEMMag)
+
+    def _onPolePosition(self, pole_pos):
+        """
+        Called when the polePosition VA is updated
+        """
+        ccd = self.tab_data_model.main.ccd
+        cntr_roi = (pole_pos[0] / ccd.shape[0],
+                    pole_pos[1] / ccd.shape[1])
+        # Clip center so we have enough space before the bounds
+        h_width = MOI_ROI_WIDTH / 2
+        cntr_roi = numpy.clip(cntr_roi, (h_width, h_width), (1 - h_width, 1 - h_width))
+        self._moi_stream.detROI.value = (cntr_roi[0] - h_width, cntr_roi[1] - h_width,
+                                         cntr_roi[0] + h_width, cntr_roi[1] + h_width)
 
     def _addMoIEntries(self, cont):
         """
