@@ -855,8 +855,8 @@ class ChamberTab(Tab):
         tab_data = guimod.ChamberGUIData(main_data)
         super(ChamberTab, self).__init__(name, button, panel, main_frame, tab_data)
 
-        # future to handle the move
-        self._move_future = model.InstantaneousFuture()
+        # futures to handle the move
+        self._move_futures = ()
 
         # Position to where to go when requested to be engaged
         try:
@@ -1022,7 +1022,7 @@ class ChamberTab(Tab):
             f2 = mirror.moveAbs({"s": MIRROR_POS_PARKED["s"]})
             btn_text = "PARKING MIRROR"
 
-        self._move_future = f2
+        self._move_futures = (f1, f2)
         f2.add_done_callback(self._on_move_done)
 
         self.tab_data_model.main.is_acquiring.value = True
@@ -1032,11 +1032,24 @@ class ChamberTab(Tab):
 
     def _on_cancel(self, evt):
         """
-        Called when the cancel button is pressed, or the
+        Called when the cancel button is pressed, or the move button is untoggled
         """
-        if not self._move_future.cancel():
-            # It should only happen if user tries to cancel at the very end,
-            # when the move is actually already completed.
+        if not self._move_futures:
+            return
+
+        # Cancel the last one first, to be sure it'll not start after cancelling
+        # the first ones.
+        cancelled = False
+        for f in reversed(self._move_futures):
+            try:
+                cancelled |= f.cancel()
+            except Exception:
+                logging.exception("Failed to cancel mirror move")
+
+        # At least one of the cancellation should have succeeded, unless the
+        # user happens to attempt cancelling at at the very end, when
+        # the move is actually already completed.
+        if not cancelled:
             logging.info("Failed to cancel the mirror move")
         else:
             logging.info("Mirror move cancelled")
