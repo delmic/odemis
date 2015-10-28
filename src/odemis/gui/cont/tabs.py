@@ -2577,8 +2577,8 @@ class Sparc2AlignTab(Tab):
         self.panel.btn_bkg_acquire.Bind(wx.EVT_BUTTON, self._onBkgAcquire)
 
         # Force MoI view fit to content when magnification is updated
-        if not (hasattr(main_data.ebeam, "horizontalFoV")
-                and isinstance(main_data.ebeam.horizontalFoV, model.VigilantAttributeBase)):
+        if not (hasattr(main_data.ebeam, "horizontalFoV") and
+                isinstance(main_data.ebeam.horizontalFoV, model.VigilantAttributeBase)):
             main_data.ebeam.magnification.subscribe(self._onSEMMag)
 
     def _onPolePosition(self, pole_pos):

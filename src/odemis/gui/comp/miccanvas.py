@@ -455,7 +455,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
     def _on_view_image_update(self, t):
         # TODO: use the real streamtree functions,for now we call a conversion layer
         self._convert_streams_to_images()
-        if self.fit_view_to_next_image and any([i is not None for i in self.images]):
+        if self.fit_view_to_next_image and any(i is not None for i in self.images):
             self.fit_view_to_content()
             self.fit_view_to_next_image = False
         # logging.debug("Will update drawing for new image")
