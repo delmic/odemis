@@ -35,8 +35,6 @@ class Camera(model.DigitalCamera):
     '''
     This represent a fake digital camera, which generates as data the image
     given at initialisation.
-    Very simple implementation: it doesn't support cropping/binning/translation or any
-    settings but exposureTime.
     '''
 
     def __init__(self, name, role, image, children=None, daemon=None, **kwargs):
