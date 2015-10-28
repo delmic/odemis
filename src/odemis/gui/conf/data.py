@@ -63,7 +63,7 @@ HW_SETTINGS_CONFIG = {
             ("exposureTime", {
                 "control_type": odemis.gui.CONTROL_SLIDER,
                 "scale": "log",
-                "range": (0.001, 60.0),
+                "range": (0.001, 60.0),  # Good for fluorescence microscopy
                 "type": "float",
                 "accuracy": 2,
             }),
@@ -222,7 +222,7 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
         {
             "exposureTime":
             {
-                "range": (0.01, 500.0),  # Typically much longer than on a SECOM
+                "range": (10e-6, 500.0),  # Much wider than on a SECOM
             },
             # TODO: need better stream GUI with crop ratio (aka ROI) + resolution based on scale + ROI
             "resolution":  # Read-only because cropping is useless for the user
@@ -238,7 +238,7 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
         {
             "dwellTime":
             {
-                "range": (1e-9, 10.0),  # TODO: actually only useful for the monochromator settings
+                "range": (1e-9, 10.0),  # TODO: 1+ s actually only useful for the monochromator settings, but cannot be set via the stream setting conf)
             },
             # TODO: need better stream GUI with crop ratio (aka ROI) + resolution based on scale + ROI
             "resolution":  # Read-only because ROI override it
@@ -270,7 +270,7 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
         {
             "exposureTime":
             {
-                "range": (0.01, 500.0),  # Typically much longer than on a SECOM
+                "range": (10e-6, 500.0),  # Much wider than on a SECOM
             },
             # TODO: need better stream GUI with crop ratio (aka ROI) + resolution based on scale + ROI
             "resolution":  # Read-only because cropping is useless for the user
@@ -285,7 +285,7 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
         {
             "dwellTime":
             {
-                "range": (1e-9, 10.0),  # TODO: actually only useful for the monochromator settings
+                "range": (1e-9, 10.0),
             },
             # TODO: need better stream GUI with crop ratio (aka ROI) + resolution based on scale + ROI
             "resolution":  # Read-only because ROI override it
