@@ -41,7 +41,7 @@ from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.viewport import MicroscopeViewport, AngularResolvedViewport, \
     PlotViewport, SpatialSpectrumViewport
 from odemis.gui.conf import get_acqui_conf
-from odemis.gui.conf.data import get_hw_settings, get_stream_settings_config
+from odemis.gui.conf.data import get_local_vas, get_stream_settings_config
 from odemis.gui.cont import settings, tools
 from odemis.gui.cont.actuators import ActuatorController
 from odemis.gui.cont.microscope import SecomStateController, DelphiStateController
@@ -608,8 +608,8 @@ class SparcAcquisitionTab(Tab):
             focuser=main_data.ebeam_focus,
             hwemtvas={'magnification'},  # Hardware VAs will not be duplicated as ent/det VAs
             hwdetvas=None,
-            emtvas=get_hw_settings(main_data.ebeam),
-            detvas=get_hw_settings(main_data.sed),
+            emtvas=get_local_vas(main_data.ebeam),
+            detvas=get_local_vas(main_data.sed),
         )
 
         sem_stream.should_update.value = True  # TODO: put it in _streams_to_restart instead?
@@ -901,7 +901,7 @@ class ChamberTab(Tab):
         # Just one stream: chamber view
         self._ccd_stream = acqstream.CameraStream("Chamber view",
                                                   main_data.ccd, main_data.ccd.data, None,
-                                                  detvas=get_hw_settings(main_data.ccd))
+                                                  detvas=get_local_vas(main_data.ccd))
         ccd_spe = self._stream_controller.addStream(self._ccd_stream)
         ccd_spe.stream_panel.flatten()  # No need for the stream name
         self._ccd_stream.should_update.value = True
@@ -2460,7 +2460,7 @@ class Sparc2AlignTab(Tab):
                             main_data.ccd.data,
                             main_data.ebeam,
                             focuser=main_data.focus,
-                            detvas=get_hw_settings(main_data.ccd))
+                            detvas=get_local_vas(main_data.ccd))
         self._ccd_stream = ccd_stream
 
         ccd_spe = self._stream_controller.addStream(ccd_stream)
@@ -2487,7 +2487,7 @@ class Sparc2AlignTab(Tab):
                            moisem,
                            hwemtvas={'magnification'},  # Hardware VAs will not be duplicated as ent/det VAs
                            # we don't want resolution to mess up with detROI
-                           detvas=get_hw_settings(main_data.ccd, hidden={"resolution"}))
+                           detvas=get_local_vas(main_data.ccd, hidden={"resolution"}))
         # Pick some typically good settings
         mois.repetition.value = (9, 9)
         mois.detExposureTime.value = mois.detExposureTime.clip(0.01)

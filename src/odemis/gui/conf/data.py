@@ -29,6 +29,8 @@ import wx
 
 import odemis.gui.conf.util as util
 
+# VAs which should never be displayed (because they are not for changing the settings)
+HIDDEN_VAS = {"children", "affects", "state", "powerSupply"}
 
 # All values in CONFIG are optional
 #
@@ -466,10 +468,9 @@ def get_stream_settings_config():
     return STREAM_SETTINGS_CONFIG
 
 
-# TODO: currently used only to find the VAs to be used as stream local VAs.
-# => Rename and/or check the function make sense?
-def get_hw_settings(hw_comp, hidden=None):
-    """ Find all the VAs of a component which have a configuration defined
+def get_local_vas(hw_comp, hidden=None):
+    """
+    Find all the VAs of a component which are worthy to become local VAs.
 
     :param hw_comp: (HwComponent)
     :param hidden: (set) Name of VAs to ignore
@@ -478,16 +479,25 @@ def get_hw_settings(hw_comp, hidden=None):
     """
 
     config = get_hw_settings_config()
-    hidden_vas = {"children", "affects", "state"} | (hidden or set())
+    hidden_vas = HIDDEN_VAS | (hidden or set())
 
-    comp_vas = list(getVAs(hw_comp).items())
+    comp_vas = getVAs(hw_comp)
     config_vas = config.get(hw_comp.role, {}) # OrderedDict or dict
 
     settings = set()
+    for name, va in comp_vas.items():
+        # Take all VAs that  would be displayed on the stream panel
+        if name in hidden_vas or va.readonly:
+            continue
+        try:
+            ctyp = config_vas[name]["control_type"]
+            if ctyp == odemis.gui.CONTROL_NONE:
+                continue
+        except KeyError:
+            # not in config => it'll be displayed
+            pass
 
-    for name, value in comp_vas:
-        if name not in hidden_vas and name in config_vas:
-            settings.add(name)
+        settings.add(name)
 
     return settings
 
