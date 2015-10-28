@@ -13,7 +13,7 @@ SPARC2: {
 
 # Light (lamp with known spectrum)
 "Calibration Light": {
-    class: simulated.Light,
+    class: light.Light,
     role: "brightlight",
     power_supplier: "Power Control Unit",
     affects: ["Camera"],
@@ -228,7 +228,7 @@ SPARC2: {
     role: lens,
     # Standard mirror config
     init: {
-       mag: 0.4917, # ratio
+       mag: 0.31, # ratio
        na: 0.2, # ratio, numerical aperture
        ri: 1.0, # ratio, refractive index
        pole_pos: [458, 519], # (px, px), position of the pole (aka the hole in the mirror)
@@ -236,6 +236,7 @@ SPARC2: {
        hole_diam: 0.6e-3,  # m, diameter the hole in the mirror
        focus_dist: 0.5e-3,  # m, the vertical mirror cutoff, iow the min distance between the mirror and the sample
        parabola_f: 2.5e-3,  # m, parabola_parameter=1/4f
+       rotation: -1.570796326795, # rad, 90° rotation between optical axis and SEM Y axis
     },
     affects: ["Camera"]
 }
@@ -361,8 +362,8 @@ SPARC2: {
     role: "mirror-xy",
     children: {"orig": "Mirror Actuators"},
     init: {
-        axes: ["s", "l"], # mapped respectively to X, Y
-        rotation: 1.04719755, # rad (= 60°)
+        axes: ["l", "s"], # mapped respectively to X, Y
+        rotation: -1.0471975511965976, # rad (= 60°)
         # Note: if you want to use absolute moves, add a "translation" too
     },
 }

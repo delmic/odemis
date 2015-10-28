@@ -4,7 +4,7 @@ Created on 7 Aug 2012
 
 @author: Éric Piel
 
-Copyright © 2012 Éric Piel, Delmic
+Copyright © 2012-2015 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -20,37 +20,39 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
+# Provides various components which are not actually drivers but just representing
+# physical components which cannot be modified by software. It's mostly used for
+# computing the right metadata/behaviour of the system.
+
 from __future__ import division
+
 from Pyro4.core import isasync
+import collections
+import math
 from numpy.polynomial import polynomial
 from odemis import model
-import collections
 import odemis
 
-"""
-Provides various components which are not actually drivers but just representing
-physical components which cannot be modified by software. It's mostly used for
-computing the right metadata/behaviour of the system.
-"""
 
 # TODO what is the best type? Emitter? Or something else?
 # Detector needs a specific .data and .shape
 class OpticalLens(model.HwComponent):
     """
-    A very simple class which just represent a lens with a given magnification.
+    A class which represents either just a lens with a given magnification,
+    or the parabolic mirror and lens of a SPARC.
     It should "affect" the detector on which it's in front of.
     """
     def __init__(self, name, role, mag, na=0.95, ri=1,
                  pole_pos=None, x_max=None, hole_diam=None,
-                 focus_dist=None, parabola_f=None, **kwargs):
+                 focus_dist=None, parabola_f=None, rotation=None, **kwargs):
         """
         name (string): should be the name of the product (for metadata)
         mag (float > 0): magnification ratio
         na (float > 0): numerical aperture
         ri (0.01 < float < 100): refractive index
         pole_pos (2 floats > 0): position of the pole on the CCD (in px, without
-          binning). Used for angular resolved imaging on SPARC (only).
-          cf MD_AR_POLE
+          binning, with the top-left pixel as origin).
+          Used for angular resolved imaging on SPARC (only). cf MD_AR_POLE
         x_max (float): the distance between the parabola origin and the cutoff
           position (in meters). Used for angular resolved imaging on SPARC (only).
           cf MD_AR_XMAX
@@ -64,6 +66,9 @@ class OpticalLens(model.HwComponent):
         parabola_f (float): parabola_parameter=1/4f. Used for angular
           resolved imaging on SPARC (only).
           cf MD_AR_PARABOLA_F
+        rotation (0<float<2*pi): rotation between the Y axis of the SEM
+          referential and the optical path axis. Used on the SPARC to report
+          the rotation between the AR image and the SEM image.
         """
         assert (mag > 0)
         model.HwComponent.__init__(self, name, role, **kwargs)
@@ -81,15 +86,19 @@ class OpticalLens(model.HwComponent):
                 len(pole_pos) != 2 or any(v < 0 for v in pole_pos)):
                 raise ValueError("pole_pos must be 2 positive values, got %s" % pole_pos)
             self.polePosition = model.ResolutionVA(tuple(pole_pos),
-                                                   rng=[(0, 0), (1e6, 1e6)])
+                                                   rng=((0, 0), (1e6, 1e6)),
+                                                   unit="px")
         if x_max is not None:
-            self.xMax = model.FloatVA(x_max)
+            self.xMax = model.FloatVA(x_max, unit="m")
         if hole_diam is not None:
-            self.holeDiameter = model.FloatVA(hole_diam)
+            self.holeDiameter = model.FloatVA(hole_diam, unit="m")
         if focus_dist is not None:
-            self.focusDistance = model.FloatVA(focus_dist)
+            self.focusDistance = model.FloatVA(focus_dist, unit="m")
         if parabola_f is not None:
-            self.parabolaF = model.FloatVA(parabola_f)
+            self.parabolaF = model.FloatVA(parabola_f, unit="m")
+        if rotation is not None:
+            self.rotation = model.FloatContinuous(rotation, (0, 2 * math.pi),
+                                                  unit="rad")
 
 
 class LightFilter(model.Actuator):

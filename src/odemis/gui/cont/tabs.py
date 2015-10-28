@@ -1744,7 +1744,7 @@ class SecomAlignTab(Tab):
 
         # Adapt the zoom level of the SEM to fit exactly the SEM field of view.
         # No need to check for resize events, because the view has a fixed size.
-        panel.vp_align_sem.canvas.abilities -= set([CAN_ZOOM])
+        panel.vp_align_sem.canvas.abilities -= {CAN_ZOOM}
         # prevent the first image to reset our computation
         panel.vp_align_sem.canvas.fit_view_to_next_image = False
         main_data.ebeam.pixelSize.subscribe(self._onSEMpxs, init=True)
@@ -2405,6 +2405,7 @@ class Sparc2AlignTab(Tab):
                     "cls": guimod.ContentView,
                     "name": "Moment of Inertia",
                     "stream_classes": acqstream.MomentOfInertiaLiveStream,
+                    "stage": main_data.mirror_xy,
                 }
             ),
             (self.panel.vp_align_center,
@@ -2460,23 +2461,28 @@ class Sparc2AlignTab(Tab):
                             focuser=main_data.focus,
                             # forcemd={model.MD_PIXEL_SIZE: (10e-5, 10e-5)},  # DEBUG
                             )
+        specline_stream.tint.value = (0, 64, 255)  # colour it blue
         self._specline_stream = specline_stream
         # Add it as second stream, so that it's displayed with the default 0.3 merge ratio
         self._stream_controller.addStream(specline_stream, visible=False)
 
         # MomentOfInertiaStream needs an SEM stream and a CCD stream
+        self.panel.vp_moi.canvas.abilities -= {CAN_ZOOM}
         moisem = acqstream.SEMStream("SEM for MoI", main_data.sed, main_data.sed.data, main_data.ebeam)
         mois = acqstream.MomentOfInertiaLiveStream("MoI",
                            main_data.ccd, main_data.ccd.data, main_data.ebeam,
                            moisem,
+                           hwemtvas={'magnification'},  # Hardware VAs will not be duplicated as ent/det VAs
                            # we don't want resolution to mess up with detROI
                            detvas=get_hw_settings(main_data.ccd, hidden={"resolution"}))
-        # TODO: need SEM mag (or set HFW to a good value)
         # Pick some typically good settings
         mois.repetition.value = (9, 9)
         mois.detExposureTime.value = mois.detExposureTime.clip(0.01)
         mois.detBinning.value = mois.detBinning.clip((8, 8))
-        # TODO: ensure full res too?
+        try:
+            mois.detReadoutRate.value = mois.detReadoutRate.range[1]
+        except AttributeError:
+            mois.detReadoutRate.value = max(mois.detReadoutRate.choices)
         self._moi_stream = mois
         # Update ROI based on the lens pole position
         main_data.lens.polePosition.subscribe(self._onPolePosition, init=True)
@@ -2485,18 +2491,13 @@ class Sparc2AlignTab(Tab):
         mois_spe.stream_panel.flatten()  # No need for the stream name
         # TODO: add ways to show:
         # * Chronograph of the MoI at the center
-        # * MoI at center
-        # * Spot size at center
         self._addMoIEntries(mois_spe.stream_panel)
         mois.image.subscribe(self._onNewMoI)
 
         # The center align view share the same CCD stream (and settings)
         self.panel.vp_align_center.microscope_view.addStream(ccd_stream)
 
-        # The mirror center (with the lens set) is defined as pole position
-        # in the microscope configuration file.
-        # TODO: use an overlay, instead of a stream? We need to allow dragging it around
-        # + connect it to the .polePosition VA of lens
+        # Connect polePosition of lens to mirror overlay (via the polePositionPhysical VA)
         mirror_ol = self.panel.vp_align_center.canvas.mirror_ol
         lens = main_data.lens
         try:
@@ -2537,13 +2538,11 @@ class Sparc2AlignTab(Tab):
         self._actuator_controller = ActuatorController(tab_data, panel, "")
         self._actuator_controller.bind_keyboard(panel)
 
-        # TODO: update MD_FAV_POS_ACTIVE of lens-mover and mirror
-
         # TODO: warn user if the mirror stage is too far from the official engaged
         # position. => The S axis will fail!
 
         if main_data.focus:
-            # TODO: focus position axis -> AxisConnector
+            # Focus position axis -> AxisConnector
             z = main_data.focus.axes["z"]
             self.panel.slider_focus.SetRange(z.range[0], z.range[1])
             self._ac_focus = AxisConnector("z", main_data.focus, self.panel.slider_focus,
@@ -2556,13 +2555,18 @@ class Sparc2AlignTab(Tab):
             self._autofocused = False  # to force autofocus on the first trial
             tab_data.autofocus_active.subscribe(self._onAutofocus)
 
-            # Prepare the calibration light
+            # Make sure the calibration light is off
             emissions = [0.] * len(main_data.brightlight.emissions.value)
             main_data.brightlight.emissions.value = emissions
-            main_data.brightlight.power.value = main_data.brightlight.power.range[1]
+            main_data.brightlight.power.value = main_data.brightlight.power.range[0]
 
         # Bind MoI background acquisition
         self.panel.btn_bkg_acquire.Bind(wx.EVT_BUTTON, self._onBkgAcquire)
+
+        # Force MoI view fit to content when magnification is updated
+        if not (hasattr(main_data.ebeam, "horizontalFoV")
+                and isinstance(main_data.ebeam.horizontalFoV, model.VigilantAttributeBase)):
+            main_data.ebeam.magnification.subscribe(self._onSEMMag)
 
     def _onPolePosition(self, pole_pos):
         """
@@ -2668,7 +2672,6 @@ class Sparc2AlignTab(Tab):
                          args=(op_mode,)).start()
 
         if mode == "lens-align":
-            # TODO: show the vp_lens_align & play CCD stream + spot stream
             self._ccd_stream.should_update.value = True
             self._spot_stream.is_active.value = True
             self.tab_data_model.focussedView.value = self.panel.vp_align_lens.microscope_view
@@ -2680,10 +2683,7 @@ class Sparc2AlignTab(Tab):
             # TODO: in this mode, if focus change, update the focus image once
             # (by going to spec-focus mode, turning the light, and acquiring an
             # AR image)
-            # Or not??? Now there is a button for that anyway, and as it's the
-            # default mode, it automatically turn on the lamp and autofocus
         elif mode == "mirror-align":
-            # TODO: show the vp_mirror_align & play the MoI stream & stop the other streams
             self._spot_stream.is_active.value = False
             self._moi_stream.should_update.value = True
             self.tab_data_model.focussedView.value = self.panel.vp_moi.microscope_view
@@ -2724,7 +2724,10 @@ class Sparc2AlignTab(Tab):
             # Go to the special focus mode (=> close the slit & turn on the lamp)
             self._stream_controller.pauseStreams()
             s = self._specline_stream
-            s.should_update.value = True  # To turn on the light
+            # Turn on the light
+            bl = self.tab_data_model.main.brightlight
+            bl.power.value = bl.power.range[1]
+            s.should_update.value = True  # the stream will set all the emissions to 1
             self.tab_data_model.main.opm.setPath("spec-focus")
             self._autofocus_f = AutoFocus(s.detector, s.emitter, s.focuser)
             self._autofocus_f.add_done_callback(self._on_autofocus_done)
@@ -2732,10 +2735,14 @@ class Sparc2AlignTab(Tab):
             # Update GUI
             self._pfc_autofocus = ProgressiveFutureConnector(self._autofocus_f, self.panel.gauge_autofocus)
         else:
+            # Cancel task, if we reached here via the GUI cancel button
             self._autofocus_f.cancel()
             self.panel.btn_autofocus.SetLabel("Auto focus")
 
     def _on_autofocus_done(self, future):
+        bl = self.tab_data_model.main.brightlight
+        bl.power.value = bl.power.range[0]
+        # That VA will take care of updating all the GUI part
         self.tab_data_model.autofocus_active.value = False
         # Go back to normal mode
         self._onAlignMode("lens-align")
@@ -2784,6 +2791,19 @@ class Sparc2AlignTab(Tab):
 
         self._txt_ss.SetValue(units.readable_str(ss, sig=3))
 
+    def _onSEMMag(self, mag):
+        """
+        Called when user enters a new SEM magnification
+        """
+        # Restart the stream and fit view to content when we get a new image
+        if self._moi_stream.is_active.value:
+            # Restarting is nice because it will get a new image faster, but
+            # the main advantage is that it avoids receiving one last image
+            # with the old magnification, which would confuse fit_view_to_next_image.
+            self._moi_stream.is_active.value = False
+            self._moi_stream.is_active.value = True
+        self.panel.vp_moi.canvas.fit_view_to_next_image = True
+
     def Show(self, show=True):
         Tab.Show(self, show=show)
 
@@ -2798,6 +2818,14 @@ class Sparc2AlignTab(Tab):
             self._spot_stream.is_active.value = False
             # Cancel autofocus (if it happens to run)
             self.tab_data_model.autofocus_active.value = False
+
+            # Save the lens and mirror positions as the "calibrated" ones
+            lm = self.tab_data_model.main.lens_mover
+            lmmd = {model.MD_FAV_POS_ACTIVE: lm.position.value}
+            lm.updateMetadata(lmmd)
+            m = self.tab_data_model.main.mirror
+            mmd = {model.MD_FAV_POS_ACTIVE: m.position.value}
+            m.updateMetadata(mmd)
 
     def terminate(self):
         self._stream_controller.pauseStreams()

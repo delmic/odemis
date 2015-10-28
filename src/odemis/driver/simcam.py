@@ -245,6 +245,8 @@ class Camera(model.DigitalCamera):
               center[1] + pxs_pos[1] - (res[1] / 2) * binning[1])
         assert(lt[0] >= 0 and lt[1] >= 0)
         # compute each row and column that will be included
+        # TODO: Could use something more hardwarish like that:
+        # data0 = data0.reshape(shape[0]//b0, b0, shape[1]//b1, b1).mean(3).mean(1)
         coord = ([int(round(lt[0] + i * binning[0])) for i in range(res[0])],
                  [int(round(lt[1] + i * binning[1])) for i in range(res[1])])
         sim_img = self._img[numpy.ix_(coord[1], coord[0])]  # copy

@@ -118,7 +118,7 @@ class StreamPanelHeader(wx.Control):
             self.ctrl_label = self._add_suggest_ctrl()
         else:
             self.ctrl_label = self._add_label_ctrl()
-        self.btn_tint = self._add_tint_btn()
+        self.btn_tint = self._add_tint_btn() if self.Parent.options & OPT_BTN_TINT else None
         self.btn_show = self._add_visibility_btn() if self.Parent.options & OPT_BTN_SHOW else None
         self.btn_update = self._add_update_btn() if self.Parent.options & OPT_BTN_UPDATE else None
 
@@ -161,10 +161,7 @@ class StreamPanelHeader(wx.Control):
         return label_ctrl
 
     def _add_tint_btn(self):
-        """ Add a tint button to the stream header if the stream has a tint attribute """
-
-        if not hasattr(self.Parent.stream, "tint"):
-            return None
+        """ Add a tint button to the stream header"""
 
         tint_btn = buttons.ColourButton(
             self, -1,
@@ -397,7 +394,7 @@ class StreamPanel(wx.Panel):
 
     """
 
-    def __init__(self, parent, stream, label_edit=False,
+    def __init__(self, parent, stream, options=(OPT_BTN_REMOVE | OPT_BTN_SHOW | OPT_BTN_UPDATE),
                  wid=wx.ID_ANY, pos=wx.DefaultPosition, size=wx.DefaultSize,
                  style=wx.CP_DEFAULT_STYLE, name="StreamPanel", collapsed=False):
         """
@@ -408,13 +405,10 @@ class StreamPanel(wx.Panel):
             TODO: This parameter and related property should be moved to the stream controller!
 
         """
-
         assert(isinstance(parent, StreamBar))
         wx.Panel.__init__(self, parent, wid, pos, size, style, name)
 
-        self.options = (OPT_BTN_REMOVE | OPT_BTN_SHOW | OPT_BTN_UPDATE | OPT_BTN_TINT)
-        self.options |= OPT_NAME_EDIT if label_edit else 0
-
+        self.options = options
         self.stream = stream  # TODO: Should this also be moved to the StreamController?
         # Dye attributes
         self._btn_excitation = None

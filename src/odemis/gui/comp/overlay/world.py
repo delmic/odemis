@@ -82,8 +82,9 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         """ Update the world position to reflect the view position """
 
         if self.select_v_start_pos and self.select_v_end_pos:
-            wsp = self.cnvs.view_to_world(self.select_v_start_pos, self.offset_b)
-            wep = self.cnvs.view_to_world(self.select_v_end_pos, self.offset_b)
+            offset = self.cnvs.get_half_buffer_size()
+            wsp = self.cnvs.view_to_world(self.select_v_start_pos, offset)
+            wep = self.cnvs.view_to_world(self.select_v_end_pos, offset)
             self.w_start_pos = wsp
             self.w_end_pos = wep
 
@@ -91,8 +92,9 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         """ Update the view position to reflect the world position """
 
         if self.w_start_pos and self.w_end_pos:
-            vsp = self.cnvs.world_to_view(self.w_start_pos, self.offset_b)
-            vep = self.cnvs.world_to_view(self.w_end_pos, self.offset_b)
+            offset = self.cnvs.get_half_buffer_size()
+            vsp = self.cnvs.world_to_view(self.w_start_pos, offset)
+            vep = self.cnvs.world_to_view(self.w_end_pos, offset)
             self.select_v_start_pos = Vec(vsp)
             self.select_v_end_pos = Vec(vep)
             self._calc_edges()

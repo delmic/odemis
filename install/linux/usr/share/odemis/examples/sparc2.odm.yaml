@@ -13,8 +13,7 @@ SPARC2: {
 
 # Light (lamp with known spectrum)
 "Calibration Light": {
-    # TODO: use light.Light
-    class: simulated.Light,
+    class: light.Light,
     role: "brightlight",
     power_supplier: "Power Control Unit",
     affects: ["Camera"],
@@ -216,6 +215,7 @@ SPARC2: {
        hole_diam: 0.6e-3,  # m, diameter the hole in the mirror
        focus_dist: 0.5e-3,  # m, the vertical mirror cutoff, iow the min distance between the mirror and the sample
        parabola_f: 2.5e-3,  # m, parabola_parameter=1/4f
+       rotation: -1.570796326795, # rad, 90° rotation between optical axis and SEM Y axis
     },
     affects: ["Camera"]
 }

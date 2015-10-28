@@ -805,9 +805,7 @@ class FluoStream(CameraStream):
         self.emission.subscribe(self.onEmission)
 
         # colouration of the image
-        default_tint = conversion.wave2rgb(center_em)
-        self.tint = model.ListVA(default_tint, unit="RGB") # 3-tuple R,G,B
-        self.tint.subscribe(self.onTint)
+        self.tint.value = conversion.wave2rgb(center_em)
 
     def _onActive(self, active):
         if active:
@@ -818,9 +816,6 @@ class FluoStream(CameraStream):
             super(FluoStream, self)._onActive(active)
             self._stop_light()
 
-    def _updateImage(self): # pylint: disable=W0221
-        super(FluoStream, self)._updateImage(self.tint.value)
-
     def onExcitation(self, value):
         if self.is_active.value:
             self._setup_excitation()
@@ -828,13 +823,6 @@ class FluoStream(CameraStream):
     def onEmission(self, value):
         if self.is_active.value:
             self._setup_emission()
-
-    def onTint(self, value):
-        if self.raw:
-            data = self.raw[0]
-            data.metadata[model.MD_USER_TINT] = value
-
-        self._updateImage()
 
     def _get_current_excitation(self):
         """

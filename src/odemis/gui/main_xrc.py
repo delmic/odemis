@@ -20,12 +20,12 @@ class xrcfr_main(wx.Frame):
 #!XRCED:begin-block:xrcfr_main.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-
+        
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-
+        
 #!XRCED:end-block:xrcfr_main.PreCreate
 
     def __init__(self, parent):
@@ -211,8 +211,8 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.btn_p_lens_mover_x = xrc.XRCCTRL(self, "btn_p_lens_mover_x")
         self.pnl_mirror = xrc.XRCCTRL(self, "pnl_mirror")
         self.slider_mirror = xrc.XRCCTRL(self, "slider_mirror")
-        self.btn_m_mirror_xy_y = xrc.XRCCTRL(self, "btn_m_mirror_xy_y")
         self.btn_p_mirror_xy_y = xrc.XRCCTRL(self, "btn_p_mirror_xy_y")
+        self.btn_m_mirror_xy_y = xrc.XRCCTRL(self, "btn_m_mirror_xy_y")
         self.btn_m_mirror_xy_x = xrc.XRCCTRL(self, "btn_m_mirror_xy_x")
         self.btn_p_mirror_xy_x = xrc.XRCCTRL(self, "btn_p_mirror_xy_x")
         self.html_alignment_doc = xrc.XRCCTRL(self, "html_alignment_doc")
@@ -2789,8 +2789,8 @@ def __init_resources():
                   <object class="sizeritem">
                     <object class="wxGridBagSizer">
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_my">
-                          <label>-Y</label>
+                        <object class="wxStaticText" name="lbl_py">
+                          <label>+Y</label>
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
@@ -2805,8 +2805,8 @@ def __init_resources():
                         <cellpos>0,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_py">
-                          <label>+Y</label>
+                        <object class="wxStaticText" name="lbl_my">
+                          <label>-Y</label>
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
@@ -2854,7 +2854,7 @@ def __init_resources():
                         <cellpos>2,0</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_m_mirror_xy_y">
+                        <object class="ImageTextButton" name="btn_p_mirror_xy_y">
                           <size>64,-1</size>
                           <height>48</height>
                           <face_colour>def</face_colour>
@@ -2876,7 +2876,7 @@ def __init_resources():
                         <cellpos>1,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_p_mirror_xy_y">
+                        <object class="ImageTextButton" name="btn_m_mirror_xy_y">
                           <size>64,-1</size>
                           <height>48</height>
                           <face_colour>def</face_colour>
@@ -2994,7 +2994,7 @@ def __init_resources():
       </object>
       <object class="sizeritem">
         <object class="ViewportGrid" name="pnl_vp_grid">
-          <object class="ARLiveViewport" name="vp_moi">
+          <object class="LiveViewport" name="vp_moi">
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>

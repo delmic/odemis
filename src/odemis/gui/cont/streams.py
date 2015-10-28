@@ -31,7 +31,8 @@ import numpy
 from odemis import model, util
 from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR
 from odemis.gui.comp.overlay.world import RepetitionSelectOverlay
-from odemis.gui.comp.stream import StreamPanel, EVT_STREAM_VISIBLE
+from odemis.gui.comp.stream import StreamPanel, EVT_STREAM_VISIBLE, \
+    OPT_BTN_REMOVE, OPT_BTN_SHOW, OPT_BTN_UPDATE, OPT_BTN_TINT, OPT_NAME_EDIT
 from odemis.gui.conf import data
 from odemis.gui.conf.data import get_hw_settings_config, get_hw_settings
 from odemis.gui.conf.util import create_setting_entry, create_axis_entry
@@ -52,7 +53,6 @@ import odemis.gui.model as guimodel
 # * Stream controller: links 1 stream <-> stream panel (cont/stream/StreamPanel)
 # * StreamBar controller: links .streams VA <-> stream bar (cont/stream/StreamBar)
 #   The StreamBar controller is also in charge of the scheduling of the streams.
-
 # Stream scheduling policies: decides which streams which are with .should_update get .is_active
 SCHED_LAST_ONE = 1  # Last stream which got added to the should_update set
 SCHED_ALL = 2  # All the streams which are in the should_update stream
@@ -74,17 +74,14 @@ class StreamController(object):
 
         self.hw_settings_config = get_hw_settings_config(tab_data_model.main.role)
 
-        label_edit = False
+        options = (OPT_BTN_REMOVE | OPT_BTN_SHOW | OPT_BTN_UPDATE)
+        # Special display for dyes (aka FluoStreams)
+        if isinstance(stream, (acqstream.FluoStream, acqstream.StaticFluoStream)):
+            options |= OPT_BTN_TINT
+            if not isinstance(stream, acqstream.StaticStream):
+                options |= OPT_NAME_EDIT
 
-        # Make the name label non-static if dye names are involved.
-        # TODO: Make this more generic/clean
-        if (
-                hasattr(stream, "excitation") and hasattr(stream, "emission") and
-                not (self.stream.excitation.readonly or self.stream.emission.readonly)
-        ):
-            label_edit = True
-
-        self.stream_panel = StreamPanel(stream_bar, stream, label_edit)
+        self.stream_panel = StreamPanel(stream_bar, stream, options)
         # Detect when the panel is destroyed (but _not_ any of the children)
         self.stream_panel.Bind(wx.EVT_WINDOW_DESTROY, self._on_stream_panel_destroy,
                                source=self.stream_panel)

@@ -31,7 +31,10 @@ class Light(model.Emitter):
     emitted (white).
     """
     def __init__(self, name, role, **kwargs):
+        # TODO: allow the user to indicate the power and the spectrum via args?
+        # This will create the .powerSupply VA
         model.Emitter.__init__(self, name, role, **kwargs)
+        self.powerSupply.value = False  # immediately turn it off
 
         self._shape = ()
         self.power = model.FloatContinuous(0., {0., 10.}, unit="W")
@@ -42,10 +45,24 @@ class Light(model.Emitter):
         # TODO: update spectra VA to support the actual spectra of the lamp
         self.spectra = model.ListVA([(380e-9, 390e-9, 560e-9, 730e-9, 740e-9)],
                                     unit="m", readonly=True)
-        self._metadata[model.MD_IN_WL] = (380e-9, 740e-9)
+
+    def _setEmissions(self, em):
+        if len(em) != 1:
+            raise ValueError("Must have one emission (got %d)" % len(em))
+
+        # Either 0 or 1
+        if em[0]:
+            em = [1]
+        else:
+            em = [0]
+
+        # Update the hardware
+        self._updatePower(self.power.value)
+
+        return em
 
     def _updatePower(self, value):
         # Set powerSupply VA based on the power value (True in case of max,
         # False in case of min)
-        self.powerSupply.value = (value == self.power.range[1])
-        self._metadata[model.MD_LIGHT_POWER] = self.power.value
+        pw = value * self.emissions.value[0]
+        self.powerSupply.value = (pw == self.power.range[1])

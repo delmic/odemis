@@ -2319,8 +2319,8 @@
                   <object class="sizeritem">
                     <object class="wxGridBagSizer">
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_my">
-                          <label>-Y</label>
+                        <object class="wxStaticText" name="lbl_py">
+                          <label>+Y</label>
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
@@ -2335,8 +2335,8 @@
                         <cellpos>0,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_py">
-                          <label>+Y</label>
+                        <object class="wxStaticText" name="lbl_my">
+                          <label>-Y</label>
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
@@ -2384,7 +2384,7 @@
                         <cellpos>2,0</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_m_mirror_xy_y">
+                        <object class="ImageTextButton" name="btn_p_mirror_xy_y">
                           <size>64,-1</size>
                           <height>48</height>
                           <face_colour>def</face_colour>
@@ -2406,7 +2406,7 @@
                         <cellpos>1,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_p_mirror_xy_y">
+                        <object class="ImageTextButton" name="btn_m_mirror_xy_y">
                           <size>64,-1</size>
                           <height>48</height>
                           <face_colour>def</face_colour>
@@ -2524,7 +2524,7 @@
       </object>
       <object class="sizeritem">
         <object class="ViewportGrid" name="pnl_vp_grid">
-          <object class="ARLiveViewport" name="vp_moi">
+          <object class="LiveViewport" name="vp_moi">
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>
