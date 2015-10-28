@@ -919,6 +919,8 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, PixelDataMixin):
                 self.clear_selection()
 
             self._selected_line_va.value = (self.start_pixel, self.end_pixel)
+            # Also set the pixel to something valid
+            self._selected_pixel_va.value = self.start_pixel
         else:
             LineSelectOverlay.on_left_up(self, evt)
 
