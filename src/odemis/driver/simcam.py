@@ -83,10 +83,22 @@ class Camera(model.DigitalCamera):
         depth = 2 ** (self._img.dtype.itemsize * 8)
         self._shape += (depth,)
 
-        # TODO: don't provide range? or don't make it readonly?
-        self.resolution = model.ResolutionVA(res, (res, res))  # , readonly=True)
-        # TODO: support (simulated) binning
-        self.binning = model.ResolutionVA((1, 1), ((1, 1), (1, 1)))
+        self._resolution = res
+        self.resolution = model.ResolutionVA(self._resolution,
+                              ((1, 1),
+                               self._resolution), setter=self._setResolution)
+
+        self._binning = (1, 1)
+        self.binning = model.ResolutionVA(self._binning,
+                              ((1, 1), (16, 16)), setter=self._setBinning)
+
+        hlf_shape = (self._shape[0] // 2 - 1, self._shape[1] // 2 - 1)
+        tran_rng = [(-hlf_shape[0], -hlf_shape[1]),
+                    (hlf_shape[0], hlf_shape[1])]
+        self._translation = (0, 0)
+        self.translation = model.ResolutionVA(self._translation, tran_rng,
+                                              cls=(int, long), unit="px",
+                                              setter=self._setTranslation)
 
         exp = self._img.metadata.get(model.MD_EXP_TIME, 0.1) # s
         self.exposureTime = model.FloatContinuous(exp, (1e-3, 1e3), unit="s")
@@ -117,6 +129,53 @@ class Camera(model.DigitalCamera):
         # Convenience event for the user to connect and fire
         self.softwareTrigger = model.Event()
 
+    def _setBinning(self, value):
+        """
+        value (2-tuple int)
+        Called when "binning" VA is modified. It actually modifies the camera binning.
+        """
+        prev_binning, self._binning = self._binning, value
+
+        # adapt resolution so that the AOI stays the same
+        change = (prev_binning[0] / self._binning[0],
+                  prev_binning[1] / self._binning[1])
+        old_resolution = self.resolution.value
+        new_res = (int(round(old_resolution[0] * change[0])),
+                   int(round(old_resolution[1] * change[1])))
+
+        # fit
+        max_res = self.resolution.range[1]
+        new_res = (min(new_res[0], max_res[0]),
+                   min(new_res[1], max_res[1]))
+        self.resolution.value = new_res
+        return self._binning
+
+    def _setResolution(self, value):
+        """
+        value (2-tuple int)
+        Called when "resolution" VA is modified. It actually modifies the camera resolution.
+        """
+        self._resolution = value
+        if not self.translation.readonly:
+            self.translation.value = self.translation.value  # force re-check
+        return value
+
+    def _setTranslation(self, value):
+        """
+        value (2-tuple int)
+        Called when "translation" VA is modified. It actually modifies the camera translation.
+        """
+        # compute the min/max of the shift. It's the same as the margin between
+        # the centered ROI and the border, taking into account the binning.
+        max_tran = ((self._shape[0] - self._resolution[0] * self._binning[0]) // 2,
+                    (self._shape[1] - self._resolution[1] * self._binning[1]) // 2)
+
+        # between -margin and +margin
+        trans = (max(-max_tran[0], min(value[0], max_tran[0])),
+                 max(-max_tran[1], min(value[1], max_tran[1])))
+        self._translation = trans
+        return trans
+
     def terminate(self):
         """
         Must be called at the end of the usage. Can be called multiple times,
@@ -143,28 +202,28 @@ class Camera(model.DigitalCamera):
         Generates the fake output based on the translation, resolution and
         current drift.
         """
+        gen_img = self._simulate()
         timer = self._generator  # might be replaced by None afterwards, so keep a copy
         self.data._waitSync()
         if self.data._sync_event:
             # If sync event, we need to simulate period after event (not efficient, but works)
             time.sleep(self.exposureTime.value)
 
-        metadata = self._img.metadata.copy()
+        metadata = gen_img.metadata.copy()
         metadata.update(self._metadata)
 
         # update fake output metadata
         exp = timer.period
         metadata[model.MD_ACQ_DATE] = time.time() - exp
         metadata[model.MD_EXP_TIME] = exp
-
-        logging.debug("Generating new fake image of shape %s", self._img.shape)
+        logging.debug("Generating new fake image of shape %s", gen_img.shape)
         if self._focus:
             # apply the defocus
             pos = self._focus.position.value['z']
             dist = abs(pos - self._focus._good_focus) * 1e4
-            img = ndimage.gaussian_filter(self._img, sigma=dist)
+            img = ndimage.gaussian_filter(gen_img, sigma=dist)
         else:
-            img = self._img
+            img = gen_img
 
         img = model.DataArray(img, metadata)
 
@@ -173,6 +232,25 @@ class Camera(model.DigitalCamera):
 
         # simulate exposure time
         timer.period = self.exposureTime.value
+
+    def _simulate(self):
+        """
+        Processes the fake image based on the translation, resolution and
+        current drift.
+        """
+        binning = self.binning.value
+        res = self.resolution.value
+        pxs_pos = self.translation.value
+        shape = self._img.shape
+        center = (shape[1] / 2, shape[0] / 2)
+        lt = (center[0] + pxs_pos[0] - (res[0] / 2) * binning[0],
+              center[1] + pxs_pos[1] - (res[1] / 2) * binning[1])
+        assert(lt[0] >= 0 and lt[1] >= 0)
+        # compute each row and column that will be included
+        coord = ([int(round(lt[0] + i * binning[0])) for i in range(res[0])],
+                 [int(round(lt[1] + i * binning[1])) for i in range(res[1])])
+        sim_img = self._img[numpy.ix_(coord[1], coord[0])]  # copy
+        return sim_img
 
 
 class SimpleDataFlow(model.DataFlow):
