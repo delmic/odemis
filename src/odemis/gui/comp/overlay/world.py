@@ -1299,6 +1299,14 @@ class MirrorArcOverlay(WorldOverlay, DragMixin):
         # The world position of the hole in the mirror (starts with a non-used VA)
         self.hole_pos_va = model.TupleContinuous((0, 0), ((-1, -1), (1, 1)))
 
+        # Mirror arc rendering parameters
+        self.parabole_cut_radius = None
+        self.cut_offset_y = None
+        self.mirror_height = None
+        self.rad_offset = None
+        self.hole_diam = None
+        self.hole_y = None
+
         # Default values using the standard mirror size, in m
         self.set_mirror_dimensions(2.5e-3, 13.25e-3, 0.5e-3, 0.6e-3)
 
