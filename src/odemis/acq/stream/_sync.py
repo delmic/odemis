@@ -1099,7 +1099,11 @@ class MomentOfInertiaMDStream(SEMCCDMDStream):
         trans = (int(bin_trans[0] * binning[0]), int(bin_trans[1] * binning[1]))
         # always in this order
         self._rep_det.resolution.value = res
-        self._rep_det.translation.value = trans
+        if (hasattr(self._rep_det, "translation") and
+            isinstance(self._rep_det.translation, model.VigilantAttributeBase)):
+            self._rep_det.translation.value = trans
+        else:
+            logging.info("CCD doesn't support ROI translation, would have used %s", trans)
         return super(MomentOfInertiaMDStream, self)._ssAdjustHardwareSettings()
 
     def acquire(self):
@@ -1116,7 +1120,7 @@ class MomentOfInertiaMDStream(SEMCCDMDStream):
         """
         return (Future)
         """
-        # Instead of storing the actual data, we queue the MoI comptation in a future
+        # Instead of storing the actual data, we queue the MoI computation in a future
         logging.debug("Queueing MoI computation")
 
         if i == (0, 0):
