@@ -242,7 +242,7 @@ class Stream(object):
         for vaname in va_names:
             # Skip the duplication if the VA is already linked as a direct hardware VA
             if vaname in self.hw_vas:
-                break
+                continue
             try:
                 va = getattr(comp, vaname)
             except AttributeError:
