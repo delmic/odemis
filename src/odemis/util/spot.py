@@ -53,6 +53,7 @@ def MomentOfInertia(data, background=None):
       If None, it will try to use the MD_BASELINE metadata, and fall-back to the
       corner pixels
     returns (float): moment of inertia
+       Note: if the image is entirely black, it will return NaN.
     """
     # Subtract background, to make sure there is no noise
     data0 = _SubtractBackground(data, background)

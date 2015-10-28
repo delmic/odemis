@@ -25,6 +25,7 @@ from concurrent import futures
 from concurrent.futures._base import RUNNING, FINISHED, CANCELLED, TimeoutError, \
     CancelledError
 import logging
+import math
 import numpy
 from odemis import model
 from odemis.acq import _futures
@@ -1128,15 +1129,18 @@ class MomentOfInertiaMDStream(SEMCCDMDStream):
         returns:
            moi (float): moment of inertia
            valid (bool): False if some pixels are clipped (which probably means
-             the computed moment of inertia is invalid)
+             the computed moment of inertia is invalid) or MoI cannot be computed
+             (eg, the image is fully black).
            spot size (None or float): spot size if was asked, otherwise None
         """
         logging.debug("Moment of inertia calculation...")
 
         try:
             moment_of_inertia = spot.MomentOfInertia(data, background)
-            # moment_of_inertia += random.uniform(0, 10)  # DEBUG
-            valid = not img.isClipping(data, drange)
+#             moment_of_inertia += random.uniform(0, 10)  # DEBUG
+#             if random.randint(0, 10) == 0:  # DEBUG
+#                 moment_of_inertia = float("NaN")
+            valid = not img.isClipping(data, drange) and not math.isnan(moment_of_inertia)
             # valid = random.choice((True, False))  # DEBUG
             if spot_size:
                 spot_estimation = spot.SpotIntensity(data, background)

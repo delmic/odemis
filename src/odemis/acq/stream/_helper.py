@@ -711,17 +711,20 @@ class MomentOfInertiaLiveStream(CCDSettingsStream):
         valid (numpy.ndarray of bool)
         return (DataArray): 3D DataArray
         """
+        # Note: NaN values will become 0 (and 255 after inversion)
         rgbim = img.DataArray2RGB(data)
         # Inverse the contrast, because the smallest the MoI, the brighter the
         # pixel should be.
         rgbim = 255 - rgbim
 
-        # Just keep the red level for non valid/clipping pixels
-        # Note that when there is clipping, typically the MoI will be small, so
-        # the pixel will be bright, so the red will be visible.
+        # Make non valid/clipping pixels reddish.
         for (x, y), v in numpy.ndenumerate(valid):
             if not v:
-                rgbim[x, y, 1:] = 0
+                if math.isnan(data[x, y]):  # We don't want it too bright
+                    rgbim[x, y] = [64, 0, 0]
+                else:
+                    val = rgbim[x, y, 0]
+                    rgbim[x, y] = [min(val + 64, 255), val // 4, val // 4]
         rgbim.flags.writeable = False
         md = self._find_metadata(data.metadata)
         md[model.MD_DIMS] = "YXC"  # RGB format
@@ -781,7 +784,7 @@ class MomentOfInertiaLiveStream(CCDSettingsStream):
         raw = self.raw
         if len(raw) >= 3:
             data = raw[1].view(numpy.ndarray)  # To ensure we get floats
-            return data[pos], (data.min(), data.max())
+            return data[pos], (numpy.nanmin(data), numpy.nanmax(data))
         else:
             # Nothing yet
             return None, None

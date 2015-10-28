@@ -293,9 +293,13 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
     # TODO: handle signed values
     assert(len(data.shape) == 2) # => 2D with greyscale
 
+    # Discard the DataArray aspect and just get the raw array, to be sure we
+    # don't get a DataArray as result of the numpy operations
+    data = data.view(numpy.ndarray)
+
     # fit it to 8 bits and update brightness and contrast at the same time
     if irange is None:
-        irange = (data.view(numpy.ndarray).min(), data.view(numpy.ndarray).max())
+        irange = (numpy.nanmin(data), numpy.nanmax(data))
     else:
         # ensure irange is the same type as the data. It ensures we don't get
         # crazy values, and also that numpy doesn't get confused in the
@@ -333,14 +337,14 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
         else: # floats et al. => always clip
             # TODO: might not work correctly if range is in middle of data
             # values trick to ensure B&W image
-            if irange[0] >= irange[1] and irange[0] > float(data.min()):
+            if irange[0] >= irange[1] and irange[0] > numpy.nanmin(data):
                 force_white = True
             else:
                 force_white = False
             # img_fast currently doesn't support floats
             data = data.clip(*irange)
             if force_white:
-                irange = [irange[1] - 1, irange[1]]
+                irange = (irange[1] - 1, irange[1])
 
         if data.dtype != "uint8":
             drescaled = scipy.misc.bytescale(data, cmin=irange[0], cmax=irange[1])
@@ -348,7 +352,6 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
             b = 255 / (irange[1] - irange[0])
             drescaled = data - irange[0]
             drescaled *= b # keep memory and dtype
-
 
     # Now duplicate it 3 times to make it RGB (as a simple approximation of
     # greyscale)
