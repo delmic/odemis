@@ -58,7 +58,6 @@ HIDDEN_VAS = {"children", "affects", "state", "powerSupply"}
 # dynamic values which can be depending on the backend configuration.
 # This is the default global settings, with ordered dict, to specify the order
 # on which they are displayed.
-# TODO: seperate HW settings from Stream settings (use stream class -> settings)
 HW_SETTINGS_CONFIG = {
     "ccd":
         OrderedDict((
@@ -78,6 +77,7 @@ HW_SETTINGS_CONFIG = {
                 "choices": util.resolution_from_range,
                 "accuracy": None,  # never simplify the numbers
             }),
+            # just here to enforce the order
             ("gain", {}),
             ("readoutRate", {}),
             ("temperature", {}),
