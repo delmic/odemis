@@ -1070,8 +1070,7 @@ class MomentOfInertiaMDStream(SEMCCDMDStream):
         self._center_raw = None  # raw data at the center
 
         # For computing the moment of inertia in background
-        # TODO: More than one thread useful? Use processes instead? + based on number of CPUs
-        self._executor = futures.ThreadPoolExecutor(4)
+        self._executor = None
 
     def _ssAdjustHardwareSettings(self):
         """
@@ -1115,6 +1114,15 @@ class MomentOfInertiaMDStream(SEMCCDMDStream):
         self._center_raw = None
 
         return super(MomentOfInertiaMDStream, self).acquire()
+
+    def _ssRunAcquisition(self, future):
+        # TODO: More than one thread useful? Use processes instead? + based on number of CPUs
+        self._executor = futures.ThreadPoolExecutor(2)
+        try:
+            return super(MomentOfInertiaMDStream, self)._ssRunAcquisition(future)
+        finally:
+            # We don't need futures anymore
+            self._executor.shutdown(wait=False)
 
     def _preprocessRepData(self, data, i):
         """
