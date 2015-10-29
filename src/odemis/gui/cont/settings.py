@@ -35,8 +35,8 @@ import odemis.dataio
 from odemis.gui.comp.buttons import ImageTextToggleButton
 from odemis.gui.comp.file import EVT_FILE_SELECT
 from odemis.gui.comp.settings import SettingsPanel
-from odemis.gui.conf.data import get_hw_settings_config
-from odemis.gui.conf.util import bind_setting_context_menu, create_setting_entry, SettingEntry,  \
+from odemis.gui.conf.data import get_hw_settings_config, HIDDEN_VAS
+from odemis.gui.conf.util import bind_setting_context_menu, create_setting_entry, SettingEntry, \
     create_axis_entry
 from odemis.gui.model import CHAMBER_UNKNOWN, CHAMBER_VACUUM
 import odemis.gui.util
@@ -369,9 +369,6 @@ class SettingsBarController(object):
         for setting_controller in self.setting_controllers:
             setting_controller.enable(enabled)
 
-    # VAs which should never be displayed
-    HIDDEN_VAS = {"children", "affects", "state"}
-
     def add_hw_component(self, hw_comp, setting_controller, hidden=None):
         """ Add setting entries for the given hardware component
 
@@ -379,7 +376,7 @@ class SettingsBarController(object):
 
         """
 
-        hidden = (hidden or set()) | self.HIDDEN_VAS
+        hidden = HIDDEN_VAS | (hidden or set())
         self.setting_controllers.append(setting_controller)
 
         vas_comp = getVAs(hw_comp)

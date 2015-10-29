@@ -1058,7 +1058,7 @@ class MomentOfInertiaMDStream(SEMCCDMDStream):
 
         # Region of interest as left, top, right, bottom (in ratio from the
         # whole area of the emitter => between 0 and 1) that defines the region
-        # to be acquired for the MoI compution.
+        # to be acquired for the MoI computation.
         # This is expected to be centered to the lens pole position.
         self.detROI = model.TupleContinuous((0, 0, 1, 1),
                                          range=((0, 0, 0, 0), (1, 1, 1, 1)),

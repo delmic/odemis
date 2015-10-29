@@ -429,7 +429,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
             ims.append((rgba_im, pos, scale, keepalpha, rot, shear, flip, blend_mode, name))
 
-        # Repleace the old cache, so the obsolete RGBA images can be garbage collected
+        # Replace the old cache, so the obsolete RGBA images can be garbage collected
         self.images_cache = im_cache
 
         # TODO: Canvas needs to accept the NDArray (+ specific attributes recorded separately).
@@ -455,7 +455,9 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
     def _on_view_image_update(self, t):
         # TODO: use the real streamtree functions,for now we call a conversion layer
         self._convert_streams_to_images()
-        if self.fit_view_to_next_image and any([i is not None for i in self.images]):
+        if (self.fit_view_to_next_image and
+            any(i is not None for i in self.images) and  # at least an image
+            all(s > 1 for s in self.ClientSize)):  # at least visible
             self.fit_view_to_content()
             self.fit_view_to_next_image = False
         # logging.debug("Will update drawing for new image")
@@ -485,7 +487,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         """
         pos = self.physical_to_world_pos(phy_pos)
         # skip ourselves, to avoid asking the stage to move to (almost) the same position
-        wx.CallAfter(super(DblMicroscopeCanvas, self).recenter_buffer, pos)
+        super(DblMicroscopeCanvas, self).recenter_buffer(pos)
 
     def recenter_buffer(self, world_pos):
         """
@@ -568,6 +570,9 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
     def on_size(self, event):
         new_size = event.Size
+        # TODO: skip if too small?
+#         if any(s <= 1 for s in new_size):
+#             return
 
         # Update the mpp, so that the same data will be displayed.
         if self.microscope_view:
@@ -613,7 +618,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
     def on_wheel(self, evt):
         """ Process user mouse wheel events
 
-        If able and without modifiers, the Canvas will zooom in/out
+        If able and without modifiers, the Canvas will zoom in/out
         If the Ctrl key is down, the merge ratio of the visible layers will be adjusted.
 
         """

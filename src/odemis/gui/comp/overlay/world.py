@@ -919,6 +919,8 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, PixelDataMixin):
                 self.clear_selection()
 
             self._selected_line_va.value = (self.start_pixel, self.end_pixel)
+            # Also set the pixel to something valid
+            self._selected_pixel_va.value = self.start_pixel
         else:
             LineSelectOverlay.on_left_up(self, evt)
 
@@ -1295,7 +1297,15 @@ class MirrorArcOverlay(WorldOverlay, DragMixin):
         self.colour = conversion.hex_to_frgb(gui.FG_COLOUR_EDIT)
 
         # The world position of the hole in the mirror (starts with a non-used VA)
-        self.hole_pos_va = model.TupleContinuous((0, 0), ((-1, -1), (1, 1)))
+        self.hole_pos_va = model.TupleContinuous((0.0, 0.0), ((-1.0, -1.0), (1.0, 1.0)))
+
+        # Mirror arc rendering parameters
+        self.parabole_cut_radius = None
+        self.cut_offset_y = None
+        self.mirror_height = None
+        self.rad_offset = None
+        self.hole_diam = None
+        self.hole_y = None
 
         # Default values using the standard mirror size, in m
         self.set_mirror_dimensions(2.5e-3, 13.25e-3, 0.5e-3, 0.6e-3)

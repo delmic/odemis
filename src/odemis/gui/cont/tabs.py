@@ -41,7 +41,7 @@ from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.viewport import MicroscopeViewport, AngularResolvedViewport, \
     PlotViewport, SpatialSpectrumViewport
 from odemis.gui.conf import get_acqui_conf
-from odemis.gui.conf.data import get_hw_settings, get_stream_settings_config
+from odemis.gui.conf.data import get_local_vas, get_stream_settings_config
 from odemis.gui.cont import settings, tools
 from odemis.gui.cont.actuators import ActuatorController
 from odemis.gui.cont.microscope import SecomStateController, DelphiStateController
@@ -608,8 +608,8 @@ class SparcAcquisitionTab(Tab):
             focuser=main_data.ebeam_focus,
             hwemtvas={'magnification'},  # Hardware VAs will not be duplicated as ent/det VAs
             hwdetvas=None,
-            emtvas=get_hw_settings(main_data.ebeam),
-            detvas=get_hw_settings(main_data.sed),
+            emtvas=get_local_vas(main_data.ebeam),
+            detvas=get_local_vas(main_data.sed),
         )
 
         sem_stream.should_update.value = True  # TODO: put it in _streams_to_restart instead?
@@ -901,7 +901,7 @@ class ChamberTab(Tab):
         # Just one stream: chamber view
         self._ccd_stream = acqstream.CameraStream("Chamber view",
                                                   main_data.ccd, main_data.ccd.data, None,
-                                                  detvas=get_hw_settings(main_data.ccd))
+                                                  detvas=get_local_vas(main_data.ccd))
         ccd_spe = self._stream_controller.addStream(self._ccd_stream)
         ccd_spe.stream_panel.flatten()  # No need for the stream name
         self._ccd_stream.should_update.value = True
@@ -1272,7 +1272,7 @@ class AnalysisTab(Tab):
         self._settings_controller.setter_spec_bck_file = self.set_spec_background
         self._settings_controller.setter_spec_file = self.set_spec_comp
 
-        self.panel.btn_open_image.Bind(wx.EVT_BUTTON, self.on_file_open_button )
+        self.panel.btn_open_image.Bind(wx.EVT_BUTTON, self.on_file_open_button)
 
         self.tab_data_model.tool.subscribe(self._onTool)
 
@@ -2418,6 +2418,7 @@ class Sparc2AlignTab(Tab):
                     "cls": guimod.ContentView,
                     "name": "Moment of Inertia",
                     "stream_classes": acqstream.MomentOfInertiaLiveStream,
+                    # To allow to move the mirror by dragging / double click:
                     "stage": main_data.mirror_xy,
                 }
             ),
@@ -2432,9 +2433,6 @@ class Sparc2AlignTab(Tab):
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
         self.panel.vp_align_lens.microscope_view.show_crosshair.value = False
         self.panel.vp_align_center.microscope_view.show_crosshair.value = False
-
-        # TODO: make the legend display a merge slider (currently not happening
-        # because both streams are optical)
 
         # The streams:
         # * MomentOfInertia stream (mois): used to align the mirror. Used both
@@ -2452,6 +2450,7 @@ class Sparc2AlignTab(Tab):
         # always playing the ccd stream first, and using global settings for the
         # specline.
         # TODO: have a special stream that does CCD + ebeam spot? (to avoid the ebeam spot)
+
         # Focuser here too so that it's possible to focus with right mouse button,
         # and also menu controller beleives it's possible to autofocus.
         ccd_stream = acqstream.CameraStream(
@@ -2460,7 +2459,7 @@ class Sparc2AlignTab(Tab):
                             main_data.ccd.data,
                             main_data.ebeam,
                             focuser=main_data.focus,
-                            detvas=get_hw_settings(main_data.ccd))
+                            detvas=get_local_vas(main_data.ccd))
         self._ccd_stream = ccd_stream
 
         ccd_spe = self._stream_controller.addStream(ccd_stream)
@@ -2476,6 +2475,8 @@ class Sparc2AlignTab(Tab):
                             )
         specline_stream.tint.value = (0, 64, 255)  # colour it blue
         self._specline_stream = specline_stream
+        # TODO: make the legend display a merge slider (currently not happening
+        # because both streams are optical)
         # Add it as second stream, so that it's displayed with the default 0.3 merge ratio
         self._stream_controller.addStream(specline_stream, visible=False)
 
@@ -2487,7 +2488,7 @@ class Sparc2AlignTab(Tab):
                            moisem,
                            hwemtvas={'magnification'},  # Hardware VAs will not be duplicated as ent/det VAs
                            # we don't want resolution to mess up with detROI
-                           detvas=get_hw_settings(main_data.ccd, hidden={"resolution"}))
+                           detvas=get_local_vas(main_data.ccd, hidden={"resolution"}))
         # Pick some typically good settings
         mois.repetition.value = (9, 9)
         mois.detExposureTime.value = mois.detExposureTime.clip(0.01)
@@ -2577,8 +2578,8 @@ class Sparc2AlignTab(Tab):
         self.panel.btn_bkg_acquire.Bind(wx.EVT_BUTTON, self._onBkgAcquire)
 
         # Force MoI view fit to content when magnification is updated
-        if not (hasattr(main_data.ebeam, "horizontalFoV")
-                and isinstance(main_data.ebeam.horizontalFoV, model.VigilantAttributeBase)):
+        if not (hasattr(main_data.ebeam, "horizontalFoV") and
+                isinstance(main_data.ebeam.horizontalFoV, model.VigilantAttributeBase)):
             main_data.ebeam.magnification.subscribe(self._onSEMMag)
 
     def _onPolePosition(self, pole_pos):

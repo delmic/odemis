@@ -34,7 +34,7 @@ from odemis.gui.comp.overlay.world import RepetitionSelectOverlay
 from odemis.gui.comp.stream import StreamPanel, EVT_STREAM_VISIBLE, \
     OPT_BTN_REMOVE, OPT_BTN_SHOW, OPT_BTN_UPDATE, OPT_BTN_TINT, OPT_NAME_EDIT
 from odemis.gui.conf import data
-from odemis.gui.conf.data import get_hw_settings_config, get_hw_settings
+from odemis.gui.conf.data import get_hw_settings_config, get_local_vas
 from odemis.gui.conf.util import create_setting_entry, create_axis_entry
 from odemis.gui.cont.settings import SettingEntry
 from odemis.gui.model import dye, TOOL_SPOT, TOOL_NONE
@@ -1810,7 +1810,7 @@ class SparcStreamsController(StreamBarController):
             main_data.ccd.data,
             main_data.ebeam,
             # TODO: add a focuser for the SPARCv2?
-            detvas=get_hw_settings(main_data.ccd),
+            detvas=get_local_vas(main_data.ccd),
         )
 
         # Create the equivalent MDStream
@@ -1833,7 +1833,7 @@ class SparcStreamsController(StreamBarController):
             main_data.ebeam,
             focuser=self._main_data_model.ebeam_focus,
             emtvas={"dwellTime"},
-            detvas=get_hw_settings(main_data.cld),
+            detvas=get_local_vas(main_data.cld),
         )
 
         # Special "safety" feature to avoid having a too high gain at start
@@ -1867,8 +1867,8 @@ class SparcStreamsController(StreamBarController):
             main_data.spectrometer,
             main_data.spectrometer.data,
             main_data.ebeam,
-            # emtvas=get_hw_settings(main_data.ebeam), # no need
-            detvas=get_hw_settings(main_data.spectrometer),
+            # emtvas=get_local_vas(main_data.ebeam), # no need
+            detvas=get_local_vas(main_data.spectrometer),
         )
 
         # Create the equivalent MDStream
@@ -1895,7 +1895,7 @@ class SparcStreamsController(StreamBarController):
             main_data.ebeam,
             main_data.spectrograph,
             emtvas={"dwellTime"},
-            detvas=get_hw_settings(main_data.monochromator),
+            detvas=get_local_vas(main_data.monochromator),
         )
 
         # Create the equivalent MDStream
