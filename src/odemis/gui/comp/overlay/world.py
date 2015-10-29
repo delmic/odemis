@@ -1300,6 +1300,7 @@ class MirrorArcOverlay(WorldOverlay, DragMixin):
         self.hole_pos_va = model.TupleContinuous((0.0, 0.0), ((-1.0, -1.0), (1.0, 1.0)))
 
         # Mirror arc rendering parameters
+        self.flipped = False
         self.parabole_cut_radius = None
         self.cut_offset_y = None
         self.mirror_height = None
@@ -1313,12 +1314,16 @@ class MirrorArcOverlay(WorldOverlay, DragMixin):
     def set_mirror_dimensions(self, parabola_f, cut_x, cut_offset_y, hole_diam):
         """
         Updates the dimensions of the mirror
-        parabola_f (float): focal length of the parabola in m
+        parabola_f (float): focal length of the parabola in m.
+         If < 0, the drawing will be flipped (ie, with the circle towards the top)
         cut_x (float): cut of the parabola from the origin
         cut_offset_y (float): Distance from the center of the circle that is cut
            horizontally in m. (Also called "focus distance")
         hole_diam (float): diameter the hole in the mirror in m
         """
+        self.flipped = (parabola_f < 0)
+        parabola_f = abs(parabola_f)
+
         # The radius of the circle shaped edge facing the detector
         # We don't care about cut_x, but "cut_y"
         # Use the formula y = x²/4f
@@ -1336,7 +1341,7 @@ class MirrorArcOverlay(WorldOverlay, DragMixin):
         # The distance from the symmetry line  of the parabola to the center of the hole
         self.hole_y = (parabola_f * 2)
 
-        self.cnvs.update_drawing()
+        self.cnvs.request_drawing_update()
 
     def set_hole_position(self, hole_pos_va):
         """
@@ -1344,7 +1349,7 @@ class MirrorArcOverlay(WorldOverlay, DragMixin):
          (in physical coordinates)
         """
         self.hole_pos_va = hole_pos_va
-        self.cnvs.update_drawing()
+        self.cnvs.request_drawing_update()
 
     def on_left_down(self, evt):
         if self.active:
@@ -1405,7 +1410,7 @@ class MirrorArcOverlay(WorldOverlay, DragMixin):
 
         hole_pos_w = Vec(self.cnvs.physical_to_world_pos(self.hole_pos_va.value))
 
-        if self.cnvs.flip == wx.VERTICAL:
+        if (self.cnvs.flip == wx.VERTICAL) != self.flipped:  # XOR
             ctx.transform(cairo.Matrix(1.0, 0.0, 0.0, -1.0))
             hole_offset = scale * (Vec(hole_pos_w.x, -hole_pos_w.y) + (0, -self.hole_y))
             hole_offset += (self.delta_v.x, -self.delta_v.y)
@@ -1431,12 +1436,10 @@ class MirrorArcOverlay(WorldOverlay, DragMixin):
         cross_end_b = scale * cross_end_w
 
         # Calculate Mirror Arc
-
         mirror_radius_b = scale * self.parabole_cut_radius
         arc_rads = (2 * math.pi + self.rad_offset, math.pi - self.rad_offset)
 
         # Calculate mirror hole
-
         hole_radius_b = (self.hole_diam / 2) * scale
         hole_pos_b = Vec(0, scale * self.hole_y)
 

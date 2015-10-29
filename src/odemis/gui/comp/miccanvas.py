@@ -1106,21 +1106,13 @@ class SparcARCanvas(DblMicroscopeCanvas):
 
         self.mirror_ol = world_overlay.MirrorArcOverlay(self)
 
-        self._goal_im_ref = None
-        self._goal_wim = None
-
-    def _reset_goal_im(self, obj):
-        """ Called when the goal_im is dereferenced """
-        self._goal_wim = None
-
     def _convert_streams_to_images(self):
         """
         Same as the overridden method, but ensures the goal image keeps the alpha
         and is displayed second. Also force the mpp to be the one of the sensor.
         """
         streams = self.microscope_view.getStreams()
-        images_opt = []
-        images_goal = []
+        ims = []
 
         # order and display the images
         for s in streams:
@@ -1136,34 +1128,16 @@ class SparcARCanvas(DblMicroscopeCanvas):
                 continue
 
             # convert to wxImage
-            # Special trick to avoid regenerating the BGRA image for Goal all the time
-            # TODO: make it generic
-            if s.name.value == "Goal":
-                prev_im = None if self._goal_im_ref is None else self._goal_im_ref()
-                if self._goal_wim is None or prev_im is None or prev_im is not rgbim:
-                    logging.debug("Converting goal image")
-                    wim = format_rgba_darray(rgbim)
-                    self._goal_im_ref = weakref.ref(rgbim, self._reset_goal_im)
-                    self._goal_wim = wim
-                else:
-                    wim = self._goal_wim
-            else:
-                wim = format_rgba_darray(rgbim)
-
+            wim = format_rgba_darray(rgbim)
             keepalpha = (rgbim.shape[2] == 4)
             scale = rgbim.metadata[model.MD_PIXEL_SIZE]
             pos = (0, 0)  # the sensor image should be centered on the sensor center
 
-            if s.name.value == "Goal":
-                images_goal.append((wim, pos, scale, keepalpha, None,
-                                    None, self.flip, None, s.name.value))
-            else:
-                # TODO: make the blending mode an option
-                images_opt.append((wim, pos, scale, keepalpha, None,
-                                   None, self.flip, BLEND_SCREEN, s.name.value))
+            # TODO: make the blending mode an option
+            ims.append((wim, pos, scale, keepalpha, None,
+                        None, self.flip, BLEND_SCREEN, s.name.value))
 
         # normal images at the beginning, goal image at the end
-        ims = images_opt + images_goal
         self.set_images(ims)
 
         # set merge_ratio

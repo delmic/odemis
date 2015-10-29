@@ -640,12 +640,13 @@ class ARLiveViewport(LiveViewport):
         """
         self.canvas.flip = orientation or 0
 
-    def activate_mirror_overlay(self):
+    def show_mirror_overlay(self, activate=True):
         """ Activate the mirror overlay to enable user manipulation """
         self.canvas.add_world_overlay(self.canvas.mirror_ol)
-        self.canvas.mirror_ol.activate()
+        if activate:
+            self.canvas.mirror_ol.activate()
 
-    def deactivate_mirror_overlay(self):
+    def hide_mirror_overlay(self):
         """ Deactivate the mirror overlay to disable user manipulation """
         self.canvas.mirror_ol.deactivate()
         self.canvas.remove_world_overlay(self.canvas.mirror_ol)

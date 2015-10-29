@@ -2079,7 +2079,6 @@ class SparcAlignTab(Tab):
         super(SparcAlignTab, self).__init__(name, button, panel, main_frame, tab_data)
 
         self._ccd_stream = None
-        self._goal_stream = None
         # TODO: add on/off button for the CCD and connect the MicroscopeStateController
 
         self._settings_controller = settings.SparcAlignSettingsController(
@@ -2101,11 +2100,6 @@ class SparcAlignTab(Tab):
                 main_data.ccd.data,
                 main_data.ebeam)
             self._ccd_stream = ccd_stream
-
-            # The mirror center (with the lens set) is defined as pole position
-            # in the microscope configuration file.
-            goal_im = self._getGoalImage(main_data)
-            self._goal_stream = acqstream.RGBStream("Goal", goal_im)
 
             # create a view on the microscope model
             vpv = collections.OrderedDict([
@@ -2131,15 +2125,28 @@ class SparcAlignTab(Tab):
             ccd_spe = self._stream_controller.addStream(ccd_stream)
             ccd_spe.stream_panel.flatten()
             ccd_stream.should_update.value = True
+
+            # Connect polePosition of lens to mirror overlay (via the polePositionPhysical VA)
+            mirror_ol = self.panel.vp_sparc_align.canvas.mirror_ol
+            lens = main_data.lens
+            try:
+                # The lens is not set, but the CCD metadata is still set as-is.
+                # So need to compensate for the magnification, and flip.
+                # (That's also the reason it's not possible to move the
+                # pole position, as it should be done with the lens)
+                m = lens.magnification.value
+                mirror_ol.set_mirror_dimensions(-lens.parabolaF.value / m,
+                                                lens.xMax.value / m,
+                                                lens.focusDistance.value / m,
+                                                lens.holeDiameter.value / m)
+            except (AttributeError, TypeError) as ex:
+                logging.warning("Failed to get mirror dimensions: %s", ex)
         else:
             self.view_controller = None
             logging.warning("No CCD available for mirror alignment feedback")
 
         # One of the goal of changing the raw/pitch is to optimise the light
         # reaching the optical fiber to the spectrometer
-        # TODO: add a way to switch the selector mirror. For now, it's always
-        # switched to AR, and it's up to the user to manually switch it to
-        # spectrometer.
         if main_data.spectrometer:
             # Only add the average count stream
             self._scount_stream = acqstream.CameraCountStream("Spectrum count",
@@ -2225,20 +2232,17 @@ class SparcAlignTab(Tab):
             # With the lens, the image must be flipped to keep the mirror at the
             # top and the sample at the bottom.
             self.panel.vp_sparc_align.SetFlip(wx.VERTICAL)
-            # FIXME: where and when do we allow manipulation?
-            self.panel.vp_sparc_align.activate_mirror_overlay()
             # Hide goal image
-            self._stream_controller.removeStream(self._goal_stream)
+            self.panel.vp_sparc_align.hide_mirror_overlay()
             self._ccd_stream.should_update.value = True
             self.panel.pnl_sparc_trans.Enable(True)
             self.panel.pnl_sparc_fib.Enable(False)
         elif mode == "mirror-align":
             # Show image normally
             self.panel.vp_sparc_align.SetFlip(None)
-            # Show the goal image (= add it, if it's not already there)
-            streams = self.panel.vp_sparc_align.microscope_view.getStreams()
-            if self._goal_stream not in streams:
-                self._stream_controller.addStream(self._goal_stream, visible=False)
+            # Show the goal image. Don't allow to move it, so that it's always
+            # at the same position, and can be used to align with a fixed pole position.
+            self.panel.vp_sparc_align.show_mirror_overlay(activate=False)
             self._ccd_stream.should_update.value = True
             self.panel.pnl_sparc_trans.Enable(True)
             self.panel.pnl_sparc_fib.Enable(False)
@@ -2522,7 +2526,7 @@ class Sparc2AlignTab(Tab):
         except (AttributeError, TypeError) as ex:
             logging.warning("Failed to get mirror dimensions: %s", ex)
         mirror_ol.set_hole_position(tab_data.polePositionPhysical)
-        self.panel.vp_align_center.activate_mirror_overlay()
+        self.panel.vp_align_center.show_mirror_overlay()
 
         # Force a spot at the center of the FoV
         # Not via stream controller, so we can avoid the scheduler
