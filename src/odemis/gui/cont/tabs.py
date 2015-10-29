@@ -1003,27 +1003,34 @@ class ChamberTab(Tab):
         #  * when engaging => move l first, then s
         mstate = self._get_mirror_state()
         mirror = self.tab_data_model.main.mirror
-        if mstate == MIRROR_NOT_REFD:
+        if mstate == MIRROR_PARKED:
+            # => Engage
+            f1 = mirror.moveAbs({"l": self._pos_engaged["l"]})
+            f2 = mirror.moveAbs({"s": self._pos_engaged["s"]})
+            self._move_futures = (f1, f2)
+            btn_text = "ENGAGING MIRROR"
+        elif mstate == MIRROR_NOT_REFD:
             # => Reference
             # f = mirror.reference(set(MIRROR_POS_PARKED.keys()))
             f1 = mirror.reference({"s"})
             f2 = mirror.reference({"l"})
+            self._move_futures = (f1, f2)
             btn_text = "PARKING MIRROR"
-            # position doesn't change during referencing, so just pulse
+            # position doesn't update during referencing, so just pulse
             self._pulse_timer.Start(250.0)  # 4 Hz
-        elif mstate == MIRROR_PARKED:
-            # => Engage
-            f1 = mirror.moveAbs({"l": self._pos_engaged["l"]})
-            f2 = mirror.moveAbs({"s": self._pos_engaged["s"]})
-            btn_text = "ENGAGING MIRROR"
         else:
             # => Park
-            f1 = mirror.moveAbs({"l": MIRROR_POS_PARKED["l"]})
-            f2 = mirror.moveAbs({"s": MIRROR_POS_PARKED["s"]})
+            # Use standard move to show the progress of the mirror position, but
+            # finish by (normally fast) referencing to be sure it really moved
+            # to the parking position.
+            f1 = mirror.moveAbs({"s": MIRROR_POS_PARKED["s"]})
+            f2 = mirror.moveAbs({"l": MIRROR_POS_PARKED["l"]})
+            f3 = mirror.reference({"s"})
+            f4 = mirror.reference({"l"})
+            self._move_futures = (f1, f2, f3, f4)
             btn_text = "PARKING MIRROR"
 
-        self._move_futures = (f1, f2)
-        f2.add_done_callback(self._on_move_done)
+        self._move_futures[-1].add_done_callback(self._on_move_done)
 
         self.tab_data_model.main.is_acquiring.value = True
 
