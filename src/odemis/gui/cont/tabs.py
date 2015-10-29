@@ -1272,7 +1272,7 @@ class AnalysisTab(Tab):
         self._settings_controller.setter_spec_bck_file = self.set_spec_background
         self._settings_controller.setter_spec_file = self.set_spec_comp
 
-        self.panel.btn_open_image.Bind(wx.EVT_BUTTON, self.on_file_open_button )
+        self.panel.btn_open_image.Bind(wx.EVT_BUTTON, self.on_file_open_button)
 
         self.tab_data_model.tool.subscribe(self._onTool)
 
@@ -2418,6 +2418,7 @@ class Sparc2AlignTab(Tab):
                     "cls": guimod.ContentView,
                     "name": "Moment of Inertia",
                     "stream_classes": acqstream.MomentOfInertiaLiveStream,
+                    # To allow to move the mirror by dragging / double click:
                     "stage": main_data.mirror_xy,
                 }
             ),
@@ -2432,9 +2433,6 @@ class Sparc2AlignTab(Tab):
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
         self.panel.vp_align_lens.microscope_view.show_crosshair.value = False
         self.panel.vp_align_center.microscope_view.show_crosshair.value = False
-
-        # TODO: make the legend display a merge slider (currently not happening
-        # because both streams are optical)
 
         # The streams:
         # * MomentOfInertia stream (mois): used to align the mirror. Used both
@@ -2452,6 +2450,7 @@ class Sparc2AlignTab(Tab):
         # always playing the ccd stream first, and using global settings for the
         # specline.
         # TODO: have a special stream that does CCD + ebeam spot? (to avoid the ebeam spot)
+
         # Focuser here too so that it's possible to focus with right mouse button,
         # and also menu controller beleives it's possible to autofocus.
         ccd_stream = acqstream.CameraStream(
@@ -2476,6 +2475,8 @@ class Sparc2AlignTab(Tab):
                             )
         specline_stream.tint.value = (0, 64, 255)  # colour it blue
         self._specline_stream = specline_stream
+        # TODO: make the legend display a merge slider (currently not happening
+        # because both streams are optical)
         # Add it as second stream, so that it's displayed with the default 0.3 merge ratio
         self._stream_controller.addStream(specline_stream, visible=False)
 

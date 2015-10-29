@@ -150,7 +150,6 @@ import math
 import os
 import wx
 import wx.lib.wxcairo as wxcairo
-import wx.lib.newevent
 
 from decorator import decorator
 
@@ -1621,17 +1620,14 @@ class DraggableCanvas(BitmapCanvas):
 
         :param world_pos: (2-tuple float) The world coordinates to center the
             buffer on.
-
-        Warning: always call from the main GUI thread. So if you're not sure in which thread you
-        are, do: wx.CallAfter(canvas.recenter_buffer, pos)
         """
 
         if self.requested_world_pos != world_pos:
             self._calc_bg_offset(world_pos)
             self.requested_world_pos = world_pos
-            # FIXME: could maybe be more clever and only request redraw for the
+            # TODO: could maybe be more clever and only request redraw for the
             # outside region
-            self.request_drawing_update()
+            wx.CallAfter(self.request_drawing_update)
 
     def repaint(self):
         """ repaint the canvas
@@ -1720,8 +1716,9 @@ class DraggableCanvas(BitmapCanvas):
         if w == 0 or h == 0:
             logging.warning("Weird image size of %fx%f wu", w, h)
             return  # no image
-        cw = max(1, self.ClientSize[0])  # px
-        ch = max(1, self.ClientSize[1])  # px
+        cs = self.ClientSize
+        cw = max(1, cs[0])  # px
+        ch = max(1, cs[1])  # px
         self.scale = min(ch / h, cw / w)  # pick the dimension which is shortest
 
         # TODO: avoid aliasing when possible by picking a round number for the
