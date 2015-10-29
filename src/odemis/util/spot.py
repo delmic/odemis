@@ -77,6 +77,10 @@ def MomentOfInertia(data, background=None):
     totDist = numpy.sqrt(diff)
     rmsDist = data0 * totDist
     Mdist = rmsDist.sum() / data_sum
+    # In case of just one bright pixel, avoid returning 0 and return unknown
+    # instead.
+    if Mdist == 0:
+        return float('nan')
     return Mdist
 
 
