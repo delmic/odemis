@@ -348,7 +348,7 @@ class SecomStateController(MicroscopeStateController):
         self._tab_panel.bmp_stream_status_info.Show(lvl in (logging.INFO, logging.DEBUG))
         self._tab_panel.bmp_stream_status_warn.Show(lvl == logging.WARN)
         self._tab_panel.bmp_stream_status_error.Show(lvl == logging.ERROR)
-        self._tab_panel.pnl_hw_info.Parent.Layout()
+        self._tab_panel.pnl_hw_info.Layout()
 
     def _show_progress_indicators(self, show_load, show_status):
         """
@@ -356,9 +356,10 @@ class SecomStateController(MicroscopeStateController):
 
         The stream status text will be hidden if the progress indicators are shown.
         """
+        assert not (show_load and show_status), "Cannot display both simultaneously"
         self._tab_panel.pnl_load_status.Show(show_load)
         self._tab_panel.pnl_stream_status.Show(show_status)
-        self._tab_panel.pnl_hw_info.Parent.Layout()
+        self._tab_panel.pnl_hw_info.Layout()
 
     def _set_ebeam_power(self, on):
         """ Set the ebeam power (if there is an ebeam that can be controlled)
@@ -666,6 +667,7 @@ class DelphiStateController(SecomStateController):
             # If it's loaded, the sample holder is registered for sure, and the
             # calibration should have already been done.
             self._load_holder_calib()
+            self._show_progress_indicators(False, True)
 
         # Progress dialog for calibration
         self._dlg = None
@@ -742,7 +744,7 @@ class DelphiStateController(SecomStateController):
         self._main_data.aligner.moveAbs(pos)
 
         super(DelphiStateController, self)._start_chamber_venting()
-        self._show_progress_indicators(True, True)
+        self._show_progress_indicators(True, False)
 
     @call_in_wx_main
     def _on_vented(self, future):
