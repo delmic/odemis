@@ -862,15 +862,12 @@ class ChamberTab(Tab):
         try:
             self._pos_engaged = main_data.mirror.getMetadata()[model.MD_FAV_POS_ACTIVE]
         except KeyError:
-            logging.exception("Mirror actuator has no metadata FAV_POS_ACTIVE")
+            raise ValueError("Mirror actuator has no metadata FAV_POS_ACTIVE")
 
         mstate = self._get_mirror_state()
         # If mirror stage not engaged, make this tab the default
         if mstate != MIRROR_ENGAGED:
             self.make_default()
-        else:  # Mirror is engaged
-            # Save that the current position as a "better" engaged position
-            self._pos_engaged = main_data.mirror.position.value
 
         self._update_mirror_status()
 
@@ -1134,9 +1131,10 @@ class ChamberTab(Tab):
         if show:
             threading.Thread(target=self.tab_data_model.main.opm.setPath,
                              args=("chamber-view",)).start()
-            # just in case the mirror was moved from another client (eg, cli)
+            # Update if the mirror has been aligned
+            self._pos_engaged = self.tab_data_model.main.mirror.getMetadata()[model.MD_FAV_POS_ACTIVE]
+            # Just in case the mirror was moved from another client (eg, cli)
             self._update_mirror_status()
-            # TODO: also update _pos_engaged?
 
         # When hidden, the new tab shown is in charge to request the right
         # optical path mode, if needed.
@@ -2829,13 +2827,32 @@ class Sparc2AlignTab(Tab):
             self._moi_stream.is_active.value = True
         self.panel.vp_moi.canvas.fit_view_to_next_image = True
 
+    def _onLensPos(self, pos):
+        """
+        Called when the lens is moved (and the tab is shown)
+        """
+        # Save the lens position as the "calibrated" one
+        lm = self.tab_data_model.main.lens_mover
+        lm.updateMetadata({model.MD_FAV_POS_ACTIVE: pos})
+
+    def _onMirrorPos(self, pos):
+        """
+        Called when the mirror is moved (and the tab is shown)
+        """
+        # Save mirror position as the "calibrated" one
+        m = self.tab_data_model.main.mirror
+        m.updateMetadata({model.MD_FAV_POS_ACTIVE: pos})
+
     def Show(self, show=True):
         Tab.Show(self, show=show)
 
+        main = self.tab_data_model.main
         # Select the right optical path mode and the plays right stream
         if show:
             mode = self.tab_data_model.align_mode.value
             self._onAlignMode(mode)
+            main.lens_mover.position.subscribe(self._onLensPos)
+            main.mirror.position.subscribe(self._onMirrorPos)
         else:
             # when hidden, the new tab shown is in charge to request the right
             # optical path mode, if needed.
@@ -2844,13 +2861,8 @@ class Sparc2AlignTab(Tab):
             # Cancel autofocus (if it happens to run)
             self.tab_data_model.autofocus_active.value = False
 
-            # Save the lens and mirror positions as the "calibrated" ones
-            lm = self.tab_data_model.main.lens_mover
-            lmmd = {model.MD_FAV_POS_ACTIVE: lm.position.value}
-            lm.updateMetadata(lmmd)
-            m = self.tab_data_model.main.mirror
-            mmd = {model.MD_FAV_POS_ACTIVE: m.position.value}
-            m.updateMetadata(mmd)
+            main.lens_mover.position.unsubscribe(self._onLensPos)
+            main.mirror.position.unsubscribe(self._onMirrorPos)
 
     def terminate(self):
         self._stream_controller.pauseStreams()
