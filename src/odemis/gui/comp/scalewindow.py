@@ -138,17 +138,18 @@ class BufferedWindow(wx.Control):
         self.Refresh(eraseBackground=False)
         self.Update()
 
+
 class ScaleWindow(BufferedWindow):
     """
     Little control that display a horizontal scale for a given screen density
     """
     def __init__(self, *args, **kwargs):
         BufferedWindow.__init__(self, *args, **kwargs)
-        self.mpp = None # unknown
-        self.nod = 4 # heigh of the nods (the end of the scale)
-        self.significant = 1 # significant numbers to keep in the length
+        self.mpp = None  # unknown
+        self.nod = 4  # height of the nods (the end of the scale)
+        self.significant = 1  # significant numbers to keep in the length
 
-        self.gap = 3 # gap between line and text
+        self.gap = 3  # gap between line and text
         self.line_width = 1
 
         # we want at least a bit of space for the text + line
