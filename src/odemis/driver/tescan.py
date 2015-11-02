@@ -20,6 +20,7 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
+from __future__ import absolute_import
 
 import logging
 import math
@@ -239,11 +240,6 @@ class Scanner(model.Emitter):
         self.power = model.IntEnumerated(self._power, power_choices, unit="",
                                   setter=self._setPower)
 
-        # Blanker is automatically enabled when no scanning takes place
-        # TODO it may cause time overhead, check on testing => If so put some
-        # small timeout (~ a few seconds) before blanking the beam.
-        # self.parent._device.ScSetBlanker(0, 2)
-
         # Enumerated float with respect to the PC indexes of Tescan API
         self._list_currents = self.GetProbeCurrents()
         pc_choices = set(self._list_currents)
@@ -301,8 +297,8 @@ class Scanner(model.Emitter):
     def _onVoltage(self, volt):
         self.parent._device.HVSetVoltage(volt)
         # Adjust brightness and contrast
-        with self.parent._acq_progress_lock:
-            self.parent._device.DtAutoSignal(self.parent._detector._channel)
+        # with self.parent._acq_progress_lock:
+        #    self.parent._device.DtAutoSignal(self.parent._detector._channel)
 
     def _setPower(self, value):
         powers = self.power.choices
@@ -323,8 +319,8 @@ class Scanner(model.Emitter):
         # Set the corresponding current index to Tescan SEM
         self.parent._device.SetPCIndex(self._indexCurrent + 1)
         # Adjust brightness and contrast
-        with self.parent._acq_progress_lock:
-            self.parent._device.DtAutoSignal(self.parent._detector._channel)
+        # with self.parent._acq_progress_lock:
+        #    self.parent._device.DtAutoSignal(self.parent._detector._channel)
 
         return self._probeCurrent
 
@@ -444,7 +440,6 @@ class Scanner(model.Emitter):
         return phy_pos
 
 
-MAX_FAILURES = 5  # maximum allowed number of acquisition failures in a row
 class Detector(model.Detector):
     """
     This is an extension of model.Detector class. It performs the main functionality 
@@ -470,12 +465,14 @@ class Detector(model.Detector):
         self.data = SEMDataFlow(self, parent)
         self._acquisition_thread = None
         self._acquisition_lock = threading.Lock()
-        self._failures = 0
         self._acquisition_init_lock = threading.Lock()
         self._acquisition_must_stop = threading.Event()
 
         # The shape is just one point, the depth
         self._shape = (2 ** 16,)  # only one point
+
+        # Blanker is automatically enabled when no scanning takes place
+        self.parent._device.ScSetBlanker(1, 2)
 
     def start_acquire(self, callback):
         with self._acquisition_lock:
@@ -484,6 +481,8 @@ class Detector(model.Detector):
             self._acquisition_thread = threading.Thread(target=target,
                     name="TescanSEM acquire flow thread",
                     args=(callback,))
+            # Beam ON
+            self.parent._device.ScSetBlanker(1, 0)
             self._acquisition_thread.start()
 
     def stop_acquire(self):
@@ -491,6 +490,8 @@ class Detector(model.Detector):
             with self._acquisition_init_lock:
                 self.parent._device.CancelRecv()
                 self.parent._device.ScStopScan()
+                # Beam blanker back to automatic
+                self.parent._device.ScSetBlanker(1, 2)
                 self._acquisition_must_stop.set()
 
     def _wait_acquisition_stopped(self):
@@ -543,24 +544,22 @@ class Detector(model.Detector):
 
             dt = self.parent._scanner.dwellTime.value * 1e9
             logging.debug("Acquiring SEM image of %s with dwell time %f ns", res, dt)
-            while self._failures < MAX_FAILURES:
-                try:
-                    # Check if spot mode is required
-                    if res == (1, 1):
-                        # FIXME: Maybe just use ScScanXY
-                        self.parent._device.ScScanLine(0, scaled_shape[0], scaled_shape[1],
-                                             l + 1, t + 1, r + 1, b + 1, dt, 1, 0)
-                    else:
-                        self.parent._device.ScScanXY(0, scaled_shape[0], scaled_shape[1],
-                                             l, t, r, b, 1, dt)
-                    # fetch the image (blocking operation), ndarray is returned
-                    sem_img = self.parent._device.FetchArray(0, res[0] * res[1])
-                    break
-                except Exception:
-                    logging.warning("Acquisition failure, retry to acquire...")
-                    self._failures += 1
-            else:
-                raise IOError("Image acquisition failed")
+            try:
+                # Check if spot mode is required
+                if res == (1, 1):
+                    # FIXME: Maybe just use ScScanXY
+                    self.parent._device.ScScanLine(0, scaled_shape[0], scaled_shape[1],
+                                         l + 1, t + 1, r + 1, b + 1, dt, 1, 0)
+                else:
+                    self.parent._device.ScScanXY(0, scaled_shape[0], scaled_shape[1],
+                                         l, t, r, b, 1, dt)
+            except Exception:
+                logging.warning("Acquisition cancelled...")
+                # we must stop the scanning even after single scan
+                self.parent._device.ScStopScan()
+                return model.DataArray(numpy.array([[0]], dtype=numpy.uint16), metadata)
+            # fetch the image (blocking operation), ndarray is returned
+            sem_img = self.parent._device.FetchArray(0, res[0] * res[1])
             sem_img.shape = res[::-1]
             # Change endianess
             sem_img.byteswap(True)
@@ -568,8 +567,6 @@ class Detector(model.Detector):
             # we must stop the scanning even after single scan
             self.parent._device.ScStopScan()
 
-            # Successful acquisition, reset number of failures
-            self._failures = 0
             return model.DataArray(sem_img, metadata)
 
     def _acquire_thread(self, callback):
