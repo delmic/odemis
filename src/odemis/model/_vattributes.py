@@ -149,6 +149,7 @@ class VigilantAttribute(VigilantAttributeBase):
         self._global_name = None # to be filled when registered
         self._ctx = None
         self.pipe = None
+        self.debug = False  # If True, this VA will print a call stack when its value is set
         self.max_discard = max_discard
 
     def __default_setter(self, value):
@@ -214,6 +215,11 @@ class VigilantAttribute(VigilantAttributeBase):
                     must_notify = True
         except Exception:
             must_notify = True
+
+        if self.debug:
+            # Print the location from which the VA's value was set
+            import traceback
+            print traceback.format_list(traceback.extract_stack(limit=2))[0]
 
         if must_notify:
             self.notify(self._value)

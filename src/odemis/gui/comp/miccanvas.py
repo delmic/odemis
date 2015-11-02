@@ -539,11 +539,10 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         new_size = event.Size
 
         # Update the mpp, so that the same data will be displayed.
-        if self.microscope_view:
+        if self.microscope_view and self._previous_size != new_size:
             hfw = self._previous_size[0] * self.microscope_view.mpp.value
             new_mpp = hfw / new_size[0]
             self.microscope_view.mpp.value = self.microscope_view.mpp.clip(new_mpp)
-
         super(DblMicroscopeCanvas, self).on_size(event)
         self._previous_size = new_size
 
@@ -576,7 +575,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
                     pass
 
         mpp = sorted(self.microscope_view.mpp.range + (mpp,))[1]
-        self.microscope_view.mpp.value = mpp # this will call _on_view_mpp()
+        self.microscope_view.mpp.value = mpp  # this will call _on_view_mpp()
 
     # Zoom/merge management
     def on_wheel(self, evt):
