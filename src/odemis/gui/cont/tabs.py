@@ -2774,17 +2774,24 @@ class Sparc2AlignTab(Tab):
         """
         Called when the user presses the "Acquire background" button (for MoI stream)
         """
-        # Start background acquisition & disable button
+        # Stop e-beam, in case it's connected to a beam blanker
+        self._moi_stream.should_update.value = False
+
+        # Disable button to give a feedback that acquisition is taking place
         self.panel.btn_bkg_acquire.Disable()
+
+        # Acquire asynchronously
+        # TODO: make sure we don't get the latest CCD image that was being acquired
         self.tab_data_model.main.ccd.data.subscribe(self._on_bkg_data)
 
     def _on_bkg_data(self, df, data):
         """
         Called with a raw CCD image corresponding to background acquisition.
         """
-        # Stop the acqusition, and pass that data to the MoI stream
+        # Stop the acquisition, and pass that data to the MoI stream
         df.unsubscribe(self._on_bkg_data)
         self._moi_stream.background.value = data
+        self._moi_stream.should_update.value = True
 
         wx.CallAfter(self.panel.btn_bkg_acquire.Enable)
 
