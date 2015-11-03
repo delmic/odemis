@@ -745,8 +745,8 @@ class SparcAcquisitionTab(Tab):
         )
 
         # Force SEM view fit to content when magnification is updated
-        if not (hasattr(main_data.ebeam, "horizontalFoV")
-                and isinstance(main_data.ebeam.horizontalFoV, model.VigilantAttributeBase)):
+        if not (hasattr(main_data.ebeam, "horizontalFoV") and
+                isinstance(main_data.ebeam.horizontalFoV, model.VigilantAttributeBase)):
             main_data.ebeam.magnification.subscribe(self._onSEMMag)
 
     @property
@@ -1678,11 +1678,13 @@ class AnalysisTab(Tab):
 
 class SecomAlignTab(Tab):
     """ Tab for the lens alignment on the SECOM and SECOMv2 platform
+
     The streams are automatically active when the tab is shown
     It provides three ways to move the "aligner" (= optical lens position):
      * raw (via the A/B or X/Y buttons)
      * dicho mode (move opposite of the relative position of the ROI center)
      * spot mode (move equal to the relative position of the spot center)
+
     """
 
     def __init__(self, name, button, panel, main_frame, main_data):
@@ -1706,11 +1708,11 @@ class SecomAlignTab(Tab):
         # approximation is enough to do the calibration relatively quickly.
         if "a" in main_data.aligner.axes:
             self._aligner_xy = ConvertStage("converter-ab", "stage",
-                                          children={"orig": main_data.aligner},
-                                          axes=["b", "a"],
-                                          rotation=math.radians(45))
+                                            children={"orig": main_data.aligner},
+                                            axes=["b", "a"],
+                                            rotation=math.radians(45))
             self._convert_to_aligner = self._convert_xy_to_ab
-        else: # SECOMv2 => it's directly X/Y
+        else:  # SECOMv2 => it's directly X/Y
             if "x" not in main_data.aligner.axes:
                 logging.error("Unknown axes in lens aligner stage")
             self._aligner_xy = main_data.aligner
@@ -1793,7 +1795,7 @@ class SecomAlignTab(Tab):
         ccd_spe = StreamController(stream_bar, ccd_stream, self.tab_data_model)
         ccd_spe.stream_panel.flatten()  # removes the expander header
         # force this view to never follow the tool mode (just standard view)
-        panel.vp_align_ccd.canvas.allowed_modes = set([guimod.TOOL_NONE])
+        panel.vp_align_ccd.canvas.allowed_modes = {guimod.TOOL_NONE}
 
         # Bind actuator buttons and keys
         self._actuator_controller = ActuatorController(self.tab_data_model, panel, "lens_align_")
@@ -2053,9 +2055,10 @@ class SecomAlignTab(Tab):
                 "a": shift["x"] * math.sin(ang) + shift["y"] * math.cos(ang)}
 
     def _onSEMpxs(self, pixel_size):
-        """
-        Called when the SEM pixel size changes, which means the FoV changes
+        """ Called when the SEM pixel size changes, which means the FoV changes
+
         pixel_size (tuple of 2 floats): in meter
+
         """
         # in dicho search, it means A/B or X/Y are actually different values
         self._update_to_center()
@@ -2611,9 +2614,9 @@ class Sparc2AlignTab(Tab):
 
         """
         # Add a intensity/time graph
-#         self.spec_graph = hist.Histogram(setting_cont.panel, size=(-1, 40))
-#         self.spec_graph.SetBackgroundColour("#000000")
-#         setting_cont.add_widgets(self.spec_graph)
+        # self.spec_graph = hist.Histogram(setting_cont.panel, size=(-1, 40))
+        # self.spec_graph.SetBackgroundColour("#000000")
+        # setting_cont.add_widgets(self.spec_graph)
 
         # the "MoI" value bellow the chronogram
         lbl_moi, txt_moi = cont.add_text_field("Moment of inertia", readonly=True)
