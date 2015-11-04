@@ -348,6 +348,7 @@ SPARC2: {
         axes: ["s", "l"],
         ustepsize: [1.e-6, 1.e-6], # m/µstep (big, for the simulator to move fast)
         refproc: "Standard",
+        refswitch: {"s": 0, "l": 0},
     },
     metadata: {
         # Default position of the mirror engaged (will be improved during alignment)
