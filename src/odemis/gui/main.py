@@ -36,6 +36,7 @@ import odemis
 from odemis.gui import main_xrc, log
 from odemis.gui.cont import acquisition
 from odemis.gui.cont.menu import MenuController
+from odemis.gui.dev.powermate import Powermate
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.xmlh import odemis_get_resources
 from odemis.util import driver
@@ -72,6 +73,9 @@ class OdemisGUIApp(wx.App):
         self._is_standalone = standalone
         self._snapshot_controller = None
         self._menu_controller = None
+
+        # User input devices
+        self.dev_powermate = None
 
         l = logging.getLogger()
         self.log_level = l.getEffectiveLevel()
@@ -138,6 +142,8 @@ class OdemisGUIApp(wx.App):
 
         self.init_gui()
         log.create_gui_logger(self.main_frame.txt_log, self.main_data.debug, self.main_data.level)
+
+        self.dev_powermate = Powermate(self.main_data)
 
         if os.name == 'nt' and getattr(sys, 'frozen', False):
             import odemis.gui.util.updater as updater
@@ -339,7 +345,7 @@ class OdemisGUIApp(wx.App):
             dlg = wx.MessageDialog(self.main_frame, msg, "Exit", wx.OK | wx.ICON_STOP)
             # if dlg.ShowModal() == wx.ID_NO:
             dlg.ShowModal()
-            dlg.Destroy() # frame
+            dlg.Destroy()  # frame
             return
 
         try:
@@ -354,6 +360,9 @@ class OdemisGUIApp(wx.App):
             log.stop_gui_logger()
         except Exception:
             logging.exception("Error stopping GUI logging")
+
+        if self.dev_powermate:
+            self.dev_powermate.led_on(False)
 
         self.main_frame.Destroy()
 
