@@ -143,7 +143,7 @@ class OdemisGUIApp(wx.App):
         self.init_gui()
         log.create_gui_logger(self.main_frame.txt_log, self.main_data.debug, self.main_data.level)
 
-        self.dev_powermate = Powermate(self.main_frame, self.main_data)
+        self.dev_powermate = Powermate(self.main_data)
 
         if os.name == 'nt' and getattr(sys, 'frozen', False):
             import odemis.gui.util.updater as updater
@@ -345,7 +345,7 @@ class OdemisGUIApp(wx.App):
             dlg = wx.MessageDialog(self.main_frame, msg, "Exit", wx.OK | wx.ICON_STOP)
             # if dlg.ShowModal() == wx.ID_NO:
             dlg.ShowModal()
-            dlg.Destroy() # frame
+            dlg.Destroy()  # frame
             return
 
         try:
@@ -360,6 +360,9 @@ class OdemisGUIApp(wx.App):
             log.stop_gui_logger()
         except Exception:
             logging.exception("Error stopping GUI logging")
+
+        if self.dev_powermate:
+            self.dev_powermate.led_on(False)
 
         self.main_frame.Destroy()
 

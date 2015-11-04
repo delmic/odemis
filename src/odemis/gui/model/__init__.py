@@ -22,20 +22,21 @@ This file is part of Odemis.
 """
 
 import Queue
-from abc import ABCMeta
 import collections
 import logging
 import math
+import os
+import threading
+import time
+from abc import ABCMeta
+
 from odemis import model
 from odemis.acq import path
-from odemis.acq.stream import Stream, SEMStream, CLSettingsStream, StreamTree
+from odemis.acq.stream import Stream, StreamTree
 from odemis.gui.conf import get_general_conf
 from odemis.model import (FloatContinuous, VigilantAttribute, IntEnumerated, StringVA, BooleanVA,
                           MD_POS, InstantaneousFuture)
 from odemis.model._vattributes import StringEnumerated
-import os
-import threading
-import time
 
 
 # The different states of a microscope
