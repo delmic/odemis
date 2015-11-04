@@ -24,9 +24,9 @@ SPARC2: {
     role: "power-control",
     init: {
         port: "/dev/ttyPCU*", # for simulator
-        pin_map: {"Calibration Light": 0, "CL PMT control unit": 1,
-                 "Camera": 2, "Spectral Camera": 3, "Spectrograph": 4,
-                 "Optical Actuators": 7},
+        pin_map: {"Calibration Light": 0, "CL PMT control unit": 3,
+                 "Camera": 4, "Spectral Camera": 5, "Spectrograph": 6,
+                 "Optical Actuators": 2},
         powered: ["Calibration Light", "CL PMT control unit",
                   "Camera", "Spectral Camera", "Spectrograph",
                   "Optical Actuators"]
