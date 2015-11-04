@@ -156,6 +156,7 @@ from decorator import decorator
 from odemis import util
 from odemis.gui import BLEND_DEFAULT, BLEND_SCREEN, BufferSizeEvent
 from odemis.gui.comp.overlay.base import WorldOverlay, ViewOverlay
+from odemis.gui.dev.powermate import EVT_KNOB_ROTATE, EVT_KNOB_PRESS
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.img import add_alpha_byte
 from odemis.util import intersect
@@ -233,6 +234,8 @@ class BufferedCanvas(wx.Panel):
         self.Bind(wx.EVT_LEFT_DCLICK, self.on_dbl_click)
         self.Bind(wx.EVT_MOTION, self.on_motion)
         self.Bind(wx.EVT_MOUSEWHEEL, self.on_wheel)
+        self.Bind(EVT_KNOB_ROTATE, self.on_knob_rotate)
+        self.Bind(EVT_KNOB_PRESS, self.on_knob_press)
         self.Bind(wx.EVT_LEAVE_WINDOW, self.on_leave)
         self.Bind(wx.EVT_ENTER_WINDOW, self.on_enter)
 
@@ -425,6 +428,16 @@ class BufferedCanvas(wx.Panel):
     @ignore_if_disabled
     def on_wheel(self, evt):
         """ Standard mouse wheel processor """
+        evt.Skip()
+
+    @ignore_if_disabled
+    def on_knob_rotate(self, evt):
+        """ Powermate knob rotation processor """
+        evt.Skip()
+
+    @ignore_if_disabled
+    def on_knob_press(self, evt):
+        """ Powermate knob press processor """
         evt.Skip()
 
     @ignore_if_disabled

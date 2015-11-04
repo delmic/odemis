@@ -118,6 +118,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         self.background_brush = wx.BRUSHSTYLE_SOLID
 
+        self.focus_timer = None
+
         # Simple image caching dictionary {obj_id: rgb image}
         self.images_cache = {}
 
@@ -540,8 +542,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
     def on_size(self, event):
         new_size = event.Size
         # TODO: skip if too small?
-#         if any(s <= 1 for s in new_size):
-#             return
+        # if any(s <= 1 for s in new_size):
+        #     return
 
         # Update the mpp, so that the same data will be displayed.
         if self.microscope_view and self._previous_size != new_size:
@@ -581,6 +583,35 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         mpp = sorted(self.microscope_view.mpp.range + (mpp,))[1]
         self.microscope_view.mpp.value = mpp  # this will call _on_view_mpp()
+
+    def on_knob_rotate(self, evt):
+        """ Powermate knob rotation processor """
+
+        if CAN_FOCUS in self.abilities:
+            # Stop the clear timer if one is running
+            if self.focus_timer is not None:
+                self.focus_timer.Stop()
+
+            if not self._focus_overlay:
+                self._focus_overlay = self.add_view_overlay(view_overlay.FocusOverlay(self))
+
+            if wx.GetKeyState(wx.WXK_SHIFT):
+                softener = 0.1  # softer
+            else:
+                softener = 1
+
+            self.on_extra_axis_move(1, evt.step_value * softener)
+
+            # Set a timer to clear the overlay in x seconds
+            self.focus_timer = wx.CallLater(5000, self._clear_knob_focus)
+
+        super(DblMicroscopeCanvas, self).on_knob_rotate(evt)
+
+    def _clear_knob_focus(self):
+        """ Clear the focus overlay after the knob focus timer has ran out """
+        if self._focus_overlay:
+            self._focus_overlay.clear_shift()
+        self.focus_timer = None
 
     # Zoom/merge management
     def on_wheel(self, evt):

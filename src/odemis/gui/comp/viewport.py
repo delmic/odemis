@@ -460,7 +460,7 @@ class MicroscopeViewport(ViewPort):
         # displayed on screen (so we don't interfere with viewports in other tabs that are not
         # currently displayed).
         # This way, we prevent mpp/fov setting loops.
-        if not self.self_set_fov and self.IsShownOnScreen():
+        if not self.self_set_fov:
             logging.debug("FoV VA changed to %s on %s", hw_fov, self)
             self.set_mpp_from_fov(hw_fov)
         else:

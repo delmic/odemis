@@ -35,6 +35,7 @@ from odemis.acq.align import AutoFocus
 from odemis.acq.stream import OpticalStream, SpectrumStream, CLStream, EMStream, \
     ARStream, CLSettingsStream, ARSettingsStream, MonochromatorSettingsStream, RGBCameraStream, BrightfieldStream
 from odemis.driver.actuator import ConvertStage
+import odemis.gui
 from odemis.gui.comp.canvas import CAN_ZOOM
 from odemis.gui.comp.popup import Message
 from odemis.gui.comp.scalewindow import ScaleWindow
@@ -49,6 +50,7 @@ from odemis.gui.cont.streams import StreamController
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.img import scale_to_alpha
 from odemis.gui.util.widgets import ProgressiveFutureConnector, AxisConnector
+from odemis.model import hasVA
 from odemis.util import units
 import os.path
 import pkg_resources
@@ -68,7 +70,6 @@ import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
 import odemis.gui.util.align as align
-import odemis.gui
 
 
 class Tab(object):
@@ -93,6 +94,7 @@ class Tab(object):
         self.main_frame = main_frame
         self.tab_data_model = tab_data
         self.highlighted = False
+        self.focussed_viewport = None
 
     def Show(self, show=True):
         self.button.SetToggle(show)
@@ -1733,6 +1735,7 @@ class SecomAlignTab(Tab):
                 panel.vp_align_sem,
                 {
                     "name": "SEM",
+                    "cls": guimod.ContentView,
                     "stage": main_data.stage,
                     "stream_classes": acqstream.EMStream,
                 },
@@ -1764,10 +1767,11 @@ class SecomAlignTab(Tab):
 
         # Adapt the zoom level of the SEM to fit exactly the SEM field of view.
         # No need to check for resize events, because the view has a fixed size.
-        panel.vp_align_sem.canvas.abilities -= {CAN_ZOOM}
-        # prevent the first image to reset our computation
-        panel.vp_align_sem.canvas.fit_view_to_next_image = False
-        main_data.ebeam.pixelSize.subscribe(self._onSEMpxs, init=True)
+        if not hasVA(main_data.ebeam, "horizontalFoV"):
+            panel.vp_align_sem.canvas.abilities -= {CAN_ZOOM}
+            # prevent the first image to reset our computation
+            panel.vp_align_sem.canvas.fit_view_to_next_image = False
+            main_data.ebeam.pixelSize.subscribe(self._onSEMpxs, init=True)
 
         # Update the SEM area in dichotomic mode
         self.tab_data_model.dicho_seq.subscribe(self._onDichoSeq, init=True)
@@ -1811,6 +1815,9 @@ class SecomAlignTab(Tab):
         self._aligner_move = None  # the future of the move (to know if it's over)
         panel.lens_align_btn_to_center.Bind(wx.EVT_BUTTON,
                                                  self._on_btn_to_center)
+
+        # If SEM pxs changes, A/B or X/Y are actually different values
+        main_data.ebeam.pixelSize.subscribe(self._update_to_center)
 
         # Fine alignment panel
         pnl_sem_toolbar = panel.pnl_sem_toolbar
@@ -1967,7 +1974,7 @@ class SecomAlignTab(Tab):
 
     # "Move to center" functions
     @call_in_wx_main
-    def _update_to_center(self):
+    def _update_to_center(self, _=None):
         # Enable a special "move to SEM center" button iif:
         # * seq is not empty
         # * (and) no move currently going on
@@ -2058,11 +2065,7 @@ class SecomAlignTab(Tab):
         """ Called when the SEM pixel size changes, which means the FoV changes
 
         pixel_size (tuple of 2 floats): in meter
-
         """
-        # in dicho search, it means A/B or X/Y are actually different values
-        self._update_to_center()
-
         eshape = self.tab_data_model.main.ebeam.shape
         fov_size = (eshape[0] * pixel_size[0], eshape[1] * pixel_size[1])  # m
         semv_size = self.panel.vp_align_sem.Size  # px
@@ -2590,8 +2593,7 @@ class Sparc2AlignTab(Tab):
         self.panel.btn_bkg_acquire.Bind(wx.EVT_BUTTON, self._onBkgAcquire)
 
         # Force MoI view fit to content when magnification is updated
-        if not (hasattr(main_data.ebeam, "horizontalFoV") and
-                isinstance(main_data.ebeam.horizontalFoV, model.VigilantAttributeBase)):
+        if not hasVA(main_data.ebeam, "horizontalFoV"):
             main_data.ebeam.magnification.subscribe(self._onSEMMag)
 
     def _onPolePosition(self, pole_pos):
