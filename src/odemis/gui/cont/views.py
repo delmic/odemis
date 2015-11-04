@@ -24,13 +24,11 @@ from __future__ import division
 
 import logging
 from odemis.acq.stream import EMStream
-
 from odemis.gui import model
 from odemis.gui.comp.grid import ViewportGrid
 from odemis.gui.cont import tools
 from odemis.gui.util import call_in_wx_main, img
-from odemis.model import MD_PIXEL_SIZE
-from odemis.model import VigilantAttributeBase
+from odemis.model import MD_PIXEL_SIZE, hasVA
 import wx
 
 
@@ -80,7 +78,7 @@ class ViewPortController(object):
         # TODO: just let the viewport do that?
         # Track the mpp of the SEM view in order to set the magnification
         ebeam = self._main_data_model.ebeam
-        if ebeam and isinstance(ebeam.horizontalFoV, VigilantAttributeBase):
+        if hasVA(ebeam, "horizontalFoV"):
             # => Link the SEM FoV with the mpp of the live SEM viewport
             for vp in self.viewports:
                 if vp.microscope_view.stream_classes == EMStream:  # For SEM only views

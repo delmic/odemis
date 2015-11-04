@@ -25,22 +25,22 @@ This module contains functions that help in the generation of dynamic configurat
 """
 
 from __future__ import division
+
 from collections import OrderedDict
 import collections
 import logging
 import math
 import numbers
+import odemis.gui
+from odemis.gui.util.widgets import VigilantAttributeConnector, AxisConnector
+from odemis.model import NotApplicableError, hasVA
+from odemis.util.conversion import reproduceTypedValue
+from odemis.util.units import readable_str
 import re
 import wx
 from wx.lib.pubsub import pub
 
-from odemis import model
-import odemis.gui
-from odemis.gui.util.widgets import VigilantAttributeConnector, AxisConnector
 import odemis.util.units as utun
-from odemis.model import NotApplicableError
-from odemis.util.conversion import reproduceTypedValue
-from odemis.util.units import readable_str
 
 
 def resolution_from_range(comp, va, conf, init=None):
@@ -186,8 +186,7 @@ def mag_if_no_hfw_ctype(comp, va, conf):
 
     """
 
-    if (hasattr(comp, "horizontalFoV") and isinstance(comp.horizontalFoV,
-                                                      model.VigilantAttributeBase)):
+    if hasVA(comp, "horizontalFoV"):
         return odemis.gui.CONTROL_NONE
     else:
         # Just use a text field => it's for copy-paste
