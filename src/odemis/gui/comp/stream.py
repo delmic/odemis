@@ -1280,8 +1280,8 @@ class StreamBar(wx.Panel):
             if isinstance(stream, c):
                 return i
 
-        msg = "Stream of unknown order type %s"
-        logging.warning(msg, stream.__class__.__name__)
+        msg = "Stream %s of unknown order type %s"
+        logging.warning(msg, stream.name.value, stream.__class__.__name__)
         return len(self.STREAM_ORDER)
 
     # === VA handlers

@@ -121,7 +121,7 @@ HW_SETTINGS_CONFIG = {
                 "accuracy": 2,
             }),
             ("magnification", {
-                # Depends whether horizontalFoV is available or not
+                # Depends whether it is readonly or not
                 "control_type": util.mag_if_no_hfw_ctype,
             }),
             ("dwellTime", {

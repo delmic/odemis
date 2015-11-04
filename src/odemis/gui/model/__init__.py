@@ -31,8 +31,7 @@ from odemis.acq import path
 from odemis.acq.stream import Stream, SEMStream, CLSettingsStream, StreamTree
 from odemis.gui.conf import get_general_conf
 from odemis.model import (FloatContinuous, VigilantAttribute, IntEnumerated, StringVA, BooleanVA,
-                          MD_POS, InstantaneousFuture)
-from odemis.model._vattributes import StringEnumerated
+                          MD_POS, InstantaneousFuture, hasVA, StringEnumerated)
 import os
 import threading
 import time
@@ -203,6 +202,30 @@ class MainGUIData(object):
             if microscope.role in ("sparc", "sparc2"):
                 self.opm = path.OpticalPathManager(microscope)
 
+            # Used when doing SECOM fine alignment, based on the value used by the user
+            # when doing manual alignment. 0.1s is not too bad value if the user
+            # hasn't specified anything (yet).
+            self.fineAlignDwellTime = FloatContinuous(0.1, range=(1e-9, 100),
+                                                      unit="s")
+
+            # There are two kinds of SEM (drivers): the one that are able to
+            # control the magnification, and the one that cannot. The former ones
+            # then relies on the user to report the current magnification by setting
+            # it to the .magnification VA. Quite some parts of the GUI changes
+            # depending on which type of SEM component we have, so save it here.
+            # To distinguish it, the magnification VA is read-only on SEM with full
+            # control (and .horizontalFoV is used to 'zoom'). On a SEM without
+            # magnification control, .magnification is writeable, and they typically
+            # don't have a .horizontalFoV (but that shouldn't be a problem).
+            self.ebeamControlsMag = self.ebeam.magnification.readonly
+            if (not self.ebeamControlsMag and
+                hasVA(self.ebeam, "horizontalFoV") and
+                not self.ebeam.horizontalFoV.readonly):
+                # If mag is writeable, for now we assume FoV is readonly
+                logging.warning("ebeam has both magnification and horizontalFoV writeable")
+            elif self.ebeamControlsMag and not hasVA(self.ebeam, "horizontalFoV"):
+                logging.warning("ebeam has no way to change FoV")
+
         # Chamber is complex so we provide a "simplified state"
         # It's managed by the ChamberController. Setting to PUMPING or VENTING
         # state will request a pressure change.
@@ -210,17 +233,9 @@ class MainGUIData(object):
                           CHAMBER_VACUUM, CHAMBER_VENTING}
         self.chamberState = model.IntEnumerated(CHAMBER_UNKNOWN, chamber_states)
 
-        # Used when doing fine alignment, based on the value used by the user
-        # when doing manual alignment. 0.1s is not too bad value if the user
-        # hasn't specified anything (yet).
-        self.fineAlignDwellTime = FloatContinuous(0.1, range=[1e-9, 100],
-                                                  unit="s")
-
-        # TODO: should we put also the configuration related stuff?
-        # Like path/file format
         # Set to True to request debug info to be displayed
         self.debug = model.BooleanVA(False)
-        self.level = model.IntVA(0)
+        self.level = model.IntVA(0)  # Highest message level not seen by the user so far
 
         # Current tab (+ all available tabs in choices as a dict tab -> name)
         # Fully set and managed later by the TabBarController.

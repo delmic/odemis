@@ -50,7 +50,6 @@ from odemis.gui.cont.streams import StreamController
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.img import scale_to_alpha
 from odemis.gui.util.widgets import ProgressiveFutureConnector, AxisConnector
-from odemis.model import hasVA
 from odemis.util import units
 import os.path
 import pkg_resources
@@ -746,8 +745,7 @@ class SparcAcquisitionTab(Tab):
         )
 
         # Force SEM view fit to content when magnification is updated
-        if not (hasattr(main_data.ebeam, "horizontalFoV") and
-                isinstance(main_data.ebeam.horizontalFoV, model.VigilantAttributeBase)):
+        if not main_data.ebeamControlsMag:
             main_data.ebeam.magnification.subscribe(self._onSEMMag)
 
     @property
@@ -1766,7 +1764,7 @@ class SecomAlignTab(Tab):
 
         # Adapt the zoom level of the SEM to fit exactly the SEM field of view.
         # No need to check for resize events, because the view has a fixed size.
-        if not hasVA(main_data.ebeam, "horizontalFoV"):
+        if not main_data.ebeamControlsMag:
             panel.vp_align_sem.canvas.abilities -= {CAN_ZOOM}
             # prevent the first image to reset our computation
             panel.vp_align_sem.canvas.fit_view_to_next_image = False
@@ -2592,7 +2590,7 @@ class Sparc2AlignTab(Tab):
         self.panel.btn_bkg_acquire.Bind(wx.EVT_BUTTON, self._onBkgAcquire)
 
         # Force MoI view fit to content when magnification is updated
-        if not hasVA(main_data.ebeam, "horizontalFoV"):
+        if not main_data.ebeamControlsMag:
             main_data.ebeam.magnification.subscribe(self._onSEMMag)
 
     def _onPolePosition(self, pole_pos):

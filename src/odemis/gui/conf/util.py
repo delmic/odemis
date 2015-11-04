@@ -180,13 +180,15 @@ def hfw_choices(comp, va, conf):
 def mag_if_no_hfw_ctype(comp, va, conf):
     """ Return the control type for e-beam magnification
 
-    This control is only useful if horizontalFoV is available.
+    This control is only useful if it's writeable (meaning that the ebeam
+      component cannot control the magnification so the user has to type it in)
 
     :return: (int) The control type
 
     """
 
-    if hasVA(comp, "horizontalFoV"):
+    # if hasVA(comp, "horizontalFoV"):
+    if va.readonly:
         return odemis.gui.CONTROL_NONE
     else:
         # Just use a text field => it's for copy-paste
