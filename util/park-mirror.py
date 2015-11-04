@@ -1,0 +1,140 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+# Attempt to park the mirror of the SPARCv2, even if no backend is running
+'''
+Created on October 2015
+
+@author: Éric Piel
+
+Copyright © 2015 Éric Piel, Delmic
+
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
+Foundation.
+
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+Odemis. If not, see http://www.gnu.org/licenses/.
+'''
+
+from __future__ import division
+
+import argparse
+import logging
+import Pyro4
+from odemis import model
+from odemis.driver import tmcm
+import sys
+import time
+
+
+# Standard way to configure the TMCM board handling the Redux stage
+REDUX_KWARGS = {
+    "port": "/dev/ttyTMCM*",
+    "address": 4,
+    "axes": ["s", "l"],
+    "ustepsize": [5.9e-9, 5.9e-9],  # m/µstep (doesn't really matter here)
+    "refproc": "Standard",
+    "refswitch": {"s": 0, "l": 0},
+}
+
+def park(mirror):
+    # Need to park in two moves: first S, then L
+    f = mirror.reference({"s"})
+    logging.info("Parking the mirror...")
+    try:
+        logging.debug("Moving S axis")
+        f.result()
+    except KeyboardInterrupt:
+        f.cancel()
+        logging.warning("Cancelled parking move")
+        raise
+
+    f = mirror.reference({"l"})
+    try:
+        logging.debug("Moving L axis")
+        f.result()
+    except KeyboardInterrupt:
+        f.cancel()
+        logging.warning("Cancelled parking move")
+        raise
+
+
+def park_via_backend():
+    """
+    Try to use the backend to park the stage
+    raise:
+        CommunicationError if no backend present
+        LookupError: backend is present but doesn't have mirror
+        IOError: if move failed
+    """
+    mirror = model.getComponent(role="mirror")
+    logging.debug("Using the backend to park the mirror")
+    park(mirror)
+
+
+def park_direct():
+    """
+    Try to directly connect to the TMCM board and park the mirror
+    """
+    mirror = tmcm.TMCLController("Mirror stage", "mirror", **REDUX_KWARGS)
+    logging.info("Connected to %s", mirror.hwVersion)
+    
+    try:
+        park(mirror)
+    finally:
+        mirror.terminate()
+
+
+def main(args):
+    """
+    Handles the command line arguments
+    args is the list of arguments passed
+    return (int): value to return to the OS as program exit code
+    """
+
+    # arguments handling
+    parser = argparse.ArgumentParser(prog="park-mirror",
+                        description="Attempt to park the mirror of the SPARCv2")
+
+    parser.add_argument("--log-level", dest="loglev", metavar="<level>", type=int,
+                        default=1, help="set verbosity level (0-2, default = 1)")
+
+    options = parser.parse_args(args[1:])
+
+    # Set up logging before everything else
+    if options.loglev < 0:
+        logging.error("Log-level must be positive.")
+        return 127
+    loglev_names = (logging.WARNING, logging.INFO, logging.DEBUG)
+    loglev = loglev_names[min(len(loglev_names) - 1, options.loglev)]
+    logging.getLogger().setLevel(loglev)
+
+    try:
+        try:
+            park_via_backend()
+        except (Pyro4.errors.CommunicationError, IOError, LookupError):
+            logging.info("Failed to access the backend, will try directly")
+            park_direct()
+    except KeyboardInterrupt:
+        logging.info("Interrupted before the end of the execution")
+        return 1
+    except ValueError as exp:
+        logging.error("%s", exp)
+        return 127
+    except IOError as exp:
+        logging.error("%s", exp)
+        return 129
+    except Exception:
+        logging.exception("Unexpected error while performing action.")
+        return 130
+
+    return 0
+
+
+if __name__ == '__main__':
+    ret = main(sys.argv)
+    exit(ret)

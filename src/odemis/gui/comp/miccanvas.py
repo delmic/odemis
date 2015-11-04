@@ -537,37 +537,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.scale = 1 / mpp
         wx.CallAfter(self.request_drawing_update)
 
-    # TODO: move to viewport?
-    @property
-    def horizontal_field_width(self):
-        """ Return the field width of the canvas in meters
-
-        :return: (None or float) Field width in meters
-        """
-
-        width = self.ClientSize.x
-        height = self.ClientSize.y
-        # trick: we actually return the smallest of the FoV dimensions, so
-        # that we are sure the microscope image will fit fully (if it's square)
-        if self.microscope_view and width:
-            return self.microscope_view.mpp.value * min(width, height)
-
-        return None
-
-    @horizontal_field_width.setter
-    def horizontal_field_width(self, hfw):
-        """ Set the mpp of the microscope view according to the given HFW """
-
-        # Trick: we use the smallest of the canvas dimensions to be sure the image
-        # will fit.
-        size = min(self.ClientSize)
-        # TODO: return both FoV dimensions, and move this cleverness to the
-        # controller, so that it can do the right thing even if the image is not
-        # square.
-        if self.microscope_view and size > 0:
-            mpp = self.microscope_view.mpp.clip(hfw / size)
-            self.microscope_view.mpp.value = mpp
-
     def on_size(self, event):
         new_size = event.Size
         # TODO: skip if too small?
@@ -575,11 +544,10 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 #             return
 
         # Update the mpp, so that the same data will be displayed.
-        if self.microscope_view:
+        if self.microscope_view and self._previous_size != new_size:
             hfw = self._previous_size[0] * self.microscope_view.mpp.value
             new_mpp = hfw / new_size[0]
             self.microscope_view.mpp.value = self.microscope_view.mpp.clip(new_mpp)
-
         super(DblMicroscopeCanvas, self).on_size(event)
         self._previous_size = new_size
 
@@ -612,7 +580,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
                     pass
 
         mpp = sorted(self.microscope_view.mpp.range + (mpp,))[1]
-        self.microscope_view.mpp.value = mpp # this will call _on_view_mpp()
+        self.microscope_view.mpp.value = mpp  # this will call _on_view_mpp()
 
     # Zoom/merge management
     def on_wheel(self, evt):
@@ -1106,21 +1074,13 @@ class SparcARCanvas(DblMicroscopeCanvas):
 
         self.mirror_ol = world_overlay.MirrorArcOverlay(self)
 
-        self._goal_im_ref = None
-        self._goal_wim = None
-
-    def _reset_goal_im(self, obj):
-        """ Called when the goal_im is dereferenced """
-        self._goal_wim = None
-
     def _convert_streams_to_images(self):
         """
         Same as the overridden method, but ensures the goal image keeps the alpha
         and is displayed second. Also force the mpp to be the one of the sensor.
         """
         streams = self.microscope_view.getStreams()
-        images_opt = []
-        images_goal = []
+        ims = []
 
         # order and display the images
         for s in streams:
@@ -1136,34 +1096,16 @@ class SparcARCanvas(DblMicroscopeCanvas):
                 continue
 
             # convert to wxImage
-            # Special trick to avoid regenerating the BGRA image for Goal all the time
-            # TODO: make it generic
-            if s.name.value == "Goal":
-                prev_im = None if self._goal_im_ref is None else self._goal_im_ref()
-                if self._goal_wim is None or prev_im is None or prev_im is not rgbim:
-                    logging.debug("Converting goal image")
-                    wim = format_rgba_darray(rgbim)
-                    self._goal_im_ref = weakref.ref(rgbim, self._reset_goal_im)
-                    self._goal_wim = wim
-                else:
-                    wim = self._goal_wim
-            else:
-                wim = format_rgba_darray(rgbim)
-
+            wim = format_rgba_darray(rgbim)
             keepalpha = (rgbim.shape[2] == 4)
             scale = rgbim.metadata[model.MD_PIXEL_SIZE]
             pos = (0, 0)  # the sensor image should be centered on the sensor center
 
-            if s.name.value == "Goal":
-                images_goal.append((wim, pos, scale, keepalpha, None,
-                                    None, self.flip, None, s.name.value))
-            else:
-                # TODO: make the blending mode an option
-                images_opt.append((wim, pos, scale, keepalpha, None,
-                                   None, self.flip, BLEND_SCREEN, s.name.value))
+            # TODO: make the blending mode an option
+            ims.append((wim, pos, scale, keepalpha, None,
+                        None, self.flip, BLEND_SCREEN, s.name.value))
 
         # normal images at the beginning, goal image at the end
-        ims = images_opt + images_goal
         self.set_images(ims)
 
         # set merge_ratio

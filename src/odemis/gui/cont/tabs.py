@@ -745,8 +745,8 @@ class SparcAcquisitionTab(Tab):
         )
 
         # Force SEM view fit to content when magnification is updated
-        if not (hasattr(main_data.ebeam, "horizontalFoV")
-                and isinstance(main_data.ebeam.horizontalFoV, model.VigilantAttributeBase)):
+        if not (hasattr(main_data.ebeam, "horizontalFoV") and
+                isinstance(main_data.ebeam.horizontalFoV, model.VigilantAttributeBase)):
             main_data.ebeam.magnification.subscribe(self._onSEMMag)
 
     @property
@@ -862,15 +862,12 @@ class ChamberTab(Tab):
         try:
             self._pos_engaged = main_data.mirror.getMetadata()[model.MD_FAV_POS_ACTIVE]
         except KeyError:
-            logging.exception("Mirror actuator has no metadata FAV_POS_ACTIVE")
+            raise ValueError("Mirror actuator has no metadata FAV_POS_ACTIVE")
 
         mstate = self._get_mirror_state()
         # If mirror stage not engaged, make this tab the default
         if mstate != MIRROR_ENGAGED:
             self.make_default()
-        else:  # Mirror is engaged
-            # Save that the current position as a "better" engaged position
-            self._pos_engaged = main_data.mirror.position.value
 
         self._update_mirror_status()
 
@@ -1003,27 +1000,34 @@ class ChamberTab(Tab):
         #  * when engaging => move l first, then s
         mstate = self._get_mirror_state()
         mirror = self.tab_data_model.main.mirror
-        if mstate == MIRROR_NOT_REFD:
+        if mstate == MIRROR_PARKED:
+            # => Engage
+            f1 = mirror.moveAbs({"l": self._pos_engaged["l"]})
+            f2 = mirror.moveAbs({"s": self._pos_engaged["s"]})
+            self._move_futures = (f1, f2)
+            btn_text = "ENGAGING MIRROR"
+        elif mstate == MIRROR_NOT_REFD:
             # => Reference
             # f = mirror.reference(set(MIRROR_POS_PARKED.keys()))
             f1 = mirror.reference({"s"})
             f2 = mirror.reference({"l"})
+            self._move_futures = (f1, f2)
             btn_text = "PARKING MIRROR"
-            # position doesn't change during referencing, so just pulse
+            # position doesn't update during referencing, so just pulse
             self._pulse_timer.Start(250.0)  # 4 Hz
-        elif mstate == MIRROR_PARKED:
-            # => Engage
-            f1 = mirror.moveAbs({"l": self._pos_engaged["l"]})
-            f2 = mirror.moveAbs({"s": self._pos_engaged["s"]})
-            btn_text = "ENGAGING MIRROR"
         else:
             # => Park
-            f1 = mirror.moveAbs({"l": MIRROR_POS_PARKED["l"]})
-            f2 = mirror.moveAbs({"s": MIRROR_POS_PARKED["s"]})
+            # Use standard move to show the progress of the mirror position, but
+            # finish by (normally fast) referencing to be sure it really moved
+            # to the parking position.
+            f1 = mirror.moveAbs({"s": MIRROR_POS_PARKED["s"]})
+            f2 = mirror.moveAbs({"l": MIRROR_POS_PARKED["l"]})
+            f3 = mirror.reference({"s"})
+            f4 = mirror.reference({"l"})
+            self._move_futures = (f1, f2, f3, f4)
             btn_text = "PARKING MIRROR"
 
-        self._move_futures = (f1, f2)
-        f2.add_done_callback(self._on_move_done)
+        self._move_futures[-1].add_done_callback(self._on_move_done)
 
         self.tab_data_model.main.is_acquiring.value = True
 
@@ -1127,9 +1131,10 @@ class ChamberTab(Tab):
         if show:
             threading.Thread(target=self.tab_data_model.main.opm.setPath,
                              args=("chamber-view",)).start()
-            # just in case the mirror was moved from another client (eg, cli)
+            # Update if the mirror has been aligned
+            self._pos_engaged = self.tab_data_model.main.mirror.getMetadata()[model.MD_FAV_POS_ACTIVE]
+            # Just in case the mirror was moved from another client (eg, cli)
             self._update_mirror_status()
-            # TODO: also update _pos_engaged?
 
         # When hidden, the new tab shown is in charge to request the right
         # optical path mode, if needed.
@@ -1673,11 +1678,13 @@ class AnalysisTab(Tab):
 
 class SecomAlignTab(Tab):
     """ Tab for the lens alignment on the SECOM and SECOMv2 platform
+
     The streams are automatically active when the tab is shown
     It provides three ways to move the "aligner" (= optical lens position):
      * raw (via the A/B or X/Y buttons)
      * dicho mode (move opposite of the relative position of the ROI center)
      * spot mode (move equal to the relative position of the spot center)
+
     """
 
     def __init__(self, name, button, panel, main_frame, main_data):
@@ -1701,11 +1708,11 @@ class SecomAlignTab(Tab):
         # approximation is enough to do the calibration relatively quickly.
         if "a" in main_data.aligner.axes:
             self._aligner_xy = ConvertStage("converter-ab", "stage",
-                                          children={"orig": main_data.aligner},
-                                          axes=["b", "a"],
-                                          rotation=math.radians(45))
+                                            children={"orig": main_data.aligner},
+                                            axes=["b", "a"],
+                                            rotation=math.radians(45))
             self._convert_to_aligner = self._convert_xy_to_ab
-        else: # SECOMv2 => it's directly X/Y
+        else:  # SECOMv2 => it's directly X/Y
             if "x" not in main_data.aligner.axes:
                 logging.error("Unknown axes in lens aligner stage")
             self._aligner_xy = main_data.aligner
@@ -1788,7 +1795,7 @@ class SecomAlignTab(Tab):
         ccd_spe = StreamController(stream_bar, ccd_stream, self.tab_data_model)
         ccd_spe.stream_panel.flatten()  # removes the expander header
         # force this view to never follow the tool mode (just standard view)
-        panel.vp_align_ccd.canvas.allowed_modes = set([guimod.TOOL_NONE])
+        panel.vp_align_ccd.canvas.allowed_modes = {guimod.TOOL_NONE}
 
         # Bind actuator buttons and keys
         self._actuator_controller = ActuatorController(self.tab_data_model, panel, "lens_align_")
@@ -2048,9 +2055,10 @@ class SecomAlignTab(Tab):
                 "a": shift["x"] * math.sin(ang) + shift["y"] * math.cos(ang)}
 
     def _onSEMpxs(self, pixel_size):
-        """
-        Called when the SEM pixel size changes, which means the FoV changes
+        """ Called when the SEM pixel size changes, which means the FoV changes
+
         pixel_size (tuple of 2 floats): in meter
+
         """
         # in dicho search, it means A/B or X/Y are actually different values
         self._update_to_center()
@@ -2079,7 +2087,6 @@ class SparcAlignTab(Tab):
         super(SparcAlignTab, self).__init__(name, button, panel, main_frame, tab_data)
 
         self._ccd_stream = None
-        self._goal_stream = None
         # TODO: add on/off button for the CCD and connect the MicroscopeStateController
 
         self._settings_controller = settings.SparcAlignSettingsController(
@@ -2101,11 +2108,6 @@ class SparcAlignTab(Tab):
                 main_data.ccd.data,
                 main_data.ebeam)
             self._ccd_stream = ccd_stream
-
-            # The mirror center (with the lens set) is defined as pole position
-            # in the microscope configuration file.
-            goal_im = self._getGoalImage(main_data)
-            self._goal_stream = acqstream.RGBStream("Goal", goal_im)
 
             # create a view on the microscope model
             vpv = collections.OrderedDict([
@@ -2131,15 +2133,28 @@ class SparcAlignTab(Tab):
             ccd_spe = self._stream_controller.addStream(ccd_stream)
             ccd_spe.stream_panel.flatten()
             ccd_stream.should_update.value = True
+
+            # Connect polePosition of lens to mirror overlay (via the polePositionPhysical VA)
+            mirror_ol = self.panel.vp_sparc_align.canvas.mirror_ol
+            lens = main_data.lens
+            try:
+                # The lens is not set, but the CCD metadata is still set as-is.
+                # So need to compensate for the magnification, and flip.
+                # (That's also the reason it's not possible to move the
+                # pole position, as it should be done with the lens)
+                m = lens.magnification.value
+                mirror_ol.set_mirror_dimensions(-lens.parabolaF.value / m,
+                                                lens.xMax.value / m,
+                                                lens.focusDistance.value / m,
+                                                lens.holeDiameter.value / m)
+            except (AttributeError, TypeError) as ex:
+                logging.warning("Failed to get mirror dimensions: %s", ex)
         else:
             self.view_controller = None
             logging.warning("No CCD available for mirror alignment feedback")
 
         # One of the goal of changing the raw/pitch is to optimise the light
         # reaching the optical fiber to the spectrometer
-        # TODO: add a way to switch the selector mirror. For now, it's always
-        # switched to AR, and it's up to the user to manually switch it to
-        # spectrometer.
         if main_data.spectrometer:
             # Only add the average count stream
             self._scount_stream = acqstream.CameraCountStream("Spectrum count",
@@ -2225,20 +2240,17 @@ class SparcAlignTab(Tab):
             # With the lens, the image must be flipped to keep the mirror at the
             # top and the sample at the bottom.
             self.panel.vp_sparc_align.SetFlip(wx.VERTICAL)
-            # FIXME: where and when do we allow manipulation?
-            self.panel.vp_sparc_align.activate_mirror_overlay()
             # Hide goal image
-            self._stream_controller.removeStream(self._goal_stream)
+            self.panel.vp_sparc_align.hide_mirror_overlay()
             self._ccd_stream.should_update.value = True
             self.panel.pnl_sparc_trans.Enable(True)
             self.panel.pnl_sparc_fib.Enable(False)
         elif mode == "mirror-align":
             # Show image normally
             self.panel.vp_sparc_align.SetFlip(None)
-            # Show the goal image (= add it, if it's not already there)
-            streams = self.panel.vp_sparc_align.microscope_view.getStreams()
-            if self._goal_stream not in streams:
-                self._stream_controller.addStream(self._goal_stream, visible=False)
+            # Show the goal image. Don't allow to move it, so that it's always
+            # at the same position, and can be used to align with a fixed pole position.
+            self.panel.vp_sparc_align.show_mirror_overlay(activate=False)
             self._ccd_stream.should_update.value = True
             self.panel.pnl_sparc_trans.Enable(True)
             self.panel.pnl_sparc_fib.Enable(False)
@@ -2522,7 +2534,7 @@ class Sparc2AlignTab(Tab):
         except (AttributeError, TypeError) as ex:
             logging.warning("Failed to get mirror dimensions: %s", ex)
         mirror_ol.set_hole_position(tab_data.polePositionPhysical)
-        self.panel.vp_align_center.activate_mirror_overlay()
+        self.panel.vp_align_center.show_mirror_overlay()
 
         # Force a spot at the center of the FoV
         # Not via stream controller, so we can avoid the scheduler
@@ -2602,9 +2614,9 @@ class Sparc2AlignTab(Tab):
 
         """
         # Add a intensity/time graph
-#         self.spec_graph = hist.Histogram(setting_cont.panel, size=(-1, 40))
-#         self.spec_graph.SetBackgroundColour("#000000")
-#         setting_cont.add_widgets(self.spec_graph)
+        # self.spec_graph = hist.Histogram(setting_cont.panel, size=(-1, 40))
+        # self.spec_graph.SetBackgroundColour("#000000")
+        # setting_cont.add_widgets(self.spec_graph)
 
         # the "MoI" value bellow the chronogram
         lbl_moi, txt_moi = cont.add_text_field("Moment of inertia", readonly=True)
@@ -2765,17 +2777,24 @@ class Sparc2AlignTab(Tab):
         """
         Called when the user presses the "Acquire background" button (for MoI stream)
         """
-        # Start background acquisition & disable button
+        # Stop e-beam, in case it's connected to a beam blanker
+        self._moi_stream.should_update.value = False
+
+        # Disable button to give a feedback that acquisition is taking place
         self.panel.btn_bkg_acquire.Disable()
+
+        # Acquire asynchronously
+        # TODO: make sure we don't get the latest CCD image that was being acquired
         self.tab_data_model.main.ccd.data.subscribe(self._on_bkg_data)
 
     def _on_bkg_data(self, df, data):
         """
         Called with a raw CCD image corresponding to background acquisition.
         """
-        # Stop the acqusition, and pass that data to the MoI stream
+        # Stop the acquisition, and pass that data to the MoI stream
         df.unsubscribe(self._on_bkg_data)
         self._moi_stream.background.value = data
+        self._moi_stream.should_update.value = True
 
         wx.CallAfter(self.panel.btn_bkg_acquire.Enable)
 
@@ -2818,13 +2837,32 @@ class Sparc2AlignTab(Tab):
             self._moi_stream.is_active.value = True
         self.panel.vp_moi.canvas.fit_view_to_next_image = True
 
+    def _onLensPos(self, pos):
+        """
+        Called when the lens is moved (and the tab is shown)
+        """
+        # Save the lens position as the "calibrated" one
+        lm = self.tab_data_model.main.lens_mover
+        lm.updateMetadata({model.MD_FAV_POS_ACTIVE: pos})
+
+    def _onMirrorPos(self, pos):
+        """
+        Called when the mirror is moved (and the tab is shown)
+        """
+        # Save mirror position as the "calibrated" one
+        m = self.tab_data_model.main.mirror
+        m.updateMetadata({model.MD_FAV_POS_ACTIVE: pos})
+
     def Show(self, show=True):
         Tab.Show(self, show=show)
 
+        main = self.tab_data_model.main
         # Select the right optical path mode and the plays right stream
         if show:
             mode = self.tab_data_model.align_mode.value
             self._onAlignMode(mode)
+            main.lens_mover.position.subscribe(self._onLensPos)
+            main.mirror.position.subscribe(self._onMirrorPos)
         else:
             # when hidden, the new tab shown is in charge to request the right
             # optical path mode, if needed.
@@ -2833,13 +2871,8 @@ class Sparc2AlignTab(Tab):
             # Cancel autofocus (if it happens to run)
             self.tab_data_model.autofocus_active.value = False
 
-            # Save the lens and mirror positions as the "calibrated" ones
-            lm = self.tab_data_model.main.lens_mover
-            lmmd = {model.MD_FAV_POS_ACTIVE: lm.position.value}
-            lm.updateMetadata(lmmd)
-            m = self.tab_data_model.main.mirror
-            mmd = {model.MD_FAV_POS_ACTIVE: m.position.value}
-            m.updateMetadata(mmd)
+            main.lens_mover.position.unsubscribe(self._onLensPos)
+            main.mirror.position.unsubscribe(self._onMirrorPos)
 
     def terminate(self):
         self._stream_controller.pauseStreams()

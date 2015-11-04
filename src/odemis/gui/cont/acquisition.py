@@ -38,7 +38,8 @@ from odemis.acq import align, stream
 from odemis.acq.align.spot import OBJECTIVE_MOVE
 from odemis.acq.stream import UNDEFINED_ROI
 from odemis.gui import conf, acqmng
-from odemis.gui.acqmng import preset_as_is
+from odemis.gui.acqmng import preset_as_is, get_global_settings_entries, \
+    get_local_settings_entries
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
 from odemis.gui.comp.popup import Message
 from odemis.gui.model import TOOL_NONE
@@ -349,14 +350,15 @@ class SecomAcquiController(object):
     def on_acquire(self, evt):
         self.open_acquisition_dialog()
 
+
     def open_acquisition_dialog(self):
         secom_live_tab = self._tab_data_model.main.getTabByName("secom_live")
 
         # save the original settings
         settingsbar_controller = secom_live_tab.settingsbar_controller
-        orig_entries = settingsbar_controller.entries
+        orig_entries = get_global_settings_entries(settingsbar_controller)
         for sc in secom_live_tab.streambar_controller.stream_controllers:
-            orig_entries.extend(sc.entries.values())
+            orig_entries += get_local_settings_entries(sc)
         orig_settings = preset_as_is(orig_entries)
         settingsbar_controller.pause()
         settingsbar_controller.enable(False)

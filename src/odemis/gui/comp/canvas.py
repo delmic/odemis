@@ -1522,7 +1522,7 @@ class DraggableCanvas(BitmapCanvas):
         wx.WXK_LEFT: (100, 0),
         wx.WXK_RIGHT: (-100, 0),
         wx.WXK_UP: (0, 100),
-        wx.WXK_DOWN:(0, -100),
+        wx.WXK_DOWN: (0, -100),
     }
 
     def on_char(self, evt):

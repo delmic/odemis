@@ -29,6 +29,35 @@ import logging
 from odemis import model
 
 
+def get_global_settings_entries(settings_cont):
+    """
+    Find all the entries needed for the presets in a settings controller (aka
+      global settings)
+    settings_cont (SettingsBarController)
+    return (list of SettingsEntry): all the SettingsEntry on the settings controller
+    """
+    return settings_cont.entries
+
+
+def get_local_settings_entries(stream_cont):
+    """
+    Find all the entries needed for the presets in a stream controller (aka
+      local settings)
+    stream_cont (StreamController)
+    return (list of SettingsEntry): all the SettingsEntry on the stream
+     controller that correspond to a local setting (ie, a duplicated VA of
+     the hardware VA present on the stream)
+    """
+    local_entries = []
+    local_vas = set(stream_cont.stream.emt_vas.values()) | set(stream_cont.stream.det_vas.values())
+    for e in stream_cont.entries.values():
+        if hasattr(e, "vigilattr") and e.vigilattr in local_vas:
+            logging.debug("Added local setting %s", e.name)
+            local_entries.append(e)
+
+    return local_entries
+
+
 # TODO: presets shouldn't work on SettingEntries (GUI-only objects), but on
 # Stream (and HwComponents).
 def apply_preset(preset):

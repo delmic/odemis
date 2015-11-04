@@ -21,13 +21,16 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 from __future__ import division
+
 from concurrent.futures._base import CancelledError
 import copy
 import logging
 import math
 from odemis import acq, model, dataio
 from odemis.acq import stream
-from odemis.gui.acqmng import presets, preset_as_is, apply_preset
+from odemis.acq.stream import EMStream, OpticalStream
+from odemis.gui.acqmng import presets, preset_as_is, apply_preset, \
+    get_global_settings_entries, get_local_settings_entries
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.cont.settings import SecomSettingsController
 from odemis.gui.cont.streams import StreamBarController
@@ -42,7 +45,6 @@ import wx
 from wx.lib.pubsub import pub
 
 import odemis.gui.model as guimodel
-from odemis.acq.stream import EMStream, OpticalStream
 
 
 class AcquisitionDialog(xrcfr_acq):
@@ -96,9 +98,9 @@ class AcquisitionDialog(xrcfr_acq):
 
         # Compute the preset values for each preset
         self._preset_values = {}  # dict string -> dict (SettingEntries -> value)
-        orig_entries = self._settings_controller.entries
+        orig_entries = get_global_settings_entries(self._settings_controller)
         for sc in self.streambar_controller.stream_controllers:
-            orig_entries.extend(sc.entries.values())
+            orig_entries += get_local_settings_entries(sc)
         self._orig_settings = preset_as_is(orig_entries) # to detect changes
         for n, preset in presets.items():
             self._preset_values[n] = preset(orig_entries)
