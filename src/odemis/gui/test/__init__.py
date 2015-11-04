@@ -101,6 +101,10 @@ class GuiTestApp(wx.App):
         # gen_test_data()
         wx.App.__init__(self, redirect=False)
 
+    def FilterEvent(self, evt):
+        print evt
+        return -1
+
     def OnInit(self):
         self.test_frame = self.test_frame(None)  # odemis.gui.test.test_gui.xrccanvas_frame(None)
 
@@ -156,6 +160,8 @@ class GuiTestCase(unittest.TestCase):
             raise ValueError("No frame_class set!")
         cls.app_class = cls.app_class or GuiTestApp
         cls.app = cls.app_class(cls.frame_class)
+        # Enable event filter, so they are printed to console
+        # cls.app.SetCallFilterEvent(True)
         cls.frame = cls.app.test_frame
         cls.frame.SetSize(cls.frame_size)
         cls.frame.Center()

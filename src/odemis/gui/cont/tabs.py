@@ -94,6 +94,7 @@ class Tab(object):
         self.main_frame = main_frame
         self.tab_data_model = tab_data
         self.highlighted = False
+        self.focussed_viewport = None
 
     def Show(self, show=True):
         self.button.SetToggle(show)

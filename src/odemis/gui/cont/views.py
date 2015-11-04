@@ -27,6 +27,7 @@ from odemis.acq.stream import EMStream
 from odemis.gui import model
 from odemis.gui.comp.grid import ViewportGrid
 from odemis.gui.cont import tools
+from odemis.gui.dev.powermate import EVT_KNOB_ROTATE, EVT_KNOB_PRESS
 from odemis.gui.util import call_in_wx_main, img
 from odemis.model import MD_PIXEL_SIZE, hasVA
 import wx
@@ -73,6 +74,7 @@ class ViewPortController(object):
             tab_data.viewLayout.subscribe(self._on_view_layout, init=True)
             tab_data.focussedView.subscribe(self._on_focussed_view, init=True)
         elif len(self._viewports) != 1:
+            self._grid_panel = None
             logging.info("Multiple viewports, but no ViewportGrid to manage them")
 
         # TODO: just let the viewport do that?
@@ -115,7 +117,7 @@ class ViewPortController(object):
         self._data_model.views.value = views
         self._data_model.visible_views.value = visible_views
 
-    def _viewport_by_view(self, view):
+    def get_viewport_by_view(self, view):
         """ Return the ViewPort associated with the given view """
 
         for vp in self._viewports:
@@ -186,6 +188,7 @@ class ViewPortController(object):
         for vp in self._viewports:
             if vp.microscope_view is view:
                 viewport = vp
+                vp.canvas.Bind(EVT_KNOB_PRESS, self._on_knob_press)
                 break
         else:
             raise ValueError("No associated ViewPort found for view %s" % (view,))
@@ -202,6 +205,22 @@ class ViewPortController(object):
             vp.Refresh()
         viewport.SetFocus(True)
         viewport.Refresh()
+
+    def _on_knob_press(self, _):
+        """ Advance the focus to the next grid Viewport, if any """
+
+        if self._grid_panel is None:
+            return
+
+        fv = self._data_model.focussedView.value
+        grid_vis = self._grid_panel.visible_viewports
+
+        for i, vp in enumerate(grid_vis):
+            if vp.microscope_view == fv and vp in grid_vis:
+                try:
+                    self._data_model.focussedView.value = grid_vis[i + 1].microscope_view
+                except IndexError:
+                    self._data_model.focussedView.value = grid_vis[0].microscope_view
 
     def _on_view_layout(self, layout):
         """ Called when the view layout of the GUI must be changed
@@ -235,7 +254,7 @@ class ViewPortController(object):
         """
         # find the viewport corresponding to the current view
         try:
-            vp = self._viewport_by_view(self._data_model.focussedView.value)
+            vp = self.get_viewport_by_view(self._data_model.focussedView.value)
             vp.canvas.fit_view_to_content()
         except IndexError:
             logging.error("Failed to find the current viewport")
