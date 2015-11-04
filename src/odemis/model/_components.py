@@ -60,6 +60,15 @@ def getVAs(component):
     return dict(vas)
 
 
+def hasVA(component, vaname):
+    """
+    component (Component)
+    vaname (str)
+    returns (bool): True if the component has an attribute named vaname which is a VA
+    """
+    return isinstance(getattr(component, vaname, None), _vattributes.VigilantAttributeBase)
+
+
 def getROAttributes(component):
     """
     returns (dict of name -> value): all the names of the roattributes and their values
