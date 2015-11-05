@@ -155,8 +155,8 @@ from decorator import decorator
 
 from odemis import util
 from odemis.gui import BLEND_DEFAULT, BLEND_SCREEN, BufferSizeEvent
+from odemis.gui.evt import EVT_KNOB_ROTATE, EVT_KNOB_PRESS
 from odemis.gui.comp.overlay.base import WorldOverlay, ViewOverlay
-from odemis.gui.dev.powermate import EVT_KNOB_ROTATE, EVT_KNOB_PRESS
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.img import add_alpha_byte
 from odemis.util import intersect

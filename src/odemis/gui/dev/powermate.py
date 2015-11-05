@@ -26,15 +26,11 @@ import threading
 import wx
 
 from odemis.acq.stream import StaticStream
-
-
-KnobRotateEvent, EVT_KNOB_ROTATE = wx.lib.newevent.NewCommandEvent()
-KnopPressEvent, EVT_KNOB_PRESS = wx.lib.newevent.NewCommandEvent()
+from odemis.gui.evt import KnobRotateEvent, KnobPressEvent
 
 
 class Powermate(threading.Thread):
-    """
-    Interface to Griffin PowerMate
+    """ Interface to Griffin PowerMate
     It will translate the knob rotation movements into EVT_KNOB_ROTATE events
     It also automatically turn on/off the led based on the whether the current
     stream can focus.
@@ -182,7 +178,7 @@ class Powermate(threading.Thread):
                         )
                         wx.PostEvent(self.target_viewport.canvas, knob_evt)
                     elif evt.type == ecodes.EV_KEY and evt.value == 1:
-                        knob_evt = KnopPressEvent(
+                        knob_evt = KnobPressEvent(
                             self.target_viewport.canvas.GetId(),
                             device=self.device
                         )

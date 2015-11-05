@@ -596,7 +596,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             if not self._focus_overlay:
                 self._focus_overlay = self.add_view_overlay(view_overlay.FocusOverlay(self))
 
-            if wx.GetKeyState(wx.WXK_SHIFT):
+            if evt.ShiftDown():
                 softener = 0.1  # softer
             else:
                 softener = 1
