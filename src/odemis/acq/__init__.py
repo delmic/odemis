@@ -35,7 +35,7 @@ import math
 from odemis import model
 from odemis.acq import _futures
 from odemis.acq.stream import FluoStream, SEMCCDMDStream, \
-    OverlayStream, OpticalStream, EMStream
+    OverlayStream, OpticalStream, EMStream, SEMMDStream
 from odemis.util import img, fluo
 import sys
 import threading
@@ -161,13 +161,14 @@ def _weight_stream(stream):
         return 90 # any other kind of optical after fluorescence
     elif isinstance(stream, EMStream):
         return 50 # can be done after any light
-    elif isinstance(stream, SEMCCDMDStream):
+    elif isinstance(stream, (SEMCCDMDStream, SEMMDStream)):
         return 40 # after standard (=survey) SEM
     elif isinstance(stream, OverlayStream):
         return 10 # after everything (especially after SEM and optical)
     else:
         logging.debug("Unexpected stream of type %s", stream.__class__.__name__)
         return 0
+
 
 class AcquisitionTask(object):
 
@@ -247,8 +248,7 @@ class AcquisitionTask(object):
                 expected_time -= self._streamTimes[s]
                 self._future.set_progress(end=time.time() + expected_time)
 
-            # TODO: if the stream is OverlayStream, apply the metadata to all the
-            # data from an optical stream. => put the data
+            # Update metadata using OverlayStream (if there was one)
             self._adjust_metadata(raw_images)
 
         except CancelledError:

@@ -81,8 +81,8 @@ class LiveStream(Stream):
             msg = "Subscribing to dataflow of component %s"
             logging.debug(msg, self._detector.name)
             if not self.should_update.value:
-                logging.warning("Trying to activate stream while it's not "
-                                "supposed to update")
+                logging.info("Trying to activate stream while it's not "
+                             "supposed to update")
             self._dataflow.subscribe(self._onNewData)
         else:
             msg = "Unsubscribing from dataflow of component %s"

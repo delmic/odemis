@@ -316,11 +316,12 @@ class SPARCTestCase(unittest.TestCase):
         self.assertLessEqual(self.end, time.time())
         self.assertEqual(self.done, 1)
         self.assertTrue(not f.cancelled())
-        
+
         # assert optical path configuration
-        self.assertEqual(self.lenswitch.position.value, path.MODES["spectral"][1]["lens-switch"])
-        self.assertEqual(self.spec_det_sel.position.value, path.MODES["spectral"][1]["spec-det-selector"])
-        self.assertEqual(self.ar_spec_sel.position.value, path.MODES["spectral"][1]["ar-spec-selector"])
+        exp_pos = path.SPARC_MODES["spectral"][1]
+        self.assertEqual(self.lenswitch.position.value, exp_pos["lens-switch"])
+        self.assertEqual(self.spec_det_sel.position.value, exp_pos["spec-det-selector"])
+        self.assertEqual(self.ar_spec_sel.position.value, exp_pos["ar-spec-selector"])
 
     def on_done(self, future):
         self.done += 1
