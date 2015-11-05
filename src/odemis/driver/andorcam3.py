@@ -1515,6 +1515,11 @@ class AndorCam3(model.DigitalCamera):
                 else:
                     num_errors = 0
 
+                # Don't send data if was asked to stop (important in case a new
+                # subscription happened since then, as it shouldn't send an old
+                if self.acquire_must_stop.is_set():
+                    raise CancelledError()
+
                 # Cannot directly use pbuffer because we'd lose the reference to the
                 # memory allocation... and it'd get free'd at the end of the method
                 # So rely on the assumption cbuffer is used as is
