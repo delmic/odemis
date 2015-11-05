@@ -29,7 +29,7 @@ from odemis.gui.comp.grid import ViewportGrid
 from odemis.gui.cont import tools
 from odemis.gui.dev.powermate import EVT_KNOB_ROTATE, EVT_KNOB_PRESS
 from odemis.gui.util import call_in_wx_main, img
-from odemis.model import MD_PIXEL_SIZE, hasVA
+from odemis.model import MD_PIXEL_SIZE
 import wx
 
 

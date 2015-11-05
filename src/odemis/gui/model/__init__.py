@@ -167,6 +167,8 @@ class MainGUIData(object):
         self.overview_focus = None  # focus of the overview CCD
         self.overview_light = None  # light of the overview CCD
 
+        self.ebeamControlsMag = None
+
         # Indicates whether the microscope is acquiring a high quality image
         self.is_acquiring = model.BooleanVA(False)
 
