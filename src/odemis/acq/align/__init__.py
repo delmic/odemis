@@ -29,6 +29,7 @@ from .autofocus import AutoFocus
 from .delphi import UpdateConversion
 from .find_overlay import FindOverlay
 from .spot import AlignSpot, FindSpot
+from odemis.util.img import Subtract
 from odemis.dataio import hdf5
 
 
@@ -78,20 +79,22 @@ def FindEbeamCenter(ccd, detector, escan):
 
             try:
                 coord = FindSpot(img, sensitivity_limit=10)
-            except ValueError as e:
-                # if no spot just try again
-                if e.args[0] == "No spot detected":
+            except ValueError:
+                # if spot was not found, subtract background and try again
+                detector.data.unsubscribe(discard_data)
+                bg_image = ccd.data.get(asap=False)
+                detector.data.subscribe(discard_data)
+                img = Subtract(img, bg_image)
+                try:
+                    coord = FindSpot(img, sensitivity_limit=10)
+                except ValueError:
                     pass
-                # if too many, stop trying, we probably need to focus
                 else:
-                    break
+                    # found a spot! => convert position to meters from center
+                    return _ConvertCoordinates(coord, img)
             else:
                 # found a spot! => convert position to meters from center
-                pxs = img.metadata[MD_PIXEL_SIZE]
-                center = (img.shape[1] / 2, img.shape[0] / 2)  # shape is Y,X
-                pos = (-(coord[0] - center[0]) * pxs[0],
-                        (coord[1] - center[1]) * pxs[1])  # physical Y is opposite direction
-                return pos
+                return _ConvertCoordinates(coord, img)
             # try longer exposure time
             prev_img = img
             exp *= 2
@@ -104,6 +107,15 @@ def FindEbeamCenter(ccd, detector, escan):
 
     raise LookupError("Failed to locate spot after exposure time %g s" % exp)
 
+def _ConvertCoordinates(coord, img):
+    """
+    Converts position to meters from center
+    """
+    pxs = img.metadata[MD_PIXEL_SIZE]
+    center = (img.shape[1] / 2, img.shape[0] / 2)  # shape is Y,X
+    pos = (-(coord[0] - center[0]) * pxs[0],
+            (coord[1] - center[1]) * pxs[1])  # physical Y is opposite direction
+    return pos
 
 def discard_data(df, data):
     """
