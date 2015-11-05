@@ -16,12 +16,15 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 # Help functions for creating/handling futures
 from __future__ import division
+
 from concurrent import futures
 from concurrent.futures._base import CancelledError, FINISHED, CANCELLED, \
     CANCELLED_AND_NOTIFIED, RUNNING
 import logging
+from odemis import model
 import sys
 import threading
+import time
 
 
 def executeTask(future, fn, *args, **kwargs):
@@ -48,6 +51,7 @@ def executeTask(future, fn, *args, **kwargs):
     else:
         future.set_result(result)
 
+
 def wrapSimpleStreamIntoFuture(stream):
     """
     Starts one stream acquisition and return a Future
@@ -62,6 +66,7 @@ def wrapSimpleStreamIntoFuture(stream):
                               args=(future, future._run))
     thread.start()
     return future
+
 
 class SimpleStreamFuture(futures.Future):
     """
@@ -88,7 +93,7 @@ class SimpleStreamFuture(futures.Future):
             if self._state == FINISHED:
                 return False
 
-            if self._state in [CANCELLED, CANCELLED_AND_NOTIFIED]:
+            if self._state in (CANCELLED, CANCELLED_AND_NOTIFIED):
                 return True
 
             logging.debug("Stopping running stream")
@@ -112,15 +117,19 @@ class SimpleStreamFuture(futures.Future):
         returns (list of DataArray): acquisition data
         raises CancelledError if the acquisition was cancelled
         """
+        estt = self._stream.estimateAcquisitionTime()
         # start stream
+        self._startt = time.time()
         self._stream.image.subscribe(self._image_listener)
         self._stream.is_active.value = True
 
-        # TODO: timeout exception if too long (> 10 x estimated time)
         # wait until one image acquired or cancelled
-        self._acq_over.wait()
+        if not self._acq_over.wait(10 * estt + 5):
+            raise IOError("Acquisition of stream %s timeed out after %f s" %
+                          (self._stream.name.value, 10 * estt + 5))
+
         with self._condition:
-            if self._state in [CANCELLED, CANCELLED_AND_NOTIFIED]:
+            if self._state in (CANCELLED, CANCELLED_AND_NOTIFIED):
                 raise CancelledError()
 
         return self._stream.raw # the acquisition data
@@ -129,6 +138,16 @@ class SimpleStreamFuture(futures.Future):
         """
         called when a new image is generated, indicating end of acquisition
         """
+        # Very unlikely, but make really sure we didn't get an image from a
+        # previous subscription (with wrong HW settings)
+        try:
+            if self._startt > image.metadata[model.MD_ACQ_DATE]:
+                logging.warning("Re-acquiring an image, as the one received appears %f s too early",
+                                self._startt - image.metadata[model.MD_ACQ_DATE])
+                return
+        except KeyError:  # no MD_ACQ_DATE
+            pass
+
         # stop acquisition
         self._stream.image.unsubscribe(self._image_listener)
         self._stream.is_active.value = False
