@@ -27,7 +27,7 @@ from odemis import model
 from odemis.acq import drift
 from odemis.acq.align import FindEbeamCenter
 from odemis.model import MD_POS_COR
-from odemis.util import img, limit_invocation, conversion, fluo
+from odemis.util import img, conversion, fluo
 import threading
 import time
 
@@ -149,7 +149,7 @@ class LiveStream(Stream):
             if not self._ht_needs_recompute.is_set() and self.auto_bc.value:
                 # Note that this can cause the .image to be updated even after the
                 # stream is not active (but that can happen even without this).
-                self._updateImage()
+                self._shouldUpdateImage()
 
     def _onNewData(self, dataflow, data):
         old_drange = self._drange
@@ -165,7 +165,7 @@ class LiveStream(Stream):
             # If different range, it will be immediately recomputed anyway
             self._shouldUpdateHistogram()
 
-        self._updateImage()
+        self._shouldUpdateImage()
 
 
 class SEMStream(LiveStream):
@@ -711,7 +711,6 @@ class CameraCountStream(CameraStream):
         self._raw_date.append(date)
         self.raw.append(count)
 
-    @limit_invocation(0.1)
     def _updateImage(self):
         # convert the list into a DataArray
         im = model.DataArray(self.raw)
@@ -728,7 +727,7 @@ class CameraCountStream(CameraStream):
             date = time.time()
         self._append(self._getCount(data), date)
 
-        self._updateImage()
+        self._shouldUpdateImage()
 
 
 class FluoStream(CameraStream):
@@ -915,7 +914,6 @@ class RGBCameraStream(CameraStream):
             if self._emitter:
                 self._emitter.power.value = self._emitter.power.range[0]
 
-    @limit_invocation(0.1)
     def _updateImage(self):
         # Just pass the RGB data on
 

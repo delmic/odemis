@@ -29,6 +29,7 @@ from odemis.acq import stream, calibration
 from odemis.driver import simcam
 from odemis.util import test, conversion, img
 import os
+import threading
 import time
 import unittest
 from unittest.case import skip
@@ -1434,6 +1435,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         da = model.DataArray(1500 + numpy.zeros((512, 1024), dtype=numpy.uint16), md)
 
         cls = stream.StaticCLStream("test", da)
+        time.sleep(0.5)  # wait a bit for the image to update
 
         self.assertEqual(cls.emission.value, md[model.MD_OUT_WL])
         self.assertEqual(cls.image.value.shape, (512, 1024, 3))
@@ -1468,14 +1470,21 @@ class StaticStreamsTestCase(unittest.TestCase):
         logging.info("setting up stream")
         ars = stream.StaticARStream("test", [data0, data1])
 
+        # wait a bit for the image to update
+        e = threading.Event()
+        def on_im(im):
+            if im is not None:
+                e.set()
+        ars.image.subscribe(on_im)
+        e.wait()
+
         # Control AR projection
         im2d0 = ars.image.value
         # Check it's a RGB DataArray
         self.assertEqual(im2d0.shape[2], 3)
 
         logging.info("changing AR pos")
-        # Wait a bit to be sure the projection doesn't get postponed to later
-        time.sleep(0.2)
+        e.clear()
         # change position
         for p in ars.point.choices:
             if p != (None, None) and p != ars.point.value:
@@ -1484,6 +1493,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         else:
             self.fail("Failed to find a second point in AR")
 
+        e.wait()
         im2d1 = ars.image.value
         # Check it's a RGB DataArray
         self.assertEqual(im2d1.shape[2], 3)
@@ -1495,9 +1505,10 @@ class StaticStreamsTestCase(unittest.TestCase):
         dcalib = numpy.ones((1, 1, 1, 512, 1024), dtype=numpy.uint16)
         calib = model.DataArray(dcalib, md)
 
-        time.sleep(0.2)
+        e.clear()
         ars.background.value = calib
         numpy.testing.assert_equal(ars.background.value, calib[0, 0, 0])
+        e.wait()
 
         im2dc = ars.image.value
         # Check it's a RGB DataArray
@@ -1531,6 +1542,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         """Test StaticSpectrumStream 2D"""
         spec = self._create_spec_data()
         specs = stream.StaticSpectrumStream("test", spec)
+        time.sleep(0.5)  # wait a bit for the image to update
 
         # Control spatial spectrum
         im2d = specs.image.value
@@ -1556,6 +1568,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         """Test StaticSpectrumStream 0D"""
         spec = self._create_spec_data()
         specs = stream.StaticSpectrumStream("test", spec)
+        time.sleep(0.5)  # wait a bit for the image to update
 
         # Check 0D spectrum
         specs.selected_pixel.value = (1, 1)

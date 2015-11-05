@@ -26,7 +26,8 @@ import numpy
 from odemis import model
 from odemis.model import (MD_POS, MD_PIXEL_SIZE, MD_ROTATION, MD_ACQ_DATE,
                           MD_SHEAR, VigilantAttribute, VigilantAttributeBase)
-from odemis.util import img, limit_invocation
+from odemis.util import img
+import threading
 import time
 
 
@@ -86,11 +87,16 @@ class Stream(object):
         # has a separate attribute.
         self._dataflow = dataflow
 
-        # TODO: this flag is horrendous as it can lead to not updating the image
-        # with the latest image. We need to reorganise everything so that the
+        # TODO: We need to reorganise everything so that the
         # image display is done via a dataflow (in a separate thread), instead
         # of a VA.
-        self._running_upd_img = False # to avoid simultaneous updates in different threads
+        # TODO: kill the thread when the stream is dereferenced
+        self._im_needs_recompute = threading.Event()
+        self._imthread = threading.Thread(target=self._image_thread,
+                                          name="Image computation")
+        self._imthread.daemon = True
+        self._imthread.start()
+
         # list of DataArray received and used to generate the image
         # every time it's modified, image is also modified
         if raw is None:
@@ -489,7 +495,7 @@ class Stream(object):
             data = self.raw[0]
             data.metadata[model.MD_USER_TINT] = value
 
-        self._updateImage()
+        self._shouldUpdateImage()
 
     def _is_active_setter(self, active):
         """
@@ -695,39 +701,52 @@ class Stream(object):
         md[model.MD_DIMS] = "YXC" # RGB format
         return model.DataArray(rgbim, md)
 
-    # Note: if overriding this method, the decorator must be copied iff this
-    # parent method is _not_ called.
-    @limit_invocation(0.1) # Max 10 Hz
+    def _shouldUpdateImage(self):
+        """
+        Ensures that the image VA will be updated in the "near future".
+        """
+        # If the previous request is still being processed, the event
+        # synchronization allows to delay it (without accumulation).
+        self._im_needs_recompute.set()
+
+    def _image_thread(self):
+        """
+        Called as a separate thread, and recomputes the image whenever
+        it receives an event asking for it.
+        """
+        tnext = 0
+        while True:
+            self._im_needs_recompute.wait()  # wait until a new image is available
+            tnow = time.time()
+
+            # sleep a bit to avoid refreshing too fast
+            tsleep = tnext - tnow
+            if tsleep > 0.0001:
+                time.sleep(tsleep)
+
+            tnext = time.time() + 0.1  # max 10 Hz
+            self._im_needs_recompute.clear()
+            self._updateImage()
+
     def _updateImage(self):
         """ Recomputes the image with all the raw data available
-
-        tint ((int, int, int)): colouration of the image, in RGB. Only used by
-            FluoStream to avoid code duplication
         """
-        # check to avoid running it if there is already one running
-        if self._running_upd_img:
-            logging.debug(("Dropping image conversion to RGB, as the previous "
-                           "one is still running"))
-            return
         if not self.raw:
             return
 
         try:
-            self._running_upd_img = True
             self.image.value = self._projectXY2RGB(self.raw[0], self.tint.value)
         except Exception:
-            logging.exception("Updating %s image", self.__class__.__name__)
-        finally:
-            self._running_upd_img = False
+            logging.exception("Updating %s %s image", self.__class__.__name__, self.name.value)
 
     def _onAutoBC(self, enabled):
         # if changing to auto: B/C might be different from the manual values
         if enabled:
-            self._updateImage()
+            self._shouldUpdateImage()
 
     def _onOutliers(self, outliers):
         if self.auto_bc.value:
-            self._updateImage()
+            self._shouldUpdateImage()
 
     def _setIntensityRange(self, irange):
         # Not much to do, but force int if the data is int
@@ -742,7 +761,7 @@ class Stream(object):
         # If auto_bc is active, it updates intensities (from _updateImage()),
         # so no need to refresh image again.
         if not self.auto_bc.value:
-            self._updateImage()
+            self._shouldUpdateImage()
 
     def _updateHistogram(self, data=None):
         """
@@ -783,4 +802,4 @@ class Stream(object):
         # Depth can change at each image (depends on hardware settings)
         self._updateDRange(data)
 
-        self._updateImage()
+        self._shouldUpdateImage()
