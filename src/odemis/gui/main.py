@@ -36,7 +36,6 @@ import odemis
 from odemis.gui import main_xrc, log
 from odemis.gui.cont import acquisition
 from odemis.gui.cont.menu import MenuController
-from odemis.gui.dev.powermate import Powermate
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.xmlh import odemis_get_resources
 from odemis.util import driver
@@ -143,7 +142,13 @@ class OdemisGUIApp(wx.App):
         self.init_gui()
         log.create_gui_logger(self.main_frame.txt_log, self.main_data.debug, self.main_data.level)
 
-        self.dev_powermate = Powermate(self.main_data)
+        try:
+            from odemis.gui.dev.powermate import Powermate
+            self.dev_powermate = Powermate(self.main_data)
+        except (LookupError, NotImplementedError):
+            pass
+        except Exception:
+            logging.exception("Failed to load Powermate support")
 
         if os.name == 'nt' and getattr(sys, 'frozen', False):
             import odemis.gui.util.updater as updater

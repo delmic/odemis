@@ -1,13 +1,29 @@
-# coding=utf-8
+# -*- coding: utf-8 -*-
+"""
+@author: Rinze de Laat
+
+Copyright © 2015 Rinze de Laat, Éric Piel, Delmic
+
+This file is part of Odemis.
+
+Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU
+General Public License version 2 as published by the Free Software Foundation.
+
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even
+the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
+Public License for more details.
+
+You should have received a copy of the GNU General Public License along with Odemis. If not,
+see http://www.gnu.org/licenses/.
+
+"""
+from __future__ import division
 
 import logging
 import os
 import struct
 import threading
 import wx
-
-from evdev import InputDevice, ecodes
-from evdev.util import list_devices
 
 from odemis.acq.stream import StaticStream
 
@@ -17,37 +33,49 @@ KnopPressEvent, EVT_KNOB_PRESS = wx.lib.newevent.NewCommandEvent()
 
 
 class Powermate(threading.Thread):
-    """  Interface to Griffin PowerMate """
+    """
+    Interface to Griffin PowerMate
+    It will translate the knob rotation movements into EVT_KNOB_ROTATE events
+    It also automatically turn on/off the led based on the whether the current
+    stream can focus.
+    """
 
     def __init__(self, main_data, **kwargs):
-        # Rerefence to the hardware device
-        self.device = None
+        """
+        Picks the first Powermate found, and
+        main_data (MainGUIData)
+        Raise:
+            NotImplementedError: if the OS doesn't support it
+            LookupError: if no Powermate is found
+        """
+        # TODO: support other OS than Linux?
+        if not os.sys.platform.startswith('linux'):
+            raise NotImplementedError("Powermate only supported on Linux")
+
+        # Find the Powermate device (will stop here if nothing is found)
+        self.device = self._find_powermate_device()
 
         # The currently opened GUI tab, so we can keep track of tab switching
         self.current_tab = None
-        # To keep track of ALL stream associated with the current tab (addition, removal etc.)
-        self.tab_model_streams_va = None
-        # Al streams beloning to the current tab
-        self.current_tab_streams = None
+        # To keep track of ALL streams associated with the current tab (addition, removal etc.)
+        self.tab_model_streams_va = None  # .streams VA of the tab model
+        # All streams belonging to the current tab
+        self.current_tab_streams = ()
         # Viewport to which we send our events
         self.target_viewport = None
 
         self.led_brightness = 255  # [0..255]
         self.led_pulse_speed = 0  # [0..510]
 
-        # Find the Powermate device
-        self._find_powermate_device()
+        # Track tab switching, so we know when to look for a new viewport
+        main_data.tab.subscribe(self.on_tab_switch, init=True)
 
-        # If the device was found
-        if self.device is not None:
-            # Track tab switching, so we know when to look for a new viewport
-            main_data.tab.subscribe(self.on_tab_switch, init=True)
+        # Start listening for Knob input
+        threading.Thread.__init__(self, **kwargs)
+        self.daemon = True
+        self.start()
 
-            # Start listening for Knob input
-            threading.Thread.__init__(self, **kwargs)
-            self.setDaemon(1)
-            self.keep_running = True
-            self.start()
+    # TODO: allow to terminate the thread?
 
     def on_tab_switch(self, tab):
         """ Subscribe to focussed view changes when the opened tab is changed """
@@ -84,16 +112,19 @@ class Powermate(threading.Thread):
                 stream.should_update.subscribe(self._on_stream_update, init=True)
 
     def _on_stream_update(self, _=None):
-        """ Check all the streams of the currently focussed Viewport to see if the LED should burn
+        """
+        Check all the streams of the currently focussed Viewport to see if the
+        LED should be on.
         """
 
-        self.led_on(False)
         if self.current_tab is None:
+            self.led_on(False)
             return
 
         view = self.current_tab.tab_data_model.focussedView.value
 
         if view is None:
+            self.led_on(False)
             return
 
         for stream in view.stream_tree:
@@ -103,8 +134,8 @@ class Powermate(threading.Thread):
             if updating and stream.focuser and not static:
                 self.led_on(True)
                 break
-            else:
-                self.led_on(False)
+        else:
+            self.led_on(False)
 
     def _on_focussed_view(self, view):
         """ Set or clear the Viewport where we should send events to """
@@ -116,36 +147,48 @@ class Powermate(threading.Thread):
         else:
             self.target_viewport = None
             self.led_on(False)
-            logging.warn("Viewport target cleared")
+            logging.debug("Viewport target cleared")
 
     def _find_powermate_device(self):
-        # Map all accessible /dev/input devices
-        devices = map(InputDevice, list_devices())
+        try:
+            import evdev
+        except ImportError:
+            raise LookupError("python-evdev is not present")
 
-        for candidate in devices:
+        # Look at all accessible /dev/input devices
+        for fn in evdev.util.list_devices():
+            d = evdev.InputDevice(fn)
             # Check for PowerMate in the device name string
-            if "PowerMate" in candidate.name:
-                self.device = InputDevice(candidate.fn)
+            if "PowerMate" in d.name:
+                logging.info("Found Powermate device in %s", fn)
+                return d
+        else:
+            raise LookupError("No Powermate device found")
 
     def run(self):
         """ Listen for knob events and translate them into wx.Python events """
+        from evdev import ecodes
 
-        for evt in self.device.read_loop():
-            if self.target_viewport is not None:
-                if evt.type == ecodes.EV_REL:
-                    knob_evt = KnobRotateEvent(
-                        self.target_viewport.canvas.GetId(),
-                        direction=(wx.RIGHT if evt.value > 0 else wx.LEFT),
-                        step_value=evt.value,
-                        device=self.device
-                    )
-                    wx.PostEvent(self.target_viewport.canvas, knob_evt)
-                elif evt.type == ecodes.EV_KEY and evt.value == 01:
-                    knob_evt = KnopPressEvent(
-                        self.target_viewport.canvas.GetId(),
-                        device=self.device
-                    )
-                    wx.PostEvent(self.target_viewport.canvas, knob_evt)
+        try:
+            for evt in self.device.read_loop():
+                if self.target_viewport is not None:
+                    if evt.type == ecodes.EV_REL:
+                        # TODO: record whether shift was pressed to put in ShiftDown()
+                        knob_evt = KnobRotateEvent(
+                            self.target_viewport.canvas.GetId(),
+                            direction=(wx.RIGHT if evt.value > 0 else wx.LEFT),
+                            step_value=evt.value,
+                            device=self.device
+                        )
+                        wx.PostEvent(self.target_viewport.canvas, knob_evt)
+                    elif evt.type == ecodes.EV_KEY and evt.value == 1:
+                        knob_evt = KnopPressEvent(
+                            self.target_viewport.canvas.GetId(),
+                            device=self.device
+                        )
+                        wx.PostEvent(self.target_viewport.canvas, knob_evt)
+        except Exception:
+            logging.exception("Powermate listener failed")
 
     def led_on(self, on):
         self.led_brightness = 255 if on else 0
@@ -155,23 +198,22 @@ class Powermate(threading.Thread):
         self.led_pulse_speed = 255 if pulse else 0
         self._set_led_state()
 
-    def _set_led_state(self, pulse_table=0, pulse_on_sleep=0):
+    def _set_led_state(self, pulse_table=0, pulse_on_sleep=False):
         """
-
-        What do these magic values mean...
-
-        bits  0- 7: 8 bits: LED brightness
-        bits  8-16: 9 bits: pulsing speed modifier (0 ... 510);
-            0-254 = slower, 255 = standard, 256-510 = faster
-        bits 17-18: 2 bits: pulse table (0, 1, 2 valid)
-        bit     19: 1 bit : pulse whilst asleep?
-        bit     20: 1 bit : pulse constantly?
-
+        Changes the led state of the powermate
+        pulse_table (0, 1, 2)
+        pulse_on_sleep (bool): starting pulsing when the device is suspended
         """
+        # What do these magic values mean:
+        # cf linux/drivers/input/misc/powermate.c:
+        # bits  0- 7: 8 bits: LED brightness
+        # bits  8-16: 9 bits: pulsing speed modifier (0 ... 510);
+        #     0-254 = slower, 255 = standard, 256-510 = faster
+        # bits 17-18: 2 bits: pulse table (0, 1, 2 valid)
+        # bit     19: 1 bit : pulse whilst asleep?
+        # bit     20: 1 bit : pulse constantly?
 
-        input_event_struct = "@llHHi"
-
-        static_brightness = self.led_brightness & 0xff;
+        static_brightness = self.led_brightness & 0xff
 
         pulse_speed = min(510, max(self.led_pulse_speed, 0))
         pulse_table = min(2, max(pulse_table, 0))
@@ -186,5 +228,6 @@ class Powermate(threading.Thread):
             (pulse_on_wake << 20)
         )
 
+        input_event_struct = "@llHHi"
         data = struct.pack(input_event_struct, 0, 0, 0x04, 0x01, magic)
         os.write(self.device.fileno(), data)
