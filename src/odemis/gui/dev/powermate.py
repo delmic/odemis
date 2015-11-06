@@ -183,6 +183,9 @@ class Powermate(threading.Thread):
                             device=self.device
                         )
                         wx.PostEvent(self.target_viewport.canvas, knob_evt)
+        except IOError:
+            logging.info("Failed to communicate with the powermate, was unplugged?")
+            # TODO: try to reconnect?
         except Exception:
             logging.exception("Powermate listener failed")
 
@@ -226,4 +229,13 @@ class Powermate(threading.Thread):
 
         input_event_struct = "@llHHi"
         data = struct.pack(input_event_struct, 0, 0, 0x04, 0x01, magic)
-        os.write(self.device.fileno(), data)
+
+        if self.device is None:
+            logging.debug("Powermate has disappeared, skipping led change")
+            return
+
+        try:
+            os.write(self.device.fd, data)
+        except OSError:
+            logging.info("Failed to communicate with the powermate, was unplugged?", exc_info=True)
+            self.device = None
