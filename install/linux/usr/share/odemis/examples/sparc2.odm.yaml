@@ -23,7 +23,7 @@ SPARC2: {
     class: powerctrl.PowerControlUnit,
     role: "power-control",
     init: {
-        port: "/dev/ttyPCU*", # for simulator
+        port: "/dev/ttyPMT*",
         pin_map: {"Calibration Light": 0, "CL PMT control unit": 3,
                  "Camera": 4, "Spectral Camera": 5, "Spectrograph": 6,
                  "Optical Actuators": 2},
