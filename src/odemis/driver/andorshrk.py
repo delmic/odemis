@@ -230,7 +230,8 @@ class Shamrock(model.Actuator):
     def __init__(self, name, role, device, camera=None, accessory=None,
                  slits=None, bands=None, fstepsize=1e-6, children=None, **kwargs):
         """
-        device (0<=int or "fake"): device number
+        device (0<=int or str): if int, device number, if str serial number or
+          "fake" to use the simulator
         camera (None or AndorCam2): Needed if the connection is done via the
           I²C connector of the camera. In such case, no children should be
           provided.
@@ -248,9 +249,6 @@ class Shamrock(model.Actuator):
           important, mostly useful for providing to the user a rough idea of how
           much the image will change after a move.
         """
-        # TODO: allow to specify the device via its sn, instead of the (absolutely
-        # unreliable) device number?
-
         # From the documentation:
         # If controlling the shamrock through I²C it is important that both the
         # camera and spectrograph are being controlled through the same calling
@@ -265,7 +263,6 @@ class Shamrock(model.Actuator):
             device = 0
         else:
             self._dll = ShamrockDLL()
-        self._device = device
 
         try:
             self._camera = children["ccd"]
@@ -286,16 +283,18 @@ class Shamrock(model.Actuator):
         self._slit_names = SLIT_NAMES.copy()
         self._slit_names.update(slits)
 
+        # TODO: sometimes this blocks (due to hardware not pleasing the SDK?),
+        # => detect it and at least report a failure (or try again?)
+        self.Initialize()
         try:
-            self.Initialize()
-        except ShamrockError:
-            raise HwError("Failed to find Andor Shamrock (%s) as device %d" %
-                          (name, device))
-        try:
-            nd = self.GetNumberDevices()
-            if device >= nd:
-                raise HwError("Failed to find Andor Shamrock (%s) as device %d" %
-                              (name, device))
+            if isinstance(device, basestring):
+                self._device = self._findDevice(device)
+            else:
+                nd = self.GetNumberDevices()
+                if device >= nd:
+                    raise HwError("Failed to find Andor Shamrock (%s) as device %s" %
+                                  (name, device))
+                self._device = device
 
             if accessory is not None and not self.AccessoryIsPresent():
                 raise ValueError("Accessory set to '%s', but no accessory connected"
@@ -1179,6 +1178,24 @@ class Shamrock(model.Actuator):
             logging.exception("Self test failed")
 
         return False
+
+    def _findDevice(self, sn):
+        """
+        Look for a device with the given serial number
+        sn (str): serial number
+        return (int): the device number of the device with the given serial number
+        raise HwError: If no device with the given serial number can be found
+        """
+        serial = create_string_buffer(64)
+        for n in range(self.GetNumberDevices()):
+            self._dll.ShamrockGetSerialNumber(n, serial)
+            if serial.value == sn:
+                return n
+            else:
+                logging.info("Skipping Andor Shamrock with S/N %s", serial.value)
+        else:
+            raise HwError("Cannot find Andor Shamrock with S/N %s, check it is "
+                          "turned on and connected." % (sn,))
 
     @staticmethod
     def scan():
