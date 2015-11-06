@@ -37,7 +37,7 @@ if TEST_NOHW:
 else:
     # Test using the hardware
     KWARGS = dict(name="test", role="power_control", powered=["sem", "sed"], pin_map={
-                  "sem": 0, "sed": 1}, port="/dev/ttyPCU*")
+                  "sem": 0, "sed": 1}, port="/dev/ttyPMT*")
 
 # Control unit used for PCU testing
 CLASS_PCU = CLASS
@@ -51,7 +51,7 @@ class TestStatic(unittest.TestCase):
     """
     def test_scan(self):
         # Only test for actual device
-        if KWARGS["port"] == "/dev/ttyPCU*":
+        if KWARGS["port"] == "/dev/ttyPMT*":
             devices = CLASS_PCU.scan()
             self.assertGreater(len(devices), 0)
 
@@ -70,7 +70,7 @@ class TestStatic(unittest.TestCase):
         """
         # Look for a device with a serial number not starting with 37
         paths = glob.glob("/dev/ttyACM*") + glob.glob("/dev/ttyUSB*")
-        realpaths = set(os.path.join(os.path.dirname(p), os.readlink(p)) for p in glob.glob("/dev/ttyPCU*"))
+        realpaths = set(os.path.join(os.path.dirname(p), os.readlink(p)) for p in glob.glob("/dev/ttyPMT*"))
         for p in paths:
             if p in realpaths:
                 continue  # don't try a device which is probably a good one
