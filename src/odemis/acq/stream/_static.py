@@ -27,7 +27,7 @@ import numpy
 from odemis import model
 from odemis.acq import calibration
 from odemis.model import MD_POS, MD_PIXEL_SIZE, VigilantAttribute
-from odemis.util import img, conversion, polar, limit_invocation, spectrum
+from odemis.util import img, conversion, polar, spectrum
 from scipy import ndimage
 
 from ._base import Stream
@@ -65,7 +65,6 @@ class RGBStream(StaticStream):
         super(RGBStream, self).__init__(name, [image])
 
     # Copy from RGBCameraStream
-    # no rate limitor as it's called only once any way
     def _updateImage(self):
         # Just pass the RGB data on
 
@@ -309,7 +308,6 @@ class StaticARStream(StaticStream):
         # For polar view, no PIXEL_SIZE nor POS
         return {}
 
-    @limit_invocation(0.1) # Max 10 Hz
     def _updateImage(self):
         """ Recomputes the image with all the raw data available for the current
         selected point.
@@ -336,7 +334,7 @@ class StaticARStream(StaticStream):
             logging.exception("Updating %s image", self.__class__.__name__)
 
     def _onPoint(self, pos):
-        self._updateImage()
+        self._shouldUpdateImage()
 
     def _setBackground(self, data):
         """Called when the background is about to be changed"""
@@ -383,7 +381,7 @@ class StaticARStream(StaticStream):
         """Called when the background is changed"""
         # uncache all the polar images, and update the current image
         self._polar = {}
-        self._updateImage()
+        self._shouldUpdateImage()
 
 
 class StaticSpectrumStream(StaticStream):
@@ -751,7 +749,6 @@ class StaticSpectrumStream(StaticStream):
 
         return av_data
 
-    @limit_invocation(0.1) # Max 10 Hz
     def _updateImage(self):
         """ Recomputes the image with all the raw data available
           Note: for spectrum-based data, it mostly computes a projection of the
@@ -830,7 +827,7 @@ class StaticSpectrumStream(StaticStream):
         self._updateDRange()
         self._updateHistogram()
 
-        self._updateImage()
+        self._shouldUpdateImage()
 
         self._force_selected_spectrum_update()
 
@@ -845,11 +842,11 @@ class StaticSpectrumStream(StaticStream):
         """
         called when fitToRGB is changed
         """
-        self._updateImage()
+        self._shouldUpdateImage()
 
     def onSpectrumBandwidth(self, value):
         """
         called when spectrumBandwidth is changed
         """
         self._updateHistogram()
-        self._updateImage()
+        self._shouldUpdateImage()

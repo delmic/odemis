@@ -30,7 +30,7 @@ import numpy
 from odemis import model
 from odemis.acq import align
 from odemis.acq.stream._sync import MomentOfInertiaMDStream
-from odemis.util import limit_invocation, img
+from odemis.util import img
 import time
 
 from ._base import Stream, UNDEFINED_ROI
@@ -397,7 +397,6 @@ class SpectrumSettingsStream(CCDSettingsStream):
 
     # onActive: same as the standard LiveStream (ie, acquire from the dataflow)
 
-    @limit_invocation(0.1)
     def _updateImage(self):
         # Just copy the raw data into the image, removing useless second dimension
         data = self.raw[0]
@@ -491,7 +490,6 @@ class MonochromatorSettingsStream(PMTSettingsStream):
         new = numpy.array([[count, date]], dtype=numpy.float64)
         self.raw = numpy.append(self.raw[first:], new, axis=0)
 
-    @limit_invocation(0.1)
     def _updateImage(self):
 
         # convert the list into a DataArray
@@ -536,7 +534,7 @@ class MonochromatorSettingsStream(PMTSettingsStream):
         assert isinstance(d, numbers.Real), "%s is not a number" % d
         self._append(d, date)
 
-        self._updateImage()
+        self._shouldUpdateImage()
 
 
 class ARSettingsStream(CCDSettingsStream):
@@ -746,7 +744,6 @@ class MomentOfInertiaLiveStream(CCDSettingsStream):
         md[model.MD_DIMS] = "YXC"  # RGB format
         return model.DataArray(rgbim, md)
 
-    @limit_invocation(0.1)
     def _updateImage(self):
         if self.raw:
             moi, valid = self.raw[1:3]  # 2nd and 3rd data are useful for us
@@ -759,7 +756,7 @@ class MomentOfInertiaLiveStream(CCDSettingsStream):
             try:
                 self.raw = future.result()  # sem, moi, valid, spot int., raw CCD center
                 if not future.cancelled():
-                    self._updateImage()
+                    self._shouldUpdateImage()
             except CancelledError:
                 pass
         except Exception:

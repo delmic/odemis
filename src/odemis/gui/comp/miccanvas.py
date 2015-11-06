@@ -101,6 +101,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self._spotmode_ol = None
         self.mirror_ol = None
         self._fps_ol = None
+        self._last_frame_update = None
         self._focus_overlay = None
 
         self.pixel_overlay = None
@@ -595,7 +596,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             if not self._focus_overlay:
                 self._focus_overlay = self.add_view_overlay(view_overlay.FocusOverlay(self))
 
-            if wx.GetKeyState(wx.WXK_SHIFT):
+            if evt.ShiftDown():
                 softener = 0.1  # softer
             else:
                 softener = 1
@@ -909,15 +910,18 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         """
 
         if self._fps_ol:
-            t_start = time.time()
+            if self._last_frame_update is None:
+                self._last_frame_update = time.time()
             super(DblMicroscopeCanvas, self).draw()
-            dur = time.time() - t_start
+            now = time.time()
 
             try:
+                dur = now - self._last_frame_update
                 fps = 1 / dur
-                self._fps_ol.labels[0].text = u"%s fps" % units.readable_str(fps, sig=4)
+                self._fps_ol.labels[0].text = u"%s fps" % units.readable_str(fps, sig=3)
             except ZeroDivisionError:
                 self._fps_ol.labels[0].text = u"∞ fps"
+            self._last_frame_update = now
         else:
             super(DblMicroscopeCanvas, self).draw()
 
