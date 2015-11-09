@@ -50,6 +50,7 @@ SI_PREFIXES = {
 # The following units should ignore SI formatting
 IGNORE_UNITS = (None, "", "px", "C", u"°C", u"°", "%", "nm")
 
+
 def round_significant(x, n):
     """
     Round a number to n significant figures
@@ -58,6 +59,7 @@ def round_significant(x, n):
         return 0
 
     return round(x, int(n - math.ceil(math.log10(abs(x)))))
+
 
 def round_down_significant(x, n):
     """
@@ -74,6 +76,7 @@ def round_down_significant(x, n):
     # assert(abs(ret) <= abs(x))
     return ret
 
+
 def get_si_scale(x):
     """ This function returns the best fitting SI scale for the given numerical
     value x.
@@ -87,12 +90,14 @@ def get_si_scale(x):
     prefix_order = max(-12, min(prefix_order, 9)) # clamping
     return (10 ** prefix_order), SI_PREFIXES[int(prefix_order)]
 
+
 def to_si_scale(x):
     """ Scale the given value x to the best fitting metric prefix.
     Return a tuple: (scaled value of x, prefix)
     """
     divisor, prefix = get_si_scale(x)
     return x / divisor, prefix
+
 
 def si_scale_list(values, si=None):
     """ Scales a list of numerical values using the same metric scale """
@@ -107,6 +112,7 @@ def si_scale_list(values, si=None):
         return [v / divisor for v in values], prefix
     return None, u""
 
+
 def to_string_si_prefix(x, sig=None):
     """
     Convert a number to a string with the most appropriate SI prefix appended
@@ -116,6 +122,7 @@ def to_string_si_prefix(x, sig=None):
     """
     value, prefix = to_si_scale(x)
     return u"%s %s" % (to_string_pretty(value, sig), prefix)
+
 
 def to_string_pretty(x, sig=None, unit=None):
     """ Convert a number to a string as int or float as most appropriate
