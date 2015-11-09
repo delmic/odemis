@@ -34,8 +34,9 @@ import numbers
 import odemis.gui
 from odemis.gui.util.widgets import VigilantAttributeConnector, AxisConnector
 from odemis.model import NotApplicableError, hasVA
-from odemis.util.conversion import reproduceTypedValue
-from odemis.util.units import readable_str, SI_PREFIXES, to_string_si_prefix
+from odemis.util.conversion import reproduce_typed_value
+from odemis.util.units import readable_str, SI_PREFIXES, to_string_si_prefix, decompose_si_prefix, \
+    si_scale_val
 import re
 import wx
 from wx.lib.pubsub import pub
@@ -716,7 +717,7 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
                 return ctrl.SetValue(txt)
 
         # equivalent wrapper function to retrieve the actual value
-        def cb_get(ctrl=value_ctrl, va=va):
+        def cb_get(ctrl=value_ctrl, va=va, u=unit):
             ctrl_value = ctrl.GetValue()
             # Try to use the predefined value if it's available
             i = ctrl.GetSelection()
@@ -731,10 +732,18 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
                 logging.debug("Parsing combobox free text value %s", ctrl_value)
                 va_val = va.value
                 # Try to find a good corresponding value inside the string
-                new_val = reproduceTypedValue(va_val, ctrl_value)
+
+                # Try and find an SI prefix
+                str_valval, str_si, _ = decompose_si_prefix(ctrl_value, unit=u)
+
+                new_val = reproduce_typed_value(va_val, str_valval)
+
                 if isinstance(new_val, collections.Iterable):
                     # be less picky, by shortening the number of values if it's too many
                     new_val = new_val[:len(va_val)]
+
+                # If an SI prefix was found, scale the new value
+                new_val = si_scale_val(new_val, str_si)
 
                 # if it ends up being the same value as before the combobox will not update, so
                 # force it now

@@ -26,6 +26,8 @@ from __future__ import division
 import collections
 import logging
 import math
+import re
+
 
 SI_PREFIXES = {
     9: u"G",
@@ -83,11 +85,11 @@ def get_si_scale(x):
     Returns a (float, string) tuple: (divisor , SI prefix)
     """
     if x == 0 or math.isnan(x) or math.isinf(x):
-        return (1, u"")
+        return 1, u""
 
     most_significant = math.floor(math.log10(abs(x)))
-    prefix_order = (most_significant // 3) * 3 # rounding to multiple of 3
-    prefix_order = max(-12, min(prefix_order, 9)) # clamping
+    prefix_order = (most_significant // 3) * 3  # rounding to multiple of 3
+    prefix_order = max(-12, min(prefix_order, 9))  # clamping
     return (10 ** prefix_order), SI_PREFIXES[int(prefix_order)]
 
 
@@ -97,6 +99,13 @@ def to_si_scale(x):
     """
     divisor, prefix = get_si_scale(x)
     return x / divisor, prefix
+
+
+def si_scale_val(val, si):
+    """ Scale the value according to the given si prefix """
+    if si in SI_PREFIXES:
+        val *= (10 ** SI_PREFIXES[si])
+    return val
 
 
 def si_scale_list(values, si=None):
@@ -122,6 +131,40 @@ def to_string_si_prefix(x, sig=None):
     """
     value, prefix = to_si_scale(x)
     return u"%s %s" % (to_string_pretty(value, sig), prefix)
+
+
+def decompose_si_prefix(str_val, unit=None):
+    """ Decompose the given string value into a value string, an si prefix and a unit
+
+    Args:
+        str_val: (string) A string representation of a value with a si prefixed unit
+        unit: (string or None) If the unit is provided and a different unit is detected, a
+            ValueError will be raised
+
+    Returns:
+        (string) str_val, (string) si prefix, (string) unit
+
+    Note:
+        This function also matches an ASCII 'u' character as a greek letter 'µ'!
+
+    """
+
+    if unit and unit.isalpha():
+        match = re.match("([+-]?[\d.]+(?:[eE][+-]?[\d]+)?)[ ]*([GMkmµunp])?(%s)?$" % unit,
+                         str_val.strip())
+    else:
+        match = re.match("([+-]?[\d.]+(?:[eE][+-]?[\d]+)?)[ ]*([GMkmµunp])?([A-Za-z]+)?$",
+                         str_val.strip())
+
+    if match:
+        val, prefix, unit = match.group(1, 2, 3)
+        # If we found a prefix but no unit, the prefix is the unit
+        if prefix is not None and unit is None:
+            prefix, unit = unit, prefix
+        prefix = u"µ" if prefix == "u" else prefix
+        return val, prefix, unit
+    else:
+        return str_val, None, None
 
 
 def to_string_pretty(x, sig=None, unit=None):
