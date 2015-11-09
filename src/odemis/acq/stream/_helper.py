@@ -445,7 +445,6 @@ class MonochromatorSettingsStream(PMTSettingsStream):
         del self.auto_bc_outliers
         del self.histogram
 
-
         # .raw is an array of floats with time on the first dim, and count/date
         # on the second dim.
         self.raw = numpy.empty((0, 2), dtype=numpy.float64)
@@ -455,7 +454,7 @@ class MonochromatorSettingsStream(PMTSettingsStream):
 
         # Time over which to accumulate the data. 0 indicates that only the last
         # value should be included
-        self.windowPeriod = model.FloatContinuous(30, range=[0, 1e6], unit="s")
+        self.windowPeriod = model.FloatContinuous(30, range=(0, 1e6), unit="s")
 
         # TODO: once the semcomedi works with any value, remove this
         if hasattr(self, "emtDwellTime"):
@@ -515,25 +514,31 @@ class MonochromatorSettingsStream(PMTSettingsStream):
         except KeyError:
             date = time.time()
 
-        # Convert the data from counts to counts/s
-        try:
-            dt = data.metadata[model.MD_DWELL_TIME]
-        except KeyError:
-            dt = data.metadata.get(model.MD_EXP_TIME, self.emitter.dwellTime.value)
-            logging.warning("No dwell time metadata found in the monochromator data, "
-                            "will use %f s", dt)
-
-        if data.shape == (1, 1): # obtained during spot mode?
-            # Just convert to count / s
-            d = data[0, 0] / dt
-        else: # obtained during a scan
+        # Get one data value
+        if data.shape == (1, 1):  # obtained during spot mode?
+            d = data[0, 0]
+        else:  # obtained during a scan
             logging.debug("Monochromator got %s points instead of 1", data.shape)
             # TODO: cut the data into subparts based on the dwell time
-            d = data.view(numpy.ndarray).mean() / dt
+            d = data.view(numpy.ndarray).mean()
 
-        assert isinstance(d, numbers.Real), "%s is not a number" % d
+        dtyp = data.metadata.get(model.MD_DET_TYPE, model.MD_DT_INTEGRATING)
+        if dtyp == model.MD_DT_INTEGRATING:
+            # Convert the data from counts to counts/s
+            try:
+                dt = data.metadata[model.MD_DWELL_TIME]
+            except KeyError:
+                dt = data.metadata.get(model.MD_EXP_TIME, self.emitter.dwellTime.value)
+                logging.warning("No dwell time metadata found in the monochromator data, "
+                                "will use %f s", dt)
+
+            d /= dt
+            assert isinstance(d, numbers.Real), "%s is not a number" % d
+
+        elif dtyp != model.MD_DT_NORMAL:
+            logging.warning("Unknown detector type %s", dtyp)
+
         self._append(d, date)
-
         self._shouldUpdateImage()
 
 

@@ -449,6 +449,7 @@ class AndorCam2(model.DigitalCamera):
         hwv = self.getHwVersion()
         self._metadata[model.MD_HW_VERSION] = hwv
         self._hwVersion = "%s (%s)" % (hw_name, hwv)
+        self._metadata[model.MD_DET_TYPE] = model.MD_DT_INTEGRATING
 
         resolution = self.GetDetector()
         self._metadata[model.MD_SENSOR_SIZE] = self._transposeSizeToUser(resolution)

@@ -3010,6 +3010,8 @@ class AnalogDetector(model.Detector):
         # Special event to request software unblocking on the scan
         self.softwareTrigger = model.Event()
 
+        self._metadata[model.MD_DET_TYPE] = model.MD_DT_NORMAL
+
     @roattribute
     def channel(self):
         return self._channel
@@ -3174,6 +3176,8 @@ class CountingDetector(model.Detector):
 
         self.reader = CounterReader(self)
 
+        self._metadata[model.MD_DET_TYPE] = model.MD_DT_INTEGRATING
+
     def _init_counter(self):
         """Configure the counter"""
 
@@ -3311,6 +3315,8 @@ class FakeCountingDetector(CountingDetector):
         self.softwareTrigger = model.Event()
 
         self.reader = FakeCounterReader(self)
+
+        self._metadata[model.MD_DET_TYPE] = model.MD_DT_INTEGRATING
 
     def setup_count_command(self):
         pass  # nothing to do

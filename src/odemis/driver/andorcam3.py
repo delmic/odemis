@@ -268,6 +268,7 @@ class AndorCam3(model.DigitalCamera):
         self._metadata[model.MD_SW_VERSION] = self._swVersion
         self._hwVersion = self.getHwVersion()
         self._metadata[model.MD_HW_VERSION] = self._hwVersion
+        self._metadata[model.MD_DET_TYPE] = model.MD_DT_INTEGRATING
 
         resolution = self.getSensorResolution()
         self._metadata[model.MD_SENSOR_SIZE] = self._transposeSizeToUser(resolution)

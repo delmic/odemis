@@ -29,7 +29,7 @@ MD_AD_LIST = "Acquisition dates" # s since epoch for each element in dimension T
 # distance between two points on the sample that are seen at the centre of two
 # adjacent pixels considering that these two points are in focus
 MD_PIXEL_SIZE = "Pixel size" # (m, m)
-MD_SHEAR = "Shear"  # float, TODO
+MD_SHEAR = "Shear"  # float, vertical shear (0, means no shearing)
 MD_FLIP = "Flip"
 MD_BINNING = "Binning" # (px, px), number of pixels acquired as one big pixel, in each dimension
 MD_SAMPLES_PER_PIXEL = "Samples per pixel" # samples (number of samples acquired for each pixel) default: 1
@@ -76,6 +76,11 @@ MD_AR_HOLE_DIAMETER = "Hole diameter"  # m, diameter the hole in the mirror
 MD_AR_FOCUS_DISTANCE = "Focus distance"  # m, the vertical mirror cutoff, iow the min distance between the mirror and the sample
 MD_AR_PARABOLA_F = "Parabola parameter"  # m, parabola_parameter=1/4f
 
+MD_DET_TYPE = "Detector type"
+# The following tags are to be used as the values of MD_DET_TYPE
+MD_DT_NORMAL = "Detector normal"  # The detector sends the same level of signal independent of the acq duration (eg, ETD)
+MD_DT_INTEGRATING = "Detector integrating"  # The detector level is proportional to the acq duration (eg, CCD)
+
 # The following tags are not to be filled at acquisition, but by the user interface
 MD_DESCRIPTION = "Description" # (string) User-friendly name that describes what this acquisition is
 MD_USER_NOTE = "User note" # (string) Whatever comment the user has added to the image
@@ -86,7 +91,7 @@ MD_USER_TINT = "Display tint" # RGB (3-tuple of 0<int<255): colour to display th
 MD_ROTATION_COR = "Rotation cor" # radians, to be subtracted from MD_ROTATION
 MD_PIXEL_SIZE_COR = "Pixel size cor" # (m, m), to be multiplied with MD_PIXEL_SIZE
 MD_POS_COR = "Centre position cor"  # (m, m), to be subtracted from MD_POS
-MD_SHEAR_COR = "Shear cor"  # float, TODO
+MD_SHEAR_COR = "Shear cor"  # float, vertical shear to be subtracted from MD_SHEAR
 
 # The following metadata is the correction metadata for the Phenom image and
 # spot shift as calculated by delphi.UpdateConversion.
