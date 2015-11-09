@@ -1414,21 +1414,21 @@ class AnalysisTab(Tab):
             # ########### Track pixel and line selection
 
             for spec_stream in spec_streams:
-                iimg = spec_stream.image.value
+                sraw = spec_stream.raw[0]
 
                 # We need to get the dimensions so we can determine the
                 # resolution. Remember that in Matrix notation, the
                 # number of rows (is vertical size), comes first. So we
                 # need to 'swap' the values to get the (x,y) resolution.
-                height, width = iimg.shape[0:2]
+                height, width = sraw.shape[-2], sraw.shape[-1]
 
                 # Set the PointOverlay values for each viewport
                 for viewport in self.view_controller.viewports:
                     if hasattr(viewport.canvas, "pixel_overlay"):
                         ol = viewport.canvas.pixel_overlay
                         ol.set_data_properties(
-                            iimg.metadata[model.MD_PIXEL_SIZE][0],
-                            iimg.metadata[model.MD_POS],
+                            sraw.metadata[model.MD_PIXEL_SIZE][0],
+                            sraw.metadata[model.MD_POS],
                             (width, height)
                         )
                         ol.connect_selection(spec_stream.selected_pixel, spec_stream.selectionWidth)
@@ -1436,8 +1436,8 @@ class AnalysisTab(Tab):
                     if hasattr(viewport.canvas, "line_overlay"):
                         ol = viewport.canvas.line_overlay
                         ol.set_data_properties(
-                            iimg.metadata[model.MD_PIXEL_SIZE][0],
-                            iimg.metadata[model.MD_POS],
+                            sraw.metadata[model.MD_PIXEL_SIZE][0],
+                            sraw.metadata[model.MD_POS],
                             (width, height)
                         )
                         ol.connect_selection(spec_stream.selected_line,
