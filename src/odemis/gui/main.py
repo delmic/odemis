@@ -353,9 +353,11 @@ class OdemisGUIApp(wx.App):
             dlg.Destroy()  # frame
             return
 
+        if self.dev_powermate:
+            self.dev_powermate.terminate()
+
         try:
             pub.unsubAll()
-
             # let all the tabs know we are stopping
             self.tab_controller.terminate()
         except Exception:
@@ -365,9 +367,6 @@ class OdemisGUIApp(wx.App):
             log.stop_gui_logger()
         except Exception:
             logging.exception("Error stopping GUI logging")
-
-        if self.dev_powermate:
-            self.dev_powermate.led_on(False)
 
         self.main_frame.Destroy()
 
