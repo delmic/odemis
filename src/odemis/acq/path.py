@@ -113,6 +113,10 @@ SPARC2_MODES = {
                 {'lens-switch': {'x': 'on'},
                  'slit-in-big': {'x': 'on'},
                  'spectrograph': {'grating': 'mirror'},
+                 # TODO: focus should be independent from the other modes.
+                 # Needs to be changed after/before grating because the spectrometer
+                 # (SR-193) remembers the focus per grating. Or just remember
+                 # focus per grating + mode.
                  'cl-det-selector': {'x': 'off'},
                  'spec-det-selector': {'rx': 0},
                 }),

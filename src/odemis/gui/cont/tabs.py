@@ -883,7 +883,6 @@ class ChamberTab(Tab):
             (self.panel.vp_chamber,
                 {
                     "name": "Chamber view",
-                    # TODO: ensure it cannot move/zoom/focus
                 }
             ),
         ))
@@ -897,7 +896,9 @@ class ChamberTab(Tab):
 
         # Just one stream: chamber view
         self._ccd_stream = acqstream.CameraStream("Chamber view",
-                                                  main_data.ccd, main_data.ccd.data, None,
+                                                  main_data.ccd, main_data.ccd.data,
+                                                  emitter=None,
+                                                  focuser=main_data.focus,
                                                   detvas=get_local_vas(main_data.ccd))
         ccd_spe = self._stream_controller.addStream(self._ccd_stream)
         ccd_spe.stream_panel.flatten()  # No need for the stream name
