@@ -127,6 +127,13 @@ SPARC2_MODES = {
                  'cl-det-selector': {'x': 'off'},
                  'spec-det-selector': {'rx': 0},
                 }),
+            # TODO: make this mode work
+            'fiber-align': ("fiber-aligner",  # TODO: also iif sp-ccd is present?
+                {'lens-switch': {'x': 'on'},
+                 'fiber-aligner': {'x': model.MD_FAV_POS_ACTIVE},
+                 'spec-dedicated-det-selector': {'rx': 0},
+                 'spectrograph-dedicated': {'slit-in': 500e-6},
+                }),
          }
 
 ALIGN_MODES = {'mirror-align', 'chamber-view', 'fiber-align', 'spec-focus'}
@@ -146,12 +153,14 @@ class OpticalPathManager(object):
         self.microscope = microscope
 
         # Use subset for modes guessed
-        if self.microscope.role == "sparc2":
+        if microscope.role == "sparc2":
             self.guessed = SPARC2_MODES.copy()
             self._modes = SPARC2_MODES.copy()
-        else:
+        elif microscope.role in ("sparc-simplex", "sparc"):
             self.guessed = SPARC_MODES.copy()
             self._modes = SPARC_MODES.copy()
+        else:
+            raise NotImplementedError("Microscope role '%s' unsupported", microscope.role)
         # No stream should ever imply alignment mode
         for m in ALIGN_MODES:
             try:

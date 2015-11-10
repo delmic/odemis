@@ -228,6 +228,7 @@ class OdemisGUIApp(wx.App):
                     "name": "sparc_acqui",
                     "label": "ACQUISITION",
                     "roles": {
+                        "sparc-simplex": {},
                         "sparc": {},
                         "sparc2": {},
                     },
@@ -254,6 +255,7 @@ class OdemisGUIApp(wx.App):
                         "delphi": {},
                         "sem": {},
                         "optical": {},
+                        "sparc-simplex": {"label": "ANALYSIS"},
                         "sparc": {"label": "ANALYSIS"},
                         "sparc2": {"label": "ANALYSIS"},
                     },

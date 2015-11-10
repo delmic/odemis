@@ -258,14 +258,6 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
                 "control_type": odemis.gui.CONTROL_NONE,
             },
         },
-        "filter":
-        {
-            "band":  # to select the filter used
-            {
-                "label": "Filter",
-                "control_type": odemis.gui.CONTROL_COMBO,
-            },
-        },
     },
     "sparc2": {
         "ccd":
@@ -303,14 +295,6 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
             },
             "temperature": {
                 "control_type": odemis.gui.CONTROL_NONE,
-            },
-        },
-        "filter":
-        {
-            "band":  # to select the filter used
-            {
-                "label": "Filter",
-                "control_type": odemis.gui.CONTROL_COMBO,
             },
         },
     },
@@ -361,6 +345,8 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
     },
 }
 
+# The sparc-simplex is identical to the sparc
+HW_SETTINGS_CONFIG_PER_ROLE["sparc-simplex"] = HW_SETTINGS_CONFIG_PER_ROLE["sparc"]
 
 # Stream class -> config
 STREAM_SETTINGS_CONFIG = {
@@ -429,6 +415,9 @@ STREAM_SETTINGS_CONFIG = {
             ("pixelSize", {
                 "control_type": odemis.gui.CONTROL_FLT,
             }),
+            ("band", {  # from filter
+                "label": "Filter",
+            }),
         )),
     stream.CLSettingsStream:
         OrderedDict((
@@ -439,6 +428,9 @@ STREAM_SETTINGS_CONFIG = {
             }),
             ("pixelSize", {
                 "control_type": odemis.gui.CONTROL_FLT,
+            }),
+            ("band", {  # from filter or cl-filter
+                "label": "Filter",
             }),
         )),
 }
