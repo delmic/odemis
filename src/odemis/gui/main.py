@@ -145,8 +145,8 @@ class OdemisGUIApp(wx.App):
         try:
             from odemis.gui.dev.powermate import Powermate
             self.dev_powermate = Powermate(self.main_data)
-        except (LookupError, NotImplementedError):
-            pass
+        except (LookupError, NotImplementedError) as ex:
+            logging.debug("Not using Powermate: %s", ex)
         except Exception:
             logging.exception("Failed to load Powermate support")
 
