@@ -216,15 +216,15 @@ class Powermate(threading.Thread):
 
         pulse_table (0, 1, 2)
         pulse_on_sleep (bool): starting pulsing when the device is suspended
-
-        bits  0- 7: 8 bits: LED brightness
-        bits  8-16: 9 bits: pulsing speed modifier (0 ... 510);
-            0-254 = slower, 255 = standard, 256-510 = faster
-        bits 17-18: 2 bits: pulse table (0, 1, 2 valid)
-        bit     19: 1 bit : pulse whilst asleep?
-        bit     20: 1 bit : pulse constantly?
-
         """
+        # What do these magic values mean:
+        # cf linux/drivers/input/misc/powermate.c:
+        # bits  0- 7: 8 bits: LED brightness
+        # bits  8-16: 9 bits: pulsing speed modifier (0 ... 510);
+        #     0-254 = slower, 255 = standard, 256-510 = faster
+        # bits 17-18: 2 bits: pulse table (0, 1, 2 valid)
+        # bit     19: 1 bit : pulse whilst asleep?
+        # bit     20: 1 bit : pulse constantly?
 
         static_brightness = self.led_brightness & 0xff
 
