@@ -331,7 +331,7 @@ SPARC2: {
     },
     metadata: {
         # Default position of the mirror engaged (will be improved during alignment)
-        FAV_POS_ACTIVE: {"x": 0.069007226, "y": 0.0027454942},  # m, m
+        FAV_POS_ACTIVE: {"l": 0.069007226, "s": 0.0027454942},  # m, m
     },
 }
 
