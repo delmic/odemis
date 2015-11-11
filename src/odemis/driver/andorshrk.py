@@ -26,6 +26,7 @@ from odemis.driver import andorcam2
 from odemis.model import isasync, CancellableThreadPoolExecutor, HwError
 from odemis.util import driver
 import os
+import signal
 import time
 
 
@@ -283,8 +284,6 @@ class Shamrock(model.Actuator):
         self._slit_names = SLIT_NAMES.copy()
         self._slit_names.update(slits)
 
-        # TODO: sometimes this blocks (due to hardware not pleasing the SDK?),
-        # => detect it and at least report a failure (or try again?)
         self.Initialize()
         try:
             if isinstance(device, basestring):
@@ -334,7 +333,6 @@ class Shamrock(model.Actuator):
                     }
 
             if self.FocusMirrorIsPresent():
-                # TODO: how to get a conversion from steps to meter? => param?
                 if not 0 < fstepsize <= 0.1:  # m
                     raise ValueError("fstepsize is %f but should be between 0 and 0.1m" % (fstepsize,))
                 self._focus_step_size = fstepsize
@@ -395,8 +393,6 @@ class Shamrock(model.Actuator):
             else:
                 logging.info("No shutter is present")
 
-            # TODO: allow to define the name of the axis? or anyway, we can use
-            # MultiplexActuator to rename the axis?
             if self.FlipperMirrorIsPresent(OUTPUT_FLIPPER):
                 # The position values are arbitrary, but these are the one we
                 # typically use in Odemis for switching between two positions
@@ -448,7 +444,18 @@ class Shamrock(model.Actuator):
             path = self._camera._initpath
         else:
             path = ""
-        self._dll.ShamrockInitialize(path)
+
+        # TODO: Catch the signal and raise an HwError in case it took too long.
+        # Unfortunately, as we are calling C code from Python it's really hard,
+        # because the GIL is hold on and won't let us call any python code anymore.
+        try:
+            # Prepare to get killed (via SIGALRM) in case it took too long,
+            # because Initialize() is buggy and can block forever if it's
+            # confused by the hardware.
+            signal.setitimer(signal.ITIMER_REAL, 60)
+            self._dll.ShamrockInitialize(path)
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0)
 
     def Close(self):
         self._dll.ShamrockClose()
