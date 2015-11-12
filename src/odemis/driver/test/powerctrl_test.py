@@ -33,11 +33,11 @@ CLASS = powerctrl.PowerControlUnit
 if TEST_NOHW:
     # Test using the simulator
     KWARGS = dict(name="test", role="power_control", powered=["sem", "sed"], pin_map={
-                  "sem": 0, "sed": 1}, port="/dev/fake")
+                    "sem": 0, "sed": 1}, port="/dev/fake")
 else:
     # Test using the hardware
     KWARGS = dict(name="test", role="power_control", powered=["sem", "sed"], pin_map={
-                  "sem": 0, "sed": 1}, port="/dev/ttyPMT*")
+                    "sem": 0, "sed": 1}, port="/dev/ttyPMT*")
 
 # Control unit used for PCU testing
 CLASS_PCU = CLASS
@@ -147,6 +147,49 @@ class TestPowerControl(unittest.TestCase):
         self.sem.powerSupply.value = False
         self.assertEqual(self.pcu.supplied.value,
                          {"sem": self.sem.powerSupply.value, "sed": self.sed.powerSupply.value})
+
+
+# @unittest.skip("faster")
+class TestMemory(unittest.TestCase):
+    """
+    Tests which need a component ready
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.pcu = PCU
+        cls.dummy = "1134557890aabbccef"  # dummy data
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.pcu.terminate()
+
+    def test_write_mem(self):
+        # Find ids
+        self.ids = self.pcu._getIdentities()
+        self.assertGreater(len(self.ids), 0)
+
+        for id in self.ids:
+            backup = self.pcu._readMemory(id, "21", len(self.dummy) // 2)
+            # Write and read back
+            self.pcu._writeMemory(id, "21", self.dummy)
+            ans = self.pcu._readMemory(id, "21", len(self.dummy) // 2)
+            self.assertEqual(self.dummy, ans)
+
+            # read part of the data sent
+            ans = self.pcu._readMemory(id, "23", (len(self.dummy) - 8) // 2)
+            self.assertEqual(self.dummy[4:-4], ans)
+
+            # Try to send invalid number of characters
+            with self.assertRaises(IOError):
+                self.pcu._writeMemory(id[:-1], "21", self.dummy)
+            with self.assertRaises(IOError):
+                self.pcu._writeMemory(id, "2", self.dummy)
+            with self.assertRaises(IOError):
+                self.pcu._writeMemory(id, "21", self.dummy[:-1])
+            # Write back whatever was there before the test
+            self.pcu._writeMemory(id, "21", backup)
+
 
 if __name__ == "__main__":
     unittest.main()

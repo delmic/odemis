@@ -24,6 +24,7 @@ from __future__ import division
 import fcntl
 import glob
 import logging
+import numpy
 from odemis import model
 from odemis.model import isasync, CancellableThreadPoolExecutor
 from odemis.model._components import HwError
@@ -78,6 +79,9 @@ class PowerControlUnit(model.PowerSupplier):
         self.supplied = model.VigilantAttribute(self._supplied, readonly=True)
         self._updateSupplied()
 
+        self._mem_ids = self._getIdentities()
+        self.memoryIDs = model.ListVA(self._mem_ids, readonly=True, getter=self._getIdentities)
+
     @isasync
     def supply(self, sup):
         if not sup:
@@ -128,18 +132,32 @@ class PowerControlUnit(model.PowerSupplier):
     def _getIdentification(self):
         return self._sendCommand("*IDN?")
 
-    def _writeMemory(self, address, data):
+    def _writeMemory(self, id, address, data):
         """
-        write data to EEPROM address
+        Write data to EEPROM.
+        id (str): EEPROM registration number #hex (little-endian format)
+        address (str): starting address #hex
+        data (str): data to be written #hex (little-endian format)
         """
-        self._sendCommand("WMEM %s %s" % (address, data))
+        self._sendCommand("WMEM %s %s %s" % (id, address, data))
 
-    def _readMemory(self, address, length):
+    def _readMemory(self, id, address, length):
         """
-        read data of length from EEPROM address
+        Read data from EEPROM.
+        id (str): EEPROM registration number #hex (little-endian format)
+        address (str): starting address #hex
+        length (int): number of bytes to be read
+        returns (str): data read back #hex (little-endian format)
         """
-        ans = self._sendCommand("RMEM %s %s" % (address, length))
+        ans = self._sendCommand("RMEM %s %s %s" % (id, address, length))
         return ans
+
+    def _getIdentities(self):
+        """
+        Return the ids of connected EEPROMs
+        """
+        ans = self._sendCommand("SID")
+        return ans.split(',', 1)
 
     def _sendCommand(self, cmd):
         """
@@ -296,6 +314,9 @@ class PowerControlSimulator(object):
         self._output_buf = ""  # what the Power Control Unit sends back to the "host computer"
         self._input_buf = ""  # what Power Control Unit receives from the "host computer"
         self._i2crcv = 0  # fake expander response byte
+        self._ids = ["233c23f40100005a", "238abe69010000c8"]
+        self._mem = numpy.chararray(shape=(2, 512), itemsize=2)  # fake eeproms
+        self._mem[:] = '00'
 
     def fileno(self):
         return self._f.fileno()
@@ -344,11 +365,11 @@ class PowerControlSimulator(object):
         process the msg, and put the result in the output buffer
         msg (str): raw message (including header)
         """
-        res = None
+        res = ""
         wspaces = msg.count(' ')
         qmarks = msg.count('?')
         tokens = msg.split()
-        if ((wspaces > 1) and (qmarks > 0)) or (wspaces > 2) or (qmarks > 1):
+        if ((wspaces > 1) and (qmarks > 0)) or (wspaces > 3) or (qmarks > 1):
             res = "ERROR: Cannot parse this command\n"
         elif qmarks:
             if tokens[0] == "*IDN?":
@@ -363,17 +384,52 @@ class PowerControlSimulator(object):
             else:
                 res = "ERROR: Cannot parse this command\n"
         elif wspaces:
-            pin = int(tokens[1])
-            val = int(tokens[2])
             if tokens[0] == "PWR":
+                pin = int(tokens[1])
+                val = int(tokens[2])
                 if (pin < 0) or (pin > 7):
                     res = "ERROR: Out of range pin number\n"
                 else:
                     self._i2crcv = (self._i2crcv & ~(1 << pin)) | ((val << pin) & (1 << pin))
                     res = '\n'
-            # TODO: add support for WMEM and RMEM
+            elif tokens[0] == "WMEM":
+                id = tokens[1]
+                address = tokens[2]
+                data = tokens[3]
+                if len(id)%2 == 1:
+                    res = "ERROR: Invalid number of hexadecimal id characters. Must be an even number.\n"
+                elif len(address) % 2 == 1:
+                    res = "ERROR: Invalid number of hexadecimal address characters. Must be an even number.\n"
+                elif len(data) % 2 == 1:
+                    res = "ERROR: Invalid number of hexadecimal data characters. Must be an even number.\n"
+                else:
+                    id_ind = self._ids.index(id)
+                    addr = int(address, 16)
+                    for i in range(len(data) // 2):
+                        self._mem[id_ind, addr + i] = data[i * 2:i * 2 + 2]
+                    res = '\n'
+            elif tokens[0] == "RMEM":
+                id = tokens[1]
+                address = tokens[2]
+                length = int(tokens[3])
+                if len(id) % 2 == 1:
+                    res = "ERROR: Invalid number of hexadecimal id characters. Must be an even number.\n"
+                elif len(address) % 2 == 1:
+                    res = "ERROR: Invalid number of hexadecimal address characters. Must be an even number.\n"
+                else:
+                    id_ind = self._ids.index(id)
+                    addr = int(address, 16)
+                    for i in range(length):
+                        res += self._mem[id_ind, addr + i]
+                    res += '\n'
             else:
                 res = "ERROR: Cannot parse this command\n"
+        elif tokens[0] == "SID":
+            for id in self._ids:
+                res += id
+                if id != self._ids[-1]:
+                    res += ","
+            res += '\n'
         else:
             res = "ERROR: Cannot parse this command\n"
 
