@@ -32,17 +32,17 @@ They will *only* receive mouse events if they are active!
 
 from __future__ import division
 
-from abc import ABCMeta, abstractmethod
-import math
-import logging
-
 import cairo
+import logging
+import math
 import wx
+from abc import ABCMeta, abstractmethod
 
 import odemis.gui as gui
-from odemis.gui import EVT_BUFFER_SIZE
 import odemis.util as util
 import odemis.util.conversion as conversion
+from odemis.gui import EVT_BUFFER_SIZE
+from odemis.model import TupleVA
 
 
 class Label(object):
@@ -1090,3 +1090,64 @@ class WorldOverlay(Overlay):
     @abstractmethod
     def draw(self, ctx, shift=(0, 0), scale=1.0):
         pass
+
+
+class SpotModeBase(object):
+    __metaclass__ = ABCMeta
+
+    def __init__(self, cnvs, spot_va=None):
+        self.colour = conversion.hex_to_frgb(gui.FG_COLOUR_EDIT)
+        self.highlight = conversion.hex_to_frgb(gui.FG_COLOUR_HIGHLIGHT)
+
+        # Rendering attributes
+        self._sect_count = 4
+        self._gap = 0.15
+        self._sect_width = 2.0 * math.pi / self._sect_count
+        self._spot_radius = 12
+
+        # Spot position as a percentage (x, y) where x and y [0..1]
+        self.r_pos = spot_va or TupleVA((0.5, 0.5))
+        self.r_pos.subscribe(self.on_spot_change)
+
+    @abstractmethod
+    def on_spot_change(self, r_pos):
+        pass
+
+    def draw(self, ctx, x, y):
+        start = -0.5 * math.pi
+        r, g, b = self.highlight
+        width = self._spot_radius / 6.0
+
+        ctx.new_sub_path() # to ensure it doesn't draw a line from the previous point
+
+        for i in range(self._sect_count):
+            ctx.set_line_width(width)
+
+            ctx.set_source_rgba(0, 0, 0, 0.6)
+            ctx.arc(x + 1, y + 1,
+                    self._spot_radius,
+                    start + self._gap,
+                    start + self._sect_width - self._gap)
+            ctx.stroke()
+
+            ctx.set_source_rgb(r, g, b)
+            ctx.arc(x, y,
+                    self._spot_radius,
+                    start + self._gap,
+                    start + self._sect_width - self._gap)
+            ctx.stroke()
+
+            start += self._sect_width
+
+        width = self._spot_radius / 3.5
+        radius = self._spot_radius * 0.6
+
+        ctx.set_line_width(width)
+
+        ctx.set_source_rgba(0, 0, 0, 0.6)
+        ctx.arc(x + 1, y + 1, radius, 0, 2 * math.pi)
+        ctx.stroke()
+
+        ctx.set_source_rgb(r, g, b)
+        ctx.arc(x, y, radius, 0, 2 * math.pi)
+        ctx.stroke()

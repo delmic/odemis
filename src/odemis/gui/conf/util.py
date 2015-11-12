@@ -709,29 +709,29 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
 
         # equivalent wrapper function to retrieve the actual value
         def cb_get(ctrl=value_ctrl, va=va):
-            value = ctrl.GetValue()
+            ctrl_value = ctrl.GetValue()
             # Try to use the predefined value if it's available
             i = ctrl.GetSelection()
 
             # Warning: if the text contains an unknown value, GetSelection will
             # not return wx.NOT_FOUND (as expected), but the last selection value
-            if i != wx.NOT_FOUND and ctrl.Items[i] == value:
+            if i != wx.NOT_FOUND and ctrl.Items[i] == ctrl_value:
                 logging.debug("Getting item value %s from combobox control",
                               ctrl.GetClientData(i))
                 return ctrl.GetClientData(i)
             else:
-                logging.debug("Parsing combobox free text value %s", value)
-                cur_val = va.value
+                logging.debug("Parsing combobox free text value %s", ctrl_value)
+                va_val = va.value
                 # Try to find a good corresponding value inside the string
-                new_val = reproduceTypedValue(cur_val, value)
+                new_val = reproduceTypedValue(va_val, ctrl_value)
                 if isinstance(new_val, collections.Iterable):
                     # be less picky, by shortening the number of values if it's too many
-                    new_val = new_val[:len(cur_val)]
+                    new_val = new_val[:len(va_val)]
 
                 # if it ends up being the same value as before the combobox will not update, so
                 # force it now
-                if cur_val == new_val:
-                    cb_set(cur_val)
+                if va_val == new_val:
+                    cb_set(va_val)
                 return new_val
 
         setting_entry = SettingEntry(name=name, va=va, hw_comp=hw_comp,
