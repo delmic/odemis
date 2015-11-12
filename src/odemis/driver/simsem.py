@@ -200,13 +200,6 @@ class Scanner(model.Emitter):
                           unit="A")
         self.accelVoltage = model.FloatContinuous(10e3, (1e3, 30e3), unit="V")
 
-    # we share metadata with our parent
-    def updateMetadata(self, md):
-        self.parent.updateMetadata(md)
-
-    def getMetadata(self):
-        return self.parent.getMetadata()
-
     def _onHFV(self, hfv):
         self._updatePixelSize()
         self._updateDepthOfField()
@@ -320,6 +313,7 @@ class Scanner(model.Emitter):
         phy_pos = (px_pos[0] * pxs[0], -px_pos[1] * pxs[1])  # - to invert Y
         return phy_pos
 
+
 class Detector(model.Detector):
     """
     This is an extension of model.Detector class. It performs the main functionality
@@ -349,7 +343,7 @@ class Detector(model.Detector):
             bpp = 8
         else:
             bpp = 16
-        self.bpp = model.IntEnumerated(bpp, set([8, 16]))
+        self.bpp = model.IntEnumerated(bpp, {8, 16})
 
         # Simulate the Hw brightness/contrast, but don't actually do anything
         self.contrast = model.FloatContinuous(0.5, [0, 1], unit="")
@@ -366,12 +360,7 @@ class Detector(model.Detector):
         if parent._drift_period:
             self._update_drift_timer.start()
 
-    # we share metadata with our parent
-    def updateMetadata(self, md):
-        self.parent.updateMetadata(md)
-
-    def getMetadata(self):
-        return self.parent.getMetadata()
+        self._metadata[model.MD_DET_TYPE] = model.MD_DT_NORMAL
 
     @isasync
     def applyAutoContrast(self):
@@ -425,8 +414,10 @@ class Detector(model.Detector):
         Generates the fake output based on the translation, resolution and
         current drift.
         """
-        metadata = dict(self.parent._metadata)
+        metadata = self.parent._metadata.copy()
         scanner = self.parent._scanner
+        metadata.update(scanner._metadata)
+        metadata.update(self._metadata)
 
         with self._acquisition_init_lock:
             pxs = scanner.pixelSize.value  # m/px

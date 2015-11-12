@@ -23,6 +23,7 @@ import logging
 import os
 import struct
 import threading
+import time
 import wx
 
 from odemis.acq.stream import StaticStream
@@ -62,6 +63,8 @@ class Powermate(threading.Thread):
 
         self.led_brightness = 255  # [0..255]
         self.led_pulse_speed = 0  # [0..510]
+
+        self.keep_running = True
 
         # Track tab switching, so we know when to look for a new viewport
         main_data.tab.subscribe(self.on_tab_switch, init=True)
@@ -163,31 +166,37 @@ class Powermate(threading.Thread):
 
     def run(self):
         """ Listen for knob events and translate them into wx.Python events """
+
         from evdev import ecodes
 
-        try:
-            for evt in self.device.read_loop():
-                if self.target_viewport is not None:
-                    if evt.type == ecodes.EV_REL:
-                        # TODO: record whether shift was pressed to put in ShiftDown()
-                        knob_evt = KnobRotateEvent(
-                            self.target_viewport.canvas.GetId(),
-                            direction=(wx.RIGHT if evt.value > 0 else wx.LEFT),
-                            step_value=evt.value,
-                            device=self.device
-                        )
-                        wx.PostEvent(self.target_viewport.canvas, knob_evt)
-                    elif evt.type == ecodes.EV_KEY and evt.value == 1:
-                        knob_evt = KnobPressEvent(
-                            self.target_viewport.canvas.GetId(),
-                            device=self.device
-                        )
-                        wx.PostEvent(self.target_viewport.canvas, knob_evt)
-        except IOError:
-            logging.info("Failed to communicate with the powermate, was unplugged?")
-            # TODO: try to reconnect?
-        except Exception:
-            logging.exception("Powermate listener failed")
+        while self.keep_running:
+            try:
+                for evt in self.device.read_loop():
+                    if self.target_viewport is not None:
+                        if evt.type == ecodes.EV_REL:
+                            knob_evt = KnobRotateEvent(
+                                self.target_viewport.canvas.GetId(),
+                                direction=(wx.RIGHT if evt.value > 0 else wx.LEFT),
+                                step_value=evt.value,
+                                device=self.device
+                            )
+                            wx.PostEvent(self.target_viewport.canvas, knob_evt)
+                        elif evt.type == ecodes.EV_KEY and evt.value == 1:
+                            knob_evt = KnobPressEvent(
+                                self.target_viewport.canvas.GetId(),
+                                device=self.device
+                            )
+                            wx.PostEvent(self.target_viewport.canvas, knob_evt)
+            except IOError:
+                logging.warn("Failed to communicate with the powermate, was unplugged?")
+                # Sleep and after try and find the device again
+                while True:
+                    time.sleep(5)
+                    self.device = self._find_powermate_device()
+                    break
+            except Exception:
+                logging.exception("Powermate listener failed")
+                self.keep_running = False
 
     def led_on(self, on):
         self.led_brightness = 255 if on else 0
@@ -197,9 +206,14 @@ class Powermate(threading.Thread):
         self.led_pulse_speed = 255 if pulse else 0
         self._set_led_state()
 
+    def terminate(self):
+        self.led_on(False)
+        self.keep_running = False
+        self.device.close()
+
     def _set_led_state(self, pulse_table=0, pulse_on_sleep=False):
-        """
-        Changes the led state of the powermate
+        """ Changes the led state of the powermate
+
         pulse_table (0, 1, 2)
         pulse_on_sleep (bool): starting pulsing when the device is suspended
         """

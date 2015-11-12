@@ -1170,6 +1170,21 @@ class StreamBarController(object):
             )
         return self._add_stream(s, **kwargs)
 
+    def addEBIC(self, **kwargs):
+        """
+        Creates a new EBIC stream and panel in the stream bar
+        returns (StreamPanel): the panel created
+        """
+        s = acqstream.SEMStream(
+            "EBIC",
+            self._main_data_model.ebic,
+            self._main_data_model.ebic.data,
+            self._main_data_model.ebeam,
+            focuser=self._main_data_model.ebeam_focus,
+        )
+        return self._add_stream(s, **kwargs)
+
+
     def addStatic(self, name, image, cls=acqstream.StaticStream, **kwargs):
         """ Creates a new static stream and stream controller
 
@@ -1592,6 +1607,9 @@ class SecomStreamsController(StreamBarController):
         # BSED
         if self._main_data_model.ebeam and self._main_data_model.bsd:
             self.add_action("Backscattered electrons", self.addSEMBSD, sem_capable)
+        # EBIC
+        if self._main_data_model.ebeam and self._main_data_model.ebic:
+            self.add_action("EBIC", self.addEBIC, sem_capable)
 
     def _onStreamUpdate(self, stream, updated):
         super(SecomStreamsController, self)._onStreamUpdate(stream, updated)
@@ -1680,6 +1698,8 @@ class SparcStreamsController(StreamBarController):
         main_data = self._main_data_model
 
         # Basically one action per type of stream
+        if main_data.ebic:
+            self.add_action("EBIC", self.addEBIC)
         if main_data.cld:
             self.add_action("CL intensity", self.addCLIntensity)
         if main_data.ccd:

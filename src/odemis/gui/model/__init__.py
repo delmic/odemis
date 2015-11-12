@@ -101,6 +101,7 @@ class MainGUIData(object):
         "ccd": "ccd",
         "se-detector": "sed",
         "bs-detector": "bsd",
+        "ebic-detector": "ebic",
         "cl-detector": "cld",
         "spectrometer": "spectrometer",
         # spectrograph is special: it's a child of spectrometer
@@ -155,7 +156,8 @@ class MainGUIData(object):
         self.ebeam_focus = None  # change the e-beam focus
         self.sed = None  # secondary electron detector
         self.bsd = None  # backscattered electron detector
-        self.cld = None  # cathodoluminescnence detector (aka analog PMT)
+        self.ebic = None  # electron beam-induced current detector
+        self.cld = None  # cathodoluminescnence detector (aka PMT)
         self.spectrometer = None  # 1D detector that returns a spectrum
         self.spectrograph = None  # actuator to change the wavelength
         self.monochromator = None  # 0D detector behind the spectrograph
@@ -192,16 +194,16 @@ class MainGUIData(object):
             # Check that the components that can be expected to be present on an actual microscope
             # have been correctly detected.
 
-            if not any((self.ccd, self.sed, self.bsd, self.spectrometer)):
+            if not any((self.ccd, self.sed, self.bsd, self.ebic, self.cld, self.spectrometer)):
                 raise KeyError("No detector found in the microscope")
 
             if not self.light and not self.ebeam:
                 raise KeyError("No emitter found in the microscope")
 
             # Optical path manager (for now, only used on the SPARC)
-            # Used to control the actuators so that the ligth goes to the right
+            # Used to control the actuators so that the light goes to the right
             # detector (in the right way).
-            if microscope.role in ("sparc", "sparc2"):
+            if microscope.role in ("sparc-simplex", "sparc", "sparc2"):
                 self.opm = path.OpticalPathManager(microscope)
 
             # Used when doing SECOM fine alignment, based on the value used by the user

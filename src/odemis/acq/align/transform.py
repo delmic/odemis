@@ -30,10 +30,11 @@ def CalculateTransform(optical_coordinates, electron_coordinates, skew=False):
     Returns the translation, scaling and rotation for the optical and electron image coordinates.
     optical_coordinates (List of tuples): Coordinates of spots in optical image
     electron_coordinates (List of tuples): Coordinates of spots in electron image
-    returns translation (Tuple of 2 floats), 
-            scaling (Tuple of 2 floats), 
+    skew (boolean): If True, also compute scaling ratio and shear
+    returns translation (Tuple of 2 floats),
+            scaling (Tuple of 2 floats),
             rotation (Float): Transformation parameters
-            skew (boolean): If True, also compute scaling ratio and shear
+            shear (Float):
     """
     # Create numpy arrays out of the coordinate lists
     optical_array = numpy.array(optical_coordinates)

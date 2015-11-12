@@ -145,8 +145,8 @@ class OdemisGUIApp(wx.App):
         try:
             from odemis.gui.dev.powermate import Powermate
             self.dev_powermate = Powermate(self.main_data)
-        except (LookupError, NotImplementedError):
-            pass
+        except (LookupError, NotImplementedError) as ex:
+            logging.debug("Not using Powermate: %s", ex)
         except Exception:
             logging.exception("Failed to load Powermate support")
 
@@ -228,6 +228,7 @@ class OdemisGUIApp(wx.App):
                     "name": "sparc_acqui",
                     "label": "ACQUISITION",
                     "roles": {
+                        "sparc-simplex": {},
                         "sparc": {},
                         "sparc2": {},
                     },
@@ -254,6 +255,7 @@ class OdemisGUIApp(wx.App):
                         "delphi": {},
                         "sem": {},
                         "optical": {},
+                        "sparc-simplex": {"label": "ANALYSIS"},
                         "sparc": {"label": "ANALYSIS"},
                         "sparc2": {"label": "ANALYSIS"},
                     },
@@ -353,9 +355,11 @@ class OdemisGUIApp(wx.App):
             dlg.Destroy()  # frame
             return
 
+        if self.dev_powermate:
+            self.dev_powermate.terminate()
+
         try:
             pub.unsubAll()
-
             # let all the tabs know we are stopping
             self.tab_controller.terminate()
         except Exception:
@@ -365,9 +369,6 @@ class OdemisGUIApp(wx.App):
             log.stop_gui_logger()
         except Exception:
             logging.exception("Error stopping GUI logging")
-
-        if self.dev_powermate:
-            self.dev_powermate.led_on(False)
 
         self.main_frame.Destroy()
 

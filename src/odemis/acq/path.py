@@ -113,6 +113,10 @@ SPARC2_MODES = {
                 {'lens-switch': {'x': 'on'},
                  'slit-in-big': {'x': 'on'},
                  'spectrograph': {'grating': 'mirror'},
+                 # TODO: focus should be independent from the other modes.
+                 # Needs to be changed after/before grating because the spectrometer
+                 # (SR-193) remembers the focus per grating. Or just remember
+                 # focus per grating + mode.
                  'cl-det-selector': {'x': 'off'},
                  'spec-det-selector': {'rx': 0},
                 }),
@@ -122,6 +126,13 @@ SPARC2_MODES = {
                  'spectrograph': {'slit-in': 10e-6, 'grating': 'mirror'},  # slit to the minimum
                  'cl-det-selector': {'x': 'off'},
                  'spec-det-selector': {'rx': 0},
+                }),
+            # TODO: make this mode work
+            'fiber-align': ("fiber-aligner",  # TODO: also iif sp-ccd is present?
+                {'lens-switch': {'x': 'on'},
+                 'fiber-aligner': {'x': model.MD_FAV_POS_ACTIVE},
+                 'spec-dedicated-det-selector': {'rx': 0},
+                 'spectrograph-dedicated': {'slit-in': 500e-6},
                 }),
          }
 
@@ -142,12 +153,14 @@ class OpticalPathManager(object):
         self.microscope = microscope
 
         # Use subset for modes guessed
-        if self.microscope.role == "sparc2":
+        if microscope.role == "sparc2":
             self.guessed = SPARC2_MODES.copy()
             self._modes = SPARC2_MODES.copy()
-        else:
+        elif microscope.role in ("sparc-simplex", "sparc"):
             self.guessed = SPARC_MODES.copy()
             self._modes = SPARC_MODES.copy()
+        else:
+            raise NotImplementedError("Microscope role '%s' unsupported", microscope.role)
         # No stream should ever imply alignment mode
         for m in ALIGN_MODES:
             try:
