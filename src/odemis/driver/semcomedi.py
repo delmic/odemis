@@ -170,13 +170,22 @@ class SEMComedi(model.HwComponent):
             # The detector children will do more thorough checks
             nchan = comedi.get_n_channels(self._device, self._ai_subdevice)
             if nchan < 1:
-                raise IOError("DAQ device '%s' has only %d input channels" % nchan)
+                raise IOError("DAQ device '%s' has only %d input channels" % (device, nchan))
             # The scanner child will do more thorough checks
             nchan = comedi.get_n_channels(self._device, self._ao_subdevice)
             if nchan < 2:
-                raise IOError("DAQ device '%s' has only %d output channels" % nchan)
+                raise IOError("DAQ device '%s' has only %d output channels" % (device, nchan))
         except comedi.ComediError:
             raise ValueError("Failed to find both input and output on DAQ device '%s'" % device)
+
+        # Look for the first digital I/O subdevice
+        try:
+            self._dio_subdevice = comedi.find_subdevice_by_type(self._device,
+                                                            comedi.SUBD_DIO, 0)
+        except comedi.ComediError:
+            # It's not required, so it could all be fine
+            self._dio_subdevice = None
+            logging.info("No digital I/O subdevice found")
 
         # Look for all the counter subdevices
         self._cnt_subdevices = []
@@ -1606,6 +1615,7 @@ class SEMComedi(model.HwComponent):
 
                 detectors = tuple(self._acq_wait_detectors_ready())  # ordered
                 if detectors:
+                    self._scanner.indicate_scan_state(True)
                     # write and read the raw data
                     try:
                         if any(isinstance(d, CountingDetector) for d in detectors):
@@ -1643,6 +1653,7 @@ class SEMComedi(model.HwComponent):
                         gc.collect()  # TODO: if scan is long enough, during scan
                         last_gc = time.time()
                 else:  # nothing to acquire => rest
+                    self._scanner.indicate_scan_state(False)
                     self.set_to_resting_position()
                     gc.collect()
                     # wait until something new comes in
@@ -2481,7 +2492,8 @@ class Scanner(model.Emitter):
       Resolution > Translation.
     """
     def __init__(self, name, role, parent, channels, limits, settle_time,
-                 hfw_nomag, park=None, fastpark=False, max_res=None, **kwargs):
+                 hfw_nomag, park=None, scanning_ttl=None, fastpark=False,
+                 max_res=None, **kwargs):
         """
         channels (2-tuple of (0<=int)): output channels for X/Y to drive. X is
           the fast scanned axis, Y is the slow scanned axis.
@@ -2494,6 +2506,9 @@ class Scanner(model.Emitter):
           (lower/upper limit in X) if magnification is 1 (in m)
         park (None or 2-tuple of (0<=float)): voltage of resting position,
           if None, it will default to top-left corner.
+        scanning_ttl (None or dict of int -> bool): list of digital output ports
+          to indicate the ebeam should be enabled/scanning (if True) or should
+          be disabled/parked (if False)
         fastpart (boolean): if True, will park immediatly after finishing a scan
           (otherwise, it will wait a few ms to check there if a new scan
         max_res (None or 2-tuple of (0<int)): maximum scan resolution allowed.
@@ -2544,6 +2559,25 @@ class Scanner(model.Emitter):
                 except comedi.ComediError:
                     raise ValueError("Park voltage %g V is too high for hardware." %
                                      (park[i],))
+
+        self._scanning_ttl = scanning_ttl or {}
+        if self._scanning_ttl:
+            if parent._dio_subdevice is None:
+                # TODO: also support digital output only subdevices
+                raise IOError("DAQ device '%s' has no digital output ports, cannot use scanning_ttl" %
+                              (parent._device_name,))
+            else:
+                # configure each channel for output
+                ndioc = comedi.get_n_channels(parent._device, parent._dio_subdevice)
+                for c, s in self._scanning_ttl.items():
+                    if not 0 <= c <= ndioc:
+                        raise ValueError("DAQ device '%s' only has %d digital output ports" %
+                                         (parent._device_name, ndioc))
+                    comedi.dio_config(parent._device, parent._dio_subdevice, c, comedi.OUTPUT)
+
+        self._scan_state = True  # To force changing the digital output when the state go to False
+        self.indicate_scan_state(False)
+
         # TODO: if fast park is required, we can only allow the same ranges as
         # for the standard scanning, but we don't handle it now as it's more a
         # hack than anything official
@@ -2798,6 +2832,27 @@ class Scanner(model.Emitter):
             ranges: the range index of each output channel
         """
         return self._resting_data
+
+    def indicate_scan_state(self, scanning):
+        """
+        Indicate the ebeam scanning state (via the digital output ports)
+        scanning (bool): if True, indicate it's scanning, otherwise, indicate it's
+          parked.
+        """
+        if self._scan_state == scanning:
+            return  # No need to update, if it's already correct
+
+        self._scan_state = scanning
+        for c, s in self._scanning_ttl.items():
+            try:
+                if s == scanning:
+                    v = 1
+                else:
+                    v = 0
+                logging.debug("Setting digital output port %d to %d", c, v)
+                comedi.dio_write(self.parent._device, self.parent._dio_subdevice, c, v)
+            except Exception:
+                logging.warning("Failed to change digital output port %d", exc_info=True)
 
     def get_scan_data(self, nrchans):
         """
