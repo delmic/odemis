@@ -42,6 +42,7 @@ class Light(model.Emitter):
         # just one band: white
         # In general emissions is list of 0 <= floats <= 1. Here it's just one value, either 0 or 1.
         self.emissions = model.ListVA([0], unit="", setter=self._setEmissions)
+        self.emissions.subscribe(self._updatePower)
         # TODO: update spectra VA to support the actual spectra of the lamp
         self.spectra = model.ListVA([(380e-9, 390e-9, 560e-9, 730e-9, 740e-9)],
                                     unit="m", readonly=True)
@@ -56,13 +57,10 @@ class Light(model.Emitter):
         else:
             em = [0]
 
-        # Update the hardware
-        self._updatePower(self.power.value)
-
         return em
 
-    def _updatePower(self, value):
+    def _updatePower(self, _):
         # Set powerSupply VA based on the power value (True in case of max,
         # False in case of min)
-        pw = value * self.emissions.value[0]
+        pw = self.power.value * self.emissions.value[0]
         self.powerSupply.value = (pw == self.power.range[1])
