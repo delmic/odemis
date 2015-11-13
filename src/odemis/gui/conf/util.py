@@ -35,7 +35,7 @@ import odemis.gui
 from odemis.gui.util.widgets import VigilantAttributeConnector, AxisConnector
 from odemis.model import NotApplicableError, hasVA
 from odemis.util.conversion import reproduceTypedValue
-from odemis.util.units import readable_str
+from odemis.util.units import readable_str, SI_PREFIXES
 import re
 import wx
 from wx.lib.pubsub import pub
@@ -419,7 +419,7 @@ def process_setting_metadata(hw_comp, setting_va, conf):
     return minv, maxv, choices, unit
 
 
-def format_choices(choices, uniformat=True):
+def format_choices(choices, uniformat=True, si=None):
     """ Transform the given choices into an ordered list of (value, formatted value) tuples
 
     Args:
@@ -438,6 +438,9 @@ def format_choices(choices, uniformat=True):
         if isinstance(choices, dict):
             # In this case we assume that the values are already formatted
             choices_formatted = choices.items()
+        elif si is not None:
+            fmt, choices_si_prefix = utun.si_scale_list(choices, si)
+            choices_formatted = zip(choices, [u"%g" % c for c in fmt])
         elif (
                 uniformat and len(choices) > 1 and
                 all([isinstance(c, numbers.Real) for c in choices])
@@ -532,7 +535,8 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
     # Get the range and choices
     min_val, max_val, choices, unit = process_setting_metadata(hw_comp, va, conf)
     # Format the provided choices
-    choices_formatted, choices_si_prefix = format_choices(choices)
+    si = conf.get('si', None)
+    choices_formatted, choices_si_prefix = format_choices(choices, si=si)
     # Determine the control type to use, either from config or some 'smart' default
     control_type = determine_control_type(hw_comp, va, choices_formatted, conf)
 

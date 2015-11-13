@@ -119,6 +119,7 @@ HW_SETTINGS_CONFIG = {
                 "control_type": odemis.gui.CONTROL_COMBO,
                 "choices": util.hfw_choices,
                 "accuracy": 2,
+                "si": u"µ",
             }),
             ("magnification", {
                 # Depends whether it is readonly or not

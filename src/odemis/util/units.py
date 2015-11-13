@@ -27,14 +27,25 @@ import collections
 import logging
 import math
 
-SI_PREFIXES = {9: u"G",
-               6: u"M",
-               3: u"k",
-               0: u"",
-               -3: u"m",
-               -6: u"µ",
-               -9: u"n",
-               -12: u"p"}
+SI_PREFIXES = {
+    9: u"G",
+    6: u"M",
+    3: u"k",
+    0: u"",
+    -3: u"m",
+    -6: u"µ",
+    -9: u"n",
+    -12: u"p",
+
+    u"G": 9,
+    u"M": 6,
+    u"k": 3,
+    u"": 0,
+    u"m": -3,
+    u"µ": -6,
+    u"n": -9,
+    u"p": -12,
+}
 
 # The following units should ignore SI formatting
 IGNORE_UNITS = (None, "", "px", "C", u"°C", u"°", "%", "nm")
@@ -83,11 +94,16 @@ def to_si_scale(x):
     divisor, prefix = get_si_scale(x)
     return x / divisor, prefix
 
-def si_scale_list(values):
+def si_scale_list(values, si=None):
     """ Scales a list of numerical values using the same metric scale """
     if values:
-        marker = max(values)
-        divisor, prefix = get_si_scale(marker)
+        if si is None:
+            marker = max(values)
+            divisor, prefix = get_si_scale(marker)
+        elif si in SI_PREFIXES:
+            divisor, prefix = (10 ** SI_PREFIXES[si]), si
+        else:
+            raise ValueError("Si %s is invalid!" % si)
         return [v / divisor for v in values], prefix
     return None, u""
 
