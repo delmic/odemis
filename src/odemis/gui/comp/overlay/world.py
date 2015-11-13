@@ -29,7 +29,7 @@ import math
 from odemis import model
 from odemis.acq.stream import UNDEFINED_ROI
 from odemis.gui.comp.overlay.base import Vec, WorldOverlay, SelectionMixin, DragMixin, \
-    PixelDataMixin, SEL_MODE_EDIT, SEL_MODE_CREATE, EDIT_MODE_BOX, EDIT_MODE_POINT
+    PixelDataMixin, SEL_MODE_EDIT, SEL_MODE_CREATE, EDIT_MODE_BOX, EDIT_MODE_POINT, SpotModeBase
 from odemis.gui.util.raster import rasterize_line
 from odemis.model import TupleVA
 from odemis.util import clip_line
@@ -507,7 +507,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
         self.selection_mode = mode_cache
 
 
-class SpotModeOverlay(WorldOverlay, DragMixin):
+class SpotModeOverlay(WorldOverlay, DragMixin, SpotModeBase):
     """ Render the spot mode indicator in the center of the view
 
     If a position is provided, the spot will be drawn there.
@@ -519,19 +519,8 @@ class SpotModeOverlay(WorldOverlay, DragMixin):
     def __init__(self, cnvs, spot_va=None):
         WorldOverlay.__init__(self, cnvs)
         DragMixin.__init__(self)
+        SpotModeBase.__init__(self, cnvs, spot_va=None)
 
-        self.colour = conversion.hex_to_frgb(gui.FG_COLOUR_EDIT)
-        self.highlight = conversion.hex_to_frgb(gui.FG_COLOUR_HIGHLIGHT)
-
-        # Rendering attributes
-        self._sect_count = 4
-        self._gap = 0.15
-        self._sect_width = 2.0 * math.pi / self._sect_count
-        self._spot_radius = 12
-
-        # Spot position as a percentage (x, y) where x and y [0..1]
-        self.r_pos = spot_va or TupleVA((0.5, 0.5))
-        self.r_pos.subscribe(self.on_spot_change)
         self.w_pos = None
 
     def on_spot_change(self, _):
@@ -560,48 +549,10 @@ class SpotModeOverlay(WorldOverlay, DragMixin):
         if self.w_pos is None:
             return
 
-        start = -0.5 * math.pi
-
-        r, g, b = self.highlight
-
-        ctx.translate(*self.offset_b)
         bx, by = self.cnvs.world_to_buffer(self.w_pos)
+        ctx.translate(*self.offset_b)
 
-        width = self._spot_radius / 6.0
-
-        ctx.new_sub_path()  # to ensure it doesn't draw a line from the previous point
-
-        for i in range(self._sect_count):
-            ctx.set_line_width(width)
-
-            ctx.set_source_rgba(0, 0, 0, 0.6)
-            ctx.arc(bx + 1, by + 1,
-                    self._spot_radius,
-                    start + self._gap,
-                    start + self._sect_width - self._gap)
-            ctx.stroke()
-
-            ctx.set_source_rgb(r, g, b)
-            ctx.arc(bx, by,
-                    self._spot_radius,
-                    start + self._gap,
-                    start + self._sect_width - self._gap)
-            ctx.stroke()
-
-            start += self._sect_width
-
-        width = self._spot_radius / 3.5
-        radius = self._spot_radius * 0.6
-
-        ctx.set_line_width(width)
-
-        ctx.set_source_rgba(0, 0, 0, 0.6)
-        ctx.arc(bx + 1, by + 1, radius, 0, 2 * math.pi)
-        ctx.stroke()
-
-        ctx.set_source_rgb(r, g, b)
-        ctx.arc(bx, by, radius, 0, 2 * math.pi)
-        ctx.stroke()
+        SpotModeBase.draw(self, ctx, bx, by)
 
     def on_left_down(self, evt):
         if self.active:
