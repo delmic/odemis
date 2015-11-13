@@ -44,12 +44,14 @@ class PowerControlUnit(model.PowerSupplier):
     communication with the PCU firmware.
     '''
 
-    def __init__(self, name, role, port, pin_map=None, powered=None, **kwargs):
+    def __init__(self, name, role, port, pin_map=None, powered=None, delay=None, **kwargs):
         '''
         port (str): port name
         pin_map (dict of str -> int): names of the components
           and the pin where the component is connected.
         powered (list of str): list of powered components
+        delay (dict str -> float): time to wait for each component after it is
+            turned on.
         Raise an exception if the device cannot be opened
         '''
         powered = powered or {}
@@ -71,6 +73,10 @@ class PowerControlUnit(model.PowerSupplier):
 
         pin_map = pin_map or {}
         self._pin_map = pin_map
+
+        delay = delay or {}
+        self._delay = delay
+        self._last_start = dict.fromkeys(delay, None)
 
         # will take care of executing switch asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
@@ -97,8 +103,19 @@ class PowerControlUnit(model.PowerSupplier):
         for comp, val in sup.items():
             # find pin and values corresponding to component
             pin = self._pin_map[comp]
+            delay = self._delay.get(comp, 0)
+            last_start = self._last_start.get(comp, None)
+            state = self.supplied.value[comp]
             if val:
                 self._sendCommand("PWR " + str(pin) + " 1")
+                # if it is the first time we start it, wait anyway
+                if (last_start is None) or (state is False):
+                    self._last_start[comp] = time.time()
+                    time.sleep(delay)
+                else:
+                    # wait the time remaining
+                    remaining = (last_start + delay) - time.time()
+                    time.sleep(max(0, remaining))
             else:
                 self._sendCommand("PWR " + str(pin) + " 0")
         self._updateSupplied()
