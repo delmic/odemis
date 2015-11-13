@@ -2909,10 +2909,11 @@ class IPBusAccesser(object):
                 # would slow down a lot. Normally, if we've received one full
                 # answer, there's 99% chance we've received everything.
                 # An answer ends with \n (and not " \n", which indicates multi-
-                # line).
-                if (ans[-1] == "\n" and (
-                     ans[-2:-1] != " " or  # multiline: "... \n"
-                     re.match(r"0 \d+ $", ans))):  # excepted empty line "0 1 \n"
+                # line, excepted empty line "0 1 \n").
+#                 if (ans[-1] == "\n" and (
+#                      ans[-2:-1] != " " or  # multiline: "... \n"
+#                      re.match(r"0 \d+ $", ans))):
+                if re.match(r"0 \d+( |.*[^ ])\n", ans, re.DOTALL):
                     break
 
         logging.debug("Received: '%s'", ans.encode('string_escape'))
