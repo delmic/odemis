@@ -650,6 +650,9 @@ class Sparc2AlignGUIData(ActuatorGUIData):
             pxs = md[model.MD_PIXEL_SIZE]
         except KeyError:
             pxs = self.main.ccd.pixelSize.value
+        b = md.get(model.MD_BINNING, (1, 1))
+        pxs = pxs[0] / b[0], pxs[0] / b[1]
+
         pos = md.get(model.MD_POS, (0, 0))
         # Pole position is always expressed considering there is no binning
         res = self.main.ccd.shape[0:2]
@@ -681,6 +684,9 @@ class Sparc2AlignGUIData(ActuatorGUIData):
             pxs = md[model.MD_PIXEL_SIZE]
         except KeyError:
             pxs = self.main.ccd.pixelSize.value
+        b = md.get(model.MD_BINNING, (1, 1))
+        pxs = pxs[0] / b[0], pxs[0] / b[1]
+
         pos = md.get(model.MD_POS, (0, 0))
         # position is always expressed considering there is no binning
         res = self.main.ccd.shape[0:2]
@@ -705,12 +711,12 @@ class Sparc2AlignGUIData(ActuatorGUIData):
         return self._posToPhysical(posccd)
 
     def _onPolePosCCD(self, posccd):
-        posw = self._posToPhysical(posccd)
-        logging.debug("Updated world polepos to %s m (= %s px)", posw, posccd)
+        posphy = self._posToPhysical(posccd)
+        logging.debug("Updated world polepos to %s m (= %s px)", posphy, posccd)
 
         # Update without calling the setter
-        self.polePositionPhysical._value = posw
-        self.polePositionPhysical.notify(posw)
+        self.polePositionPhysical._value = posphy
+        self.polePositionPhysical.notify(posphy)
 
 
 class FileInfo(object):
