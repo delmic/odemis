@@ -157,7 +157,7 @@ class PowerControlUnit(model.PowerSupplier):
         Return the ids of connected EEPROMs
         """
         ans = self._sendCommand("SID")
-        return ans.split(',', 1)
+        return ans.split(',')
 
     def _sendCommand(self, cmd):
         """
