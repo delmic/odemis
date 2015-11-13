@@ -825,7 +825,7 @@ class IPAccesser(object):
 
                 ans += data
                 # does it look like we received a full answer?
-                if len(ans) >= 3 and ans[-2:] == "\r\n":
+                if "\r\n" in ans:
                     break
 
                 if time.time() > end_time:
@@ -834,7 +834,12 @@ class IPAccesser(object):
                 time.sleep(0.01)
 
         logging.debug("Received: %s", ans.encode('string_escape'))
-        return ans[:-2] # remove the end of line characters
+
+        ans, left = ans.split("\r\n", 1)  # remove the end of line characters
+        if left:
+            logging.error("Received too much data, will discard the end: %s",
+                          left.encode('string_escape'))
+        return ans
 
     def flushInput(self):
         """
