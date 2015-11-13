@@ -1358,7 +1358,6 @@ class AndorCam3(model.DigitalCamera):
             # SimCam doesn't support stride
             stride = self.GetInt(u"AOIWidth")
 
-        logging.debug("stride = %d px", stride)
         p = cast(cbuffer, POINTER(ityp))
         ndbuffer = numpy.ctypeslib.as_array(p, (size[1], stride))  # numpy shape is H, W
         dataarray = model.DataArray(ndbuffer, metadata)
