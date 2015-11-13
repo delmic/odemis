@@ -37,11 +37,11 @@ class Light(model.Emitter):
         self.powerSupply.value = False  # immediately turn it off
 
         self._shape = ()
-        self.power = model.FloatContinuous(0., {0., 10.}, unit="W")
+        self.power = model.FloatContinuous(0., (0., 10.), unit="W")
         self.power.subscribe(self._updatePower)
         # just one band: white
-        # emissions is list of 0 <= floats <= 1. Always 1.0: cannot lower it.
-        self.emissions = model.ListVA([1.0], unit="", setter=lambda x: [1.0])
+        # In general emissions is list of 0 <= floats <= 1. Here it's just one value, either 0 or 1.
+        self.emissions = model.ListVA([0], unit="", setter=self._setEmissions)
         # TODO: update spectra VA to support the actual spectra of the lamp
         self.spectra = model.ListVA([(380e-9, 390e-9, 560e-9, 730e-9, 740e-9)],
                                     unit="m", readonly=True)
