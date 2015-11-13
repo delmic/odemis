@@ -80,6 +80,11 @@ class MenuController(object):
 
         # /File/Quit is handled by main
 
+        if self._main_data.role != "delphi":
+            # Remove the Delphi recalibration menu item
+            calib_id = self._main_frame.menu_item_recalibrate.GetId()
+            self._main_frame.GetMenuBar().GetMenu(0).Delete(calib_id)
+
         # /View
 
         # /View/2x2 is handled by the tab controllers

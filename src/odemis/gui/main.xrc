@@ -3,7 +3,6 @@
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
-        <label>File</label>
         <object class="wxMenuItem" name="menu_item_open">
           <label>Open...</label>
           <accel>Ctrl+O</accel>
@@ -39,6 +38,12 @@
             <assign_var>1</assign_var>
           </XRCED>
         </object>
+        <object class="wxMenuItem" name="menu_item_recalibrate">
+          <label>Recalibrate Sample Holder</label>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
         <object class="separator"/>
         <object class="wxMenuItem" name="menu_item_quit">
           <label>Quit</label>
@@ -47,6 +52,7 @@
             <assign_var>1</assign_var>
           </XRCED>
         </object>
+        <label>File</label>
       </object>
       <object class="wxMenu">
         <object class="wxMenuItem" name="menu_item_22view">

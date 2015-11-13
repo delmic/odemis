@@ -187,16 +187,16 @@ class CalibrationProgressDialog(xrcprogress_dialog):
                                      sscale, srot, iscale, irot, iscale_xy, ishear,
                                      resa, resb, hfwa, spotshift)
 
-#         self.update_calibration_time(0)
-        self.time_txt.SetLabel("Calibration completed.")
+        self.update_calibration_time(0)
+        # self.time_txt.SetLabel("Calibration completed.")
         # As the action is complete, rename "Cancel" to "Close"
         self.cancel_btn.SetLabel("Close")
 
-#     @call_in_wx_main
-#     @ignore_dead
-#     def on_calib_update(self, future, past, left):
-#         """ Callback called when the calibration time is updated (either successfully or cancelled) """
-#         self.update_calibration_time(left)
+    # @call_in_wx_main
+    # @ignore_dead
+    # def on_calib_update(self, future, past, left):
+    #     """ Callback called when the calibration time is updated (either successfully or cancelled) """
+    #     self.update_calibration_time(left)
 
 
 def DelphiCalibration(main_data,

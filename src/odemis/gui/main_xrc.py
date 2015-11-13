@@ -41,6 +41,7 @@ class xrcfr_main(wx.Frame):
         self.menu_item_snapshot_as = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_snapshot_as"))
         self.menu_item_reset_finealign = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_reset_finealign"))
         self.menu_item_halt = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_halt"))
+        self.menu_item_recalibrate = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_recalibrate"))
         self.menu_item_quit = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_quit"))
         self.menu_item_22view = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_22view"))
         self.menu_item_play_stream = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_play_stream"))
@@ -473,7 +474,6 @@ def __init_resources():
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
-        <label>File</label>
         <object class="wxMenuItem" name="menu_item_open">
           <label>Open...</label>
           <accel>Ctrl+O</accel>
@@ -509,6 +509,12 @@ def __init_resources():
             <assign_var>1</assign_var>
           </XRCED>
         </object>
+        <object class="wxMenuItem" name="menu_item_recalibrate">
+          <label>Recalibrate Sample Holder</label>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
         <object class="separator"/>
         <object class="wxMenuItem" name="menu_item_quit">
           <label>Quit</label>
@@ -517,6 +523,7 @@ def __init_resources():
             <assign_var>1</assign_var>
           </XRCED>
         </object>
+        <label>File</label>
       </object>
       <object class="wxMenu">
         <object class="wxMenuItem" name="menu_item_22view">
