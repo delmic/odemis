@@ -1,3 +1,12 @@
+odemis (2.2.6-1ubuntu1) precise; urgency=low
+
+  * New version: 2.2.6
+   - Fix error when SEM magnification is updated in SPARC
+   - Ensure the SEM warning is always displayed in DELPHI
+   - Ensure all the local VAs are displayed in SPARC
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Tue, 17 Nov 2015 17:19:42 +0100
+
 odemis (2.2.5-1ubuntu1) precise; urgency=low
 
   * New version: 2.2.5
