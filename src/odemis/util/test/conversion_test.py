@@ -22,7 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from odemis import model
 from odemis.util import conversion
-from odemis.util.conversion import convertToObject, reproduceTypedValue
+from odemis.util.conversion import convert_to_object, reproduce_typed_value
 import unittest
 
 
@@ -89,7 +89,7 @@ class TestConversion(unittest.TestCase):
               ]
 
         for str_val, expo in tc:
-            out = convertToObject(str_val)
+            out = convert_to_object(str_val)
             self.assertEqual(out, expo,
                  "Testing with '%s' -> %s" % (str_val, out))
 
@@ -106,7 +106,7 @@ class TestConversion(unittest.TestCase):
 
         for str_val in tc:
             with self.assertRaises((ValueError, TypeError)):
-                out = convertToObject(str_val)
+                out = convert_to_object(str_val)
 
     def test_reproduceTypedValue_good(self):
         """
@@ -135,7 +135,7 @@ class TestConversion(unittest.TestCase):
               ]
 
         for ex_val, str_val, expo in tc:
-            out = reproduceTypedValue(ex_val, str_val)
+            out = reproduce_typed_value(ex_val, str_val)
             self.assertEqual(out, expo,
                  "Testing with %s / '%s' -> %s" % (ex_val, str_val, out))
 
@@ -154,7 +154,7 @@ class TestConversion(unittest.TestCase):
 
         for ex_val, str_val in tc:
             with self.assertRaises((ValueError, TypeError)):
-                out = reproduceTypedValue(ex_val, str_val)
+                out = reproduce_typed_value(ex_val, str_val)
 
 
 if __name__ == "__main__":

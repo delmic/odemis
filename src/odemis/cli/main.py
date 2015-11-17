@@ -9,15 +9,15 @@ Copyright © 2012 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 # This is a basic command line interface to the odemis back-end
@@ -35,7 +35,7 @@ from odemis import model, dataio, util
 import odemis
 from odemis.cli.video_displayer import VideoDisplayer
 from odemis.util import units
-from odemis.util.conversion import convertToObject
+from odemis.util.conversion import convert_to_object
 from odemis.util.driver import BACKEND_RUNNING, \
     BACKEND_DEAD, BACKEND_STOPPED, get_backend_status, BACKEND_STARTING
 import sys
@@ -371,7 +371,7 @@ def set_attr(comp_name, attr_val_str):
         if not isinstance(attr, model.VigilantAttributeBase):
             raise ValueError("'%s' is not a vigilant attribute of component %s" % (attr_name, comp_name))
 
-        new_val = convertToObject(str_val)
+        new_val = convert_to_object(str_val)
 
         # Special case for floats, due to rounding error, it's very hard to put the
         # exact value if it's an enumerated VA. So just pick the closest one in this
@@ -391,7 +391,7 @@ def set_attr(comp_name, attr_val_str):
 def update_metadata(comp_name, key_val_str):
     """
     update the metadata of the given component with the given key/value
-    key_val_str (dict str->str): key name -> value as a string 
+    key_val_str (dict str->str): key name -> value as a string
     """
     component = get_component(comp_name)
 
@@ -410,7 +410,7 @@ def update_metadata(comp_name, key_val_str):
             except AttributeError:
                 raise ValueError("Metadata key '%s' is unknown" % key_name)
 
-        md[key] = convertToObject(str_val)
+        md[key] = convert_to_object(str_val)
 
     try:
         component.updateMetadata(md)
@@ -466,7 +466,7 @@ def move(comp_name, moves, check_distance=True):
                 raise IOError("Distance of %f m is too big (> %f m), use '--big-distance' to allow the move." %
                               (abs(distance), MAX_DISTANCE))
         else:
-            distance = convertToObject(str_distance)
+            distance = convert_to_object(str_distance)
 
         act_mv[axis_name] = distance
         logging.info(u"Will move %s.%s by %s", comp_name, axis_name,
@@ -516,7 +516,7 @@ def move_abs(comp_name, moves, check_distance=True):
                 raise IOError("Distance of %f m is too big (> %f m), use '--big-distance' to allow the move." %
                               (abs(cur_pos - position), MAX_DISTANCE))
         else:
-            position = convertToObject(str_position)
+            position = convert_to_object(str_position)
 
         # If only a couple of positions are possible, and asking for a float,
         # avoid the rounding error by looking for the closest possible

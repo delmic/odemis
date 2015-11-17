@@ -120,7 +120,7 @@ class TestUnits(unittest.TestCase):
             0.230234543545,
         ]
 
-        for sig in [2, 4, 6]:#(None, 0, 1, 2, 4, 8):
+        for sig in [2, 4, 6]:  # (None, 0, 1, 2, 4, 8):
             for v in values:
                 self.assertEqual(
                     units.round_significant(v, sig),
@@ -132,6 +132,29 @@ class TestUnits(unittest.TestCase):
                 #                         v,
                 #                         units.round_significant(v, sig),
                 #                         units.to_string_pretty(v, sig, "s"))
+
+    def test_decompose_si_prefix(self):
+
+        values = [
+            ("-12 nm", ("-12", "n", "m")),
+            ("12 um", ("12", u"µ", "m")),
+            ("12 um  ", ("12", u"µ", "m")),
+            ("12 um  Hallo!", ("12 um  Hallo!", None, None)),
+            ("3.2 Ggrap", ("3.2", "G", "grap")),
+            ("-13.223    mm", ("-13.223", "m", "m")),
+            ("-13.323 pm", ("-13.323", "p", "m")),
+            ("-156.41e-9kN", ("-156.41e-9", "k", "N")),
+            ("-156.41e-9 GN", ("-156.41e-9", "G", "N")),
+            ("100 m", ("100", None, "m")),
+            ("banaan", ("banaan", None, None)),
+            ("2 x 2 px", ("2 x 2 px", None, None)),
+            ("2 x 2", ("2 x 2", None, None)),
+            ("[3.0, 4.5]", ("[3.0, 4.5]", None, None)),
+        ]
+
+        for str_in, tuple_out in values:
+            self.assertEqual(units.decompose_si_prefix(str_in), tuple_out)
+
 
 if __name__ == "__main__":
     unittest.main()

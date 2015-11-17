@@ -34,8 +34,9 @@ import numbers
 import odemis.gui
 from odemis.gui.util.widgets import VigilantAttributeConnector, AxisConnector
 from odemis.model import NotApplicableError, hasVA
-from odemis.util.conversion import reproduceTypedValue
-from odemis.util.units import readable_str, SI_PREFIXES
+from odemis.util.conversion import reproduce_typed_value
+from odemis.util.units import readable_str, SI_PREFIXES, to_string_si_prefix, decompose_si_prefix, \
+    si_scale_val
 import re
 import wx
 from wx.lib.pubsub import pub
@@ -425,6 +426,8 @@ def format_choices(choices, uniformat=True, si=None):
     Args:
         choices (Iterable): The choices to be formatted or None
         uniformat (bool): If True, all the values will be formatted using the same si unit
+        si (bool): si unit to format the choice values to. This argument takes precidence over the
+            `uniformat` argument.
 
     Returns:
         ([(value, formatted value)], si prefix) or (None, None)
@@ -441,23 +444,19 @@ def format_choices(choices, uniformat=True, si=None):
         elif si is not None:
             fmt, choices_si_prefix = utun.si_scale_list(choices, si)
             choices_formatted = zip(choices, [u"%g" % c for c in fmt])
-        elif (
-                uniformat and len(choices) > 1 and
-                all([isinstance(c, numbers.Real) for c in choices])
-        ):
-            # Try to share the same unit prefix, if the range is not too big
-            choices_abs = set(abs(c) for c in choices)
-            # 0 doesn't affect the unit prefix but is annoying for divisions
-            choices_abs.discard(0)
-            mn, mx = min(choices_abs), max(choices_abs)
-            if mx / mn > 1000:
-                # TODO: use readable_str(c, unit, sig=3)? is it more readable?
-                # => need to not add prefix+units from the combo box
-                # (but still handle differently for radio)
+        elif len(choices) > 1 and all([isinstance(c, numbers.Real) for c in choices]):
+            try:
+                if uniformat:
+                    fmt, choices_si_prefix = utun.si_scale_list(choices)
+                    choices_formatted = zip(choices, [u"%g" % c for c in fmt])
+                else:
+                    fmt = []
+                    for choice in choices:
+                        fmt.append(to_string_si_prefix(choice))
+                    return zip(choices, fmt), choices_si_prefix
+            except Exception:
+                logging.exception("Formatting error!")
                 choices_formatted = [(c, choice_to_str(c)) for c in choices]
-            else:
-                fmt, choices_si_prefix = utun.si_scale_list(choices)
-                choices_formatted = zip(choices, [u"%g" % c for c in fmt])
         else:
             choices_formatted = [(c, choice_to_str(c)) for c in choices]
 
@@ -497,10 +496,11 @@ def create_formatted_setter(value_ctrl, val, val_unit, sig=3):
     return value_formatter
 
 
-def choice_to_str(choice):
+def choice_to_str(choice, js=None):
+    """ Return a list of choices, where iterable choices are joined by an `x` """
     if not isinstance(choice, collections.Iterable):
         choice = [unicode(choice)]
-    return u" x ".join([unicode(c) for c in choice])
+    return (js if js else u" x ").join([unicode(c) for c in choice])
 
 
 def label_to_human(camel_label):
@@ -536,7 +536,8 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
     min_val, max_val, choices, unit = process_setting_metadata(hw_comp, va, conf)
     # Format the provided choices
     si = conf.get('si', None)
-    choices_formatted, choices_si_prefix = format_choices(choices, si=si)
+    si_unif = conf.get('si_unif', True)
+    choices_formatted, choices_si_prefix = format_choices(choices, uniformat=si_unif, si=si)
     # Determine the control type to use, either from config or some 'smart' default
     control_type = determine_control_type(hw_comp, va, choices_formatted, conf)
 
@@ -693,8 +694,12 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
         lbl_ctrl, value_ctrl = container.add_combobox_control(label_text)
 
         # Set choices
-        for choice, formatted in choices_formatted:
-            value_ctrl.Append(u"%s %s" % (formatted, (choices_si_prefix or "") + unit), choice)
+        if choices_si_prefix:
+            for choice, formatted in choices_formatted:
+                value_ctrl.Append(u"%s %s" % (formatted, choices_si_prefix + unit), choice)
+        else:
+            for choice, formatted in choices_formatted:
+                value_ctrl.Append(u"%s%s" % (formatted, unit), choice)
 
         # A small wrapper function makes sure that the value can
         # be set by passing the actual value (As opposed to the text label)
@@ -712,7 +717,7 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
                 return ctrl.SetValue(txt)
 
         # equivalent wrapper function to retrieve the actual value
-        def cb_get(ctrl=value_ctrl, va=va):
+        def cb_get(ctrl=value_ctrl, va=va, u=unit):
             ctrl_value = ctrl.GetValue()
             # Try to use the predefined value if it's available
             i = ctrl.GetSelection()
@@ -727,10 +732,18 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
                 logging.debug("Parsing combobox free text value %s", ctrl_value)
                 va_val = va.value
                 # Try to find a good corresponding value inside the string
-                new_val = reproduceTypedValue(va_val, ctrl_value)
+
+                # Try and find an SI prefix
+                str_valval, str_si, _ = decompose_si_prefix(ctrl_value, unit=u)
+
+                new_val = reproduce_typed_value(va_val, str_valval)
+
                 if isinstance(new_val, collections.Iterable):
                     # be less picky, by shortening the number of values if it's too many
                     new_val = new_val[:len(va_val)]
+
+                # If an SI prefix was found, scale the new value
+                new_val = si_scale_val(new_val, str_si)
 
                 # if it ends up being the same value as before the combobox will not update, so
                 # force it now
