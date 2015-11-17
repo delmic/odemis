@@ -440,11 +440,11 @@ class SECOMTestCase(unittest.TestCase):
         # => stream emission is based on filter
         self.assertEqual(s1.excitation.choices, set(self.light.spectra.value))
         self.assertEqual(set(s1.emission.choices),
-                         set(conversion.ensureTuple(em_choices.values())))
+                         set(conversion.ensure_tuple(em_choices.values())))
 
         em_idx = self.light_filter.position.value["band"]
         em_hw = em_choices[em_idx]
-        self.assertEqual(s1.emission.value, conversion.ensureTuple(em_hw))
+        self.assertEqual(s1.emission.value, conversion.ensure_tuple(em_hw))
 
         # => stream excitation is light spectra closest below emission
         self.assertIn(s1.excitation.value, self.light.spectra.value)
@@ -464,11 +464,11 @@ class SECOMTestCase(unittest.TestCase):
         # => stream emission is based on filter
         self.assertEqual(s2.excitation.choices, set(self.light.spectra.value))
         self.assertEqual(set(s2.emission.choices),
-                         set(conversion.ensureTuple(em_choices.values())))
+                         set(conversion.ensure_tuple(em_choices.values())))
 
         em_idx = self.light_filter.position.value["band"]
         em_hw = em_choices[em_idx]
-        self.assertEqual(s2.emission.value, conversion.ensureTuple(em_hw))
+        self.assertEqual(s2.emission.value, conversion.ensure_tuple(em_hw))
 
         # => stream excitation is based on light.emissions
         self.assertIn(s2.excitation.value, self.light.spectra.value)

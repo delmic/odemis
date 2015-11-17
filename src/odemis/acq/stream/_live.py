@@ -767,7 +767,7 @@ class FluoStream(CameraStream):
         em_choices = em_filter.axes["band"].choices.copy()
         # convert any list into tuple, as lists cannot be put in a set
         for k, v in em_choices.items():
-            em_choices[k] = conversion.ensureTuple(v)
+            em_choices[k] = conversion.ensure_tuple(v)
 
         # invert the dict, to directly convert the emission to the position value
         self._emission_to_idx = dict((v, k) for k, v in em_choices.items())

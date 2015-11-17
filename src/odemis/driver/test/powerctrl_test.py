@@ -170,25 +170,25 @@ class TestMemory(unittest.TestCase):
         self.assertGreater(len(self.ids), 0)
 
         for id in self.ids:
-            backup = self.pcu._readMemory(id, "21", len(self.dummy) // 2)
+            backup = self.pcu.readMemory(id, "21", len(self.dummy) // 2)
             # Write and read back
-            self.pcu._writeMemory(id, "21", self.dummy)
-            ans = self.pcu._readMemory(id, "21", len(self.dummy) // 2)
+            self.pcu.writeMemory(id, "21", self.dummy)
+            ans = self.pcu.readMemory(id, "21", len(self.dummy) // 2)
             self.assertEqual(self.dummy, ans)
 
             # read part of the data sent
-            ans = self.pcu._readMemory(id, "23", (len(self.dummy) - 8) // 2)
+            ans = self.pcu.readMemory(id, "23", (len(self.dummy) - 8) // 2)
             self.assertEqual(self.dummy[4:-4], ans)
 
             # Try to send invalid number of characters
             with self.assertRaises(IOError):
-                self.pcu._writeMemory(id[:-1], "21", self.dummy)
+                self.pcu.writeMemory(id[:-1], "21", self.dummy)
             with self.assertRaises(IOError):
-                self.pcu._writeMemory(id, "2", self.dummy)
+                self.pcu.writeMemory(id, "2", self.dummy)
             with self.assertRaises(IOError):
-                self.pcu._writeMemory(id, "21", self.dummy[:-1])
+                self.pcu.writeMemory(id, "21", self.dummy[:-1])
             # Write back whatever was there before the test
-            self.pcu._writeMemory(id, "21", backup)
+            self.pcu.writeMemory(id, "21", backup)
 
 
 if __name__ == "__main__":

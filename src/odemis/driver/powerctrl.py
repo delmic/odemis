@@ -44,7 +44,7 @@ class PowerControlUnit(model.PowerSupplier):
     communication with the PCU firmware.
     '''
 
-    def __init__(self, name, role, port, pin_map=None, powered=None, delay=None, **kwargs):
+    def __init__(self, name, role, port, pin_map=None, powered=None, delay=None, init=None, **kwargs):
         '''
         port (str): port name
         pin_map (dict of str -> int): names of the components
@@ -52,6 +52,8 @@ class PowerControlUnit(model.PowerSupplier):
         powered (list of str): list of powered components
         delay (dict str -> float): time to wait for each component after it is
             turned on.
+        init (dict str -> boolean): turn on/off the corresponding component upon
+            initialization.
         Raise an exception if the device cannot be opened
         '''
         powered = powered or {}
@@ -75,8 +77,10 @@ class PowerControlUnit(model.PowerSupplier):
         self._pin_map = pin_map
 
         delay = delay or {}
-        self._delay = delay
-        self._last_start = dict.fromkeys(delay, None)
+        # fill the missing pairs with 0 values
+        self._delay = dict.fromkeys(pin_map, 0)
+        self._delay.update(delay)
+        self._last_start = dict.fromkeys(self._delay, time.time())
 
         # will take care of executing switch asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
@@ -85,11 +89,25 @@ class PowerControlUnit(model.PowerSupplier):
         self.supplied = model.VigilantAttribute(self._supplied, readonly=True)
         self._updateSupplied()
 
+        # just remove all None elements from init dict, so then you can pass it
+        # to supply()
+        for k, v in init.items():
+            if v is None:
+                del init[k]
+        self._init = init
+        self.supply(self._init)
+
         self._mem_ids = self._getIdentities()
         self.memoryIDs = model.ListVA(self._mem_ids, readonly=True, getter=self._getIdentities)
 
     @isasync
     def supply(self, sup):
+        """
+        Change the power supply to the defined state for each component given.
+        This is an asynchronous method.
+        sup dict(string-> boolean): name of the component and new state
+        returns (Future): object to control the supply request
+        """
         if not sup:
             return model.InstantaneousFuture()
         self._checkSupply(sup)
@@ -103,19 +121,27 @@ class PowerControlUnit(model.PowerSupplier):
         for comp, val in sup.items():
             # find pin and values corresponding to component
             pin = self._pin_map[comp]
+            # should always be able to get the value, default values just to be
+            # on the safe side
             delay = self._delay.get(comp, 0)
-            last_start = self._last_start.get(comp, None)
+            last_start = self._last_start.get(comp, time.time())
             state = self.supplied.value[comp]
+            # only for the very first time, then the init dict should become
+            # empty
+            if comp in self._init:
+                val = self._init[comp]
+                delay = 0
+                del self._init[comp]
             if val:
                 self._sendCommand("PWR " + str(pin) + " 1")
-                # if it is the first time we start it, wait anyway
-                if (last_start is None) or (state is False):
-                    self._last_start[comp] = time.time()
-                    time.sleep(delay)
-                else:
-                    # wait the time remaining
+                if state:
+                    # Already on, wait the time remaining
                     remaining = (last_start + delay) - time.time()
                     time.sleep(max(0, remaining))
+                else:
+                    # wait full time
+                    self._last_start[comp] = time.time()
+                    time.sleep(delay)
             else:
                 self._sendCommand("PWR " + str(pin) + " 0")
         self._updateSupplied()
@@ -149,7 +175,7 @@ class PowerControlUnit(model.PowerSupplier):
     def _getIdentification(self):
         return self._sendCommand("*IDN?")
 
-    def _writeMemory(self, id, address, data):
+    def writeMemory(self, id, address, data):
         """
         Write data to EEPROM.
         id (str): EEPROM registration number #hex (little-endian format)
@@ -158,7 +184,7 @@ class PowerControlUnit(model.PowerSupplier):
         """
         self._sendCommand("WMEM %s %s %s" % (id, address, data))
 
-    def _readMemory(self, id, address, length):
+    def readMemory(self, id, address, length):
         """
         Read data from EEPROM.
         id (str): EEPROM registration number #hex (little-endian format)
