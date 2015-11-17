@@ -596,12 +596,11 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             if not self._focus_overlay:
                 self._focus_overlay = self.add_view_overlay(view_overlay.FocusOverlay(self))
 
+            change = evt.step_value * 2  # magic constant that feels fast enough
             if evt.ShiftDown():
-                softener = 0.1  # softer
-            else:
-                softener = 1
+                change *= 0.1  # softer
 
-            self.on_extra_axis_move(1, evt.step_value * softener)
+            self.on_extra_axis_move(1, change)
 
             # Set a timer to clear the overlay in x seconds
             self.focus_timer = wx.CallLater(5000, self._clear_knob_focus)
