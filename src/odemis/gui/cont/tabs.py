@@ -792,7 +792,7 @@ class SparcAcquisitionTab(Tab):
             # with the old magnification, which would confuse fit_view_to_next_image.
             cur_stream.is_active.value = False
             cur_stream.is_active.value = True
-        self.panel.vp_sparc_tl.canvas.fit_view_to_next_image = True
+        self.main_frame.vp_sparc_tl.canvas.fit_view_to_next_image = True
 
     def on_acquisition(self, is_acquiring):
         # TODO: Make sure nothing can be modified during acquisition
