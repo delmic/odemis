@@ -25,8 +25,16 @@ SPARC2: {
     init: {
         port: "/dev/ttyPMT*",
         pin_map: {"Calibration Light": 0, "CL PMT control unit": 3,
-                 "Camera": 4, "Spectral Camera": 5, "Spectrograph": 6,
-                 "Optical Actuators": 2},
+                  "Camera": 4, "Spectral Camera": 5, "Spectrograph": 6,
+                  "Optical Actuators": 2},
+        delay: { # Time it takes before a component is accessible
+            "Calibration Light": 0, # To turn on/off the light, it's immediate
+            "CL PMT control unit": 1,
+            "Camera": 3,
+            "Spectral Camera": 3,
+            "Spectrograph": 70, # SR-193 needs a looong time to initialise
+            "Optical Actuators": 1
+        },
         powered: ["Calibration Light", "CL PMT control unit",
                   "Camera", "Spectral Camera", "Spectrograph",
                   "Optical Actuators"]
@@ -128,6 +136,7 @@ SPARC2: {
     power_supplier: "Power Control Unit",
     init: {
        device: 0,
+       transpose: [-1, -2], # flip both axes X and Y
     },
 }
 
@@ -255,7 +264,7 @@ SPARC2: {
     },
     metadata: {
         # Default position of the lens (can be improved by user)
-        FAV_POS_ACTIVE: {"x": -0.045} # m
+        FAV_POS_ACTIVE: {"x": 0.0226112848} # m
     },
     affects: ["Camera", "Spectral Camera"],
 }
@@ -298,8 +307,8 @@ SPARC2: {
     init: {
         axis_name: "cl-sel",
         positions: {
-            0: "on",
-            0.01: "off"
+            0.00123453: "on",
+            0.0388107: "off"
         },
     },
     affects: ["Camera", "Spectral Camera", "CL Detector"],
@@ -335,6 +344,7 @@ SPARC2: {
         axes: ["s", "l"],
         ustepsize: [5.9e-9, 5.9e-9], # m/µstep
         refproc: "Standard",
+        refswitch: {"s": 0, "l": 0},
     },
     metadata: {
         # Default position of the mirror engaged (will be improved during alignment)
