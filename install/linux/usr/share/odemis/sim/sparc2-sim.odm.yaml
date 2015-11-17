@@ -35,6 +35,13 @@ SPARC2: {
             "Spectrograph": 10,
             "Optical Actuators": 1
         },
+        init: { # Which component to power on from the very beginning (to save time)
+            "CL PMT control unit": True,
+            "Camera": True,
+            "Spectral Camera": True,
+            "Spectrograph": True,
+            "Optical Actuators": True
+        },
         powered: ["Calibration Light", "CL PMT control unit",
                   "Camera", "Spectral Camera", "Spectrograph",
                   "Optical Actuators"]

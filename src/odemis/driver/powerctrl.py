@@ -89,13 +89,12 @@ class PowerControlUnit(model.PowerSupplier):
         self.supplied = model.VigilantAttribute(self._supplied, readonly=True)
         self._updateSupplied()
 
-        # just remove all None elements from init dict, so then you can pass it
-        # to supply()
+        init = init or {}
+        # Remove all None's from the dict, so it can be passed as-is to _doSupply()
         for k, v in init.items():
             if v is None:
                 del init[k]
-        self._init = init
-        self.supply(self._init)
+        self._doSupply(init, apply_delay=False)
 
         self._mem_ids = self._getIdentities()
         self.memoryIDs = model.ListVA(self._mem_ids, readonly=True, getter=self._getIdentities)
@@ -114,29 +113,27 @@ class PowerControlUnit(model.PowerSupplier):
 
         return self._executor.submit(self._doSupply, sup)
 
-    def _doSupply(self, sup):
+    def _doSupply(self, sup, apply_delay=True):
         """
         supply power
+        apply_delay (bool): If true, wait the amount of time requested in delay
+          after turning on the power
         """
         for comp, val in sup.items():
             # find pin and values corresponding to component
             pin = self._pin_map[comp]
             # should always be able to get the value, default values just to be
             # on the safe side
-            delay = self._delay.get(comp, 0)
-            last_start = self._last_start.get(comp, time.time())
-            state = self.supplied.value[comp]
-            # only for the very first time, then the init dict should become
-            # empty
-            if comp in self._init:
-                val = self._init[comp]
+            if apply_delay:
+                delay = self._delay.get(comp, 0)
+            else:
                 delay = 0
-                del self._init[comp]
+            state = self.supplied.value[comp]
             if val:
                 self._sendCommand("PWR " + str(pin) + " 1")
                 if state:
                     # Already on, wait the time remaining
-                    remaining = (last_start + delay) - time.time()
+                    remaining = (self._last_start[comp] + delay) - time.time()
                     time.sleep(max(0, remaining))
                 else:
                     # wait full time
