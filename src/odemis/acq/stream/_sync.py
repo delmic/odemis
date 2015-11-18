@@ -622,7 +622,6 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     self._acq_main_complete.clear()
                     self._acq_rep_complete.clear()
                     self._main_df.synchronizedOn(None)
-                    # self._main_df.subscribe(self._ssOnMainImage)
                     time.sleep(0)  # give more chances spot has been already processed
                     start = time.time()
                     ccd_trigger.notify()
@@ -713,6 +712,9 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     # no need to retry
                     break
 
+            # Done!
+            self._main_df.unsubscribe(self._ssOnMainImage)
+            self._main_df.synchronizedOn(None)
             self._rep_df.unsubscribe(self._ssOnRepetitionImage)
             self._rep_df.synchronizedOn(None)
 
