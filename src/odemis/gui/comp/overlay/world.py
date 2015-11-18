@@ -519,7 +519,7 @@ class SpotModeOverlay(WorldOverlay, DragMixin, SpotModeBase):
     def __init__(self, cnvs, spot_va=None):
         WorldOverlay.__init__(self, cnvs)
         DragMixin.__init__(self)
-        SpotModeBase.__init__(self, cnvs, spot_va=None)
+        SpotModeBase.__init__(self, cnvs, spot_va=spot_va)
 
         self.w_pos = None
 

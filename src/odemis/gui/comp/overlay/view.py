@@ -1216,12 +1216,10 @@ class SpotModeOverlay(base.ViewOverlay, base.DragMixin, base.SpotModeBase):
 
 
     """
-    # TODO: Share code or combine with the world view version
-
     def __init__(self, cnvs, spot_va=None):
         base.ViewOverlay.__init__(self, cnvs)
         base.DragMixin.__init__(self)
-        base.SpotModeBase.__init__(self, cnvs, spot_va=None)
+        base.SpotModeBase.__init__(self, cnvs, spot_va=spot_va)
 
         self.v_pos = None
 
