@@ -2575,8 +2575,8 @@ class Scanner(model.Emitter):
                                          (parent._device_name, ndioc))
                     comedi.dio_config(parent._device, parent._dio_subdevice, c, comedi.OUTPUT)
 
-        self._scan_state = True  # To force changing the digital output when the state go to False
-        self.indicate_scan_state(False)
+        # It will set up ._shape and .parent
+        model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
 
         # TODO: if fast park is required, we can only allow the same ranges as
         # for the standard scanning, but we don't handle it now as it's more a
@@ -2586,8 +2586,8 @@ class Scanner(model.Emitter):
         # TODO: only set this to True if the order of the conversion polynomial <=1
         self._can_generate_raw_directly = True
 
-        # It will set up ._shape and .parent
-        model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
+        self._scan_state = True  # To force changing the digital output when the state go to False
+        self.indicate_scan_state(False)
 
         # In theory the maximum resolution depends on the X/Y ranges, the actual
         # ranges that can be used and the maxdata. It also depends on the noise

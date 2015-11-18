@@ -24,19 +24,18 @@ SPARC2: {
     role: "power-control",
     init: {
         port: "/dev/ttyPMT*",
-        pin_map: {"Calibration Light": 0, "CL PMT control unit": 3,
+        pin_map: {"Calibration Light": 0, "CL PMT control unit": 1,
                   "Camera": 4, "Spectral Camera": 5, "Spectrograph": 6,
                   "Optical Actuators": 2},
         delay: { # Time it takes before a component is accessible
             "Calibration Light": 0, # To turn on/off the light, it's immediate
-            "CL PMT control unit": 1,
+            "CL PMT control unit": 0,
             "Camera": 3,
             "Spectral Camera": 3,
             "Spectrograph": 70, # SR-193 needs a looong time to initialise
             "Optical Actuators": 1
         },
         init: { # Which component to power on from the very beginning (to save time)
-            "CL PMT control unit": True,
             "Camera": True,
             "Spectral Camera": True,
             "Spectrograph": True,

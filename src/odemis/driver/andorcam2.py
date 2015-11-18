@@ -169,6 +169,7 @@ class AndorCapabilities(Structure):
         CAMERATYPE_IXON: "iXon",
         CAMERATYPE_IDUS: "iDus",
         CAMERATYPE_IVAC_CCD: "iVac CCD",
+        CAMERATYPE_NEWTON: "Newton",
         }
 
 

@@ -29,22 +29,18 @@ SPARC2: {
                   "Optical Actuators": 2},
         delay: { # Time it takes before a component is accessible
             "Calibration Light": 0, # To turn on/off the light, it's immediate
-            "CL PMT control unit": 1,
+            "CL PMT control unit": 0,
             "Camera": 3,
             "Spectral Camera": 3,
             "Spectrograph": 10,
             "Optical Actuators": 1
         },
         init: { # Which component to power on from the very beginning (to save time)
-            "CL PMT control unit": True,
             "Camera": True,
             "Spectral Camera": True,
             "Spectrograph": True,
             "Optical Actuators": True
         },
-        powered: ["Calibration Light", "CL PMT control unit",
-                  "Camera", "Spectral Camera", "Spectrograph",
-                  "Optical Actuators"]
     }
 }
 
