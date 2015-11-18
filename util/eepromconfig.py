@@ -1,0 +1,147 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+'''
+Created on November 2015
+
+@author: Kimon Tsitsikas
+
+Copyright © 2015 Kimon Tsitsikas, Delmic
+
+eepromconfig is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
+Foundation.
+
+eepromconfig is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+eepromconfig. If not, see http://www.gnu.org/licenses/.
+'''
+
+import argparse
+import logging
+from odemis.driver import powerctrl
+import re
+import sys
+import yaml
+import time
+
+
+def read_param(ctrl, id, filename):
+    """
+    We use this method to get a file that contains all the data written in the
+    EEPROM with the given id.
+    id (str): EEPROM registration number #hex (little-endian format)
+    filename (str): Name of YAML file
+    """
+    if id not in ctrl.memoryIDs.value:
+        raise KeyError("There was no EEPROM with the given id found")
+    mem_yaml = ctrl.readEEPROM(id)
+    filename.write("%s" % (mem_yaml))
+    filename.close()
+
+def write_param(ctrl, id, filename):
+    """
+    Using this method we write all the information of a YAML file to the EEPROM
+    with the given ID. To this end, this method first turns the YAML to a byte
+    stream that is then split and written in chunks to the EEPROM.
+    id (str): EEPROM registration number #hex (little-endian format)
+    filename (str): Name of YAML file
+    """
+    if id not in ctrl.memoryIDs.value:
+        raise KeyError("There was no EEPROM with the given id found")
+    # with open(filename) as data_file:
+    data = yaml.load(filename)
+    str = yaml.dump(data)
+    hex = str.encode("hex")
+    addr = 0
+    while hex != "":
+        # send in 8byte chunks if possible
+        ctrl.writeMemory(id, "%0.4X" % addr, hex[:16])
+        addr += 8
+        hex = hex[16:]
+
+def reset_mem(ctrl, id):
+    """
+    Using this method we write all the information of a YAML file to the EEPROM
+    with the given ID. To this end, this method first turns the YAML to a byte
+    stream that is then split and written in chunks to the EEPROM.
+    id (str): EEPROM registration number #hex (little-endian format)
+    filename (str): Name of YAML file
+    """
+    if id not in ctrl.memoryIDs.value:
+        raise KeyError("There was no EEPROM with the given id found")
+    # FIXME better way to know when end of memory is reached
+    addr = 0
+    while addr < powerctrl.EEPROM_CAPACITY:
+        # send in 8byte chunks if possible
+        ctrl.writeMemory(id, "%0.4X" % addr, "0000000000000000")
+        addr += 8
+
+def main(args):
+    """
+    Handles the command line arguments
+    args is the list of arguments passed
+    return (int): value to return to the OS as program exit code
+    """
+
+    # arguments handling
+    parser = argparse.ArgumentParser(prog="eepromconfig",
+                        description="Read/write parameters in an EEPROM")
+
+    parser.add_argument("--log-level", dest="loglev", metavar="<level>", type=int,
+                        default=1, help="set verbosity level (0-2, default = 1)")
+    parser.add_argument('--reset', dest="reset", action="store_true", default=False,
+                        help="Reset the EEPROM to the factory defaults")
+    parser.add_argument('--read', dest="read", type=argparse.FileType('w'),
+                        help="Will read all the parameters and save them in a file (use - for stdout)")
+    parser.add_argument('--write', dest="write", type=argparse.FileType('r'),
+                        help="Will write all the parameters as read from the file (use - for stdin)")
+
+    parser.add_argument('--id', dest="id",
+                        help="EEPROM registration number")
+
+    options = parser.parse_args(args[1:])
+
+    # Set up logging before everything else
+    if options.loglev < 0:
+        logging.error("Log-level must be positive.")
+        return 127
+    loglev_names = (logging.WARNING, logging.INFO, logging.DEBUG)
+    loglev = loglev_names[min(len(loglev_names) - 1, options.loglev)]
+    logging.getLogger().setLevel(loglev)
+
+    try:
+        if options.id is None:
+            raise ValueError("Need to either specify the EEPROM id")
+
+        ctrl = powerctrl.PowerControlUnit("Power control unit", "config",
+                                   port="/dev/ttyPMT*")
+        logging.info("Connected to %s", ctrl._hwVersion)
+
+        if options.reset:
+            reset_mem(ctrl, options.id)
+
+        if options.read:
+            read_param(ctrl, options.id, options.read)
+        elif options.write:
+            write_param(ctrl, options.id, options.write)
+
+        ctrl.terminate()
+    except ValueError as exp:
+        logging.error("%s", exp)
+        return 127
+    except IOError as exp:
+        logging.error("%s", exp)
+        return 129
+    except Exception:
+        logging.exception("Unexpected error while performing action.")
+        return 130
+
+    return 0
+
+
+if __name__ == '__main__':
+    ret = main(sys.argv)
+    exit(ret)
