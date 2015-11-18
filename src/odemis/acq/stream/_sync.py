@@ -567,9 +567,20 @@ class SEMCCDMDStream(MultipleDetectorStream):
             # We need to use synchronisation event because without it, either we
             # use .get() but it's not possible to cancel the acquisition, or we
             # subscribe/unsubscribe for each image, but the overhead is high.
-            trigger = self._rep_det.softwareTrigger
-            self._rep_df.synchronizedOn(trigger)
+            ccd_trigger = self._rep_det.softwareTrigger
+            self._rep_df.synchronizedOn(ccd_trigger)
             self._rep_df.subscribe(self._ssOnRepetitionImage)
+
+            # Instead of subscribing/unsubscribing to the SEM for each pixel,
+            # we keep subscribed, but request to be synchronised.
+            # To start scanning we remove the synchronisation. To stop scanning
+            # we put back the synchronisation (and never send any trigger event).
+            # Note that we cannot just send one trigger event, because we want
+            # the scanning to keep going on as long as the CCD acquisition takes
+            # place. TODO: send the event from _ssOnMainImage()?
+            sem_trigger = self._main_det.softwareTrigger
+            self._main_df.synchronizedOn(sem_trigger)
+            self._main_df.subscribe(self._ssOnMainImage)
 
             tot_num = numpy.prod(rep)
             n = 0  # number of points acquired so far
@@ -610,10 +621,11 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 while True:
                     self._acq_main_complete.clear()
                     self._acq_rep_complete.clear()
-                    self._main_df.subscribe(self._ssOnMainImage)
+                    self._main_df.synchronizedOn(None)
+                    # self._main_df.subscribe(self._ssOnMainImage)
                     time.sleep(0)  # give more chances spot has been already processed
                     start = time.time()
-                    trigger.notify()
+                    ccd_trigger.notify()
 
                     timedout = not self._acq_rep_complete.wait(rep_time * 4 + 5)
                     if self._acq_state == CANCELLED:
@@ -642,7 +654,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                             # In three failures we just give up
                             raise IOError("Repetition stream acquisition repeatedly fails to synchronize")
                         else:
-                            self._main_df.unsubscribe(self._ssOnMainImage)
+                            self._main_df.synchronizedOn(sem_trigger)
                             # Ensure we don't keep the SEM data for this run
                             self._main_data = self._main_data[:n]
                             # Stop and restart the acquisition, hoping this time we will synchronize
@@ -656,12 +668,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     if not self._acq_main_complete.wait(sem_time * 1.5 + 5):
                         raise TimeoutError("Acquisition of SEM pixel %s timed out after %g s"
                                            % (i, sem_time * 1.5 + 5))
-                    # TODO: we don't really need to stop it, we could have a small
-                    # dwell time, move the ebeam to the new position, and as soon as
-                    # we get next acquisition we can expect the spot has moved. The
-                    # advantage would be to avoid setting the ebeam back to resting
-                    # position, and reduce overhead of stopping/starting.
-                    self._main_df.unsubscribe(self._ssOnMainImage)
+                    self._main_df.synchronizedOn(sem_trigger)
 
                     if self._acq_state == CANCELLED:
                         raise CancelledError()
@@ -685,9 +692,13 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     if self._dc_estimator is not None and n_til_dc <= 0:
                         n_til_dc = pxs_dc_period.next()
 
-                        # Cannot cancel during this time, but hopefully it's short
                         # Acquisition of anchor area
+                        # Cannot cancel during this time, but hopefully it's short
+                        self._main_df.unsubscribe(self._ssOnMainImage)
+                        self._main_df.synchronizedOn(None)
                         self._dc_estimator.acquire()
+                        self._main_df.synchronizedOn(sem_trigger)
+                        self._main_df.subscribe(self._ssOnMainImage)
 
                         if self._acq_state == CANCELLED:
                             raise CancelledError()
@@ -727,6 +738,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
             # make sure it's all stopped
             self._main_df.unsubscribe(self._ssOnMainImage)
+            self._main_df.synchronizedOn(None)
             self._rep_df.unsubscribe(self._ssOnRepetitionImage)
             self._rep_df.synchronizedOn(None)
 
