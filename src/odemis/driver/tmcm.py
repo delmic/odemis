@@ -1060,14 +1060,24 @@ class TMCLController(model.Actuator):
         """
         self._refproc_cancelled[axis].clear()
 
-        logging.info("Starting referencing of axis %d", axis)
         if not self._isFullyPowered():
-            raise IOError("Device is not powered, so motors cannot move")
+            raise IOError("Device is not powered, so axis %d cannot reference" % (axis,))
 
         # Turn on the ref switch
         if self._refswitch.get(axis) is not None:
             self.SetIO(2, self._refswitch[axis], 1)
         try:
+            # Read the current reference switch value
+            refmethod = self.GetAxisParam(axis, 193)
+            if refmethod & 0xf >= 5:
+                refs = 9  # Home switch
+            elif refmethod & 0x40:
+                refs = 10  # Right switch
+            else:
+                refs = 11  # Left switch
+            refsval = self.GetAxisParam(axis, refs)
+            logging.info("Starting referencing of axis %d (ref switch %d = %d)", axis, refs, refsval)
+
             self.StartRefSearch(axis)
         except Exception:
             # turn off the reference switch

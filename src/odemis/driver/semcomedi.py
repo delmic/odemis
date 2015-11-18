@@ -2405,7 +2405,7 @@ class Writer(Accesser):
         # Wait until SDF_RUNNING is gone, then cancel() to reset SDF_BUSY
         comedi.cancel(self._device, self._subdevice)
 
-        logging.debug("Write finished after %g s, while expected  %g s",
+        logging.debug("Write finished after %g s, while expected %g s",
                       time.time() - self._begin, self.duration)
 
     def cancel(self):
@@ -2852,7 +2852,7 @@ class Scanner(model.Emitter):
                 logging.debug("Setting digital output port %d to %d", c, v)
                 comedi.dio_write(self.parent._device, self.parent._dio_subdevice, c, v)
             except Exception:
-                logging.warning("Failed to change digital output port %d", exc_info=True)
+                logging.warning("Failed to change digital output port %d", c, exc_info=True)
 
     def get_scan_data(self, nrchans):
         """
