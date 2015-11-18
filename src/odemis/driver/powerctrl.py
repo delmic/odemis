@@ -44,20 +44,18 @@ class PowerControlUnit(model.PowerSupplier):
     communication with the PCU firmware.
     '''
 
-    def __init__(self, name, role, port, pin_map=None, powered=None, delay=None, init=None, **kwargs):
+    def __init__(self, name, role, port, pin_map=None, delay=None, init=None, **kwargs):
         '''
         port (str): port name
         pin_map (dict of str -> int): names of the components
           and the pin where the component is connected.
-        powered (list of str): list of powered components
         delay (dict str -> float): time to wait for each component after it is
             turned on.
         init (dict str -> boolean): turn on/off the corresponding component upon
             initialization.
         Raise an exception if the device cannot be opened
         '''
-        powered = powered or {}
-        self.powered = powered
+        self.powered = pin_map.keys()
         model.PowerSupplier.__init__(self, name, role, **kwargs)
 
         # TODO: catch errors and convert to HwError

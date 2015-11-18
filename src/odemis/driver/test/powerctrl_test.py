@@ -32,11 +32,11 @@ TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 CLASS = powerctrl.PowerControlUnit
 if TEST_NOHW:
     # Test using the simulator
-    KWARGS = dict(name="test", role="power_control", powered=["sem", "sed"], pin_map={
+    KWARGS = dict(name="test", role="power_control", pin_map={
                     "sem": 0, "sed": 1}, port="/dev/fake")
 else:
     # Test using the hardware
-    KWARGS = dict(name="test", role="power_control", powered=["sem", "sed"], pin_map={
+    KWARGS = dict(name="test", role="power_control", pin_map={
                     "sem": 0, "sed": 1}, port="/dev/ttyPMT*")
 
 # Control unit used for PCU testing

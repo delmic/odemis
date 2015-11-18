@@ -805,18 +805,19 @@ class FixedPositionsActuator(model.Actuator):
         if not self._referenced.get(axis, True) or (self._cycle and axis in self._referenced):
             # The initialisation will fail if the referencing fails
             f = self.reference({axis})
-            f.add_done_callback(self.on_done)
+            # If not at a known position => move to the closest known position
+            # Queue the move so it is executed before any other move requested
+            nearest = util.find_closest(self._child.position.value[self._caxis], self._positions.keys())
+            self.moveAbs({self._axis: nearest})
+            f.add_done_callback(self._on_referenced)
         else:
             # If not at a known position => move to the closest known position
             nearest = util.find_closest(self._child.position.value[self._caxis], self._positions.keys())
             self.moveAbs({self._axis: nearest}).result()
 
-    def on_done(self, future):
+    def _on_referenced(self, future):
         try:
             future.result()
-            # If not at a known position => move to the closest known position
-            nearest = util.find_closest(self._child.position.value[self._caxis], self._positions.keys())
-            self.moveAbs({self._axis: nearest}).result()
         except Exception as e:
             self.state._set_value(e, force_write=True)
             logging.exception(e)

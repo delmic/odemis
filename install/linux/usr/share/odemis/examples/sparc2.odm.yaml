@@ -41,10 +41,7 @@ SPARC2: {
             "Spectral Camera": True,
             "Spectrograph": True,
             "Optical Actuators": True
-        },
-        powered: ["Calibration Light", "CL PMT control unit",
-                  "Camera", "Spectral Camera", "Spectrograph",
-                  "Optical Actuators"]
+        }
     }
 }
 
