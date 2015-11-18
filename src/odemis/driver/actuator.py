@@ -804,11 +804,22 @@ class FixedPositionsActuator(model.Actuator):
         # In case of cyclic move always reference
         if not self._referenced.get(axis, True) or (self._cycle and axis in self._referenced):
             # The initialisation will fail if the referencing fails
-            self.reference({axis}).result()
+            f = self.reference({axis})
+            f.add_done_callback(self.on_done)
+        else:
+            # If not at a known position => move to the closest known position
+            nearest = util.find_closest(self._child.position.value[self._caxis], self._positions.keys())
+            self.moveAbs({self._axis: nearest}).result()
 
-        # If not at a known position => move to the closest known position
-        nearest = util.find_closest(self._child.position.value[self._caxis], self._positions.keys())
-        self.moveAbs({self._axis: nearest}).result()
+    def on_done(self, future):
+        try:
+            future.result()
+            # If not at a known position => move to the closest known position
+            nearest = util.find_closest(self._child.position.value[self._caxis], self._positions.keys())
+            self.moveAbs({self._axis: nearest}).result()
+        except Exception as e:
+            self.state._set_value(e, force_write=True)
+            logging.exception(e)
 
     def _update_child_position(self, value):
         p = value[self._caxis]
