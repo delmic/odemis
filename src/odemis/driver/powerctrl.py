@@ -34,8 +34,11 @@ import serial
 import sys
 import tempfile
 import threading
+import yaml
 import time
 
+# FIXME: figure out when reaching memory end
+EEPROM_CAPACITY = 512  # Memory space 0h-1ffh
 
 class PowerControlUnit(model.PowerSupplier):
     '''
@@ -55,7 +58,10 @@ class PowerControlUnit(model.PowerSupplier):
             initialization.
         Raise an exception if the device cannot be opened
         '''
-        self.powered = pin_map.keys()
+        if pin_map:
+            self.powered = pin_map.keys()
+        else:
+            self.powered = []
         model.PowerSupplier.__init__(self, name, role, **kwargs)
 
         # TODO: catch errors and convert to HwError
@@ -189,6 +195,23 @@ class PowerControlUnit(model.PowerSupplier):
         """
         ans = self._sendCommand("RMEM %s %s %s" % (id, address, length))
         return ans
+
+    def readEEPROM(self, id):
+        """
+        We use this method to get a dict that contains all the data written in
+        the EEPROM with the given id.
+        id (str): EEPROM registration number #hex (little-endian format)
+        """
+        if id not in self.memoryIDs.value:
+            raise KeyError("There was no EEPROM with the given id found")
+        mem_cont = self.readMemory(id, "00", EEPROM_CAPACITY)
+        mem_yaml = ""
+        while mem_cont != "":
+            if mem_cont[:2] != "00":
+                mem_yaml += chr(int(mem_cont[:2], 16))
+            mem_cont = mem_cont[2:]
+        dct = yaml.load(mem_yaml)
+        return dct
 
     def _getIdentities(self):
         """

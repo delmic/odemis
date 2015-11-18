@@ -803,12 +803,8 @@ class FixedPositionsActuator(model.Actuator):
         # If the axis can be referenced => do it now (and move to a known position)
         # In case of cyclic move always reference
         if not self._referenced.get(axis, True) or (self._cycle and axis in self._referenced):
-            # The initialisation will fail if the referencing fails
+            # The initialisation will not fail if the referencing fails
             f = self.reference({axis})
-            # If not at a known position => move to the closest known position
-            # Queue the move so it is executed before any other move requested
-            nearest = util.find_closest(self._child.position.value[self._caxis], self._positions.keys())
-            self.moveAbs({self._axis: nearest})
             f.add_done_callback(self._on_referenced)
         else:
             # If not at a known position => move to the closest known position
@@ -819,6 +815,7 @@ class FixedPositionsActuator(model.Actuator):
         try:
             future.result()
         except Exception as e:
+            self._child.stop({self._caxis})  # prevent any move queued
             self.state._set_value(e, force_write=True)
             logging.exception(e)
 
@@ -870,13 +867,17 @@ class FixedPositionsActuator(model.Actuator):
             return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
         pos = self._applyInversion(pos)
+        f = self._executor.submit(self._doMoveAbs, pos)
 
+        return f
+
+    def _doMoveAbs(self, pos):
         axis, distance = pos.items()[0]
         logging.debug("Moving axis %s (-> %s) to %g", self._axis, self._caxis, distance)
 
         if self._cycle is None:
             move = {self._caxis: distance}
-            f = self._child.moveAbs(move)
+            self._child.moveAbs(move).result()
         else:
             # Optimize by moving through the closest way
             cur_pos = self._child.position.value[self._caxis]
@@ -901,9 +902,7 @@ class FixedPositionsActuator(model.Actuator):
                 move = {self._caxis:-mod2}
                 self._move_sum -= mod2
 
-            f = self._child.moveRel(move)
-
-        return f
+            self._child.moveRel(move).result()
 
     def _doReference(self, axes):
         logging.debug("Referencing axis %s (-> %s)", self._axis, self._caxis)
@@ -915,8 +914,7 @@ class FixedPositionsActuator(model.Actuator):
         cp = self._child.position.value[self._caxis]
         if (cp not in self._positions):
             nearest = util.find_closest(cp, self._positions.keys())
-            f = self.moveAbs({self._axis: nearest})
-            f.result()
+            self._doMoveAbs({self._axis: nearest})
 
     @isasync
     def reference(self, axes):
