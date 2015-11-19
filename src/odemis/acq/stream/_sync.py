@@ -564,24 +564,6 @@ class SEMCCDMDStream(MultipleDetectorStream):
             logging.debug("Starting repetition stream acquisition with components %s and %s",
                           self._main_det.name, self._rep_det.name)
 
-            # We need to use synchronisation event because without it, either we
-            # use .get() but it's not possible to cancel the acquisition, or we
-            # subscribe/unsubscribe for each image, but the overhead is high.
-            ccd_trigger = self._rep_det.softwareTrigger
-            self._rep_df.synchronizedOn(ccd_trigger)
-            self._rep_df.subscribe(self._ssOnRepetitionImage)
-
-            # Instead of subscribing/unsubscribing to the SEM for each pixel,
-            # we keep subscribed, but request to be synchronised.
-            # To start scanning we remove the synchronisation. To stop scanning
-            # we put back the synchronisation (and never send any trigger event).
-            # Note that we cannot just send one trigger event, because we want
-            # the scanning to keep going on as long as the CCD acquisition takes
-            # place. TODO: send the event from _ssOnMainImage()?
-            sem_trigger = self._main_det.softwareTrigger
-            self._main_df.synchronizedOn(sem_trigger)
-            self._main_df.subscribe(self._ssOnMainImage)
-
             tot_num = numpy.prod(rep)
             n = 0  # number of points acquired so far
 
@@ -603,6 +585,24 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 n_til_dc = tot_num
 
             dc_period = n_til_dc  # approx. (just for time estimation)
+
+            # We need to use synchronisation event because without it, either we
+            # use .get() but it's not possible to cancel the acquisition, or we
+            # subscribe/unsubscribe for each image, but the overhead is high.
+            ccd_trigger = self._rep_det.softwareTrigger
+            self._rep_df.synchronizedOn(ccd_trigger)
+            self._rep_df.subscribe(self._ssOnRepetitionImage)
+
+            # Instead of subscribing/unsubscribing to the SEM for each pixel,
+            # we keep subscribed, but request to be synchronised.
+            # To start scanning we remove the synchronisation. To stop scanning
+            # we put back the synchronisation (and never send any trigger event).
+            # Note that we cannot just send one trigger event, because we want
+            # the scanning to keep going on as long as the CCD acquisition takes
+            # place. TODO: send the event from _ssOnMainImage()?
+            sem_trigger = self._main_det.softwareTrigger
+            self._main_df.synchronizedOn(sem_trigger)
+            self._main_df.subscribe(self._ssOnMainImage)
 
             for i in numpy.ndindex(*rep[::-1]):  # last dim (X) iterates first
                 trans = (spot_pos[i[::-1]][0], spot_pos[i[::-1]][1])
