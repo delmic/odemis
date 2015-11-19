@@ -2544,6 +2544,8 @@ class Sparc2AlignTab(Tab):
                                               main_data.sed.data, main_data.ebeam)
         spot_stream.should_update.value = True
         self._spot_stream = spot_stream
+        # Make sure it only plays when the CCD stream plays
+        ccd_stream.should_update.subscribe(self._on_ccd_stream_play)
 
         # Switch between alignment modes
         # * mirror-align: move x, y of mirror with moment of inertia feedback
@@ -2700,7 +2702,6 @@ class Sparc2AlignTab(Tab):
 
         if mode == "lens-align":
             self._ccd_stream.should_update.value = True
-            self._spot_stream.is_active.value = True
             self.tab_data_model.focussedView.value = self.panel.vp_align_lens.microscope_view
             self.panel.pnl_mirror.Enable(True)  # also allow to move the mirror here
             self.panel.html_alignment_doc.Show(False)
@@ -2709,10 +2710,9 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_moi_settings.Show(False)
             # TODO: in this mode, if focus change, update the focus image once
             # (by going to spec-focus mode, turning the light, and acquiring an
-            # AR image)
+            # AR image). Problem is that it takes about 10s.
         elif mode == "mirror-align":
-            self._spot_stream.is_active.value = False
-            self._moi_stream.should_update.value = True
+            self._moi_stream.should_update.value = True  # that automatically pauses the other streams
             self.tab_data_model.focussedView.value = self.panel.vp_moi.microscope_view
             self.panel.pnl_mirror.Enable(True)
             self.panel.html_alignment_doc.Show(True)
@@ -2724,13 +2724,23 @@ class Sparc2AlignTab(Tab):
             self.panel.html_moi_doc.Parent.Layout()
         else:  # "center-align"
             self.tab_data_model.focussedView.value = self.panel.vp_align_center.microscope_view
-            self._spot_stream.is_active.value = True
             self._ccd_stream.should_update.value = True
             self.panel.pnl_mirror.Enable(False)
             self.panel.html_alignment_doc.Show(False)
             self.panel.pnl_lens_mover.Enable(False)
             self.panel.pnl_focus.Enable(False)
             self.panel.pnl_moi_settings.Show(False)
+
+    def _on_ccd_stream_play(self, update):
+        """
+        Called when the ccd_stream.should_update VA changes.
+        Used to also play/pause the spot stream simultaneously
+        """
+        # Especially useful for the hardware which force the SEM external scan
+        # when the SEM stream is playing. Because that allows the user to see
+        # the SEM image in the original SEM software while still being able to
+        # move the mirror
+        self._spot_stream.is_active.value = update
 
     def _onClickFocus(self, evt):
         """
@@ -2780,6 +2790,9 @@ class Sparc2AlignTab(Tab):
         """
         # Stop e-beam, in case it's connected to a beam blanker
         self._moi_stream.should_update.value = False
+
+        # TODO: if there is no blanker available, put the spec-det-selector to
+        # the other port, so that the ccd get almost no signal
 
         # Disable button to give a feedback that acquisition is taking place
         self.panel.btn_bkg_acquire.Disable()
@@ -2868,7 +2881,6 @@ class Sparc2AlignTab(Tab):
             # when hidden, the new tab shown is in charge to request the right
             # optical path mode, if needed.
             self._stream_controller.pauseStreams()
-            self._spot_stream.is_active.value = False
             # Cancel autofocus (if it happens to run)
             self.tab_data_model.autofocus_active.value = False
 
@@ -2877,7 +2889,6 @@ class Sparc2AlignTab(Tab):
 
     def terminate(self):
         self._stream_controller.pauseStreams()
-        self._spot_stream.is_active.value = False
         self.tab_data_model.autofocus_active.value = False
 
 
