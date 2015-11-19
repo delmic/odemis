@@ -1184,7 +1184,6 @@ class StreamBarController(object):
         )
         return self._add_stream(s, **kwargs)
 
-
     def addStatic(self, name, image, cls=acqstream.StaticStream, **kwargs):
         """ Creates a new static stream and stream controller
 
@@ -1761,6 +1760,11 @@ class SparcStreamsController(StreamBarController):
             if s not in streams:
                 logging.debug("Removing %s from repetition content subscriptions", s)
                 del self._repct_listeners[s]  # automatically unsubscribed
+
+    def addEBIC(self, **kwargs):
+        # Need to use add_to_all_views=True to force only showing on the right
+        # view (and not on the current view)
+        return super(SparcStreamsController, self).addEBIC(add_to_all_views=True, **kwargs)
 
     def _addRepStream(self, stream, mdstream, vas, axes, **kwargs):
         """
