@@ -270,7 +270,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
                 self.remove_world_overlay(self._spotmode_ol)
             else:
                 self.remove_view_overlay(self._spotmode_ol)
-            self._spotmode_ol.deactivate()
+            if self._spotmode_ol:
+                self._spotmode_ol.deactivate()
 
         if self._spotmode_ol:
             self.microscope_view.show_crosshair.value = (not tool_mode == guimodel.TOOL_SPOT)
