@@ -26,6 +26,7 @@ import readline  # for nice editing in raw_input()
 import sys
 import threading
 import numpy
+import math
 
 
 logging.getLogger().setLevel(logging.INFO) # put "DEBUG" level for more messages
@@ -85,7 +86,6 @@ def acquire_spec(wls, wle, res, dt, filename):
             trig.notify()
             if not _pt_acq.wait(dt * 5 + 1):
                 raise IOError("Timeout waiting for the data")
-            print _data
             wllist.append(cwl)
     except KeyboardInterrupt:
         logging.info("Stopping after only %d images acquired", i + 1)
@@ -109,6 +109,7 @@ def acquire_spec(wls, wle, res, dt, filename):
         # Save the file
         exporter = dataio.find_fittest_converter(filename)
         exporter.export(filename, spec)
+        raw_input("Spectrum successfully saved to %s" % (filename,))
 
 def getNumber(prompt):
     """
@@ -136,13 +137,14 @@ def main(args):
     wle = getNumber("Ending wavelength (in nm): ") * 1e-9
     nbp = getNumber("Number of wavelengths to acquire: ")
     dt = getNumber("Dwell time (in ms): ") * 1e-3
+    exp_time = nbp * (dt + 0.05)  # 50 ms to change wavelength
+    print("Expected duration: %s" % (units.readable_time(math.ceil(exp_time)),))
+
     filename = raw_input("Filename to store the spectrum: ")
     if "." not in filename:
-        # No extention -> force hdf5
+        # No extension -> force hdf5
         filename += ".h5"
     
-    exp_time = nbp * (dt + 0.01)  # 10 ms to change wavelength
-    print("Expected duration: %s" % (units.readable_time(exp_time),))
     print("Press Ctrl+C to cancel the acquisition")
 
     try:
