@@ -1665,6 +1665,7 @@ class SEMComedi(model.HwComponent):
             logging.exception("Unexpected failure during image acquisition")
         finally:
             try:
+                self._scanner.indicate_scan_state(False)
                 self.set_to_resting_position()
             except comedi.ComediError:
                 # can happen if the driver already terminated
@@ -1842,6 +1843,11 @@ class SEMComedi(model.HwComponent):
                 self._acq_cmd_q.put(ACQ_CMD_TERM)
                 self._req_stop_acquisition()
             self._acquisition_thread.join(10)
+
+            # Just to be really sure that the scan signal is off
+            self._scanner.indicate_scan_state(False)
+
+            # TODO: also terminate the children?
 
             comedi.close(self._device)
             self._device = None
