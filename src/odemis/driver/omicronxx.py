@@ -520,7 +520,10 @@ class GenericxX(model.Emitter):
 
         # Ensure the whole Hub is turned on
         if self._master:
-            self._master.PowerOn()
+            try:
+                self._master.PowerOn()
+            except OXXError:
+                raise HwError("Failed to power on the master device, check the interlock.")
 
         # make sure everything is off (turning on the HUB will turn on the lights)
         self._updateIntensities(self.power.value, self.emissions.value)
