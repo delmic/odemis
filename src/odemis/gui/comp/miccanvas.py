@@ -241,19 +241,20 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
     def _set_spot_mode(self, tool_mode):
 
-        if not any([isinstance(s, EMStream) for s in self.microscope_view.stream_tree]):
+        if not any(isinstance(s, EMStream) for s in self.microscope_view.stream_tree):
             return
 
         use_world = hasattr(self._tab_data_model, 'spotPosition')
-        if self._spotmode_ol is None:
-            if use_world:
-                spot_va = self._tab_data_model.spotPosition
-                self._spotmode_ol = world_overlay.SpotModeOverlay(self, spot_va)
-            else:
-                spot_va = None
-                self._spotmode_ol = view_overlay.SpotModeOverlay(self, spot_va)
 
         if tool_mode == guimodel.TOOL_SPOT:
+            if self._spotmode_ol is None:
+                if use_world:
+                    spot_va = self._tab_data_model.spotPosition
+                    self._spotmode_ol = world_overlay.SpotModeOverlay(self, spot_va)
+                else:
+                    spot_va = None
+                    self._spotmode_ol = view_overlay.SpotModeOverlay(self, spot_va)
+
             if use_world:
                 self.add_world_overlay(self._spotmode_ol)
                 # Activate the spot mode overlay when the canvas can be dragged, so the user can
@@ -264,7 +265,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
                 self.add_view_overlay(self._spotmode_ol)
                 self._spotmode_ol.activate()
 
-        else:
+        elif self._spotmode_ol:
             if use_world:
                 self.remove_world_overlay(self._spotmode_ol)
             else:
@@ -272,7 +273,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self._spotmode_ol.deactivate()
 
         if self._spotmode_ol:
-            self.microscope_view.show_crosshair.value = not tool_mode == guimodel.TOOL_SPOT
+            self.microscope_view.show_crosshair.value = (not tool_mode == guimodel.TOOL_SPOT)
 
         self.Refresh(eraseBackground=False)
 
