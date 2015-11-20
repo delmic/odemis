@@ -217,7 +217,12 @@ class PowerControlUnit(model.PowerSupplier):
         """
         Return the ids of connected EEPROMs
         """
-        ans = self._sendCommand("SID")
+        try:
+            ans = self._sendCommand("SID")
+        except PowerControlError as e:
+            # means there is no power provided
+            raise HwError("There is no power provided to the Power Control Unit. "
+                          "Please make sure the board is turned on.")
         x = ans.split(',')
         return filter(lambda a: a != '', x)
 
