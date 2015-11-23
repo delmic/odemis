@@ -37,7 +37,7 @@ from unittest.case import skip
 logging.getLogger().setLevel(logging.DEBUG)
 
 # arguments used for the creation of basic components
-CONFIG_SED = {"name": "sed", "role": "sed", "channel": 0}
+CONFIG_SED = {"name": "sed", "role": "sed", "channel": 0, "detector": 0}
 CONFIG_BSD = {"name": "bsd", "role": "bsd"}
 CONFIG_STG = {"name": "stg", "role": "stage"}
 CONFIG_CM = {"name": "camera", "role": "camera"}
@@ -46,7 +46,7 @@ CONFIG_PRESSURE = {"name": "pressure", "role": "pressure"}
 CONFIG_SCANNER = {"name": "scanner", "role": "ebeam",
                   "fov_range": [196.e-9, 25586.e-6]}
 CONFIG_SEM = {"name": "sem", "role": "sem",
-              "children": {"detector": CONFIG_SED, "scanner": CONFIG_SCANNER,
+              "children": {"detector0": CONFIG_SED, "scanner": CONFIG_SCANNER,
                            "stage": CONFIG_STG, "focus": CONFIG_FOCUS,
                            "camera": CONFIG_CM, "pressure": CONFIG_PRESSURE},
               "host": "192.168.92.91"
