@@ -4,7 +4,7 @@ Created on 8 Mar 2013
 
 @author: Éric Piel
 
-Copyright © 2013 Éric Piel, Delmic
+Copyright © 2013-2015 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -21,7 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 from odemis import model
-from odemis.driver import spectrometer, spectrapro, pvcam, andorcam2
+from odemis.driver import spectrometer, spectrapro, pvcam, andorcam2, andorshrk
 from unittest.case import skip
 import logging
 import os
@@ -43,6 +43,12 @@ else:
 CLASS_SPG = spectrapro.SpectraPro
 CLASS_SPG_SIM = spectrapro.FakeSpectraPro
 KWARGS_SPG = {"name": "spg", "role": "spectrograph", "port": PORT_SPG}
+
+CLASS_SHRK = andorshrk.Shamrock
+KWARGS_SHRK_SIM = dict(name="sr193", role="spectrograph", device="fake",
+                       slits={1: "slit-in", 3: "slit-monochromator"},
+                       bands={1: (230e-9, 500e-9), 3: (600e-9, 1253e-9), 5: "pass-through"})
+
 
 # Real device: PI PIXIS
 CLASS_CCD = pvcam.PVCam
@@ -125,6 +131,21 @@ class TestSimulated(unittest.TestCase):
         self.assertGreaterEqual(duration, exp)
         self.assertEqual(data.shape[0], 1)
         self.assertEqual(data.shape[-1::-1], self.spectrometer.resolution.value)
+
+
+class TestSimulatedShamrock(TestSimulated):
+    """
+    Test the CompositedSpectrometer class with only simulated components
+    """
+    @classmethod
+    def setUpClass(cls):
+        cls.detector = CLASS_CCD_SIM(**KWARGS_CCD_SIM)
+        cls.spectrograph = CLASS_SHRK(**KWARGS_SHRK_SIM)
+        cls.spectrometer = CLASS(name="test", role="spectrometer",
+                                 children={"detector": cls.detector,
+                                           "spectrograph": cls.spectrograph})
+        # save position
+        cls._orig_pos = cls.spectrograph.position.value
 
 
 class TestCompositedSpectrometer(unittest.TestCase):
@@ -258,7 +279,6 @@ class TestCompositedSpectrometer(unittest.TestCase):
         md = data.metadata
         self.assertEqual(md[model.MD_BINNING], tuple(binning))
 
-
     def test_resolution(self):
         """
         Check the (unusual) behaviour of the resolution
@@ -364,7 +384,7 @@ class TestCompositedSpectrometer(unittest.TestCase):
         # This assumes that we have a PIXIS 400 (1340 x 400)
         if (self.spectrometer.shape[0] != 1340 or
             self.spectrometer.pixelSize.value[0] != 20e-6):
-            self.skipTest("Hardware needs to have to be a PIXIS 400 for the test")
+            self.skipTest("Hardware needs to be a PIXIS 400 for the test")
         # TODO: check we have a SpectraPro i2300 or FakeSpectraPro
 
         res = self.spectrometer.resolution.value
@@ -392,6 +412,28 @@ class TestCompositedSpectrometer(unittest.TestCase):
         wl_bw = wl[-1] - wl[0]
         logging.debug("Got CCD coverage = %f nm", wl_bw * 1e9)
         self.assertAlmostEqual(wl_bw, 48e-9, 2)
+
+    def test_ccd_separated(self):
+        """
+        Check that it's possible to access the CCD as a whole CCD without being
+        affected by the binning/resolution of the spectrometer
+        """
+        # As long as there is no acquisition, CCD and spectrometer should not
+        # be connected
+        self.detector.binning.value = (1, 1)
+        self.detector.resolution.value = self.detector.resolution.range[1]
+        binning = (self.spectrometer.binning.range[0][0],
+                   self.spectrometer.binning.range[1][1])
+        self.spectrometer.binning.value = binning
+        self.assertEqual(self.spectrometer.binning.value, binning)
+        self.assertNotEqual(self.detector.binning.value, self.spectrometer.binning.value)
+
+        # Now, we acquire
+        data = self.spectrometer.data.get()
+
+        self.assertEqual(self.spectrometer.binning.value, binning)
+        self.assertEqual(self.detector.binning.value, self.spectrometer.binning.value)
+
 
 if __name__ == '__main__':
     unittest.main()

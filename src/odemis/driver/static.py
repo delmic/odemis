@@ -195,11 +195,7 @@ class Spectrograph(model.Actuator):
         if not isinstance(wlp, list) or len(wlp) < 1:
             raise ValueError("wlp need to be a list of at least one float")
 
-        try:
-            self._ccd = children["ccd"]
-        except (TypeError, KeyError):
-            raise ValueError("Spectrograph needs a child 'ccd'")
-
+        # Note: it used to need a "ccd" child, but not anymore
         self._swVersion = "N/A (Odemis %s)" % odemis.__version__
         self._hwVersion = name
 
@@ -236,8 +232,12 @@ class Spectrograph(model.Actuator):
         # nothing to do
         pass
 
-    def getPixelToWavelength(self):
+    def getPixelToWavelength(self, npixels, pxs):
         """
+        Return the lookup table pixel number of the CCD -> wavelength observed.
+        npixels (1 <= int): number of pixels on the CCD (horizontally), after
+          binning.
+        pxs (0 < float): pixel size in m (after binning)
         return (list of floats): pixel number -> wavelength in m
         """
         pl = list(self._wlp)
@@ -252,12 +252,9 @@ class Spectrograph(model.Actuator):
         # => composition of polynomials
         # with "a" the distance of the centre of the left-most pixel to the
         # centre of the image, and b the density in meters per pixel.
-        ccd = self._ccd
-        npixels = ccd.resolution.value[0]
-        mpp = ccd.pixelSize.value[0] * ccd.binning.value[0] # m/px
         # distance from the pixel 0 to the centre (in m)
-        distance0 = -(npixels - 1) / 2 * mpp
-        pnc = self.polycomp(pl, [distance0, mpp])
+        distance0 = -(npixels - 1) / 2 * pxs
+        pnc = self.polycomp(pl, [distance0, pxs])
 
         npn = polynomial.Polynomial(pnc,  # pylint: disable=E1101
                                     domain=[0, npixels - 1],

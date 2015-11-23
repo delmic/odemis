@@ -182,6 +182,8 @@ class SpectraPro(model.Actuator):
         try:
             self._ccd = children["ccd"]
         except (TypeError, KeyError):
+            # TODO: only needed if there is calibration info (for the pixel size)
+            # otherwise it's fine without CCD.
             raise ValueError("Spectrograph needs a child 'ccd'")
 
         # according to the model determine how many gratings per turret
@@ -779,13 +781,15 @@ class SpectraPro(model.Actuator):
             self._serial.close()
             self._serial = None
 
-    def getPixelToWavelength(self):
+    def getPixelToWavelength(self, npixels, pxs):
         """
+        Return the lookup table pixel number of the CCD -> wavelength observed.
+        npixels (1 <= int): number of pixels on the CCD (horizontally), after
+          binning.
+        pxs (0 < float): pixel size in m (after binning)
         return (list of floats): pixel number -> wavelength in m
         """
-        npixels = self._ccd.resolution.value[0]
         centerpixel = (npixels - 1) / 2
-        psz = (self._ccd.pixelSize.value[0] * self._ccd.binning.value[0]) # m/px
         cw = self.position.value["wavelength"] # m
         gid = self.position.value["grating"]
         gl = self._getGrooveDensity(gid)
@@ -794,12 +798,12 @@ class SpectraPro(model.Actuator):
         # Formula based on the Winspec documentation:
         # "Equations used in WinSpec Wavelength Calibration", p. 257 of the manual
         # ftp://ftp.piacton.com/Public/Manuals/Princeton%20Instruments/WinSpec%202.6%20Spectroscopy%20Software%20User%20Manual.pdf
-        # Converted to code by Benjamin Brenny
+        # Converted to code by Benjamin Brenny (from AMOLF)
         G = math.asin(cw / (math.cos(ia / 2) * 2 / gl))
 
         wllist = []
         for i in range(npixels):
-            pxd = psz * (i - centerpixel) # distance of pixel to sensor centre
+            pxd = pxs * (i - centerpixel)  # distance of pixel to sensor centre
             E = math.atan((pxd * math.cos(da)) / (fl + pxd * math.sin(da)))
             wl = (math.sin(G - ia / 2) + math.sin(G + ia / 2 + E)) / gl
             wllist.append(wl)

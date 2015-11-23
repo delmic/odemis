@@ -110,7 +110,6 @@ SPARC-Lund-sim: {
 "Spectrograph": {
     class: andorshrk.Shamrock,
     role: spectrograph,
-    children: {"ccd": "Spectral Camera"},
     init: {
         device: "fake",
         # The input and output slits are manual

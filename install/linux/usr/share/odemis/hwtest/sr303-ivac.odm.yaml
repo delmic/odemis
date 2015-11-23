@@ -80,7 +80,6 @@ SPARC-Spec: {
     class: andorshrk.Shamrock,
     role: spectrograph,
     affects: ["Monochromator PMT", "Spectral Camera"],
-    children: {"ccd": "Spectral Camera"},
     init: {
         device: 0,
     },
