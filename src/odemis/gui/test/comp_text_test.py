@@ -32,7 +32,7 @@ import wx
 import odemis.gui.test as test
 
 
-# test.goto_manual()
+test.goto_manual()
 
 TEST_LST = ["Aap", u"nöot", "noot", "mies", "kees", "vuur", "quantummechnica",
             "Repelsteeltje", "", "XXX", "a", "aa", "aaa", "aaaa",
@@ -64,7 +64,6 @@ class OwnerDrawnComboBoxTestCase(test.GuiTestCase):
         # test.goto_manual()
         self.frame.unit_float.Enable(False)
 
-
     def test_unit_float(self):
 
         self.app.test_frame.unit_float.unit = u"☠"
@@ -88,7 +87,6 @@ class OwnerDrawnComboBoxTestCase(test.GuiTestCase):
 
             old_focus.SetFocus()
             test.gui_loop()
-
 
 
 if __name__ == "__main__":

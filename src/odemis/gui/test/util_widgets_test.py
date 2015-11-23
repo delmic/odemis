@@ -143,10 +143,10 @@ class ConnectorTestCase(test.GuiTestCase):
 
         # TODO: support cancelling the task
         # End the task (early)
-#         pf.cancel()
-#         test.gui_loop(300)  # need to wait at least 0.25 s
-#         r6 = gauge.Value / gauge.Range
-#         self.assertEqual(r6, 1)
+        # pf.cancel()
+        # test.gui_loop(300)  # need to wait at least 0.25 s
+        # r6 = gauge.Value / gauge.Range
+        # self.assertEqual(r6, 1)
 
 
 if __name__ == "__main__":

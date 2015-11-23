@@ -187,22 +187,22 @@ def to_string_pretty(x, sig=None, unit=None):
         # don't consider this a float
         return u"0"
 
+    elif math.isnan(x):
+        return "unknown"
+    elif math.isinf(x):
+        if x < 0:
+            return u"-∞"
+        else:
+            return u"∞"
+
+    if sig is not None:
+        x = round_significant(x, sig)
+
+    # so close from an int that it's very likely one?
+    if abs(x - round(x)) < 1e-5 and abs(x) >= 1:
+        x = int(round(x))  # avoid the .0
+
     if isinstance(x, float):
-
-        if math.isnan(x):
-            return "unknown"
-        elif math.isinf(x):
-            if x < 0:
-                return u"-∞"
-            else:
-                return u"∞"
-
-        if sig is not None:
-            x = round_significant(x, sig)
-
-        # so close from an int that it's very likely one?
-        if abs(x - round(x)) < 1e-5 and abs(x) >= 1:
-            x = int(round(x))  # avoid the .0
 
         str_val = "%r" % x
 
