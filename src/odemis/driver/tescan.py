@@ -77,15 +77,6 @@ class SEM(model.HwComponent):
                                                       self._device.TcpGetVersion())
         self._metadata[model.MD_SW_VERSION] = self._swVersion
 
-        # create the detector children
-        self._detectors = {}
-        for name, ckwargs in children.items():
-            if name.startswith("detector"):
-                self._detectors[name] = Detector(parent=self, daemon=daemon, **ckwargs)
-                self.children.value.add(self._detectors[name])
-        if not self._detectors:
-            raise KeyError("TescanSEM was not given a 'detector' child")
-
         # create the scanner child
         try:
             kwargs = children["scanner"]
@@ -94,6 +85,15 @@ class SEM(model.HwComponent):
 
         self._scanner = Scanner(parent=self, daemon=daemon, **kwargs)
         self.children.value.add(self._scanner)
+
+        # create the detector children
+        self._detectors = {}
+        for name, ckwargs in children.items():
+            if name.startswith("detector"):
+                self._detectors[name] = Detector(parent=self, daemon=daemon, **ckwargs)
+                self.children.value.add(self._detectors[name])
+        if not self._detectors:
+            raise KeyError("TescanSEM was not given a 'detector' child")
 
         # create the stage child
         try:
