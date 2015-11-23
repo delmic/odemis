@@ -62,7 +62,7 @@ class SEM(model.HwComponent):
                           "Check that the ip address is correct and TESCAN server "
                           "connected to the network." % (host,))
         logging.info("Connected")
-                   
+
         # Lock in order to synchronize all the child component functions
         # that acquire data from the SEM while we continuously acquire images
         self._acq_progress_lock = threading.Lock()
@@ -77,6 +77,15 @@ class SEM(model.HwComponent):
                                                       self._device.TcpGetVersion())
         self._metadata[model.MD_SW_VERSION] = self._swVersion
 
+        # create the detector children
+        self._detectors = {}
+        for name, ckwargs in children.items():
+            if name.startswith("detector"):
+                self._detectors[name] = Detector(parent=self, daemon=daemon, **ckwargs)
+                self.children.value.add(self._detectors[name])
+        if not self._detectors:
+            raise KeyError("TescanSEM was not given a 'detector' child")
+
         # create the scanner child
         try:
             kwargs = children["scanner"]
@@ -85,14 +94,6 @@ class SEM(model.HwComponent):
 
         self._scanner = Scanner(parent=self, daemon=daemon, **kwargs)
         self.children.value.add(self._scanner)
-
-        # create the detector child
-        try:
-            kwargs = children["detector"]
-        except (KeyError, TypeError):
-            raise KeyError("TescanSEM was not given a 'detector' child")
-        self._detector = Detector(parent=self, daemon=daemon, **kwargs)
-        self.children.value.add(self._detector)
 
         # create the stage child
         try:
@@ -446,7 +447,7 @@ class Detector(model.Detector):
     of the SEM. It sets up a Dataflow and notifies it every time that an SEM image 
     is captured.
     """
-    def __init__(self, name, role, parent, channel, **kwargs):
+    def __init__(self, name, role, parent, channel, detector, **kwargs):
         """
         Note: parent should have a child "scanner" already initialised
         """
@@ -455,7 +456,8 @@ class Detector(model.Detector):
 
         # select detector and enable channel
         self._channel = channel
-        self.parent._device.DtSelect(self._channel, 0)
+        self._detector = detector
+        self.parent._device.DtSelect(self._channel, self._detector)
         self.parent._device.DtEnable(self._channel, 1, 16)  # 16 bits
         self.acq_shape = self.parent._scanner._shape
 
@@ -559,7 +561,7 @@ class Detector(model.Detector):
                 self.parent._device.ScStopScan()
                 return model.DataArray(numpy.array([[0]], dtype=numpy.uint16), metadata)
             # fetch the image (blocking operation), ndarray is returned
-            sem_img = self.parent._device.FetchArray(0, res[0] * res[1])
+            sem_img = self.parent._device.FetchArray(self._channel, res[0] * res[1])
             sem_img.shape = res[::-1]
             # Change endianess
             sem_img.byteswap(True)

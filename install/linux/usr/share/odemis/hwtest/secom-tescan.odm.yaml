@@ -2,8 +2,7 @@ SimTescanSECOM: {
     class: Microscope,
     role: secom,
     emitters: [Spectra, "Nikon Super Duper", "FW102C", "EBeam ExtXY", "Chamber Light"],
-    detectors: ["Andor SimCam", "SED ExtXY", "ChamberCam"
-                ],
+    detectors: ["Andor SimCam", "SED ExtXY", "ChamberCam", "CL PMT"],
     actuators: ["SEM-Optical Alignment", "OpticalZ actuator",
                 "OLStage", "Ebeam-focus actuator"],
 }
@@ -47,7 +46,8 @@ Spectra: {
     init: {host: "192.168.92.116"},
     # more detectors can be added, if necessary
     children: {scanner: "EBeam ExtXY",
-               detector: "SED ExtXY",
+               detector0: "SED ExtXY",
+               detector1: "CL PMT",
                stage: "OLStage",
                focus: "Ebeam-focus actuator",
                camera: "ChamberCam", # comment out if using the simulator
@@ -57,16 +57,19 @@ Spectra: {
 }
 
 "EBeam ExtXY": {
-    # Internal child of Quanta ExtXY, so no class
     role: e-beam,
     init: {fov_range: [196.e-9, 25586.e-6]},
     affects: ["SED ExtXY", "Andor SimCam"] # affects the CCD in case of cathodoluminescence
 }
 
 "SED ExtXY": { # aka ETD
-    # Internal child of Quanta ExtXY, so no class
     role: se-detector,
-    init: {channel: 0}
+    init: {channel: 0, detector: 0}
+}
+
+"CL PMT": {
+    role: cl-detector,
+    init: {channel: 1, detector: 1}
 }
 
 "Ebeam-focus actuator": {
