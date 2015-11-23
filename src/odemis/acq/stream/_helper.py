@@ -922,6 +922,7 @@ class OverlayStream(Stream):
             # calibration values just abort them
             f_scale = opt_md[model.MD_PIXEL_SIZE_COR]
             f_rot = -opt_md[model.MD_ROTATION_COR] % (2 * math.pi)
+            f_scale_xy = sem_md.get(model.MD_PIXEL_SIZE_COR, (1, 1))
             ccdmd = self._ccd.getMetadata()
             c_scale = ccdmd.get(model.MD_PIXEL_SIZE_COR, (1, 1))
             if model.MD_PIXEL_SIZE_COR in ccdmd:
@@ -931,10 +932,11 @@ class OverlayStream(Stream):
             c_rot = -ccdmd.get(model.MD_ROTATION_COR, 0) % (2 * math.pi)
             rot_diff = abs(((f_rot - c_rot) + math.pi) % (2 * math.pi) - math.pi)
             scale_diff = max(f_scale[0] / c_scale[0], c_scale[0] / f_scale[0])
-            if (rot_diff > math.radians(2) or scale_diff > max_scale_diff):
+            if (rot_diff > math.radians(2) or scale_diff > max_scale_diff or any(v > 1.3 for v in f_scale_xy) or any(v < 0.7 for v in f_scale_xy)):
                 raise ValueError("Overlay failure. There is a significant difference between the calibration "
-                                 "and fine alignment values (scale difference: %f, rotation difference: %f)"
-                                 %(scale_diff, rot_diff))
+                                 "and fine alignment values (scale difference: %f, rotation difference: %f, "
+                                 "scale ratio xy: %s)"
+                                 % (scale_diff, rot_diff, f_scale_xy))
 
             # Create an empty DataArray with trans_md as the metadata
             return [model.DataArray([], opt_md), model.DataArray([], sem_md)]
