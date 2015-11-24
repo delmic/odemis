@@ -47,7 +47,7 @@ class PowerControlUnit(model.PowerSupplier):
     communication with the PCU firmware.
     '''
 
-    def __init__(self, name, role, port, pin_map=None, delay=None, init=None, **kwargs):
+    def __init__(self, name, role, port, pin_map=None, delay=None, init=None, ids=None, **kwargs):
         '''
         port (str): port name
         pin_map (dict of str -> int): names of the components
@@ -56,6 +56,7 @@ class PowerControlUnit(model.PowerSupplier):
             turned on.
         init (dict str -> boolean): turn on/off the corresponding component upon
             initialization.
+        ids (list str): EEPROM ids expected to be detected during initialization.
         Raise an exception if the device cannot be opened
         '''
         if pin_map:
@@ -100,7 +101,13 @@ class PowerControlUnit(model.PowerSupplier):
                 del init[k]
         self._doSupply(init, apply_delay=False)
 
+        ids = ids or []
         self._mem_ids = self._getIdentities()
+        for id in ids:
+            if id not in self._mem_ids:
+                raise HwError("EEPROM id %s was not detected. Please make sure "
+                              "you are using the correct microscope file and "
+                              "all EEPROM components are connected." % (id,))
         self.memoryIDs = model.ListVA(self._mem_ids, readonly=True, getter=self._getIdentities)
 
     @isasync
