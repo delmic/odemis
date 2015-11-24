@@ -27,6 +27,7 @@ from odemis.model import isasync, CancellableThreadPoolExecutor, HwError
 from odemis.util import driver
 import os
 import signal
+import threading
 import time
 
 
@@ -148,10 +149,13 @@ class HwAccessMgr(object):
         ccd (AndorCam2 or None)
         """
         self._ccd = ccd
+        if ccd is None:
+            self.hw_lock = threading.Lock()
 
     def __enter__(self):
         if self._ccd is None:
-            logging.debug("Not taking CCD lock")
+            logging.debug("Taking spectrograph lock")
+            self.hw_lock.acquire()
         else:
             self._ccd.request_hw.append(None)  # let the acquisition thread know it should release the lock
             logging.debug("Requesting access to CCD")
@@ -162,7 +166,8 @@ class HwAccessMgr(object):
         returns True if the exception is to be suppressed (never)
         """
         if self._ccd is None:
-            logging.debug("CCD lock doesn't need to be released")
+            logging.debug("Released spectrograph lock")
+            self.hw_lock.release()
         else:
             self._ccd.request_hw.pop()  # hw no more needed
             logging.debug("Released CCD lock")
@@ -630,7 +635,11 @@ class Shamrock(model.Actuator):
         # numpy array or returning directly the C array. We could also just
         # allocate one array at the init, and reuse it.
         CalibrationValues = (c_float * npixels)()
-        self._dll.ShamrockGetCalibration(self._device, CalibrationValues, npixels)
+        # Note that altough it looks like it could do without hardware access,
+        # it is necessary. For example, the SDK call can completely block if a
+        # move is currently happening.
+        with self._hw_access:
+            self._dll.ShamrockGetCalibration(self._device, CalibrationValues, npixels)
         # Note: it just applies the polynomial, so you can end up with negative
         # values => clamp them to 0.
         return [max(0, v * 1e-9) for v in CalibrationValues]
@@ -640,7 +649,8 @@ class Shamrock(model.Actuator):
         return (4 floats)
         """
         a, b, c, d = c_float(), c_float(), c_float(), c_float()
-        self._dll.ShamrockGetPixelCalibrationCoefficients(self._device, byref(a), byref(b), byref(c), byref(d))
+        with self._hw_access:
+            self._dll.ShamrockGetPixelCalibrationCoefficients(self._device, byref(a), byref(b), byref(c), byref(d))
         return a.value, b.value, c.value, d.value
 
     def GetCCDLimits(self, port):
@@ -682,7 +692,8 @@ class Shamrock(model.Actuator):
         """
         assert isinstance(steps, int)
         # The documentation states focus is >=0, but SR193 only accepts >0
-        self._dll.ShamrockSetFocusMirror(self._device, steps)
+        with self._hw_access:
+            self._dll.ShamrockSetFocusMirror(self._device, steps)
 
     def GetFocusMirror(self):
         """
@@ -690,7 +701,8 @@ class Shamrock(model.Actuator):
         return (0<=int<=maxsteps): absolute position (in steps)
         """
         focus = c_int()
-        self._dll.ShamrockGetFocusMirror(self._device, byref(focus))
+        with self._hw_access:
+            self._dll.ShamrockGetFocusMirror(self._device, byref(focus))
         return focus.value
 
     def GetFocusMirrorMaxSteps(self):
@@ -714,7 +726,8 @@ class Shamrock(model.Actuator):
         pos (1<=int<=6): new position
         """
         assert(FILTERMIN <= pos <= FILTERMAX)
-        self._dll.ShamrockSetFilter(self._device, pos)
+        with self._hw_access:
+            self._dll.ShamrockSetFilter(self._device, pos)
 
     def GetFilter(self):
         """
@@ -722,7 +735,8 @@ class Shamrock(model.Actuator):
         return (1<=int<=6): current filter
         """
         pos = c_int()
-        self._dll.ShamrockGetFilter(self._device, byref(pos))
+        with self._hw_access:
+            self._dll.ShamrockGetFilter(self._device, byref(pos))
         return pos.value
 
     def GetFilterInfo(self, pos):
@@ -731,7 +745,8 @@ class Shamrock(model.Actuator):
         return (str): the text associated to the given filter
         """
         info = create_string_buffer(64)  # TODO: what's a good size? The SDK doc says nothing
-        self._dll.ShamrockGetFilterInfo(self._device, pos, info)
+        with self._hw_access:
+            self._dll.ShamrockGetFilterInfo(self._device, pos, info)
         return info.value
 
     def FilterIsPresent(self):
@@ -819,6 +834,7 @@ class Shamrock(model.Actuator):
         # value, it will move the focus. So avoid changing to the current value.
         if self.GetFlipperMirror(flipper) == port:
             logging.info("Not changing again flipper %d to current pos %d", flipper, port)
+            return
 
         with self._hw_access:
             if "focus" in self.axes:
@@ -826,8 +842,10 @@ class Shamrock(model.Actuator):
 
             self._dll.ShamrockSetFlipperMirror(self._device, flipper, port)
 
-            if "focus" in self.axes and cf != self.GetFocusMirror():
-                logging.warning("Focus mirror changed unexpectedly after moving flipper %d to %d", flipper, port)
+            nf = self.GetFocusMirror()
+            if "focus" in self.axes and cf != nf:
+                logging.warning("Focus mirror changed unexpectedly after moving flipper %d to %d, "
+                                "going from %d to %d steps", flipper, port, cf, nf)
 
     def GetFlipperMirror(self, flipper):
         assert(FLIPPER_INDEX_MIN <= flipper <= FLIPPER_INDEX_MAX)
@@ -856,12 +874,13 @@ class Shamrock(model.Actuator):
             state = 1
         else:
             state = 0
-        self._dll.ShamrockSetAccessory(self._device, line, state)
+        with self._hw_access:
+            self._dll.ShamrockSetAccessory(self._device, line, state)
 
-        # HACK: the Andor driver has a problem and sets the spectrograph in a
-        # bad state after setting the accessory to True. This puts it back in a
-        # good state.
-        self.GetGrating()
+            # HACK: the Andor driver has a problem and sets the spectrograph in a
+            # bad state after setting the accessory to True. This puts it back in a
+            # good state.
+            self.GetGrating()
 
     # def ShamrockGetAccessoryState(int device,int Accessory, int *state);
     def GetAccessoryState(self, line):
