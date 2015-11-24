@@ -96,6 +96,9 @@ class CompositedSpectrometer(model.Detector):
         # shape is same as detector (raw sensor), but the max resolution is always flat
         self._shape = tuple(dt.shape) # duplicate
 
+        # Wrapper for the dataflow
+        self.data = SpecDataFlow(self, dt.data)
+
         # The resolution and binning are derived from the detector, but with
         # settings set so that there is only one horizontal line.
 
@@ -126,9 +129,6 @@ class CompositedSpectrometer(model.Detector):
 
         # TODO: also wrap translation, if it exists?
 
-        # Wrapper for the dataflow
-        self.data = SpecDataFlow(self, dt.data)
-
         # duplicate every other VA and Event from the detector
         # that includes required VAs like .pixelSize and .exposureTime
         for aname, value in model.getVAs(dt).items() + model.getEvents(dt).items():
@@ -142,8 +142,8 @@ class CompositedSpectrometer(model.Detector):
             logging.warning("Spectrometer %s has no exposureTime VA", name)
 
         sp.position.subscribe(self._onPositionUpdate)
-        self.resolution.subscribe(self._onResolution)
-        self.binning.subscribe(self._onBinning)
+        self.resolution.subscribe(self._onResBinning)
+        self.binning.subscribe(self._onResBinning)
         self._updateWavelengthList()
 
     # The metadata is an overlay of our special metadata with the standard one
@@ -158,6 +158,9 @@ class CompositedSpectrometer(model.Detector):
         Called when the wavelength position or grating (ie, groove density)
           of the spectrograph is changed.
         """
+        self._updateWavelengthList()
+
+    def _onResBinning(self, value):
         self._updateWavelengthList()
 
     def _updateWavelengthList(self):
@@ -175,8 +178,12 @@ class CompositedSpectrometer(model.Detector):
         value (int): how many pixels horizontally and vertically
           are combined to create "super pixels"
         """
+        # Everything accepted by the VA should be acceptable
         prev_binning = self._binning
         self._binning = tuple(value) # duplicate
+
+        if self.data.active:
+            self._applyBinning(value)
 
         # adapt horizontal resolution so that the AOI stays the same
         changeh = prev_binning[0] / self._binning[0]
@@ -204,33 +211,23 @@ class CompositedSpectrometer(model.Detector):
         min_size = int(math.ceil(self.resolution.range[0][0] / self._binning[0]))
         size = (max(min(value[0], max_size), min_size), 1)
 
+        if self.data.active:
+            self._applyResolution(size)
+
         return size
 
-    def _onBinning(self, value):
-        if self.data.active:
-            self._applyBinning()
+    def _applyBinning(self, b):
+        self._detector.binning.value = b
+        if self._detector.binning.value != b:
+            logging.error("Hw binning didn't follow requested binning %s", b)
 
-        # TODO: not needed, as the resolution will update necessarily?
-        self._updateWavelengthList()
-
-    def _onResolution(self, value):
-        if self.data.active:
-            self._applyResolution()
-
-        self._updateWavelengthList()
-
-    def _applyBinning(self):
-        self._detector.binning.value = self.binning.value
-        if self._detector.binning.value != self.binning.value:
-            logging.error("Hw binning didn't follow requested binning %s", self.binning.value)
-
-    def _applyResolution(self):
-        self._detector.resolution.value = self.resolution.value
+    def _applyResolution(self, res):
+        self._detector.resolution.value = res
         assert self._detector.resolution.value[1] == 1
 
     def _applyCCDSettings(self):
-        self._applyBinning()
-        self._applyResolution()
+        self._applyBinning(self.binning.value)
+        self._applyResolution(self.resolution.value)
 
     def selfTest(self):
         return self._detector.selfTest() and self._spectrograph.selfTest()
@@ -246,11 +243,17 @@ class SpecDataFlow(model.DataFlow):
         self.component = comp
         self._ccddf = ccddf
         self.active = False
+        # Metadata is a little tricky because it must be synchronised with the
+        # actual acquisition, but it's difficult to know with which settings
+        # the acquisition was taken (when the settings are changing while
+        # generating).
+        self._beg_metadata = {}  # Metadata (more or less) at the beginning of the acquisition
 
     def start_generate(self):
         logging.debug("Activating Spectrometer acquisition")
         self.active = True
         self.component._applyCCDSettings()
+        self._beg_metadata = self.component._metadata.copy()
         self._ccddf.subscribe(self._newFrame)
 
     def stop_generate(self):
@@ -266,12 +269,29 @@ class SpecDataFlow(model.DataFlow):
         """
         Get the new frame from the detector
         """
-        if data.shape[1] != 1:
-            logging.warning("Shape of spectrometer data is %s, while second dim should be 1", data.shape)
-            # TODO: do software binning (= sum/mean over the second axis)
-        # TODO: get the metadata from just before the acquisition instead of just
-        # at the end? It shouldn't really matter much as normally the wavelength
-        # shouldn't move in the middle of an acquisition.
-        data.metadata.update(self.component._metadata)
+        if data.shape[0] != 1:
+            logging.warning("Shape of spectrometer data is %s, while first dim should be 1", data.shape)
+            # TODO: do software binning (= sum/mean over the first axis)
+
+        # Check the metadata seems correct, and if not, recompute it on-the-fly
+        md = self._beg_metadata
+        if model.MD_WL_LIST in md:
+            # TODO: the current metadata should contain the pxs/res/wl/grating it corresponds to
+            if len(md[model.MD_WL_LIST]) != data.shape[1]:
+                dmd = data.metadata
+                logging.debug("WL_LIST len = %d vs %d", len(md[model.MD_WL_LIST]), data.shape[1])
+                try:
+                    npixels = data.shape[1]
+                    pxs = dmd[model.MD_SENSOR_PIXEL_SIZE][0] * dmd[model.MD_BINNING][0]
+                    logging.info("Recomputing correct WL_LIST metadata")
+                    wll = self.component._spectrograph.getPixelToWavelength(npixels, pxs)
+                    md[model.MD_WL_LIST] = wll
+                except KeyError:
+                    logging.warning("Failed to compute correct WL_LIST metadata", exc_info=True)
+
+        data.metadata.update(md)
         model.DataFlow.notify(self, data)
+
+        # If the acquisition continues, it will likely be using the current settings
+        self._beg_metadata = self.component._metadata.copy()
 

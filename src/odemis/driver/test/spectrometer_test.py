@@ -20,13 +20,16 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
+
+import Queue
+import logging
 from odemis import model
 from odemis.driver import spectrometer, spectrapro, pvcam, andorcam2, andorshrk
-from unittest.case import skip
-import logging
 import os
 import time
 import unittest
+from unittest.case import skip
+
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -428,12 +431,70 @@ class TestCompositedSpectrometer(unittest.TestCase):
         self.assertEqual(self.spectrometer.binning.value, binning)
         self.assertNotEqual(self.detector.binning.value, self.spectrometer.binning.value)
 
-        # Now, we acquire
         data = self.spectrometer.data.get()
+        self.assertEqual(data.shape[1], self.spectrometer.resolution.value[0])
 
         self.assertEqual(self.spectrometer.binning.value, binning)
         self.assertEqual(self.detector.binning.value, self.spectrometer.binning.value)
 
+    def test_live_change(self):
+        """
+        Now modify while acquiring
+        """
+        self.spectrometer.exposureTime.value = 0.01
+        binning = [self.spectrometer.binning.range[0][0],
+                   self.spectrometer.binning.range[1][1]]
+        self.spectrometer.binning.value = binning
+        self.spectrometer.resolution.value = self.spectrometer.resolution.range[1]
+
+        self._data = Queue.Queue()
+
+        orig_res = self.spectrometer.resolution.value
+        self.spectrometer.data.subscribe(self.receive_spec_data)
+        try:
+            binning[0] *= 2
+            self.spectrometer.binning.value = binning
+            self.assertEqual(self.spectrometer.binning.value, tuple(binning))
+            self.assertEqual(self.detector.binning.value, self.spectrometer.binning.value)
+            new_res = self.spectrometer.resolution.value
+            self.assertEqual(orig_res[0] / 2, new_res[0])
+            time.sleep(2)
+            # Empty the queue
+            while True:
+                try:
+                    self._data.get(block=False)
+                except Queue.Empty:
+                    break
+
+            d = self._data.get()
+            self.assertEqual(d.shape[1], new_res[0])
+
+            binning[0] *= 2
+            self.spectrometer.binning.value = binning
+            self.assertEqual(self.spectrometer.binning.value, tuple(binning))
+            self.assertEqual(self.detector.binning.value, self.spectrometer.binning.value)
+            new_res = self.spectrometer.resolution.value
+            # Empty the queue
+            while True:
+                try:
+                    self._data.get(block=False)
+                except Queue.Empty:
+                    break
+
+            d = self._data.get()
+            self.assertEqual(d.shape[1], new_res[0])
+        finally:
+            self.spectrometer.data.unsubscribe(self.receive_spec_data)
+
+    def receive_spec_data(self, df, d):
+        self._data.put(d)
+        wl = d.metadata[model.MD_WL_LIST]
+        if d.shape[0] != 1:
+            logging.error("Shape is %s", d.shape)
+        if d.shape[1] != len(wl):
+            logging.error("Shape is %s but wl has len %d", d.shape, len(wl))
+
+        logging.debug("Received data of shape %s", d.shape)
 
 if __name__ == '__main__':
     unittest.main()
