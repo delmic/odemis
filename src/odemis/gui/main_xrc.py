@@ -202,6 +202,7 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.btn_align_lens = xrc.XRCCTRL(self, "btn_align_lens")
         self.btn_align_mirror = xrc.XRCCTRL(self, "btn_align_mirror")
         self.btn_align_centering = xrc.XRCCTRL(self, "btn_align_centering")
+        self.btn_align_fiber = xrc.XRCCTRL(self, "btn_align_fiber")
         self.pnl_focus = xrc.XRCCTRL(self, "pnl_focus")
         self.slider_focus = xrc.XRCCTRL(self, "slider_focus")
         self.btn_autofocus = xrc.XRCCTRL(self, "btn_autofocus")
@@ -216,12 +217,19 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.btn_m_mirror_xy_y = xrc.XRCCTRL(self, "btn_m_mirror_xy_y")
         self.btn_m_mirror_xy_x = xrc.XRCCTRL(self, "btn_m_mirror_xy_x")
         self.btn_p_mirror_xy_x = xrc.XRCCTRL(self, "btn_p_mirror_xy_x")
+        self.pnl_sparc_fib = xrc.XRCCTRL(self, "pnl_sparc_fib")
+        self.mirror_align_slider_fibaligner = xrc.XRCCTRL(self, "mirror_align_slider_fibaligner")
+        self.btn_p_fibaligner_y = xrc.XRCCTRL(self, "btn_p_fibaligner_y")
+        self.btn_m_fibaligner_y = xrc.XRCCTRL(self, "btn_m_fibaligner_y")
+        self.btn_m_fibaligner_x = xrc.XRCCTRL(self, "btn_m_fibaligner_x")
+        self.btn_p_fibaligner_x = xrc.XRCCTRL(self, "btn_p_fibaligner_x")
         self.html_alignment_doc = xrc.XRCCTRL(self, "html_alignment_doc")
         self.btn_log = xrc.XRCCTRL(self, "btn_log")
         self.pnl_vp_grid = xrc.XRCCTRL(self, "pnl_vp_grid")
         self.vp_moi = xrc.XRCCTRL(self, "vp_moi")
         self.vp_align_lens = xrc.XRCCTRL(self, "vp_align_lens")
         self.vp_align_center = xrc.XRCCTRL(self, "vp_align_center")
+        self.vp_align_fiber = xrc.XRCCTRL(self, "vp_align_fiber")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.pnl_streams = xrc.XRCCTRL(self, "pnl_streams")
         self.pnl_moi_settings = xrc.XRCCTRL(self, "pnl_moi_settings")
@@ -2441,74 +2449,108 @@ def __init_resources():
             <object class="sizeritem">
               <object class="wxPanel" name="pnl_mode_btns">
                 <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
-                    <object class="GraphicRadioButton" name="btn_align_lens">
-                      <icon>img_icon_ico_lens_png</icon>
-                      <icon_on>img_icon_ico_lens_green_png</icon_on>
-                      <height>48</height>
-                      <face_colour>def</face_colour>
-                      <label>LENS</label>
-                      <fg>#1A1A1A</fg>
-                      <font>
-                        <size>11</size>
-                        <style>normal</style>
-                        <weight>normal</weight>
-                        <underlined>0</underlined>
-                        <face>Ubuntu</face>
-                      </font>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
+                    <object class="wxGridBagSizer">
+                      <object class="sizeritem">
+                        <object class="GraphicRadioButton" name="btn_align_lens">
+                          <icon>img_icon_ico_lens_png</icon>
+                          <icon_on>img_icon_ico_lens_green_png</icon_on>
+                          <height>48</height>
+                          <face_colour>def</face_colour>
+                          <label>LENS</label>
+                          <fg>#1A1A1A</fg>
+                          <font>
+                            <size>11</size>
+                            <style>normal</style>
+                            <weight>normal</weight>
+                            <underlined>0</underlined>
+                            <face>Ubuntu</face>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxEXPAND</flag>
+                        <cellpos>0,0</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="GraphicRadioButton" name="btn_align_mirror">
+                          <icon>img_icon_ico_mirror_png</icon>
+                          <icon_on>img_icon_ico_mirror_green_png</icon_on>
+                          <height>48</height>
+                          <face_colour>def</face_colour>
+                          <label>MIRROR</label>
+                          <fg>#1A1A1A</fg>
+                          <font>
+                            <size>11</size>
+                            <style>normal</style>
+                            <weight>normal</weight>
+                            <underlined>0</underlined>
+                            <face>Ubuntu</face>
+                            <encoding>UTF-8</encoding>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxEXPAND</flag>
+                        <cellpos>0,1</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="GraphicRadioButton" name="btn_align_centering">
+                          <icon>img_icon_ico_ang_png</icon>
+                          <icon_on>img_icon_ico_ang_green_png</icon_on>
+                          <height>48</height>
+                          <face_colour>def</face_colour>
+                          <label>CENTERING</label>
+                          <fg>#1A1A1A</fg>
+                          <font>
+                            <size>11</size>
+                            <style>normal</style>
+                            <weight>normal</weight>
+                            <underlined>0</underlined>
+                            <face>Ubuntu</face>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxEXPAND</flag>
+                        <cellpos>1,0</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="GraphicRadioButton" name="btn_align_fiber">
+                          <icon>img_icon_ico_fib_png</icon>
+                          <icon_on>img_icon_ico_fib_green_png</icon_on>
+                          <height>48</height>
+                          <face_colour>def</face_colour>
+                          <label>FIBER</label>
+                          <fg>#1A1A1A</fg>
+                          <font>
+                            <size>11</size>
+                            <style>normal</style>
+                            <weight>normal</weight>
+                            <underlined>0</underlined>
+                            <face>Ubuntu</face>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxEXPAND</flag>
+                        <cellpos>1,1</cellpos>
+                      </object>
+                      <vgap>10</vgap>
+                      <hgap>10</hgap>
                     </object>
                     <flag>wxALL</flag>
                     <border>10</border>
                   </object>
-                  <object class="sizeritem">
-                    <object class="GraphicRadioButton" name="btn_align_mirror">
-                      <icon>img_icon_ico_mirror_png</icon>
-                      <icon_on>img_icon_ico_mirror_green_png</icon_on>
-                      <height>48</height>
-                      <face_colour>def</face_colour>
-                      <label>MIRROR</label>
-                      <fg>#1A1A1A</fg>
-                      <font>
-                        <size>11</size>
-                        <style>normal</style>
-                        <weight>normal</weight>
-                        <underlined>0</underlined>
-                        <face>Ubuntu</face>
-                        <encoding>UTF-8</encoding>
-                      </font>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <flag>wxALL</flag>
-                    <border>10</border>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="GraphicRadioButton" name="btn_align_centering">
-                      <icon>img_icon_ico_ang_png</icon>
-                      <icon_on>img_icon_ico_ang_green_png</icon_on>
-                      <height>48</height>
-                      <face_colour>def</face_colour>
-                      <label>CENTERING</label>
-                      <fg>#1A1A1A</fg>
-                      <font>
-                        <size>11</size>
-                        <style>normal</style>
-                        <weight>normal</weight>
-                        <underlined>0</underlined>
-                        <face>Ubuntu</face>
-                      </font>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <flag>wxALL</flag>
-                    <border>10</border>
-                  </object>
-                  <orient>wxHORIZONTAL</orient>
                 </object>
                 <fg>#E5E5E5</fg>
                 <bg>#444444</bg>
@@ -2963,6 +3005,217 @@ def __init_resources():
             </object>
             <orient>wxVERTICAL</orient>
             <object class="sizeritem">
+              <object class="wxPanel" name="pnl_sparc_fib">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="wxStaticText">
+                      <label>Fiber</label>
+                      <fg>#E5E5E5</fg>
+                      <font>
+                        <size>16</size>
+                        <style>normal</style>
+                        <weight>normal</weight>
+                        <underlined>0</underlined>
+                        <face>Ubuntu</face>
+                      </font>
+                    </object>
+                    <flag>wxBOTTOM|wxALL</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxStaticText">
+                      <label>Step size</label>
+                    </object>
+                    <flag>wxLEFT</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="UnitFloatSlider" name="mirror_align_slider_fibaligner">
+                      <size>-1,20</size>
+                      <value>0.00001</value>
+                      <min>0.0000001</min>
+                      <max>0.001</max>
+                      <unit>m</unit>
+                      <scale>log</scale>
+                      <accuracy>2</accuracy>
+                      <style>wxBORDER_NONE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxGridBagSizer">
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_pfy">
+                          <label>+Y</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <style>normal</style>
+                            <weight>bold</weight>
+                            <underlined>0</underlined>
+                            <face>Ubuntu</face>
+                          </font>
+                        </object>
+                        <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                        <border>5</border>
+                        <cellpos>0,2</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_mfy">
+                          <label>-Y</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <style>normal</style>
+                            <weight>bold</weight>
+                            <underlined>0</underlined>
+                            <face>Ubuntu</face>
+                          </font>
+                        </object>
+                        <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                        <border>5</border>
+                        <cellpos>4,2</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_pfx">
+                          <label>+X</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <style>normal</style>
+                            <weight>bold</weight>
+                            <underlined>0</underlined>
+                            <face>Ubuntu</face>
+                          </font>
+                          <style>wxALIGN_LEFT</style>
+                        </object>
+                        <flag>wxLEFT|wxALIGN_CENTRE_VERTICAL</flag>
+                        <border>5</border>
+                        <cellpos>2,4</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_mfx">
+                          <label>-X</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <style>normal</style>
+                            <weight>bold</weight>
+                            <underlined>0</underlined>
+                            <face>Ubuntu</face>
+                          </font>
+                        </object>
+                        <flag>wxRIGHT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
+                        <border>5</border>
+                        <cellpos>2,0</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="btn_p_fibaligner_y">
+                          <size>64,-1</size>
+                          <height>48</height>
+                          <face_colour>def</face_colour>
+                          <label>↑</label>
+                          <font>
+                            <size>24</size>
+                            <style>normal</style>
+                            <weight>bold</weight>
+                            <underlined>0</underlined>
+                            <face>Ubuntu</face>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxLEFT|wxRIGHT</flag>
+                        <border>7</border>
+                        <cellpos>1,2</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="btn_m_fibaligner_y">
+                          <size>64,-1</size>
+                          <height>48</height>
+                          <face_colour>def</face_colour>
+                          <label>↓</label>
+                          <font>
+                            <size>24</size>
+                            <style>normal</style>
+                            <weight>bold</weight>
+                            <underlined>0</underlined>
+                            <face>Ubuntu</face>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxLEFT|wxRIGHT</flag>
+                        <border>7</border>
+                        <cellpos>3,2</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="btn_m_fibaligner_x">
+                          <size>64,-1</size>
+                          <height>48</height>
+                          <face_colour>def</face_colour>
+                          <label>←</label>
+                          <font>
+                            <size>24</size>
+                            <style>normal</style>
+                            <weight>bold</weight>
+                            <underlined>0</underlined>
+                            <face>Ubuntu</face>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <cellpos>2,1</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="btn_p_fibaligner_x">
+                          <size>64,-1</size>
+                          <height>48</height>
+                          <face_colour>def</face_colour>
+                          <label>→</label>
+                          <font>
+                            <size>24</size>
+                            <style>normal</style>
+                            <weight>bold</weight>
+                            <underlined>0</underlined>
+                            <face>Ubuntu</face>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <cellpos>2,3</cellpos>
+                      </object>
+                      <vgap>0</vgap>
+                      <hgap>5</hgap>
+                      <growablecols/>
+                      <growablerows/>
+                    </object>
+                    <flag>wxLEFT|wxRIGHT|wxALIGN_CENTRE</flag>
+                    <border>5</border>
+                  </object>
+                </object>
+                <fg>#E5E5E5</fg>
+                <bg>#444444</bg>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
               <object class="wxHtmlWindow" name="html_alignment_doc">
                 <size>-1,400</size>
                 <fg>#BBBBBB</fg>
@@ -3020,6 +3273,12 @@ def __init_resources():
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
+          <object class="ARLiveViewport" name="vp_align_fiber">
+            <size>400,-1</size>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
         </object>
         <option>1</option>
         <flag>wxEXPAND</flag>

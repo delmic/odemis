@@ -25,6 +25,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import collections
+from collections import OrderedDict
+
 from concurrent.futures import CancelledError
 import logging
 import math
@@ -2385,6 +2387,7 @@ class SparcAlignTab(Tab):
 # Moment of inertia ROI width
 MOI_ROI_WIDTH = 0.5  # => take half of the full frame (in each dimension)
 
+
 class Sparc2AlignTab(Tab):
     """
     Tab for the mirror/fiber alignment on the SPARCv2. Note that the basic idea
@@ -2551,17 +2554,43 @@ class Sparc2AlignTab(Tab):
         # * mirror-align: move x, y of mirror with moment of inertia feedback
         # * lens-align: first auto-focus spectrograph, then align lens1
         # * goal-align: find the center of the AR image using a "Goal" image
-        self._alignbtn_to_mode = {panel.btn_align_lens: "lens-align",
-                                  panel.btn_align_mirror: "mirror-align",
-                                  panel.btn_align_centering: "center-align"}
-        # The GUI mode to the optical path mode
-        self._mode_to_opm = {"mirror-align": "mirror-align",
-                             "lens-align": "mirror-align",  # if autofocus is needed: spec-focus (first)
-                             "center-align": "ar",
-                             }
+        # * fiber-align: TODO: write info
+        self._alignbtn_to_mode = OrderedDict([
+            (panel.btn_align_lens, "lens-align"),
+            (panel.btn_align_mirror, "mirror-align"),
+            (panel.btn_align_centering, "center-align"),
+            (panel.btn_align_fiber, "fiber-align"),
+        ])
 
-        for btn in self._alignbtn_to_mode:
-            btn.Bind(wx.EVT_BUTTON, self._onClickAlignButton)
+        # The GUI mode to the optical path mode
+        self._mode_to_opm = {
+            "mirror-align": "mirror-align",
+            "lens-align": "mirror-align",  # if autofocus is needed: spec-focus (first)
+            "center-align": "ar",
+        }
+
+        gb_sizer = None
+        free_slots = []
+
+        # Hide the buttons that are not needed and move the visible ones to fill gaps that may arise
+        for btn, mode in self._alignbtn_to_mode.items():
+            if gb_sizer is None:
+                gb_sizer = btn.Parent.GetSizer().GetChildren()[0].GetSizer()
+
+            if mode in tab_data.align_mode.choices:
+                btn.Bind(wx.EVT_BUTTON, self._onClickAlignButton)
+                if free_slots:
+                    gb_sizer.SetItemPosition(btn, free_slots.pop(0))
+            else:
+                free_slots.append(gb_sizer.GetItemPosition(btn))
+                btn.Destroy()
+                del self._alignbtn_to_mode[btn]
+
+        # If there are 3 buttons, move the last one from the 2nd row to the 3rd position of the 1st
+        if len(tab_data.align_mode.choices) == 3:
+            last_btn = next(reversed(self._alignbtn_to_mode))
+            gb_sizer.SetItemPosition(last_btn, (0, 2))
+
         tab_data.align_mode.subscribe(self._onAlignMode)
 
         # Bind moving buttons & keys
@@ -2660,11 +2689,13 @@ class Sparc2AlignTab(Tab):
         lm.moveAbs(lpos)
 
     def _onClickAlignButton(self, evt):
-        """
-        Called when one of the Mirror/Optical fiber button is pushed
+        """ Called when one of the Mirror/Optical fiber button is pushed
+
         Note: in practice they can never be unpushed by the user, so this happens
           only when the button is toggled on.
+
         """
+
         btn = evt.GetEventObject()
         if not btn.GetToggle():
             logging.warning("Got event from button being untoggled")
@@ -2675,7 +2706,8 @@ class Sparc2AlignTab(Tab):
         except KeyError:
             logging.warning("Unknown button %s pressed", btn)
             return
-        # untoggling the other button will be done when the VA is updated
+
+        # un-toggling the other button will be done when the VA is updated
         self.tab_data_model.align_mode.value = mode
 
     @call_in_wx_main
@@ -2722,7 +2754,7 @@ class Sparc2AlignTab(Tab):
             self.panel.html_alignment_doc.Parent.Layout()
             self.panel.pnl_moi_settings.Parent.Layout()
             self.panel.html_moi_doc.Parent.Layout()
-        else:  # "center-align"
+        elif mode == "center-align":
             self.tab_data_model.focussedView.value = self.panel.vp_align_center.microscope_view
             self._ccd_stream.should_update.value = True
             self.panel.pnl_mirror.Enable(False)
@@ -2730,6 +2762,12 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_lens_mover.Enable(False)
             self.panel.pnl_focus.Enable(False)
             self.panel.pnl_moi_settings.Show(False)
+        elif mode == "fiber-align":
+            # FIXME: ActuatorController hides the fiber alignment panel if it cannot align. Should
+            # this work as in Sparc v1?
+            pass
+        else:
+            raise ValueError("Unknown alignment mode %s!" % mode)
 
     def _on_ccd_stream_play(self, update):
         """
