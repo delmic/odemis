@@ -1653,6 +1653,8 @@ class SEMComedi(model.HwComponent):
                         gc.collect()  # TODO: if scan is long enough, during scan
                         last_gc = time.time()
                 else:  # nothing to acquire => rest
+                    # TODO: only change the state after a little while, if it doesn't
+                    # need scanning again, to avoid too fast switch.
                     self._scanner.indicate_scan_state(False)
                     self.set_to_resting_position()
                     gc.collect()

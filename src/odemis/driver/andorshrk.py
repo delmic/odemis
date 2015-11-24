@@ -226,7 +226,7 @@ class Shamrock(model.Actuator):
     including the SR193i since SDK 2.99.
     The SR303i must be connected via the I²C cable on the iDus. With SDK 2.100+,
     it also work via the direct USB connection.
-    Note: we don't handle changing turret.
+    Note: we don't handle changing turret (live).
     """
     def __init__(self, name, role, device, camera=None, accessory=None,
                  slits=None, bands=None, fstepsize=1e-6, children=None, **kwargs):
@@ -236,8 +236,6 @@ class Shamrock(model.Actuator):
         camera (None or AndorCam2): Needed if the connection is done via the
           I²C connector of the camera. In such case, no children should be
           provided.
-        children (dict str -> Components): "ccd" should be the CCD used to acquire
-          the spectrum, if the connection is directly via USB.
         inverted (None): it is not allowed to invert the axes
         accessory (str or None): if "slitleds", then a TTL signal will be set to
           high on line 1 whenever one of the slit leds might be turned on.
@@ -265,17 +263,10 @@ class Shamrock(model.Actuator):
         else:
             self._dll = ShamrockDLL()
 
-        try:
-            self._camera = children["ccd"]
-        except (TypeError, KeyError):  # no "ccd" child => camera?
-            if camera is None:
-                raise ValueError("Spectrograph needs a child 'ccd' or a camera")
-            self._camera = camera
-            self._is_via_camera = True
-            self._hw_access = HwAccessMgr(camera)
-        else:
-            self._is_via_camera = False
-            self._hw_access = HwAccessMgr(None)
+        # Note: it used to need a "ccd" child, but not anymore
+        self._camera = camera
+        self._hw_access = HwAccessMgr(camera)
+        self._is_via_camera = (camera is not None)
 
         slits = slits or {}
         for i in slits:
@@ -937,11 +928,12 @@ class Shamrock(model.Actuator):
 
         self.position._set_value(pos, force_write=True)
 
-    def getPixelToWavelength(self):
+    def getPixelToWavelength(self, npixels, pxs):
         """
         Return the lookup table pixel number of the CCD -> wavelength observed.
-        That's correct for the given current CCD binning, and current
-        grating/wavelength.
+        npixels (10 <= int): number of pixels on the CCD (horizontally), after
+          binning.
+        pxs (0 < float): pixel size in m (after binning)
         return (list of floats): pixel number -> wavelength in m
         """
         # FIXME: calling this during a move seems to hang => need a hw access lock
@@ -949,10 +941,8 @@ class Shamrock(model.Actuator):
         if self.position.value["wavelength"] <= 1e-9:
             return []
 
-        npixels = self._camera.resolution.value[0]
-
         self.SetNumberPixels(npixels)
-        self.SetPixelWidth(self._camera.pixelSize.value[0] * self._camera.binning.value[0])
+        self.SetPixelWidth(pxs)
         # TODO: GetCalibration() return several values identical (eg, 0's if
         # cw is < 75 nm). Need to decide if we return something better (what?)
         # or check all the clients handle this corner case well.
@@ -1500,12 +1490,17 @@ class AndorSpec(model.Detector):
     """
     def __init__(self, name, role, children=None, daemon=None, **kwargs):
         """
-        All the arguments are identical to AndorCam2, expected: 
-        children (dict string->kwargs): name of child must be "shamrock" and the
-          kwargs contains the arguments passed to instantiate the Shamrock component
+        All the arguments are identical to AndorCam2, excepted:
+        children (dict string->kwargs): Must have two children, one named
+         "andorcam2" and the other one named "shamrock".
+         The kwargs contains the arguments passed to instantiate the Andorcam2
+         and Shamrock components.
         """
         # we will fill the set of children with Components later in ._children
         model.Detector.__init__(self, name, role, daemon=daemon, **kwargs)
+
+        # TODO: update it to allow standard access to the CCD, like the
+        # CompositedSpectrometer
 
         # Create the detector (ccd) child
         try:
@@ -1519,8 +1514,6 @@ class AndorSpec(model.Detector):
         self.children.value.add(self._detector)
         dt = self._detector
 
-        # Copy and adapt the VAs and roattributes from the detector
-                # set up the detector part
         # check that the shape is "horizontal"
         if dt.shape[0] <= 1:
             raise ValueError("Child detector must have at least 2 pixels horizontally")
@@ -1547,7 +1540,7 @@ class AndorSpec(model.Detector):
 
         min_res = (dt.resolution.range[0][0], 1)
         max_res = (dt.resolution.range[1][0], 1)
-        self.resolution = model.ResolutionVA(resolution, [min_res, max_res],
+        self.resolution = model.ResolutionVA(resolution, (min_res, max_res),
                                              setter=self._setResolution)
         # 2D binning is like a "small resolution"
         self._binning = binning
@@ -1561,8 +1554,6 @@ class AndorSpec(model.Detector):
         self.pixelSize = model.VigilantAttribute(pxs, unit="m", readonly=True)
         # Note: the metadata has no MD_PIXEL_SIZE, but a MD_WL_LIST
 
-        # TODO: support software binning by rolling up our own dataflow that
-        # does data merging
         assert dt.resolution.range[0][1] == 1
         self.data = dt.data
 
@@ -1573,8 +1564,6 @@ class AndorSpec(model.Detector):
                 setattr(self, aname, value)
             else:
                 logging.debug("skipping duplication of already existing VA '%s'", aname)
-
-        assert hasattr(self, "exposureTime")
 
         # Create the spectrograph (actuator) child
         try:
@@ -1647,7 +1636,9 @@ class AndorSpec(model.Detector):
         self._updateWavelengthList()
 
     def _updateWavelengthList(self):
-        wll = self._spectrograph.getPixelToWavelength()
+        npixels = self.resolution.value[0]
+        pxs = self.pixelSize.value[0] * self.binning.value[0]
+        wll = self._spectrograph.getPixelToWavelength(npixels, pxs)
         md = {model.MD_WL_LIST: wll}
         self._detector.updateMetadata(md)
 

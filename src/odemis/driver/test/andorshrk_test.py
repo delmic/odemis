@@ -355,7 +355,9 @@ class TestSpectrograph(object):
         # Most gratings (but mirrors) works well with 600 nm
         sp.moveAbs({"wavelength": 600e-9}).result()
         wl = sp.position.value['wavelength']
-        lt = sp.getPixelToWavelength()
+        npixels = self.ccd.resolution.value[0]
+        pxs = self.ccd.pixelSize.value[0] * self.ccd.binning.value[0]
+        lt = sp.getPixelToWavelength(npixels, pxs)
         self.assertEqual(len(lt), self.ccd.resolution.value[0])
         self.assertTrue(lt[0] < wl < lt[-1])
 
@@ -370,7 +372,7 @@ class TestSpectrograph(object):
         sp.moveAbs({"wavelength": 0}).result()
         wl = sp.position.value['wavelength']
         self.assertLessEqual(wl, 10e-9)
-        lt = sp.getPixelToWavelength()
+        lt = sp.getPixelToWavelength(npixels, pxs)
         for w in lt:
             self.assertTrue(0 <= w <= 20e-9)
 

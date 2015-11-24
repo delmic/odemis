@@ -1342,6 +1342,7 @@ class AndorCam2(model.DigitalCamera):
         Commits the settings to the camera. Only the settings which have been
         modified are updated.
         Note: acquisition_lock must be taken, and acquisition must _not_ going on.
+        return (int, int): resolution of the image to be acquired
         """
         prev_image_settings, prev_exp_time, prev_readout_rate, prev_gain = self._prev_settings
 
@@ -1411,6 +1412,11 @@ class AndorCam2(model.DigitalCamera):
         self._prev_settings = [new_image_settings, self._exposure_time,
                                self._readout_rate, self._gain]
 
+        # Computes (back) the resolution
+        b, rect = new_image_settings[0:2], new_image_settings[2:]
+        im_res = (rect[1] - rect[0] + 1) // b[0], (rect[3] - rect[2] + 1) // b[1]
+        return im_res
+
     def _allocate_buffer(self, size):
         """
         returns a cbuffer of the right size for an image
@@ -1442,13 +1448,12 @@ class AndorCam2(model.DigitalCamera):
             self.atcore.SetAcquisitionMode(1) # 1 = Single scan
             # Seems exposure needs to be re-set after setting acquisition mode
             self._prev_settings[1] = None # 1 => exposure time
-            self._update_settings()
+            size = self._update_settings()
             metadata = dict(self._metadata) # duplicate
 
             # Acquire the image
             self.atcore.StartAcquisition()
 
-            size = self.resolution.value
             exposure, accumulate, kinetic = self.GetAcquisitionTimings()
             logging.debug("Accumulate time = %f, kinetic = %f", accumulate, kinetic)
             self._metadata[model.MD_EXP_TIME] = exposure
@@ -1525,13 +1530,12 @@ class AndorCam2(model.DigitalCamera):
                     self.atcore.SetAcquisitionMode(5) # 5 = Run till abort
                     # Seems exposure needs to be re-set after setting acquisition mode
                     self._prev_settings[1] = None # 1 => exposure time
-                    self._update_settings()
+                    size = self._update_settings()
                     if not has_hw_lock:
                         self.hw_lock.acquire()
                         has_hw_lock = True
                     self.atcore.StartAcquisition()
 
-                    size = self._transposeSizeFromUser(self.resolution.value)
                     exposure, accumulate, kinetic = self.GetAcquisitionTimings()
                     logging.debug("Accumulate time = %f, kinetic = %f", accumulate, kinetic)
                     readout = size[0] * size[1] * self._metadata[model.MD_READOUT_TIME] # s
@@ -1653,10 +1657,8 @@ class AndorCam2(model.DigitalCamera):
                     self.atcore.SetAcquisitionMode(1) # 1 = Single scan
                     # Seems exposure needs to be re-set after setting acquisition mode
                     self._prev_settings[1] = None # 1 => exposure time
-                    self._update_settings()
+                    size = self._update_settings()
 
-                    # TODO: can be before starting?
-                    size = self._transposeSizeFromUser(self.resolution.value)
                     exposure, accumulate, kinetic = self.GetAcquisitionTimings()
                     logging.debug("Accumulate time = %f, kinetic = %f", accumulate, kinetic)
                     readout = size[0] * size[1] * self._metadata[model.MD_READOUT_TIME] # s
@@ -2384,7 +2386,8 @@ class FakeAndorV2DLL(object):
         p = cast(cbuffer, POINTER(c_uint16))
         res = ((self.roi[1] - self.roi[0] + 1) // self.binning[0],
                (self.roi[3] - self.roi[2] + 1) // self.binning[1])
-        assert res[0] * res[1] == size.value
+        if res[0] * res[1] != size.value:
+            raise ValueError("res %s != size %d" % (res, size.value))
         ndbuffer = numpy.ctypeslib.as_array(p, (res[1], res[0]))
         ndbuffer[...] = self._data[self.roi[2] - 1:self.roi[3]:self.binning[1],
                                    self.roi[0] - 1:self.roi[1]:self.binning[0]]

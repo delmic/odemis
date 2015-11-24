@@ -4,7 +4,7 @@ Created on 8 Mar 2013
 
 @author: Éric Piel
 
-Copyright © 2013 Éric Piel, Delmic
+Copyright © 2013-2015 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -20,13 +20,16 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
-from odemis import model
-from odemis.driver import spectrometer, spectrapro, pvcam, andorcam2
-from unittest.case import skip
+
+import Queue
 import logging
+from odemis import model
+from odemis.driver import spectrometer, spectrapro, pvcam, andorcam2, andorshrk
 import os
 import time
 import unittest
+from unittest.case import skip
+
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -43,6 +46,12 @@ else:
 CLASS_SPG = spectrapro.SpectraPro
 CLASS_SPG_SIM = spectrapro.FakeSpectraPro
 KWARGS_SPG = {"name": "spg", "role": "spectrograph", "port": PORT_SPG}
+
+CLASS_SHRK = andorshrk.Shamrock
+KWARGS_SHRK_SIM = dict(name="sr193", role="spectrograph", device="fake",
+                       slits={1: "slit-in", 3: "slit-monochromator"},
+                       bands={1: (230e-9, 500e-9), 3: (600e-9, 1253e-9), 5: "pass-through"})
+
 
 # Real device: PI PIXIS
 CLASS_CCD = pvcam.PVCam
@@ -125,6 +134,21 @@ class TestSimulated(unittest.TestCase):
         self.assertGreaterEqual(duration, exp)
         self.assertEqual(data.shape[0], 1)
         self.assertEqual(data.shape[-1::-1], self.spectrometer.resolution.value)
+
+
+class TestSimulatedShamrock(TestSimulated):
+    """
+    Test the CompositedSpectrometer class with only simulated components
+    """
+    @classmethod
+    def setUpClass(cls):
+        cls.detector = CLASS_CCD_SIM(**KWARGS_CCD_SIM)
+        cls.spectrograph = CLASS_SHRK(**KWARGS_SHRK_SIM)
+        cls.spectrometer = CLASS(name="test", role="spectrometer",
+                                 children={"detector": cls.detector,
+                                           "spectrograph": cls.spectrograph})
+        # save position
+        cls._orig_pos = cls.spectrograph.position.value
 
 
 class TestCompositedSpectrometer(unittest.TestCase):
@@ -258,7 +282,6 @@ class TestCompositedSpectrometer(unittest.TestCase):
         md = data.metadata
         self.assertEqual(md[model.MD_BINNING], tuple(binning))
 
-
     def test_resolution(self):
         """
         Check the (unusual) behaviour of the resolution
@@ -364,7 +387,7 @@ class TestCompositedSpectrometer(unittest.TestCase):
         # This assumes that we have a PIXIS 400 (1340 x 400)
         if (self.spectrometer.shape[0] != 1340 or
             self.spectrometer.pixelSize.value[0] != 20e-6):
-            self.skipTest("Hardware needs to have to be a PIXIS 400 for the test")
+            self.skipTest("Hardware needs to be a PIXIS 400 for the test")
         # TODO: check we have a SpectraPro i2300 or FakeSpectraPro
 
         res = self.spectrometer.resolution.value
@@ -392,6 +415,86 @@ class TestCompositedSpectrometer(unittest.TestCase):
         wl_bw = wl[-1] - wl[0]
         logging.debug("Got CCD coverage = %f nm", wl_bw * 1e9)
         self.assertAlmostEqual(wl_bw, 48e-9, 2)
+
+    def test_ccd_separated(self):
+        """
+        Check that it's possible to access the CCD as a whole CCD without being
+        affected by the binning/resolution of the spectrometer
+        """
+        # As long as there is no acquisition, CCD and spectrometer should not
+        # be connected
+        self.detector.binning.value = (1, 1)
+        self.detector.resolution.value = self.detector.resolution.range[1]
+        binning = (self.spectrometer.binning.range[0][0],
+                   self.spectrometer.binning.range[1][1])
+        self.spectrometer.binning.value = binning
+        self.assertEqual(self.spectrometer.binning.value, binning)
+        self.assertNotEqual(self.detector.binning.value, self.spectrometer.binning.value)
+
+        data = self.spectrometer.data.get()
+        self.assertEqual(data.shape[1], self.spectrometer.resolution.value[0])
+
+        self.assertEqual(self.spectrometer.binning.value, binning)
+        self.assertEqual(self.detector.binning.value, self.spectrometer.binning.value)
+
+    def test_live_change(self):
+        """
+        Now modify while acquiring
+        """
+        self.spectrometer.exposureTime.value = 0.01
+        binning = [self.spectrometer.binning.range[0][0],
+                   self.spectrometer.binning.range[1][1]]
+        self.spectrometer.binning.value = binning
+        self.spectrometer.resolution.value = self.spectrometer.resolution.range[1]
+
+        self._data = Queue.Queue()
+
+        orig_res = self.spectrometer.resolution.value
+        self.spectrometer.data.subscribe(self.receive_spec_data)
+        try:
+            binning[0] *= 2
+            self.spectrometer.binning.value = binning
+            self.assertEqual(self.spectrometer.binning.value, tuple(binning))
+            self.assertEqual(self.detector.binning.value, self.spectrometer.binning.value)
+            new_res = self.spectrometer.resolution.value
+            self.assertEqual(orig_res[0] / 2, new_res[0])
+            time.sleep(2)
+            # Empty the queue
+            while True:
+                try:
+                    self._data.get(block=False)
+                except Queue.Empty:
+                    break
+
+            d = self._data.get()
+            self.assertEqual(d.shape[1], new_res[0])
+
+            binning[0] *= 2
+            self.spectrometer.binning.value = binning
+            self.assertEqual(self.spectrometer.binning.value, tuple(binning))
+            self.assertEqual(self.detector.binning.value, self.spectrometer.binning.value)
+            new_res = self.spectrometer.resolution.value
+            # Empty the queue
+            while True:
+                try:
+                    self._data.get(block=False)
+                except Queue.Empty:
+                    break
+
+            d = self._data.get()
+            self.assertEqual(d.shape[1], new_res[0])
+        finally:
+            self.spectrometer.data.unsubscribe(self.receive_spec_data)
+
+    def receive_spec_data(self, df, d):
+        self._data.put(d)
+        wl = d.metadata[model.MD_WL_LIST]
+        if d.shape[0] != 1:
+            logging.error("Shape is %s", d.shape)
+        if d.shape[1] != len(wl):
+            logging.error("Shape is %s but wl has len %d", d.shape, len(wl))
+
+        logging.debug("Received data of shape %s", d.shape)
 
 if __name__ == '__main__':
     unittest.main()

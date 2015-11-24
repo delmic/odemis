@@ -165,7 +165,7 @@ class PMT(model.Detector):
 class PMTDataFlow(model.DataFlow):
     def __init__(self, detector, pmt, control):
         """
-        detector (semcomedi.Detector): the detector that the dataflow corresponds to
+        detector (Detector): the detector that the dataflow corresponds to
         """
         model.DataFlow.__init__(self)
         self.component = detector

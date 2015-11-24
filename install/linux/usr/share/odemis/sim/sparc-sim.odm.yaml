@@ -194,6 +194,9 @@ SimSPARC: {
        device: "fake",
        image: "andorcam2-fake-clara.tiff", # only for simulator
     },
+    properties: {
+        targetTemperature: -60, # °C
+    },
 }
 
 "Spectrograph": {

@@ -172,7 +172,6 @@ SPARC2: {
     class: andorshrk.Shamrock,
     role: spectrograph,
     power_supplier: "Power Control Unit",
-    children: {"ccd": "Spectral Camera"},
     init: {
         device: 0,
         slits: {1: "slit-in", # INPUT_SIDE
