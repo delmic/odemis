@@ -31,14 +31,22 @@ import logging
 import time
 
 # List of places to look for the database file
-FLUODB_PATHS = [u"/usr/share/odemis/fluodb/",
-                u"./install/linux/usr/share/odemis/fluodb/"]
+FLUODB_PATHS = (u"/usr/share/odemis/fluodb/",
+                u"./install/linux/usr/share/odemis/fluodb/")
 
 # Simple dye database, that will be filled in at initialisation, if there is a
 # database file available
 # string (name) -> 2-tuple of float (excitation peak wl, emission peak wl in m)
-# TODO: Should support having multiple peaks, orderer by strength
+# TODO: Should support having multiple peaks, ordered by strength
 DyeDatabase = None
+
+
+def _clean_up_name(name):
+    name = name.strip()
+    # first letter upper-case
+    name = name[:1].upper() + name[1:]
+
+    return name
 
 
 def LoadDyeDatabase():
@@ -59,9 +67,11 @@ def LoadDyeDatabase():
         index = json.load(findex)
         basedir = p
         break
-
-    if index is None:
+    else:
         return False
+
+    # Name of the substance -> name of the substance + solvent
+    fullnames = {}
 
     # Load the main excitation and emission peak for each environment
     # For each environment, download it
@@ -69,14 +79,14 @@ def LoadDyeDatabase():
         # find the names (of the substance)
         names = set()
         s = e["substance"]
-        names.add(s["common_name"].strip()) # in case loading the substance file fails
+        names.add(_clean_up_name(s["common_name"]))  # in case loading the substance file fails
         nsid = int(s["substance_id"])
         sname = basedir + u"substance/%d.json" % nsid
         try:
             fs = open(sname, "r")
             fulls = json.load(fs)
             for n in fulls["common_names"]:
-                names.add(n.strip())
+                names.add(_clean_up_name(n))
         except (IOError, ValueError):
             # no such file => no problem
             logging.debug("Failed to open %s", sname)
@@ -135,17 +145,33 @@ def LoadDyeDatabase():
         # Note: if two substances have the same name (and it changes something)
         # => add the solvent name.
         for n in names:
+            if not solname:
+                fullname = n
+            else:
+                fullname = n + u" (in %s)" % solname
+
             if n not in DyeDatabase:
                 DyeDatabase[n] = (xwl, ewl)
+                fullnames[n] = fullname
             else:
-                # TODO: check for all the names with solvent name, and put the
-                # solvent name in the first dye too.
-                if DyeDatabase[n] == (xwl, ewl):
+                odye = DyeDatabase[n]
+                if odye == (xwl, ewl):
                     continue
-                if not solname:
-                    continue
-                fullname = n + u" (in %s)" % solname
+
+                # Move the old simple name to its fullname
+                # Note, if there is no solvent, then it doesn't really move
+                del DyeDatabase[n]
+                DyeDatabase[fullnames[n]] = odye
+
+                # Add this new dye directly with its fullname
+                if fullname in DyeDatabase and DyeDatabase[fullname] != (xwl, ewl):
+                    logging.info("Dropping duplicated dye %s", fullname)
+
                 DyeDatabase[fullname] = (xwl, ewl)
+
+                if fullname == n:
+                    # This one had no solvent, so no real fullname
+                    fullnames[n] = fullname
 
     # TODO: also de-duplicate names in a case insensitive way
     logging.info("Loaded %d dye names from the database.", len(DyeDatabase))
