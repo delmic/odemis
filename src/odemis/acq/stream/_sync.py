@@ -1053,6 +1053,9 @@ class SEMARMDStream(SEMCCDMDStream):
         for d in rep_data:
             d.metadata[MD_DESCRIPTION] = sname
 
+        if len(rep_data) != numpy.prod(repetition):
+            logging.error("Only got %d AR acquisitions while expected %d", len(rep_data), numpy.prod(repetition))
+
         self._rep_raw = rep_data
         self._main_raw = [main_data]
 
