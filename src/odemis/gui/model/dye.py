@@ -94,13 +94,48 @@ def LoadDyeDatabase():
         if len(xpeaks) == 0 or len(epeaks) == 0:
             # not enough information to be worthy
             continue
-        xwl = xpeaks[0] * 1e-9 # m
-        ewl = epeaks[0] * 1e-9 # m
+
+        # In case of multiple peaks, select the one that make most sense:
+        # excitation is just before emission
+        if len(xpeaks) == 1:
+            xp = xpeaks[0]
+            if len(epeaks) == 1:  # easy
+                ep = epeaks[0]
+            else:  # Closest emission above excitation
+                for ep in sorted(epeaks):
+                    if ep > xp:
+                        break
+                else:
+                    ep = max(epeaks)
+        else: # multiple excitations
+            if len(epeaks) == 1:  # Closest excitation below emissions
+                ep = epeaks[0]
+                for xp in sorted(xpeaks, reverse=True):
+                    if xp < ep:
+                        break
+                else:
+                    xp = min(xpeaks)
+            else:  # Find something not too weird
+                for ep in sorted(epeaks):
+                    if any(xp < ep for xp in xpeaks):
+                        break
+                else:
+                    ep = max(epeaks)
+                for xp in sorted(xpeaks, reverse=True):
+                    if xp < ep:
+                        break
+                else:
+                    xp = min(xpeaks)
+
+        if not xp <= ep:
+            logging.info("Dye %s, excitation is %d > emission %d nm", s["common_name"], xp, ep)
+        xwl = xp * 1e-9  # m
+        ewl = ep * 1e-9  # m
 
         # Note: if two substances have the same name (and it changes something)
         # => add the solvent name.
         for n in names:
-            if not n in DyeDatabase:
+            if n not in DyeDatabase:
                 DyeDatabase[n] = (xwl, ewl)
             else:
                 # TODO: check for all the names with solvent name, and put the
