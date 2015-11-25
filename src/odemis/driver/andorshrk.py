@@ -150,7 +150,7 @@ class HwAccessMgr(object):
         """
         self._ccd = ccd
         if ccd is None:
-            self.hw_lock = threading.Lock()
+            self.hw_lock = threading.RLock()
 
     def __enter__(self):
         if self._ccd is None:
@@ -514,8 +514,8 @@ class Shamrock(model.Actuator):
         """
         return (0<int<=3): current grating
         """
+        grating = c_int()
         with self._hw_access:
-            grating = c_int()
             self._dll.ShamrockGetGrating(self._device, byref(grating))
         return grating.value
 
@@ -524,7 +524,8 @@ class Shamrock(model.Actuator):
         return (0<int<=3): number of gratings present
         """
         noGratings = c_int()
-        self._dll.ShamrockGetNumberGratings(self._device, byref(noGratings))
+        with self._hw_access:
+            self._dll.ShamrockGetNumberGratings(self._device, byref(noGratings))
         return noGratings.value
 
     def WavelengthReset(self):
@@ -604,8 +605,9 @@ class Shamrock(model.Actuator):
         """
         assert 1 <= grating <= 3
         Min, Max = c_float(), c_float() # in nm
-        self._dll.ShamrockGetWavelengthLimits(self._device, grating,
-                                              byref(Min), byref(Max))
+        with self._hw_access:
+            self._dll.ShamrockGetWavelengthLimits(self._device, grating,
+                                                  byref(Min), byref(Max))
         return Min.value * 1e-9, Max.value * 1e-9
 
     def WavelengthIsPresent(self):
@@ -635,11 +637,13 @@ class Shamrock(model.Actuator):
         # numpy array or returning directly the C array. We could also just
         # allocate one array at the init, and reuse it.
         CalibrationValues = (c_float * npixels)()
-        # Note that altough it looks like it could do without hardware access,
+        # Note that although it looks like it could do without hardware access,
         # it is necessary. For example, the SDK call can completely block if a
         # move is currently happening.
         with self._hw_access:
             self._dll.ShamrockGetCalibration(self._device, CalibrationValues, npixels)
+        # FIXME: still seems to hang, even with hw access lock
+        logging.debug("Calibration info returned")
         # Note: it just applies the polynomial, so you can end up with negative
         # values => clamp them to 0.
         return [max(0, v * 1e-9) for v in CalibrationValues]
@@ -660,7 +664,8 @@ class Shamrock(model.Actuator):
         """
         low = c_float()
         high = c_float()
-        self._dll.ShamrockGetCCDLimits(self._device, port, byref(low), byref(high))
+        with self._hw_access:
+            self._dll.ShamrockGetCCDLimits(self._device, port, byref(low), byref(high))
         return low.value * 1e-9, high.value * 1e-9
 
     def SetPixelWidth(self, width):
@@ -670,7 +675,8 @@ class Shamrock(model.Actuator):
         width (float): size of a pixel in m
         """
         # set in µm
-        self._dll.ShamrockSetPixelWidth(self._device, c_float(width * 1e6))
+        with self._hw_access:
+            self._dll.ShamrockSetPixelWidth(self._device, c_float(width * 1e6))
 
     def SetNumberPixels(self, npixels):
         """
@@ -678,7 +684,8 @@ class Shamrock(model.Actuator):
         Needed to get correct information from GetCalibration()
         npixels (int): number of pixels on the attached sensor
         """
-        self._dll.ShamrockSetNumberPixels(self._device, npixels)
+        with self._hw_access:
+            self._dll.ShamrockSetNumberPixels(self._device, npixels)
 
 #self._dll.ShamrockGetPixelWidth(self._device, float* Width)
 #self._dll.ShamrockGetNumberPixels(self._device, int* NumberPixels)
@@ -711,7 +718,8 @@ class Shamrock(model.Actuator):
         return (0 <= int): absolute max position (in steps)
         """
         focus = c_int()
-        self._dll.ShamrockGetFocusMirrorMaxSteps(self._device, byref(focus))
+        with self._hw_access:
+            self._dll.ShamrockGetFocusMirrorMaxSteps(self._device, byref(focus))
         return focus.value
 
     def FocusMirrorIsPresent(self):
@@ -836,16 +844,16 @@ class Shamrock(model.Actuator):
             logging.info("Not changing again flipper %d to current pos %d", flipper, port)
             return
 
-        with self._hw_access:
-            if "focus" in self.axes:
-                cf = self.GetFocusMirror()
+        if "focus" in self.axes:
+            cf = self.GetFocusMirror()
 
+        with self._hw_access:
             self._dll.ShamrockSetFlipperMirror(self._device, flipper, port)
 
-            nf = self.GetFocusMirror()
-            if "focus" in self.axes and cf != nf:
-                logging.warning("Focus mirror changed unexpectedly after moving flipper %d to %d, "
-                                "going from %d to %d steps", flipper, port, cf, nf)
+        nf = self.GetFocusMirror()
+        if "focus" in self.axes and cf != nf:
+            logging.warning("Focus mirror changed unexpectedly after moving flipper %d to %d, "
+                            "going from %d to %d steps", flipper, port, cf, nf)
 
     def GetFlipperMirror(self, flipper):
         assert(FLIPPER_INDEX_MIN <= flipper <= FLIPPER_INDEX_MAX)
@@ -882,7 +890,6 @@ class Shamrock(model.Actuator):
             # good state.
             self.GetGrating()
 
-    # def ShamrockGetAccessoryState(int device,int Accessory, int *state);
     def GetAccessoryState(self, line):
         """
         line (0 <= int <= 1): line number
@@ -890,7 +897,8 @@ class Shamrock(model.Actuator):
         """
         assert(ACCESSORYMIN <= line <= ACCESSORYMAX)
         state = c_int()
-        self._dll.ShamrockGetAccessoryState(self._device, line, byref(state))
+        with self._hw_access:
+            self._dll.ShamrockGetAccessoryState(self._device, line, byref(state))
         return (state.value != 0)
 
     def AccessoryIsPresent(self):
@@ -955,7 +963,6 @@ class Shamrock(model.Actuator):
         pxs (0 < float): pixel size in m (after binning)
         return (list of floats): pixel number -> wavelength in m
         """
-        # FIXME: calling this during a move seems to hang => need a hw access lock
         # If wavelength is 0, report empty list to indicate it makes no sense
         if self.position.value["wavelength"] <= 1e-9:
             return []
