@@ -65,6 +65,7 @@ if TEST_NOHW:
     CLASS_CCD = CLASS_CCD_SIM
 
 CLASS = spectrometer.CompositedSpectrometer
+SPEC_KWARGS = {"name": "test", "role": "spectrometer", "transpose": [1, -2]}
 
 class TestSimulated(unittest.TestCase):
     """
@@ -75,9 +76,9 @@ class TestSimulated(unittest.TestCase):
         cls.detector = CLASS_CCD_SIM(**KWARGS_CCD_SIM)
         cls.spectrograph = CLASS_SPG_SIM(children={"ccd": cls.detector},
                                          **KWARGS_SPG)
-        cls.spectrometer = CLASS(name="test", role="spectrometer",
-                                 children={"detector": cls.detector,
-                                           "spectrograph": cls.spectrograph})
+        cls.spectrometer = CLASS(children={"detector": cls.detector,
+                                           "spectrograph": cls.spectrograph},
+                                 **SPEC_KWARGS)
         #save position
         cls._orig_pos = cls.spectrograph.position.value
 
@@ -144,9 +145,9 @@ class TestSimulatedShamrock(TestSimulated):
     def setUpClass(cls):
         cls.detector = CLASS_CCD_SIM(**KWARGS_CCD_SIM)
         cls.spectrograph = CLASS_SHRK(**KWARGS_SHRK_SIM)
-        cls.spectrometer = CLASS(name="test", role="spectrometer",
-                                 children={"detector": cls.detector,
-                                           "spectrograph": cls.spectrograph})
+        cls.spectrometer = CLASS(children={"detector": cls.detector,
+                                           "spectrograph": cls.spectrograph},
+                                 **SPEC_KWARGS)
         # save position
         cls._orig_pos = cls.spectrograph.position.value
 
@@ -161,9 +162,9 @@ class TestCompositedSpectrometer(unittest.TestCase):
         cls.detector = CLASS_CCD(**KWARGS_CCD)
         cls.spectrograph = CLASS_SPG(children={"ccd": cls.detector},
                                      **KWARGS_SPG)
-        cls.spectrometer = CLASS(name="test", role="spectrometer",
-                                 children={"detector": cls.detector,
-                                           "spectrograph": cls.spectrograph})
+        cls.spectrometer = CLASS(children={"detector": cls.detector,
+                                           "spectrograph": cls.spectrograph},
+                                 **SPEC_KWARGS)
         #save position
         cls._orig_pos = cls.spectrograph.position.value
 
