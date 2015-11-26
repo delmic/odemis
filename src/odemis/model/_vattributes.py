@@ -176,6 +176,7 @@ class VigilantAttribute(VigilantAttributeBase):
             return self._value
         else:
             try:
+                # TODO: any way to not avoid calling the getter during serialization?
                 return self._getter()
             except WeakRefLostError:
                 return self._value
