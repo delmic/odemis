@@ -1,11 +1,12 @@
-# Configuration for a simulated SPARC v2 system
+# Configuration for a simulated SPARC v2 system with a single CCD used for AR
+# and spectrometry.
 SPARC2: {
     class: Microscope,
     role: sparc2,
     children: ["SEM E-beam", "SEM Detector", "Calibration Light",
                "Optical Path Properties",
-               "Camera", "Spectrometer", "CL Detector",
-               "Spec Filter Wheel", "Spec CCD Flipper", "Spectrograph focus",
+               "Camera", "Spectrometer", "CL Detector", "Spectrograph",
+               "Spectrograph focus",
                "Mirror Actuators", "Mirror Actuators in XY referential",
                "Slit", "CL Selector", "CL Filter Wheel",
                "Lens1 Mover", "Lens2 Switch"],
@@ -24,20 +25,18 @@ SPARC2: {
     role: "power-control",
     init: {
         port: "/dev/fake", # for simulator
-        pin_map: {"Calibration Light": 0, "CL PMT control unit": 3,
-                  "Camera": 4, "Spectral Camera": 5, "Spectrograph": 6,
+        pin_map: {"Calibration Light": 0, "CL PMT control unit": 1,
+                  "Camera": 4, "Spectrograph": 6,
                   "Optical Actuators": 2},
         delay: { # Time it takes before a component is accessible
             "Calibration Light": 0, # To turn on/off the light, it's immediate
             "CL PMT control unit": 0,
             "Camera": 3,
-            "Spectral Camera": 3,
             "Spectrograph": 10,
             "Optical Actuators": 1
         },
         init: { # Which component to power on from the very beginning (to save time)
             "Camera": True,
-            "Spectral Camera": True,
             "Spectrograph": True,
             "Optical Actuators": True
         },
@@ -149,29 +148,17 @@ SPARC2: {
 #     },
 # }
 
-# On some configuration, there is a dedicated camera for the acquisition of the
-# spectra, otherwise 'Camera' is used.
-"Spectral Camera": {
-    class: andorcam2.AndorCam2,
-    role: sp-ccd,
-    power_supplier: "Power Control Unit",
-    init: {
-       device: "fake",
-       transp: [-1, 2], # if mirrored on X axis
-    },
-    properties: {
-        targetTemperature: -60, # °C
-    },
-}
-
-# Spectrometer = Andor iVac 316 + Shamrock SR193 (connected via USB)
+# Spectrometer = Zyla + Shamrock SR193 (connected via USB)
 "Spectrometer": {
     class: spectrometer.CompositedSpectrometer,
     role: spectrometer,
-    children: {detector: "Spectral Camera", spectrograph: "Spectrograph"},
-    properties: {
-        binning: [4, 16],
-    },
+    children: {detector: "Camera", spectrograph: "Spectrograph"},
+    init: {
+        transp: [1, -2], # only applied to the spectrometer data (not raw CCD)
+    }
+#     properties: {
+#         binning: [4, 1080], # CCD has 2160 px, so only half is used
+#     },
 }
 
 "Spectrograph": {
@@ -182,16 +169,9 @@ SPARC2: {
         device: "fake",
         slits: {1: "slit-in", # INPUT_SIDE
         },
-        bands: { # The filters in the filter-wheel
-            1: [320.e-9, 400.e-9], # pos -> m,m
-            2: [500.e-9, 550.e-9],
-            3: [400.e-9, 450.e-9],
-            4: "polariser",
-            6: "pass-through"
-        },
         fstepsize: 10.9e-6, # m, size of one focus step
     },
-    affects: ["Camera", "Spectral Camera"],
+    affects: ["Camera", "Spectrometer"],
 }
 
 "Spectrograph focus": {
@@ -201,36 +181,7 @@ SPARC2: {
     init: {
         axes_map: {"z": "focus"},
     },
-    affects: ["Camera", "Spectral Camera"],
-}
-
-
-# "Spectrograph focus": {
-#     # Normally child of Spectrograph, but for the simulator: child of Camera
-#     role: "focus",
-#     affects: ["Camera", "Spectral Camera"],
-# }
-
-# Provide the mirror (aka port selector) of the spectrograph as a separate component
-"Spec CCD Flipper": {
-    class: actuator.MultiplexActuator,
-    role: "spec-det-selector",
-    children: {"rx": "Spectrograph"},
-    init: {
-        axes_map: {"rx": "flip-out"},
-    },
-    affects: ["Camera", "Spectral Camera"],
-}
-
-# Provide the filter wheel of the spectrograph as a separate component
-"Spec Filter Wheel": {
-    class: actuator.MultiplexActuator,
-    role: filter,
-    children: {"band": "Spectrograph"},
-    init: {
-        axes_map: {"band": "band"},
-    },
-    affects: ["Camera", "Spectral Camera"],
+    affects: ["Camera", "Spectrometer"],
 }
 
 "Optical Path Properties": {
@@ -248,7 +199,7 @@ SPARC2: {
        parabola_f: 2.5e-3,  # m, parabola_parameter=1/4f
        rotation: -1.570796326795, # rad, 90° rotation between optical axis and SEM Y axis
     },
-    affects: ["Camera"]
+    affects: ["Camera", "Spectrometer"]
 }
 
 # Controller for the motors moving the various parts of the optical box
@@ -280,7 +231,7 @@ SPARC2: {
         # Default position of the lens (can be improved by user)
         FAV_POS_ACTIVE: {"x": -0.0045} # m
     },
-    affects: ["Camera", "Spectral Camera"],
+    affects: ["Camera", "Spectrometer"],
 }
 
 # The second lens of Plate 1, either to working or parking position
@@ -295,7 +246,7 @@ SPARC2: {
             -0.02: "off", # completely out of the path
         },
     },
-    affects: ["Camera", "Spectral Camera"],
+    affects: ["Camera", "Spectrometer"],
 }
 
 # Control the slit position to either fully-open or small (dependent on the spectrometer slit-in)
@@ -310,7 +261,7 @@ SPARC2: {
             -0.0012: "off", # opening based on the small slit
         },
     },
-    affects: ["Camera", "Spectral Camera"],
+    affects: ["Camera", "Spectrometer"],
 }
 
 # Mirror in Plate 2, selects between spectrometer and cl-detector
@@ -325,7 +276,7 @@ SPARC2: {
             0.01: "off"
         },
     },
-    affects: ["Camera", "Spectral Camera", "CL Detector"],
+    affects: ["Camera", "Spectrometer", "CL Detector"],
 }
 
 "CL Filter Wheel": {
@@ -378,15 +329,3 @@ SPARC2: {
         # Note: if you want to use absolute moves, add a "translation" too
     },
 }
-
-# Controller for moving the 'Deltabot' stage
-# "Mirror Actuators": {
-#     class: tmcm.TMCLController,
-#     role: mirror,
-#     init: {
-#         port: "/dev/fake",
-#         axes: ["a", "b", "c"],
-#         ustepsize: [5.9e-9, 5.9e-9, 5.9e-9], # m/µstep
-#         refproc: "Standard",
-#     },
-#}

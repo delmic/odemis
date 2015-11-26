@@ -27,6 +27,7 @@ from odemis.model import isasync, CancellableThreadPoolExecutor, HwError
 from odemis.util import driver
 import os
 import signal
+import threading
 import time
 
 
@@ -148,10 +149,13 @@ class HwAccessMgr(object):
         ccd (AndorCam2 or None)
         """
         self._ccd = ccd
+        if ccd is None:
+            self.hw_lock = threading.RLock()
 
     def __enter__(self):
         if self._ccd is None:
-            logging.debug("Not taking CCD lock")
+            logging.debug("Taking spectrograph lock")
+            self.hw_lock.acquire()
         else:
             self._ccd.request_hw.append(None)  # let the acquisition thread know it should release the lock
             logging.debug("Requesting access to CCD")
@@ -162,7 +166,8 @@ class HwAccessMgr(object):
         returns True if the exception is to be suppressed (never)
         """
         if self._ccd is None:
-            logging.debug("CCD lock doesn't need to be released")
+            logging.debug("Released spectrograph lock")
+            self.hw_lock.release()
         else:
             self._ccd.request_hw.pop()  # hw no more needed
             logging.debug("Released CCD lock")
@@ -509,8 +514,8 @@ class Shamrock(model.Actuator):
         """
         return (0<int<=3): current grating
         """
+        grating = c_int()
         with self._hw_access:
-            grating = c_int()
             self._dll.ShamrockGetGrating(self._device, byref(grating))
         return grating.value
 
@@ -519,7 +524,8 @@ class Shamrock(model.Actuator):
         return (0<int<=3): number of gratings present
         """
         noGratings = c_int()
-        self._dll.ShamrockGetNumberGratings(self._device, byref(noGratings))
+        with self._hw_access:
+            self._dll.ShamrockGetNumberGratings(self._device, byref(noGratings))
         return noGratings.value
 
     def WavelengthReset(self):
@@ -599,8 +605,9 @@ class Shamrock(model.Actuator):
         """
         assert 1 <= grating <= 3
         Min, Max = c_float(), c_float() # in nm
-        self._dll.ShamrockGetWavelengthLimits(self._device, grating,
-                                              byref(Min), byref(Max))
+        with self._hw_access:
+            self._dll.ShamrockGetWavelengthLimits(self._device, grating,
+                                                  byref(Min), byref(Max))
         return Min.value * 1e-9, Max.value * 1e-9
 
     def WavelengthIsPresent(self):
@@ -630,7 +637,13 @@ class Shamrock(model.Actuator):
         # numpy array or returning directly the C array. We could also just
         # allocate one array at the init, and reuse it.
         CalibrationValues = (c_float * npixels)()
-        self._dll.ShamrockGetCalibration(self._device, CalibrationValues, npixels)
+        # Note that although it looks like it could do without hardware access,
+        # it is necessary. For example, the SDK call can completely block if a
+        # move is currently happening.
+        with self._hw_access:
+            self._dll.ShamrockGetCalibration(self._device, CalibrationValues, npixels)
+        # FIXME: still seems to hang, even with hw access lock
+        logging.debug("Calibration info returned")
         # Note: it just applies the polynomial, so you can end up with negative
         # values => clamp them to 0.
         return [max(0, v * 1e-9) for v in CalibrationValues]
@@ -640,7 +653,8 @@ class Shamrock(model.Actuator):
         return (4 floats)
         """
         a, b, c, d = c_float(), c_float(), c_float(), c_float()
-        self._dll.ShamrockGetPixelCalibrationCoefficients(self._device, byref(a), byref(b), byref(c), byref(d))
+        with self._hw_access:
+            self._dll.ShamrockGetPixelCalibrationCoefficients(self._device, byref(a), byref(b), byref(c), byref(d))
         return a.value, b.value, c.value, d.value
 
     def GetCCDLimits(self, port):
@@ -650,7 +664,8 @@ class Shamrock(model.Actuator):
         """
         low = c_float()
         high = c_float()
-        self._dll.ShamrockGetCCDLimits(self._device, port, byref(low), byref(high))
+        with self._hw_access:
+            self._dll.ShamrockGetCCDLimits(self._device, port, byref(low), byref(high))
         return low.value * 1e-9, high.value * 1e-9
 
     def SetPixelWidth(self, width):
@@ -660,7 +675,8 @@ class Shamrock(model.Actuator):
         width (float): size of a pixel in m
         """
         # set in µm
-        self._dll.ShamrockSetPixelWidth(self._device, c_float(width * 1e6))
+        with self._hw_access:
+            self._dll.ShamrockSetPixelWidth(self._device, c_float(width * 1e6))
 
     def SetNumberPixels(self, npixels):
         """
@@ -668,7 +684,8 @@ class Shamrock(model.Actuator):
         Needed to get correct information from GetCalibration()
         npixels (int): number of pixels on the attached sensor
         """
-        self._dll.ShamrockSetNumberPixels(self._device, npixels)
+        with self._hw_access:
+            self._dll.ShamrockSetNumberPixels(self._device, npixels)
 
 #self._dll.ShamrockGetPixelWidth(self._device, float* Width)
 #self._dll.ShamrockGetNumberPixels(self._device, int* NumberPixels)
@@ -682,7 +699,8 @@ class Shamrock(model.Actuator):
         """
         assert isinstance(steps, int)
         # The documentation states focus is >=0, but SR193 only accepts >0
-        self._dll.ShamrockSetFocusMirror(self._device, steps)
+        with self._hw_access:
+            self._dll.ShamrockSetFocusMirror(self._device, steps)
 
     def GetFocusMirror(self):
         """
@@ -690,7 +708,8 @@ class Shamrock(model.Actuator):
         return (0<=int<=maxsteps): absolute position (in steps)
         """
         focus = c_int()
-        self._dll.ShamrockGetFocusMirror(self._device, byref(focus))
+        with self._hw_access:
+            self._dll.ShamrockGetFocusMirror(self._device, byref(focus))
         return focus.value
 
     def GetFocusMirrorMaxSteps(self):
@@ -699,7 +718,8 @@ class Shamrock(model.Actuator):
         return (0 <= int): absolute max position (in steps)
         """
         focus = c_int()
-        self._dll.ShamrockGetFocusMirrorMaxSteps(self._device, byref(focus))
+        with self._hw_access:
+            self._dll.ShamrockGetFocusMirrorMaxSteps(self._device, byref(focus))
         return focus.value
 
     def FocusMirrorIsPresent(self):
@@ -714,7 +734,8 @@ class Shamrock(model.Actuator):
         pos (1<=int<=6): new position
         """
         assert(FILTERMIN <= pos <= FILTERMAX)
-        self._dll.ShamrockSetFilter(self._device, pos)
+        with self._hw_access:
+            self._dll.ShamrockSetFilter(self._device, pos)
 
     def GetFilter(self):
         """
@@ -722,7 +743,8 @@ class Shamrock(model.Actuator):
         return (1<=int<=6): current filter
         """
         pos = c_int()
-        self._dll.ShamrockGetFilter(self._device, byref(pos))
+        with self._hw_access:
+            self._dll.ShamrockGetFilter(self._device, byref(pos))
         return pos.value
 
     def GetFilterInfo(self, pos):
@@ -731,7 +753,8 @@ class Shamrock(model.Actuator):
         return (str): the text associated to the given filter
         """
         info = create_string_buffer(64)  # TODO: what's a good size? The SDK doc says nothing
-        self._dll.ShamrockGetFilterInfo(self._device, pos, info)
+        with self._hw_access:
+            self._dll.ShamrockGetFilterInfo(self._device, pos, info)
         return info.value
 
     def FilterIsPresent(self):
@@ -819,15 +842,18 @@ class Shamrock(model.Actuator):
         # value, it will move the focus. So avoid changing to the current value.
         if self.GetFlipperMirror(flipper) == port:
             logging.info("Not changing again flipper %d to current pos %d", flipper, port)
+            return
+
+        if "focus" in self.axes:
+            cf = self.GetFocusMirror()
 
         with self._hw_access:
-            if "focus" in self.axes:
-                cf = self.GetFocusMirror()
-
             self._dll.ShamrockSetFlipperMirror(self._device, flipper, port)
 
-            if "focus" in self.axes and cf != self.GetFocusMirror():
-                logging.warning("Focus mirror changed unexpectedly after moving flipper %d to %d", flipper, port)
+        nf = self.GetFocusMirror()
+        if "focus" in self.axes and cf != nf:
+            logging.warning("Focus mirror changed unexpectedly after moving flipper %d to %d, "
+                            "going from %d to %d steps", flipper, port, cf, nf)
 
     def GetFlipperMirror(self, flipper):
         assert(FLIPPER_INDEX_MIN <= flipper <= FLIPPER_INDEX_MAX)
@@ -856,14 +882,14 @@ class Shamrock(model.Actuator):
             state = 1
         else:
             state = 0
-        self._dll.ShamrockSetAccessory(self._device, line, state)
+        with self._hw_access:
+            self._dll.ShamrockSetAccessory(self._device, line, state)
 
-        # HACK: the Andor driver has a problem and sets the spectrograph in a
-        # bad state after setting the accessory to True. This puts it back in a
-        # good state.
-        self.GetGrating()
+            # HACK: the Andor driver has a problem and sets the spectrograph in a
+            # bad state after setting the accessory to True. This puts it back in a
+            # good state.
+            self.GetGrating()
 
-    # def ShamrockGetAccessoryState(int device,int Accessory, int *state);
     def GetAccessoryState(self, line):
         """
         line (0 <= int <= 1): line number
@@ -871,7 +897,8 @@ class Shamrock(model.Actuator):
         """
         assert(ACCESSORYMIN <= line <= ACCESSORYMAX)
         state = c_int()
-        self._dll.ShamrockGetAccessoryState(self._device, line, byref(state))
+        with self._hw_access:
+            self._dll.ShamrockGetAccessoryState(self._device, line, byref(state))
         return (state.value != 0)
 
     def AccessoryIsPresent(self):
@@ -936,7 +963,6 @@ class Shamrock(model.Actuator):
         pxs (0 < float): pixel size in m (after binning)
         return (list of floats): pixel number -> wavelength in m
         """
-        # FIXME: calling this during a move seems to hang => need a hw access lock
         # If wavelength is 0, report empty list to indicate it makes no sense
         if self.position.value["wavelength"] <= 1e-9:
             return []

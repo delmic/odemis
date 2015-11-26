@@ -97,7 +97,7 @@ SPARC: {
     init: {
         device: 0,  # if a real camera is plugged in, it's usually 0
         bitflow_install_dirs: "/usr/share/bitflow/", # Put the path where Bitflow data is installed
-        transpose: [1, -2], # mirrored on Y axis
+        transp: [-1, 2], # mirrored on Y axis
     },
     properties: {
         fanSpeed: 0.0, # 0 = Off, 0.5= half speed, 1 = max speed
@@ -134,7 +134,7 @@ SPARC: {
     role: sp-ccd,
     init: {
            device: 0, # 0 = first and only Andor SDK 2 camera
-           #transpose: [-1, 2], # mirrored on X axis if camera is upside-down
+           #transp: [-1, 2], # mirrored on X axis if camera is upside-down
     },
     properties: {
         targetTemperature: -55, # °C

@@ -376,10 +376,39 @@ class Detector(HwComponent):
     """
     __metaclass__ = ABCMeta
 
-    def __init__(self, name, role, **kwargs):
+    def __init__(self, name, role, transpose=None, transp=None, **kwargs):
+        """
+        transp (None or list of int): list of axes (indexed from 1).
+         Allows to rotate/mirror the CCD image. For each axis of the output data
+         is the corresponding axis of the detector indicated. Each detector axis
+         must be indicated precisely once.
+        transpose: same as transp, but with a bug that causes - to be applied
+          on the wrong dimension. Only there for compatibility.
+        """
         HwComponent.__init__(self, name, role, **kwargs)
 
-        # To be overridden
+        if transpose is not None:
+            if transp is not None:
+                raise ValueError("Cannot specify transp and transpose simultaneously")
+            # Convert transpose to trans
+            transp = [abs(v) for v in transpose]
+            transp = [v * cmp(s, 0) for v, s in zip(transp, reversed(transpose))]
+
+        if transp is not None:
+            # check a bit it's valid
+            transp = tuple(transp)
+            if len(set(abs(v) for v in transp)) != len(transp):
+                raise ValueError("Transp argument contains multiple times "
+                                 "the same axis: %s" % (transp,))
+            # Shape not yet defined, so can't check precisely all the axes are there
+            if (not 1 <= len(transp) <= 5 or 0 in transp or
+                any(abs(v) > 5 for v in transp)):
+                raise ValueError("Transp argument does not define each axis "
+                                 "of the camera once: %s" % (transp,))
+            # Indicate there is nothing to do, if so
+            if transp == tuple(range(len(transp))):
+                transp = None
+        self._transpose = transp
 
         # Maximum value of each dimension of the detector (including the
         # intensity). A CCD camera 2560x1920 with 12 bits intensity has a 3D
@@ -388,50 +417,6 @@ class Detector(HwComponent):
         # Data-flow coming from this detector.
         # normally a detector doesn't affect anything
         self.data = None
-
-    @roattribute
-    def shape(self):
-        return self._shape
-
-
-class DigitalCamera(Detector):
-    """
-    A component which represent a digital camera (i.e., CCD or CMOS)
-    It's basically a detector with a few more compulsory VAs
-    """
-    __metaclass__ = ABCMeta
-
-    def __init__(self, name, role, transpose=None, **kwargs):
-        """
-        transpose (None or list of int): list of axes (indexed from 1).
-         Allows to rotate/mirror the CCD image. For each axis of the output data
-         is the corresponding axis of the detector indicated. Each detector axis
-         must be indicated precisely once.
-        """
-        Detector.__init__(self, name, role, **kwargs)
-        if transpose is not None:
-            # check a bit it's valid
-            transpose = tuple(transpose)
-            if len(set(abs(v) for v in transpose)) != len(transpose):
-                raise ValueError("Transpose argument contains multiple times "
-                                 "the same axis: %s" % (transpose,))
-            # Shape not yet defined, so can't check precisely all the axes are there
-            if (not 1 <= len(transpose) <= 5 or 0 in transpose
-                    or any(abs(v) > 5 for v in transpose)):
-                raise ValueError("Transpose argument does not define each axis "
-                                 "of the camera once: %s" % (transpose,))
-        self._transpose = transpose
-
-        # depth of field will be updated automatically if metadata LENS_MAG,
-        # LENS_NA, and LENS_RI are provided.
-        # To provide some rough idea of the step size when changing focus
-        self.depthOfField = _vattributes.FloatContinuous(1e-6, range=(0, 1e9),
-                                                         unit="m", readonly=True)
-        # To be overridden by a VA
-        self.pixelSize = None  # (len(dim)-1 * float) size of a sensor pixel (in meters). More precisely it should be the average distance between the centres of two pixels.
-        self.binning = None  # how many CCD pixels are merged (in each dimension) to form one pixel on the image.
-        self.resolution = None  # (len(dim)-1 * int): number of pixels in the image generated for each dimension. If it's smaller than the full resolution of the captor, it's centred.
-        self.exposureTime = None  # (float): time in second for the exposure for one image.
 
     @roattribute
     def transpose(self):
@@ -443,33 +428,6 @@ class DigitalCamera(Detector):
     @roattribute
     def shape(self):
         return self._transposeShapeToUser(self._shape)
-
-    def updateMetadata(self, md):
-        Detector.updateMetadata(self, md)
-        mdf = self._metadata
-        if self.pixelSize is not None:
-            try:
-                pxs = self.pixelSize.value[0]  # pixel should be square
-                mag = mdf[_metadata.MD_LENS_MAG]
-                na = mdf[_metadata.MD_LENS_NA]
-                ri = mdf[_metadata.MD_LENS_RI]
-                l = 550e-9  # the light wavelength
-                # We could use emission wavelength center for l, but it's mostly
-                # confusing for the user that the focus sensitivity changes when
-                # the observed part changes. So just use 550 nm, which is never
-                # more than 50% wrong.
-                # from https://www.microscopyu.com/articles/formulas/formulasfielddepth.html
-                dof = (l * ri) / na ** 2 + (ri * pxs) / (mag - na)
-                rng = self.depthOfField.range
-                if rng[0] <= dof <= rng[1]:
-                    self.depthOfField._set_value(dof, force_write=True)
-                else:
-                    logging.warning("Depth of field computed seems incorrect: %f m", dof)
-            except KeyError:
-                # Not enough metadata is present for computing Depth of Field
-                pass
-            except Exception:
-                logging.warning("Failure to update the depth of field", exc_info=True)
 
     # helper functions for handling transpose
     def _transposePosToUser(self, v):
@@ -589,17 +547,15 @@ class DigitalCamera(Detector):
         # No copy is made, it's just a different view of the same data
 
         # Switch the axes order
-        v = v.transpose([abs(idx) - 1 for idx in self._transpose])
-        # FIXME: This is wrong due to numpy's arrays being opposite order. We
-        # need the following code to be correct... but then we break all the
-        # microscope files that were using rotation/mirroring.
-        # l = len(self._transpose)
-        # v = v.transpose([l - abs(idx) for idx in reversed(self._transpose)])
+        l = len(self._transpose)
+        v = v.transpose([l - abs(idx) for idx in reversed(self._transpose)])
+        # Old version, when transpose arg was in use
+        # v = v.transpose([abs(idx) - 1 for idx in self._transpose])
 
         # Build slices on the fly, to reorder the whole array in one go
         slc = []
-        for idx in self._transpose:
-            # for idx in reversed(self._transpose):
+        # for idx in self._transpose:
+        for idx in reversed(self._transpose):
             if idx > 0:
                 slc.append(slice(None))  # [:] (=no change)
             else:
@@ -607,6 +563,55 @@ class DigitalCamera(Detector):
 
         v = v[tuple(slc)]
         return v
+
+
+class DigitalCamera(Detector):
+    """
+    A component which represent a digital camera (i.e., CCD or CMOS)
+    It's basically a detector with a few more compulsory VAs
+    """
+    __metaclass__ = ABCMeta
+
+    def __init__(self, name, role, **kwargs):
+        Detector.__init__(self, name, role, **kwargs)
+
+        # depth of field will be updated automatically if metadata LENS_MAG,
+        # LENS_NA, and LENS_RI are provided.
+        # To provide some rough idea of the step size when changing focus
+        self.depthOfField = _vattributes.FloatContinuous(1e-6, range=(0, 1e9),
+                                                         unit="m", readonly=True)
+        # To be overridden by a VA
+        self.pixelSize = None  # (len(dim)-1 * float) size of a sensor pixel (in meters). More precisely it should be the average distance between the centres of two pixels.
+        self.binning = None  # how many CCD pixels are merged (in each dimension) to form one pixel on the image.
+        self.resolution = None  # (len(dim)-1 * int): number of pixels in the image generated for each dimension. If it's smaller than the full resolution of the captor, it's centred.
+        self.exposureTime = None  # (float): time in second for the exposure for one image.
+
+    def updateMetadata(self, md):
+        Detector.updateMetadata(self, md)
+        mdf = self._metadata
+        if self.pixelSize is not None:
+            try:
+                pxs = self.pixelSize.value[0]  # pixel should be square
+                mag = mdf[_metadata.MD_LENS_MAG]
+                na = mdf[_metadata.MD_LENS_NA]
+                ri = mdf[_metadata.MD_LENS_RI]
+                l = 550e-9  # the light wavelength
+                # We could use emission wavelength center for l, but it's mostly
+                # confusing for the user that the focus sensitivity changes when
+                # the observed part changes. So just use 550 nm, which is never
+                # more than 50% wrong.
+                # from https://www.microscopyu.com/articles/formulas/formulasfielddepth.html
+                dof = (l * ri) / na ** 2 + (ri * pxs) / (mag - na)
+                rng = self.depthOfField.range
+                if rng[0] <= dof <= rng[1]:
+                    self.depthOfField._set_value(dof, force_write=True)
+                else:
+                    logging.warning("Depth of field computed seems incorrect: %f m", dof)
+            except KeyError:
+                # Not enough metadata is present for computing Depth of Field
+                pass
+            except Exception:
+                logging.warning("Failure to update the depth of field", exc_info=True)
 
 
 class Axis(object):

@@ -290,7 +290,8 @@ class SpecDataFlow(model.DataFlow):
                     logging.warning("Failed to compute correct WL_LIST metadata", exc_info=True)
 
         data.metadata.update(md)
-        model.DataFlow.notify(self, data)
+        udata = self.component._transposeDAToUser(data)
+        model.DataFlow.notify(self, udata)
 
         # If the acquisition continues, it will likely be using the current settings
         self._beg_metadata = self.component._metadata.copy()

@@ -919,10 +919,8 @@ class AndorCam3(model.DigitalCamera):
                    int(round(old_resolution[1] * change[1])))
 
         # fit
-        max_res = self._transposeSizeFromUser(self.resolution.range[1])
-        new_res = (min(new_res[0], max_res[0]),
-                   min(new_res[1], max_res[1]))
-        self.resolution.value = self._transposeSizeToUser(new_res)
+        ures = self._transposeSizeToUser(new_res)
+        self.resolution.value = self.resolution.clip(ures)
         return self._transposeSizeToUser(self._binning)
 
     def _getResolutionRangesPerBinning(self):

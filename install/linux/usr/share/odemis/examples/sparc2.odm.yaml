@@ -139,7 +139,7 @@ SPARC2: {
     power_supplier: "Power Control Unit",
     init: {
        device: 0,
-       transpose: [-1, -2], # flip both axes X and Y
+       transp: [-1, -2], # flip both axes X and Y
     },
 }
 
@@ -151,7 +151,7 @@ SPARC2: {
     power_supplier: "Power Control Unit",
     init: {
        device: 0,
-       transpose: [1, -2], # if mirrored on X axis (due to a Odemis bug, it's the second dim which has the -)
+       transp: [-1, 2], # if mirrored on X axis
     },
     properties: {
         targetTemperature: -60, # °C
