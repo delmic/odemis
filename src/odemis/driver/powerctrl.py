@@ -108,7 +108,7 @@ class PowerControlUnit(model.PowerSupplier):
                 raise HwError("EEPROM id %s was not detected. Please make sure "
                               "you are using the correct microscope file and "
                               "all EEPROM components are connected." % (id,))
-        self.memoryIDs = model.ListVA(self._mem_ids, readonly=True, getter=self._getIdentities)
+        self.memoryIDs = model.VigilantAttribute(self._mem_ids, readonly=True, getter=self._getIdentities)
 
     @isasync
     def supply(self, sup):
