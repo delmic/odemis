@@ -94,6 +94,8 @@ class MultipleDetectorStream(Stream):
         self._main_data = None
         self._rep_data = None
 
+        self._acq_min_date = None  # minimum acquisition time for the data to be acceptable
+
         # For the drift correction
         self._dc_estimator = None
         self._current_future = None
@@ -297,6 +299,13 @@ class MultipleDetectorStream(Stream):
 
     def _ssOnMainImage(self, df, data):
         logging.debug("Main stream data received")
+        if self._acq_min_date > data.metadata.get(model.MD_ACQ_DATE, 0):
+            # This is a sign that the e-beam might have been at the wrong (old)
+            # position while Rep data is acquiring
+            logging.warning("Dropping data because it seems started %g s too early",
+                            self._acq_min_date - data.metadata.get(model.MD_ACQ_DATE, 0))
+            return
+
         # Do not stop the acquisition, as it ensures the e-beam is at the right place
         if not self._acq_main_complete.is_set():
             # only use the first data per pixel
@@ -305,6 +314,13 @@ class MultipleDetectorStream(Stream):
 
     def _ssOnRepetitionImage(self, df, data):
         logging.debug("Repetition stream data received")
+        if self._acq_min_date > data.metadata.get(model.MD_ACQ_DATE, 0):
+            # This is a sign that the e-beam might have been at the wrong (old)
+            # position while data was acquiring
+            logging.warning("Dropping data because it seems started %g s too early",
+                            self._acq_min_date - data.metadata.get(model.MD_ACQ_DATE, 0))
+            return
+
         self._rep_data = data
         self._acq_rep_complete.set()
 
@@ -612,6 +628,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                                   "of bounds: needed to scan spot at %s.",
                                   drift_shift, trans)
                 self._emitter.translation.value = cptrans
+                self._acq_min_date = time.time()
                 logging.debug("E-beam spot after drift correction: %s",
                               self._emitter.translation.value)
                 logging.debug("Scanning resolution is %s and scale %s",
@@ -875,6 +892,7 @@ class SEMMDStream(MultipleDetectorStream):
                 self._acq_rep_complete.clear()
                 start = time.time()
 
+                self._acq_min_date = start
                 self._rep_df.synchronizedOn(trigger)
                 self._rep_df.subscribe(self._ssOnRepetitionImage)
                 self._main_df.subscribe(self._ssOnMainImage)
