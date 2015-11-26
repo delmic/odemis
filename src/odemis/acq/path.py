@@ -29,6 +29,7 @@ from odemis.acq import stream
 
 GRATING_NOT_MIRROR = object()
 
+
 # Dict includes all the modes available and the corresponding component axis or
 # VA values
 # {Mode: (detector_needed, {role: {axis/VA: value}})}
@@ -80,11 +81,13 @@ SPARC2_MODES = {
                  'slit-in-big': {'x': 'on'},  # fully opened
                  'spectrograph': {'grating': 'mirror'},
                  'cl-det-selector': {'x': 'off'},
+                 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
                  'spec-det-selector': {'rx': 0},
                 }),
             'cli': ("cl-detector",
                 {'lens-switch': {'x': 'on'},
                  'cl-det-selector': {'x': 'on'},
+                 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
                  # there is also the cl-filter, but that's just up to the user
                 }),
             'spectral-integrated': ("spectrometer",
@@ -93,6 +96,7 @@ SPARC2_MODES = {
                  # TODO: need to restore slit-in to the current position?
                  'cl-det-selector': {'x': 'off'},
                  'spec-det-selector': {'rx': 0},
+                 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
                  'spectrograph': {'grating': GRATING_NOT_MIRROR},
                 }),
             'spectral-dedicated': ("spectrometer",  # Only in case sp-ccd is present
@@ -100,12 +104,14 @@ SPARC2_MODES = {
                  'slit-in-big': {'x': 'off'},  # opened according to spec.slit-in
                  'cl-det-selector': {'x': 'off'},
                  'spec-det-selector': {'rx': math.radians(90)},
+                 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'spectrograph': {'grating': GRATING_NOT_MIRROR},
                 }),
             'mirror-align': ("ccd",  # Also used for lens alignment
                 {'lens-switch': {'x': 'off'},
                  'slit-in-big': {'x': 'on'},
                  'spectrograph': {'grating': 'mirror'},
+                 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
                  'cl-det-selector': {'x': 'off'},
                  'spec-det-selector': {'rx': 0},
                 }),
@@ -117,6 +123,7 @@ SPARC2_MODES = {
                  # Needs to be changed after/before grating because the spectrometer
                  # (SR-193) remembers the focus per grating. Or just remember
                  # focus per grating + mode.
+                 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
                  'cl-det-selector': {'x': 'off'},
                  'spec-det-selector': {'rx': 0},
                 }),
@@ -124,19 +131,31 @@ SPARC2_MODES = {
                 {'lens-switch': {'x': 'off'},
                  'slit-in-big': {'x': 'off'},
                  'spectrograph': {'slit-in': 10e-6, 'grating': 'mirror'},  # slit to the minimum
+                 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
                  'cl-det-selector': {'x': 'off'},
                  'spec-det-selector': {'rx': 0},
                 }),
             # TODO: make this mode work
             'fiber-align': ("fiber-aligner",  # TODO: also iif sp-ccd is present?
                 {'lens-switch': {'x': 'on'},
-                 'fiber-aligner': {'x': model.MD_FAV_POS_ACTIVE},
-                 'spec-dedicated-det-selector': {'rx': 0},
+                 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'spectrograph-dedicated': {'slit-in': 500e-6},
                 }),
          }
 
 ALIGN_MODES = {'mirror-align', 'chamber-view', 'fiber-align', 'spec-focus'}
+
+
+# TODO: Could be moved to util
+def affectsGraph(microscope):
+    """
+    Creates a graph based on the affects lists of the microscope components.
+    returns (dict str->set)
+    """
+    graph = {}
+    for comp in model.getComponents():
+        graph[comp.name] = set(comp.affects.value)
+    return graph
 
 
 class OpticalPathManager(object):
@@ -188,6 +207,25 @@ class OpticalPathManager(object):
         if self.microscope.role == "sparc2":
             for comp in model.getComponents():
                 if comp.role == "sp-ccd":
+                    for check_comp in model.getComponents():
+                        # if (comp.name in check_comp.affects.value) and (check_comp.role == "spec-det-selector"):
+                        if (check_comp.role == "spec-det-selector") and self.isAffected(check_comp.name, comp.name):
+                            # if sp-ccd is affected by the spec-det-selector then spec-selector should always
+                            # be deactivated, since it means there is no external spectrograph
+                            for key_mode in self.guessed.keys():
+                                try:
+                                    self.guessed[key_mode][1]["spec-selector"]["x"] = "MD:" + model.MD_FAV_POS_DEACTIVE
+                                except KeyError:
+                                    # spec-selector just not existing in this mode
+                                    continue
+                            break
+                    else:
+                        for key_mode in self.guessed.keys():
+                            try:
+                                self.guessed[key_mode][1]["spec-det-selector"]["rx"] = 0
+                            except KeyError:
+                                # spec-det-selector just not existing in this mode
+                                continue
                     self.guessed['spectral'] = self.guessed["spectral-dedicated"]
                     self._modes['spectral'] = self._modes["spectral-dedicated"]
                     break
@@ -237,6 +275,8 @@ class OpticalPathManager(object):
 
             mv = {}
             for axis, pos in conf.items():
+                if isinstance(pos, str) and pos.startswith("MD:"):
+                    pos = self.mdToValue(comp, pos[3:])[axis]
                 if axis in comp.axes:
                     if axis == "band":
                         # Handle the filter wheel in a special way. Search
@@ -372,3 +412,42 @@ class OpticalPathManager(object):
                 return key
         else:
             raise ValueError("Cannot find grating value in given choices")
+
+    def mdToValue(self, comp, md_name):
+        """
+        Just retrieves the "md_name" metadata from component "comp"
+        """
+        md = comp.getMetadata()
+        try:
+            value = md.get(md_name)
+            return value
+        except KeyError:
+            raise KeyError("Metadata %s does not exist in component %s" % (md_name, comp.name))
+
+    def isAffected(self, affecting, affected):
+        """
+        Returns True if "affecting" component affects -directly of indirectly-
+        the "affected" component
+        """
+        self._graph = affectsGraph(self.microscope)
+        path = self.findPath(affecting, affected)
+        if path is None:
+            return False
+        else:
+            return True
+
+    def findPath(self, node1, node2, path=[]):
+        """
+        Find any path between node1 and node2 (may not be shortest)
+        """
+        path = path + [node1]
+        if node1 == node2:
+            return path
+        if node1 not in self._graph:
+            return None
+        for node in self._graph[node1]:
+            if node not in path:
+                new_path = self.findPath(node, node2, path)
+                if new_path:
+                    return new_path
+        return None
