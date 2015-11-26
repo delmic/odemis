@@ -103,3 +103,4 @@ MD_SPOT_SHIFT = "Spot shift"  # (float, float), SEM spot shift in percentage of 
 # The following metadata is used to store specific known positions for the
 # actuators.
 MD_FAV_POS_ACTIVE = "Favourite position active"  # dict of str -> float representing a good position for being "active" (eg, mirror engaged, lens in use)
+MD_FAV_POS_DEACTIVE = "Favourite position deactive"  # dict of str -> float representing a good position for being "deactive" (eg, mirror parked, lens not in use)
