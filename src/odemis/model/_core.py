@@ -20,8 +20,10 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
+
 import Pyro4
 from Pyro4.core import oneway
+import inspect
 import logging
 import multiprocessing
 import os
@@ -127,7 +129,7 @@ def _getChildren(root):
     return ret
 
 
-#TODO special attributes, which are just properties that are explicitly duplicated
+# TODO special attributes, which are just properties that are explicitly duplicated
 # on the proxy. Getting/setting them always access the actual object remotely.
 # declarator is like a property. Two possible implementations:
 # * special message types (get/set) instead of method call
@@ -150,18 +152,8 @@ def get_roattributes(self):
     list all roattributes of an instance
     Note: this only works on an original class, not on a proxy
     """
-#    members = inspect.getmembers(self.__class__)
-#    return [name for name, obj in members if isinstance(obj, roattribute)]
-    klass = self.__class__
-    roattributes = []
-    for key in dir(klass):
-        try:
-            if isinstance(getattr(klass, key), roattribute):
-                roattributes.append(key)
-        except AttributeError:
-            continue
-
-    return roattributes
+    members = inspect.getmembers(self.__class__)
+    return [name for name, obj in members if isinstance(obj, roattribute)]
 
 def dump_roattributes(self):
     """
@@ -171,7 +163,7 @@ def dump_roattributes(self):
     roattr = getattr(self, "_odemis_roattributes", [])
     roattr += get_roattributes(self)
 
-    return dict([[name, getattr(self, name)] for name in roattr])
+    return dict((name, getattr(self, name)) for name in roattr)
 
 def load_roattributes(self, roattributes):
     """
@@ -219,7 +211,7 @@ class Container(Pyro4.core.Daemon):
         """
         name: name of the container (must be unique)
         """
-        assert not "/" in name
+        assert "/" not in name
         self._name = name
         # all the sockets are in the same directory so it's independent from the PWD
         self.ipc_name = BASE_DIRECTORY + "/" + urllib.quote(name) + ".ipc"
