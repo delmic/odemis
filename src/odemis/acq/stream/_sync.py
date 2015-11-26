@@ -610,15 +610,10 @@ class SEMCCDMDStream(MultipleDetectorStream):
             self._rep_df.subscribe(self._ssOnRepetitionImage)
 
             # Instead of subscribing/unsubscribing to the SEM for each pixel,
-            # we keep subscribed, but request to be synchronised.
-            # To start scanning we remove the synchronisation. To stop scanning
-            # we put back the synchronisation (and never send any trigger event).
-            # Note that we cannot just send one trigger event, because we want
-            # the scanning to keep going on as long as the CCD acquisition takes
-            # place. TODO: send the event from _ssOnMainImage()?
-            sem_trigger = self._main_det.softwareTrigger
-            self._main_df.synchronizedOn(sem_trigger)
-            self._main_df.subscribe(self._ssOnMainImage)
+            # we've tried to keep subscribed, but request to be unsynchronised/
+            # synchronised. However, synchronizing doesn't cancel the current
+            # scanning, so it could still be going on with the old translation
+            # while starting the next acquisition.
 
             for i in numpy.ndindex(*rep[::-1]):  # last dim (X) iterates first
                 trans = (spot_pos[i[::-1]][0], spot_pos[i[::-1]][1])
@@ -638,7 +633,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 while True:
                     self._acq_main_complete.clear()
                     self._acq_rep_complete.clear()
-                    self._main_df.synchronizedOn(None)
+                    self._main_df.subscribe(self._ssOnMainImage)
                     time.sleep(0)  # give more chances spot has been already processed
                     start = time.time()
                     ccd_trigger.notify()
@@ -670,7 +665,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                             # In three failures we just give up
                             raise IOError("Repetition stream acquisition repeatedly fails to synchronize")
                         else:
-                            self._main_df.synchronizedOn(sem_trigger)
+                            self._main_df.unsubscribe(self._ssOnMainImage)
                             # Ensure we don't keep the SEM data for this run
                             self._main_data = self._main_data[:n]
                             # Stop and restart the acquisition, hoping this time we will synchronize
@@ -684,7 +679,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     if not self._acq_main_complete.wait(sem_time * 1.5 + 5):
                         raise TimeoutError("Acquisition of SEM pixel %s timed out after %g s"
                                            % (i, sem_time * 1.5 + 5))
-                    self._main_df.synchronizedOn(sem_trigger)
+                    self._main_df.unsubscribe(self._ssOnMainImage)
 
                     if self._acq_state == CANCELLED:
                         raise CancelledError()
@@ -710,11 +705,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
                         # Acquisition of anchor area
                         # Cannot cancel during this time, but hopefully it's short
-                        self._main_df.unsubscribe(self._ssOnMainImage)
-                        self._main_df.synchronizedOn(None)
                         self._dc_estimator.acquire()
-                        self._main_df.synchronizedOn(sem_trigger)
-                        self._main_df.subscribe(self._ssOnMainImage)
 
                         if self._acq_state == CANCELLED:
                             raise CancelledError()
@@ -730,8 +721,6 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     break
 
             # Done!
-            self._main_df.unsubscribe(self._ssOnMainImage)
-            self._main_df.synchronizedOn(None)
             self._rep_df.unsubscribe(self._ssOnRepetitionImage)
             self._rep_df.synchronizedOn(None)
 
@@ -757,7 +746,6 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
             # make sure it's all stopped
             self._main_df.unsubscribe(self._ssOnMainImage)
-            self._main_df.synchronizedOn(None)
             self._rep_df.unsubscribe(self._ssOnRepetitionImage)
             self._rep_df.synchronizedOn(None)
 
