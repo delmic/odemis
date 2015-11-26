@@ -386,6 +386,8 @@ class Instantiator(object):
                 cont, comp = model.createInNewContainer(name, class_comp, args)
                 self.sub_containers[name] = cont
             else:
+                # TODO: instead of running with the backend, run the wrapper
+                # in the same container as the component wrapped (if only one comp)
                 logging.debug("Creating %s in root container", name)
                 comp = self.root_container.instantiate(class_comp, args)
         except Exception:
