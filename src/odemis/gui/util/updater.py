@@ -59,6 +59,7 @@ class WindowsUpdater:
         """ Get the remote  version of Odemis as a string of the form #.#.## """
 
         web_version = None
+        web_size = 0
 
         try:
             web_version_file = urllib.urlopen(os.path.join(VIEWER_ROOT_URL, VERSION_FILE))
