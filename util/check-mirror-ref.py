@@ -62,6 +62,8 @@ def check_ref(mirror):
             if vl == vr:
                 logging.error("Reference switches for axis %s both have value %d", name, vr)
                 error = True
+            else:
+                logging.info("Reference switches for axis %s seem correct (left reports %d)", name, vl)
     finally:
         # Turn on the reference switches power
         mirror.SetIO(2, 0, 0)
