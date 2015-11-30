@@ -1836,6 +1836,11 @@ class SparcStreamsController(StreamBarController):
             # TODO: add a focuser for the SPARCv2?
             detvas=get_local_vas(main_data.ccd),
         )
+        # Make sure the binning is not crazy (especially can happen if CCD is shared for spectrometry)
+        if model.hasVA(ar_stream, "detBinning"):
+            b = ar_stream.detBinning.value
+            if b[0] != b[1] or b[0] > 16:
+                ar_stream.detBinning.value = ar_stream.detBinning.clip((1, 1))
 
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
