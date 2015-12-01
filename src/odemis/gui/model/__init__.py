@@ -221,14 +221,15 @@ class MainGUIData(object):
             # control (and .horizontalFoV is used to 'zoom'). On a SEM without
             # magnification control, .magnification is writeable, and they typically
             # don't have a .horizontalFoV (but that shouldn't be a problem).
-            self.ebeamControlsMag = self.ebeam.magnification.readonly
-            if (not self.ebeamControlsMag and
-                hasVA(self.ebeam, "horizontalFoV") and
-                not self.ebeam.horizontalFoV.readonly):
-                # If mag is writeable, for now we assume FoV is readonly
-                logging.warning("ebeam has both magnification and horizontalFoV writeable")
-            elif self.ebeamControlsMag and not hasVA(self.ebeam, "horizontalFoV"):
-                logging.warning("ebeam has no way to change FoV")
+            if self.ebeam is not None:
+                self.ebeamControlsMag = self.ebeam.magnification.readonly
+                if (not self.ebeamControlsMag and
+                    hasVA(self.ebeam, "horizontalFoV") and
+                    not self.ebeam.horizontalFoV.readonly):
+                    # If mag is writeable, for now we assume FoV is readonly
+                    logging.warning("ebeam has both magnification and horizontalFoV writeable")
+                elif self.ebeamControlsMag and not hasVA(self.ebeam, "horizontalFoV"):
+                    logging.warning("ebeam has no way to change FoV")
 
         # Chamber is complex so we provide a "simplified state"
         # It's managed by the ChamberController. Setting to PUMPING or VENTING
