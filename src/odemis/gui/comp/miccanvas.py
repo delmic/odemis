@@ -38,7 +38,6 @@ from odemis.gui.util.img import format_rgba_darray
 from odemis.model import VigilantAttributeBase
 from odemis.util import units
 import time
-import weakref
 import wx
 from wx.lib.imageutils import stepColour
 
@@ -184,7 +183,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         # Check if the desired tool mode is allowed
         if self.allowed_modes and tool_mode not in self.allowed_modes:
-            logging.warn("Toolmode %s is not allowed and will be ignored!", tool_mode)
+            # This can happen if only some views in a tab accepts a mode
+            logging.info("Toolmode %s is not allowed and will be ignored", tool_mode)
             tool_mode = guimodel.TOOL_NONE
 
         self.current_mode = tool_mode
