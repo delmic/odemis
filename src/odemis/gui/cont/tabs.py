@@ -1736,7 +1736,7 @@ class SecomAlignTab(Tab):
                 panel.vp_align_sem,
                 {
                     "name": "SEM",
-                    "cls": guimod.ContentView,
+                    "cls": guimod.MicroscopeView,
                     "stage": main_data.stage,
                     "stream_classes": acqstream.EMStream,
                 },
