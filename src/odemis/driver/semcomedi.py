@@ -1655,7 +1655,7 @@ class SEMComedi(model.HwComponent):
                 else:  # nothing to acquire => rest
                     # TODO: only change the state after a little while, if it doesn't
                     # need scanning again, to avoid too fast switch.
-                    self._scanner.indicate_scan_state(False)
+                    self._scanner.indicate_scan_state(False, delay=0.1)
                     self.set_to_resting_position()
                     gc.collect()
                     # wait until something new comes in
@@ -1847,7 +1847,7 @@ class SEMComedi(model.HwComponent):
             self._acquisition_thread.join(10)
 
             # Just to be really sure that the scan signal is off
-            self._scanner.indicate_scan_state(False)
+            self._scanner.terminate()
 
             # TODO: also terminate the children?
 
@@ -2594,7 +2594,14 @@ class Scanner(model.Emitter):
         # TODO: only set this to True if the order of the conversion polynomial <=1
         self._can_generate_raw_directly = True
 
+        self._scan_state_req = Queue.Queue()
+        self._scanning_ready = threading.Event()
         self._scan_state = True  # To force changing the digital output when the state go to False
+        t = threading.Thread(target=self._scan_state_mng_run,
+                             name="Scanning state manager")
+        self._scanning_mng = t
+        t.daemon = True
+        t.start()
         self.indicate_scan_state(False)
 
         # In theory the maximum resolution depends on the X/Y ranges, the actual
@@ -2681,6 +2688,13 @@ class Scanner(model.Emitter):
         self._resting_data = self._get_point_data((park[1], park[0]))
         self._prev_settings = [None, None, None, None] # resolution, scale, translation, margin
         self._scan_array = None # last scan array computed
+
+    def terminate(self):
+        if self._scanning_mng:
+            self.indicate_scan_state(False)
+            self._scan_state_req.put(None)
+            self._scanning_mng.join(10)
+            self._scanning_mng = None
 
     @roattribute
     def channels(self):
@@ -2841,7 +2855,70 @@ class Scanner(model.Emitter):
         """
         return self._resting_data
 
-    def indicate_scan_state(self, scanning):
+    def _scan_state_mng_run(self):
+        """
+        Main loop for scan state manager thread:
+        Switch on/off the scan state based on the requests received
+        """
+        try:
+            q = self._scan_state_req
+            stopt = None  # None if must be on, otherwise time to stop
+            while True:
+                # wait for a new message or for the time to stop the encoder
+                now = time.time()
+                if stopt is None or not q.empty():
+                    msg = q.get()
+                elif now < stopt:  # soon time to turn off the encoder
+                    timeout = stopt - now
+                    try:
+                        msg = q.get(timeout=timeout)
+                    except Queue.Empty:
+                        # time to stop the encoder => just do the loop again
+                        continue
+                else:  # time to stop
+                    # the queue should be empty (with some high likelyhood)
+                    self._set_scan_state(False)
+                    stopt = None
+                    continue
+
+                # parse the new message
+                logging.debug("Decoding scanning state message %s", msg)
+                if msg is None:
+                    return
+                elif msg is True:
+                    self._set_scan_state(True)
+                    self._scanning_ready.set()
+                    stopt = None
+                else:  # time at which to stop the encoder
+                    if stopt is not None:
+                        stopt = min(msg, stopt)
+                    else:
+                        stopt = msg
+
+        except Exception:
+            logging.exception("Scanning state manager failed:")
+        finally:
+            logging.info("Scanning state manager thread over")
+
+    def indicate_scan_state(self, scanning, delay=0):
+        """
+        Indicate the ebeam scanning state (via the digital output ports)
+        scanning (bool): if True, indicate it's scanning, otherwise, indicate it's
+          parked.
+        delay (0 <= float): time to the state to be set to False (if state
+         hasn't been requested to change to True in-between)
+        """
+        if scanning:
+            if delay > 0:
+                raise ValueError("Cannot delay starting the scan")
+            self._scanning_ready.clear()
+            self._scan_state_req.put(True)
+            if not self._scan_state:  # If it's already on, no need to wait more
+                self._scanning_ready.wait()
+        else:
+            self._scan_state_req.put(time.time() + delay)
+
+    def _set_scan_state(self, scanning):
         """
         Indicate the ebeam scanning state (via the digital output ports)
         scanning (bool): if True, indicate it's scanning, otherwise, indicate it's
@@ -2850,6 +2927,7 @@ class Scanner(model.Emitter):
         if self._scan_state == scanning:
             return  # No need to update, if it's already correct
 
+        logging.debug("Updating scanning state to %s", scanning)
         self._scan_state = scanning
         for c, s in self._scanning_ttl.items():
             try:

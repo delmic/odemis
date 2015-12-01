@@ -109,7 +109,8 @@ class Instantiator(object):
         self.microscope = None # the root of the model (Microscope component)
         self._microscope_ast = None # the definition of the Microscope
         self.components = set() # all the components created
-        self.sub_containers = {}  # name -> container: all the sub-containers created for the components
+        self.sub_containers = {}  # container's name -> container: all the sub-containers created for the components
+        self._comp_container = {}  # comp name -> container: the container that runs the given component
         self.create_sub_containers = create_sub_containers # flag for creating sub-containers
         self.dry_run = dry_run # flag for instantiating mock version of the components
 
@@ -342,6 +343,40 @@ class Instantiator(object):
 
         return True
 
+    def _get_container(self, name):
+        """
+        Find the best container to instantiate a component
+        name (str): name of the component to instantiate
+        return (None or containter): None means a new container must be created
+        """
+        # If it's a leaf, use its own container
+        if self.create_sub_containers and self.is_leaf(name):
+            return None
+
+        # If it's not a leaf, it's probably a wrapper (eg, MultiplexActuator),
+        # which is simple Python code and so doesn't need to run in a
+        # separate container. If clearly it wraps just one other component,
+        # use the same container, otherwise, use the root container
+
+        # Get the instantiated children (ie, dependencies)
+        attr = self.ast[name]
+        children_names = attr.get("children", {})
+        children_cont = set()
+        for child_name in children_names.values():
+            if "class" in self.ast[child_name]:
+                try:
+                    cont = self._comp_container[child_name]
+                except KeyError:
+                    logging.warning("Component %s was not created yet, but %s depends on it", child_name, name)
+                    continue
+                children_cont.add(cont)
+
+        if len(children_cont) == 1:
+            return children_cont.pop()
+
+        # Multiple dependencies -> just use the root container then
+        return self.root_container
+
     def _instantiate_comp(self, name):
         """
         Instantiate a component
@@ -378,18 +413,15 @@ class Instantiator(object):
             class_comp = mock.MockComponent
 
         try:
-            # If it's not a leaf, it's probably a wrapper (eg, MultiplexActuator),
-            # which is simple Python code and so doesn't need to run in a
-            # separate container.
-            if self.create_sub_containers and self.is_leaf(name):
+            cont = self._get_container(name)
+            if cont is None:
                 # new container has the same name as the component
                 cont, comp = model.createInNewContainer(name, class_comp, args)
                 self.sub_containers[name] = cont
             else:
-                # TODO: instead of running with the backend, run the wrapper
-                # in the same container as the component wrapped (if only one comp)
-                logging.debug("Creating %s in root container", name)
-                comp = self.root_container.instantiate(class_comp, args)
+                logging.debug("Creating %s in container %s", name, cont)
+                comp = cont.instantiate(class_comp, args)
+            self._comp_container[name] = cont
         except Exception:
             logging.error("Error while instantiating component %s.", name)
             raise

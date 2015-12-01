@@ -1736,7 +1736,7 @@ class SecomAlignTab(Tab):
                 panel.vp_align_sem,
                 {
                     "name": "SEM",
-                    "cls": guimod.ContentView,
+                    "cls": guimod.MicroscopeView,
                     "stage": main_data.stage,
                     "stream_classes": acqstream.EMStream,
                 },
@@ -2462,10 +2462,6 @@ class Sparc2AlignTab(Tab):
         # * ebeam spot (spot): Used to force the ebeam to spot mode in lens
         #   and center alignment.
 
-        # Ideally, we'd like to have the same settings for the specline and ccd
-        # streams (but different from the MoI stream). That kind of works by
-        # always playing the ccd stream first, and using global settings for the
-        # specline.
         # TODO: have a special stream that does CCD + ebeam spot? (to avoid the ebeam spot)
 
         # Focuser here too so that it's possible to focus with right mouse button,
@@ -2477,25 +2473,38 @@ class Sparc2AlignTab(Tab):
                             main_data.ebeam,
                             focuser=main_data.focus,
                             detvas=get_local_vas(main_data.ccd))
+        # Make sure the binning is not crazy (especially can happen if CCD is shared for spectrometry)
+        ccd_stream.detBinning.value = ccd_stream.detBinning.clip((2, 2))
         self._ccd_stream = ccd_stream
 
         ccd_spe = self._stream_controller.addStream(ccd_stream)
         ccd_spe.stream_panel.flatten()
 
-        specline_stream = acqstream.BrightfieldStream(
+        speclines = acqstream.BrightfieldStream(
                             "Spectrograph line",
                             main_data.ccd,
                             main_data.ccd.data,
                             main_data.brightlight,
                             focuser=main_data.focus,
-                            # forcemd={model.MD_PIXEL_SIZE: (10e-5, 10e-5)},  # DEBUG
+                            detvas=get_local_vas(main_data.ccd),
                             )
-        specline_stream.tint.value = (0, 64, 255)  # colour it blue
-        self._specline_stream = specline_stream
+        speclines.tint.value = (0, 64, 255)  # colour it blue
+        # Fixed values, known to work well for autofocus
+        speclines.detExposureTime.value = speclines.detExposureTime.clip(0.2)
+        speclines.detBinning.value = speclines.detBinning.clip((2, 2))
+        b = speclines.detBinning.value
+        max_res = speclines.detResolution.range[1]
+        res = max_res[0] // b[0], max_res[1] // b[1]
+        speclines.detResolution.value = speclines.detResolution.clip(res)
+        try:
+            speclines.detReadoutRate.value = speclines.detReadoutRate.range[1]
+        except AttributeError:
+            speclines.detReadoutRate.value = max(speclines.detReadoutRate.choices)
+        self._specline_stream = speclines
         # TODO: make the legend display a merge slider (currently not happening
         # because both streams are optical)
         # Add it as second stream, so that it's displayed with the default 0.3 merge ratio
-        self._stream_controller.addStream(specline_stream, visible=False)
+        self._stream_controller.addStream(speclines, visible=False)
 
         # MomentOfInertiaStream needs an SEM stream and a CCD stream
         self.panel.vp_moi.canvas.abilities -= {CAN_ZOOM}
@@ -2567,29 +2576,8 @@ class Sparc2AlignTab(Tab):
             "mirror-align": "mirror-align",
             "lens-align": "mirror-align",  # if autofocus is needed: spec-focus (first)
             "center-align": "ar",
+            "fiber-align": "fiber-align",
         }
-
-        gb_sizer = None
-        free_slots = []
-
-        # Hide the buttons that are not needed and move the visible ones to fill gaps that may arise
-        for btn, mode in self._alignbtn_to_mode.items():
-            if gb_sizer is None:
-                gb_sizer = btn.Parent.GetSizer().GetChildren()[0].GetSizer()
-
-            if mode in tab_data.align_mode.choices:
-                btn.Bind(wx.EVT_BUTTON, self._onClickAlignButton)
-                if free_slots:
-                    gb_sizer.SetItemPosition(btn, free_slots.pop(0))
-            else:
-                free_slots.append(gb_sizer.GetItemPosition(btn))
-                btn.Destroy()
-                del self._alignbtn_to_mode[btn]
-
-        # If there are 3 buttons, move the last one from the 2nd row to the 3rd position of the 1st
-        if len(tab_data.align_mode.choices) == 3:
-            last_btn = next(reversed(self._alignbtn_to_mode))
-            gb_sizer.SetItemPosition(last_btn, (0, 2))
 
         tab_data.align_mode.subscribe(self._onAlignMode)
 
@@ -2625,6 +2613,35 @@ class Sparc2AlignTab(Tab):
         # Force MoI view fit to content when magnification is updated
         if not main_data.ebeamControlsMag:
             main_data.ebeam.magnification.subscribe(self._onSEMMag)
+
+    def _layoutModeButtons(self):
+        """
+        Make sure just the right mode buttons are displayed, and in a nice way
+        """
+        gb_sizer = None
+        free_slots = []
+        tab_data = self.tab_data_model
+
+        # Hide the buttons that are not needed and move the visible ones to fill
+        # gaps that may arise
+        for btn, mode in self._alignbtn_to_mode.items():
+            if gb_sizer is None:
+                gb_sizer = btn.Parent.GetSizer().GetChildren()[0].GetSizer()
+
+            if mode in tab_data.align_mode.choices:
+                btn.Bind(wx.EVT_BUTTON, self._onClickAlignButton)
+                if free_slots:
+                    gb_sizer.SetItemPosition(btn, free_slots.pop(0))
+            else:
+                free_slots.append(gb_sizer.GetItemPosition(btn))
+                btn.Destroy()
+                del self._alignbtn_to_mode[btn]
+
+        # If there are 3 buttons or less, move the last one from the 2nd row to
+        # the 3rd position of the 1st
+        if len(tab_data.align_mode.choices) < 4:
+            last_btn = next(reversed(self._alignbtn_to_mode))
+            gb_sizer.SetItemPosition(last_btn, (0, 2))
 
     def _onPolePosition(self, pole_pos):
         """

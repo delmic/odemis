@@ -22,10 +22,9 @@ This module contains update functionality for the Windows Viewer version of Odem
 
 import logging
 import os
-import socket
 import subprocess
 import tempfile
-import urllib
+import urllib2
 
 import wx
 
@@ -39,15 +38,13 @@ VIEWER_ROOT_URL = "http://www.delmic.com/odemisviewer/"
 
 class WindowsUpdater:
     def __init__(self):
-        socket.setdefaulttimeout(2)
-        self.result = False
-        self.dest = ""
-
-        self.web_version = None
+        pass
 
     @staticmethod
-    def _get_local_version():
-        """ Get the local version of Odemis as a string of the form #.#.## """
+    def get_local_version():
+        """ Get the local version of Odemis
+        return (str): version of the form #.#.##
+         """
 
         ver_str = odemis._get_version()
         if '-' in ver_str:
@@ -55,13 +52,17 @@ class WindowsUpdater:
         return ver_str
 
     @staticmethod
-    def _get_remote_version():
-        """ Get the remote  version of Odemis as a string of the form #.#.## """
+    def get_remote_version():
+        """ Get the remote version of Odemis as a string
+
+        return (None or str, int): version of the form #.#.##, size of the installer to install (in bytes)
+        """
 
         web_version = None
+        web_size = 0
 
         try:
-            web_version_file = urllib.urlopen(os.path.join(VIEWER_ROOT_URL, VERSION_FILE))
+            web_version_file = urllib2.urlopen(os.path.join(VIEWER_ROOT_URL, VERSION_FILE), timeout=10)
             web_version = web_version_file.readline().strip()
             web_size = int(web_version_file.readline().strip())
             web_version_file.close()
@@ -79,7 +80,7 @@ class WindowsUpdater:
 
         """
 
-        local = self._get_local_version().split('.')
+        local = self.get_local_version().split('.')
         other = version.split('.')
 
         for l, o in zip(local, other):
@@ -90,9 +91,10 @@ class WindowsUpdater:
 
     def check_for_update(self):
         """ Check if a newer version is available online and offer to update """
+        # TODO: just return True or False, and let the caller call show_update_dialog()
         logging.info("Retrieving version info...")
 
-        web_version, web_size = self._get_remote_version()
+        web_version, web_size = self.get_remote_version()
 
         if web_version is None:
             logging.warn("Could not retrieve remote version!")
@@ -100,6 +102,7 @@ class WindowsUpdater:
 
         logging.info("Found remote version %s", web_version)
 
+        # TODO: just use pkg_resources.parse_version()
         if not self._is_newer(web_version):
             return
 
@@ -126,7 +129,7 @@ class WindowsUpdater:
             installer_file = INSTALLER_FILE % remote_version
 
             web_url = os.path.join(VIEWER_ROOT_URL, installer_file)
-            web_file = urllib.urlopen(web_url)
+            web_file = urllib2.urlopen(web_url, timeout=10)
 
             local_path = os.path.join(dest_dir, installer_file)
             local_file = open(local_path, 'wb')
@@ -162,8 +165,9 @@ class WindowsUpdater:
 
             if keep_going:
                 self.run_installer(local_path)
-        except:
+        except Exception:
             logging.exception("Failure to download!")
+            # TODO: close the dialog
 
     @staticmethod
     def run_installer(local_path):
