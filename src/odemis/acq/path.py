@@ -137,7 +137,7 @@ SPARC2_MODES = {
                 }),
             # TODO: make this mode work
             'fiber-align': ("fiber-aligner",  # TODO: also iif sp-ccd is present?
-                {'lens-switch': {'x': 'on'},
+                {'lens-switch': {'x': 'off'},
                  'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'spectrograph-dedicated': {'slit-in': 500e-6},
                 }),
