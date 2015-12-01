@@ -179,11 +179,15 @@ class MenuController(object):
         """
         # Technically, we cannot "remove" metadata, but we can set it to the
         # default value
-        md = {model.MD_POS_COR: (0, 0),
-              model.MD_ROTATION_COR: 0,
-              model.MD_PIXEL_SIZE_COR: (1, 1)}
+        ccdmd = {model.MD_POS_COR: (0, 0),
+                 model.MD_ROTATION_COR: 0,
+                 model.MD_PIXEL_SIZE_COR: (1, 1)}
+        self._main_data.ccd.updateMetadata(ccdmd)
 
-        self._main_data.ccd.updateMetadata(md)
+        # TODO: if SEM has been rotated (via rotation VA + MD_ROTATION_COR), remove it too?
+        semmd = {model.MD_SHEAR_COR: 0,
+                 model.MD_PIXEL_SIZE_COR: (1, 1)}
+        self._main_data.ebeam.updateMetadata(semmd)
 
         # Will be enabled next time fine alignment is set
         self._main_frame.menu_item_reset_finealign.Enable(False)
