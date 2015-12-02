@@ -902,6 +902,9 @@ class ChamberTab(Tab):
                                                   emitter=None,
                                                   focuser=main_data.focus,
                                                   detvas=get_local_vas(main_data.ccd))
+        # Make sure image has square pixels and full FoV
+        self._ccd_stream.detBinning.value = (1, 1)
+        self._ccd_stream.detResolution.value = self._ccd_stream.detResolution.range[1]
         ccd_spe = self._stream_controller.addStream(self._ccd_stream)
         ccd_spe.stream_panel.flatten()  # No need for the stream name
         self._ccd_stream.should_update.value = True
