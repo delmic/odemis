@@ -168,7 +168,7 @@ SPARC2: {
         slits: {1: "slit-in", # INPUT_SIDE
         },
     },
-    affects: ["Spectral Camera"],
+    affects: ["Spectral Camera", "Spectrometer"],
 }
 
 # Dedicated camera for the acquisition of the spectra
@@ -200,7 +200,7 @@ SPARC2: {
        parabola_f: 2.5e-3,  # m, parabola_parameter=1/4f
        rotation: -1.570796326795, # rad, 90° rotation between optical axis and SEM Y axis
     },
-    affects: ["Camera", "Spectral Camera"]
+    affects: ["Camera", "Spectral Camera", "Spectrometer"]
 }
 
 # Controller for the motors moving the various parts of the optical box
@@ -215,7 +215,7 @@ SPARC2: {
         #address: 2,
         address: null,
         axes: ["l1", "l2", "spec-sel", "fiby", "slit"],
-        # These values only need to be roughly correct
+        # These values are adapted to make the simulator roughly the same speed
         # TODO: check for "spec-sel" & "fiby"
         ustepsize: [25.1e-9, 25.1e-9, 26.1e-9,  25.1e-9, 5.e-9], # m/µstep
         refproc: "Standard",
@@ -234,9 +234,9 @@ SPARC2: {
     },
     metadata: {
         # Default position of the lens (can be improved by user)
-        FAV_POS_ACTIVE: {"x": 0.0226112848} # m
+        FAV_POS_ACTIVE: {"x": -0.0045} # m
     },
-    affects: ["Camera", "Spectral Camera"],
+    affects: ["Camera", "Spectral Camera", "Spectrometer"],
 }
 
 # The second lens of Plate 1, either to working or parking position
@@ -247,11 +247,11 @@ SPARC2: {
     init: {
         axis_name: "l2",
         positions: {
-            0.0031124: "on",
-            -0.048192: "off", # completely out of the path
+            -4.e-3: "on",
+            -0.02: "off", # completely out of the path
         },
     },
-    affects: ["Camera", "Spectral Camera"],
+    affects: ["Camera", "Spectral Camera", "Spectrometer"],
 }
 
 # Control the slit position to either fully-open or small (dependent on the spectrometer slit-in)
@@ -266,7 +266,7 @@ SPARC2: {
             0.0012: "off", # opening based on the small slit
         },
     },
-    affects: ["Camera", "Spectral Camera"],
+    affects: ["Camera", "Spectral Camera", "Spectrometer"],
 }
 
 # Note that the next two components actually move the _same_ axis!
@@ -278,7 +278,7 @@ SPARC2: {
     init: {
         axes_map: {"x": "spec-sel", "y": "fiby"}
     },
-    affects: ["Camera", "Spectral Camera"],
+    affects: ["Camera", "Spectral Camera", "Spectrometer"],
 }
 
 # Mirror in Plate 2, selects between integrated spectrometer and external spectrometer
@@ -295,7 +295,7 @@ SPARC2: {
         # TODO: needed?
         FAV_POS_DEACTIVE: {"x": 0.0} # m
     },
-    affects: ["Camera", "Spectral Camera"],
+    affects: ["Camera", "Spectral Camera", "Spectrometer"],
 }
 
 # Controller for moving the 'Redux' stage

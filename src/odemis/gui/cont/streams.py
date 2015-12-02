@@ -1228,7 +1228,6 @@ class StreamBarController(object):
             # Insert it as first, so it's considered the latest stream used
             self._tab_data_model.streams.value.insert(0, stream)
 
-        # TODO: change to "add_to_view", and take view, or boolean
         if add_to_view is True:
             for v in self._tab_data_model.views.value:
                 if hasattr(v, "stream_classes") and isinstance(stream, v.stream_classes):

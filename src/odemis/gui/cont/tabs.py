@@ -2417,13 +2417,15 @@ class Sparc2AlignTab(Tab):
             locked=True
         )
 
-        # create a view on the microscope model
+        # Create the views. Note that lens/center views use BrightfieldStream,
+        # instead of the more generic CameraStream, to avoid picking up
+        # CameraCountStream.
         vpv = collections.OrderedDict((
             (self.panel.vp_align_lens,
                 {
                     "cls": guimod.ContentView,
                     "name": "Lens alignment",
-                    "stream_classes": acqstream.CameraStream,
+                    "stream_classes": acqstream.BrightfieldStream,
                 }
             ),
             (self.panel.vp_moi,
@@ -2439,7 +2441,7 @@ class Sparc2AlignTab(Tab):
                 {
                     "cls": guimod.ContentView,
                     "name": "Center alignment",
-                    "stream_classes": (acqstream.CameraStream, acqstream.RGBStream),
+                    "stream_classes": (acqstream.BrightfieldStream, acqstream.RGBStream),
                 }
             ),
             (self.panel.vp_align_fiber,
@@ -2468,11 +2470,11 @@ class Sparc2AlignTab(Tab):
 
         # Focuser here too so that it's possible to focus with right mouse button,
         # and also menu controller beleives it's possible to autofocus.
-        ccd_stream = acqstream.CameraStream(
+        ccd_stream = acqstream.BrightfieldStream(
                             "Angle-resolved sensor",
                             main_data.ccd,
                             main_data.ccd.data,
-                            main_data.ebeam,
+                            emitter=None,
                             focuser=main_data.focus,
                             detvas=get_local_vas(main_data.ccd))
         # Make sure the binning is not crazy (especially can happen if CCD is shared for spectrometry)
@@ -2767,9 +2769,12 @@ class Sparc2AlignTab(Tab):
         threading.Thread(target=self.tab_data_model.main.opm.setPath,
                          args=(op_mode,)).start()
 
+        # Focused view must be updated before the stream to play is changed,
+        # as the scheduler automatically adds the stream to the current view.
+        # The scheduler also automatically pause all the other streams.
         if mode == "lens-align":
-            self._ccd_stream.should_update.value = True
             self.tab_data_model.focussedView.value = self.panel.vp_align_lens.microscope_view
+            self._ccd_stream.should_update.value = True
             self.panel.pnl_mirror.Enable(True)  # also allow to move the mirror here
             self.panel.html_alignment_doc.Show(False)
             self.panel.pnl_lens_mover.Enable(True)
@@ -2780,8 +2785,8 @@ class Sparc2AlignTab(Tab):
             # (by going to spec-focus mode, turning the light, and acquiring an
             # AR image). Problem is that it takes about 10s.
         elif mode == "mirror-align":
-            self._moi_stream.should_update.value = True  # that automatically pauses the other streams
             self.tab_data_model.focussedView.value = self.panel.vp_moi.microscope_view
+            self._moi_stream.should_update.value = True
             self.panel.pnl_mirror.Enable(True)
             self.panel.html_alignment_doc.Show(True)
             self.panel.pnl_lens_mover.Enable(False)
@@ -2792,8 +2797,8 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_moi_settings.Parent.Layout()
             self.panel.html_moi_doc.Parent.Layout()
         elif mode == "center-align":
-            self._ccd_stream.should_update.value = True
             self.tab_data_model.focussedView.value = self.panel.vp_align_center.microscope_view
+            self._ccd_stream.should_update.value = True
             self.panel.pnl_mirror.Enable(False)
             self.panel.html_alignment_doc.Show(False)
             self.panel.pnl_lens_mover.Enable(False)
@@ -2804,8 +2809,8 @@ class Sparc2AlignTab(Tab):
             # FIXME: ActuatorController hides the fiber alignment panel if it cannot align. Should
             # this work as in Sparc v1?
             # FIXME: only allow to move once the spec-selector is ready
-            self._speccnt_stream.should_update.value = True
             self.tab_data_model.focussedView.value = self.panel.vp_align_fiber.microscope_view
+            self._speccnt_stream.should_update.value = True
             self.panel.pnl_mirror.Enable(False)
             self.panel.html_alignment_doc.Show(False)
             self.panel.pnl_lens_mover.Enable(False)
