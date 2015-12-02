@@ -1207,9 +1207,12 @@ class StreamBar(wx.Panel):
         acq.stream.StaticStream,
         acq.stream.FluoStream,
         acq.stream.CLStream,
+        acq.stream.CameraStream,
         acq.stream.ARSettingsStream,
         acq.stream.SpectrumSettingsStream,
         acq.stream.MonochromatorSettingsStream,
+        acq.stream.MomentOfInertiaLiveStream,
+        acq.stream.CameraCountStream,
     )
 
     def __init__(self, *args, **kwargs):

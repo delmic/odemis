@@ -298,7 +298,8 @@ SPARC2: {
     affects: ["Camera", "Spectral Camera"],
 }
 
-# DIP must be configured with address 4 (= 0010000)
+# Controller for moving the 'Redux' stage
+# Note: the S axis can _only_ be moved when the l axis is near the active/engaged position
 "Mirror Actuators": {
     class: tmcm.TMCLController,
     role: "mirror",
@@ -308,14 +309,13 @@ SPARC2: {
         #port: "/dev/ttyTMCM*",
         #address: 4,
         axes: ["s", "l"],
-        ustepsize: [5.9e-9, 5.9e-9], # m/µstep
-#        ustepsize: [2.e-6, 2.e-6], # m/µstep, for simulator
+        ustepsize: [1.e-6, 1.e-6], # m/µstep (big, for the simulator to move fast)
         refproc: "Standard",
         refswitch: {"s": 0, "l": 0},
     },
     metadata: {
         # Default position of the mirror engaged (will be improved during alignment)
-        FAV_POS_ACTIVE: {"l": 0.0688688061, "s": 0.0037467301},  # m, m
+        FAV_POS_ACTIVE: {"l": 70.e-3, "s": 5.e-3},  # m, m
     },
 }
 

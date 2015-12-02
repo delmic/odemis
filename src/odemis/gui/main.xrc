@@ -2184,7 +2184,7 @@
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
                     <object class="wxStaticText">
-                      <label>Lens translation</label>
+                      <label>Lens</label>
                       <fg>#E5E5E5</fg>
                       <font>
                         <size>16</size>
@@ -2320,7 +2320,7 @@
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
                     <object class="wxStaticText">
-                      <label>Mirror translation</label>
+                      <label>Mirror</label>
                       <font>
                         <size>16</size>
                         <style>normal</style>
@@ -2527,7 +2527,7 @@
             </object>
             <orient>wxVERTICAL</orient>
             <object class="sizeritem">
-              <object class="wxPanel" name="pnl_sparc_fib">
+              <object class="wxPanel" name="pnl_fibaligner">
                 <object class="wxBoxSizer">
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
@@ -2553,7 +2553,7 @@
                     <border>5</border>
                   </object>
                   <object class="sizeritem">
-                    <object class="UnitFloatSlider" name="mirror_align_slider_fibaligner">
+                    <object class="UnitFloatSlider" name="slider_fibaligner">
                       <size>-1,20</size>
                       <value>0.00001</value>
                       <min>0.0000001</min>
@@ -2793,15 +2793,15 @@
               <assign_var>1</assign_var>
             </XRCED>
           </object>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-          <object class="ARLiveViewport" name="vp_align_fiber">
+          <object class="ChronographViewport" name="vp_align_fiber">
             <size>400,-1</size>
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>
           </object>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
         </object>
         <option>1</option>
         <flag>wxEXPAND</flag>

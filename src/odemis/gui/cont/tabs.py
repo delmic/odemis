@@ -516,7 +516,7 @@ class SecomStreamsTab(Tab):
             has_opt = any(isinstance(s, acqstream.OpticalStream)
                           for s in self.tab_data_model.streams.value)
             if not has_opt:
-                self._streambar_controller.addFluo(add_to_all_views=True, play=False)
+                self._streambar_controller.addFluo(add_to_view=True, play=False)
                 # don't forbid to remove it, as for the user it can be easier to
                 # remove than change all the values
 
@@ -524,7 +524,7 @@ class SecomStreamsTab(Tab):
             has_sem = any(isinstance(s, acqstream.EMStream)
                           for s in self.tab_data_model.streams.value)
             if not has_sem:
-                stream_cont = self._add_em_stream(add_to_all_views=True, play=False)
+                stream_cont = self._add_em_stream(add_to_view=True, play=False)
                 stream_cont.stream_panel.show_remove_btn(False)
 
     @call_in_wx_main
@@ -544,7 +544,7 @@ class SecomStreamsTab(Tab):
                     opts = s
                     break
             else: # Could happen if the user has deleted all the optical streams
-                sp = self._streambar_controller.addFluo(add_to_all_views=True)
+                sp = self._streambar_controller.addFluo(add_to_view=True)
                 opts = sp.stream
 
             self._streambar_controller.resumeStreams({opts})
@@ -561,7 +561,7 @@ class SecomStreamsTab(Tab):
                     sems = s
                     break
             else: # Could happen if the user has deleted all the optical streams
-                sp = self._add_em_stream(add_to_all_views=True)
+                sp = self._add_em_stream(add_to_view=True)
                 sp.show_remove_btn(False)
                 sems = sp.stream
 
@@ -725,7 +725,7 @@ class SparcAcquisitionTab(Tab):
         )
 
         # The sem stream is always visible, so add it by default
-        sem_stream_cont = self._stream_controller.addStream(sem_stream, add_to_all_views=True)
+        sem_stream_cont = self._stream_controller.addStream(sem_stream, add_to_view=True)
         sem_stream_cont.stream_panel.show_remove_btn(False)
         sem_stream_cont.stream_panel.show_visible_btn(False)
 
@@ -1494,7 +1494,7 @@ class AnalysisTab(Tab):
 
         # Load the Streams and their data into the model and views
         for s in streams:
-            self._stream_controller.addStream(s, add_to_all_views=True)
+            self._stream_controller.addStream(s, add_to_view=True)
 
         # Reload current calibration on the new streams (must be done after .streams is set)
         if spec_streams:
@@ -2442,6 +2442,12 @@ class Sparc2AlignTab(Tab):
                     "stream_classes": (acqstream.CameraStream, acqstream.RGBStream),
                 }
             ),
+            (self.panel.vp_align_fiber,
+                {
+                    "name": "Spectrum average",
+                    "stream_classes": acqstream.CameraCountStream,
+                }
+            ),
         ))
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
         self.panel.vp_align_lens.microscope_view.show_crosshair.value = False
@@ -2473,7 +2479,8 @@ class Sparc2AlignTab(Tab):
         ccd_stream.detBinning.value = ccd_stream.detBinning.clip((2, 2))
         self._ccd_stream = ccd_stream
 
-        ccd_spe = self._stream_controller.addStream(ccd_stream)
+        ccd_spe = self._stream_controller.addStream(ccd_stream,
+                            add_to_view=self.panel.vp_align_lens.microscope_view)
         ccd_spe.stream_panel.flatten()
 
         speclines = acqstream.BrightfieldStream(
@@ -2500,7 +2507,8 @@ class Sparc2AlignTab(Tab):
         # TODO: make the legend display a merge slider (currently not happening
         # because both streams are optical)
         # Add it as second stream, so that it's displayed with the default 0.3 merge ratio
-        self._stream_controller.addStream(speclines, visible=False)
+        self._stream_controller.addStream(speclines, visible=False,
+                            add_to_view=self.panel.vp_align_lens.microscope_view)
 
         # MomentOfInertiaStream needs an SEM stream and a CCD stream
         self.panel.vp_moi.canvas.abilities -= {CAN_ZOOM}
@@ -2522,8 +2530,8 @@ class Sparc2AlignTab(Tab):
         self._moi_stream = mois
         # Update ROI based on the lens pole position
         main_data.lens.polePosition.subscribe(self._onPolePosition, init=True)
-        # TODO: instead of add_to_all_views, have a way to ask to add to a specific view (or none at all)
-        mois_spe = self._stream_controller.addStream(mois, add_to_all_views=True)
+        mois_spe = self._stream_controller.addStream(mois,
+                         add_to_view=self.panel.vp_moi.microscope_view)
         mois_spe.stream_panel.flatten()  # No need for the stream name
         # TODO: add ways to show:
         # * Chronograph of the MoI at the center
@@ -2546,6 +2554,19 @@ class Sparc2AlignTab(Tab):
         mirror_ol.set_hole_position(tab_data.polePositionPhysical)
         self.panel.vp_align_center.show_mirror_overlay()
 
+        # chronograph of spectrometer if "fiber-align" mode is present
+        if "fiber-align" in tab_data.align_mode.choices:
+            speccnts = acqstream.CameraCountStream("Spectrum average",
+                                   main_data.spectrometer,
+                                   main_data.spectrometer.data,
+                                   emitter=None,
+                                   detvas=get_local_vas(main_data.spectrometer),
+                                   )
+            speccnt_spe = self._stream_controller.addStream(speccnts,
+                                add_to_view=self.panel.vp_align_fiber.microscope_view)
+            speccnt_spe.stream_panel.flatten()
+            self._speccnt_stream = speccnts
+
         # Force a spot at the center of the FoV
         # Not via stream controller, so we can avoid the scheduler
         spot_stream = acqstream.SpotSEMStream("SpotSEM", main_data.sed,
@@ -2554,10 +2575,6 @@ class Sparc2AlignTab(Tab):
         self._spot_stream = spot_stream
         # Make sure it only plays when the CCD stream plays
         ccd_stream.should_update.subscribe(self._on_ccd_stream_play)
-
-        # TODO: chrongraph of spectrometer if "fiber-align" mode is present
-        if "fiber-align" in tab_data.align_mode.choices:
-            pass
 
         # Switch between alignment modes
         # * mirror-align: move x, y of mirror with moment of inertia feedback
@@ -2758,6 +2775,7 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_lens_mover.Enable(True)
             self.panel.pnl_focus.Enable(True)
             self.panel.pnl_moi_settings.Show(False)
+            self.panel.pnl_fibaligner.Enable(False)
             # TODO: in this mode, if focus change, update the focus image once
             # (by going to spec-focus mode, turning the light, and acquiring an
             # AR image). Problem is that it takes about 10s.
@@ -2769,21 +2787,33 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_lens_mover.Enable(False)
             self.panel.pnl_focus.Enable(False)
             self.panel.pnl_moi_settings.Show(True)
+            self.panel.pnl_fibaligner.Enable(False)
             self.panel.html_alignment_doc.Parent.Layout()
             self.panel.pnl_moi_settings.Parent.Layout()
             self.panel.html_moi_doc.Parent.Layout()
         elif mode == "center-align":
-            self.tab_data_model.focussedView.value = self.panel.vp_align_center.microscope_view
             self._ccd_stream.should_update.value = True
+            self.tab_data_model.focussedView.value = self.panel.vp_align_center.microscope_view
             self.panel.pnl_mirror.Enable(False)
             self.panel.html_alignment_doc.Show(False)
             self.panel.pnl_lens_mover.Enable(False)
             self.panel.pnl_focus.Enable(False)
             self.panel.pnl_moi_settings.Show(False)
+            self.panel.pnl_fibaligner.Enable(False)
         elif mode == "fiber-align":
             # FIXME: ActuatorController hides the fiber alignment panel if it cannot align. Should
             # this work as in Sparc v1?
-            pass
+            # FIXME: only allow to move once the spec-selector is ready
+            self._speccnt_stream.should_update.value = True
+            self.tab_data_model.focussedView.value = self.panel.vp_align_fiber.microscope_view
+            self.panel.pnl_mirror.Enable(False)
+            self.panel.html_alignment_doc.Show(False)
+            self.panel.pnl_lens_mover.Enable(False)
+            self.panel.pnl_focus.Enable(False)
+            self.panel.pnl_moi_settings.Show(False)
+            self.panel.pnl_fibaligner.Enable(True)
+            # TODO: the X axis of fiber aligner must be used for
+            # MD_FAV_POS_ACTIVE of spec-selector
         else:
             raise ValueError("Unknown alignment mode %s!" % mode)
 

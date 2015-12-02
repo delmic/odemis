@@ -217,8 +217,8 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.btn_m_mirror_xy_y = xrc.XRCCTRL(self, "btn_m_mirror_xy_y")
         self.btn_m_mirror_xy_x = xrc.XRCCTRL(self, "btn_m_mirror_xy_x")
         self.btn_p_mirror_xy_x = xrc.XRCCTRL(self, "btn_p_mirror_xy_x")
-        self.pnl_sparc_fib = xrc.XRCCTRL(self, "pnl_sparc_fib")
-        self.mirror_align_slider_fibaligner = xrc.XRCCTRL(self, "mirror_align_slider_fibaligner")
+        self.pnl_fibaligner = xrc.XRCCTRL(self, "pnl_fibaligner")
+        self.slider_fibaligner = xrc.XRCCTRL(self, "slider_fibaligner")
         self.btn_p_fibaligner_y = xrc.XRCCTRL(self, "btn_p_fibaligner_y")
         self.btn_m_fibaligner_y = xrc.XRCCTRL(self, "btn_m_fibaligner_y")
         self.btn_m_fibaligner_x = xrc.XRCCTRL(self, "btn_m_fibaligner_x")
@@ -2663,7 +2663,7 @@ def __init_resources():
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
                     <object class="wxStaticText">
-                      <label>Lens translation</label>
+                      <label>Lens</label>
                       <fg>#E5E5E5</fg>
                       <font>
                         <size>16</size>
@@ -2799,7 +2799,7 @@ def __init_resources():
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
                     <object class="wxStaticText">
-                      <label>Mirror translation</label>
+                      <label>Mirror</label>
                       <font>
                         <size>16</size>
                         <style>normal</style>
@@ -3006,7 +3006,7 @@ def __init_resources():
             </object>
             <orient>wxVERTICAL</orient>
             <object class="sizeritem">
-              <object class="wxPanel" name="pnl_sparc_fib">
+              <object class="wxPanel" name="pnl_fibaligner">
                 <object class="wxBoxSizer">
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
@@ -3032,7 +3032,7 @@ def __init_resources():
                     <border>5</border>
                   </object>
                   <object class="sizeritem">
-                    <object class="UnitFloatSlider" name="mirror_align_slider_fibaligner">
+                    <object class="UnitFloatSlider" name="slider_fibaligner">
                       <size>-1,20</size>
                       <value>0.00001</value>
                       <min>0.0000001</min>
@@ -3272,15 +3272,15 @@ def __init_resources():
               <assign_var>1</assign_var>
             </XRCED>
           </object>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-          <object class="ARLiveViewport" name="vp_align_fiber">
+          <object class="ChronographViewport" name="vp_align_fiber">
             <size>400,-1</size>
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>
           </object>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
         </object>
         <option>1</option>
         <flag>wxEXPAND</flag>
