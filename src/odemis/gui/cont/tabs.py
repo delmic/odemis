@@ -2402,10 +2402,7 @@ class Sparc2AlignTab(Tab):
         else:
             self._moveLensToActive()
 
-        # Documentation text on the left & right panel for mirror alignement
-        doc_path = pkg_resources.resource_filename("odemis.gui", "doc/sparc2_moi_procedure.html")
-        panel.html_alignment_doc.SetBorders(0)  # sizer already give us borders
-        panel.html_alignment_doc.LoadPage(doc_path)
+        # Documentation text on the right panel for mirror alignement
         doc_path = pkg_resources.resource_filename("odemis.gui", "doc/sparc2_moi_goals.html")
         panel.html_moi_doc.SetBorders(0)
         panel.html_moi_doc.LoadPage(doc_path)
@@ -2597,6 +2594,7 @@ class Sparc2AlignTab(Tab):
             "center-align": "ar",
             "fiber-align": "fiber-align",
         }
+        # Note: ActuatorController hides the fiber alignment panel if not needed.
         for btn, mode in self._alignbtn_to_mode.items():
             if mode in tab_data.align_mode.choices:
                 btn.Bind(wx.EVT_BUTTON, self._onClickAlignButton)
@@ -2776,7 +2774,6 @@ class Sparc2AlignTab(Tab):
             self.tab_data_model.focussedView.value = self.panel.vp_align_lens.microscope_view
             self._ccd_stream.should_update.value = True
             self.panel.pnl_mirror.Enable(True)  # also allow to move the mirror here
-            self.panel.html_alignment_doc.Show(False)
             self.panel.pnl_lens_mover.Enable(True)
             self.panel.pnl_focus.Enable(True)
             self.panel.pnl_moi_settings.Show(False)
@@ -2788,31 +2785,25 @@ class Sparc2AlignTab(Tab):
             self.tab_data_model.focussedView.value = self.panel.vp_moi.microscope_view
             self._moi_stream.should_update.value = True
             self.panel.pnl_mirror.Enable(True)
-            self.panel.html_alignment_doc.Show(True)
             self.panel.pnl_lens_mover.Enable(False)
             self.panel.pnl_focus.Enable(False)
             self.panel.pnl_moi_settings.Show(True)
             self.panel.pnl_fibaligner.Enable(False)
-            self.panel.html_alignment_doc.Parent.Layout()
             self.panel.pnl_moi_settings.Parent.Layout()
             self.panel.html_moi_doc.Parent.Layout()
         elif mode == "center-align":
             self.tab_data_model.focussedView.value = self.panel.vp_align_center.microscope_view
             self._ccd_stream.should_update.value = True
             self.panel.pnl_mirror.Enable(False)
-            self.panel.html_alignment_doc.Show(False)
             self.panel.pnl_lens_mover.Enable(False)
             self.panel.pnl_focus.Enable(False)
             self.panel.pnl_moi_settings.Show(False)
             self.panel.pnl_fibaligner.Enable(False)
         elif mode == "fiber-align":
-            # FIXME: ActuatorController hides the fiber alignment panel if it cannot align. Should
-            # this work as in Sparc v1?
             # FIXME: only allow to move once the spec-selector is ready
             self.tab_data_model.focussedView.value = self.panel.vp_align_fiber.microscope_view
             self._speccnt_stream.should_update.value = True
             self.panel.pnl_mirror.Enable(False)
-            self.panel.html_alignment_doc.Show(False)
             self.panel.pnl_lens_mover.Enable(False)
             self.panel.pnl_focus.Enable(False)
             self.panel.pnl_moi_settings.Show(False)

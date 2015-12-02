@@ -193,7 +193,7 @@ SPARC2: {
        mag: 0.31, # ratio
        na: 0.2, # ratio, numerical aperture
        ri: 1.0, # ratio, refractive index
-       pole_pos: [1608, 1370], # (px, px), position of the pole (aka the hole in the mirror)
+       pole_pos: [458, 519], # (px, px), position of the pole (aka the hole in the mirror)
        x_max: 13.25e-3,  # m, the distance between the parabola origin and the cutoff position
        hole_diam: 0.6e-3,  # m, diameter the hole in the mirror
        focus_dist: 0.5e-3,  # m, the vertical mirror cutoff, iow the min distance between the mirror and the sample
