@@ -2621,6 +2621,7 @@ def __init_resources():
                         </object>
                         <flag>wxLEFT</flag>
                         <border>5</border>
+                        <minsize>90,-1</minsize>
                         <cellpos>1,0</cellpos>
                       </object>
                       <object class="sizeritem">
@@ -3251,6 +3252,7 @@ def __init_resources():
           <bg>#333333</bg>
         </object>
         <flag>wxEXPAND</flag>
+        <minsize>400,-1</minsize>
       </object>
       <object class="sizeritem">
         <object class="ViewportGrid" name="pnl_vp_grid">

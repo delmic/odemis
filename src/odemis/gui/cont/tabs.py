@@ -2187,21 +2187,17 @@ class SparcAlignTab(Tab):
                                   panel.btn_align_mirror: "mirror-align",
                                   panel.btn_align_fiber: "fiber-align"}
 
-        # TODO: move mode detection in the model, and hide buttons for which
-        # no mode exist.
-        if main_data.spectrometer is None:
-            # Note: if no fiber alignment actuators, but a spectrometer, it's
-            # still good to provide the mode, as the user can do it manually.
-            panel.btn_align_fiber.Show(False)
-            del self._alignbtn_to_mode[panel.btn_align_fiber]
-
-        if main_data.ccd is None:
-            # No AR => only one mode possible => hide the buttons
-            panel.pnl_alignment_btns.Show(False)
-            tab_data.align_mode.value = "fiber-align"
-        else:
-            for btn in self._alignbtn_to_mode:
+        # Remove the modes which are not supported by the current hardware
+        for btn, mode in self._alignbtn_to_mode.items():
+            if mode in tab_data.align_mode.choices:
                 btn.Bind(wx.EVT_BUTTON, self._onClickAlignButton)
+            else:
+                btn.Destroy()
+                del self._alignbtn_to_mode[btn]
+
+        if len(tab_data.align_mode.choices) <= 1:
+            # only one mode possible => hide the buttons
+            panel.pnl_alignment_btns.Show(False)
 
         tab_data.align_mode.subscribe(self._onAlignMode)
 
@@ -2559,17 +2555,21 @@ class Sparc2AlignTab(Tab):
         # Make sure it only plays when the CCD stream plays
         ccd_stream.should_update.subscribe(self._on_ccd_stream_play)
 
+        # TODO: chrongraph of spectrometer if "fiber-align" mode is present
+        if "fiber-align" in tab_data.align_mode.choices:
+            pass
+
         # Switch between alignment modes
         # * mirror-align: move x, y of mirror with moment of inertia feedback
         # * lens-align: first auto-focus spectrograph, then align lens1
         # * goal-align: find the center of the AR image using a "Goal" image
-        # * fiber-align: TODO: write info
-        self._alignbtn_to_mode = OrderedDict([
+        # * fiber-align: move x, y of the fibaligner with mean of spectrometer as feedback
+        self._alignbtn_to_mode = OrderedDict((
             (panel.btn_align_lens, "lens-align"),
             (panel.btn_align_mirror, "mirror-align"),
             (panel.btn_align_centering, "center-align"),
             (panel.btn_align_fiber, "fiber-align"),
-        ])
+        ))
 
         # The GUI mode to the optical path mode
         self._mode_to_opm = {
@@ -2578,7 +2578,14 @@ class Sparc2AlignTab(Tab):
             "center-align": "ar",
             "fiber-align": "fiber-align",
         }
+        for btn, mode in self._alignbtn_to_mode.items():
+            if mode in tab_data.align_mode.choices:
+                btn.Bind(wx.EVT_BUTTON, self._onClickAlignButton)
+            else:
+                btn.Destroy()
+                del self._alignbtn_to_mode[btn]
 
+        self._layoutModeButtons()
         tab_data.align_mode.subscribe(self._onAlignMode)
 
         # Bind moving buttons & keys
@@ -2616,32 +2623,26 @@ class Sparc2AlignTab(Tab):
 
     def _layoutModeButtons(self):
         """
-        Make sure just the right mode buttons are displayed, and in a nice way
+        Positions the mode buttons in a nice way: on one line if they fit,
+         otherwise on two lines.
         """
-        gb_sizer = None
-        free_slots = []
-        tab_data = self.tab_data_model
+        # If 3 buttons or less, keep them all on a single line, otherwise,
+        # spread on two lines. (Works up to 6 buttons)
+        btns = self._alignbtn_to_mode.keys()
+        if len(btns) == 1:
+            btns[0].Show(False)  # No other choice => no need to choose
+            return
+        elif len(btns) == 4:
+            # Spread over two columns
+            width = 2
+        else:
+            width = 3
 
-        # Hide the buttons that are not needed and move the visible ones to fill
-        # gaps that may arise
-        for btn, mode in self._alignbtn_to_mode.items():
-            if gb_sizer is None:
-                gb_sizer = btn.Parent.GetSizer().GetChildren()[0].GetSizer()
-
-            if mode in tab_data.align_mode.choices:
-                btn.Bind(wx.EVT_BUTTON, self._onClickAlignButton)
-                if free_slots:
-                    gb_sizer.SetItemPosition(btn, free_slots.pop(0))
-            else:
-                free_slots.append(gb_sizer.GetItemPosition(btn))
-                btn.Destroy()
-                del self._alignbtn_to_mode[btn]
-
-        # If there are 3 buttons or less, move the last one from the 2nd row to
-        # the 3rd position of the 1st
-        if len(tab_data.align_mode.choices) < 4:
-            last_btn = next(reversed(self._alignbtn_to_mode))
-            gb_sizer.SetItemPosition(last_btn, (0, 2))
+        # Position each button at the next position in the grid
+        gb_sizer = btns[0].Parent.GetSizer().GetChildren()[0].GetSizer()
+        for i, btn in enumerate(btns):
+            pos = (i // width, i % width)
+            gb_sizer.SetItemPosition(btn, pos)
 
     def _onPolePosition(self, pole_pos):
         """
