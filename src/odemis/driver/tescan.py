@@ -34,7 +34,13 @@ from odemis.util import TimeoutError
 from tescan import sem, CancelledError
 import re
 from odemis.model import HwError
+import Queue
+from odemis.model import roattribute, oneway
+import gc
 
+
+ACQ_CMD_UPD = 1
+ACQ_CMD_TERM = 2
 
 class SEM(model.HwComponent):
     '''
@@ -54,6 +60,7 @@ class SEM(model.HwComponent):
         # we will fill the set of children with Components later in ._children
         model.HwComponent.__init__(self, name, role, daemon=daemon, **kwargs)
 
+        self._host = host
         self._device = sem.Sem()
         logging.info("Going to connect to host")
         result = self._device.Connect(host, 8300)
@@ -66,10 +73,17 @@ class SEM(model.HwComponent):
         # Lock in order to synchronize all the child component functions
         # that acquire data from the SEM while we continuously acquire images
         self._acq_progress_lock = threading.Lock()
+        self._acquisition_mng_lock = threading.Lock()
+        self._acquisition_init_lock = threading.Lock()
+        self._acq_cmd_q = Queue.Queue()
+        self._acquisition_must_stop = threading.Event()
+        self._acquisitions = set()  # detectors currently active
 
         # important: stop the scanning before we start scanning or before automatic
         # procedures, even before we configure the detectors
         self._device.ScStopScan()
+        # Blanker is automatically enabled when no scanning takes place
+        self._device.ScSetBlanker(1, 2)
 
         self._hwName = "TescanSEM (s/n: %s)" % (self._device.TcpGetDevice())
         self._metadata[model.MD_HW_NAME] = self._hwName
@@ -139,6 +153,262 @@ class SEM(model.HwComponent):
             self._light = Light(parent=self, daemon=daemon, **kwargs)
             self.children.value.add(self._light)
 
+        self._acquisition_thread = threading.Thread(target=self._acquisition_run,
+                                                    name="SEM acquisition thread")
+        self._acquisition_thread.start()
+
+    def _reset_device(self):
+        logging.info("Resetting device %s", self._hwName)
+        self._device = sem.Sem()
+        logging.info("Going to connect to host")
+        result = self._device.Connect(self._host, 8300)
+        if result < 0:
+            raise HwError("Failed to connect to TESCAN server '%s'. "
+                          "Check that the ip address is correct and TESCAN server "
+                          "connected to the network." % (self._host,))
+        self._device.ScStopScan()
+        logging.info("Connected")
+
+    def start_acquire(self, detector):
+        """
+        Start acquiring images on the given detector (i.e., input channel).
+        detector (Detector): detector from which to acquire an image
+        Note: The acquisition parameters are defined by the scanner. Acquisition
+        might already be going on for another detector, in which case the detector
+        will be added on the next acquisition.
+        raises KeyError if the detector is already being acquired.
+        """
+        # to be thread-safe (simultaneous calls to start/stop_acquire())
+        with self._acquisition_mng_lock:
+            if detector in self._acquisitions:
+                raise KeyError("Channel %d already set up for acquisition." % detector.channel)
+            self._acquisitions.add(detector)
+            self._acq_cmd_q.put(ACQ_CMD_UPD)
+
+            # If something went wrong with the thread, report also here
+            if self._acquisition_thread is None:
+                raise IOError("Acquisition thread is gone, cannot acquire")
+
+    def stop_acquire(self, detector):
+        """
+        Stop acquiring images on the given channel.
+        detector (Detector): detector from which to acquire an image
+        Note: acquisition might still go on on other channels
+        """
+        with self._acquisition_mng_lock:
+            self._acquisitions.discard(detector)
+            self._acq_cmd_q.put(ACQ_CMD_UPD)
+            if not self._acquisitions:
+                self._req_stop_acquisition()
+
+    def _check_cmd_q(self, block=True):
+        """
+        block (bool): if True, will wait for a (just one) command to come,
+          otherwise, will wait for no more command to be queued
+        raise CancelledError: if the TERM command was received.
+        """
+        # Read until there are no more commands
+        while True:
+            try:
+                cmd = self._acq_cmd_q.get(block=block)
+            except Queue.Empty:
+                break
+
+            # Decode command
+            if cmd == ACQ_CMD_UPD:
+                pass
+            elif cmd == ACQ_CMD_TERM:
+                logging.debug("Acquisition thread received terminate command")
+                raise CancelledError("Terminate command received")
+            else:
+                logging.error("Unexpected command %s", cmd)
+
+            if block:
+                return
+
+    def _acquisition_run(self):
+        """
+        Acquire images until asked to stop. Sends the raw acquired data to the
+          callbacks.
+        Note: to be run in a separate thread
+        """
+        last_gc = 0
+        nfailures = 0
+        try:
+            while True:
+                with self._acquisition_init_lock:
+                    # Ensure that if a rest/term is needed, and we don't catch
+                    # it in the queue (yet), it will be detected before starting
+                    # the read/write commands.
+                    self._acquisition_must_stop.clear()
+
+                self._check_cmd_q(block=False)
+
+                detectors = tuple(self._acq_wait_detectors_ready())  # ordered
+                if detectors:
+                    with self._acq_progress_lock:
+                        # Beam ON
+                        self._device.ScSetBlanker(1, 0)
+                    # write and read the raw data
+                    try:
+                        rdas = self._acquire_detectors(detectors)
+                    except CancelledError:
+                        # either because must terminate or just need to rest
+                        logging.debug("Acquisition was cancelled")
+                        continue
+                    except Exception as e:
+                        logging.exception(e)
+                        # could be genuine or just due to cancellation
+                        self._check_cmd_q(block=False)
+
+                        nfailures += 1
+                        if nfailures == 5:
+                            logging.exception("Acquisition failed %d times in a row, giving up", nfailures)
+                            return
+                        else:
+                            logging.exception("Acquisition failed, will retry")
+                            time.sleep(1)
+                            self._reset_device()
+                            continue
+
+                    nfailures = 0
+
+                    for d, da in zip(detectors, rdas):
+                        d.data.notify(da)
+
+                    # force the GC to non-used buffers, for some reason, without this
+                    # the GC runs only after we've managed to fill up the memory
+                    if time.time() - last_gc > 2:  # Costly, so not too often
+                        gc.collect()  # TODO: if scan is long enough, during scan
+                        last_gc = time.time()
+                else:  # nothing to acquire => rest
+                    with self._acq_progress_lock:
+                        # Beam blanker back to automatic
+                        self._device.ScStopScan()
+                        # Beam blanker back to automatic
+                        self._device.ScSetBlanker(1, 2)
+                    gc.collect()
+                    # wait until something new comes in
+                    self._check_cmd_q(block=True)
+                    last_gc = time.time()
+        except CancelledError:
+            logging.info("Acquisition threading terminated on request")
+        except Exception:
+            logging.exception("Unexpected failure during image acquisition")
+        finally:
+            try:
+                with self._acq_progress_lock:
+                    self._device.ScStopScan()
+                    # Beam blanker back to automatic
+                    self._device.ScSetBlanker(1, 2)
+            except Exception:
+                # can happen if the driver already terminated
+                pass
+            logging.info("Acquisition thread closed")
+            self._acquisition_thread = None
+
+    def _req_stop_acquisition(self):
+        """
+        Request the acquisition thread to stop
+        """
+        # This must be entirely done before any new comedi command is started
+        # So it's protected with the init of read/write and set_to_resting_position
+        with self._acquisition_init_lock:
+            self._acquisition_must_stop.set()
+
+    def _acq_wait_detectors_ready(self):
+        """
+        Block until all the detectors to acquire are ready (ie, received
+          synchronisation event, or not synchronized)
+        returns (set of Detectors): the detectors to acquire from
+        """
+        detectors = self._acquisitions.copy()
+        det_not_ready = detectors.copy()
+        det_ready = set()
+        while det_not_ready:
+            # Wait for all the DataFlows to have received a sync event
+            for d in det_not_ready:
+                d.data._waitSync()
+                det_ready.add(d)
+
+            # Check if new detectors were added (or removed) in the mean time
+            with self._acquisition_mng_lock:
+                detectors = self._acquisitions.copy()
+            det_not_ready = detectors - det_ready
+
+        return detectors
+
+    def _acquire_detectors(self, detectors):
+        """
+        Run the acquisition for multiple detectors
+        return (list of DataArrays): acquisition for each detector in order
+        """
+        rdas = []
+        for d in detectors:
+            rbuf = self._single_acquisition(d.channel)
+            rdas.append(rbuf)
+
+        return rdas
+
+    def _single_acquisition(self, channel):
+        with self._acq_progress_lock:
+            with self._acquisition_init_lock:
+                if self._acquisition_must_stop.is_set():
+                    raise CancelledError("Acquisition cancelled during preparation")
+            pxs = self._scanner.pixelSize.value  # m/px
+
+            pxs_pos = self._scanner.translation.value
+            scale = self._scanner.scale.value
+            res = (self._scanner.resolution.value[0],
+                   self._scanner.resolution.value[1])
+
+            metadata = dict(self._metadata)
+            phy_pos = metadata.get(model.MD_POS, (0, 0))
+            trans = self._scanner.pixelToPhy(pxs_pos)
+            updated_phy_pos = (phy_pos[0] + trans[0], phy_pos[1] + trans[1])
+
+            # update changed metadata
+            metadata[model.MD_POS] = updated_phy_pos
+            metadata[model.MD_PIXEL_SIZE] = (pxs[0] * scale[0], pxs[1] * scale[1])
+            metadata[model.MD_ACQ_DATE] = time.time()
+            metadata[model.MD_ROTATION] = self._scanner.rotation.value
+            metadata[model.MD_DWELL_TIME] = self._scanner.dwellTime.value
+
+            scaled_shape = (self._scanner._shape[0] / scale[0], self._scanner._shape[1] / scale[1])
+            center = (scaled_shape[0] / 2, scaled_shape[1] / 2)
+            l = int(center[0] + pxs_pos[0] - (res[0] / 2))
+            t = int(center[1] + pxs_pos[1] - (res[1] / 2))
+            r = l + res[0] - 1
+            b = t + res[1] - 1
+
+            dt = self._scanner.dwellTime.value * 1e9
+            logging.debug("Acquiring SEM image of %s with dwell time %f ns", res, dt)
+            try:
+                # Check if spot mode is required
+                if res == (1, 1):
+                    # FIXME: Maybe just use ScScanXY
+                    self._device.ScScanLine(0, scaled_shape[0], scaled_shape[1],
+                                         l + 1, t + 1, r + 1, b + 1, dt, 1, 0)
+                else:
+                    self._device.ScScanXY(0, scaled_shape[0], scaled_shape[1],
+                                         l, t, r, b, 0, dt)
+                # we must stop the scanning even after single scan
+                # self._device.ScStopScan()
+                # return model.DataArray(numpy.array([[0]], dtype=numpy.uint16), metadata)
+                # fetch the image (blocking operation), ndarray is returned
+                sem_img = self._device.FetchArray(channel, res[0] * res[1])
+            except Exception, e:
+                self._acq_progress_lock.release()
+                raise IOError("Failed while scanning SEM image: %s" % e)
+            sem_img.shape = res[::-1]
+            # Change endianess
+            sem_img.byteswap(True)
+
+            # we must stop the scanning even after single scan
+            self._device.ScStopScan()
+
+            return model.DataArray(sem_img, metadata)
+
     def terminate(self):
         """
         Must be called at the end of the usage. Can be called multiple times,
@@ -151,7 +421,15 @@ class SEM(model.HwComponent):
             self._camera.terminate()
         self._pressure.terminate()
         # finish
-        self._device.Disconnect()
+        if self._device:
+            # stop the acquisition thread
+            with self._acquisition_mng_lock:
+                self._acquisitions.clear()
+                self._acq_cmd_q.put(ACQ_CMD_TERM)
+                self._req_stop_acquisition()
+            self._acquisition_thread.join(10)
+            self._device.Disconnect()
+            self._device = None
 
 
 class Scanner(model.Emitter):
@@ -264,6 +542,7 @@ class Scanner(model.Emitter):
     def updateHorizontalFOV(self):
         with self.parent._acq_progress_lock:
             new_fov = self.parent._device.GetViewField()
+
         # self._setHorizontalFOV(new_fov * 1e-03)
         self.horizontalFoV.value = new_fov * 1e-03
         # Update current pixelSize and magnification
@@ -271,16 +550,14 @@ class Scanner(model.Emitter):
         self._updateMagnification()
 
     def _setHorizontalFOV(self, value):
-        # FOV to mm to comply with Tescan API
-        self.parent._device.SetViewField(value * 1e03)
-
         # Ensure fov odemis field always shows the right value
         # Also useful in case fov value that we try to set is
         # out of range
         with self.parent._acq_progress_lock:
+            # FOV to mm to comply with Tescan API
+            self.parent._device.SetViewField(value * 1e03)
             cur_fov = self.parent._device.GetViewField() * 1e-03
             value = cur_fov
-
         return value
 
     def _updateMagnification(self):
@@ -449,155 +726,32 @@ class Detector(model.Detector):
     """
     def __init__(self, name, role, parent, channel, detector, **kwargs):
         """
-        Note: parent should have a child "scanner" already initialised
+        channel (0<= int): input channel from which to read
+        detector (0<= int): detector index
         """
         # It will set up ._shape and .parent
         model.Detector.__init__(self, name, role, parent=parent, **kwargs)
-
-        # select detector and enable channel
         self._channel = channel
         self._detector = detector
         self.parent._device.DtSelect(self._channel, self._detector)
         self.parent._device.DtEnable(self._channel, 1, 16)  # 16 bits
-        self.acq_shape = self.parent._scanner._shape
-
         # adjust brightness and contrast
         self.parent._device.DtAutoSignal(self._channel)
 
-        self.data = SEMDataFlow(self, parent)
-        self._acquisition_thread = None
-        self._acquisition_lock = threading.Lock()
-        self._acquisition_init_lock = threading.Lock()
-        self._acquisition_must_stop = threading.Event()
-
         # The shape is just one point, the depth
         self._shape = (2 ** 16,)  # only one point
+        self.data = SEMDataFlow(self, parent)
 
-        # Blanker is automatically enabled when no scanning takes place
-        self.parent._device.ScSetBlanker(1, 2)
+        # Special event to request software unblocking on the scan
+        self.softwareTrigger = model.Event()
 
-    def start_acquire(self, callback):
-        with self._acquisition_lock:
-            self._wait_acquisition_stopped()
-            target = self._acquire_thread
-            self._acquisition_thread = threading.Thread(target=target,
-                    name="TescanSEM acquire flow thread",
-                    args=(callback,))
-            # Beam ON
-            self.parent._device.ScSetBlanker(1, 0)
-            self._acquisition_thread.start()
+    @roattribute
+    def channel(self):
+        return self._channel
 
-    def stop_acquire(self):
-        with self._acquisition_lock:
-            with self._acquisition_init_lock:
-                self.parent._device.CancelRecv()
-                self.parent._device.ScStopScan()
-                # Beam blanker back to automatic
-                self.parent._device.ScSetBlanker(1, 2)
-                self._acquisition_must_stop.set()
-
-    def _wait_acquisition_stopped(self):
-        """
-        Waits until the acquisition thread is fully finished _iff_ it was requested
-        to stop.
-        """
-        # "if" is to not wait if it's already finished
-        if self._acquisition_must_stop.is_set():
-            logging.debug("Waiting for thread to stop.")
-            self._acquisition_thread.join(10)  # 10s timeout for safety
-            if self._acquisition_thread.isAlive():
-                logging.error("Failed to stop the acquisition thread")
-                # Now let's hope everything is back to normal...
-            # ensure it's not set, even if the thread died prematurely
-            self._acquisition_must_stop.clear()
-
-    def _acquire_image(self):
-        """
-        Acquires the SEM image based on the translation, resolution and
-        current drift.
-        """
-
-        with self.parent._acq_progress_lock:
-            pxs = self.parent._scanner.pixelSize.value  # m/px
-
-            pxs_pos = self.parent._scanner.translation.value
-            scale = self.parent._scanner.scale.value
-            res = (self.parent._scanner.resolution.value[0],
-                   self.parent._scanner.resolution.value[1])
-
-            metadata = dict(self.parent._metadata)
-            phy_pos = metadata.get(model.MD_POS, (0, 0))
-            trans = self.parent._scanner.pixelToPhy(pxs_pos)
-            updated_phy_pos = (phy_pos[0] + trans[0], phy_pos[1] + trans[1])
-
-            # update changed metadata
-            metadata[model.MD_POS] = updated_phy_pos
-            metadata[model.MD_PIXEL_SIZE] = (pxs[0] * scale[0], pxs[1] * scale[1])
-            metadata[model.MD_ACQ_DATE] = time.time()
-            metadata[model.MD_ROTATION] = self.parent._scanner.rotation.value
-            metadata[model.MD_DWELL_TIME] = self.parent._scanner.dwellTime.value
-
-            scaled_shape = (self.acq_shape[0] / scale[0], self.acq_shape[1] / scale[1])
-            center = (scaled_shape[0] / 2, scaled_shape[1] / 2)
-            l = int(center[0] + pxs_pos[1] - (res[0] / 2))
-            t = int(center[1] + pxs_pos[0] - (res[1] / 2))
-            r = l + res[0] - 1
-            b = t + res[1] - 1
-
-            dt = self.parent._scanner.dwellTime.value * 1e9
-            logging.debug("Acquiring SEM image of %s with dwell time %f ns", res, dt)
-            try:
-                # Check if spot mode is required
-                if res == (1, 1):
-                    # FIXME: Maybe just use ScScanXY
-                    self.parent._device.ScScanLine(0, scaled_shape[0], scaled_shape[1],
-                                         l + 1, t + 1, r + 1, b + 1, dt, 1, 0)
-                else:
-                    self.parent._device.ScScanXY(0, scaled_shape[0], scaled_shape[1],
-                                         l, t, r, b, 1, dt)
-            except Exception:
-                logging.warning("Acquisition cancelled...")
-                # we must stop the scanning even after single scan
-                self.parent._device.ScStopScan()
-                return model.DataArray(numpy.array([[0]], dtype=numpy.uint16), metadata)
-            # fetch the image (blocking operation), ndarray is returned
-            sem_img = self.parent._device.FetchArray(self._channel, res[0] * res[1])
-            sem_img.shape = res[::-1]
-            # Change endianess
-            sem_img.byteswap(True)
-
-            # we must stop the scanning even after single scan
-            self.parent._device.ScStopScan()
-
-            return model.DataArray(sem_img, metadata)
-
-    def _acquire_thread(self, callback):
-        """
-        Thread that performs the SEM acquisition. It calculates and updates the
-        center (e-beam) position based on the translation and provides the new 
-        generated output to the Dataflow. 
-        """
-        try:
-            while not self._acquisition_must_stop.is_set():
-                with self._acquisition_init_lock:
-                    if self._acquisition_must_stop.is_set():
-                        break
-                callback(self._acquire_image())
-        except CancelledError:
-            # Waiting to fetch image is cancelled
-            pass
-        except Exception:
-            logging.exception("Image acquisition failed")
-        finally:
-            logging.debug("Acquisition thread closed")
-            self._acquisition_must_stop.clear()
-
-    # we share metadata with our parent
-    def updateMetadata(self, md):
-        self.parent.updateMetadata(md)
-
-    def getMetadata(self):
-        return self.parent.getMetadata()
+    @roattribute
+    def detector(self):
+        return self._detector
 
 
 class SEMDataFlow(model.DataFlow):
@@ -608,28 +762,91 @@ class SEMDataFlow(model.DataFlow):
     """
     def __init__(self, detector, sem):
         """
-        detector (semcomedi.Detector): the detector that the dataflow corresponds to
-        sem (semcomedi.SEMComedi): the SEM
+        detector (model.Detector): the detector that the dataflow corresponds to
+        sem (model.Emitter): the SEM
         """
         model.DataFlow.__init__(self)
         self.component = weakref.ref(detector)
+        self._sem = weakref.proxy(sem)
+
+        self._sync_event = None  # event to be synchronised on, or None
+        self._evtq = None  # a Queue to store received events (= float, time of the event)
+        self._prev_max_discard = self._max_discard
 
     # start/stop_generate are _never_ called simultaneously (thread-safe)
     def start_generate(self):
+        comp = self.component()
+        if comp is None:
+            # sem/component has been deleted, it's all fine, we'll be GC'd soon
+            return
+
         try:
-            self.component().start_acquire(self.notify)
+            self._sem.start_acquire(comp)
         except ReferenceError:
             # sem/component has been deleted, it's all fine, we'll be GC'd soon
             pass
 
     def stop_generate(self):
+        comp = self.component()
+        if comp is None:
+            # sem/component has been deleted, it's all fine, we'll be GC'd soon
+            return
+
         try:
-            self.component().stop_acquire()
-            # Note that after that acquisition might still go on for a short time
+            self._sem.stop_acquire(comp)
+            if self._sync_event:
+                self._evtq.put(None)  # in case it was waiting for an event
         except ReferenceError:
             # sem/component has been deleted, it's all fine, we'll be GC'd soon
             pass
 
+    def synchronizedOn(self, event):
+        """
+        Synchronize the acquisition on the given event. Every time the event is
+          triggered, the scanner will start a new acquisition/scan.
+          The DataFlow can be synchronized only with one Event at a time.
+          However each DataFlow can be synchronized, separately. The scan will
+          only start once each active DataFlow has received an event.
+        event (model.Event or None): event to synchronize with. Use None to
+          disable synchronization.
+        """
+        if self._sync_event == event:
+            return
+
+        if self._sync_event:
+            self._sync_event.unsubscribe(self)
+            self.max_discard = self._prev_max_discard
+            if not event:
+                self._evtq.put(None)  # in case it was waiting for this event
+
+        self._sync_event = event
+        if self._sync_event:
+            # if the df is synchronized, the subscribers probably don't want to
+            # skip some data
+            self._evtq = Queue.Queue()  # to be sure it's empty
+            self._prev_max_discard = self._max_discard
+            self.max_discard = 0
+            self._sync_event.subscribe(self)
+
+    @oneway
+    def onEvent(self):
+        """
+        Called by the Event when it is triggered
+        """
+        if not self._evtq.empty():
+            logging.warning("Received synchronization event but already %d queued",
+                            self._evtq.qsize())
+
+        self._evtq.put(time.time())
+
+    def _waitSync(self):
+        """
+        Block until the Event on which the dataflow is synchronised has been
+          received. If the DataFlow is not synchronised on any event, this
+          method immediatly returns
+        """
+        if self._sync_event:
+            self._evtq.get()
 
 class Stage(model.Actuator):
     """
