@@ -752,8 +752,6 @@ def main(args):
                          default=0, help="set verbosity level (0-2, default = 0)")
     opt_grp.add_argument("--machine", dest="machine", action="store_true", default=False,
                          help="display in a machine-friendly way (i.e., no pretty printing)")
-    opt_grp.add_argument("--big-distance", dest="bigdist", action="store_true", default=False,
-                         help=u"flag needed to allow any move bigger than 10 mm.")
     dm_grp = parser.add_argument_group('Microscope management')
     dm_grpe = dm_grp.add_mutually_exclusive_group()
     dm_grpe.add_argument("--kill", "-k", dest="kill", action="store_true", default=False,
@@ -785,6 +783,8 @@ def main(args):
     dm_grpe.add_argument("--position", "-p", dest="position", nargs=3, action='append',
                          metavar=("<component>", "<axis>", "<position>"),
                          help=u"move the axis to the given position.")
+    dm_grp.add_argument("--big-distance", dest="bigdist", action="store_true", default=False,
+                        help=u"flag needed to allow any move bigger than 10 mm.")
     dm_grpe.add_argument("--reference", dest="reference", nargs=2, action="append",
                          metavar=("<component>", "<axis>"),
                          help="runs the referencing procedure for the given axis.")
