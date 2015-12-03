@@ -55,14 +55,17 @@ class WindowsUpdater:
     def get_remote_version():
         """ Get the remote version of Odemis as a string
 
-        return (None or str, int): version of the form #.#.##, size of the installer to install (in bytes)
+        return (None or str, int): version of the form #.#.##, size of the installer to install (in
+        bytes)
+
         """
 
         web_version = None
         web_size = 0
 
         try:
-            web_version_file = urllib2.urlopen(os.path.join(VIEWER_ROOT_URL, VERSION_FILE), timeout=10)
+            web_version_file = urllib2.urlopen(os.path.join(VIEWER_ROOT_URL, VERSION_FILE),
+                                               timeout=10)
             web_version = web_version_file.readline().strip()
             web_size = int(web_version_file.readline().strip())
             web_version_file.close()
@@ -111,7 +114,12 @@ class WindowsUpdater:
         self.show_update_dialog(web_version, web_size)
 
     def show_update_dialog(self, remote_version, web_size):
-        """ Show update dialog"""
+        """ Show update dialog
+
+        Args:
+            remote_version: (str) Version of the installer on the website
+            web_size: (str) The byte size of the installer
+        """
 
         answer = wx.MessageBox(
             'Version %s of Odemis viewer is available.\n\nDo you want to update?' % remote_version,
@@ -122,6 +130,8 @@ class WindowsUpdater:
             self.download_installer(remote_version, web_size)
 
     def download_installer(self, remote_version, web_size):
+
+        pdlg = None
 
         try:
             dest_dir = tempfile.gettempdir()
@@ -167,7 +177,10 @@ class WindowsUpdater:
                 self.run_installer(local_path)
         except Exception:
             logging.exception("Failure to download!")
-            # TODO: close the dialog
+            try:
+                pdlg.Destroy()
+            except (wx.PyDeadObjectError, AttributeError):
+                pass
 
     @staticmethod
     def run_installer(local_path):
@@ -176,5 +189,3 @@ class WindowsUpdater:
         except WindowsError, (err_nr, _):
             if err_nr == 740:
                 os.startfile(local_path, "runas")
-
-

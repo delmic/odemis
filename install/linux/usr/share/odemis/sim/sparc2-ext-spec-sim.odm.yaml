@@ -168,7 +168,7 @@ SPARC2: {
         slits: {1: "slit-in", # INPUT_SIDE
         },
     },
-    affects: ["Spectral Camera"],
+    affects: ["Spectral Camera", "Spectrometer"],
 }
 
 # Dedicated camera for the acquisition of the spectra
@@ -193,14 +193,14 @@ SPARC2: {
        mag: 0.31, # ratio
        na: 0.2, # ratio, numerical aperture
        ri: 1.0, # ratio, refractive index
-       pole_pos: [1608, 1370], # (px, px), position of the pole (aka the hole in the mirror)
+       pole_pos: [458, 519], # (px, px), position of the pole (aka the hole in the mirror)
        x_max: 13.25e-3,  # m, the distance between the parabola origin and the cutoff position
        hole_diam: 0.6e-3,  # m, diameter the hole in the mirror
        focus_dist: 0.5e-3,  # m, the vertical mirror cutoff, iow the min distance between the mirror and the sample
        parabola_f: 2.5e-3,  # m, parabola_parameter=1/4f
        rotation: -1.570796326795, # rad, 90° rotation between optical axis and SEM Y axis
     },
-    affects: ["Camera", "Spectral Camera"]
+    affects: ["Camera", "Spectral Camera", "Spectrometer"]
 }
 
 # Controller for the motors moving the various parts of the optical box
@@ -215,7 +215,7 @@ SPARC2: {
         #address: 2,
         address: null,
         axes: ["l1", "l2", "spec-sel", "fiby", "slit"],
-        # These values only need to be roughly correct
+        # These values are adapted to make the simulator roughly the same speed
         # TODO: check for "spec-sel" & "fiby"
         ustepsize: [25.1e-9, 25.1e-9, 26.1e-9,  25.1e-9, 5.e-9], # m/µstep
         refproc: "Standard",
@@ -234,9 +234,9 @@ SPARC2: {
     },
     metadata: {
         # Default position of the lens (can be improved by user)
-        FAV_POS_ACTIVE: {"x": 0.0226112848} # m
+        FAV_POS_ACTIVE: {"x": -0.0045} # m
     },
-    affects: ["Camera", "Spectral Camera"],
+    affects: ["Camera", "Spectral Camera", "Spectrometer"],
 }
 
 # The second lens of Plate 1, either to working or parking position
@@ -247,11 +247,11 @@ SPARC2: {
     init: {
         axis_name: "l2",
         positions: {
-            0.0031124: "on",
-            -0.048192: "off", # completely out of the path
+            -4.e-3: "on",
+            -0.02: "off", # completely out of the path
         },
     },
-    affects: ["Camera", "Spectral Camera"],
+    affects: ["Camera", "Spectral Camera", "Spectrometer"],
 }
 
 # Control the slit position to either fully-open or small (dependent on the spectrometer slit-in)
@@ -266,7 +266,7 @@ SPARC2: {
             0.0012: "off", # opening based on the small slit
         },
     },
-    affects: ["Camera", "Spectral Camera"],
+    affects: ["Camera", "Spectral Camera", "Spectrometer"],
 }
 
 # Note that the next two components actually move the _same_ axis!
@@ -278,7 +278,7 @@ SPARC2: {
     init: {
         axes_map: {"x": "spec-sel", "y": "fiby"}
     },
-    affects: ["Camera", "Spectral Camera"],
+    affects: ["Camera", "Spectral Camera", "Spectrometer"],
 }
 
 # Mirror in Plate 2, selects between integrated spectrometer and external spectrometer
@@ -295,10 +295,11 @@ SPARC2: {
         # TODO: needed?
         FAV_POS_DEACTIVE: {"x": 0.0} # m
     },
-    affects: ["Camera", "Spectral Camera"],
+    affects: ["Camera", "Spectral Camera", "Spectrometer"],
 }
 
-# DIP must be configured with address 4 (= 0010000)
+# Controller for moving the 'Redux' stage
+# Note: the S axis can _only_ be moved when the l axis is near the active/engaged position
 "Mirror Actuators": {
     class: tmcm.TMCLController,
     role: "mirror",
@@ -308,14 +309,13 @@ SPARC2: {
         #port: "/dev/ttyTMCM*",
         #address: 4,
         axes: ["s", "l"],
-        ustepsize: [5.9e-9, 5.9e-9], # m/µstep
-#        ustepsize: [2.e-6, 2.e-6], # m/µstep, for simulator
+        ustepsize: [1.e-6, 1.e-6], # m/µstep (big, for the simulator to move fast)
         refproc: "Standard",
         refswitch: {"s": 0, "l": 0},
     },
     metadata: {
         # Default position of the mirror engaged (will be improved during alignment)
-        FAV_POS_ACTIVE: {"l": 0.0688688061, "s": 0.0037467301},  # m, m
+        FAV_POS_ACTIVE: {"l": 70.e-3, "s": 5.e-3},  # m, m
     },
 }
 

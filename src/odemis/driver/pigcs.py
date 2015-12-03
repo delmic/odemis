@@ -22,12 +22,12 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import Queue
-from concurrent.futures import CancelledError, TimeoutError
+from concurrent.futures import CancelledError
 import glob
 import logging
 from odemis import model
 from odemis.model import isasync, CancellableFuture, CancellableThreadPoolExecutor
-from odemis.util import driver
+from odemis.util import driver, TimeoutError
 import os
 import random
 import re

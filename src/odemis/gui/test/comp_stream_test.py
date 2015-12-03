@@ -362,7 +362,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         fluo_panel = stream_cont.addStatic("Fluo Stream",
                                            fluod,
                                            cls=stream_mod.StaticFluoStream,
-                                           add_to_all_views=True)
+                                           add_to_view=True)
 
         # Check it indeed created a panel entry to a static fluo stream
         self.assertIsInstance(fluo_panel.stream, stream_mod.StaticFluoStream)
@@ -389,7 +389,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         # cont.tabs.AnalysisTab.display_new_data()
         sem_cont = stream_cont.addStatic("SEM Stream", semd,
                                           cls=stream_mod.StaticSEMStream,
-                                          add_to_all_views=True)
+                                          add_to_view=True)
 
         # Check it indeed created a panel entry to a static fluo stream
         self.assertIsInstance(sem_cont.stream, stream_mod.StaticSEMStream)

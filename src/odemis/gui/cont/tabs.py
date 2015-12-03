@@ -516,7 +516,7 @@ class SecomStreamsTab(Tab):
             has_opt = any(isinstance(s, acqstream.OpticalStream)
                           for s in self.tab_data_model.streams.value)
             if not has_opt:
-                self._streambar_controller.addFluo(add_to_all_views=True, play=False)
+                self._streambar_controller.addFluo(add_to_view=True, play=False)
                 # don't forbid to remove it, as for the user it can be easier to
                 # remove than change all the values
 
@@ -524,7 +524,7 @@ class SecomStreamsTab(Tab):
             has_sem = any(isinstance(s, acqstream.EMStream)
                           for s in self.tab_data_model.streams.value)
             if not has_sem:
-                stream_cont = self._add_em_stream(add_to_all_views=True, play=False)
+                stream_cont = self._add_em_stream(add_to_view=True, play=False)
                 stream_cont.stream_panel.show_remove_btn(False)
 
     @call_in_wx_main
@@ -544,7 +544,7 @@ class SecomStreamsTab(Tab):
                     opts = s
                     break
             else: # Could happen if the user has deleted all the optical streams
-                sp = self._streambar_controller.addFluo(add_to_all_views=True)
+                sp = self._streambar_controller.addFluo(add_to_view=True)
                 opts = sp.stream
 
             self._streambar_controller.resumeStreams({opts})
@@ -561,7 +561,7 @@ class SecomStreamsTab(Tab):
                     sems = s
                     break
             else: # Could happen if the user has deleted all the optical streams
-                sp = self._add_em_stream(add_to_all_views=True)
+                sp = self._add_em_stream(add_to_view=True)
                 sp.show_remove_btn(False)
                 sems = sp.stream
 
@@ -725,7 +725,7 @@ class SparcAcquisitionTab(Tab):
         )
 
         # The sem stream is always visible, so add it by default
-        sem_stream_cont = self._stream_controller.addStream(sem_stream, add_to_all_views=True)
+        sem_stream_cont = self._stream_controller.addStream(sem_stream, add_to_view=True)
         sem_stream_cont.stream_panel.show_remove_btn(False)
         sem_stream_cont.stream_panel.show_visible_btn(False)
 
@@ -902,6 +902,9 @@ class ChamberTab(Tab):
                                                   emitter=None,
                                                   focuser=main_data.focus,
                                                   detvas=get_local_vas(main_data.ccd))
+        # Make sure image has square pixels and full FoV
+        self._ccd_stream.detBinning.value = (1, 1)
+        self._ccd_stream.detResolution.value = self._ccd_stream.detResolution.range[1]
         ccd_spe = self._stream_controller.addStream(self._ccd_stream)
         ccd_spe.stream_panel.flatten()  # No need for the stream name
         self._ccd_stream.should_update.value = True
@@ -1494,7 +1497,7 @@ class AnalysisTab(Tab):
 
         # Load the Streams and their data into the model and views
         for s in streams:
-            self._stream_controller.addStream(s, add_to_all_views=True)
+            self._stream_controller.addStream(s, add_to_view=True)
 
         # Reload current calibration on the new streams (must be done after .streams is set)
         if spec_streams:
@@ -2187,21 +2190,17 @@ class SparcAlignTab(Tab):
                                   panel.btn_align_mirror: "mirror-align",
                                   panel.btn_align_fiber: "fiber-align"}
 
-        # TODO: move mode detection in the model, and hide buttons for which
-        # no mode exist.
-        if main_data.spectrometer is None:
-            # Note: if no fiber alignment actuators, but a spectrometer, it's
-            # still good to provide the mode, as the user can do it manually.
-            panel.btn_align_fiber.Show(False)
-            del self._alignbtn_to_mode[panel.btn_align_fiber]
-
-        if main_data.ccd is None:
-            # No AR => only one mode possible => hide the buttons
-            panel.pnl_alignment_btns.Show(False)
-            tab_data.align_mode.value = "fiber-align"
-        else:
-            for btn in self._alignbtn_to_mode:
+        # Remove the modes which are not supported by the current hardware
+        for btn, mode in self._alignbtn_to_mode.items():
+            if mode in tab_data.align_mode.choices:
                 btn.Bind(wx.EVT_BUTTON, self._onClickAlignButton)
+            else:
+                btn.Destroy()
+                del self._alignbtn_to_mode[btn]
+
+        if len(tab_data.align_mode.choices) <= 1:
+            # only one mode possible => hide the buttons
+            panel.pnl_alignment_btns.Show(False)
 
         tab_data.align_mode.subscribe(self._onAlignMode)
 
@@ -2406,10 +2405,7 @@ class Sparc2AlignTab(Tab):
         else:
             self._moveLensToActive()
 
-        # Documentation text on the left & right panel for mirror alignement
-        doc_path = pkg_resources.resource_filename("odemis.gui", "doc/sparc2_moi_procedure.html")
-        panel.html_alignment_doc.SetBorders(0)  # sizer already give us borders
-        panel.html_alignment_doc.LoadPage(doc_path)
+        # Documentation text on the right panel for mirror alignement
         doc_path = pkg_resources.resource_filename("odemis.gui", "doc/sparc2_moi_goals.html")
         panel.html_moi_doc.SetBorders(0)
         panel.html_moi_doc.LoadPage(doc_path)
@@ -2421,13 +2417,15 @@ class Sparc2AlignTab(Tab):
             locked=True
         )
 
-        # create a view on the microscope model
+        # Create the views. Note that lens/center views use BrightfieldStream,
+        # instead of the more generic CameraStream, to avoid picking up
+        # CameraCountStream.
         vpv = collections.OrderedDict((
             (self.panel.vp_align_lens,
                 {
                     "cls": guimod.ContentView,
                     "name": "Lens alignment",
-                    "stream_classes": acqstream.CameraStream,
+                    "stream_classes": acqstream.BrightfieldStream,
                 }
             ),
             (self.panel.vp_moi,
@@ -2443,7 +2441,13 @@ class Sparc2AlignTab(Tab):
                 {
                     "cls": guimod.ContentView,
                     "name": "Center alignment",
-                    "stream_classes": (acqstream.CameraStream, acqstream.RGBStream),
+                    "stream_classes": (acqstream.BrightfieldStream, acqstream.RGBStream),
+                }
+            ),
+            (self.panel.vp_align_fiber,
+                {
+                    "name": "Spectrum average",
+                    "stream_classes": acqstream.CameraCountStream,
                 }
             ),
         ))
@@ -2466,18 +2470,19 @@ class Sparc2AlignTab(Tab):
 
         # Focuser here too so that it's possible to focus with right mouse button,
         # and also menu controller beleives it's possible to autofocus.
-        ccd_stream = acqstream.CameraStream(
+        ccd_stream = acqstream.BrightfieldStream(
                             "Angle-resolved sensor",
                             main_data.ccd,
                             main_data.ccd.data,
-                            main_data.ebeam,
+                            emitter=None,
                             focuser=main_data.focus,
                             detvas=get_local_vas(main_data.ccd))
         # Make sure the binning is not crazy (especially can happen if CCD is shared for spectrometry)
         ccd_stream.detBinning.value = ccd_stream.detBinning.clip((2, 2))
         self._ccd_stream = ccd_stream
 
-        ccd_spe = self._stream_controller.addStream(ccd_stream)
+        ccd_spe = self._stream_controller.addStream(ccd_stream,
+                            add_to_view=self.panel.vp_align_lens.microscope_view)
         ccd_spe.stream_panel.flatten()
 
         speclines = acqstream.BrightfieldStream(
@@ -2504,7 +2509,8 @@ class Sparc2AlignTab(Tab):
         # TODO: make the legend display a merge slider (currently not happening
         # because both streams are optical)
         # Add it as second stream, so that it's displayed with the default 0.3 merge ratio
-        self._stream_controller.addStream(speclines, visible=False)
+        self._stream_controller.addStream(speclines, visible=False,
+                            add_to_view=self.panel.vp_align_lens.microscope_view)
 
         # MomentOfInertiaStream needs an SEM stream and a CCD stream
         self.panel.vp_moi.canvas.abilities -= {CAN_ZOOM}
@@ -2526,8 +2532,8 @@ class Sparc2AlignTab(Tab):
         self._moi_stream = mois
         # Update ROI based on the lens pole position
         main_data.lens.polePosition.subscribe(self._onPolePosition, init=True)
-        # TODO: instead of add_to_all_views, have a way to ask to add to a specific view (or none at all)
-        mois_spe = self._stream_controller.addStream(mois, add_to_all_views=True)
+        mois_spe = self._stream_controller.addStream(mois,
+                         add_to_view=self.panel.vp_moi.microscope_view)
         mois_spe.stream_panel.flatten()  # No need for the stream name
         # TODO: add ways to show:
         # * Chronograph of the MoI at the center
@@ -2550,6 +2556,19 @@ class Sparc2AlignTab(Tab):
         mirror_ol.set_hole_position(tab_data.polePositionPhysical)
         self.panel.vp_align_center.show_mirror_overlay()
 
+        # chronograph of spectrometer if "fiber-align" mode is present
+        if "fiber-align" in tab_data.align_mode.choices:
+            speccnts = acqstream.CameraCountStream("Spectrum average",
+                                   main_data.spectrometer,
+                                   main_data.spectrometer.data,
+                                   emitter=None,
+                                   detvas=get_local_vas(main_data.spectrometer),
+                                   )
+            speccnt_spe = self._stream_controller.addStream(speccnts,
+                                add_to_view=self.panel.vp_align_fiber.microscope_view)
+            speccnt_spe.stream_panel.flatten()
+            self._speccnt_stream = speccnts
+
         # Force a spot at the center of the FoV
         # Not via stream controller, so we can avoid the scheduler
         spot_stream = acqstream.SpotSEMStream("SpotSEM", main_data.sed,
@@ -2563,13 +2582,13 @@ class Sparc2AlignTab(Tab):
         # * mirror-align: move x, y of mirror with moment of inertia feedback
         # * lens-align: first auto-focus spectrograph, then align lens1
         # * goal-align: find the center of the AR image using a "Goal" image
-        # * fiber-align: TODO: write info
-        self._alignbtn_to_mode = OrderedDict([
+        # * fiber-align: move x, y of the fibaligner with mean of spectrometer as feedback
+        self._alignbtn_to_mode = OrderedDict((
             (panel.btn_align_lens, "lens-align"),
             (panel.btn_align_mirror, "mirror-align"),
             (panel.btn_align_centering, "center-align"),
             (panel.btn_align_fiber, "fiber-align"),
-        ])
+        ))
 
         # The GUI mode to the optical path mode
         self._mode_to_opm = {
@@ -2578,7 +2597,15 @@ class Sparc2AlignTab(Tab):
             "center-align": "ar",
             "fiber-align": "fiber-align",
         }
+        # Note: ActuatorController hides the fiber alignment panel if not needed.
+        for btn, mode in self._alignbtn_to_mode.items():
+            if mode in tab_data.align_mode.choices:
+                btn.Bind(wx.EVT_BUTTON, self._onClickAlignButton)
+            else:
+                btn.Destroy()
+                del self._alignbtn_to_mode[btn]
 
+        self._layoutModeButtons()
         tab_data.align_mode.subscribe(self._onAlignMode)
 
         # Bind moving buttons & keys
@@ -2616,32 +2643,26 @@ class Sparc2AlignTab(Tab):
 
     def _layoutModeButtons(self):
         """
-        Make sure just the right mode buttons are displayed, and in a nice way
+        Positions the mode buttons in a nice way: on one line if they fit,
+         otherwise on two lines.
         """
-        gb_sizer = None
-        free_slots = []
-        tab_data = self.tab_data_model
+        # If 3 buttons or less, keep them all on a single line, otherwise,
+        # spread on two lines. (Works up to 6 buttons)
+        btns = self._alignbtn_to_mode.keys()
+        if len(btns) == 1:
+            btns[0].Show(False)  # No other choice => no need to choose
+            return
+        elif len(btns) == 4:
+            # Spread over two columns
+            width = 2
+        else:
+            width = 3
 
-        # Hide the buttons that are not needed and move the visible ones to fill
-        # gaps that may arise
-        for btn, mode in self._alignbtn_to_mode.items():
-            if gb_sizer is None:
-                gb_sizer = btn.Parent.GetSizer().GetChildren()[0].GetSizer()
-
-            if mode in tab_data.align_mode.choices:
-                btn.Bind(wx.EVT_BUTTON, self._onClickAlignButton)
-                if free_slots:
-                    gb_sizer.SetItemPosition(btn, free_slots.pop(0))
-            else:
-                free_slots.append(gb_sizer.GetItemPosition(btn))
-                btn.Destroy()
-                del self._alignbtn_to_mode[btn]
-
-        # If there are 3 buttons or less, move the last one from the 2nd row to
-        # the 3rd position of the 1st
-        if len(tab_data.align_mode.choices) < 4:
-            last_btn = next(reversed(self._alignbtn_to_mode))
-            gb_sizer.SetItemPosition(last_btn, (0, 2))
+        # Position each button at the next position in the grid
+        gb_sizer = btns[0].Parent.GetSizer().GetChildren()[0].GetSizer()
+        for i, btn in enumerate(btns):
+            pos = (i // width, i % width)
+            gb_sizer.SetItemPosition(btn, pos)
 
     def _onPolePosition(self, pole_pos):
         """
@@ -2749,40 +2770,49 @@ class Sparc2AlignTab(Tab):
         threading.Thread(target=self.tab_data_model.main.opm.setPath,
                          args=(op_mode,)).start()
 
+        # Focused view must be updated before the stream to play is changed,
+        # as the scheduler automatically adds the stream to the current view.
+        # The scheduler also automatically pause all the other streams.
         if mode == "lens-align":
-            self._ccd_stream.should_update.value = True
             self.tab_data_model.focussedView.value = self.panel.vp_align_lens.microscope_view
+            self._ccd_stream.should_update.value = True
             self.panel.pnl_mirror.Enable(True)  # also allow to move the mirror here
-            self.panel.html_alignment_doc.Show(False)
             self.panel.pnl_lens_mover.Enable(True)
             self.panel.pnl_focus.Enable(True)
             self.panel.pnl_moi_settings.Show(False)
+            self.panel.pnl_fibaligner.Enable(False)
             # TODO: in this mode, if focus change, update the focus image once
             # (by going to spec-focus mode, turning the light, and acquiring an
             # AR image). Problem is that it takes about 10s.
         elif mode == "mirror-align":
-            self._moi_stream.should_update.value = True  # that automatically pauses the other streams
             self.tab_data_model.focussedView.value = self.panel.vp_moi.microscope_view
+            self._moi_stream.should_update.value = True
             self.panel.pnl_mirror.Enable(True)
-            self.panel.html_alignment_doc.Show(True)
             self.panel.pnl_lens_mover.Enable(False)
             self.panel.pnl_focus.Enable(False)
             self.panel.pnl_moi_settings.Show(True)
-            self.panel.html_alignment_doc.Parent.Layout()
+            self.panel.pnl_fibaligner.Enable(False)
             self.panel.pnl_moi_settings.Parent.Layout()
             self.panel.html_moi_doc.Parent.Layout()
         elif mode == "center-align":
             self.tab_data_model.focussedView.value = self.panel.vp_align_center.microscope_view
             self._ccd_stream.should_update.value = True
             self.panel.pnl_mirror.Enable(False)
-            self.panel.html_alignment_doc.Show(False)
             self.panel.pnl_lens_mover.Enable(False)
             self.panel.pnl_focus.Enable(False)
             self.panel.pnl_moi_settings.Show(False)
+            self.panel.pnl_fibaligner.Enable(False)
         elif mode == "fiber-align":
-            # FIXME: ActuatorController hides the fiber alignment panel if it cannot align. Should
-            # this work as in Sparc v1?
-            pass
+            # FIXME: only allow to move once the spec-selector is ready
+            self.tab_data_model.focussedView.value = self.panel.vp_align_fiber.microscope_view
+            self._speccnt_stream.should_update.value = True
+            self.panel.pnl_mirror.Enable(False)
+            self.panel.pnl_lens_mover.Enable(False)
+            self.panel.pnl_focus.Enable(False)
+            self.panel.pnl_moi_settings.Show(False)
+            self.panel.pnl_fibaligner.Enable(True)
+            # TODO: the X axis of fiber aligner must be used for
+            # MD_FAV_POS_ACTIVE of spec-selector
         else:
             raise ValueError("Unknown alignment mode %s!" % mode)
 

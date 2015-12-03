@@ -607,8 +607,21 @@ class SparcAlignGUIData(ActuatorGUIData):
         self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_ONE, choices={VIEW_LAYOUT_ONE})
 
         # Same values than the modes of the OpticalPathManager
-        self.align_mode = StringEnumerated("chamber-view",
-                                   choices={"chamber-view", "mirror-align", "fiber-align"})
+        amodes = ["chamber-view", "mirror-align", "fiber-align"]
+        if main.spectrometer is None:
+            amodes.remove("fiber-align")
+            # Note: if no fiber alignment actuators, but a spectrometer, it's
+            # still good to provide the mode, as the user can do it manually.
+
+        if main.ccd is None:
+            amodes.remove("chamber-view")
+            amodes.remove("mirror-align")
+            # Note: even if no lens-switch present, leave chamber-view as the user
+            # might still switch the lens manually
+
+        if not amodes:
+            raise ValueError("Trying to build alignment tab for SPARC without spectrometer nor CCD")
+        self.align_mode = StringEnumerated(amodes[0], choices=set(amodes))
 
 
 class Sparc2AlignGUIData(ActuatorGUIData):
@@ -618,8 +631,7 @@ class Sparc2AlignGUIData(ActuatorGUIData):
         self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_ONE, choices={VIEW_LAYOUT_ONE})
 
         # Mode values are different from the modes of the OpticalPathManager
-        self.align_mode = StringEnumerated("lens-align",
-                               choices={"lens-align", "mirror-align", "center-align"})
+        amodes = ["lens-align", "mirror-align", "center-align", "fiber-align"]
 
         # VA for autofocus procedure mode
         self.autofocus_active = BooleanVA(False)
@@ -635,6 +647,13 @@ class Sparc2AlignGUIData(ActuatorGUIData):
                                            setter=self._setPolePosPhysical)
 
             main.lens.polePosition.subscribe(self._onPolePosCCD, init=True)
+        else:
+            amodes.remove("center-align")
+
+        if main.fibaligner is None:
+            amodes.remove("fiber-align")
+
+        self.align_mode = StringEnumerated(amodes[0], choices=set(amodes))
 
     def _posToCCD(self, posphy):
         """

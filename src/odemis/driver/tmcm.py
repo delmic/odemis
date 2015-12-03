@@ -41,7 +41,7 @@ from odemis import model, util
 import odemis
 from odemis.model import (isasync, CancellableThreadPoolExecutor,
                           CancellableFuture, HwError)
-from odemis.util import driver
+from odemis.util import driver, TimeoutError
 import os
 import serial
 import struct
@@ -1326,17 +1326,21 @@ class TMCLController(model.Actuator):
 
     def _waitEndMove(self, future, axes, end=0):
         """
-        Wait until all the given axes are finished moving, or a request to 
+        Wait until all the given axes are finished moving, or a request to
         stop has been received.
         future (Future): the future it handles
         axes (set of int): the axes IDs to check
         end (float): expected end time
         raise:
+            TimeoutError: if took too long to finish the move
             CancelledError: if cancelled before the end of the move
         """
         moving_axes = set(axes)
 
         last_upd = time.time()
+        dur = max(0.01, min(end - last_upd, 60))
+        max_dur = dur * 2 + 1
+        timeout = last_upd + max_dur
         last_axes = moving_axes.copy()
         try:
             while not future._must_stop.is_set():
@@ -1347,8 +1351,17 @@ class TMCLController(model.Actuator):
                     # no more axes to wait for
                     break
 
+                now = time.time()
+                if now > timeout:
+                    logging.info("Stopping move due to timeout after %g s.", max_dur)
+                    for i in moving_axes:
+                        self.MotorStop(i)
+                    raise TimeoutError("Move is not over after %g s, while "
+                                       "expected it takes only %g s" %
+                                       (max_dur, dur))
+
                 # Update the position from time to time (10 Hz)
-                if time.time() - last_upd > 0.1 or last_axes != moving_axes:
+                if now - last_upd > 0.1 or last_axes != moving_axes:
                     last_names = set(n for n, i in self._name_to_axis.items() if i in last_axes)
                     self._updatePosition(last_names)
                     last_upd = time.time()
@@ -1366,6 +1379,7 @@ class TMCLController(model.Actuator):
                 future._was_stopped = True
                 raise CancelledError()
         finally:
+            # TODO: check if the move succeded ? (= Not failed due to stallguard/limit switch)
             self._updatePosition() # update (all axes) with final position
 
     def _cancelCurrentMove(self, future):

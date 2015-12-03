@@ -217,13 +217,12 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.btn_m_mirror_xy_y = xrc.XRCCTRL(self, "btn_m_mirror_xy_y")
         self.btn_m_mirror_xy_x = xrc.XRCCTRL(self, "btn_m_mirror_xy_x")
         self.btn_p_mirror_xy_x = xrc.XRCCTRL(self, "btn_p_mirror_xy_x")
-        self.pnl_sparc_fib = xrc.XRCCTRL(self, "pnl_sparc_fib")
-        self.mirror_align_slider_fibaligner = xrc.XRCCTRL(self, "mirror_align_slider_fibaligner")
+        self.pnl_fibaligner = xrc.XRCCTRL(self, "pnl_fibaligner")
+        self.slider_fibaligner = xrc.XRCCTRL(self, "slider_fibaligner")
         self.btn_p_fibaligner_y = xrc.XRCCTRL(self, "btn_p_fibaligner_y")
         self.btn_m_fibaligner_y = xrc.XRCCTRL(self, "btn_m_fibaligner_y")
         self.btn_m_fibaligner_x = xrc.XRCCTRL(self, "btn_m_fibaligner_x")
         self.btn_p_fibaligner_x = xrc.XRCCTRL(self, "btn_p_fibaligner_x")
-        self.html_alignment_doc = xrc.XRCCTRL(self, "html_alignment_doc")
         self.btn_log = xrc.XRCCTRL(self, "btn_log")
         self.pnl_vp_grid = xrc.XRCCTRL(self, "pnl_vp_grid")
         self.vp_moi = xrc.XRCCTRL(self, "vp_moi")
@@ -478,7 +477,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource class="wxHtmlWindow" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -2621,6 +2620,7 @@ def __init_resources():
                         </object>
                         <flag>wxLEFT</flag>
                         <border>5</border>
+                        <minsize>90,-1</minsize>
                         <cellpos>1,0</cellpos>
                       </object>
                       <object class="sizeritem">
@@ -2662,7 +2662,7 @@ def __init_resources():
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
                     <object class="wxStaticText">
-                      <label>Lens translation</label>
+                      <label>Lens</label>
                       <fg>#E5E5E5</fg>
                       <font>
                         <size>16</size>
@@ -2676,29 +2676,37 @@ def __init_resources():
                     <border>5</border>
                   </object>
                   <object class="sizeritem">
-                    <object class="wxStaticText">
-                      <label>Step size</label>
+                    <object class="wxBoxSizer">
+                      <object class="sizeritem">
+                        <object class="wxStaticText">
+                          <label>Step size</label>
+                        </object>
+                        <flag>wxRIGHT</flag>
+                        <border>5</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="UnitFloatSlider" name="slider_lens_mover">
+                          <size>-1,20</size>
+                          <value>0.000001</value>
+                          <min>0.0000001</min>
+                          <max>0.001</max>
+                          <unit>m</unit>
+                          <scale>log</scale>
+                          <accuracy>2</accuracy>
+                          <style>wxBORDER_NONE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <option>1</option>
+                        <flag>wxEXPAND</flag>
+                      </object>
+                      <orient>wxHORIZONTAL</orient>
                     </object>
-                    <flag>wxLEFT</flag>
+                    <flag>wxLEFT|wxRIGHT|wxEXPAND|wxALIGN_CENTRE</flag>
                     <border>5</border>
                   </object>
-                  <object class="sizeritem">
-                    <object class="UnitFloatSlider" name="slider_lens_mover">
-                      <size>-1,20</size>
-                      <value>0.000001</value>
-                      <min>0.0000001</min>
-                      <max>0.001</max>
-                      <unit>m</unit>
-                      <scale>log</scale>
-                      <accuracy>2</accuracy>
-                      <style>wxBORDER_NONE</style>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
-                    <border>5</border>
-                  </object>
+                  
                   <object class="sizeritem">
                     <object class="wxGridBagSizer">
                       <object class="sizeritem">
@@ -2798,7 +2806,7 @@ def __init_resources():
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
                     <object class="wxStaticText">
-                      <label>Mirror translation</label>
+                      <label>Mirror</label>
                       <font>
                         <size>16</size>
                         <style>normal</style>
@@ -2811,30 +2819,37 @@ def __init_resources():
                     <border>5</border>
                   </object>
                   <object class="sizeritem">
-                    <object class="wxStaticText">
-                      <label>Step size</label>
+                    <object class="wxBoxSizer">
+                      <object class="sizeritem">
+                        <object class="wxStaticText">
+                          <label>Step size</label>
+                        </object>
+                        <flag>wxRIGHT</flag>
+                        <border>5</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="UnitFloatSlider" name="slider_mirror">
+                          <size>-1,20</size>
+                          <value>0.000001</value>
+                          <min>0.0000001</min>
+                          <max>0.001</max>
+                          <unit>m</unit>
+                          <scale>log</scale>
+                          <accuracy>2</accuracy>
+                          <style>wxBORDER_NONE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <option>1</option>
+                        <flag>wxEXPAND</flag>
+                      </object>
+                      <orient>wxHORIZONTAL</orient>
                     </object>
-                    <flag>wxBOTTOM|wxLEFT</flag>
+                    <flag>wxLEFT|wxRIGHT|wxEXPAND|wxALIGN_CENTRE</flag>
                     <border>5</border>
                   </object>
-                  <object class="sizeritem">
-                    <object class="UnitFloatSlider" name="slider_mirror">
-                      <size>-1,20</size>
-                      <value>0.000001</value>
-                      <min>0.0000001</min>
-                      <max>0.001</max>
-                      <unit>m</unit>
-                      <scale>log</scale>
-                      <accuracy>2</accuracy>
-                      <fg>#E5E5E5</fg>
-                      <style>wxBORDER_NONE</style>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
-                    <border>5</border>
-                  </object>
+                  
                   <object class="sizeritem">
                     <object class="wxGridBagSizer">
                       <object class="sizeritem">
@@ -3005,7 +3020,7 @@ def __init_resources():
             </object>
             <orient>wxVERTICAL</orient>
             <object class="sizeritem">
-              <object class="wxPanel" name="pnl_sparc_fib">
+              <object class="wxPanel" name="pnl_fibaligner">
                 <object class="wxBoxSizer">
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
@@ -3024,29 +3039,38 @@ def __init_resources():
                     <border>5</border>
                   </object>
                   <object class="sizeritem">
-                    <object class="wxStaticText">
-                      <label>Step size</label>
+                    <object class="wxBoxSizer">
+                      <object class="sizeritem">
+                        <object class="wxStaticText">
+                          <label>Step size</label>
+                        </object>
+                        <flag>wxRIGHT</flag>
+                        <border>5</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="UnitFloatSlider" name="slider_fibaligner">
+                          <size>-1,20</size>
+                          <value>0.000001</value>
+                          <min>0.0000001</min>
+                          <max>0.001</max>
+                          <unit>m</unit>
+                          <scale>log</scale>
+                          <accuracy>2</accuracy>
+                          <style>wxBORDER_NONE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <option>1</option>
+                        <flag>wxEXPAND</flag>
+                      </object>
+                      <orient>wxHORIZONTAL</orient>
                     </object>
-                    <flag>wxLEFT</flag>
+                    <flag>wxLEFT|wxRIGHT|wxEXPAND|wxALIGN_CENTRE</flag>
                     <border>5</border>
                   </object>
-                  <object class="sizeritem">
-                    <object class="UnitFloatSlider" name="mirror_align_slider_fibaligner">
-                      <size>-1,20</size>
-                      <value>0.00001</value>
-                      <min>0.0000001</min>
-                      <max>0.001</max>
-                      <unit>m</unit>
-                      <scale>log</scale>
-                      <accuracy>2</accuracy>
-                      <style>wxBORDER_NONE</style>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
-                    <border>5</border>
-                  </object>
+                  
+                  
                   <object class="sizeritem">
                     <object class="wxGridBagSizer">
                       <object class="sizeritem">
@@ -3215,19 +3239,7 @@ def __init_resources():
               </object>
               <flag>wxEXPAND</flag>
             </object>
-            <object class="sizeritem">
-              <object class="wxHtmlWindow" name="html_alignment_doc">
-                <size>-1,400</size>
-                <fg>#BBBBBB</fg>
-                <bg>#333333</bg>
-                <style>wxHW_SCROLLBAR_NEVER|wxHW_NO_SELECTION</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxALL|wxEXPAND|wxALIGN_BOTTOM|wxALIGN_CENTRE_VERTICAL</flag>
-              <border>10</border>
-            </object>
+            
             <object class="spacer">
               <option>1</option>
               <flag>wxEXPAND</flag>
@@ -3251,6 +3263,7 @@ def __init_resources():
           <bg>#333333</bg>
         </object>
         <flag>wxEXPAND</flag>
+        <minsize>400,-1</minsize>
       </object>
       <object class="sizeritem">
         <object class="ViewportGrid" name="pnl_vp_grid">
@@ -3270,15 +3283,15 @@ def __init_resources():
               <assign_var>1</assign_var>
             </XRCED>
           </object>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-          <object class="ARLiveViewport" name="vp_align_fiber">
+          <object class="ChronographViewport" name="vp_align_fiber">
             <size>400,-1</size>
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>
           </object>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
         </object>
         <option>1</option>
         <flag>wxEXPAND</flag>

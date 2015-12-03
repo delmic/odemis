@@ -1204,15 +1204,15 @@ class StreamBarController(object):
         """
         return self._add_stream(stream, **kwargs)
 
-    def _add_stream(self, stream, add_to_all_views=False, visible=True, play=None):
+    def _add_stream(self, stream, add_to_view=False, visible=True, play=None):
         """ Add the given stream to the tab data model and appropriate views
 
         Args:
             stream (Stream): the new stream to add
 
         Kwargs:
-            add_to_all_views (boolean): if True, add the stream to all the compatible views,
-                otherwise add only to the current view.
+            add_to_view (boolean or View): if True, add the stream to all the compatible views,
+                if False add to the current view, otherwise, add to the given view.
             visible (boolean): If True, create a stream entry, otherwise adds the stream but do not
                 create any entry.
             play (None or boolean): If True, immediately start it, if False, let it stopped, and if
@@ -1228,15 +1228,18 @@ class StreamBarController(object):
             # Insert it as first, so it's considered the latest stream used
             self._tab_data_model.streams.value.insert(0, stream)
 
-        if add_to_all_views:
+        if add_to_view is True:
             for v in self._tab_data_model.views.value:
                 if hasattr(v, "stream_classes") and isinstance(stream, v.stream_classes):
                     v.addStream(stream)
         else:
-            v = self._tab_data_model.focussedView.value
+            if add_to_view is False:
+                v = self._tab_data_model.focussedView.value
+            else:
+                v = add_to_view
             if hasattr(v, "stream_classes") and not isinstance(stream, v.stream_classes):
-                warn = "Adding %s stream incompatible with the current view"
-                logging.warning(warn, stream.__class__.__name__)
+                warn = "Adding %s stream incompatible with the view %s"
+                logging.warning(warn, stream.__class__.__name__, v.name.value)
             v.addStream(stream)
 
         # TODO: create a StreamScheduler call it like self._scheduler.addStream(stream)
@@ -1762,9 +1765,9 @@ class SparcStreamsController(StreamBarController):
                 del self._repct_listeners[s]  # automatically unsubscribed
 
     def addEBIC(self, **kwargs):
-        # Need to use add_to_all_views=True to force only showing on the right
+        # Need to use add_to_view=True to force only showing on the right
         # view (and not on the current view)
-        return super(SparcStreamsController, self).addEBIC(add_to_all_views=True, **kwargs)
+        return super(SparcStreamsController, self).addEBIC(add_to_view=True, **kwargs)
 
     def _addRepStream(self, stream, mdstream, vas, axes, **kwargs):
         """
@@ -1779,7 +1782,7 @@ class SparcStreamsController(StreamBarController):
         """
         self._connectROI(stream)
 
-        stream_cont = self._add_stream(stream, add_to_all_views=True, **kwargs)
+        stream_cont = self._add_stream(stream, add_to_view=True, **kwargs)
         stream_cont.stream_panel.show_visible_btn(False)
 
         # add the acquisition stream to the acquisition view

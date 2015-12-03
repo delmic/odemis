@@ -28,6 +28,7 @@ from odemis.acq import drift
 from odemis.acq.align import FindEbeamCenter
 from odemis.model import MD_POS_COR
 from odemis.util import img, conversion, fluo
+import random
 import threading
 import time
 
@@ -672,13 +673,16 @@ class CameraCountStream(CameraStream):
     """
     def __init__(self, *args, **kwargs):
         super(CameraCountStream, self).__init__(*args, **kwargs)
-        self._raw_date = [] # time of each raw acquisition (=count)
+
+        # .raw is an array of floats with time on the first dim, and count/date
+        # on the second dim.
+        self.raw = numpy.empty((0, 2), dtype=numpy.float64)
         self.image.value = model.DataArray([]) # start with an empty array
 
         # time over which to accumulate the data. 0 indicates that only the last
         # value should be included
         # TODO: immediately cut window when the value changes
-        self.windowPeriod = model.FloatContinuous(30, range=[0, 1e6], unit="s")
+        self.windowPeriod = model.FloatContinuous(30, range=(0, 1e6), unit="s")
 
     def _getCount(self, data):
         """
@@ -688,7 +692,7 @@ class CameraCountStream(CameraStream):
         return (number): the count
         """
         # DEBUG: return random value, which is more fun than always the same number
-#        return random.uniform(300, 2 ** 15)
+        # return random.uniform(300, 2 ** 15)
 
         # Mean is handy because it avoid very large numbers and still give
         # useful info if the CCD is saturated
@@ -700,23 +704,27 @@ class CameraCountStream(CameraStream):
         """
         # delete all old data
         oldest = date - self.windowPeriod.value
-        first = 0 # first element still part of the window
-        for i, d in enumerate(self._raw_date):
-            if d >= oldest:
-                first = i
-                break
-        self._raw_date = self._raw_date[first:]
-        self.raw = self.raw[first:]
+        first = numpy.searchsorted(self.raw[:, 1], oldest)
 
-        self._raw_date.append(date)
-        self.raw.append(count)
+        # We must update .raw atomically as _updateImage() can run simultaneously
+        new = numpy.array([[count, date]], dtype=numpy.float64)
+        self.raw = numpy.append(self.raw[first:], new, axis=0)
 
     def _updateImage(self):
         # convert the list into a DataArray
-        im = model.DataArray(self.raw)
-        # save the time of each point as ACQ_DATE, unorthodox but should not
+        raw = self.raw  # read in one shot
+        count, date = raw[:, 0], raw[:, 1]
+        im = model.DataArray(count)
+        # save the relative time of each point as ACQ_DATE, unorthodox but should not
         # cause much problems as the data is so special anyway.
-        im.metadata[model.MD_ACQ_DATE] = self._raw_date
+        if len(date) > 0:
+            age = date - date[-1]
+        else:
+            age = date  # empty
+        im.metadata[model.MD_ACQ_DATE] = age
+        assert len(im) == len(date)
+        assert im.ndim == 1
+
         self.image.value = im
 
     def _onNewData(self, dataflow, data):
