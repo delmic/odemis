@@ -442,9 +442,18 @@ def main(args):
             raise ValueError("Only 0 or 1 argument accepted")
         elif len(args) == 2:
             modelfile = args[1]
-        else:
+        elif "MODEL" in config:
             modelfile = config["MODEL"]
-
+        elif "MODEL_SELECTOR" in config:
+            cmd = shlex.split(config["MODEL_SELECTOR"])
+            logging.debug("Getting the model filename using %s", cmd)
+            try:
+                modelfile = subprocess.check_output(cmd)
+            except subprocess.CalledProcessError as ex:
+                # TODO: check if backend is already running anyway?
+                raise ValueError("Failed to pick the microscope file: %s" % (ex,))
+        else:
+            raise ValueError("No microscope model specified")
 
         # TODO: just bring the focus?
         # Kill GUI if an instance is already there

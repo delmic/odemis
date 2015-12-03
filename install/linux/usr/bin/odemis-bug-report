@@ -2,13 +2,30 @@
 
 . /etc/odemis.conf
 
+export PYTHONPATH
+
 # filename is %hostname-odemis-log-%date.zip
 # Zip is nice, because it's very fast add files
 bn="$(hostname)-odemis-log-$(date +%Y%m%d-%H%M%S).zip"
 fn="$HOME/Desktop/$bn"
 
+
+# Call the MODEL_SELECTOR if needed
+if [ -z "$MODEL" -a -n "MODEL_SELECTOR" ]; then
+    MODEL=("$($MODEL_SELECTOR)")
+    if [ "$?" -ne 0 ]; then
+       # Just pick every potential microscope models
+       MODEL=("$CONFIGPATH/"*.odm.yaml)
+    fi
+else
+    MODEL=("$MODEL") # Convert into an array of one
+fi
+
+
 # Compress in background
-zip -j $fn /var/log/odemis.log $HOME/odemis-gui.log "$MODEL" /etc/odemis.conf &
+echo zip -j $fn /var/log/odemis.log $HOME/odemis-gui.log "${MODEL[@]}" /etc/odemis.conf &
+
+exit
 
 # Take a screenshot if the GUI is there
 if pgrep -f $GUI > /dev/null; then
@@ -49,7 +66,7 @@ Current behaviour:
 Expected behaviour:
 
 
-Additional information (eg, reproducability, severity):
+Additional information (eg, reproducibility, severity):
 
 EOL
 ret="$?"
