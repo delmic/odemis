@@ -101,14 +101,15 @@ class PowerControlUnit(model.PowerSupplier):
                 del init[k]
         self._doSupply(init, apply_delay=False)
 
-        ids = ids or []
-        self._mem_ids = self._getIdentities()
-        for id in ids:
-            if id not in self._mem_ids:
-                raise HwError("EEPROM id %s was not detected. Please make sure "
-                              "you are using the correct microscope file and "
-                              "all EEPROM components are connected." % (id,))
-        self.memoryIDs = model.VigilantAttribute(self._mem_ids, readonly=True, getter=self._getIdentities)
+        self.memoryIDs = model.VigilantAttribute(None, readonly=True, getter=self._getIdentities)
+
+        if ids:
+            mem_ids = self.memoryIDs.value
+            for eid in ids:
+                if eid not in mem_ids:
+                    raise HwError("EEPROM id %s was not detected. Please make sure "
+                                  "you are using the correct microscope file and "
+                                  "all EEPROM components are connected." % (eid,))
 
     @isasync
     def supply(self, sup):

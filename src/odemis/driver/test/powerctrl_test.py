@@ -81,17 +81,14 @@ class TestStatic(unittest.TestCase):
                 dev = CLASS_PCU(**kwargsw)
 
 # arguments used for the creation of basic components
-PCU = CLASS_PCU(**KWARGS_PCU)
-CONFIG_SED = {"name": "sed", "role": "sed", "power_supplier": PCU,
+CONFIG_SED = {"name": "sed", "role": "sed",
               "channel": 5, "limits": [-3, 3]}
 CONFIG_BSD = {"name": "bsd", "role": "bsd",
               "channel": 6, "limits": [-0.1, 0.2]}
 CONFIG_SCANNER = {"name": "scanner", "role": "ebeam", "limits": [[-5, 5], [3, -3]],
                   "channels": [0, 1], "settle_time": 10e-6, "hfw_nomag": 10e-3,
                   "park": [8, 8]}
-CONFIG_SEM2 = {"name": "sem", "role": "sem", "power_supplier": PCU, "device": "/dev/comedi0",
-               "children": {"detector0": CONFIG_SED, "detector1": CONFIG_BSD, "scanner": CONFIG_SCANNER}
-               }
+CONFIG_SEM2 = {"name": "sem", "role": "sem", "device": "/dev/comedi0"}
 
 
 # @unittest.skip("faster")
@@ -102,8 +99,13 @@ class TestPowerControl(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.pcu = PCU
-        cls.sem = semcomedi.SEMComedi(**CONFIG_SEM2)
+        cls.pcu = CLASS_PCU(**KWARGS_PCU)
+        confsed = CONFIG_SED.copy()
+        confsed["power_supplier"] = cls.pcu
+        semchild = {"detector0": confsed, "detector1": CONFIG_BSD, "scanner": CONFIG_SCANNER}
+        cls.sem = semcomedi.SEMComedi(power_supplier=cls.pcu,
+                                      children=semchild,
+                                      **CONFIG_SEM2)
 
         for child in cls.sem.children.value:
             if child.name == CONFIG_SED["name"]:
@@ -157,7 +159,7 @@ class TestMemory(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.pcu = PCU
+        cls.pcu = CLASS_PCU(**KWARGS_PCU)
         cls.dummy = "1134557890aabbccef"  # dummy data
 
     @classmethod
