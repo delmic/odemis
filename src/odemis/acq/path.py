@@ -101,11 +101,7 @@ SPARC2_MODES = {
                 }),
             'spectral-dedicated': ("spectrometer",  # Only in case sp-ccd is present
                 {'lens-switch': {'x': 'off'},
-                 'slit-in-big': {'x': 'off'},  # opened according to spec.slit-in
-                 'cl-det-selector': {'x': 'off'},
-                 'spec-det-selector': {'rx': math.radians(90)},
                  'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
-                 'spectrograph': {'grating': GRATING_NOT_MIRROR},
                 }),
             'mirror-align': ("ccd",  # Also used for lens alignment
                 {'lens-switch': {'x': 'off'},
