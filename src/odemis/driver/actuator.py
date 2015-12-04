@@ -147,12 +147,11 @@ class MultiplexActuator(model.Actuator):
                 # The initialisation will not fail if the referencing fails
                 f = self.reference({axis})
                 self._axes_referencing.append(axis)
-                f.add_done_callback(self._on_referenced, axis)
+                f.add_done_callback(self._on_referenced)
 
-    def _on_referenced(self, future, axis):
+    def _on_referenced(self, future):
         try:
             future.result()
-            self._axes_referencing.remove(axis)
         except Exception as e:
             for ax in self._axes_referencing:
                 c, ca = self._axis_to_child[ax]
