@@ -1706,6 +1706,10 @@ class SparcStreamsController(StreamBarController):
             self.add_action("CL intensity", self.addCLIntensity)
         if main_data.ccd:
             self.add_action("Angle-resolved", self.addAR)
+        # On the SPARCv2, there is potentially 4 different ways to acquire a
+        # spectrum: two spectrographs, with each two ports. In practice, there
+        # are never more than 2 at the same time.
+        # TODO support adding both types, (by having spectrometer != spectrometer-dedicated)
         if main_data.spectrometer:
             self.add_action("Spectrum", self.addSpectrum)
         if main_data.monochromator:
@@ -1907,12 +1911,21 @@ class SparcStreamsController(StreamBarController):
         sem_stream = self._tab_data_model.semStream
         sem_spec_stream = acqstream.SEMSpectrumMDStream("SEM Spectrum", sem_stream, spec_stream)
 
+        # Find which spectrograph matters for that spectrometer
+        spec_name = main_data.spectrometer.name
+        for spg in (main_data.spectrograph, main_data.spectrograph_ded):
+            if spg is not None and spec_name in spg.affects.value:
+                break
+        else:
+            spg = None
+            logging.warning("No spectrograph found affecting spectrometer %s", spec_name)
+
         # No light filter for the spectrum stream: typically useless
         return self._addRepStream(spec_stream, sem_spec_stream,
                                   vas=("repetition", "pixelSize", "fuzzing"),
-                                  axes={"wavelength": main_data.spectrograph,
-                                        "grating": main_data.spectrograph,
-                                        "slit-in": main_data.spectrograph,
+                                  axes={"wavelength": spg,
+                                        "grating": spg,
+                                        "slit-in": spg,
                                         },
                                   )
 

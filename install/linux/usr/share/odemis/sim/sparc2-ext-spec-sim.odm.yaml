@@ -291,9 +291,8 @@ SPARC2: {
     },
     metadata: {
         # Position of the mirror to select the external spectrometer (can be improved by user)
-        FAV_POS_ACTIVE: {"x": 0.0226112848}, # m
-        # TODO: needed?
-        FAV_POS_DEACTIVE: {"x": 0.0} # m
+        FAV_POS_ACTIVE: {"x": 0.026112848}, # m
+        FAV_POS_DEACTIVE: {"x": 0.022} # m
     },
     affects: ["Camera", "Spectral Camera", "Spectrometer"],
 }
