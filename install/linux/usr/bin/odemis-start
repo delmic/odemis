@@ -448,7 +448,12 @@ def main(args):
             cmd = shlex.split(config["MODEL_SELECTOR"])
             logging.debug("Getting the model filename using %s", cmd)
             try:
-                modelfile = subprocess.check_output(cmd)
+                out = subprocess.check_output(cmd).splitlines()
+                if not out:
+                    raise ValueError("No microscope file name provided by %s" % (cmd,))
+                elif len(out) > 1:
+                    logging.warning("Model selector returned multiple lines: %s", out)
+                modelfile = out[0].strip()
             except subprocess.CalledProcessError as ex:
                 # TODO: check if backend is already running anyway?
                 raise ValueError("Failed to pick the microscope file: %s" % (ex,))
