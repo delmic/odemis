@@ -253,7 +253,7 @@ class MultiplexActuator(model.Actuator):
         for axis in axes:
             child, child_axis = self._axis_to_child[axis]
             logging.debug("Referencing axis %s (-> %s)", axis, child_axis)
-            f = child.reference(child_axis)
+            f = child.reference({child_axis})
             self._moves_queue.append(f)
         return self._executor.submit(self._checkQueue)
     reference.__doc__ = model.Actuator.reference.__doc__
