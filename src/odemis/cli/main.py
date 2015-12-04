@@ -287,7 +287,10 @@ def print_metadata(component, pretty):
             return
         print("\tMetadata:")
         for name, value in md.items():
-            print(u"\t\t%s: '%s'" % (name, value))
+            if isinstance(value, basestring):
+                print(u"\t\t%s: '%s'" % (name, value))
+            else:
+                print(u"\t\t%s: %s" % (name, value))
     else:
         for name, value in md.items():
             print(u"%s\ttype:metadata\tvalue:%s" % (name, value))
