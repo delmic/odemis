@@ -40,12 +40,13 @@ class MultiplexActuator(model.Actuator):
      = a set of axes that can be moved and optionally report their position.
     """
 
-    def __init__(self, name, role, children, axes_map, **kwargs):
+    def __init__(self, name, role, children, axes_map, ref_on_init=None, **kwargs):
         """
         name (string)
         role (string)
         children (dict str -> actuator): axis name (in this actuator) -> actuator to be used for this axis
         axes_map (dict str -> str): axis name in this actuator -> axis name in the child actuator
+        ref_on_init (list): axes to be referenced during initialization
         """
         if not children:
             raise ValueError("MultiplexActuator needs children")
@@ -53,6 +54,7 @@ class MultiplexActuator(model.Actuator):
         if set(children.keys()) != set(axes_map.keys()):
             raise ValueError("MultiplexActuator needs the same keys in children and axes_map")
 
+        ref_on_init = ref_on_init or []
         self._axis_to_child = {} # axis name => (Actuator, axis name)
         self._position = {}
         self._speed = {}
@@ -130,7 +132,7 @@ class MultiplexActuator(model.Actuator):
 
         # whether the axes are referenced
         self.referenced = model.VigilantAttribute(self._referenced, readonly=True)
-        self._axes_referencing = []
+
         for axis in self._referenced.keys():
             c, ca = self._axis_to_child[axis]
             def update_ref_per_child(value, a=axis, ca=ca, cname=c.name):
@@ -142,6 +144,8 @@ class MultiplexActuator(model.Actuator):
             c.referenced.subscribe(update_ref_per_child)
             self._subfun.append(update_ref_per_child)
 
+        self._axes_referencing = []
+        for axis in ref_on_init:
             # If the axis can be referenced => do it now (and move to a known position)
             if not self._referenced.get(axis, True):
                 # The initialisation will not fail if the referencing fails
@@ -253,7 +257,7 @@ class MultiplexActuator(model.Actuator):
         for axis in axes:
             child, child_axis = self._axis_to_child[axis]
             logging.debug("Referencing axis %s (-> %s)", axis, child_axis)
-            f = child.reference(child_axis)
+            f = child.reference({child_axis})
             self._moves_queue.append(f)
         return self._executor.submit(self._checkQueue)
     reference.__doc__ = model.Actuator.reference.__doc__
