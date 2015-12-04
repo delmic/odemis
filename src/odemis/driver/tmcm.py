@@ -1103,7 +1103,7 @@ class TMCLController(model.Actuator):
             else:
                 self.StopRefSearch(axis)
                 logging.warning("Reference search failed to finish in time")
-                raise IOError("Timeout after 30s when referencing axis %d" % axis)
+                raise IOError("Timeout after 60s when referencing axis %d" % axis)
 
             if self._refproc_cancelled[axis].is_set():
                 logging.debug("Referencing for axis %d cancelled while running", axis)
