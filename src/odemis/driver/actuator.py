@@ -58,6 +58,11 @@ class MultiplexActuator(model.Actuator):
         self._speed = {}
         self._referenced = {}
         axes = {}
+        # Queue maintaining moves to be done
+        self._moves_queue = collections.deque()
+        # will take care of executing axis move asynchronously
+        self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
+
         for axis, child in children.items():
             caxis = axes_map[axis]
             self._axis_to_child[axis] = (child, caxis)
@@ -125,6 +130,7 @@ class MultiplexActuator(model.Actuator):
 
         # whether the axes are referenced
         self.referenced = model.VigilantAttribute(self._referenced, readonly=True)
+        self._axes_referencing = []
         for axis in self._referenced.keys():
             c, ca = self._axis_to_child[axis]
             def update_ref_per_child(value, a=axis, ca=ca, cname=c.name):
@@ -136,7 +142,23 @@ class MultiplexActuator(model.Actuator):
             c.referenced.subscribe(update_ref_per_child)
             self._subfun.append(update_ref_per_child)
 
-        # TODO hwVersion swVersion
+            # If the axis can be referenced => do it now (and move to a known position)
+            if not self._referenced.get(axis, True):
+                # The initialisation will not fail if the referencing fails
+                f = self.reference({axis})
+                self._axes_referencing.append(axis)
+                f.add_done_callback(self._on_referenced, axis)
+
+    def _on_referenced(self, future, axis):
+        try:
+            future.result()
+            self._axes_referencing.remove(axis)
+        except Exception as e:
+            for ax in self._axes_referencing:
+                c, ca = self._axis_to_child[ax]
+                c.stop({ca})  # prevent any move queued
+            self.state._set_value(e, force_write=True)
+            logging.exception(e)
 
     def _updatePosition(self):
         """
@@ -189,75 +211,52 @@ class MultiplexActuator(model.Actuator):
             return model.InstantaneousFuture()
         self._checkMoveRel(shift)
         shift = self._applyInversion(shift)
-
-        # merge multiple axes for the same children
-        child_to_move = collections.defaultdict(dict) # child -> moveRel argument
         for axis, distance in shift.items():
             child, child_axis = self._axis_to_child[axis]
-            child_to_move[child].update({child_axis: distance})
-            logging.debug("Moving axis %s (-> %s) by %g", axis, child_axis, distance)
-
-        futures = []
-        for child, move in child_to_move.items():
-            f = child.moveRel(move)
-            futures.append(f)
-
-        if len(futures) == 1:
-            return futures[0]
-        else:
-            # TODO return future composed of multiple futures
-            return futures[-1]
+            logging.debug("Moving axis %s (-> %s) to %g", axis, child_axis, distance)
+            f = child.moveRel({child_axis: distance})
+            self._moves_queue.append(f)
+        return self._executor.submit(self._checkQueue)
 
     @isasync
     def moveAbs(self, pos):
-        """
-        Move the stage to the defined position in m for each axis given.
-        pos dict(string-> float): name of the axis and position in m
-        """
         if not pos:
             return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
         pos = self._applyInversion(pos)
-
-        child_to_move = collections.defaultdict(dict) # child -> moveAbs argument
         for axis, distance in pos.items():
             child, child_axis = self._axis_to_child[axis]
-            child_to_move[child].update({child_axis: distance})
             logging.debug("Moving axis %s (-> %s) to %g", axis, child_axis, distance)
+            f = child.moveAbs({child_axis: distance})
+            self._moves_queue.append(f)
+        return self._executor.submit(self._checkQueue)
 
-        futures = []
-        for child, move in child_to_move.items():
-            f = child.moveAbs(move)
-            futures.append(f)
-
-        if len(futures) == 1:
-            return futures[0]
+    def _checkQueue(self):
+        """
+        accumulates the children moves
+        """
+        if not self._moves_queue:
+            return
         else:
-            # TODO return future composed of multiple futures
-            return futures[-1]
+            while True:
+                logging.debug("%d moves in the queue at the moment", len(self._moves_queue))
+                try:
+                    f = self._moves_queue.popleft()
+                    f.result()
+                except IndexError:
+                    break
 
     @isasync
     def reference(self, axes):
         if not axes:
             return model.InstantaneousFuture()
         self._checkReference(axes)
-
-        child_to_move = collections.defaultdict(set) # child -> reference argument
         for axis in axes:
             child, child_axis = self._axis_to_child[axis]
-            child_to_move[child].add(child_axis)
             logging.debug("Referencing axis %s (-> %s)", axis, child_axis)
-
-        futures = []
-        for child, a in child_to_move.items():
-            f = child.reference(a)
-            futures.append(f)
-
-        if len(futures) == 1:
-            return futures[0]
-        else:
-            # TODO return future composed of multiple futures
-            return futures[0]
+            f = child.reference(child_axis)
+            self._moves_queue.append(f)
+        return self._executor.submit(self._checkQueue)
     reference.__doc__ = model.Actuator.reference.__doc__
 
     def stop(self, axes=None):
@@ -265,6 +264,8 @@ class MultiplexActuator(model.Actuator):
         stops the motion
         axes (iterable or None): list of axes to stop, or None if all should be stopped
         """
+        # Empty the queue for the given axes
+        self._executor.cancel()
         axes = axes or self.axes
         threads = []
         for axis in axes:
@@ -282,6 +283,12 @@ class MultiplexActuator(model.Actuator):
             thread.join(1)
             if thread.is_alive():
                 logging.warning("Stopping child actuator of '%s' is taking more than 1s", self.name)
+
+    def terminate(self):
+        if self._executor:
+            self.stop()
+            self._executor.shutdown()
+            self._executor = None
 
 
 class CoupledStage(model.Actuator):
