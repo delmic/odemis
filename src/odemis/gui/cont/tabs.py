@@ -2767,10 +2767,15 @@ class Sparc2AlignTab(Tab):
         # Disable controls/streams which are useless (to guide the user)
         self._stream_controller.pauseStreams()
 
+        main = self.tab_data_model.main
+
+        # Things to do at the end of a mode
+        if mode != "fiber-align":
+            main.spec_sel.position.unsubscribe(self._onFiberPos)
+
         # This is blocking on the hardware => run in a separate thread
         op_mode = self._mode_to_opm[mode]
-        threading.Thread(target=self.tab_data_model.main.opm.setPath,
-                         args=(op_mode,)).start()
+        threading.Thread(target=self._opm_runner, args=(op_mode,)).start()
 
         # Focused view must be updated before the stream to play is changed,
         # as the scheduler automatically adds the stream to the current view.
@@ -2805,7 +2810,6 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_moi_settings.Show(False)
             self.panel.pnl_fibaligner.Enable(False)
         elif mode == "fiber-align":
-            # FIXME: only allow to move once the spec-selector is ready
             self.tab_data_model.focussedView.value = self.panel.vp_align_fiber.microscope_view
             self._speccnt_stream.should_update.value = True
             self.panel.pnl_mirror.Enable(False)
@@ -2813,10 +2817,28 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_focus.Enable(False)
             self.panel.pnl_moi_settings.Show(False)
             self.panel.pnl_fibaligner.Enable(True)
-            # TODO: the X axis of fiber aligner must be used for
-            # MD_FAV_POS_ACTIVE of spec-selector
+            # Disbale the buttons until the fiber box is ready
+            self.panel.btn_m_fibaligner_x.Enable(False)
+            self.panel.btn_p_fibaligner_x.Enable(False)
+            self.panel.btn_m_fibaligner_y.Enable(False)
+            self.panel.btn_p_fibaligner_y.Enable(False)
         else:
             raise ValueError("Unknown alignment mode %s!" % mode)
+
+    def _opm_runner(self, mode):
+        """
+        Thread that runs the optical path manager setPath.
+        The main goal is to be able to do additional command once it's over
+        """
+        main = self.tab_data_model.main
+        main.opm.setPath(mode)
+        # Make sure the user can move the X axis only once at ACTIVE position
+        if mode == "fiber-align":
+            main.spec_sel.position.subscribe(self._onFiberPos)
+            self.panel.btn_m_fibaligner_x.Enable(True)
+            self.panel.btn_p_fibaligner_x.Enable(True)
+            self.panel.btn_m_fibaligner_y.Enable(True)
+            self.panel.btn_p_fibaligner_y.Enable(True)
 
     def _on_ccd_stream_play(self, _):
         """
@@ -2957,6 +2979,15 @@ class Sparc2AlignTab(Tab):
         m = self.tab_data_model.main.mirror
         m.updateMetadata({model.MD_FAV_POS_ACTIVE: pos})
 
+    def _onFiberPos(self, pos):
+        """
+        Called when the spec-selector (wrapper to the X axis of fiber-aligner)
+          is moved (and the fiber align mode is active)
+        """
+        # Save the axis position as the "calibrated" one
+        ss = self.tab_data_model.main.spec_sel
+        ss.updateMetadata({model.MD_FAV_POS_ACTIVE: pos})
+
     def Show(self, show=True):
         Tab.Show(self, show=show)
 
@@ -2976,6 +3007,7 @@ class Sparc2AlignTab(Tab):
 
             main.lens_mover.position.unsubscribe(self._onLensPos)
             main.mirror.position.unsubscribe(self._onMirrorPos)
+            main.spec_sel.position.unsubscribe(self._onFiberPos)
 
     def terminate(self):
         self._stream_controller.pauseStreams()

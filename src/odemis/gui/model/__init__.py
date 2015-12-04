@@ -104,7 +104,8 @@ class MainGUIData(object):
         "ebic-detector": "ebic",
         "cl-detector": "cld",
         "spectrometer": "spectrometer",
-        # spectrograph is special: it's a child of spectrometer
+        "spectrograph": "spectrograph",
+        "spectrograph-dedicated": "spectrograph_ded",
         "monochromator": "monochromator",
         "chamber-ccd": "chamber_ccd",
         "overview-ccd": "overview_ccd",
@@ -117,6 +118,7 @@ class MainGUIData(object):
         "align": "aligner",
         "fiber-aligner": "fibaligner",
         "lens-mover": "lens_mover",  # lens1 of SPARCv2
+        "spec-selector": "spec_sel",
         "chamber": "chamber",
         "light": "light",
         "brightlight": "brightlight",
@@ -148,7 +150,7 @@ class MainGUIData(object):
         self.mirror_xy = None  # mirror in X/Y referential (SPARCv2)
         self.fibaligner = None  # actuator to move/calibrate the fiber (SPARC)
         self.light = None  # epi-fluorescence light (SECOM/DELPHI)
-        self.brightlight = None  # brightlight (no hardware has this yet)
+        self.brightlight = None  # special light for white illumination (SECOM) or calibration (SPARC)
         self.light_filter = None  # emission light filter for SECOM/output filter for SPARC
         self.cl_filter = None  # light filter for SPARCv2 on the CL components
         self.lens = None  # Optical lens for SECOM/focus lens for the SPARC
@@ -160,8 +162,10 @@ class MainGUIData(object):
         self.cld = None  # cathodoluminescnence detector (aka PMT)
         self.spectrometer = None  # 1D detector that returns a spectrum
         self.spectrograph = None  # actuator to change the wavelength
+        self.spectrograph_ded = None  # second external spectrograph dedicated (SPARCv2)
         self.monochromator = None  # 0D detector behind the spectrograph
         self.lens_mover = None  # actuator to align the lens1 (SPARCv2)
+        self.spec_sel = None  # actuator to activate the path to the spectrometer (SPARCv2)
         self.chamber = None  # actuator to control the chamber (has vacuum, pumping etc.)
         self.chamber_ccd = None  # view of inside the chamber
         self.chamber_light = None   # Light illuminating the chamber
@@ -186,6 +190,7 @@ class MainGUIData(object):
                     pass  # not interested by this component
 
             # Spectrograph is not directly a child, but a sub-comp of spectrometer
+            # TODO: now it's also a direct child. Code can be removed once all installs have been updated
             if self.spectrometer:
                 for child in self.spectrometer.children.value:
                     if child.role == "spectrograph":
