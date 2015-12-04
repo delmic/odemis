@@ -2556,6 +2556,16 @@ class Sparc2AlignTab(Tab):
         mirror_ol.set_hole_position(tab_data.polePositionPhysical)
         self.panel.vp_align_center.show_mirror_overlay()
 
+
+        # Force a spot at the center of the FoV
+        # Not via stream controller, so we can avoid the scheduler
+        spot_stream = acqstream.SpotSEMStream("SpotSEM", main_data.sed,
+                                              main_data.sed.data, main_data.ebeam)
+        spot_stream.should_update.value = True
+        self._spot_stream = spot_stream
+        # Make sure it only plays when the CCD (or spec count) stream plays
+        ccd_stream.should_update.subscribe(self._on_ccd_stream_play)
+
         # chronograph of spectrometer if "fiber-align" mode is present
         if "fiber-align" in tab_data.align_mode.choices:
             speccnts = acqstream.CameraCountStream("Spectrum average",
@@ -2568,15 +2578,7 @@ class Sparc2AlignTab(Tab):
                                 add_to_view=self.panel.vp_align_fiber.microscope_view)
             speccnt_spe.stream_panel.flatten()
             self._speccnt_stream = speccnts
-
-        # Force a spot at the center of the FoV
-        # Not via stream controller, so we can avoid the scheduler
-        spot_stream = acqstream.SpotSEMStream("SpotSEM", main_data.sed,
-                                              main_data.sed.data, main_data.ebeam)
-        spot_stream.should_update.value = True
-        self._spot_stream = spot_stream
-        # Make sure it only plays when the CCD stream plays
-        ccd_stream.should_update.subscribe(self._on_ccd_stream_play)
+            speccnts.should_update.subscribe(self._on_ccd_stream_play)
 
         # Switch between alignment modes
         # * mirror-align: move x, y of mirror with moment of inertia feedback
@@ -2816,16 +2818,19 @@ class Sparc2AlignTab(Tab):
         else:
             raise ValueError("Unknown alignment mode %s!" % mode)
 
-    def _on_ccd_stream_play(self, update):
+    def _on_ccd_stream_play(self, _):
         """
-        Called when the ccd_stream.should_update VA changes.
+        Called when the ccd_stream.should_update or speccnt_stream.should_update
+         VA changes.
         Used to also play/pause the spot stream simultaneously
         """
         # Especially useful for the hardware which force the SEM external scan
         # when the SEM stream is playing. Because that allows the user to see
         # the SEM image in the original SEM software while still being able to
         # move the mirror
-        self._spot_stream.is_active.value = update
+        ccdupdate = self._ccd_stream.should_update.value
+        spcupdate = self._speccnt_stream.should_update.value
+        self._spot_stream.is_active.value = any((ccdupdate, spcupdate))
 
     def _onClickFocus(self, evt):
         """
