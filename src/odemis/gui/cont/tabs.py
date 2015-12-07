@@ -1583,7 +1583,7 @@ class AnalysisTab(Tab):
                 converter = dataio.find_fittest_converter(fn, mode=os.O_RDONLY)
                 data = converter.read_data(fn)
                 # will raise exception if doesn't contain good calib data
-                cdata = calibration.get_spectrum_data(data) # FIXME
+                cdata = calibration.get_spectrum_data(data)
 
             spec_strms = [s for s in self.tab_data_model.streams.value
                           if isinstance(s, acqstream.SpectrumStream)]

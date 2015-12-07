@@ -962,11 +962,10 @@ class StreamBarController(object):
 
             for channel_data in channels_data:
                 # TODO: be more clever to detect the type of stream
-                if (
-                    model.MD_WL_LIST in channel_data.metadata or
-                    model.MD_WL_POLYNOMIAL in channel_data.metadata or
+                if ((model.MD_WL_LIST in channel_data.metadata or
+                     model.MD_WL_POLYNOMIAL in channel_data.metadata) and
                     (len(channel_data.shape) >= 5 and channel_data.shape[-5] > 1)
-                ):
+                   ):
                     name = channel_data.metadata.get(model.MD_DESCRIPTION, "Spectrum")
                     klass = acqstream.StaticSpectrumStream
                 elif model.MD_AR_POLE in channel_data.metadata:
@@ -1000,6 +999,12 @@ class StreamBarController(object):
                 else:
                     name = channel_data.metadata.get(model.MD_DESCRIPTION, "Secondary electrons")
                     klass = acqstream.StaticSEMStream
+
+                if issubclass(klass, acqstream.Static2DStream):
+                    if numpy.prod(channel_data.shape[-3::-1]) != 1:
+                        logging.warning("Dropping dimensions from the data %s of shape %s",
+                                        name, channel_data.shape)
+                        channel_data = channel_data[-2, -1]
 
                 result_streams.append(klass(name, channel_data))
 
