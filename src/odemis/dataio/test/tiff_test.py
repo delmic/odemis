@@ -782,7 +782,7 @@ def rational2float(rational):
     Converts a rational number (from libtiff) to a float
     rational (numpy array of shape 1 with numer and denom fields): num,denom
     """
-    return rational["numer"][0]/rational["denom"][0]
+    return rational["numer"][0] / rational["denom"][0]
 
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']
