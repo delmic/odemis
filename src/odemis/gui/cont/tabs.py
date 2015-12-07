@@ -2247,7 +2247,7 @@ class SparcAlignTab(Tab):
             self.panel.vp_sparc_align.hide_mirror_overlay()
             self._ccd_stream.should_update.value = True
             self.panel.pnl_sparc_trans.Enable(True)
-            self.panel.pnl_sparc_fib.Enable(False)
+            self.panel.pnl_fibaligner.Enable(False)
         elif mode == "mirror-align":
             # Show image normally
             self.panel.vp_sparc_align.SetFlip(None)
@@ -2256,12 +2256,12 @@ class SparcAlignTab(Tab):
             self.panel.vp_sparc_align.show_mirror_overlay(activate=False)
             self._ccd_stream.should_update.value = True
             self.panel.pnl_sparc_trans.Enable(True)
-            self.panel.pnl_sparc_fib.Enable(False)
+            self.panel.pnl_fibaligner.Enable(False)
         else:
             if self._ccd_stream:
                 self._ccd_stream.should_update.value = False
             self.panel.pnl_sparc_trans.Enable(False)
-            self.panel.pnl_sparc_fib.Enable(True)
+            self.panel.pnl_fibaligner.Enable(True)
 
         # This is blocking on the hardware => run in a separate thread
         # TODO: Probably better is that setPath returns a future (and cancel it
@@ -2579,6 +2579,8 @@ class Sparc2AlignTab(Tab):
             speccnt_spe.stream_panel.flatten()
             self._speccnt_stream = speccnts
             speccnts.should_update.subscribe(self._on_ccd_stream_play)
+        else:
+            self._speccnt_stream = None
 
         # Switch between alignment modes
         # * mirror-align: move x, y of mirror with moment of inertia feedback
@@ -2770,7 +2772,7 @@ class Sparc2AlignTab(Tab):
         main = self.tab_data_model.main
 
         # Things to do at the end of a mode
-        if mode != "fiber-align":
+        if mode != "fiber-align" and main.spec_sel:
             main.spec_sel.position.unsubscribe(self._onFiberPos)
 
         # This is blocking on the hardware => run in a separate thread
@@ -2851,7 +2853,10 @@ class Sparc2AlignTab(Tab):
         # the SEM image in the original SEM software while still being able to
         # move the mirror
         ccdupdate = self._ccd_stream.should_update.value
-        spcupdate = self._speccnt_stream.should_update.value
+        if self._speccnt_stream:
+            spcupdate = self._speccnt_stream.should_update.value
+        else:
+            spcupdate = False
         self._spot_stream.is_active.value = any((ccdupdate, spcupdate))
 
     def _onClickFocus(self, evt):
@@ -3007,7 +3012,8 @@ class Sparc2AlignTab(Tab):
 
             main.lens_mover.position.unsubscribe(self._onLensPos)
             main.mirror.position.unsubscribe(self._onMirrorPos)
-            main.spec_sel.position.unsubscribe(self._onFiberPos)
+            if main.spec_sel:
+                main.spec_sel.position.unsubscribe(self._onFiberPos)
 
     def terminate(self):
         self._stream_controller.pauseStreams()
