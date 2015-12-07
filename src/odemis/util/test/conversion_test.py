@@ -20,6 +20,8 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+from __future__ import division
+
 from odemis import model
 from odemis.util import conversion
 from odemis.util.conversion import convert_to_object, reproduce_typed_value
@@ -27,7 +29,6 @@ import unittest
 
 
 class TestConversion(unittest.TestCase):
-
 
     def test_wave2rgb(self):
         #         (input) (expected output)

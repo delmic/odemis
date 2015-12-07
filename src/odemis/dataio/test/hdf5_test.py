@@ -718,7 +718,7 @@ class TestHDF5IO(unittest.TestCase):
                      model.MD_ACQ_DATE: time.time(),
                      model.MD_HW_VERSION: "Unknown",
                      model.MD_DWELL_TIME: 0.001,  # s
-                     model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
+                     model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
                      model.MD_POS: (1.2e-3, -30e-3),  # m
                      model.MD_LENS_MAG: 100,  # ratio
                      model.MD_OUT_WL: (2.8e-07, 3.1e-07)
@@ -727,27 +727,40 @@ class TestHDF5IO(unittest.TestCase):
                      model.MD_HW_VERSION: "Unknown",
                      model.MD_SAMPLES_PER_PIXEL: 1,
                      model.MD_HW_NAME: "fake hw",
-                     model.MD_DESCRIPTION: "Anchor region",
+                     model.MD_DESCRIPTION: "etd",
                      model.MD_ACQ_DATE: time.time(),
-                     model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
+                     model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
                      model.MD_POS: (1e-3, -30e-3),  # m
+                     model.MD_LENS_MAG: 100,  # ratio
+                     model.MD_DWELL_TIME: 1e-06,  # s
+                    },
+                    {model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_VERSION: "Unknown",
+                     model.MD_SAMPLES_PER_PIXEL: 1,
+                     model.MD_HW_NAME: "fake hw",
+                     model.MD_DESCRIPTION: "Anchor region",
+                     model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
+                     model.MD_POS: (10e-3, 30e-3),  # m
                      model.MD_LENS_MAG: 100,  # ratio
                      model.MD_AD_LIST: (1437117571.733935, 1437117571.905051),
                      model.MD_DWELL_TIME: 1e-06,  # s
                     },
                     ]
-        # create 2 greyscale images of different
+        # create 3 greyscale images
+        ldata = []
         mnchr_size = (6, 5)
         sem_size = (128, 128)
+        # Monochromator
         mnchr_dtype = numpy.dtype("uint32")
-        sem_dtype = numpy.dtype("uint16")
-        ldata = []
-        # for i, md in enumerate(metadata):
         a = model.DataArray(numpy.zeros(mnchr_size[::-1], mnchr_dtype), metadata[0])
         ldata.append(a)
-
-        b = model.DataArray(numpy.zeros(sem_size[::-1], sem_dtype), metadata[1])
+        # Normal SEM
+        sem_dtype = numpy.dtype("uint16")
+        b = model.DataArray(numpy.zeros(mnchr_size[::-1], sem_dtype), metadata[1])
         ldata.append(b)
+        # Anchor data
+        c = model.DataArray(numpy.zeros(sem_size[::-1], sem_dtype), metadata[2])
+        ldata.append(c)
 
         # export
         hdf5.export(FILENAME, ldata)

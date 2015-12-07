@@ -24,9 +24,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
-import collections
 from collections import OrderedDict
-
+import collections
 from concurrent.futures import CancelledError
 import logging
 import math
@@ -53,6 +52,7 @@ from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.img import scale_to_alpha
 from odemis.gui.util.widgets import ProgressiveFutureConnector, AxisConnector
 from odemis.util import units
+from odemis.util.dataio import data_to_static_streams
 import os.path
 import pkg_resources
 import scipy.misc
@@ -1408,7 +1408,7 @@ class AnalysisTab(Tab):
         self.tab_data_model.acq_fileinfo.value = fi
 
         # Create streams from data
-        streams = self._stream_controller.data_to_static_streams(data)
+        streams = data_to_static_streams(data)
 
         # Spectrum and AR streams are, for now, considered mutually exclusive
         spec_streams = [s for s in streams if isinstance(s, acqstream.SpectrumStream)]
