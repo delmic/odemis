@@ -39,9 +39,8 @@ import logging
 import numpy
 from odemis import model, util
 import odemis
-from odemis.model import (isasync, CancellableThreadPoolExecutor,
+from odemis.model import (isasync, ParallelThreadPoolExecutor,
                           CancellableFuture, HwError)
-from odemis.model import ParallelThreadPoolExecutor
 from odemis.util import driver, TimeoutError
 import os
 import serial
@@ -1269,7 +1268,11 @@ class TMCLController(model.Actuator):
         if not axes:
             return model.InstantaneousFuture()
         self._checkReference(axes)
-        dependences = set(axes)
+        if self._refproc == REFPROC_2XFF:
+            # Can only run one referencing at a time => block all the other axes too
+            dependences = set(self.axes.keys())
+        else:
+            dependences = set(axes)
 
         f = self._createRefFuture()
         self._executor.submitf(dependences, f, self._doReference, f, axes)

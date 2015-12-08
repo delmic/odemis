@@ -188,11 +188,20 @@ class GuiTestCase(unittest.TestCase):
             "%s > %s" % (self.app.module_name, self._testMethodName))
 
     @classmethod
-    def add_control(cls, ctrl, flags=0, border=10, proportion=0, clear=False):
+    def add_control(cls, ctrl, flags=0, border=10, proportion=0, clear=False, label=None):
         if clear:
             cls.remove_all()
 
-        cls.sizer.Add(ctrl, flag=flags, border=border, proportion=proportion)
+        flags = flags or wx.ALL
+
+        if label is not None:
+            lbl = wx.StaticText(ctrl.Parent, -1, label)
+            bs = wx.BoxSizer()
+            bs.Add(lbl, proportion=0, flag=wx.RIGHT, border=10)
+            bs.Add(ctrl, proportion=-1, flag=wx.EXPAND)
+            cls.sizer.Add(bs, flag=flags, border=border, proportion=proportion)
+        else:
+            cls.sizer.Add(ctrl, flag=flags, border=border, proportion=proportion)
         cls.sizer.Layout()
         return ctrl
 
