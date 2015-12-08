@@ -19,6 +19,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 from __future__ import division
+
 import collections
 import logging
 import re
@@ -390,3 +391,4 @@ def ensure_tuple(v):
         return tuple(ensure_tuple(i) for i in v)
     else:
         return v
+

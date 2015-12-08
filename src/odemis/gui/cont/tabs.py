@@ -24,9 +24,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
-import collections
 from collections import OrderedDict
-
+import collections
 from concurrent.futures import CancelledError
 import logging
 import math
@@ -53,6 +52,7 @@ from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.img import scale_to_alpha
 from odemis.gui.util.widgets import ProgressiveFutureConnector, AxisConnector
 from odemis.util import units
+from odemis.util.dataio import data_to_static_streams
 import os.path
 import pkg_resources
 import scipy.misc
@@ -1408,7 +1408,7 @@ class AnalysisTab(Tab):
         self.tab_data_model.acq_fileinfo.value = fi
 
         # Create streams from data
-        streams = self._stream_controller.data_to_static_streams(data)
+        streams = data_to_static_streams(data)
 
         # Spectrum and AR streams are, for now, considered mutually exclusive
         spec_streams = [s for s in streams if isinstance(s, acqstream.SpectrumStream)]
@@ -1583,7 +1583,7 @@ class AnalysisTab(Tab):
                 converter = dataio.find_fittest_converter(fn, mode=os.O_RDONLY)
                 data = converter.read_data(fn)
                 # will raise exception if doesn't contain good calib data
-                cdata = calibration.get_spectrum_data(data) # FIXME
+                cdata = calibration.get_spectrum_data(data)
 
             spec_strms = [s for s in self.tab_data_model.streams.value
                           if isinstance(s, acqstream.SpectrumStream)]
@@ -2247,7 +2247,7 @@ class SparcAlignTab(Tab):
             self.panel.vp_sparc_align.hide_mirror_overlay()
             self._ccd_stream.should_update.value = True
             self.panel.pnl_sparc_trans.Enable(True)
-            self.panel.pnl_sparc_fib.Enable(False)
+            self.panel.pnl_fibaligner.Enable(False)
         elif mode == "mirror-align":
             # Show image normally
             self.panel.vp_sparc_align.SetFlip(None)
@@ -2256,12 +2256,12 @@ class SparcAlignTab(Tab):
             self.panel.vp_sparc_align.show_mirror_overlay(activate=False)
             self._ccd_stream.should_update.value = True
             self.panel.pnl_sparc_trans.Enable(True)
-            self.panel.pnl_sparc_fib.Enable(False)
+            self.panel.pnl_fibaligner.Enable(False)
         else:
             if self._ccd_stream:
                 self._ccd_stream.should_update.value = False
             self.panel.pnl_sparc_trans.Enable(False)
-            self.panel.pnl_sparc_fib.Enable(True)
+            self.panel.pnl_fibaligner.Enable(True)
 
         # This is blocking on the hardware => run in a separate thread
         # TODO: Probably better is that setPath returns a future (and cancel it
@@ -2579,6 +2579,8 @@ class Sparc2AlignTab(Tab):
             speccnt_spe.stream_panel.flatten()
             self._speccnt_stream = speccnts
             speccnts.should_update.subscribe(self._on_ccd_stream_play)
+        else:
+            self._speccnt_stream = None
 
         # Switch between alignment modes
         # * mirror-align: move x, y of mirror with moment of inertia feedback
@@ -2770,7 +2772,7 @@ class Sparc2AlignTab(Tab):
         main = self.tab_data_model.main
 
         # Things to do at the end of a mode
-        if mode != "fiber-align":
+        if mode != "fiber-align" and main.spec_sel:
             main.spec_sel.position.unsubscribe(self._onFiberPos)
 
         # This is blocking on the hardware => run in a separate thread
@@ -2851,7 +2853,10 @@ class Sparc2AlignTab(Tab):
         # the SEM image in the original SEM software while still being able to
         # move the mirror
         ccdupdate = self._ccd_stream.should_update.value
-        spcupdate = self._speccnt_stream.should_update.value
+        if self._speccnt_stream:
+            spcupdate = self._speccnt_stream.should_update.value
+        else:
+            spcupdate = False
         self._spot_stream.is_active.value = any((ccdupdate, spcupdate))
 
     def _onClickFocus(self, evt):
@@ -3007,7 +3012,8 @@ class Sparc2AlignTab(Tab):
 
             main.lens_mover.position.unsubscribe(self._onLensPos)
             main.mirror.position.unsubscribe(self._onMirrorPos)
-            main.spec_sel.position.unsubscribe(self._onFiberPos)
+            if main.spec_sel:
+                main.spec_sel.position.unsubscribe(self._onFiberPos)
 
     def terminate(self):
         self._stream_controller.pauseStreams()

@@ -559,7 +559,7 @@ class TestTiffIO(unittest.TestCase):
                      model.MD_BINNING: (1, 2), # px, px
                      model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
                      model.MD_POS: (1e-3, -30e-3), # m
-                     model.MD_EXP_TIME: 1.2, # s
+                     model.MD_DWELL_TIME: 1e-6,  # s
                      model.MD_LENS_MAG: 1200, # ratio
                     },
                     {model.MD_SW_VERSION: "1.0-test",
@@ -776,13 +776,95 @@ class TestTiffIO(unittest.TestCase):
         self.assertEqual(im.shape, tshape)
         self.assertEqual(im[0, 0].tolist(), [0, 255, 0])
 
+    def testReadMDMnchr(self):
+        """
+        Checks that we can read back the metadata of a monochromator image.
+        It's 32 bits, and the same shape as the ETD
+        """
+        metadata = [{model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_NAME: "fake monochromator",
+                     model.MD_SAMPLES_PER_PIXEL: 1,
+                     model.MD_DESCRIPTION: "test",
+                     model.MD_ACQ_DATE: time.time(),
+                     model.MD_HW_VERSION: "Unknown",
+                     model.MD_DWELL_TIME: 0.001,  # s
+                     model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
+                     model.MD_POS: (1.2e-3, -30e-3),  # m
+                     model.MD_LENS_MAG: 100,  # ratio
+                     model.MD_OUT_WL: (2.8e-07, 3.1e-07)
+                    },
+                    {model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_VERSION: "Unknown",
+                     model.MD_SAMPLES_PER_PIXEL: 1,
+                     model.MD_HW_NAME: "fake hw",
+                     model.MD_DESCRIPTION: "etd",
+                     model.MD_ACQ_DATE: time.time(),
+                     model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
+                     model.MD_POS: (1e-3, -30e-3),  # m
+                     model.MD_LENS_MAG: 100,  # ratio
+                     model.MD_DWELL_TIME: 1e-06,  # s
+                    },
+                    {model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_VERSION: "Unknown",
+                     model.MD_SAMPLES_PER_PIXEL: 1,
+                     model.MD_HW_NAME: "fake hw",
+                     model.MD_DESCRIPTION: "Anchor region",
+                     model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
+                     model.MD_POS: (10e-3, 30e-3),  # m
+                     model.MD_LENS_MAG: 100,  # ratio
+                     model.MD_AD_LIST: (1437117571.733935, 1437117571.905051),
+                     model.MD_DWELL_TIME: 1e-06,  # s
+                    },
+                    ]
+        # create 3 greyscale images
+        ldata = []
+        mnchr_size = (6, 5)
+        sem_size = (128, 128)
+        # Monochromator
+        mnchr_dtype = numpy.dtype("uint32")
+        a = model.DataArray(numpy.zeros(mnchr_size[::-1], mnchr_dtype), metadata[0])
+        ldata.append(a)
+        # Normal SEM
+        sem_dtype = numpy.dtype("uint16")
+        b = model.DataArray(numpy.zeros(mnchr_size[::-1], sem_dtype), metadata[1])
+        ldata.append(b)
+        # Anchor data
+        c = model.DataArray(numpy.zeros(sem_size[::-1], sem_dtype), metadata[2])
+        ldata.append(c)
+
+        # export
+        tiff.export(FILENAME, ldata)
+
+        # check it's here
+        st = os.stat(FILENAME)  # this test also that the file is created
+        self.assertGreater(st.st_size, 0)
+
+        # check data
+        rdata = tiff.read_data(FILENAME)
+        self.assertEqual(len(rdata), len(ldata))
+
+        for i, im in enumerate(rdata):
+            md = metadata[i].copy()
+            img.mergeMetadata(md)
+            self.assertEqual(im.metadata[model.MD_DESCRIPTION], md[model.MD_DESCRIPTION])
+            self.assertAlmostEqual(im.metadata[model.MD_POS][0], md[model.MD_POS][0])
+            self.assertAlmostEqual(im.metadata[model.MD_POS][1], md[model.MD_POS][1])
+            self.assertAlmostEqual(im.metadata[model.MD_PIXEL_SIZE][0], md[model.MD_PIXEL_SIZE][0])
+            self.assertAlmostEqual(im.metadata[model.MD_PIXEL_SIZE][1], md[model.MD_PIXEL_SIZE][1])
+
+        # Check that output wavelength range was correctly read back
+        owl = rdata[0].metadata[model.MD_OUT_WL]  # nm
+        md = metadata[0]
+        self.assertTrue((md[model.MD_OUT_WL][0] <= owl[0] and
+                         owl[1] <= md[model.MD_OUT_WL][-1]))
+
 
 def rational2float(rational):
     """
     Converts a rational number (from libtiff) to a float
     rational (numpy array of shape 1 with numer and denom fields): num,denom
     """
-    return rational["numer"][0]/rational["denom"][0]
+    return rational["numer"][0] / rational["denom"][0]
 
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']

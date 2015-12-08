@@ -153,9 +153,9 @@ class ActuatorController(object):
             tab_panel.pnl_ab_align.Show()
 
         # On SPARC, show the fiber aligner only if needed
-        if hasattr(tab_panel, 'pnl_sparc_fib'):
+        if hasattr(tab_panel, 'pnl_fibaligner'):
             showfib = ("fibaligner", "x") in tab_data.axes
-            tab_panel.pnl_sparc_fib.Show(showfib)
+            tab_panel.pnl_fibaligner.Show(showfib)
 
         tab_data.main.is_acquiring.subscribe(self._on_acquisition)
 

@@ -163,7 +163,7 @@ class xrcpnl_tab_sparc_align(wx.Panel):
         self.mirror_align_btn_p_mirror_ry = xrc.XRCCTRL(self, "mirror_align_btn_p_mirror_ry")
         self.mirror_align_btn_m_mirror_rz = xrc.XRCCTRL(self, "mirror_align_btn_m_mirror_rz")
         self.mirror_align_btn_p_mirror_rz = xrc.XRCCTRL(self, "mirror_align_btn_p_mirror_rz")
-        self.pnl_sparc_fib = xrc.XRCCTRL(self, "pnl_sparc_fib")
+        self.pnl_fibaligner = xrc.XRCCTRL(self, "pnl_fibaligner")
         self.mirror_align_slider_fibaligner = xrc.XRCCTRL(self, "mirror_align_slider_fibaligner")
         self.mirror_align_btn_p_fibaligner_y = xrc.XRCCTRL(self, "mirror_align_btn_p_fibaligner_y")
         self.mirror_align_btn_m_fibaligner_y = xrc.XRCCTRL(self, "mirror_align_btn_m_fibaligner_y")
@@ -477,7 +477,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource class="wxHtmlWindow" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource class="" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -2119,7 +2119,7 @@ def __init_resources():
               <border>5</border>
             </object>
             <object class="sizeritem">
-              <object class="wxPanel" name="pnl_sparc_fib">
+              <object class="wxPanel" name="pnl_fibaligner">
                 <object class="wxBoxSizer">
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
@@ -2706,7 +2706,6 @@ def __init_resources():
                     <flag>wxLEFT|wxRIGHT|wxEXPAND|wxALIGN_CENTRE</flag>
                     <border>5</border>
                   </object>
-                  
                   <object class="sizeritem">
                     <object class="wxGridBagSizer">
                       <object class="sizeritem">
@@ -2849,7 +2848,6 @@ def __init_resources():
                     <flag>wxLEFT|wxRIGHT|wxEXPAND|wxALIGN_CENTRE</flag>
                     <border>5</border>
                   </object>
-                  
                   <object class="sizeritem">
                     <object class="wxGridBagSizer">
                       <object class="sizeritem">
@@ -3069,8 +3067,6 @@ def __init_resources():
                     <flag>wxLEFT|wxRIGHT|wxEXPAND|wxALIGN_CENTRE</flag>
                     <border>5</border>
                   </object>
-                  
-                  
                   <object class="sizeritem">
                     <object class="wxGridBagSizer">
                       <object class="sizeritem">
@@ -3239,7 +3235,6 @@ def __init_resources():
               </object>
               <flag>wxEXPAND</flag>
             </object>
-            
             <object class="spacer">
               <option>1</option>
               <flag>wxEXPAND</flag>

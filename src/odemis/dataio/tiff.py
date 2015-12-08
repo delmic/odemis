@@ -917,12 +917,14 @@ def _countNeededIFDs(da):
 def _findImageGroups(das):
     """
     Find groups of images which should be considered part of the same acquisition
-    (aka "Image" in OME-XML).
+    (aka "Image" in OME-XML). Mainly to put optical images at different wavelenghts
+    together.
     das (list of DataArray): all the images of the final TIFF file
     returns (dict int -> list of DataArrays):
         IFD (index) of the first DataArray of a group -> "group" of DataArrays
     """
     # We consider images to be part of the same group if they have:
+    # * signs to be an optical image
     # * same shape
     # * metadata that show they were acquired by the same instrument
     groups = dict()
@@ -932,6 +934,7 @@ def _findImageGroups(das):
     for da in das:
         # check if it can be part of the current group (compare just to the previous DA)
         if (prev_da is None
+            or not (model.MD_IN_WL in da.metadata or model.MD_OUT_WL in da.metadata)
             or prev_da.shape != da.shape
             or prev_da.metadata.get(model.MD_HW_NAME, None) != da.metadata.get(model.MD_HW_NAME, None)
             or prev_da.metadata.get(model.MD_HW_VERSION, None) != da.metadata.get(model.MD_HW_VERSION, None)
