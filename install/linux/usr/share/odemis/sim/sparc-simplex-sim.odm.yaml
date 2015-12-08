@@ -115,7 +115,7 @@ SPARC-Lund-sim: {
         # The input and output slits are manual
         fstepsize: 10.9e-6, # m, size of one focus step
     },
-    affects: ["Spectral Camera", "PMT"],
+    affects: ["Spectrometer", "Spectral Camera", "PMT"],
 }
 
 # Selects between CCD and PMT
@@ -127,7 +127,7 @@ SPARC-Lund-sim: {
     init: {
         axes_map: {"rx": "flip-out"},
     },
-    affects: ["Spectral Camera", "PMT"],
+    affects: ["Spectrometer", "Spectral Camera", "PMT"],
 }
 
 # The spectrograph remembers the focus position per grating, so it typically doesn't
@@ -139,6 +139,6 @@ SPARC-Lund-sim: {
     init: {
         axes_map: {"z": "focus"},
     },
-    affects: ["Spectral Camera", "PMT"],
+    affects: ["Spectrometer", "Spectral Camera", "PMT"],
 }
 
