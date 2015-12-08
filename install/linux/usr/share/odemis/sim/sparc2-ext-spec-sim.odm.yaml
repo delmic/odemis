@@ -29,10 +29,10 @@ SPARC2: {
                   "Optical Actuators": 2},
         delay: { # Time it takes before a component is accessible
             "Calibration Light": 0, # To turn on/off the light, it's immediate
-            "Camera": 0,
-            "Spectral Camera": 0,
-            "Integrated Spectrograph": 0, # SR-193 needs a looong time to initialise
-            "Optical Actuators": 0
+            "Camera": 1,
+            "Spectral Camera": 1,
+            "Integrated Spectrograph": 10, # SR-193 needs a looong time to initialise
+            "Optical Actuators": 1,
         },
         init: { # Which component to power on from the very beginning (to save time)
             "Camera": True,
@@ -216,10 +216,9 @@ SPARC2: {
         address: null,
         axes: ["l1", "l2", "spec-sel", "fiby", "slit"],
         # These values are adapted to make the simulator roughly the same speed
-        # TODO: check for "spec-sel" & "fiby"
-        ustepsize: [25.1e-9, 25.1e-9, 26.1e-9,  25.1e-9, 5.e-9], # m/µstep
+        ustepsize: [25.1e-9, 25.1e-9, 26.1e-9, 5.86e-9, 5.e-9], # m/µstep
         refproc: "Standard",
-        refswitch: {"l1": 0, "l2": 0, "spec-sel": 4, "fiby": 4},
+        refswitch: {"l1": 0, "l2": 0, "spec-sel": 4}, # fiby has no ref swich
         inverted: ["l2"],
     },
 }
@@ -230,7 +229,8 @@ SPARC2: {
     role: "lens-mover",
     children: {"x": "Optical Actuators"},
     init: {
-        axes_map: {"x": "l1"}
+        axes_map: {"x": "l1"},
+        ref_on_init: ["x"],
     },
     metadata: {
         # Default position of the lens (can be improved by user)
@@ -287,7 +287,8 @@ SPARC2: {
     role: "spec-selector",
     children: {"x": "Optical Actuators"},
     init: {
-        axes_map: {"x": "spec-sel"}
+        axes_map: {"x": "spec-sel"},
+        ref_on_init: ["x"],
     },
     metadata: {
         # Position of the mirror to select the external spectrometer (can be improved by user)

@@ -225,7 +225,8 @@ SPARC2: {
     role: "lens-mover",
     children: {"x": "Optical Actuators"},
     init: {
-        axes_map: {"x": "l1"}
+        axes_map: {"x": "l1"},
+        ref_on_init: ["x"],
     },
     metadata: {
         # Default position of the lens (can be improved by user)

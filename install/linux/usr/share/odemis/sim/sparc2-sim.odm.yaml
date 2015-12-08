@@ -191,7 +191,7 @@ SPARC2: {
         },
         fstepsize: 10.9e-6, # m, size of one focus step
     },
-    affects: ["Camera", "Spectral Camera"],
+    affects: ["Camera", "Spectral Camera", "Spectrometer"],
 }
 
 "Spectrograph focus": {
@@ -201,7 +201,7 @@ SPARC2: {
     init: {
         axes_map: {"z": "focus"},
     },
-    affects: ["Camera", "Spectral Camera"],
+    affects: ["Camera", "Spectral Camera", "Spectrometer"],
 }
 
 
@@ -274,7 +274,8 @@ SPARC2: {
     role: "lens-mover",
     children: {"x": "Optical Actuators"},
     init: {
-        axes_map: {"x": "l1"}
+        axes_map: {"x": "l1"},
+        ref_on_init: ["x"],
     },
     metadata: {
         # Default position of the lens (can be improved by user)
@@ -310,7 +311,7 @@ SPARC2: {
             -0.0012: "off", # opening based on the small slit
         },
     },
-    affects: ["Camera", "Spectral Camera"],
+    affects: ["Camera", "Spectral Camera", "Spectrometer"],
 }
 
 # Mirror in Plate 2, selects between spectrometer and cl-detector
@@ -378,15 +379,3 @@ SPARC2: {
         # Note: if you want to use absolute moves, add a "translation" too
     },
 }
-
-# Controller for moving the 'Deltabot' stage
-# "Mirror Actuators": {
-#     class: tmcm.TMCLController,
-#     role: mirror,
-#     init: {
-#         port: "/dev/fake",
-#         axes: ["a", "b", "c"],
-#         ustepsize: [5.9e-9, 5.9e-9, 5.9e-9], # m/µstep
-#         refproc: "Standard",
-#     },
-#}
