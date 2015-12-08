@@ -41,6 +41,7 @@ from odemis import model, util
 import odemis
 from odemis.model import (isasync, CancellableThreadPoolExecutor,
                           CancellableFuture, HwError)
+from odemis.model import ParallelThreadPoolExecutor
 from odemis.util import driver, TimeoutError
 import os
 import serial
@@ -221,7 +222,7 @@ class TMCLController(model.Actuator):
         # TODO: add a .powerSupply readonly VA ? Only if not already provided by HwComponent.
 
         # will take care of executing axis move asynchronously
-        self._executor = CancellableThreadPoolExecutor(max_workers=1) # one task at a time
+        self._executor = ParallelThreadPoolExecutor()  # one task at a time
 
         axes_def = {}
         for n, i in self._name_to_axis.items():
@@ -1214,6 +1215,7 @@ class TMCLController(model.Actuator):
     def moveRel(self, shift):
         self._checkMoveRel(shift)
         shift = self._applyInversion(shift)
+        dependences = set(shift.keys())
 
         # Check if the distance is big enough to make sense
         for an, v in shift.items():
@@ -1228,7 +1230,7 @@ class TMCLController(model.Actuator):
             return model.InstantaneousFuture()
 
         f = self._createMoveFuture()
-        f = self._executor.submitf(f, self._doMoveRel, f, shift)
+        f = self._executor.submitf(dependences, f, self._doMoveRel, f, shift)
         return f
 
     @isasync
@@ -1237,6 +1239,7 @@ class TMCLController(model.Actuator):
             return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
         pos = self._applyInversion(pos)
+        dependences = set(pos.keys())
 
         for a, p in pos.items():
             if (hasattr(self, "referenced") and
@@ -1244,7 +1247,7 @@ class TMCLController(model.Actuator):
                 logging.warning("Absolute move on axis '%s' which has not be referenced", a)
 
         f = self._createMoveFuture()
-        self._executor.submitf(f, self._doMoveAbs, f, pos)
+        self._executor.submitf(dependences, f, self._doMoveAbs, f, pos)
         return f
     moveAbs.__doc__ = model.Actuator.moveAbs.__doc__
 
@@ -1266,9 +1269,10 @@ class TMCLController(model.Actuator):
         if not axes:
             return model.InstantaneousFuture()
         self._checkReference(axes)
+        dependences = set(axes)
 
         f = self._createRefFuture()
-        self._executor.submitf(f, self._doReference, f, axes)
+        self._executor.submitf(dependences, f, self._doReference, f, axes)
         return f
     reference.__doc__ = model.Actuator.reference.__doc__
 
