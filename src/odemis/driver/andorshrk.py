@@ -972,7 +972,12 @@ class Shamrock(model.Actuator):
         # TODO: GetCalibration() return several values identical (eg, 0's if
         # cw is < 75 nm). Need to decide if we return something better (what?)
         # or check all the clients handle this corner case well.
-        return self.GetCalibration(npixels)
+        calib = self.GetCalibration(npixels)
+        if calib[-1] < 1e-9:
+            logging.info("Calibration data doesn't seem valid (cw = %g): %s",
+                         self.position.value["wavelength"], calib)
+            return []
+        return calib
 
     def getOpeningToWavelength(self, width):
         """
