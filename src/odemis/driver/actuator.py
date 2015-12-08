@@ -60,8 +60,6 @@ class MultiplexActuator(model.Actuator):
         self._speed = {}
         self._referenced = {}
         axes = {}
-        # Queue maintaining moves to be done
-        self._moves_queue = collections.deque()
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
 
@@ -214,12 +212,25 @@ class MultiplexActuator(model.Actuator):
             return model.InstantaneousFuture()
         self._checkMoveRel(shift)
         shift = self._applyInversion(shift)
+        f = self._executor.submit(self._doMoveRel, shift)
+
+        return f
+
+    def _doMoveRel(self, shift):
+        child_to_move = collections.defaultdict(dict)  # child -> moveRel argument
         for axis, distance in shift.items():
             child, child_axis = self._axis_to_child[axis]
-            logging.debug("Moving axis %s (-> %s) to %g", axis, child_axis, distance)
-            f = child.moveRel({child_axis: distance})
-            self._moves_queue.append(f)
-        return self._executor.submit(self._checkQueue)
+            child_to_move[child].update({child_axis: distance})
+            logging.debug("Moving axis %s (-> %s) by %g", axis, child_axis, distance)
+
+        futures = []
+        for child, move in child_to_move.items():
+            f = child.moveRel(move)
+            futures.append(f)
+
+        # just wait for all futures to finish
+        for f in futures:
+            f.result()
 
     @isasync
     def moveAbs(self, pos):
@@ -227,40 +238,51 @@ class MultiplexActuator(model.Actuator):
             return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
         pos = self._applyInversion(pos)
+        f = self._executor.submit(self._doMoveAbs, pos)
+
+        return f
+
+    def _doMoveAbs(self, pos):
+        child_to_move = collections.defaultdict(dict) # child -> moveAbs argument
         for axis, distance in pos.items():
             child, child_axis = self._axis_to_child[axis]
+            child_to_move[child].update({child_axis: distance})
             logging.debug("Moving axis %s (-> %s) to %g", axis, child_axis, distance)
-            f = child.moveAbs({child_axis: distance})
-            self._moves_queue.append(f)
-        return self._executor.submit(self._checkQueue)
 
-    def _checkQueue(self):
-        """
-        accumulates the children moves
-        """
-        if not self._moves_queue:
-            return
-        else:
-            while True:
-                logging.debug("%d moves in the queue at the moment", len(self._moves_queue))
-                try:
-                    f = self._moves_queue.popleft()
-                    f.result()
-                except IndexError:
-                    break
+        futures = []
+        for child, move in child_to_move.items():
+            f = child.moveAbs(move)
+            futures.append(f)
+
+        # just wait for all futures to finish
+        for f in futures:
+            f.result()
 
     @isasync
     def reference(self, axes):
         if not axes:
             return model.InstantaneousFuture()
         self._checkReference(axes)
+        f = self._executor.submit(self._doReference, axes)
+
+        return f
+    reference.__doc__ = model.Actuator.reference.__doc__
+
+    def _doReference(self, axes):
+        child_to_move = collections.defaultdict(set)  # child -> reference argument
         for axis in axes:
             child, child_axis = self._axis_to_child[axis]
+            child_to_move[child].add(child_axis)
             logging.debug("Referencing axis %s (-> %s)", axis, child_axis)
-            f = child.reference({child_axis})
-            self._moves_queue.append(f)
-        return self._executor.submit(self._checkQueue)
-    reference.__doc__ = model.Actuator.reference.__doc__
+
+        futures = []
+        for child, a in child_to_move.items():
+            f = child.reference(a)
+            futures.append(f)
+
+        # just wait for all futures to finish
+        for f in futures:
+            f.result()
 
     def stop(self, axes=None):
         """
