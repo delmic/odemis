@@ -24,10 +24,6 @@ from concurrent.futures.thread import ThreadPoolExecutor, _WorkItem
 import logging
 import threading
 import time
-try:
-    import queue
-except ImportError:
-    import Queue as queue
 
 
 class CancellableThreadPoolExecutor(ThreadPoolExecutor):
@@ -107,25 +103,33 @@ class ParallelThreadPoolExecutor(ThreadPoolExecutor):
     """
     An extended ThreadPoolExecutor that can execute multiple jobs in parallel
     -if not on the same set.
+    Note that the task are still always executed in order they were submitted.
     It also allows non standard Future to be created.
     """
     def __init__(self):
         # just a big number of workers
         ThreadPoolExecutor.__init__(self, max_workers=100)
         self._queue = collections.deque()  # thread-safe queue of futures
-        self._waiting_work = collections.deque()
-        # (dict future -> set) dependences that their tasks are currently being executed
+        self._waiting_work = collections.deque()  # tuple (WorkItem, future, set=dependences)
+
+        # (dict id(future) -> set): futures running -> dependences used
         self._sets_in_progress = {}
         self._set_remove = threading.Lock()
 
     def _schedule_work(self):
         while self._waiting_work:
-            w, f, dependences = self._waiting_work.pop()
             with self._set_remove:
-                for task, dep in self._sets_in_progress.iteritems():
-                    # do not schedule the task if its dependences set has an intersection
-                    # with some of the ongoing tasks
-                    if set.intersection(dep, dependences):
+                w, f, dependences = self._waiting_work.pop()
+                if f not in self._queue:
+                    # the future has already been cancelled => forget about it
+                    continue
+
+                # do not schedule the task (and any later ones) if its dependences
+                # set has an intersection with some of the ongoing tasks
+                for dep in self._sets_in_progress.values():
+                    if dep & dependences:  # intersects?
+                        logging.debug("Waiting for scheduling task with dep %s, conflicting with current %s",
+                                      dependences, set.union(*self._sets_in_progress.values()))
                         # put it back to the queue
                         self._waiting_work.append((w, f, dependences))
                         return
@@ -137,8 +141,8 @@ class ParallelThreadPoolExecutor(ThreadPoolExecutor):
     def submitf(self, dependences, f, fn, *args, **kwargs):
         """
         submit a task, handled by the given fresh Future
-        dependences (set): set of dependences. Only schedule a task if no task running
-        has an intersection with the dependences.
+        dependences (set): set of dependences. The task will be scheduled only
+          when no running task has a dependence intersection.
         f (Future): a newly created Future
         fn (callable): the function to call
         args, kwargs -> passed to fn
@@ -149,13 +153,14 @@ class ParallelThreadPoolExecutor(ThreadPoolExecutor):
             if self._shutdown:
                 raise RuntimeError('cannot schedule new futures after shutdown')
 
-            w = _WorkItem(f, fn, args, kwargs)
-            self._waiting_work.appendleft((w, f, dependences))
-            self._schedule_work()
-
             # add to the queue and track the task
             self._queue.append(f)
             f.add_done_callback(self._on_done)
+
+            w = _WorkItem(f, fn, args, kwargs)
+            with self._set_remove:
+                self._waiting_work.appendleft((w, f, dependences))
+            self._schedule_work()
         return f
 
     def submit(self, dependences, fn, *args, **kwargs):
@@ -166,12 +171,16 @@ class ParallelThreadPoolExecutor(ThreadPoolExecutor):
         # task is over
         try:
             self._queue.remove(future)
+        except ValueError:
+            # can happen if it was cancelled (was already removed)
+            pass
+        try:
             with self._set_remove:
                 del self._sets_in_progress[id(future)]
-            self._schedule_work()
-        except (ValueError, KeyError):
-            # can happen if it was cancelled
+        except KeyError:
+            # can happen if it was cancelled (was not yet added)
             pass
+        self._schedule_work()
 
     def cancel(self):
         """
