@@ -22,10 +22,13 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+from odemis.model import isasync
 import logging
 import math
 from odemis import model
 from odemis.acq import stream
+from odemis.model import CancellableThreadPoolExecutor
+
 
 GRATING_NOT_MIRROR = object()
 
@@ -230,6 +233,9 @@ class OpticalPathManager(object):
                 self.guessed['spectral'] = self.guessed['spectral-integrated']
                 self._modes['spectral'] = self._modes["spectral-integrated"]
 
+        # will take care of executing setPath asynchronously
+        self._executor = CancellableThreadPoolExecutor(max_workers=1)
+
     def _getComponent(self, role):
         """
         same as model.getComponent, but optimised by caching the result
@@ -244,7 +250,16 @@ class OpticalPathManager(object):
 
         return comp
 
+    @isasync
     def setPath(self, mode):
+        """
+        Just a wrapper of _doSetPath
+        """
+        f = self._executor.submit(self._doSetPath, mode)
+
+        return f
+
+    def _doSetPath(self, mode):
         """
         Given a particular mode it sets all the necessary components of the
         optical path (found through the microscope component) to the

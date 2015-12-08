@@ -27,8 +27,6 @@ related configuration files.
 
 """
 
-from .file import GeneralConfig, AcquisitionConfig, CalibrationConfig
-
 CONF_GENERAL = None
 CONF_ACQUI = None
 CONF_CALIB = None
@@ -37,6 +35,7 @@ CONF_CALIB = None
 def get_general_conf():
     global CONF_GENERAL
     if not CONF_GENERAL:
+        from .file import GeneralConfig
         CONF_GENERAL = GeneralConfig()
     return CONF_GENERAL
 
@@ -45,6 +44,7 @@ def get_acqui_conf():
     """ Return the Acquisition config object and create/read it first if it does not yet exist """
     global CONF_ACQUI
     if not CONF_ACQUI:
+        from .file import AcquisitionConfig
         CONF_ACQUI = AcquisitionConfig()
     return CONF_ACQUI
 
@@ -53,5 +53,6 @@ def get_calib_conf():
     """ Return the calibration config object and create/read it first if it does not yet exist """
     global CONF_CALIB
     if not CONF_CALIB:
+        from .file import CalibrationConfig
         CONF_CALIB = CalibrationConfig()
     return CONF_CALIB

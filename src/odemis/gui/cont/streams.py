@@ -1907,7 +1907,7 @@ class SparcStreamsController(StreamBarController):
                 # TODO: Run in a separate thread as in live view it's ok if
                 # the path is not immediately correct?
                 logging.debug("Going to mode %s for %s", mode, stream)
-                opm.setPath(mode)
+                opm.setPath(mode).result()
 
             # Activate or deactive spot mode based on what the stream needs
             # Note: changing tool is fine, because it will only _pause_ the

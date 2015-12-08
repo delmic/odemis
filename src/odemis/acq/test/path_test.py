@@ -87,7 +87,7 @@ class SimPathTestCase(unittest.TestCase):
         Test setting mode that does not exist
         """
         with self.assertRaises(ValueError):
-            self.optmngr.setPath("ErrorMode")
+            self.optmngr.setPath("ErrorMode").result()
 
 #    @skip("simple")
     def test_set_path(self):
@@ -96,32 +96,32 @@ class SimPathTestCase(unittest.TestCase):
         modes to be available
         """
         # setting ar
-        self.optmngr.setPath("ar")
+        self.optmngr.setPath("ar").result()
         # Assert that actuator was moved according to mode given
         self.assertEqual(self.lenswitch.position.value, path.SPARC_MODES["ar"][1]["lens-switch"])
 
         # setting spectral
-        self.optmngr.setPath("spectral")
+        self.optmngr.setPath("spectral").result()
         # Assert that actuator was moved according to mode given
         self.assertEqual(self.lenswitch.position.value, path.SPARC_MODES["spectral"][1]["lens-switch"])
 
         # setting mirror-align
-        self.optmngr.setPath("mirror-align")
+        self.optmngr.setPath("mirror-align").result()
         # Assert that actuator was moved according to mode given
         self.assertEqual(self.lenswitch.position.value, path.SPARC_MODES["mirror-align"][1]["lens-switch"])
 
-        self.optmngr.setPath("chamber-view")
+        self.optmngr.setPath("chamber-view").result()
         # Assert that actuator was moved according to mode given
         self.assertEqual(self.lenswitch.position.value, path.SPARC_MODES["chamber-view"][1]["lens-switch"])
 
 
         # setting cli
         with self.assertRaises(ValueError):
-            self.optmngr.setPath("cli")
+            self.optmngr.setPath("cli").result()
 
         # setting monochromator
         with self.assertRaises(ValueError):
-            self.optmngr.setPath("monochromator")
+            self.optmngr.setPath("monochromator").result()
 
 #     @skip("simple")
     def test_guess_mode(self):
@@ -197,7 +197,7 @@ class MonashPathTestCase(unittest.TestCase):
         Test setting mode that does not exist
         """
         with self.assertRaises(ValueError):
-            self.optmngr.setPath("ErrorMode")
+            self.optmngr.setPath("ErrorMode").result()
 
 #    @skip("simple")
     def test_set_path(self):
@@ -205,24 +205,24 @@ class MonashPathTestCase(unittest.TestCase):
         Test setting modes that do exist. We expect all modes to be available
         """
         # setting ar
-        self.optmngr.setPath("ar")
+        self.optmngr.setPath("ar").result()
         # Assert that actuator was moved according to mode given
         self.assertEqual(self.lenswitch.position.value, path.SPARC_MODES["ar"][1]["lens-switch"])
 
         # setting spectral
-        self.optmngr.setPath("spectral")
+        self.optmngr.setPath("spectral").result()
         # Assert that actuator was moved according to mode given
         self.assertEqual(self.lenswitch.position.value, path.SPARC_MODES["spectral"][1]["lens-switch"])
 
         # setting mirror-align
-        self.optmngr.setPath("mirror-align")
+        self.optmngr.setPath("mirror-align").result()
         # Assert that actuator was moved according to mode given
         self.assertEqual(self.lenswitch.position.value, path.SPARC_MODES["mirror-align"][1]["lens-switch"])
         # Special assertion for filter wheel
         self.assertEqual(self.filter.position.value, {path.SPARC_MODES["mirror-align"][1]["filter"].keys()[0] : 6})
 
         # setting fiber-align
-        self.optmngr.setPath("fiber-align")
+        self.optmngr.setPath("fiber-align").result()
         # Assert that actuator was moved according to mode given
         self.assertEqual(self.lenswitch.position.value, path.SPARC_MODES["fiber-align"][1]["lens-switch"])
         # Special assertion for filter wheel and spectrograph
@@ -230,12 +230,12 @@ class MonashPathTestCase(unittest.TestCase):
         self.assertEqual(self.specgraph.position.value['slit-in'], path.SPARC_MODES["fiber-align"][1]["spectrograph"]['slit-in'])
 
         # setting cli
-        self.optmngr.setPath("cli")
+        self.optmngr.setPath("cli").result()
         # Assert that actuator was moved according to mode given
         self.assertEqual(self.lenswitch.position.value, path.SPARC_MODES["cli"][1]["lens-switch"])
 
         # setting monochromator
-        self.optmngr.setPath("monochromator")
+        self.optmngr.setPath("monochromator").result()
         self.assertEqual(self.spec_det_sel.position.value,
                          path.SPARC_MODES["monochromator"][1]["spec-det-selector"])
 
@@ -318,7 +318,7 @@ class SpecPathTestCase(unittest.TestCase):
         Test setting mode that does not exist
         """
         with self.assertRaises(ValueError):
-            self.optmngr.setPath("ErrorMode")
+            self.optmngr.setPath("ErrorMode").result()
 
 #    @skip("simple")
     def test_set_path(self):
@@ -328,22 +328,22 @@ class SpecPathTestCase(unittest.TestCase):
         """
         # setting ar
         with self.assertRaises(ValueError):
-            self.optmngr.setPath("ar")
+            self.optmngr.setPath("ar").result()
 
         # setting spectral
-        self.optmngr.setPath("spectral")
+        self.optmngr.setPath("spectral").result()
 
         # setting mirror-align
         with self.assertRaises(ValueError):
-            self.optmngr.setPath("mirror-align")
+            self.optmngr.setPath("mirror-align").result()
 
         # setting cli
         with self.assertRaises(ValueError):
-            self.optmngr.setPath("cli")
+            self.optmngr.setPath("cli").result()
 
         # setting monochromator
         with self.assertRaises(ValueError):
-            self.optmngr.setPath("monochromator")
+            self.optmngr.setPath("monochromator").result()
 
 #     @skip("simple")
     def test_guess_mode(self):
@@ -424,7 +424,7 @@ class Sparc2PathTestCase(unittest.TestCase):
         Test setting mode that does not exist
         """
         with self.assertRaises(ValueError):
-            self.optmngr.setPath("ErrorMode")
+            self.optmngr.setPath("ErrorMode").result()
 
     # @skip("simple")
     def test_set_path(self):
@@ -434,7 +434,7 @@ class Sparc2PathTestCase(unittest.TestCase):
         sparc2_modes = path.SPARC2_MODES
 
         # setting ar
-        self.optmngr.setPath("ar")
+        self.optmngr.setPath("ar").result()
         # Assert that actuator was moved according to mode given
         self.assertEqual(self.lenswitch.position.value,
                          self.find_dict_key(self.lenswitch, sparc2_modes["ar"]))
@@ -447,7 +447,7 @@ class Sparc2PathTestCase(unittest.TestCase):
                         ['grating']) or (0, self.specgraph.position.value['wavelength']))
 
         # CL intensity mode
-        self.optmngr.setPath("cli")
+        self.optmngr.setPath("cli").result()
         # Assert that actuator was moved according to mode given
         self.assertEqual(self.lenswitch.position.value,
                          self.find_dict_key(self.lenswitch, sparc2_modes["cli"]))
@@ -455,7 +455,7 @@ class Sparc2PathTestCase(unittest.TestCase):
                          self.find_dict_key(self.cl_det_sel, sparc2_modes["cli"]))
 
         # setting spectral
-        self.optmngr.setPath("spectral-integrated")
+        self.optmngr.setPath("spectral-integrated").result()
         # Assert that actuator was moved according to mode given
         self.assertEqual(self.lenswitch.position.value,
                          self.find_dict_key(self.lenswitch, sparc2_modes["spectral-integrated"]))
@@ -465,29 +465,20 @@ class Sparc2PathTestCase(unittest.TestCase):
                          sparc2_modes["spectral-integrated"][1]["spec-det-selector"])
         self.assertTrue(self.specgraph.position.value['grating'] != 'mirror')
 
-        self.optmngr.setPath("spectral-dedicated")
+        self.optmngr.setPath("spectral-dedicated").result()
         # Assert that actuator was moved according to mode given
         self.assertEqual(self.lenswitch.position.value,
                          self.find_dict_key(self.lenswitch, sparc2_modes["spectral-dedicated"]))
-        self.assertEqual(self.slit.position.value, self.find_dict_key(self.slit,
-                                                                      sparc2_modes["spectral-dedicated"]))
-        self.assertEqual(self.spec_det_sel.position.value,
-                         sparc2_modes["spectral-dedicated"][1]["spec-det-selector"])
-        self.assertTrue(self.specgraph.position.value['grating'] != 'mirror')
 
         # spectral should be a shortcut to spectral-dedicated
-        self.optmngr.setPath("spectral")
+        self.optmngr.setPath("spectral").result()
         # Assert that actuator was moved according to mode given
         self.assertEqual(self.lenswitch.position.value,
                          self.find_dict_key(self.lenswitch, sparc2_modes["spectral-dedicated"]))
-        self.assertEqual(self.slit.position.value,
-                         self.find_dict_key(self.slit, sparc2_modes["spectral-dedicated"]))
-        self.assertEqual(self.spec_det_sel.position.value,
-                         sparc2_modes["spectral-dedicated"][1]["spec-det-selector"])
         self.assertTrue(self.specgraph.position.value['grating'] != 'mirror')
 
         # setting mirror-align
-        self.optmngr.setPath("mirror-align")
+        self.optmngr.setPath("mirror-align").result()
         # Assert that actuator was moved according to mode given
         self.assertEqual(self.lenswitch.position.value,
                          self.find_dict_key(self.lenswitch, sparc2_modes["mirror-align"]))
@@ -500,7 +491,7 @@ class Sparc2PathTestCase(unittest.TestCase):
                         (0, self.specgraph.position.value['wavelength']))
 
         # setting chamber-view
-        self.optmngr.setPath("chamber-view")
+        self.optmngr.setPath("chamber-view").result()
         # Assert that actuator was moved according to mode given
         self.assertEqual(self.lenswitch.position.value,
                          self.find_dict_key(self.lenswitch, sparc2_modes["chamber-view"]))
@@ -513,7 +504,7 @@ class Sparc2PathTestCase(unittest.TestCase):
                         (0, self.specgraph.position.value['wavelength']))
 
         # setting spec-focus
-        self.optmngr.setPath("spec-focus")
+        self.optmngr.setPath("spec-focus").result()
         # Assert that actuator was moved according to mode given
         self.assertEqual(self.lenswitch.position.value,
                          self.find_dict_key(self.lenswitch, sparc2_modes["spec-focus"]))
@@ -611,7 +602,7 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
         Test setting mode that does not exist
         """
         with self.assertRaises(ValueError):
-            self.optmngr.setPath("ErrorMode")
+            self.optmngr.setPath("ErrorMode").result()
 
     # @skip("simple")
     def test_set_path(self):
@@ -621,7 +612,7 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
         sparc2_modes = path.SPARC2_MODES
 
         # setting ar
-        self.optmngr.setPath("ar")
+        self.optmngr.setPath("ar").result()
         # Assert that actuator was moved according to mode given
         self.assertEqual(self.lenswitch.position.value,
                          self.find_dict_key(self.lenswitch, sparc2_modes["ar"]))
@@ -634,7 +625,7 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
                         ['grating']) or (0, self.specgraph.position.value['wavelength']))
 
         # setting spectral
-        self.optmngr.setPath("spectral-integrated")
+        self.optmngr.setPath("spectral-integrated").result()
         # Assert that actuator was moved according to mode given
         self.assertEqual(self.lenswitch.position.value,
                          self.find_dict_key(self.lenswitch, sparc2_modes["spectral-integrated"]))
@@ -644,29 +635,19 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
                          sparc2_modes["spectral-integrated"][1]["spec-det-selector"])
         self.assertTrue(self.specgraph.position.value['grating'] != 'mirror')
 
-        self.optmngr.setPath("spectral-dedicated")
+        self.optmngr.setPath("spectral-dedicated").result()
         # Assert that actuator was moved according to mode given
         self.assertEqual(self.lenswitch.position.value,
                          self.find_dict_key(self.lenswitch, sparc2_modes["spectral-dedicated"]))
-        self.assertEqual(self.slit.position.value, self.find_dict_key(self.slit,
-                                                                      sparc2_modes["spectral-dedicated"]))
-        self.assertEqual(self.spec_det_sel.position.value,
-                         sparc2_modes["spectral-dedicated"][1]["spec-det-selector"])
-        self.assertTrue(self.specgraph.position.value['grating'] != 'mirror')
 
         # spectral should be a shortcut to spectral-dedicated
-        self.optmngr.setPath("spectral")
+        self.optmngr.setPath("spectral").result()
         # Assert that actuator was moved according to mode given
         self.assertEqual(self.lenswitch.position.value,
                          self.find_dict_key(self.lenswitch, sparc2_modes["spectral-dedicated"]))
-        self.assertEqual(self.slit.position.value,
-                         self.find_dict_key(self.slit, sparc2_modes["spectral-dedicated"]))
-        self.assertEqual(self.spec_det_sel.position.value,
-                         sparc2_modes["spectral-dedicated"][1]["spec-det-selector"])
-        self.assertTrue(self.specgraph.position.value['grating'] != 'mirror')
 
         # setting mirror-align
-        self.optmngr.setPath("mirror-align")
+        self.optmngr.setPath("mirror-align").result()
         # Assert that actuator was moved according to mode given
         self.assertEqual(self.lenswitch.position.value,
                          self.find_dict_key(self.lenswitch, sparc2_modes["mirror-align"]))
@@ -679,7 +660,7 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
                         (0, self.specgraph.position.value['wavelength']))
 
         # setting chamber-view
-        self.optmngr.setPath("chamber-view")
+        self.optmngr.setPath("chamber-view").result()
         # Assert that actuator was moved according to mode given
         self.assertEqual(self.lenswitch.position.value,
                          self.find_dict_key(self.lenswitch, sparc2_modes["chamber-view"]))
@@ -692,7 +673,7 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
                         (0, self.specgraph.position.value['wavelength']))
 
         # setting spec-focus
-        self.optmngr.setPath("spec-focus")
+        self.optmngr.setPath("spec-focus").result()
         # Assert that actuator was moved according to mode given
         self.assertEqual(self.lenswitch.position.value,
                          self.find_dict_key(self.lenswitch, sparc2_modes["spec-focus"]))
