@@ -186,6 +186,9 @@ HW_SETTINGS_CONFIG = {
             ("readoutRate", {}),
             ("temperature", {}),
             # what we don't want to display:
+            ("translation", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
             ("targetTemperature", {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
@@ -232,10 +235,6 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
             {
                 "control_type": odemis.gui.CONTROL_READONLY,
             },
-            # TODO: show the temperature in the alignment tab?
-            "temperature": {
-                "control_type": odemis.gui.CONTROL_NONE,
-            },
         },
         "e-beam":
         {
@@ -255,9 +254,6 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
             {
                 "control_type": odemis.gui.CONTROL_READONLY,
             },
-            "temperature": {
-                "control_type": odemis.gui.CONTROL_NONE,
-            },
         },
     },
     "sparc2": {
@@ -271,9 +267,6 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
             "resolution":  # Read-only because cropping is useless for the user
             {
                 "control_type": odemis.gui.CONTROL_READONLY,
-            },
-            "temperature": {
-                "control_type": odemis.gui.CONTROL_NONE,
             },
         },
         "e-beam":
@@ -293,9 +286,6 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
             "resolution":  # Read-only it shouldn't be changed by the user
             {
                 "control_type": odemis.gui.CONTROL_READONLY,
-            },
-            "temperature": {
-                "control_type": odemis.gui.CONTROL_NONE,
             },
         },
     },
