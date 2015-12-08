@@ -857,8 +857,10 @@ class ChamberTab(Tab):
         tab_data = guimod.ChamberGUIData(main_data)
         super(ChamberTab, self).__init__(name, button, panel, main_frame, tab_data)
 
-        # futures to handle the move
-        self._move_futures = ()
+        # future to handle the move
+        self._move_future = model.InstantaneousFuture()
+        # list of moves that still need to be executed, FIFO
+        self._next_moves = collections.deque()  # tuple callable, arg
 
         # Position to where to go when requested to be engaged
         try:
@@ -1000,6 +1002,10 @@ class ChamberTab(Tab):
             # just got unpressed -> that means we need to stop the current move
             return self._on_cancel(evt)
 
+        if self._next_moves:
+            logging.warning("Going to move mirror while still %d moves scheduled",
+                            len(self._next_moves))
+
         # Decide which move to do
         # Note: s axis can only be moved when near engaged pos. So:
         #  * when parking/referencing => move s first, then l
@@ -1008,16 +1014,15 @@ class ChamberTab(Tab):
         mirror = self.tab_data_model.main.mirror
         if mstate == MIRROR_PARKED:
             # => Engage
-            f1 = mirror.moveAbs({"l": self._pos_engaged["l"]})
-            f2 = mirror.moveAbs({"s": self._pos_engaged["s"]})
-            self._move_futures = (f1, f2)
+            f1 = (mirror.moveAbs, {"l": self._pos_engaged["l"]})
+            f2 = (mirror.moveAbs, {"s": self._pos_engaged["s"]})
+            moves = (f1, f2)
             btn_text = "ENGAGING MIRROR"
         elif mstate == MIRROR_NOT_REFD:
             # => Reference
-            # f = mirror.reference(set(MIRROR_POS_PARKED.keys()))
-            f1 = mirror.reference({"s"})
-            f2 = mirror.reference({"l"})
-            self._move_futures = (f1, f2)
+            f1 = (mirror.reference, {"s"})
+            f2 = (mirror.reference, {"l"})
+            moves = (f1, f2)
             btn_text = "PARKING MIRROR"
             # position doesn't update during referencing, so just pulse
             self._pulse_timer.Start(250.0)  # 4 Hz
@@ -1026,56 +1031,61 @@ class ChamberTab(Tab):
             # Use standard move to show the progress of the mirror position, but
             # finish by (normally fast) referencing to be sure it really moved
             # to the parking position.
-            f1 = mirror.moveAbs({"s": MIRROR_POS_PARKED["s"]})
-            f2 = mirror.moveAbs({"l": MIRROR_POS_PARKED["l"]})
-            f3 = mirror.reference({"s"})
-            f4 = mirror.reference({"l"})
-            self._move_futures = (f1, f2, f3, f4)
+            f1 = (mirror.moveAbs, {"s": MIRROR_POS_PARKED["s"]})
+            f2 = (mirror.moveAbs, {"l": MIRROR_POS_PARKED["l"]})
+            f3 = (mirror.reference, {"s"})
+            f4 = (mirror.reference, {"l"})
+            moves = (f1, f2, f3, f4)
             btn_text = "PARKING MIRROR"
 
-        self._move_futures[-1].add_done_callback(self._on_move_done)
+        self._next_moves.extend(moves)
+        c, a = self._next_moves.popleft()
+        self._move_future = c(a)
+        self._move_future.add_done_callback(self._on_move_done)
 
         self.tab_data_model.main.is_acquiring.value = True
 
         self.panel.btn_cancel.Enable()
         self.panel.btn_switch_mirror.SetLabel(btn_text)
 
+    def _on_move_done(self, future):
+        """
+        Called when one (sub) move is over, (either successfully or not)
+        """
+        try:
+            future.result()
+        except Exception as ex:
+            # Something went wrong, don't go any further
+            if not isinstance(ex, CancelledError):
+                logging.warning("Failed to move mirror: %s", ex)
+            logging.debug("Cancelling next %d moves", len(self._next_moves))
+            self._next_moves.clear()
+            self._on_full_move_end()
+
+        # Schedule next sub-move
+        try:
+            c, a = self._next_moves.popleft()
+        except IndexError:  # We're done!
+            self._on_full_move_end()
+        else:
+            self._move_future = c(a)
+            self._move_future.add_done_callback(self._on_move_done)
+
     def _on_cancel(self, evt):
         """
         Called when the cancel button is pressed, or the move button is untoggled
         """
-        if not self._move_futures:
-            return
-
-        # Cancel the last one first, to be sure it'll not start after cancelling
-        # the first ones.
-        cancelled = False
-        for f in reversed(self._move_futures):
-            try:
-                cancelled |= f.cancel()
-            except Exception:
-                logging.exception("Failed to cancel mirror move")
-
-        # At least one of the cancellation should have succeeded, unless the
-        # user happens to attempt cancelling at at the very end, when
-        # the move is actually already completed.
-        if not cancelled:
-            logging.info("Failed to cancel the mirror move")
-        else:
-            logging.info("Mirror move cancelled")
+        # Remove any other queued moves
+        self._next_moves.clear()
+        # Cancel the running move
+        self._move_future.cancel()
+        logging.info("Mirror move cancelled")
 
     @call_in_wx_main
-    def _on_move_done(self, future):
+    def _on_full_move_end(self):
         """
-        Called when a move is over (either successfully or not)
+        Called when a complete move (L+S) is over (either successfully or not)
         """
-        try:
-            future.result()
-        except CancelledError:
-            pass
-        except Exception as ex:
-            logging.warning("Failed to move mirror: %s", ex)
-
         # In case it was referencing
         self._pulse_timer.Stop()
 
