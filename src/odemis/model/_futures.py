@@ -15,13 +15,19 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
+
 import collections
 from concurrent import futures
 from concurrent.futures._base import CANCELLED, CANCELLED_AND_NOTIFIED, FINISHED, \
     PENDING, RUNNING
 from concurrent.futures.thread import ThreadPoolExecutor, _WorkItem
 import logging
+import threading
 import time
+try:
+    import queue
+except ImportError:
+    import Queue as queue
 
 
 class CancellableThreadPoolExecutor(ThreadPoolExecutor):
@@ -65,6 +71,105 @@ class CancellableThreadPoolExecutor(ThreadPoolExecutor):
         try:
             self._queue.remove(future)
         except ValueError:
+            # can happen if it was cancelled
+            pass
+
+    def cancel(self):
+        """
+        Cancels all the tasks still in the work queue, if they can be cancelled
+        Returns when all the tasks have been cancelled or are done.
+        """
+        logging.debug("Cancelling all the %d futures in queue", len(self._queue))
+        uncancellables = []
+        # cancel one task at a time until there is nothing in the queue
+        while True:
+            try:
+                # Start with the last one added as it's the most likely to be cancellable
+                f = self._queue.pop()
+            except IndexError:
+                break
+            logging.debug("Cancelling %s", f)
+            if not f.cancel():
+                uncancellables.append(f)
+
+        # wait for the non cancellable tasks to finish
+        if uncancellables:
+            logging.debug("Waiting for %d futures to finish", len(uncancellables))
+        for f in uncancellables:
+            try:
+                f.result()
+            except Exception:
+                # the task raised an exception => we don't care
+                pass
+
+
+class ParallelThreadPoolExecutor(ThreadPoolExecutor):
+    """
+    An extended ThreadPoolExecutor that can execute multiple jobs in parallel
+    -if not on the same set.
+    It also allows non standard Future to be created.
+    """
+    def __init__(self):
+        # just a big number of workers
+        ThreadPoolExecutor.__init__(self, max_workers=100)
+        self._queue = collections.deque()  # thread-safe queue of futures
+        self._waiting_work = collections.deque()
+        # (dict future -> set) dependences that their tasks are currently being executed
+        self._sets_in_progress = {}
+        self._set_remove = threading.Lock()
+
+    def _schedule_work(self):
+        while self._waiting_work:
+            w, f, dependences = self._waiting_work.pop()
+            with self._set_remove:
+                for task, dep in self._sets_in_progress.iteritems():
+                    # do not schedule the task if its dependences set has an intersection
+                    # with some of the ongoing tasks
+                    if set.intersection(dep, dependences):
+                        # put it back to the queue
+                        self._waiting_work.append((w, f, dependences))
+                        return
+                else:
+                    self._work_queue.put(w)
+                    self._adjust_thread_count()
+                    self._sets_in_progress[id(f)] = dependences
+
+    def submitf(self, dependences, f, fn, *args, **kwargs):
+        """
+        submit a task, handled by the given fresh Future
+        dependences (set): set of dependences. Only schedule a task if no task running
+        has an intersection with the dependences.
+        f (Future): a newly created Future
+        fn (callable): the function to call
+        args, kwargs -> passed to fn
+        returns (Future): f
+        """
+#         logging.debug("queuing action %s with future %s", fn, f.__class__.__name__)
+        with self._shutdown_lock:
+            if self._shutdown:
+                raise RuntimeError('cannot schedule new futures after shutdown')
+
+            w = _WorkItem(f, fn, args, kwargs)
+            self._waiting_work.appendleft((w, f, dependences))
+            self._schedule_work()
+
+            # add to the queue and track the task
+            self._queue.append(f)
+            f.add_done_callback(self._on_done)
+        return f
+
+    def submit(self, dependences, fn, *args, **kwargs):
+        return self.submitf(dependences, futures.Future(), fn, *args, **kwargs)
+    submit.__doc__ = ThreadPoolExecutor.submit.__doc__
+
+    def _on_done(self, future):
+        # task is over
+        try:
+            self._queue.remove(future)
+            with self._set_remove:
+                del self._sets_in_progress[id(future)]
+            self._schedule_work()
+        except (ValueError, KeyError):
             # can happen if it was cancelled
             pass
 
