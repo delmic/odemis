@@ -23,9 +23,8 @@ fi
 
 
 # Compress in background
-echo zip -j $fn /var/log/odemis.log $HOME/odemis-gui.log "${MODEL[@]}" /etc/odemis.conf &
+zip -j $fn /var/log/odemis.log $HOME/odemis-gui.log "${MODEL[@]}" /etc/odemis.conf &
 
-exit
 
 # Take a screenshot if the GUI is there
 if pgrep -f $GUI > /dev/null; then
