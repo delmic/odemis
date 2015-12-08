@@ -1135,8 +1135,7 @@ class ChamberTab(Tab):
 
         # If there is an actuator, disable the lens
         if show:
-            threading.Thread(target=self.tab_data_model.main.opm.setPath,
-                             args=("chamber-view",)).start()
+            self.tab_data_model.main.opm.setPath("chamber-view")
             # Update if the mirror has been aligned
             self._pos_engaged = self.tab_data_model.main.mirror.getMetadata()[model.MD_FAV_POS_ACTIVE]
             # Just in case the mirror was moved from another client (eg, cli)
@@ -2266,8 +2265,7 @@ class SparcAlignTab(Tab):
         # This is blocking on the hardware => run in a separate thread
         # TODO: Probably better is that setPath returns a future (and cancel it
         # when hiding the panel)
-        threading.Thread(target=self.tab_data_model.main.opm.setPath,
-                         args=(mode,)).start()
+        self.tab_data_model.main.opm.setPath(mode)
 
     @call_in_wx_main
     def _on_spec_count(self, scount):
@@ -2777,7 +2775,7 @@ class Sparc2AlignTab(Tab):
 
         # This is blocking on the hardware => run in a separate thread
         op_mode = self._mode_to_opm[mode]
-        threading.Thread(target=self._opm_runner, args=(op_mode,)).start()
+        f = main.opm.setPath(op_mode)
 
         # Focused view must be updated before the stream to play is changed,
         # as the scheduler automatically adds the stream to the current view.
@@ -2819,28 +2817,25 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_focus.Enable(False)
             self.panel.pnl_moi_settings.Show(False)
             self.panel.pnl_fibaligner.Enable(True)
-            # Disbale the buttons until the fiber box is ready
+            # Disable the buttons until the fiber box is ready
             self.panel.btn_m_fibaligner_x.Enable(False)
             self.panel.btn_p_fibaligner_x.Enable(False)
             self.panel.btn_m_fibaligner_y.Enable(False)
             self.panel.btn_p_fibaligner_y.Enable(False)
+            f.add_done_callback(self._on_fibalign_done)
         else:
             raise ValueError("Unknown alignment mode %s!" % mode)
 
-    def _opm_runner(self, mode):
+    def _on_fibalign_done(self, f):
         """
-        Thread that runs the optical path manager setPath.
-        The main goal is to be able to do additional command once it's over
+        Called when the optical path mode is fiber-align and ready
         """
-        main = self.tab_data_model.main
-        main.opm.setPath(mode)
         # Make sure the user can move the X axis only once at ACTIVE position
-        if mode == "fiber-align":
-            main.spec_sel.position.subscribe(self._onFiberPos)
-            self.panel.btn_m_fibaligner_x.Enable(True)
-            self.panel.btn_p_fibaligner_x.Enable(True)
-            self.panel.btn_m_fibaligner_y.Enable(True)
-            self.panel.btn_p_fibaligner_y.Enable(True)
+        self.tab_data_model.main.spec_sel.position.subscribe(self._onFiberPos)
+        self.panel.btn_m_fibaligner_x.Enable(True)
+        self.panel.btn_p_fibaligner_x.Enable(True)
+        self.panel.btn_m_fibaligner_y.Enable(True)
+        self.panel.btn_p_fibaligner_y.Enable(True)
 
     def _on_ccd_stream_play(self, _):
         """
@@ -2882,7 +2877,7 @@ class Sparc2AlignTab(Tab):
             bl = self.tab_data_model.main.brightlight
             bl.power.value = bl.power.range[1]
             s.should_update.value = True  # the stream will set all the emissions to 1
-            self.tab_data_model.main.opm.setPath("spec-focus")
+            self.tab_data_model.main.opm.setPath("spec-focus").result()
             self._autofocus_f = AutoFocus(s.detector, s.emitter, s.focuser)
             self._autofocus_f.add_done_callback(self._on_autofocus_done)
 

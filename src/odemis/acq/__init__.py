@@ -214,7 +214,7 @@ class AcquisitionTask(object):
                     try:
                         guess_mode = self._opm.guessMode(s)
                         logging.info("setting optical path %s for stream %s", guess_mode, s.name.value)
-                        self._opm.setPath(guess_mode)
+                        self._opm.setPath(guess_mode).result()
                     except LookupError:
                         logging.info("No mode can be inferred for the given stream")
                     except IOError:
