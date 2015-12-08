@@ -162,6 +162,8 @@ class TMCLController(model.Actuator):
             self._name_to_axis[n] = i
 
         self._refswitch = {} # int -> None or int: axis number -> out port to turn on the ref switch
+        self._active_refswitchs = set()  # int: axes which currently need the ref switch on
+        self._refswitch_lock = threading.Lock()  # to be taken when touching ref switchs
         for a, s in (refswitch or {}).items():
             if not (0 <= s <= 7):
                 raise ValueError("Output port for axis %s is must be between 0 and 7 (but is %s)" % (a, s))
@@ -757,6 +759,8 @@ class TMCLController(model.Actuator):
         return (bool): False if reference is not active, True if reference is active.
         """
         val = self.SendInstruction(13, 2, axis) # 2 = status
+        # The value seems to go from 1 -> 9 corresponding to the referencing state.
+        # After cancelling, it becomes 15 (but not sure when it becomes 0 again)
         return (val != 0)
 
     def _isOnTarget(self, axis):
@@ -1049,6 +1053,45 @@ class TMCLController(model.Actuator):
             gparam = 128 + axis
             self.SetGlobalParam(2, gparam, 3)  # 3 => indicate cancelled
 
+    def _requestRefSwitch(self, axis):
+        refswitch = self._refswitch.get(axis)
+        if refswitch is None:
+            return
+
+        with self._refswitch_lock:
+            self._active_refswitchs.add(axis)
+            logging.debug("Activating ref switch power line %d (for axis %d)", refswitch, axis)
+            # Turn on the ref switch (even if it was already on)
+            self.SetIO(2, refswitch, 1)
+
+    def _releaseRefSwitch(self, axis):
+        """
+        Indicate that an axis doesn't need its reference switch anymore.
+        It's ok to call this function even if the axis was already released.
+        If other axes use the same reference switch (power line) then it will
+        stay on.
+        axis (int): the axis for which to release the ref switch
+        """
+        refswitch = self._refswitch.get(axis)
+        if refswitch is None:
+            return
+
+        with self._refswitch_lock:
+            self._active_refswitchs.discard(axis)
+
+            # Turn off the ref switch only if no other axis use it
+            active = False
+            for a, r in self._refswitch.items():
+                if r == refswitch and a in self._active_refswitchs:
+                    active = True
+                    break
+
+            if not active:
+                logging.debug("Disabling ref switch power line %d", refswitch)
+                self.SetIO(2, refswitch, 0)
+            else:
+                logging.debug("Leaving ref switch power line %d active", refswitch)
+
     def _startReferencingStd(self, axis):
         """
         Start standard referencing procedure. The exact behaviour depends on the
@@ -1063,9 +1106,7 @@ class TMCLController(model.Actuator):
         if not self._isFullyPowered():
             raise IOError("Device is not powered, so axis %d cannot reference" % (axis,))
 
-        # Turn on the ref switch
-        if self._refswitch.get(axis) is not None:
-            self.SetIO(2, self._refswitch[axis], 1)
+        self._requestRefSwitch(axis)
         try:
             # Read the current reference switch value
             refmethod = self.GetAxisParam(axis, 193)
@@ -1080,9 +1121,7 @@ class TMCLController(model.Actuator):
 
             self.StartRefSearch(axis)
         except Exception:
-            # turn off the reference switch
-            if self._refswitch.get(axis) is not None:
-                self.SetIO(2, self._refswitch[axis], 0)
+            self._releaseRefSwitch(axis)
             raise
 
     def _waitReferencingStd(self, axis):
@@ -1115,9 +1154,7 @@ class TMCLController(model.Actuator):
             oldpos = self.GetAxisParam(axis, 197)
             logging.debug("Changing referencing position by %d", oldpos)
         finally:
-            # turn off the reference switch
-            if self._refswitch.get(axis) is not None:
-                self.SetIO(2, self._refswitch[axis], 0)
+            self._releaseRefSwitch(axis)
 
     def _cancelReferencingStd(self, axis):
         """
