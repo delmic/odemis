@@ -29,6 +29,9 @@ import math
 # a spectrum) by wrapping a DigitalCamera and a spectrograph (ie, actuator which
 # offers a wavelength dimension).
 
+NON_SPEC_MD = {model.MD_AR_POLE, model.MD_AR_FOCUS_DISTANCE, model.MD_AR_PARABOLA_F,
+               model.MD_AR_XMAX, model.MD_AR_HOLE_DIAMETER, model.MD_ROTATION,
+               model.MD_ROTATION_COR, model.MD_SHEAR, model.MD_SHEAR_COR}
 
 class CompositedSpectrometer(model.Detector):
     '''
@@ -288,6 +291,10 @@ class SpecDataFlow(model.DataFlow):
                     md[model.MD_WL_LIST] = wll
                 except KeyError:
                     logging.warning("Failed to compute correct WL_LIST metadata", exc_info=True)
+
+        # Remove non useful metadata
+        for k in NON_SPEC_MD:
+            data.metadata.pop(k, None)
 
         data.metadata.update(md)
         udata = self.component._transposeDAToUser(data)
