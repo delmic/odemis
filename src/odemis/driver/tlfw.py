@@ -103,10 +103,6 @@ class FW102c(model.Actuator):
 
         self.position = model.VigilantAttribute({"band": curpos}, readonly=True)
 
-        # TODO: MD_OUT_WL or MD_IN_WL depending on affect
-        self._metadata = {model.MD_FILTER_NAME: name,
-                          model.MD_OUT_WL: self._axes["band"].choices[curpos]}
-
     def getMetadata(self):
         return self._metadata
 
@@ -315,7 +311,6 @@ class FW102c(model.Actuator):
         move to the position and updates the metadata and position once it's over
         """
         self.SetPosition(pos)
-        self._metadata[model.MD_OUT_WL] = self._axes["band"].choices[pos]
         self._updatePosition()
 
     # high-level methods (interface)

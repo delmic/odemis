@@ -280,8 +280,7 @@ class MetadataUpdater(model.Component):
     def observeFilter(self, filter, comp):
         # update any affected component
         def updateOutWLRange(pos, fl=filter, comp=comp):
-            fl_md = fl.getMetadata()
-            wl_out = fl_md.get(model.MD_OUT_WL)
+            wl_out = fl.axes["band"].choices[fl.position.value["band"]]
             comp.updateMetadata({model.MD_OUT_WL: wl_out})
 
         filter.position.subscribe(updateOutWLRange, init=True)
