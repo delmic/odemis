@@ -293,9 +293,14 @@ def _add_image_info(group, dataset, image):
             # monochromator wavelength
             elif (model.MD_OUT_WL in image.metadata):
                 wl = image.metadata[model.MD_OUT_WL]
-                group["COffset"] = wl[0]
-                _h5svi_set_state(group["COffset"], ST_REPORTED)
-                group["DimensionScaleC"] = wl[1] - wl[0]  # m
+                if isinstance(wl, basestring):
+                    group["COffset"] = wl
+                    _h5svi_set_state(group["COffset"], ST_REPORTED)
+                    group["DimensionScaleC"] = wl
+                else:
+                    group["COffset"] = wl[0]
+                    _h5svi_set_state(group["COffset"], ST_REPORTED)
+                    group["DimensionScaleC"] = wl[1] - wl[0]  # m
             else:
                 wll = spectrum.get_wavelength_per_pixel(image)
                 # list or polynomial of degree > 2 => store the values of each
@@ -376,12 +381,15 @@ def _read_image_info(group):
                 if dim[0].shape == (dataset.shape[i],):
                     md[model.MD_WL_LIST] = map(float, dim[0][...].tolist())
                 elif dim[0].shape == ():
-                    pn = [float(group["COffset"][()]),
-                          float(dim[0][()])]
-                    if dataset.shape[i] == 1:
-                        md[model.MD_OUT_WL] = (pn[0], pn[0] + pn[1])
+                    if isinstance(group["COffset"], basestring):
+                        md[model.MD_OUT_WL] = group["COffset"]
                     else:
-                        md[model.MD_WL_POLYNOMIAL] = pn
+                        pn = [float(group["COffset"][()]),
+                              float(dim[0][()])]
+                        if dataset.shape[i] == 1:
+                            md[model.MD_OUT_WL] = (pn[0], pn[0] + pn[1])
+                        else:
+                            md[model.MD_WL_POLYNOMIAL] = pn
     except Exception:
         pass
 
@@ -475,12 +483,15 @@ def _parse_physical_data(pdgroup, da):
 
         try:
             ds = pdgroup["EmissionWavelength"]
-            ewl = float(ds[i]) # in m
             state = _h5svi_get_state(ds)
             if state and state[i] == ST_INVALID:
                 raise ValueError
-            if model.MD_OUT_WL not in md:  # could already be filled by C scale
-                md[model.MD_OUT_WL] = (ewl - h_width, ewl + h_width)
+            if isinstance(ds[i], basestring):
+                md[model.MD_OUT_WL] = ds[i]
+            else:
+                ewl = float(ds[i])  # in m
+                if model.MD_OUT_WL not in md:  # could already be filled by C scale
+                    md[model.MD_OUT_WL] = (ewl - h_width, ewl + h_width)
         except (KeyError, IndexError, ValueError):
             pass
 
@@ -672,7 +683,7 @@ def _add_image_metadata(group, image, mds):
     _h5svi_set_state(gp["ExcitationWavelength"], state)
 
     ewls = [md.get(model.MD_OUT_WL) for md in mds]
-    gp["EmissionWavelength"] = [1e-9 if v is None else fluo.get_center(v) for v in ewls] # in m
+    gp["EmissionWavelength"] = [1e-9 if v is None else v if isinstance(v, basestring) else fluo.get_center(v) for v in ewls]  # in m
     state = [ST_INVALID if v is None else ST_REPORTED for v in ewls]
     _h5svi_set_state(gp["EmissionWavelength"], state)
 

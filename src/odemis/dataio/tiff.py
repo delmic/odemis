@@ -537,13 +537,19 @@ def _updateMDFromOME(root, das, basename):
                 pass
 
             try:
-                owl = float(che.attrib["EmissionWavelength"]) * 1e-9 # nm -> m
-                if che.attrib["AcquisitionMode"] == "SpectralImaging":
-                    # Spectrum => on the whole data cube
-                    wl_list.append(owl)
+                if "EmissionWavelength" in che.attrib:
+                    owl = float(che.attrib["EmissionWavelength"]) * 1e-9 # nm -> m
+                    if che.attrib["AcquisitionMode"] == "SpectralImaging":
+                        # Spectrum => on the whole data cube
+                        wl_list.append(owl)
+                    else:
+                        # Fluorescence
+                        mdc[model.MD_OUT_WL] = (owl - 1e-9, owl + 1e-9)
                 else:
-                    # Fluorescence
-                    mdc[model.MD_OUT_WL] = (owl - 1e-9, owl + 1e-9)
+                    fl = che.find("Filter")
+                    type = fl.attrib["Type"]
+                    mdc[model.MD_OUT_WL] = type
+
             except (KeyError, ValueError):
                 pass
 
@@ -1137,8 +1143,13 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
 
             if model.MD_OUT_WL in da.metadata:
                 owl = da.metadata[model.MD_OUT_WL]
-                ewl = fluo.get_center(owl) * 1e9 # in nm
-                chan.attrib["EmissionWavelength"] = "%d" % round(ewl)
+                if isinstance(owl, basestring):
+                    filter = ET.SubElement(chan, "Filter", attrib={
+                                    "ID": "Filter:%d:%d" % (idnum, subid)})
+                    filter.attrib["Type"] = owl
+                else:
+                    ewl = fluo.get_center(owl) * 1e9 # in nm
+                    chan.attrib["EmissionWavelength"] = "%d" % round(ewl)
 
             if wl_list is not None and len(wl_list) > 0:
                 if model.MD_OUT_WL in da.metadata:
