@@ -62,8 +62,13 @@ class TestTiffIO(unittest.TestCase):
         dtype = numpy.uint16
         ldata = []
         num = 2
+        metadata = {
+                    model.MD_IN_WL: (500e-9, 520e-9),  # m
+                    }
+
+        # Add wavelength metadata just to group them
         for i in range(num):
-            a = model.DataArray(numpy.zeros(size[::-1], dtype))
+            a = model.DataArray(numpy.zeros(size[::-1], dtype), metadata)
             a[white[::-1]] = 124
             ldata.append(a)
 
@@ -99,8 +104,11 @@ class TestTiffIO(unittest.TestCase):
         dtype = numpy.uint16
         ldata = []
         num = 2
+        metadata = {
+                    model.MD_IN_WL: (500e-9, 520e-9),  # m
+                    }
         for i in range(num):
-            a = model.DataArray(numpy.zeros(size[::-1], dtype))
+            a = model.DataArray(numpy.zeros(size[::-1], dtype), metadata)
             a[white[::-1]] = 124
             ldata.append(a)
 
