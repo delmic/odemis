@@ -247,7 +247,11 @@ class MetadataUpdater(model.Component):
         self._onTerminate.append((light.emissions.unsubscribe, (updateInputWL,)))
 
     def observeSpectrograph(self, spectrograph, comp):
-        if comp.role != "monochromator":
+        if comp.role == "spectrometer":
+            # Currently, the spectrometers are special, and they automatically
+            # pick up the right metadata by having the spectrograph as child.
+            pass
+        elif comp.role != "monochromator":
             logging.warning("Does not know what to do with a spectrograph affecting a %s", comp.role)
             return
         if 'slit-monochromator' not in spectrograph.axes:

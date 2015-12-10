@@ -116,6 +116,8 @@ SPARC2_MODES = {
                 }),
             'chamber-view': ("ccd",  # Same as AR but SEM is disabled and a light may be used
                 {'lens-switch': {'x': 'on'},
+                 # TODO: check this now works
+                 # 'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'on'},
                  'spectrograph': {'grating': 'mirror'},
                  # TODO: focus should be independent from the other modes.

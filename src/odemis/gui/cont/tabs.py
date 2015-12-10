@@ -1424,6 +1424,8 @@ class AnalysisTab(Tab):
         ar_streams = [s for s in streams if isinstance(s, acqstream.ARStream)]
 
         # TODO: Move viewport related code to ViewPortController
+        # TODO: to support multiple (types of) streams (eg, AR+Spec+Spec), do
+        # this every time the streams are hidden/displayed.
         if spec_streams:
 
             # ########### Track pixel and line selection

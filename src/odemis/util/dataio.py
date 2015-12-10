@@ -39,6 +39,9 @@ def data_to_static_streams(data):
         if d.metadata.get(model.MD_DESCRIPTION) == "Anchor region":
             continue
 
+        # TODO: first guess based on the raw data, and then, if needed, try
+        # again, for each 3rd dim.
+
         # Streams only support 2D data (e.g., no multiple channels like RGB)
         # except for spectra which have a 3rd dimensions on dim 5.
         # So if that's the case => separate into one stream per channel
@@ -48,8 +51,11 @@ def data_to_static_streams(data):
             # TODO: be more clever to detect the type of stream
             if ((model.MD_WL_LIST in channel_data.metadata or
                  model.MD_WL_POLYNOMIAL in channel_data.metadata) and
-                (len(channel_data.shape) >= 5 and channel_data.shape[-5] > 1)
+                (len(channel_data.shape) >= 5 and channel_data.shape[-5] > 1) or
+               (len(channel_data.shape) >= 5 and channel_data.shape[-5] >= 5)
                ):
+                # Spectrum: either it's obvious based on metadata, or no metadata
+                # but lots of wavelengths, so no other way to display
                 name = channel_data.metadata.get(model.MD_DESCRIPTION, "Spectrum")
                 klass = stream.StaticSpectrumStream
             elif model.MD_AR_POLE in channel_data.metadata:

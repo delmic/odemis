@@ -1673,6 +1673,23 @@ class SparcStreamsController(StreamBarController):
                 logging.debug("Removing %s from repetition content subscriptions", s)
                 del self._repct_listeners[s]  # automatically unsubscribed
 
+    def _getAffectingSpectrograph(self, comp):
+        """
+        Find which spectrograph matters for the given spectrometer
+        comp (Component): name of the spectrometer
+        return (None or Component): the spectrograph corresponding to the spectrometer
+        """
+        cname = comp.name
+        main_data = self._main_data_model
+        for spg in (main_data.spectrograph, main_data.spectrograph_ded):
+            if spg is not None and cname in spg.affects.value:
+                return spg
+        else:
+            logging.warning("No spectrograph found affecting spectrometer %s", cname)
+            # spg should be None, but in case it's an error in the microscope file
+            # and actually, there is a spectrograph, then use that one
+            return main_data.spectrograph
+
     def addEBIC(self, **kwargs):
         # Need to use add_to_view=True to force only showing on the right
         # view (and not on the current view)
@@ -1803,6 +1820,7 @@ class SparcStreamsController(StreamBarController):
         """ Create a Spectrum stream and add to to all compatible viewports """
 
         main_data = self._main_data_model
+        spg = self._getAffectingSpectrograph(main_data.spectrometer)
         spec_stream = acqstream.SpectrumSettingsStream(
             "Spectrum",
             main_data.spectrometer,
@@ -1815,15 +1833,6 @@ class SparcStreamsController(StreamBarController):
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
         sem_spec_stream = acqstream.SEMSpectrumMDStream("SEM Spectrum", sem_stream, spec_stream)
-
-        # Find which spectrograph matters for that spectrometer
-        spec_name = main_data.spectrometer.name
-        for spg in (main_data.spectrograph, main_data.spectrograph_ded):
-            if spg is not None and spec_name in spg.affects.value:
-                break
-        else:
-            spg = None
-            logging.warning("No spectrograph found affecting spectrometer %s", spec_name)
 
         # No light filter for the spectrum stream: typically useless
         return self._addRepStream(spec_stream, sem_spec_stream,
@@ -1838,12 +1847,13 @@ class SparcStreamsController(StreamBarController):
         """ Create a Monochromator stream and add to to all compatible viewports """
 
         main_data = self._main_data_model
+        spg = self._getAffectingSpectrograph(main_data.spectrometer)
         monoch_stream = acqstream.MonochromatorSettingsStream(
             "Monochromator",
             main_data.monochromator,
             main_data.monochromator.data,
             main_data.ebeam,
-            main_data.spectrograph,
+            spg,
             emtvas={"dwellTime"},
             detvas=get_local_vas(main_data.monochromator),
         )
@@ -1855,10 +1865,10 @@ class SparcStreamsController(StreamBarController):
         # No light filter for the spectrum stream: typically useless
         return self._addRepStream(monoch_stream, sem_monoch_stream,
                                   vas=("repetition", "pixelSize"),
-                                  axes={"wavelength": main_data.spectrograph,
-                                        "grating": main_data.spectrograph,
-                                        "slit-in": main_data.spectrograph,
-                                        "slit-monochromator": main_data.spectrograph,
+                                  axes={"wavelength": spg,
+                                        "grating": spg,
+                                        "slit-in": spg,
+                                        "slit-monochromator": spg,
                                         },
                                   play=False
                                   )
