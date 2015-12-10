@@ -822,6 +822,11 @@ class FixedPositionsActuator(model.Actuator):
         self._position = {}
         self.position = model.VigilantAttribute({}, readonly=True)
 
+        # In case of filter wheel update metadata
+        if role == "cl-filter":
+            self._metadata = {model.MD_FILTER_NAME: name,
+                              model.MD_OUT_WL: None}  # will be updated along with the position
+
         logging.debug("Subscribing to position of child %s", child.name)
         child.position.subscribe(self._update_child_position, init=True)
 
@@ -875,6 +880,8 @@ class FixedPositionsActuator(model.Actuator):
         pos = {self._axis: nearest}
         logging.debug("reporting position %s", pos)
         self.position._set_value(pos, force_write=True)
+        if self.role == "cl-filter":
+            self._metadata[model.MD_OUT_WL] = self._axes[self._axis].choices[self.position.value[self._axis]]
 
     def _updateReferenced(self):
         """

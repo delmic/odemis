@@ -102,15 +102,15 @@ class MetadataUpdater(model.Component):
                 elif a.role == "lens":
                     # update the pixel size, mag, and pole position
                     self.observeLens(a, d)
-#                elif a.role == "filter":
-#                    # update the received light wavelength
-#                    self.observeFilter(a, d)
                 elif a.role == "light":
                     # update the emitted light wavelength
                     self.observeLight(a, d)
                 elif a.role == "spectrograph":
                     # update the output wavelength range
                     self.observeSpectrograph(a, d)
+                elif a.role in ("cl-filter", "filter"):
+                    # update the output wavelength range
+                    self.observeFilter(a, d)
                 else:
                     logging.debug("not observing %s which affects %s", a.name, d.name)
                     continue
@@ -262,6 +262,16 @@ class MetadataUpdater(model.Component):
 
         spectrograph.position.subscribe(updateOutWLRange, init=True)
         self._onTerminate.append((spectrograph.position.unsubscribe, (updateOutWLRange,)))
+
+    def observeFilter(self, filter, comp):
+        # update any affected component
+        def updateOutWLRange(pos, fl=filter, comp=comp):
+            fl_md = fl.getMetadata()
+            wl_out = fl_md.get(model.MD_OUT_WL)
+            comp.updateMetadata({model.MD_OUT_WL: wl_out})
+
+        filter.position.subscribe(updateOutWLRange, init=True)
+        self._onTerminate.append((filter.position.unsubscribe, (updateOutWLRange,)))
 
     def terminate(self):
         # call all the unsubscribes
