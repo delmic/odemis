@@ -193,6 +193,16 @@ class MetadataUpdater(model.Component):
             except AttributeError:
                 pass
 
+        if (hasattr(lens, "rotation")
+            and isinstance(lens.rotation, model.VigilantAttributeBase)):
+            def updateRotation(unused, lens=lens, comp=comp):
+                rot = lens.rotation.value
+                md = {model.MD_ROTATION: rot}
+                comp.updateMetadata(md)
+
+            lens.rotation.subscribe(updateRotation, init=True)
+            self._onTerminate.append((lens.rotation.unsubscribe, (updateRotation,)))
+
         # update metadata for VAs which can be directly copied
         md_va_list = (("numericalAperture", model.MD_LENS_NA),
                       ("refractiveIndex", model.MD_LENS_RI),
