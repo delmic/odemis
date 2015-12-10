@@ -22,15 +22,15 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
-from odemis.model import isasync
+import copy
 import logging
 import math
 from odemis import model
 from odemis.acq import stream
-from odemis.model import CancellableThreadPoolExecutor
+from odemis.model import CancellableThreadPoolExecutor, isasync
 
 
-GRATING_NOT_MIRROR = object()
+GRATING_NOT_MIRROR = ("NOTMIRROR",)  # A tuple, so that no grating position can be like this
 
 
 # Dict includes all the modes available and the corresponding component axis or
@@ -95,16 +95,30 @@ SPARC2_MODES = {
                 }),
             'spectral-integrated': ("spectrometer",
                 {'lens-switch': {'x': 'off'},
-                 'slit-in-big': {'x': 'off'},  # opened according to spec.slit-in
+                 'slit-in-big': {'x': 'off'},  # opened according to spg.slit-in
                  # TODO: need to restore slit-in to the current position?
                  'cl-det-selector': {'x': 'off'},
                  'spec-det-selector': {'rx': 0},
                  'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
                  'spectrograph': {'grating': GRATING_NOT_MIRROR},
                 }),
-            'spectral-dedicated': ("spectrometer",  # Only in case sp-ccd is present
+            'spectral-dedicated': ("spectrometer",
                 {'lens-switch': {'x': 'off'},
+                 'slit-in-big': {'x': 'off'},  # opened according to spg.slit-in
+                 'cl-det-selector': {'x': 'off'},
+                 'spec-det-selector': {'rx': 0},  # Will be updated based on affects
+                 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},  # Will be updated based on affects
+                 'spectrograph': {'grating': GRATING_NOT_MIRROR},
+                 # TODO: also 'spectrograph-dedicated' ? Normally it'd never have mirror grating anyway
+                }),
+            'monochromator': ("monochromator",
+                {'lens-switch': {'x': 'off'},
+                 'slit-in-big': {'x': 'off'},  # opened according to spg.slit-in
+                 'cl-det-selector': {'x': 'off'},
+                 # TODO
+                 'spec-det-selector': {'rx': math.radians(90)},
                  'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 'spectrograph': {'grating': GRATING_NOT_MIRROR},
                 }),
             'mirror-align': ("ccd",  # Also used for lens alignment
                 {'lens-switch': {'x': 'off'},
@@ -151,7 +165,7 @@ ALIGN_MODES = {'mirror-align', 'chamber-view', 'fiber-align', 'spec-focus'}
 def affectsGraph(microscope):
     """
     Creates a graph based on the affects lists of the microscope components.
-    returns (dict str->set)
+    returns (dict str->(set of str))
     """
     graph = {}
     for comp in model.getComponents():
@@ -171,22 +185,15 @@ class OpticalPathManager(object):
             handle all the components needed
         """
         self.microscope = microscope
+        self._graph = affectsGraph(self.microscope)
 
         # Use subset for modes guessed
         if microscope.role == "sparc2":
-            self.guessed = SPARC2_MODES.copy()
-            self._modes = SPARC2_MODES.copy()
+            self._modes = copy.deepcopy(SPARC2_MODES)
         elif microscope.role in ("sparc-simplex", "sparc"):
-            self.guessed = SPARC_MODES.copy()
-            self._modes = SPARC_MODES.copy()
+            self._modes = copy.deepcopy(SPARC_MODES)
         else:
             raise NotImplementedError("Microscope role '%s' unsupported", microscope.role)
-        # No stream should ever imply alignment mode
-        for m in ALIGN_MODES:
-            try:
-                del self.guessed[m]
-            except KeyError:
-                pass  # Mode to delete is just not there
 
         # keep list of already accessed components, to avoid creating new proxys
         # every time the mode changes
@@ -202,38 +209,88 @@ class OpticalPathManager(object):
                 logging.debug("Removing mode %s, which is not supported", m)
                 del self._modes[m]
 
+        # Create the guess information out of the mode
+        # TODO: just make it a dict comprole -> mode
+        self.guessed = self._modes.copy()
+        # No stream should ever imply alignment mode
+        for m in ALIGN_MODES:
+            try:
+                del self.guessed[m]
+            except KeyError:
+                pass  # Mode to delete is just not there
+
         # FIXME: Handle spectral modes for SPARC2 in a special way to
         # distinguish integrated from dedicated. For now we just remove
         # spectral dedicated if there is no sp-ccd component found,
-        if self.microscope.role == "sparc2":
-            for comp in model.getComponents():
-                if comp.role == "sp-ccd":
-                    for check_comp in model.getComponents():
-                        # if (comp.name in check_comp.affects.value) and (check_comp.role == "spec-det-selector"):
-                        if (check_comp.role == "spec-det-selector") and self.isAffected(check_comp.name, comp.name):
-                            # if sp-ccd is affected by the spec-det-selector then spec-selector should always
-                            # be deactivated, since it means there is no external spectrograph
-                            for key_mode in self.guessed.keys():
-                                try:
-                                    self.guessed[key_mode][1]["spec-selector"]["x"] = "MD:" + model.MD_FAV_POS_DEACTIVE
-                                except KeyError:
-                                    # spec-selector just not existing in this mode
-                                    continue
-                            break
-                    else:
-                        for key_mode in self.guessed.keys():
-                            try:
-                                self.guessed[key_mode][1]["spec-det-selector"]["rx"] = 0
-                            except KeyError:
-                                # spec-det-selector just not existing in this mode
-                                continue
-                    self.guessed['spectral'] = self.guessed["spectral-dedicated"]
-                    self._modes['spectral'] = self._modes["spectral-dedicated"]
-                    break
-            else:
+        try:
+            spec = self._getComponent("spectrometer")
+        except LookupError:
+            spec = None
+        if self.microscope.role == "sparc2" and spec:
+            try:
+                spccd = self._getComponent("sp-ccd")
+            except LookupError:
+                # No sp-ccd => use the normal ccd == integrated
+                logging.debug("Will use spectral-integrated mode")
                 del self.guessed["spectral-dedicated"]
                 self.guessed['spectral'] = self.guessed['spectral-integrated']
                 self._modes['spectral'] = self._modes["spectral-integrated"]
+            else:
+                # sp-ccd => Use dedicated
+                del self.guessed["spectral-integrated"]
+                self.guessed['spectral'] = self.guessed["spectral-dedicated"]
+                self._modes['spectral'] = self._modes["spectral-dedicated"]
+
+                # Still need find out which spectrograph it uses (if there are
+                # multiple spectrographs).
+                try:
+                    spg = self._getComponent("spectrograph")
+                except LookupError:
+                    spg = None
+                try:
+                    spgded = self._getComponent("spectrograph-dedicated")
+                except LookupError:
+                    spgded = None
+
+                if spgded and self.affects(spgded.name, spec.name):
+                    # Using the dedicated spectrograph
+                    logging.debug("Will use spectral-dedicated mode with dedicated spectrograph")
+                    # => spec-selector should be set to MD_FAV_POS_ACTIVE
+                    # => spec-det-selector = 0 (first output of dedicated)
+                    self._modes['spectral'][1]["spec-selector"]["x"] = "MD:" + model.MD_FAV_POS_ACTIVE
+                    self._modes['spectral'][1]["spec-det-selector"]["rx"] = 0
+                elif spg:
+                    # It's using the spectrograph
+                    logging.debug("Will use spectral-dedicated mode with integrated spectrograph")
+                    # => spec-selector should be set to MD_FAV_POS_DEACTIVE
+                    # => spec-det-selector = 90° (second output of spg)
+                    if not self.affects(spg.name, spec.name):
+                        logging.warning("Spectrograph doesn't affect spectrometer, but will assume it does")
+                    self._modes['spectral'][1]["spec-selector"]["x"] = "MD:" + model.MD_FAV_POS_DEACTIVE
+                    self._modes['spectral'][1]["spec-det-selector"]["rx"] = math.radians(90)
+                else:
+                    logging.warning("No spectrograph while there is a spectrometer")
+
+                # TODO: also update monochromator?
+
+            # Remove the moves that don't affects the detector
+            # TODO: do this for _all_ modes
+            for mode in ('spectral', 'monochromator'):
+                if mode in self._modes:
+                    det_role = self._modes[mode][0]
+                    det = self._getComponent(det_role)
+                    modeconf = self._modes[mode][1]
+                    for act_role in modeconf.keys():
+                        try:
+                            act = self._getComponent(act_role)
+                        except LookupError:
+                            # TODO: just remove that move too?
+                            logging.debug("Failed to find component %s, skipping it", act_role)
+                            continue
+                        if not self.affects(act.name, det.name):
+                            logging.debug("Actuator %s doesn't affect %s, so removing it from mode %s",
+                                          act_role, det_role, mode)
+                            del modeconf[act_role]
 
         # will take care of executing setPath asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1)
@@ -400,21 +457,22 @@ class OpticalPathManager(object):
                 LookupError if no mode can be inferred for the given stream
                 IOError if given object is not a stream
         """
-        # Handle multiple detector streams
-        if isinstance(guess_stream, stream.Stream):
-            if isinstance(guess_stream, stream.MultipleDetectorStream):
-                for st in guess_stream.streams:
-                    for mode, conf in self.guessed.items():
-                        if conf[0] == st.detector.role:
-                            return mode
-            else:
-                for mode, conf in self.guessed.items():
-                    if conf[0] == guess_stream.detector.role:
-                        return mode
-            # In case no mode was found yet
-            raise LookupError("No mode can be inferred for the given stream")
-        else:
+        if not isinstance(guess_stream, stream.Stream):
             raise IOError("Given object is not a stream")
+
+        # Handle multiple detector streams
+        if isinstance(guess_stream, stream.MultipleDetectorStream):
+            for st in guess_stream.streams:
+                try:
+                    return self.guessMode(st)
+                except LookupError:
+                    pass
+        else:
+            for mode, conf in self.guessed.items():
+                if conf[0] == guess_stream.detector.role:
+                    return mode
+        # In case no mode was found yet
+        raise LookupError("No mode can be inferred for the given stream")
 
     def findNonMirror(self, choices):
         """
@@ -437,12 +495,11 @@ class OpticalPathManager(object):
         except KeyError:
             raise KeyError("Metadata %s does not exist in component %s" % (md_name, comp.name))
 
-    def isAffected(self, affecting, affected):
+    def affects(self, affecting, affected):
         """
         Returns True if "affecting" component affects -directly of indirectly-
         the "affected" component
         """
-        self._graph = affectsGraph(self.microscope)
         path = self.findPath(affecting, affected)
         if path is None:
             return False

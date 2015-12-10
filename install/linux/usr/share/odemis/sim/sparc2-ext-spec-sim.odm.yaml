@@ -120,6 +120,9 @@ SPARC2: {
         device: "fake",
         slits: {1: "slit-in", # INPUT_SIDE
         },
+        bands: { # The filters in the filter-wheel
+            6: "pass-through"
+        },
         fstepsize: 10.9e-6, # m, size of one focus step
     },
     affects: ["Camera"],
@@ -266,7 +269,7 @@ SPARC2: {
             0.0012: "off", # opening based on the small slit
         },
     },
-    affects: ["Camera", "Spectral Camera", "Spectrometer"],
+    affects: ["Camera"],
 }
 
 # Note that the next two components actually move the _same_ axis!
