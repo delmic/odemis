@@ -539,7 +539,7 @@ def _updateMDFromOME(root, das, basename):
             try:
                 if "EmissionWavelength" in che.attrib:
                     owl = float(che.attrib["EmissionWavelength"]) * 1e-9 # nm -> m
-                    if che.attrib["AcquisitionMode"] == "SpectralImaging":
+                    if ("AcquisitionMode" in che.attrib) and (che.attrib["AcquisitionMode"] == "SpectralImaging"):
                         # Spectrum => on the whole data cube
                         wl_list.append(owl)
                     else:
@@ -547,8 +547,9 @@ def _updateMDFromOME(root, das, basename):
                         mdc[model.MD_OUT_WL] = (owl - 1e-9, owl + 1e-9)
                 else:
                     fl = che.find("Filter")
-                    type = fl.attrib["Type"]
-                    mdc[model.MD_OUT_WL] = type
+                    if fl:
+                        type = fl.attrib["Type"]
+                        mdc[model.MD_OUT_WL] = type
 
             except (KeyError, ValueError):
                 pass
