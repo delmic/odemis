@@ -476,8 +476,8 @@ class Shamrock(model.Actuator):
     # computed
     def EepromGetOpticalParams(self):
         """
-        Returns (tuple of 3 floats): Focal Length (m), Angular Deviation (degree) and
-           Focal Tilt (degree) from the Shamrock device.
+        Returns (tuple of 3 floats): Focal Length (m), Angular Deviation (rad) and
+           Focal Tilt (rad) from the Shamrock device.
         """
         FocalLength = c_float()
         AngularDeviation = c_float()
@@ -485,7 +485,7 @@ class Shamrock(model.Actuator):
         self._dll.ShamrockEepromGetOpticalParams(self._device,
                  byref(FocalLength), byref(AngularDeviation), byref(FocalTilt))
 
-        return FocalLength.value, AngularDeviation.value, FocalTilt.value
+        return FocalLength.value, math.radians(AngularDeviation.value), math.radians(FocalTilt.value)
 
     def SetGrating(self, grating):
         """
@@ -642,7 +642,6 @@ class Shamrock(model.Actuator):
         # move is currently happening.
         with self._hw_access:
             self._dll.ShamrockGetCalibration(self._device, CalibrationValues, npixels)
-        # FIXME: still seems to hang, even with hw access lock
         logging.debug("Calibration info returned")
         # Note: it just applies the polynomial, so you can end up with negative
         # values => clamp them to 0.
@@ -660,6 +659,7 @@ class Shamrock(model.Actuator):
     def GetCCDLimits(self, port):
         """
         Gets the upper and lower accessible wavelength through the port.
+        port (int)
         return (float, float): low/high wavelength in m
         """
         low = c_float()
@@ -812,7 +812,7 @@ class Shamrock(model.Actuator):
         with self._hw_access:
             self._dll.ShamrockSetShutter(self._device, mode)
 
-    def ShamrockGetShutter(self):
+    def GetShutter(self):
         mode = c_int()
 
         with self._hw_access:
@@ -974,10 +974,46 @@ class Shamrock(model.Actuator):
         # or check all the clients handle this corner case well.
         calib = self.GetCalibration(npixels)
         if calib[-1] < 1e-9:
-            logging.info("Calibration data doesn't seem valid (cw = %g): %s",
-                         self.position.value["wavelength"], calib)
-            return []
+            logging.error("Calibration data doesn't seem valid, will use internal one (cw = %g): %s",
+                          self.position.value["wavelength"], calib)
+            return self._FallbackGetPixelToWavelength(npixels, pxs)
         return calib
+
+    def _FallbackGetPixelToWavelength(self, npixels, pxs):
+        """
+        Fallback version that only uses the basic optical properties of the
+          spectrograph (and doesn't rely on the sometimes non-working SDK
+          functions)
+        Return the lookup table pixel number of the CCD -> wavelength observed.
+        npixels (1 <= int): number of pixels on the CCD (horizontally), after
+          binning.
+        pxs (0 < float): pixel size in m (after binning)
+        return (list of floats): pixel number -> wavelength in m
+        """
+        centerpixel = (npixels - 1) / 2
+        cw = self.position.value["wavelength"]  # m
+        gid = self.position.value["grating"]
+        gl = self.GetGratingInfo(gid)[0]  # lines/meter
+        # fl = focal length (m)
+        # ia = inclusion angle (rad)
+        # da = detector angle (rad)
+        fl, adev, da = self.EepromGetOpticalParams()
+        ia = -adev * 2
+
+        # Formula based on the Winspec documentation:
+        # "Equations used in WinSpec Wavelength Calibration", p. 257 of the manual
+        # ftp://ftp.piacton.com/Public/Manuals/Princeton%20Instruments/WinSpec%202.6%20Spectroscopy%20Software%20User%20Manual.pdf
+        # Converted to code by Benjamin Brenny (from AMOLF)
+        G = math.asin(cw / (math.cos(ia / 2) * 2 / gl))
+
+        wllist = []
+        for i in range(npixels):
+            pxd = pxs * (i - centerpixel)  # distance of pixel to sensor centre
+            E = math.atan((pxd * math.cos(da)) / (fl + pxd * math.sin(da)))
+            wl = (math.sin(G - ia / 2) + math.sin(G + ia / 2 + E)) / gl
+            wllist.append(wl)
+
+        return wllist
 
     def getOpeningToWavelength(self, width):
         """
