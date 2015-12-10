@@ -57,7 +57,7 @@ class AnchoredEstimator(object):
         self._dwell_time = dwell_time
         self.orig_drift = (0, 0) # in sem px
         self.max_drift = (0, 0) # in sem px
-        self.raw = [] # all the anchor areas acquired (in order)
+        self.raw = []  # first 2 and last 2 anchor areas acquired (in order)
         self._acq_sem_complete = threading.Event()
 
         # Calculate initial translation for anchor region acquisition
@@ -127,8 +127,11 @@ class AnchoredEstimator(object):
 
         # TODO: allow to record just every Nth image, and separately record the
         # drift after every measurement
-        # In the mean time, we only save the 1st, 2nd and last image
-        self.raw = self.raw[0:2]
+        # In the mean time, we only save the 1st, 2nd and last two images
+        if len(self.raw) > 2:
+            self.raw = self.raw[0:2] + self.raw[-1:]
+        else:
+            self.raw = self.raw[0:2]
         self.raw.append(data)
 
         # Restore SEM settings
@@ -138,6 +141,9 @@ class AnchoredEstimator(object):
 
     def estimate(self):
         """
+        Estimate the additional drift since previous acquisition+estimation.
+        Note: It should be only called once after every acquisition.
+        To read the value again, use .orig_drift.
         return (float, float): estimated current drift in X/Y SEM px
         """
         # Calculate the drift between the last two frames and
