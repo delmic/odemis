@@ -749,8 +749,7 @@ class TMCLController(model.Actuator):
 
     def StopRefSearch(self, axis):
         """
-        Can be called even if no referencing takes place (will never raise an
-          error)
+        Can be called even if no referencing takes place (will never raise an error)
         """
         self.SendInstruction(13, 1, axis) # 1 = stop
 
