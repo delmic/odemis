@@ -544,7 +544,7 @@ class Sparc2PathTestCase(unittest.TestCase):
 # @skip("faster")
 class Sparc2ExtSpecPathTestCase(unittest.TestCase):
     """
-    Tests to be run with a (simulated) SPARC2 (like in Oslo)
+    Tests to be run with a (simulated) SPARC2 (like in EMPA)
     """
     backend_was_running = False
 
@@ -566,6 +566,7 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
         cls.ccd = model.getComponent(role="ccd")
         cls.spec = model.getComponent(role="spectrometer")
         cls.specgraph = model.getComponent(role="spectrograph")
+        cls.specgraph_dedicated = model.getComponent(role="spectrograph-dedicated")
         cls.ebeam = model.getComponent(role="e-beam")
         cls.sed = model.getComponent(role="se-detector")
         cls.lensmover = model.getComponent(role="lens-mover")
@@ -685,6 +686,16 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
                         (0, self.specgraph.position.value['wavelength']))
         self.assertAlmostEqual(self.specgraph.position.value['slit-in'],
                                sparc2_modes["spec-focus"][1]["spectrograph"]['slit-in'])
+
+        # setting fiber-align
+        self.optmngr.setPath("fiber-align").result()
+        # Assert that actuator was moved according to mode given
+        self.assertEqual(self.lenswitch.position.value,
+                         self.find_dict_key(self.lenswitch, sparc2_modes["fiber-align"]))
+        self.assertTrue((self.specgraph_dedicated.position.value['grating'], 'mirror') or
+                        (0, self.specgraph_dedicated.position.value['wavelength']))
+        self.assertAlmostEqual(self.specgraph_dedicated.position.value['slit-in'],
+                               sparc2_modes["fiber-align"][1]["spectrograph-dedicated"]['slit-in'])
 
     # @skip("simple")
     def test_guess_mode(self):
