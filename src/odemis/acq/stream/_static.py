@@ -787,6 +787,11 @@ class StaticSpectrumStream(StaticStream):
             self._calibrated = None
             return
 
+        if bckg is None and coef is None:
+            # make sure to not display any other error
+            self._calibrated = data
+            return
+
         if not (set(data.metadata.keys()) &
                 {model.MD_WL_LIST, model.MD_WL_POLYNOMIAL}):
             raise ValueError("Spectrum data contains no wavelength information")
