@@ -201,16 +201,19 @@ def find_best_band_for_dye(wl, bands):
 def to_readable_band(band):
     """ Convert a emission or excitation band into readable text
 
-    :param band: ((list of) tuple of 2 or 5 floats): either the min/max of the band or the
-        -99%, -25%, middle, +25%, +99% of the band in m.
+    :param band: (str or (list of) tuple of 2 or 5 floats): either the min/max of the band or the
+        -99%, -25%, middle, +25%, +99% of the band in m. It can also be a string
+        in which case it will be returned as-is
     :return: (unicode) human readable string
 
     """
-
+    # if string: => return as is
     # if one band => center/bandwidth nm (bandwidth not displayed if < 5nm)
     #   ex: 453/19 nm
     # if multi-band => center, center... nm
     #   ex: 453, 568, 968 nm
+    if isinstance(band, basestring):
+        return unicode(band)
     if not isinstance(band[0], collections.Iterable):
         b = band
         center_nm = int(round(get_center(b) * 1e9))

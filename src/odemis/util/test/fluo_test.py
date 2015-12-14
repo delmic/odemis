@@ -25,7 +25,7 @@ import unittest
 logging.getLogger().setLevel(logging.DEBUG)
 
 class FluoTestCase(unittest.TestCase):
-    
+
     def test_center(self):
         in_exp = [((490e-9, 510e-9), 500e-9), # 2-float band
                   ((490e-9, 497e-9, 500e-9, 503e-9, 510e-9), 500e-9), # 5-float band
@@ -99,7 +99,7 @@ class FluoTestCase(unittest.TestCase):
         """
         compare quantify and fit
         """
-        # inputs, expected
+        # inputs
         ins = [(500e-9, (490e-9, 510e-9)),
                (500e-9, (490e-9, 497e-9, 500e-9, 503e-9, 510e-9)),
                (489e-9, (490e-9, 510e-9)),
@@ -198,6 +198,16 @@ class FluoTestCase(unittest.TestCase):
         out = fluo.find_best_band_for_dye(wl, bands)
         b = (490e-9, 510e-9)
         self.assertEqual(b, out, "find_best(%f, %s) returned %s while expected %s" % (wl, bands, out, b))
+
+    def test_to_readable_band(self):
+        # inputs, expected
+        in_exp = [((490e-9, 510e-9), "500/20 nm"),  # 2-float band
+                  (((490e-9, 510e-9), (590e-9, 610e-9)), "500, 600 nm"), # multi-band
+                  ("pass-through", u"pass-through"), # just a string
+                  ]
+        for arg, exp in in_exp:
+            out = fluo.to_readable_band(arg)
+            self.assertEqual(exp, out, "Failed while running with %s and got %s" % (arg, out))
 
 
 if __name__ == "__main__":

@@ -601,15 +601,26 @@ class StreamController(object):
         center_wl_color (None or 3 0<= int <= 255): RGB colour. If None, it
           will be guessed.
         """
-        if center_wl_color is None:
-            center_wl = fluo.get_one_center(self.stream.emission.value)
-            center_wl_color = wave2rgb(center_wl)
-
-        band = to_readable_band(self.stream.emission.value)
+        em = self.stream.emission.value
+        band = to_readable_band(em)
         readonly = self.stream.emission.readonly or len(self.stream.emission.choices) <= 1
+
+        if center_wl_color is None:
+            if isinstance(em, basestring):
+                # Unknown colour or non-meaningful
+                center_wl_color = None
+            else:
+                center_wl = fluo.get_one_center(self.stream.emission.value)
+                center_wl_color = wave2rgb(center_wl)
 
         r = self.stream_panel.add_dye_emission_ctrl(band, readonly, center_wl_color)
         lbl_ctrl, value_ctrl, self._lbl_em_peak, self._btn_emission = r
+
+        if isinstance(em, basestring):
+            if not readonly:
+                logging.error("Emission band is a string, but not readonly")
+            return
+
         self.update_peak_label_fit(self._lbl_em_peak, self._btn_emission, None, band)
 
         if not readonly:

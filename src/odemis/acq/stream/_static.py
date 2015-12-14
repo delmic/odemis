@@ -125,7 +125,11 @@ class StaticCLStream(Static2DStream):
         """
         try:
             em_range = image.metadata[model.MD_OUT_WL]
-            self.emission = VigilantAttribute(em_range, unit="m",
+            if isinstance(em_range, basestring):
+                unit = None
+            else:
+                unit = "m"
+            self.emission = VigilantAttribute(em_range, unit=unit,
                                               readonly=True)
 
         except KeyError:
@@ -167,15 +171,18 @@ class StaticFluoStream(Static2DStream):
         except KeyError:
             logging.warning("No excitation wavelength for fluorescence stream")
 
+        default_tint = (0, 255, 0)  # green is most typical
         try:
             em_range = image.metadata[model.MD_OUT_WL]
-            self.emission = VigilantAttribute(em_range, unit="m",
+            if isinstance(em_range, basestring):
+                unit = None
+            else:
+                unit = "m"
+                default_tint = conversion.wave2rgb(numpy.mean(em_range))
+            self.emission = VigilantAttribute(em_range, unit=unit,
                                               readonly=True)
-
-            default_tint = conversion.wave2rgb(numpy.mean(em_range))
         except KeyError:
             logging.warning("No emission wavelength for fluorescence stream")
-            default_tint = (0, 255, 0) # green is most typical
 
         # colouration of the image
         tint = image.metadata.get(model.MD_USER_TINT, default_tint)

@@ -1020,9 +1020,10 @@ class StreamPanel(wx.Panel):
         """ Create the controls for dye emission/excitation colour filter setting
 
         :param name: (str): the label name
-        :param band (2+ floats): the current wavelength band
+        :param band (str): the current wavelength band to display
         :param readonly (bool) read-only when there's no or just one band value
-        :param center_wl_color: (r, g, b) center wavelength color of the current band of the VA
+        :param center_wl_color: None or (r, g, b) center wavelength color of the
+           current band of the VA. If None, no button is shown.
 
         :return: (4 wx.Controls) the respective controls created
 
@@ -1054,15 +1055,18 @@ class StreamPanel(wx.Panel):
         lbl_peak = wx.StaticText(self._panel)
         exc_sizer.Add(lbl_peak, 1, border=5, flag=wx.ALL | wx.ALIGN_CENTRE_VERTICAL | wx.ALIGN_LEFT)
 
-        # A button, but not clickable, just to show the wavelength
-        # If a dye is selected, the colour of the peak is used, otherwise we
-        # use the hardware setting
-        btn_color = buttons.ColourButton(self._panel, -1, colour=center_wl_color,
-                                          size=(18, 18))
-        self.gb_sizer.Add(btn_color,
-                          (self.num_rows, 2),
-                          flag=wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL | wx.ALIGN_RIGHT,
-                          border=5)
+        if center_wl_color:
+            # A button, but not clickable, just to show the wavelength
+            # If a dye is selected, the colour of the peak is used, otherwise we
+            # use the hardware setting
+            btn_color = buttons.ColourButton(self._panel, -1, colour=center_wl_color,
+                                              size=(18, 18))
+            self.gb_sizer.Add(btn_color,
+                              (self.num_rows, 2),
+                              flag=wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL | wx.ALIGN_RIGHT,
+                              border=5)
+        else:
+            btn_color = None
 
         return lbl_ctrl, hw_set, lbl_peak, btn_color
 
