@@ -1781,6 +1781,7 @@ class SparcStreamsController(StreamBarController):
             b = ar_stream.detBinning.value
             if b[0] != b[1] or b[0] > 16:
                 ar_stream.detBinning.value = ar_stream.detBinning.clip((1, 1))
+                ar_stream.detResolution.value = ar_stream.detResolution.range[1]
 
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream

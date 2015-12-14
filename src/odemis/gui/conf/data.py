@@ -181,7 +181,9 @@ HW_SETTINGS_CONFIG = {
                 # means only 1st dimension can change
                 "choices": util.binning_firstd_only,
             }),
-            ("resolution", {}),
+            ("resolution", {
+                "accuracy": None,  # never simplify the numbers
+            }),
             ("gain", {}),
             ("readoutRate", {}),
             ("temperature", {}),
