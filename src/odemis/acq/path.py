@@ -154,7 +154,9 @@ SPARC2_MODES = {
             'fiber-align': ("fiber-aligner",  # TODO: also iif sp-ccd is present?
                 {'lens-switch': {'x': 'off'},
                  'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
-                 'spectrograph-dedicated': {'slit-in': 500e-6},
+                 # Grating "mirror" forces wavelength to zero order and saves the
+                 # current values so we can restore them
+                 'spectrograph-dedicated': {'slit-in': 500e-6, 'grating': 'mirror'},
                 }),
          }
 
