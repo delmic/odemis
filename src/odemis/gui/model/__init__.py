@@ -837,12 +837,14 @@ class StreamView(View):
     other objects can update it.
     """
 
-    def __init__(self, name, stage=None, stream_classes=None):
+    def __init__(self, name, stage=None, stream_classes=None, fov_va=None):
         """
         :param name (string): user-friendly name of the view
         :param stage (Actuator): actuator with two axes: x and y
         :param stream_classes (None, or tuple of classes): all subclasses that the
           streams in this view is allowed to show.
+        :param fov_va (None or FloatVA): horizontal field of view VA to which
+          the mpp * widget size should be connected. Mostly used
         """
 
         super(StreamView, self).__init__(name)
@@ -852,6 +854,8 @@ class StreamView(View):
         else:
             self.stream_classes = stream_classes
         self._stage = stage
+
+        self.fov_va = fov_va
 
         # Will be created on the first time it's needed
         self._focus_thread = None

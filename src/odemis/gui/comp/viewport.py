@@ -243,8 +243,6 @@ class MicroscopeViewport(ViewPort):
         self.self_set_fov = False
         self.self_set_mpp = False
 
-        self._hw_fov_va = None  # (hardware) VA to follow for HFW
-
     def setView(self, microscope_view, tab_data):
         """
         Set the microscope view that this viewport is displaying/representing
@@ -279,6 +277,13 @@ class MicroscopeViewport(ViewPort):
 
         # canvas handles also directly some of the view properties
         self.canvas.setView(microscope_view, tab_data)
+
+        if microscope_view.fov_va:
+            logging.info("Tracking mpp on %s" % self)
+            # The view FoV changes either when the mpp changes or on resize,  but resize typically
+            # causes an update of the mpp (to keep the FoV)  so no need to listen to resize.
+            self.microscope_view.mpp.subscribe(self._on_em_view_mpp_change)
+            microscope_view.fov_va.subscribe(self._on_hw_fov_change, init=True)
 
     ################################################
     #  Panel control
@@ -438,20 +443,6 @@ class MicroscopeViewport(ViewPort):
 
     # END Event handling
 
-    def track_view_hfw(self, hw_fov_va):
-        """ Link the given hardware field of view VA with microscope view's meter per pixel setting
-
-        :param hw_fov_va: (FloatVA)
-
-        """
-
-        logging.info("Tracking mpp on %s" % self)
-        self._hw_fov_va = hw_fov_va
-        # The view FoV changes either when the mpp changes or on resize,  but resize typically
-        # causes an update of the mpp (to keep the FoV)  so no need to listen to resize.
-        self.microscope_view.mpp.subscribe(self._on_em_view_mpp_change)
-        self._hw_fov_va.subscribe(self._on_hw_fov_change, init=True)
-
     def _on_hw_fov_change(self, hw_fov):
         """ Set the microscope view's mpp value when the hardware's FoV changes """
 
@@ -482,20 +473,21 @@ class MicroscopeViewport(ViewPort):
             logging.debug("View mpp changed to %s on %s", mpp, self)
 
             hfw = self.get_fov_from_mpp()
+            fov_va = self.microscope_view.fov_va
 
             try:
                 # TODO: Test with a simulated SEM that has HFW choices
-                choices = self._hw_fov_va.choices
+                choices = fov_va.choices
                 # Get the choice that matches hfw most closely
                 hfw = min(choices, key=lambda choice: abs(choice - hfw))
             except NotApplicableError:
-                hfw = self._hw_fov_va.clip(hfw)
+                hfw = fov_va.clip(hfw)
 
             # Indicate that this object was responsible for updating the hardware's HFW, so it won't
             # get updated again in `_on_hw_fov_change`
             self.self_set_fov = True
             logging.debug("Setting hardware FoV to %s", hfw)
-            self._hw_fov_va.value = hfw
+            fov_va.value = hfw
         else:
             self.self_set_mpp = False
 

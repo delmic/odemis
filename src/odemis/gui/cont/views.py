@@ -77,14 +77,6 @@ class ViewPortController(object):
             self._grid_panel = None
             logging.info("Multiple viewports, but no ViewportGrid to manage them")
 
-        # TODO: just let the viewport do that? Or let it be a flag on the view?
-        # Track the mpp of the SEM view in order to set the magnification
-        if self._main_data_model.ebeamControlsMag:
-            # => Link the SEM FoV with the mpp of the live SEM viewport
-            for vp in self.viewports:
-                if vp.microscope_view.stream_classes == EMStream:  # For SEM only views
-                    vp.track_view_hfw(self._main_data_model.ebeam.horizontalFoV)
-
     @property
     def viewports(self):
         return self._viewports

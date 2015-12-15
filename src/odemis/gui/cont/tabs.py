@@ -441,6 +441,12 @@ class SecomStreamsTab(Tab):
                 "stream_classes": (RGBCameraStream, BrightfieldStream),
             }
 
+        # Add connection to SEM hFoV if possible (on SEM-only views)
+        if main_data.ebeamControlsMag:
+            for v in vpv.values():
+                if v.get("stream_classes") == EMStream:
+                    v["fov_va"] = main_data.ebeam.horizontalFoV
+
         return vpv
 
     def _onAutofocus(self, active):
@@ -680,6 +686,9 @@ class SparcAcquisitionTab(Tab):
               "stream_classes": MonochromatorSettingsStream,
               }),
         ])
+        # Add connection to SEM hFoV if possible
+        if main_data.ebeamControlsMag:
+            vpv[viewports[0]]["fov_va"] = main_data.ebeam.horizontalFoV
 
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
 
@@ -2461,6 +2470,10 @@ class Sparc2AlignTab(Tab):
                 }
             ),
         ))
+        # Add connection to SEM hFoV if possible
+        if main_data.ebeamControlsMag:
+            vpv[self.panel.vp_moi]["fov_va"] = main_data.ebeam.horizontalFoV
+
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
         self.panel.vp_align_lens.microscope_view.show_crosshair.value = False
         self.panel.vp_align_center.microscope_view.show_crosshair.value = False
