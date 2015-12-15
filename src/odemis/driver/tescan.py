@@ -178,6 +178,8 @@ class SEM(model.HwComponent):
         will be added on the next acquisition.
         raises KeyError if the detector is already being acquired.
         """
+        with self._acq_progress_lock:
+            self._device.ScStopScan()
         # to be thread-safe (simultaneous calls to start/stop_acquire())
         with self._acquisition_mng_lock:
             if detector in self._acquisitions:
