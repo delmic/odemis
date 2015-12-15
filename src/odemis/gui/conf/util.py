@@ -84,7 +84,7 @@ def resolution_from_range_plus_point(comp, va, conf):
     return resolution_from_range(comp, va, conf, init={va.value, (1, 1)})
 
 
-MIN_RES = 200 * 200  # px, minimum amount of pixels to consider it acceptable
+MIN_RES = 128 * 128  # px, minimum amount of pixels to consider it acceptable
 
 
 def binning_1d_from_2d(comp, va, _):
