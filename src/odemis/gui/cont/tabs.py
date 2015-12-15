@@ -2473,6 +2473,8 @@ class Sparc2AlignTab(Tab):
         #   lens alignment.
         # * AR CCD (ccd): Used to show CL spot during the alignment of the lens1,
         #   _and_ to show the mirror shadow in center alignment
+        # * Spectrum count (speccnt): Used to show how much light is received
+        #   by the spectrometer over time (30s).
         # * ebeam spot (spot): Used to force the ebeam to spot mode in lens
         #   and center alignment.
 
@@ -2486,7 +2488,9 @@ class Sparc2AlignTab(Tab):
                             main_data.ccd.data,
                             emitter=None,
                             focuser=main_data.focus,
-                            detvas=get_local_vas(main_data.ccd))
+                            detvas=get_local_vas(main_data.ccd),
+                            forcemd={model.MD_POS: (0, 0)}  # Just in case the stage is there
+                            )
         # Make sure the binning is not crazy (especially can happen if CCD is shared for spectrometry)
         ccd_stream.detBinning.value = ccd_stream.detBinning.clip((2, 2))
         self._ccd_stream = ccd_stream
@@ -2502,6 +2506,7 @@ class Sparc2AlignTab(Tab):
                             main_data.brightlight,
                             focuser=main_data.focus,
                             detvas=get_local_vas(main_data.ccd),
+                            forcemd={model.MD_POS: (0, 0)}
                             )
         speclines.tint.value = (0, 64, 255)  # colour it blue
         # Fixed values, known to work well for autofocus
