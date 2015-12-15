@@ -674,6 +674,11 @@ class CameraCountStream(CameraStream):
     def __init__(self, *args, **kwargs):
         super(CameraCountStream, self).__init__(*args, **kwargs)
 
+        # B/C and histogram are meaningless on a chronogram
+        del self.auto_bc
+        del self.auto_bc_outliers
+        del self.histogram
+
         # .raw is an array of floats with time on the first dim, and count/date
         # on the second dim.
         self.raw = numpy.empty((0, 2), dtype=numpy.float64)
@@ -683,6 +688,8 @@ class CameraCountStream(CameraStream):
         # value should be included
         # TODO: immediately cut window when the value changes
         self.windowPeriod = model.FloatContinuous(30, range=(0, 1e6), unit="s")
+
+    # TODO: use .roi to select which part of the CCD to use
 
     def _getCount(self, data):
         """
