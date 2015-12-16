@@ -207,6 +207,10 @@ On old versions of Linux (before 3.2.7), you need to create a file
 /etc/udev/rules.d/99-usbftdi.rules with:
 SUBSYSTEMS=="usb", ATTRS{idProduct}=="1008", ATTRS{idVendor}=="1a72", RUN+="/sbin/modprobe -q ftdi-sio product=0x1008 vendor=0x1a72"
 
+For newer versions of Linux, to force using a FTDI device, you need to do the following:
+sudo modprobe ftdi-sio
+sudo sh -c "echo 1a72 1008 > /sys/bus/usb-serial/drivers/ftdi_sio/new_id"
+
 = Configuring the instantiation file =
 This file describes the available hardware for Odemis. Basically, it lists for each
 hardware, which driver to use and the parameters required. It's following the

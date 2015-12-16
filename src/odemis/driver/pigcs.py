@@ -319,11 +319,19 @@ class PIGCSError(StandardError):
 
 # constants for model number
 MODEL_C867 = 867
+MODEL_E725 = 725
 MODEL_E861 = 861
 MODEL_UNKNOWN = 0
 
 class Controller(object):
-    def __new__(cls, busacc, address=None, axes=None, *args, **kwargs):
+
+    idn_matches = {
+        MODEL_C867: "Physik Instrumente.*,.*C-867",
+        MODEL_E725: "Physik Instrumente.*,.*E-725",
+        MODEL_E861: "Physik Instrumente.*,.*E-861",
+    }
+
+    def __new__(cls, busacc, address=None, axes=None, _stem=False, *args, **kwargs):
         """
         Takes care of selecting the right class of controller depending on the
         hardware.
@@ -334,13 +342,17 @@ class Controller(object):
         # arguments), normal open-loop, and open-loop via SMO test command.
         # Difference between the 2 open-loop is hard-coded on the model as it's
         # faster than checking for the list of commands available.
-        if address is None:
+        if _stem is True:
             subcls = Controller # just for tests/scan
         elif any(axes.values()):
             if not all(axes.values()):
                 raise ValueError("Controller %d, mix of closed-loop and "
                                  "open-loop axes is not supported", address)
-            subcls = CLController
+            idn = busacc.sendQueryCommand(address, "*IDN?\n")
+            if re.search(cls.idn_matches[MODEL_E725], idn):
+                subcls = CLAbsController
+            else:
+                subcls = CLRelController
         else:
             # Check controller model by asking it, but cannot rely on the
             # normal commands as nothing is ready, so do all "manually"
@@ -354,24 +366,25 @@ class Controller(object):
         return super(Controller, cls).__new__(subcls, busacc, address, axes,
                                               *args, **kwargs)
 
-    def __init__(self, busacc, address=None, axes=None):
+    def __init__(self, busacc, address=None, axes=None, _stem=False):
         """
         busacc: a BusAccesser
-        address 1<int<16: address as configured on the controller
-        If not address is given, it just allows to do some raw commands
+        address (None or 1<=int<=16): address as configured on the controller
         axes (dict int -> boolean): determine which axis will be used and whether
           it will be used closed-loop (True) or open-loop (False).
+        _stem (bool): just allows to do some raw commands, and changing address
+          is allowed
         """
         # TODO: calibration values should be per axis (but for now we only have controllers with 1 axis)
         self.busacc = busacc
         self.address = address
         self._try_recover = False # for now, fully raw access
         # did the user asked for a raw access only?
-        if address is None:
+        if _stem:
             self._channels = set(range(1, 17)) # allow commands to work on any axis
             return
         if axes is None:
-            raise LookupError("Need to have at least one axis configured")
+            raise ValueError("Need to have at least one axis configured")
 
         self.GetErrorNum() # make it happy again (in case it wasn't)
         # We don't reboot by default because:
@@ -393,10 +406,11 @@ class Controller(object):
                             address, self.GetIdentification())
 
         self._channels = self.GetAxes() # available channels (=axes)
+        # FIXME: only if the command is supported
         # dict axis -> boolean
-        self._hasLimitSwitches = dict([(a, self.HasLimitSwitches(a)) for a in self._channels])
+        self._hasLimitSwitches = dict((a, self.HasLimitSwitches(a)) for a in self._channels)
         # dict axis -> boolean
-        self._hasRefSwitch = dict([(a, self.HasRefSwitch(a)) for a in self._channels])
+        self._hasRefSwitch = dict((a, self.HasRefSwitch(a)) for a in self._channels)
         self._position = {} # m (dict axis-> position)
 
         # only for interpolated position (on open-loop)
@@ -517,10 +531,9 @@ class Controller(object):
         returns (set of int): all the available axes
         """
         # SAI? (Get List Of Current Axis Identifiers)
-        # SAI? ALL: list all axes (included disabled ones)
+        # SAI? ALL: list all axes (included disabled ones), one per line
         answer = self._sendQueryCommand("SAI? ALL\n")
-        # TODO check it works with multiple axes
-        axes = set([int(a) for a in answer.split(" ")])
+        axes = set(int(a) for a in answer)
         return axes
 
     def GetAvailableCommands(self):
@@ -533,8 +546,8 @@ class Controller(object):
     def GetAvailableParameters(self):
         """
         Returns the available parameters
-        return (dict param -> list of strings): parameter number and strings
-         used to describe it (typically: 0, 1, FLOAT, description)
+        return (dict param -> str): parameter number and string
+         used to describe it (typically: 0 1 FLOAT description)
         """
         # HPA? (Get List Of Available Parameters)
         lines = self._sendQueryCommand("HPA?\n")
@@ -544,12 +557,12 @@ class Controller(object):
         # look for something like '0x412=\t0\t1\tINT\tmotorcontroller\tI term 1'
         # (and old firmwares report like: '0x412 XXX')
         for l in lines:
-            m = re.match(r"0x(?P<param>[0-9A-Fa-f]+)[= ]\w*(?P<desc>(\t?\S+)+)", l)
+            m = re.match(r"0x(?P<param>[0-9A-Fa-f]+)[= ]\s*(?P<desc>.+)", l)
             if not m:
                 logging.debug("Line doesn't seem to be a parameter: '%s'", l)
                 continue
             param, desc = int(m.group("param"), 16), m.group("desc")
-            params[param] = tuple(filter(bool, desc.split("\t")))
+            params[param] = desc
         return params
 
     def GetParameter(self, axis, param):
@@ -561,7 +574,7 @@ class Controller(object):
         # SPA? (Get Volatile Memory Parameters)
         assert((1 <= axis) and (axis <= 16))
         assert(0 <= param)
-        if hasattr(self, "_avail_params") and  not param in self._avail_params:
+        if hasattr(self, "_avail_params") and param not in self._avail_params:
             raise ValueError("Parameter %d %d not available" % (axis, param))
 
         answer = self._sendQueryCommand("SPA? %d %d\n" % (axis, param))
@@ -1057,10 +1070,6 @@ class Controller(object):
 #
 
     # Below are methods for manipulating the controller
-    idn_matches = {
-        MODEL_C867: "Physik Instrumente.*,.*C-867",
-        MODEL_E861: "Physik Instrumente.*,.*E-861",
-    }
     def getModel(self):
         """
         returns a model constant
@@ -1293,7 +1302,7 @@ class Controller(object):
         return (dict int -> tuple): addresses of available controllers associated
             to number of axes, and presence of limit switches/sensor
         """
-        ctrl = Controller(busacc)
+        ctrl = Controller(busacc, _stem=True)
 
         present = {}
         for i in range(1, max_add + 1):
@@ -1318,13 +1327,137 @@ class Controller(object):
         ctrl.address = None
         return present
 
+
+class CLAbsController(Controller):
+    """
+    Controller managed via closed-loop commands and which is always referenced
+     (ex: E-725 with scan stage).
+    """
+    def __init__(self, busacc, address=None, axes=None):
+        super(CLAbsController, self).__init__(busacc, address, axes)
+        self._speed = {}  # m/s dict axis -> speed
+        self._accel = {}  # m/s² dict axis -> acceleration/deceleration
+        self.pos_rng = {}  # m, dict axis -> min,max position
+
+        for a, cl in axes.items():
+            if a not in self._channels:
+                raise LookupError("Axis %d is not supported by controller %d" % (a, address))
+
+            if not cl:  # want open-loop?
+                raise ValueError("Initialising CLAbsController with request for open-loop")
+
+            # Check the unit is um
+            # TODO: cf PUN?
+            unit = self.GetParameter(a, 0x7000601)
+            if unit.lower() != "um":
+                raise IOError("Controller %d configured with unit %s, but only "
+                              "micrometers (UM) is supported." % (address, unit))
+
+            # Start the closed loop
+            self.SetServo(a, True)
+
+            # Movement range before referencing is max range in both directions
+            self.pos_rng[a] = (self.GetMinPosition(a) * 1e-6, self.GetMaxPosition(a) * 1e-6)
+
+            # Read speed/accel ranges
+            self._speed[a] = self.GetCLVelocity(a) * 1e-6  # m/s
+            # TODO ACC? Not supported?
+            self._accel[a] = self._speed[a]  # m/s²
+            # self._accel[a] = self.GetCLAcceleration(a) * 1e-6  # m/s²
+
+        self.min_speed = 10e-6  # m/s (default low value)
+        self._prev_speed_accel = ({}, {})
+
+    def moveRel(self, axis, distance):
+        """
+        See Controller.moveRel
+        """
+        assert(axis in self._channels)
+
+        # The controller is normally ready. The only case it's is not ready is
+        # when switching the servo/encoder, but that should be already taken
+        # care by startEncoder().
+        for i in range(100):
+            if self.IsReady():
+                break
+            logging.debug("Controller not yet ready, waiting a bit more")
+            time.sleep(0.01)
+        else:
+            logging.warning("Controller indicates it's still not ready, but will not wait any longer")
+
+        # self._updateSpeedAccel(axis)
+        # We trust the caller that it knows it's in range
+        # (worst case the hardware will not go further)
+        self.MoveRel(axis, distance * 1e6)
+        self.checkError()
+        return distance
+
+    def moveAbs(self, axis, position):
+        """
+        See Controller.moveAbs
+        """
+        assert(axis in self._channels)
+
+        # The controller is normally ready. The only case it's is not ready is
+        # when switching the servo/encoder, but that should be already taken
+        # care by startEncoder().
+        for i in range(100):
+            if self.IsReady():
+                break
+            logging.debug("Controller not yet ready, waiting a bit more")
+            time.sleep(0.01)
+        else:
+            logging.warning("Controller indicates it's still not ready, but will not wait any longer")
+
+        # TODO
+        # self._updateSpeedAccel(axis)
+        # We trust the caller that it knows it's in range
+        # (worst case the hardware will not go further)
+        old_pos = self.GetPosition(axis) * 1e-6
+        distance = position - old_pos
+
+        self.MoveAbs(axis, position * 1e6)
+        self.checkError()
+        return distance
+
+    def getPosition(self, axis):
+        """
+        Find current position as reported by the sensor
+        return (float): the current position of the given axis
+        """
+        return self.GetPosition(axis) * 1e-6
+
+    # Warning: if the settling window is too small or settling time too big,
+    # it might take several seconds to reach target (or even never reach it)
+    def isMoving(self, axes=None):
+        """
+        Indicate whether the motors are moving (ie, last requested move is over)
+        axes (None or set of int): axes to check whether for move, or all if None
+        return (boolean): True if at least one of the axes is moving, False otherwise
+        """
+        if axes is None:
+            axes = self._channels
+        else:
+            assert axes.issubset(self._channels)
+
+        # With servo on, it might constantly be _slightly_ moving (around the
+        # target), so it's much better to use IsOnTarget info. The controller
+        # needs to be correctly configured with the right window size.
+        for a in axes:
+            if not self.IsOnTarget(a):
+                return True
+
+        return False
+
+
 # Messages to the encoder manager
 MNG_TERMINATE = "T"
 MNG_START = "S"
 # To stop the encoder: send a float representing the earliest time at which it is
 # possible to stop it. 0 will stop it immediately.
 
-class CLController(Controller):
+
+class CLRelController(Controller):
     """
     Controller managed via closed-loop commands (ex: C-867 with encoder).
     Note that it knows if there is a reference or a limit switch only based on
@@ -1342,7 +1475,7 @@ class CLController(Controller):
           some warm up, and also ensures that no vibrations are caused by trying
           to stay on target.
         """
-        super(CLController, self).__init__(busacc, address, axes)
+        super(CLRelController, self).__init__(busacc, address, axes)
 
         if not (auto_suspend is False or auto_suspend > 0):
             raise ValueError("auto_suspend should be False or > 0 but got %s" % (auto_suspend,))
@@ -1368,7 +1501,7 @@ class CLController(Controller):
                 raise LookupError("Axis %d is not supported by controller %d" % (a, address))
 
             if not cl:  # want open-loop?
-                raise ValueError("Initialising CLController with request for open-loop")
+                raise ValueError("Initialising CLRelController with request for open-loop")
             if not self._hasRefSwitch[a]:
                 logging.warning("Closed-loop control requested but controller "
                                 "%d reports no reference sensor for axis %d",
@@ -1436,7 +1569,7 @@ class CLController(Controller):
         self._prev_speed_accel = ({}, {})
 
     def terminate(self):
-        super(CLController, self).terminate()
+        super(CLRelController, self).terminate()
 
         # Disable servo, to allow the user to move the axis manually
         for a in self._channels:
@@ -1721,7 +1854,7 @@ class CLController(Controller):
         # ONT? 1 # Should be true at worst a little after the settle time window
 
     def stopMotion(self):
-        super(CLController, self).stopMotion()
+        super(CLRelController, self).stopMotion()
         for c in self._channels:
             self._releaseEncoder(c, delay=1)
 
@@ -2107,6 +2240,7 @@ class SMOController(Controller):
         for c in self._channels:
             self.StopOLViaPID(c)
             self._storeStop(c)
+
 
 class Bus(model.Actuator):
     """
@@ -2527,13 +2661,14 @@ class Bus(model.Actuator):
 
         return passed
 
-    def _openPort(self, port, baudrate, _addresses):
+    @classmethod
+    def _openPort(cls, port, baudrate, _addresses, master=254):
         if port.startswith("/dev/") or port.startswith("COM"):
-            ser = self._openSerialPort(port, baudrate, _addresses)
+            ser = cls._openSerialPort(port, baudrate, _addresses)
             return SerialBusAccesser(ser)
         else: # ip address
             if port == "autoip": # Search for IP (and hope there is only one result)
-                ipmasters = self._scanIPMasters()
+                ipmasters = cls._scanIPMasters()
                 if not ipmasters:
                     raise model.HwError("Failed to find any PI network master controller")
                 host, ipport = ipmasters[0]
@@ -2547,8 +2682,8 @@ class Bus(model.Actuator):
                     host = port
                     ipport = 50000 # default
 
-            sock = self._openIPSocket(host, ipport)
-            return IPBusAccesser(sock)
+            sock = cls._openIPSocket(host, ipport)
+            return IPBusAccesser(sock, master)
 
     @classmethod
     def scan(cls, port=None):
@@ -2572,7 +2707,7 @@ class Bus(model.Actuator):
         for p in ports:
             try:
                 # check all possible baud rates, in the most likely order
-                for br in [38400, 9600, 19200, 115200]:
+                for br in (38400, 9600, 19200, 115200):
                     logging.debug("Trying port %s at baud rate %d", p, br)
                     ser = cls._openSerialPort(p, br)
                     controllers = Controller.scan(SerialBusAccesser(ser))
@@ -2598,7 +2733,7 @@ class Bus(model.Actuator):
             try:
                 logging.debug("Scanning controllers on master %s:%d", ipadd[0], ipadd[1])
                 sock = cls._openIPSocket(*ipadd)
-                controllers = Controller.scan(IPBusAccesser(sock))
+                controllers = Controller.scan(IPBusAccesser(sock, master=None))
                 if controllers:
                     axis_num = 0
                     arg = {}
@@ -2639,26 +2774,29 @@ class Bus(model.Actuator):
             bdc = ['<broadcast>']
 
         for bdcaddr in bdc:
-            for port in [50000]: # TODO: the PI program tries on more ports
+            for port, msg, ansstart in ((50000, "PI", "PI"), (30718, "\x00\x00\x00\xf8", "\x00\x00\x00\xf9")):
                 # Special protocol by PI (reversed-engineered):
                 # * Broadcast "PI" on a (known) port
                 # * Listen for an answer
+                # * Answer should contain something like "PI C-863K016 SN 0 -- listening on port 50000 --"
+                # It's more or less the same thing for port 30718 (used by E-725)
                 try:
                     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                     s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
                     s.bind(('', 0))
                     logging.debug("Broadcasting on %s:%d", bdcaddr, port)
-                    s.sendto('PI', (bdcaddr, port))
+                    s.sendto(msg, (bdcaddr, port))
                     s.settimeout(1.0)  # It should take less than 1 s to answer
 
                     while True:
                         data, fulladdr = s.recvfrom(1024)
                         if not data:
                             break
-                        # data should contain something like "PI C-863K016 SN 0 -- listening on port 50000 --"
-                        if data.startswith("PI"):
-                            found.add(fulladdr)
+                        if data.startswith(ansstart):
+                            # TODO: decode the message to know to which port it's actually listening to
+                            # (in practice, it seems to always be 50000)
+                            found.add((fulladdr[0], 50000))
                         else:
                             logging.info("Received %s from %s", data.encode('string_escape'), fulladdr)
                 except socket.timeout:
@@ -2711,6 +2849,7 @@ class Bus(model.Actuator):
         sock.settimeout(1.0) # s
         return sock
 
+
 class SerialBusAccesser(object):
     """
     Manages connections to the low-level bus
@@ -2732,7 +2871,7 @@ class SerialBusAccesser(object):
         com (string): command to send (including the \n if necessary)
         """
         assert(len(com) <= 100) # commands can be quite long (with floats)
-        assert(1 <= addr <= 16 or addr == 254 or addr == 255)
+        assert(addr is None or 1 <= addr <= 16 or addr == 254 or addr == 255)
         if addr is None:
             full_com = com
         else:
@@ -2759,7 +2898,7 @@ class SerialBusAccesser(object):
               not respected)
         """
         assert(len(com) <= 100) # commands can be quite long (with floats)
-        assert(1 <= addr <= 16 or addr == 254)
+        assert(addr is None or 1 <= addr <= 16 or addr == 254)
         if addr is None:
             full_com = com
         else:
@@ -2790,7 +2929,7 @@ class SerialBusAccesser(object):
                 char = self.serial.read()
 
         if not char:
-            raise model.HwError("Controller %d timed out, check the device is "
+            raise model.HwError("Controller %s timed out, check the device is "
                                 "plugged in and turned on." % addr)
 
         assert len(lines) > 0
@@ -2828,17 +2967,24 @@ class IPBusAccesser(object):
     """
     Manages connections to the low-level bus
     """
-    def __init__(self, socket):
+    def __init__(self, socket, master=254):
+        """
+        master (1<=int<=255 or None): address of the master
+        """
+
         self.socket = socket
         # to acquire before sending anything on the socket
         self.ser_access = threading.Lock()
 
-        # recover the main controller from previous errors (just in case)
-        err = self.sendQueryCommand(254, "ERR?\n")
+        if master is None:
+            self.driverInfo = "TCP/IP connection"
+        else:
+            # recover the main controller from previous errors (just in case)
+            err = self.sendQueryCommand(master, "ERR?\n")
 
-        # Get the master controller version
-        version = self.sendQueryCommand(254, "*IDN?\n")
-        self.driverInfo = "%s" % (version.encode('string_escape'),)
+            # Get the master controller version
+            version = self.sendQueryCommand(master, "*IDN?\n")
+            self.driverInfo = "%s" % (version.encode('string_escape'),)
 
     def terminate(self):
         self.socket.close()
@@ -2851,7 +2997,7 @@ class IPBusAccesser(object):
         com (string): command to send (including the \n if necessary)
         """
         assert(len(com) <= 100) # commands can be quite long (with floats)
-        assert(1 <= addr <= 16 or addr == 254 or addr == 255)
+        assert(addr is None or 1 <= addr <= 16 or addr == 254 or addr == 255)  # 255 means "broadcast"
         if addr is None:
             full_com = com
         else:
@@ -2875,11 +3021,15 @@ class IPBusAccesser(object):
               not respected)
         """
         assert(len(com) <= 100) # commands can be quite long (with floats)
-        assert(1 <= addr <= 16 or addr == 254)
+        assert(addr is None or 1 <= addr <= 16 or addr == 254)
         if addr is None:
             full_com = com
+            prefix = ""
+            prefixre = ""
         else:
             full_com = "%d %s" % (addr, com)
+            prefix = "0 %d " % addr
+            prefixre = r"0 \d+ "
 
         with self.ser_access:
             logging.debug("Sending: '%s'", full_com.encode('string_escape'))
@@ -2892,7 +3042,7 @@ class IPBusAccesser(object):
                 try:
                     data = self.socket.recv(4096)
                 except socket.timeout:
-                    raise model.HwError("Controller %d timed out, check the device is "
+                    raise model.HwError("Controller %s timed out, check the device is "
                                         "plugged in and turned on." % addr)
                 # If the master is already accessed from somewhere else it will just
                 # immediately answer an empty message
@@ -2903,6 +3053,7 @@ class IPBusAccesser(object):
                     time.sleep(0.01)
                     continue
 
+                logging.debug("Received: '%s'", data.encode('string_escape'))
                 ans += data
                 # does it look like we received the end of an answer?
                 # To be really sure we'd need to wait until timeout, but that
@@ -2910,16 +3061,11 @@ class IPBusAccesser(object):
                 # answer, there's 99% chance we've received everything.
                 # An answer ends with \n (and not " \n", which indicates multi-
                 # line, excepted empty line "0 1 \n").
-                if re.match(r"0 \d+.*[^ ]\n", ans, re.DOTALL) or re.match(r"0 \d+ $", ans):
+                if (re.match(prefixre + r".*[^ ]\n", ans, re.DOTALL) or
+                    re.match(prefixre + r"$", ans)):
                     break
 
-        logging.debug("Received: '%s'", ans.encode('string_escape'))
-
         # remove the prefix and last newline
-        if addr is None:
-            prefix = ""
-        else:
-            prefix = "0 %d " % addr
         if not ans.startswith(prefix):
             logging.debug("Failed to decode answer '%s'", ans.encode('string_escape'))
             raise IOError("Report prefix unexpected after '%s': '%s'." % (com, ans))
@@ -2964,6 +3110,7 @@ class SimulatedError(Exception):
     Special exception class to simulate error in the controller
     """
     pass
+
 
 class E861Simulator(object):
     """

@@ -4,22 +4,25 @@
 # (relying on find_next_available), or just use %n (and the numbers will not be continuous)
 # Note: it seems the USB device has a "serial" attribute which is different for each device
 
-# as found in the E-861
-SUBSYSTEMS=="usb", ATTRS{idProduct}=="1008", ATTRS{idVendor}=="1a72", KERNEL=="ttyUSB[0-9]*", SYMLINK="ttyPIGCS", GROUP="odemis"
+# E-725 (unknown USB-serial chipset, not currently working)
+# SUBSYSTEMS=="usb", ATTRS{idVendor}=="1a72", ATTRS{idProduct}=="1003", GROUP="odemis"
+
+# E-861
+SUBSYSTEMS=="usb", ATTRS{idVendor}=="1a72", ATTRS{idProduct}=="1008", KERNEL=="ttyUSB[0-9]*", SYMLINK="ttyPIGCS", GROUP="odemis"
 
 # We got one E-861, which had the generic FTDI IDs, but don't use by default as many hardware report these IDs
-#SUBSYSTEMS=="usb", ATTRS{idProduct}=="6001", ATTRS{idVendor}=="0403", KERNEL=="ttyUSB[0-9]*", SYMLINK="ttyPIGCS", GROUP="odemis"
+#SUBSYSTEMS=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6001", KERNEL=="ttyUSB[0-9]*", SYMLINK="ttyPIGCS", GROUP="odemis"
 
-# as found in the C-867.160
-SUBSYSTEMS=="usb", ATTRS{idProduct}=="1009", ATTRS{idVendor}=="1a72", KERNEL=="ttyUSB[0-9]*", SYMLINK="ttyPIGCS", GROUP="odemis"
+# The E-861s in AMOLF are old versions and seem to use other generic USB-serial controller
+SUBSYSTEMS=="usb", ATTRS{idVendor}=="06cd", ATTRS{idProduct}=="0121", KERNEL=="ttyUSB[0-9]*", SYMLINK="ttyPIGCS", GROUP="odemis"
 
-# off the shelf USB-serial port used for the PIGCS in AMOLF
-SUBSYSTEMS=="usb", ATTRS{idProduct}=="0121", ATTRS{idVendor}=="06cd", KERNEL=="ttyUSB[0-9]*", SYMLINK="ttyPIGCS", GROUP="odemis"
+# C-867.160
+SUBSYSTEMS=="usb", ATTRS{idVendor}=="1a72", ATTRS{idProduct}=="1009", KERNEL=="ttyUSB[0-9]*", SYMLINK="ttyPIGCS", GROUP="odemis"
 
 # just an off the shelf USB-serial port used for the Redstone
-#SUBSYSTEMS=="usb", ATTRS{idProduct}=="2303", ATTRS{idVendor}=="067b", KERNEL=="ttyUSB[0-9]*", SYMLINK="ttyPIRS", GROUP="odemis"
+#SUBSYSTEMS=="usb", ATTRS{idVendor}=="067b", ATTRS{idProduct}=="2303", KERNEL=="ttyUSB[0-9]*", SYMLINK="ttyPIRS", GROUP="odemis"
 
-# off the shelf USB-serial CDC port used for the PI Master controller
+# off the shelf USB-serial CDC port used for the PI Master controller E-863
 # Not used normally, but useful for reconfiguration
-SUBSYSTEMS=="usb", ATTRS{idProduct}=="a4a7", ATTRS{idVendor}=="0525", KERNEL=="ttyUSB[0-9]*", SYMLINK="ttyPIM%n", GROUP="odemis"
+SUBSYSTEMS=="usb", ATTRS{idVendor}=="0525", ATTRS{idProduct}=="a4a7", KERNEL=="ttyUSB[0-9]*", SYMLINK="ttyPIM%n", GROUP="odemis"
 
