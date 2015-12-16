@@ -532,6 +532,11 @@ class Scanner(model.Emitter):
         self.probeCurrent = model.FloatEnumerated(self._probeCurrent, pc_choices, unit="A",
                                   setter=self._setPC)
 
+        # None implies that there is a blanker but it is set automatically.
+        # Mostly used in order to know if the module supports beam blanking
+        # when accessing it from outside.
+        self.blanker = model.VAEnumerated(None, choices=set([None]))
+
     # we share metadata with our parent
     def updateMetadata(self, md):
         self.parent.updateMetadata(md)
