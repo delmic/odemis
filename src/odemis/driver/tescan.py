@@ -388,9 +388,12 @@ class SEM(model.HwComponent):
             try:
                 # Check if spot mode is required
                 if res == (1, 1):
-                    # FIXME: Maybe just use ScScanXY
+                    # FIXME: Overlook the dwell time, just set it to 1e03 ns and
+                    # scan until you leave the spot mode. This is to avoid the
+                    # delay in fetching images from Tescan when we are in spot
+                    # mode with a dwell time > 1ms.
                     self._device.ScScanLine(0, scaled_shape[0], scaled_shape[1],
-                                         l + 1, t + 1, r + 1, b + 1, dt, 1, 0)
+                                         l + 1, t + 1, r + 1, b + 1, 1000, 1, 0)
                 else:
                     self._device.ScScanXY(0, scaled_shape[0], scaled_shape[1],
                                          l, t, r, b, 0, dt)
