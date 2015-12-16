@@ -403,6 +403,9 @@ class Scanner(model.Emitter):
         self.spotSize = model.FloatContinuous(self._spotSize, spot_rng,
                                               setter=self._setSpotSize)
 
+        self.blanker = model.VAEnumerated(True, choices=set([True, False]),
+                                          setter=self._setBlanker)
+
     def updateMetadata(self, md):
         # we share metadata with our parent
         self.parent.updateMetadata(md)
@@ -439,6 +442,11 @@ class Scanner(model.Emitter):
             logging.debug("Cannot set HFW when the sample is not in SEM.")
 
         return self.horizontalFoV.value
+
+    def _setBlanker(self, value):
+        self.parent._detector.beam_blank(value)
+
+        return value
 
     def _updateMagnification(self):
 
@@ -718,7 +726,7 @@ class Detector(model.Detector):
             if beam_blanked:
                 try:
                     # "Unblank" the beam
-                    self.beam_blank(False)
+                    self.parent._scanner.blanker.value = False
                 except suds.WebFault:
                     logging.warning("Beam might still be blanked!")
         with self.parent._acq_progress_lock:
@@ -727,7 +735,7 @@ class Detector(model.Detector):
             if beam_blanked:
                 try:
                     # "Blank" the beam
-                    self.beam_blank(True)
+                    self.parent._scanner.blanker.value = True
                 except suds.WebFault:
                     logging.warning("Beam might still be unblanked!")
         # Update with the new values after automatic procedure is completed
@@ -835,7 +843,7 @@ class Detector(model.Detector):
             self._wait_acquisition_stopped()
             try:
                 # "Unblank" the beam
-                self.beam_blank(False)
+                self.parent._scanner.blanker.value = False
             except suds.WebFault:
                 logging.warning("Beam might still be blanked!")
             target = self._acquire_thread
@@ -877,7 +885,7 @@ class Detector(model.Detector):
                 #    logging.debug("No acquisition in progress to be aborted.")
 
                 # "Blank" the beam
-                self.beam_blank(True)
+                self.parent._scanner.blanker.value = True
 
     def _wait_acquisition_stopped(self):
         """
@@ -1061,7 +1069,7 @@ class Detector(model.Detector):
         try:
             # "Unblank" the beam
             if self._tilt_unblank is not None:
-                self.beam_blank(False)
+                self.parent._scanner.blanker.value = False
         except suds.WebFault:
             logging.warning("Beam might still be blanked!")
 
@@ -1680,7 +1688,7 @@ class ChamberPressure(model.Actuator):
             # Then blank the beam and unblank it once SEM stream is started
             self.parent._detector.update_parameters()
             self.parent._detector._tilt_unblank = self.parent._device.GetSEMSourceTilt()
-            self.parent._detector.beam_blank(True)
+            self.parent._scanner.blanker.value = True
             self._position = PRESSURE_SEM
         elif area == "LOADING-WORK-AREA-NAVCAM":
             self._position = PRESSURE_NAVCAM
