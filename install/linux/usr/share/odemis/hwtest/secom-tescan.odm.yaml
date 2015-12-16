@@ -148,7 +148,7 @@ Spectra: {
 
 # Light (lamp with known spectrum)
 "Chamber Light": {
-    role: light,
+    role: chamber-light,
     init: {},
 }
 
