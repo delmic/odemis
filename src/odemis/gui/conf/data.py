@@ -166,6 +166,9 @@ HW_SETTINGS_CONFIG = {
             ("depthOfField", {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
+            ("blanker", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
         )),
     "spectrometer":
         OrderedDict((
@@ -485,4 +488,3 @@ def get_local_vas(hw_comp, hidden=None):
         settings.add(name)
 
     return settings
-

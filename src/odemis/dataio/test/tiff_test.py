@@ -698,6 +698,7 @@ class TestTiffIO(unittest.TestCase):
                      model.MD_OUT_WL: (620e-9, 650e-9), # m
                      model.MD_ROTATION: 0.1,  # rad
                      model.MD_SHEAR: 0,
+                     model.MD_BASELINE: 400.0
                     },
                     {model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake hw",
@@ -767,6 +768,7 @@ class TestTiffIO(unittest.TestCase):
                 self.assertEqual(im.metadata[model.MD_LIGHT_POWER], md[model.MD_LIGHT_POWER])
 
             self.assertAlmostEqual(im.metadata.get(model.MD_ROTATION, 0), md.get(model.MD_ROTATION, 0))
+            self.assertAlmostEqual(im.metadata.get(model.MD_BASELINE, 0), md.get(model.MD_BASELINE, 0))
             self.assertAlmostEqual(im.metadata.get(model.MD_SHEAR, 0), md.get(model.MD_SHEAR, 0))
 
         # check thumbnail

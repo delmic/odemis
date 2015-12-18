@@ -86,14 +86,14 @@ SPARC2_MODES = {
                  'cl-det-selector': {'x': 'off'},
                  'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
                  'spec-det-selector': {'rx': 0},
-                 'light': {'power': 'off'},
+                 'chamber-light': {'power': 'off'},
                 }),
             'cli': ("cl-detector",
                 {'lens-switch': {'x': 'on'},
                  'cl-det-selector': {'x': 'on'},
                  'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
                  # there is also the cl-filter, but that's just up to the user
-                 'light': {'power': 'off'},
+                 'chamber-light': {'power': 'off'},
                 }),
             'spectral-integrated': ("spectrometer",
                 {'lens-switch': {'x': 'off'},
@@ -103,7 +103,7 @@ SPARC2_MODES = {
                  'spec-det-selector': {'rx': 0},
                  'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
                  'spectrograph': {'grating': GRATING_NOT_MIRROR},
-                 'light': {'power': 'off'},
+                 'chamber-light': {'power': 'off'},
                 }),
             'spectral-dedicated': ("spectrometer",
                 {'lens-switch': {'x': 'off'},
@@ -113,7 +113,7 @@ SPARC2_MODES = {
                  'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},  # Will be updated based on affects
                  'spectrograph': {'grating': GRATING_NOT_MIRROR},
                  # TODO: also 'spectrograph-dedicated' ? Normally it'd never have mirror grating anyway
-                 'light': {'power': 'off'},
+                 'chamber-light': {'power': 'off'},
                 }),
             'monochromator': ("monochromator",
                 {'lens-switch': {'x': 'off'},
@@ -123,7 +123,7 @@ SPARC2_MODES = {
                  'spec-det-selector': {'rx': math.radians(90)},
                  'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'spectrograph': {'grating': GRATING_NOT_MIRROR},
-                 'light': {'power': 'off'},
+                 'chamber-light': {'power': 'off'},
                 }),
             'mirror-align': ("ccd",  # Also used for lens alignment
                 {'lens-switch': {'x': 'off'},
@@ -132,7 +132,7 @@ SPARC2_MODES = {
                  'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
                  'cl-det-selector': {'x': 'off'},
                  'spec-det-selector': {'rx': 0},
-                 'light': {'power': 'off'},
+                 'chamber-light': {'power': 'off'},
                 }),
             'chamber-view': ("ccd",  # Same as AR but SEM is disabled and a light may be used
                 {'lens-switch': {'x': 'on'},
@@ -147,7 +147,7 @@ SPARC2_MODES = {
                  'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
                  'cl-det-selector': {'x': 'off'},
                  'spec-det-selector': {'rx': 0},
-                 'light': {'power': 'on'},
+                 'chamber-light': {'power': 'on'},
                 }),
             'spec-focus': ("ccd",
                 {'lens-switch': {'x': 'off'},
@@ -156,7 +156,7 @@ SPARC2_MODES = {
                  'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
                  'cl-det-selector': {'x': 'off'},
                  'spec-det-selector': {'rx': 0},
-                 'light': {'power': 'off'},
+                 'chamber-light': {'power': 'off'},
                 }),
             # TODO: make this mode work
             'fiber-align': ("fiber-aligner",  # TODO: also iif sp-ccd is present?
@@ -165,7 +165,7 @@ SPARC2_MODES = {
                  # Grating "mirror" forces wavelength to zero order and saves the
                  # current values so we can restore them
                  'spectrograph-dedicated': {'slit-in': 500e-6, 'grating': 'mirror'},
-                 'light': {'power': 'off'},
+                 'chamber-light': {'power': 'off'},
                 }),
          }
 
@@ -358,13 +358,12 @@ class OpticalPathManager(object):
             for axis, pos in conf.items():
                 if axis == "power":
                     if model.hasVA(comp, "power"):
-                        pwr = getattr(comp, "power")
                         try:
-                            rng = getattr(pwr, "range")
                             if pos == 'on':
-                                setattr(pwr, "value", rng[1])
+                                comp.power.value = comp.power.range[1]
                             else:
-                                setattr(pwr, "value", rng[0])
+                                comp.power.value = comp.power.range[0]
+                            logging.debug("Updating power of comp %s to %f", comp.name, comp.power.value)
                         except AttributeError:
                             logging.debug("Could not retrieve power range of %s component", comp_role)
                     continue

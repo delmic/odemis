@@ -505,6 +505,16 @@ def _parse_physical_data(pdgroup, da):
         except (KeyError, IndexError, ValueError):
             pass
 
+        try:
+            ds = pdgroup["Baseline"]
+            oft = float(ds[i])
+            state = _h5svi_get_state(ds)
+            if state and state[i] == ST_INVALID:
+                raise ValueError
+            md[model.MD_BASELINE] = oft
+        except (KeyError, IndexError, ValueError):
+            pass
+
         # Our extended metadata
         try:
             ds = pdgroup["IntegrationTime"]
@@ -691,6 +701,11 @@ def _add_image_metadata(group, image, mds):
     gp["Magnification"] = [1.0 if m is None else m for m in mags]
     state = [ST_INVALID if v is None else ST_REPORTED for v in mags]
     _h5svi_set_state(gp["Magnification"], state)
+
+    ofts = [md.get(model.MD_BASELINE) for md in mds]
+    gp["Baseline"] = [0.0 if m is None else m for m in ofts]
+    state = [ST_INVALID if v is None else ST_REPORTED for v in ofts]
+    _h5svi_set_state(gp["Baseline"], state)
 
     # MicroscopeMode
     _h5py_enum_commit(gp, "MicroscopeModeEnumeration", _dtmm)

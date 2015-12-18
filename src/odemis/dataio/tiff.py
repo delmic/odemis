@@ -470,6 +470,13 @@ def _updateMDFromOME(root, das, basename):
             except (OverflowError, ValueError):
                 pass
 
+        detse = ime.find("DetectorSettings")
+        try:
+            offset = detse.attrib["Offset"]
+            md[model.MD_BASELINE] = float(offset)
+        except (AttributeError, KeyError, ValueError):
+            pass
+
         objse = ime.find("ObjectiveSettings")
         try:
             obje = _findElementByID(root, objse.attrib["ID"], "Objective")
@@ -766,6 +773,7 @@ WHITELIST_MD_MERGE = frozenset([model.MD_DESCRIPTION, model.MD_FILTER_NAME,
                                 model.MD_HW_NAME, model.MD_HW_VERSION,
                                 model.MD_SW_VERSION, model.MD_LENS_NAME,
                                 model.MD_SENSOR_TEMP, model.MD_ACQ_DATE])
+
 def _canBeMerged(das):
     """
     Check whether multiple DataArrays can be merged into a larger DA without
@@ -1038,6 +1046,12 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
         # add ref to Objective
         ose = ET.SubElement(ime, "ObjectiveSettings",
                             attrib={"ID": "Objective:%d" % ifd})
+
+    if model.MD_BASELINE in globalMD:
+        # add ref to Objective
+        dse = ET.SubElement(ime, "DetectorSettings",
+                            attrib={"ID": "Detector:%d" % ifd,
+                                    "Offset": "%.15f" % globalMD[model.MD_BASELINE]})
 
     if model.MD_ROTATION in globalMD or model.MD_SHEAR in globalMD:
         # globalMD.get(model.MD_ROTATION, 0)

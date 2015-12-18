@@ -923,4 +923,8 @@ class Emitter(HwComponent):
     def shape(self):
         return self._shape
 
+    # An EnumeratedVA called blanker can be included. It is None if blanking
+    # is automatically applied when no scanning is taking place and True/False
+    # if blanking is set manually.
+
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

@@ -37,6 +37,7 @@ from odemis.model import HwError
 import Queue
 from odemis.model import roattribute, oneway
 import gc
+import socket
 
 
 ACQ_CMD_UPD = 1
@@ -69,6 +70,8 @@ class SEM(model.HwComponent):
                           "Check that the ip address is correct and TESCAN server "
                           "connected to the network." % (host,))
         logging.info("Connected")
+        self._device.connection.socket_c.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        self._device.connection.socket_d.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
         # Lock in order to synchronize all the child component functions
         # that acquire data from the SEM while we continuously acquire images
@@ -184,6 +187,9 @@ class SEM(model.HwComponent):
         with self._acquisition_mng_lock:
             if detector in self._acquisitions:
                 raise KeyError("Channel %d already set up for acquisition." % detector.channel)
+            # make sure socket settings are reset
+            self._device.connection.socket_c.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            self._device.connection.socket_d.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             self._acquisitions.add(detector)
             self._acq_cmd_q.put(ACQ_CMD_UPD)
 
@@ -313,10 +319,10 @@ class SEM(model.HwComponent):
         """
         Request the acquisition thread to stop
         """
-        # This must be entirely done before any new comedi command is started
-        # So it's protected with the init of read/write and set_to_resting_position
         with self._acquisition_init_lock:
             self._acquisition_must_stop.set()
+            self._device.ScStopScan()
+            self._device.CancelRecv()
 
     def _acq_wait_detectors_ready(self):
         """
@@ -377,9 +383,10 @@ class SEM(model.HwComponent):
             metadata[model.MD_DWELL_TIME] = self._scanner.dwellTime.value
 
             scaled_shape = (self._scanner._shape[0] / scale[0], self._scanner._shape[1] / scale[1])
+            scaled_trans = (pxs_pos[0] / scale[0], pxs_pos[1] / scale[1])
             center = (scaled_shape[0] / 2, scaled_shape[1] / 2)
-            l = int(center[0] + pxs_pos[0] - (res[0] / 2))
-            t = int(center[1] + pxs_pos[1] - (res[1] / 2))
+            l = int(center[0] + scaled_trans[0] - (res[0] / 2))
+            t = int(center[1] + scaled_trans[1] - (res[1] / 2))
             r = l + res[0] - 1
             b = t + res[1] - 1
 
@@ -393,18 +400,17 @@ class SEM(model.HwComponent):
                     # delay in fetching images from Tescan when we are in spot
                     # mode with a dwell time > 1ms.
                     self._device.ScScanLine(0, scaled_shape[0], scaled_shape[1],
-                                         l + 1, t + 1, r + 1, b + 1, 1000, 1, 0)
+                                         l + 1, t + 1, r + 1, b + 1, dt, 1, 1)
                 else:
                     self._device.ScScanXY(0, scaled_shape[0], scaled_shape[1],
-                                         l, t, r, b, 0, dt)
+                                         l, t, r, b, 1, dt)
                 # we must stop the scanning even after single scan
                 # self._device.ScStopScan()
                 # return model.DataArray(numpy.array([[0]], dtype=numpy.uint16), metadata)
                 # fetch the image (blocking operation), ndarray is returned
                 sem_img = self._device.FetchArray(channel, res[0] * res[1])
-            except Exception, e:
-                self._acq_progress_lock.release()
-                raise IOError("Failed while scanning SEM image: %s" % e)
+            except Exception:
+                raise CancelledError("Acquisition cancelled during scanning")
             sem_img.shape = res[::-1]
             # Change endianess
             sem_img.byteswap(True)
@@ -532,6 +538,11 @@ class Scanner(model.Emitter):
         self.probeCurrent = model.FloatEnumerated(self._probeCurrent, pc_choices, unit="A",
                                   setter=self._setPC)
 
+        # None implies that there is a blanker but it is set automatically.
+        # Mostly used in order to know if the module supports beam blanking
+        # when accessing it from outside.
+        self.blanker = model.VAEnumerated(None, choices=set([None]))
+
     # we share metadata with our parent
     def updateMetadata(self, md):
         self.parent.updateMetadata(md)
@@ -573,9 +584,9 @@ class Scanner(model.Emitter):
         self.magnification.notify(mag)
 
     def _onDwellTime(self, dt):
-        # TODO interrupt current scanning when dwell time is changed
-        # ScStopScan does not work this way
         pass
+#         self.parent._device.ScStopScan()
+#         self.parent._device.CancelRecv()
 
     def _onVoltage(self, volt):
         self.parent._device.HVSetVoltage(volt)

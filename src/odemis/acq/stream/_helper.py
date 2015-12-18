@@ -904,7 +904,8 @@ class OverlayStream(Stream):
                                         self._emitter,
                                         self._ccd,
                                         self._detector,
-                                        skew=True)
+                                        skew=True,
+                                        bgsub=model.hasVA(self._emitter, "blanker"))
 
         ovrl_future.result = self._result_wrapper(ovrl_future.result)
         return ovrl_future

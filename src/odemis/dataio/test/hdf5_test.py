@@ -641,6 +641,7 @@ class TestHDF5IO(unittest.TestCase):
                      model.MD_OUT_WL: (620e-9, 650e-9), # m
                      model.MD_ROTATION: 0.1, # rad
                      model.MD_SHEAR: 0,
+                     model.MD_BASELINE: 200
                     },
                     ]
         # create 3 greyscale images of same size
@@ -694,6 +695,7 @@ class TestHDF5IO(unittest.TestCase):
 #            self.assertEqual(im.metadata[model.MD_BINNING], md[model.MD_BINNING])
             self.assertEqual(im.metadata[model.MD_EXP_TIME], md[model.MD_EXP_TIME])
             self.assertEqual(im.metadata.get(model.MD_ROTATION, 0), md.get(model.MD_ROTATION, 0))
+            self.assertEqual(im.metadata.get(model.MD_BASELINE, 0), md.get(model.MD_BASELINE, 0))
             self.assertEqual(im.metadata.get(model.MD_SHEAR, 0), md.get(model.MD_SHEAR, 0))
         # check thumbnail
         rthumbs = hdf5.read_thumbnail(FILENAME)
