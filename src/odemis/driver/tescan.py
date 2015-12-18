@@ -73,7 +73,11 @@ class SEM(model.HwComponent):
             raise HwError("Failed to connect to TESCAN server '%s'. "
                           "Check that the IP address is correct and TESCAN server "
                           "connected to the network." % (host,))
-        logging.info("Connected to Tescan %s", host)
+        logging.info("Connected")
+        # Disable Nagle's algorithm (batching data messages) and send them asap instead.
+        # This is to avoid the 200ms ceiling on data transmission.
+        self._device.connection.socket_c.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        self._device.connection.socket_d.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
         # Lock in order to synchronize all the child component functions
         # that acquire data from the SEM while we continuously acquire images
