@@ -1143,7 +1143,7 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
             # TODO create a Filter with the cut range?
             if model.MD_IN_WL in da.metadata:
                 iwl = da.metadata[model.MD_IN_WL]
-                xwl = fluo.get_center(iwl) * 1e9 # in nm
+                xwl = fluo.get_one_center(iwl) * 1e9  # in nm
                 chan.attrib["ExcitationWavelength"] = "%d" % round(xwl)
 
                 # if input wavelength range is small, it means we are in epifluoresence
@@ -1162,8 +1162,13 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
                     filter = ET.SubElement(chan, "Filter", attrib={
                                     "ID": "Filter:%d:%d" % (idnum, subid)})
                     filter.attrib["Type"] = owl
+                elif model.MD_IN_WL in da.metadata:
+                    # Use excitation wavelength in case of multiple bands
+                    iwl = da.metadata[model.MD_IN_WL]
+                    ewl = fluo.get_one_center_em(owl, iwl) * 1e9  # in nm
+                    chan.attrib["EmissionWavelength"] = "%d" % round(ewl)
                 else:
-                    ewl = fluo.get_center(owl) * 1e9 # in nm
+                    ewl = fluo.get_one_center(owl) * 1e9  # in nm
                     chan.attrib["EmissionWavelength"] = "%d" % round(ewl)
 
             if wl_list is not None and len(wl_list) > 0:

@@ -704,6 +704,60 @@ class TestHDF5IO(unittest.TestCase):
         self.assertEqual(im.shape, tshape)
         self.assertEqual(im[0, 0].tolist(), [0, 255, 0])
 
+    def testReadMDOutWlBands(self):
+        """
+        Checks that we hand MD_OUT_WL if it contains multiple bands.
+        OME supports only one value, so it's ok to discard some info.
+        """
+        metadata = [{model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_NAME: "fake hw",
+                     model.MD_DESCRIPTION: "blue dye",
+                     model.MD_ACQ_DATE: time.time() + 1,
+                     model.MD_BPP: 12,
+                     model.MD_BINNING: (1, 1),  # px, px
+                     model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
+                     model.MD_POS: (13.7e-3, -30e-3),  # m
+                     model.MD_EXP_TIME: 1.2,  # s
+                     model.MD_IN_WL: (500e-9, 520e-9),  # m
+                     model.MD_OUT_WL: ((630e-9, 660e-9), (675e-9, 690e-9)),  # m
+                     model.MD_USER_TINT: (255, 0, 65),  # purple
+                     model.MD_LIGHT_POWER: 100e-3  # W
+                    },
+                    ]
+        size = (512, 256)
+        dtype = numpy.dtype("uint16")
+        ldata = []
+        for i, md in enumerate(metadata):
+            a = model.DataArray(numpy.zeros(size[::-1], dtype), md.copy())
+            a[i, i] = i  # "watermark" it
+            ldata.append(a)
+
+        # export
+        hdf5.export(FILENAME, ldata)
+
+        # check data
+        rdata = hdf5.read_data(FILENAME)
+        self.assertEqual(len(rdata), len(ldata))
+
+        im = rdata[0]
+        emd = metadata[0].copy()
+        rmd = im.metadata
+        img.mergeMetadata(emd)
+        img.mergeMetadata(rmd)
+        self.assertEqual(rmd[model.MD_DESCRIPTION], emd[model.MD_DESCRIPTION])
+        iwl = rmd[model.MD_IN_WL]  # nm
+        self.assertTrue((emd[model.MD_IN_WL][0] <= iwl[0] and
+                         iwl[1] <= emd[model.MD_IN_WL][-1]))
+
+        # It should be within at least one of the bands
+        owl = rmd[model.MD_OUT_WL]  # nm
+        for eowl in emd[model.MD_OUT_WL]:
+            if (eowl[0] <= owl[0] and owl[1] <= eowl[-1]):
+                break
+        else:
+            self.fail("Out wl %s is not within original metadata" % (owl,))
+
+
     def testReadMDMnchr(self):
         """
         Checks that we can read back the metadata of a monochromator image.

@@ -478,7 +478,7 @@ def _parse_physical_data(pdgroup, da):
             if state and state[i] == ST_INVALID:
                 raise ValueError
             md[model.MD_IN_WL] = (xwl - h_width, xwl + h_width)
-        except (KeyError, IndexError, ValueError):
+        except (TypeError, KeyError, IndexError, ValueError):
             pass
 
         try:
@@ -492,7 +492,7 @@ def _parse_physical_data(pdgroup, da):
                 ewl = float(ds[i])  # in m
                 if model.MD_OUT_WL not in md:  # could already be filled by C scale
                     md[model.MD_OUT_WL] = (ewl - h_width, ewl + h_width)
-        except (KeyError, IndexError, ValueError):
+        except (TypeError, KeyError, IndexError, ValueError):
             pass
 
         try:
@@ -688,13 +688,30 @@ def _add_image_metadata(group, image, mds):
 
     # Wavelengths are not a band, but a single value, so we pick the center
     xwls = [md.get(model.MD_IN_WL) for md in mds]
-    gp["ExcitationWavelength"] = [1e-9 if v is None else fluo.get_center(v) for v in xwls] # in m
+    gp["ExcitationWavelength"] = [1e-9 if v is None else fluo.get_one_center(v) for v in xwls]  # in m
     state = [ST_INVALID if v is None else ST_REPORTED for v in xwls]
     _h5svi_set_state(gp["ExcitationWavelength"], state)
 
-    ewls = [md.get(model.MD_OUT_WL) for md in mds]
-    gp["EmissionWavelength"] = [1e-9 if v is None else v if isinstance(v, basestring) else fluo.get_center(v) for v in ewls]  # in m
-    state = [ST_INVALID if v is None else ST_REPORTED for v in ewls]
+    ewls = []
+    state = []
+    for md in mds:
+        ewl = md.get(model.MD_OUT_WL)
+        if ewl is None:
+            ewls.append(1e-9) # to not confuse some readers
+            state.append(ST_INVALID)
+        elif isinstance(ewl, basestring):
+            # Just copy as is, hopefully there are all the same type
+            ewls.append(ewl)
+            state.append(ST_REPORTED)
+        elif model.MD_IN_WL in md:
+            xwl = md[model.MD_IN_WL]
+            ewls.append(fluo.get_one_center_em(ewl, xwl))
+            state.append(ST_REPORTED)
+        else:
+            ewls.append(fluo.get_one_center(ewl))
+            state.append(ST_REPORTED)
+
+    gp["EmissionWavelength"] = ewls # in m
     _h5svi_set_state(gp["EmissionWavelength"], state)
 
     mags = [md.get(model.MD_LENS_MAG) for md in mds]
