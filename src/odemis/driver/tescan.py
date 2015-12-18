@@ -401,7 +401,6 @@ class SEM(model.HwComponent):
                     # mode with a dwell time > 1ms.
                     self._device.ScScanLine(0, scaled_shape[0], scaled_shape[1],
                                          l + 1, t + 1, r + 1, b + 1, dt, 1, 1)
-                    self._device.ScSetBeamPos((l + 1) / scaled_shape[0], (t + 1) / scaled_shape[1])
                 else:
                     self._device.ScScanXY(0, scaled_shape[0], scaled_shape[1],
                                          l, t, r, b, 1, dt)
