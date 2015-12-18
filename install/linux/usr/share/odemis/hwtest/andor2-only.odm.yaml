@@ -11,7 +11,7 @@ Light: {
     role: light,
     affects: ["Camera"],
     properties: {
-        power: 100 # W
+        #power: 10 # W
     }
 }
 "Optical Objective": {

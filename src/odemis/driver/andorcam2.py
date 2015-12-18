@@ -4,7 +4,7 @@ Created on 15 Mar 2012
 
 @author: Éric Piel
 
-Copyright © 2012 Éric Piel, Delmic
+Copyright © 2012-2015 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -108,6 +108,18 @@ class AndorCapabilities(Structure):
     GETFUNCTION_DETECTORSIZE = 0x08
     GETFUNCTION_MCPGAIN = 0x10
     GETFUNCTION_EMCCDGAIN = 0x20
+    GETFUNCTION_HVFLAG = 0x40
+    GETFUNCTION_GATEMODE = 0x80
+    GETFUNCTION_DDGTIMES = 0x0100
+    GETFUNCTION_IOC = 0x0200
+    GETFUNCTION_INTELLIGATE = 0x0400
+    GETFUNCTION_INSERTION_DELAY = 0x0800
+    GETFUNCTION_GATESTEP = 0x1000
+    GETFUNCTION_GATEDELAYSTEP = 0x1000
+    GETFUNCTION_PHOSPHORSTATUS = 0x2000
+    GETFUNCTION_MCPGAINTABLE = 0x4000
+    GETFUNCTION_BASELINECLAMP = 0x8000
+    GETFUNCTION_GATEWIDTHSTEP = 0x10000
 
     # for the SetFunctions field
     SETFUNCTION_VREADOUT = 0x01
@@ -120,6 +132,28 @@ class AndorCapabilities(Structure):
     SETFUNCTION_HIGHCAPACITY = 0x80
     SETFUNCTION_BASELINEOFFSET = 0x0100
     SETFUNCTION_PREAMPGAIN = 0x0200
+    SETFUNCTION_CROPMODE = 0x0400
+    SETFUNCTION_DMAPARAMETERS = 0x0800
+    SETFUNCTION_HORIZONTALBIN = 0x1000
+    SETFUNCTION_MULTITRACKHRANGE = 0x2000
+    SETFUNCTION_RANDOMTRACKNOGAPS = 0x4000
+    SETFUNCTION_EMADVANCED = 0x8000
+    SETFUNCTION_GATEMODE = 0x010000
+    SETFUNCTION_DDGTIMES = 0x020000
+    SETFUNCTION_IOC = 0x040000
+    SETFUNCTION_INTELLIGATE = 0x080000
+    SETFUNCTION_INSERTION_DELAY = 0x100000
+    SETFUNCTION_GATESTEP = 0x200000
+    SETFUNCTION_GATEDELAYSTEP = 0x200000
+    SETFUNCTION_TRIGGERTERMINATION = 0x400000
+    SETFUNCTION_EXTENDEDNIR = 0x800000
+    SETFUNCTION_SPOOLTHREADCOUNT = 0x1000000
+    SETFUNCTION_REGISTERPACK = 0x2000000
+    SETFUNCTION_PRESCANS = 0x4000000
+    SETFUNCTION_GATEWIDTHSTEP = 0x8000000
+    SETFUNCTION_EXTENDED_CROP_MODE = 0x10000000
+    SETFUNCTION_SUPERKINETICS = 0x20000000
+    SETFUNCTION_TIMESCAN = 0x40000000
 
     # ReadModes field
     READMODE_FULLIMAGE = 1
@@ -170,7 +204,9 @@ class AndorCapabilities(Structure):
         CAMERATYPE_IDUS: "iDus",
         CAMERATYPE_IVAC_CCD: "iVac CCD",
         CAMERATYPE_NEWTON: "Newton",
-        }
+        CAMERATYPE_IKON: "iKon M",
+        CAMERATYPE_INGAAS: "iDus InGaAs",
+    }
 
 
 class AndorV2DLL(CDLL):
@@ -388,19 +424,19 @@ class AndorCam2(model.DigitalCamera):
     def __init__(self, name, role, device=None, emgains=None, image=None, **kwargs):
         """
         Initialises the device
-        device (None or 0<=int or "fake"): number of the device to open, as defined by Andor, cd scan()
-          if None, uses the system handle, which allows very limited access to
-          some information. "fake" will create a simulated device
+        device (None or 0<=int or str): number of the device to open, as defined
+          by Andor, or the serial number of the camera (as a string).
+          "fake" will create a simulated device.
+          If None, uses the system handle, which allows very limited access to
+          some information. For a simulated version of the system handle, use
+          "fakesys".
         emgains (list of (0<float, 0<float, 1 <= int <=300)): Look-up table for
          the EMCCD real gain. Readout rate, Gain, Real Gain.
         image (str or None): only useful for simulated device, the path to a file
           to use as fake image.
         Raise an exception if the device cannot be opened.
         """
-        # TODO: add a way to select which camera is to be opened better than
-        # device ID as they can be numbered in any order. Maybe (regex on)
-        # serial number?
-        if device in ["fake", "fakesys"]:
+        if device in ("fake", "fakesys"):
             self.atcore = FakeAndorV2DLL(image)
             if device == "fake":
                 device = 0
@@ -418,31 +454,35 @@ class AndorCam2(model.DigitalCamera):
             self.handle = None
             return
 
-        self._device = device # for reinit only
+        if isinstance(device, basestring):
+            self._device, self.handle = self._findDevice(device)
+        else:
+            self._device = device  # for reinit only
+            try:
+                logging.debug("Looking for camera %d, can be long...", device)  # ~20s
+                self.handle = self.GetCameraHandle(device)
+            except AndorV2Error as exp:
+                if exp.errno == 20066:  # DRV_P1INVALID
+                    raise HwError("Failed to find Andor camera %s (%d), check it is "
+                                  "turned on and connected to the computer." %
+                                  (name, device))
+                else:
+                    raise
+
         model.DigitalCamera.__init__(self, name, role, **kwargs)
-        try:
-            logging.debug("Looking for camera %d, can be long...", device) # ~20s
-            self.handle = self.GetCameraHandle(device)
-        except AndorV2Error as exp:
-            if exp.errno == 20066: # DRV_P1INVALID
-                raise HwError("Failed to find Andor camera %s (%d), check it is "
-                              "turned on and connected to the computer." %
-                              (name, device))
-            else:
-                raise
         self.select()
         self._initpath = None
         self.Initialize()
 
-        logging.info("opened device %d successfully", device)
+        logging.info("Opened device %s successfully", device)
 
         # Describe the camera
         # up-to-date metadata to be included in dataflow
         hw_name = self.getModelName()
         self._metadata[model.MD_HW_NAME] = hw_name
-        caps = self.GetCapabilities()
-        if caps.CameraType not in AndorCapabilities.CameraTypes:
-            logging.warning("This driver has not been tested for this camera type")
+        self._caps = self.GetCapabilities()
+        if self._caps.CameraType not in AndorCapabilities.CameraTypes:
+            logging.warning("This driver has not been tested for this camera type %d", self._caps.CameraType)
 
         # drivers/hardware info
         self._swVersion = self.getSwVersion()
@@ -471,8 +511,7 @@ class AndorCam2(model.DigitalCamera):
             if self.hasGetFunction(AndorCapabilities.GETFUNCTION_TEMPERATURERANGE):
                 ranges = self.GetTemperatureRange()
             else:
-                ranges = [-275, 100]
-            # TODO Clara must be cooled to the specified temperature: -45 C with fan, -15 C without.
+                ranges = (-275, 100)
             self.targetTemperature = model.FloatContinuous(ranges[0], ranges, unit=u"°C",
                                                             setter=self._setTargetTemperature)
             self._setTargetTemperature(ranges[0], force=True)
@@ -590,7 +629,7 @@ class AndorCam2(model.DigitalCamera):
             # 3 = Real Gain mode (seems to be the best, but not always available)
             # 2 = Linear mode (similar, but without aging compensation)
             # 0 = Gain between 0 and 255
-            for m in [3, 2, 0]:
+            for m in (3, 2, 0):
                 try:
                     self.atcore.SetEMGainMode(m)
                 except AndorV2Error as exp:
@@ -753,6 +792,11 @@ class AndorCam2(model.DigitalCamera):
         dc = c_uint32()
         self.atcore.GetAvailableCameras(byref(dc))
         return dc.value
+
+    def GetCameraSerialNumber(self):
+        serial = c_int32()
+        self.atcore.GetCameraSerialNumber(byref(serial))
+        return serial.value
 
     def GetCapabilities(self):
         """
@@ -1021,8 +1065,7 @@ class AndorCam2(model.DigitalCamera):
         feature (int): one of the AndorCapabilities.FEATURE_* constant (can be OR'd)
         return boolean
         """
-        caps = self.GetCapabilities()
-        return bool(caps.Features & feature)
+        return bool(self._caps.Features & feature)
 
     def hasSetFunction(self, function):
         """
@@ -1031,8 +1074,7 @@ class AndorCam2(model.DigitalCamera):
         function (int): one of the AndorCapabilities.SETFUNCTION_* constant (can be OR'd)
         return boolean
         """
-        caps = self.GetCapabilities()
-        return bool(caps.SetFunctions & function)
+        return bool(self._caps.SetFunctions & function)
 
     def hasGetFunction(self, function):
         """
@@ -1041,8 +1083,7 @@ class AndorCam2(model.DigitalCamera):
         function (int): one of the AndorCapabilities.GETFUNCTION_* constant (can be OR'd)
         return boolean
         """
-        caps = self.GetCapabilities()
-        return bool(caps.GetFunctions & function)
+        return bool(self._caps.GetFunctions & function)
 
     def _setTargetTemperature(self, temp, force=False):
         """
@@ -1143,9 +1184,7 @@ class AndorCam2(model.DigitalCamera):
         self.atcore.GetHeadModel(headmodel)
 
         try:
-            serial = c_int32()
-            self.atcore.GetCameraSerialNumber(byref(serial))
-            serial_str = " (s/n: %d)" % serial.value
+            serial_str = " (s/n: %d)" % self.GetCameraSerialNumber()
         except AndorV2Error:
             serial_str = "" # unknown
 
@@ -1362,12 +1401,18 @@ class AndorCam2(model.DigitalCamera):
             self.atcore.SetHSSpeed(self._output_amp, hsspeed)
             self._metadata[model.MD_READOUT_TIME] = 1.0 / self._readout_rate # s
 
-            # fastest VSspeed which doesn't need to increase noise (voltage)
-#            nb_vsspeeds = c_int()
-#            self.atcore.GetNumberVSSpeeds(byref(nb_vsspeeds))
-            speed_idx, vsspeed = c_int(), c_float() # ms
-            self.atcore.GetFastestRecommendedVSSpeed(byref(speed_idx), byref(vsspeed))
-            self.atcore.SetVSSpeed(speed_idx)
+            if self.hasSetFunction(AndorCapabilities.SETFUNCTION_VREADOUT):
+                # fastest VSspeed which doesn't need to increase noise (voltage)
+                try:
+                    speed_idx, vsspeed = c_int(), c_float()  # ms
+                    self.atcore.GetFastestRecommendedVSSpeed(byref(speed_idx), byref(vsspeed))
+                    self.atcore.SetVSSpeed(speed_idx)
+                except AndorV2Error as ex:
+                    # Some cameras report SETFUNCTION_VREADOUT but don't actually support it (as of SDK 2.100)
+                    if ex.errno == 20991:  # DRV_NOT_SUPPORTED
+                        logging.debug("VSSpeed cannot be set, will not change it")
+                    else:
+                        raise
 
             # bits per pixel depends just on the AD channel
             bpp = c_int()
@@ -1905,6 +1950,38 @@ class AndorCam2(model.DigitalCamera):
 
         return True
 
+    def _findDevice(self, sn):
+        """
+        Look for a device with the given serial number
+        sn (str): serial number
+        return (int, c_uint32): the device number of the device with the given
+          serial number and the corresponding handle
+        raise HwError: If no device with the given serial number can be found
+        """
+        try:
+            sni = int(sn)
+        except TypeError:
+            raise ValueError("Serial number must be just a number but got %s" % (sn,))
+
+        serial = c_int32()
+        for n in range(self.GetAvailableCameras()):
+            handle = self.GetCameraHandle(n)
+            self.atcore.SetCurrentCamera(handle)
+            # Initialisation is needed for getting the serial number
+            try:
+                self.Initialize()
+            except HwError:
+                logging.debug("Skipping Andor camera %d, which is not responding or already used", n)
+                continue
+            serial = self.GetCameraSerialNumber()
+            if serial == sni:
+                return n, handle
+            else:
+                logging.info("Skipping Andor camera with S/N %d", serial)
+        else:
+            raise HwError("Failed to find Andor camera with S/N %d, check it is "
+                          "turned on and connected to the computer." % (sni,))
+
     @staticmethod
     def scan(_fake=False):
         """
@@ -1922,13 +1999,13 @@ class AndorCam2(model.DigitalCamera):
 
         cameras = []
         for i in range(dc):
-            camera.handle = c_int32()
-            camera.atcore.GetCameraHandle(c_int32(i), byref(camera.handle))
+            camera.handle = camera.GetCameraHandle(i)
             camera.select()
             camera.Initialize()
 
             caps = camera.GetCapabilities()
             name = "Andor " + AndorCapabilities.CameraTypes.get(caps.CameraType, "unknown")
+            name += " (s/n %s)" % camera.GetCameraSerialNumber()
             cameras.append((name, {"device": i}))
             # seems to cause problem is the camera is to be reopened...
             camera.Shutdown()
