@@ -31,6 +31,7 @@ import gc
 import importlib
 import inspect
 import logging
+import numbers
 from odemis import model, dataio, util
 import odemis
 from odemis.cli.video_displayer import VideoDisplayer
@@ -507,29 +508,42 @@ def move_abs(comp_name, moves, check_distance=True):
         except (TypeError, AttributeError):
             raise ValueError("Component %s is not an actuator" % comp_name)
 
-        if ad.unit == "m":
-            try:
-                position = float(str_position)
-            except ValueError:
-                raise ValueError("Position '%s' cannot be converted to a number" % str_position)
+        # Allow the user to indicate the position via the user-friendly choice entry
+        position = None
+        if (hasattr(ad, "choices") and isinstance(ad.choices, dict)):
+            for key, value in ad.choices.items():
+                if value == str_position:
+                    logging.info("Converting '%s' into %s", str_position, key)
+                    position = key
+                    # Even if it's a big distance, we don't complain as it's likely
+                    # that all choices are safe
+                    break
 
-            # compare to the current position, to see if the new position sounds reasonable
-            cur_pos = component.position.value[axis_name]
-            if check_distance and abs(cur_pos - position) > MAX_DISTANCE:
-                raise IOError("Distance of %f m is too big (> %f m), use '--big-distance' to allow the move." %
-                              (abs(cur_pos - position), MAX_DISTANCE))
-        else:
-            position = convert_to_object(str_position)
+        if position is None:
+            if ad.unit == "m":
+                try:
+                    position = float(str_position)
+                except ValueError:
+                    raise ValueError("Position '%s' cannot be converted to a number" % str_position)
 
-        # If only a couple of positions are possible, and asking for a float,
-        # avoid the rounding error by looking for the closest possible
-        if (hasattr(ad, "choices") and
-            isinstance(ad.choices, collections.Iterable) and
-            position not in ad.choices):
-            closest = util.find_closest(position, ad.choices)
-            if util.almost_equal(closest, position, rtol=1e-3):
-                logging.debug("Adjusting value %.15g to %.15g", position, closest)
-                position = closest
+                # compare to the current position, to see if the new position sounds reasonable
+                cur_pos = component.position.value[axis_name]
+                if check_distance and abs(cur_pos - position) > MAX_DISTANCE:
+                    raise IOError("Distance of %f m is too big (> %f m), use '--big-distance' to allow the move." %
+                                  (abs(cur_pos - position), MAX_DISTANCE))
+            else:
+                position = convert_to_object(str_position)
+
+            # If only a couple of positions are possible, and asking for a float,
+            # avoid the rounding error by looking for the closest possible
+            if (isinstance(position, numbers.Real) and
+                hasattr(ad, "choices") and
+                isinstance(ad.choices, collections.Iterable) and
+                position not in ad.choices):
+                closest = util.find_closest(position, ad.choices)
+                if util.almost_equal(closest, position, rtol=1e-3):
+                    logging.debug("Adjusting value %.15g to %.15g", position, closest)
+                    position = closest
 
         act_mv[axis_name] = position
         logging.info(u"Will move %s.%s to %s", comp_name, axis_name,

@@ -438,6 +438,7 @@ class OpticalPathManager(object):
                         for key, value in choices.items():
                             if value == pos:
                                 pos = key
+                                break
                     mv[axis] = pos
                 else:
                     logging.debug("Not moving axis %s.%s as it is not present", comp_role, axis)
