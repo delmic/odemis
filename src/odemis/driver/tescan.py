@@ -110,7 +110,7 @@ class SEM(model.HwComponent):
                 self._detectors[name] = Detector(parent=self, daemon=daemon, **ckwargs)
                 self.children.value.add(self._detectors[name])
         if not self._detectors:
-            raise KeyError("TescanSEM was not given a 'detector' child")
+            logging.info("TescanSEM was not given a 'detector' child")
 
         # create the stage child
         try:
