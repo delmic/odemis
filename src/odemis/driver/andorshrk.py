@@ -396,6 +396,8 @@ class Shamrock(model.Actuator):
                                               choices=set(FLIPPER_TO_PORT.keys())
                                               )
                 logging.info("Adding out mirror flipper as flip-out")
+                # Some of the SR-193 don't have the hardware switch working, so better force it to a known position
+                self.SetFlipperMirror(OUTPUT_FLIPPER, self.GetFlipperMirror(OUTPUT_FLIPPER))
             else:
                 logging.info("Out mirror flipper is not present")
 
@@ -840,20 +842,24 @@ class Shamrock(model.Actuator):
 
         # Sometimes, the SR-193 gets a bit confused and if changing to the same
         # value, it will move the focus. So avoid changing to the current value.
+        checkfocus = False and "focus" in self.axes # Set to True if need debugging
         if self.GetFlipperMirror(flipper) == port:
-            logging.info("Not changing again flipper %d to current pos %d", flipper, port)
-            return
-
-        if "focus" in self.axes:
-            cf = self.GetFocusMirror()
+            if checkfocus:
+	        cf = self.GetFocusMirror()
+            else:
+                logging.info("Not changing again flipper %d to current pos %d", flipper, port)
+                return
+        else:
+            checkfocus = False
 
         with self._hw_access:
             self._dll.ShamrockSetFlipperMirror(self._device, flipper, port)
 
-        nf = self.GetFocusMirror()
-        if "focus" in self.axes and cf != nf:
-            logging.warning("Focus mirror changed unexpectedly after moving flipper %d to %d, "
-                            "going from %d to %d steps", flipper, port, cf, nf)
+        if checkfocus:
+            nf = self.GetFocusMirror()
+            if cf != nf:
+                logging.warning("Focus mirror changed unexpectedly after moving flipper %d to %d, "
+                                "going from %d to %d steps", flipper, port, cf, nf)
 
     def GetFlipperMirror(self, flipper):
         assert(FLIPPER_INDEX_MIN <= flipper <= FLIPPER_INDEX_MAX)
