@@ -50,11 +50,6 @@ CONFIG_SEM_EXT = {"name": "sem_ext", "role": "null", "device": "/dev/comedi0",
               }
 
 
-CONFIG_SCANNER = {"name": "scanner", "role": "e-beam", "limits": [[-5, 5], [3, -3]],
-                  "channels": [0, 1], "settle_time": 10e-6, "hfw_nomag": 10e-3,
-                  "park": [8, 8]}
-
-
 class TestScanner(unittest.TestCase):
     """
     Test Scanner class
@@ -62,20 +57,20 @@ class TestScanner(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.sem_int = semcomedi.SEMComedi(**CONFIG_SEM_EXT)
-        cls.sem_ext = simsem.SimSEM(**CONFIG_SEM_INT)
+        cls.sem_ext = semcomedi.SEMComedi(**CONFIG_SEM_EXT)
+        cls.sem_int = simsem.SimSEM(**CONFIG_SEM_INT)
 
-        for child in cls.sem_int.children.value:
+        for child in cls.sem_ext.children.value:
             if child.name == CONFIG_SCANNER_EXT["name"]:
-                cls.ebeam_int = child
+                cls.ebeam_ext = child
             elif child.name == CONFIG_SED_EXT["name"]:
                 cls.sed = child
-        for child in cls.sem_ext.children.value:
+        for child in cls.sem_int.children.value:
             if child.name == CONFIG_SCANNER_INT["name"]:
-                cls.ebeam_ext = child
+                cls.ebeam_int = child
         cls.scanner = CLASS(name="test", role="e-beam",
-                            children={"external": cls.ebeam_int,
-                                      "internal": cls.ebeam_ext})
+                            children={"external": cls.ebeam_ext,
+                                      "internal": cls.ebeam_int})
 
     @classmethod
     def tearDownClass(cls):
@@ -108,7 +103,10 @@ class TestScanner(unittest.TestCase):
         self.scanner.horizontalFoV.value = orig_hfv / 2
 
         self.assertAlmostEqual(orig_pxs[0] / 2, self.scanner.pixelSize.value[0])
+        self.assertAlmostEqual(self.ebeam_ext.pixelSize.value[0], self.scanner.pixelSize.value[0])
         self.assertAlmostEqual(orig_mag * 2, self.scanner.magnification.value)
+        self.assertAlmostEqual(self.ebeam_ext.magnification.value, self.scanner.magnification.value)
+        self.assertAlmostEqual(self.ebeam_int.horizontalFoV.value, self.scanner.horizontalFoV.value)
 
     def test_acquire_with_va(self):
         """
