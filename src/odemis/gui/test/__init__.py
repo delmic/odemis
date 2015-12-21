@@ -69,10 +69,6 @@ def gui_loop(slp=0):
     while time.time() < (start + slp / 1000):
         wx.CallAfter(app.ExitMainLoop)
         app.MainLoop()
-#         if not app.Pending():
-#             break
-
-#     wx.MilliSleep(slp or SLEEP_TIME)
 
 
 def sleep(ms=None):
@@ -84,8 +80,8 @@ def set_sleep_time(slp_tm):
     SLEEP_TIME = slp_tm
 
 
-def set_log_level(level):
-    logging.getLogger().setLevel(logging.DEBUG)
+def set_log_level(level=logging.DEBUG):
+    logging.getLogger().setLevel(level)
 
 
 # Default wxPython App that can be used as a basis for testing

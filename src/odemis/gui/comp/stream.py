@@ -749,7 +749,7 @@ class StreamPanel(wx.Panel):
                                  self.stream.intensityRange.value[0],
                                  style=wx.NO_BORDER, size=(-1, 14),
                                  min_val=hist_min, max_val=hist_max,
-                                 step=1, accuracy=6)
+                                 key_step=1, accuracy=6)
         txt_lowi.SetForegroundColour(FG_COLOUR_EDIT)
         txt_lowi.SetOwnBackgroundColour(BG_COLOUR_MAIN)
 
@@ -763,7 +763,7 @@ class StreamPanel(wx.Panel):
                                   self.stream.intensityRange.value[1],
                                   style=wx.NO_BORDER, size=(-1, 14),
                                   min_val=hist_min, max_val=hist_max,
-                                  step=1, accuracy=6)
+                                  key_step=1, accuracy=6)
         txt_highi.SetBackgroundColour(BG_COLOUR_MAIN)
         txt_highi.SetForegroundColour(FG_COLOUR_EDIT)
         txt_highi.SetToolTipString(tooltip_txt)
@@ -940,7 +940,9 @@ class StreamPanel(wx.Panel):
         lbl_ctrl = self._add_side_label(label_text)
         # wx.ALIGN_RIGHT has the effect of only highlighting the box on hover,
         # which makes it less ugly with Ubuntu
-        value_ctrl = wx.CheckBox(self._panel, wx.ID_ANY, style=wx.ALIGN_RIGHT | wx.NO_BORDER, **conf)
+        value_ctrl = wx.CheckBox(self._panel, wx.ID_ANY,
+                                 style=wx.ALIGN_RIGHT | wx.NO_BORDER,
+                                 **conf)
         self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 3),
                           flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.TOP | wx.BOTTOM, border=5)
         value_ctrl.SetValue(value)

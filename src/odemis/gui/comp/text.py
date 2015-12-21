@@ -27,22 +27,23 @@ Content:
 """
 from __future__ import division
 
-import logging
 import locale
+import logging
 import math
 import os
+import re
+import string
 import sys
 
 import wx
 import wx.lib.mixins.listctrl as listmix
+
 from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_EDIT
-
 from odemis.util import units
-
+from odemis.util.units import decompose_si_prefix, si_scale_val
 
 # Locale is needed for correct string sorting
 locale.setlocale(locale.LC_ALL, "")
-
 
 # The SuggestTextCtrl and ChoiceListCtrl class are adaptations of the
 # TextCtrlAutoComplete class found at
@@ -382,16 +383,24 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
         self.dropdown.SetClientSize(self.popupsize)
 
 
-class NumberValidator(wx.PyValidator):
-    """ Base class used for number validation """
+class _NumberValidator(wx.PyValidator):
+    """ Base class used for number validation
 
-    def __init__(self, min_val=None, max_val=None, choices=None):
+    Note::
+        In wxPython 3.0 Phoenix, wx.PyValidator will be replaced with wx. Validator. When you try
+        and replace wx.PyValidator with wx.Validator in wxPython 3.0 Classic, however, validators
+        will not be assigned correctly to TextCtrls (most notably the one in the Slider class)
+
+        No clear reason was found for this and no attempt to change the super class should be made
+        as long as Odemis uses the Classic version of wxPython.
+
+    """
+
+    def __init__(self, min_val=None, max_val=None, choices=None, unit=None):
         """ Constructor """
-        wx.PyValidator.__init__(self)
-        self.Bind(wx.EVT_CHAR, self.OnChar)
+        super(_NumberValidator, self).__init__()
 
-        # String of legal characters
-        self.legal = "0123456789"
+        self.Bind(wx.EVT_CHAR, self.on_char)
 
         # this is a kludge because default value in XRC is 0:
         if min_val == 0 and max_val == 0:
@@ -402,120 +411,68 @@ class NumberValidator(wx.PyValidator):
         self.min_val = min_val
         self.max_val = max_val
         self.choices = choices
+        self.unit = unit
 
-        if min_val is not None and max_val is not None:
-            if min_val > max_val:
-                raise ValueError("Min value is bigger than max value: %r > %r" % (min_val, max_val))
+        if None not in (min_val, max_val) and min_val > max_val:
+            raise ValueError("Min value is bigger than max value: %r > %r" % (min_val, max_val))
         self._validate_choices()
 
-        # Are negative values allowed?
-        if ((min_val is None or min_val < 0) or
-           (max_val is not None and max_val < 0) or
-           (choices and min(choices) < 0)):
-            self.legal += "-"
+        # Build a regular expression pattern against which we can match the data that is being
+        # entered
 
-    def SetRange(self, minv, maxv):
+        reg_data = {
+            'negative_sign': '',
+            'unit': u"[ ]*[GMkmµunp]?%s?" % unit if unit else ''
+        }
+
+        if (
+                (min_val is None or min_val < 0) or
+                (max_val is not None and max_val < 0) or
+                (choices and min(choices) < 0)
+        ):
+            reg_data['negative_sign'] = '-'
+
+        # Update the regular expression with the variables we've discovered
+        self.entry_regex = self.entry_regex.format(**reg_data)
+        # Compile the regex pattern what will be used for validation
+        self.entry_pattern = re.compile(self.entry_regex)
+
+    def set_value_range(self, min_val, max_val):
         # TODO: check values and recompute .legal as in init
-        self.min_val = minv
-        self.max_val = maxv
+        self.min_val = min_val
+        self.max_val = max_val
 
     def GetRange(self):
         return self.min_val, self.max_val
 
     def _validate_choices(self):
+        """ Validate all the choice values, if choice values are defined """
 
         if self.choices:
-            for c in self.choices:
-                valid = self.validate_value(c)
+            if not all([self._is_valid_value(c) for c in self.choices]):
+                raise ValueError("Illegal value (%s) found in choices" % c)
 
-                if not valid:
-                    raise ValueError("Illegal value (%s) found in choices" % c)
-
-    def _get_fld_text(self):
-        """
-        Returns the text contained in the window validated
-        """
-        # Special trick in (the very likely) case we are validating a NumberTextCtrl
-        fld = self.GetWindow()
-        if hasattr(fld, "GetValueStr"):
-            val = fld.GetValueStr()
-        else:
-            val = fld.GetValue()
-        return val
-
-    def Clone(self): #pylint: disable=W0221
-        raise NotImplementedError
-
-    def OnChar(self, event):
-        """ This method prevents the entry of illegal characters """
-        key = event.GetKeyCode()
-
-        # Allow control keys to propagate
-        if key < wx.WXK_SPACE or key == wx.WXK_DELETE or key > 255:
-            event.Skip()
-            return
-
-        # TODO: just check if the new value would conform to a regex
-        # Allow legal characters to reach the text control
-        if chr(key) in self.legal:
-            logging.debug("Processing key '%s'", key)
-            val = self._get_fld_text()
-
-            if val is None:
-                event.Skip()
-                return
-            else:
-                val = unicode(val)
-
-            start, end = self.GetWindow().GetSelection()
-            val = val[:start] + chr(key) + val[end:]
-
-            if chr(key) in ('.', ','):
-                val = val.replace('..', '.')
-                val = val.replace(',,', ',')
-
-            logging.debug("Checking against %s", val)
-
-            try:
-                # if starting to write negative number or exponent => it's fine
-                if val != "-" and not (val.endswith("e") or val.endswith("e-")):
-                    val = self.cast(val)
-                logging.debug("Key accepted")
-                event.Skip()
-            except ValueError:
-                logging.debug("Key rejected")
-                return
-
-        # 'Eat' the event by not Skipping it, thus preventing it.
-        # from reaching the text control
-        return
-
-    def Validate(self, win=None):
-        """ This method is called when the 'Validate()' method is called on the
-        parent of the TextCtrl to which this validator belongs. It can also
-        be called as a standalone validation method.
-
-        returns (boolean)
-        """
-        val = self._get_fld_text()
-        validated = self.validate_value(val)
-        logging.debug("Value {} is {} valid".format(val, "" if validated else "not"))
-        return validated
-
-    def validate_value(self, val):
+    def _is_valid_value(self, val):
         """ Validate the given value
-        val (string)
-        returns (boolean): True if the given string is valid
+
+        Args:
+            val (str):
+
+        Returns:
+            (boolean): True if the given string is valid
+
         """
+
+        # Don't fail on empty string
         if val is False or val is None:
             return False
 
         try:
-            num = self.cast(val)
+            num = self._cast(val)
         except ValueError:
             return False
 
-        if self.choices and not num in self.choices:
+        if self.choices and num not in self.choices:
             return False
         if self.min_val and num < self.min_val:
             return False
@@ -524,52 +481,112 @@ class NumberValidator(wx.PyValidator):
 
         return True
 
-    def GetNumber(self, val):
+    def _get_str_value(self):
+        """ Return the string value of the wx.Window to which this validator belongs """
+
+        # Special trick in, the very likely, case we are validating a NumberTextCtrl, which has it's
+        # default 'GetValue' method replaced with one that returns number instances
+
+        fld = self.GetWindow()
+
+        if hasattr(fld, "get_value_str"):
+            val = fld.get_value_str()
+        else:
+            val = fld.GetValue()
+        return val
+
+    def Clone(self):
+        raise NotImplementedError
+
+    def on_char(self, event):
+        """ This method prevents the entry of illegal characters """
+
+        key = event.GetKeyCode()
+
+        # Allow control keys to propagate
+        if key < wx.WXK_SPACE or key == wx.WXK_DELETE or key > 255:
+            event.Skip()
+            return
+
+        field_val = unicode(self._get_str_value())
+
+        start, end = self.GetWindow().GetSelection()
+
+        field_val = field_val[:start] + chr(key) + field_val[end:]
+
+        if not field_val or self.entry_pattern.match(field_val):
+            # logging.debug("Field value %s accepted using %s", "field_val", self.entry_regex)
+            event.Skip()
+        else:
+            logging.debug("Field value %s NOT accepted using %s", field_val, self.entry_regex)
+
+    def Validate(self, win=None):
+        """ This method is called when the 'Validate()' method is called on the
+        parent of the TextCtrl to which this validator belongs. It can also
+        be called as a standalone validation method.
+
+        returns (boolean)
         """
-        Return a number corresponding to the (string) value provided
-        val (string): a string representing a number
-        returns (None or number of the right type): the most meaningful value
-          that would fit the validator for the given string, or None if the string
-          is empty.
-          If choices is set, it will pick the closest choice available
-          If min_val or max_val are set, it will always return a value within bound
+        is_valid = self._is_valid_value(self._get_str_value())
+        logging.debug("Value '%s' is %s valid", val, "" if is_valid else "not")
+        return is_valid
+
+    def get_validated_number(self, str_val):
+        """ Return a validated number represented by the string value provided
+
+        If choices is set, it will pick the closest mathcing value available.
+        If min_val or max_val are set, it will always return a value within bounds.
+
+        Args:
+            str_val (string): a string representing a number
+
+        Returns:
+            (None or number of the right type): the most meaningful value that would fit the
+            validator for the given string or None if the string is empty.
+
         """
-        if not val:
+
+        if not str_val:
             return None
 
-        # remove illegal characters
-        val = "".join([c for c in val if c in self.legal])
-
-        # try hard to cast it to a legal value by removing anything meaningless at the end
-        while len(val) > 0:
+        # Aggressively try to cast the string to a legal value by removing characters
+        while len(str_val):
             try:
-                num = self.cast(val)
+                num = self._cast(str_val)
                 break
             except ValueError:
                 pass
-            val = val[:len(val)-1]
+            str_val = str_val[:-1]
 
-        if len(val) == 0:
+        if not str_val:
             return None
 
-        # find the closest value in choices
+        # Find the closest value in choices
         if self.choices:
             num = min(self.choices, key=lambda x: abs(x - num))
 
         # bound the value by min/max
-        msg = "Value {} out of range [{}, {}]"
+        msg = "Truncating out of range [{}, {}] value {}"
         if self.min_val is not None and num < self.min_val:
-            logging.debug(msg.format(num, self.min_val, self.max_val))
+            logging.debug(msg.format(self.min_val, self.max_val, num))
             num = self.min_val
         if self.max_val is not None and num > self.max_val:
-            logging.debug(msg.format(num, self.min_val, self.max_val))
+            logging.debug(msg.format(self.min_val, self.max_val, num))
             num = self.max_val
 
         return num
 
-    def cast(self, val):
-        """ Try to cast the value string to the desired type """
-        # To be overridden
+    def _cast(self, str_val):
+        """ Cast the value string to the desired type
+
+        Args:
+            str_val (str): Value to cast
+
+        Returns:
+            number: Scaled and correctly typed number value
+
+        """
+
         raise NotImplementedError
 
 
@@ -586,45 +603,41 @@ def _step_from_range(min_val, max_val):
         logging.exception(msg)
 
 
-class NumberTextCtrl(wx.TextCtrl):
+class _NumberTextCtrl(wx.TextCtrl):
     """ A base text control specifically tailored to contain numerical data
-    The main behaviour is that when it has the focus, it just displays the number
-    as raw as possible (in the standard unit), and if it's out of focus, it displays
-    a beautiful value (not too digits, with unit and unit multiplicator if needed).
 
     Use .GetValue() and .SetValue()/.ChangeValue() to get/set the raw value
     (number). SetValue and ChangeValue are identical but the first one generates
     an event as if the user had typed something in.
-    To get the actual string displayed, use .GetValueStr() and .SetValueStr(),
-    but in general this shouldn't be needed.
+    To get the string that is displayed by the control, use .get_value_str() and .SetValueStr().
 
     Generates a wxEVT_COMMAND_ENTER whenever a new number is set by the user.
-    This happens typically when loosing the focus or when pressing "Enter" key.
+    This happens typically when loosing the focus or when pressing the [Enter] key.
 
     """
 
     def __init__(self, *args, **kwargs):
         """
-        validator (Validator): instance that checks the value entered by the user
-        key_inc (boolean): whether up/down should change the value
-        step (number): by how much the value should be changed on key up/down
-        accuracy (None or int): how many significant digits to keep when cleanly
-          displayed. If None, it is never truncated.
-        """
-        # Make sure that a validator is provided
-        try:
-            self._validator = kwargs["validator"]
-        except AttributeError:
-            raise ValueError("No validator set!")
 
-        key_inc = kwargs.pop('key_inc', True)
-        self.step = kwargs.pop('step', 0)
+        Args:
+            validator (Validator): Validator that checks the value entered by the user
+            key_step (number or None): by how much the value should be changed on key up/down
+            accuracy (None or int): how many significant digits to keep when cleanly displayed. If
+                None, it is never truncated.
+
+        """
+
+        # Make sure that a validator is provided
+        if "validator" not in kwargs:
+            raise ValueError("Validator required!")
+
+        # The step size for when the up and down keys are pressed
+        self.key_step = kwargs.pop('key_step', None)
         self.accuracy = kwargs.pop('accuracy', None)
 
-        # For the wx.EVT_TEXT_ENTER event to work, the TE_PROCESS_ENTER
-        # style needs to be set, but setting it in XRC throws an error
-        # A possible workaround is to include the style by hand
-        kwargs['style'] = kwargs.get('style', 0) | wx.TE_PROCESS_ENTER
+        # For the wx.EVT_TEXT_ENTER event to work, the TE_PROCESS_ENTER style needs to be set, but
+        # setting it in XRC throws an error. A possible workaround is to include the style by hand
+        kwargs['style'] = kwargs.get('style', 0) | wx.TE_PROCESS_ENTER | wx.BORDER_NONE
 
         if len(args) > 2:
             val = args[2]
@@ -632,53 +645,31 @@ class NumberTextCtrl(wx.TextCtrl):
         else:
             val = kwargs.pop('value', None)
 
-        # the raw value: a number or None
-        self.number = val
+        # The
+        self._number_value = val
 
         wx.TextCtrl.__init__(self, *args, **kwargs)
 
+        self.SetBackgroundColour(self.Parent.BackgroundColour)
+        self.SetForegroundColour(FG_COLOUR_EDIT)
+
         # Set the value so it will be validated to be a valid number
         if val is not None:
-            self.SetValue(self.number)
+            self.SetValue(self._number_value)
 
-        if key_inc:
+        if self.key_step is not None:
             self.Bind(wx.EVT_CHAR, self.on_char)
 
         self.Bind(wx.EVT_KILL_FOCUS, self.on_kill_focus)
         self.Bind(wx.EVT_SET_FOCUS, self.on_focus)
         self.Bind(wx.EVT_TEXT_ENTER, self.on_text_enter)
 
-    def _display_raw(self):
-        """ Set the current text to raw style (no truncation/no unit) """
-
-        if self.number is None:
-            str_val = u""
-        else:
-            if hasattr(self, 'unit'):
-                unit = self.unit  #pylint: disable=E1101
-            else:
-                unit = None
-            if self.accuracy is None:
-                accuracy = None
-            else:
-                accuracy = self.accuracy + 1
-            str_val = units.to_string_pretty(self.number, accuracy, unit)
-        wx.TextCtrl.ChangeValue(self, str_val)
-
     def _display_pretty(self):
-        if self.number is None:
+        if self._number_value is None:
             str_val = u""
         else:
-            str_val = units.readable_str(self.number, sig=self.accuracy)
+            str_val = units.readable_str(self._number_value, sig=self.accuracy)
         wx.TextCtrl.ChangeValue(self, str_val)
-
-    def GetValue(self):
-        """ Return the value as an integer, or None if no (valid) value is
-        present.
-        """
-        # Warning: we return the last value accepted, not the current value in
-        # the text field
-        return self.number
 
     def Enable(self, enable):
 
@@ -692,84 +683,87 @@ class NumberTextCtrl(wx.TextCtrl):
             else:
                 self.SetForegroundColour(FG_COLOUR_DIS)
         else:
-            super(NumberTextCtrl, self).Enable(enable)
-
+            super(_NumberTextCtrl, self).Enable(enable)
 
     def SetValue(self, val):
+        """ Set the numerical value of the text field
+
+        Args:
+            val (numerical type): The value to set the field to
+
+        """
         self.ChangeValue(val)
-        # TODO: call _send_change_event() ? => in this case we need to change
-        # all Odemis to use ChangeValue instead of SetValue()
+
+    def GetValue(self):
+        """ Return the numerical value of the text field or None if no (valid) value is present
+
+        Warning: we return the last validated value, not the current value in the text field
+
+        """
+        return self._number_value
 
     def ChangeValue(self, val):
-        """ Set the value of the control
+        """ Set the value of the text field
 
         No checks are done on the value to be correct. If this is needed, use the validator.
 
+        Args:
+            val (numerical type): The value to set the field to
+
         """
 
-        self.number = val
-        # logging.debug(
-        #         "Setting value to '%s' for %s",
-        #         val, self.__class__.__name__)
+        self._number_value = val
+        # logging.debug("Setting value to '%s' for %s", val, self.__class__.__name__)
+        self._display_pretty()
 
-        if self.HasFocus():
-            logging.info("Received the new value '%s' to set while in focus", val)
-            self._display_raw()
-        else:
-            self._display_pretty()
-
-    def GetValueStr(self):
+    def get_value_str(self):
         """ Return the value of the control as a string """
         return wx.TextCtrl.GetValue(self)
 
-    def SetValueStr(self, val):
+    def set_value_str(self, val):
         wx.TextCtrl.SetValue(self, val)
 
-    def ChangeValueStr(self, val):
+    def change_value_str(self, val):
+        """ Set the value of the field, without generating a change event """
         wx.TextCtrl.ChangeValue(self, val)
 
     def SetValueRange(self, minv, maxv):
         """ Same as SetRange of a slider """
-        self.GetValidator().SetRange(minv, maxv)
+        self.Validator.set_value_range(minv, maxv)
 
     def GetValueRange(self):
         return self.GetValidator().GetRange()
 
-    def _processNewText(self, str_val):
-        """ Called internally when a new text is entered by the user
-        It processes the new text and set the number
+    def _set_number_value(self, str_number):
+        """ Parse the given number string and set the internal number value
+
+        This method is used when the enter key is pressed, or when the text field loses focus, i.e.
+        situations where we always need to leave a valid and well formatted value.
+
         """
-        prev_num = self.number
-        if str_val is None or str_val == "":
-            self.number = None
+
+        prev_num = self._number_value
+        if str_number is None or str_number == "":
+            self._number_value = None
         else:
             # set new value even if not validated, so that we reach the boundaries
-            self.number = self.GetValidator().GetNumber(str_val)
+            self._number_value = self.GetValidator().get_validated_number(str_number)
             # TODO: turn the text red temporarily if not valid?
             # if not validated:
             # logging.debug("Value '%s' not valid, using '%s'", str_val, val)
 
-        if prev_num != self.number:
+        if prev_num != self._number_value:
             self._send_change_event()
 
     # Event handlers
 
     def _send_change_event(self):
-        changeEvent = wx.CommandEvent(wx.wxEVT_COMMAND_ENTER, self.GetId())
+        """ Create and send a change event (wxEVT_COMMAND_ENTER) """
+        change_event = wx.CommandEvent(wx.wxEVT_COMMAND_ENTER, self.GetId())
         # Set the originating object for the event (ourselves)
-        changeEvent.SetEventObject(self)
-
-        # Watch for a possible listener of this event that will catch it and
-        # eventually process it
-        self.GetEventHandler().ProcessEvent(changeEvent)
-
-    def on_text_enter(self, evt):
-        logging.debug("New text entered in %s", self.__class__.__name__)
-        # almost the same as on_kill_focus, but still display raw
-        wx.CallAfter(self.SetSelection, 0, 0)
-        str_val = wx.TextCtrl.GetValue(self)
-        self._processNewText(str_val)
-        self._display_raw() # display the new value as understood
+        change_event.SetEventObject(self)
+        # Watch for a possible listener of this event that will catch it and eventually process it
+        self.GetEventHandler().ProcessEvent(change_event)
 
     def on_char(self, evt):
         """ This event handler increases or decreases the integer value when
@@ -779,89 +773,113 @@ class NumberTextCtrl(wx.TextCtrl):
         """
 
         key = evt.GetKeyCode()
-        prev_num = self.number
-        num = self.number
+        prev_num = self._number_value
+        num = self._number_value
 
-        if key == wx.WXK_UP and self.step and self.IsEditable():
-            num = (num or 0) + self.step
-        elif key == wx.WXK_DOWN and self.step and self.IsEditable():
-            num = (num or 0) - self.step
+        if key == wx.WXK_UP and self.key_step and self.IsEditable():
+            num = (num or 0) + self.key_step
+        elif key == wx.WXK_DOWN and self.key_step and self.IsEditable():
+            num = (num or 0) - self.key_step
         else:
             # Skip the event, so it can be processed in the regular way
             # (As in validate typed numbers etc.)
             evt.Skip()
             return
 
-        val = u"%r" % num # GetNumber needs a string
-        self.number = self.GetValidator().GetNumber(val)
-        # if not validated:
-        #     logging.debug("Reached invalid value %s", val)
+        val = u"%r" % num  # GetNumber needs a string
+        self._number_value = self.GetValidator().get_validated_number(val)
+        print self._number_value
 
-        if prev_num != self.number:
-            self._display_raw() # we assume we have the focus
+        if prev_num != self._number_value:
             self._send_change_event()
 
-    def on_focus(self, evt):
-        """ Remove the units from the displayed value on focus """
-        self._display_raw()
-        wx.CallAfter(self.SetSelection, -1, -1)
+    def on_focus(self, _):
+        """ Select the number part (minus any unit indication) of the data in the text field """
+        number_length = len(self.get_value_str().rstrip(string.ascii_letters + u" µ"))
+        wx.CallAfter(self.SetSelection, 0, number_length)
 
     def on_kill_focus(self, evt):
-        """ Display the current value with the units added when focus is
-        lost .
-        """
+        """ Display the current number value as a formatted string when the focus is lost """
         wx.CallAfter(self.SetSelection, 0, 0)
         str_val = wx.TextCtrl.GetValue(self)
-        self._processNewText(str_val)
+        self._set_number_value(str_val)
         self._display_pretty()
-        # SKip the EVT_KILL_FOCUS event when the value is set
         evt.Skip()
+
+    def on_text_enter(self, evt):
+        """ Process [enter] key presses """
+
+        logging.debug("New text entered in %s", self.__class__.__name__)
+        # almost the same as on_kill_focus, but still display raw
+        wx.CallAfter(self.SetSelection, 0, 0)
+        str_val = wx.TextCtrl.GetValue(self)
+        self._set_number_value(str_val)
+        self._display_pretty()
 
     # END Event handlers
 
 
-class UnitNumberCtrl(NumberTextCtrl):
+class UnitNumberCtrl(_NumberTextCtrl):
 
     def __init__(self, *args, **kwargs):
         """
         unit (None or string): if None then behave like NumberTextCtrl
         """
         self.unit = kwargs.pop('unit', None)
-        NumberTextCtrl.__init__(self, *args, **kwargs)
+        _NumberTextCtrl.__init__(self, *args, **kwargs)
 
     def _display_pretty(self):
-        if self.number is None:
+        if self._number_value is None:
             str_val = u""
         else:
-            str_val = units.readable_str(self.number, self.unit, self.accuracy)
+            str_val = units.readable_str(self._number_value, self.unit, self.accuracy)
+        # Get the length of the number (string length, minus the unit length)
+        number_length = len(str_val.rstrip(string.ascii_letters + u" µ"))
         wx.TextCtrl.ChangeValue(self, str_val)
+        # Select the number value
+        wx.CallAfter(self.SetSelection, number_length, number_length)
 
 
 #########################################
 # Integer controls
 #########################################
 
-class IntegerValidator(NumberValidator):
+class IntegerValidator(_NumberValidator):
     """ This validator can be used to make sure only valid characters are
     entered into a control (digits and a minus symbol).
     It can also validate if the value that is present is a valid integer.
     """
 
-    def __init__(self, min_val=None, max_val=None, choices=None):
-        """ Constructor """
-        NumberValidator.__init__(self, min_val, max_val, choices)
+    def __init__(self, min_val=None, max_val=None, choices=None, unit=None):
+        # The regular expression to check the validity of what is being typed, is a bit different
+        # from a regular expression that would validate an entire string, because we need to check
+        # validity as the user types
+        self.entry_regex = u"[+{negative_sign}]?[\d]*{unit}$"
+        _NumberValidator.__init__(self, min_val, max_val, choices, unit)
 
-    def Clone(self):    #pylint: disable=W0221
+    def Clone(self):
         """ Required method """
-        return IntegerValidator(self.min_val, self.max_val, self.choices)
+        return IntegerValidator(self.min_val, self.max_val, self.choices, self.unit)
 
-    def cast(self, val):
-        if isinstance(val, (str, unicode)):
-            val = float(val)
-        return int(val)
+    def _cast(self, str_val):
+        """ Cast the string value to an integer and return it
+
+        Args:
+            str_val (str): A string representing a number value
+
+        Returns:
+            (int)
+
+        Raises:
+            ValueError: When the string cannot be parsed correctly
+
+        """
+
+        str_val, si_prefix, unit = decompose_si_prefix(str_val)
+        return int(si_scale_val(float(str_val), si_prefix))
 
 
-class IntegerTextCtrl(NumberTextCtrl):
+class IntegerTextCtrl(_NumberTextCtrl):
     """ This class describes a text field that may only hold integer data.
 
     The 'min_val' and 'max_val' keyword arguments may be used to set limits on
@@ -889,12 +907,12 @@ class IntegerTextCtrl(NumberTextCtrl):
         choices = kwargs.pop('choices', None)
 
         kwargs['validator'] = IntegerValidator(min_val, max_val, choices)
-        kwargs['step'] = kwargs.get('step', 1)
+        kwargs['key_step'] = kwargs.get('key_step', 1)
 
-        NumberTextCtrl.__init__(self, *args, **kwargs)
+        _NumberTextCtrl.__init__(self, *args, **kwargs)
 
-    def SetValue(self, val): #pylint: disable=W0221
-        NumberTextCtrl.SetValue(self, int(val))
+    def SetValue(self, val):
+        _NumberTextCtrl.SetValue(self, int(val))
 
 
 class UnitIntegerCtrl(UnitNumberCtrl):
@@ -914,9 +932,12 @@ class UnitIntegerCtrl(UnitNumberCtrl):
         max_val = kwargs.pop('max_val', None)
         choices = kwargs.pop('choices', None)
         kwargs['validator'] = IntegerValidator(min_val, max_val, choices)
+        unit = kwargs.get('unit', None)
 
-        if 'step' not in kwargs and (min_val != max_val):
-            kwargs['step'] = max(int(round(_step_from_range(min_val, max_val))), 1)
+        kwargs['validator'] = IntegerValidator(min_val, max_val, choices, unit)
+
+        if 'key_step' not in kwargs and (min_val != max_val):
+            kwargs['key_step'] = max(int(round(_step_from_range(min_val, max_val))), 1)
 
         UnitNumberCtrl.__init__(self, *args, **kwargs)
 
@@ -928,32 +949,47 @@ class UnitIntegerCtrl(UnitNumberCtrl):
 # Float controls
 #########################################
 
-class FloatValidator(NumberValidator):
-    def __init__(self, min_val=None, max_val=None, choices=None):
-        """ Constructor """
-        NumberValidator.__init__(self, min_val, max_val, choices)
-        # More legal characters for floats
-        self.legal += ".e-" # - is for the exponent (e.g., 1e-6)
+class FloatValidator(_NumberValidator):
+    def __init__(self, min_val=None, max_val=None, choices=None, unit=None):
+        # The regular expression to check the validity of what is being typed, is a bit different
+        # from a regular expression that would validate an entire string, because we need to check
+        # validity as the user types
+        self.entry_regex = u"[+{negative_sign}]?[\d]*[.]?[\d]*[eE]?[+-]?[\d]*{unit}$"
+        _NumberValidator.__init__(self, min_val, max_val, choices, unit)
 
     def Clone(self):
         """ Required method """
-        return FloatValidator(self.min_val, self.max_val, self.choices)
+        return FloatValidator(self.min_val, self.max_val, self.choices, self.unit)
 
-    def cast(self, val):
-        return float(val)
+    def _cast(self, str_val):
+        """ Cast the string value to a float and return it
+
+        Args:
+            str_val (str): A string representing a number value
+
+        Returns:
+            (float)
+
+        Raises:
+            ValueError: When the string cannot be parsed correctly
+
+        """
+
+        str_val, si_prefix, unit = decompose_si_prefix(str_val)
+        return si_scale_val(float(str_val), si_prefix)
 
 
-class FloatTextCtrl(NumberTextCtrl):
+class FloatTextCtrl(_NumberTextCtrl):
     def __init__(self, *args, **kwargs):
+
         min_val = kwargs.pop('min_val', None)
         max_val = kwargs.pop('max_val', None)
         choices = kwargs.pop('choices', None)
 
         kwargs['validator'] = FloatValidator(min_val, max_val, choices)
-        kwargs['step'] = kwargs.get('step', 0.1)
-        kwargs['accuracy'] = kwargs.get('accuracy', 3) # decimal places
+        kwargs['key_step'] = kwargs.get('key_step', 0.1)
 
-        NumberTextCtrl.__init__(self, *args, **kwargs)
+        _NumberTextCtrl.__init__(self, *args, **kwargs)
 
 
 class UnitFloatCtrl(UnitNumberCtrl):
@@ -961,12 +997,13 @@ class UnitFloatCtrl(UnitNumberCtrl):
         min_val = kwargs.pop('min_val', None)
         max_val = kwargs.pop('max_val', None)
         choices = kwargs.pop('choices', None)
+        unit = kwargs.get('unit', None)
 
-        kwargs['validator'] = FloatValidator(min_val, max_val, choices)
+        kwargs['validator'] = FloatValidator(min_val, max_val, choices, unit)
 
-        if 'step' not in kwargs and (min_val != max_val):
-            kwargs['step'] = _step_from_range(min_val, max_val)
+        if 'key_step' not in kwargs and (min_val != max_val):
+            kwargs['key_step'] = _step_from_range(min_val, max_val)
 
-        kwargs['accuracy'] = kwargs.get('accuracy', 3) # decimal places
+        kwargs['accuracy'] = kwargs.get('accuracy', None)
 
         UnitNumberCtrl.__init__(self, *args, **kwargs)

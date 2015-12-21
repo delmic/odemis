@@ -734,9 +734,9 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
                 # Try to find a good corresponding value inside the string
 
                 # Try and find an SI prefix
-                str_valval, str_si, _ = decompose_si_prefix(ctrl_value, unit=u)
+                str_val, str_si, _ = decompose_si_prefix(ctrl_value, unit=u)
 
-                new_val = reproduce_typed_value(va_val, str_valval)
+                new_val = reproduce_typed_value(va_val, str_val)
 
                 if isinstance(new_val, collections.Iterable):
                     # be less picky, by shortening the number of values if it's too many
