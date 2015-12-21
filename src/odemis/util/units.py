@@ -123,12 +123,19 @@ def si_scale_list(values, si=None):
 
 
 def to_string_si_prefix(x, sig=None):
+    """ Convert a number to a string with the most appropriate SI prefix appended
+
+    e.g.: 0.0012 -> "1.2 m"
+
+    Args:
+        x (float): Number to parse
+        sig (int or None): Number of significant numbers
+
+    Returns:
+        (str): String representing the number value
+
     """
-    Convert a number to a string with the most appropriate SI prefix appended
-    ex: 0.0012 -> "1.2 m"
-    x (float): number
-    return (string)
-    """
+
     value, prefix = to_si_scale(x)
     return u"%s %s" % (to_string_pretty(value, sig), prefix)
 
