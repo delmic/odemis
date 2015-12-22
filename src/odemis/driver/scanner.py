@@ -60,8 +60,6 @@ class CompositedScanner(model.Emitter):
         self.children.value.add(intnl)
 
         # Copy VAs from external
-        if model.hasVA(self._external, "magnification"):
-            self.magnification = self._external.magnification
         if model.hasVA(self._external, "pixelSize"):
             self.pixelSize = self._external.pixelSize
         if model.hasVA(self._external, "translation"):
@@ -79,7 +77,12 @@ class CompositedScanner(model.Emitter):
         # Copy VAs from internal
         if model.hasVA(self._internal, "horizontalFoV"):
             self.horizontalFoV = self._internal.horizontalFoV
+            # Create read-only magnification VA
+            mag = self._external.HFWNoMag / self.horizontalFoV.value
+            self.magnification = model.VigilantAttribute(mag, unit="", readonly=True)
             self.horizontalFoV.subscribe(self._updateMagnification, init=True)
+        elif model.hasVA(self._external, "magnification"):
+            self.magnification = self._external.magnification
         if model.hasVA(self._internal, "accelVoltage"):
             self.accelVoltage = self._internal.accelVoltage
         if model.hasVA(self._internal, "power"):
@@ -88,4 +91,8 @@ class CompositedScanner(model.Emitter):
             self.probeCurrent = self._internal.probeCurrent
 
     def _updateMagnification(self, hfw):
-        self.magnification.value = self._external.HFWNoMag / hfw
+        new_mag = self._external.HFWNoMag / hfw
+        self.magnification._value = new_mag
+        self.magnification.notify(new_mag)
+        # Also update external magnification
+        self._external.magnification.value = new_mag
