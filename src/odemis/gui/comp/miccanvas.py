@@ -759,26 +759,26 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         """
         Returns the (theoretical) scanning area of the SEM. Works even if the
         SEM has not send any image yet.
-        returns (tuple of 4 floats): position in physical coordinates m (l, t, r,br)
+        returns (tuple of 4 floats): position in physical coordinates m (l, t, r, b)
         raises AttributeError in case no SEM is found
         """
-        sem = self._tab_data_model.main.ebeam
+        # Ideally, we'd like to know the position of the SEM image.
+        # As long as the SEM image stays at the center of the view, view_pos
+        # will be correct... but that will break if for some reason the SEM
+        # is shifted/dragged.
+        # TODO: try to use getMetadata()[MD_POS] if possible?
+        sem_center = self.microscope_view.view_pos.value
 
-        try:
-            stage_pos = self.microscope_view.stage_pos.value
-            sem_center = (stage_pos["x"], stage_pos["y"])
-        except (AttributeError, KeyError):
-            # no stage => pos is always 0,0
-            sem_center = (0, 0)
+        sem = self._tab_data_model.main.ebeam
         # TODO: pixelSize will be updated when the SEM magnification changes,
         # so we might want to recompute this ROA whenever pixelSize changes so
         # that it's always correct (but maybe not here in the view)
         sem_width = (sem.shape[0] * sem.pixelSize.value[0],
                      sem.shape[1] * sem.pixelSize.value[1])
-        sem_rect = [sem_center[0] - sem_width[0] / 2,  # left
+        sem_rect = (sem_center[0] - sem_width[0] / 2,  # left
                     sem_center[1] - sem_width[1] / 2,  # top
                     sem_center[0] + sem_width[0] / 2,  # right
-                    sem_center[1] + sem_width[1] / 2]  # bottom
+                    sem_center[1] + sem_width[1] / 2)  # bottom
 
         return sem_rect
 
@@ -802,29 +802,29 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         return phys_pos
 
     def convert_spot_phys_to_ratio(self, p_spot):
-        """ Clip the physical spot to the sem data and convert it into a ratio
+        """ Clip the physical spot to the SEM FoV and convert it into a ratio
 
+        p_spot (tuple of floats): spot in physical coordinates (m)
         returns:
-            The clipped physical spot and the ratio
-
+            p_spot (2 floats): The clipped physical spot
+            r_spot (2 floats): The spot position as a ratio
         """
 
         # Get the position of the overlay in physical coordinates
         if p_spot is None:
-            return 0.5, 0.5
+            return p_spot, (0.5, 0.5)
 
         # Position of the complete SEM scan in physical coordinates
         l, t, r, b = self._get_sem_rect()
-        px, py = p_spot
 
         # Take only the intersection so that that ROA is always inside the SEM scan
-        p_spot = (max(min(px, r), l), max(min(py, b), t))
+        p_spot = min(max(l, p_spot[0]), r), min(max(t, p_spot[1]), b)
 
         # Convert the ROI into relative value compared to the SEM scan
         # In physical coordinates Y goes up, but in ROI, Y goes down => "1-"
         r_spot = (
             (p_spot[0] - l) / (r - l),
-            (p_spot[1] - t) / (b - t)
+            1 - (p_spot[1] - t) / (b - t)
         )
 
         return p_spot, r_spot

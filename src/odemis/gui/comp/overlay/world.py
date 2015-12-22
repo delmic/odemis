@@ -535,7 +535,9 @@ class SpotModeOverlay(WorldOverlay, DragMixin, SpotModeBase):
             self.r_pos.value = (0.5, 0.5)
         else:
             # Since converting to a ratio possibly involves clipping, the w_pos is also updated
-            self.w_pos, self.r_pos.value = self.cnvs.convert_spot_phys_to_ratio(self.w_pos)
+            p_pos = self.cnvs.world_to_physical_pos(self.w_pos)
+            p_pos, self.r_pos.value = self.cnvs.convert_spot_phys_to_ratio(p_pos)
+            self.w_pos = self.cnvs.physical_to_world_pos(p_pos)
 
     def _r_to_w(self):
         try:
@@ -563,8 +565,7 @@ class SpotModeOverlay(WorldOverlay, DragMixin, SpotModeBase):
     def on_left_up(self, evt):
         if self.active:
             DragMixin._on_left_up(self, evt)
-            offset = self.cnvs.get_half_buffer_size()
-            self.w_pos = self.cnvs.view_to_world(evt.GetPositionTuple(), offset)
+            self.w_pos = self.cnvs.view_to_world(evt.GetPositionTuple(), self.offset_b)
             self._w_to_r()
             self.cnvs.update_drawing()
         else:
@@ -572,8 +573,7 @@ class SpotModeOverlay(WorldOverlay, DragMixin, SpotModeBase):
 
     def on_motion(self, evt):
         if self.active and self.left_dragging:
-            offset = self.cnvs.get_half_buffer_size()
-            self.w_pos = self.cnvs.view_to_world(evt.GetPositionTuple(), offset)
+            self.w_pos = self.cnvs.view_to_world(evt.GetPositionTuple(), self.offset_b)
             self._w_to_r()
             self.cnvs.update_drawing()
         else:
