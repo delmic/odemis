@@ -608,6 +608,19 @@ class SparcAcquisitionTab(Tab):
         # For remembering which streams are paused when hiding the tab
         self._streams_to_restart = set()  # set of weakref to the streams
 
+        # Only put the VAs that do directly define the image as local, everything
+        # else should be global. The advantage is double: the global VAs will
+        # set the hardware even if another stream (also using the e-beam) is
+        # currently playing, and if the VAs are changed externally, the settings
+        # will be displayed correctly (and not reset the values on next play).
+        emtvas = set()
+        hwemtvas = set()
+        for vaname in get_local_vas(main_data.ebeam):
+            if vaname in ("resolution", "dwellTime", "scale"):
+                emtvas.add(vaname)
+            else:
+                hwemtvas.add(vaname)
+
         # This stream is used both for rendering and acquisition
         sem_stream = acqstream.SEMStream(
             "Secondary electrons survey",
@@ -615,9 +628,9 @@ class SparcAcquisitionTab(Tab):
             main_data.sed.data,
             main_data.ebeam,
             focuser=main_data.ebeam_focus,
-            hwemtvas={'magnification'},  # Hardware VAs will not be duplicated as ent/det VAs
+            hwemtvas=hwemtvas,
             hwdetvas=None,
-            emtvas=get_local_vas(main_data.ebeam),
+            emtvas=emtvas,
             detvas=get_local_vas(main_data.sed),
         )
 
