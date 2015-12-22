@@ -1859,7 +1859,8 @@ class PlotCanvas(BufferedCanvas):
         try:
             horz, vert = zip(*data)
         except TypeError:
-            print data
+            logging.exception("Failed to separate tuples in %s", data)
+            raise
 
         min_x = min(horz)
         max_x = max(horz)

@@ -788,7 +788,6 @@ class _NumberTextCtrl(wx.TextCtrl):
 
         val = u"%r" % num  # GetNumber needs a string
         self._number_value = self.GetValidator().get_validated_number(val)
-        print self._number_value
 
         if prev_num != self._number_value:
             self._send_change_event()
