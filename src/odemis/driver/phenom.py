@@ -705,6 +705,13 @@ class Detector(model.Detector):
                         timeout=SOCKET_TIMEOUT)
         self._grid_device = grid_client.service
 
+        # Store current scan params
+        self._nrOfFrames = None
+        self._center = None
+        self._scale = None
+        self._resolution_width = None
+        self._resolution_height = None
+
     @isasync
     def applyAutoContrast(self):
         # Create ProgressiveFuture and update its state to RUNNING
@@ -797,7 +804,8 @@ class Detector(model.Detector):
                     self._scan_params_view.center.x = self.parent._scanner.tran_roi[0] + shift_pos[0] + spot_shift[0]
                     self._scan_params_view.center.y = self.parent._scanner.tran_roi[1] + shift_pos[1] + spot_shift[1]
                     try:
-                        self._grid_device.SetSEMViewingMode(self._scan_params_view, 'SEM-SCAN-MODE-IMAGING')
+                        if self._needResetParams(self._scan_params_view):
+                            self._grid_device.SetSEMViewingMode(self._scan_params_view, 'SEM-SCAN-MODE-IMAGING')
                     except suds.WebFault:
                         logging.warning("Spot scan failure.")
 
@@ -903,6 +911,20 @@ class Detector(model.Detector):
             # ensure it's not set, even if the thread died prematurely
             self._acquisition_must_stop.clear()
 
+    def _needResetParams(self, scanParams):
+        if (self._nrOfFrames != scanParams.nrOfFrames or
+            self._center != (scanParams.center.x, scanParams.center.y) or
+            self._scale != scanParams.scale or self._resolution_width != scanParams.resolution.width or
+            self._resolution_height != scanParams.resolution.height):
+            self._nrOfFrames = scanParams.nrOfFrames
+            self._center = (scanParams.center.x, scanParams.center.y)
+            self._scale = scanParams.scale
+            self._resolution_width = scanParams.resolution.width
+            self._resolution_height = scanParams.resolution.height
+            return True
+        else:
+            return False
+
     def _acquire_image(self):
         """
         Acquires the SEM image based on the resolution and
@@ -955,7 +977,8 @@ class Detector(model.Detector):
                         self._scan_params_view.center.x = center_x
                         self._scan_params_view.center.y = center_y
                         try:
-                            self._acq_device.SetSEMViewingMode(self._scan_params_view, 'SEM-SCAN-MODE-IMAGING')
+                            if self._needResetParams(self._scan_params_view):
+                                self._acq_device.SetSEMViewingMode(self._scan_params_view, 'SEM-SCAN-MODE-IMAGING')
                         except suds.WebFault:
                             logging.warning("Move to centre failure.")
 
@@ -966,7 +989,8 @@ class Detector(model.Detector):
                     self._scan_params_view.scale = 0
                     self._scan_params_view.center.x = center_x
                     self._scan_params_view.center.y = center_y
-                    self._acq_device.SetSEMViewingMode(self._scan_params_view, 'SEM-SCAN-MODE-IMAGING')
+                    if self._needResetParams(self._scan_params_view):
+                        self._acq_device.SetSEMViewingMode(self._scan_params_view, 'SEM-SCAN-MODE-IMAGING')
                 time.sleep(0.1)
                 # MD_POS is hopefully set via updateMetadata
                 return model.DataArray(numpy.array([[0]], dtype=dataType), metadata)
@@ -1017,7 +1041,8 @@ class Detector(model.Detector):
                     # Move back to the center
                     self._scan_params_view.center.x = 0
                     self._scan_params_view.center.y = 0
-                self._acq_device.SetSEMViewingMode(self._scanParams, 'SEM-SCAN-MODE-IMAGING')
+                if self._needResetParams(self._scanParams):
+                    self._acq_device.SetSEMViewingMode(self._scanParams, 'SEM-SCAN-MODE-IMAGING')
                 img_str = self._acq_device.SEMGetLiveImageCopy(0)
 
                 # Use the metadata from the string to update some metadata
