@@ -743,9 +743,10 @@ class Scanner(model.Emitter):
     def _pollVAs(self):
         try:
             self.updateHorizontalFOV()
-            volt = self.parent._device.HVGetVoltage()
-            self.accelVoltage.value = volt
-            self.probeCurrent.value = self._list_currents[self.parent._device.GetPCIndex() - 1]
+            with self.parent._acq_progress_lock:
+                volt = self.parent._device.HVGetVoltage()
+                self.accelVoltage.value = volt
+                self.probeCurrent.value = self._list_currents[self.parent._device.GetPCIndex() - 1]
         except Exception:
             logging.exception("Unexpected failure during VAs polling")
 
