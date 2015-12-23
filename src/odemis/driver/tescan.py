@@ -546,8 +546,8 @@ class Scanner(model.Emitter):
 
         # Timer polling VAs so we keep up to date with changes made via
         # Tescan UI
-        updater = functools.partial(self._pollVAs)
-        self._va_poll = util.RepeatingTimer(5, updater, "VAs polling")
+        self._updater = functools.partial(self._pollVAs)
+        self._va_poll = util.RepeatingTimer(5, self._updater, "VAs polling")
         self._va_poll.start()
 
     # we share metadata with our parent
@@ -929,6 +929,22 @@ class Stage(model.Actuator):
                                     self._applyInversion(self._position),
                                     unit="m", readonly=True)
 
+        self._updater = functools.partial(self._pollXYZ)
+        self._xyz_poll = util.RepeatingTimer(5, self._updater, "XYZ polling")
+        self._xyz_poll.start()
+
+    def _pollXYZ(self):
+        try:
+            with self.parent._acq_progress_lock:
+                x, y, z, rot, tilt = self.parent._device.StgGetPosition()
+                self._position["x"] = -x * 1e-3
+                self._position["y"] = -y * 1e-3
+                self._position["z"] = -z * 1e-3
+
+                self._updatePosition()
+        except Exception:
+            logging.exception("Unexpected failure during XYZ polling")
+
     def _updatePosition(self):
         """
         update the position VA
@@ -996,6 +1012,7 @@ class Stage(model.Actuator):
         logging.warning("Stopping all axes: %s", ", ".join(self.axes))
 
     def terminate(self):
+        self._xyz_poll.cancel()
         if self._executor:
             self.stop()
             self._executor.shutdown()
