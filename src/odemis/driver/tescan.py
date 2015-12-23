@@ -19,25 +19,25 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from __future__ import division
 from __future__ import absolute_import
+from __future__ import division
 
+import Queue
+import functools
+import gc
 import logging
 import math
 import numpy
 from odemis import model, util
+from odemis.model import HwError
 from odemis.model import isasync, CancellableThreadPoolExecutor
+from odemis.model import roattribute, oneway
+from odemis.util import TimeoutError
+import re
+from tescan import sem, CancelledError
 import threading
 import time
 import weakref
-from odemis.util import TimeoutError
-from tescan import sem, CancelledError
-import re
-from odemis.model import HwError
-import Queue
-from odemis.model import roattribute, oneway
-import gc
-import socket
 
 
 ACQ_CMD_UPD = 1
@@ -70,8 +70,6 @@ class SEM(model.HwComponent):
                           "Check that the ip address is correct and TESCAN server "
                           "connected to the network." % (host,))
         logging.info("Connected")
-        self._device.connection.socket_c.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        self._device.connection.socket_d.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
         # Lock in order to synchronize all the child component functions
         # that acquire data from the SEM while we continuously acquire images
@@ -81,6 +79,7 @@ class SEM(model.HwComponent):
         self._acq_cmd_q = Queue.Queue()
         self._acquisition_must_stop = threading.Event()
         self._acquisitions = set()  # detectors currently active
+        self.pre_res = None
 
         # important: stop the scanning before we start scanning or before automatic
         # procedures, even before we configure the detectors
@@ -181,15 +180,11 @@ class SEM(model.HwComponent):
         will be added on the next acquisition.
         raises KeyError if the detector is already being acquired.
         """
-        with self._acq_progress_lock:
-            self._device.ScStopScan()
+        self._device.GUISetScanning(0)
         # to be thread-safe (simultaneous calls to start/stop_acquire())
         with self._acquisition_mng_lock:
             if detector in self._acquisitions:
                 raise KeyError("Channel %d already set up for acquisition." % detector.channel)
-            # make sure socket settings are reset
-            self._device.connection.socket_c.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-            self._device.connection.socket_d.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             self._acquisitions.add(detector)
             self._acq_cmd_q.put(ACQ_CMD_UPD)
 
@@ -207,7 +202,7 @@ class SEM(model.HwComponent):
             self._acquisitions.discard(detector)
             self._acq_cmd_q.put(ACQ_CMD_UPD)
             if not self._acquisitions:
-                self._req_stop_acquisition()
+                self._req_stop_acquisition(detector)
 
     def _check_cmd_q(self, block=True):
         """
@@ -260,9 +255,9 @@ class SEM(model.HwComponent):
                     # write and read the raw data
                     try:
                         rdas = self._acquire_detectors(detectors)
-                    except CancelledError:
+                    except CancelledError, e:
                         # either because must terminate or just need to rest
-                        logging.debug("Acquisition was cancelled")
+                        logging.debug("Acquisition was cancelled %s", e)
                         continue
                     except Exception as e:
                         logging.exception(e)
@@ -315,7 +310,7 @@ class SEM(model.HwComponent):
             logging.info("Acquisition thread closed")
             self._acquisition_thread = None
 
-    def _req_stop_acquisition(self):
+    def _req_stop_acquisition(self, detector):
         """
         Request the acquisition thread to stop
         """
@@ -391,17 +386,19 @@ class SEM(model.HwComponent):
             b = t + res[1] - 1
 
             dt = self._scanner.dwellTime.value * 1e9
+            # make sure socket settings are always set
+            self._device.connection.socket_c.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            self._device.connection.socket_d.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             logging.debug("Acquiring SEM image of %s with dwell time %f ns", res, dt)
+
             try:
                 # Check if spot mode is required
-                if res == (1, 1):
-                    # FIXME: Overlook the dwell time, just set it to 1e03 ns and
-                    # scan until you leave the spot mode. This is to avoid the
-                    # delay in fetching images from Tescan when we are in spot
-                    # mode with a dwell time > 1ms.
-                    self._device.ScScanLine(0, scaled_shape[0], scaled_shape[1],
-                                         l + 1, t + 1, r + 1, b + 1, dt, 1, 1)
-                else:
+                if res == (1, 1) and self.pre_res != (1, 1):
+                    self._device.ScScanLine(1, scaled_shape[0], scaled_shape[1],
+                                         l + 1, t + 1, r + 1, b + 1, dt, 1, 0)
+                elif res != (1, 1):
+                    if self.pre_res == (1, 1):
+                        self._device.ScStopScan()
                     self._device.ScScanXY(0, scaled_shape[0], scaled_shape[1],
                                          l, t, r, b, 1, dt)
                 # we must stop the scanning even after single scan
@@ -409,14 +406,17 @@ class SEM(model.HwComponent):
                 # return model.DataArray(numpy.array([[0]], dtype=numpy.uint16), metadata)
                 # fetch the image (blocking operation), ndarray is returned
                 sem_img = self._device.FetchArray(channel, res[0] * res[1])
-            except Exception:
+            except CancelledError:
                 raise CancelledError("Acquisition cancelled during scanning")
+
+            if res != (1, 1):
+                # we must stop the scanning even after single scan
+                self._device.ScStopScan()
+
+            self.pre_res = res
             sem_img.shape = res[::-1]
             # Change endianess
             sem_img.byteswap(True)
-
-            # we must stop the scanning even after single scan
-            self._device.ScStopScan()
 
             return model.DataArray(sem_img, metadata)
 
@@ -542,6 +542,12 @@ class Scanner(model.Emitter):
         # Mostly used in order to know if the module supports beam blanking
         # when accessing it from outside.
         self.blanker = model.VAEnumerated(None, choices=set([None]))
+
+        # Timer polling VAs so we keep up to date with changes made via
+        # Tescan UI
+        updater = functools.partial(self._pollVAs)
+        self._va_poll = util.RepeatingTimer(5, updater, "VAs polling")
+        self._va_poll.start()
 
     # we share metadata with our parent
     def updateMetadata(self, md):
@@ -733,6 +739,18 @@ class Scanner(model.Emitter):
         phy_pos = (px_pos[0] * pxs[0], -px_pos[1] * pxs[1])  # - to invert Y
         return phy_pos
 
+    def _pollVAs(self):
+        try:
+            self.updateHorizontalFOV()
+            volt = self.parent._device.HVGetVoltage()
+            self.accelVoltage.value = volt
+            self.probeCurrent.value = self._list_currents[self.parent._device.GetPCIndex() - 1]
+        except Exception:
+            logging.exception("Unexpected failure during VAs polling")
+
+    def terminate(self):
+        self._va_poll.cancel()
+
 
 class Detector(model.Detector):
     """
@@ -768,6 +786,9 @@ class Detector(model.Detector):
     @roattribute
     def detector(self):
         return self._detector
+
+    def terminate(self):
+        self.parent._device.DtEnable(self._channel, 0, 16)
 
 
 class SEMDataFlow(model.DataFlow):
@@ -882,9 +903,9 @@ class Stage(model.Actuator):
         axes_def["z"] = model.Axis(unit="m", range=rng)
 
         # Demand calibrated stage
-        if parent._device.StgIsCalibrated() !=1:
+        if parent._device.StgIsCalibrated() != 1:
             logging.warning("Stage was not calibrated. We are performing calibration now.")
-            parent._device.StgCalibrate()
+            # parent._device.StgCalibrate()
 
         # Wait for stage to be stable after calibration
         while parent._device.StgIsBusy() != 0:
