@@ -37,6 +37,7 @@ import re
 from tescan import sem, CancelledError
 import threading
 import time
+import socket
 import weakref
 
 
