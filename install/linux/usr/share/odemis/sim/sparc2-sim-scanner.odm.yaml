@@ -422,3 +422,9 @@ SPARC2: {
         # Note: if you want to use absolute moves, add a "translation" too
     },
 }
+
+"Sample Stage": {
+    class: simulated.Stage,
+    role: stage,
+    init: {axes: [x, y]},
+}
