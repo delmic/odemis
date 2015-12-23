@@ -454,6 +454,8 @@ class AndorCam2(model.DigitalCamera):
             self.handle = None
             return
 
+        self._initpath = None # Will be updated by Initialize()
+
         if isinstance(device, basestring):
             self._device, self.handle = self._findDevice(device)
         else:
@@ -468,21 +470,18 @@ class AndorCam2(model.DigitalCamera):
                                   (name, device))
                 else:
                     raise
+            self.select()
+            self.Initialize()
+        logging.info("Opened device %s successfully", device)
 
         model.DigitalCamera.__init__(self, name, role, **kwargs)
-        self.select()
-        self._initpath = None
-        self.Initialize()
-
-        logging.info("Opened device %s successfully", device)
 
         # Describe the camera
         # up-to-date metadata to be included in dataflow
         hw_name = self.getModelName()
         self._metadata[model.MD_HW_NAME] = hw_name
-        self._caps = self.GetCapabilities()
-        if self._caps.CameraType not in AndorCapabilities.CameraTypes:
-            logging.warning("This driver has not been tested for this camera type %d", self._caps.CameraType)
+        if self.GetCapabilities().CameraType not in AndorCapabilities.CameraTypes:
+            logging.warning("This driver has not been tested for this camera type %d", self.GetCapabilities().CameraType)
 
         # drivers/hardware info
         self._swVersion = self.getSwVersion()
@@ -524,9 +523,14 @@ class AndorCam2(model.DigitalCamera):
 
         self._binning = (1, 1) # px, horizontal, vertical
         self._image_rect = (1, resolution[0], 1, resolution[1])
+        if resolution[1] == 1:
+            # If limit is obvious, indicate it via the VA range
+            min_res = (self.GetMinimumImageLength(), 1)
+        else:
+            min_res = (1, 1)
         # need to be before binning, as it is modified when changing binning
         self.resolution = model.ResolutionVA(self._transposeSizeToUser(resolution),
-                                             (self._transposeSizeToUser((1, 1)),
+                                             (self._transposeSizeToUser(min_res),
                                               self._transposeSizeToUser(resolution)),
                                              setter=self._setResolution)
         self._setResolution(self._transposeSizeToUser(resolution))
@@ -650,16 +654,18 @@ class AndorCam2(model.DigitalCamera):
 
         # Shutter -> auto in most cases is fine (= open during acquisition)
         if self.hasFeature(AndorCapabilities.FEATURES_SHUTTEREX):
+            logging.debug("Using ShutterEx")
             # Special case for iXon Ultra -> leave it open (with 0, 0) (cf p.77 hardware guide)
             caps = self.GetCapabilities()
             if caps.CameraType == AndorCapabilities.CAMERATYPE_IXONULTRA:
                 self.atcore.SetShutterEx(1, 1, 0, 0, 0) # mode 1 = open, extmode 0 = auto
             else:
-                self.atcore.SetShutterEx(1, 0, 0, 0, 0) # mode 0 = auto, extmode 0 = auto
+                self.atcore.SetShutterEx(1, 1, 0, 0, 0) # mode 1 = open, extmode 0 = auto
         elif self.hasFeature(AndorCapabilities.FEATURES_SHUTTER):
             # Clara : 20, 20 gives horrible results. Default for Andor Solis: 10, 0
             # Apparently, if there is no shutter, it should be 0, 0
-            self.atcore.SetShutter(1, 0, 0, 0) # mode 0 = auto
+            #self.atcore.SetShutter(1, 0, 0, 0) # mode 0 = auto
+            self.atcore.SetShutter(1, 1, 0, 0) # mode 1 = open
 
         self.atcore.SetTriggerMode(0) # 0 = internal
 
@@ -838,6 +844,14 @@ class AndorCam2(model.DigitalCamera):
         self.atcore.GetStatus(byref(status))
         return status.value
 
+    def GetMinimumImageLength(self):
+        """
+        return (int): the minimum number of super pixels that can be acquired
+        """
+        minl = c_int()
+        self.atcore.GetMinimumImageLength(byref(minl))
+        return minl.value
+
     def GetMaximumBinnings(self, readmode):
         """
         readmode (0<= int <= 4): cf SetReadMode
@@ -848,6 +862,13 @@ class AndorCam2(model.DigitalCamera):
         maxh, maxv = c_int(), c_int()
         self.atcore.GetMaximumBinning(readmode, 0, byref(maxh))
         self.atcore.GetMaximumBinning(readmode, 1, byref(maxv))
+
+        # As of SDK 2.100, the SDK reports a max binning of 1024, but anything
+        # > 2 will fail, so hardcode it here.
+        ct = self.GetCapabilities().CameraType
+        if ct == AndorCapabilities.CAMERATYPE_INGAAS:
+            return 1, maxv.value
+
         return maxh.value, maxv.value
 
     def GetTemperature(self):
@@ -1065,7 +1086,7 @@ class AndorCam2(model.DigitalCamera):
         feature (int): one of the AndorCapabilities.FEATURE_* constant (can be OR'd)
         return boolean
         """
-        return bool(self._caps.Features & feature)
+        return bool(self.GetCapabilities().Features & feature)
 
     def hasSetFunction(self, function):
         """
@@ -1074,7 +1095,7 @@ class AndorCam2(model.DigitalCamera):
         function (int): one of the AndorCapabilities.SETFUNCTION_* constant (can be OR'd)
         return boolean
         """
-        return bool(self._caps.SetFunctions & function)
+        return bool(self.GetCapabilities().SetFunctions & function)
 
     def hasGetFunction(self, function):
         """
@@ -1083,7 +1104,7 @@ class AndorCam2(model.DigitalCamera):
         function (int): one of the AndorCapabilities.GETFUNCTION_* constant (can be OR'd)
         return boolean
         """
-        return bool(self._caps.GetFunctions & function)
+        return bool(self.GetCapabilities().GetFunctions & function)
 
     def _setTargetTemperature(self, temp, force=False):
         """
@@ -1435,8 +1456,8 @@ class AndorCam2(model.DigitalCamera):
             # The iDus allows horizontal binning up to 1000... but the
             # documentation recommends to only use 1, no idea why...
             if self._binning[0] > 1:
-                caps = self.GetCapabilities()
-                if caps.CameraType == AndorCapabilities.CAMERATYPE_IDUS:
+                ct = self.GetCapabilities().CameraType
+                if ct in (AndorCapabilities.CAMERATYPE_IDUS, AndorCapabilities.CAMERATYPE_INGAAS):
                     logging.warning("Horizontal binning set to %d, but only "
                                     "1 is recommended on the iDus",
                                     self._binning[0])
@@ -1625,9 +1646,15 @@ class AndorCam2(model.DigitalCamera):
                         raise
                     # This sometimes happen with 20024 (DRV_NO_NEW_DATA) or
                     # 20067 (DRV_P2INVALID) on GetMostRecentImage16()
-                    self.atcore.CancelWait()
+                    try:
+                        self.atcore.CancelWait()
+                        if self.GetStatus() == AndorV2DLL.DRV_ACQUIRING:
+                            self.atcore.AbortAcquisition()  # Need to stop acquisition to read temperature
+                        temp = self.GetTemperature()
+                    except AndorV2Error:
+                        temp = None
                     # -999°C means the camera is gone
-                    if self.GetTemperature() == -999:
+                    if temp == -999:
                         logging.error("Camera seems to have disappeared, will try to reinitialise it")
                         self.Reinitialize()
                     else:
@@ -1755,9 +1782,15 @@ class AndorCam2(model.DigitalCamera):
                         raise
                     # This sometimes happen with 20024 (DRV_NO_NEW_DATA) or
                     # 20067 (DRV_P2INVALID) on GetMostRecentImage16()
-                    self.atcore.CancelWait()
+                    try:
+                        self.atcore.CancelWait()
+                        if self.GetStatus() == AndorV2DLL.DRV_ACQUIRING:
+                            self.atcore.AbortAcquisition()  # Need to stop acquisition to read temperature
+                        temp = self.GetTemperature()
+                    except AndorV2Error:
+                        temp = None
                     # -999°C means the camera is gone
-                    if self.GetTemperature() == -999:
+                    if temp == -999:
                         logging.error("Camera seems to have disappeared, will try to reinitialise it")
                         self.Reinitialize()
                     else:
@@ -1977,6 +2010,12 @@ class AndorCam2(model.DigitalCamera):
             if serial == sni:
                 return n, handle
             else:
+                # Try to fully release the camera (not sure it helps, but doesn't seem to hurt)
+                try:
+                    self.atcore.FreeInternalMemory()
+                    self.Shutdown()
+                except AndorV2Error as ex:
+                    logging.warning("Failed to shutdown non-used camera: %s", ex)
                 logging.info("Skipping Andor camera with S/N %d", serial)
         else:
             raise HwError("Failed to find Andor camera with S/N %d, check it is "

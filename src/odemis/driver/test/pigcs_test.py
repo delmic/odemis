@@ -85,12 +85,13 @@ class TestController(unittest.TestCase):
 
     def test_move(self):
         """
-        Note: with C-867 open-looped (SMOController), speed is very imprecise,  
+        Note: with C-867 open-looped (SMOController), speed is very imprecise,
         so test failure might not indicate software bug.
         """
         ctrl = pigcs.Controller(self.accesser, *self.config_ctrl)
-        speed = max(ctrl.min_speed, ctrl.max_speed / 10)
-        self.assertGreater(ctrl.max_speed, 100e-6, "Maximum speed is expected to be more than 100μm/s")
+        speed_rng = ctrl.speed_rng[1]
+        speed = max(speed_rng[0], speed_rng[1] / 10)
+        self.assertGreater(speed_rng[1], 100e-6, "Maximum speed is expected to be more than 100μm/s")
         ctrl.setSpeed(1, speed)
         distance = -ctrl.moveRel(1, -speed / 2) # should take 0.5s
         self.assertGreater(distance, 0)

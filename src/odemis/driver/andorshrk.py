@@ -982,7 +982,12 @@ class Shamrock(model.Actuator):
         if calib[-1] < 1e-9:
             logging.error("Calibration data doesn't seem valid, will use internal one (cw = %g): %s",
                           self.position.value["wavelength"], calib)
-            return self._FallbackGetPixelToWavelength(npixels, pxs)
+            try:
+                return self._FallbackGetPixelToWavelength(npixels, pxs)
+            except Exception:
+                logging.exception("Failed to compute pixel->wavelength (cw = %f nm)",
+                                  self.position.value["wavelength"] * 1e9)
+                return []
         return calib
 
     def _FallbackGetPixelToWavelength(self, npixels, pxs):
@@ -1000,6 +1005,9 @@ class Shamrock(model.Actuator):
         cw = self.position.value["wavelength"]  # m
         gid = self.position.value["grating"]
         gl = self.GetGratingInfo(gid)[0]  # lines/meter
+        if gl < 1e-5:
+            logging.warning("Trying to compute pixel->wavelength with null lines/mm")
+            return []
         # fl = focal length (m)
         # ia = inclusion angle (rad)
         # da = detector angle (rad)

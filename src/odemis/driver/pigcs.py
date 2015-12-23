@@ -406,12 +406,26 @@ class Controller(object):
                             address, self.GetIdentification())
 
         self._channels = self.GetAxes() # available channels (=axes)
+        self._avail_cmds = self.GetAvailableCommands()
+        self._avail_params = self.GetAvailableParameters()
         # FIXME: only if the command is supported
         # dict axis -> boolean
-        self._hasLimitSwitches = dict((a, self.HasLimitSwitches(a)) for a in self._channels)
+        try:
+            self._hasLimitSwitches = dict((a, self.HasLimitSwitches(a)) for a in self._channels)
+        except NotImplementedError:
+            self._hasLimitSwitches = dict((a, False) for a in self._channels)
         # dict axis -> boolean
-        self._hasRefSwitch = dict((a, self.HasRefSwitch(a)) for a in self._channels)
+        try:
+            self._hasRefSwitch = dict((a, self.HasRefSwitch(a)) for a in self._channels)
+        except NotImplementedError:
+            self._hasLimitSwitches = dict((a, False) for a in self._channels)
+
         self._position = {} # m (dict axis-> position)
+        self.pos_rng = {}  # m, dict axis -> min,max position
+
+        self._speed = {}  # m/s dict axis -> speed
+        self.speed_rng = {}  # m/s, dict axis -> min,max speed
+        self._accel = {}  # m/s² dict axis -> acceleration/deceleration
 
         # only for interpolated position (on open-loop)
         self._target = {} # m (dict axis-> future position when a move is over)
@@ -426,7 +440,6 @@ class Controller(object):
                          c,
                          "" if self._hasLimitSwitches[c] else "no ",
                          "a " if self._hasRefSwitch[c] else "no ")
-        self._avail_params = self.GetAvailableParameters()
 
         self._try_recover = True # full feature only after init
 
@@ -524,7 +537,8 @@ class Controller(object):
         """
         # CST? does this as well
         # parameter 0x3c
-        return self.GetParameter(axis, 0x3C)
+        # return self.GetParameter(axis, 0x3C)
+        return self._readAxisValue("CST?", axis)
 
     def GetAxes(self):
         """
@@ -537,16 +551,32 @@ class Controller(object):
         return axes
 
     def GetAvailableCommands(self):
-        # HLP? (Get List Of Available Commands)
-        # first line starts with \x00
+        """
+        return (dict str -> str): command name -> command description
+        """
+        # HLP? (Get List Of Available Commands), returns lines in such formats:
+        # "HLP? - Get List Of Available Commands \n" or
+        # "HLP? Get List Of Available Commands \n"
+        # first line sometimes starts with \x00
         lines = self._sendQueryCommand("HLP?\n")
         lines[0] = lines[0].lstrip("\x00")
-        return lines
+        cmds = {}
+        for l in lines:
+            ll = l.lower()
+            if re.match(r"(the following.*:|^end of.*)", ll):
+                logging.debug("Line doesn't seem to be a command: '%s'", l)
+            else:
+                cd = re.split(r"[\s-]", l, 1)
+                if len(cd) != 2:
+                    logging.debug("Line doesn't seem to be a command: '%s'", l)
+                else:
+                    cmds[cd[0]] = cd[1]
+        return cmds
 
     def GetAvailableParameters(self):
         """
         Returns the available parameters
-        return (dict param -> str): parameter number and string
+        return (dict int -> str): parameter number and string
          used to describe it (typically: 0 1 FLOAT description)
         """
         # HPA? (Get List Of Available Parameters)
@@ -572,8 +602,8 @@ class Controller(object):
         returns (string): the string representing this parameter
         """
         # SPA? (Get Volatile Memory Parameters)
-        assert((1 <= axis) and (axis <= 16))
-        assert(0 <= param)
+        assert 1 <= axis <= 16
+        assert 0 <= param
         if hasattr(self, "_avail_params") and param not in self._avail_params:
             raise ValueError("Parameter %d %d not available" % (axis, param))
 
@@ -594,7 +624,7 @@ class Controller(object):
         Raises ValueError if hardware complains
         """
         # SPA (Set Volatile Memory Parameters)
-        assert((1 <= axis) and (axis <= 16))
+        assert(1 <= axis <= 16)
         assert(0 <= param)
         self._sendOrderCommand("SPA %d %d %s\n" % (axis, param, val))
         if check:
@@ -602,6 +632,16 @@ class Controller(object):
             if err:
                 raise ValueError("Error %d: setting param 0x%X with val %s failed." %
                                  (err, param, val), err)
+
+    def SetCommandLevel(self, level, pwd):
+        """
+        Change the authorization level
+        level (0<=int): 0 is standard, 1 allows to change parameters
+        pwd (str): 'advanced' for level 1
+        """
+        assert(0 <= level)
+        self._sendOrderCommand("CCL %d %s\n" % (level, pwd))
+        self.checkError()
 
     def _readAxisValue(self, com, axis):
         """
@@ -613,6 +653,9 @@ class Controller(object):
         """
         assert(axis in self._channels)
         assert(2 < len(com) < 8)
+        if com not in self._avail_cmds:
+            raise NotImplementedError("Command %s not supported by the controller", com)
+
         resp = self._sendQueryCommand("%s %d\n" % (com, axis))
         try:
             value_str = resp.split("=")[1]
@@ -651,7 +694,6 @@ class Controller(object):
         axis (1<int<16): axis number
         returns (bool)
         """
-        # TODO: Rename to has RefSwitch?
         # TRS? (Indicate Reference Switch)
         # 1 => True, 0 => False
         return self._readAxisValue("TRS?", axis) == 1
@@ -779,7 +821,7 @@ class Controller(object):
 
         # need to recover from the "error", otherwise nothing works
         error = self.GetErrorNum()
-        if error != 10: #PI_CNTR_STOP
+        if error != 10:  # PI_CNTR_STOP
             logging.warning("Stopped controller %d, but error code is %d instead of 10", self.address, error)
 
     def Stop(self):
@@ -888,6 +930,15 @@ class Controller(object):
         assert((-55 <= amplitude) and (amplitude <= 55))
         self._sendOrderCommand("OAD %d %.5g\n" % (axis, amplitude))
 
+    def GetOLVelocity(self, axis):
+        """
+        Get velocity for open-loop montion.
+        axis (1<int<16): axis number
+        return float: velocity in step-cycles/s
+        """
+        assert(axis in self._channels)
+        return self._readAxisValue("OVL?", axis)
+
     def SetOLVelocity(self, axis, velocity):
         """
         Set velocity for open-loop nanostepping motion.
@@ -898,6 +949,15 @@ class Controller(object):
         assert(axis in self._channels)
         assert(velocity > 0)
         self._sendOrderCommand("OVL %d %.5g\n" % (axis, velocity))
+
+    def GetOLAcceleration(self, axis):
+        """
+        Get acceleration for open-loop montion.
+        axis (1<int<16): axis number
+        return float: acceleration in step-cycles/s²
+        """
+        assert(axis in self._channels)
+        return self._readAxisValue("OAC?", axis)
 
     def SetOLAcceleration(self, axis, value):
         """
@@ -955,7 +1015,7 @@ class Controller(object):
         # FNL (Fast Reference Move To Negative Limit)
         # FPL (Fast Reference Move To Positive Limit)
         assert(axis in self._channels)
-        assert(lim in [-1, 1])
+        assert(lim in (-1, 1))
         if lim == 1:
             self._sendOrderCommand("FPL %d\n" % axis)
         else:
@@ -971,6 +1031,36 @@ class Controller(object):
         # FRF (Fast Reference Move To Reference Switch)
         assert(axis in self._channels)
         self._sendOrderCommand("FRF %d\n" % axis)
+
+    def AutoZero(self, axes=None, voltage=None):
+        """
+        Set Automatic Zero Calibration Point. Runs the calibration procedure.
+        cf E-725 manual p. 29.
+        axes (None or list of int): If None, all axes, otherwise a set of axes
+        voltage (None or list of floats): If None, uses the default low voltage,
+          otherwise uses the voltage given for each axis
+        Note that the axes on which it is not run are automatically reset.
+        So the recommanded usage is to not set any arguments.
+        Check it is over by using GetMotionStatus()
+        """
+        acmd = ""
+        if axes is not None:
+            for i, a in enumerate(axes):
+                if voltage is None:
+                    acmd += " %d NAN" % (a,)
+                else:
+                    acmd += " %d %g" % (a, voltage[i])
+
+        self._sendOrderCommand("ATZ%s\n" % acmd)
+
+    def GetAutoZero(self, axis):
+        """
+        Return the status of the Auto Zero procedure for the given axis
+        axis (1<int<16): axis number
+        return (bool): True if successfull, False otherwise
+        """
+        ans = self._readAxisValue("ATZ?", axis)
+        return ans == 1
 
     def GetPosition(self, axis):
         """
@@ -1162,23 +1252,12 @@ class Controller(object):
         speed (0<float<10): speed in m/s.
         axis (1<=int<=16): the axis
         """
-        assert (self.min_speed <= speed <= self.max_speed)
         assert (axis in self._channels)
+        assert (self.speed_rng[axis][0] <= speed <= self.speed_rng[axis][1])
         self._speed[axis] = speed
 
     def getSpeed(self, axis):
         return self._speed[axis]
-
-    def setAccel(self, axis, accel):
-        """
-        Changes the move acceleration (and deceleration) of the motor (for the next move).
-        Note: in open-loop mode, it's very approximate.
-        accel (0<float<100): acceleration in m/s².
-        axis (1<=int<=16): the axis
-        """
-        assert (0 < accel <= self.max_accel)
-        assert (axis in self._channels)
-        self._accel[axis] = accel
 
     def getAccel(self, axis):
         return self._accel[axis]
@@ -1312,6 +1391,7 @@ class Controller(object):
             # is it answering?
             try:
                 ctrl.address = i
+                ctrl._avail_cmds = ctrl.GetAvailableCommands()
                 axes = {}
                 for a in ctrl.GetAxes():
                     axes = {a: ctrl.HasRefSwitch(a)}
@@ -1335,9 +1415,21 @@ class CLAbsController(Controller):
     """
     def __init__(self, busacc, address=None, axes=None):
         super(CLAbsController, self).__init__(busacc, address, axes)
-        self._speed = {}  # m/s dict axis -> speed
-        self._accel = {}  # m/s² dict axis -> acceleration/deceleration
-        self.pos_rng = {}  # m, dict axis -> min,max position
+        self._upm = {} # ratio to convert values in user units to meters
+
+        # It's pretty much required to reference the axes, and fast and
+        # normally not dangerous (travel range is very small).
+        # It's also import to reference all the axes simultaneously
+        # TODO: just use a standard parameter to request referencing on init?
+        logging.info("Referencing the axes (via AutoZero)")
+        self.AutoZero()
+        tstart = time.time()
+        while self.GetMotionStatus():
+            time.sleep(0.01)
+            if time.time() > tstart + 10:
+                self.stopMotion()
+                raise IOError("AutoZero refenrencing is taking more that 10s, stopping")
+        logging.debug("Referencing took %f s", time.time() - tstart)
 
         for a, cl in axes.items():
             if a not in self._channels:
@@ -1350,6 +1442,8 @@ class CLAbsController(Controller):
             # TODO: cf PUN?
             unit = self.GetParameter(a, 0x7000601)
             if unit.lower() != "um":
+                self._upm[a] = 1e-6 #
+            else:
                 raise IOError("Controller %d configured with unit %s, but only "
                               "micrometers (UM) is supported." % (address, unit))
 
@@ -1357,16 +1451,16 @@ class CLAbsController(Controller):
             self.SetServo(a, True)
 
             # Movement range before referencing is max range in both directions
-            self.pos_rng[a] = (self.GetMinPosition(a) * 1e-6, self.GetMaxPosition(a) * 1e-6)
+            self.pos_rng[a] = (self.GetMinPosition(a) * self._upm[a],
+                               self.GetMaxPosition(a) * self._upm[a])
 
             # Read speed/accel ranges
-            self._speed[a] = self.GetCLVelocity(a) * 1e-6  # m/s
+            self._speed[a] = self.GetCLVelocity(a) * self._upm[a]  # m/s
+            # TODO: get range from the parameters?
+            self.speed_rng[a] = (10e-6, 1) # m/s (default large values)
             # TODO ACC? Not supported?
             self._accel[a] = self._speed[a]  # m/s²
-            # self._accel[a] = self.GetCLAcceleration(a) * 1e-6  # m/s²
-
-        self.min_speed = 10e-6  # m/s (default low value)
-        self._prev_speed_accel = ({}, {})
+            # self._accel[a] = self.GetCLAcceleration(a) * self._upm[a]  # m/s²
 
     def moveRel(self, axis, distance):
         """
@@ -1388,7 +1482,7 @@ class CLAbsController(Controller):
         # self._updateSpeedAccel(axis)
         # We trust the caller that it knows it's in range
         # (worst case the hardware will not go further)
-        self.MoveRel(axis, distance * 1e6)
+        self.MoveRel(axis, distance / self._upm[a])
         self.checkError()
         return distance
 
@@ -1413,10 +1507,10 @@ class CLAbsController(Controller):
         # self._updateSpeedAccel(axis)
         # We trust the caller that it knows it's in range
         # (worst case the hardware will not go further)
-        old_pos = self.GetPosition(axis) * 1e-6
+        old_pos = self.GetPosition(axis) * self._upm[a]
         distance = position - old_pos
 
-        self.MoveAbs(axis, position * 1e6)
+        self.MoveAbs(axis, position / self._upm[a])
         self.checkError()
         return distance
 
@@ -1425,7 +1519,7 @@ class CLAbsController(Controller):
         Find current position as reported by the sensor
         return (float): the current position of the given axis
         """
-        return self.GetPosition(axis) * 1e-6
+        return self.GetPosition(axis) * self._upm[a]
 
     # Warning: if the settling window is too small or settling time too big,
     # it might take several seconds to reach target (or even never reach it)
@@ -1448,6 +1542,17 @@ class CLAbsController(Controller):
                 return True
 
         return False
+
+    # TODO allow to reference, but need to get multiple axes, and to check the
+    # status, isMoving() cannot be used, but just GetMotionStatus()
+    # def startReferencing(self, axis):
+
+    def isReferenced(self, axis):
+        """
+        returns (bool or None): True if the axis is referenced, or None if it's
+        not possible
+        """
+        return self.GetAutoZero(axis)
 
 
 # Messages to the encoder manager
@@ -1476,14 +1581,11 @@ class CLRelController(Controller):
           to stay on target.
         """
         super(CLRelController, self).__init__(busacc, address, axes)
+        self._upm = {} # ratio to convert values in user units to meters
 
         if not (auto_suspend is False or auto_suspend > 0):
             raise ValueError("auto_suspend should be False or > 0 but got %s" % (auto_suspend,))
         self._auto_suspend = auto_suspend
-
-        self._speed = {} # m/s dict axis -> speed
-        self._accel = {} # m/s² dict axis -> acceleration/deceleration
-        self.pos_rng = {} # m, dict axis -> min,max position
 
         # for managing starting/stopping the encoder:
         # * one queue to request turning on/off the encoder and terminating the thread
@@ -1509,13 +1611,15 @@ class CLRelController(Controller):
 
             # Check the unit is mm
             unit = self.GetParameter(a, 0x7000601)
-            if unit != "MM":
+            if unit == "MM":
+                self._upm[a] = 1e-3
+            else:
                 raise IOError("Controller %d configured with unit %s, but only "
                               "millimeters (MM) is supported." % (address, unit))
 
             try:  # Only exists on E-861
                 # slew rate is stored in ms
-                self._slew_rate[a] = float(self.GetParameter(a, 0x7000002)) * 1e-3
+                self._slew_rate[a] = float(self.GetParameter(a, 0x7000002)) * self._upm[a]
             except ValueError:  # param doesn't exist => no problem
                 pass
 
@@ -1532,8 +1636,8 @@ class CLRelController(Controller):
             # anyway, or it hasn't moved and the position is correct.
 
             # Movement range before referencing is max range in both directions
-            pos = self.GetPosition(a) * 1e-3
-            width = self.GetMaxPosition(a) * 1e-3 - self.GetMinPosition(a) * 1e-3
+            pos = self.GetPosition(a) * self._upm[a]
+            width = (self.GetMaxPosition(a) - self.GetMinPosition(a)) * self._upm[a]
             # TODO: check that if the stage starts at a limit, it's still possible
             # to reach the other side (with relative moves) even if the travel
             # range limits it.
@@ -1543,16 +1647,16 @@ class CLRelController(Controller):
             self.pos_rng[a] = (pos - width, pos + width)
 
             # Read speed/accel ranges
-            self._speed[a] = self.GetCLVelocity(a) * 1e-3 # m/s
-            self._accel[a] = self.GetCLAcceleration(a) * 1e-3 # m/s²
+            self._speed[a] = self.GetCLVelocity(a) * self._upm[a] # m/s
+            self._accel[a] = self.GetCLAcceleration(a) * self._upm[a] # m/s²
 
-            # TODO: also use per-axis info
             try:
-                self.max_speed = float(self.GetParameter(a, 0xA)) * 1e-3 # m/s
-                self.max_accel = float(self.GetParameter(a, 0x4A)) * 1e-3 # m/s²
+                max_speed = float(self.GetParameter(a, 0xA)) * self._upm[a] # m/s
+                # max_accel = float(self.GetParameter(a, 0x4A)) * self._upm[a] # m/s²
             except (IOError, ValueError):
-                self.max_speed = self._speed[a]
-                self.max_accel = self._accel[a]
+                max_speed = self._speed[a]
+                # max_accel = self._accel[a]
+            self.speed_rng[a] = (10e-6, max_speed)  # m/s (default low value for min)
 
             self._pos_lock[a] = threading.Lock()
             self._stopEncoder(a)  # in case it was not off yet
@@ -1565,7 +1669,6 @@ class CLRelController(Controller):
             self._encoder_mng[a] = t
             t.start()
 
-        self.min_speed = 10e-6  # m/s (default low value)
         self._prev_speed_accel = ({}, {})
 
     def terminate(self):
@@ -1903,7 +2006,7 @@ class CLRelController(Controller):
 
 class OLController(Controller):
     """
-    Controller managed via open-loop commands (ex: E-861)
+    Controller managed via standard open-loop commands (ex: E-861)
     """
     def __init__(self, busacc, address=None, axes=None,
                  dist_to_steps=None, min_dist=None):
@@ -1922,6 +2025,15 @@ class OLController(Controller):
             raise ValueError("min_dist (%s) must be between 0 and 1 m" % min_dist)
 
         super(OLController, self).__init__(busacc, address, axes)
+
+        # TODO: params should be per axis
+        # TODO: allow to pass a polynomial
+        self._dist_to_steps = dist_to_steps or 1e5 # step/m
+        if min_dist is None:
+            self.min_stepsize = 0.01 # step, under this, no move at all
+        else:
+            self.min_stepsize = min_dist * self._dist_to_steps
+
         for a, cl in axes.items():
             if a not in self._channels:
                 raise LookupError("Axis %d is not supported by controller %d" % (a, address))
@@ -1932,33 +2044,31 @@ class OLController(Controller):
             self.SetServo(a, False)
             self.SetStepAmplitude(a, 55) # maximum is best
             self._position[a] = 0
+            # TODO: use LIM? values * 2, as for the CLRel version?
+            # Unknown range => give room
+            self.pos_rng[a] = (-1, 1) # m
 
-        # TODO: allow to pass a polynomial
-        self._dist_to_steps = dist_to_steps or 1e5 # step/m
-        if min_dist is None:
-            self.min_stepsize = 0.01 # step, under this, no move at all
-        else:
-            self.min_stepsize = min_dist * self._dist_to_steps
+            try:
+                # (max m/s) = (max step/s) * (step/m)
+                max_speed = float(self.GetParameter(1, 0x7000204)) / self._dist_to_steps # m/s
+                # Note: the E-861 claims max 0.015 m/s but actually never goes above 0.004 m/s
+                # (max m/s²) = (max step/s²) * (step/m)
+#                 max_accel = float(self.GetParameter(1, 0x7000205)) / self._dist_to_steps # m/s²
+            except (IOError, ValueError) as err:
+                # TODO use CL info if not available?
+                # TODO detect better that it's just a problem of sending unsupported command/value
+                # Put default (large values)
+                self.GetErrorNum() # reset error (just in case)
+                max_speed = 0.5 # m/s
+#                 max_accel = 0.01 # m/s²
+                logging.debug("Using default speed and acceleration value after error '%s'", err)
 
-        self.min_speed = 10e-6 # m/s (default low value)
+            # TODO just read the current values
+            self.speed_rng[a] = (10e-6, max_speed)  # m/s (default low value)
+            self._speed[a] = (self.speed_rng[a][0] + self.speed_rng[a][1]) / 2  # m/s
+            self._accel[a] = self.GetOLAcceleration(a) / self._dist_to_steps # m/s² (both acceleration and deceleration)
+            #self._accel[a] = max_accel # m/s² (both acceleration and deceleration)
 
-        # FIXME 0x7000204 seems specific to E-861. => use CL info if not available?
-        self.max_speed = 0.5 # m/s
-        self.max_accel = 0.01 # m/s²
-        try:
-            # (max m/s) = (max step/s) * (step/m)
-            self.max_speed = float(self.GetParameter(1, 0x7000204)) / self._dist_to_steps # m/s
-            # Note: the E-861 claims max 0.015 m/s but actually never goes above 0.004 m/s
-            # (max m/s²) = (max step/s²) * (step/m)
-            self.max_accel = float(self.GetParameter(1, 0x7000205)) / self._dist_to_steps # m/s²
-        except (IOError, ValueError) as err:
-            # TODO detect better that it's just a problem of sending unsupported command/value
-            # Put default (large values)
-            self.GetErrorNum() # reset error (just in case)
-            logging.debug("Using default speed and acceleration value after error '%s'", err)
-
-        self._speed = dict([(a, (self.min_speed + self.max_speed) / 2) for a in axes]) # m/s
-        self._accel = dict([(a, self.max_accel) for a in axes]) # m/s² (both acceleration and deceleration)
         self._prev_speed_accel = ({}, {})
 
     def _convertDistanceToDevice(self, distance):
@@ -2073,6 +2183,12 @@ class SMOController(Controller):
             self.SetServo(a, False)
             self._position[a] = 0
 
+            # Don't authorize different speeds or accels
+            self._speed_base = speed_base
+            self.speed_rng = (speed_base, speed_base)  # m/s
+            self._speed[a] = speed_base  # m/s
+            self._accel[a] = 0.01  # m/s² (actually I've got no idea)
+
         # Get maximum motor output parameter (0x9) allowed
         # Because some type of stages cannot bear as much as the full maximum
         # The maximum output voltage is calculated following this formula:
@@ -2101,15 +2217,6 @@ class SMOController(Controller):
               "%(n)d SMO 1 0\n"  \
               "%(n)d MAC END\n" % {"n": self.address}
         self._sendOrderCommand(mac)
-
-        # Don't authorize different speeds or accels
-        self._speed_base = speed_base
-        self.min_speed = speed_base # m/s
-        self.max_speed = speed_base # m/s
-        self.max_accel = 0.01 # m/s² (actually I've got no idea)
-
-        self._speed = dict([(a, self.min_speed) for a in axes]) # m/s
-        self._accel = dict([(a, self.max_accel) for a in axes]) # m/s² (both acceleration and deceleration)
 
     def StopOLViaPID(self, axis):
         """
@@ -2322,16 +2429,11 @@ class Bus(model.Actuator):
                 self._axis_to_cc[axis] = (controller, c)
 
                 # TODO if closed-loop, the ranges should be updated after homing
-                try:
-                    rng = controller.pos_rng[c]
-                except (IndexError, AttributeError):
-                    # Unknown? Give room
-                    rng = (-1, 1) # m
-                speed_rng = (controller.min_speed, controller.max_speed)
+                rng = controller.pos_rng[c]
+                speed_rng = controller.speed_rng[c]
                 # Just to make sure it doesn't go too fast
                 speed[axis] = controller.getSpeed(c) # m/s
-                ad = model.Axis(unit="m", range=rng, speed=speed_rng,
-                                canAbs=isCL)
+                ad = model.Axis(unit="m", range=rng, speed=speed_rng, canAbs=isCL)
                 axes_def[axis] = ad
 
                 refed = controller.isReferenced(c)
@@ -2351,7 +2453,9 @@ class Bus(model.Actuator):
         self.referenced = model.VigilantAttribute(referenced, readonly=True)
 
         # min speed = don't be crazy slow. max speed from hardware spec
-        self.speed = model.MultiSpeedVA(speed, range=[0, 10.],
+        gspeed_rng = (min(ad.speed[0] for ad in self.axes.values()),
+                      max(ad.speed[1] for ad in self.axes.values()))
+        self.speed = model.MultiSpeedVA(speed, range=gspeed_rng,
                                         unit="m/s", setter=self._setSpeed)
 
         # set HW and SW version
@@ -3243,7 +3347,7 @@ class E861Simulator(object):
     # Command name -> parameter number
     _com_to_param = {# "LIM": 0x32, # LIM actually report the opposite of 0x32
                      "TRS": 0x14,
-                     "CTS": 0x3c,
+                     "CST": 0x3c,
                      "TMN": 0x30,
                      "TMX": 0x15,
                      "VEL": 0x49,
@@ -3458,11 +3562,33 @@ class E861Simulator(object):
                 out = "1"
             elif com == "HLP?":
                 # The important part is " \n" at the end of each line
-                out = ("\x00The following commands are available: \n" +
-                       "#4 request status register \n" +
-                       "HLP list the available commands \n" +
-                       "ERR? get error number \n" +
-                       "VEL {<AxisId> <Velocity>} set closed-loop velocity \n" +
+                out = ("\x00The following commands are available: \n"
+                       "#4 request status register \n"
+                       "HLP list the available commands \n"
+                       "LIM?  booo \n"
+                       "TRS?  booo \n"
+                       "SVO  booo \n"
+                       "RON  booo \n"
+                       "HTL  booo \n"
+                       "STP  booo \n"
+                       "CST?  booo \n"
+                       "VEL?  booo \n"
+                       "ACC?  booo \n"
+                       "OVL?  booo \n"
+                       "OAC?  booo \n"
+                       "TMN?  booo \n"
+                       "TMX?  booo \n"
+                       "FRF  booo \n"
+                       "FRF?  booo \n"
+                       "SAI?  booo \n"
+                       "POS  booo \n"
+                       "POS?  booo \n"
+                       "ONT?  booo \n"
+                       "MOV  booo \n"
+                       "MVR  booo \n"
+                       "OSM  booo \n"
+                       "ERR? get error number \n"
+                       "VEL {<AxisId> <Velocity>} set closed-loop velocity \n"
                        "end of help"
                        )
             elif com == "HPA?":
