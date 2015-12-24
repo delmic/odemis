@@ -43,6 +43,10 @@ import weakref
 
 ACQ_CMD_UPD = 1
 ACQ_CMD_TERM = 2
+# FIXME: Tescan integrations lower limit. For some reason when trying to acquire
+# a spot with less than 100 integrations it gets an enormous delay to receive
+# new data from the server.
+TESCAN_PXL_LIMIT = 100
 
 class SEM(model.HwComponent):
     '''
@@ -81,6 +85,9 @@ class SEM(model.HwComponent):
         self._acquisition_must_stop = threading.Event()
         self._acquisitions = set()  # detectors currently active
         self.pre_res = None
+        self._scaled_shape = None
+        self._roi = None
+        self._dt = None
 
         # important: stop the scanning before we start scanning or before automatic
         # procedures, even before we configure the detectors
@@ -161,16 +168,17 @@ class SEM(model.HwComponent):
         self._acquisition_thread.start()
 
     def _reset_device(self):
-        logging.info("Resetting device %s", self._hwName)
-        self._device = sem.Sem()
-        logging.info("Going to connect to host")
-        result = self._device.Connect(self._host, 8300)
-        if result < 0:
-            raise HwError("Failed to connect to TESCAN server '%s'. "
-                          "Check that the ip address is correct and TESCAN server "
-                          "connected to the network." % (self._host,))
-        self._device.ScStopScan()
-        logging.info("Connected")
+        pass
+#         logging.info("Resetting device %s", self._hwName)
+#         self._device = sem.Sem()
+#         logging.info("Going to connect to host")
+#         result = self._device.Connect(self._host, 8300)
+#         if result < 0:
+#             raise HwError("Failed to connect to TESCAN server '%s'. "
+#                           "Check that the ip address is correct and TESCAN server "
+#                           "connected to the network." % (self._host,))
+#         self._device.ScStopScan()
+#         logging.info("Connected")
 
     def start_acquire(self, detector):
         """
@@ -311,6 +319,19 @@ class SEM(model.HwComponent):
             logging.info("Acquisition thread closed")
             self._acquisition_thread = None
 
+    def flush(self):
+        self._device.Disconnect()
+        self._device = sem.Sem()
+        result = self._device.Connect(self._host, 8300)
+        if result < 0:
+            raise HwError("Failed to connect to TESCAN server '%s'. "
+                          "Check that the ip address is correct and TESCAN server "
+                          "connected to the network." % (self._host,))
+        self._device.ScStopScan()
+        for name, det in self._detectors.iteritems():
+            self._device.DtSelect(det._channel, det._detector)
+            self._device.DtEnable(det._channel, 1, 16)
+
     def _req_stop_acquisition(self, detector):
         """
         Request the acquisition thread to stop
@@ -319,6 +340,10 @@ class SEM(model.HwComponent):
             self._acquisition_must_stop.set()
             self._device.ScStopScan()
             self._device.CancelRecv()
+            if self._scanner.resolution.value == (1, 1):
+                # flush remaining data in data buffer
+                self.flush()
+                self.pre_res = None
 
     def _acq_wait_detectors_ready(self):
         """
@@ -355,10 +380,10 @@ class SEM(model.HwComponent):
         return rdas
 
     def _single_acquisition(self, channel):
-        with self._acq_progress_lock:
-            with self._acquisition_init_lock:
-                if self._acquisition_must_stop.is_set():
-                    raise CancelledError("Acquisition cancelled during preparation")
+        # with self._acq_progress_lock:
+        with self._acquisition_init_lock:
+            if self._acquisition_must_stop.is_set():
+                raise CancelledError("Acquisition cancelled during preparation")
             pxs = self._scanner.pixelSize.value  # m/px
 
             pxs_pos = self._scanner.translation.value
@@ -387,26 +412,43 @@ class SEM(model.HwComponent):
             b = t + res[1] - 1
 
             dt = self._scanner.dwellTime.value * 1e9
-            # make sure socket settings are always set
-            self._device.connection.socket_c.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-            self._device.connection.socket_d.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            # with self._acquisition_init_lock:
             logging.debug("Acquiring SEM image of %s with dwell time %f ns", res, dt)
-
+        with self._acq_progress_lock:
             try:
+                # make sure socket settings are always set
+                self._device.connection.socket_c.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                self._device.connection.socket_d.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
                 # Check if spot mode is required
-                if res == (1, 1) and self.pre_res != (1, 1):
+                if res == (1, 1):
+                    if ((self._scaled_shape != scaled_shape) or
+                        (self._roi != (l, t, r, b)) or
+                        (self._dt != dt)):
+                        self._device.ScStopScan()
+                        # flush remaining data in data buffer
+                        self.flush()
                     self._device.ScScanLine(1, scaled_shape[0], scaled_shape[1],
-                                         l + 1, t + 1, r + 1, b + 1, dt, 1, 0)
-                elif res != (1, 1):
+                                         l + 1, t + 1, r + 1, b + 1, (dt / TESCAN_PXL_LIMIT), TESCAN_PXL_LIMIT, 0)
+                    self._scaled_shape = scaled_shape
+                    self._roi = (l, t, r, b)
+                    self._dt = dt
+                else:
                     if self.pre_res == (1, 1):
                         self._device.ScStopScan()
+                        # flush remaining data in data buffer
+                        self.flush()
                     self._device.ScScanXY(0, scaled_shape[0], scaled_shape[1],
                                          l, t, r, b, 1, dt)
                 # we must stop the scanning even after single scan
-                # self._device.ScStopScan()
-                # return model.DataArray(numpy.array([[0]], dtype=numpy.uint16), metadata)
                 # fetch the image (blocking operation), ndarray is returned
-                sem_img = self._device.FetchArray(channel, res[0] * res[1])
+                if res == (1, 1):
+                    sem_pxs = self._device.FetchArray(channel, TESCAN_PXL_LIMIT)
+                    # Since we acquired TESCAN_PXL_LIMIT integrations of
+                    # dt/TESCAN_PXL_LIMIT we now get the mean signal and return
+                    # it as the result
+                    sem_img = numpy.array([sem_pxs.mean()])
+                else:
+                    sem_img = self._device.FetchArray(channel, res[0] * res[1])
             except CancelledError:
                 raise CancelledError("Acquisition cancelled during scanning")
 
@@ -742,11 +784,12 @@ class Scanner(model.Emitter):
 
     def _pollVAs(self):
         try:
-            self.updateHorizontalFOV()
-            with self.parent._acq_progress_lock:
-                volt = self.parent._device.HVGetVoltage()
-                self.accelVoltage.value = volt
-                self.probeCurrent.value = self._list_currents[self.parent._device.GetPCIndex() - 1]
+            with self.parent._acquisition_init_lock:
+                self.updateHorizontalFOV()
+                with self.parent._acq_progress_lock:
+                    volt = self.parent._device.HVGetVoltage()
+                    self.accelVoltage.value = volt
+                    self.probeCurrent.value = self._list_currents[self.parent._device.GetPCIndex() - 1]
         except Exception:
             logging.exception("Unexpected failure during VAs polling")
 
@@ -936,13 +979,14 @@ class Stage(model.Actuator):
 
     def _pollXYZ(self):
         try:
-            with self.parent._acq_progress_lock:
-                x, y, z, rot, tilt = self.parent._device.StgGetPosition()
-                self._position["x"] = -x * 1e-3
-                self._position["y"] = -y * 1e-3
-                self._position["z"] = -z * 1e-3
+            with self.parent._acquisition_init_lock:
+                with self.parent._acq_progress_lock:
+                    x, y, z, rot, tilt = self.parent._device.StgGetPosition()
+                    self._position["x"] = -x * 1e-3
+                    self._position["y"] = -y * 1e-3
+                    self._position["z"] = -z * 1e-3
 
-                self._updatePosition()
+                    self._updatePosition()
         except Exception:
             logging.exception("Unexpected failure during XYZ polling")
 
