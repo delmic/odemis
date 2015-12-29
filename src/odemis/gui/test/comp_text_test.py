@@ -1,4 +1,4 @@
-#-*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 
 """
 @author: Rinze de Laat
@@ -24,14 +24,12 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Test module for Odemis' gui.comp.text module
 # ===============================================================================
 from __future__ import division
-
 import locale
 import unittest
 import wx
-
 import odemis.gui.test as test
-
 from odemis.gui.comp.text import FloatTextCtrl, IntegerTextCtrl, UnitFloatCtrl, UnitIntegerCtrl
+
 
 test.goto_manual()
 test.set_log_level()
@@ -47,7 +45,7 @@ TEST_FLT = [1234567489.0, 123456748.9, 12345674.89, 1234567.489, 123456.7489, 12
 
 
 def gen_test_data():
-    data = [1234567489.0 / 10**i for i in range(20)]
+    data = [1234567489.0 / 10 ** i for i in range(20)]
     print data
 
 
@@ -59,7 +57,6 @@ def suggest(val):
 
 
 class OwnerDrawnComboBoxTestCase(test.GuiTestCase):
-
     frame_class = test.test_gui.xrctext_frame
 
     def test_ms_windows(self):
@@ -90,7 +87,6 @@ class OwnerDrawnComboBoxTestCase(test.GuiTestCase):
 
 
 class NumberTextCtrlTestCase(test.GuiTestCase):
-
     frame_class = test.test_gui.xrcbutton_frame
 
     def test_int_txt_ctrl(self):
@@ -156,7 +152,6 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
 
         self.assertEqual(ctrl.GetValue(), 44)
         self.assertEqual(ctrl.get_value_str(), u"44 m")
-
 
     def test_unit_float_txt_ctrl(self):
 
