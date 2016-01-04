@@ -321,6 +321,14 @@ class SecomStreamsTab(Tab):
             self._streambar_controller
         )
 
+        # Connect the Delphi recalibration to the menu item
+        if main_data.role == "delphi":
+            wx.EVT_MENU(
+                    self.main_frame,
+                    self.main_frame.menu_item_recalibrate.GetId(),
+                    self._state_controller.request_holder_calib
+            )
+
         # For remembering which streams are paused when hiding the tab
         self._streams_to_restart = set()  # set of weakref to the streams
 

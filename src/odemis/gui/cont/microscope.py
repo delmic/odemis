@@ -849,7 +849,7 @@ class DelphiStateController(SecomStateController):
                                VigilantAttributeBase) and
                     not self._main_data.chamber.registeredSampleHolder.value
             ):
-                self._request_holder_calib() # async
+                self.request_holder_calib()  # async
                 return False
 
             # Note the sht is only defined after registration
@@ -864,7 +864,7 @@ class DelphiStateController(SecomStateController):
             # Look in the config file if the sample holder is known, or needs
             # first-time calibration, and otherwise update the metadata
             if self._calibconf.get_sh_calib(shid) is None:
-                self._request_holder_calib() # async
+                self.request_holder_calib() # async
                 return False # don't go further, as everything will be taken care
 
                 # TODO: shall we also reference the optical focus? It'd be handy only
@@ -875,14 +875,19 @@ class DelphiStateController(SecomStateController):
         return True
 
     @call_in_wx_main
-    def _request_holder_calib(self):
+    def request_holder_calib(self, _=None):
         """
         Handle all the actions needed when no calibration data is available
         for a sample holder (eg, it's the first time it is inserted)
         When this method returns, the sample holder will have been ejected,
         independently of whether the calibration has worked or not.
         This method is asynchronous (running in the main GUI thread)
+
+        Args:
+            _: (wx.Event) Empty place holder, so this method can be attached to menu items
+
         """
+
         shid, sht = self._main_data.chamber.sampleHolder.value
         logging.info("New sample holder %x inserted", shid)
         # Tell the user we need to do calibration, and it needs to have
@@ -914,7 +919,7 @@ class DelphiStateController(SecomStateController):
                     dlg.Destroy()
                     # looks like recursive, but as it's call_in_wx_main, it will
                     # return immediately and be actually called later
-                    self._request_holder_calib()
+                    self.request_holder_calib()
                     return
 
             # Now run the full calibration
