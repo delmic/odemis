@@ -80,6 +80,9 @@ HW_SETTINGS_CONFIG = {
             # just here to enforce the order
             ("gain", {}),
             ("readoutRate", {}),
+            ("shutterMinimumPeriod", { # Will be displayed here on the SPARC
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
             ("temperature", {}),
             # what we don't want to display:
             ("translation", {
@@ -189,6 +192,9 @@ HW_SETTINGS_CONFIG = {
             }),
             ("gain", {}),
             ("readoutRate", {}),
+            ("shutterMinimumPeriod", {  # Will be displayed here on the SPARC
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
             ("temperature", {}),
             # what we don't want to display:
             ("translation", {
@@ -240,6 +246,9 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
             {
                 "control_type": odemis.gui.CONTROL_READONLY,
             },
+            "shutterMinimumPeriod": {  # Only on the SPARC, for AMOLF
+                "control_type": odemis.gui.CONTROL_SLIDER,
+            },
         },
         "e-beam":
         {
@@ -258,6 +267,9 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
             "resolution":  # Read-only it shouldn't be changed by the user
             {
                 "control_type": odemis.gui.CONTROL_READONLY,
+            },
+            "shutterMinimumPeriod": {  # Only on the SPARC, for AMOLF
+                "control_type": odemis.gui.CONTROL_SLIDER,
             },
         },
     },
