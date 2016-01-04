@@ -423,15 +423,16 @@ class SEM(model.HwComponent):
                 if res == (1, 1):
                     if ((self._scaled_shape != scaled_shape) or
                         (self._roi != (l, t, r, b)) or
-                        (self._dt != dt)):
+                        (self._dt != dt) or
+                        (self.pre_res != res)):
                         self._device.ScStopScan()
                         # flush remaining data in data buffer
                         self.flush()
-                    self._device.ScScanLine(1, scaled_shape[0], scaled_shape[1],
-                                         l + 1, t + 1, r + 1, b + 1, (dt / TESCAN_PXL_LIMIT), TESCAN_PXL_LIMIT, 0)
-                    self._scaled_shape = scaled_shape
-                    self._roi = (l, t, r, b)
-                    self._dt = dt
+                        self._device.ScScanLine(1, scaled_shape[0], scaled_shape[1],
+                                             l + 1, t + 1, r + 1, b + 1, (dt / TESCAN_PXL_LIMIT), TESCAN_PXL_LIMIT, 0)
+                        self._scaled_shape = scaled_shape
+                        self._roi = (l, t, r, b)
+                        self._dt = dt
                 else:
                     if self.pre_res == (1, 1):
                         self._device.ScStopScan()
@@ -633,9 +634,9 @@ class Scanner(model.Emitter):
         self.magnification.notify(mag)
 
     def _onDwellTime(self, dt):
-        pass
-#         self.parent._device.ScStopScan()
-#         self.parent._device.CancelRecv()
+#         pass
+        self.parent._device.ScStopScan()
+        self.parent._device.CancelRecv()
 
     def _onVoltage(self, volt):
         self.parent._device.HVSetVoltage(volt)
