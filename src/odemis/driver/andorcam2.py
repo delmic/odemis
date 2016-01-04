@@ -652,20 +652,24 @@ class AndorCam2(model.DigitalCamera):
             # Initial EMCCD gain is 0, between (2, 300), in mode 2
             # mode 3 is supported for iXon Ultra only since SDK 2.97
 
-        # Shutter -> auto in most cases is fine (= open during acquisition)
-        if self.hasFeature(AndorCapabilities.FEATURES_SHUTTEREX):
-            logging.debug("Using ShutterEx")
+        try:
+            if self.IsInternalMechanicalShutter():
+                logging.info("Camera has an internal shutter")
+                # TODO: do something clever with shutter config?
+        except AndorV2Error as exp:
+            if exp.errno != 20992: # DRV_NOT_AVAILABLE
+                raise
+
+        ct = self.GetCapabilities().CameraType
+        if ct == AndorCapabilities.CAMERATYPE_IXONULTRA:
             # Special case for iXon Ultra -> leave it open (with 0, 0) (cf p.77 hardware guide)
-            caps = self.GetCapabilities()
-            if caps.CameraType == AndorCapabilities.CAMERATYPE_IXONULTRA:
-                self.atcore.SetShutterEx(1, 1, 0, 0, 0) # mode 1 = open, extmode 0 = auto
-            else:
-                self.atcore.SetShutterEx(1, 1, 0, 0, 0) # mode 1 = open, extmode 0 = auto
-        elif self.hasFeature(AndorCapabilities.FEATURES_SHUTTER):
-            # Clara : 20, 20 gives horrible results. Default for Andor Solis: 10, 0
-            # Apparently, if there is no shutter, it should be 0, 0
-            #self.atcore.SetShutter(1, 0, 0, 0) # mode 0 = auto
-            self.atcore.SetShutter(1, 1, 0, 0) # mode 1 = open
+            self.SetShutter(1, 1, 0, 0)
+        else:
+            # Consider there is no shutter, or if there is one, auto open during
+            # acquisitions (with instantaneous opening/closing time)
+            # => allows any exposure time.
+            # If there is no shutter, opening/closing time should be 0, 0
+            self.atcore.SetShutter(1, 0, 0, 0)
 
         self.atcore.SetTriggerMode(0) # 0 = internal
 
@@ -880,6 +884,40 @@ class AndorCam2(model.DigitalCamera):
         # not yet reached...) but we don't care
         status = self.atcore.GetTemperature(byref(temp))
         return temp.value
+
+    def IsInternalMechanicalShutter(self):
+        """
+        Checks if an iXon camera has a mechanical shutter installed.
+        return (bool): True if the camera has an internal shutter.
+        Raises AndorV2Error if the camera doesn't support that function
+        """
+        shut = c_int()
+        self.atcore.IsInternalMechanicalShutter(byref(shut))
+        return shut.value == 1
+
+    def SetShutter(self, typ, mode, optime, cltime, extmode=None):
+        """
+        Configures the shutter opening.
+        Note: it automatically uses Shutter() or ShutterEx() when needed. It's
+        also fine to call if the camera doesn't support shutter config at all.
+        typ (0 or 1): 0 = TTL low when opening, 1 = TTL high when opening
+        mode (0 < int): 0 = auto, 1 = opened, 2 = closed... cf doc for more
+        optime (0 <= float): time in second it takes to open the shutter
+        cltime (0 <= float): time in second it takes to close the shutter
+        extmode (None or 0 < int): same as mode, but for external shutter.
+          Must be None if the camera doesn't support ShutterEx. None is auto.
+        """
+        optime = int(optime * 1e3) # ms
+        cltime = int(cltime * 1e3) # ms
+        if self.hasFeature(AndorCapabilities.FEATURES_SHUTTEREX):
+            logging.debug("Using ShutterEx")
+            if extmode is None:
+                extmode = 0
+            self.atcore.SetShutterEx(typ, mode, optime, cltime, extmode)
+        elif self.hasFeature(AndorCapabilities.FEATURES_SHUTTER):
+            self.atcore.SetShutterEx(typ, mode, optime, cltime, extmode)
+        else:
+            logging.debug("Camera doesn't support shutter configuration")
 
     def GetEMGainRange(self):
         """
@@ -2316,6 +2354,10 @@ class FakeAndorV2DLL(object):
         maxt = _deref(p_maxt, c_int)
         mint.value = -200
         maxt.value = 50
+
+    def IsInternalMechanicalShutter(self, p_intshut):
+        intshut = _deref(p_intshut, c_int)
+        intshut.value = 0  # No shutter
 
     def SetTemperature(self, temp):
         self.targetTemperature = _val(temp)
