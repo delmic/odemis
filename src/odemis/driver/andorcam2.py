@@ -1543,6 +1543,12 @@ class AndorCam2(model.DigitalCamera):
         elif self._shutter_period is not None:
             exposure, accumulate, kinetic = self.GetAcquisitionTimings()
 
+        # Computes (back) the resolution
+        b, rect = new_image_settings[0:2], new_image_settings[2:]
+        im_res = (rect[1] - rect[0] + 1) // b[0], (rect[3] - rect[2] + 1) // b[1]
+
+        readout = im_res[0] * im_res[1] * self._readout_rate  # s
+
         if self._shutter_period is not None:
             # Activate shutter closure whenever needed:
             # Shutter closes between exposures iif:
@@ -1553,9 +1559,12 @@ class AndorCam2(model.DigitalCamera):
                 logging.info("Forcing shutter opened because it would go at %g Hz",
                              1 / tot_time)
                 self.SetShutter(1, 1, 0, 0)
-            elif accumulate < (exposure / 100):
+            elif readout < (exposure / 100):
                 logging.info("Leaving shutter opened because readout is %g times "
-                             "smaller than exposure", exposure / accumulate)
+                             "smaller than exposure", exposure / readout)
+                self.SetShutter(1, 1, 0, 0)
+            elif b[1] == im_res[1]:
+                logging.info("Leaving shutter opened because binning is full vertical")
                 self.SetShutter(1, 1, 0, 0)
             else:
                 logging.info("Shutter activated")
@@ -1564,9 +1573,6 @@ class AndorCam2(model.DigitalCamera):
         self._prev_settings = [new_image_settings, self._exposure_time,
                                self._readout_rate, self._gain, self._shutter_period]
 
-        # Computes (back) the resolution
-        b, rect = new_image_settings[0:2], new_image_settings[2:]
-        im_res = (rect[1] - rect[0] + 1) // b[0], (rect[3] - rect[2] + 1) // b[1]
         return im_res
 
     def _allocate_buffer(self, size):
@@ -2346,7 +2352,8 @@ class FakeAndorV2DLL(object):
         caps.GetFunctions = (AndorCapabilities.GETFUNCTION_TEMPERATURERANGE
                              )
         caps.Features = (AndorCapabilities.FEATURES_FANCONTROL |
-                         AndorCapabilities.FEATURES_MIDFANCONTROL
+                         AndorCapabilities.FEATURES_MIDFANCONTROL |
+                         AndorCapabilities.FEATURES_SHUTTER
                          )
         caps.CameraType = AndorCapabilities.CAMERATYPE_CLARA
         caps.ReadModes = (AndorCapabilities.READMODE_SUBIMAGE
@@ -2406,6 +2413,7 @@ class FakeAndorV2DLL(object):
     def IsInternalMechanicalShutter(self, p_intshut):
         intshut = _deref(p_intshut, c_int)
         intshut.value = 0  # No shutter
+        raise AndorV2Error(20992, "DRV_NOT_AVAILABLE")
 
     def SetTemperature(self, temp):
         self.targetTemperature = _val(temp)
