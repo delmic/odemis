@@ -450,7 +450,8 @@ class Shamrock(model.Actuator):
             # Prepare to get killed (via SIGALRM) in case it took too long,
             # because Initialize() is buggy and can block forever if it's
             # confused by the hardware.
-            signal.setitimer(signal.ITIMER_REAL, 60)
+            # Note, SDK 2.100.30026+ has now a timeout of 2 minutes.
+            signal.setitimer(signal.ITIMER_REAL, 150)
             self._dll.ShamrockInitialize(path)
         finally:
             signal.setitimer(signal.ITIMER_REAL, 0)
