@@ -495,7 +495,7 @@ class AndorCam2(model.DigitalCamera):
         self._metadata[model.MD_SENSOR_SIZE] = self._transposeSizeToUser(resolution)
 
         # setup everything best (fixed)
-        self._prev_settings = [None, None, None, None] # image, exposure, readout, gain
+        self._prev_settings = [None, None, None, None, None]  # image, exposure, readout, gain
         self._setStaticSettings()
         self._shape = resolution + (2 ** self._getMaxBPP(),)
 
@@ -588,11 +588,31 @@ class AndorCam2(model.DigitalCamera):
             raise ValueError("Failed to parse emgains, which must be in the "
                              "form [[rr, gain, emgain], ...]: '%s'" % (emgains,))
 
+        # To control the shutter: select the maximum frequency, aka minimum
+        # period for the shutter. If it the acquisition time is below, the
+        # shutter stays open all the time. So:
+        # 0 => shutter always auto
+        # > 0 => shutter auto if exp time + readout > period, otherwise opened
+        # big value => shutter always opened
+        if self.hasShutter():
+            self._shutter_period = 0.1
+            ct = self.GetCapabilities().CameraType
+            if ct == AndorCapabilities.CAMERATYPE_IXONULTRA:
+                # Special case for iXon Ultra -> leave it open (with 0, 0) (cf p.77 hardware guide)
+                self._shutter_period = maxexp.value
+
+            self.shutterMinimumPeriod = model.FloatContinuous(self._shutter_period,
+                                              (0, maxexp.value), unit="s",
+                                              setter=self._setShutterPeriod)
+        else:
+            self.SetShutter(1, 0, 0, 0)  # Probably not needed, but just in case
+            self._shutter_period = None
+
         current_temp = self.GetTemperature()
         self.temperature = model.FloatVA(current_temp, unit=u"°C", readonly=True)
         self._metadata[model.MD_SENSOR_TEMP] = current_temp
         self.temp_timer = util.RepeatingTimer(10, self.updateTemperatureVA,
-                                         "AndorCam2 temperature update")
+                                              "AndorCam2 temperature update")
         self.temp_timer.start()
 
         self.acquisition_lock = threading.Lock()
@@ -651,25 +671,6 @@ class AndorCam2(model.DigitalCamera):
             # Initial EMCCD gain is 0, between (1, 3551), in mode 1
             # Initial EMCCD gain is 0, between (2, 300), in mode 2
             # mode 3 is supported for iXon Ultra only since SDK 2.97
-
-        try:
-            if self.IsInternalMechanicalShutter():
-                logging.info("Camera has an internal shutter")
-                # TODO: do something clever with shutter config?
-        except AndorV2Error as exp:
-            if exp.errno != 20992: # DRV_NOT_AVAILABLE
-                raise
-
-        ct = self.GetCapabilities().CameraType
-        if ct == AndorCapabilities.CAMERATYPE_IXONULTRA:
-            # Special case for iXon Ultra -> leave it open (with 0, 0) (cf p.77 hardware guide)
-            self.SetShutter(1, 1, 0, 0)
-        else:
-            # Consider there is no shutter, or if there is one, auto open during
-            # acquisitions (with instantaneous opening/closing time)
-            # => allows any exposure time.
-            # If there is no shutter, opening/closing time should be 0, 0
-            self.atcore.SetShutter(1, 0, 0, 0)
 
         self.atcore.SetTriggerMode(0) # 0 = internal
 
@@ -1144,6 +1145,27 @@ class AndorCam2(model.DigitalCamera):
         """
         return bool(self.GetCapabilities().GetFunctions & function)
 
+    def hasShutter(self):
+        """
+        return (bool): False if the camera has no shutter, True if it potentially
+          has a shutter.
+        """
+        feat = self.GetCapabilities().Features
+        if feat & (AndorCapabilities.FEATURES_SHUTTER | AndorCapabilities.FEATURES_SHUTTEREX):
+            # The iXon can detect if it has an internal shutter.
+            # We consider that if there is no internal shutter, there is no shutter.
+            try:
+                if not self.IsInternalMechanicalShutter():
+                    logging.info("Camera has no internal shutter, will consider it has no shutter")
+                    return False
+            except AndorV2Error as exp:
+                if exp.errno != 20992: # DRV_NOT_AVAILABLE
+                    logging.exception("Failed to check whether the camera has an internal shutter")
+
+            return True
+
+        return False
+
     def _setTargetTemperature(self, temp, force=False):
         """
         Change the targeted temperature of the CCD.
@@ -1392,6 +1414,10 @@ class AndorCam2(model.DigitalCamera):
         self.gain.value = self.setGain(self.gain.value)
         return value
 
+    def _setShutterPeriod(self, period):
+        self._shutter_period = period
+        return period
+
     def setGain(self, value):
         # TODO: need to handle EM Gain for EMCCD cameras (eg, iXon Ultra) too.
         # cf SetEMCCDGain(), SetEMGainMode(), GetEMGainRange()
@@ -1432,7 +1458,7 @@ class AndorCam2(model.DigitalCamera):
         """
         new_image_settings = self._binning + self._image_rect
         new_settings = [new_image_settings, self._exposure_time,
-                        self._readout_rate, self._gain]
+                        self._readout_rate, self._gain, self._shutter_period]
         return new_settings != self._prev_settings
 
     def _update_settings(self):
@@ -1442,7 +1468,8 @@ class AndorCam2(model.DigitalCamera):
         Note: acquisition_lock must be taken, and acquisition must _not_ going on.
         return (int, int): resolution of the image to be acquired
         """
-        prev_image_settings, prev_exp_time, prev_readout_rate, prev_gain = self._prev_settings
+        (prev_image_settings, prev_exp_time, prev_readout_rate,
+         prev_gain, prev_shut) = self._prev_settings
 
         if prev_readout_rate != self._readout_rate:
             logging.debug("Updating readout rate settings to %f Hz", self._readout_rate)
@@ -1463,9 +1490,10 @@ class AndorCam2(model.DigitalCamera):
             if self.hasSetFunction(AndorCapabilities.SETFUNCTION_VREADOUT):
                 # fastest VSspeed which doesn't need to increase noise (voltage)
                 try:
-                    speed_idx, vsspeed = c_int(), c_float()  # ms
+                    speed_idx, vsspeed = c_int(), c_float()  # idx, µs
                     self.atcore.GetFastestRecommendedVSSpeed(byref(speed_idx), byref(vsspeed))
                     self.atcore.SetVSSpeed(speed_idx)
+                    logging.debug(u"Set VSSpeed to %g µs", vsspeed.value)
                 except AndorV2Error as ex:
                     # Some cameras report SETFUNCTION_VREADOUT but don't actually support it (as of SDK 2.100)
                     if ex.errno == 20991:  # DRV_NOT_SUPPORTED
@@ -1512,13 +1540,39 @@ class AndorCam2(model.DigitalCamera):
             self._metadata[model.MD_EXP_TIME] = exposure
             logging.debug("Updating exposure time setting to %f s (asked %f s)",
                           exposure, self._exposure_time)
-
-        self._prev_settings = [new_image_settings, self._exposure_time,
-                               self._readout_rate, self._gain]
+        elif self._shutter_period is not None:
+            exposure, accumulate, kinetic = self.GetAcquisitionTimings()
 
         # Computes (back) the resolution
         b, rect = new_image_settings[0:2], new_image_settings[2:]
         im_res = (rect[1] - rect[0] + 1) // b[0], (rect[3] - rect[2] + 1) // b[1]
+
+        readout = im_res[0] * im_res[1] * self._readout_rate  # s
+
+        if self._shutter_period is not None:
+            # Activate shutter closure whenever needed:
+            # Shutter closes between exposures iif:
+            # * period between exposures is long enough (>0.1s): to ensure we don't burn the mechanism
+            # * readout time > exposure time/100 (when risk of smearing is possible)
+            tot_time = accumulate
+            if tot_time < self._shutter_period:
+                logging.info("Forcing shutter opened because it would go at %g Hz",
+                             1 / tot_time)
+                self.SetShutter(1, 1, 0, 0)
+            elif readout < (exposure / 100):
+                logging.info("Leaving shutter opened because readout is %g times "
+                             "smaller than exposure", exposure / readout)
+                self.SetShutter(1, 1, 0, 0)
+            elif b[1] == im_res[1]:
+                logging.info("Leaving shutter opened because binning is full vertical")
+                self.SetShutter(1, 1, 0, 0)
+            else:
+                logging.info("Shutter activated")
+                self.SetShutter(1, 0, 0, 0)  # mode = auto
+
+        self._prev_settings = [new_image_settings, self._exposure_time,
+                               self._readout_rate, self._gain, self._shutter_period]
+
         return im_res
 
     def _allocate_buffer(self, size):
@@ -1643,8 +1697,8 @@ class AndorCam2(model.DigitalCamera):
                     exposure, accumulate, kinetic = self.GetAcquisitionTimings()
                     logging.debug("Accumulate time = %f, kinetic = %f", accumulate, kinetic)
                     readout = size[0] * size[1] * self._metadata[model.MD_READOUT_TIME] # s
-                    # kinetic should be approximately same as exposure + readout => play safe
-                    duration = max(kinetic, exposure + readout)
+                    # accumulate should be approximately same as exposure + readout => play safe
+                    duration = max(accumulate, exposure + readout)
                     need_reinit = False
 
                 # Acquire the images
@@ -1773,8 +1827,8 @@ class AndorCam2(model.DigitalCamera):
                     logging.debug("Accumulate time = %f, kinetic = %f", accumulate, kinetic)
                     readout = size[0] * size[1] * self._metadata[model.MD_READOUT_TIME] # s
                     # kinetic should be approximately same as exposure + readout => play safe
-                    duration = max(kinetic, exposure + readout)
-                    logging.debug("Will get image every %g s (expected %g s)", kinetic, exposure + readout)
+                    duration = max(accumulate, exposure + readout)
+                    logging.debug("Will get image every %g s (expected %g s)", accumulate, exposure + readout)
                     need_reinit = False
 
                 # Acquire the images
@@ -1962,9 +2016,9 @@ class AndorCam2(model.DigitalCamera):
                 # FIXME: not sure if it does anything (with Clara)
                 self.atcore.SetCoolerMode(1) # Temperature is maintained on ShutDown
                 # iXon Ultra: as we force it open, we need to force it close now
-                caps = self.GetCapabilities()
-                if caps.CameraType == AndorCapabilities.CAMERATYPE_IXONULTRA:
-                    self.atcore.SetShutterEx(1, 2, 0, 0, 0) # mode 2 = close
+                ct = self.GetCapabilities().CameraType
+                if ct == AndorCapabilities.CAMERATYPE_IXONULTRA:
+                    self.SetShutter(1, 2, 0, 0)  # mode 2 = close
             except Exception:
                 pass
 
@@ -2298,7 +2352,8 @@ class FakeAndorV2DLL(object):
         caps.GetFunctions = (AndorCapabilities.GETFUNCTION_TEMPERATURERANGE
                              )
         caps.Features = (AndorCapabilities.FEATURES_FANCONTROL |
-                         AndorCapabilities.FEATURES_MIDFANCONTROL
+                         AndorCapabilities.FEATURES_MIDFANCONTROL |
+                         AndorCapabilities.FEATURES_SHUTTER
                          )
         caps.CameraType = AndorCapabilities.CAMERATYPE_CLARA
         caps.ReadModes = (AndorCapabilities.READMODE_SUBIMAGE
@@ -2358,6 +2413,7 @@ class FakeAndorV2DLL(object):
     def IsInternalMechanicalShutter(self, p_intshut):
         intshut = _deref(p_intshut, c_int)
         intshut.value = 0  # No shutter
+        raise AndorV2Error(20992, "DRV_NOT_AVAILABLE")
 
     def SetTemperature(self, temp):
         self.targetTemperature = _val(temp)
@@ -2495,8 +2551,8 @@ class FakeAndorV2DLL(object):
         kinetic = _deref(p_kinetic, c_float)
 
         exposure.value = self.exposure
-        accumulate.value = self._getReadout()
-        kinetic.value = exposure.value + accumulate.value + self.kinetic
+        accumulate.value = self.exposure + self._getReadout()
+        kinetic.value = accumulate.value + self.kinetic
 
     def StartAcquisition(self):
         self.status = AndorV2DLL.DRV_ACQUIRING

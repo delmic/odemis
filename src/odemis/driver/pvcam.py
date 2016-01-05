@@ -960,8 +960,8 @@ class PVCam(model.DigitalCamera):
                 region (pv.rgn_type): the region structure that can be used to set up the acquisition
                 size (2-tuple of int): the size of the data array that will get acquired
         """
-        [prev_image_settings, prev_exp_time,
-                prev_readout_rate, prev_gain, prev_shut] = self._prev_settings
+        (prev_image_settings, prev_exp_time,
+         prev_readout_rate, prev_gain, prev_shut) = self._prev_settings
 
         if prev_readout_rate != self._readout_rate:
             logging.debug("Updating readout rate settings to %f Hz", self._readout_rate)

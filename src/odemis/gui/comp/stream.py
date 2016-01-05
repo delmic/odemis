@@ -1093,9 +1093,10 @@ class StreamPanel(wx.Panel):
 
     @control_bookkeeper
     def add_specbw_ctrls(self):
-        """ Add controls  to manipulate the spectrum data bandwidth
+        """ Add controls to manipulate the spectrum data bandwidth
 
-        :return: VisualRangeSlider, wx.StaticText, wx.StaticText
+        Returns:
+            (VisualRangeSlider, wx.StaticText, wx.StaticText)
 
         """
 
@@ -1125,7 +1126,8 @@ class StreamPanel(wx.Panel):
         txt_scenter = UnitFloatCtrl(self._panel, -1, (wl[0] + wl[1]) / 2,
                                     style=wx.NO_BORDER, size=(-1, 14),
                                     min_val=wl_rng[0], max_val=wl_rng[1],
-                                    unit=self.stream.spectrumBandwidth.unit)  # m or px
+                                    unit=self.stream.spectrumBandwidth.unit,  # m or px
+                                    accuracy=3)
 
         txt_scenter.SetBackgroundColour(BG_COLOUR_MAIN)
         txt_scenter.SetForegroundColour(FG_COLOUR_EDIT)
@@ -1138,7 +1140,8 @@ class StreamPanel(wx.Panel):
         txt_sbw = UnitFloatCtrl(self._panel, -1, (wl[1] - wl[0]),
                                 style=wx.NO_BORDER, size=(-1, 14),
                                 min_val=0, max_val=(wl_rng[1] - wl_rng[0]),
-                                unit=self.stream.spectrumBandwidth.unit)
+                                unit=self.stream.spectrumBandwidth.unit,
+                                accuracy=3)
         txt_sbw.SetBackgroundColour(BG_COLOUR_MAIN)
         txt_sbw.SetForegroundColour(FG_COLOUR_EDIT)
         txt_sbw.SetToolTipString(tooltip_txt)

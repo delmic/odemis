@@ -1121,8 +1121,7 @@ class MomentOfInertiaMDStream(SEMCCDMDStream):
         trans = (int(bin_trans[0] * binning[0]), int(bin_trans[1] * binning[1]))
         # always in this order
         self._rep_det.resolution.value = res
-        if (hasattr(self._rep_det, "translation") and
-            isinstance(self._rep_det.translation, model.VigilantAttributeBase)):
+        if model.hasVA(self._rep_det, "translation"):
             self._rep_det.translation.value = trans
         else:
             logging.info("CCD doesn't support ROI translation, would have used %s", trans)
