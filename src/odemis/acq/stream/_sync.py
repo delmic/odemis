@@ -60,6 +60,7 @@ class MultipleDetectorStream(Stream):
     the .raw from the sub-streams.
     """
     __metaclass__ = ABCMeta
+
     def __init__(self, name, main_stream, rep_stream):
         self.name = model.StringVA(name)
         self._streams = [main_stream, rep_stream]
@@ -186,12 +187,12 @@ class MultipleDetectorStream(Stream):
         self._acq_state = RUNNING  # TODO: move to per acquisition
         # for progress time estimation
         self._prog_sum = 0
-        f.task_canceller = self._ssCancelAcquisition
+        f.task_canceller = self._cancelAcquisition
 
         # run task in separate thread
         self._acq_thread = threading.Thread(target=_futures.executeTask,
                               name="Multiple detector acquisition",
-                              args=(f, self._ssRunAcquisition, f))
+                              args=(f, self._runAcquisition, f))
         self._acq_thread.start()
         return f
 
@@ -228,7 +229,7 @@ class MultipleDetectorStream(Stream):
         tot_left = left + time_assemble + bonus + 0.1
         future.set_end_time(time.time() + tot_left)
 
-    def _ssCancelAcquisition(self, future):
+    def _cancelAcquisition(self, future):
         with self._acq_lock:
             if self._acq_state == FINISHED:
                 return False  # too late
@@ -238,8 +239,8 @@ class MultipleDetectorStream(Stream):
                       self._emitter.name, self._rep_det.name)
 
         # Do it in any case, to be sure
-        self._main_df.unsubscribe(self._ssOnMainImage)
-        self._rep_df.unsubscribe(self._ssOnRepetitionImage)
+        self._main_df.unsubscribe(self._onMainImage)
+        self._rep_df.unsubscribe(self._onRepetitionImage)
         self._rep_df.synchronizedOn(None)
         # set the events, so the acq thread doesn't wait for them
         self._acq_rep_complete.set()
@@ -247,7 +248,7 @@ class MultipleDetectorStream(Stream):
         return True
 
     @abstractmethod
-    def _ssAdjustHardwareSettings(self):
+    def _adjustHardwareSettings(self):
         """
         Read the stream settings and adapt the SEM scanner accordingly.
         return (float): estimated time per pixel.
@@ -286,7 +287,7 @@ class MultipleDetectorStream(Stream):
         return pos
 
     @abstractmethod
-    def _ssRunAcquisition(self, future):
+    def _runAcquisition(self, future):
         """
         Acquires images from the multiple detectors via software synchronisation.
         Warning: can be quite memory consuming if the grid is big
@@ -297,7 +298,7 @@ class MultipleDetectorStream(Stream):
         """
         pass
 
-    def _ssOnMainImage(self, df, data):
+    def _onMainImage(self, df, data):
         logging.debug("Main stream data received")
         if self._acq_min_date > data.metadata.get(model.MD_ACQ_DATE, 0):
             # This is a sign that the e-beam might have been at the wrong (old)
@@ -312,7 +313,7 @@ class MultipleDetectorStream(Stream):
             self._main_data.append(data)
             self._acq_main_complete.set()
 
-    def _ssOnRepetitionImage(self, df, data):
+    def _onRepetitionImage(self, df, data):
         logging.debug("Repetition stream data received")
         if self._acq_min_date > data.metadata.get(model.MD_ACQ_DATE, 0):
             # This is a sign that the e-beam might have been at the wrong (old)
@@ -329,7 +330,7 @@ class MultipleDetectorStream(Stream):
         Preprocess the raw repetition data.
         Note: this version just return the data as is.
         data (DataArray): the data as received from the repetition detector, from
-          _ssOnRepetitionImage(), and with MD_POS updated
+          _onRepetitionImage(), and with MD_POS updated
         i (int, int): iteration number in X, Y
         return (value): value as needed by _onMultipleDetectorData
         """
@@ -510,7 +511,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
             logging.exception(msg, self.name.value)
             return Stream.estimateAcquisitionTime(self)
 
-    def _ssAdjustHardwareSettings(self):
+    def _adjustHardwareSettings(self):
         """
         Read the SEM and CCD stream settings and adapt the SEM scanner
         accordingly.
@@ -550,7 +551,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
         return exp + readout
 
-    def _ssRunAcquisition(self, future):
+    def _runAcquisition(self, future):
         """
         Acquires images from the multiple detectors via software synchronisation.
         Warning: can be quite memory consuming if the grid is big
@@ -562,7 +563,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
         # TODO: handle better very large grid acquisition (than memory oops)
         try:
             self._acq_done.clear()
-            rep_time = self._ssAdjustHardwareSettings()
+            rep_time = self._adjustHardwareSettings()
             dwell_time = self._emitter.dwellTime.value
             sem_time = dwell_time * numpy.prod(self._emitter.resolution.value)
             spot_pos = self._getSpotPositions()
@@ -607,7 +608,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
             # subscribe/unsubscribe for each image, but the overhead is high.
             ccd_trigger = self._rep_det.softwareTrigger
             self._rep_df.synchronizedOn(ccd_trigger)
-            self._rep_df.subscribe(self._ssOnRepetitionImage)
+            self._rep_df.subscribe(self._onRepetitionImage)
 
             # Instead of subscribing/unsubscribing to the SEM for each pixel,
             # we've tried to keep subscribed, but request to be unsynchronised/
@@ -633,7 +634,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 while True:
                     self._acq_main_complete.clear()
                     self._acq_rep_complete.clear()
-                    self._main_df.subscribe(self._ssOnMainImage)
+                    self._main_df.subscribe(self._onMainImage)
                     time.sleep(0)  # give more chances spot has been already processed
                     start = time.time()
                     ccd_trigger.notify()
@@ -665,21 +666,21 @@ class SEMCCDMDStream(MultipleDetectorStream):
                             # In three failures we just give up
                             raise IOError("Repetition stream acquisition repeatedly fails to synchronize")
                         else:
-                            self._main_df.unsubscribe(self._ssOnMainImage)
+                            self._main_df.unsubscribe(self._onMainImage)
                             # Ensure we don't keep the SEM data for this run
                             self._main_data = self._main_data[:n]
                             # Stop and restart the acquisition, hoping this time we will synchronize
                             # properly
-                            self._rep_df.unsubscribe(self._ssOnRepetitionImage)
+                            self._rep_df.unsubscribe(self._onRepetitionImage)
                             time.sleep(1)
-                            self._rep_df.subscribe(self._ssOnRepetitionImage)
+                            self._rep_df.subscribe(self._onRepetitionImage)
                             continue
 
                     # Normally, the SEM acquisition has already completed
                     if not self._acq_main_complete.wait(sem_time * 1.5 + 5):
                         raise TimeoutError("Acquisition of SEM pixel %s timed out after %g s"
                                            % (i, sem_time * 1.5 + 5))
-                    self._main_df.unsubscribe(self._ssOnMainImage)
+                    self._main_df.unsubscribe(self._onMainImage)
 
                     if self._acq_state == CANCELLED:
                         raise CancelledError()
@@ -721,7 +722,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     break
 
             # Done!
-            self._rep_df.unsubscribe(self._ssOnRepetitionImage)
+            self._rep_df.unsubscribe(self._onRepetitionImage)
             self._rep_df.synchronizedOn(None)
 
             with self._acq_lock:
@@ -745,8 +746,8 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 logging.exception("Software sync acquisition of multiple detectors failed")
 
             # make sure it's all stopped
-            self._main_df.unsubscribe(self._ssOnMainImage)
-            self._rep_df.unsubscribe(self._ssOnRepetitionImage)
+            self._main_df.unsubscribe(self._onMainImage)
+            self._rep_df.unsubscribe(self._onRepetitionImage)
             self._rep_df.synchronizedOn(None)
 
             self._rep_raw = []
@@ -784,7 +785,7 @@ class SEMMDStream(MultipleDetectorStream):
 
         return duration
 
-    def _ssAdjustHardwareSettings(self):
+    def _adjustHardwareSettings(self):
         """
         Read the SEM streams settings and adapt the SEM scanner accordingly.
         return (float): dwell time (for one pixel)
@@ -803,7 +804,7 @@ class SEMMDStream(MultipleDetectorStream):
         self._emitter.scale.value = cscale
         return self._rep_stream._getEmitterVA("dwellTime").value
 
-    def _ssRunAcquisition(self, future):
+    def _runAcquisition(self, future):
         """
         Acquires images from the multiple detectors via software synchronisation.
         Warning: can be quite memory consuming if the grid is big
@@ -814,7 +815,7 @@ class SEMMDStream(MultipleDetectorStream):
         """
         try:
             self._acq_done.clear()
-            dt = self._ssAdjustHardwareSettings()
+            dt = self._adjustHardwareSettings()
             if self._emitter.dwellTime.value != dt:
                 raise IOError("Expected hw dt = %f but got %f" % (dt, self._emitter.dwellTime.value))
             spot_pos = self._getSpotPositions()
@@ -882,8 +883,8 @@ class SEMMDStream(MultipleDetectorStream):
 
                 self._acq_min_date = start
                 self._rep_df.synchronizedOn(trigger)
-                self._rep_df.subscribe(self._ssOnRepetitionImage)
-                self._main_df.subscribe(self._ssOnMainImage)
+                self._rep_df.subscribe(self._onRepetitionImage)
+                self._main_df.subscribe(self._onMainImage)
                 trigger.notify()
                 # Time to scan a frame
                 frame_time = dt * cur_dc_period
@@ -897,8 +898,8 @@ class SEMMDStream(MultipleDetectorStream):
                     raise TimeoutError("Acquisition of SEM frame %s timed out after %g s"
                                        % (self._emitter.translation.value, frame_time * 1.1 + 1))
 
-                self._main_df.unsubscribe(self._ssOnMainImage)
-                self._rep_df.unsubscribe(self._ssOnRepetitionImage)  # synchronized DF last
+                self._main_df.unsubscribe(self._onMainImage)
+                self._rep_df.unsubscribe(self._onRepetitionImage)  # synchronized DF last
 
                 # remove synchronisation
                 self._rep_df.synchronizedOn(None)
@@ -930,8 +931,8 @@ class SEMMDStream(MultipleDetectorStream):
                     drift_shift = (drift_shift[0] + shift[0],
                                    drift_shift[1] + shift[1])
 
-            self._main_df.unsubscribe(self._ssOnMainImage)
-            self._rep_df.unsubscribe(self._ssOnRepetitionImage)
+            self._main_df.unsubscribe(self._onMainImage)
+            self._rep_df.unsubscribe(self._onRepetitionImage)
             with self._acq_lock:
                 if self._acq_state == CANCELLED:
                     raise CancelledError()
@@ -949,8 +950,8 @@ class SEMMDStream(MultipleDetectorStream):
                 logging.exception("Software sync acquisition of multiple detectors failed")
 
             # make sure it's all stopped
-            self._main_df.unsubscribe(self._ssOnMainImage)
-            self._rep_df.unsubscribe(self._ssOnRepetitionImage)
+            self._main_df.unsubscribe(self._onMainImage)
+            self._rep_df.unsubscribe(self._onRepetitionImage)
             self._rep_df.synchronizedOn(None)
 
             self._rep_raw = []
@@ -1095,7 +1096,7 @@ class MomentOfInertiaMDStream(SEMCCDMDStream):
         # For computing the moment of inertia in background
         self._executor = None
 
-    def _ssAdjustHardwareSettings(self):
+    def _adjustHardwareSettings(self):
         """
         Set the CCD settings to crop the FoV around the pole position to
         optimize the speed of the MoI computation.
@@ -1125,7 +1126,7 @@ class MomentOfInertiaMDStream(SEMCCDMDStream):
             self._rep_det.translation.value = trans
         else:
             logging.info("CCD doesn't support ROI translation, would have used %s", trans)
-        return super(MomentOfInertiaMDStream, self)._ssAdjustHardwareSettings()
+        return super(MomentOfInertiaMDStream, self)._adjustHardwareSettings()
 
     def acquire(self):
         if self._current_future is not None and not self._current_future.done():
@@ -1137,11 +1138,11 @@ class MomentOfInertiaMDStream(SEMCCDMDStream):
 
         return super(MomentOfInertiaMDStream, self).acquire()
 
-    def _ssRunAcquisition(self, future):
+    def _runAcquisition(self, future):
         # TODO: More than one thread useful? Use processes instead? + based on number of CPUs
         self._executor = futures.ThreadPoolExecutor(2)
         try:
-            return super(MomentOfInertiaMDStream, self)._ssRunAcquisition(future)
+            return super(MomentOfInertiaMDStream, self)._runAcquisition(future)
         finally:
             # We don't need futures anymore
             self._executor.shutdown(wait=False)
