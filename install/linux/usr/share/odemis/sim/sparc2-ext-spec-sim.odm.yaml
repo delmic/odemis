@@ -141,11 +141,15 @@ SPARC2: {
 # Provide the mirror (aka port selector) of the spectrograph as a separate component
 # Only used to disable the AR CCD, to perform basic background subtraction
 "Spec CCD Flipper": {
-    class: actuator.MultiplexActuator,
+    class: actuator.FixedPositionsActuator,
     role: "spec-det-selector",
     children: {"rx": "Integrated Spectrograph"},
     init: {
-        axes_map: {"rx": "flip-out"},
+        axis_name: "flip-out",
+        positions: {
+            0: ["Camera"],
+            1.5707963267948966: [],   # nothing connected
+        },
     },
     affects: ["Camera"],
 }
@@ -294,9 +298,11 @@ SPARC2: {
         ref_on_init: ["x"],
     },
     metadata: {
-        # Position of the mirror to select the external spectrometer (can be improved by user)
+        # Position of the mirror to select the external spectrometer (cagratn be improved by user)
         FAV_POS_ACTIVE: {"x": 0.026112848}, # m
-        FAV_POS_DEACTIVE: {"x": 0.022} # m
+        FAV_POS_ACTIVE_DEST: {"Fiber align", "Spectrometer"},
+        FAV_POS_DEACTIVE: {"x": 0.022}, # m
+        FAV_POS_DEACTIVE_DEST: {"Spec CCD Flipper"}, # m
     },
     affects: ["Camera", "Spectral Camera", "Spectrometer"],
 }

@@ -385,6 +385,7 @@ class Sparc2PathTestCase(unittest.TestCase):
         # Find CCD & SEM components
         cls.ccd = model.getComponent(role="ccd")
         cls.spec = model.getComponent(role="spectrometer")
+        cls.spec_integrated = model.getComponent(role="spectrometer-integrated")
         cls.specgraph = model.getComponent(role="spectrograph")
         cls.cld = model.getComponent(role="cl-detector")
         cls.ebeam = model.getComponent(role="e-beam")
@@ -441,10 +442,12 @@ class Sparc2PathTestCase(unittest.TestCase):
         self.assertEqual(self.slit.position.value,
                          self.find_dict_key(self.slit, sparc2_modes["ar"]))
         self.assertEqual(self.spec_det_sel.position.value,
-                         sparc2_modes["ar"][1]["spec-det-selector"])
+                         {'rx': 0})
         self.assertTrue((self.specgraph.position.value['grating'],
                          self.find_dict_key(self.specgraph, sparc2_modes["ar"])
                         ['grating']) or (0, self.specgraph.position.value['wavelength']))
+        self.assertEqual(self.cl_det_sel.position.value,
+                         {'x': 0.01})
 
         # CL intensity mode
         self.optmngr.setPath("cli").result()
@@ -452,30 +455,32 @@ class Sparc2PathTestCase(unittest.TestCase):
         self.assertEqual(self.lenswitch.position.value,
                          self.find_dict_key(self.lenswitch, sparc2_modes["cli"]))
         self.assertEqual(self.cl_det_sel.position.value,
-                         self.find_dict_key(self.cl_det_sel, sparc2_modes["cli"]))
+                         {'x': 0.003})
 
         # setting spectral
-        self.optmngr.setPath("spectral-integrated").result()
-        # Assert that actuator was moved according to mode given
-        self.assertEqual(self.lenswitch.position.value,
-                         self.find_dict_key(self.lenswitch, sparc2_modes["spectral-integrated"]))
-        self.assertEqual(self.slit.position.value,
-                         self.find_dict_key(self.slit, sparc2_modes["spectral-integrated"]))
-        self.assertEqual(self.spec_det_sel.position.value,
-                         sparc2_modes["spectral-integrated"][1]["spec-det-selector"])
-        self.assertTrue(self.specgraph.position.value['grating'] != 'mirror')
-
-        self.optmngr.setPath("spectral-dedicated").result()
-        # Assert that actuator was moved according to mode given
-        self.assertEqual(self.lenswitch.position.value,
-                         self.find_dict_key(self.lenswitch, sparc2_modes["spectral-dedicated"]))
-
-        # spectral should be a shortcut to spectral-dedicated
         self.optmngr.setPath("spectral").result()
         # Assert that actuator was moved according to mode given
         self.assertEqual(self.lenswitch.position.value,
-                         self.find_dict_key(self.lenswitch, sparc2_modes["spectral-dedicated"]))
+                         self.find_dict_key(self.lenswitch, sparc2_modes["spectral"]))
+        self.assertEqual(self.slit.position.value,
+                         self.find_dict_key(self.slit, sparc2_modes["spectral"]))
+        self.assertEqual(self.spec_det_sel.position.value,
+                         {'rx' : 1.5707963267948966})
         self.assertTrue(self.specgraph.position.value['grating'] != 'mirror')
+        self.assertEqual(self.cl_det_sel.position.value,
+                         {'x': 0.01})
+
+#         self.optmngr.setPath("spectral-dedicated").result()
+#         # Assert that actuator was moved according to mode given
+#         self.assertEqual(self.lenswitch.position.value,
+#                          self.find_dict_key(self.lenswitch, sparc2_modes["spectral-dedicated"]))
+
+#         # spectral should be a shortcut to spectral-dedicated
+#         self.optmngr.setPath("spectral").result()
+#         # Assert that actuator was moved according to mode given
+#         self.assertEqual(self.lenswitch.position.value,
+#                          self.find_dict_key(self.lenswitch, sparc2_modes["spectral-dedicated"]))
+#         self.assertTrue(self.specgraph.position.value['grating'] != 'mirror')
 
         # setting mirror-align
         self.optmngr.setPath("mirror-align").result()
@@ -485,10 +490,12 @@ class Sparc2PathTestCase(unittest.TestCase):
         self.assertEqual(self.slit.position.value,
                          self.find_dict_key(self.slit, sparc2_modes["mirror-align"]))
         self.assertEqual(self.spec_det_sel.position.value,
-                         sparc2_modes["mirror-align"][1]["spec-det-selector"])
+                         {'rx': 0})
         self.assertTrue((self.specgraph.position.value['grating'],
                          self.find_dict_key(self.specgraph, sparc2_modes["mirror-align"])['grating']) or
                         (0, self.specgraph.position.value['wavelength']))
+        self.assertEqual(self.cl_det_sel.position.value,
+                         {'x': 0.01})
 
         # setting chamber-view
         self.optmngr.setPath("chamber-view").result()
@@ -498,10 +505,12 @@ class Sparc2PathTestCase(unittest.TestCase):
         self.assertEqual(self.slit.position.value,
                          self.find_dict_key(self.slit, sparc2_modes["chamber-view"]))
         self.assertEqual(self.spec_det_sel.position.value,
-                         sparc2_modes["chamber-view"][1]["spec-det-selector"])
+                         {'rx': 0})
         self.assertTrue((self.specgraph.position.value['grating'],
                          self.find_dict_key(self.specgraph, sparc2_modes["chamber-view"])['grating']) or
                         (0, self.specgraph.position.value['wavelength']))
+        self.assertEqual(self.cl_det_sel.position.value,
+                         {'x': 0.01})
 
         # setting spec-focus
         self.optmngr.setPath("spec-focus").result()
@@ -511,11 +520,13 @@ class Sparc2PathTestCase(unittest.TestCase):
         self.assertEqual(self.slit.position.value,
                          self.find_dict_key(self.slit, sparc2_modes["spec-focus"]))
         self.assertEqual(self.spec_det_sel.position.value,
-                         sparc2_modes["spec-focus"][1]["spec-det-selector"])
+                         {'rx': 0})
         self.assertTrue((self.specgraph.position.value['grating'], 'mirror') or
                         (0, self.specgraph.position.value['wavelength']))
         self.assertAlmostEqual(self.specgraph.position.value['slit-in'],
                                sparc2_modes["spec-focus"][1]["spectrograph"]['slit-in'])
+        self.assertEqual(self.cl_det_sel.position.value,
+                         {'x': 0.01})
 
     # @skip("simple")
     def test_guess_mode(self):
@@ -540,6 +551,94 @@ class Sparc2PathTestCase(unittest.TestCase):
 
         guess = self.optmngr.guessMode(sps)
         self.assertIn(guess, ("spectral", "spectral-dedicated"))
+
+    # @skip("simple")
+    def test_set_path_stream(self):
+        sparc2_modes = path.SPARC2_MODES
+
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+        ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam)
+        sas = stream.SEMARMDStream("test sem-ar", sems, ars)
+
+        self.optmngr.setPath(ars).result()
+        # Assert that actuator was moved according to mode given
+        self.assertEqual(self.lenswitch.position.value,
+                         self.find_dict_key(self.lenswitch, sparc2_modes["ar"]))
+        self.assertEqual(self.slit.position.value,
+                         self.find_dict_key(self.slit, sparc2_modes["ar"]))
+        self.assertEqual(self.spec_det_sel.position.value,
+                         {'rx': 0})
+        self.assertTrue((self.specgraph.position.value['grating'],
+                         self.find_dict_key(self.specgraph, sparc2_modes["ar"])
+                        ['grating']) or (0, self.specgraph.position.value['wavelength']))
+
+        self.optmngr.setPath(sas).result()
+        # Assert that actuator was moved according to mode given
+        self.assertEqual(self.lenswitch.position.value,
+                         self.find_dict_key(self.lenswitch, sparc2_modes["ar"]))
+        self.assertEqual(self.slit.position.value,
+                         self.find_dict_key(self.slit, sparc2_modes["ar"]))
+        self.assertEqual(self.spec_det_sel.position.value,
+                         {'rx': 0})
+        self.assertTrue((self.specgraph.position.value['grating'],
+                         self.find_dict_key(self.specgraph, sparc2_modes["ar"])
+                        ['grating']) or (0, self.specgraph.position.value['wavelength']))
+
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+        specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data, self.ebeam)
+        sps = stream.SEMSpectrumMDStream("test sem-spec", sems, specs)
+
+        self.optmngr.setPath(specs).result()
+        # Assert that actuator was moved according to mode given
+        self.assertEqual(self.lenswitch.position.value,
+                         self.find_dict_key(self.lenswitch, sparc2_modes["spectral"]))
+        self.assertEqual(self.slit.position.value,
+                         self.find_dict_key(self.slit, sparc2_modes["spectral"]))
+        self.assertEqual(self.spec_det_sel.position.value,
+                         {'rx' : 1.5707963267948966})
+        self.assertTrue(self.specgraph.position.value['grating'] != 'mirror')
+        self.assertEqual(self.cl_det_sel.position.value,
+                         {'x': 0.01})
+
+        self.optmngr.setPath(sps).result()
+        # Assert that actuator was moved according to mode given
+        self.assertEqual(self.lenswitch.position.value,
+                         self.find_dict_key(self.lenswitch, sparc2_modes["spectral"]))
+        self.assertEqual(self.slit.position.value,
+                         self.find_dict_key(self.slit, sparc2_modes["spectral"]))
+        self.assertEqual(self.spec_det_sel.position.value,
+                         {'rx' : 1.5707963267948966})
+        self.assertTrue(self.specgraph.position.value['grating'] != 'mirror')
+        self.assertEqual(self.cl_det_sel.position.value,
+                         {'x': 0.01})
+
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+        specs = stream.SpectrumSettingsStream("test spec", self.spec_integrated, self.spec_integrated.data, self.ebeam)
+        sps = stream.SEMSpectrumMDStream("test sem-spec", sems, specs)
+
+        self.optmngr.setPath(specs).result()
+        # Assert that actuator was moved according to mode given
+        self.assertEqual(self.lenswitch.position.value,
+                         self.find_dict_key(self.lenswitch, sparc2_modes["spectral"]))
+        self.assertEqual(self.slit.position.value,
+                         self.find_dict_key(self.slit, sparc2_modes["spectral"]))
+        self.assertEqual(self.spec_det_sel.position.value,
+                         {'rx' : 0})
+        self.assertTrue(self.specgraph.position.value['grating'] != 'mirror')
+        self.assertEqual(self.cl_det_sel.position.value,
+                         {'x': 0.01})
+
+        self.optmngr.setPath(sps).result()
+        # Assert that actuator was moved according to mode given
+        self.assertEqual(self.lenswitch.position.value,
+                         self.find_dict_key(self.lenswitch, sparc2_modes["spectral"]))
+        self.assertEqual(self.slit.position.value,
+                         self.find_dict_key(self.slit, sparc2_modes["spectral"]))
+        self.assertEqual(self.spec_det_sel.position.value,
+                         {'rx' : 0})
+        self.assertTrue(self.specgraph.position.value['grating'] != 'mirror')
+        self.assertEqual(self.cl_det_sel.position.value,
+                         {'x': 0.01})
 
 # @skip("faster")
 class Sparc2ExtSpecPathTestCase(unittest.TestCase):
@@ -597,7 +696,7 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
         else:
             pos = None
         return {axis: pos}
-
+    # @skip("simple")
     def test_wrong_mode(self):
         """
         Test setting mode that does not exist
@@ -620,32 +719,34 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
         self.assertEqual(self.slit.position.value,
                          self.find_dict_key(self.slit, sparc2_modes["ar"]))
         self.assertEqual(self.spec_det_sel.position.value,
-                         sparc2_modes["ar"][1]["spec-det-selector"])
+                         {'rx': 0})
+        self.assertAlmostEqual(self.spec_sel.position.value["x"],
+                         0.022)
         self.assertTrue((self.specgraph.position.value['grating'],
                          self.find_dict_key(self.specgraph, sparc2_modes["ar"])
                         ['grating']) or (0, self.specgraph.position.value['wavelength']))
 
         # setting spectral
-        self.optmngr.setPath("spectral-integrated").result()
-        # Assert that actuator was moved according to mode given
-        self.assertEqual(self.lenswitch.position.value,
-                         self.find_dict_key(self.lenswitch, sparc2_modes["spectral-integrated"]))
-        self.assertEqual(self.slit.position.value,
-                         self.find_dict_key(self.slit, sparc2_modes["spectral-integrated"]))
-        self.assertEqual(self.spec_det_sel.position.value,
-                         sparc2_modes["spectral-integrated"][1]["spec-det-selector"])
-        self.assertTrue(self.specgraph.position.value['grating'] != 'mirror')
-
-        self.optmngr.setPath("spectral-dedicated").result()
-        # Assert that actuator was moved according to mode given
-        self.assertEqual(self.lenswitch.position.value,
-                         self.find_dict_key(self.lenswitch, sparc2_modes["spectral-dedicated"]))
-
-        # spectral should be a shortcut to spectral-dedicated
         self.optmngr.setPath("spectral").result()
         # Assert that actuator was moved according to mode given
         self.assertEqual(self.lenswitch.position.value,
-                         self.find_dict_key(self.lenswitch, sparc2_modes["spectral-dedicated"]))
+                         self.find_dict_key(self.lenswitch, sparc2_modes["spectral"]))
+#         self.assertEqual(self.slit.position.value,
+#                          self.find_dict_key(self.slit, sparc2_modes["spectral"]))
+        self.assertAlmostEqual(self.spec_sel.position.value["x"],
+                               0.026112848)
+#         self.assertTrue(self.specgraph.position.value['grating'] != 'mirror')
+
+#         self.optmngr.setPath("spectral-dedicated").result()
+#         # Assert that actuator was moved according to mode given
+#         self.assertEqual(self.lenswitch.position.value,
+#                          self.find_dict_key(self.lenswitch, sparc2_modes["spectral-dedicated"]))
+#
+#         # spectral should be a shortcut to spectral-dedicated
+#         self.optmngr.setPath("spectral").result()
+#         # Assert that actuator was moved according to mode given
+#         self.assertEqual(self.lenswitch.position.value,
+#                          self.find_dict_key(self.lenswitch, sparc2_modes["spectral-dedicated"]))
 
         # setting mirror-align
         self.optmngr.setPath("mirror-align").result()
@@ -655,10 +756,12 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
         self.assertEqual(self.slit.position.value,
                          self.find_dict_key(self.slit, sparc2_modes["mirror-align"]))
         self.assertEqual(self.spec_det_sel.position.value,
-                         sparc2_modes["mirror-align"][1]["spec-det-selector"])
+                         {'rx': 0})
         self.assertTrue((self.specgraph.position.value['grating'],
                          self.find_dict_key(self.specgraph, sparc2_modes["mirror-align"])['grating']) or
                         (0, self.specgraph.position.value['wavelength']))
+        self.assertAlmostEqual(self.spec_sel.position.value["x"],
+                         0.022)
 
         # setting chamber-view
         self.optmngr.setPath("chamber-view").result()
@@ -668,10 +771,12 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
         self.assertEqual(self.slit.position.value,
                          self.find_dict_key(self.slit, sparc2_modes["chamber-view"]))
         self.assertEqual(self.spec_det_sel.position.value,
-                         sparc2_modes["chamber-view"][1]["spec-det-selector"])
+                         {'rx': 0})
         self.assertTrue((self.specgraph.position.value['grating'],
                          self.find_dict_key(self.specgraph, sparc2_modes["chamber-view"])['grating']) or
                         (0, self.specgraph.position.value['wavelength']))
+        self.assertAlmostEqual(self.spec_sel.position.value["x"],
+                         0.022)
 
         # setting spec-focus
         self.optmngr.setPath("spec-focus").result()
@@ -681,11 +786,13 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
         self.assertEqual(self.slit.position.value,
                          self.find_dict_key(self.slit, sparc2_modes["spec-focus"]))
         self.assertEqual(self.spec_det_sel.position.value,
-                         sparc2_modes["spec-focus"][1]["spec-det-selector"])
+                         {'rx': 0})
         self.assertTrue((self.specgraph.position.value['grating'], 'mirror') or
                         (0, self.specgraph.position.value['wavelength']))
         self.assertAlmostEqual(self.specgraph.position.value['slit-in'],
                                sparc2_modes["spec-focus"][1]["spectrograph"]['slit-in'])
+        self.assertAlmostEqual(self.spec_sel.position.value["x"],
+                         0.022)
 
         # setting fiber-align
         self.optmngr.setPath("fiber-align").result()
@@ -696,6 +803,8 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
                         (0, self.specgraph_dedicated.position.value['wavelength']))
         self.assertAlmostEqual(self.specgraph_dedicated.position.value['slit-in'],
                                sparc2_modes["fiber-align"][1]["spectrograph-dedicated"]['slit-in'])
+        self.assertAlmostEqual(self.spec_sel.position.value["x"],
+                               0.026112848)
 
     # @skip("simple")
     def test_guess_mode(self):
@@ -720,6 +829,66 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
 
         guess = self.optmngr.guessMode(sps)
         self.assertIn(guess, ("spectral", "spectral-dedicated"))
+
+    # @skip("simple")
+    def test_set_path_stream(self):
+        sparc2_modes = path.SPARC2_MODES
+
+        # test guess mode for ar
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+        ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam)
+        sas = stream.SEMARMDStream("test sem-ar", sems, ars)
+
+        self.optmngr.setPath(ars).result()
+        # Assert that actuator was moved according to mode given
+        self.assertEqual(self.lenswitch.position.value,
+                         self.find_dict_key(self.lenswitch, sparc2_modes["ar"]))
+        self.assertEqual(self.slit.position.value,
+                         self.find_dict_key(self.slit, sparc2_modes["ar"]))
+        self.assertEqual(self.spec_det_sel.position.value,
+                         {'rx': 0})
+        self.assertAlmostEqual(self.spec_sel.position.value["x"],
+                         0.022)
+        self.assertTrue((self.specgraph.position.value['grating'],
+                         self.find_dict_key(self.specgraph, sparc2_modes["ar"])
+                        ['grating']) or (0, self.specgraph.position.value['wavelength']))
+
+        self.optmngr.setPath(sas).result()
+        # Assert that actuator was moved according to mode given
+        self.assertEqual(self.lenswitch.position.value,
+                         self.find_dict_key(self.lenswitch, sparc2_modes["ar"]))
+        self.assertEqual(self.slit.position.value,
+                         self.find_dict_key(self.slit, sparc2_modes["ar"]))
+        self.assertEqual(self.spec_det_sel.position.value,
+                         {'rx': 0})
+        self.assertAlmostEqual(self.spec_sel.position.value["x"],
+                         0.022)
+        self.assertTrue((self.specgraph.position.value['grating'],
+                         self.find_dict_key(self.specgraph, sparc2_modes["ar"])
+                        ['grating']) or (0, self.specgraph.position.value['wavelength']))
+
+        # test guess mode for spectral-dedicated
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+        specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data, self.ebeam)
+        sps = stream.SEMSpectrumMDStream("test sem-spec", sems, specs)
+
+        self.optmngr.setPath(specs).result()
+        # Assert that actuator was moved according to mode given
+        self.assertEqual(self.lenswitch.position.value,
+                         self.find_dict_key(self.lenswitch, sparc2_modes["spectral"]))
+#         self.assertEqual(self.slit.position.value,
+#                          self.find_dict_key(self.slit, sparc2_modes["spectral"]))
+        self.assertAlmostEqual(self.spec_sel.position.value["x"],
+                               0.026112848)
+
+        self.optmngr.setPath(sps).result()
+        # Assert that actuator was moved according to mode given
+        self.assertEqual(self.lenswitch.position.value,
+                         self.find_dict_key(self.lenswitch, sparc2_modes["spectral"]))
+#         self.assertEqual(self.slit.position.value,
+#                          self.find_dict_key(self.slit, sparc2_modes["spectral"]))
+        self.assertAlmostEqual(self.spec_sel.position.value["x"],
+                               0.026112848)
 
 if __name__ == "__main__":
     unittest.main()

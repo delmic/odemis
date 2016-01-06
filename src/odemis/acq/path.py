@@ -83,45 +83,45 @@ SPARC2_MODES = {
                 {'lens-switch': {'x': 'on'},
                  'slit-in-big': {'x': 'on'},  # fully opened
                  'spectrograph': {'grating': 'mirror'},
-                 'cl-det-selector': {'x': 'off'},
-                 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
-                 'spec-det-selector': {'rx': 0},
+                 # 'cl-det-selector': {'x': 'off'},
+                 # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
+                 # 'spec-det-selector': {'rx': 0},
                  'chamber-light': {'power': 'off'},
                 }),
             'cli': ("cl-detector",
                 {'lens-switch': {'x': 'on'},
-                 'cl-det-selector': {'x': 'on'},
-                 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
+                 # 'cl-det-selector': {'x': 'on'},
+                 # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
                  # there is also the cl-filter, but that's just up to the user
                  'chamber-light': {'power': 'off'},
                 }),
-            'spectral-integrated': ("spectrometer",
+            'spectral': ("spectrometer",
                 {'lens-switch': {'x': 'off'},
                  'slit-in-big': {'x': 'off'},  # opened according to spg.slit-in
                  # TODO: need to restore slit-in to the current position?
-                 'cl-det-selector': {'x': 'off'},
-                 'spec-det-selector': {'rx': 0},
-                 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
+                 # 'cl-det-selector': {'x': 'off'},
+                 # 'spec-det-selector': {'rx': 0},
+                 # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
                  'spectrograph': {'grating': GRATING_NOT_MIRROR},
                  'chamber-light': {'power': 'off'},
                 }),
-            'spectral-dedicated': ("spectrometer",
+            'spectral-integrated': ("spectrometer-integrated",
                 {'lens-switch': {'x': 'off'},
                  'slit-in-big': {'x': 'off'},  # opened according to spg.slit-in
-                 'cl-det-selector': {'x': 'off'},
-                 'spec-det-selector': {'rx': 0},  # Will be updated based on affects
-                 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},  # Will be updated based on affects
+                 # TODO: need to restore slit-in to the current position?
+                 # 'cl-det-selector': {'x': 'off'},
+                 # 'spec-det-selector': {'rx': 0},
+                 # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
                  'spectrograph': {'grating': GRATING_NOT_MIRROR},
-                 # TODO: also 'spectrograph-dedicated' ? Normally it'd never have mirror grating anyway
                  'chamber-light': {'power': 'off'},
                 }),
             'monochromator': ("monochromator",
                 {'lens-switch': {'x': 'off'},
                  'slit-in-big': {'x': 'off'},  # opened according to spg.slit-in
-                 'cl-det-selector': {'x': 'off'},
+                 # 'cl-det-selector': {'x': 'off'},
                  # TODO
-                 'spec-det-selector': {'rx': math.radians(90)},
-                 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 # 'spec-det-selector': {'rx': math.radians(90)},
+                 # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'spectrograph': {'grating': GRATING_NOT_MIRROR},
                  'chamber-light': {'power': 'off'},
                 }),
@@ -129,9 +129,9 @@ SPARC2_MODES = {
                 {'lens-switch': {'x': 'off'},
                  'slit-in-big': {'x': 'on'},
                  'spectrograph': {'grating': 'mirror'},
-                 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
-                 'cl-det-selector': {'x': 'off'},
-                 'spec-det-selector': {'rx': 0},
+                 # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
+                 # 'cl-det-selector': {'x': 'off'},
+                 # 'spec-det-selector': {'rx': 0},
                  'chamber-light': {'power': 'off'},
                 }),
             'chamber-view': ("ccd",  # Same as AR but SEM is disabled and a light may be used
@@ -144,24 +144,24 @@ SPARC2_MODES = {
                  # Needs to be changed after/before grating because the spectrometer
                  # (SR-193) remembers the focus per grating. Or just remember
                  # focus per grating + mode.
-                 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
-                 'cl-det-selector': {'x': 'off'},
-                 'spec-det-selector': {'rx': 0},
+                 # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
+                 # 'cl-det-selector': {'x': 'off'},
+                 # 'spec-det-selector': {'rx': 0},
                  'chamber-light': {'power': 'on'},
                 }),
             'spec-focus': ("ccd",
                 {'lens-switch': {'x': 'off'},
                  'slit-in-big': {'x': 'off'},
                  'spectrograph': {'slit-in': 10e-6, 'grating': 'mirror'},  # slit to the minimum
-                 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
-                 'cl-det-selector': {'x': 'off'},
-                 'spec-det-selector': {'rx': 0},
+                 # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
+                 # 'cl-det-selector': {'x': 'off'},
+                 # 'spec-det-selector': {'rx': 0},
                  'chamber-light': {'power': 'off'},
                 }),
             # TODO: make this mode work
             'fiber-align': ("fiber-aligner",  # TODO: also iif sp-ccd is present?
                 {'lens-switch': {'x': 'off'},
-                 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  # Grating "mirror" forces wavelength to zero order and saves the
                  # current values so we can restore them
                  'spectrograph-dedicated': {'slit-in': 500e-6, 'grating': 'mirror'},
@@ -238,52 +238,6 @@ class OpticalPathManager(object):
         except LookupError:
             spec = None
         if self.microscope.role == "sparc2" and spec:
-            try:
-                spccd = self._getComponent("sp-ccd")
-            except LookupError:
-                # No sp-ccd => use the normal ccd == integrated
-                logging.debug("Will use spectral-integrated mode")
-                del self.guessed["spectral-dedicated"]
-                self.guessed['spectral'] = self.guessed['spectral-integrated']
-                self._modes['spectral'] = self._modes["spectral-integrated"]
-            else:
-                # sp-ccd => Use dedicated
-                del self.guessed["spectral-integrated"]
-                self.guessed['spectral'] = self.guessed["spectral-dedicated"]
-                self._modes['spectral'] = self._modes["spectral-dedicated"]
-
-                # Still need find out which spectrograph it uses (if there are
-                # multiple spectrographs).
-                try:
-                    spg = self._getComponent("spectrograph")
-                except LookupError:
-                    spg = None
-                try:
-                    spgded = self._getComponent("spectrograph-dedicated")
-                except LookupError:
-                    spgded = None
-
-                if spgded and self.affects(spgded.name, spec.name):
-                    # Using the dedicated spectrograph
-                    logging.debug("Will use spectral-dedicated mode with dedicated spectrograph")
-                    # => spec-selector should be set to MD_FAV_POS_ACTIVE
-                    # => spec-det-selector = 0 (first output of dedicated)
-                    self._modes['spectral'][1]["spec-selector"]["x"] = "MD:" + model.MD_FAV_POS_ACTIVE
-                    self._modes['spectral'][1]["spec-det-selector"]["rx"] = 0
-                elif spg:
-                    # It's using the spectrograph
-                    logging.debug("Will use spectral-dedicated mode with integrated spectrograph")
-                    # => spec-selector should be set to MD_FAV_POS_DEACTIVE
-                    # => spec-det-selector = 90° (second output of spg)
-                    if not self.affects(spg.name, spec.name):
-                        logging.warning("Spectrograph doesn't affect spectrometer, but will assume it does")
-                    self._modes['spectral'][1]["spec-selector"]["x"] = "MD:" + model.MD_FAV_POS_DEACTIVE
-                    self._modes['spectral'][1]["spec-det-selector"]["rx"] = math.radians(90)
-                else:
-                    logging.warning("No spectrograph while there is a spectrometer")
-
-                # TODO: also update monochromator?
-
             # Remove the moves that don't affects the detector
             # TODO: do this for _all_ modes
             for mode in ('spectral', 'monochromator'):
@@ -329,23 +283,33 @@ class OpticalPathManager(object):
 
         return f
 
-    def _doSetPath(self, mode):
+    def _doSetPath(self, path):
         """
         Given a particular mode it sets all the necessary components of the
         optical path (found through the microscope component) to the
         corresponding positions.
-        mode (str): The optical path mode
+        path (stream.Stream or str): The stream or the optical path mode
         raises:
                 ValueError if the given mode does not exist
                 IOError if a detector is missing
         """
-        if mode not in self._modes:
-            raise ValueError("Mode '%s' does not exist" % (mode,))
+        if isinstance(path, stream.Stream):
+            mode = self.guessMode(path)
+            if mode not in self._modes:
+                raise ValueError("Mode '%s' does not exist" % (mode,))
+            target = self.getStreamDetector(path)  # target detector
+        else:
+            mode = path
+            if mode not in self._modes:
+                raise ValueError("Mode '%s' does not exist" % (mode,))
+            comp_role = self._modes[mode][0]
+            comp = model.getComponent(role=comp_role)
+            target = comp.name
 
         logging.debug("Going to optical path '%s'", mode)
 
         modeconf = self._modes[mode][1]
-        fmoves = []  # moves in progress
+        self.fmoves = []  # moves in progress
         for comp_role, conf in modeconf.items():
             # Try to access the component needed
             try:
@@ -444,22 +408,25 @@ class OpticalPathManager(object):
                     logging.debug("Not moving axis %s.%s as it is not present", comp_role, axis)
 
             try:
-                fmoves.append(comp.moveAbs(mv))
+                self.fmoves.append(comp.moveAbs(mv))
             except AttributeError:
                 logging.debug("%s not an actuator", comp_role)
+
+        # Now take care of the selectors based on the target detector
+        self.selectorsToPath(target)
 
         # If we are about to leave alignment modes, restore values
         if self._last_mode in ALIGN_MODES and mode not in ALIGN_MODES:
             if 'band' in self._stored:
                 try:
                     flter = self._getComponent("filter")
-                    fmoves.append(flter.moveAbs({"band": self._stored['band']}))
+                    self.fmoves.append(flter.moveAbs({"band": self._stored['band']}))
                 except LookupError:
                     logging.debug("No filter component available")
             if 'slit-in' in self._stored:
                 try:
                     spectrograph = self._getComponent("spectrograph")
-                    fmoves.append(spectrograph.moveAbs({"slit-in": self._stored['slit-in']}))
+                    self.fmoves.append(spectrograph.moveAbs({"slit-in": self._stored['slit-in']}))
                 except LookupError:
                     logging.debug("No spectrograph component available")
 
@@ -467,11 +434,43 @@ class OpticalPathManager(object):
         self._last_mode = mode
 
         # wait for all the moves to be completed
-        for f in fmoves:
+        for f in self.fmoves:
             try:
                 f.result()
             except IOError as e:
                 logging.debug("Actuator move failed giving the error %s", e)
+
+    def selectorsToPath(self, target):
+        """
+        Sets the selectors so the optical path leads to the target component
+        (usually a detector).
+        target (str): component name
+        """
+        comps = model.getComponents()
+        for comp in comps:
+            if hasattr(comp, "positions") and isinstance(comp.positions, dict):
+                for key, value in comp.positions.items():
+                    if target in value:
+                        # set the position so it points to the target
+                        mv = {}
+                        mv[comp.axes.keys()[0]] = key
+                        self.fmoves.append(comp.moveAbs(mv))
+                        # keep the component name as the new target
+                        comp_found = comp.name
+                        self.selectorsToPath(comp_found)
+            comp_md = comp.getMetadata()
+            if (model.MD_FAV_POS_ACTIVE_DEST in comp_md) and (target in comp_md[model.MD_FAV_POS_ACTIVE_DEST]):
+                self.fmoves.append(comp.moveAbs(comp_md[model.MD_FAV_POS_ACTIVE]))
+                # keep the component name as the new target
+                comp_found = comp.name
+                self.selectorsToPath(comp_found)
+            elif (model.MD_FAV_POS_DEACTIVE_DEST in comp_md) and (target in comp_md[model.MD_FAV_POS_DEACTIVE_DEST]):
+                self.fmoves.append(comp.moveAbs(comp_md[model.MD_FAV_POS_DEACTIVE]))
+                # keep the component name as the new target
+                comp_found = comp.name
+                self.selectorsToPath(comp_found)
+        else:
+            return
 
     def guessMode(self, guess_stream):
         """
@@ -499,6 +498,27 @@ class OpticalPathManager(object):
                     return mode
         # In case no mode was found yet
         raise LookupError("No mode can be inferred for the given stream")
+
+    def getStreamDetector(self, path_stream):
+        """
+        Given a stream find the detector.
+        path_stream (object): The given stream
+        returns (str): detector name
+        raises:
+                IOError if given object is not a stream
+        """
+        if not isinstance(path_stream, stream.Stream):
+            raise IOError("Given object is not a stream")
+
+        # Handle multiple detector streams
+        if isinstance(path_stream, stream.MultipleDetectorStream):
+            for st in path_stream.streams:
+                try:
+                    return self.getStreamDetector(st)
+                except AttributeError:
+                    pass
+        else:
+            return path_stream.detector.name
 
     def findNonMirror(self, choices):
         """
