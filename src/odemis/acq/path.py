@@ -454,17 +454,20 @@ class OpticalPathManager(object):
                         # set the position so it points to the target
                         mv = {}
                         mv[comp.axes.keys()[0]] = key
+                        logging.debug("Move %s added so %s targets to %s", mv, comp.name, target)
                         self.fmoves.append(comp.moveAbs(mv))
                         # keep the component name as the new target
                         comp_found = comp.name
                         self.selectorsToPath(comp_found)
             comp_md = comp.getMetadata()
             if (model.MD_FAV_POS_ACTIVE_DEST in comp_md) and (target in comp_md[model.MD_FAV_POS_ACTIVE_DEST]):
+                logging.debug("Move %s added so %s targets to %s", comp_md[model.MD_FAV_POS_ACTIVE], comp.name, target)
                 self.fmoves.append(comp.moveAbs(comp_md[model.MD_FAV_POS_ACTIVE]))
                 # keep the component name as the new target
                 comp_found = comp.name
                 self.selectorsToPath(comp_found)
             elif (model.MD_FAV_POS_DEACTIVE_DEST in comp_md) and (target in comp_md[model.MD_FAV_POS_DEACTIVE_DEST]):
+                logging.debug("Move %s added so %s targets to %s", comp_md[model.MD_FAV_POS_DEACTIVE], comp.name, target)
                 self.fmoves.append(comp.moveAbs(comp_md[model.MD_FAV_POS_DEACTIVE]))
                 # keep the component name as the new target
                 comp_found = comp.name
