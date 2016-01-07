@@ -435,7 +435,7 @@ class Controller(object):
         # If the controller is mis-configured for the actuator, things can go quite
         # wrong, so make it clear
         for c in self._channels:
-            logging.info("Controller %d is configured for actuator %s", address, self.GetStageName(c))
+            logging.info("Controller %s is configured for actuator %s", address, self.GetStageName(c))
             logging.info("Axis %s has %slimit switches and has %sreference switch",
                          c,
                          "" if self._hasLimitSwitches[c] else "no ",
@@ -599,7 +599,7 @@ class Controller(object):
         """
         axis (1<int<16): axis number
         param (0<int): parameter id (cf p.35)
-        returns (string): the string representing this parameter
+        returns (str): the string representing this parameter
         """
         # SPA? (Get Volatile Memory Parameters)
         assert 1 <= axis <= 16
@@ -615,6 +615,25 @@ class Controller(object):
             raise ValueError("Parameter %d %d unknown" % (axis, param))
         return value
 
+    def GetParameters(self):
+        """
+        Return all the parameters values for all the axes
+        returns (dict (int, int)->str): the axis/parameter number -> value
+        """
+        # SPA? (Get Volatile Memory Parameters)
+        lines = self._sendQueryCommand("SPA?\n")
+        lines[0] = lines[0].lstrip("\x00")
+        params = {}
+        # look for something like '1 0x412=5.000'
+        for l in lines:
+            m = re.match(r"(?P<axis>\d+)\s0x(?P<param>[0-9A-Fa-f]+)=\s*(?P<value>(\S+))", l)
+            if not m:
+                logging.debug("Line doesn't seem to be a parameter: '%s'", l)
+                continue
+            a, param, value = int(m.group("axis")), int(m.group("param"), 16), m.group("value")
+            params[(a, param)] = value
+        return params
+
     def SetParameter(self, axis, param, val, check=True):
         """
         axis (1<int<16): axis number
@@ -626,7 +645,7 @@ class Controller(object):
         # SPA (Set Volatile Memory Parameters)
         assert(1 <= axis <= 16)
         assert(0 <= param)
-        self._sendOrderCommand("SPA %d %d %s\n" % (axis, param, val))
+        self._sendOrderCommand("SPA %d 0x%X %s\n" % (axis, param, val))
         if check:
             err = self.GetErrorNum()
             if err:
@@ -742,7 +761,7 @@ class Controller(object):
         elif ans == "\xb0":
             return False
 
-        logging.warning("Controller %d replied unknown ready status '%s'", self.address, ans)
+        logging.warning("Controller %s replied unknown ready status '%s'", self.address, ans)
         return None
 
     def IsReferenced(self, axis):
@@ -822,7 +841,7 @@ class Controller(object):
         # need to recover from the "error", otherwise nothing works
         error = self.GetErrorNum()
         if error != 10:  # PI_CNTR_STOP
-            logging.warning("Stopped controller %d, but error code is %d instead of 10", self.address, error)
+            logging.warning("Stopped controller %s, but error code is %d instead of 10", self.address, error)
 
     def Stop(self):
         """
@@ -836,7 +855,7 @@ class Controller(object):
         # need to recover from the "error", otherwise nothing works
         error = self.GetErrorNum()
         if error != 10: #PI_CNTR_STOP
-            logging.warning("Stopped controller %d, but error code is %d instead of 10", self.address, error)
+            logging.warning("Stopped controller %s, but error code is %d instead of 10", self.address, error)
 
     def SetServo(self, axis, activated):
         """
@@ -1335,18 +1354,18 @@ class Controller(object):
         try:
             error = self.GetErrorNum()
             if error:
-                logging.warning("Controller %d had error status %d", self.address, error)
+                logging.warning("Controller %s had error status %d", self.address, error)
 
             version = self.GetSyntaxVersion()
             logging.info("GCS version: '%s'", version)
             ver_num = float(version)
             if ver_num < 1 or ver_num > 2:
-                logging.error("Controller %d has unexpected GCS version %s", self.address, version)
+                logging.error("Controller %s has unexpected GCS version %s", self.address, version)
                 return False
 
             axes = self.GetAxes()
             if len(axes) == 0 or len(axes) > 16:
-                logging.error("Controller %d report axes %s", self.address, str(axes))
+                logging.error("Controller %s report axes %s", self.address, str(axes))
                 return False
 
             if self._model in (MODEL_E861,): # support open-loop mode
@@ -1354,7 +1373,7 @@ class Controller(object):
                     self.SetStepAmplitude(a, 10)
                     amp = self.GetStepAmplitude(a)
                     if amp != 10:
-                        logging.error("Failed to modify amplitude of controller %d (%f instead of 10)", self.address, amp)
+                        logging.error("Failed to modify amplitude of controller %s (%f instead of 10)", self.address, amp)
                         return False
 
             if self._model in (MODEL_C867,): # support temperature reading
@@ -1363,7 +1382,7 @@ class Controller(object):
                 current_temp = float(self.GetParameter(1, 0x57))
                 max_temp = float(self.GetParameter(1, 0x58))
                 if current_temp >= max_temp:
-                    logging.error("Motor of controller %d too hot (%f C)", self.address, current_temp)
+                    logging.error("Motor of controller %s too hot (%f C)", self.address, current_temp)
                     return False
         except Exception:
             return False
@@ -1421,19 +1440,22 @@ class CLAbsController(Controller):
         # normally not dangerous (travel range is very small).
         # It's also import to reference all the axes simultaneously
         # TODO: just use a standard parameter to request referencing on init?
-        logging.info("Referencing the axes (via AutoZero)")
-        self.AutoZero()
-        tstart = time.time()
-        while self.GetMotionStatus():
-            time.sleep(0.01)
-            if time.time() > tstart + 10:
-                self.stopMotion()
-                raise IOError("AutoZero refenrencing is taking more that 10s, stopping")
-        logging.debug("Referencing took %f s", time.time() - tstart)
+        # TODO: only do if needed
+        referenced = all(self.isReferenced(a) for a in axes)
+        if not referenced:
+            logging.info("Referencing the axes (via AutoZero)")
+            self.AutoZero()
+            tstart = time.time()
+            while self.GetMotionStatus():
+                time.sleep(0.01)
+                if time.time() > tstart + 10:
+                    self.stopMotion()
+                    raise IOError("AutoZero refenrencing is taking more that 10s, stopping")
+            logging.debug("Referencing took %f s", time.time() - tstart)
 
         for a, cl in axes.items():
             if a not in self._channels:
-                raise LookupError("Axis %d is not supported by controller %d" % (a, address))
+                raise LookupError("Axis %d is not supported by controller %s" % (a, address))
 
             if not cl:  # want open-loop?
                 raise ValueError("Initialising CLAbsController with request for open-loop")
@@ -1441,10 +1463,10 @@ class CLAbsController(Controller):
             # Check the unit is um
             # TODO: cf PUN?
             unit = self.GetParameter(a, 0x7000601)
-            if unit.lower() != "um":
-                self._upm[a] = 1e-6 #
+            if unit.lower() == "um":
+                self._upm[a] = 1e-6  # m
             else:
-                raise IOError("Controller %d configured with unit %s, but only "
+                raise IOError("Controller %s configured with unit %s, but only "
                               "micrometers (UM) is supported." % (address, unit))
 
             # Start the closed loop
@@ -1482,7 +1504,7 @@ class CLAbsController(Controller):
         # self._updateSpeedAccel(axis)
         # We trust the caller that it knows it's in range
         # (worst case the hardware will not go further)
-        self.MoveRel(axis, distance / self._upm[a])
+        self.MoveRel(axis, distance / self._upm[axis])
         self.checkError()
         return distance
 
@@ -1507,10 +1529,10 @@ class CLAbsController(Controller):
         # self._updateSpeedAccel(axis)
         # We trust the caller that it knows it's in range
         # (worst case the hardware will not go further)
-        old_pos = self.GetPosition(axis) * self._upm[a]
+        old_pos = self.GetPosition(axis) * self._upm[axis]
         distance = position - old_pos
 
-        self.MoveAbs(axis, position / self._upm[a])
+        self.MoveAbs(axis, position / self._upm[axis])
         self.checkError()
         return distance
 
@@ -1519,7 +1541,7 @@ class CLAbsController(Controller):
         Find current position as reported by the sensor
         return (float): the current position of the given axis
         """
-        return self.GetPosition(axis) * self._upm[a]
+        return self.GetPosition(axis) * self._upm[axis]
 
     # Warning: if the settling window is too small or settling time too big,
     # it might take several seconds to reach target (or even never reach it)
@@ -2766,7 +2788,7 @@ class Bus(model.Actuator):
         return passed
 
     @classmethod
-    def _openPort(cls, port, baudrate, _addresses, master=254):
+    def _openPort(cls, port, baudrate=38400, _addresses=None, master=254):
         if port.startswith("/dev/") or port.startswith("COM"):
             ser = cls._openSerialPort(port, baudrate, _addresses)
             return SerialBusAccesser(ser)
@@ -3457,7 +3479,11 @@ class E861Simulator(object):
                     logging.debug("Unknown parameter %d", addr)
                     raise SimulatedError(56)
             elif args[0] == "SPA" and len(args) == 4: # SetParameter: axis, address, value
-                axis, addr = int(args[1]), int(args[2])
+                axis = int(args[1])
+                if args[2].startswith("0x"):
+                    addr = int(args[2][2:], 16)
+                else:
+                    addr = int(args[2])
                 if axis != 1:
                     raise SimulatedError(15)
                 if addr in [0x0E, 0x0F] and self._parameters[addr] != int(args[3]):
