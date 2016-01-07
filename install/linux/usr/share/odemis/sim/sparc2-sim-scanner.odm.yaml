@@ -1,12 +1,14 @@
-# Configuration for a simulated SPARC v2 system using a composited scanner
+# Configuration for a simulated SPARC v2 system using a composited scanner and
+# a scan stage
 SPARC2: {
     class: Microscope,
     role: sparc2,
     children: ["SEM Detector", "Calibration Light",
                "Optical Path Properties", "Scanner",
-               "Camera", "Spectrometer", "CL Detector", "Sample Stage",
+               "Camera", "Spectrometer", "CL Detector",
                "Spec Filter Wheel", "Spec CCD Flipper", "Spectrograph focus",
                "Mirror Actuators", "Mirror Actuators in XY referential",
+               "Sample Stage", "Scan Stage",
                "Slit", "CL Selector", "CL Filter Wheel",
                "Lens1 Mover", "Lens2 Switch"],
 }
@@ -102,7 +104,7 @@ SPARC2: {
 
 "SEM ExtXY": {
     class: simsem.SimSEM,
-    role: none,
+    role: null,
     init: {
            image: "simsem-fake-output.h5", # any large 16 bit image is fine
            drift_period: 5, # seconds
@@ -115,7 +117,7 @@ SPARC2: {
 
 "EBeam ExtXY": {
     # Internal child of SimSEM, so no class
-    role: none,
+    role: null,
     init: {},
     creator: "SEM ExtXY",
     properties: {
@@ -126,7 +128,7 @@ SPARC2: {
 
 "SED ExtXY": { # aka ETD
     # Internal child of SimSEM, so no class
-    role: none,
+    role: null,
     init: {},
 }
 
@@ -423,8 +425,32 @@ SPARC2: {
     },
 }
 
+"Scan Stage": {
+    class: simulated.Stage,
+    role: scan-stage,
+    affects: ["Camera", "Spectral Camera", "Spectrometer", "CL Detector"],
+    init: {
+        axes: [x, y],
+        ranges: {
+            "x": [0, 100.e-6],
+            "y": [0, 100.e-6],
+        },
+        inverted: ["x"],
+    },
+    properties: {
+        speed: {"x": 100.e-6, "y": 100.e-6},
+    }
+}
+
 "Sample Stage": {
     class: simulated.Stage,
     role: stage,
-    init: {axes: [x, y]},
+    init: {
+        axes: [x, y],
+        ranges: {
+            "x": [-10.e-3, 10.e-3],
+            "y": [-10.e-3, 10.e-3],
+        },
+    },
+    affects: ["Camera", "Spectral Camera", "Spectrometer", "CL Detector"],
 }
