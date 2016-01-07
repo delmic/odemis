@@ -113,6 +113,8 @@ class Stage(model.Actuator):
         for axis, change in shift.items():
             self._position[axis] += change
             rng = self.axes[axis].range
+            if axis in self._inverted:
+                rng = (-rng[1], -rng[0])  # user -> internal range
             if not rng[0] < self._position[axis] < rng[1]:
                 logging.warning("moving axis %s to %f, outside of range %r",
                                 axis, self._position[axis], rng)
