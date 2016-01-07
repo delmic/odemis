@@ -273,8 +273,8 @@ SPARC2: {
     init: {
         axis_name: "cl-sel",
         positions: {
-            0.003: "on",
-            0.01: "off"
+            0.003: ["CL Detector"],
+            0.01: ["Camera", "Spectrometer"]
         },
     },
     affects: ["Camera", "Spectrometer", "CL Detector"],
