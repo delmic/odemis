@@ -1925,14 +1925,13 @@ class SparcStreamsController(StreamBarController):
             # Prepare the optical path
             opm = self._main_data_model.opm
             try:
-                mode = opm.guessMode(stream)
+                opm.setPath(stream).result()
             except LookupError:
                 logging.debug("%s doesn't require optical path change", stream)
             else:
                 # TODO: Run in a separate thread as in live view it's ok if
                 # the path is not immediately correct?
-                logging.debug("Going to mode %s for %s", mode, stream)
-                opm.setPath(mode).result()
+                logging.debug("Setting optical path for %s", stream)
 
             # Activate or deactive spot mode based on what the stream needs
             # Note: changing tool is fine, because it will only _pause_ the

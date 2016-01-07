@@ -31,6 +31,7 @@ import numpy
 from odemis import model, util
 from odemis.model import CancellableThreadPoolExecutor, isasync, MD_PIXEL_SIZE_COR, MD_ROTATION_COR, \
     MD_POS_COR
+from odemis.model._core import roattribute
 import threading
 
 
@@ -842,6 +843,10 @@ class FixedPositionsActuator(model.Actuator):
             # If not at a known position => move to the closest known position
             nearest = util.find_closest(self._child.position.value[self._caxis], self._positions.keys())
             self.moveAbs({self._axis: nearest}).result()
+
+    @roattribute
+    def positions(self):
+        return self._positions
 
     def _on_referenced(self, future):
         try:

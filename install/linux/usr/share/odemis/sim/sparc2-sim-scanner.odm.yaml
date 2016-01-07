@@ -4,8 +4,8 @@ SPARC2: {
     class: Microscope,
     role: sparc2,
     children: ["SEM Detector", "Calibration Light",
-               "Optical Path Properties", "Scanner",
-               "Camera", "Spectrometer", "CL Detector",
+               "Optical Path Properties", "Scanner", "Spectrometer Vis-NIR",
+               "Camera", "Spectrometer IR", "CL Detector",
                "Spec Filter Wheel", "Spec CCD Flipper", "Spectrograph focus",
                "Mirror Actuators", "Mirror Actuators in XY referential",
                "Sample Stage", "Scan Stage",
@@ -89,7 +89,7 @@ SPARC2: {
         dwellTime: 10.e-6, # s
         magnification: 100, # (ratio)
     },
-    affects: ["SEM Detector", "Spectrometer", "Angular Camera"] # affects the CCD in case of cathodoluminescence
+    affects: ["SEM Detector", "Spectrometer IR", "Camera"] # affects the CCD in case of cathodoluminescence
 }
 
 # Must be connected on AI 0/AI GND
@@ -194,6 +194,15 @@ SPARC2: {
 #     },
 # }
 
+"Spectrometer Vis-NIR": {
+    class: spectrometer.CompositedSpectrometer,
+    role: spectrometer-integrated,
+    children: {detector: "Camera", spectrograph: "Spectrograph"},
+    init: {
+        transp: [1, -2], # only applied to the spectrometer data (not raw CCD)
+    },
+}
+
 # On some configuration, there is a dedicated camera for the acquisition of the
 # spectra, otherwise 'Camera' is used.
 "Spectral Camera": {
@@ -209,8 +218,7 @@ SPARC2: {
     },
 }
 
-# Spectrometer = Andor iVac 316 + Shamrock SR193 (connected via USB)
-"Spectrometer": {
+"Spectrometer IR": {
     class: spectrometer.CompositedSpectrometer,
     role: spectrometer,
     children: {detector: "Spectral Camera", spectrograph: "Spectrograph"},
@@ -236,7 +244,7 @@ SPARC2: {
         },
         fstepsize: 10.9e-6, # m, size of one focus step
     },
-    affects: ["Camera", "Spectral Camera", "Spectrometer"],
+    affects: ["Camera", "Spectral Camera", "Spectrometer IR"],
 }
 
 "Spectrograph focus": {
@@ -246,7 +254,7 @@ SPARC2: {
     init: {
         axes_map: {"z": "focus"},
     },
-    affects: ["Camera", "Spectral Camera", "Spectrometer"],
+    affects: ["Camera", "Spectral Camera", "Spectrometer IR"],
 }
 
 
@@ -258,13 +266,17 @@ SPARC2: {
 
 # Provide the mirror (aka port selector) of the spectrograph as a separate component
 "Spec CCD Flipper": {
-    class: actuator.MultiplexActuator,
+    class: actuator.FixedPositionsActuator,
     role: "spec-det-selector",
     children: {"rx": "Spectrograph"},
     init: {
-        axes_map: {"rx": "flip-out"},
+        axis_name: "flip-out",
+        positions: {
+            0: ["Camera", "Spectrometer Vis-NIR"],
+            1.5707963267948966: ["Spectral Camera", "Spectrometer IR"],
+        },
     },
-    affects: ["Camera", "Spectral Camera"],
+    affects: ["Camera", "Spectral Camera", "Spectrometer Vis-NIR", "Spectrometer IR"],
 }
 
 # Provide the filter wheel of the spectrograph as a separate component
@@ -275,7 +287,7 @@ SPARC2: {
     init: {
         axes_map: {"band": "band"},
     },
-    affects: ["Camera", "Spectral Camera", "Spectrometer"],
+    affects: ["Camera", "Spectral Camera", "Spectrometer IR"],
 }
 
 "Optical Path Properties": {
@@ -293,7 +305,7 @@ SPARC2: {
        parabola_f: 2.5e-3,  # m, parabola_parameter=1/4f
        rotation: -1.570796326795, # rad, 90° rotation between optical axis and SEM Y axis
     },
-    affects: ["Camera", "Spectral Camera", "Spectrometer"]
+    affects: ["Camera", "Spectral Camera", "Spectrometer IR"]
 }
 
 # Controller for the motors moving the various parts of the optical box
@@ -326,7 +338,7 @@ SPARC2: {
         # Default position of the lens (can be improved by user)
         FAV_POS_ACTIVE: {"x": -0.0045} # m
     },
-    affects: ["Camera", "Spectral Camera", "Spectrometer"],
+    affects: ["Camera", "Spectral Camera", "Spectrometer IR"],
 }
 
 # The second lens of Plate 1, either to working or parking position
@@ -341,7 +353,7 @@ SPARC2: {
             -0.02: "off", # completely out of the path
         },
     },
-    affects: ["Camera", "Spectral Camera", "Spectrometer"],
+    affects: ["Camera", "Spectral Camera", "Spectrometer IR"],
 }
 
 # Control the slit position to either fully-open or small (dependent on the spectrometer slit-in)
@@ -356,7 +368,7 @@ SPARC2: {
             -0.0012: "off", # opening based on the small slit
         },
     },
-    affects: ["Camera", "Spectral Camera", "Spectrometer"],
+    affects: ["Camera", "Spectral Camera", "Spectrometer IR"],
 }
 
 # Mirror in Plate 2, selects between spectrometer and cl-detector
@@ -367,11 +379,11 @@ SPARC2: {
     init: {
         axis_name: "cl-sel",
         positions: {
-            0.003: "on",
-            0.01: "off"
+            0.003: ["CL Detector"],
+            0.01: ["Spec CCD Flipper"]
         },
     },
-    affects: ["Camera", "Spectral Camera", "Spectrometer", "CL Detector"],
+    affects: ["Camera", "Spectral Camera", "Spectrometer IR", "CL Detector"],
 }
 
 "CL Filter Wheel": {

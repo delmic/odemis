@@ -428,6 +428,9 @@ class SEM(model.HwComponent):
                         self._device.ScStopScan()
                         # flush remaining data in data buffer
                         self.flush()
+                        # need to reset
+                        self._device.connection.socket_c.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                        self._device.connection.socket_d.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
                         self._device.ScScanLine(1, scaled_shape[0], scaled_shape[1],
                                              l + 1, t + 1, r + 1, b + 1, (dt / TESCAN_PXL_LIMIT), TESCAN_PXL_LIMIT, 0)
                         self._scaled_shape = scaled_shape
@@ -792,7 +795,7 @@ class Scanner(model.Emitter):
                     self.accelVoltage.value = volt
                     self.probeCurrent.value = self._list_currents[self.parent._device.GetPCIndex() - 1]
         except Exception:
-            logging.exception("Unexpected failure during VAs polling")
+            logging.debug("Unexpected failure during VAs polling")
 
     def terminate(self):
         self._va_poll.cancel()
@@ -989,7 +992,7 @@ class Stage(model.Actuator):
 
                     self._updatePosition()
         except Exception:
-            logging.exception("Unexpected failure during XYZ polling")
+            logging.debug("Unexpected failure during XYZ polling")
 
     def _updatePosition(self):
         """
