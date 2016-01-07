@@ -27,11 +27,11 @@ from concurrent.futures._base import RUNNING, FINISHED, CANCELLED, TimeoutError,
 import logging
 import math
 import numpy
-from odemis import model
+from odemis import model, util
 from odemis.acq import _futures
 from odemis.acq import drift
 from odemis.model import MD_POS, MD_DESCRIPTION, MD_PIXEL_SIZE, MD_ACQ_DATE, MD_AD_LIST
-from odemis.util import img
+from odemis.util import img, units
 from odemis.util import spot
 import random
 import threading
@@ -61,12 +61,13 @@ class MultipleDetectorStream(Stream):
     """
     __metaclass__ = ABCMeta
 
-    def __init__(self, name, main_stream, rep_stream):
+    def __init__(self, name, main_stream, rep_stream, stage=None):
         self.name = model.StringVA(name)
         self._streams = [main_stream, rep_stream]
 
         self._main_stream = main_stream
         self._rep_stream = rep_stream
+
         # Don't use the .raw of the substreams, because that is used for live view
         self._main_raw = []
         self._rep_raw = []
@@ -128,30 +129,65 @@ class MultipleDetectorStream(Stream):
 
     def estimateAcquisitionTime(self):
         # Time required without drift correction
-        acq_time = self._estimateRawAcquisitionTime()
+        total_time = self._estimateRawAcquisitionTime()
 
-        if self._main_stream.dcRegion.value == UNDEFINED_ROI:
-            return acq_time
 
         # Estimate time spent in scanning the anchor region
-        npixels = numpy.prod(self._rep_stream.repetition.value)
-        dt = acq_time / npixels
+        if self._main_stream.dcRegion.value != UNDEFINED_ROI:
+            npixels = numpy.prod(self._rep_stream.repetition.value)
+            dt = total_time / npixels
 
-        dc_estimator = drift.AnchoredEstimator(self._emitter,
-                             self._main_det,
-                             self._main_stream.dcRegion.value,
-                             self._main_stream.dcDwellTime.value)
-        period = dc_estimator.estimateCorrectionPeriod(
-                                           self._main_stream.dcPeriod.value,
-                                           dt,
-                                           self._rep_stream.repetition.value)
-        # number of times the anchor will be acquired
-        n_anchor = 1 + npixels // period.next()
-        anchor_time = n_anchor * dc_estimator.estimateAcquisitionTime()
+            dc_estimator = drift.AnchoredEstimator(self._emitter,
+                                 self._main_det,
+                                 self._main_stream.dcRegion.value,
+                                 self._main_stream.dcDwellTime.value)
+            period = dc_estimator.estimateCorrectionPeriod(
+                                               self._main_stream.dcPeriod.value,
+                                               dt,
+                                               self._rep_stream.repetition.value)
+            # number of times the anchor will be acquired
+            n_anchor = 1 + npixels // period.next()
+            anchor_time = n_anchor * dc_estimator.estimateAcquisitionTime()
 
-        total_time = acq_time + anchor_time
-        logging.debug("Estimated overhead time for drift correction: %g s / %g s",
-                      anchor_time, total_time)
+            total_time += anchor_time
+            logging.debug("Estimated overhead time for drift correction: %g s / %g s",
+                          anchor_time, total_time)
+
+        if model.hasVA(self._rep_stream, "useScanStage") and self._rep_stream.useScanStage.value:
+            sstage = self._rep_stream._sstage
+            if sstage:
+                # It's pretty hard to estimate the move time, as the speed is
+                # only the maximum speed and what takes actually most of the time
+                # is to stop to the next point.
+                # TODO: just get the output of _getScanStagePositions() and add
+                # up distances?
+                repetition = tuple(self._rep_stream.repetition.value)
+                roi = self._rep_stream.roi.value
+                width = (roi[2] - roi[0], roi[3] - roi[1])
+
+                # Take into account the "border" around each pixel
+                pxs = (width[0] / repetition[0], width[1] / repetition[1])
+                lim = (roi[0] + pxs[0] / 2, roi[1] + pxs[1] / 2,
+                       roi[2] - pxs[0] / 2, roi[3] - pxs[1] / 2)
+
+                shape = self._emitter.shape
+                sem_pxs = self._emitter.pixelSize.value
+                sem_fov = shape[0] * sem_pxs[0], shape[1] * sem_pxs[1]
+                phy_width = sem_fov[0] * (lim[2] - lim[0]), sem_fov[1] * (lim[3] - lim[1])
+
+                # Count 2x as we need to go back and forth
+                tot_dist = (phy_width[0] * repetition[1] + phy_width[1]) * 2
+                speed = sstage.speed.value["x"]  # consider both axes have same speed
+
+                npixels = numpy.prod(repetition)
+                move_time = tot_dist / speed + npixels * 10e-3  # 10 ms per pixel overhead
+                logging.debug("Estimated total scan stage travel distance is %s = %s s",
+                              units.readable_str(tot_dist, "m"), move_time)
+                total_time += move_time
+            else:
+                logging.warning("Estimated time cannot take into account scan stage, "
+                                "as no scan stage was provided.")
+
         return total_time
 
     def acquire(self):
@@ -286,6 +322,53 @@ class MultipleDetectorStream(Stream):
         pos[:, :, 1] = numpy.linspace(lim_main[1], lim_main[3], repetition[1])
         return pos
 
+    def _getScanStagePositions(self):
+        """
+        Compute the positions of the scan stage for each point in the ROI
+        return (numpy ndarray of floats of shape (X,Y,2)): each value is for a
+          given X/Y in the repetition grid -> 2 floats corresponding to the
+          absolute position of the X/Y axes of the stage.
+        """
+        repetition = tuple(self._rep_stream.repetition.value)
+        roi = self._rep_stream.roi.value
+        width = (roi[2] - roi[0], roi[3] - roi[1])
+
+        # Take into account the "border" around each pixel
+        pxs = (width[0] / repetition[0], width[1] / repetition[1])
+        lim = (roi[0] + pxs[0] / 2, roi[1] + pxs[1] / 2,
+               roi[2] - pxs[0] / 2, roi[3] - pxs[1] / 2)
+
+        shape = self._emitter.shape
+        sem_pxs = self._emitter.pixelSize.value
+        sem_fov = shape[0] * sem_pxs[0], shape[1] * sem_pxs[1]
+
+        # Convert into physical translation
+        sstage = self._rep_stream._sstage
+        spos = sstage.position.value
+        spos_rng = sstage.axes["x"].range[1], sstage.axes["y"].range[1]
+        spos0 = sstage.axes["x"].range[0], sstage.axes["y"].range[0]
+        dist_0 = math.hypot(spos["x"] - spos0[0], spos["y"] - spos0[1])
+        if not util.almost_equal(dist_0, 0, atol=100e-9):
+            logging.warning("Scan stage is not initially at top-left %s, but %s", spos0, spos)
+
+        phy_width = sem_fov[0] * (lim[2] - lim[0]), sem_fov[1] * (lim[3] - lim[1])
+        lim_main = (spos["x"], spos["y"],
+                    spos["x"] + phy_width[0], spos["y"] + phy_width[1])
+        logging.debug("Generating stage points in the SEM area %s, from rep %s and roi %s",
+                      lim_main, repetition, roi)
+
+        if lim_main[2] > spos_rng[0] or lim_main[3] > spos_rng[1]:
+            # TODO: do something more clever? Just fallback to ebeam scanning?
+            raise ValueError("ROI goes outside the scan stage range (%s > %s)" %
+                             (lim_main[2:4], spos_rng))
+
+        pos = numpy.empty(repetition + (2,), dtype=numpy.float)
+        posx = pos[:, :, 0].swapaxes(0, 1)  # just a view to have X as last dim
+        posx[:, :] = numpy.linspace(lim_main[0], lim_main[2], repetition[0])
+        # fill the X dimension
+        pos[:, :, 1] = numpy.linspace(lim_main[1], lim_main[3], repetition[1])
+        return pos
+
     @abstractmethod
     def _runAcquisition(self, future):
         """
@@ -305,6 +388,7 @@ class MultipleDetectorStream(Stream):
             # position while Rep data is acquiring
             logging.warning("Dropping data because it seems started %g s too early",
                             self._acq_min_date - data.metadata.get(model.MD_ACQ_DATE, 0))
+            # FIXME: if sed_trigger, need to notify it again
             return
 
         # Do not stop the acquisition, as it ensures the e-beam is at the right place
@@ -560,6 +644,9 @@ class SEMCCDMDStream(MultipleDetectorStream):
           CancelledError() if cancelled
           Exceptions if error
         """
+        if model.hasVA(self._rep_stream, "useScanStage") and self._rep_stream.useScanStage.value:
+            return self._runAcquisitionScanStage(future)
+
         # TODO: handle better very large grid acquisition (than memory oops)
         try:
             self._acq_done.clear()
@@ -763,6 +850,305 @@ class SEMCCDMDStream(MultipleDetectorStream):
             self._main_stream._unlinkHwVAs()
             self._rep_stream._unlinkHwVAs()
             del self._main_data  # regain a bit of memory
+            self._acq_done.set()
+
+    def _adjustHardwareSettingsScanStage(self):
+        """
+        Read the SEM and CCD stream settings and adapt the SEM scanner
+        accordingly.
+        return (float): estimated time for a whole CCD image
+        """
+        exp = self._rep_det.exposureTime.value  # s
+        rep_size = self._rep_det.resolution.value
+        readout = numpy.prod(rep_size) / self._rep_det.readoutRate.value
+
+        # Calculate dwellTime and scale to check if fuzzing could be applied
+        fuzzing = (hasattr(self._rep_stream, "fuzzing") and self._rep_stream.fuzzing.value)
+        if fuzzing:
+            dt = (exp / numpy.prod(TILE_SHAPE)) / 2
+            sem_pxs = self._emitter.pixelSize.value
+            subpxs = (self._rep_stream.pixelSize.value / TILE_SHAPE[0],
+                      self._rep_stream.pixelSize.value / TILE_SHAPE[1])
+            scale = (subpxs[0] / sem_pxs[0], subpxs[1] / sem_pxs[1])
+
+            # In case dt it is below the minimum dwell time or scale is less
+            # than 1, give up fuzzing and do normal acquisition
+            rng = self._emitter.dwellTime.range
+            if not (rng[0] <= dt <= rng[1]) or scale < 1:
+                fuzzing = False
+
+        if fuzzing:
+            # Handle fuzzing by scanning tile instead of spot
+            self._emitter.scale.value = scale
+            self._emitter.resolution.value = TILE_SHAPE  # grid scan
+            self._emitter.dwellTime.value = self._emitter.dwellTime.clip(dt)
+        else:
+            # Set SEM to spot mode, without caring about actual position (set later)
+            self._emitter.scale.value = (1, 1)  # min, to avoid limits on translation
+            self._emitter.resolution.value = (1, 1)
+            # Dwell time as long as possible, but better be slightly shorter than
+            # CCD to be sure it is not slowing thing down.
+            self._emitter.dwellTime.value = self._emitter.dwellTime.clip(exp + readout)
+
+        # Move ebeam to the top-left of the ROI (code from getSpotPositions())
+        repetition = tuple(self._rep_stream.repetition.value)
+        roi = self._rep_stream.roi.value
+        width = (roi[2] - roi[0], roi[3] - roi[1])
+
+        # Take into account the "border" around each pixel
+        pxs = (width[0] / repetition[0], width[1] / repetition[1])
+        lim = (roi[0] + pxs[0] / 2, roi[1] + pxs[1] / 2,
+               roi[2] - pxs[0] / 2, roi[3] - pxs[1] / 2)
+
+        shape = self._emitter.shape
+        # convert into SEM translation coordinates: distance in px from center
+        # (situated at 0.5, 0.5), can be floats
+        trans0 = shape[0] * (lim[0] - 0.5), shape[1] * (lim[1] - 0.5)
+        self._emitter.translation.value = trans0
+
+        return exp + readout
+
+    def _runAcquisitionScanStage(self, future):
+        """
+        Acquires images from the multiple detectors via software synchronisation,
+        with a scan stage.
+        Warning: can be quite memory consuming if the grid is big
+        returns (list of DataArray): all the data acquired
+        raises:
+          CancelledError() if cancelled
+          Exceptions if error
+        """
+        # The idea of the acquiring with a scan stage:
+        #  (Note we expect the scan stage to be at top-left)
+        #  * Move the ebeam to the top-left corner of the ROI
+        #  * Start CCD acquisition with software synchronisation
+        #  * Move to next position with the stage and wait for it
+        #  * Start SED acquisition and trigger CCD
+        #  * Wait for the CCD/SED data
+        #  * Repeat until all the points have been scanned
+        #  * Move back the stage to top-left
+
+        try:
+            sstage = self._rep_stream._sstage
+            if not sstage:
+                raise ValueError("Cannot acquire with scan stage, as no stage was provided")
+
+            self._acq_done.clear()
+            rep_time = self._adjustHardwareSettingsScanStage()
+            dwell_time = self._emitter.dwellTime.value
+            sem_time = dwell_time * numpy.prod(self._emitter.resolution.value)
+            stage_pos = self._getScanStagePositions()
+            logging.debug("Generating %s pos for %g (dt=%g) s", stage_pos.shape[:2], rep_time, dwell_time)
+            orig_spos = stage_pos[0, 0][0], stage_pos[0, 0][1]
+            rep = self._rep_stream.repetition.value
+            roi = self._rep_stream.roi.value
+            drift_shift = (0, 0)  # total drift shift (in sem px)
+            main_pxs = self._emitter.pixelSize.value
+            etrans = self._emitter.translation.value
+            self._main_data = []
+            self._rep_data = None
+            rep_buf = []
+            self._rep_raw = []
+            self._main_raw = []
+            self._anchor_raw = []
+            logging.debug("Starting repetition stream acquisition with components %s and %s",
+                          self._main_det.name, self._rep_det.name)
+            logging.debug("Scanning resolution is %s and scale %s",
+                          self._emitter.resolution.value,
+                          self._emitter.scale.value)
+
+            tot_num = numpy.prod(rep)
+            n = 0  # number of points acquired so far
+
+            # Translate dc_period to a number of pixels
+            if self._dc_estimator is not None:
+                rep_time_psmt = self._estimateRawAcquisitionTime() / numpy.prod(rep)
+                pxs_dc_period = self._dc_estimator.estimateCorrectionPeriod(
+                                        self._main_stream.dcPeriod.value,
+                                        rep_time_psmt,
+                                        rep)
+                # number of points left to acquire until next drift correction
+                n_til_dc = pxs_dc_period.next()
+                dc_acq_time = self._dc_estimator.estimateAcquisitionTime()
+
+                # First acquisition of anchor area
+                self._dc_estimator.acquire()
+            else:
+                dc_acq_time = 0
+                n_til_dc = tot_num
+
+            dc_period = n_til_dc  # approx. (just for time estimation)
+            # We need to use synchronisation event because without it, either we
+            # use .get() but it's not possible to cancel the acquisition, or we
+            # subscribe/unsubscribe for each image, but the overhead is high.
+            ccd_trigger = self._rep_det.softwareTrigger
+            self._rep_df.synchronizedOn(ccd_trigger)
+            self._rep_df.subscribe(self._onRepetitionImage)
+
+            for i in numpy.ndindex(*rep[::-1]):  # last dim (X) iterates first
+                # Move the scan stage to the next position
+                spos = stage_pos[i[::-1]][0], stage_pos[i[::-1]][1]
+                logging.debug("Scan stage pos: %s", spos)
+                f = sstage.moveAbs({"x": spos[0], "y": spos[1]})
+                f.result()
+                self._acq_min_date = time.time()
+
+                failures = 0  # Keep track of synchronizing failures
+                while True:
+                    self._acq_main_complete.clear()
+                    self._acq_rep_complete.clear()
+                    self._main_df.subscribe(self._onMainImage)
+                    time.sleep(0)  # give more chances spot has been already processed
+                    start = time.time()
+                    ccd_trigger.notify()
+
+                    timedout = not self._acq_rep_complete.wait(rep_time * 4 + 5)
+                    if self._acq_state == CANCELLED:
+                        raise CancelledError()
+
+                    # Check whether it went fine
+                    dur = time.time() - start
+                    if timedout or dur < rep_time:
+                        if timedout:
+                            # Note: it can happen we don't receive the data if there
+                            # no more memory left (without any other warning).
+                            # So we log the memory usage here too.
+                            # TODO: Support also for Windows
+                            import odemis.util.driver as udriver
+                            memu = udriver.readMemoryUsage()
+                            # Too bad, need to use VmSize to get any good value
+                            logging.warning("Acquisition of repetition stream for "
+                                            "pixel %s timed out after %g s. "
+                                            "Memory usage is %d. Will try again",
+                                            i, rep_time * 4 + 5, memu)
+                        else:  # too fast to be possible
+                            logging.warning("Repetition stream acquisition took less than %g s: %g s, will try again",
+                                            rep_time, dur)
+                        failures += 1
+                        if failures >= 3:
+                            # In three failures we just give up
+                            raise IOError("Repetition stream acquisition repeatedly fails to synchronize")
+                        else:
+                            self._main_df.unsubscribe(self._onMainImage)
+                            # Ensure we don't keep the SEM data for this run
+                            self._main_data = self._main_data[:n]
+                            # Stop and restart the acquisition, hoping this time we will synchronize
+                            # properly
+                            self._rep_df.unsubscribe(self._onRepetitionImage)
+                            time.sleep(1)
+                            self._rep_df.subscribe(self._onRepetitionImage)
+                            continue
+
+                    # Normally, the SEM acquisition has already completed
+                    if not self._acq_main_complete.wait(sem_time * 1.5 + 5):
+                        raise TimeoutError("Acquisition of SEM pixel %s timed out after %g s"
+                                           % (i, sem_time * 1.5 + 5))
+                    self._main_df.unsubscribe(self._onMainImage)
+
+                    if self._acq_state == CANCELLED:
+                        raise CancelledError()
+
+                    # MD_POS default to the center of the sample stage, but it
+                    # needs to be the position of the
+                    # sample stage + e-beam + scan stage translation + drift cor
+                    raw_pos = self._main_data[-1].metadata[MD_POS]
+                    strans = spos[0] - orig_spos[0], spos[1] - orig_spos[1]
+                    cor_pos = (raw_pos[0] + strans[0] + drift_shift[0] * main_pxs[0],
+                               raw_pos[1] + strans[1] - drift_shift[1] * main_pxs[1])  # Y is upside down
+                    # self._main_data[-1].metadata[MD_POS] = cor_pos
+                    self._rep_data.metadata[MD_POS] = cor_pos
+                    rep_buf.append(self._preprocessRepData(self._rep_data, i))
+
+                    n += 1
+                    # guess how many drift anchors to acquire
+                    n_anchor = (tot_num - n) // dc_period
+                    anchor_time = n_anchor * dc_acq_time
+                    self._updateProgress(future, time.time() - start, n, tot_num, anchor_time)
+
+                    # Check if it is time for drift correction
+                    n_til_dc -= 1
+                    if self._dc_estimator is not None and n_til_dc <= 0:
+                        n_til_dc = pxs_dc_period.next()
+
+                        # Move back to orig pos, to not compensate for the scan stage move
+                        f = sstage.moveAbs({"x": orig_spos[0], "y": orig_spos[1]})
+                        f.result()
+                        # TODO: if it's not too far, acquire anchor area without
+                        # moving back, by compensating the current shift with
+                        # e-beam translation.
+
+                        # Acquisition of anchor area
+                        # Cannot cancel during this time, but hopefully it's short
+                        self._dc_estimator.acquire()
+
+                        if self._acq_state == CANCELLED:
+                            raise CancelledError()
+
+                        # Estimate drift
+                        shift = self._dc_estimator.estimate()
+                        etrans = etrans[0] - shift[0], etrans[1] - shift[1]
+                        drift_shift = (drift_shift[0] + shift[0],
+                                       drift_shift[1] + shift[1])
+
+                        # Compensate for the drift by shifting the ebeam
+                        cptrans = self._emitter.translation.clip(etrans)
+                        if cptrans != etrans:
+                            logging.error("Drift of %s px caused acquisition region out "
+                                          "of bounds: needed to scan spot at %s.",
+                                          drift_shift, etrans)
+                        self._emitter.translation.value = cptrans
+
+                    # Since we reached this point means everything went fine, so
+                    # no need to retry
+                    break
+
+            # Done!
+            self._rep_df.unsubscribe(self._onRepetitionImage)
+            self._rep_df.synchronizedOn(None)
+
+            with self._acq_lock:
+                if self._acq_state == CANCELLED:
+                    raise CancelledError()
+                self._acq_state = FINISHED
+
+            if self._emitter.resolution.value != (1, 1):  # means fuzzing was applied
+                # Handle data generated by fuzzing
+                main_one = self._assembleTiles(rep, roi, self._main_data)
+            else:
+                main_one = self._assembleMainData(rep, roi, self._main_data)  # shape is (Y, X)
+            # explicitly add names to make sure they are different
+            main_one.metadata[MD_DESCRIPTION] = self._main_stream.name.value
+            self._onMultipleDetectorData(main_one, rep_buf, rep)
+
+        except Exception as exp:
+            if not isinstance(exp, CancelledError):
+                logging.exception("Scan stage software sync acquisition of multiple detectors failed")
+
+            # make sure it's all stopped
+            self._main_df.unsubscribe(self._onMainImage)
+            self._rep_df.unsubscribe(self._onRepetitionImage)
+            self._rep_df.synchronizedOn(None)
+
+            self._rep_raw = []
+            self._main_raw = []
+            self._anchor_raw = []
+            if not isinstance(exp, CancelledError) and self._acq_state == CANCELLED:
+                logging.warning("Converting exception to cancellation")
+                raise CancelledError()
+            raise
+        else:
+            return self.raw
+        finally:
+            if sstage:
+                # Move back the stage to the top left
+                pos0 = {"x": sstage.axes["x"].range[0],
+                        "y": sstage.axes["y"].range[0]}
+                f = sstage.moveAbs(pos0)
+
+            self._main_stream._unlinkHwVAs()
+            self._rep_stream._unlinkHwVAs()
+            del self._main_data  # regain a bit of memory
+            f.result()
             self._acq_done.set()
 
 

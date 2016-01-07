@@ -110,6 +110,7 @@ class MainGUIData(object):
         "chamber-ccd": "chamber_ccd",
         "overview-ccd": "overview_ccd",
         "stage": "stage",
+        "scan-stage": "scan_stage",
         "focus": "focus",
         "ebeam-focus": "ebeam_focus",
         "overview-focus": "overview_focus",
@@ -144,6 +145,7 @@ class MainGUIData(object):
         # The following attributes are either HwComponents or None (if not available)
         self.ccd = None
         self.stage = None
+        self.scan_stage = None  # fast stage to scan, instead of the ebeam (SPARC)
         self.focus = None  # actuator to change the camera focus
         self.aligner = None  # actuator to align ebeam/ccd (SECOM)
         self.mirror = None  # actuator to change the mirror position (SPARC)
@@ -419,7 +421,7 @@ class LiveViewGUIData(MicroscopyGUIData):
         self.autofocus_active = BooleanVA(False)
 
 
-class ScannedAcquisitionGUIData(MicroscopyGUIData):
+class SparcAcquisitionGUIData(MicroscopyGUIData):
     """ Represent an interface used to select a precise area to scan and
     acquire signal. It allows fine control of the shape and density of the scan.
     It is specifically made for the SPARC system.
@@ -459,6 +461,10 @@ class ScannedAcquisitionGUIData(MicroscopyGUIData):
 
         # The position of the spot. Two floats 0->1. (None, None) if undefined.
         self.spotPosition = model.TupleVA((None, None))
+
+        # Whether to use a scan stage (if there is one)
+        hasScanStage = main.scan_stage is not None
+        self.useScanStage = model.BooleanVA(hasScanStage, readonly=not hasScanStage)
 
 
 class ChamberGUIData(MicroscopyGUIData):

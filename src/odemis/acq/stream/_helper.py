@@ -50,7 +50,11 @@ class RepetitionStream(LiveStream):
     acquisition.
     """
 
-    def __init__(self, name, detector, dataflow, emitter, **kwargs):
+    def __init__(self, name, detector, dataflow, emitter, sstage=None, **kwargs):
+        """
+        sstage (None or Actuator): scan stage. If None, it will use the ebeam
+          to scan (= standard behaviour).
+        """
         super(RepetitionStream, self).__init__(name, detector, dataflow, emitter,
                                                **kwargs)
 
@@ -102,6 +106,10 @@ class RepetitionStream(LiveStream):
         # Note: some subclasses for which it doesn't make sense will remove it
         self.fuzzing = model.BooleanVA(False)
 
+        self._sstage = sstage
+        # Can be True only if the sstage is not None
+        self.useScanStage = model.BooleanVA(False)
+
         # exposure time of each pixel is the exposure time of the detector,
         # the dwell time of the emitter will be adapted before acquisition.
 
@@ -109,6 +117,8 @@ class RepetitionStream(LiveStream):
         # This allows to keep the ROI at the same place in the SEM FoV.
         # Note: this is to be done only if the user needs to manually update the
         # magnification.
+        # TODO: only do this if the SEM component doesn't support horizontalFoV?
+        # or move the whole code to the GUI.
         try:
             magva = self._getEmitterVA("magnification")
             self._prev_mag = magva.value
@@ -440,6 +450,9 @@ class MonochromatorSettingsStream(PMTSettingsStream):
         # sense as it's the same as software-binning
         del self.fuzzing
 
+        # scan stage is not (yet?) handled for SEM/SEM streams
+        del self.useScanStage
+
         # B/C and histogram are meaningless on a chronogram
         del self.auto_bc
         del self.auto_bc_outliers
@@ -587,6 +600,9 @@ class CLSettingsStream(PMTSettingsStream):
         # Fuzzing is not handled for SEM/SEM streams (and doesn't make much
         # sense as it's the same as software-binning
         del self.fuzzing
+
+        # scan stage is not (yet?) handled for SEM/SEM streams
+        del self.useScanStage
 
         # For the live view, we need a way to define the scale and resolution,
         # but not changing any hardware setting would mean we rely on another

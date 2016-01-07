@@ -601,7 +601,7 @@ class SecomStreamsTab(Tab):
 
 class SparcAcquisitionTab(Tab):
     def __init__(self, name, button, panel, main_frame, main_data):
-        tab_data = guimod.ScannedAcquisitionGUIData(main_data)
+        tab_data = guimod.SparcAcquisitionGUIData(main_data)
         super(SparcAcquisitionTab, self).__init__(name, button, panel, main_frame, tab_data)
 
         # Create the streams (first, as SEM viewport needs SEM concurrent stream):
@@ -643,14 +643,14 @@ class SparcAcquisitionTab(Tab):
         )
 
         sem_stream.should_update.value = True  # TODO: put it in _streams_to_restart instead?
-        self.tab_data_model.acquisitionView.addStream(sem_stream)  # it should also be saved
+        tab_data.acquisitionView.addStream(sem_stream)  # it should also be saved
 
         # This stream is a bit tricky, because it will play (potentially)
         # simultaneously as another one, and it changes the SEM settings at
         # play and pause.
         spot_stream = acqstream.SpotSEMStream("Spot", main_data.sed,
                                               main_data.sed.data, main_data.ebeam)
-        self.tab_data_model.spotStream = spot_stream
+        tab_data.spotStream = spot_stream
         # TODO: add to tab_data.streams and move the handling to the stream controller?
         tab_data.spotPosition.subscribe(self._onSpotPosition)
 
@@ -668,7 +668,7 @@ class SparcAcquisitionTab(Tab):
             main_data.ebeam
             # No local VAs,
         )
-        self.tab_data_model.semStream = semcl_stream
+        tab_data.semStream = semcl_stream
 
         # drift correction is disabled until a roi is selected
         semcl_stream.dcRegion.value = acqstream.UNDEFINED_ROI
@@ -676,9 +676,9 @@ class SparcAcquisitionTab(Tab):
         sem_stream.emtDwellTime.subscribe(self._copyDwellTimeToAnchor, init=True)
 
         # Add the SEM stream to the view
-        self.tab_data_model.streams.value.append(sem_stream)
+        tab_data.streams.value.append(sem_stream)
         # To make sure the spot mode is stopped when the tab loses focus
-        self.tab_data_model.streams.value.append(spot_stream)
+        tab_data.streams.value.append(spot_stream)
 
         viewports = panel.pnl_sparc_grid.viewports
         for vp in viewports[:4]:
@@ -736,19 +736,19 @@ class SparcAcquisitionTab(Tab):
 
         # Toolbar
         self.tb = self.panel.sparc_acq_toolbar
-        self.tb.add_tool(tools.TOOL_ROA, self.tab_data_model.tool)
-        self.tb.add_tool(tools.TOOL_RO_ANCHOR, self.tab_data_model.tool)
-        self.tb.add_tool(tools.TOOL_SPOT, self.tab_data_model.tool)
+        self.tb.add_tool(tools.TOOL_ROA, tab_data.tool)
+        self.tb.add_tool(tools.TOOL_RO_ANCHOR, tab_data.tool)
+        self.tb.add_tool(tools.TOOL_SPOT, tab_data.tool)
         # TODO: Add the buttons when the functionality is there
-        #self.tb.add_tool(tools.TOOL_POINT, self.tab_data_model.tool)
-        #self.tb.add_tool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
+        # self.tb.add_tool(tools.TOOL_POINT, tab_data.tool)
+        # self.tb.add_tool(tools.TOOL_RO_ZOOM, tab_data.tool)
         self.tb.add_tool(tools.TOOL_ZOOM_FIT, self.view_controller.fitViewToContent)
 
-        self.tab_data_model.tool.subscribe(self.on_tool_change)
+        tab_data.tool.subscribe(self.on_tool_change)
 
         # Create Stream Bar Controller
         self._stream_controller = streamcont.SparcStreamsController(
-            self.tab_data_model,
+            tab_data,
             panel.pnl_sparc_streams,
             self.view_controller,
             ignore_view=True  # Show all stream panels, independent of any selected viewport
@@ -768,6 +768,20 @@ class SparcAcquisitionTab(Tab):
             get_stream_settings_config()[acqstream.SEMStream]["dcPeriod"]
         )
         semcl_stream.dcRegion.subscribe(self._onDCRegion, init=True)
+
+        # add "Use scan stage" check box if scan_stage is present
+        sstage = main_data.scan_stage
+        if sstage:
+            # Move the scan stage to the top-left (so that scan has maximum range)
+            pos0 = {"x": sstage.axes["x"].range[0], "y": sstage.axes["y"].range[0]}
+            sstage.moveAbs(pos0)
+
+            self.scan_stage_ent = sem_stream_cont.add_setting_entry(
+                "useScanStage",
+                tab_data.useScanStage,
+                None,  # component
+                get_stream_settings_config()[acqstream.SEMStream]["useScanStage"]
+            )
 
         main_data.is_acquiring.subscribe(self.on_acquisition)
 

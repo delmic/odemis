@@ -358,16 +358,23 @@ HW_SETTINGS_CONFIG_PER_ROLE["sparc-simplex"] = HW_SETTINGS_CONFIG_PER_ROLE["spar
 
 # Stream class -> config
 STREAM_SETTINGS_CONFIG = {
-    stream.SEMStream: {
-            "dcPeriod": {
+    stream.SEMStream:
+        OrderedDict((
+            ("dcPeriod", {
                 "label": "Drift corr. period",
                 "tooltip": u"Maximum time between anchor region acquisitions",
                 "control_type": odemis.gui.CONTROL_SLIDER,
                 "scale": "log",
                 "range": (1, 300),  # s, the VA allows a wider range, not typically needed
                 "accuracy": 2,
-            },
-    },
+            }),
+            ("useScanStage", {
+                "tooltip": u"Scans the area using the scan stage, "
+                           u"instead of the e-beam. "
+                           u"It increases the area that can be properly acquired. "
+                           u"Note that survey acquisition is not affected.",
+            }),
+        )),
     stream.SpectrumSettingsStream:
         OrderedDict((
             ("repetition", {
@@ -379,7 +386,7 @@ STREAM_SETTINGS_CONFIG = {
                 "control_type": odemis.gui.CONTROL_FLT,
             }),
             ("fuzzing", {
-                 "tooltip": u"Scans each pixel over their complete area, instead of only scanning the center the pixel area.",
+                "tooltip": u"Scans each pixel over their complete area, instead of only scanning the center the pixel area.",
             }),
             ("wavelength", {
                 "range": (0.0, 1900e-9),

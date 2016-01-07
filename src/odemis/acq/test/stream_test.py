@@ -21,7 +21,9 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Test module for model.Stream classes
 from __future__ import division
 
+from concurrent.futures._base import CancelledError
 import logging
+import math
 import numpy
 from odemis import model
 import odemis
@@ -41,8 +43,9 @@ logging.getLogger().setLevel(logging.DEBUG)
 # logging.getLogger().handlers[0].setFormatter(logging.Formatter(_frm))
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
-SPARC_CONFIG = CONFIG_PATH + "sim/sparc-pmts-sim.odm.yaml"
 SECOM_CONFIG = CONFIG_PATH + "sim/secom-sim.odm.yaml"
+SPARC_CONFIG = CONFIG_PATH + "sim/sparc-pmts-sim.odm.yaml"
+SPARC2_CONFIG = CONFIG_PATH + "sim/sparc2-sim-scanner.odm.yaml"
 
 RGBCAM_CLASS = simcam.Camera
 RGBCAM_KWARGS = dict(name="camera", role="overview", image="simcam-fake-overview.h5")
@@ -228,6 +231,7 @@ class StreamTestCase(unittest.TestCase):
         rgbs.should_update.value = False
 
         # Check it stopped updating
+        time.sleep(0.2)
         img = rgbs.image.value
         time.sleep(2 * dur)
         img2 = rgbs.image.value
@@ -953,7 +957,8 @@ class SPARCTestCase(unittest.TestCase):
         spec_md = sps._rep_raw[0].metadata
         self.assertAlmostEqual(sem_md[model.MD_POS], spec_md[model.MD_POS])
         self.assertAlmostEqual(sem_md[model.MD_PIXEL_SIZE],
-                               (spec_md[model.MD_PIXEL_SIZE][0] / stream.TILE_SHAPE[0], spec_md[model.MD_PIXEL_SIZE][1] / stream.TILE_SHAPE[1]))
+                               (spec_md[model.MD_PIXEL_SIZE][0] / stream.TILE_SHAPE[0],
+                                spec_md[model.MD_PIXEL_SIZE][1] / stream.TILE_SHAPE[1]))
         numpy.testing.assert_allclose(spec_md[model.MD_POS], exp_pos)
         numpy.testing.assert_allclose(spec_md[model.MD_PIXEL_SIZE], exp_pxs)
 
@@ -985,7 +990,8 @@ class SPARCTestCase(unittest.TestCase):
         spec_md = sps._rep_raw[0].metadata
         self.assertAlmostEqual(sem_md[model.MD_POS], spec_md[model.MD_POS])
         self.assertAlmostEqual(sem_md[model.MD_PIXEL_SIZE],
-                               (spec_md[model.MD_PIXEL_SIZE][0] / stream.TILE_SHAPE[0], spec_md[model.MD_PIXEL_SIZE][1] / stream.TILE_SHAPE[1]))
+                               (spec_md[model.MD_PIXEL_SIZE][0] / stream.TILE_SHAPE[0],
+                                spec_md[model.MD_PIXEL_SIZE][1] / stream.TILE_SHAPE[1]))
         numpy.testing.assert_allclose(spec_md[model.MD_POS], exp_pos)
         numpy.testing.assert_allclose(spec_md[model.MD_PIXEL_SIZE], exp_pxs)
 
@@ -1173,6 +1179,336 @@ class SPARCTestCase(unittest.TestCase):
         self.assertEqual(imd[model.MD_POS], semmd[model.MD_POS])
         self.assertEqual(imd[model.MD_PIXEL_SIZE], semmd[model.MD_PIXEL_SIZE])
 
+
+class SPARC2TestCase(unittest.TestCase):
+    """
+    Tests to be run with a (simulated) SPARCv2
+    """
+    # The hardware is very similar to the SPARCv1, so just check special behaviour
+    backend_was_running = False
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            test.start_backend(SPARC2_CONFIG)
+        except LookupError:
+            logging.info("A running backend is already found, skipping tests")
+            cls.backend_was_running = True
+            return
+        except IOError as exp:
+            logging.error(str(exp))
+            raise
+
+        # Find CCD & SEM components
+        cls.ccd = model.getComponent(role="ccd")
+        cls.spec = model.getComponent(role="spectrometer")
+        cls.ebeam = model.getComponent(role="e-beam")
+        cls.sed = model.getComponent(role="se-detector")
+        cls.spgp = model.getComponent(role="spectrograph")
+        cls.sstage = model.getComponent(role="scan-stage")
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.backend_was_running:
+            return
+        test.stop_backend()
+
+    def setUp(self):
+        if self.backend_was_running:
+            self.skipTest("Running backend found")
+
+    def _roiToPhys(self, repst):
+        """
+        Compute the (expected) physical position of a stream ROI
+        repst (RepetitionStream): the repetition stream with ROI
+        return:
+            pos (tuple of 2 floats): physical position of the center
+            pxs (tuple of 2 floats): pixel size in m
+            res (tuple of ints): number of pixels
+        """
+        res = repst.repetition.value
+        pxs = (repst.pixelSize.value,) * 2
+
+        # To compute pos, we need to convert the ROI to physical coordinates
+        roi = repst.roi.value
+        roi_center = ((roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2)
+
+        try:
+            sem_center = repst.detector.getMetadata()[model.MD_POS]
+        except KeyError:
+            # no stage => pos is always 0,0
+            sem_center = (0, 0)
+        # TODO: pixelSize will be updated when the SEM magnification changes,
+        # so we might want to recompute this ROA whenever pixelSize changes so
+        # that it's always correct (but maybe not here in the view)
+        emt = repst.emitter
+        sem_width = (emt.shape[0] * emt.pixelSize.value[0],
+                     emt.shape[1] * emt.pixelSize.value[1])
+        # In physical coordinates Y goes up, but in ROI, Y goes down => "1-"
+        pos = (sem_center[0] + sem_width[0] * (roi_center[0] - 0.5),
+               sem_center[1] - sem_width[1] * (roi_center[1] - 0.5))
+
+        logging.debug("Expecting pos %s, pxs %s, res %s", pos, pxs, res)
+        return pos, pxs, res
+
+    def test_acq_spec_sstage(self):
+        """
+        Test spectrum acquisition with scan stage
+        """
+        # Zoom in to make sure the ROI is not too big physically
+        self.ebeam.horizontalFoV.value = 200e-6
+        self.ebeam.resolution.value = self.ebeam.resolution.clip((2048, 2048))
+
+        # Move the stage to the top-left
+        pos0 = {"x": self.sstage.axes["x"].range[0],
+                "y": self.sstage.axes["y"].range[0]}
+        f = self.sstage.moveAbs(pos0)
+
+        # Create the streams
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+        specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data,
+                                              self.ebeam, sstage=self.sstage)
+        sps = stream.SEMSpectrumMDStream("test sem-spec", sems, specs)
+
+        specs.useScanStage.value = True
+
+        # Long acquisition (small rep to avoid being too long) > 0.1s
+        specs.roi.value = (0.25, 0.55, 0.6, 0.8)
+        specs.repetition.value = (5, 6)
+        self.spec.exposureTime.value = 0.3  # s
+        exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
+
+        f.result()
+
+        # Start acquisition
+        timeout = 1 + 1.5 * sps.estimateAcquisitionTime()
+        start = time.time()
+        f = sps.acquire()
+
+        # wait until it's over
+        data = f.result(timeout)
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(f.done())
+        self.assertEqual(len(data), len(sps.raw))
+        self.assertEqual(len(sps._main_raw), 1)
+        self.assertEqual(sps._main_raw[0].shape, exp_res[::-1])
+        self.assertEqual(len(sps._rep_raw), 1)
+        sshape = sps._rep_raw[0].shape
+        self.assertEqual(len(sshape), 5)
+        self.assertGreater(sshape[0], 1)  # should have at least 2 wavelengths
+        sem_md = sps._main_raw[0].metadata
+        spec_md = sps._rep_raw[0].metadata
+        self.assertAlmostEqual(sem_md[model.MD_POS], spec_md[model.MD_POS])
+        self.assertAlmostEqual(sem_md[model.MD_PIXEL_SIZE], spec_md[model.MD_PIXEL_SIZE])
+        numpy.testing.assert_allclose(spec_md[model.MD_POS], exp_pos)
+        numpy.testing.assert_allclose(spec_md[model.MD_PIXEL_SIZE], exp_pxs)
+
+        # Check the stage is back to top-left
+        pos = self.sstage.position.value
+        dist0 = math.hypot(pos["x"] - pos0["x"], pos["y"] - pos0["y"])
+        self.assertAlmostEqual(dist0, 0, delta=100e-9)
+
+        # Short acquisition (< 0.1s)
+        self.spec.exposureTime.value = 0.01  # s
+        specs.repetition.value = (25, 60)
+        exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
+
+        # Start acquisition
+        timeout = 1 + 1.5 * sps.estimateAcquisitionTime()
+        start = time.time()
+        f = sps.acquire()
+
+        # wait until it's over
+        data = f.result(timeout)
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(f.done())
+        self.assertEqual(len(data), len(sps.raw))
+        self.assertEqual(len(sps._main_raw), 1)
+        self.assertEqual(sps._main_raw[0].shape, exp_res[::-1])
+        self.assertEqual(len(sps._rep_raw), 1)
+        sshape = sps._rep_raw[0].shape
+        self.assertEqual(len(sshape), 5)
+        self.assertGreater(sshape[0], 1)  # should have at least 2 wavelengths
+        sem_md = sps._main_raw[0].metadata
+        spec_md = sps._rep_raw[0].metadata
+        self.assertAlmostEqual(sem_md[model.MD_POS], spec_md[model.MD_POS])
+        self.assertAlmostEqual(sem_md[model.MD_PIXEL_SIZE], spec_md[model.MD_PIXEL_SIZE])
+        numpy.testing.assert_allclose(spec_md[model.MD_POS], exp_pos)
+        numpy.testing.assert_allclose(spec_md[model.MD_PIXEL_SIZE], exp_pxs)
+
+    def test_acq_spec_sstage_cancel(self):
+        """
+        Test canceling spectrum acquisition with scan stage
+        """
+        # Zoom in to make sure the ROI is not too big physically
+        self.ebeam.horizontalFoV.value = 200e-6
+        self.ebeam.resolution.value = self.ebeam.resolution.clip((2048, 2048))
+
+        # Move the stage to the top-left
+        pos0 = {"x": self.sstage.axes["x"].range[0],
+                "y": self.sstage.axes["y"].range[0]}
+        f = self.sstage.moveAbs(pos0)
+
+        # Create the streams
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+        specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data,
+                                              self.ebeam, sstage=self.sstage)
+        sps = stream.SEMSpectrumMDStream("test sem-spec", sems, specs)
+
+        specs.useScanStage.value = True
+
+        # Long acquisition (small rep to avoid being too long) > 0.1s
+        specs.roi.value = (0.25, 0.55, 0.6, 0.8)
+        specs.repetition.value = (5, 6)
+        self.spec.exposureTime.value = 0.3  # s
+        f.result()
+
+        # Start acquisition
+        estt = sps.estimateAcquisitionTime()
+        f = sps.acquire()
+
+        # Wait a bit and cancel
+        time.sleep(estt / 2)
+        f.cancel()
+        try:
+            f.result()
+        except CancelledError:
+            pass
+        time.sleep(0.1)
+
+        # Check the stage is back to top-left
+        pos = self.sstage.position.value
+        dist0 = math.hypot(pos["x"] - pos0["x"], pos["y"] - pos0["y"])
+        self.assertAlmostEqual(dist0, 0, delta=100e-9)
+
+        # Check it still works after cancelling
+        self.spec.exposureTime.value = 0.01  # s
+        specs.repetition.value = (5, 6)
+        exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
+
+        # Start acquisition
+        timeout = 1 + 1.5 * sps.estimateAcquisitionTime()
+        start = time.time()
+        f = sps.acquire()
+
+        # wait until it's over
+        data = f.result(timeout)
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(f.done())
+        self.assertEqual(len(data), len(sps.raw))
+        self.assertEqual(len(sps._main_raw), 1)
+        self.assertEqual(sps._main_raw[0].shape, exp_res[::-1])
+        self.assertEqual(len(sps._rep_raw), 1)
+        sshape = sps._rep_raw[0].shape
+        self.assertEqual(len(sshape), 5)
+        self.assertGreater(sshape[0], 1)  # should have at least 2 wavelengths
+        sem_md = sps._main_raw[0].metadata
+        spec_md = sps._rep_raw[0].metadata
+        self.assertAlmostEqual(sem_md[model.MD_POS], spec_md[model.MD_POS])
+        self.assertAlmostEqual(sem_md[model.MD_PIXEL_SIZE], spec_md[model.MD_PIXEL_SIZE])
+        numpy.testing.assert_allclose(spec_md[model.MD_POS], exp_pos)
+        numpy.testing.assert_allclose(spec_md[model.MD_PIXEL_SIZE], exp_pxs)
+
+    def test_acq_spec_all(self):
+        """
+        Test spectrum acquisition with scan stage, fuzzying, and drift correction
+        """
+        # Zoom in to make sure the ROI is not too big physically
+        self.ebeam.horizontalFoV.value = 200e-6
+        self.ebeam.resolution.value = self.ebeam.resolution.clip((2048, 2048))
+
+        # Move the stage to the top-left
+        pos0 = {"x": self.sstage.axes["x"].range[0],
+                "y": self.sstage.axes["y"].range[0]}
+        f = self.sstage.moveAbs(pos0)
+
+        # Create the streams
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+        specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data,
+                                              self.ebeam, sstage=self.sstage)
+        sps = stream.SEMSpectrumMDStream("test sem-spec", sems, specs)
+
+        specs.useScanStage.value = True
+        specs.fuzzing.value = True
+
+        sems.dcPeriod.value = 1
+        sems.dcRegion.value = (0.8, 0.5, 0.9, 0.6)
+        sems.dcDwellTime.value = 1e-06
+
+        # Long acquisition (small rep to avoid being too long) > 0.1s
+        specs.roi.value = (0.25, 0.55, 0.6, 0.8)
+        specs.repetition.value = (5, 6)
+        self.spec.exposureTime.value = 0.3  # s
+        exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
+
+        f.result()
+
+        # Start acquisition
+        timeout = 1 + 1.5 * sps.estimateAcquisitionTime()
+        start = time.time()
+        f = sps.acquire()
+
+        # wait until it's over
+        data = f.result(timeout)
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(f.done())
+        self.assertEqual(len(data), len(sps.raw))
+        self.assertEqual(len(sps._main_raw), 1)
+        exp_sem_res = (exp_res[0] * stream.TILE_SHAPE[0], exp_res[1] * stream.TILE_SHAPE[1])
+        self.assertEqual(sps._main_raw[0].shape, exp_sem_res[::-1])
+        self.assertEqual(len(sps._rep_raw), 1)
+        sshape = sps._rep_raw[0].shape
+        self.assertEqual(len(sshape), 5)
+        self.assertGreater(sshape[0], 1)  # should have at least 2 wavelengths
+        sem_md = sps._main_raw[0].metadata
+        spec_md = sps._rep_raw[0].metadata
+        self.assertAlmostEqual(sem_md[model.MD_POS], spec_md[model.MD_POS])
+        self.assertAlmostEqual(sem_md[model.MD_PIXEL_SIZE],
+                               (spec_md[model.MD_PIXEL_SIZE][0] / stream.TILE_SHAPE[0],
+                                spec_md[model.MD_PIXEL_SIZE][1] / stream.TILE_SHAPE[1]))
+        numpy.testing.assert_allclose(spec_md[model.MD_POS], exp_pos)
+        numpy.testing.assert_allclose(spec_md[model.MD_PIXEL_SIZE], exp_pxs)
+
+        # Check the stage is back to top-left
+        pos = self.sstage.position.value
+        dist0 = math.hypot(pos["x"] - pos0["x"], pos["y"] - pos0["y"])
+        self.assertAlmostEqual(dist0, 0, delta=100e-9)
+
+        # Short acquisition (< 0.1s)
+        self.spec.exposureTime.value = 0.01  # s
+        specs.repetition.value = (25, 60)
+        exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
+
+        # Start acquisition
+        timeout = 1 + 1.5 * sps.estimateAcquisitionTime()
+        start = time.time()
+        f = sps.acquire()
+
+        # wait until it's over
+        data = f.result(timeout)
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(f.done())
+        self.assertEqual(len(data), len(sps.raw))
+        self.assertEqual(len(sps._main_raw), 1)
+        exp_sem_res = (exp_res[0] * stream.TILE_SHAPE[0], exp_res[1] * stream.TILE_SHAPE[1])
+        self.assertEqual(sps._main_raw[0].shape, exp_sem_res[::-1])
+        self.assertEqual(len(sps._rep_raw), 1)
+        sshape = sps._rep_raw[0].shape
+        self.assertEqual(len(sshape), 5)
+        self.assertGreater(sshape[0], 1)  # should have at least 2 wavelengths
+        sem_md = sps._main_raw[0].metadata
+        spec_md = sps._rep_raw[0].metadata
+        self.assertAlmostEqual(sem_md[model.MD_POS], spec_md[model.MD_POS])
+        self.assertAlmostEqual(sem_md[model.MD_PIXEL_SIZE],
+                               (spec_md[model.MD_PIXEL_SIZE][0] / stream.TILE_SHAPE[0],
+                                spec_md[model.MD_PIXEL_SIZE][1] / stream.TILE_SHAPE[1]))
+        numpy.testing.assert_allclose(spec_md[model.MD_POS], exp_pos)
+        numpy.testing.assert_allclose(spec_md[model.MD_PIXEL_SIZE], exp_pxs)
 
 # @skip("faster")
 class SettingsStreamsTestCase(unittest.TestCase):

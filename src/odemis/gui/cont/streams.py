@@ -1608,6 +1608,9 @@ class SparcStreamsController(StreamBarController):
         # When the SettingsStream is deleted, automatically remove the MDStream
         tab_data.streams.subscribe(self._on_streams)
 
+        # Connect the global useScanStage VA to each RepStream
+        tab_data.useScanStage.subscribe(self._updateScanStage)
+
     def _createAddStreamActions(self):
         """ Create the compatible "add stream" actions according to the current microscope.
 
@@ -1717,6 +1720,8 @@ class SparcStreamsController(StreamBarController):
         kwargs (dict): to be passed to _add_stream()
         return (StreamController): the new stream controller
         """
+        if model.hasVA(stream, "useScanStage"):
+            stream.useScanStage.value = self._tab_data_model.useScanStage.value
         self._connectROI(stream)
 
         stream_cont = self._add_stream(stream, add_to_view=True, **kwargs)
@@ -1773,6 +1778,7 @@ class SparcStreamsController(StreamBarController):
             main_data.ccd,
             main_data.ccd.data,
             main_data.ebeam,
+            sstage=main_data.scan_stage,
             # TODO: add a focuser for the SPARCv2?
             detvas=get_local_vas(main_data.ccd),
         )
@@ -1785,7 +1791,8 @@ class SparcStreamsController(StreamBarController):
 
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
-        sem_ar_stream = acqstream.SEMARMDStream("SEM AR", sem_stream, ar_stream)
+        sem_ar_stream = acqstream.SEMARMDStream("SEM AR",
+                                                sem_stream, ar_stream)
 
         return self._addRepStream(ar_stream, sem_ar_stream,
                                   vas=("repetition", "pixelSize"),
@@ -1801,6 +1808,7 @@ class SparcStreamsController(StreamBarController):
             main_data.cld,
             main_data.cld.data,
             main_data.ebeam,
+            sstage=main_data.scan_stage,
             focuser=self._main_data_model.ebeam_focus,
             emtvas={"dwellTime"},
             detvas=get_local_vas(main_data.cld),
@@ -1812,7 +1820,8 @@ class SparcStreamsController(StreamBarController):
 
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
-        sem_cli_stream = acqstream.SEMMDStream("SEM CLi", sem_stream, cli_stream)
+        sem_cli_stream = acqstream.SEMMDStream("SEM CLi",
+                                               sem_stream, cli_stream)
 
         # Need to pick the right filter wheel (if there is one)
         axes = {}
@@ -1838,13 +1847,15 @@ class SparcStreamsController(StreamBarController):
             main_data.spectrometer,
             main_data.spectrometer.data,
             main_data.ebeam,
+            sstage=main_data.scan_stage,
             # emtvas=get_local_vas(main_data.ebeam), # no need
             detvas=get_local_vas(main_data.spectrometer),
         )
 
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
-        sem_spec_stream = acqstream.SEMSpectrumMDStream("SEM Spectrum", sem_stream, spec_stream)
+        sem_spec_stream = acqstream.SEMSpectrumMDStream("SEM Spectrum",
+                                                        sem_stream, spec_stream)
 
         # No light filter for the spectrum stream: typically useless
         return self._addRepStream(spec_stream, sem_spec_stream,
@@ -1865,14 +1876,16 @@ class SparcStreamsController(StreamBarController):
             main_data.monochromator,
             main_data.monochromator.data,
             main_data.ebeam,
-            spg,
+            spectrograph=spg,
+            sstage=main_data.scan_stage,
             emtvas={"dwellTime"},
             detvas=get_local_vas(main_data.monochromator),
         )
 
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
-        sem_monoch_stream = acqstream.SEMMDStream("SEM Monochromator", sem_stream, monoch_stream)
+        sem_monoch_stream = acqstream.SEMMDStream("SEM Monochromator",
+                                                  sem_stream, monoch_stream)
 
         # No light filter for the spectrum stream: typically useless
         return self._addRepStream(monoch_stream, sem_monoch_stream,
@@ -1950,6 +1963,15 @@ class SparcStreamsController(StreamBarController):
         # Make sure the current view is compatible with the stream playing
         if updated:
             self._view_controller.focusViewWithStream(stream)
+
+    def _updateScanStage(self, use):
+        """
+        Updates the useScanStage VAs of each RepStream based on the global
+          useScanStage VA of the tab.
+        """
+        for s in self._tab_data_model.streams.value:
+            if model.hasVA(s, "useScanStage"):
+                s.useScanStage.value = use
 
     # ROA synchronisation methods
     # Updating the ROI requires a bit of care, because the streams might

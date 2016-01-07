@@ -466,7 +466,7 @@ class SparcAcquiController(object):
 
     # black list of VAs name which are known to not affect the acquisition time
     VAS_NO_ACQUSITION_EFFECT = ("image", "autoBC", "intensityRange", "histogram",
-                                "is_active", "should_update", "status")
+                                "is_active", "should_update", "status", "name", "tint")
 
     def _get_settings_vas(self, stream):
         """
@@ -478,6 +478,7 @@ class SparcAcquiController(object):
         # remove some VAs known to not affect the acquisition time
         for n, va in nvas.items():
             if n not in self.VAS_NO_ACQUSITION_EFFECT:
+                logging.debug("VA %s can affect acq time", n)
                 vas.add(va)
         return vas
 
