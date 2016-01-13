@@ -1205,6 +1205,7 @@ class SPARC2TestCase(unittest.TestCase):
         cls.ebeam = model.getComponent(role="e-beam")
         cls.sed = model.getComponent(role="se-detector")
         cls.spgp = model.getComponent(role="spectrograph")
+        cls.stage = model.getComponent(role="stage")
         cls.sstage = model.getComponent(role="scan-stage")
 
     @classmethod
@@ -1255,14 +1256,18 @@ class SPARC2TestCase(unittest.TestCase):
         """
         Test spectrum acquisition with scan stage
         """
+        # Check that it works even when not at 0,0 of the sample stage
+        f = self.stage.moveRel({"x":-1e-3, "y": 2e-3})
+        f.result()
+
         # Zoom in to make sure the ROI is not too big physically
         self.ebeam.horizontalFoV.value = 200e-6
-        self.ebeam.resolution.value = self.ebeam.resolution.clip((2048, 2048))
+#         self.ebeam.resolution.value = self.ebeam.resolution.clip((2048, 2048))
 
         # Move the stage to the top-left
-        pos0 = {"x": self.sstage.axes["x"].range[0],
-                "y": self.sstage.axes["y"].range[0]}
-        f = self.sstage.moveAbs(pos0)
+        posc = {"x": sum(self.sstage.axes["x"].range) / 2,
+                "y": sum(self.sstage.axes["y"].range) / 2}
+        f = self.sstage.moveAbs(posc)
 
         # Create the streams
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
@@ -1273,7 +1278,8 @@ class SPARC2TestCase(unittest.TestCase):
         specs.useScanStage.value = True
 
         # Long acquisition (small rep to avoid being too long) > 0.1s
-        specs.roi.value = (0.25, 0.55, 0.6, 0.8)
+        specs.pixelSize.value = 1e-6
+        specs.roi.value = (0.25, 0.45, 0.6, 0.7)
         specs.repetition.value = (5, 6)
         self.spec.exposureTime.value = 0.3  # s
         exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
@@ -1281,14 +1287,15 @@ class SPARC2TestCase(unittest.TestCase):
         f.result()
 
         # Start acquisition
-        timeout = 1 + 1.5 * sps.estimateAcquisitionTime()
+        estt = sps.estimateAcquisitionTime()
+        timeout = 1 + 1.5 * estt
         start = time.time()
         f = sps.acquire()
 
         # wait until it's over
         data = f.result(timeout)
         dur = time.time() - start
-        logging.debug("Acquisition took %g s", dur)
+        logging.debug("Acquisition took %g s (while expected %g s)", dur, estt)
         self.assertTrue(f.done())
         self.assertEqual(len(data), len(sps.raw))
         self.assertEqual(len(sps._main_raw), 1)
@@ -1306,12 +1313,13 @@ class SPARC2TestCase(unittest.TestCase):
 
         # Check the stage is back to top-left
         pos = self.sstage.position.value
-        dist0 = math.hypot(pos["x"] - pos0["x"], pos["y"] - pos0["y"])
-        self.assertAlmostEqual(dist0, 0, delta=100e-9)
+        distc = math.hypot(pos["x"] - posc["x"], pos["y"] - posc["y"])
+        self.assertLessEqual(distc, 100e-9)
 
         # Short acquisition (< 0.1s)
         self.spec.exposureTime.value = 0.01  # s
-        specs.repetition.value = (25, 60)
+        specs.pixelSize.value = 1e-6
+        specs.repetition.value = (25, 30)
         exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
 
         # Start acquisition
@@ -1344,12 +1352,12 @@ class SPARC2TestCase(unittest.TestCase):
         """
         # Zoom in to make sure the ROI is not too big physically
         self.ebeam.horizontalFoV.value = 200e-6
-        self.ebeam.resolution.value = self.ebeam.resolution.clip((2048, 2048))
+#         self.ebeam.resolution.value = self.ebeam.resolution.clip((2048, 2048))
 
         # Move the stage to the top-left
-        pos0 = {"x": self.sstage.axes["x"].range[0],
-                "y": self.sstage.axes["y"].range[0]}
-        f = self.sstage.moveAbs(pos0)
+        posc = {"x": sum(self.sstage.axes["x"].range) / 2,
+                "y": sum(self.sstage.axes["y"].range) / 2}
+        f = self.sstage.moveAbs(posc)
 
         # Create the streams
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
@@ -1360,7 +1368,8 @@ class SPARC2TestCase(unittest.TestCase):
         specs.useScanStage.value = True
 
         # Long acquisition (small rep to avoid being too long) > 0.1s
-        specs.roi.value = (0.25, 0.55, 0.6, 0.8)
+        specs.pixelSize.value = 1e-6
+        specs.roi.value = (0.25, 0.45, 0.6, 0.7)
         specs.repetition.value = (5, 6)
         self.spec.exposureTime.value = 0.3  # s
         f.result()
@@ -1380,12 +1389,11 @@ class SPARC2TestCase(unittest.TestCase):
 
         # Check the stage is back to top-left
         pos = self.sstage.position.value
-        dist0 = math.hypot(pos["x"] - pos0["x"], pos["y"] - pos0["y"])
-        self.assertAlmostEqual(dist0, 0, delta=100e-9)
+        distc = math.hypot(pos["x"] - posc["x"], pos["y"] - posc["y"])
+        self.assertLessEqual(distc, 100e-9)
 
         # Check it still works after cancelling
         self.spec.exposureTime.value = 0.01  # s
-        specs.repetition.value = (5, 6)
         exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
 
         # Start acquisition
@@ -1418,12 +1426,12 @@ class SPARC2TestCase(unittest.TestCase):
         """
         # Zoom in to make sure the ROI is not too big physically
         self.ebeam.horizontalFoV.value = 200e-6
-        self.ebeam.resolution.value = self.ebeam.resolution.clip((2048, 2048))
+#         self.ebeam.resolution.value = self.ebeam.resolution.clip((2048, 2048))
 
         # Move the stage to the top-left
-        pos0 = {"x": self.sstage.axes["x"].range[0],
-                "y": self.sstage.axes["y"].range[0]}
-        f = self.sstage.moveAbs(pos0)
+        posc = {"x": sum(self.sstage.axes["x"].range) / 2,
+                "y": sum(self.sstage.axes["y"].range) / 2}
+        f = self.sstage.moveAbs(posc)
 
         # Create the streams
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
@@ -1439,7 +1447,8 @@ class SPARC2TestCase(unittest.TestCase):
         sems.dcDwellTime.value = 1e-06
 
         # Long acquisition (small rep to avoid being too long) > 0.1s
-        specs.roi.value = (0.25, 0.55, 0.6, 0.8)
+        specs.pixelSize.value = 1e-6
+        specs.roi.value = (0.25, 0.45, 0.6, 0.7)
         specs.repetition.value = (5, 6)
         self.spec.exposureTime.value = 0.3  # s
         exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
@@ -1475,12 +1484,13 @@ class SPARC2TestCase(unittest.TestCase):
 
         # Check the stage is back to top-left
         pos = self.sstage.position.value
-        dist0 = math.hypot(pos["x"] - pos0["x"], pos["y"] - pos0["y"])
-        self.assertAlmostEqual(dist0, 0, delta=100e-9)
+        distc = math.hypot(pos["x"] - posc["x"], pos["y"] - posc["y"])
+        self.assertLessEqual(distc, 100e-9)
 
         # Short acquisition (< 0.1s)
         self.spec.exposureTime.value = 0.01  # s
-        specs.repetition.value = (25, 60)
+        specs.pixelSize.value = 1e-6
+        specs.repetition.value = (25, 30)
         exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
 
         # Start acquisition

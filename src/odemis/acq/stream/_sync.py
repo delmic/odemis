@@ -344,23 +344,28 @@ class MultipleDetectorStream(Stream):
 
         # Convert into physical translation
         sstage = self._rep_stream._sstage
+        saxes = sstage.axes
         spos = sstage.position.value
-        spos_rng = sstage.axes["x"].range[1], sstage.axes["y"].range[1]
-        spos0 = sstage.axes["x"].range[0], sstage.axes["y"].range[0]
-        dist_0 = math.hypot(spos["x"] - spos0[0], spos["y"] - spos0[1])
-        if not util.almost_equal(dist_0, 0, atol=100e-9):
-            logging.warning("Scan stage is not initially at top-left %s, but %s", spos0, spos)
+        spos_rng = (saxes["x"].range[0], saxes["y"].range[0],
+                    saxes["x"].range[1], saxes["y"].range[1])  # max phy ROI
+        sposc = ((spos_rng[0] + spos_rng[2]) / 2,
+                 (spos_rng[1] + spos_rng[3]) / 2)
+        dist_c = math.hypot(spos["x"] - sposc[0], spos["y"] - sposc[1])
+        if dist_c > 10e-6:
+            logging.warning("Scan stage is not initially at center %s, but %s", sposc, spos)
 
+        phy_shift = sem_fov[0] * (0.5 - lim[0]), -sem_fov[1] * (0.5 - lim[1])  # Y is opposite dir
         phy_width = sem_fov[0] * (lim[2] - lim[0]), sem_fov[1] * (lim[3] - lim[1])
-        lim_main = (spos["x"], spos["y"],
-                    spos["x"] + phy_width[0], spos["y"] + phy_width[1])
-        logging.debug("Generating stage points in the SEM area %s, from rep %s and roi %s",
-                      lim_main, repetition, roi)
+        spos0 = spos["x"] - phy_shift[0], spos["y"] - phy_shift[1]
+        lim_main = (spos0[0], spos0[1],
+                    spos0[0] + phy_width[0], spos0[1] - phy_width[1])
+        logging.debug("Generating stage points in the area %s, from rep %s and roi %s with FoV %s",
+                      lim_main, repetition, roi, sem_fov)
 
-        if lim_main[2] > spos_rng[0] or lim_main[3] > spos_rng[1]:
-            # TODO: do something more clever? Just fallback to ebeam scanning?
+        if not (spos_rng[0] <= lim_main[0] <= lim_main[2] <= spos_rng[2] and
+                spos_rng[1] <= lim_main[3] <= lim_main[1] <= spos_rng[3]):  # Y decreases
             raise ValueError("ROI goes outside the scan stage range (%s > %s)" %
-                             (lim_main[2:4], spos_rng))
+                             (lim_main, spos_rng))
 
         pos = numpy.empty(repetition + (2,), dtype=numpy.float)
         posx = pos[:, :, 0].swapaxes(0, 1)  # just a view to have X as last dim
@@ -485,6 +490,8 @@ class MultipleDetectorStream(Stream):
               center_tl[1] + (pxs[1] * (datatl.shape[-2] - 1)) / 2)
         center = (tl[0] + (pxs[0] * (rep[0] - 1)) / 2,
                   tl[1] - (pxs[1] * (rep[1] - 1)) / 2)
+        logging.debug("Computed data width to be %s x %s",
+                      pxs[0] * rep[0], pxs[1] * rep[1])
 
         return center, pxs
 
@@ -862,6 +869,9 @@ class SEMCCDMDStream(MultipleDetectorStream):
         rep_size = self._rep_det.resolution.value
         readout = numpy.prod(rep_size) / self._rep_det.readoutRate.value
 
+        # Move ebeam to the center
+        self._emitter.translation.value = (0, 0)
+
         # Calculate dwellTime and scale to check if fuzzing could be applied
         fuzzing = (hasattr(self._rep_stream, "fuzzing") and self._rep_stream.fuzzing.value)
         if fuzzing:
@@ -890,22 +900,6 @@ class SEMCCDMDStream(MultipleDetectorStream):
             # CCD to be sure it is not slowing thing down.
             self._emitter.dwellTime.value = self._emitter.dwellTime.clip(exp + readout)
 
-        # Move ebeam to the top-left of the ROI (code from getSpotPositions())
-        repetition = tuple(self._rep_stream.repetition.value)
-        roi = self._rep_stream.roi.value
-        width = (roi[2] - roi[0], roi[3] - roi[1])
-
-        # Take into account the "border" around each pixel
-        pxs = (width[0] / repetition[0], width[1] / repetition[1])
-        lim = (roi[0] + pxs[0] / 2, roi[1] + pxs[1] / 2,
-               roi[2] - pxs[0] / 2, roi[3] - pxs[1] / 2)
-
-        shape = self._emitter.shape
-        # convert into SEM translation coordinates: distance in px from center
-        # (situated at 0.5, 0.5), can be floats
-        trans0 = shape[0] * (lim[0] - 0.5), shape[1] * (lim[1] - 0.5)
-        self._emitter.translation.value = trans0
-
         return exp + readout
 
     def _runAcquisitionScanStage(self, future):
@@ -919,19 +913,23 @@ class SEMCCDMDStream(MultipleDetectorStream):
           Exceptions if error
         """
         # The idea of the acquiring with a scan stage:
-        #  (Note we expect the scan stage to be at top-left)
-        #  * Move the ebeam to the top-left corner of the ROI
+        #  (Note we expect the scan stage to be about at the center of its range)
+        #  * Move the ebeam to 0, 0 (center), for the best image quality
         #  * Start CCD acquisition with software synchronisation
         #  * Move to next position with the stage and wait for it
         #  * Start SED acquisition and trigger CCD
         #  * Wait for the CCD/SED data
         #  * Repeat until all the points have been scanned
-        #  * Move back the stage to top-left
+        #  * Move back the stage to center
 
+        sstage = self._rep_stream._sstage
         try:
-            sstage = self._rep_stream._sstage
             if not sstage:
                 raise ValueError("Cannot acquire with scan stage, as no stage was provided")
+            saxes = sstage.axes
+            orig_spos = sstage.position.value  # TODO: need to protect from the stage being outside of the axes range?
+            spos_rng = (saxes["x"].range[0], saxes["y"].range[0],
+                        saxes["x"].range[1], saxes["y"].range[1])  # max phy ROI
 
             self._acq_done.clear()
             rep_time = self._adjustHardwareSettingsScanStage()
@@ -939,12 +937,10 @@ class SEMCCDMDStream(MultipleDetectorStream):
             sem_time = dwell_time * numpy.prod(self._emitter.resolution.value)
             stage_pos = self._getScanStagePositions()
             logging.debug("Generating %s pos for %g (dt=%g) s", stage_pos.shape[:2], rep_time, dwell_time)
-            orig_spos = stage_pos[0, 0][0], stage_pos[0, 0][1]
             rep = self._rep_stream.repetition.value
             roi = self._rep_stream.roi.value
-            drift_shift = (0, 0)  # total drift shift (in sem px)
+            drift_shift = (0, 0)  # total drift shift (in m)
             main_pxs = self._emitter.pixelSize.value
-            etrans = self._emitter.translation.value
             self._main_data = []
             self._rep_data = None
             rep_buf = []
@@ -988,8 +984,16 @@ class SEMCCDMDStream(MultipleDetectorStream):
             for i in numpy.ndindex(*rep[::-1]):  # last dim (X) iterates first
                 # Move the scan stage to the next position
                 spos = stage_pos[i[::-1]][0], stage_pos[i[::-1]][1]
-                logging.debug("Scan stage pos: %s", spos)
-                f = sstage.moveAbs({"x": spos[0], "y": spos[1]})
+                cspos = spos[0] - drift_shift[0], spos[1] - drift_shift[1]
+                if not (spos_rng[0] <= cspos[0] <= spos_rng[2] and
+                        spos_rng[1] <= cspos[1] <= spos_rng[3]):
+                    logging.error("Drift of %s px caused acquisition region out "
+                                  "of bounds: needed to scan spot at %s.",
+                                  drift_shift, cspos)
+                    cspos = (min(max(spos_rng[0], cspos[0]), spos_rng[2]),
+                             min(max(spos_rng[1], cspos[1]), spos_rng[3]))
+                logging.debug("Scan stage pos: %s (including drift of %s)", cspos, drift_shift)
+                f = sstage.moveAbs({"x": cspos[0], "y": cspos[1]})
                 f.result()
                 self._acq_min_date = time.time()
 
@@ -1050,12 +1054,12 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
                     # MD_POS default to the center of the sample stage, but it
                     # needs to be the position of the
-                    # sample stage + e-beam + scan stage translation + drift cor
+                    # sample stage + e-beam + scan stage translation (without the drift cor)
                     raw_pos = self._main_data[-1].metadata[MD_POS]
-                    strans = spos[0] - orig_spos[0], spos[1] - orig_spos[1]
-                    cor_pos = (raw_pos[0] + strans[0] + drift_shift[0] * main_pxs[0],
-                               raw_pos[1] + strans[1] - drift_shift[1] * main_pxs[1])  # Y is upside down
-                    # self._main_data[-1].metadata[MD_POS] = cor_pos
+                    strans = spos[0] - orig_spos["x"], spos[1] - orig_spos["y"]
+                    cor_pos = raw_pos[0] + strans[0], raw_pos[1] + strans[1]
+                    logging.debug("Updating pixel pos from %s to %s", raw_pos, cor_pos)
+                    self._main_data[-1].metadata[MD_POS] = cor_pos  # Only used for the first point in practice
                     self._rep_data.metadata[MD_POS] = cor_pos
                     rep_buf.append(self._preprocessRepData(self._rep_data, i))
 
@@ -1071,7 +1075,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                         n_til_dc = pxs_dc_period.next()
 
                         # Move back to orig pos, to not compensate for the scan stage move
-                        f = sstage.moveAbs({"x": orig_spos[0], "y": orig_spos[1]})
+                        f = sstage.moveAbs(orig_spos)
                         f.result()
                         # TODO: if it's not too far, acquire anchor area without
                         # moving back, by compensating the current shift with
@@ -1086,17 +1090,8 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
                         # Estimate drift
                         shift = self._dc_estimator.estimate()
-                        etrans = etrans[0] - shift[0], etrans[1] - shift[1]
-                        drift_shift = (drift_shift[0] + shift[0],
-                                       drift_shift[1] + shift[1])
-
-                        # Compensate for the drift by shifting the ebeam
-                        cptrans = self._emitter.translation.clip(etrans)
-                        if cptrans != etrans:
-                            logging.error("Drift of %s px caused acquisition region out "
-                                          "of bounds: needed to scan spot at %s.",
-                                          drift_shift, etrans)
-                        self._emitter.translation.value = cptrans
+                        drift_shift = (drift_shift[0] + shift[0] * main_pxs[0],
+                                       drift_shift[1] - shift[1] * main_pxs[1]) # Y is upside down
 
                     # Since we reached this point means everything went fine, so
                     # no need to retry
@@ -1140,9 +1135,10 @@ class SEMCCDMDStream(MultipleDetectorStream):
             return self.raw
         finally:
             if sstage:
-                # Move back the stage to the top left
-                pos0 = {"x": sstage.axes["x"].range[0],
-                        "y": sstage.axes["y"].range[0]}
+                # Move back the stage to the center
+                saxes = sstage.axes
+                pos0 = {"x": sum(saxes["x"].range) / 2,
+                        "y": sum(saxes["y"].range) / 2}
                 f = sstage.moveAbs(pos0)
 
             self._main_stream._unlinkHwVAs()
