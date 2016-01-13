@@ -1189,15 +1189,15 @@ class SPARC2TestCase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        try:
-            test.start_backend(SPARC2_CONFIG)
-        except LookupError:
-            logging.info("A running backend is already found, skipping tests")
-            cls.backend_was_running = True
-            return
-        except IOError as exp:
-            logging.error(str(exp))
-            raise
+#         try:
+#             test.start_backend(SPARC2_CONFIG)
+#         except LookupError:
+#             logging.info("A running backend is already found, skipping tests")
+#             cls.backend_was_running = True
+#             return
+#         except IOError as exp:
+#             logging.error(str(exp))
+#             raise
 
         # Find CCD & SEM components
         cls.ccd = model.getComponent(role="ccd")
@@ -1212,7 +1212,7 @@ class SPARC2TestCase(unittest.TestCase):
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
-        test.stop_backend()
+#         test.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:
@@ -1262,7 +1262,6 @@ class SPARC2TestCase(unittest.TestCase):
 
         # Zoom in to make sure the ROI is not too big physically
         self.ebeam.horizontalFoV.value = 200e-6
-#         self.ebeam.resolution.value = self.ebeam.resolution.clip((2048, 2048))
 
         # Move the stage to the top-left
         posc = {"x": sum(self.sstage.axes["x"].range) / 2,
@@ -1288,7 +1287,7 @@ class SPARC2TestCase(unittest.TestCase):
 
         # Start acquisition
         estt = sps.estimateAcquisitionTime()
-        timeout = 1 + 1.5 * estt
+        timeout = 5 + 3 * estt
         start = time.time()
         f = sps.acquire()
 
@@ -1323,14 +1322,15 @@ class SPARC2TestCase(unittest.TestCase):
         exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
 
         # Start acquisition
-        timeout = 1 + 1.5 * sps.estimateAcquisitionTime()
+        estt = sps.estimateAcquisitionTime()
+        timeout = 5 + 3 * estt
         start = time.time()
         f = sps.acquire()
 
         # wait until it's over
         data = f.result(timeout)
         dur = time.time() - start
-        logging.debug("Acquisition took %g s", dur)
+        logging.debug("Acquisition took %g s (while expected %g s)", dur, estt)
         self.assertTrue(f.done())
         self.assertEqual(len(data), len(sps.raw))
         self.assertEqual(len(sps._main_raw), 1)
@@ -1397,14 +1397,15 @@ class SPARC2TestCase(unittest.TestCase):
         exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
 
         # Start acquisition
-        timeout = 1 + 1.5 * sps.estimateAcquisitionTime()
+        estt = sps.estimateAcquisitionTime()
+        timeout = 5 + 3 * estt
         start = time.time()
         f = sps.acquire()
 
         # wait until it's over
         data = f.result(timeout)
         dur = time.time() - start
-        logging.debug("Acquisition took %g s", dur)
+        logging.debug("Acquisition took %g s (while expected %g s)", dur, estt)
         self.assertTrue(f.done())
         self.assertEqual(len(data), len(sps.raw))
         self.assertEqual(len(sps._main_raw), 1)
@@ -1456,14 +1457,15 @@ class SPARC2TestCase(unittest.TestCase):
         f.result()
 
         # Start acquisition
-        timeout = 1 + 1.5 * sps.estimateAcquisitionTime()
+        estt = sps.estimateAcquisitionTime()
+        timeout = 5 + 3 * estt
         start = time.time()
         f = sps.acquire()
 
         # wait until it's over
         data = f.result(timeout)
         dur = time.time() - start
-        logging.debug("Acquisition took %g s", dur)
+        logging.debug("Acquisition took %g s (while expected %g s)", dur, estt)
         self.assertTrue(f.done())
         self.assertEqual(len(data), len(sps.raw))
         self.assertEqual(len(sps._main_raw), 1)
@@ -1494,14 +1496,15 @@ class SPARC2TestCase(unittest.TestCase):
         exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
 
         # Start acquisition
-        timeout = 1 + 1.5 * sps.estimateAcquisitionTime()
+        estt = sps.estimateAcquisitionTime()
+        timeout = 5 + 3 * estt
         start = time.time()
         f = sps.acquire()
 
         # wait until it's over
         data = f.result(timeout)
         dur = time.time() - start
-        logging.debug("Acquisition took %g s", dur)
+        logging.debug("Acquisition took %g s (while expected %g s)", dur, estt)
         self.assertTrue(f.done())
         self.assertEqual(len(data), len(sps.raw))
         self.assertEqual(len(sps._main_raw), 1)

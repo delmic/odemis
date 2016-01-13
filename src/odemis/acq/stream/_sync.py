@@ -131,7 +131,6 @@ class MultipleDetectorStream(Stream):
         # Time required without drift correction
         total_time = self._estimateRawAcquisitionTime()
 
-
         # Estimate time spent in scanning the anchor region
         if self._main_stream.dcRegion.value != UNDEFINED_ROI:
             npixels = numpy.prod(self._rep_stream.repetition.value)
@@ -180,7 +179,8 @@ class MultipleDetectorStream(Stream):
                 speed = sstage.speed.value["x"]  # consider both axes have same speed
 
                 npixels = numpy.prod(repetition)
-                move_time = tot_dist / speed + npixels * 10e-3  # 10 ms per pixel overhead
+                # x2 the move time for compensating the accel/decel + 50 ms per pixel overhead
+                move_time = 2 * tot_dist / speed + npixels * 50e-3  # s
                 logging.debug("Estimated total scan stage travel distance is %s = %s s",
                               units.readable_str(tot_dist, "m"), move_time)
                 total_time += move_time
@@ -928,6 +928,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 raise ValueError("Cannot acquire with scan stage, as no stage was provided")
             saxes = sstage.axes
             orig_spos = sstage.position.value  # TODO: need to protect from the stage being outside of the axes range?
+            prev_spos = orig_spos.copy()
             spos_rng = (saxes["x"].range[0], saxes["y"].range[0],
                         saxes["x"].range[1], saxes["y"].range[1])  # max phy ROI
 
@@ -984,17 +985,24 @@ class SEMCCDMDStream(MultipleDetectorStream):
             for i in numpy.ndindex(*rep[::-1]):  # last dim (X) iterates first
                 # Move the scan stage to the next position
                 spos = stage_pos[i[::-1]][0], stage_pos[i[::-1]][1]
-                cspos = spos[0] - drift_shift[0], spos[1] - drift_shift[1]
-                if not (spos_rng[0] <= cspos[0] <= spos_rng[2] and
-                        spos_rng[1] <= cspos[1] <= spos_rng[3]):
+                cspos = {"x": spos[0] - drift_shift[0],
+                         "y": spos[1] - drift_shift[1]}
+                if not (spos_rng[0] <= cspos["x"] <= spos_rng[2] and
+                        spos_rng[1] <= cspos["y"] <= spos_rng[3]):
                     logging.error("Drift of %s px caused acquisition region out "
                                   "of bounds: needed to scan spot at %s.",
                                   drift_shift, cspos)
-                    cspos = (min(max(spos_rng[0], cspos[0]), spos_rng[2]),
-                             min(max(spos_rng[1], cspos[1]), spos_rng[3]))
+                    cspos = {"x": min(max(spos_rng[0], cspos["x"]), spos_rng[2]),
+                             "y": min(max(spos_rng[1], cspos["y"]), spos_rng[3])}
                 logging.debug("Scan stage pos: %s (including drift of %s)", cspos, drift_shift)
-                f = sstage.moveAbs({"x": cspos[0], "y": cspos[1]})
+
+                # Remove unneeded moves, to not lose time with the actuator doing actually (almost) nothing
+                for a, p in cspos.items():
+                    if prev_spos[a] == p:
+                        del cspos[a]
+                f = sstage.moveAbs(cspos)
                 f.result()
+                prev_spos.update(cspos)
                 self._acq_min_date = time.time()
 
                 failures = 0  # Keep track of synchronizing failures
@@ -1077,6 +1085,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                         # Move back to orig pos, to not compensate for the scan stage move
                         f = sstage.moveAbs(orig_spos)
                         f.result()
+                        prev_spos.update(orig_spos)
                         # TODO: if it's not too far, acquire anchor area without
                         # moving back, by compensating the current shift with
                         # e-beam translation.
