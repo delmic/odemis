@@ -4,7 +4,7 @@ SPARC2: {
     class: Microscope,
     role: sparc2,
     children: ["SEM Detector", "Calibration Light",
-               "Optical Path Properties", "Scanner", "Spectrometer Vis-NIR",
+               "Optical Path Properties", "SEM E-beam full", "Spectrometer Vis-NIR",
                "Camera", "Spectrometer IR", "CL Detector",
                "Spec Filter Wheel", "Spec CCD Flipper", "Spectrograph focus",
                "Mirror Actuators", "Mirror Actuators in XY referential",
@@ -61,12 +61,18 @@ SPARC2: {
        detector1: "CL PMT",
     }
 }
-
-"Scanner": {
+# Merges the scan interface e-beam and the e-beam control (via API)
+"SEM E-beam full": {
     class: scanner.CompositedScanner,
     role: e-beam,
-    children: {external: "SEM E-beam", internal: "EBeam ExtXY"},
+    children: {external: "SEM E-beam", internal: "EBeam control"},
     init: {},
+    properties: {
+        scale: [8, 8], # (ratio) : start with a pretty fast scan
+        dwellTime: 10.e-6, # s
+        horizontalFoV: 1.e-3, # m
+    },
+    affects: ["SEM Detector", "Spectrometer IR", "Camera"] # affects the CCD in case of cathodoluminescence
 }
 
 # Connect:
@@ -74,8 +80,9 @@ SPARC2: {
 # Y -> AO 1
 # Ground -> AO GND
 "SEM E-beam": {
-    # Internal child of SEM ExtXY, so no class
-    role: e-beam,
+    # Internal child of SEM Scan Interface, so no class
+    creator: "SEM Scan Interface",
+    role: null,
     init: {
         channels: [1, 0],
         limits: [[0, 5], [0, 5]],  # V
@@ -83,13 +90,6 @@ SPARC2: {
         settle_time: 5.e-6, # s
         hfw_nomag: 0.25, # m
     },
-    creator: "SEM Scan Interface",
-    properties: {
-        scale: [8, 8], # (ratio) : start with a pretty fast scan
-        dwellTime: 10.e-6, # s
-        magnification: 100, # (ratio)
-    },
-    affects: ["SEM Detector", "Spectrometer IR", "Camera"] # affects the CCD in case of cathodoluminescence
 }
 
 # Must be connected on AI 0/AI GND
@@ -102,31 +102,32 @@ SPARC2: {
     },
 }
 
-"SEM ExtXY": {
+"SEM via API": {
     class: simsem.SimSEM,
     role: null,
     init: {
            image: "simsem-fake-output.h5", # any large 16 bit image is fine
            drift_period: 5, # seconds
     },
-    children: {scanner: "EBeam ExtXY",
-               detector0: "SED ExtXY",
+    children: {scanner: "EBeam control",
+               detector0: "SED via API",
                focus: "EBeam Focus",
     }
 }
 
-"EBeam ExtXY": {
+"EBeam control": {
     # Internal child of SimSEM, so no class
     role: null,
     init: {},
-    creator: "SEM ExtXY",
+    creator: "SEM via API",
     properties: {
         dwellTime: 10.e-6, # s
     },
     affects: ["SEM Detector", "Angular Camera"] # affects the CCD in case of cathodoluminescence
 }
 
-"SED ExtXY": { # aka ETD
+# Not used
+"SED via API": {
     # Internal child of SimSEM, so no class
     role: null,
     init: {},
@@ -440,7 +441,7 @@ SPARC2: {
 "Scan Stage": {
     class: simulated.Stage,
     role: scan-stage,
-    affects: ["Camera", "Spectral Camera", "Spectrometer", "CL Detector"],
+    affects: ["Camera", "Spectral Camera", "Spectrometer", "CL Detector", "SEM E-beam full"],
     init: {
         axes: [x, y],
         ranges: {
@@ -464,5 +465,5 @@ SPARC2: {
             "y": [-10.e-3, 10.e-3],
         },
     },
-    affects: ["Camera", "Spectral Camera", "Spectrometer", "CL Detector"],
+    affects: ["Camera", "Spectral Camera", "Spectrometer", "CL Detector", "SEM E-beam full"],
 }
