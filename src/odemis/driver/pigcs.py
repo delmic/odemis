@@ -1435,6 +1435,8 @@ class CLAbsController(Controller):
     def __init__(self, busacc, address=None, axes=None):
         super(CLAbsController, self).__init__(busacc, address, axes)
         self._upm = {} # ratio to convert values in user units to meters
+        # For _getPositionCached()
+        self._lastpos = {}  # axis (int) -> (pos (float), timestamp (float))
 
         # It's pretty much required to reference the axes, and fast and
         # normally not dangerous (travel range is very small).
@@ -1472,6 +1474,7 @@ class CLAbsController(Controller):
             # Start the closed loop
             self.SetServo(a, True)
 
+            self._lastpos[a] = (None, 0)  # Looong time ago not read
             # Movement range before referencing is max range in both directions
             self.pos_rng[a] = (self.GetMinPosition(a) * self._upm[a],
                                self.GetMaxPosition(a) * self._upm[a])
@@ -1484,64 +1487,61 @@ class CLAbsController(Controller):
             self._accel[a] = self._speed[a]  # m/s²
             # self._accel[a] = self.GetCLAcceleration(a) * self._upm[a]  # m/s²
 
+            # TODO: sometimes (mostly after autozero) the axis position might
+            # be slightly outside of the range, which tends to confuse the clients.
+            # => move to the closest allowed position automatically?
+
     def moveRel(self, axis, distance):
         """
         See Controller.moveRel
         """
         assert(axis in self._channels)
 
-        # The controller is normally ready. The only case it's is not ready is
-        # when switching the servo/encoder, but that should be already taken
-        # care by startEncoder().
-        for i in range(100):
-            if self.IsReady():
-                break
-            logging.debug("Controller not yet ready, waiting a bit more")
-            time.sleep(0.01)
-        else:
-            logging.warning("Controller indicates it's still not ready, but will not wait any longer")
-
         # self._updateSpeedAccel(axis)
         # We trust the caller that it knows it's in range
         # (worst case the hardware will not go further)
         self.MoveRel(axis, distance / self._upm[axis])
         self.checkError()
+        self._lastpos[axis] = (None, 0)
         return distance
 
     def moveAbs(self, axis, position):
         """
         See Controller.moveAbs
         """
+        # TODO: support multiple axes to reduce init latency?
         assert(axis in self._channels)
-
-        # The controller is normally ready. The only case it's is not ready is
-        # when switching the servo/encoder, but that should be already taken
-        # care by startEncoder().
-        for i in range(100):
-            if self.IsReady():
-                break
-            logging.debug("Controller not yet ready, waiting a bit more")
-            time.sleep(0.01)
-        else:
-            logging.warning("Controller indicates it's still not ready, but will not wait any longer")
 
         # TODO
         # self._updateSpeedAccel(axis)
         # We trust the caller that it knows it's in range
         # (worst case the hardware will not go further)
-        old_pos = self.GetPosition(axis) * self._upm[axis]
-        distance = position - old_pos
+        old_pos = self.getPosition(axis, maxage=1)  # It's just a rough estimation anyway
 
         self.MoveAbs(axis, position / self._upm[axis])
         self.checkError()
+
+        distance = position - old_pos
+        self._lastpos[axis] = (None, 0)
         return distance
 
-    def getPosition(self, axis):
+    def getPosition(self, axis, maxage=0):
         """
         Find current position as reported by the sensor
+        axis (int)
+        maxage (0 < float): maximum time (in s) since last reading before the
+          position will be re-read from the hardware.
         return (float): the current position of the given axis
         """
-        return self.GetPosition(axis) * self._upm[axis]
+        # Use cached info if it's not too old
+        if maxage > 0:
+            pos, ts = self._lastpos[axis]
+            if time.time() - ts < maxage:
+                return pos
+
+        pos = self.GetPosition(axis) * self._upm[axis]
+        self._lastpos[axis] = (pos, time.time())
+        return pos
 
     # Warning: if the settling window is too small or settling time too big,
     # it might take several seconds to reach target (or even never reach it)
@@ -2399,8 +2399,6 @@ class Bus(model.Actuator):
         min_dist (dict string -> (0 <= float < 1)): axis name -> value
         vpms (dict string -> (0 < float)): axis name -> value
         """
-        self.accesser = self._openPort(port, baudrate, _addresses)
-
         dist_to_steps = dist_to_steps or {}
         min_dist = min_dist or {}
         vmin = vmin or {}
@@ -2413,10 +2411,10 @@ class Bus(model.Actuator):
         for axis, (add, channel, isCL) in axes.items():
             if add not in controllers:
                 controllers[add] = {"axes": {}}
-            elif channel in controllers[add]:
-                raise ValueError("Cannot associate multiple axes to controller %d:%d" % (add, channel))
-            ac_to_axis[(add, channel)] = axis
             kwc = controllers[add]
+            if channel in kwc["axes"]:
+                raise ValueError("Multiple axes got assigned to controller %d channel %d" % (add, channel))
+            ac_to_axis[(add, channel)] = axis
             kwc["axes"].update({channel: isCL})
             # FIXME: for now we rely on the fact 1 axis = 1 controller for the calibration values
             if axis in dist_to_steps:
@@ -2430,6 +2428,14 @@ class Bus(model.Actuator):
             if axis in auto_suspend:
                 kwc["auto_suspend"] = auto_suspend[axis]
 
+        # Special support for no address
+        if len(controllers) == 1 and None in controllers:
+            master = None
+        else:
+            master = 254  # Standard value for IPAccesser with multiple controllers
+
+        self.accesser = self._openPort(port, baudrate, _addresses, master=master)
+
         # Init each controller
         self._axis_to_cc = {} # axis name => (Controller, channel)
         axes_def = {} # axis name => axis definition
@@ -2440,10 +2446,10 @@ class Bus(model.Actuator):
             try:
                 controller = Controller(self.accesser, address, **kwc)
             except IOError:
-                logging.exception("Failed to find a controller with address %d on %s", address, port)
+                logging.exception("Failed to find a controller with address %s on %s", address, port)
                 raise
             except LookupError:
-                logging.exception("Failed to initialise controller %d on %s", address, port)
+                logging.exception("Failed to initialise controller %s on %s", address, port)
                 raise
             channels = kwc["axes"]
             for c, isCL in channels.items():
@@ -2972,6 +2978,9 @@ class Bus(model.Actuator):
             raise model.HwError("Failed to connect to '%s:%d', check the master "
                                 "controller is connected to the network, turned "
                                 " on, and correctly configured." % (host, port))
+        except socket.error:
+            raise model.HwError("Failed to connect to '%s:%d', check the master "
+                                "controller is not already in use." % (host, port))
         sock.settimeout(1.0) # s
         return sock
 
