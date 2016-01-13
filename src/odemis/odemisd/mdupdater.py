@@ -134,8 +134,7 @@ class MetadataUpdater(model.Component):
                           comp.name, x, y)
             comp.updateMetadata(md)
 
-        stage.position.subscribe(updateStagePos)
-        updateStagePos(stage.position.value)
+        stage.position.subscribe(updateStagePos, init=True)
         self._onTerminate.append((stage.position.unsubscribe, (updateStagePos,)))
 
     def observeLens(self, lens, comp):
