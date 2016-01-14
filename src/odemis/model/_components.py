@@ -752,6 +752,13 @@ class Actuator(HwComponent):
         """
         pass
 
+    def moveRelSync(self, shift):
+        """
+        Synchronised version of moveRel(). Same behaviour, but will be slightly
+         quicker to return at the end of the move (saves ~ 20 ms).
+        """
+        return self.moveRel(shift).result()
+
     @abstractmethod
     @isasync
     def moveAbs(self, pos):
@@ -762,6 +769,15 @@ class Actuator(HwComponent):
         returns (Future): object to control the move request
         """
         pass
+
+    def moveAbsSync(self, pos):
+        """
+        Synchronised version of moveAbs(). Same behaviour, but will be slightly
+         quicker to return at the end of the move (saves ~ 20 ms).
+        """
+        # We save time compared to the client because it avoids network latency
+        # caused by the future callback.
+        return self.moveAbs(pos).result()
 
     # If the actuator has .referenced, it must also override this method
     @isasync
