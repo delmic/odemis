@@ -1223,6 +1223,7 @@ class BarPlotCanvas(canvas.PlotCanvas):
         self.val_y.value = None
         self.markline_overlay.clear_labels()
         self.markline_overlay.deactivate()
+        self.curve_overlay.clear_labels()
         self.curve_overlay.deactivate()
         wx.CallAfter(self.update_drawing)
 
