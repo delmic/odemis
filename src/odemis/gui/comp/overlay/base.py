@@ -311,11 +311,17 @@ class Overlay(object):
             l.render_pos = (x, y)
             l.text_size = (lw, lh)
 
+        # Take care of newline characters
+        parts = l.text.split("\n")
+
         # Draw Shadow
         if l.colour:
             ctx.set_source_rgba(0.0, 0.0, 0.0, 0.7 * l.opacity)
-            ctx.move_to(x + 1, y + 1)
-            ctx.show_text(l.text)
+            ofst = 0
+            for part in parts:
+                ctx.move_to(x + 1, y + 1 + ofst)
+                ofst += 12
+                ctx.show_text(part)
 
         # Draw Text
         if l.colour:
@@ -324,8 +330,11 @@ class Overlay(object):
             else:
                 ctx.set_source_rgba(*l.colour)
 
-        ctx.move_to(x, y)
-        ctx.show_text(l.text)
+        ofst = 0
+        for part in parts:
+            ctx.move_to(x, y + ofst)
+            ofst += 12
+            ctx.show_text(part)
 
         ctx.restore()
 
