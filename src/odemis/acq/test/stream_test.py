@@ -21,7 +21,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Test module for model.Stream classes
 from __future__ import division
 
-from concurrent.futures._base import CancelledError
 import logging
 import math
 import numpy
@@ -37,10 +36,8 @@ import unittest
 from unittest.case import skip
 
 
-# logging.basicConfig(format=" - %(levelname)s \t%(message)s")
+logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
 logging.getLogger().setLevel(logging.DEBUG)
-# _frm = "%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s"
-# logging.getLogger().handlers[0].setFormatter(logging.Formatter(_frm))
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 SECOM_CONFIG = CONFIG_PATH + "sim/secom-sim.odm.yaml"
@@ -1381,10 +1378,6 @@ class SPARC2TestCase(unittest.TestCase):
         # Wait a bit and cancel
         time.sleep(estt / 2)
         f.cancel()
-        try:
-            f.result()
-        except CancelledError:
-            pass
         time.sleep(0.1)
 
         # Check the stage is back to top-left

@@ -281,6 +281,9 @@ class MultipleDetectorStream(Stream):
         # set the events, so the acq thread doesn't wait for them
         self._acq_rep_complete.set()
         self._acq_main_complete.set()
+
+        # Wait for the thread to be complete (and hardware state restored)
+        self._acq_done.wait(5)
         return True
 
     @abstractmethod
@@ -733,7 +736,17 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     start = time.time()
                     ccd_trigger.notify()
 
-                    timedout = not self._acq_rep_complete.wait(rep_time * 4 + 5)
+                    # A big timeout in the wait can cause up to 50 ms latency.
+                    # => after waiting the expected time only do small waits
+                    endt = start + rep_time * 4 + 5
+                    timedout = not self._acq_rep_complete.wait(rep_time + 0.01)
+                    if timedout:
+                        logging.debug("Waiting more for rep")
+                        while time.time() < endt:
+                            timedout = not self._acq_rep_complete.wait(0.005)
+                            if not timedout:
+                                break
+
                     if self._acq_state == CANCELLED:
                         raise CancelledError()
 
@@ -1000,21 +1013,36 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 for a, p in cspos.items():
                     if prev_spos[a] == p:
                         del cspos[a]
-                f = sstage.moveAbs(cspos)
-                f.result()
+
+                sstage.moveAbsSync(cspos)
                 prev_spos.update(cspos)
+                logging.debug("Got stage synchronisation")
                 self._acq_min_date = time.time()
 
                 failures = 0  # Keep track of synchronizing failures
                 while True:
                     self._acq_main_complete.clear()
                     self._acq_rep_complete.clear()
+                    if self._acq_state == CANCELLED:
+                        raise CancelledError()
+
                     self._main_df.subscribe(self._onMainImage)
                     time.sleep(0)  # give more chances spot has been already processed
                     start = time.time()
                     ccd_trigger.notify()
 
-                    timedout = not self._acq_rep_complete.wait(rep_time * 4 + 5)
+                    # A big timeout in the wait can cause up to 50 ms latency.
+                    # => after waiting the expected time only do small waits
+                    endt = start + rep_time * 4 + 5
+                    timedout = not self._acq_rep_complete.wait(rep_time + 0.01)
+                    if timedout:
+                        logging.debug("Waiting more for rep")
+                        while time.time() < endt:
+                            timedout = not self._acq_rep_complete.wait(0.005)
+                            if not timedout:
+                                break
+                    logging.debug("Got rep synchronisation")
+
                     if self._acq_state == CANCELLED:
                         raise CancelledError()
 
@@ -1055,6 +1083,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     if not self._acq_main_complete.wait(sem_time * 1.5 + 5):
                         raise TimeoutError("Acquisition of SEM pixel %s timed out after %g s"
                                            % (i, sem_time * 1.5 + 5))
+                    logging.debug("Got main synchronisation")
                     self._main_df.unsubscribe(self._onMainImage)
 
                     if self._acq_state == CANCELLED:
@@ -1148,12 +1177,11 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 saxes = sstage.axes
                 pos0 = {"x": sum(saxes["x"].range) / 2,
                         "y": sum(saxes["y"].range) / 2}
-                f = sstage.moveAbs(pos0)
+                sstage.moveAbs(pos0).result()
 
             self._main_stream._unlinkHwVAs()
             self._rep_stream._unlinkHwVAs()
             del self._main_data  # regain a bit of memory
-            f.result()
             self._acq_done.set()
 
 
