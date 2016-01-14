@@ -2545,7 +2545,7 @@ class Bus(model.Actuator):
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1) # one task at a time
 
-    def _updatePosition(self, axes=None, notify=True):
+    def _updatePosition(self, axes=None):
         """
         update the position VA
         axes (None or set of str): the axes to update (None indicates all of them)
@@ -2561,14 +2561,11 @@ class Bus(model.Actuator):
                 npos[a] = controller.getPosition(channel)
 
         pos.update(self._applyInversion(npos))
+        logging.debug("Reporting new position at %s", pos)
 
         # it's read-only, so we change it via _value
         self.position._value = pos
-        if notify:
-            logging.debug("Reporting new position at %s", pos)
-            self.position.notify(self.position.value)
-        else:
-            logging.debug("Updating new position at %s", pos)
+        self.position.notify(self.position.value)
 
     def _setSpeed(self, value):
         """
@@ -2794,7 +2791,7 @@ class Bus(model.Actuator):
         except Exception:
             raise
         finally:
-            self._updatePosition(last_axes, notify=False)
+            self._updatePosition(last_axes)
             # TODO: this takes quite some time, which increases latency for
             # the caller to know the move is done => only update the last axes
             # moving (and don't notify the VA) and update the rest of axes in a
