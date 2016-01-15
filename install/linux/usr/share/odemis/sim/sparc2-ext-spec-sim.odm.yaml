@@ -286,7 +286,7 @@ SPARC2: {
     role: "fiber-aligner",
     children: {"x": "Optical Actuators", "y": "Optical Actuators"},
     init: {
-        axes_map: {"x": "spec-sel", "y": "fiby"}
+        axes_map: {"x": "spec-sel", "y": "fiby"},
     },
     affects: ["Camera", "Integrated Spectrometer", "Spectral Camera", "Dedicated Spectrometer"],
 }
