@@ -32,7 +32,7 @@ from odemis.acq import stream
 from odemis.acq.stream import UNDEFINED_ROI, EMStream
 from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
 from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS, BitmapCanvas
-from odemis.gui.comp.overlay.view import HistoryOverlay, PointSelectOverlay, MarkingLineOverlay
+from odemis.gui.comp.overlay.view import HistoryOverlay, PointSelectOverlay, MarkingLineOverlay, CurveOverlay
 from odemis.gui.util import wxlimit_invocation, ignore_dead, img
 from odemis.gui.util.img import format_rgba_darray
 from odemis.model import VigilantAttributeBase
@@ -1195,7 +1195,13 @@ class BarPlotCanvas(canvas.PlotCanvas):
         self.add_view_overlay(self.markline_overlay)
         self.markline_overlay.activate()
 
-    def set_data(self, data, unit_x=None, unit_y=None, range_x=None, range_y=None):
+        self.curve_overlay = view_overlay.CurveOverlay(
+            self,
+            orientation=CurveOverlay.HORIZONTAL | CurveOverlay.VERTICAL)
+        self.add_view_overlay(self.curve_overlay)
+        self.curve_overlay.activate()
+
+    def set_data(self, data, unit_x=None, unit_y=None, range_x=None, range_y=None, peaks=None):
         """ Subscribe to the x position of the overlay when data is loaded """
 
         super(BarPlotCanvas, self).set_data(data, unit_x, unit_y, range_x, range_y)
@@ -1207,12 +1213,18 @@ class BarPlotCanvas(canvas.PlotCanvas):
             self.markline_overlay.v_pos.unsubscribe(self._map_to_plot_values)
             self.markline_overlay.deactivate()
 
+        if peaks is not None:
+            self.curve_overlay.set_peaks(peaks)
+            self.curve_overlay.set_range([i[0] for i in data])
+
     def clear(self):
         super(BarPlotCanvas, self).clear()
         self.val_x.value = None
         self.val_y.value = None
         self.markline_overlay.clear_labels()
         self.markline_overlay.deactivate()
+        self.curve_overlay.clear_labels()
+        self.curve_overlay.deactivate()
         wx.CallAfter(self.update_drawing)
 
     # Event handlers
@@ -1223,6 +1235,7 @@ class BarPlotCanvas(canvas.PlotCanvas):
         if None not in (self.val_x.value, self.val_y.value):
             pos = (self._val_x_to_pos_x(self.val_x.value), self._val_y_to_pos_y(self.val_y.value))
             self.markline_overlay.set_position(pos)
+            self.curve_overlay.set_position(pos)
 
     def _map_to_plot_values(self, v_pos):
         """ Calculate the x and y *values* belonging to the x pixel position """
@@ -1237,6 +1250,7 @@ class BarPlotCanvas(canvas.PlotCanvas):
 
         pos = (v_posx, self._val_y_to_pos_y(self.val_y.value, self.data_prop[2], self.data_prop[3]))
         self.markline_overlay.set_position(pos)
+        self.curve_overlay.set_position(pos)
 
         self.markline_overlay.x_label = units.readable_str(self.val_x.value, self.unit_x, 3)
         self.markline_overlay.y_label = units.readable_str(self.val_y.value, self.unit_y, 3)

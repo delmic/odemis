@@ -38,7 +38,7 @@ from odemis.gui.model import CHAMBER_VACUUM, CHAMBER_UNKNOWN
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.raster import rasterize_line
 from odemis.model import NotApplicableError
-from odemis.util import units, spectrum
+from odemis.util import units, spectrum, peak
 import wx
 
 
@@ -909,7 +909,10 @@ class PointSpectrumViewport(PlotViewport):
         spectrum_range = self.stream.get_spectrum_range()
         unit_x = self.stream.spectrumBandwidth.unit
 
-        self.canvas.set_1d_data(spectrum_range, data, unit_x)
+        f = peak.Fit(data, spectrum_range)
+        peak_data = f.result()
+
+        self.canvas.set_1d_data(spectrum_range, data, unit_x, peaks=peak_data)
 
         self.bottom_legend.unit = unit_x
         self.bottom_legend.range = (spectrum_range[0], spectrum_range[-1])
