@@ -320,7 +320,7 @@ class Overlay(object):
             ofst = 0
             for part in parts:
                 ctx.move_to(x + 1, y + 1 + ofst)
-                ofst += 12
+                ofst += l.font_size
                 ctx.show_text(part)
 
         # Draw Text
@@ -333,7 +333,7 @@ class Overlay(object):
         ofst = 0
         for part in parts:
             ctx.move_to(x, y + ofst)
-            ofst += 12
+            ofst += l.font_size
             ctx.show_text(part)
 
         ctx.restore()
