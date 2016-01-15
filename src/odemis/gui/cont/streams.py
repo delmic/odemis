@@ -1803,7 +1803,7 @@ class SparcStreamsController(StreamBarController):
                                                 sem_stream, ar_stream)
 
         return self._addRepStream(ar_stream, sem_ar_stream,
-                                  vas=("repetition", "pixelSize"),
+                                  vas=("repetition", "pixelSize", "fuzzing"),
                                   axes={"band": main_data.light_filter}
                                   )
 
@@ -1877,13 +1877,21 @@ class SparcStreamsController(StreamBarController):
         sem_spec_stream = acqstream.SEMSpectrumMDStream("SEM " + name,
                                                         sem_stream, spec_stream)
 
-        # No light filter for the spectrum stream: typically useless
+        axes = {"wavelength": spg,
+                "grating": spg,
+                "slit-in": spg,
+               }
+
+        # Also add light filter for the spectrum stream if it affects the detector
+        for fw in (main_data.cl_filter, main_data.light_filter):
+            if fw is None:
+                continue
+            if detector.name in fw.affects.value:
+                axes["band"] = fw
+
         return self._addRepStream(spec_stream, sem_spec_stream,
                                   vas=("repetition", "pixelSize", "fuzzing"),
-                                  axes={"wavelength": spg,
-                                        "grating": spg,
-                                        "slit-in": spg,
-                                        },
+                                  axes=axes,
                                   )
 
     def addMonochromator(self):
