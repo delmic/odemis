@@ -104,6 +104,7 @@ class MainGUIData(object):
         "ebic-detector": "ebic",
         "cl-detector": "cld",
         "spectrometer": "spectrometer",
+        "spectrometer-integrated": "spectrometer_int",
         "spectrograph": "spectrograph",
         "spectrograph-dedicated": "spectrograph_ded",
         "monochromator": "monochromator",
@@ -163,6 +164,7 @@ class MainGUIData(object):
         self.ebic = None  # electron beam-induced current detector
         self.cld = None  # cathodoluminescnence detector (aka PMT)
         self.spectrometer = None  # 1D detector that returns a spectrum
+        self.spectrometer_int = None  # second spectrometer (SPARCv2)
         self.spectrograph = None  # actuator to change the wavelength
         self.spectrograph_ded = None  # second external spectrograph dedicated (SPARCv2)
         self.monochromator = None  # 0D detector behind the spectrograph

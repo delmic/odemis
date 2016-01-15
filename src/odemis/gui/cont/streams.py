@@ -1625,12 +1625,20 @@ class SparcStreamsController(StreamBarController):
             self.add_action("CL intensity", self.addCLIntensity)
         if main_data.ccd:
             self.add_action("Angle-resolved", self.addAR)
+
         # On the SPARCv2, there is potentially 4 different ways to acquire a
         # spectrum: two spectrographs, with each two ports. In practice, there
         # are never more than 2 at the same time.
-        # TODO support adding both types, (by having spectrometer != spectrometer-dedicated)
-        if main_data.spectrometer:
-            self.add_action("Spectrum", self.addSpectrum)
+        sptms = [main_data.spectrometer, main_data.spectrometer_int]
+        sptms = [s for s in sptms if s is not None]
+        for sptm in sptms:
+            if len(sptms) == 1:
+                actname = "Spectrum"
+            else:
+                actname = "Spectrum with %s" % (sptm.name,)
+            act = functools.partial(self.addSpectrum, name=actname, detector=sptms[0])
+            self.add_action(actname, act)
+
         if main_data.monochromator:
             self.add_action("Monochromator", self.addMonochromator)
 
@@ -1837,24 +1845,36 @@ class SparcStreamsController(StreamBarController):
                                   play=False
                                   )
 
-    def addSpectrum(self):
-        """ Create a Spectrum stream and add to to all compatible viewports """
-
+    def addSpectrum(self, name=None, detector=None):
+        """
+        Create a Spectrum stream and add to to all compatible viewports
+        name (str or None): name of the stream to be created
+        detector (Detector or None): the spectrometer to use. If None, it will
+          use the one with "spectrometer" as role.
+        """
         main_data = self._main_data_model
-        spg = self._getAffectingSpectrograph(main_data.spectrometer)
+
+        if name is None:
+            name = "Spectrum"
+
+        if detector is None:
+            detector = main_data.spectrometer
+        logging.debug("Adding spectrum stream for %s", detector.name)
+
+        spg = self._getAffectingSpectrograph(detector)
         spec_stream = acqstream.SpectrumSettingsStream(
-            "Spectrum",
-            main_data.spectrometer,
-            main_data.spectrometer.data,
+            name,
+            detector,
+            detector.data,
             main_data.ebeam,
             sstage=main_data.scan_stage,
             # emtvas=get_local_vas(main_data.ebeam), # no need
-            detvas=get_local_vas(main_data.spectrometer),
+            detvas=get_local_vas(detector),
         )
 
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
-        sem_spec_stream = acqstream.SEMSpectrumMDStream("SEM Spectrum",
+        sem_spec_stream = acqstream.SEMSpectrumMDStream("SEM " + name,
                                                         sem_stream, spec_stream)
 
         # No light filter for the spectrum stream: typically useless
