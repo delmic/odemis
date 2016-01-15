@@ -4,8 +4,8 @@ SPARC2: {
     role: sparc2,
     children: ["SEM E-beam", "SEM Detector","Calibration Light", "Integrated Spectrograph",
                "Optical Path Properties", "Spectrometer Selector", "External Spectrograph",
-               "Camera", "Spectrometer", "Fiber align", "Spectral Camera",
-               "Spec CCD Flipper", "Spectrograph focus", 
+               "Camera", "Dedicated Spectrometer", "Fiber align", "Spectral Camera",
+               "Spec CCD Flipper", "Spectrograph focus", "Integrated Spectrometer",
                "Mirror Actuators", "Mirror Actuators in XY referential", "Slit",
                "Lens1 Mover", "Lens2 Switch"],
 }
@@ -77,7 +77,7 @@ SPARC2: {
         dwellTime: 10.e-6, # s
         magnification: 100, # (ratio)
     },
-    affects: ["SEM Detector", "Spectrometer", "Angular Camera"] # affects the CCD in case of cathodoluminescence
+    affects: ["SEM Detector", "Dedicated Spectrometer", "Angular Camera", "Integrated Spectrometer"] # affects the CCD in case of cathodoluminescence
 }
 
 # Must be connected on AI 0/AI GND
@@ -103,14 +103,17 @@ SPARC2: {
 }
 
 # Spectrometer 1 = Andor Zyla + Shamrock SR193 (connected via USB)
-#"Spectrometer": {
-#    class: spectrometer.CompositedSpectrometer,
-#    role: spectrometer,
-#    children: {detector: "Camera", spectrograph: "Integrated Spectrograph"},
-#    properties: {
-#        binning: [4, 256],
-#    },
-#}
+"Integrated Spectrometer": {
+    class: spectrometer.CompositedSpectrometer,
+    role: spectrometer-integrated,
+    children: {detector: "Camera", spectrograph: "Integrated Spectrograph"},
+    init: {
+        transp: [1, 2], # only applied to the spectrometer data (not raw CCD)
+    },
+    properties: {
+        binning: [4, 16],
+    },
+}
 
 "Integrated Spectrograph": {
     class: andorshrk.Shamrock,
@@ -125,7 +128,7 @@ SPARC2: {
         },
         fstepsize: 10.9e-6, # m, size of one focus step
     },
-    affects: ["Camera"],
+    affects: ["Camera", "Integrated Spectrometer"],
 }
 
 "Spectrograph focus": {
@@ -135,7 +138,7 @@ SPARC2: {
     init: {
         axes_map: {"z": "focus"},
     },
-    affects: ["Camera"],
+    affects: ["Camera", "Integrated Spectrometer"],
 }
 
 # Provide the mirror (aka port selector) of the spectrograph as a separate component
@@ -147,7 +150,7 @@ SPARC2: {
     init: {
         axis_name: "flip-out",
         positions: {
-            0: ["Camera"],
+            0: ["Camera", "Integrated Spectrometer"],
             1.5707963267948966: [],   # nothing connected
         },
     },
@@ -157,7 +160,7 @@ SPARC2: {
 
 # Spectrometer = Andor iDus + Shamrock SR303i (connected via USB)
 # Note that the SR193 could be used as a spectrometer too, but it's not needed, and that keeps things simple
-"Spectrometer": {
+"Dedicated Spectrometer": {
     class: spectrometer.CompositedSpectrometer,
     role: spectrometer,
     children: {detector: "Spectral Camera", spectrograph: "External Spectrograph"},
@@ -175,7 +178,7 @@ SPARC2: {
         slits: {1: "slit-in", # INPUT_SIDE
         },
     },
-    affects: ["Spectral Camera", "Spectrometer"],
+    affects: ["Spectral Camera", "Dedicated Spectrometer"],
 }
 
 # Dedicated camera for the acquisition of the spectra
@@ -207,7 +210,7 @@ SPARC2: {
        parabola_f: 2.5e-3,  # m, parabola_parameter=1/4f
        rotation: -1.570796326795, # rad, 90° rotation between optical axis and SEM Y axis
     },
-    affects: ["Camera", "Spectral Camera", "Spectrometer"]
+    affects: ["Camera", "Integrated Spectrometer", "Spectral Camera", "Dedicated Spectrometer"]
 }
 
 # Controller for the motors moving the various parts of the optical box
@@ -243,7 +246,7 @@ SPARC2: {
         # Default position of the lens (can be improved by user)
         FAV_POS_ACTIVE: {"x": -0.0045} # m
     },
-    affects: ["Camera", "Spectral Camera", "Spectrometer"],
+    affects: ["Camera", "Spectral Camera", "Dedicated Spectrometer"],
 }
 
 # The second lens of Plate 1, either to working or parking position
@@ -258,7 +261,7 @@ SPARC2: {
             -0.02: "off", # completely out of the path
         },
     },
-    affects: ["Camera", "Spectral Camera", "Spectrometer"],
+    affects: ["Camera", "Integrated Spectrometer", "Spectral Camera", "Dedicated Spectrometer"],
 }
 
 # Control the slit position to either fully-open or small (dependent on the spectrometer slit-in)
@@ -273,7 +276,7 @@ SPARC2: {
             0.0012: "off", # opening based on the small slit
         },
     },
-    affects: ["Camera"],
+    affects: ["Camera", "Integrated Spectrometer"],
 }
 
 # Note that the next two components actually move the _same_ axis!
@@ -285,7 +288,7 @@ SPARC2: {
     init: {
         axes_map: {"x": "spec-sel", "y": "fiby"}
     },
-    affects: ["Camera", "Spectral Camera", "Spectrometer"],
+    affects: ["Camera", "Integrated Spectrometer", "Spectral Camera", "Dedicated Spectrometer"],
 }
 
 # Mirror in Plate 2, selects between integrated spectrometer and external spectrometer
@@ -298,13 +301,13 @@ SPARC2: {
         ref_on_init: ["x"],
     },
     metadata: {
-        # Position of the mirror to select the external spectrometer (cagratn be improved by user)
+        # Position of the mirror to select the external spectrometer (can be improved by user)
         FAV_POS_ACTIVE: {"x": 0.026112848}, # m
-        FAV_POS_ACTIVE_DEST: {"Fiber align", "Spectrometer"},
+        FAV_POS_ACTIVE_DEST: ["Fiber align", "Dedicated Spectrometer"],
         FAV_POS_DEACTIVE: {"x": 0.022}, # m
-        FAV_POS_DEACTIVE_DEST: {"Spec CCD Flipper"}, # m
+        FAV_POS_DEACTIVE_DEST: ["Spec CCD Flipper"], # m
     },
-    affects: ["Camera", "Spectral Camera", "Spectrometer"],
+    affects: ["Camera", "Integrated Spectrometer", "Spectral Camera", "Dedicated Spectrometer"],
 }
 
 # Controller for moving the 'Redux' stage

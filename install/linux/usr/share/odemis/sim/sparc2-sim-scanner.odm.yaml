@@ -200,7 +200,7 @@ SPARC2: {
     role: spectrometer-integrated,
     children: {detector: "Camera", spectrograph: "Spectrograph"},
     init: {
-        transp: [1, -2], # only applied to the spectrometer data (not raw CCD)
+        transp: [-1, 2], # only applied to the spectrometer data (not raw CCD)
     },
 }
 
