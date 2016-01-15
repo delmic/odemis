@@ -556,7 +556,8 @@ class Controller(object):
         """
         # HLP? (Get List Of Available Commands), returns lines in such formats:
         # "HLP? - Get List Of Available Commands \n" or
-        # "HLP? Get List Of Available Commands \n"
+        # "HLP? Get List Of Available Commands \n" or
+        # "#24 - Stop All Motion \n"
         # first line sometimes starts with \x00
         lines = self._sendQueryCommand("HLP?\n")
         lines[0] = lines[0].lstrip("\x00")
@@ -570,6 +571,13 @@ class Controller(object):
                 if len(cd) != 2:
                     logging.debug("Line doesn't seem to be a command: '%s'", l)
                 else:
+                    cmd = cd[0]
+                    if cmd.startswith("#"):  # One character command
+                        try:
+                            cmd = int(cmd[1:])
+                        except ValueError:
+                            logging.info("Unexpected command %s", cmd)
+
                     cmds[cd[0]] = cd[1]
         return cmds
 
@@ -717,15 +725,23 @@ class Controller(object):
         # 1 => True, 0 => False
         return self._readAxisValue("TRS?", axis) == 1
 
-    def GetMotionStatus(self):
+    def GetMotionStatus(self, check=True):
         """
         returns (set of int): the set of moving axes
         Note: it seems the controller doesn't report moves when using OL via PID
+        raise PIGCSError if check is True and an error on a controller happened
         """
         # "\x05" (Request Motion Status)
         # hexadecimal number bitmap of which axis is moving => 0 if everything is stopped
         # Ex: 4 => 3rd axis moving
-        answer = self._sendQueryCommand("\x05")
+        if check:
+            errs, answer = self._sendQueryCommand(["ERR?\n", "\x05"])
+            err = int(errs)
+            if err:
+                raise PIGCSError(err)
+        else:
+            answer = self._sendQueryCommand("\x05")
+
         bitmap = int(answer, 16)
         # convert to a set
         i = 1
@@ -775,18 +791,33 @@ class Controller(object):
         # 1 => True, 0 => False
         return self._readAxisValue("FRF?", axis) == 1
 
-    def IsOnTarget(self, axis):
+    def IsOnTarget(self, axes, check=True):
         """
         Report whether the given axis is considered on target (for closed-loop
           moves only)
-        axis (1<int<16): axis number
+        axes (1<int<16): axis numbers
         returns (bool)
+        raise PIGCSError if check is True and an error on a controller happened
         """
         # ONT? (Get On Target State)
         # 1 => True, 0 => False
         # cf parameters 0x3F (settle time), and 0x4D (algo), 0x406 (window size)
         # 0x407 (window off size)
-        return self._readAxisValue("ONT?", axis) == 1
+        if check:
+            # TODO: change to a list
+            com = ["ERR?\n", "ONT? %d\n" % (axes,)]
+            lresp = self._sendQueryCommand(com)
+            err = int(lresp[0])
+            if err:
+                raise PIGCSError(err)
+            r = lresp[1]
+            ss = r.split("=")
+            if len(ss) != 2:
+                raise ValueError("Failed to parse answer from %s: '%s'" %
+                                 (com, lresp))
+            return (ss[1] == "1")
+        else:
+            return self._readAxisValue("ONT?", axes) == 1
 
     def GetErrorNum(self):
         """
@@ -1259,7 +1290,7 @@ class Controller(object):
         assert(axis in self._channels)
 
         # make sure that if a move finished early, we report the final position
-        if not self.isMoving(set([axis])):
+        if not self.isMoving({axis}):
             self._storeMoveComplete(axis)
 
         return self._interpolatePosition(axis)
@@ -1310,7 +1341,11 @@ class Controller(object):
         Indicate whether the motors are moving.
         axes (None or set of int): axes to check whether for move, or all if None
         return (boolean): True if at least one of the axes is moving, False otherwise
+        raise PIGCSError if an error on a controller happened
         """
+        # TODO: the interface is not useful, we typically want to know whether
+        # each axis is moving or not, so for now all the callers do one axis at
+        # a time => return a set(int) = axes moving? or just take one axis?
         if axes is None:
             axes = self._channels
         else:
@@ -1435,6 +1470,8 @@ class CLAbsController(Controller):
     def __init__(self, busacc, address=None, axes=None):
         super(CLAbsController, self).__init__(busacc, address, axes)
         self._upm = {} # ratio to convert values in user units to meters
+        # For _getPositionCached()
+        self._lastpos = {}  # axis (int) -> (pos (float), timestamp (float))
 
         # It's pretty much required to reference the axes, and fast and
         # normally not dangerous (travel range is very small).
@@ -1472,6 +1509,7 @@ class CLAbsController(Controller):
             # Start the closed loop
             self.SetServo(a, True)
 
+            self._lastpos[a] = (None, 0)  # Looong time ago not read
             # Movement range before referencing is max range in both directions
             self.pos_rng[a] = (self.GetMinPosition(a) * self._upm[a],
                                self.GetMaxPosition(a) * self._upm[a])
@@ -1480,9 +1518,19 @@ class CLAbsController(Controller):
             self._speed[a] = self.GetCLVelocity(a) * self._upm[a]  # m/s
             # TODO: get range from the parameters?
             self.speed_rng[a] = (10e-6, 1) # m/s (default large values)
-            # TODO ACC? Not supported?
-            self._accel[a] = self._speed[a]  # m/s²
+            # Doesn't support accel setting => just assume it's very high (to not wait too long for a move)
+            self._accel[a] = self._speed[a] * 1000  # m/s²
             # self._accel[a] = self.GetCLAcceleration(a) * self._upm[a]  # m/s²
+
+            # TODO: sometimes (mostly after autozero) the axis position might
+            # be slightly outside of the range, which tends to confuse the clients.
+            # => move to the closest allowed position automatically?
+    def terminate(self):
+        super(CLAbsController, self).terminate()
+
+        # Disable servo, to allow the user to move the axis manually
+        for a in self._channels:
+            self.SetServo(a, False)
 
     def moveRel(self, axis, distance):
         """
@@ -1490,69 +1538,61 @@ class CLAbsController(Controller):
         """
         assert(axis in self._channels)
 
-        # The controller is normally ready. The only case it's is not ready is
-        # when switching the servo/encoder, but that should be already taken
-        # care by startEncoder().
-        for i in range(100):
-            if self.IsReady():
-                break
-            logging.debug("Controller not yet ready, waiting a bit more")
-            time.sleep(0.01)
-        else:
-            logging.warning("Controller indicates it's still not ready, but will not wait any longer")
-
         # self._updateSpeedAccel(axis)
         # We trust the caller that it knows it's in range
         # (worst case the hardware will not go further)
         self.MoveRel(axis, distance / self._upm[axis])
         self.checkError()
+        self._lastpos[axis] = (None, 0)
         return distance
 
     def moveAbs(self, axis, position):
         """
         See Controller.moveAbs
         """
+        # TODO: support multiple axes to reduce init latency?
         assert(axis in self._channels)
-
-        # The controller is normally ready. The only case it's is not ready is
-        # when switching the servo/encoder, but that should be already taken
-        # care by startEncoder().
-        for i in range(100):
-            if self.IsReady():
-                break
-            logging.debug("Controller not yet ready, waiting a bit more")
-            time.sleep(0.01)
-        else:
-            logging.warning("Controller indicates it's still not ready, but will not wait any longer")
 
         # TODO
         # self._updateSpeedAccel(axis)
         # We trust the caller that it knows it's in range
         # (worst case the hardware will not go further)
-        old_pos = self.GetPosition(axis) * self._upm[axis]
-        distance = position - old_pos
+        old_pos = self.getPosition(axis, maxage=1)  # It's just a rough estimation anyway
 
         self.MoveAbs(axis, position / self._upm[axis])
         self.checkError()
+
+        distance = position - old_pos
+        self._lastpos[axis] = (None, 0)
         return distance
 
-    def getPosition(self, axis):
+    def getPosition(self, axis, maxage=0):
         """
         Find current position as reported by the sensor
+        axis (int)
+        maxage (0 < float): maximum time (in s) since last reading before the
+          position will be re-read from the hardware.
         return (float): the current position of the given axis
         """
-        return self.GetPosition(axis) * self._upm[axis]
+        # Use cached info if it's not too old
+        if maxage > 0:
+            pos, ts = self._lastpos[axis]
+            if time.time() - ts < maxage:
+                return pos
 
-    # Warning: if the settling window is too small or settling time too big,
-    # it might take several seconds to reach target (or even never reach it)
+        pos = self.GetPosition(axis) * self._upm[axis]
+        self._lastpos[axis] = (pos, time.time())
+        return pos
+
     def isMoving(self, axes=None):
         """
         Indicate whether the motors are moving (ie, last requested move is over)
         axes (None or set of int): axes to check whether for move, or all if None
         return (boolean): True if at least one of the axes is moving, False otherwise
+        raise PIGCSError: if there is an error with the controller
         """
         if axes is None:
-            axes = self._channels
+            axes = set(self._upm.keys())
         else:
             assert axes.issubset(self._channels)
 
@@ -1935,6 +1975,7 @@ class CLRelController(Controller):
         Indicate whether the motors are moving (ie, last requested move is over)
         axes (None or set of int): axes to check whether for move, or all if None
         return (boolean): True if at least one of the axes is moving, False otherwise
+        raise PIGCSError: if there is an error with the controller
         """
         if axes is None:
             axes = self._channels
@@ -2266,10 +2307,15 @@ class SMOController(Controller):
         """
         axis (1<int<16): axis number
         returns (boolean): True moving axes for the axes controlled via PID
+        raise PIGCSError if an error on a controller happened
         """
         # "SMO?" (Get Control Value)
         # Reports the speed set. If it's 0, it's not moving, otherwise, it is.
-        answer = self._sendQueryCommand("SMO? %d\n" % axis)
+        errs, answer = self._sendQueryCommand(["ERR?\n", "SMO? %d\n" % axis])
+        err = int(errs)
+        if err:
+            raise PIGCSError(err)
+
         value = answer.split("=")[1]
         if value == "0":
             return False
@@ -2355,7 +2401,7 @@ class SMOController(Controller):
         else:
             assert axes.issubset(self._channels)
 
-        for c in self._channels:
+        for c in axes:
             if self._isAxisMovingOLViaPID(c):
                 return True
         return False
@@ -2399,8 +2445,6 @@ class Bus(model.Actuator):
         min_dist (dict string -> (0 <= float < 1)): axis name -> value
         vpms (dict string -> (0 < float)): axis name -> value
         """
-        self.accesser = self._openPort(port, baudrate, _addresses)
-
         dist_to_steps = dist_to_steps or {}
         min_dist = min_dist or {}
         vmin = vmin or {}
@@ -2413,10 +2457,10 @@ class Bus(model.Actuator):
         for axis, (add, channel, isCL) in axes.items():
             if add not in controllers:
                 controllers[add] = {"axes": {}}
-            elif channel in controllers[add]:
-                raise ValueError("Cannot associate multiple axes to controller %d:%d" % (add, channel))
-            ac_to_axis[(add, channel)] = axis
             kwc = controllers[add]
+            if channel in kwc["axes"]:
+                raise ValueError("Multiple axes got assigned to controller %d channel %d" % (add, channel))
+            ac_to_axis[(add, channel)] = axis
             kwc["axes"].update({channel: isCL})
             # FIXME: for now we rely on the fact 1 axis = 1 controller for the calibration values
             if axis in dist_to_steps:
@@ -2430,6 +2474,14 @@ class Bus(model.Actuator):
             if axis in auto_suspend:
                 kwc["auto_suspend"] = auto_suspend[axis]
 
+        # Special support for no address
+        if len(controllers) == 1 and None in controllers:
+            master = None
+        else:
+            master = 254  # Standard value for IPAccesser with multiple controllers
+
+        self.accesser = self._openPort(port, baudrate, _addresses, master=master)
+
         # Init each controller
         self._axis_to_cc = {} # axis name => (Controller, channel)
         axes_def = {} # axis name => axis definition
@@ -2440,10 +2492,10 @@ class Bus(model.Actuator):
             try:
                 controller = Controller(self.accesser, address, **kwc)
             except IOError:
-                logging.exception("Failed to find a controller with address %d on %s", address, port)
+                logging.exception("Failed to find a controller with address %s on %s", address, port)
                 raise
             except LookupError:
-                logging.exception("Failed to initialise controller %d on %s", address, port)
+                logging.exception("Failed to initialise controller %s on %s", address, port)
                 raise
             channels = kwc["axes"]
             for c, isCL in channels.items():
@@ -2501,14 +2553,14 @@ class Bus(model.Actuator):
         if axes is None:
             pos = {}
         else:
-            # uses the current values (converted to internal representation)
-            pos = self._applyInversion(self.position.value)
+            pos = self.position._value.copy()
 
+        npos = {}
         for a, (controller, channel) in self._axis_to_cc.items():
             if axes is None or a in axes:
-                pos[a] = controller.getPosition(channel)
+                npos[a] = controller.getPosition(channel)
 
-        pos = self._applyInversion(pos)
+        pos.update(self._applyInversion(npos))
         logging.debug("Reporting new position at %s", pos)
 
         # it's read-only, so we change it via _value
@@ -2694,17 +2746,16 @@ class Bus(model.Actuator):
 
         last_upd = time.time()
         dur = max(0.01, min(end - last_upd, 60))
-        max_dur = dur * 2 + 1
+        max_dur = dur * 2 + 3
         timeout = last_upd + max_dur
         last_axes = moving_axes.copy()
         try:
             while not future._must_stop.is_set():
                 for an in moving_axes.copy():  # need copy to remove during iteration
                     controller, channel = self._axis_to_cc[an]
-                    # TODO: use the fact that isMoving can directly be asked about multiple channels
+                    # TODO: change isMoving to report separate info on multiple channels
                     if not controller.isMoving({channel}):
                         moving_axes.discard(an)
-                        controller.checkError()
                 if not moving_axes:
                     # no more axes to wait for
                     break
@@ -2739,13 +2790,16 @@ class Bus(model.Actuator):
                 raise CancelledError()
         except Exception:
             raise
-        else:
-            # Did everything really finished fine?
-            ctlrs = set(self._axis_to_cc[an][0] for an in moving_axes)
-            for controller in ctlrs:
-                controller.checkError()
         finally:
-            self._updatePosition()  # update (all axes) with final position
+            self._updatePosition(last_axes)
+            # TODO: this takes quite some time, which increases latency for
+            # the caller to know the move is done => only update the last axes
+            # moving (and don't notify the VA) and update the rest of axes in a
+            # separate thread
+            # self._updatePosition()  # update (all axes) with final position
+            other_axes = set(self._axis_to_cc.keys()) - last_axes
+            if other_axes:
+                threading.Thread(target=self._updatePosition, args=(other_axes,)).start()
 
     def _cancelCurrentMove(self, future):
         """
@@ -2972,7 +3026,12 @@ class Bus(model.Actuator):
             raise model.HwError("Failed to connect to '%s:%d', check the master "
                                 "controller is connected to the network, turned "
                                 " on, and correctly configured." % (host, port))
+        except socket.error:
+            raise model.HwError("Failed to connect to '%s:%d', check the master "
+                                "controller is not already in use." % (host, port))
         sock.settimeout(1.0) # s
+        # Immediately send the packet, as small as it is (to avoid latency)
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         return sock
 
 
@@ -3023,12 +3082,24 @@ class SerialBusAccesser(object):
            IOError: if error during the communication (such as the protocol is
               not respected)
         """
-        assert(len(com) <= 100) # commands can be quite long (with floats)
         assert(addr is None or 1 <= addr <= 16 or addr == 254)
-        if addr is None:
-            full_com = com
+
+        if isinstance(com, basestring):
+            com = [com]
+            multicom = False
         else:
-            full_com = "%d %s" % (addr, com)
+            multicom = True
+
+        for c in com:
+            assert(len(c) <= 100)  # commands can be quite long (with floats)
+
+        if addr is None:
+            full_com = "".join(com)
+            prefix = ""
+        else:
+            full_com = "".join("%d %s" % (addr, c) for c in com)
+            prefix = "0 %d " % addr
+
         with self.ser_access:
             logging.debug("Sending: '%s'", full_com.encode('string_escape'))
             self.serial.write(full_com)
@@ -3036,43 +3107,57 @@ class SerialBusAccesser(object):
             # ensure everything is received, before expecting an answer
             self.serial.flush()
 
-            char = self.serial.read() # empty if timeout
-            line = ""
-            lines = []
-            while char:
-                if char == "\n":
-                    if (line[-1:] == " " and  # multiline: "... \n"
-                        not re.match(r"0 \d+ $", line)):  # excepted empty line "0 1 \n"
-                        lines.append(line[:-1]) # don't include the space
-                        line = ""
+            ans = ""  # received data not yet processed
+            ret = []  # one answer per command
+            continuing = False
+            while True:
+                char = self.serial.read()  # empty if timeout
+                if not char:
+                    raise model.HwError("Controller %s timed out, check the device is "
+                                        "plugged in and turned on." % addr)
+                ans += char
+
+                anssplited = ans.split("\n")
+                # if finishing with \n last split is empty
+                ans = anssplited[-1]
+                anssplited = anssplited[:-1]
+
+                for l in anssplited:
+                    if not continuing:
+                        lines = []  # one string per answer line
+                        # remove the prefix
+                        if not l.startswith(prefix):
+                            logging.debug("Failed to decode answer '%s'", l.encode('string_escape'))
+                            raise IOError("Report prefix unexpected after '%s': '%s'." % (com, l))
+                        l = l[len(prefix):]
+                    if l[-1:] == " ":  # remove the spaces indicating multi-line
+                        continuing = True
+                        l = l[:-1]
+                        lines.append(l)
                     else:
-                        # full end
-                        lines.append(line)
-                        break
-                else:
-                    # normal char
-                    line += char
-                char = self.serial.read()
+                        # End of the answer for that command
+                        continuing = False
+                        lines.append(l)
+                        if len(lines) == 1:
+                            ret.append(lines[0])
+                        else:
+                            ret.append(lines)
 
-        if not char:
-            raise model.HwError("Controller %s timed out, check the device is "
-                                "plugged in and turned on." % addr)
+                # does it look like we received the end of an answer?
+                if not continuing and not ans and len(ret) >= len(com):
+                    break
 
-        assert len(lines) > 0
+        if len(ret) > len(com):
+            logging.warning("Skipping previous answers from hardware %r",
+                            ret[:-len(com)])
+            ret = ret[-len(com):]
+        elif len(ret) < len(com):
+            logging.error("Expected %d answers but only got %d", len(com), len(ret))
 
-        logging.debug("Received: '%s'", "\n".join(lines).encode('string_escape'))
-        if addr is None:
-            prefix = ""
+        if not multicom:
+            return ret[0]
         else:
-            prefix = "0 %d " % addr
-        if not lines[0].startswith(prefix):
-            raise IOError("Report prefix unexpected after '%s': '%s'." % (com, lines[0]))
-        lines[0] = lines[0][len(prefix):]
-
-        if len(lines) == 1:
-            return lines[0]
-        else:
-            return lines
+            return ret
 
     def flushInput(self):
         """
@@ -3146,16 +3231,23 @@ class IPBusAccesser(object):
            IOError: if error during the communication (such as the protocol is
               not respected)
         """
-        assert(len(com) <= 100) # commands can be quite long (with floats)
         assert(addr is None or 1 <= addr <= 16 or addr == 254)
-        if addr is None:
-            full_com = com
-            prefix = ""
-            prefixre = ""
+
+        if isinstance(com, basestring):
+            com = [com]
+            multicom = False
         else:
-            full_com = "%d %s" % (addr, com)
+            multicom = True
+
+        for c in com:
+            assert(len(c) <= 100)  # commands can be quite long (with floats)
+
+        if addr is None:
+            full_com = "".join(com)
+            prefix = ""
+        else:
+            full_com = "".join("%d %s" % (addr, c) for c in com)
             prefix = "0 %d " % addr
-            prefixre = r"0 \d+ "
 
         with self.ser_access:
             logging.debug("Sending: '%s'", full_com.encode('string_escape'))
@@ -3163,7 +3255,9 @@ class IPBusAccesser(object):
 
             # read the answer
             end_time = time.time() + 0.5
-            ans = ""
+            ans = ""  # received data not yet processed
+            ret = []  # one answer per command
+            continuing = False
             while True:
                 try:
                     data = self.socket.recv(4096)
@@ -3174,45 +3268,58 @@ class IPBusAccesser(object):
                 # immediately answer an empty message
                 if not data:
                     if time.time() > end_time:
-                        raise model.HwError("Master controller not answering. "
+                        raise model.HwError("Controller not answering. "
                                             "It might be already connected with another client.")
+                    else:
+                        logging.debug("Received empty data packet")
                     time.sleep(0.01)
                     continue
 
                 logging.debug("Received: '%s'", data.encode('string_escape'))
                 ans += data
+
+                anssplited = ans.split("\n")
+                # if finishing with \n last split is empty
+                ans = anssplited[-1]
+                anssplited = anssplited[:-1]
+
+                for l in anssplited:
+                    # logging.debug("Processing %s", l)
+                    if not continuing:
+                        lines = []  # one string per answer line
+                        # remove the prefix
+                        if not l.startswith(prefix):
+                            logging.debug("Failed to decode answer '%s'", l.encode('string_escape'))
+                            raise IOError("Report prefix unexpected after '%s': '%s'." % (com, l))
+                        l = l[len(prefix):]
+                    if l[-1:] == " ":  # remove the spaces indicating multi-line
+                        continuing = True
+                        l = l[:-1]
+                        lines.append(l)
+                    else:
+                        # End of the answer for that command
+                        continuing = False
+                        lines.append(l)
+                        if len(lines) == 1:
+                            ret.append(lines[0])
+                        else:
+                            ret.append(lines)
+
                 # does it look like we received the end of an answer?
-                # To be really sure we'd need to wait until timeout, but that
-                # would slow down a lot. Normally, if we've received one full
-                # answer, there's 99% chance we've received everything.
-                # An answer ends with \n (and not " \n", which indicates multi-
-                # line, excepted empty line "0 1 \n").
-                if (re.match(prefixre + r".*[^ ]\n", ans, re.DOTALL) or
-                    re.match(prefixre + r"$", ans)):
+                if not continuing and not ans and len(ret) >= len(com):
                     break
 
-        # remove the prefix and last newline
-        if not ans.startswith(prefix):
-            logging.debug("Failed to decode answer '%s'", ans.encode('string_escape'))
-            raise IOError("Report prefix unexpected after '%s': '%s'." % (com, ans))
-        ans = ans[len(prefix):-1]
+        if len(ret) > len(com):
+            logging.warning("Skipping previous answers from hardware %r",
+                            ret[:-len(com)])
+            ret = ret[-len(com):]
+        elif len(ret) < len(com):
+            logging.error("Expected %d answers but only got %d", len(com), len(ret))
 
-        # Interpret the answer
-        lines = []
-        for i, l in enumerate(ans.split("\n")):
-            if l[-1:] == " ": # remove the spaces indicating multi-line
-                l = l[:-1]
-            elif i != len(lines):
-                logging.warning("Skipping previous answer from hardware %s",
-                                "\n".join(lines + [l]).encode('string_escape'))
-                lines = []
-                continue
-            lines.append(l)
-
-        if len(lines) == 1:
-            return lines[0]
+        if not multicom:
+            return ret[0]
         else:
-            return lines
+            return ret
 
     def flushInput(self):
         """
@@ -3220,9 +3327,13 @@ class IPBusAccesser(object):
         """
         with self.ser_access:
             try:
+                end = time.time() + 1
                 while True:
                     data = self.socket.recv(4096)
                     logging.debug("Flushing data '%s'", data.encode('string_escape'))
+                    if time.time() > end:
+                        logging.warning("Still trying to flush data after 1 s")
+                        return
             except socket.timeout:
                 pass
             except Exception:

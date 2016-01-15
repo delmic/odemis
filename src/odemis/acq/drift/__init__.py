@@ -112,32 +112,35 @@ class AnchoredEstimator(object):
         cur_dwell_time = self._emitter.dwellTime.value
         cur_scale = self._emitter.scale.value
         cur_resolution = self._emitter.resolution.value
+        cur_trans = self._emitter.translation.value
 
-        self._updateSEMSettings()
-        logging.debug("E-beam spot to anchor region: %s",
-                      self._emitter.translation.value)
-        logging.debug("Scanning anchor region with resolution "
-                      "%s and dwelltime %s and scale %s",
-                      self._emitter.resolution.value,
-                      self._emitter.dwellTime.value,
-                      self._emitter.scale.value)
-        data = self._semd.data.get(asap=False)
-        if data.shape[::-1] != self._res:
-            logging.warning("Shape of data is %s instead of %s", data.shape[::-1], self._res)
+        try:
+            self._updateSEMSettings()
+            logging.debug("E-beam spot to anchor region: %s",
+                          self._emitter.translation.value)
+            logging.debug("Scanning anchor region with resolution "
+                          "%s and dwelltime %s and scale %s",
+                          self._emitter.resolution.value,
+                          self._emitter.dwellTime.value,
+                          self._emitter.scale.value)
+            data = self._semd.data.get(asap=False)
+            if data.shape[::-1] != self._res:
+                logging.warning("Shape of data is %s instead of %s", data.shape[::-1], self._res)
 
-        # TODO: allow to record just every Nth image, and separately record the
-        # drift after every measurement
-        # In the mean time, we only save the 1st, 2nd and last two images
-        if len(self.raw) > 2:
-            self.raw = self.raw[0:2] + self.raw[-1:]
-        else:
-            self.raw = self.raw[0:2]
-        self.raw.append(data)
-
-        # Restore SEM settings
-        self._emitter.dwellTime.value = cur_dwell_time
-        self._emitter.scale.value = cur_scale
-        self._emitter.resolution.value = cur_resolution
+            # TODO: allow to record just every Nth image, and separately record the
+            # drift after every measurement
+            # In the mean time, we only save the 1st, 2nd and last two images
+            if len(self.raw) > 2:
+                self.raw = self.raw[0:2] + self.raw[-1:]
+            else:
+                self.raw = self.raw[0:2]
+            self.raw.append(data)
+        finally:
+            # Restore SEM settings
+            self._emitter.dwellTime.value = cur_dwell_time
+            self._emitter.scale.value = cur_scale
+            self._emitter.resolution.value = cur_resolution
+            self._emitter.translation.value = cur_trans
 
     def estimate(self):
         """

@@ -772,9 +772,10 @@ class SparcAcquisitionTab(Tab):
         # add "Use scan stage" check box if scan_stage is present
         sstage = main_data.scan_stage
         if sstage:
-            # Move the scan stage to the top-left (so that scan has maximum range)
-            pos0 = {"x": sstage.axes["x"].range[0], "y": sstage.axes["y"].range[0]}
-            sstage.moveAbs(pos0)
+            # Move the scan stage to the center (so that scan has maximum range)
+            posc = {"x": sum(sstage.axes["x"].range) / 2,
+                    "y": sum(sstage.axes["y"].range) / 2}
+            sstage.moveAbs(posc)
 
             self.scan_stage_ent = sem_stream_cont.add_setting_entry(
                 "useScanStage",

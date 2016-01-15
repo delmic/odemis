@@ -463,8 +463,7 @@ class SparcAcquisitionGUIData(MicroscopyGUIData):
         self.spotPosition = model.TupleVA((None, None))
 
         # Whether to use a scan stage (if there is one)
-        hasScanStage = main.scan_stage is not None
-        self.useScanStage = model.BooleanVA(hasScanStage, readonly=not hasScanStage)
+        self.useScanStage = model.BooleanVA(False, readonly=(main.scan_stage is None))
 
 
 class ChamberGUIData(MicroscopyGUIData):

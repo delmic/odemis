@@ -59,22 +59,16 @@ class CompositedScanner(model.Emitter):
         self._internal = intnl
         self.children.value.add(intnl)
 
-        # Copy VAs from external
-        if model.hasVA(self._external, "pixelSize"):
-            self.pixelSize = self._external.pixelSize
-        if model.hasVA(self._external, "translation"):
-            self.translation = self._external.translation
-        if model.hasVA(self._external, "resolution"):
-            self.resolution = self._external.resolution
-        if model.hasVA(self._external, "scale"):
-            self.scale = self._external.scale
-        if model.hasVA(self._external, "rotation"):
-            self.rotation = self._external.rotation
-        if model.hasVA(self._external, "dwellTime"):
-            self.dwellTime = self._external.dwellTime
+        # Copy VAs directly related to scanning from external
         self._shape = self._external.shape
+        for vaname in ("pixelSize", "translation", "resolution", "scale",
+                       "rotation", "dwellTime"):
+            if model.hasVA(self._external, vaname):
+                va = getattr(self._external, vaname)
+                setattr(self, vaname, va)
 
-        # Copy VAs from internal
+        # Copy VAs for controlling the ebeam from internal
+        # horizontalFoV or magnification need a bit more cleverness
         if model.hasVA(self._internal, "horizontalFoV"):
             self.horizontalFoV = self._internal.horizontalFoV
             # Create read-only magnification VA
@@ -83,12 +77,12 @@ class CompositedScanner(model.Emitter):
             self.horizontalFoV.subscribe(self._updateMagnification, init=True)
         elif model.hasVA(self._external, "magnification"):
             self.magnification = self._external.magnification
-        if model.hasVA(self._internal, "accelVoltage"):
-            self.accelVoltage = self._internal.accelVoltage
-        if model.hasVA(self._internal, "power"):
-            self.power = self._internal.power
-        if model.hasVA(self._internal, "probeCurrent"):
-            self.probeCurrent = self._internal.probeCurrent
+
+        # TODO: just pick every VAs which are not yet on self?
+        for vaname in ("accelVoltage", "power", "probeCurrent"):
+            if model.hasVA(self._internal, vaname):
+                va = getattr(self._internal, vaname)
+                setattr(self, vaname, va)
 
     def _updateMagnification(self, hfw):
         new_mag = self._external.HFWNoMag / hfw
@@ -96,3 +90,11 @@ class CompositedScanner(model.Emitter):
         self.magnification.notify(new_mag)
         # Also update external magnification
         self._external.magnification.value = new_mag
+
+    # Share the metadata with the external, which is the one that will actually
+    # generate the data (with the metadata)
+    def updateMetadata(self, md):
+        self._external.updateMetadata(md)
+
+    def getMetadata(self):
+        return self._external.getMetadata()
