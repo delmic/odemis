@@ -1,0 +1,198 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+# Picks the microscope file fitting depending on the current hardware
+# Takes as arguments:
+#  --config <microscope file> IDs: the microscope file to run and (all) the IDs
+#   (EEPROM or USB) that should be present. Can be sepecified multiple times,
+#   the first matching is returned.
+#  --fallback <microscope file>: the microscope file to run if nothing else matches
+# Output is either:
+#  * name of the file to start, and returns 0
+#  * Error message on stderr, and returns >= 1
+# Example:
+# odemis-mic-selector.py --log-level 2 --config /usr/share/test-sun.yaml 238abe69010000c8 1bcf:2880 --config /usr/share/test-key.yaml 413c:2003 --fallback /usr/share/test-none.yaml
+
+
+from __future__ import division, print_function, absolute_import
+
+import argparse
+import logging
+import sys
+import subprocess
+import collections
+from odemis.util import driver
+from odemis.driver import powerctrl
+
+
+LSUSB_BIN = "/usr/bin/lsusb"
+
+TMCMCONFIG_BIN = "/usr/bin/tmcmconfig.py"
+
+CLASS_PCU = powerctrl.PowerControlUnit
+KWARGS_PCU = {"name": "pcu", "role": "pcu", "port": "/dev/ttyPMT*"}
+# KWARGS_PCU_TEST = {"name": "pcu", "role": "pcu", "port": "/dev/fake"}
+# KWARGS_PCU = KWARGS_PCU_TEST
+
+ConfigMatcher = collections.namedtuple("ConfigMatcher", ["file", "eeprom", "usb"])
+
+
+def count_usb_device(usbid):
+    """
+    usbid (str): vendor ID:product ID
+    return (int): number of USB devices connected 
+    """
+    cmd = [LSUSB_BIN, "-d", usbid]
+    logging.debug("Running command %s", cmd)
+    try:
+        out = subprocess.check_output(cmd)
+    except subprocess.CalledProcessError as ex:
+        if ex.returncode == 1 and not ex.output:
+            # Just no device
+            return 0
+        else:
+            raise ex
+    return out.count(usbid)
+
+
+def get_eeprom_ids():
+    """
+    return (set of int): ID of each EEPROM detected
+    """
+    # TODO: handle if the backend is already running
+    pcu = CLASS_PCU(**KWARGS_PCU)
+    ids = pcu.memoryIDs.value
+    pcu.terminate()
+    logging.debug("Found EEPROM IDs %s", ids)
+    iids = set(int(i, 16) for i in ids)
+    return iids
+
+
+def guess_hw(config):
+    """
+    Try to guess which hardware is present
+    config (list of ConfigMatcher)
+    return (ConfigMatcher): the first
+    """
+    try:
+        eids = get_eeprom_ids()  # If backend is running, it will fail
+    except Exception:
+        logging.warning("Failed to read EEPROM IDs, will pretend no ID is connected", exc_info=True)
+        eids = set()
+
+    for c in config:
+        if not c.eeprom <= eids:
+            logging.debug("Skipping config %s due to missing EEPROM ID", c.file)
+            continue
+
+        for uid in c.usb:
+            if count_usb_device(uid) < 1:
+                logging.debug("Skipping config %s due to missing USB ID %s", c.file, uid)
+                break
+        else:
+            return c
+
+    return None
+
+
+def update_tmcm(config, address):
+    """
+    Update the TMCM board EEPROM
+    config (str): path to the config file
+    address (int): address of the board
+    """
+    # Note: it's actually a python script, so we could also import it and do
+    # the right thing, but that's quite a little bit more
+    logging.info("Updating TMCM board...")
+    cmd = [TMCMCONFIG_BIN, "--write", config, "--address", "%d" % address]
+    logging.debug("Running command %s", cmd)
+    subprocess.check_call(cmd)
+    
+
+def main(args):
+    """
+    Handles the command line arguments
+    args is the list of arguments passed
+    return (int): value to return to the OS as program exit code
+    """
+
+    # arguments handling
+    parser = argparse.ArgumentParser(prog="odemis-mic-selector",
+                        description="Picks the right microscope file based on the hardware present")
+
+    parser.add_argument("--log-level", dest="loglev", metavar="<level>", type=int,
+                        default=1, help="set verbosity level (0-2, default = 1)")
+    parser.add_argument("--config", "-c", dest="config", nargs="+", action='append',
+                        required=True,
+                         metavar=("<configfile>"),  # , "[EEPROM ID]", "[USB:ID]"),
+                        help="Microscope file and EEPROM and/or USB IDs to select it (all of them must match)")
+    parser.add_argument("--fallback", "-f", dest="fallback", type=str,
+                        help="Microscope file to use if no hardware is detected")
+    # TODO: --tmcm?
+    #
+
+    options = parser.parse_args(args[1:])
+
+    # Set up logging before everything else
+    if options.loglev < 0:
+        logging.error("Log-level must be positive.")
+        return 127
+    loglev_names = (logging.WARNING, logging.INFO, logging.DEBUG)
+    loglev = loglev_names[min(len(loglev_names) - 1, options.loglev)]
+    logging.getLogger().setLevel(loglev)
+
+    # Parse the config arguments
+    config = []
+    for carg in options.config:
+        if len(carg) == 1:
+            raise ValueError("Config argument must at least have one ID specified, "
+                             "but got none for %s" (carg[0],))
+        c = ConfigMatcher(carg[0], set(), set())
+        for idc in carg[1:]:
+            if ":" in idc:  # USB
+                c.usb.add(idc)
+            else:  # Must be EEPROM ID then
+                # Convert IDs as hexadecimal to numbers
+                c.eeprom.add(int(idc, 16))
+        config.append(c)
+    try:
+        c = guess_hw(config)
+        if c is None:
+            if options.fallback:
+                logging.info("No hardware detected, will use fallback microscope file")
+                micf = options.fallback
+            else:
+                raise ValueError("No hardware fitting detected")
+        else:
+            micf = c.file
+#
+#         status = driver.get_backend_status()
+#         if status != driver.BACKEND_STOPPED:
+#             logging.warning("Cannot update TMCM as Odemis backend is already running")
+#             # Note: It cannot raise an error. That's needed
+#             # because odemis-start will call this script before checking whether
+#             # to (re)start the backend or not.
+#             # TODO: make the update also work when the backend is running?
+#         else:
+#             update_tmcm(tcf, TMCM_ADD)
+
+        print(micf)
+    except KeyboardInterrupt:
+        logging.info("Interrupted before the end of the execution")
+        return 1
+    except ValueError as exp:
+        logging.error("%s", exp)
+        return 127
+    except IOError as exp:
+        logging.error("%s", exp)
+        return 129
+    except Exception:
+        logging.exception("Unexpected error while performing action.")
+        return 130
+
+    return 0
+
+
+if __name__ == '__main__':
+    ret = main(sys.argv)
+    exit(ret)
+
