@@ -30,7 +30,7 @@ import logging
 from odemis import gui, model
 from odemis.acq.stream import OpticalStream, EMStream, SpectrumStream, StaticStream
 from odemis.gui import BG_COLOUR_LEGEND, FG_COLOUR_LEGEND
-from odemis.gui.comp import miccanvas
+from odemis.gui.comp import miccanvas, overlay
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
 from odemis.gui.comp.legend import InfoLegend, AxisLegend
 from odemis.gui.img.data import getico_blending_goalBitmap
@@ -242,6 +242,8 @@ class MicroscopeViewport(ViewPort):
         # Set the following attributes to `True` to prevent local mpp/hfw setting loops
         self.self_set_fov = False
         self.self_set_mpp = False
+
+        self.stage_limit_overlay = None
 
     def setView(self, microscope_view, tab_data):
         """
@@ -522,6 +524,25 @@ class MicroscopeViewport(ViewPort):
             logging.debug("Setting view mpp to %s using given fov %s for %s", mpp, fov, self)
             self.self_set_mpp = True
             self.microscope_view.mpp.value = mpp
+
+    def show_stage_limit_overlay(self):
+        if not self.stage_limit_overlay:
+            self.stage_limit_overlay = overlay.world.BoxOverlay(self.canvas)
+        self.canvas.add_world_overlay(self.stage_limit_overlay)
+        wx.CallAfter(self.canvas.request_drawing_update)
+
+    def hide_stage_limit_overlay(self):
+        if self.stage_limit_overlay:
+            self.canvas.remove_world_overlay(self.stage_limit_overlay)
+            wx.CallAfter(self.canvas.request_drawing_update)
+
+    def set_stage_limits(self, roi):
+        """
+        roi (4 x float): ltrb, in m from the centre
+        """
+        if not self.stage_limit_overlay:
+            self.stage_limit_overlay = overlay.world.BoxOverlay(self.canvas)
+        self.stage_limit_overlay.set_dimensions(roi)
 
 
 class OverviewViewport(MicroscopeViewport):
