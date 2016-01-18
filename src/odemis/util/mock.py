@@ -65,3 +65,8 @@ class MockComponent(model.HwComponent):
 
         # use explicit setter to be sure the changes are notified
         self.children.value = self.children.value | cc
+
+    # To pretend being a PowerSupplier
+    def supply(self, sup):
+        logging.debug("Pretending to power on components %s", sup)
+        return model.InstantaneousFuture()
