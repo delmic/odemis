@@ -60,14 +60,17 @@ def get_eeprom_ids():
     """
     return (set of int): ID of each EEPROM detected
     """
+    terminate = False
     try:
         pcu = model.getComponent(role="power-control")
         logging.debug("Using the backend to access the power controller")
     except (Pyro4.errors.CommunicationError, IOError, LookupError):
         logging.debug("Failed to access the backend, will try directly")
         pcu = CLASS_PCU(**KWARGS_PCU)
+        terminate = True
     ids = pcu.memoryIDs.value
-    pcu.terminate()
+    if terminate:
+        pcu.terminate()
     logging.debug("Found EEPROM IDs %s", ids)
     iids = set(int(i, 16) for i in ids)
     return iids

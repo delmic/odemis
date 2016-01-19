@@ -440,25 +440,6 @@ def main(args):
     try:
         if len(args) > 2:
             raise ValueError("Only 0 or 1 argument accepted")
-        elif len(args) == 2:
-            modelfile = args[1]
-        elif "MODEL" in config:
-            modelfile = config["MODEL"]
-        elif "MODEL_SELECTOR" in config:
-            cmd = shlex.split(config["MODEL_SELECTOR"])
-            logging.debug("Getting the model filename using %s", cmd)
-            try:
-                out = subprocess.check_output(cmd).splitlines()
-                if not out:
-                    raise ValueError("No microscope file name provided by %s" % (cmd,))
-                elif len(out) > 1:
-                    logging.warning("Model selector returned multiple lines: %s", out)
-                modelfile = out[0].strip()
-            except subprocess.CalledProcessError as ex:
-                # TODO: check if backend is already running anyway?
-                raise ValueError("Failed to pick the microscope file: %s" % (ex,))
-        else:
-            raise ValueError("No microscope model specified")
 
         # TODO: just bring the focus?
         # Kill GUI if an instance is already there
@@ -479,6 +460,27 @@ def main(args):
 
             try:
                 if status in (driver.BACKEND_DEAD, driver.BACKEND_STOPPED):
+                    # Get the model file out of the various ways
+                    if len(args) == 2:
+                        modelfile = args[1]
+                    elif "MODEL" in config:
+                        modelfile = config["MODEL"]
+                    elif "MODEL_SELECTOR" in config:
+                        cmd = shlex.split(config["MODEL_SELECTOR"])
+                        logging.debug("Getting the model filename using %s", cmd)
+                        try:
+                            out = subprocess.check_output(cmd).splitlines()
+                            if not out:
+                                raise ValueError("No microscope file name provided by %s" % (cmd,))
+                            elif len(out) > 1:
+                                logging.warning("Model selector returned multiple lines: %s", out)
+                            modelfile = out[0].strip()
+                        except subprocess.CalledProcessError as ex:
+                            # TODO: check if backend is already running anyway?
+                            raise ValueError("Failed to pick the microscope file: %s" % (ex,))
+                    else:
+                        raise ValueError("No microscope model specified")
+
                     starter.start_backend(modelfile)
                 if status in (driver.BACKEND_DEAD, driver.BACKEND_STOPPED, driver.BACKEND_STARTING):
                     starter.wait_backend_is_ready()
