@@ -1839,11 +1839,17 @@ class SparcStreamsController(StreamBarController):
             if main_data.cld.name in fw.affects.value:
                 axes["band"] = fw
 
-        return self._addRepStream(cli_stream, sem_cli_stream,
+        ret = self._addRepStream(cli_stream, sem_cli_stream,
                                   vas=("repetition", "pixelSize"),
                                   axes=axes,
                                   play=False
                                   )
+
+        # With CLi, often the user wants to get the whole area, same as the survey.
+        # But it's not very easy to select all of it, so do it automatically.
+        if sem_stream.roi.value == acqstream.UNDEFINED_ROI:
+            sem_stream.roi.value = (0, 0, 1, 1)
+        return ret
 
     def addSpectrum(self, name=None, detector=None):
         """
