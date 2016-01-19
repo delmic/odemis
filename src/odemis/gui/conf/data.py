@@ -112,7 +112,8 @@ HW_SETTINGS_CONFIG = {
         OrderedDict((
             ("accelVoltage", {
                 "label": "Accel. voltage",
-                "tooltip": "Acceleration voltage"
+                "tooltip": "Acceleration voltage",
+                "event": wx.EVT_SCROLL_CHANGED  # only affects when it's a slider
             }),
             ("probeCurrent", {}),
             ("spotSize", {}),

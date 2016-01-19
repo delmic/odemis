@@ -425,9 +425,9 @@ def format_choices(choices, uniformat=True, si=None):
 
     Args:
         choices (Iterable): The choices to be formatted or None
-        uniformat (bool): If True, all the values will be formatted using the same si unit
-        si (bool): si unit to format the choice values to. This argument takes precidence over the
-            `uniformat` argument.
+        uniformat (bool): If True, all the values will be formatted using the same SI prefix
+        si (bool): si unit to format the choice values to.
+          This argument takes precedence over the `uniformat` argument.
 
     Returns:
         ([(value, formatted value)], si prefix) or (None, None)
