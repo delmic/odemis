@@ -489,6 +489,7 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
         self.v_pos = model.VigilantAttribute(None)
         self.peaks = model.VigilantAttribute(None)
         self.range = model.VigilantAttribute(None)
+        self.peak_label = self.add_label("", colour=self.colour_peaks)
 
         self.orientation = orientation or self.HORIZONTAL
         self.label_orientation = self.orientation
@@ -531,6 +532,7 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
     def set_position(self, pos):
         x, y = pos
         self.v_pos.value = (max(min(self.view_width, x), 1), max(min(self.view_height - 1, y), 1))
+        self.cnvs.Refresh()
 
     def update_data(self, peak_data, spectrum_range, unit):
         self.set_peaks(peak_data)
@@ -548,6 +550,7 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
         self.unit = unit
 
     def draw(self, ctx):
+        logging.debug("Curve line redraw")
         ctx.set_line_width(self.line_width)
         ctx.set_dash([3])
         ctx.set_line_join(cairo.LINE_JOIN_MITER)
@@ -588,12 +591,11 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
                 ctx.line_to(p_pos - 3, self.cnvs.ClientSize.y)
                 ctx.fill()
 
-                peak_label = self.add_label("", colour=self.colour_peaks)
-                peak_label.text = p_label
+                self.peak_label.text = p_label
                 closest_pos = min([x[0] for x in curve_drawn], key=lambda y:abs(y - p_pos))
                 peak_tuple = [item for item in curve_drawn if item[0] == closest_pos][0]
-                peak_label.pos = (p_pos, peak_tuple[1] - 20)
-                list_labels.append(peak_label)
+                self.peak_label.pos = (p_pos, peak_tuple[1] - 20)
+                list_labels.append(self.peak_label)
 
         if self.v_pos.value is not None:
             v_posx, v_posy = self.v_pos.value
