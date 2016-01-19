@@ -532,9 +532,10 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
         x, y = pos
         self.v_pos.value = (max(min(self.view_width, x), 1), max(min(self.view_height - 1, y), 1))
 
-    def update_data(self, peak_data, spectrum_range):
+    def update_data(self, peak_data, spectrum_range, unit):
         self.set_peaks(peak_data)
         self.set_range(spectrum_range)
+        self.set_unit(unit)
         self.cnvs.Refresh()
 
     def set_peaks(self, peaks):
@@ -542,6 +543,9 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
 
     def set_range(self, range):
         self.range.value = range
+
+    def set_unit(self, unit):
+        self.unit = unit
 
     def draw(self, ctx):
         ctx.set_line_width(self.line_width)
@@ -557,8 +561,8 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
         range = self.range.value
         if peaks is not None:
             for pos, width, amplitude in peak._Grouped(peaks[:-1], 3):
-                peak_labels.append(units.readable_str(pos, "m", 3))
-                width_labels.append(units.readable_str(width, "m", 3))
+                peak_labels.append(units.readable_str(pos, self.unit, 3))
+                width_labels.append(units.readable_str(width, self.unit, 3))
                 amplitude_labels.append(units.readable_str(amplitude, None, 3))
                 peaks_canvpos.append(int((((pos - range[0]) * (self.cnvs.ClientSize.x - 1)) / (range[-1] - range[0])) + 1))
                 single_peaks.append(numpy.array([pos, width, amplitude, peaks[-1]]))
