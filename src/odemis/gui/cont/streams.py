@@ -1625,12 +1625,20 @@ class SparcStreamsController(StreamBarController):
             self.add_action("CL intensity", self.addCLIntensity)
         if main_data.ccd:
             self.add_action("Angle-resolved", self.addAR)
+
         # On the SPARCv2, there is potentially 4 different ways to acquire a
         # spectrum: two spectrographs, with each two ports. In practice, there
         # are never more than 2 at the same time.
-        # TODO support adding both types, (by having spectrometer != spectrometer-dedicated)
-        if main_data.spectrometer:
-            self.add_action("Spectrum", self.addSpectrum)
+        sptms = [main_data.spectrometer, main_data.spectrometer_int]
+        sptms = [s for s in sptms if s is not None]
+        for sptm in sptms:
+            if len(sptms) == 1:
+                actname = "Spectrum"
+            else:
+                actname = "Spectrum with %s" % (sptm.name,)
+            act = functools.partial(self.addSpectrum, name=actname, detector=sptm)
+            self.add_action(actname, act)
+
         if main_data.monochromator:
             self.add_action("Monochromator", self.addMonochromator)
 
@@ -1795,7 +1803,7 @@ class SparcStreamsController(StreamBarController):
                                                 sem_stream, ar_stream)
 
         return self._addRepStream(ar_stream, sem_ar_stream,
-                                  vas=("repetition", "pixelSize"),
+                                  vas=("repetition", "pixelSize", "fuzzing"),
                                   axes={"band": main_data.light_filter}
                                   )
 
@@ -1831,39 +1839,65 @@ class SparcStreamsController(StreamBarController):
             if main_data.cld.name in fw.affects.value:
                 axes["band"] = fw
 
-        return self._addRepStream(cli_stream, sem_cli_stream,
+        ret = self._addRepStream(cli_stream, sem_cli_stream,
                                   vas=("repetition", "pixelSize"),
                                   axes=axes,
                                   play=False
                                   )
 
-    def addSpectrum(self):
-        """ Create a Spectrum stream and add to to all compatible viewports """
+        # With CLi, often the user wants to get the whole area, same as the survey.
+        # But it's not very easy to select all of it, so do it automatically.
+        if sem_stream.roi.value == acqstream.UNDEFINED_ROI:
+            sem_stream.roi.value = (0, 0, 1, 1)
+        return ret
 
+    def addSpectrum(self, name=None, detector=None):
+        """
+        Create a Spectrum stream and add to to all compatible viewports
+        name (str or None): name of the stream to be created
+        detector (Detector or None): the spectrometer to use. If None, it will
+          use the one with "spectrometer" as role.
+        """
         main_data = self._main_data_model
-        spg = self._getAffectingSpectrograph(main_data.spectrometer)
+
+        if name is None:
+            name = "Spectrum"
+
+        if detector is None:
+            detector = main_data.spectrometer
+        logging.debug("Adding spectrum stream for %s", detector.name)
+
+        spg = self._getAffectingSpectrograph(detector)
         spec_stream = acqstream.SpectrumSettingsStream(
-            "Spectrum",
-            main_data.spectrometer,
-            main_data.spectrometer.data,
+            name,
+            detector,
+            detector.data,
             main_data.ebeam,
             sstage=main_data.scan_stage,
             # emtvas=get_local_vas(main_data.ebeam), # no need
-            detvas=get_local_vas(main_data.spectrometer),
+            detvas=get_local_vas(detector),
         )
 
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
-        sem_spec_stream = acqstream.SEMSpectrumMDStream("SEM Spectrum",
+        sem_spec_stream = acqstream.SEMSpectrumMDStream("SEM " + name,
                                                         sem_stream, spec_stream)
 
-        # No light filter for the spectrum stream: typically useless
+        axes = {"wavelength": spg,
+                "grating": spg,
+                "slit-in": spg,
+               }
+
+        # Also add light filter for the spectrum stream if it affects the detector
+        for fw in (main_data.cl_filter, main_data.light_filter):
+            if fw is None:
+                continue
+            if detector.name in fw.affects.value:
+                axes["band"] = fw
+
         return self._addRepStream(spec_stream, sem_spec_stream,
                                   vas=("repetition", "pixelSize", "fuzzing"),
-                                  axes={"wavelength": spg,
-                                        "grating": spg,
-                                        "slit-in": spg,
-                                        },
+                                  axes=axes,
                                   )
 
     def addMonochromator(self):

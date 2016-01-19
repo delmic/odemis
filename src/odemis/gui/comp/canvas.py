@@ -720,7 +720,7 @@ class BufferedCanvas(wx.Panel):
         )
 
     @classmethod
-    def world_to_view_pos(cls, w_pos, w_buff_cent, margins, scale, offset=None):
+    def world_to_view_pos(cls, w_pos, w_buff_cent, margins, scale, offset=(0, 0)):
         """ Convert a position in world coordinates into view coordinates
 
         See `buffer_to_view_pos` and `world_to_buffer_pos` for more details
@@ -1266,7 +1266,7 @@ class BitmapCanvas(BufferedCanvas):
             self.scale,
             offset)
 
-    def world_to_view(self, pos, offset=None):
+    def world_to_view(self, pos, offset=(0, 0)):
         # TODO: either indicate what should be offset (half the buffer size?)
         # or remove from argument and always use the right value
         # TODO: there is probably no reason we need to include the buffer size

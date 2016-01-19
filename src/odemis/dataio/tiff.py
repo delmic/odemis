@@ -554,9 +554,9 @@ def _updateMDFromOME(root, das, basename):
                         mdc[model.MD_OUT_WL] = (owl - 1e-9, owl + 1e-9)
                 else:
                     fl = che.find("Filter")
-                    if fl:
-                        type = fl.attrib["Type"]
-                        mdc[model.MD_OUT_WL] = type
+                    if fl is not None:
+                        ftype = fl.attrib["Type"]
+                        mdc[model.MD_OUT_WL] = ftype
 
             except (KeyError, ValueError):
                 pass

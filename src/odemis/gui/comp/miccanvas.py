@@ -257,10 +257,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
             if use_world:
                 self.add_world_overlay(self._spotmode_ol)
-                # Activate the spot mode overlay when the canvas can be dragged, so the user can
-                # position the spot. (By default, the spot is static in the center)
-                if CAN_DRAG in self.abilities:
-                    self._spotmode_ol.activate()
+                self._spotmode_ol.activate()
             else:
                 self.add_view_overlay(self._spotmode_ol)
                 self._spotmode_ol.activate()

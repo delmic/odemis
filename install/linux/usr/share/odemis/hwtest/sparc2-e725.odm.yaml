@@ -61,6 +61,7 @@ SPARC2: {
        detector1: "CL PMT",
     }
 }
+
 # Merges the scan interface e-beam and the e-beam control (via API)
 "SEM E-beam full": {
     class: scanner.CompositedScanner,
@@ -72,7 +73,7 @@ SPARC2: {
         dwellTime: 10.e-6, # s
         horizontalFoV: 1.e-3, # m
     },
-    affects: ["SEM Detector", "Spectrometer IR", "Camera", "Spectrometer Vis-NIR"] # affects the CCD in case of cathodoluminescence
+    affects: ["SEM Detector", "Spectrometer IR", "Camera"] # affects the CCD in case of cathodoluminescence
 }
 
 # Connect:
@@ -123,7 +124,7 @@ SPARC2: {
     properties: {
         dwellTime: 10.e-6, # s
     },
-    affects: ["SEM Detector", "Camera"] # affects the CCD in case of cathodoluminescence
+    affects: ["SEM Detector", "Angular Camera"] # affects the CCD in case of cathodoluminescence
 }
 
 # Not used
@@ -200,7 +201,7 @@ SPARC2: {
     role: spectrometer-integrated,
     children: {detector: "Camera", spectrograph: "Spectrograph"},
     init: {
-        transp: [-1, 2], # only applied to the spectrometer data (not raw CCD)
+        transp: [1, 2], # only applied to the spectrometer data (not raw CCD)
     },
 }
 
@@ -438,21 +439,20 @@ SPARC2: {
     },
 }
 
+# Network should be set up and the E-725 should be configured for DHCP.
+# X and Y axes should be configured to follow the SEM X/Y axes
+
 "Scan Stage": {
-    class: simulated.Stage,
+    class: pigcs.Bus,
     role: scan-stage,
-    affects: ["Camera", "IR Camera", "Spectrometer", "CL Detector", "SEM E-beam full"],
+    affects: ["Camera", "IR Camera", "Spectrometer", "CL Detector", "SEM E-beam"],
     init: {
-        axes: [x, y],
-        ranges: {
-            "x": [0, 100.e-6],
-            "y": [0, 100.e-6],
-        },
+        port: "autoip", # put "autoip" or the IP address (if fixed)
+        # axis -> controller, channel, closed-loop?
+        axes: {"x": [null, 1, True], "y": [null, 2, True]},
+        # TODO: check on the actual hardware -> needs to be the same directions as SEM
         inverted: ["x"],
     },
-    properties: {
-        speed: {"x": 100.e-6, "y": 100.e-6},
-    }
 }
 
 "Sample Stage": {

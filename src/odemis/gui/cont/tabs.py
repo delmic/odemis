@@ -773,8 +773,9 @@ class SparcAcquisitionTab(Tab):
         sstage = main_data.scan_stage
         if sstage:
             # Move the scan stage to the center (so that scan has maximum range)
-            posc = {"x": sum(sstage.axes["x"].range) / 2,
-                    "y": sum(sstage.axes["y"].range) / 2}
+            ssaxes = sstage.axes
+            posc = {"x": sum(ssaxes["x"].range) / 2,
+                    "y": sum(ssaxes["y"].range) / 2}
             sstage.moveAbs(posc)
 
             self.scan_stage_ent = sem_stream_cont.add_setting_entry(
@@ -783,6 +784,14 @@ class SparcAcquisitionTab(Tab):
                 None,  # component
                 get_stream_settings_config()[acqstream.SEMStream]["useScanStage"]
             )
+
+            # Draw the limits on the SEM view
+            tab_data.useScanStage.subscribe(self._on_use_scan_stage, init=True)
+            roi = (ssaxes["x"].range[0] - posc["x"],
+                   ssaxes["y"].range[0] - posc["y"],
+                   ssaxes["x"].range[1] - posc["x"],
+                   ssaxes["y"].range[1] - posc["y"])
+            panel.vp_sparc_tl.set_stage_limits(roi)
 
         main_data.is_acquiring.subscribe(self.on_acquisition)
 
@@ -853,6 +862,12 @@ class SparcAcquisitionTab(Tab):
         Use the sem stream dwell time as the anchor dwell time
         """
         self.tab_data_model.semStream.dcDwellTime.value = dt
+
+    def _on_use_scan_stage(self, use):
+        if use:
+            self.panel.vp_sparc_tl.show_stage_limit_overlay()
+        else:
+            self.panel.vp_sparc_tl.hide_stage_limit_overlay()
 
     @call_in_wx_main
     def _onDCRegion(self, roi):

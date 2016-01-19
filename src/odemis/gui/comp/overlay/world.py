@@ -26,12 +26,11 @@ from __future__ import division
 import cairo
 import logging
 import math
-from odemis import model
+from odemis import model, util
 from odemis.acq.stream import UNDEFINED_ROI
 from odemis.gui.comp.overlay.base import Vec, WorldOverlay, SelectionMixin, DragMixin, \
     PixelDataMixin, SEL_MODE_EDIT, SEL_MODE_CREATE, EDIT_MODE_BOX, EDIT_MODE_POINT, SpotModeBase
 from odemis.gui.util.raster import rasterize_line
-from odemis.model import TupleVA
 from odemis.util import clip_line
 import wx
 
@@ -135,7 +134,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
         if self.w_start_pos and self.w_end_pos:
 
-            # FIXME: The following version of the code does noto worok. Update_projection is causing
+            # FIXME: The following version of the code does not work. Update_projection is causing
             # the start position to be drawn at the top left of the buffer and the calculation of
             # the edges is all wrong.
 
@@ -507,6 +506,65 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
         self.selection_mode = mode_cache
 
 
+class BoxOverlay(WorldOverlay):
+    """
+    Overlay showing a rectangle from the center of the view.
+    Currently used only for the scan stage limits
+    """
+
+    def __init__(self, cnvs):
+        WorldOverlay.__init__(self, cnvs)
+
+        # tlbr points compared to the center
+        self.roi = None  #
+        self.set_dimensions((-50e-6, -50e-6, 50e-6, 50e-6))  # m
+
+        self.colour = conversion.hex_to_frgb("#FF0000")
+        self.line_width = 1  # px
+        self.dash_pattern = [2]
+
+    def set_dimensions(self, roi):
+        """ Set the dimensions of the rectangle """
+        # Connect the provided VA to the overlay
+        w_roi = (self.cnvs.physical_to_world_pos(roi[:2]) +
+                 self.cnvs.physical_to_world_pos(roi[2:4]))
+        self.roi = util.normalize_rect(w_roi)
+        wx.CallAfter(self.cnvs.request_drawing_update)
+
+    def draw(self, ctx, shift=(0, 0), scale=1.0):
+        """ Draw the selection as a rectangle and the repetition inside of that """
+
+        # To make sure the line is drawn on a full pixel
+        if self.line_width % 2:
+            shift = 0.5
+        else:
+            shift = 0
+
+        offset = self.cnvs.get_half_buffer_size()
+        # Convert from abs to relative, as the ROI is from the center of the view
+        cpos = self.cnvs.world_to_view((0, 0))
+        v_roi = (self.cnvs.world_to_view(self.roi[:2]) +
+                 self.cnvs.world_to_view(self.roi[2:4]))
+        v_width = v_roi[2] - v_roi[0], v_roi[3] - v_roi[1]
+        rect = (offset[0] + (v_roi[0] - cpos[0]) + shift,
+                offset[1] + (v_roi[1] - cpos[1]) + shift,
+                v_width[0], v_width[1])
+
+        # draws a light black background for the rectangle
+        ctx.set_line_width(self.line_width + 1)
+        ctx.set_source_rgba(0, 0, 0, 0.5)
+        ctx.rectangle(*rect)
+        ctx.stroke()
+
+        # draws the dotted line
+        ctx.set_line_width(self.line_width)
+        ctx.set_dash(self.dash_pattern)
+        ctx.set_line_join(cairo.LINE_JOIN_MITER)
+        ctx.set_source_rgba(*self.colour)
+        ctx.rectangle(*rect)
+        ctx.stroke()
+
+
 class SpotModeOverlay(WorldOverlay, DragMixin, SpotModeBase):
     """ Render the spot mode indicator in the center of the view
 
@@ -635,14 +693,14 @@ class LineSelectOverlay(WorldSelectOverlay):
             dx, dy = (self.w_start_pos[0] - self.w_end_pos[0],
                       self.w_start_pos[1] - self.w_end_pos[1])
 
-            length = math.sqrt(dx*dx + dy*dy) or 0.000001
+            length = math.hypot(dx, dy) or 0.000001
             udx, udy = dx / length, dy / length  # Normalized vector
 
             # Rotate over 60 and -60 degrees
             ax = udx * math.sqrt(3) / 2 - udy / 2
-            ay = udx / 2 + udy * math.sqrt(3)/2
-            bx = udx * math.sqrt(3)/2 + udy / 2
-            by = -udx / 2 + udy * math.sqrt(3)/2
+            ay = udx / 2 + udy * math.sqrt(3) / 2
+            bx = udx * math.sqrt(3) / 2 + udy / 2
+            by = -udx / 2 + udy * math.sqrt(3) / 2
 
             # The two lower corners of the arrow head
             b_arrow_1 = (b_end[0] + arrow_size * ax, b_end[1] + arrow_size * ay)
@@ -653,7 +711,7 @@ class LineSelectOverlay(WorldSelectOverlay):
                            (b_arrow_1[1] + b_arrow_2[1]) / 2.0)
 
             # Calculate the connection to the start circle
-            rad = math.atan2(b_start[1] - b_end[1],  b_start[0] - b_end[0])
+            rad = math.atan2(b_start[1] - b_end[1], b_start[0] - b_end[0])
             y_offset = start_radius * math.sin(rad)
             x_offset = start_radius * math.cos(rad)
             b_circle_con = (b_start[0] - x_offset, b_start[1] - y_offset)

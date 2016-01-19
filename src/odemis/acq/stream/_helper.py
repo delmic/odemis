@@ -568,10 +568,6 @@ class ARSettingsStream(CCDSettingsStream):
         # For SPARC: typical user wants density much lower than SEM
         self.pixelSize.value *= 30
 
-        # Fuzzing makes no sense for AR acquisitions, which need to have a spot
-        # as precise as possible
-        del self.fuzzing
-
     # onActive & projection: same as the standard LiveStream
 
 
