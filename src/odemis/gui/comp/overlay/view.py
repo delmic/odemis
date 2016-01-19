@@ -532,6 +532,11 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
         x, y = pos
         self.v_pos.value = (max(min(self.view_width, x), 1), max(min(self.view_height - 1, y), 1))
 
+    def update_data(self, peak_data, spectrum_range):
+        self.set_peaks(peak_data)
+        self.set_range(spectrum_range)
+        self.cnvs.Refresh()
+
     def set_peaks(self, peaks):
         self.peaks.value = peaks
 

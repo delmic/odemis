@@ -1201,7 +1201,7 @@ class BarPlotCanvas(canvas.PlotCanvas):
         self.add_view_overlay(self.curve_overlay)
         self.curve_overlay.activate()
 
-    def set_data(self, data, unit_x=None, unit_y=None, range_x=None, range_y=None, peaks=None):
+    def set_data(self, data, unit_x=None, unit_y=None, range_x=None, range_y=None):
         """ Subscribe to the x position of the overlay when data is loaded """
 
         super(BarPlotCanvas, self).set_data(data, unit_x, unit_y, range_x, range_y)
@@ -1212,10 +1212,6 @@ class BarPlotCanvas(canvas.PlotCanvas):
         else:
             self.markline_overlay.v_pos.unsubscribe(self._map_to_plot_values)
             self.markline_overlay.deactivate()
-
-        if peaks is not None:
-            self.curve_overlay.set_peaks(peaks)
-            self.curve_overlay.set_range([i[0] for i in data])
 
     def clear(self):
         super(BarPlotCanvas, self).clear()

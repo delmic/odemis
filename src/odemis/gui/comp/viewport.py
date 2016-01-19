@@ -26,6 +26,7 @@ Created on 8 Feb 2012
 from __future__ import division
 
 from abc import abstractmethod, ABCMeta
+from concurrent.futures._base import CancelledError
 import logging
 from odemis import gui, model
 from odemis.acq.stream import OpticalStream, EMStream, SpectrumStream, StaticStream
@@ -909,16 +910,32 @@ class PointSpectrumViewport(PlotViewport):
         spectrum_range = self.stream.get_spectrum_range()
         unit_x = self.stream.spectrumBandwidth.unit
 
-        f = peak.Fit(data, spectrum_range)
-        peak_data = f.result()
-
-        self.canvas.set_1d_data(spectrum_range, data, unit_x, peaks=peak_data)
+        try:
+            # cancel previous fitting if there is one in progress
+            self._peak_future.cancel()
+        except AttributeError:
+            pass
+        self.spectrum_range = spectrum_range
+        self._peak_future = peak.Fit(data, spectrum_range)
+        self._peak_future.add_done_callback(self._update_peak)
+        self.canvas.set_1d_data(spectrum_range, data, unit_x)
 
         self.bottom_legend.unit = unit_x
         self.bottom_legend.range = (spectrum_range[0], spectrum_range[-1])
         self.left_legend.range = (min(data), max(data))
 
         self.Refresh()
+
+    @call_in_wx_main
+    def _update_peak(self, f):
+        try:
+            peak_data = f.result()
+            self.canvas.curve_overlay.update_data(peak_data, self.spectrum_range)
+        except CancelledError:
+            logging.debug("Peak fitting in progress was cancelled")
+        except ValueError:
+            self.canvas.curve_overlay.update_data(None, self.spectrum_range)
+            logging.debug("Peak fitting failed")
 
 
 class ChronographViewport(PlotViewport):

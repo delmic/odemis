@@ -182,6 +182,7 @@ def Fit(spectrum, wavelength, type='gaussian'):
                                 end=est_start + estimateFitTime())
     f._fit_state = RUNNING
     f._fit_lock = threading.Lock()
+    f._fit_progress_lock = threading.Lock()
     f.task_canceller = _CancelFit
 
     # Run in separate thread
@@ -211,39 +212,45 @@ def _DoFit(future, spectrum, wavelength, type='gaussian'):
             ValueError if fitting cannot be applied
     """
     try:
-        smoothed = Smooth(spectrum)
-        window_size = 7  # value based on experimental datasets
-        step = 1
-        try:
-            width = PEAK_WIDTHS[type]
-            FitFunction = PEAK_FUNCTIONS[type]
-        except KeyError:
-            raise KeyError("Given type %s not in available fitting types: %s" % (type, PEAK_FUNCTIONS.keys()))
-        while window_size <= 40:
-            if future._fit_state == CANCELLED:
-                raise CancelledError()
-            # Increase window size until peak detection finds enough peaks to fit
-            # the spectrum curve
-            peaks = Detect(smoothed, wavelength, lookahead=window_size, delta=5)[0]
-
-            fit_list = []
-            for (pos, amplitude) in peaks:
-                fit_list.append(pos)
-                fit_list.append(width)
-                fit_list.append(amplitude)
-            # Initialize offset to 0
-            fit_list.append(0)
-
+        with future._fit_progress_lock:
+            # values based on experimental datasets
+            init_window_size = len(wavelength) // 30
+            window_size = init_window_size
+            step = 1
             try:
-                params, unused = curve_fit(FitFunction, wavelength, spectrum, p0=fit_list)
-                break
-            except Exception:
-                window_size += step
-                step += 1  # makes it a bit faster
-                continue
-        else:
-            raise ValueError("Could not apply peak fitting of type %s." % type)
-        return params
+                width = PEAK_WIDTHS[type]
+                FitFunction = PEAK_FUNCTIONS[type]
+            except KeyError:
+                raise KeyError("Given type %s not in available fitting types: %s" % (type, PEAK_FUNCTIONS.keys()))
+            while window_size <= init_window_size + 10:
+                if future._fit_state == CANCELLED:
+                    raise CancelledError()
+                smoothed = Smooth(spectrum, window_len=window_size)
+                # Increase window size until peak detection finds enough peaks to fit
+                # the spectrum curve
+                peaks = Detect(smoothed, wavelength, lookahead=window_size, delta=5)[0]
+
+                fit_list = []
+                for (pos, amplitude) in peaks:
+                    fit_list.append(pos)
+                    fit_list.append(width)
+                    fit_list.append(amplitude)
+                # Initialize offset to 0
+                fit_list.append(0)
+
+                try:
+                    # print wavelength
+#                     print wavelength.mean()
+                    # print wavelength
+                    params, unused = curve_fit(FitFunction, wavelength, spectrum, p0=fit_list)
+                    break
+                except Exception:
+                    window_size += step
+                    step += 1  # makes it a bit faster
+                    continue
+            else:
+                raise ValueError("Could not apply peak fitting of type %s." % type)
+            return params
     except CancelledError:
         logging.debug("Fitting of type %s was cancelled." % type)
     finally:
@@ -263,7 +270,8 @@ def _CancelFit(future):
         if future._fit_state == FINISHED:
             return False
         future._fit_state = CANCELLED
-        logging.debug("Fitting cancelled.")
+        with future._fit_progress_lock:
+            logging.debug("Fitting cancelled.")
 
     return True
 
