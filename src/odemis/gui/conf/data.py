@@ -214,6 +214,48 @@ HW_SETTINGS_CONFIG = {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
         )),
+    "spectrometer-integrated":
+        OrderedDict((
+            ("exposureTime", {
+                "control_type": odemis.gui.CONTROL_SLIDER,
+                "scale": "log",
+                "range": (0.01, 500.0),
+                "type": "float",
+                "accuracy": 2,
+            }),
+            ("binning", {
+                "control_type": odemis.gui.CONTROL_RADIO,
+                # means only 1st dimension can change
+                "choices": util.binning_firstd_only,
+            }),
+            ("resolution", {
+                # Read-only it shouldn't be changed by the user
+                "control_type": odemis.gui.CONTROL_READONLY,
+                "accuracy": None,  # never simplify the numbers
+            }),
+            ("gain", {}),
+            ("readoutRate", {}),
+            ("shutterMinimumPeriod", {  # Will be displayed here on the SPARC
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("temperature", {}),
+            # what we don't want to display:
+            ("translation", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("targetTemperature", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("fanSpeed", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("pixelSize", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("depthOfField", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+        )),
     "spectrograph":
         OrderedDict((
             ("wavelength", {
