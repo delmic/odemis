@@ -937,6 +937,7 @@ class PointSpectrumViewport(PlotViewport):
         except AttributeError:
             pass
         self.spectrum_range = spectrum_range
+        self.unit_x = unit_x
         self._peak_future = peak.Fit(data, spectrum_range)
         self._peak_future.add_done_callback(self._update_peak)
         self.canvas.set_1d_data(spectrum_range, data, unit_x)
@@ -951,11 +952,11 @@ class PointSpectrumViewport(PlotViewport):
     def _update_peak(self, f):
         try:
             peak_data = f.result()
-            self.canvas.curve_overlay.update_data(peak_data, self.spectrum_range)
+            self.canvas.curve_overlay.update_data(peak_data, self.spectrum_range, self.unit_x)
         except CancelledError:
             logging.debug("Peak fitting in progress was cancelled")
         except ValueError:
-            self.canvas.curve_overlay.update_data(None, self.spectrum_range)
+            self.canvas.curve_overlay.update_data(None, self.spectrum_range, self.unit_x)
             logging.debug("Peak fitting failed")
 
 
