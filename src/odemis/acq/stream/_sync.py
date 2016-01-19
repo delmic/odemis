@@ -454,6 +454,12 @@ class MultipleDetectorStream(Stream):
         md.update({MD_POS: center,
                    MD_PIXEL_SIZE: pxs})
 
+        exp_pxs = self._rep_stream.pixelSize.value
+        if not util.almost_equal(pxs[0], exp_pxs):
+            # Can happen for example if the SEM magnification changed
+            logging.warning("Expected pxs %s is different from (post) acquisition pxs %s",
+                            pxs[0], exp_pxs)
+
         # concatenate data into one big array of (number of pixels,1)
         flat_list = [ar.flatten() for ar in data_list]
         main_data = numpy.concatenate(flat_list)
@@ -478,17 +484,9 @@ class MultipleDetectorStream(Stream):
         rel_width = (roi[2] - roi[0], roi[3] - roi[1])
         pxs = (rel_width[0] * fov[0] / rep[0], rel_width[1] * fov[1] / rep[1])
 
-        center_tl = datatl.metadata[MD_POS]
-        pxs_tl = datatl.metadata[MD_PIXEL_SIZE]
-        if pxs != pxs_tl:
-            # TODO: check that this is still valid. Do we really set the SEM scale to the right one?
-            # For e-beam data, they should be the same. If datatl is from a CCD
-            # then they have no reason to be identical
-            logging.warning("Computed global pxs %s is different from acquisition pxs %s",
-                            pxs, pxs_tl)
-
         # Compute center of area, based on the position of the first point (the
         # position of the other points can be wrong due to drift correction)
+        center_tl = datatl.metadata[MD_POS]
         tl = (center_tl[0] - (pxs[0] * (datatl.shape[-1] - 1)) / 2,
               center_tl[1] + (pxs[1] * (datatl.shape[-2] - 1)) / 2)
         center = (tl[0] + (pxs[0] * (rep[0] - 1)) / 2,
@@ -534,6 +532,13 @@ class MultipleDetectorStream(Stream):
         center, pxs = self._get_center_pxs(arr.shape[::-1], roi, data_list[0])
         md.update({MD_POS: center,
                    MD_PIXEL_SIZE: pxs})
+
+        exp_rep = self._rep_stream.repetition.value
+        exp_pxs = self._rep_stream.pixelSize.value * (exp_rep[0] / rep[0])
+        if not util.almost_equal(pxs[0], exp_pxs):
+            # Can happen for example if the SEM magnification changed
+            logging.warning("Expected pxs %s is different from (post) acquisition pxs %s",
+                            pxs[0], exp_pxs)
 
         return model.DataArray(arr, md)
 
