@@ -1636,7 +1636,7 @@ class SparcStreamsController(StreamBarController):
                 actname = "Spectrum"
             else:
                 actname = "Spectrum with %s" % (sptm.name,)
-            act = functools.partial(self.addSpectrum, name=actname, detector=sptms[0])
+            act = functools.partial(self.addSpectrum, name=actname, detector=sptm)
             self.add_action(actname, act)
 
         if main_data.monochromator:
