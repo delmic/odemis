@@ -239,9 +239,6 @@ def _DoFit(future, spectrum, wavelength, type='gaussian'):
                 fit_list.append(0)
 
                 try:
-                    # print wavelength
-#                     print wavelength.mean()
-                    # print wavelength
                     params, unused = curve_fit(FitFunction, wavelength, spectrum, p0=fit_list)
                     break
                 except Exception:
