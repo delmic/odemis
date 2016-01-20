@@ -1556,8 +1556,8 @@ class AndorCam2(model.DigitalCamera):
             # Shutter closes between exposures iif:
             # * period between exposures is long enough (>0.1s): to ensure we don't burn the mechanism
             # * readout time > exposure time/100 (when risk of smearing is possible)
-            readout = im_res[0] * im_res[1] * self._readout_rate  # s
-            tot_time = readout + self._exposure_time
+            readout = im_res[0] * im_res[1] / self._readout_rate  # s
+            tot_time = self._exposure_time + readout
             shutter_active = False
             if tot_time < self._shutter_period:
                 logging.info("Forcing shutter opened because it would go at %g Hz",
