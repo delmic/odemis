@@ -622,36 +622,37 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
                 )
                 self.labels.append(peak_label)
                 self.list_labels.append(peak_label)
-        if self.v_pos.value is not None:
-            v_posx, v_posy = self.v_pos.value
-            if self.peaks_canvpos:
-                # Find closest peak
-                closest_peak = min(self.peaks_canvpos, key=lambda x:abs(x - v_posx))
-                peak_margin = self.cnvs.ClientSize.x / (10 * len(self.peaks_canvpos))
-                if abs(closest_peak - v_posx) <= peak_margin:
-                    peak_i = self.peaks_canvpos.index(closest_peak)
-                    single_curve = peak.Curve(range, self.single_peaks[peak_i])
-                    curve_to_draw = zip(range, single_curve)
-                    mn, mx = min(self.curve), max(self.curve)
-                    x_canvas = (((curve_to_draw[0][0] - rng_first) * (client_size_x - 1)) / (rng_last - rng_first)) + 1
-                    y_canvas = client_size_y - 1
-                    self.colour = self.colour[:3] + (0.5,)
-                    ctx.set_source_rgba(*self.colour)
-                    ctx.move_to(x_canvas, y_canvas)
-                    step = max(1, len(range) // self.length)
-                    odd_curve = curve_to_draw[1::step]
-                    for x, y in odd_curve:
-                        x_canvas = (((x - rng_first) * (client_size_x - 1)) / (rng_last - rng_first)) + 1
-                        y_canvas = (((y - mn) * (client_size_y - 1)) / (mx - mn)) + 1
-                        y_canvas = client_size_y - y_canvas
+            if self.v_pos.value is not None:
+                v_posx, v_posy = self.v_pos.value
+                if self.peaks_canvpos:
+                    # Find closest peak
+                    closest_peak = min(self.peaks_canvpos, key=lambda x:abs(x - v_posx))
+                    peak_margin = self.cnvs.ClientSize.x / (10 * len(self.peaks_canvpos))
+                    if abs(closest_peak - v_posx) <= peak_margin:
+                        peak_i = self.peaks_canvpos.index(closest_peak)
+                        single_curve = peak.Curve(range, self.single_peaks[peak_i])
+                        curve_to_draw = zip(range, single_curve)
+                        mn, mx = min(self.curve), max(self.curve)
+                        x_canvas = (((curve_to_draw[0][0] - rng_first) * (client_size_x - 1)) / (rng_last - rng_first)) + 1
+                        y_canvas = client_size_y - 1
+                        self.colour = self.colour[:3] + (0.5,)
+                        ctx.set_source_rgba(*self.colour)
+                        ctx.move_to(x_canvas, y_canvas)
+                        step = max(1, len(range) // self.length)
+                        odd_curve = curve_to_draw[1::step]
+                        for x, y in odd_curve:
+                            x_canvas = (((x - rng_first) * (client_size_x - 1)) / (rng_last - rng_first)) + 1
+                            y_canvas = (((y - mn) * (client_size_y - 1)) / (mx - mn)) + 1
+                            y_canvas = client_size_y - y_canvas
+                            ctx.line_to(x_canvas, y_canvas)
+                        x_canvas = (((curve_to_draw[-1][0] - rng_first) * (client_size_x - 1)) / (rng_last - rng_first)) + 1
+                        y_canvas = client_size_y - 1
                         ctx.line_to(x_canvas, y_canvas)
-                    x_canvas = (((curve_to_draw[-1][0] - rng_first) * (client_size_x - 1)) / (rng_last - rng_first)) + 1
-                    y_canvas = client_size_y - 1
-                    ctx.line_to(x_canvas, y_canvas)
-                    ctx.fill()
-                    self.list_labels[peak_i].text = self.list_labels[peak_i].text + "\nWidth: " + self.width_labels[peak_i] + "\nAmplitude: " + self.amplitude_labels[peak_i]
-        for pl in self.list_labels:
-            self._write_label(ctx, pl)
+                        ctx.fill()
+                        self.list_labels[peak_i].text = self.list_labels[peak_i].text + "\nWidth: " + self.width_labels[peak_i] + "\nAmplitude: " + self.amplitude_labels[peak_i]
+
+            for pl in self.list_labels:
+                self._write_label(ctx, pl)
 
 
 class DichotomyOverlay(base.ViewOverlay):
