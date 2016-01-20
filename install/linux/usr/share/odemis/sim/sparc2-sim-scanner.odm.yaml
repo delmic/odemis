@@ -179,6 +179,7 @@ SPARC2: {
     power_supplier: "Power Control Unit",
     init: {
        device: "fake",
+       shutter_times: [40.e-3, 40.e-3], # s, opening/closing times of the shutter
        image: "sparc-ar-mirror-align.h5", # only for simulator
     },
 }
