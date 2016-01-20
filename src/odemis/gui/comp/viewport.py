@@ -952,11 +952,17 @@ class PointSpectrumViewport(PlotViewport):
     def _update_peak(self, f):
         try:
             peak_data = f.result()
+            self.canvas.add_view_overlay(self.canvas.curve_overlay)
+            self.canvas.curve_overlay.activate()
+            wx.CallAfter(self.canvas.request_drawing_update)
             self.canvas.curve_overlay.update_data(peak_data, self.spectrum_range, self.unit_x)
         except CancelledError:
             logging.debug("Peak fitting in progress was cancelled")
         except ValueError:
-            self.canvas.curve_overlay.update_data(None, self.spectrum_range, self.unit_x)
+            self.canvas.curve_overlay.deactivate()
+            self.canvas.remove_view_overlay(self.canvas.curve_overlay)
+            wx.CallAfter(self.canvas.request_drawing_update)
+            # self.canvas.curve_overlay.update_data(None, self.spectrum_range, self.unit_x)
             logging.debug("Peak fitting failed")
 
 

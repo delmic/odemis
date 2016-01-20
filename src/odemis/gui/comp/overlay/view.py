@@ -27,6 +27,7 @@ import cairo
 import logging
 import math
 import numpy
+from odemis.gui.comp.overlay.base import Label
 from odemis.util import peak
 import wx
 
@@ -475,11 +476,12 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
     HORIZONTAL = 1
     VERTICAL = 2
 
-    def __init__(self, cnvs, colour=gui.FG_COLOUR_CURVE, colour_peaks=gui.FG_COLOUR_PEAK, orientation=None):
+    def __init__(self, cnvs, colour=gui.FG_COLOUR_CURVE, colour_peaks=gui.FG_COLOUR_PEAK, orientation=None, length=200):
 
         base.ViewOverlay.__init__(self, cnvs)
         base.DragMixin.__init__(self)
 
+        self.length = length  # curve length
         self.label = None
         self.colour = conversion.hex_to_frgba(colour)
         self.colour = self.colour[:3] + (0.5,)
@@ -489,12 +491,18 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
         self.v_pos = model.VigilantAttribute(None)
         self.peaks = model.VigilantAttribute(None)
         self.range = model.VigilantAttribute(None)
+        self._must_update = model.BooleanVA(True)
+        self.list_labels = []
+        self.single_peaks = []
+        self.peaks_canvpos = []
+        self.width_labels = []
+        self.amplitude_labels = []
+        self.peak_labels = []
 
         self.orientation = orientation or self.HORIZONTAL
         self.label_orientation = self.orientation
 
         self.line_width = 2
-
     # Event Handlers
 
     def on_left_down(self, evt):
@@ -531,11 +539,13 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
     def set_position(self, pos):
         x, y = pos
         self.v_pos.value = (max(min(self.view_width, x), 1), max(min(self.view_height - 1, y), 1))
+        self.cnvs.Refresh()
 
     def update_data(self, peak_data, spectrum_range, unit):
         self.set_peaks(peak_data)
         self.set_range(spectrum_range)
         self.set_unit(unit)
+        self._must_update.value = True
         self.cnvs.Refresh()
 
     def set_peaks(self, peaks):
@@ -551,79 +561,98 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
         ctx.set_line_width(self.line_width)
         ctx.set_dash([3])
         ctx.set_line_join(cairo.LINE_JOIN_MITER)
-        list_labels = []
-        peak_labels = []
-        width_labels = []
-        amplitude_labels = []
-        peaks_canvpos = []
-        single_peaks = []
         peaks = self.peaks.value
         range = self.range.value
         if peaks is not None:
-            for pos, width, amplitude in peak._Grouped(peaks[:-1], 3):
-                peak_labels.append(units.readable_str(pos, self.unit, 3))
-                width_labels.append(units.readable_str(width, self.unit, 3))
-                amplitude_labels.append(units.readable_str(amplitude, None, 3))
-                peaks_canvpos.append(int((((pos - range[0]) * (self.cnvs.ClientSize.x - 1)) / (range[-1] - range[0])) + 1))
-                single_peaks.append(numpy.array([pos, width, amplitude, peaks[-1]]))
+            rng_first = range[0]
+            rng_last = range[-1]
+            client_size_x = self.cnvs.ClientSize.x
+            client_size_y = self.cnvs.ClientSize.y
+            if self._must_update.value:
+                self.single_peaks = []
+                self.width_labels = []
+                self.amplitude_labels = []
+                self.peak_labels = []
+                for pos, width, amplitude in peak._Grouped(peaks[:-1], 3):
+                    self.peak_labels.append(units.readable_str(pos, self.unit, 3))
+                    self.width_labels.append(units.readable_str(width, self.unit, 3))
+                    self.amplitude_labels.append(units.readable_str(amplitude, None, 3))
+                    self.single_peaks.append(numpy.array([pos, width, amplitude, peaks[-1]]))
 
-            curve = peak.Curve(range, peaks)
-            curve_to_draw = zip(range, curve)
+                self.curve = peak.Curve(range, peaks)
+                self.curve_to_draw = zip(range, self.curve)
+                self._must_update.value = False
+            self.peaks_canvpos = []
+            # Depends on canvas size so always update
+            for pos, width, amplitude in peak._Grouped(peaks[:-1], 3):
+                self.peaks_canvpos.append(int((((pos - rng_first) * (client_size_x - 1)) / (rng_last - rng_first)) + 1))
             curve_drawn = []
             self.colour = self.colour[:3] + (0.5,)
             ctx.set_source_rgba(*self.colour)
-            for x, y in curve_to_draw:
-                x_canvas = (((x - range[0]) * (self.cnvs.ClientSize.x - 1)) / (range[-1] - range[0])) + 1
-                y_canvas = (((y - min(curve)) * (self.cnvs.ClientSize.y - 1)) / (max(curve) - min(curve))) + 1
-                y_canvas = self.cnvs.ClientSize.y - y_canvas
+            mn, mx = min(self.curve), max(self.curve)
+            step = max(1, len(range) // self.length)
+            odd_curve = self.curve_to_draw[1::step]
+            for x, y in odd_curve:
+                x_canvas = (((x - rng_first) * (client_size_x - 1)) / (rng_last - rng_first)) + 1
+                y_canvas = (((y - mn) * (client_size_y - 1)) / (mx - mn)) + 1
+                y_canvas = client_size_y - y_canvas
                 ctx.line_to(x_canvas, y_canvas)
                 curve_drawn.append((x_canvas, y_canvas))
             ctx.stroke()
-
             ctx.set_source_rgba(*self.colour_peaks)
-            for p_label, p_pos in zip(peak_labels, peaks_canvpos):
+            self.list_labels = []
+            for p_label, p_pos in zip(self.peak_labels, self.peaks_canvpos):
                 ctx.move_to(p_pos - 3, self.cnvs.ClientSize.y)
                 ctx.line_to(p_pos, self.cnvs.ClientSize.y - 16)
                 ctx.line_to(p_pos + 3, self.cnvs.ClientSize.y)
                 ctx.line_to(p_pos - 3, self.cnvs.ClientSize.y)
                 ctx.fill()
 
-                peak_label = self.add_label("", colour=self.colour_peaks)
-                peak_label.text = p_label
                 closest_pos = min([x[0] for x in curve_drawn], key=lambda y:abs(y - p_pos))
                 peak_tuple = [item for item in curve_drawn if item[0] == closest_pos][0]
-                peak_label.pos = (p_pos, peak_tuple[1] - 20)
-                list_labels.append(peak_label)
-
-        if self.v_pos.value is not None:
-            v_posx, v_posy = self.v_pos.value
-            if peaks_canvpos:
-                # Find closest peak
-                closest_peak = min(peaks_canvpos, key=lambda x:abs(x - v_posx))
-                peak_margin = self.cnvs.ClientSize.x / (10 * len(peaks_canvpos))
-                if abs(closest_peak - v_posx) <= peak_margin:
-                    peak_i = peaks_canvpos.index(closest_peak)
-                    single_curve = peak.Curve(range, single_peaks[peak_i])
-                    curve_to_draw = zip(range, single_curve)
-
-                    x_canvas = (((curve_to_draw[0][0] - range[0]) * (self.cnvs.ClientSize.x - 1)) / (range[-1] - range[0])) + 1
-                    y_canvas = self.cnvs.ClientSize.y - 1
-                    self.colour = self.colour[:3] + (0.5,)
-                    ctx.set_source_rgba(*self.colour)
-                    ctx.move_to(x_canvas, y_canvas)
-                    for x, y in curve_to_draw:
-                        x_canvas = (((x - range[0]) * (self.cnvs.ClientSize.x - 1)) / (range[-1] - range[0])) + 1
-                        y_canvas = (((y - min(curve)) * (self.cnvs.ClientSize.y - 1)) / (max(curve) - min(curve))) + 1
-                        y_canvas = self.cnvs.ClientSize.y - y_canvas
+                peak_label = Label(
+                    text=p_label,
+                    pos=(p_pos, peak_tuple[1] - 20),
+                    font_size=12,
+                    flip=True,
+                    align=wx.ALIGN_LEFT | wx.ALIGN_TOP,
+                    colour=self.colour_peaks,  # default to white
+                    opacity=1.0,
+                    deg=None
+                )
+                self.labels.append(peak_label)
+                self.list_labels.append(peak_label)
+            if self.v_pos.value is not None:
+                v_posx, v_posy = self.v_pos.value
+                if self.peaks_canvpos:
+                    # Find closest peak
+                    closest_peak = min(self.peaks_canvpos, key=lambda x:abs(x - v_posx))
+                    peak_margin = self.cnvs.ClientSize.x / (10 * len(self.peaks_canvpos))
+                    if abs(closest_peak - v_posx) <= peak_margin:
+                        peak_i = self.peaks_canvpos.index(closest_peak)
+                        single_curve = peak.Curve(range, self.single_peaks[peak_i])
+                        curve_to_draw = zip(range, single_curve)
+                        mn, mx = min(self.curve), max(self.curve)
+                        x_canvas = (((curve_to_draw[0][0] - rng_first) * (client_size_x - 1)) / (rng_last - rng_first)) + 1
+                        y_canvas = client_size_y - 1
+                        self.colour = self.colour[:3] + (0.5,)
+                        ctx.set_source_rgba(*self.colour)
+                        ctx.move_to(x_canvas, y_canvas)
+                        step = max(1, len(range) // self.length)
+                        odd_curve = curve_to_draw[1::step]
+                        for x, y in odd_curve:
+                            x_canvas = (((x - rng_first) * (client_size_x - 1)) / (rng_last - rng_first)) + 1
+                            y_canvas = (((y - mn) * (client_size_y - 1)) / (mx - mn)) + 1
+                            y_canvas = client_size_y - y_canvas
+                            ctx.line_to(x_canvas, y_canvas)
+                        x_canvas = (((curve_to_draw[-1][0] - rng_first) * (client_size_x - 1)) / (rng_last - rng_first)) + 1
+                        y_canvas = client_size_y - 1
                         ctx.line_to(x_canvas, y_canvas)
-                    x_canvas = (((curve_to_draw[-1][0] - range[0]) * (self.cnvs.ClientSize.x - 1)) / (range[-1] - range[0])) + 1
-                    y_canvas = self.cnvs.ClientSize.y - 1
-                    ctx.line_to(x_canvas, y_canvas)
-                    ctx.fill()
-                    list_labels[peak_i].text = list_labels[peak_i].text + "\nWidth: " + width_labels[peak_i] + "\nAmplitude: " + amplitude_labels[peak_i]
+                        ctx.fill()
+                        self.list_labels[peak_i].text = self.list_labels[peak_i].text + "\nWidth: " + self.width_labels[peak_i] + "\nAmplitude: " + self.amplitude_labels[peak_i]
 
-        for pl in list_labels:
-            self._write_label(ctx, pl)
+            for pl in self.list_labels:
+                self._write_label(ctx, pl)
 
 
 class DichotomyOverlay(base.ViewOverlay):
