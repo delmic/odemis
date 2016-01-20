@@ -214,7 +214,13 @@ def _DoFit(future, spectrum, wavelength, type='gaussian'):
     try:
         with future._fit_progress_lock:
             # values based on experimental datasets
-            init_window_size = len(wavelength) // 30
+            if len(wavelength) >= 2000:
+                divider = 15
+            if len(wavelength) >= 1000:
+                divider = 20
+            else:
+                divider = 30
+            init_window_size = len(wavelength) // divider
             window_size = init_window_size
             step = 1
             try:
@@ -222,7 +228,7 @@ def _DoFit(future, spectrum, wavelength, type='gaussian'):
                 FitFunction = PEAK_FUNCTIONS[type]
             except KeyError:
                 raise KeyError("Given type %s not in available fitting types: %s" % (type, PEAK_FUNCTIONS.keys()))
-            while window_size <= init_window_size + 10:
+            while window_size <= init_window_size + 5:
                 if future._fit_state == CANCELLED:
                     raise CancelledError()
                 smoothed = Smooth(spectrum, window_len=window_size)

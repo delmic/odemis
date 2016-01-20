@@ -476,11 +476,12 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
     HORIZONTAL = 1
     VERTICAL = 2
 
-    def __init__(self, cnvs, colour=gui.FG_COLOUR_CURVE, colour_peaks=gui.FG_COLOUR_PEAK, orientation=None):
+    def __init__(self, cnvs, colour=gui.FG_COLOUR_CURVE, colour_peaks=gui.FG_COLOUR_PEAK, orientation=None, length=200):
 
         base.ViewOverlay.__init__(self, cnvs)
         base.DragMixin.__init__(self)
 
+        self.length = length  # curve length
         self.label = None
         self.colour = conversion.hex_to_frgba(colour)
         self.colour = self.colour[:3] + (0.5,)
@@ -502,7 +503,6 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
         self.label_orientation = self.orientation
 
         self.line_width = 2
-
     # Event Handlers
 
     def on_left_down(self, evt):
@@ -558,7 +558,6 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
         self.unit = unit
 
     def draw(self, ctx):
-        logging.debug("Curve line redraw")
         ctx.set_line_width(self.line_width)
         ctx.set_dash([3])
         ctx.set_line_join(cairo.LINE_JOIN_MITER)
@@ -584,14 +583,20 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
             curve_drawn = []
             self.colour = self.colour[:3] + (0.5,)
             ctx.set_source_rgba(*self.colour)
-            for x, y in self.curve_to_draw:
-                x_canvas = (((x - range[0]) * (self.cnvs.ClientSize.x - 1)) / (range[-1] - range[0])) + 1
-                y_canvas = (((y - min(self.curve)) * (self.cnvs.ClientSize.y - 1)) / (max(self.curve) - min(self.curve))) + 1
-                y_canvas = self.cnvs.ClientSize.y - y_canvas
+            rng_first = range[0]
+            rng_last = range[-1]
+            client_size_x = self.cnvs.ClientSize.x
+            client_size_y = self.cnvs.ClientSize.y
+            mn, mx = min(self.curve), max(self.curve)
+            step = max(1, len(range) // self.length)
+            odd_curve = self.curve_to_draw[1::step]
+            for x, y in odd_curve:
+                x_canvas = (((x - rng_first) * (client_size_x - 1)) / (rng_last - rng_first)) + 1
+                y_canvas = (((y - mn) * (client_size_y - 1)) / (mx - mn)) + 1
+                y_canvas = client_size_y - y_canvas
                 ctx.line_to(x_canvas, y_canvas)
                 curve_drawn.append((x_canvas, y_canvas))
             ctx.stroke()
-
             ctx.set_source_rgba(*self.colour_peaks)
             self.list_labels = []
             for p_label, p_pos in zip(self.peak_labels, self.peaks_canvpos):
@@ -615,7 +620,6 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
                 )
                 self.labels.append(peak_label)
                 self.list_labels.append(peak_label)
-
         if self.v_pos.value is not None:
             v_posx, v_posy = self.v_pos.value
             if self.peaks_canvpos:
@@ -626,23 +630,28 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
                     peak_i = self.peaks_canvpos.index(closest_peak)
                     single_curve = peak.Curve(range, self.single_peaks[peak_i])
                     curve_to_draw = zip(range, single_curve)
-
-                    x_canvas = (((curve_to_draw[0][0] - range[0]) * (self.cnvs.ClientSize.x - 1)) / (range[-1] - range[0])) + 1
-                    y_canvas = self.cnvs.ClientSize.y - 1
+                    rng_first = range[0]
+                    rng_last = range[-1]
+                    client_size_x = self.cnvs.ClientSize.x
+                    client_size_y = self.cnvs.ClientSize.y
+                    mn, mx = min(self.curve), max(self.curve)
+                    x_canvas = (((curve_to_draw[0][0] - rng_first) * (client_size_x - 1)) / (rng_last - rng_first)) + 1
+                    y_canvas = client_size_y - 1
                     self.colour = self.colour[:3] + (0.5,)
                     ctx.set_source_rgba(*self.colour)
                     ctx.move_to(x_canvas, y_canvas)
-                    for x, y in curve_to_draw:
-                        x_canvas = (((x - range[0]) * (self.cnvs.ClientSize.x - 1)) / (range[-1] - range[0])) + 1
-                        y_canvas = (((y - min(self.curve)) * (self.cnvs.ClientSize.y - 1)) / (max(self.curve) - min(self.curve))) + 1
-                        y_canvas = self.cnvs.ClientSize.y - y_canvas
+                    step = max(1, len(range) // self.length)
+                    odd_curve = curve_to_draw[1::step]
+                    for x, y in odd_curve:
+                        x_canvas = (((x - rng_first) * (client_size_x - 1)) / (rng_last - rng_first)) + 1
+                        y_canvas = (((y - mn) * (client_size_y - 1)) / (mx - mn)) + 1
+                        y_canvas = client_size_y - y_canvas
                         ctx.line_to(x_canvas, y_canvas)
-                    x_canvas = (((curve_to_draw[-1][0] - range[0]) * (self.cnvs.ClientSize.x - 1)) / (range[-1] - range[0])) + 1
-                    y_canvas = self.cnvs.ClientSize.y - 1
+                    x_canvas = (((curve_to_draw[-1][0] - rng_first) * (client_size_x - 1)) / (rng_last - rng_first)) + 1
+                    y_canvas = client_size_y - 1
                     ctx.line_to(x_canvas, y_canvas)
                     ctx.fill()
                     self.list_labels[peak_i].text = self.list_labels[peak_i].text + "\nWidth: " + self.width_labels[peak_i] + "\nAmplitude: " + self.amplitude_labels[peak_i]
-
         for pl in self.list_labels:
             self._write_label(ctx, pl)
 
