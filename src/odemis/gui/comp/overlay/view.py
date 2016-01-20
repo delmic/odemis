@@ -563,11 +563,11 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
         ctx.set_line_join(cairo.LINE_JOIN_MITER)
         peaks = self.peaks.value
         range = self.range.value
-        rng_first = range[0]
-        rng_last = range[-1]
-        client_size_x = self.cnvs.ClientSize.x
-        client_size_y = self.cnvs.ClientSize.y
         if peaks is not None:
+            rng_first = range[0]
+            rng_last = range[-1]
+            client_size_x = self.cnvs.ClientSize.x
+            client_size_y = self.cnvs.ClientSize.y
             if self._must_update.value:
                 self.single_peaks = []
                 self.width_labels = []
