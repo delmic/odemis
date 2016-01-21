@@ -220,7 +220,8 @@ class VigilantAttribute(VigilantAttributeBase):
         if self.debug:
             # Print the location from which the VA's value was set
             import traceback
-            print traceback.format_list(traceback.extract_stack(limit=2))[0]
+            logging.debug("Value changed to %r from:\n%s", self._value,
+                          traceback.format_list(traceback.extract_stack(limit=2))[0])
 
         if must_notify:
             self.notify(self._value)
