@@ -1,10 +1,10 @@
-﻿  # -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 '''
 Created on 4 Mar 2014
 
 @author: Kimon Tsitsikas
 
-Copyright © 2014 Kimon Tsitsikas, Delmic
+Copyright © 2014-2016 Kimon Tsitsikas, Delmic
 
 This file is part of Odemis.
 
@@ -19,25 +19,23 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from __future__ import absolute_import
-from __future__ import division
+
+from __future__ import absolute_import, division
 
 import Queue
-import functools
 import gc
 import logging
 import math
 import numpy
 from odemis import model, util
-from odemis.model import HwError
-from odemis.model import isasync, CancellableThreadPoolExecutor
-from odemis.model import roattribute, oneway
+from odemis.model import (HwError, isasync, CancellableThreadPoolExecutor,
+                          roattribute, oneway)
 from odemis.util import TimeoutError
 import re
+import socket
 from tescan import sem, CancelledError
 import threading
 import time
-import socket
 import weakref
 
 
@@ -48,11 +46,12 @@ ACQ_CMD_TERM = 2
 # new data from the server.
 TESCAN_PXL_LIMIT = 100
 
+
 class SEM(model.HwComponent):
     '''
-    This is an extension of the model.HwComponent class. It instantiates the scanner 
-    and se-detector children components and provides an update function for its 
-    metadata. 
+    This is an extension of the model.HwComponent class. It instantiates the scanner
+    and se-detector children components and provides an update function for its
+    metadata.
     '''
 
     def __init__(self, name, role, children, host, daemon=None, **kwargs):
@@ -68,13 +67,13 @@ class SEM(model.HwComponent):
 
         self._host = host
         self._device = sem.Sem()
-        logging.info("Going to connect to host")
+        logging.debug("Going to connect to host")
         result = self._device.Connect(host, 8300)
         if result < 0:
             raise HwError("Failed to connect to TESCAN server '%s'. "
-                          "Check that the ip address is correct and TESCAN server "
+                          "Check that the IP address is correct and TESCAN server "
                           "connected to the network." % (host,))
-        logging.info("Connected")
+        logging.info("Connected to Tescan %s", host)
 
         # Lock in order to synchronize all the child component functions
         # that acquire data from the SEM while we continuously acquire images
@@ -89,11 +88,14 @@ class SEM(model.HwComponent):
         self._roi = None
         self._dt = None
 
-        # important: stop the scanning before we start scanning or before automatic
-        # procedures, even before we configure the detectors
-        self._device.ScStopScan()
-        # Blanker is automatically enabled when no scanning takes place
-        self._device.ScSetBlanker(1, 2)
+        # If no detectors, no need to annoy the user by stopping the current scanning
+        hasdet = any(n.startswith("detector") for n in children.keys())
+        if hasdet:
+            # important: stop the scanning before we start scanning or before
+            # automatic procedures, even before we configure the detectors
+            self._device.ScStopScan()
+            # Blanker is automatically enabled when no scanning takes place
+            self._device.ScSetBlanker(1, 2)
 
         self._hwName = "TescanSEM (s/n: %s)" % (self._device.TcpGetDevice())
         self._metadata[model.MD_HW_NAME] = self._hwName
@@ -295,7 +297,6 @@ class SEM(model.HwComponent):
                         last_gc = time.time()
                 else:  # nothing to acquire => rest
                     with self._acq_progress_lock:
-                        # Beam blanker back to automatic
                         self._device.ScStopScan()
                         # Beam blanker back to automatic
                         self._device.ScSetBlanker(1, 2)
@@ -1159,7 +1160,9 @@ class ChamberView(model.DigitalCamera):
     """
     Represents one chamber camera - chamberscope. Provides video consisted of
     static images sent in regular intervals.
-    This implementation is for the Tescan.
+    This implementation is for the Tescan. Note that some Tescans have several
+    chamber cameras, but the current API is limited to acquiring images from the
+    first one.
     """
     def __init__(self, name, role, parent, **kwargs):
         """
@@ -1182,7 +1185,7 @@ class ChamberView(model.DigitalCamera):
         resolution = (height, width)
         self._shape = resolution + (2 ** 8,)
         self.resolution = model.ResolutionVA(resolution, [(1, 1), (2048, 2048)],
-                                            readonly=True)
+                                             readonly=True)
 
         self.acquisition_lock = threading.Lock()
         self.acquire_must_stop = threading.Event()
@@ -1191,9 +1194,6 @@ class ChamberView(model.DigitalCamera):
         self.data = ChamberDataFlow(self)
 
         logging.debug("Camera component ready to use.")
-
-    def Shutdown(self):
-        self.parent._device.CameraDisable()
 
     def GetStatus(self):
         """
@@ -1235,8 +1235,6 @@ class ChamberView(model.DigitalCamera):
         self.acquire_must_stop.set()
         # self.parent._device.CancelRecv()
         with self.parent._acq_progress_lock:
-            # self.parent._device.CameraDisable()
-            # self.parent._device.ScStopScan()
             self.parent._device.CameraDisable()
 
     def _acquire_thread_continuous(self, callback):
@@ -1252,8 +1250,7 @@ class ChamberView(model.DigitalCamera):
                 logging.debug("Acquiring chamber image of %s", sem_img.shape)
                 array = model.DataArray(sem_img)
                 # update resolution
-                self.resolution._value = sem_img.shape
-                self.resolution.notify(sem_img.shape)
+                self.resolution._set_value(sem_img.shape, force_write=True)
                 # first we wait ourselves the typical time (which might be very long)
                 # while detecting requests for stop
                 # If the Chamber view is just enabled it may take several seconds
@@ -1285,7 +1282,8 @@ class ChamberView(model.DigitalCamera):
         """
         Must be called at the end of the usage
         """
-        self.Shutdown()
+        self.req_stop_flow()
+        self.wait_stopped_flow()
 
 
 class ChamberDataFlow(model.DataFlow):
@@ -1306,7 +1304,7 @@ class ChamberDataFlow(model.DataFlow):
         comp = self.component()
         if comp is None:
             return
-        comp.req_stop_flow()  # FIXME
+        comp.req_stop_flow()
 
 
 PRESSURE_VENTED = 1e05  # Pa
