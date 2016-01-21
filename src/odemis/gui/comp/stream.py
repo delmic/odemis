@@ -49,6 +49,7 @@ import odemis.gui.img.data as img
 
 stream_remove_event, EVT_STREAM_REMOVE = wx.lib.newevent.NewEvent()
 stream_visible_event, EVT_STREAM_VISIBLE = wx.lib.newevent.NewEvent()
+stream_peak_event, EVT_STREAM_PEAK = wx.lib.newevent.NewEvent()
 
 # Values to control which option is available
 OPT_NAME_EDIT = 1  # allow the renaming of the stream (for one time only)
@@ -56,6 +57,7 @@ OPT_BTN_REMOVE = 2  # remove the stream entry
 OPT_BTN_SHOW = 4  # show/hide the stream image
 OPT_BTN_UPDATE = 8  # update/stop the stream acquisition
 OPT_BTN_TINT = 16  # tint of the stream (if the VA exists)
+OPT_BTN_PEAK = 32  # show/hide the peak fitting data
 
 CAPTION_PADDING_RIGHT = 5
 ICON_WIDTH, ICON_HEIGHT = 16, 16
@@ -118,6 +120,7 @@ class StreamPanelHeader(wx.Control):
             self.ctrl_label = self._add_suggest_ctrl()
         else:
             self.ctrl_label = self._add_label_ctrl()
+        self.btn_peak = self._add_peak_btn() if self.Parent.options & OPT_BTN_PEAK else None
         self.btn_tint = self._add_tint_btn() if self.Parent.options & OPT_BTN_TINT else None
         self.btn_show = self._add_visibility_btn() if self.Parent.options & OPT_BTN_SHOW else None
         self.btn_update = self._add_update_btn() if self.Parent.options & OPT_BTN_UPDATE else None
@@ -177,6 +180,18 @@ class StreamPanelHeader(wx.Control):
 
         self._add_ctrl(tint_btn)
         return tint_btn
+
+    def _add_peak_btn(self):
+        """ Add the peak toggle button to the stream panel header """
+        peak_btn = buttons.ImageToggleButtonImageButton(self,
+                                                              bitmap=img.getico_gaussian_offBitmap())
+        peak_btn.bmpHover = img.getico_gaussian_off_hBitmap()
+        peak_btn.bmpSelected = img.getico_gaussian_onBitmap()
+        peak_btn.bmpSelectedHover = img.getico_gaussian_on_hBitmap()
+
+        peak_btn.SetToolTipString("Show peaks")
+        self._add_ctrl(peak_btn)
+        return peak_btn
 
     def _add_visibility_btn(self):
         """ Add the visibility toggle button to the stream panel header """
@@ -273,6 +288,10 @@ class StreamPanelHeader(wx.Control):
         """ Show or hide the update button """
         self._show_ctrl(self.btn_update, show)
 
+    def show_peak_btn(self, show):
+        """ Show or hide the peak button """
+        self._show_ctrl(self.btn_peak, show)
+
     def show_show_btn(self, show):
         """ Show or hide the show button """
         self._show_ctrl(self.btn_show, show)
@@ -293,6 +312,10 @@ class StreamPanelHeader(wx.Control):
         """ Enable or disable the show button """
         self.btn_show.Enable(enabled)
 
+    def enable_peak_btn(self, enabled):
+        """ Enable or disable the peak button """
+        self.btn_peak.Enable(enabled)
+
     def enable_tint_btn(self, enabled):
         """ Enable or disable the tint button """
         self.btn_tint.Enable(enabled)
@@ -309,6 +332,9 @@ class StreamPanelHeader(wx.Control):
         if self.btn_show:
             self.enable_show_btn(enabled)
 
+        if self.btn_peak:
+            self.enable_peak_btn(enabled)
+
         if self.btn_tint:
             self.enable_tint_btn(enabled)
 
@@ -323,6 +349,7 @@ class StreamPanelHeader(wx.Control):
         """ Remove or disable all controls """
         self.to_static_mode()
         self.show_show_btn(False)
+        self.show_peak_btn(False)
 
     # END Show/hide/disable controls
 
@@ -457,6 +484,8 @@ class StreamPanel(wx.Panel):
 
         self._header.btn_remove.Bind(wx.EVT_BUTTON, self.on_remove_btn)
         self._header.btn_show.Bind(wx.EVT_BUTTON, self.on_visibility_btn)
+        if self._header.btn_peak is not None:
+            self._header.btn_peak.Bind(wx.EVT_BUTTON, self.on_peak_btn)
 
         if wx.Platform == "__WXMSW__":
             self._header.Bind(wx.EVT_LEFT_DCLICK, self.on_button)
@@ -574,6 +603,10 @@ class StreamPanel(wx.Panel):
         """ Set the "visible" toggle button of the stream panel """
         self._header.btn_show.SetToggle(visible)
 
+    def set_peak(self, visible):
+        """ Set the "peak" toggle button of the stream panel """
+        self._header.btn_peak.SetToggle(visible)
+
     def collapse(self, collapse=None):
         """ Collapses or expands the pane window """
 
@@ -605,6 +638,11 @@ class StreamPanel(wx.Panel):
         event = stream_visible_event(visible=self._header.btn_show.GetToggle())
         wx.PostEvent(self, event)
 
+    def on_peak_btn(self, evt):
+        # generate EVT_STREAM_PEAK
+        event = stream_peak_event(visible=self._header.btn_peak.GetToggle())
+        wx.PostEvent(self, event)
+
     # Manipulate expander buttons
 
     def show_updated_btn(self, show):
@@ -618,6 +656,9 @@ class StreamPanel(wx.Panel):
 
     def show_visible_btn(self, show):
         self._header.show_show_btn(show)
+
+    def show_peak_btn(self, show):
+        self._header.show_peak_btn(show)
 
     def enable(self, enabled):
         self._header.enable(enabled)

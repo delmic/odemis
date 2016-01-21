@@ -32,7 +32,8 @@ from odemis import model, util
 from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR
 from odemis.gui.comp.overlay.world import RepetitionSelectOverlay
 from odemis.gui.comp.stream import StreamPanel, EVT_STREAM_VISIBLE, \
-    OPT_BTN_REMOVE, OPT_BTN_SHOW, OPT_BTN_UPDATE, OPT_BTN_TINT, OPT_NAME_EDIT
+    EVT_STREAM_PEAK, OPT_BTN_REMOVE, OPT_BTN_SHOW, OPT_BTN_UPDATE, OPT_BTN_TINT, \
+    OPT_NAME_EDIT, OPT_BTN_PEAK
 from odemis.gui.conf import data
 from odemis.gui.conf.data import get_hw_settings_config, get_local_vas
 from odemis.gui.conf.util import create_setting_entry, create_axis_entry
@@ -80,6 +81,10 @@ class StreamController(object):
             options |= OPT_BTN_TINT
             if not isinstance(stream, acqstream.StaticStream):
                 options |= OPT_NAME_EDIT
+
+        # Special display for spectrum (aka SpectrumStream)
+        if isinstance(stream, acqstream.SpectrumStream) and hasattr(stream, "peak_show"):
+            options |= OPT_BTN_PEAK
 
         self.stream_panel = StreamPanel(stream_bar, stream, options)
         # Detect when the panel is destroyed (but _not_ any of the children)
@@ -139,6 +144,12 @@ class StreamController(object):
         vis = stream in tab_data_model.focussedView.value.getStreams()
         self.stream_panel.set_visible(vis)
         self.stream_panel.Bind(EVT_STREAM_VISIBLE, self._on_stream_visible)
+
+        if isinstance(stream, acqstream.SpectrumStream) and hasattr(stream, "peak_show"):
+            # Set the peak button on the stream panel
+            vis = stream in tab_data_model.focussedView.value.getStreams()
+            self.stream_panel.set_peak(vis)
+            self.stream_panel.Bind(EVT_STREAM_PEAK, self._on_stream_peak)
 
         stream_bar.add_stream_panel(self.stream_panel, show_panel)
 
@@ -295,6 +306,15 @@ class StreamController(object):
         else:
             logging.debug("Hiding stream '%s'", self.stream.name.value)
             view.removeStream(self.stream)
+
+    def _on_stream_peak(self, evt):
+        """ Show or hide a stream in the focussed view if the peak button is clicked """
+        if evt.visible:
+            logging.debug("Showing peak data")
+            self.stream.peak_show.value = True
+        else:
+            logging.debug("Hiding peak data")
+            self.stream.peak_show.value = False
 
     def _on_new_dye_name(self, dye_name):
         """ Assign excitation and emission wavelengths if the given name matches a known dye """

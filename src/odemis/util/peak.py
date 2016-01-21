@@ -320,7 +320,7 @@ def _Grouped(iterable, n):
 
 
 def _Normalize(vector):
-    normfac = numpy.max(numpy.max(vector))
+    normfac = numpy.max(vector)
 
     vecnorm = vector / normfac
     return vecnorm

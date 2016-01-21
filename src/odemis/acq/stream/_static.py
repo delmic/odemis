@@ -472,6 +472,9 @@ class StaticSpectrumStream(StaticStream):
         self.selected_line = model.ListVA([(None, None), (None, None)],
                                           setter=self._setLine)
 
+        # True when spectrum peak fitting curve is displayed
+        self.peak_show = model.BooleanVA(True)
+
         # The thickness of a point or a line (shared).
         # A point of width W leads to the average value between all the pixels
         # which are within W/2 from the center of the point.

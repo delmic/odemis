@@ -1195,7 +1195,7 @@ class BarPlotCanvas(canvas.PlotCanvas):
         self.curve_overlay = view_overlay.CurveOverlay(
             self,
             orientation=CurveOverlay.HORIZONTAL | CurveOverlay.VERTICAL)
-        self.add_view_overlay(self.curve_overlay)
+        # self.add_view_overlay(self.curve_overlay)
         self.curve_overlay.activate()
 
     def set_data(self, data, unit_x=None, unit_y=None, range_x=None, range_y=None):

@@ -862,6 +862,9 @@ class PlotViewport(ViewPort):
             logging.info("No stream to plot found")
             self.clear()  # Remove legend ticks and clear plot
 
+        if hasattr(self.stream, "peak_show"):
+            self.stream.peak_show.subscribe(self.on_peak_show, init=True)
+
     @abstractmethod
     def _on_new_data(self, data):
         pass
@@ -880,6 +883,30 @@ class PointSpectrumViewport(PlotViewport):
         super(PointSpectrumViewport, self).setView(view, tab_data)
         wx.CallAfter(self.bottom_legend.SetToolTipString, "Wavelength")
         wx.CallAfter(self.left_legend.SetToolTipString, "Intensity")
+
+    def on_peak_show(self, visible):
+        if visible:
+            self.canvas.add_view_overlay(self.canvas.curve_overlay)
+            self.canvas.curve_overlay.activate()
+            wx.CallAfter(self.canvas.request_drawing_update)
+            if self.stream is not None:
+                data = self.stream.get_pixel_spectrum()
+                if data is not None:
+                    spectrum_range = self.stream.get_spectrum_range()
+                    unit_x = self.stream.spectrumBandwidth.unit
+                    try:
+                        # cancel previous fitting if there is one in progress
+                        self._peak_future.cancel()
+                    except AttributeError:
+                        pass
+                    self.spectrum_range = spectrum_range
+                    self.unit_x = unit_x
+                    self._peak_future = peak.Fit(data, spectrum_range)
+                    self._peak_future.add_done_callback(self._update_peak)
+        else:
+            self.canvas.curve_overlay.deactivate()
+            self.canvas.remove_view_overlay(self.canvas.curve_overlay)
+            wx.CallAfter(self.canvas.request_drawing_update)
 
     def _on_new_data(self, data):
         """
@@ -931,15 +958,17 @@ class PointSpectrumViewport(PlotViewport):
         spectrum_range = self.stream.get_spectrum_range()
         unit_x = self.stream.spectrumBandwidth.unit
 
-        try:
-            # cancel previous fitting if there is one in progress
-            self._peak_future.cancel()
-        except AttributeError:
-            pass
-        self.spectrum_range = spectrum_range
-        self.unit_x = unit_x
-        self._peak_future = peak.Fit(data, spectrum_range)
-        self._peak_future.add_done_callback(self._update_peak)
+        if self.stream.peak_show.value:
+            try:
+                # cancel previous fitting if there is one in progress
+                self._peak_future.cancel()
+            except AttributeError:
+                pass
+            self.spectrum_range = spectrum_range
+            self.unit_x = unit_x
+            self._peak_future = peak.Fit(data, spectrum_range)
+            self._peak_future.add_done_callback(self._update_peak)
+
         self.canvas.set_1d_data(spectrum_range, data, unit_x)
 
         self.bottom_legend.unit = unit_x
@@ -952,8 +981,9 @@ class PointSpectrumViewport(PlotViewport):
     def _update_peak(self, f):
         try:
             peak_data = f.result()
-            self.canvas.add_view_overlay(self.canvas.curve_overlay)
-            self.canvas.curve_overlay.activate()
+            if self.stream.peak_show.value:
+                self.canvas.add_view_overlay(self.canvas.curve_overlay)
+                self.canvas.curve_overlay.activate()
             wx.CallAfter(self.canvas.request_drawing_update)
             self.canvas.curve_overlay.update_data(peak_data, self.spectrum_range, self.unit_x)
         except CancelledError:
@@ -1111,8 +1141,11 @@ class SpatialSpectrumViewport(ViewPort):
         """ Clear the marking line when the selected pixel is cleared """
         if None in pixel:
             self.canvas.markline_overlay.clear_labels()
-            if self.canvas.curve_overlay is not None:
+            # Try to clear previous curve, if any
+            try:
                 self.canvas.curve_overlay.clear_labels()
+            except AttributeError:
+                pass
 
     def _on_line_select(self, line):
         """ Line selection event handler """
