@@ -211,7 +211,7 @@ class SEM(model.HwComponent):
             self._acquisitions.discard(detector)
             self._acq_cmd_q.put(ACQ_CMD_UPD)
             if not self._acquisitions:
-                self._req_stop_acquisition(detector)
+                self._req_stop_acquisition()
 
     def _check_cmd_q(self, block=True):
         """
@@ -332,7 +332,7 @@ class SEM(model.HwComponent):
             self._device.DtSelect(det._channel, det._detector)
             self._device.DtEnable(det._channel, 1, 16)
 
-    def _req_stop_acquisition(self, detector):
+    def _req_stop_acquisition(self):
         """
         Request the acquisition thread to stop
         """
@@ -559,11 +559,11 @@ class Scanner(model.Emitter):
 
         # (float) in rad => rotation of the image compared to the original axes
         # TODO: for now it's readonly because no rotation is supported
-        self.rotation = model.FloatContinuous(0, [0, 2 * math.pi], unit="rad",
+        self.rotation = model.FloatContinuous(0, (0, 2 * math.pi), unit="rad",
                                               readonly=True)
 
         self.dwellTime = model.FloatContinuous(1e-06, (1e-06, 1000), unit="s")
-        self.dwellTime.subscribe(self._onDwellTime)
+#         self.dwellTime.subscribe(self._onDwellTime)
 
         # Range is according to min and max voltages accepted by Tescan API
         volt_range = self.GetVoltagesRange()
@@ -572,28 +572,26 @@ class Scanner(model.Emitter):
         self.accelVoltage.subscribe(self._onVoltage)
 
         # 0 turns off the e-beam, 1 turns it on
-        power_choices = set([0, 1])
-        self._power = self.parent._device.HVGetBeam()  # Don't change state
-        self.power = model.IntEnumerated(self._power, power_choices, unit="",
-                                  setter=self._setPower)
+        power = self.parent._device.HVGetBeam()  # Don't change state
+        self.power = model.IntEnumerated(power, {0, 1}, unit="",
+                                         setter=self._setPower)
 
         # Enumerated float with respect to the PC indexes of Tescan API
         self._list_currents = self.GetProbeCurrents()
         pc_choices = set(self._list_currents)
         # We use the current PC
-        self._probeCurrent = self._list_currents[self.parent._device.GetPCIndex() - 1]
-        self.probeCurrent = model.FloatEnumerated(self._probeCurrent, pc_choices, unit="A",
-                                  setter=self._setPC)
+        pc = self._list_currents[self.parent._device.GetPCIndex() - 1]
+        self.probeCurrent = model.FloatEnumerated(pc, pc_choices, unit="A",
+                                                  setter=self._setPC)
 
         # None implies that there is a blanker but it is set automatically.
         # Mostly used in order to know if the module supports beam blanking
         # when accessing it from outside.
-        self.blanker = model.VAEnumerated(None, choices=set([None]))
+        # TODO: support True/False choices to force active/inactive blanker
+        self.blanker = model.VAEnumerated(None, choices={None})
 
-        # Timer polling VAs so we keep up to date with changes made via
-        # Tescan UI
-        self._updater = functools.partial(self._pollVAs)
-        self._va_poll = util.RepeatingTimer(5, self._updater, "VAs polling")
+        # Timer polling VAs so we keep up to date with changes made via Tescan UI
+        self._va_poll = util.RepeatingTimer(5, self._pollVAs, "VAs polling")
         self._va_poll.start()
 
     # we share metadata with our parent
@@ -609,14 +607,17 @@ class Scanner(model.Emitter):
         self._updateMagnification()
 
     def updateHorizontalFOV(self):
-        with self.parent._acq_progress_lock:
-            new_fov = self.parent._device.GetViewField()
+        prev_fov = self.horizontalFoV.value
 
-        # self._setHorizontalFOV(new_fov * 1e-03)
-        self.horizontalFoV.value = new_fov * 1e-03
-        # Update current pixelSize and magnification
-        self._updatePixelSize()
-        self._updateMagnification()
+        with self.parent._acq_progress_lock:
+            new_fov = self.parent._device.GetViewField() * 1e-3
+
+        if prev_fov != new_fov:
+            self.horizontalFoV._value = new_fov
+            self.horizontalFoV.notify(new_fov)
+            # Update current pixelSize and magnification
+            self._updatePixelSize()
+            self._updateMagnification()
 
     def _setHorizontalFOV(self, value):
         # Ensure fov odemis field always shows the right value
@@ -624,22 +625,17 @@ class Scanner(model.Emitter):
         # out of range
         with self.parent._acq_progress_lock:
             # FOV to mm to comply with Tescan API
-            self.parent._device.SetViewField(value * 1e03)
-            cur_fov = self.parent._device.GetViewField() * 1e-03
-            value = cur_fov
-        return value
+            self.parent._device.SetViewField(value * 1e3)
+            cur_fov = self.parent._device.GetViewField() * 1e-3
+        return cur_fov
 
     def _updateMagnification(self):
-
-        # it's read-only, so we change it only via _value
         mag = self._hfw_nomag / self.horizontalFoV.value
-        self.magnification._value = mag
-        self.magnification.notify(mag)
+        self.magnification._set_value(mag, force_write=True)
 
-    def _onDwellTime(self, dt):
-#         pass
-        self.parent._device.ScStopScan()
-        self.parent._device.CancelRecv()
+#     def _onDwellTime(self, dt):
+#         self.parent._device.ScStopScan()
+#         self.parent._device.CancelRecv()
 
     def _onVoltage(self, volt):
         self.parent._device.HVSetVoltage(volt)
@@ -650,26 +646,24 @@ class Scanner(model.Emitter):
     def _setPower(self, value):
         powers = self.power.choices
 
-        self._power = util.find_closest(value, powers)
-        if self._power == 0:
+        power = util.find_closest(value, powers)
+        if power == 0:
             self.parent._device.HVBeamOff()
         else:
             self.parent._device.HVBeamOn()
-        return self._power
+        return power
 
     def _setPC(self, value):
-        currents = self.probeCurrent.choices
-
-        self._probeCurrent = util.find_closest(value, currents)
-        self._indexCurrent = util.index_closest(value, self._list_currents)
 
         # Set the corresponding current index to Tescan SEM
-        self.parent._device.SetPCIndex(self._indexCurrent + 1)
+        ipc = util.index_closest(value, self._list_currents)
+        self.parent._device.SetPCIndex(ipc + 1)
+        pc = self._list_currents[ipc]
         # Adjust brightness and contrast
         # with self.parent._acq_progress_lock:
         #    self.parent._device.DtAutoSignal(self.parent._detector._channel)
 
-        return self._probeCurrent
+        return pc
 
     def GetVoltagesRange(self):
         """
@@ -780,7 +774,7 @@ class Scanner(model.Emitter):
         Note: the convention is that in internal coordinates Y goes down, while
         in physical coordinates, Y goes up.
         px_pos (tuple of 2 floats): position in internal coordinates (pixels)
-        returns (tuple of 2 floats): physical position in meters 
+        returns (tuple of 2 floats): physical position in meters
         """
         pxs = self.pixelSize.value  # m/px
         phy_pos = (px_pos[0] * pxs[0], -px_pos[1] * pxs[1])  # - to invert Y
@@ -789,16 +783,27 @@ class Scanner(model.Emitter):
     def _pollVAs(self):
         try:
             with self.parent._acquisition_init_lock:
+                logging.debug("Updating FoV, voltage and current")
                 self.updateHorizontalFOV()
                 with self.parent._acq_progress_lock:
-                    volt = self.parent._device.HVGetVoltage()
-                    self.accelVoltage.value = volt
-                    self.probeCurrent.value = self._list_currents[self.parent._device.GetPCIndex() - 1]
+                    prev_volt = self.accelVoltage._value
+                    new_volt = self.parent._device.HVGetVoltage()
+                    if prev_volt != new_volt:
+                        # Skip the setter
+                        self.accelVoltage._value = new_volt
+                        self.accelVoltage.notify(new_volt)
+
+                    prev_pc = self.probeCurrent._value
+                    new_pc = self._list_currents[self.parent._device.GetPCIndex() - 1]
+                    if prev_pc != new_pc:
+                        self.probeCurrent._value = new_pc
+                        self.probeCurrent.notify(new_pc)
         except Exception:
-            logging.debug("Unexpected failure during VAs polling")
+            logging.exception("Unexpected failure during VAs polling")
 
     def terminate(self):
         self._va_poll.cancel()
+        self._va_poll.join(5)
 
 
 class Detector(model.Detector):
@@ -929,10 +934,11 @@ class SEMDataFlow(model.DataFlow):
         """
         Block until the Event on which the dataflow is synchronised has been
           received. If the DataFlow is not synchronised on any event, this
-          method immediatly returns
+          method immediately returns
         """
         if self._sync_event:
             self._evtq.get()
+
 
 class Stage(model.Actuator):
     """
@@ -953,7 +959,8 @@ class Stage(model.Actuator):
 
         # Demand calibrated stage
         if parent._device.StgIsCalibrated() != 1:
-            logging.warning("Stage was not calibrated. We are performing calibration now.")
+            logging.warning("Stage is not calibrated. Moves will not succeed until it has been calibratred.")
+            # TODO: support doing it from Odemis, via reference()
             # parent._device.StgCalibrate()
 
         # Wait for stage to be stable after calibration
@@ -962,69 +969,54 @@ class Stage(model.Actuator):
             # updated approximately every 500 ms
             time.sleep(0.5)
 
-        x, y, z, rot, tilt = parent._device.StgGetPosition()
-        self._position["x"] = -x * 1e-3
-        self._position["y"] = -y * 1e-3
-        self._position["z"] = -z * 1e-3
-
         model.Actuator.__init__(self, name, role, parent=parent, axes=axes_def, **kwargs)
 
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
 
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
-        self.position = model.VigilantAttribute(
-                                    self._applyInversion(self._position),
-                                    unit="m", readonly=True)
+        self.position = model.VigilantAttribute({}, unit="m", readonly=True)
+        self._updatePosition()
 
-        self._updater = functools.partial(self._pollXYZ)
-        self._xyz_poll = util.RepeatingTimer(5, self._updater, "XYZ polling")
+        self._xyz_poll = util.RepeatingTimer(5, self._pollXYZ, "XYZ polling")
         self._xyz_poll.start()
 
     def _pollXYZ(self):
         try:
             with self.parent._acquisition_init_lock:
                 with self.parent._acq_progress_lock:
-                    x, y, z, rot, tilt = self.parent._device.StgGetPosition()
-                    self._position["x"] = -x * 1e-3
-                    self._position["y"] = -y * 1e-3
-                    self._position["z"] = -z * 1e-3
-
                     self._updatePosition()
         except Exception:
-            logging.debug("Unexpected failure during XYZ polling")
+            logging.exception("Unexpected failure during XYZ polling")
 
     def _updatePosition(self):
         """
         update the position VA
         """
+        x, y, z, rot, tilt = self.parent._device.StgGetPosition()
+        self._position["x"] = -x * 1e-3
+        self._position["y"] = -y * 1e-3
+        self._position["z"] = -z * 1e-3
+
         # it's read-only, so we change it via _value
-        self.position._value = self._applyInversion(self._position)
-        self.position.notify(self.position.value)
+        pos = self._applyInversion(self._position)
+        self.position._set_value(pos, force_write=True)
 
     def _doMove(self, pos):
         """
-        move to the position 
+        move to the position
         """
+        # TODO: support cancelling (= call StgStop)
         with self.parent._acq_progress_lock:
             # Perform move through Tescan API
             # Position from m to mm and inverted
             self.parent._device.StgMoveTo(-pos["x"] * 1e3,
-                                        - pos["y"] * 1e3,
-                                        - pos["z"] * 1e3)
+                                          - pos["y"] * 1e3,
+                                          - pos["z"] * 1e3)
 
             # Wait until move is completed
             while self.parent._device.StgIsBusy():
                 time.sleep(0.2)
-
-            # Obtain the finally reached position after move is performed.
-            # This is mainly in order to keep the correct position in case the
-            # move we tried to perform was greater than the maximum possible
-            # one.
-            x, y, z, rot, tilt = self.parent._device.StgGetPosition()
-            self._position["x"] = -x * 1e-3
-            self._position["y"] = -y * 1e-3
-            self._position["z"] = -z * 1e-3
 
             self._updatePosition()
 
@@ -1058,10 +1050,12 @@ class Stage(model.Actuator):
     def stop(self, axes=None):
         # Empty the queue for the given axes
         self._executor.cancel()
-        logging.warning("Stopping all axes: %s", ", ".join(self.axes))
+        self.parent._device.StgStop()
+        logging.info("Stopping all axes: %s", ", ".join(self.axes))
 
     def terminate(self):
         self._xyz_poll.cancel()
+        self._xyz_poll.join(5)
         if self._executor:
             self.stop()
             self._executor.shutdown()
@@ -1090,15 +1084,11 @@ class EbeamFocus(model.Actuator):
         rng = [0, 1]
         axes_def[a] = model.Axis(unit="m", range=rng)
 
-        # start at the centre
-        self._position[a] = parent._device.GetWD() * 1e-3
-
         model.Actuator.__init__(self, name, role, parent=parent, axes=axes_def, **kwargs)
 
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
-        self.position = model.VigilantAttribute(
-                                    self._applyInversion(self._position),
-                                    unit="m", readonly=True)
+        self.position = model.VigilantAttribute({}, unit="m", readonly=True)
+        self._updatePosition()
 
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
@@ -1107,9 +1097,11 @@ class EbeamFocus(model.Actuator):
         """
         update the position VA
         """
+        wd = self.parent._device.GetWD()
+        self._position["z"] = wd * 1e-3
         # it's read-only, so we change it via _value
-        self.position._value = self._applyInversion(self._position)
-        self.position.notify(self.position.value)
+        pos = self._applyInversion(self._position)
+        self.position._set_value(pos, force_write=True)
 
     def _doMove(self, pos):
         """
@@ -1120,9 +1112,6 @@ class EbeamFocus(model.Actuator):
         with self.parent._acq_progress_lock:
             self.parent._device.SetWD(self._position["z"] * 1e03)
             # Obtain the finally reached position after move is performed.
-            wd = self.parent._device.GetWD()
-            self._position["z"] = wd * 1e-3
-
             self._updatePosition()
         # Changing WD results to change in fov
         self.parent._scanner.updateHorizontalFOV()
@@ -1342,19 +1331,17 @@ class ChamberPressure(model.Actuator):
             self._position = PRESSURE_VENTED
 
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
-        self.position = model.VigilantAttribute(
-                                    {"pressure": self._position},
-                                    unit="Pa", readonly=True)
-        # Almost the same as position, but gives the current position
-        self.pressure = model.VigilantAttribute(self._position,
-                                    unit="Pa", readonly=True)
+        self.position = model.VigilantAttribute({}, unit="Pa", readonly=True)
+        # Almost the same as position, but gives the actual value
+        self.pressure = model.VigilantAttribute({}, unit="Pa", readonly=True)
+        self._updatePosition()
 
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
 
     def GetStatus(self):
         """
-        return int: vacuum status, 
+        return int: vacuum status,
             -1 error 
             0 ready for operation
             1 pumping in progress
@@ -1436,7 +1423,7 @@ class Light(model.Emitter):
         model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
 
         self._shape = ()
-        self.power = model.FloatContinuous(10., {0., 10.}, unit="W")
+        self.power = model.FloatContinuous(10., (0., 10.), unit="W")
         # turn on when initializing
         self.parent._device.ChamberLed(1)
         self.power.subscribe(self._updatePower)
@@ -1446,7 +1433,6 @@ class Light(model.Emitter):
         # TODO: update spectra VA to support the actual spectra of the lamp
         self.spectra = model.ListVA([(380e-9, 390e-9, 560e-9, 730e-9, 740e-9)],
                                     unit="m", readonly=True)
-        self._metadata[model.MD_IN_WL] = (380e-9, 740e-9)
 
     def _updatePower(self, value):
         # Switch the chamber LED based on the power value (On in case of max,
@@ -1455,4 +1441,3 @@ class Light(model.Emitter):
             self.parent._device.ChamberLed(1)
         else:
             self.parent._device.ChamberLed(0)
-        self._metadata[model.MD_LIGHT_POWER] = self.power.value

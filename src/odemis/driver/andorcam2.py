@@ -421,7 +421,8 @@ class AndorCam2(model.DigitalCamera):
     It also provide low-level methods corresponding to the SDK functions.
     """
 
-    def __init__(self, name, role, device=None, emgains=None, image=None, **kwargs):
+    def __init__(self, name, role, device=None, emgains=None, shutter_times=None,
+                 image=None, **kwargs):
         """
         Initialises the device
         device (None or 0<=int or str): number of the device to open, as defined
@@ -432,6 +433,8 @@ class AndorCam2(model.DigitalCamera):
           "fakesys".
         emgains (list of (0<float, 0<float, 1 <= int <=300)): Look-up table for
          the EMCCD real gain. Readout rate, Gain, Real Gain.
+        shutter_times (float, float): time (in s) for the opening and closing
+          of the shutter. Default is 0 s for both.
         image (str or None): only useful for simulated device, the path to a file
           to use as fake image.
         Raise an exception if the device cannot be opened.
@@ -595,6 +598,12 @@ class AndorCam2(model.DigitalCamera):
         # > 0 => shutter auto if exp time + readout > period, otherwise opened
         # big value => shutter always opened
         if self.hasShutter():
+            if shutter_times is None:
+                shutter_times = (0, 0)
+            elif not all(0 <= s < 10 for s in shutter_times):
+                raise ValueError("shutter_times must be between 0 and 10s")
+            self._shutter_optime, self._shutter_cltime = shutter_times
+
             self._shutter_period = 0.1
             ct = self.GetCapabilities().CameraType
             if ct == AndorCapabilities.CAMERATYPE_IXONULTRA:
@@ -605,7 +614,10 @@ class AndorCam2(model.DigitalCamera):
                                               (0, maxexp.value), unit="s",
                                               setter=self._setShutterPeriod)
         else:
-            self.SetShutter(1, 0, 0, 0)  # Probably not needed, but just in case
+            if shutter_times:
+                raise ValueError("No shutter found but shutter times defined")
+            # To make sure the (non-existent) shutter doesn't limit the exposure time
+            self.SetShutter(1, 0, 0, 0)
             self._shutter_period = None
 
         current_temp = self.GetTemperature()
@@ -896,27 +908,26 @@ class AndorCam2(model.DigitalCamera):
         self.atcore.IsInternalMechanicalShutter(byref(shut))
         return shut.value == 1
 
-    def SetShutter(self, typ, mode, optime, cltime, extmode=None):
+    def SetShutter(self, typ, mode, cltime, optime, extmode=None):
         """
         Configures the shutter opening.
         Note: it automatically uses Shutter() or ShutterEx() when needed. It's
         also fine to call if the camera doesn't support shutter config at all.
         typ (0 or 1): 0 = TTL low when opening, 1 = TTL high when opening
         mode (0 < int): 0 = auto, 1 = opened, 2 = closed... cf doc for more
-        optime (0 <= float): time in second it takes to open the shutter
         cltime (0 <= float): time in second it takes to close the shutter
+        optime (0 <= float): time in second it takes to open the shutter
         extmode (None or 0 < int): same as mode, but for external shutter.
           Must be None if the camera doesn't support ShutterEx. None is auto.
         """
-        optime = int(optime * 1e3) # ms
-        cltime = int(cltime * 1e3) # ms
+        cltime = int(cltime * 1e3)  # ms
+        optime = int(optime * 1e3)  # ms
         if self.hasFeature(AndorCapabilities.FEATURES_SHUTTEREX):
-            logging.debug("Using ShutterEx")
             if extmode is None:
                 extmode = 0
-            self.atcore.SetShutterEx(typ, mode, optime, cltime, extmode)
+            self.atcore.SetShutterEx(typ, mode, cltime, optime, extmode)
         elif self.hasFeature(AndorCapabilities.FEATURES_SHUTTER):
-            self.atcore.SetShutterEx(typ, mode, optime, cltime, extmode)
+            self.atcore.SetShutter(typ, mode, cltime, optime)
         else:
             logging.debug("Camera doesn't support shutter configuration")
 
@@ -1533,6 +1544,41 @@ class AndorCam2(model.DigitalCamera):
             # there is no metadata for the resolution
             self._metadata[model.MD_BINNING] = self._transposeSizeToUser(self._binning)
 
+        # Computes (back) the resolution
+        b, rect = new_image_settings[0:2], new_image_settings[2:]
+        im_res = (rect[1] - rect[0] + 1) // b[0], (rect[3] - rect[2] + 1) // b[1]
+
+        # It's a little tricky because we decide whether to use or not the shutter
+        # based on exp and readout time, but setting the shutter clamps the
+        # exposure time.
+        if self._shutter_period is not None:
+            # Activate shutter closure whenever needed:
+            # Shutter closes between exposures iif:
+            # * period between exposures is long enough (>0.1s): to ensure we don't burn the mechanism
+            # * readout time > exposure time/100 (when risk of smearing is possible)
+            readout = im_res[0] * im_res[1] / self._readout_rate  # s
+            tot_time = self._exposure_time + readout
+            shutter_active = False
+            if tot_time < self._shutter_period:
+                logging.info("Forcing shutter opened because it would go at %g Hz",
+                             1 / tot_time)
+            elif readout < (self._exposure_time / 100):
+                logging.info("Leaving shutter opened because readout is %g times "
+                             "smaller than exposure", self._exposure_time / readout)
+            elif b[1] == im_res[1]:
+                logging.info("Leaving shutter opened because binning is full vertical")
+            else:
+                logging.info("Shutter activated")
+                shutter_active = True
+
+            if shutter_active:
+                self.SetShutter(1, 0, self._shutter_cltime, self._shutter_optime)  # mode 0 = auto
+            else:
+                self.SetShutter(1, 1, 0, 0)
+                # The shutter times limits the minimum exposure time
+                # => force setting exp time, in case shutter was active before
+                prev_exp_time = None
+
         if prev_exp_time != self._exposure_time:
             self.atcore.SetExposureTime(c_float(self._exposure_time))
             # Read actual value
@@ -1540,35 +1586,6 @@ class AndorCam2(model.DigitalCamera):
             self._metadata[model.MD_EXP_TIME] = exposure
             logging.debug("Updating exposure time setting to %f s (asked %f s)",
                           exposure, self._exposure_time)
-        elif self._shutter_period is not None:
-            exposure, accumulate, kinetic = self.GetAcquisitionTimings()
-
-        # Computes (back) the resolution
-        b, rect = new_image_settings[0:2], new_image_settings[2:]
-        im_res = (rect[1] - rect[0] + 1) // b[0], (rect[3] - rect[2] + 1) // b[1]
-
-        readout = im_res[0] * im_res[1] * self._readout_rate  # s
-
-        if self._shutter_period is not None:
-            # Activate shutter closure whenever needed:
-            # Shutter closes between exposures iif:
-            # * period between exposures is long enough (>0.1s): to ensure we don't burn the mechanism
-            # * readout time > exposure time/100 (when risk of smearing is possible)
-            tot_time = accumulate
-            if tot_time < self._shutter_period:
-                logging.info("Forcing shutter opened because it would go at %g Hz",
-                             1 / tot_time)
-                self.SetShutter(1, 1, 0, 0)
-            elif readout < (exposure / 100):
-                logging.info("Leaving shutter opened because readout is %g times "
-                             "smaller than exposure", exposure / readout)
-                self.SetShutter(1, 1, 0, 0)
-            elif b[1] == im_res[1]:
-                logging.info("Leaving shutter opened because binning is full vertical")
-                self.SetShutter(1, 1, 0, 0)
-            else:
-                logging.info("Shutter activated")
-                self.SetShutter(1, 0, 0, 0)  # mode = auto
 
         self._prev_settings = [new_image_settings, self._exposure_time,
                                self._readout_rate, self._gain, self._shutter_period]
@@ -1629,7 +1646,7 @@ class AndorCam2(model.DigitalCamera):
 
     def start_flow(self, callback):
         """
-        Set up the camera and acquireOne a flow of images at the best quality for the given
+        Set up the camera and acquires a flow of images at the best quality for the given
           parameters. Should not be called if already a flow is being acquired.
         callback (callable (DataArray) no return):
          function called for each image acquired
@@ -2510,6 +2527,7 @@ class FakeAndorV2DLL(object):
 
     def SetShutter(self, typ, mode, closingtime, openingtime):
         # mode 0 = auto
+        # TODO: in auto, opening time is the minimum exposure time
         pass # whatever
 
     def SetShutterEx(self, typ, mode, closingtime, openingtime, extmode):

@@ -1467,7 +1467,7 @@ class AndorCam3(model.DigitalCamera):
                     logging.debug("waiting for acquisition trigger")
                     self._start_acquisition()
                 metadata = dict(self._metadata) # duplicate
-                tend = time.time() + exposure_time + readout_time # s
+                tend = time.time() + exposure_time + readout_time * 1.2 + 3  # s
                 center = metadata.get(model.MD_POS, (0, 0))
                 metadata[model.MD_POS] = (center[0] + phyt[0], center[1] + phyt[1])
 
@@ -1491,8 +1491,8 @@ class AndorCam3(model.DigitalCamera):
                             pbuffer, _ = self.WaitBuffer(0.1)
                         except ATError as (errno, strerr):
                             if errno == 13: # AT_ERR_TIMEDOUT
-                                if time.time() > tend + 2:
-                                    raise  # 2 s late seems actually serious
+                                if time.time() > tend:
+                                    raise
                                 else:
                                     pass
                         else:
