@@ -476,6 +476,8 @@ class MicroscopeViewport(ViewPort):
         if not self.self_set_mpp and self.IsShownOnScreen():
             logging.debug("View mpp changed to %s on %s", mpp, self)
             hfw = self.get_fov_from_mpp()
+            if hfw is None:
+                return
             fov_va = self.microscope_view.fov_va
 
             try:
@@ -505,7 +507,8 @@ class MicroscopeViewport(ViewPort):
 
         if self.microscope_view and smallest_dimension > 0:
             hfw = self.microscope_view.mpp.value * smallest_dimension
-            logging.debug("Getting HFW %s using view mpp on %s", hfw, self)
+            logging.debug("Getting HFW %s (=%g x %g) using view mpp on %s",
+                          hfw, self.microscope_view.mpp.value, smallest_dimension, self)
             return hfw
 
         return None

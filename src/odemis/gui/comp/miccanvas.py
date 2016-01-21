@@ -544,13 +544,21 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # if any(s <= 1 for s in new_size):
         #     return
 
-        # Update the mpp, so that the same data will be displayed.
+        # Update the mpp, so that the same data will be displayed (ie, keep the HFW)
+        # Note: we use the same trick as in viewport, and actually consider the
+        # smallest FoV dimension
         if self.microscope_view and self._previous_size != new_size:
-            logging.debug("Updating mpp do to canvas resize from %s to %s",
-                          self._previous_size, new_size)
-            hfw = self._previous_size[0] * self.microscope_view.mpp.value
-            new_mpp = hfw / new_size[0]
-            self.microscope_view.mpp.value = self.microscope_view.mpp.clip(new_mpp)
+            try:
+                prev_ss = min(s for s in self._previous_size if s > 0)
+                new_ss = min(s for s in new_size if s > 0)
+            except ValueError:
+                pass  # One of the size has only 0s
+            else:
+                hfw = prev_ss * self.microscope_view.mpp.value
+                logging.debug("Updating mpp due to canvas resize from %s to %s, to keep hfw at %g",
+                              self._previous_size, new_size, hfw)
+                new_mpp = hfw / new_ss
+                self.microscope_view.mpp.value = self.microscope_view.mpp.clip(new_mpp)
         super(DblMicroscopeCanvas, self).on_size(event)
         self._previous_size = new_size
 
