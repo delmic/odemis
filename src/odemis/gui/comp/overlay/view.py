@@ -530,6 +530,9 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
 
     # END Event Handlers
 
+    def clear_labels(self):
+        self.peaks.value = None
+
     def _store_event_pos(self, evt):
         """ Position the focus line at the position of the given mouse event """
         x, y = evt.GetPositionTuple()
