@@ -546,6 +546,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         # Update the mpp, so that the same data will be displayed.
         if self.microscope_view and self._previous_size != new_size:
+            logging.debug("Updating mpp do to canvas resize from %s to %s",
+                          self._previous_size, new_size)
             hfw = self._previous_size[0] * self.microscope_view.mpp.value
             new_mpp = hfw / new_size[0]
             self.microscope_view.mpp.value = self.microscope_view.mpp.clip(new_mpp)
@@ -580,8 +582,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
                 except KeyError:
                     pass
 
-        mpp = sorted(self.microscope_view.mpp.range + (mpp,))[1]
-        self.microscope_view.mpp.value = mpp  # this will call _on_view_mpp()
+        self.microscope_view.mpp.value = self.microscope_view.mpp.clip(mpp)  # this will call _on_view_mpp()
 
     def on_knob_rotate(self, evt):
         """ Powermate knob rotation processor """
