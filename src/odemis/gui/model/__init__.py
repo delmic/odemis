@@ -685,14 +685,11 @@ class Sparc2AlignGUIData(ActuatorGUIData):
         b = md.get(model.MD_BINNING, (1, 1))
         pxs = pxs[0] / b[0], pxs[0] / b[1]
 
-        pos = md.get(model.MD_POS, (0, 0))
         # Pole position is always expressed considering there is no binning
         res = self.main.ccd.shape[0:2]
 
-        # pole pos in the referential with the CCD center as origin
-        posc = (posphy[0] - pos[0], posphy[1] - pos[1])
         # Convert into px referential (Y is inverted)
-        posc_px = (posc[0] / pxs[0], -posc[1] / pxs[1])
+        posc_px = (posphy[0] / pxs[0], -posphy[1] / pxs[1])
         # Convert into the referential with the top-left corner as origin
         posccd = (posc_px[0] + (res[0] - 1) / 2, posc_px[1] + (res[1] - 1) / 2)
 
@@ -708,6 +705,7 @@ class Sparc2AlignGUIData(ActuatorGUIData):
     def _posToPhysical(self, posccd):
         """
         Convert position from CCD coordinates to physical coordinates.
+        Note: it conciders the physical origin to be at the center of the CCD.
         posccd (int, int)
         return (float, float)
         """
@@ -719,17 +717,14 @@ class Sparc2AlignGUIData(ActuatorGUIData):
         b = md.get(model.MD_BINNING, (1, 1))
         pxs = pxs[0] / b[0], pxs[0] / b[1]
 
-        pos = md.get(model.MD_POS, (0, 0))
         # position is always expressed considering there is no binning
         res = self.main.ccd.shape[0:2]
 
         # Convert into the referential with the center as origin
         posc_px = (posccd[0] - (res[0] - 1) / 2, posccd[1] - (res[1] - 1) / 2)
-        # Convert into px referential (Y is inverted)
+        # Convert into world referential (Y is inverted)
         posc = (posc_px[0] * pxs[0], -posc_px[1] * pxs[1])
-        # Convert into world referential
-        posw = (posc[0] + pos[0], posc[1] + pos[1])
-        return posw
+        return posc
 
     def _setPolePosPhysical(self, posphy):
         posccd = self._posToCCD(posphy)

@@ -451,9 +451,10 @@ class SecomStreamsTab(Tab):
 
         # Add connection to SEM hFoV if possible (on SEM-only views)
         if main_data.ebeamControlsMag:
-            for v in vpv.values():
+            for vp, v in vpv.items():
                 if v.get("stream_classes") == EMStream:
                     v["fov_va"] = main_data.ebeam.horizontalFoV
+                    vp.canvas.fit_view_to_next_image = False
 
         return vpv
 
@@ -682,7 +683,7 @@ class SparcAcquisitionTab(Tab):
 
         viewports = panel.pnl_sparc_grid.viewports
         for vp in viewports[:4]:
-            assert(isinstance(vp, MicroscopeViewport) or isinstance(vp, PlotViewport))
+            assert(isinstance(vp, (MicroscopeViewport, PlotViewport)))
 
         # Connect the views
         # TODO: make them different depending on the hardware available?
@@ -694,7 +695,7 @@ class SparcAcquisitionTab(Tab):
               "stage": main_data.stage,
               "stream_classes": (EMStream, CLSettingsStream),
               }),
-            (viewports[1],  # focused view
+            (viewports[1],
              {"name": "Angle-resolved",
               "stream_classes": ARSettingsStream,
               }),
@@ -710,6 +711,7 @@ class SparcAcquisitionTab(Tab):
         # Add connection to SEM hFoV if possible
         if main_data.ebeamControlsMag:
             vpv[viewports[0]]["fov_va"] = main_data.ebeam.horizontalFoV
+            viewports[0].canvas.fit_view_to_next_image = False
 
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
 
@@ -2524,6 +2526,7 @@ class Sparc2AlignTab(Tab):
         # Add connection to SEM hFoV if possible
         if main_data.ebeamControlsMag:
             vpv[self.panel.vp_moi]["fov_va"] = main_data.ebeam.horizontalFoV
+            self.panel.vp_moi.canvas.fit_view_to_next_image = False
 
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
         self.panel.vp_align_lens.microscope_view.show_crosshair.value = False
