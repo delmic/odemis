@@ -478,7 +478,6 @@ class SparcAcquiController(object):
         # remove some VAs known to not affect the acquisition time
         for n, va in nvas.items():
             if n not in self.VAS_NO_ACQUSITION_EFFECT:
-                logging.debug("VA %s can affect acq time", n)
                 vas.add(va)
         return vas
 
