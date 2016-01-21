@@ -1111,6 +1111,8 @@ class SpatialSpectrumViewport(ViewPort):
         """ Clear the marking line when the selected pixel is cleared """
         if None in pixel:
             self.canvas.markline_overlay.clear_labels()
+            if self.canvas.curve_overlay is not None:
+                self.canvas.curve_overlay.clear_labels()
 
     def _on_line_select(self, line):
         """ Line selection event handler """
