@@ -18,11 +18,11 @@ from __future__ import division
 
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
     RUNNING
-from odemis.acq._futures import executeTask
 from itertools import izip
 import logging
 import numpy
 from odemis import model
+from odemis.model import isasync, CancellableThreadPoolExecutor
 from scipy.optimize import curve_fit
 import threading
 import time
@@ -165,54 +165,81 @@ def Detect(y_vector, x_vector=None, lookahead=5, delta=0):
     return maxtab, mintab
 
 
-def Fit(spectrum, wavelength, type='gaussian'):
-    """
-    Wrapper for _DoFit. It provides the ability to check the progress of fitting
-    procedure or even cancel it.
-    spectrum (1d array of floats): The data representing the spectrum.
-    wavelength (1d array of floats): The wavelength values corresponding to the
-    spectrum given.
-    type (str): Type of fitting to be applied (for now only ‘gaussian’ and
-    ‘lorentzian’ are available).
-    returns (model.ProgressiveFuture):  Progress of DoFit
-    """
-    # Create ProgressiveFuture and update its state to RUNNING
-    est_start = time.time() + 0.1
-    f = model.ProgressiveFuture(start=est_start,
-                                end=est_start + estimateFitTime())
-    f._fit_state = RUNNING
-    f._fit_lock = threading.Lock()
-    f._fit_progress_lock = threading.Lock()
-    f.task_canceller = _CancelFit
-
-    # Run in separate thread
-    fit_thread = threading.Thread(target=executeTask,
-                                        name="Fitting",
-                                        args=(f, _DoFit, f, spectrum, wavelength, type))
-
-    fit_thread.start()
-    return f
+# def Fit(spectrum, wavelength, type='gaussian'):
+#     """
+#     Wrapper for _DoFit. It provides the ability to check the progress of fitting
+#     procedure or even cancel it.
+#     spectrum (1d array of floats): The data representing the spectrum.
+#     wavelength (1d array of floats): The wavelength values corresponding to the
+#     spectrum given.
+#     type (str): Type of fitting to be applied (for now only ‘gaussian’ and
+#     ‘lorentzian’ are available).
+#     returns (model.ProgressiveFuture):  Progress of DoFit
+#     """
+#     # Create ProgressiveFuture and update its state to RUNNING
+#     est_start = time.time() + 0.1
+#     f = model.ProgressiveFuture(start=est_start,
+#                                 end=est_start + estimateFitTime())
+#     f._fit_state = RUNNING
+#     f._fit_lock = threading.Lock()
+#     f._fit_progress_lock = threading.Lock()
+#     f.task_canceller = _CancelFit
+#
+#     # Run in separate thread
+#     fit_thread = threading.Thread(target=executeTask,
+#                                         name="Fitting",
+#                                         args=(f, _DoFit, f, spectrum, wavelength, type))
+#
+#     fit_thread.start()
+#     return f
 
 
 PEAK_FUNCTIONS = {'gaussian': GaussianFit, 'lorentzian': LorentzianFit}
-def _DoFit(future, spectrum, wavelength, type='gaussian'):
-    """
-    Smooths the spectrum signal, detects the peaks and applies the type of peak
-    fitting required. Finally returns the optimized peak parameters.
-    future (model.ProgressiveFuture): Progressive future provided by the wrapper
-    spectrum (1d array of floats): The data representing the spectrum.
-    wavelength (1d array of floats): The wavelength values corresponding to the
-    spectrum given.
-    type (str): Type of fitting to be applied (for now only ‘gaussian’ and
-    ‘lorentzian’ are available).
-    returns (list of floats): Contains the optimized peak parameters i.e. [pos1,
-    width1, amplitude1, pos2, width2, amplitude2, … , offset]
-    raises:
-            KeyError if given type not available
-            ValueError if fitting cannot be applied
-    """
-    try:
-        with future._fit_progress_lock:
+class PeakFitter(object):
+    def __init__(self):
+        # will take care of executing peak fitting asynchronously
+        self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
+
+    @isasync
+    def Fit(self, spectrum, wavelength, type='gaussian'):
+        """
+        Wrapper for _DoFit. It provides the ability to check the progress of fitting
+        procedure or even cancel it.
+        spectrum (1d array of floats): The data representing the spectrum.
+        wavelength (1d array of floats): The wavelength values corresponding to the
+        spectrum given.
+        type (str): Type of fitting to be applied (for now only ‘gaussian’ and
+        ‘lorentzian’ are available).
+        returns (model.ProgressiveFuture):  Progress of DoFit
+        """
+        # Create ProgressiveFuture and update its state to RUNNING
+        est_start = time.time() + 0.1
+        f = model.ProgressiveFuture(start=est_start,
+                                    end=est_start + self.estimateFitTime())
+        f._fit_state = RUNNING
+        f._fit_lock = threading.Lock()
+        f._fit_progress_lock = threading.Lock()
+        f.task_canceller = self._CancelFit
+
+        return self._executor.submitf(f, self._DoFit, f, spectrum, wavelength, type)
+
+    def _DoFit(self, future, spectrum, wavelength, type='gaussian'):
+        """
+        Smooths the spectrum signal, detects the peaks and applies the type of peak
+        fitting required. Finally returns the optimized peak parameters.
+        future (model.ProgressiveFuture): Progressive future provided by the wrapper
+        spectrum (1d array of floats): The data representing the spectrum.
+        wavelength (1d array of floats): The wavelength values corresponding to the
+        spectrum given.
+        type (str): Type of fitting to be applied (for now only ‘gaussian’ and
+        ‘lorentzian’ are available).
+        returns (list of floats): Contains the optimized peak parameters i.e. [pos1,
+        width1, amplitude1, pos2, width2, amplitude2, … , offset]
+        raises:
+                KeyError if given type not available
+                ValueError if fitting cannot be applied
+        """
+        try:
             # values based on experimental datasets
             if len(wavelength) >= 2000:
                 divider = 15
@@ -245,7 +272,8 @@ def _DoFit(future, spectrum, wavelength, type='gaussian'):
                 fit_list.append(0)
 
                 try:
-                    params, unused = curve_fit(FitFunction, wavelength, spectrum, p0=fit_list)
+                    with future._fit_progress_lock:
+                        params, unused = curve_fit(FitFunction, wavelength, spectrum, p0=fit_list)
                     break
                 except Exception:
                     window_size += step
@@ -254,37 +282,42 @@ def _DoFit(future, spectrum, wavelength, type='gaussian'):
             else:
                 raise ValueError("Could not apply peak fitting of type %s." % type)
             return params
-    except CancelledError:
-        logging.debug("Fitting of type %s was cancelled." % type)
-    finally:
+        except CancelledError:
+            logging.debug("Fitting of type %s was cancelled." % type)
+        finally:
+            with future._fit_lock:
+                if future._fit_state == CANCELLED:
+                    raise CancelledError()
+                future._fit_state = FINISHED
+
+    def _CancelFit(self, future):
+        """
+        Canceller of _DoFit task.
+        """
+        logging.debug("Cancelling fitting...")
+
         with future._fit_lock:
-            if future._fit_state == CANCELLED:
-                raise CancelledError()
-            future._fit_state = FINISHED
-
-
-def _CancelFit(future):
-    """
-    Canceller of _DoFit task.
-    """
-    logging.debug("Cancelling fitting...")
-
-    with future._fit_lock:
-        if future._fit_state == FINISHED:
-            return False
-        future._fit_state = CANCELLED
-        with future._fit_progress_lock:
+            if future._fit_state == FINISHED:
+                return False
+            future._fit_state = CANCELLED
+            # with future._fit_progress_lock:
             logging.debug("Fitting cancelled.")
 
-    return True
+        return True
 
+    def estimateFitTime(self):
+        """
+        Estimates fitting duration
+        """
+        # really rough estimation
+        return 4  # s
 
-def estimateFitTime():
-    """
-    Estimates fitting duration
-    """
-    # really rough estimation
-    return 4  # s
+    def __del__(self):
+        if self._executor:
+            self._executor.cancel()
+            self._executor.shutdown()
+            self._executor = None
+        logging.debug("PeakFitter destroyed")
 
 
 def Curve(wavelength, peak_parameters, type='gaussian'):

@@ -884,6 +884,7 @@ class PointSpectrumViewport(PlotViewport):
         super(PointSpectrumViewport, self).setView(view, tab_data)
         wx.CallAfter(self.bottom_legend.SetToolTipString, "Wavelength")
         wx.CallAfter(self.left_legend.SetToolTipString, "Intensity")
+        self._peak_fitter = peak.PeakFitter()
 
     def on_peak_show(self, visible):
         if visible:
@@ -902,7 +903,7 @@ class PointSpectrumViewport(PlotViewport):
                         pass
                     self.spectrum_range = spectrum_range
                     self.unit_x = unit_x
-                    self._peak_future = peak.Fit(data, spectrum_range)
+                    self._peak_future = self._peak_fitter.Fit(data, spectrum_range)
                     self._peak_future.add_done_callback(self._update_peak)
         else:
             self.canvas.curve_overlay.deactivate()
@@ -967,7 +968,7 @@ class PointSpectrumViewport(PlotViewport):
                 pass
             self.spectrum_range = spectrum_range
             self.unit_x = unit_x
-            self._peak_future = peak.Fit(data, spectrum_range)
+            self._peak_future = self._peak_fitter.Fit(data, spectrum_range)
             self._peak_future.add_done_callback(self._update_peak)
 
         self.canvas.set_1d_data(spectrum_range, data, unit_x)

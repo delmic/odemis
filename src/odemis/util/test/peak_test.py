@@ -32,6 +32,7 @@ class TestPeak(unittest.TestCase):
         data = numpy.squeeze(data)
         self.data = data
         self.wl = numpy.linspace(470, 1030, 167)
+        self._peak_fitter = peak.PeakFitter()
 
     def test_precomputed(self):
         data = self.data
@@ -39,14 +40,14 @@ class TestPeak(unittest.TestCase):
         spec = data[:, 20, 20]
 
         # Try gaussian
-        f = peak.Fit(spec, wl)
+        f = self._peak_fitter.Fit(spec, wl)
         params = f.result()
         curve = peak.Curve(wl, params)
         plt.figure()
         plt.plot(wl, spec, 'r', wl, curve, 'r', linewidth=2)
 
         # Try lorentzian
-        f = peak.Fit(spec, wl, type='lorentzian')
+        f = self._peak_fitter.Fit(spec, wl, type='lorentzian')
         params = f.result()
         curve = peak.Curve(wl, params, type='lorentzian')
         plt.figure()
