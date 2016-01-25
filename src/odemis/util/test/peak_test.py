@@ -16,11 +16,17 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 from __future__ import division
 
+import logging
 import numpy
 from odemis.dataio import hdf5
 from odemis.util import peak
+import os
 import unittest
 import matplotlib.pyplot as plt
+
+
+logging.getLogger().setLevel(logging.DEBUG)
+PATH = os.path.dirname(__file__)
 
 
 class TestPeak(unittest.TestCase):
@@ -28,7 +34,7 @@ class TestPeak(unittest.TestCase):
     Test peak fitting
     """
     def setUp(self):
-        data = hdf5.read_data("spectrum_fitting.h5")[1]
+        data = hdf5.read_data(os.path.join(PATH, "spectrum_fitting.h5"))[1]
         data = numpy.squeeze(data)
         self.data = data
         self.wl = numpy.linspace(470, 1030, 167)

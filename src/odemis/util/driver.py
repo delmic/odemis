@@ -187,6 +187,7 @@ BACKEND_RUNNING = "RUNNING"
 BACKEND_STARTING = "STARTING"
 BACKEND_DEAD = "DEAD"
 BACKEND_STOPPED = "STOPPED"
+# TODO: support TERMINATING status?
 def get_backend_status():
     try:
         model._core._microscope = None # force reset of the microscope
