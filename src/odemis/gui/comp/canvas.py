@@ -2015,7 +2015,6 @@ class PlotCanvas(BufferedCanvas):
             #     return
             #
             # self._locked = True
-
             ctx = wxcairo.ContextFromDC(self._dc_buffer)
             self._draw_background(ctx)
 
