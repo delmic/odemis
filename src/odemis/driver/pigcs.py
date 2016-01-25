@@ -3122,7 +3122,6 @@ class SerialBusAccesser(object):
                 anssplited, ans = anssplited[:-1], anssplited[-1]
 
                 for l in anssplited:
-                    # logging.debug("Processing %s", l)
                     if not continuing:
                         lines = []  # one string per answer line
                         # remove the prefix
