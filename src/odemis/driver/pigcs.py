@@ -3118,22 +3118,28 @@ class SerialBusAccesser(object):
                 ans += char
 
                 anssplited = ans.split("\n")
-                # if finishing with \n last split is empty
-                ans = anssplited[-1]
-                anssplited = anssplited[:-1]
+                # if the answer finishes with \n, last split is empty
+                anssplited, ans = anssplited[:-1], anssplited[-1]
 
                 for l in anssplited:
+                    # logging.debug("Processing %s", l)
                     if not continuing:
                         lines = []  # one string per answer line
                         # remove the prefix
-                        if not l.startswith(prefix):
-                            logging.debug("Failed to decode answer '%s'", l.encode('string_escape'))
-                            raise IOError("Report prefix unexpected after '%s': '%s'." % (com, l))
-                        l = l[len(prefix):]
-                    if l[-1:] == " ":  # remove the spaces indicating multi-line
+                        if l.startswith(prefix):
+                            l = l[len(prefix):]
+                        else:
+                            # Maybe the previous line was actually continuing (but the hardware is strange)?
+                            if ret and ret[-1] == "":
+                                logging.debug("Reconcidering previous line as beginning of multi-line")
+                                ret = ret[:-1]
+                            else:
+                                logging.debug("Failed to decode answer '%s'", l.encode('string_escape'))
+                                raise IOError("Report prefix unexpected after '%s': '%s'." % (full_com, l))
+
+                    if l[-1:] == " ":  # multi-line
                         continuing = True
-                        l = l[:-1]
-                        lines.append(l)
+                        lines.append(l[:-1])  # remove the space indicating multi-line
                     else:
                         # End of the answer for that command
                         continuing = False
@@ -3221,10 +3227,11 @@ class IPBusAccesser(object):
         """
         Send a command and return its report (raw)
         addr (None or 1<=int<=16): address of the controller
-        com (string): the command to send (without address prefix but with \n)
+        com (str or list of str): the command(s) to send (without address prefix but with \n)
         return (string or list of strings): the report without prefix
            (e.g.,"0 1") nor newline.
            If answer is multiline: returns a list of each line
+           If command was a list: one str or list of str per command
         raise:
            HwError: if error communicating with the hardware, probably due to
               the hardware not being in a good state (or connected)
@@ -3253,7 +3260,13 @@ class IPBusAccesser(object):
             logging.debug("Sending: '%s'", full_com.encode('string_escape'))
             self.socket.sendall(full_com)
 
-            # read the answer
+            # Read the answer
+            # The basic is simple. An answer starts with a prefix, and finishes
+            # with \n. If it actually finishes with " \n", then it's just a new
+            # line and not the end of the answer.
+            # However, it gets muddy sometimes with empty answers. For instance,
+            # it can answer "0 1 \n", which is an empty answer. But some
+            # controllers answer "1 HLP\n" with "0 1 \nBla bla \nBla\n"
             end_time = time.time() + 0.5
             ans = ""  # received data not yet processed
             ret = []  # one answer per command
@@ -3279,23 +3292,28 @@ class IPBusAccesser(object):
                 ans += data
 
                 anssplited = ans.split("\n")
-                # if finishing with \n last split is empty
-                ans = anssplited[-1]
-                anssplited = anssplited[:-1]
+                # if the answer finishes with \n, last split is empty
+                anssplited, ans = anssplited[:-1], anssplited[-1]
 
                 for l in anssplited:
                     # logging.debug("Processing %s", l)
                     if not continuing:
                         lines = []  # one string per answer line
                         # remove the prefix
-                        if not l.startswith(prefix):
-                            logging.debug("Failed to decode answer '%s'", l.encode('string_escape'))
-                            raise IOError("Report prefix unexpected after '%s': '%s'." % (com, l))
-                        l = l[len(prefix):]
-                    if l[-1:] == " ":  # remove the spaces indicating multi-line
+                        if l.startswith(prefix):
+                            l = l[len(prefix):]
+                        else:
+                            # Maybe the previous line was actually continuing (but the hardware is strange)?
+                            if ret and ret[-1] == "":
+                                logging.debug("Reconcidering previous line as beginning of multi-line")
+                                ret = ret[:-1]
+                            else:
+                                logging.debug("Failed to decode answer '%s'", l.encode('string_escape'))
+                                raise IOError("Report prefix unexpected after '%s': '%s'." % (full_com, l))
+
+                    if l[-1:] == " ":  # multi-line
                         continuing = True
-                        l = l[:-1]
-                        lines.append(l)
+                        lines.append(l[:-1])  # remove the space indicating multi-line
                     else:
                         # End of the answer for that command
                         continuing = False
