@@ -1173,6 +1173,7 @@ class BarPlotCanvas(canvas.PlotCanvas):
 
         # These attributes need to be assigned before the super constructor
         # is called, because they are used in the on_size event handler.
+        # TODO: no need for VAs
         self.val_y = model.VigilantAttribute(None)
         self.val_x = model.VigilantAttribute(None)
         # FIXME: This attribute should be renamed to simply `view`, or `view_model`, but that
@@ -1195,17 +1196,10 @@ class BarPlotCanvas(canvas.PlotCanvas):
         self.closed = canvas.PLOT_CLOSE_BOTTOM
         self.plot_mode = canvas.PLOT_MODE_BAR
 
-        self.markline_overlay = view_overlay.MarkingLineOverlay(
-            self,
+        self.markline_overlay = view_overlay.MarkingLineOverlay(self,
             orientation=MarkingLineOverlay.HORIZONTAL | MarkingLineOverlay.VERTICAL)
         self.add_view_overlay(self.markline_overlay)
         self.markline_overlay.activate()
-
-        self.curve_overlay = view_overlay.CurveOverlay(
-            self,
-            orientation=CurveOverlay.HORIZONTAL | CurveOverlay.VERTICAL)
-        # self.add_view_overlay(self.curve_overlay)
-        self.curve_overlay.activate()
 
     def set_data(self, data, unit_x=None, unit_y=None, range_x=None, range_y=None):
         """ Subscribe to the x position of the overlay when data is loaded """
@@ -1225,8 +1219,6 @@ class BarPlotCanvas(canvas.PlotCanvas):
         self.val_y.value = None
         self.markline_overlay.clear_labels()
         self.markline_overlay.deactivate()
-        self.curve_overlay.clear_labels()
-        self.curve_overlay.deactivate()
         wx.CallAfter(self.update_drawing)
 
     # Event handlers
@@ -1234,10 +1226,13 @@ class BarPlotCanvas(canvas.PlotCanvas):
     def on_size(self, evt):
         """ Update the position of the focus line """
         super(BarPlotCanvas, self).on_size(evt)
+        # TODO: it should be possible to have the markline overlay do pretty
+        # much everything itself, and just ask the canvas for the data value
+        # at a specific wavelength. See CurveOverlay.
+        # => Have a method to convert from a X position to closest (X/Y) + (wl/data)
         if None not in (self.val_x.value, self.val_y.value):
             pos = (self._val_x_to_pos_x(self.val_x.value), self._val_y_to_pos_y(self.val_y.value))
             self.markline_overlay.set_position(pos)
-            self.curve_overlay.set_position(pos)
 
     def _map_to_plot_values(self, v_pos):
         """ Calculate the x and y *values* belonging to the x pixel position """
@@ -1251,8 +1246,7 @@ class BarPlotCanvas(canvas.PlotCanvas):
         self.val_y.value = self._val_x_to_val_y(self.val_x.value, snap=True)
 
         pos = (v_posx, self._val_y_to_pos_y(self.val_y.value, self.data_prop[2], self.data_prop[3]))
-        self.markline_overlay.set_position(pos)
-        self.curve_overlay.set_position(pos)
+        self.markline_overlay.set_position(pos)  # FIXME: this cause to call this method immediately
 
         self.markline_overlay.x_label = units.readable_str(self.val_x.value, self.unit_x, 3)
         self.markline_overlay.y_label = units.readable_str(self.val_y.value, self.unit_y, 3)
@@ -1287,10 +1281,6 @@ class BarPlotCanvas(canvas.PlotCanvas):
 
         if self.microscope_view:
             self.update_thumbnail()
-
-    def get_y_value(self):
-        """ Return the current y value """
-        return self.val_y.value
 
 
 class TwoDPlotCanvas(BitmapCanvas):
