@@ -989,8 +989,8 @@ class PointSpectrumViewport(PlotViewport):
     @call_in_wx_main
     def _update_peak(self, f):
         try:
-            peak_data = f.result()
-            self._curve_overlay.update_data(peak_data, self.spectrum_range, self.unit_x, self.stream.peak_method.value)
+            peak_data, peak_offset = f.result()
+            self._curve_overlay.update_data(peak_data, peak_offset, self.spectrum_range, self.unit_x, self.stream.peak_method.value)
             logging.debug("Received peak data")
         except CancelledError:
             logging.debug("Peak fitting in progress was cancelled")
@@ -1059,22 +1059,13 @@ class SpatialSpectrumViewport(ViewPort):
         self.stream = None
         self.current_line = None
 
-        self.canvas.markline_overlay.v_pos.subscribe(self.on_spectrum_motion)
+        self.canvas.markline_overlay.val.subscribe(self.on_spectrum_motion)
 
-    def on_spectrum_motion(self, vpos):
+    def on_spectrum_motion(self, val):
 
-        if vpos:
-            self.canvas.markline_overlay.x_label = units.readable_str(
-                self.bottom_legend.pixel_to_value(vpos[0]),
-                self.bottom_legend.unit,
-                3
-            )
-            self.canvas.markline_overlay.y_label = units.readable_str(
-                self.left_legend.pixel_to_value(vpos[1]),
-                self.left_legend.unit,
-                3
-            )
-            rat = self.left_legend.pixel_to_ratio(vpos[1])
+        if val:
+            rng = self.bottom_legend.range
+            rat = (val[0] - rng[0]) / (rng[1] - rng[0])
             line_pixels = rasterize_line(*self.current_line)
             self.stream.selected_pixel.value = line_pixels[int(len(line_pixels) * rat)]
 
@@ -1172,10 +1163,12 @@ class SpatialSpectrumViewport(ViewPort):
             unit_x = self.stream.spectrumBandwidth.unit
             self.bottom_legend.unit = unit_x
             self.bottom_legend.range = (spectrum_range[0], spectrum_range[-1])
-            self.left_legend.unit = 'm'
+            unit_y = 'm'
+            self.left_legend.unit = unit_y
             self.left_legend.range = (0, line_length)
 
-            self.canvas.set_2d_data(data)
+            self.canvas.set_2d_data(data, unit_x, unit_y,
+                                    self.bottom_legend.range, self.left_legend.range)
         else:
             logging.warn("No data to display for the selected line!")
 

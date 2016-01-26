@@ -1171,11 +1171,6 @@ class BarPlotCanvas(canvas.PlotCanvas):
 
     def __init__(self, *args, **kwargs):
 
-        # These attributes need to be assigned before the super constructor
-        # is called, because they are used in the on_size event handler.
-        # TODO: no need for VAs
-        self.val_y = model.VigilantAttribute(None)
-        self.val_x = model.VigilantAttribute(None)
         # FIXME: This attribute should be renamed to simply `view`, or `view_model`, but that
         # would also require renaming the `microscope_view` attributes of the
         # other Canvas classes.
@@ -1197,9 +1192,9 @@ class BarPlotCanvas(canvas.PlotCanvas):
         self.plot_mode = canvas.PLOT_MODE_BAR
 
         self.markline_overlay = view_overlay.MarkingLineOverlay(self,
-            orientation=MarkingLineOverlay.HORIZONTAL | MarkingLineOverlay.VERTICAL)
+            orientation=MarkingLineOverlay.HORIZONTAL | MarkingLineOverlay.VERTICAL,
+            map_y_from_x=True)
         self.add_view_overlay(self.markline_overlay)
-        self.markline_overlay.activate()
 
     def set_data(self, data, unit_x=None, unit_y=None, range_x=None, range_y=None):
         """ Subscribe to the x position of the overlay when data is loaded """
@@ -1207,51 +1202,15 @@ class BarPlotCanvas(canvas.PlotCanvas):
         super(BarPlotCanvas, self).set_data(data, unit_x, unit_y, range_x, range_y)
 
         if data:
-            self.markline_overlay.v_pos.subscribe(self._map_to_plot_values, init=True)
             self.markline_overlay.activate()
         else:
-            self.markline_overlay.v_pos.unsubscribe(self._map_to_plot_values)
             self.markline_overlay.deactivate()
 
     def clear(self):
         super(BarPlotCanvas, self).clear()
-        self.val_x.value = None
-        self.val_y.value = None
         self.markline_overlay.clear_labels()
         self.markline_overlay.deactivate()
         wx.CallAfter(self.update_drawing)
-
-    # Event handlers
-
-    def on_size(self, evt):
-        """ Update the position of the focus line """
-        super(BarPlotCanvas, self).on_size(evt)
-        # TODO: it should be possible to have the markline overlay do pretty
-        # much everything itself, and just ask the canvas for the data value
-        # at a specific wavelength. See CurveOverlay.
-        # => Have a method to convert from a X position to closest (X/Y) + (wl/data)
-        if None not in (self.val_x.value, self.val_y.value):
-            pos = (self._val_x_to_pos_x(self.val_x.value), self._val_y_to_pos_y(self.val_y.value))
-            self.markline_overlay.set_position(pos)
-
-    def _map_to_plot_values(self, v_pos):
-        """ Calculate the x and y *values* belonging to the x pixel position """
-
-        if not self._data or v_pos is None:
-            return
-
-        v_posx, v_posy = v_pos
-
-        self.val_x.value = self._pos_x_to_val_x(v_posx, snap=True)
-        self.val_y.value = self._val_x_to_val_y(self.val_x.value, snap=True)
-
-        pos = (v_posx, self._val_y_to_pos_y(self.val_y.value, self.data_prop[2], self.data_prop[3]))
-        self.markline_overlay.set_position(pos)  # FIXME: this cause to call this method immediately
-
-        self.markline_overlay.x_label = units.readable_str(self.val_x.value, self.unit_x, 3)
-        self.markline_overlay.y_label = units.readable_str(self.val_y.value, self.unit_y, 3)
-
-        # self.Parent.Refresh()  # TODO: Does it need to be parent? is it needed at all?
 
     def setView(self, microscope_view, tab_data):
         """ Set the microscope_view that this canvas is displaying/representing
@@ -1299,8 +1258,12 @@ class TwoDPlotCanvas(BitmapCanvas):
         self.microscope_view = None
         self._tab_data_model = None
 
-        self.markline_overlay = view_overlay.MarkingLineOverlay(
-            self,
+        self.unit_x = None
+        self.unit_y = None
+        self.range_x = None
+        self.range_y = None
+
+        self.markline_overlay = view_overlay.MarkingLineOverlay(self,
             orientation=MarkingLineOverlay.HORIZONTAL | MarkingLineOverlay.VERTICAL)
         self.add_view_overlay(self.markline_overlay)
 
@@ -1363,22 +1326,23 @@ class TwoDPlotCanvas(BitmapCanvas):
         :param microscope_view:(model.MicroscopeView)
         :param tab_data: (model.MicroscopyGUIData)
         """
-        # This is a kind of kludge, see mscviewport.MicroscopeViewport for
-        # details
+        # This is a kind of kludge, see viewport.MicroscopeViewport for details
         assert(self.microscope_view is None)
 
         self.microscope_view = microscope_view
         self._tab_data_model = tab_data
 
-    def set_2d_data(self, im_data):
+    def set_2d_data(self, im_data, unit_x=None, unit_y=None, range_x=None, range_y=None):
         """ Set the data to be displayed
 
-        TODO: Process the units for both the horizontal and vertical legends/axis
         TODO: Allow for both a horizontal and vertical domain
-
         """
-
         self.set_images([(im_data, (0.0, 0.0), 1.0, True, None, None, None, None, "Spatial Spectrum")])
+        self.unit_x = unit_x
+        self.unit_y = unit_y
+        self.range_x = range_x
+        self.range_y = range_y
+
         self.markline_overlay.clear_labels()
         self.markline_overlay.activate()
 
@@ -1391,6 +1355,50 @@ class TwoDPlotCanvas(BitmapCanvas):
                 image = self._get_img_from_buffer()
                 if image is not None:
                     self.microscope_view.thumbnail.value = image
+
+    def val_to_pos(self, val):
+        """ Translate a value tuple to a pixel position tuple
+        If a value (x or y) is out of range, it will be clipped.
+        :param val: (float, float) The value coordinates to translate
+        :return: (int, int)
+        """
+        size = self.ClientSize
+        data_width = self.range_x[1] - self.range_x[0]
+        x = min(max(self.range_x[0], val[0]), self.range_x[1])
+        perc_x = (x - self.range_x[0]) / data_width
+        pos_x = perc_x * size[0]
+
+        data_height = self.range_y[1] - self.range_y[0]
+        y = min(max(self.range_y[0], val[1]), self.range_y[1])
+        perc_y = (self.range_y[1] - y) / data_height
+        pos_y = perc_y * size[1]
+
+        return pos_x, pos_y
+
+    def pos_to_val(self, pos, snap=False):
+        """ Map the given pixel position to a value in the data range
+
+        If snap is True, the closest snap from `self._data` will be returned, otherwise
+        interpolation will occur.
+        """
+        size = self.ClientSize
+        perc_x = pos[0] / size[0]
+        data_width = self.range_x[1] - self.range_x[0]
+        val_x = perc_x * data_width + self.range_x[0]
+
+        perc_y = pos[1] / size[1]
+        data_height = self.range_y[1] - self.range_y[0]
+        val_y = self.range_y[1] - perc_y * data_height
+
+        if snap:
+            # TODO: should be just a matter of rounding down to the size of a pixel
+            raise NotImplementedError("Doesn't know how to snap to value")
+        else:
+            # Clip the value
+            val_x = max(self.range_x[0], min(val_x, self.range_x[1]))
+            val_y = max(self.range_y[0], min(val_y, self.range_y[1]))
+
+        return val_x, val_y
 
 
 class AngularResolvedCanvas(canvas.DraggableCanvas):

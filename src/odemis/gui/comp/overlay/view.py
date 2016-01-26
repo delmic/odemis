@@ -340,23 +340,29 @@ class ViewSelectOverlay(base.ViewOverlay, base.SelectionMixin):
 class MarkingLineOverlay(base.ViewOverlay, base.DragMixin):
     """ Draw a vertical line at the given view position
 
-    This class can easily be extended to include a horizontal or horz/vert
-    display mode.
-
+    Provides a .val VA indicating the selected position by the user (using mouse).
     """
 
     HORIZONTAL = 1
     VERTICAL = 2
 
-    def __init__(self, cnvs, colour=gui.SELECTION_COLOUR, orientation=None):
+    def __init__(self, cnvs, colour=gui.SELECTION_COLOUR, orientation=None, map_y_from_x=False):
+        """
+        map_y_from_x (bool): If True, the Y coordinate of the value will be
+          based on the data, obtained via cnvs.val_x_to_val(), and .val will
+          contain None as Y => 1D movement.
+          If False, both X and Y will be based on the mouse position (2D movement).
+        """
 
         base.ViewOverlay.__init__(self, cnvs)
         base.DragMixin.__init__(self)
 
         self.label = None
         self.colour = conversion.hex_to_frgba(colour)
+        self.map_y_from_x = map_y_from_x
 
-        self.v_pos = model.VigilantAttribute(None)
+        # highlighted position (in the data format, but not necessarily part of the data)
+        self.val = model.VigilantAttribute(None)  # tuple (X, Y) or None
 
         self._x_label = self.add_label("", colour=self.colour)
         self._y_label = self.add_label("", colour=self.colour, align=wx.ALIGN_BOTTOM)
@@ -372,7 +378,7 @@ class MarkingLineOverlay(base.ViewOverlay, base.DragMixin):
 
     @x_label.setter
     def x_label(self, lbl):
-        if self.label_orientation & self.VERTICAL == self.VERTICAL:
+        if self.label_orientation & self.VERTICAL:
             self._x_label.text = lbl
 
     @property
@@ -384,7 +390,7 @@ class MarkingLineOverlay(base.ViewOverlay, base.DragMixin):
         self._y_label.text = lbl
 
     def clear_labels(self):
-        self.v_pos.value = None
+        self.val.value = None
 
     def hide_x_label(self):
         self.label_orientation = self.HORIZONTAL
@@ -421,12 +427,14 @@ class MarkingLineOverlay(base.ViewOverlay, base.DragMixin):
     def _store_event_pos(self, evt):
         """ Position the focus line at the position of the given mouse event """
         x, y = evt.GetPositionTuple()
-        # FIXME: why not heigh -1 too?
-        self.v_pos.value = (max(min(self.view_width, x), 1), max(min(self.view_height, y), 1))
-
-    def set_position(self, pos):
-        x, y = pos
-        self.v_pos.value = (max(min(self.view_width, x), 1), max(min(self.view_height - 1, y), 1))
+        x = max(1, min(self.view_width, x))
+        if self.map_y_from_x:
+            # Y will be automatically mapped at drawing
+            val = self.cnvs.pos_x_to_val_x(x, snap=False), None
+        else:
+            y = max(1, min(self.view_height, y))
+            val = self.cnvs.pos_to_val((x, y), snap=False)
+        self.val.value = val
 
     def draw(self, ctx):
         ctx.set_line_width(self.line_width)
@@ -434,34 +442,42 @@ class MarkingLineOverlay(base.ViewOverlay, base.DragMixin):
         ctx.set_line_join(cairo.LINE_JOIN_MITER)
         ctx.set_source_rgba(*self.colour)
 
-        if self.v_pos.value is not None:
-            v_posx, v_posy = self.v_pos.value
-            if self.orientation & self.VERTICAL == self.VERTICAL:
-                ctx.move_to(v_posx, 0)
-                ctx.line_to(v_posx, self.cnvs.ClientSize.y)
+        if self.val.value is not None:
+            val = self.val.value
+            if self.map_y_from_x:
+                # Maps Y and also snap X to the closest X value in the data
+                val = self.cnvs.val_x_to_val(val[0])
+            v_pos = self.cnvs.val_to_pos(val)
+
+            self.x_label = units.readable_str(val[0], self.cnvs.unit_x, 3)
+            self.y_label = units.readable_str(val[1], self.cnvs.unit_y, 3)
+
+            # v_posx, v_posy = self.v_pos.value
+            if self.orientation & self.VERTICAL:
+                ctx.move_to(v_pos[0], 0)
+                ctx.line_to(v_pos[0], self.cnvs.ClientSize.y)
                 ctx.stroke()
 
-            if self.orientation & self.HORIZONTAL == self.HORIZONTAL:
-                ctx.move_to(0, v_posy)
-                ctx.line_to(self.cnvs.ClientSize.x, v_posy)
+            if self.orientation & self.HORIZONTAL:
+                ctx.move_to(0, v_pos[1])
+                ctx.line_to(self.cnvs.ClientSize.x, v_pos[1])
                 ctx.stroke()
 
             if self.x_label.text:
-                self.x_label.pos = (v_posx + 5, self.cnvs.ClientSize.y)
+                self.x_label.pos = (v_pos[0] + 5, self.cnvs.ClientSize.y)
                 self._write_label(ctx, self.x_label)
 
             if self.y_label.text:
-                yp = max(0, v_posy - 5)  # Padding from line
+                yp = max(0, v_pos[1] - 5)  # Padding from line
                 # Increase bottom margin if x label is close
-                label_padding = 30 if v_posx < 50 else 0
+                label_padding = 30 if v_pos[0] < 50 else 0
                 yn = min(self.view_height - label_padding, yp)
                 self.y_label.pos = (2, yn)
                 self._write_label(ctx, self.y_label)
 
             r, g, b, a = conversion.change_brightness(self.colour, -0.2)
-            a = 0.5
-            ctx.set_source_rgba(r, g, b, a)
-            ctx.arc(v_posx, v_posy, 5.5, 0, 2*math.pi)
+            ctx.set_source_rgba(r, g, b, 0.5)
+            ctx.arc(v_pos[0], v_pos[1], 5.5, 0, 2 * math.pi)
             ctx.fill()
 
 
@@ -482,13 +498,13 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
         self.selected_wl = None  # in same unit as the range
 
         self.peaks = None  # list of peak data
+        self.peak_offset = None
         self.range = None  # array of wl/px
         self.unit = None  # str
         self.type = None  # str
         # Cached computation of the peak curve. The global curve is index None
         self._curves = {}  # wavelength/None -> list of values
         self.list_labels = []
-        self.single_peaks = []
         self.width_labels = []
         self.amplitude_labels = []
         self.peak_labels = []
@@ -535,14 +551,15 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
         else:
             self.selected_wl = None
 
-    def update_data(self, peak_data, spectrum_range, unit, type):
+    def update_data(self, peak_data, peak_offset, spectrum_range, unit, type):
         """
-        peak_data (list of floats): series of [pos, width, amplitude]
-          and finally initial offset
+        peak_data (list of tuple of 3 floats): series of (pos, width, amplitude)
+        peak_offset (float): initial offset
         spectrum_range (list of floats): wavelength/pixel for each pixel in the original spectrum data
         unit (str): m or px
         """
         self.peaks = peak_data
+        self.peak_offset = peak_offset
         self.range = spectrum_range
         self.unit = unit
         self.type = type
@@ -557,17 +574,14 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
 
         # Compute the label and global curve on the first time needed
         if None not in self._curves:
-            self.single_peaks = []
             self.width_labels = []
             self.amplitude_labels = []
             self.peak_labels = []
-            for (pos, width, amplitude) in peaks[0]:
+            for pos, width, amplitude in peaks:
                 self.peak_labels.append(units.readable_str(pos, self.unit, 3))
                 self.width_labels.append(units.readable_str(width, self.unit, 3))
                 self.amplitude_labels.append(units.readable_str(amplitude, None, 3))
-                self.single_peaks.append(([(pos, width, amplitude)], peaks[1]))
-
-            self._curves[None] = peak.Curve(rng, peaks, type=self.type)
+            self._curves[None] = peak.Curve(rng, peaks, self.peak_offset, type=self.type)
         curve = self._curves[None]
 
         step = max(1, len(rng) // self.length)
@@ -595,7 +609,7 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
         # Draw the peak and peak label
         peaks_canvpos = []
         # Depends on canvas size so always update
-        for (pos, width, amplitude) in peaks[0]:
+        for pos, width, amplitude in peaks:
             peaks_canvpos.append(int((((pos - rng_first) * (client_size_x - 1)) / (rng_last - rng_first)) + 1))
 
         ctx.set_source_rgba(*self.colour_peaks)
@@ -622,14 +636,14 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
             self.list_labels.append(peak_label)
 
         # Draw the peak curve (if the user has selected a wavelength)
-        if self.selected_wl is not None and self.single_peaks:
+        if self.selected_wl is not None and peaks:
             # Find closest peak
-            peak_i = util.index_closest(self.selected_wl, [p for (p, w, a) in self.peaks[0]])  # peak pos
-            peak_wl = self.single_peaks[peak_i][0][0][0]
-            peak_margin = (rng_last - rng_first) / (5 * len(self.single_peaks))
-            if abs(peak_wl - self.selected_wl) <= peak_margin:
+            peak_i = util.index_closest(self.selected_wl, [p for (p, w, a) in peaks])  # peak pos
+            peak_pos = peaks[peak_i][0]
+            peak_margin = (rng_last - rng_first) / (5 * len(peaks))
+            if abs(peak_pos - self.selected_wl) <= peak_margin:
                 if peak_i not in self._curves:
-                    self._curves[peak_i] = peak.Curve(rng, self.single_peaks[peak_i], type=self.type)
+                    self._curves[peak_i] = peak.Curve(rng, [peaks[peak_i]], self.peak_offset, type=self.type)
                 single_curve = self._curves[peak_i]
                 ctx.set_source_rgba(*self.colour)
                 x_canvas = 1

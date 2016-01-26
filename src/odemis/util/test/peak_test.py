@@ -47,21 +47,21 @@ class TestPeak(unittest.TestCase):
 
         # Try gaussian
         f = self._peak_fitter.Fit(spec, wl)
-        params = f.result()
-        curve = peak.Curve(wl, params)
+        params, offset = f.result()
+        curve = peak.Curve(wl, params, offset)
         plt.figure()
         plt.plot(wl, spec, 'r', wl, curve, 'r', linewidth=2)
 
         # Try lorentzian
         f = self._peak_fitter.Fit(spec, wl, type='lorentzian')
-        params = f.result()
-        curve = peak.Curve(wl, params, type='lorentzian')
+        params, offset = f.result()
+        curve = peak.Curve(wl, params, offset, type='lorentzian')
         plt.figure()
         plt.plot(wl, spec, 'r', wl, curve, 'r', linewidth=2)
         plt.show(block=False)
 
         # Assert wrong fitting type
-        self.assertRaises(KeyError, peak.Curve, wl, params, type='wrongType')
+        self.assertRaises(KeyError, peak.Curve, wl, params, offset, type='wrongType')
 
 
 if __name__ == "__main__":
