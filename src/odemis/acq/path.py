@@ -204,7 +204,7 @@ class OpticalPathManager(object):
         elif microscope.role in ("sparc-simplex", "sparc"):
             self._modes = copy.deepcopy(SPARC_MODES)
         else:
-            raise NotImplementedError("Microscope role '%s' unsupported", microscope.role)
+            raise NotImplementedError("Microscope role '%s' unsupported" % (microscope.role,))
 
         # keep list of already accessed components, to avoid creating new proxys
         # every time the mode changes
@@ -396,6 +396,7 @@ class OpticalPathManager(object):
                             pass  # use pos as-is
                     elif axis == "slit-in":
                         if self._last_mode not in ALIGN_MODES:
+                            # TODO: save also the component
                             self._stored[axis] = comp.position.value[axis]
                     elif hasattr(comp.axes[axis], "choices") and isinstance(comp.axes[axis].choices, dict):
                         choices = comp.axes[axis].choices
