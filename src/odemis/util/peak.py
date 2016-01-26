@@ -286,7 +286,11 @@ class PeakFitter(object):
                     continue
             else:
                 raise ValueError("Could not apply peak fitting of type %s." % type)
-            # TODO: return a better type: offset + list of 3 tuples (and Curve should be updated too)
+            # reformat parameters to (list of 3 tuples, offset)
+            peaks_params = []
+            for pos, width, amplitude in _Grouped(params[:-1], 3):
+                peaks_params.append((pos, width, amplitude))
+            params = peaks_params, params[-1]
             return params
         except CancelledError:
             logging.debug("Fitting of type %s was cancelled.", type)
@@ -324,7 +328,7 @@ def Curve(wavelength, peak_parameters, type='gaussian'):
     dataset of curve points.
     wavelength (1d array of floats): The wavelength values corresponding to the
     spectrum given.
-    peak_parameters (1d array of floats): The parameters of the peak curves to
+    peak_parameters (list of tuples, float): The parameters of the peak curves to
     be depicted.
     type (str): Type of fitting to be applied (for now only ‘gaussian’ and
     ‘lorentzian’ are available).
@@ -338,7 +342,10 @@ def Curve(wavelength, peak_parameters, type='gaussian'):
     except KeyError:
         raise KeyError("Given type %s not in available fitting types: %s" % (type, PEAK_FUNCTIONS.keys()))
 
-    curve = FitFunction(wavelength, *peak_parameters)
+    # Flatten the peak parameters tuple
+    peak_flat = [p for l in peak_parameters[0] for p in l]
+    peak_flat.append(peak_parameters[1])
+    curve = FitFunction(wavelength, *peak_flat)
 #         residual = numpy.sqrt((abs(output - spectrum) ** 2).sum() / len(spectrum))
 #         logging.info("Residual error of spectrum fitting is %f", residual)
     return curve
