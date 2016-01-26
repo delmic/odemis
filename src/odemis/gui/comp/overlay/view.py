@@ -501,6 +501,7 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
         self.peak_offset = None
         self.range = None  # array of wl/px
         self.unit = None  # str
+        self.type = None  # str
         # Cached computation of the peak curve. The global curve is index None
         self._curves = {}  # wavelength/None -> list of values
         self.list_labels = []
@@ -550,7 +551,7 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
         else:
             self.selected_wl = None
 
-    def update_data(self, peak_data, peak_offset, spectrum_range, unit):
+    def update_data(self, peak_data, peak_offset, spectrum_range, unit, type):
         """
         peak_data (list of tuple of 3 floats): series of (pos, width, amplitude)
         peak_offset (float): initial offset
@@ -561,6 +562,7 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
         self.peak_offset = peak_offset
         self.range = spectrum_range
         self.unit = unit
+        self.type = type
         self._curves = {}  # throw away the cache
         self.cnvs.Refresh()
 
@@ -579,8 +581,7 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
                 self.peak_labels.append(units.readable_str(pos, self.unit, 3))
                 self.width_labels.append(units.readable_str(width, self.unit, 3))
                 self.amplitude_labels.append(units.readable_str(amplitude, None, 3))
-
-            self._curves[None] = peak.Curve(rng, peaks, self.peak_offset)
+            self._curves[None] = peak.Curve(rng, peaks, self.peak_offset, type=self.type)
         curve = self._curves[None]
 
         step = max(1, len(rng) // self.length)
@@ -642,7 +643,7 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
             peak_margin = (rng_last - rng_first) / (5 * len(peaks))
             if abs(peak_pos - self.selected_wl) <= peak_margin:
                 if peak_i not in self._curves:
-                    self._curves[peak_i] = peak.Curve(rng, [peaks[peak_i]], self.peak_offset)
+                    self._curves[peak_i] = peak.Curve(rng, [peaks[peak_i]], self.peak_offset, type=self.type)
                 single_curve = self._curves[peak_i]
                 ctx.set_source_rgba(*self.colour)
                 x_canvas = 1

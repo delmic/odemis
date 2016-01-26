@@ -863,8 +863,8 @@ class PlotViewport(ViewPort):
             logging.info("No stream to plot found")
             self.clear()  # Remove legend ticks and clear plot
 
-        if hasattr(self.stream, "peak_show"):
-            self.stream.peak_show.subscribe(self._on_peak_show, init=True)
+        if hasattr(self.stream, "peak_method"):
+            self.stream.peak_method.subscribe(self._on_peak_method, init=True)
 
     @abstractmethod
     def _on_new_data(self, data):
@@ -873,8 +873,8 @@ class PlotViewport(ViewPort):
     def _on_pixel_select(self, pixel):
         raise NotImplementedError("This viewport doesn't support streams with .selected_pixel")
 
-    def _on_peak_show(self, visible):
-        raise NotImplementedError("This viewport doesn't support streams with .peak_show")
+    def _on_peak_method(self, state):
+        raise NotImplementedError("This viewport doesn't support streams with .peak_method")
 
 
 class PointSpectrumViewport(PlotViewport):
@@ -897,8 +897,8 @@ class PointSpectrumViewport(PlotViewport):
             self._curve_overlay.clear_labels()
         super(PointSpectrumViewport, self).clear()
 
-    def _on_peak_show(self, visible):
-        if visible:
+    def _on_peak_method(self, state):
+        if state is not None:
             self.canvas.add_view_overlay(self._curve_overlay)
             self._curve_overlay.activate()
             if self.stream is not None:
@@ -909,7 +909,7 @@ class PointSpectrumViewport(PlotViewport):
                     # cancel previous fitting if there is one in progress
                     self.spectrum_range = spectrum_range
                     self.unit_x = unit_x
-                    self._peak_future = self._peak_fitter.Fit(data, spectrum_range)
+                    self._peak_future = self._peak_fitter.Fit(data, spectrum_range, type=state)
                     self._peak_future.add_done_callback(self._update_peak)
                 else:
                     self._curve_overlay.clear_labels()
@@ -969,13 +969,13 @@ class PointSpectrumViewport(PlotViewport):
         spectrum_range = self.stream.get_spectrum_range()
         unit_x = self.stream.spectrumBandwidth.unit
 
-        if self.stream.peak_show.value:
+        if self.stream.peak_method.value is not None:
             # cancel previous fitting if there is one in progress
             self._peak_future.cancel()
             self._curve_overlay.clear_labels()
             self.spectrum_range = spectrum_range
             self.unit_x = unit_x
-            self._peak_future = self._peak_fitter.Fit(data, spectrum_range)
+            self._peak_future = self._peak_fitter.Fit(data, spectrum_range, type=self.stream.peak_method.value)
             self._peak_future.add_done_callback(self._update_peak)
 
         self.canvas.set_1d_data(spectrum_range, data, unit_x)
@@ -990,7 +990,7 @@ class PointSpectrumViewport(PlotViewport):
     def _update_peak(self, f):
         try:
             peak_data, peak_offset = f.result()
-            self._curve_overlay.update_data(peak_data, peak_offset, self.spectrum_range, self.unit_x)
+            self._curve_overlay.update_data(peak_data, peak_offset, self.spectrum_range, self.unit_x, self.stream.peak_method.value)
             logging.debug("Received peak data")
         except CancelledError:
             logging.debug("Peak fitting in progress was cancelled")
