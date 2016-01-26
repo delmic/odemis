@@ -569,7 +569,7 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
     def draw(self, ctx):
         peaks = self.peaks
         rng = self.range
-        if peaks is None:
+        if (peaks is None) or (self.type is None):
             return
 
         # Compute the label and global curve on the first time needed
