@@ -975,6 +975,9 @@ class PointSpectrumViewport(PlotViewport):
             self._curve_overlay.clear_labels()
             self.spectrum_range = spectrum_range
             self.unit_x = unit_x
+            # TODO: try to find more peaks (= small window) based on width?
+            # => so far not much success
+            # ex: dividerf = 1 + math.log(self.stream.selectionWidth.value)
             self._peak_future = self._peak_fitter.Fit(data, spectrum_range, type=self.stream.peak_method.value)
             self._peak_future.add_done_callback(self._update_peak)
 

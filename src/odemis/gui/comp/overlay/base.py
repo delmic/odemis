@@ -283,8 +283,6 @@ class Overlay(object):
                 lw = max(lw, plw)
                 lh += plh
 
-            logging.debug("Computed text extend = %s x %s, pos = %s x %s", lw, lh, x, y)
-
             if isinstance(self, ViewOverlay):
                 # Apply padding
                 x = max(min(x, self.view_width - self.canvas_padding), self.canvas_padding)

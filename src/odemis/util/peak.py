@@ -35,24 +35,24 @@ def GaussianFit(data, *peaks):
     Applies gaussian fitting to data given the "peaks" parameters.
     peaks (list of floats): series of pos, width, amplitude and initial offset
     """
-    gau = 0
+    gau = peaks[-1]  # Automatically converted to a vector in the addition
     for pos, width, amplitude in _Grouped(peaks[:-1], 3):
         sprime = pos * width
         gau += amplitude * _Normalize(numpy.exp(-(data - pos) ** 2 / sprime ** 2))
 
-    return gau + peaks[-1]
+    return gau
 
 
 def LorentzianFit(data, *peaks):
     """
     Applies lorentzian fitting to data given the "peaks" parameters.
     """
-    lor = 0
+    lor = peaks[-1]
     for pos, width, amplitude in _Grouped(peaks[:-1], 3):
         wprime = width * pos
         lor += amplitude * _Normalize(wprime ** 2 / ((data - pos) ** 2 + wprime ** 2))
 
-    return lor + peaks[-1]
+    return lor
 
 
 def Smooth(signal, window_len=11, window='hanning'):
@@ -244,16 +244,16 @@ class PeakFitter(object):
         """
         try:
             # values based on experimental datasets
-#             if len(wavelength) >= 2000:
-#                 # divider = 15
-#                 divider = 30
-#             elif len(wavelength) >= 1000:
-#                 divider = 20
-#             else:
-#                 divider = 30
-            divider = 30
-            init_window_size = len(wavelength) // divider
+            if len(wavelength) >= 2000:
+                divider = 20
+            elif len(wavelength) >= 1000:
+                divider = 25
+            else:
+                divider = 30
+            init_window_size = max(3, len(wavelength) // divider)
             window_size = init_window_size
+            logging.debug("Starting peak detection on data (len = %d) with window = %d",
+                          len(wavelength), window_size)
             try:
                 width = PEAK_WIDTHS[type]
                 FitFunction = PEAK_FUNCTIONS[type]
@@ -284,8 +284,7 @@ class PeakFitter(object):
                     break
                 except Exception:
                     window_size = int(round(window_size * 1.2))
-                    logging.debug("Retrying to fit peak on data (len = %d) with window = %d",
-                                  len(wavelength), window_size)
+                    logging.debug("Retrying to fit peak with window = %d", window_size)
                     continue
             else:
                 raise ValueError("Could not apply peak fitting of type %s." % type)

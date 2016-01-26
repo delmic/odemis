@@ -589,6 +589,10 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
         rng_last = rng[-1]
         rng_n = rng[1::step]
         mn, mx = min(curve), max(curve)
+        if mn == mx:
+            logging.info("Global peak curve is flat, not displaying")
+            return
+
         client_size_x = self.cnvs.ClientSize.x
         client_size_y = self.cnvs.ClientSize.y
 
