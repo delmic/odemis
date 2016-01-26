@@ -614,10 +614,10 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
         ctx.set_source_rgba(*self.colour_peaks)
         self.list_labels = []
         for p_label, p_pos in zip(self.peak_labels, peaks_canvpos):
-            ctx.move_to(p_pos - 3, self.cnvs.ClientSize.y)
-            ctx.line_to(p_pos, self.cnvs.ClientSize.y - 16)
-            ctx.line_to(p_pos + 3, self.cnvs.ClientSize.y)
-            ctx.line_to(p_pos - 3, self.cnvs.ClientSize.y)
+            ctx.move_to(p_pos - 3, client_size_y)
+            ctx.line_to(p_pos, client_size_y - 16)
+            ctx.line_to(p_pos + 3, client_size_y)
+            ctx.line_to(p_pos - 3, client_size_y)
             ctx.fill()
 
             peak_tuple = min(curve_drawn, key=lambda p:abs(p[0] - p_pos))

@@ -254,9 +254,6 @@ class Overlay(object):
         else:
             ctx.set_font_size(l.font_size)
 
-        x, y = l.render_pos or l.pos
-        lw, lh = l.text_size or ctx.text_extents(l.text)[2:-2]
-
         # Rotation always happens at the plot coordinates
         if l.deg is not None:
             phi = math.radians(l.deg)
@@ -269,28 +266,40 @@ class Overlay(object):
             ctx.rotate(phi)
             ctx.translate(-rx, -ry)
 
+        # Take care of newline characters
+        parts = l.text.split("\n")
+
         # Calculate the rendering position
         if not l.render_pos:
+            x, y = l.pos
+            # Cairo renders text from the bottom left, but we want to treat
+            # the top left as the origin. So we need to add the height (lower the
+            # render point), to make the given position align with the top left.
+            y += l.font_size
+
+            lw, lh = 0, 0
+            for p in parts:
+                plw, plh = ctx.text_extents(p)[2:4]
+                lw = max(lw, plw)
+                lh += plh
+
+            logging.debug("Computed text extend = %s x %s, pos = %s x %s", lw, lh, x, y)
+
             if isinstance(self, ViewOverlay):
                 # Apply padding
                 x = max(min(x, self.view_width - self.canvas_padding), self.canvas_padding)
                 y = max(min(y, self.view_height - self.canvas_padding), self.canvas_padding)
 
-            # Cairo renders text from the bottom left, but we want to treat
-            # the top left as the origin. So we need to add the height (lower the
-            # render point), to make the given position align with the top left.
-            y += lh
-
             # Horizontally align the label
-            if l.align & wx.ALIGN_RIGHT == wx.ALIGN_RIGHT:
+            if l.align & wx.ALIGN_RIGHT:
                 x -= lw
-            elif l.align & wx.ALIGN_CENTRE_HORIZONTAL == wx.ALIGN_CENTRE_HORIZONTAL:
+            elif l.align & wx.ALIGN_CENTRE_HORIZONTAL:
                 x -= lw / 2.0
 
             # Vertically align the label
-            if l.align & wx.ALIGN_BOTTOM == wx.ALIGN_BOTTOM:
+            if l.align & wx.ALIGN_BOTTOM:
                 y -= lh
-            elif l.align & wx.ALIGN_CENTER_VERTICAL == wx.ALIGN_CENTER_VERTICAL:
+            elif l.align & wx.ALIGN_CENTER_VERTICAL:
                 y -= lh / 2.0
 
             # When we rotate text, flip gets a different meaning
@@ -301,18 +310,19 @@ class Overlay(object):
 
                     # Prevent the text from running off screen
                     if x + lw + self.canvas_padding > width:
-                        x = width - lw - self.canvas_padding
+                        x = width - lw
                     elif x < self.canvas_padding:
                         x = self.canvas_padding
-                    if y + self.canvas_padding > height:
+                    if y + lh + self.canvas_padding > height:
                         y = height - lh
                     elif y < lh:
                         y = lh
-            l.render_pos = (x, y)
-            l.text_size = (lw, lh)
 
-        # Take care of newline characters
-        parts = l.text.split("\n")
+            l.render_pos = x, y
+            l.text_size = lw, lh
+        else:
+            x, y = l.render_pos
+            lw, lh = l.text_size
 
         # Draw Shadow
         if l.colour:
@@ -333,7 +343,7 @@ class Overlay(object):
         ofst = 0
         for part in parts:
             ctx.move_to(x, y + ofst)
-            ofst += l.font_size
+            ofst += l.font_size + 1
             ctx.show_text(part)
 
         ctx.restore()
