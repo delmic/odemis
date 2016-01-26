@@ -20,12 +20,14 @@
 
 """
 
+from __future__ import division
+
 import unittest
 import wx
 
-
 import odemis.gui.comp.miccanvas as miccanvas
-from odemis.gui.dev.powermate import Powermate, EVT_KNOB_ROTATE
+from odemis.gui.dev.powermate import Powermate
+from odemis.gui.evt import EVT_KNOB_ROTATE
 import odemis.gui.test as test
 
 

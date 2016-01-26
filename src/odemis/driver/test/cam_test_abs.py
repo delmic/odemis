@@ -22,6 +22,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 # This is not a real test case, but just a stub to be used for each camera driver.
 
+from __future__ import division
+
 from abc import ABCMeta, abstractproperty
 import gc
 import logging
