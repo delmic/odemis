@@ -989,8 +989,8 @@ class PointSpectrumViewport(PlotViewport):
     @call_in_wx_main
     def _update_peak(self, f):
         try:
-            peak_data = f.result()
-            self._curve_overlay.update_data(peak_data, self.spectrum_range, self.unit_x)
+            peak_data, peak_offset = f.result()
+            self._curve_overlay.update_data(peak_data, peak_offset, self.spectrum_range, self.unit_x)
             logging.debug("Received peak data")
         except CancelledError:
             logging.debug("Peak fitting in progress was cancelled")

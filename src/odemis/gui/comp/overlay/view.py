@@ -498,12 +498,12 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
         self.selected_wl = None  # in same unit as the range
 
         self.peaks = None  # list of peak data
+        self.peak_offset = None
         self.range = None  # array of wl/px
         self.unit = None  # str
         # Cached computation of the peak curve. The global curve is index None
         self._curves = {}  # wavelength/None -> list of values
         self.list_labels = []
-        self.single_peaks = []
         self.width_labels = []
         self.amplitude_labels = []
         self.peak_labels = []
@@ -550,14 +550,15 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
         else:
             self.selected_wl = None
 
-    def update_data(self, peak_data, spectrum_range, unit):
+    def update_data(self, peak_data, peak_offset, spectrum_range, unit):
         """
-        peak_data (list of floats): series of [pos, width, amplitude]
-          and finally initial offset
+        peak_data (list of tuple of 3 floats): series of (pos, width, amplitude)
+        peak_offset (float): initial offset
         spectrum_range (list of floats): wavelength/pixel for each pixel in the original spectrum data
         unit (str): m or px
         """
         self.peaks = peak_data
+        self.peak_offset = peak_offset
         self.range = spectrum_range
         self.unit = unit
         self._curves = {}  # throw away the cache
@@ -571,17 +572,15 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
 
         # Compute the label and global curve on the first time needed
         if None not in self._curves:
-            self.single_peaks = []
             self.width_labels = []
             self.amplitude_labels = []
             self.peak_labels = []
-            for (pos, width, amplitude) in peaks[0]:
+            for pos, width, amplitude in peaks:
                 self.peak_labels.append(units.readable_str(pos, self.unit, 3))
                 self.width_labels.append(units.readable_str(width, self.unit, 3))
                 self.amplitude_labels.append(units.readable_str(amplitude, None, 3))
-                self.single_peaks.append(([(pos, width, amplitude)], peaks[1]))
 
-            self._curves[None] = peak.Curve(rng, peaks)
+            self._curves[None] = peak.Curve(rng, peaks, self.peak_offset)
         curve = self._curves[None]
 
         step = max(1, len(rng) // self.length)
@@ -609,7 +608,7 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
         # Draw the peak and peak label
         peaks_canvpos = []
         # Depends on canvas size so always update
-        for (pos, width, amplitude) in peaks[0]:
+        for pos, width, amplitude in peaks:
             peaks_canvpos.append(int((((pos - rng_first) * (client_size_x - 1)) / (rng_last - rng_first)) + 1))
 
         ctx.set_source_rgba(*self.colour_peaks)
@@ -636,14 +635,14 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
             self.list_labels.append(peak_label)
 
         # Draw the peak curve (if the user has selected a wavelength)
-        if self.selected_wl is not None and self.single_peaks:
+        if self.selected_wl is not None and peaks:
             # Find closest peak
-            peak_i = util.index_closest(self.selected_wl, [p for (p, w, a) in self.peaks[0]])  # peak pos
-            peak_wl = self.single_peaks[peak_i][0][0][0]
-            peak_margin = (rng_last - rng_first) / (5 * len(self.single_peaks))
-            if abs(peak_wl - self.selected_wl) <= peak_margin:
+            peak_i = util.index_closest(self.selected_wl, [p for (p, w, a) in peaks])  # peak pos
+            peak_pos = peaks[peak_i][0]
+            peak_margin = (rng_last - rng_first) / (5 * len(peaks))
+            if abs(peak_pos - self.selected_wl) <= peak_margin:
                 if peak_i not in self._curves:
-                    self._curves[peak_i] = peak.Curve(rng, self.single_peaks[peak_i])
+                    self._curves[peak_i] = peak.Curve(rng, [peaks[peak_i]], self.peak_offset)
                 single_curve = self._curves[peak_i]
                 ctx.set_source_rgba(*self.colour)
                 x_canvas = 1

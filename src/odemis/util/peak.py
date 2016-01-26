@@ -244,21 +244,22 @@ class PeakFitter(object):
         """
         try:
             # values based on experimental datasets
-            if len(wavelength) >= 2000:
-                divider = 15
-            if len(wavelength) >= 1000:
-                divider = 20
-            else:
-                divider = 30
+#             if len(wavelength) >= 2000:
+#                 # divider = 15
+#                 divider = 30
+#             elif len(wavelength) >= 1000:
+#                 divider = 20
+#             else:
+#                 divider = 30
+            divider = 30
             init_window_size = len(wavelength) // divider
             window_size = init_window_size
-            step = 1
             try:
                 width = PEAK_WIDTHS[type]
                 FitFunction = PEAK_FUNCTIONS[type]
             except KeyError:
                 raise KeyError("Given type %s not in available fitting types: %s" % (type, PEAK_FUNCTIONS.keys()))
-            while window_size <= init_window_size + 5:
+            for step in range(5):
                 if future._fit_state == CANCELLED:
                     raise CancelledError()
                 smoothed = Smooth(spectrum, window_len=window_size)
@@ -278,11 +279,13 @@ class PeakFitter(object):
                     raise CancelledError()
 
                 try:
+                    # TODO: forbid negative peaks?
                     params, _ = curve_fit(FitFunction, wavelength, spectrum, p0=fit_list)
                     break
                 except Exception:
-                    window_size += step
-                    step += 1  # makes it a bit faster
+                    window_size = int(round(window_size * 1.2))
+                    logging.debug("Retrying to fit peak on data (len = %d) with window = %d",
+                                  len(wavelength), window_size)
                     continue
             else:
                 raise ValueError("Could not apply peak fitting of type %s." % type)
@@ -322,7 +325,7 @@ class PeakFitter(object):
         return len(data) * 10e-3  # s
 
 
-def Curve(wavelength, peak_parameters, type='gaussian'):
+def Curve(wavelength, peak_parameters, offset, type='gaussian'):
     """
     Given the peak parameters and the wavelength values returns the actual
     dataset of curve points.
@@ -330,6 +333,7 @@ def Curve(wavelength, peak_parameters, type='gaussian'):
     spectrum given.
     peak_parameters (list of tuples, float): The parameters of the peak curves to
     be depicted.
+    offset (float): peaks offset
     type (str): Type of fitting to be applied (for now only ‘gaussian’ and
     ‘lorentzian’ are available).
     returns (1d array of floats): Dataset of points representing the curve.
@@ -342,9 +346,9 @@ def Curve(wavelength, peak_parameters, type='gaussian'):
     except KeyError:
         raise KeyError("Given type %s not in available fitting types: %s" % (type, PEAK_FUNCTIONS.keys()))
 
-    # Flatten the peak parameters tuple
-    peak_flat = [p for l in peak_parameters[0] for p in l]
-    peak_flat.append(peak_parameters[1])
+    # Flatten the peak parameters tuples
+    peak_flat = [p for l in peak_parameters for p in l]
+    peak_flat.append(offset)
     curve = FitFunction(wavelength, *peak_flat)
 #         residual = numpy.sqrt((abs(output - spectrum) ** 2).sum() / len(spectrum))
 #         logging.info("Residual error of spectrum fitting is %f", residual)
