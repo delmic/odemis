@@ -484,6 +484,7 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
         self.peaks = None  # list of peak data
         self.range = None  # array of wl/px
         self.unit = None  # str
+        self.type = None  # str
         # Cached computation of the peak curve. The global curve is index None
         self._curves = {}  # wavelength/None -> list of values
         self.list_labels = []
@@ -534,7 +535,7 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
         else:
             self.selected_wl = None
 
-    def update_data(self, peak_data, spectrum_range, unit):
+    def update_data(self, peak_data, spectrum_range, unit, type):
         """
         peak_data (list of floats): series of [pos, width, amplitude]
           and finally initial offset
@@ -544,6 +545,7 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
         self.peaks = peak_data
         self.range = spectrum_range
         self.unit = unit
+        self.type = type
         self._curves = {}  # throw away the cache
         self.cnvs.Refresh()
 
@@ -565,7 +567,7 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
                 self.amplitude_labels.append(units.readable_str(amplitude, None, 3))
                 self.single_peaks.append(([(pos, width, amplitude)], peaks[1]))
 
-            self._curves[None] = peak.Curve(rng, peaks)
+            self._curves[None] = peak.Curve(rng, peaks, type=self.type)
         curve = self._curves[None]
 
         step = max(1, len(rng) // self.length)
@@ -627,7 +629,7 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
             peak_margin = (rng_last - rng_first) / (5 * len(self.single_peaks))
             if abs(peak_wl - self.selected_wl) <= peak_margin:
                 if peak_i not in self._curves:
-                    self._curves[peak_i] = peak.Curve(rng, self.single_peaks[peak_i])
+                    self._curves[peak_i] = peak.Curve(rng, self.single_peaks[peak_i], type=self.type)
                 single_curve = self._curves[peak_i]
                 ctx.set_source_rgba(*self.colour)
                 x_canvas = 1

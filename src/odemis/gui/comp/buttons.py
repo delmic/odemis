@@ -33,6 +33,7 @@ from __future__ import division
 import logging
 from operator import xor
 import wx
+import wx.lib.newevent
 import wx.lib.buttons as wxbuttons
 import math
 
@@ -498,6 +499,93 @@ class ImageTextButton(BtnMixin, wxbuttons.GenBitmapTextButton):
 
 class ImageTextToggleButton(BtnMixin, wxbuttons.GenBitmapTextToggleButton):
     pass
+
+
+# Event signaling that button state has been changed
+state_changed_event, EVT_STATE_CHANGED = wx.lib.newevent.NewEvent()
+
+class ImageStateButtonImageButton(ImageToggleButtonImageButton):
+    def __init__(self, *args, **kwargs):
+        super(ImageToggleButtonImageButton, self).__init__(*args, **kwargs)
+        self.state = 0
+        self.up = False
+
+    def DrawLabel(self, dc, width, height, dx=0, dy=0):
+        bmp = self.bmpLabel
+        if not self.IsEnabled():
+            if not self.bmpDisabled:
+                self.bmpDisabled = self._create_disabled_bitmap()
+            bmp = self.bmpDisabled
+        elif not self.up and (self.state is not None):
+            if not self.bmpSelected:
+                self.bmpSelected = self._create_active_bitmap()
+            if self.bmpSelectedHover and self.hovering:
+                if isinstance(self.bmpSelectedHover, list):
+                    bmp = self.bmpSelectedHover[self.state]
+                else:
+                    bmp = self.bmpSelectedHover
+            else:
+                if isinstance(self.bmpSelected, list):
+                    bmp = self.bmpSelected[self.state]
+                else:
+                    bmp = self.bmpSelected
+        elif self.hovering:
+            if not self.bmpHover:
+                self.bmpHover = self._create_hover_bitmap()
+            bmp = self.bmpHover
+
+        brush = self.GetBackgroundBrush(dc)
+        brush.SetColour(self.Parent.BackgroundColour)
+        dc.SetBackground(brush)
+        dc.Clear()
+
+        dc.DrawBitmap(bmp, 0, 0, True)
+        self.DrawText(dc, width, height)
+
+    def OnLeftDown(self, event):
+        if not self.IsEnabled():
+            return
+        self.saveUp = self.up
+        if isinstance(self.bmpSelected, list):
+            if self.state is None:
+                self.up = False
+                self.state = 0
+            elif (self.state == len(self.bmpSelected) - 1):
+                self.up = True
+                self.state = None
+            else:
+                self.up = False
+                self.state += 1
+            event = state_changed_event(state=self.state)
+            wx.PostEvent(self, event)
+        else:
+            self.up = not self.up
+        self.CaptureMouse()
+        self.SetFocus()
+        self.Refresh()
+
+    def OnMotion(self, event):
+        if not self.IsEnabled():
+            return
+        if event.LeftIsDown() and self.HasCapture():
+            x, y = event.GetPositionTuple()
+            w, h = self.GetClientSizeTuple()
+            if x < w and x >= 0 and y < h and y >= 0:
+                self.Refresh()
+                return
+            if (x < 0 or y < 0 or x >= w or y >= h):
+                self.Refresh()
+                return
+        event.Skip()
+
+    def SetState(self, state):
+        self.state = state
+        self.Refresh()
+    SetValue = SetState
+
+    def GetState(self):
+        return self.state
+    GetValue = GetState
 
 
 class GraphicRadioButton(ImageTextToggleButton):

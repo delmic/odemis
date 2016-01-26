@@ -1122,6 +1122,19 @@ getico_spec_greenImage = ico_spec_green.GetImage
 getico_spec_greenBitmap = ico_spec_green.GetBitmap
 
 #----------------------------------------------------------------------
+ico_lorentzian_on_h = PyEmbeddedImage(
+    "iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAAABHNCSVQICAgIfAhkiAAAAMNJ"
+    "REFUOI3FlLENwjAQRZ9tCroU2eB2YAPEKIGNIPukY4dbIUpFhUwRW7IiO+Ck4Elp4rvnf4l0"
+    "hhkBTkBDHRPwBNQFyRk4VkoIPQKMDrhslKS0lvpxcjQWQFX7tapwbo0xrlRjv12lqr2IXFX1"
+    "7r1/h9emWlTAV4liGoCQqvgJtib6gygdK7I23iEniE25hlSW1higS28RkRuZv1JKHYW5RI9f"
+    "JEsM0G1pXGKZV8FeJge8mFfBHgYHjOFpqV8nEzAA+gHWq0XfBRr0/gAAAABJRU5ErkJggg==")
+index.append('ico_lorentzian_on_h')
+catalog['ico_lorentzian_on_h'] = ico_lorentzian_on_h
+getico_lorentzian_on_hData = ico_lorentzian_on_h.GetData
+getico_lorentzian_on_hImage = ico_lorentzian_on_h.GetImage
+getico_lorentzian_on_hBitmap = ico_lorentzian_on_h.GetBitmap
+
+#----------------------------------------------------------------------
 ico_eject_orange = PyEmbeddedImage(
     "iVBORw0KGgoAAAANSUhEUgAAAB0AAAAcCAYAAACdz7SqAAADFklEQVRIx6VWzYoUMRBOpdN/"
     "M7PKiiuiXrx48iAePImXRUEW9OTBk7DgQRFRfB3RR/AlfAQPPoEIu+yy/z3TM4mV3mT8pqan"
@@ -2208,6 +2221,18 @@ catalog['ico_contrast'] = ico_contrast
 getico_contrastData = ico_contrast.GetData
 getico_contrastImage = ico_contrast.GetImage
 getico_contrastBitmap = ico_contrast.GetBitmap
+
+#----------------------------------------------------------------------
+ico_lorentzian_on = PyEmbeddedImage(
+    "iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAAABHNCSVQICAgIfAhkiAAAAGZJ"
+    "REFUOI3tklEOgDAIQ+niSXr/M3EV/NFo2NAu+rn3s2SwtiyYLSTcPcQ6qp6mmJBEMusEX4US"
+    "kc7eVbl/+oLZRCPwl9DFIHJTxy2L7h7KOpw9AGB2zHd/SLLclSoASWxT0Ref2AEC9EQMXM3f"
+    "HQAAAABJRU5ErkJggg==")
+index.append('ico_lorentzian_on')
+catalog['ico_lorentzian_on'] = ico_lorentzian_on
+getico_lorentzian_onData = ico_lorentzian_on.GetData
+getico_lorentzian_onImage = ico_lorentzian_on.GetImage
+getico_lorentzian_onBitmap = ico_lorentzian_on.GetBitmap
 
 #----------------------------------------------------------------------
 ico_bgr = PyEmbeddedImage(
