@@ -180,7 +180,7 @@ class Stream(object):
         # if there is already some data, update image with it
         # TODO: have this done by the child class, if needed.
         if self.raw:
-            self._updateHistogram(self.raw[0])
+            self._updateHistogram()
             self._onNewData(None, self.raw[0])
 
     # No __del__: subscription should be automatically stopped when the object
@@ -536,34 +536,21 @@ class Stream(object):
                         logging.warning("Data reports a BPP of %d",
                                         data.metadata[model.MD_BPP])
                         raise ValueError()
-
-                    if data.dtype.kind == "i":
-                        drange = (-depth // 2, depth // 2 - 1)
-                    else:
-                        drange = (0, depth - 1)
+                    drange = (0, depth - 1)
                 except (KeyError, ValueError):
-                    try:
-                        try:
-                            depth = 2 ** self._getDetectorVA("bpp").value
-                        except AttributeError:
-                            depth = self._detector.shape[-1]
+                    drange = self._guessDRangeFromDetector()
 
-                        if depth <= 1:
-                            logging.warning("Detector %s report a depth of %d",
-                                            self._detector.name, depth)
-                            raise ValueError()
-
-                        if data.dtype.kind == "i":
-                            drange = (-depth // 2, depth // 2 - 1)
-                        else:
-                            drange = (0, depth - 1)
-                    except (AttributeError, IndexError, ValueError):
-                        idt = numpy.iinfo(data.dtype)
-                        drange = (idt.min, idt.max)
+                if drange is None:
+                    idt = numpy.iinfo(data.dtype)
+                    drange = (idt.min, idt.max)
+                elif data.dtype.kind == "i":  # shift the range for signed data
+                    depth = drange[1] + 1
+                    drange = (-depth // 2, depth // 2 - 1)
 
                 # If range is too big to be used as is => look really at the data
                 if (drange[1] - drange[0] > 4095 and
-                    (self._drange is None or self._drange[1] - self._drange[0] < 4096)):
+                    (self._drange is None or
+                     self._drange[1] - self._drange[0] < drange[1] - drange[0])):
                     mn = int(data.view(numpy.ndarray).min())
                     mx = int(data.view(numpy.ndarray).max())
                     if self._drange is not None:
@@ -590,29 +577,34 @@ class Stream(object):
                     drange = (min(drange[0], self._drange[0]),
                               max(drange[1], self._drange[1]))
         else:
-            # no data, assume it's uint
-            try:
-                # If the detector has .bpp, use this info
-                try:
-                    depth = 2 ** self._getDetectorVA("bpp").value
-                except AttributeError:
-                    # The last element of the shape indicates the bit depth, which
-                    # is used for brightness/contrast adjustment.
-                    depth = self._detector.shape[-1]
-
-                if depth <= 1:
-                    logging.warning("Detector %s report a depth of %d",
-                                    self._detector.name, depth)
-                    raise ValueError()
-                drange = (0, depth - 1)
-            except (AttributeError, IndexError, ValueError):
-                drange = None
+            # no data, assume try to use the detector
+            drange = self._guessDRangeFromDetector()
 
         if drange:
             # This VA will clip its own value if it is out of range
             self.intensityRange.range = ((drange[0], drange[0]),
                                          (drange[1], drange[1]))
         self._drange = drange
+
+    def _guessDRangeFromDetector(self):
+        try:
+            # If the detector has .bpp, use this info
+            try:
+                depth = 2 ** self._getDetectorVA("bpp").value
+            except AttributeError:
+                # The last element of the shape indicates the bit depth, which
+                # is used for brightness/contrast adjustment.
+                depth = self._detector.shape[-1]
+
+            if depth <= 1:
+                logging.warning("Detector %s report a depth of %d",
+                                self._detector.name, depth)
+                raise ValueError()
+            drange = (0, depth - 1)
+        except (AttributeError, IndexError, ValueError):
+            drange = None
+
+        return drange
 
     def _getDisplayIRange(self):
         """
