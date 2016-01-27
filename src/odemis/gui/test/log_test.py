@@ -23,10 +23,11 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 import logging
+from odemis.gui import test, log
 import random
 import threading
+import unittest
 
-from odemis.gui import test, log
 
 log.init_logger(logging.DEBUG)
 test.goto_manual()
@@ -53,3 +54,7 @@ class TestLogWindow(test.GuiTestCase):
 
         test.gui_loop()
 
+
+if __name__ == "__main__":
+    unittest.main()
+    suit = unittest.TestSuite()
