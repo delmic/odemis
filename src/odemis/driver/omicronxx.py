@@ -4,7 +4,7 @@ Created on 6 Nov 2013
 
 @author: Éric Piel
 
-Copyright © 2013, 2015 Éric Piel, Delmic
+Copyright © 2013-2016 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -39,6 +39,7 @@ from odemis.util import driver
 import os
 import re
 import serial
+import time
 
 
 class OXXError(Exception):
@@ -81,6 +82,9 @@ class USBAccesser(object):
         port (string): the name of the serial port (e.g., /dev/ttyUSB0)
         return (serial): the opened serial port
         """
+        if port == "/dev/fakehub":
+            return HubxXSimulator(timeout=1)
+
         ser = serial.Serial(
             port=port,
             baudrate=500000, # TODO: only correct for USB connections
@@ -201,9 +205,16 @@ class DevxX(object):
         logging.debug("Device (on port %s) status = %X", acc.port, status)
         if status & 1:  # bit 0: error state
             error = self.GetFailureByte()
-            logging.info("Device (on port %s) reports error %X, will reset it",
-                         acc.port, error)
-            self.ResetController()
+            if error & 1:  # Soft-interlock => reset will fix it
+                logging.info("Device (on port %s) reports error %X, will reset it",
+                             acc.port, error)
+                self.ResetController()
+                error = self.GetFailureByte()
+                status = self.GetActualStatus()
+
+            if error:
+                raise HwError("Device reports error %04X, see documentation for more information" %
+                              (error,))
 
         if not (status & (1 << 6)):  # bit 6: "external" light enabler
             logging.warning("Electronic shutter active, no light will be output "
@@ -293,7 +304,7 @@ class DevxX(object):
         ans = self.acc.sendCommand(fullcom)
         if not ans.startswith(fullcom):
             raise IOError("Expected answer to start with %s but got %s" %
-                          (com, ans.encode('string_escape')))
+                          (fullcom, ans.encode('string_escape')))
         return ans[len(fullcom):]
 
     def _setValue(self, com, val=None):
@@ -336,7 +347,7 @@ class DevxX(object):
             m = re.match(r"(?P<model>.*)\xa7(?P<devid>.*)\xa7(?P<fw>.*)", ans)
             modl, devid, fw = m.group("model"), int(m.group("devid")), m.group("fw")
         except Exception:
-            raise IOError("Failed to decode firmware answer '%s'" % ans.encode('string_escape'))
+            raise ValueError("Failed to decode firmware answer '%s'" % ans.encode('string_escape'))
 
         return modl, devid, fw
 
@@ -349,7 +360,7 @@ class DevxX(object):
         """
         ans = self._getValue("GSI")
         # Expects something like:
-        # GSi [m63] (optional) int (wl in nm) § int (power in mW)
+        # GSI [m63] (optional) int (wl in nm) § int (power in mW)
         try:
             m = re.match(r"(\[m(?P<mdev>\d+)])?(?P<wl>\d+)\xa7(?P<power>\d+)", ans)
             mdev = m.group("mdev")
@@ -389,7 +400,7 @@ class DevxX(object):
         try:
             power = int(ans) * 1e-3 # W
         except Exception:
-            raise IOError("Failed to decode max power answer '%s'" % ans.encode('string_escape'))
+            raise ValueError("Failed to decode max power answer '%s'" % ans.encode('string_escape'))
 
         return power
 
@@ -599,7 +610,9 @@ class MultixX(GenericxX):
 
     @classmethod
     def _getAvailableDevices(cls, ports):
-        if os.name == "nt":
+        if ports.startswith("/dev/fake"):
+            names = [ports]
+        elif os.name == "nt":
             # TODO
             # ports = ["COM" + str(n) for n in range(15)]
             raise NotImplementedError("Windows not supported")
@@ -654,7 +667,9 @@ class HubxX(GenericxX):
 
     @classmethod
     def _getMasterDevices(cls, ports):
-        if os.name == "nt":
+        if ports.startswith("/dev/fake"):
+            names = [ports]
+        elif os.name == "nt":
             raise NotImplementedError("Windows not supported")
         else:
             names = glob.glob(ports)
@@ -667,7 +682,7 @@ class HubxX(GenericxX):
                 d = DevxX(acc, 0)
                 mdevs.append(d)
             except (TypeError, IOError):
-                logging.info("Port %s doesn't seem to have a Omicron LightHub device connected", n)
+                logging.info("Port %s doesn't seem to have a Omicron Hub device connected", n, exc_info=True)
                 continue
 
         return mdevs
@@ -710,4 +725,129 @@ class HubxX(GenericxX):
 
         return ret
 
-# TODO: simulator
+
+class HubxXSimulator(object):
+    """
+    Simulates a LedHUB (+ serial port). Only used for testing.
+    Same interface as the serial port
+    """
+    def __init__(self, timeout=0, *args, **kwargs):
+        # we don't care about the actual parameters but timeout
+        self.timeout = timeout
+        self._output_buf = ""  # what the commands sends back to the "host computer"
+        self._input_buf = ""  # what we receive from the "host computer"
+
+        # Sub devices info: channel -> wavelength (nm) / power (mw)
+        self._csi = {1: (400, 10),
+                          5: (500, 8),
+                          }
+
+    def write(self, data):
+        self._input_buf += data
+        msgs = self._input_buf.split("\r")
+        for m in msgs[:-1]:
+            self._parseMessage(m)  # will update _output_buf
+
+        self._input_buf = msgs[-1]
+
+    def read(self, size=1):
+        ret = self._output_buf[:size]
+        self._output_buf = self._output_buf[len(ret):]
+
+        if len(ret) < size:
+            # simulate timeout
+            time.sleep(self.timeout)
+        return ret
+
+    def flush(self):
+        pass
+
+    def flushInput(self):
+        self._output_buf = ""
+
+    def close(self):
+        # using read or write will fail after that
+        del self._output_buf
+        del self._input_buf
+
+    def _sendAnswer(self, com, chan=None, ans=""):
+        if chan is None:
+            rep = com + ans
+        else:
+            rep = "%s[%d]%s" % (com, chan, ans)
+        self._output_buf += "!%s\r" % (rep,)
+
+    def _parseMessage(self, msg):
+        """
+        msg (str): the message to parse (without the \r)
+        return None: self._output_buf is updated if necessary
+        """
+        logging.debug("SIM: parsing %s", msg)
+        m = re.match(r"\?(?P<com>[A-Za-z]{3})(\[(?P<chan>\d+)\])?((?P<args>.*))", msg)
+        if not m:
+            logging.error("Received unexpected message %s", msg)
+            return
+
+        com = m.group("com")
+        if m.group("chan"):
+            chan = int(m.group("chan"))
+        else:
+            chan = None
+
+        if m.group("args"):
+            args = m.group("args").split("\xa7")
+        else:
+            args = None
+
+        logging.debug("SIM: decoded message as %s [%s] %s", com, chan, args)
+
+        # decode the command
+        if com == "GFw":
+            self._sendAnswer("GFw", chan, "LEDHUB\xa720\xa710.FAKE")
+        elif com == "GSN":
+            self._sendAnswer("GSN", chan, "123456.7")
+        elif com == "GAS":
+            self._sendAnswer("GAS", chan, "0042")  # Device on (bit 1) + Led ready (bit 6)
+        elif com == "GOM":
+            self._sendAnswer("GOM", chan, "FCFB")
+        elif com == "SOM":
+            if len(args) == 1:
+                om = int(args[0], 16)
+                # We don't care actually
+                self._sendAnswer("SOM", chan, ">")
+            else:
+                self._sendAnswer("UK")  # wrong instruction
+        elif com == "GMP":
+            if chan is None:
+                pw = 0
+            else:
+                _, pw = self._csi[chan]
+            self._sendAnswer("GMP", chan, "%d" % (pw,))
+        elif com == "GWH":
+            self._sendAnswer("GWH", chan, "23")
+        elif com == "GSI":
+            if chan is None:
+                # Master -> return the sub devices
+                mdev = sum(1 << (n - 1) for n in self._csi.keys())
+                self._sendAnswer("GSI", chan, "[m%d]0\xa70" % (mdev,))
+            else:
+                self._sendAnswer("GSI", chan, "%d\xa7%d" % self._csi[chan])
+        elif com == "LOf":
+            self._sendAnswer("LOf", chan, ">")
+        elif com == "LOn":
+            self._sendAnswer("LOn", chan, ">")
+        elif com == "POf":
+            self._sendAnswer("POf", chan, ">")
+        elif com == "POn":
+            self._sendAnswer("POn", chan, ">")
+        elif com == "TPP":
+            if chan in self._csi and len(args) == 1:
+                per = float(args[0])
+                _, mpw = self._csi[chan]
+                # self._cpw[chan] = mpw * per / 100
+                self._sendAnswer("TPP", chan, ">")
+            else:
+                self._sendAnswer("UK")  # wrong instruction
+        else:
+            logging.warning("SIM: Unsupported instruction %s", com)
+            self._sendAnswer("UK")  # unknown instruction

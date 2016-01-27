@@ -23,10 +23,17 @@ import time
 import unittest
 from unittest.case import skip
 
-
 logging.getLogger().setLevel(logging.DEBUG)
 
-if os.name == "nt":
+# Export TEST_NOHW=1 to force using only the simulator and skipping test cases
+# needing real hardware
+TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
+
+
+if TEST_NOHW:
+    MXXPORTS = "/dev/fakeone"  # TODO: no simulator
+    HUBPORT = "/dev/fakehub"
+elif os.name == "nt":
     MXXPORTS = "COM*"
     HUBPORT = "COM*"
 else:
@@ -73,6 +80,8 @@ class TestGenericxX(object):
 
 class TestMultixX(TestGenericxX, unittest.TestCase):
     def setUp(self):
+        if TEST_NOHW:
+            self.skipTest("No simulator for MultixX")
         self.dev = omicronxx.MultixX("test", "light", MXXPORTS)
 
 
