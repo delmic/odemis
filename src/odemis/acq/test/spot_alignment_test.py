@@ -106,8 +106,8 @@ class TestAlignment(unittest.TestCase):
         focus = self.focus
 
         f = align.AlignSpot(ccd, self.aligner_xy, escan, focus)
-        with self.assertRaises(IOError):
-            f.result()
+        dist, vector = f.result()
+        self.assertAlmostEqual(dist, 2.41e-05)
 
 #     @skip("faster")
     def test_spot_alignment_cancelled(self):
