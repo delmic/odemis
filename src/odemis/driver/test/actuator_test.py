@@ -233,7 +233,8 @@ class TestCoupledStage(unittest.TestCase):
         stage.updateMetadata({model.MD_ROTATION_COR: 0,
                               model.MD_POS_COR: (-1e-06, -2e-06),
                               model.MD_PIXEL_SIZE_COR: (1, 1)})
-        time.sleep(1)  # eventually, stages should be synchronised again
+        f = stage.moveRel({"x": 0, "y": 0})  # synchronize stages again
+        f.result()
         self.assertPosAlmostEqual(align.position.value, {"x": 0, "y": 0})
         self.assertPosAlmostEqual(sem_stage.position.value, {"x": -1e-06, "y": -2e-06})
         self.assertXYAlmostEqual(tmcm.position.value, {"x": 0, "y": 0})
