@@ -220,7 +220,7 @@ class VigilantAttribute(VigilantAttributeBase):
         if self.debug:
             # Print the location from which the VA's value was set
             import traceback
-            logging.debug("Value changed to %r from:\n%s", self._value,
+            logging.debug("Value changed to %r from (notify = %s):\n%s", self._value, must_notify,
                           traceback.format_list(traceback.extract_stack(limit=2))[0])
 
         if must_notify:
@@ -301,6 +301,10 @@ class VigilantAttribute(VigilantAttributeBase):
             VigilantAttributeBase.unsubscribe(self, listener)
 
     def notify(self, v):
+        if self.debug:
+            logging.debug("Notifying %d local and %d remote subscribers for v = %s",
+                          len(self._listeners), len(self._remote_listeners), v)
+
         # publish the data remotely
         if len(self._remote_listeners) > 0:
             self.pipe.send_pyobj(v)
