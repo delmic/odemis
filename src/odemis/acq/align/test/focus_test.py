@@ -109,7 +109,7 @@ class TestAutofocus(unittest.TestCase):
         ccd.exposureTime.value = ccd.exposureTime.range[0]
         future_focus = align.AutoFocus(ccd, ebeam, focus)
         foc_pos, foc_lev = future_focus.result(timeout=1000)
-        self.assertAlmostEqual(foc_pos, 0.0006742, 4)
+        self.assertAlmostEqual(foc_pos, 0.0038379, 4)
         self.assertGreater(foc_lev, 0)
 
 if __name__ == '__main__':
