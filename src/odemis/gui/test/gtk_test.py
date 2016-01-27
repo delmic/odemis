@@ -37,10 +37,13 @@ theming and not GTK programming in general
 
 """
 
-import wx
+
 import os
+import unittest
+import wx
 
 import odemis.gui.test as test
+
 
 gtkrc_path = os.path.dirname(os.path.realpath(__file__))
 
@@ -62,3 +65,8 @@ class OwnerDrawnComboBoxTestCase(test.GuiTestCase):
 
         cbl = wx.CheckBox(self.panel, -1, "Label left", style=wx.ALIGN_RIGHT)
         self.add_control(cbl)
+
+
+if __name__ == "__main__":
+    unittest.main()
+    suit = unittest.TestSuite()
