@@ -34,6 +34,7 @@ import os
 from odemis import model, gui
 import odemis
 from odemis.gui import main_xrc, log
+from odemis.gui.conf import get_general_conf
 from odemis.gui.cont import acquisition
 from odemis.gui.cont.menu import MenuController
 from odemis.gui.util import call_in_wx_main
@@ -162,9 +163,10 @@ class OdemisGUIApp(wx.App):
             logging.exception("Failed to load Powermate support")
 
         if os.name == 'nt' and getattr(sys, 'frozen', False):
-            import odemis.gui.util.updater as updater
-            u = updater.WindowsUpdater()
-            wx.CallLater(1000, u.check_for_update)
+            if get_general_conf().get("viewer", "update") == "yes":
+                import odemis.gui.util.updater as updater
+                u = updater.WindowsUpdater()
+                wx.CallLater(1000, u.check_for_update)
 
         # Application successfully launched
         return True

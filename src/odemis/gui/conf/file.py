@@ -147,6 +147,10 @@ class GeneralConfig(Config):
         self.default.set("calibration", "spec_file", u"")
         self.default.set("calibration", "spec_bck_file", u"")
 
+        # Section for Odemis/Delphi viewer config
+        self.default.add_section("viewer")
+        self.default.set("viewer", "update", "yes")
+
     def get_manual(self, role=None):
         """ This method returns the path to the user manual
 
