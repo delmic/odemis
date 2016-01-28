@@ -7,15 +7,15 @@ Copyright © 2014 Kimon Tsitsikas, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
@@ -33,8 +33,13 @@ import unittest
 from odemis.dataio import hdf5
 from unittest.case import skip
 
-
 logging.getLogger().setLevel(logging.DEBUG)
+
+# Export TEST_NOHW=1 to force using only the simulator and skipping test cases
+# needing real hardware
+TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
+
+# Note: there is a simulator, but it must be run in a (Windows) virtual machine
 
 # arguments used for the creation of basic components
 CONFIG_SED = {"name": "sed", "role": "sed", "channel": 0, "detector": 0}
@@ -64,7 +69,7 @@ class TestSEMStatic(unittest.TestCase):
         """
         sem = tescan.SEM(**CONFIG_SEM)
         self.assertEqual(len(sem.children.value), 6)
-        
+
         for child in sem.children.value:
             if child.name == CONFIG_SED["name"]:
                 sed = child
@@ -78,10 +83,10 @@ class TestSEMStatic(unittest.TestCase):
                 camera = child
             elif child.name == CONFIG_PRESSURE["name"]:
                 pressure = child
-        
+
         self.assertEqual(len(scanner.resolution.value), 2)
         self.assertIsInstance(sed.data, model.DataFlow)
-        
+
         self.assertTrue(sem.selfTest(), "SEM self test failed.")
         sem.terminate()
 
@@ -115,7 +120,7 @@ class TestSEM(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.sem = tescan.SEM(**CONFIG_SEM)
-        
+
         for child in cls.sem.children.value:
             if child.name == CONFIG_SED["name"]:
                 cls.sed = child
