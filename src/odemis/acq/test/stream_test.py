@@ -1186,15 +1186,15 @@ class SPARC2TestCase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-#         try:
-#             test.start_backend(SPARC2_CONFIG)
-#         except LookupError:
-#             logging.info("A running backend is already found, skipping tests")
-#             cls.backend_was_running = True
-#             return
-#         except IOError as exp:
-#             logging.error(str(exp))
-#             raise
+        try:
+            test.start_backend(SPARC2_CONFIG)
+        except LookupError:
+            logging.info("A running backend is already found, skipping tests")
+            cls.backend_was_running = True
+            return
+        except IOError as exp:
+            logging.error(str(exp))
+            raise
 
         # Find CCD & SEM components
         cls.ccd = model.getComponent(role="ccd")
@@ -1209,7 +1209,7 @@ class SPARC2TestCase(unittest.TestCase):
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
-#         test.stop_backend()
+        test.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:
