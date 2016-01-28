@@ -1,5 +1,6 @@
 # -*- mode: python -*-
 
+import os
 
 def get_lib_tiff():
     import site
@@ -53,7 +54,14 @@ def get_version():
         f.write(long_version + '\n')
     return [('version.txt', 'dist/version.txt', 'DATA')]
 
-a = Analysis(['viewer.py'],
+if os.environ.get('FLAVOR') == "delphi":
+    name = "DelphiViewer"
+    script = "delphi_viewer.py"
+else:
+    name = "OdemisViewer"
+    script = "odemis_viewer.py"
+
+a = Analysis([script],
              pathex=['.'],
              hiddenimports=[
                  'cairo',
@@ -67,7 +75,7 @@ pyz = PYZ(a.pure)
 exe = EXE(pyz,
           a.scripts,
           exclude_binaries=True,
-          name='OdemisViewer.exe',
+          name='%s.exe' % name,
           debug=False,
           strip=None,
           upx=False,
@@ -85,5 +93,5 @@ coll = COLLECT(exe,
                a.datas,
                strip=None,
                upx=False,
-               name='OdemisViewer'
+               name=name
        )

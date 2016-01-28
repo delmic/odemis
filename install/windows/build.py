@@ -10,7 +10,11 @@ nsis_command = [r"C:\Program Files (x86)\NSIS\makensis",
                 "setup.nsi"]
 
 
-def run_command(cmd):
+def run_command(cmd, flavor=None):
+
+    if flavor is not None:
+        os.environ['FLAVOR'] = str(flavor)
+
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     print "\n\n"
     for line in iter(p.stdout.readline, b''):
@@ -30,20 +34,27 @@ os.chdir(os.path.dirname(__file__) or '.')
 while True:
     i = raw_input("""
     [1] - Compile CPython modules
-    [2] - Build MS Windows executable
-    [3] - Build MS Windows installer
-    [4] - Run all
+    [2] - Build Odemis Viewer executable
+    [3] - Build Odemis Viewer installer
+    [4] - Build Delphi Viewer executable
+    [5] - Build Delphi Viewer installer
+    [6] - Run all
 
     > """)
 
     if i == '1':
         run_command(cpy_command)
     elif i == '2':
-        run_command(pyi_command)
+        run_command(pyi_command, "odemis")
     elif i == '3':
-        run_command(nsis_command)
+        run_command(nsis_command, "odemis")
         add_size_to_version()
     elif i == '4':
+        run_command(pyi_command, "delphi")
+    elif i == '5':
+        run_command(nsis_command, "delphi")
+        add_size_to_version()
+    elif i == '6':
         ret_code = run_command(cpy_command)
         if ret_code == 0:
             ret_code = run_command(pyi_command)
