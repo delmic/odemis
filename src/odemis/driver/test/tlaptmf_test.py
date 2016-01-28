@@ -52,8 +52,9 @@ class TestStatic(unittest.TestCase):
 
         for name, kwargs in devices:
             print "opening", name
-            sem = CLASS(name, "switch", **kwargs)
-            self.assertTrue(sem.selfTest(), "self test failed.")
+            dev = CLASS(name, "switch", **kwargs)
+            self.assertTrue(dev.selfTest(), "self test failed.")
+            dev.terminate()
 
     def test_creation(self):
         """

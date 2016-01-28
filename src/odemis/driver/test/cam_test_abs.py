@@ -30,10 +30,15 @@ import logging
 import numpy
 from odemis import model
 from odemis.driver import semcomedi
+import os
 import threading
 import time
 import unittest
 
+
+# Export TEST_NOHW=1 to force using only the simulator and skipping test cases
+# needing real hardware
+TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 
 #gc.set_debug(gc.DEBUG_LEAK | gc.DEBUG_STATS)
 # arguments used for the creation of the SEM simulator
@@ -66,13 +71,18 @@ class VirtualStaticTestCam(object):
 
     def test_scan(self):
         """
-        Check that we can do a scan. It can pass only if we are
-        connected to at least one camera.
+        Check that we can do a scan.
         """
         if not hasattr(self.camera_type, "scan"):
             self.skipTest("Camera class doesn't support scanning")
         cameras = self.camera_type.scan()
-        self.assertGreater(len(cameras), 0)
+        if not TEST_NOHW:
+            self.assertGreater(len(cameras), 0)
+
+        for name, kwargs in cameras:
+            logging.debug("opening %s", name)
+            dev = self.camera_type(name, "test", **kwargs)
+            dev.terminate()
 
 
 # It doesn't inherit from TestCase because it should not be run by itself
