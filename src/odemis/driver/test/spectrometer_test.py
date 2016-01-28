@@ -459,7 +459,7 @@ class TestCompositedSpectrometer(unittest.TestCase):
             self.assertEqual(self.detector.binning.value, self.spectrometer.binning.value)
             new_res = self.spectrometer.resolution.value
             self.assertEqual(orig_res[0] / 2, new_res[0])
-            time.sleep(2)
+            time.sleep(1)
             # Empty the queue
             while True:
                 try:
