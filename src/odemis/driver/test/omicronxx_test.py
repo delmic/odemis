@@ -22,6 +22,7 @@ import os
 import time
 import unittest
 from unittest.case import skip
+from odemis.driver.omicronxx import HubxX
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -39,6 +40,29 @@ elif os.name == "nt":
 else:
     MXXPORTS = "/dev/ttyFTDI*" # "/dev/ttyUSB*"
     HUBPORT = "/dev/ttyFTDI*" # "/dev/ttyUSB*"
+
+
+class TestStatic(unittest.TestCase):
+
+    def test_scan_hub(self):
+        devices = omicronxx.HubxX.scan()
+        if not TEST_NOHW:
+            self.assertGreater(len(devices), 0)
+
+        for name, kwargs in devices:
+            logging.debug("opening %s", name)
+            dev = omicronxx.HubxX(name, "test", **kwargs)
+            dev.terminate()
+
+    def test_scan_multi(self):
+        devices = omicronxx.MultixX.scan()
+        if not TEST_NOHW:
+            self.assertGreater(len(devices), 0)
+
+        for name, kwargs in devices:
+            logging.debug("opening %s", name)
+            dev = omicronxx.MultixX(name, "test", **kwargs)
+            dev.terminate()
 
 
 class TestGenericxX(object):

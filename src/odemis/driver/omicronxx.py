@@ -643,7 +643,7 @@ class MultixX(GenericxX):
             else:
                 ports = '/dev/ttyUSB?*'
 
-        devices = cls._getAvailableDevices(ports)
+        _, devices = cls._getAvailableDevices(ports)
         if devices:
             return [("Omicron LuxX", {"ports": ports})]
         else:
