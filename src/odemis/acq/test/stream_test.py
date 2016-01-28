@@ -1103,8 +1103,8 @@ class SPARCTestCase(unittest.TestCase):
         self.assertTrue(2 <= len(window) <= 5, len(window))
         self.assertEqual(window.ndim, 1)
         dates = window.metadata[model.MD_ACQ_DATE]
-        self.assertLess(dates[0], dates[-1])
-        first_date = dates[0]
+        self.assertLess(-cs.windowPeriod.value - dur, dates[0])
+        numpy.testing.assert_array_equal(dates, sorted(dates))
 
         time.sleep(15 * dur)
         # Should have received enough data to fill the window
@@ -1118,7 +1118,8 @@ class SPARCTestCase(unittest.TestCase):
         logging.debug("%s", window)
         self.assertTrue(10 <= len(window) <= 16, len(window))
         dates = window.metadata[model.MD_ACQ_DATE]
-        self.assertTrue(first_date < dates[0] < dates[-1])
+        self.assertLess(-cs.windowPeriod.value - dur, dates[0])
+        numpy.testing.assert_array_equal(dates, sorted(dates))
 
 #    @skip("simple")
     def test_acq_moi(self):
