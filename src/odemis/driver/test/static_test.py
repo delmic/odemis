@@ -19,6 +19,8 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+from __future__ import division
+
 from odemis.driver import static, simcam
 from odemis.util import timeout
 import unittest
@@ -66,7 +68,7 @@ class TestSpectrograph(unittest.TestCase):
         wlp = [500e-9, 1/1e6]
         ccd = simcam.Camera("testcam", "ccd", image="andorcam2-fake-clara.tiff")
         sp = static.Spectrograph("test", "spectrograph", wlp=wlp, children={"ccd": ccd})
-        ptw = sp.getPixelToWavelength()
+        ptw = sp.getPixelToWavelength(ccd.shape[0], ccd.pixelSize.value[0])
         self.assertGreater(wlp[0], ptw[0])
         self.assertLess(wlp[0], ptw[-1])
 
@@ -75,7 +77,7 @@ class TestSpectrograph(unittest.TestCase):
         self.assertAlmostEqual(sp.position.value["wavelength"], 300e-9)
 
         wlp[0] = 300e-9
-        ptw = sp.getPixelToWavelength()
+        ptw = sp.getPixelToWavelength(ccd.shape[0], ccd.pixelSize.value[0])
         self.assertGreater(wlp[0], ptw[0])
         self.assertLess(wlp[0], ptw[-1])
 

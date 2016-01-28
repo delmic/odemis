@@ -76,13 +76,9 @@ class MultiplexActuator(model.Actuator):
                 raise ValueError("Child %s is not an actuator." % child.name)
             axes[axis] = copy.deepcopy(child.axes[caxis])
             self._position[axis] = child.position.value[axes_map[axis]]
-            if (hasattr(child, "speed") and
-                isinstance(child.speed, model.VigilantAttributeBase) and
-                caxis in child.speed.value):
+            if model.hasVA(child, "speed") and caxis in child.speed.value:
                 self._speed[axis] = child.speed.value[caxis]
-            if (hasattr(child, "referenced") and
-                isinstance(child.referenced, model.VigilantAttributeBase) and
-                caxis in child.referenced.value):
+            if model.hasVA(child, "referenced") and caxis in child.referenced.value:
                 self._referenced[axis] = child.referenced.value[caxis]
 
         # this set ._axes and ._children
@@ -112,7 +108,6 @@ class MultiplexActuator(model.Actuator):
                     except KeyError:
                         logging.error("Child %s is not reporting position of axis %s", c.name, a)
                 self._updatePosition()
-            logging.debug("Subscribing to position of child %s", c.name)
             c.position.subscribe(update_position_per_child)
             self._subfun.append(update_position_per_child)
 
@@ -130,7 +125,8 @@ class MultiplexActuator(model.Actuator):
             self._subfun.append(update_speed_per_child)
 
         # whether the axes are referenced
-        self.referenced = model.VigilantAttribute(self._referenced, readonly=True)
+        self.referenced = model.VigilantAttribute(self._referenced.copy(), readonly=True)
+        self.referenced.debug = True
 
         for axis in self._referenced.keys():
             c, ca = self._axis_to_child[axis]
@@ -183,7 +179,8 @@ class MultiplexActuator(model.Actuator):
         """
         update the referenced VA
         """
-        self.referenced._set_value(self._referenced, force_write=True)
+        # .referenced is copied to detect changes to it on next update
+        self.referenced._set_value(self._referenced.copy(), force_write=True)
 
     def _setSpeed(self, value):
         """
@@ -338,7 +335,7 @@ class CoupledStage(model.Actuator):
                 raise ValueError("Child %s is not a component." % child)
             if not hasattr(child, "axes") or not isinstance(child.axes, dict):
                 raise ValueError("Child %s is not an actuator." % child.name)
-            if not "x" in child.axes or not "y" in child.axes:
+            if "x" not in child.axes or "y" not in child.axes:
                 raise ValueError("Child %s doesn't have both x and y axes" % child.name)
 
             if crole == "slave":
@@ -375,8 +372,8 @@ class CoupledStage(model.Actuator):
         self.referenced = model.VigilantAttribute({}, readonly=True)
         # listen to changes from children
         for c in self.children.value:
-            if (hasattr(c, "referenced") and
-                isinstance(c.referenced, model.VigilantAttributeBase)):
+            if model.hasVA(c, "referenced"):
+                logging.debug("Subscribing to reference of child %s", c.name)
                 c.referenced.subscribe(self._onChildReferenced)
         self._updateReferenced()
 
@@ -413,9 +410,8 @@ class CoupledStage(model.Actuator):
         self._position["x"] = mode_pos['x']
         self._position["y"] = mode_pos['y']
 
-        # it's read-only, so we change it via _value
-        self.position._value = self._applyInversion(self._position)
-        self.position.notify(self.position.value)
+        pos = self._applyInversion(self._position)
+        self.position._set_value(pos, force_write=True)
 
     def _onChildReferenced(self, ref):
         # ref can be from any child, so we don't use it
@@ -426,18 +422,15 @@ class CoupledStage(model.Actuator):
         update the referenced VA
         """
         ref = {} # str (axes name) -> boolean (is referenced)
-        # consider an axis referenced iff it's referenced in every children
+        # consider an axis referenced iff it's referenced in every referenceable children
         for c in self.children.value:
-            if not (hasattr(c, "referenced") and
-                    isinstance(c.referenced, model.VigilantAttributeBase)):
+            if not model.hasVA(c, "referenced"):
                 continue
             cref = c.referenced.value
             for a in (set(self.axes.keys()) & set(cref.keys())):
                 ref[a] = ref.get(a, True) and cref[a]
 
-        # it's read-only, so we change it via _value
-        self.referenced._value = ref
-        self.referenced.notify(ref)
+        self.referenced._set_value(ref, force_write=True)
 
     def _doMoveAbs(self, pos):
         """
@@ -500,8 +493,7 @@ class CoupledStage(model.Actuator):
         fs = []
         for c in self.children.value:
             # only do the referencing for the stages that support it
-            if not (hasattr(c, "referenced") and
-                    isinstance(c.referenced, model.VigilantAttributeBase)):
+            if not model.hasVA(c, "referenced"):
                 continue
             ax = axes & set(c.referenced.value.keys())
             fs.append(c.reference(ax))
@@ -648,15 +640,15 @@ class ConvertStage(model.Actuator):
 
 class AntiBacklashActuator(model.Actuator):
     """
-    This is a stage wrapper that takes a stage and ensures that every move 
+    This is a stage wrapper that takes a stage and ensures that every move
     always finishes in the same direction.
     """
     def __init__(self, name, role, children, backlash, **kwargs):
         """
-        children (dict str -> Stage): dict containing one component, the stage 
+        children (dict str -> Stage): dict containing one component, the stage
         to wrap
-        backlash (dict str -> float): for each axis of the stage, the additional 
-        distance to move (and the direction). If an axis of the stage is not 
+        backlash (dict str -> float): for each axis of the stage, the additional
+        distance to move (and the direction). If an axis of the stage is not
         present, then it’s the same as having 0 as backlash (=> no antibacklash 
         motion is performed for this axis)
 
@@ -690,11 +682,9 @@ class AntiBacklashActuator(model.Actuator):
         # while doing this move?
         self.position = self._child.position
 
-        if (hasattr(self._child, "referenced") and
-            isinstance(self._child.referenced, model.VigilantAttributeBase)):
+        if model.hasVA(self._child, "referenced"):
             self.referenced = self._child.referenced
-        if (hasattr(self._child, "speed") and
-            isinstance(self._child.speed, model.VigilantAttributeBase)):
+        if model.hasVA(self._child, "speed"):
             self.speed = self._child.speed
 
     def terminate(self):
@@ -763,7 +753,7 @@ class AntiBacklashActuator(model.Actuator):
         return self._executor.submit(self._doMoveAbs, pos)
 
     def stop(self, axes=None):
-        self._child.stop()
+        self._child.stop(axes=axes)
 
     @isasync
     def reference(self, axes):
@@ -826,11 +816,9 @@ class FixedPositionsActuator(model.Actuator):
         logging.debug("Subscribing to position of child %s", child.name)
         child.position.subscribe(self._update_child_position, init=True)
 
-        if (hasattr(child, "referenced") and
-            isinstance(child.referenced, model.VigilantAttributeBase) and
-            axis_name in child.referenced.value):
+        if model.hasVA(child, "referenced") and axis_name in child.referenced.value:
             self._referenced[axis] = child.referenced.value[axis_name]
-            self.referenced = model.VigilantAttribute(self._referenced, readonly=True)
+            self.referenced = model.VigilantAttribute(self._referenced.copy(), readonly=True)
             child.referenced.subscribe(self._update_child_ref)
 
         # If the axis can be referenced => do it now (and move to a known position)
@@ -885,7 +873,8 @@ class FixedPositionsActuator(model.Actuator):
         """
         update the referenced VA
         """
-        self.referenced._set_value(self._referenced, force_write=True)
+        # .referenced is copied to detect changes to it on next update
+        self.referenced._set_value(self._referenced.copy(), force_write=True)
 
     @isasync
     def moveRel(self, shift):

@@ -2301,7 +2301,8 @@ class FakeAndorV2DLL(object):
             try:
                 # will be copied when asked for an image
                 # to ensure relative path is from this file
-                os.chdir(os.path.dirname(unicode(__file__)))
+                if not os.path.isabs(image):
+                    image = os.path.join(os.path.dirname(__file__), image)
                 converter = dataio.find_fittest_converter(image, mode=os.O_RDONLY)
                 self._data = img.ensure2DImage(converter.read_data(image)[0])
                 self.shape = self._data.shape[::-1]

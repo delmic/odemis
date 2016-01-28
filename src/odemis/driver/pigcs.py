@@ -681,7 +681,7 @@ class Controller(object):
         assert(axis in self._channels)
         assert(2 < len(com) < 8)
         if com not in self._avail_cmds:
-            raise NotImplementedError("Command %s not supported by the controller", com)
+            raise NotImplementedError("Command %s not supported by the controller" % (com,))
 
         resp = self._sendQueryCommand("%s %d\n" % (com, axis))
         try:
@@ -3122,7 +3122,6 @@ class SerialBusAccesser(object):
                 anssplited, ans = anssplited[:-1], anssplited[-1]
 
                 for l in anssplited:
-                    # logging.debug("Processing %s", l)
                     if not continuing:
                         lines = []  # one string per answer line
                         # remove the prefix

@@ -183,11 +183,11 @@ class StreamPanelHeader(wx.Control):
 
     def _add_peak_btn(self):
         """ Add the peak toggle button to the stream panel header """
-        peak_btn = buttons.ImageToggleButtonImageButton(self,
-                                                              bitmap=img.getico_gaussian_offBitmap())
+        peak_btn = buttons.ImageStateButtonImageButton(self,
+                                                        bitmap=img.getico_gaussian_offBitmap())
         peak_btn.bmpHover = img.getico_gaussian_off_hBitmap()
-        peak_btn.bmpSelected = img.getico_gaussian_onBitmap()
-        peak_btn.bmpSelectedHover = img.getico_gaussian_on_hBitmap()
+        peak_btn.bmpSelected = [img.getico_gaussian_onBitmap(), img.getico_lorentzian_onBitmap()]
+        peak_btn.bmpSelectedHover = [img.getico_gaussian_on_hBitmap(), img.getico_lorentzian_on_hBitmap()]
 
         peak_btn.SetToolTipString("Show peaks")
         self._add_ctrl(peak_btn)
@@ -485,7 +485,7 @@ class StreamPanel(wx.Panel):
         self._header.btn_remove.Bind(wx.EVT_BUTTON, self.on_remove_btn)
         self._header.btn_show.Bind(wx.EVT_BUTTON, self.on_visibility_btn)
         if self._header.btn_peak is not None:
-            self._header.btn_peak.Bind(wx.EVT_BUTTON, self.on_peak_btn)
+            self._header.btn_peak.Bind(buttons.EVT_STATE_CHANGED, self.on_peak_btn)
 
         if wx.Platform == "__WXMSW__":
             self._header.Bind(wx.EVT_LEFT_DCLICK, self.on_button)
@@ -603,9 +603,9 @@ class StreamPanel(wx.Panel):
         """ Set the "visible" toggle button of the stream panel """
         self._header.btn_show.SetToggle(visible)
 
-    def set_peak(self, visible):
+    def set_peak(self, state):
         """ Set the "peak" toggle button of the stream panel """
-        self._header.btn_peak.SetToggle(visible)
+        self._header.btn_peak.SetState(state)
 
     def collapse(self, collapse=None):
         """ Collapses or expands the pane window """
@@ -640,7 +640,7 @@ class StreamPanel(wx.Panel):
 
     def on_peak_btn(self, evt):
         # generate EVT_STREAM_PEAK
-        event = stream_peak_event(visible=self._header.btn_peak.GetToggle())
+        event = stream_peak_event(state=evt.state)
         wx.PostEvent(self, event)
 
     # Manipulate expander buttons

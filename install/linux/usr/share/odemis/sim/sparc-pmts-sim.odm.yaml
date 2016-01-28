@@ -84,7 +84,7 @@ SPARC-MONASH: {
         port: "/dev/fake", # for simulator
         prot_time: 0.0002,  # s
         prot_curr: 50.e-6,  # A
-        relay_cycle: 10, # s
+        relay_cycle: 5, # s
         powered: ["Fiber Flipper", "Focus Lens Flipper", "AR CCD-PMT Flipper"]
     }
 }
@@ -137,16 +137,16 @@ SPARC-MONASH: {
        parabola_f: 2.5e-3,  # m, parabola_parameter=1/4f
     },
     # Small mirror config
-    #init: {
-    #   mag: 0.4917, # ratio
-    #   na: 0.2, # ratio, numerical aperture
-    #   ri: 1.0, # ratio, refractive index
-    #   pole_pos: [1280, 1080], # (px, px), position of the pole (aka the hole in the mirror)
-    #   x_max: 10e-3,  # m, the distance between the parabola origin and the cutoff position
-    #   hole_diam: 0.6e-3,  # m, diameter the hole in the mirror
-    #   focus_dist: 0.5e-3,  # m, the vertical mirror cutoff, iow the min distance between the mirror and the sample
-    #   parabola_f: 0.8e-3,  # m, parabola_parameter=1/4f
-    #},
+#     init: {
+#        mag: 0.4017, # ratio
+#        na: 0.2, # ratio, numerical aperture
+#        ri: 1.0, # ratio, refractive index
+#        pole_pos: [256, 183], # (px, px), position of the pole (aka the hole in the mirror)
+#        x_max: 3.55e-3,  # m, the distance between the parabola origin and the cutoff position
+#        hole_diam: 0.6e-3,  # m, diameter the hole in the mirror
+#        focus_dist: 0.5e-3,  # m, the vertical mirror cutoff, iow the min distance between the mirror and the sample
+#        parabola_f: 0.8e-3,  # m, parabola_parameter=1/4f
+#     },
     affects: ["Angular Camera"]
 }
 
@@ -202,6 +202,8 @@ SPARC-MONASH: {
     init: {
        device: "fake",
        image: "sparc-ar-mirror-align.h5", # only for simulator
+       #image: "small_mirror_image_sim_pxs.tif", # only for small mirror test
+       #transp: [1, -2],
     },
 }
 

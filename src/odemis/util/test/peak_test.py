@@ -16,11 +16,17 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 from __future__ import division
 
+import logging
 import numpy
 from odemis.dataio import hdf5
 from odemis.util import peak
+import os
 import unittest
 import matplotlib.pyplot as plt
+
+
+logging.getLogger().setLevel(logging.DEBUG)
+PATH = os.path.dirname(__file__)
 
 
 class TestPeak(unittest.TestCase):
@@ -28,7 +34,7 @@ class TestPeak(unittest.TestCase):
     Test peak fitting
     """
     def setUp(self):
-        data = hdf5.read_data("spectrum_fitting.h5")[1]
+        data = hdf5.read_data(os.path.join(PATH, "spectrum_fitting.h5"))[1]
         data = numpy.squeeze(data)
         self.data = data
         self.wl = numpy.linspace(470, 1030, 167)
@@ -41,21 +47,21 @@ class TestPeak(unittest.TestCase):
 
         # Try gaussian
         f = self._peak_fitter.Fit(spec, wl)
-        params = f.result()
-        curve = peak.Curve(wl, params)
+        params, offset = f.result()
+        curve = peak.Curve(wl, params, offset)
         plt.figure()
         plt.plot(wl, spec, 'r', wl, curve, 'r', linewidth=2)
 
         # Try lorentzian
         f = self._peak_fitter.Fit(spec, wl, type='lorentzian')
-        params = f.result()
-        curve = peak.Curve(wl, params, type='lorentzian')
+        params, offset = f.result()
+        curve = peak.Curve(wl, params, offset, type='lorentzian')
         plt.figure()
         plt.plot(wl, spec, 'r', wl, curve, 'r', linewidth=2)
         plt.show(block=False)
 
         # Assert wrong fitting type
-        self.assertRaises(KeyError, peak.Curve, wl, params, type='wrongType')
+        self.assertRaises(KeyError, peak.Curve, wl, params, offset, type='wrongType')
 
 
 if __name__ == "__main__":

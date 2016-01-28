@@ -1767,7 +1767,7 @@ class PlotCanvas(BufferedCanvas):
         self.range_x = None
         self.range_y = None
 
-        self.data_prop = None
+        self.data_prop = None  # data_width, range_x, data_height, range_y
 
         # TODO not used?
         self.unit_x = None
@@ -1897,80 +1897,63 @@ class PlotCanvas(BufferedCanvas):
 
     # Value calculation methods
 
-    def value_to_position(self, value_tuple, data_width=None, range_x=None, data_height=None,
-                          range_y=None):
+    def val_to_pos(self, value_tuple, data_width=None, range_x=None,
+                   data_height=None, range_y=None):
         """ Translate a value tuple to a pixel position tuple
-
         If a value (x or y) is out of range, it will be clipped.
-
         :param value_tuple: (float, float) The value coordinates to translate
-
         :return: (int, int)
-
         """
-
         x, y = value_tuple
         return (self._val_x_to_pos_x(x, data_width, range_x),
                 self._val_y_to_pos_y(y, data_height, range_y))
 
-    # FIXME: When the memoize on the method is activated, _pos_x_to_val_x starts returning weird
+    # FIXME: When the memoize on the method is activated, pos_x_to_val_x starts returning weird
     # values. To reproduce: draw the smallest graph in the test case and drag back and forth between
     # 0 and 1
 
     def _val_x_to_pos_x(self, val_x, data_width=None, range_x=None):
         """ Translate an x value to an x position in pixels
-
         The minimum x value is considered to be pixel 0 and the maximum is the canvas width. The
         parameter will be clipped if it's out of range.
-
         :param val_x: (float) The value to map
-
         :return: (float)
-
         """
-
         range_x = range_x or self.data_prop[1]
         data_width = data_width or self.data_prop[0]
 
         if data_width:
             # Clip val_x
             x = min(max(range_x[0], val_x), range_x[1])
-            perc_x = float(x - range_x[0]) / data_width
+            perc_x = (x - range_x[0]) / data_width
             return perc_x * self.ClientSize.x
         else:
             return 0
 
     def _val_y_to_pos_y(self, val_y, data_height=None, range_y=None):
         """ Translate an y value to an y position in pixels
-
         The minimum y value is considered to be pixel 0 and the maximum is the canvas width. The
         parameter will be clipped if it's out of range.
-
         :param val_y: (float) The value to map
-
         :return: (float)
-
         """
-
         range_y = range_y or self.data_prop[3]
         data_height = data_height or self.data_prop[2]
 
         if data_height:
             y = min(max(range_y[0], val_y), range_y[1])
-            perc_y = float(range_y[1] - y) / data_height
+            perc_y = (range_y[1] - y) / data_height
             return perc_y * self.ClientSize.y
         else:
             return 0
 
-    def _pos_x_to_val_x(self, pos_x, snap=False):
+    def pos_x_to_val_x(self, pos_x, snap=False):
         """ Map the given pixel position to an x value from the data
 
         If snap is True, the closest snap from `self._data` will be returned, otherwise
         interpolation will occur.
-
         """
-
-        perc_x = pos_x / float(self.ClientSize.x)
+        perc_x = pos_x / self.ClientSize.x
         val_x = (perc_x * self.data_prop[0]) + self.data_prop[1][0]
 
         if snap:
@@ -1981,6 +1964,16 @@ class PlotCanvas(BufferedCanvas):
             val_x = max(min(val_x, self.data_prop[1][1]), self.data_prop[1][0])
 
         return val_x
+
+    def val_x_to_val(self, val_x):
+        """
+        Find the X/Y value from the data closest to the given X value
+        val_x (number): the value in X
+        return (tuple of data): X, Y value
+        """
+        # TODO: as _data is sorted over X, it would be much faster to use
+        # dichotomy search, cf bisect.bisect() or numpy.searchsorted()
+        return min(self._data, key=lambda v: abs(v[0] - val_x))
 
     def _val_x_to_val_y(self, val_x, snap=False):
         """ Map the given x pixel value to a y value """
@@ -2015,7 +2008,6 @@ class PlotCanvas(BufferedCanvas):
             #     return
             #
             # self._locked = True
-
             ctx = wxcairo.ContextFromDC(self._dc_buffer)
             self._draw_background(ctx)
 
@@ -2086,9 +2078,9 @@ class PlotCanvas(BufferedCanvas):
     def _line_plot(self, ctx, data, data_width, range_x, data_height, range_y):
         """ Do a line plot of the current `_data` """
 
-        ctx.move_to(*self.value_to_position(data[0], data_width, range_x, data_height, range_y))
+        ctx.move_to(*self.val_to_pos(data[0], data_width, range_x, data_height, range_y))
 
-        value_to_position = self.value_to_position
+        value_to_position = self.val_to_pos
         line_to = ctx.line_to
 
         for p in data[1:]:
@@ -2111,7 +2103,7 @@ class PlotCanvas(BufferedCanvas):
     def _point_plot(self, ctx, data, data_width, range_x, data_height, range_y):
         """ Do a line plot of the current `_data` """
 
-        value_to_position = self.value_to_position
+        value_to_position = self.val_to_pos
         move_to = ctx.move_to
         line_to = ctx.line_to
         bottom_y = self.ClientSize.y

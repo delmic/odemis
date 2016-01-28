@@ -22,16 +22,47 @@ import os
 import time
 import unittest
 from unittest.case import skip
-
+from odemis.driver.omicronxx import HubxX
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-if os.name == "nt":
+# Export TEST_NOHW=1 to force using only the simulator and skipping test cases
+# needing real hardware
+TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
+
+
+if TEST_NOHW:
+    MXXPORTS = "/dev/fakeone"  # TODO: no simulator
+    HUBPORT = "/dev/fakehub"
+elif os.name == "nt":
     MXXPORTS = "COM*"
     HUBPORT = "COM*"
 else:
     MXXPORTS = "/dev/ttyFTDI*" # "/dev/ttyUSB*"
     HUBPORT = "/dev/ttyFTDI*" # "/dev/ttyUSB*"
+
+
+class TestStatic(unittest.TestCase):
+
+    def test_scan_hub(self):
+        devices = omicronxx.HubxX.scan()
+        if not TEST_NOHW:
+            self.assertGreater(len(devices), 0)
+
+        for name, kwargs in devices:
+            logging.debug("opening %s", name)
+            dev = omicronxx.HubxX(name, "test", **kwargs)
+            dev.terminate()
+
+    def test_scan_multi(self):
+        devices = omicronxx.MultixX.scan()
+        if not TEST_NOHW:
+            self.assertGreater(len(devices), 0)
+
+        for name, kwargs in devices:
+            logging.debug("opening %s", name)
+            dev = omicronxx.MultixX(name, "test", **kwargs)
+            dev.terminate()
 
 
 class TestGenericxX(object):
@@ -73,6 +104,8 @@ class TestGenericxX(object):
 
 class TestMultixX(TestGenericxX, unittest.TestCase):
     def setUp(self):
+        if TEST_NOHW:
+            self.skipTest("No simulator for MultixX")
         self.dev = omicronxx.MultixX("test", "light", MXXPORTS)
 
 

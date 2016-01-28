@@ -404,6 +404,7 @@ class TestHDF5IO(unittest.TestCase):
         """
         Checks that we can read back the metadata of an image
         """
+        sizes = [(512, 256), (500, 400, 1, 1, 220)] # different sizes to ensure different acquisitions
         metadata = [{model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake hw",
                      model.MD_DESCRIPTION: "test",
@@ -422,13 +423,14 @@ class TestHDF5IO(unittest.TestCase):
                      model.MD_BPP: 12,
                      model.MD_BINNING: (1, 1), # px, px
                      model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
-                     model.MD_WL_POLYNOMIAL: [500e-9, 1e-9], # m, m/px: wl polynomial
+                     #model.MD_WL_POLYNOMIAL: [500e-9, 1e-9], # m, m/px: wl polynomial
+                     model.MD_WL_LIST: [500e-9 + i * 1e-9 for i in range(sizes[1][-1])],
+                     model.MD_OUT_WL: "pass-through",
                      model.MD_POS: (1e-3, -30e-3), # m
                      model.MD_EXP_TIME: 1.2, # s
                     },
                     ]
         # create 2 simple greyscale images
-        sizes = [(512, 256), (500, 400, 1, 1, 220)] # different sizes to ensure different acquisitions
         dtype = numpy.dtype("uint8")
         ldata = []
         for i, s in enumerate(sizes):
@@ -477,6 +479,9 @@ class TestHDF5IO(unittest.TestCase):
                     self.assertEqual(im.metadata[model.MD_WL_LIST], wl)
                 else:
                     self.assertEqual(im.metadata[model.MD_WL_POLYNOMIAL], pn)
+            elif model.MD_WL_LIST in md:
+                wl = md[model.MD_WL_LIST]
+                self.assertEqual(im.metadata[model.MD_WL_LIST], wl)
 
         # check thumbnail
         rthumbs = hdf5.read_thumbnail(FILENAME)

@@ -863,8 +863,8 @@ class PlotViewport(ViewPort):
             logging.info("No stream to plot found")
             self.clear()  # Remove legend ticks and clear plot
 
-        if hasattr(self.stream, "peak_show"):
-            self.stream.peak_show.subscribe(self.on_peak_show, init=True)
+        if hasattr(self.stream, "peak_method"):
+            self.stream.peak_method.subscribe(self._on_peak_method, init=True)
 
     @abstractmethod
     def _on_new_data(self, data):
@@ -872,6 +872,9 @@ class PlotViewport(ViewPort):
 
     def _on_pixel_select(self, pixel):
         raise NotImplementedError("This viewport doesn't support streams with .selected_pixel")
+
+    def _on_peak_method(self, state):
+        raise NotImplementedError("This viewport doesn't support streams with .peak_method")
 
 
 class PointSpectrumViewport(PlotViewport):
@@ -885,30 +888,36 @@ class PointSpectrumViewport(PlotViewport):
         wx.CallAfter(self.bottom_legend.SetToolTipString, "Wavelength")
         wx.CallAfter(self.left_legend.SetToolTipString, "Intensity")
         self._peak_fitter = peak.PeakFitter()
+        self._peak_future = model.InstantaneousFuture()
+        self._curve_overlay = overlay.view.CurveOverlay(self.canvas)
 
-    def on_peak_show(self, visible):
-        if visible:
-            self.canvas.add_view_overlay(self.canvas.curve_overlay)
-            self.canvas.curve_overlay.activate()
-            wx.CallAfter(self.canvas.request_drawing_update)
+    def clear(self):
+        # Try to clear previous curve, if any
+        if hasattr(self, "_curve_overlay"):
+            self._curve_overlay.clear_labels()
+        super(PointSpectrumViewport, self).clear()
+
+    def _on_peak_method(self, state):
+        if state is not None:
+            self.canvas.add_view_overlay(self._curve_overlay)
+            self._curve_overlay.activate()
             if self.stream is not None:
                 data = self.stream.get_pixel_spectrum()
                 if data is not None:
                     spectrum_range = self.stream.get_spectrum_range()
                     unit_x = self.stream.spectrumBandwidth.unit
-                    try:
-                        # cancel previous fitting if there is one in progress
-                        self._peak_future.cancel()
-                    except AttributeError:
-                        pass
+                    # cancel previous fitting if there is one in progress
                     self.spectrum_range = spectrum_range
                     self.unit_x = unit_x
-                    self._peak_future = self._peak_fitter.Fit(data, spectrum_range)
+                    self._peak_future = self._peak_fitter.Fit(data, spectrum_range, type=state)
                     self._peak_future.add_done_callback(self._update_peak)
+                else:
+                    self._curve_overlay.clear_labels()
+                    self.canvas.Refresh()
         else:
-            self.canvas.curve_overlay.deactivate()
-            self.canvas.remove_view_overlay(self.canvas.curve_overlay)
-            wx.CallAfter(self.canvas.request_drawing_update)
+            self._curve_overlay.deactivate()
+            self.canvas.remove_view_overlay(self._curve_overlay)
+            self.canvas.Refresh()
 
     def _on_new_data(self, data):
         """
@@ -960,15 +969,16 @@ class PointSpectrumViewport(PlotViewport):
         spectrum_range = self.stream.get_spectrum_range()
         unit_x = self.stream.spectrumBandwidth.unit
 
-        if self.stream.peak_show.value:
-            try:
-                # cancel previous fitting if there is one in progress
-                self._peak_future.cancel()
-            except AttributeError:
-                pass
+        if self.stream.peak_method.value is not None:
+            # cancel previous fitting if there is one in progress
+            self._peak_future.cancel()
+            self._curve_overlay.clear_labels()
             self.spectrum_range = spectrum_range
             self.unit_x = unit_x
-            self._peak_future = self._peak_fitter.Fit(data, spectrum_range)
+            # TODO: try to find more peaks (= small window) based on width?
+            # => so far not much success
+            # ex: dividerf = 1 + math.log(self.stream.selectionWidth.value)
+            self._peak_future = self._peak_fitter.Fit(data, spectrum_range, type=self.stream.peak_method.value)
             self._peak_future.add_done_callback(self._update_peak)
 
         self.canvas.set_1d_data(spectrum_range, data, unit_x)
@@ -982,20 +992,19 @@ class PointSpectrumViewport(PlotViewport):
     @call_in_wx_main
     def _update_peak(self, f):
         try:
-            peak_data = f.result()
-            if self.stream.peak_show.value:
-                self.canvas.add_view_overlay(self.canvas.curve_overlay)
-                self.canvas.curve_overlay.activate()
-            wx.CallAfter(self.canvas.request_drawing_update)
-            self.canvas.curve_overlay.update_data(peak_data, self.spectrum_range, self.unit_x)
+            peak_data, peak_offset = f.result()
+            self._curve_overlay.update_data(peak_data, peak_offset, self.spectrum_range, self.unit_x, self.stream.peak_method.value)
+            logging.debug("Received peak data")
         except CancelledError:
             logging.debug("Peak fitting in progress was cancelled")
         except ValueError:
-            self.canvas.curve_overlay.deactivate()
-            self.canvas.remove_view_overlay(self.canvas.curve_overlay)
-            wx.CallAfter(self.canvas.request_drawing_update)
-            # self.canvas.curve_overlay.update_data(None, self.spectrum_range, self.unit_x)
-            logging.debug("Peak fitting failed")
+            logging.info("Peak fitting failed on the data")
+            self._curve_overlay.clear_labels()
+            self.canvas.Refresh()
+        except Exception:
+            logging.error("Error while try to find peaks", exc_info=True)
+            self._curve_overlay.clear_labels()
+            self.canvas.Refresh()
 
 
 class ChronographViewport(PlotViewport):
@@ -1053,22 +1062,13 @@ class SpatialSpectrumViewport(ViewPort):
         self.stream = None
         self.current_line = None
 
-        self.canvas.markline_overlay.v_pos.subscribe(self.on_spectrum_motion)
+        self.canvas.markline_overlay.val.subscribe(self.on_spectrum_motion)
 
-    def on_spectrum_motion(self, vpos):
+    def on_spectrum_motion(self, val):
 
-        if vpos:
-            self.canvas.markline_overlay.x_label = units.readable_str(
-                self.bottom_legend.pixel_to_value(vpos[0]),
-                self.bottom_legend.unit,
-                3
-            )
-            self.canvas.markline_overlay.y_label = units.readable_str(
-                self.left_legend.pixel_to_value(vpos[1]),
-                self.left_legend.unit,
-                3
-            )
-            rat = self.left_legend.pixel_to_ratio(vpos[1])
+        if val:
+            rng = self.bottom_legend.range
+            rat = (val[0] - rng[0]) / (rng[1] - rng[0])
             line_pixels = rasterize_line(*self.current_line)
             self.stream.selected_pixel.value = line_pixels[int(len(line_pixels) * rat)]
 
@@ -1143,11 +1143,6 @@ class SpatialSpectrumViewport(ViewPort):
         """ Clear the marking line when the selected pixel is cleared """
         if None in pixel:
             self.canvas.markline_overlay.clear_labels()
-            # Try to clear previous curve, if any
-            try:
-                self.canvas.curve_overlay.clear_labels()
-            except AttributeError:
-                pass
 
     def _on_line_select(self, line):
         """ Line selection event handler """
@@ -1171,10 +1166,12 @@ class SpatialSpectrumViewport(ViewPort):
             unit_x = self.stream.spectrumBandwidth.unit
             self.bottom_legend.unit = unit_x
             self.bottom_legend.range = (spectrum_range[0], spectrum_range[-1])
-            self.left_legend.unit = 'm'
+            unit_y = 'm'
+            self.left_legend.unit = unit_y
             self.left_legend.range = (0, line_length)
 
-            self.canvas.set_2d_data(data)
+            self.canvas.set_2d_data(data, unit_x, unit_y,
+                                    self.bottom_legend.range, self.left_legend.range)
         else:
             logging.warn("No data to display for the selected line!")
 

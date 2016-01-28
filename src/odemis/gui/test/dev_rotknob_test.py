@@ -20,14 +20,19 @@
 
 """
 
+from __future__ import division
+
+import os
 import unittest
 import wx
 
-
 import odemis.gui.comp.miccanvas as miccanvas
-from odemis.gui.dev.powermate import Powermate, EVT_KNOB_ROTATE
+from odemis.gui.dev.powermate import Powermate
+from odemis.gui.evt import EVT_KNOB_ROTATE
 import odemis.gui.test as test
 
+# Export TEST_NOHW=1 to indicate no hardware present is not a failure
+TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 
 test.goto_manual()
 
@@ -62,7 +67,11 @@ class RotationKnobTestCase(test.GuiTestCase):
 
             wx.CallAfter(cnvs.update_drawing)
 
-        self.pm = Powermate(self.frame)
+        try:
+            self.pm = Powermate(self.frame)
+        except LookupError:
+            if TEST_NOHW:
+                self.skipTest("No hardware detected, skipping test")
 
         cnvs.Bind(EVT_KNOB_ROTATE, zoom)
 

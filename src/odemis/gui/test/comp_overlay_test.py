@@ -21,6 +21,7 @@
     Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
+from __future__ import division
 
 import math
 from odemis.gui.cont.tools import TOOL_LINE

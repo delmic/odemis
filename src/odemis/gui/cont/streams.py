@@ -83,7 +83,7 @@ class StreamController(object):
                 options |= OPT_NAME_EDIT
 
         # Special display for spectrum (aka SpectrumStream)
-        if isinstance(stream, acqstream.SpectrumStream) and hasattr(stream, "peak_show"):
+        if isinstance(stream, acqstream.SpectrumStream) and hasattr(stream, "peak_method"):
             options |= OPT_BTN_PEAK
 
         self.stream_panel = StreamPanel(stream_bar, stream, options)
@@ -145,10 +145,10 @@ class StreamController(object):
         self.stream_panel.set_visible(vis)
         self.stream_panel.Bind(EVT_STREAM_VISIBLE, self._on_stream_visible)
 
-        if isinstance(stream, acqstream.SpectrumStream) and hasattr(stream, "peak_show"):
+        if isinstance(stream, acqstream.SpectrumStream) and hasattr(stream, "peak_method"):
             # Set the peak button on the stream panel
             vis = stream in tab_data_model.focussedView.value.getStreams()
-            self.stream_panel.set_peak(vis)
+            self.stream_panel.set_peak(0)
             self.stream_panel.Bind(EVT_STREAM_PEAK, self._on_stream_peak)
 
         stream_bar.add_stream_panel(self.stream_panel, show_panel)
@@ -309,12 +309,12 @@ class StreamController(object):
 
     def _on_stream_peak(self, evt):
         """ Show or hide a stream in the focussed view if the peak button is clicked """
-        if evt.visible:
-            logging.debug("Showing peak data")
-            self.stream.peak_show.value = True
+        if evt.state == 0:
+            self.stream.peak_method.value = "gaussian"
+        elif evt.state == 1:
+            self.stream.peak_method.value = "lorentzian"
         else:
-            logging.debug("Hiding peak data")
-            self.stream.peak_show.value = False
+            self.stream.peak_method.value = evt.state
 
     def _on_new_dye_name(self, dye_name):
         """ Assign excitation and emission wavelengths if the given name matches a known dye """

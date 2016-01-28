@@ -76,8 +76,8 @@ class Stage(model.Actuator):
         self._position = {}
         init_speed = {}
         for a in axes:
-            rng = ranges.get(a, [-0.1, 0.1])
-            axes_def[a] = model.Axis(unit="m", range=rng, speed=[0., 10.])
+            rng = ranges.get(a, (-0.1, 0.1))
+            axes_def[a] = model.Axis(unit="m", range=rng, speed=(0., 10.))
             # start at the centre
             self._position[a] = (rng[0] + rng[1]) / 2
             init_speed[a] = 10.0  # we are super fast!
@@ -92,7 +92,7 @@ class Stage(model.Actuator):
         self.position = model.VigilantAttribute({}, unit="m", readonly=True)
         self._updatePosition()
 
-        self.speed = model.MultiSpeedVA(init_speed, [0., 10.], "m/s")
+        self.speed = model.MultiSpeedVA(init_speed, (0., 10.), "m/s")
 
     def _updatePosition(self):
         """
