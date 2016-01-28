@@ -385,7 +385,7 @@ class VirtualTestCam(object):
         self.assertNotEqual(self.camera.resolution.value, prev_size)
 
         # ask for the whole image
-        self.size = (self.camera.shape[0] / 2, self.camera.shape[1] / 2)
+        self.size = (self.camera.shape[0] // 2, self.camera.shape[1] // 2)
         self.camera.resolution.value = self.size
         exposure = 0.1
         self.camera.exposureTime.value = exposure
@@ -404,7 +404,7 @@ class VirtualTestCam(object):
         """
         Check sub-area acquisition works
         """
-        self.size = (self.camera.shape[0] / 2, self.camera.shape[1] / 2)
+        self.size = (self.camera.shape[0] // 2, self.camera.shape[1] // 2)
         exposure = 0.1
 
         if (self.camera.resolution.range[0][0] > self.size[0] or

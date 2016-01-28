@@ -48,8 +48,9 @@ class Camera(model.DigitalCamera):
         # TODO: support transpose? If not, warn that it's not accepted
         # fake image setup
         image = unicode(image)
-        # change to this directory to ensure relative path is from this file
-        os.chdir(os.path.dirname(unicode(__file__)))
+        # ensure relative path is from this file
+        if not os.path.isabs(image):
+            image = os.path.join(os.path.dirname(__file__), image)
         converter = dataio.find_fittest_converter(image, mode=os.O_RDONLY)
         self._img = converter.read_data(image)[0]  # can be RGB or greyscale
 
