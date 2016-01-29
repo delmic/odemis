@@ -428,9 +428,6 @@ class StreamPanel(wx.Panel):
         :param parent: (StreamBar) The parent widget.
         :param stream: (Stream) The stream data model to be displayed to and
             modified by the user.
-        :param tab_data: (MicroscopyGUIData) The microscope data model,
-            TODO: This parameter and related property should be moved to the stream controller!
-
         """
         assert(isinstance(parent, StreamBar))
         wx.Panel.__init__(self, parent, wid, pos, size, style, name)
