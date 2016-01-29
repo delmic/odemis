@@ -152,8 +152,8 @@ class SEM(model.HwComponent):
         # check Phenom's state and raise HwError if it reports error mode
         instrument_mode = self._device.GetInstrumentMode()
         if instrument_mode == 'INSTRUMENT-MODE-ERROR':
-            raise HwError("Phenom host '%s' is in error mode. Check Phenom "
-                          "state, a reboot may be needed." % (host,))
+            raise HwError("Phenom host is in error mode. Check Phenom "
+                          "state, a reboot may be needed.")
 
         # Access to service objects
         self._objects = client.factory
