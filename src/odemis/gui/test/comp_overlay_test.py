@@ -23,26 +23,28 @@
 """
 from __future__ import division
 
+import logging
 import math
-from odemis.gui.cont.tools import TOOL_LINE
-from odemis.gui.model import TOOL_POINT
-
-from odemis.util.conversion import hex_to_frgb
+import numpy
+from odemis import model
 from odemis.gui.comp.overlay import view as vol
 from odemis.gui.comp.overlay import world as wol
-import logging
-import odemis.gui as gui
-import odemis.gui.comp.miccanvas as miccanvas
-import odemis.gui.comp.canvas as canvas
-import odemis.gui.test as test
-import odemis.gui.model as guimodel
-import odemis.model as omodel
+from odemis.gui.cont.tools import TOOL_LINE
+from odemis.gui.model import TOOL_POINT
+from odemis.util.conversion import hex_to_frgb
 import unittest
 import wx
 
+import odemis.gui as gui
+import odemis.gui.comp.canvas as canvas
+import odemis.gui.comp.miccanvas as miccanvas
+import odemis.gui.model as guimodel
+import odemis.gui.test as test
+import odemis.model as omodel
+
 
 test.goto_manual()
-# logging.getLogger().setLevel(logging.DEBUG)
+logging.getLogger().setLevel(logging.DEBUG)
 # test.set_sleep_time(1000)
 
 
@@ -282,25 +284,39 @@ class OverlayTestCase(test.GuiTestCase):
         test.gui_loop()
 
     def test_marking_line_overlay(self):
-        cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
-        mlol = vol.MarkingLineOverlay(cnvs, orientation=1)
-        mlol.activate()
-        cnvs.add_view_overlay(mlol)
+        cnvs = miccanvas.TwoDPlotCanvas(self.panel)
+        mlol = cnvs.markline_overlay
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
+
+        rgb = numpy.empty((30, 200, 3), dtype=numpy.uint8)
+        data = model.DataArray(rgb)
+        cnvs.set_2d_data(data, unit_x='m', unit_y='m',
+                         range_x=[200e-9, 500e-9], range_y=[0, 20e-6])
+
         test.gui_loop()
 
-        mlol.v_pos.value = (100, 100)
+        mlol.val.value = (201e-9, 10e-6)
         cnvs.Refresh()
 
         test.gui_loop(500)
-        mlol.orientation = 2
-        mlol.v_pos.value = (200, 200)
+        mlol.orientation = vol.MarkingLineOverlay.HORIZONTAL
         cnvs.Refresh()
 
         test.gui_loop(500)
-        mlol.orientation = 3
-        mlol.v_pos.value = (300, 300)
+        mlol.orientation = vol.MarkingLineOverlay.VERTICAL
+        mlol.val.value = (301e-9, 12e-6)
         cnvs.Refresh()
+
+        test.gui_loop(500)
+        mlol.orientation = vol.MarkingLineOverlay.HORIZONTAL | vol.MarkingLineOverlay.VERTICAL
+        mlol.val.value = (401e-9, 20e-6)
+        cnvs.Refresh()
+
+        test.gui_loop(500)
+        # Out of the range
+        mlol.val.value = (0, 0)
+        cnvs.Refresh()
+        test.gui_loop(500)
 
     def test_dichotomy_overlay(self):
         cnvs = miccanvas.SecomCanvas(self.panel)
