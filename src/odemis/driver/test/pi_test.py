@@ -10,15 +10,15 @@ Copyright © 2012 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
@@ -33,6 +33,10 @@ import unittest
 
 logging.getLogger().setLevel(logging.INFO)
 
+# Export TEST_NOHW=1 to force using only the simulator and skipping test cases
+# needing real hardware
+TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
+
 if os.name == "nt":
     PORT = "COM1"
 else:
@@ -45,45 +49,45 @@ class TestPIRedStone(unittest.TestCase):
     Test directly the PIRedStone class.
     """
     config = CONFIG_RS_SECOM_1
-    
-#    @unittest.skip("don't have the hardware")
+
     def test_scan_low_level(self):
         """
         Check that we can do a scan network. It can pass only if we are
         connected to at least one controller.
         """
         adds = pi.PIRedStone.scan(PORT)
-        self.assertGreater(len(adds), 0)
-        
-        ser = pi.PIRedStone.openSerialPort(PORT)    
+        if not TEST_NOHW:
+            self.assertGreater(len(adds), 0)
+
+        ser = pi.PIRedStone.openSerialPort(PORT)
         for add in adds:
             cont = pi.PIRedStone(ser, add)
             self.assertTrue(cont.selfTest(), "Controller self test failed.")
-          
-#    @unittest.skip("don't have the hardware")
+
     def test_scan(self):
         """
         Check that we can do a scan network. It can pass only if we are
         connected to at least one controller.
         """
         devices = pi.StageRedStone.scan()
-        self.assertGreater(len(devices), 0)
-        
+        if not TEST_NOHW:
+            self.assertGreater(len(devices), 0)
+
         for name, kwargs in devices:
             print "opening ", name
             stage = pi.StageRedStone(name, "stage", **kwargs)
             self.assertTrue(stage.selfTest(), "Controller self test failed.")
-            
+
     def test_simple(self):
         stage = pi.StageRedStone("test", "stage", PORT, self.config)
         move = {'x':0.01e-6, 'y':0.01e-6}
         stage.moveRel(move)
         time.sleep(0.1) # wait for the move to finish
-        
+
     def test_sync(self):
         # For moves big enough, sync should always take more time than async
         delta = 0.0001 # s
-        
+
         stage = pi.StageRedStone("test", "stage", PORT, self.config)
         stage.speed.value = {"x":0.001, "y":0.001}
         move = {'x':100e-6, 'y':100e-6}
@@ -92,28 +96,28 @@ class TestPIRedStone(unittest.TestCase):
         dur_async = time.time() - start
         f.result()
         self.assertTrue(f.done())
-        
+
         move = {'x':-100e-6, 'y':-100e-6}
         start = time.time()
         f = stage.moveRel(move)
         f.result() # wait
         dur_sync = time.time() - start
         self.assertTrue(f.done())
-        
+
         self.assertGreater(dur_sync, max(0, dur_async - delta), "Sync should take more time than async.")
-        
+
         move = {'x':100e-6, 'y':100e-6}
         f = stage.moveRel(move)
         # 0.001s should be too short
         self.assertRaises(futures.TimeoutError, f.result, 0.001)
-        
+
 
     def test_speed(self):
         # For moves big enough, a 0.1m/s move should take approximately 100 times less time
-        # than a 0.001m/s move 
+        # than a 0.001m/s move
         expected_ratio = 10.0
-        delta_ratio = 2.0 # no unit 
-        
+        delta_ratio = 2.0  # no unit
+
         # fast move
         stage = pi.StageRedStone("test", "stage", PORT, self.config)
         stage.speed.value = {"x":0.001} # max speed of E-861 in practice
@@ -128,7 +132,7 @@ class TestPIRedStone(unittest.TestCase):
         if delta_ratio/2 < ratio or ratio > delta_ratio:
             self.fail("Speed not consistent: %f m/s instead of %f m/s." %
                       (act_speed, stage.speed.value['x']))
-        
+
         stage.speed.value = {"x":0.001/expected_ratio}
         move = {'x':-1e-3}
         start = time.time()
@@ -141,22 +145,22 @@ class TestPIRedStone(unittest.TestCase):
         if delta_ratio/2 < ratio or ratio > delta_ratio:
             self.fail("Speed not consistent: %f m/s instead of %f m/s." %
                       (act_speed, stage.speed.value['x']))
-                    
+
         ratio = dur_slow / dur_fast
         print "ratio of %f while expected %f" % (ratio, expected_ratio)
         if ratio < expected_ratio / 2 or ratio > expected_ratio * 2:
-            self.fail("Speed not consistent: ratio of " + str(ratio) + 
+            self.fail("Speed not consistent: ratio of " + str(ratio) +
                          " instead of " + str(expected_ratio) + ".")
 
     def test_stop(self):
         stage = pi.StageRedStone("test", "stage", PORT, self.config)
         stage.stop()
-        
+
         move = {'x':100e-6, 'y':100e-6}
         f = stage.moveRel(move)
         stage.stop()
         self.assertTrue(f.cancelled())
-        
+
     def test_queue(self):
         """
         Ask for several long moves in a row, and checks that nothing breaks
@@ -175,10 +179,10 @@ class TestPIRedStone(unittest.TestCase):
         f1.result()
 #        f2.result()
         f3.result()
-        
+
         dur = time.time() - start
         self.assertGreaterEqual(dur, expected_time)
-        
+
     def test_cancel(self):
         stage = pi.StageRedStone("test", "stage", PORT, self.config)
         move_forth = {'x':1e-3}
@@ -191,7 +195,7 @@ class TestPIRedStone(unittest.TestCase):
         f.cancel()
         self.assertTrue(f.cancelled())
         self.assertTrue(f.done())
-        
+
         # test cancel in queue
         f1 = stage.moveRel(move_forth)
         f2 = stage.moveRel(move_back)
@@ -199,14 +203,14 @@ class TestPIRedStone(unittest.TestCase):
         self.assertFalse(f1.done())
         self.assertTrue(f2.cancelled())
         self.assertTrue(f2.done())
-        
+
         # test cancel after already cancelled
         f.cancel()
         self.assertTrue(f.cancelled())
         self.assertTrue(f.done())
-        
+
         f1.result() # wait for the move to be finished
-        
+
     def test_not_cancel(self):
         stage = pi.StageRedStone("test", "stage", PORT, self.config)
         small_move_forth = {'x':1e-4}
@@ -218,14 +222,14 @@ class TestPIRedStone(unittest.TestCase):
         f.cancel()
         self.assertFalse(f.cancelled())
         self.assertTrue(f.done())
-        
+
         # test cancel after result()
         f = stage.moveRel(small_move_forth)
         f.result()
         f.cancel()
         self.assertFalse(f.cancelled())
         self.assertTrue(f.done())
-        
+
         # test not cancelled
         f = stage.moveRel(small_move_forth)
         f.result()
@@ -255,7 +259,7 @@ class TestPIRedStone(unittest.TestCase):
         move_forth = {'x':1e-4}
         move_back = {'x':-1e-4}
         stage.speed.value = {"x":1e-3} # => 0.1s per move
-        
+
         # test callback while being executed
         f = stage.moveRel(move_forth)
         self.called = 0
@@ -280,7 +284,7 @@ class TestPIRedStone(unittest.TestCase):
         # It should work even if the action is fully done
         f2.add_done_callback(self.callback_test_notify2)
         self.assertEquals(self.called, 3)
-        
+
         # test callback called after being cancelled
         f = stage.moveRel(move_forth)
         self.called = 0
@@ -289,16 +293,16 @@ class TestPIRedStone(unittest.TestCase):
         f.cancel()
         time.sleep(0.01) # make sure the callback had time to be called
         self.assertEquals(self.called, 1)
-        self.assertTrue(f.cancelled()) 
-        
+        self.assertTrue(f.cancelled())
+
     def callback_test_notify(self, future):
         self.assertTrue(future.done())
         self.called += 1
-        
+
     def callback_test_notify2(self, future):
         self.assertTrue(future.done())
         self.called += 1
-        
+
 if __name__ == '__main__':
     unittest.main()
 

@@ -138,6 +138,8 @@ class TestSEM(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        if TEST_NOHW:
+            return
         cls.sem.terminate()
         time.sleep(3)
 

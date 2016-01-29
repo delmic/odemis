@@ -58,8 +58,9 @@ class SimSEM(model.HwComponent):
         if image is None:
             image = u"simsem-fake-output.h5"
         image = unicode(image)
-        # change to this directory to ensure relative path is from this file
-        os.chdir(os.path.dirname(unicode(__file__)))
+        # ensure relative path is from this file
+        if not os.path.isabs(image):
+            image = os.path.join(os.path.dirname(__file__), image)
         converter = dataio.find_fittest_converter(image, mode=os.O_RDONLY)
         self.fake_img = img.ensure2DImage(converter.read_data(image)[0])
 

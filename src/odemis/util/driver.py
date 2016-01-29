@@ -198,11 +198,11 @@ def get_backend_status():
             # Not all components are working => we are "starting" (or borked)
             return BACKEND_STARTING
     except (IOError, CommunicationError):
-        logging.info("Failed to find microscope")
         if os.path.exists(model.BACKEND_FILE):
+            logging.debug("No microscope found, it's sign the back-end is not responding")
             return BACKEND_DEAD
         else:
-            logging.info("Back-end %s file doesn't exists", model.BACKEND_FILE)
+            logging.debug("Back-end %s file doesn't exists", model.BACKEND_FILE)
             return BACKEND_STOPPED
     except:
         logging.exception("Unresponsive back-end")

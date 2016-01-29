@@ -21,6 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
+import collections
 import h5py
 import logging
 import numpy
@@ -80,7 +81,7 @@ def _create_image_dataset(group, dataset_name, image, **kwargs):
     """
     Create a dataset respecting the HDF5 image specification
     http://www.hdfgroup.org/HDF5/doc/ADGuide/ImageSpec.html
-   
+
     group (HDF group): the group that will contain the dataset
     dataset_name (string): name of the dataset
     image (numpy.ndimage): the image to create. It should have at least 2 dimensions
@@ -278,10 +279,9 @@ def _add_image_info(group, dataset, image):
         _h5svi_set_state(group["DimensionScaleT"], ST_DEFAULT)
         dataset.dims[tpos].attach_scale(group["DimensionScaleT"])
 
-    # Wavelength (for spectrograms and monochromator)
+    # Wavelength (for spectrograms)
     if ("C" in dims and
-        set(image.metadata.keys()) & {model.MD_WL_LIST, model.MD_WL_POLYNOMIAL,
-                                      model.MD_OUT_WL}):
+        set(image.metadata.keys()) & {model.MD_WL_LIST, model.MD_WL_POLYNOMIAL}):
         try:
             # polynomial of degree = 2 => linear, so use compact notation
             if (model.MD_WL_POLYNOMIAL in image.metadata and
@@ -290,17 +290,6 @@ def _add_image_info(group, dataset, image):
                 group["COffset"] = pn[0]
                 _h5svi_set_state(group["COffset"], ST_REPORTED)
                 group["DimensionScaleC"] = pn[1] # m
-            # monochromator wavelength
-            elif (model.MD_OUT_WL in image.metadata):
-                wl = image.metadata[model.MD_OUT_WL]
-                if isinstance(wl, basestring):
-                    group["COffset"] = wl
-                    _h5svi_set_state(group["COffset"], ST_REPORTED)
-                    group["DimensionScaleC"] = wl
-                else:
-                    group["COffset"] = wl[0]
-                    _h5svi_set_state(group["COffset"], ST_REPORTED)
-                    group["DimensionScaleC"] = wl[1] - wl[0]  # m
             else:
                 wll = spectrum.get_wavelength_per_pixel(image)
                 # list or polynomial of degree > 2 => store the values of each
@@ -382,11 +371,16 @@ def _read_image_info(group):
                     md[model.MD_WL_LIST] = map(float, dim[0][...].tolist())
                 elif dim[0].shape == ():
                     if isinstance(group["COffset"], basestring):
+                        # Only to support some files saved with Odemis 2.3-alpha
+                        logging.warning("COffset is a string, not officially supported")
                         md[model.MD_OUT_WL] = group["COffset"]
                     else:
                         pn = [float(group["COffset"][()]),
                               float(dim[0][()])]
                         if dataset.shape[i] == 1:
+                            # To support some files saved with Odemis 2.2
+                            # Now MD_OUT_WL is only mapped to EmissionWavelength
+                            logging.info("Updating MD_OUT_WL from DimensionScaleC, only supported in backward compatible mode")
                             md[model.MD_OUT_WL] = (pn[0], pn[0] + pn[1])
                         else:
                             md[model.MD_WL_POLYNOMIAL] = pn
@@ -398,7 +392,7 @@ def _read_image_info(group):
         md[model.MD_ROTATION] = float(rot[2])
         if rot[0] != 0 or rot[1] != 0:
             logging.info("Metadata contains rotation vector %s, which cannot be"
-                         " fully reproduced in Odemis.", rot) 
+                         " fully reproduced in Odemis.", rot)
     except Exception:
         pass
 
@@ -473,10 +467,10 @@ def _parse_physical_data(pdgroup, da):
 
         try:
             ds = pdgroup["ExcitationWavelength"]
-            xwl = float(ds[i]) # in m
             state = _h5svi_get_state(ds)
             if state and state[i] == ST_INVALID:
                 raise ValueError
+            xwl = float(ds[i])  # in m
             md[model.MD_IN_WL] = (xwl - h_width, xwl + h_width)
         except (TypeError, KeyError, IndexError, ValueError):
             pass
@@ -488,10 +482,14 @@ def _parse_physical_data(pdgroup, da):
                 raise ValueError
             if isinstance(ds[i], basestring):
                 md[model.MD_OUT_WL] = ds[i]
-            else:
+            elif len(ds.shape) == 1: # Only one value per channel
                 ewl = float(ds[i])  # in m
-                if model.MD_OUT_WL not in md:  # could already be filled by C scale
+                # In files saved with Odemis 2.2, MD_OUT_WL could be saved with
+                # more precision in C scale (now explicitly saved as tuple here)
+                if model.MD_OUT_WL not in md:
                     md[model.MD_OUT_WL] = (ewl - h_width, ewl + h_width)
+            else: # full band for each channel
+                md[model.MD_OUT_WL] = tuple(ds[i])
         except (TypeError, KeyError, IndexError, ValueError):
             pass
 
@@ -694,22 +692,39 @@ def _add_image_metadata(group, image, mds):
 
     ewls = []
     state = []
+    typ = 0  # 0 = str, 1 = number, >1 = len of a tuple
     for md in mds:
         ewl = md.get(model.MD_OUT_WL)
         if ewl is None:
             ewls.append(1e-9) # to not confuse some readers
+            typ = max(typ, 1)
             state.append(ST_INVALID)
         elif isinstance(ewl, basestring):
             # Just copy as is, hopefully there are all the same type
             ewls.append(ewl)
             state.append(ST_REPORTED)
-        elif model.MD_IN_WL in md:
-            xwl = md[model.MD_IN_WL]
-            ewls.append(fluo.get_one_center_em(ewl, xwl))
-            state.append(ST_REPORTED)
         else:
-            ewls.append(fluo.get_one_center(ewl))
+            if model.MD_IN_WL in md:
+                xwl = md[model.MD_IN_WL]
+                ewl = fluo.get_one_band_em(ewl, xwl)
+            # Only support one value or a tuple (min/max)
+            if len(ewl) > 2:
+                ewl = ewl[0], ewl[-1]
+            ewls.append(ewl)
+            typ = max(typ, len(ewl))
             state.append(ST_REPORTED)
+
+    # Check all ewls are the same type
+    for i, ewl in enumerate(ewls):
+        if isinstance(ewl, basestring) and typ > 0:
+            logging.warning("Dropping MD_OUT_WL %s due to mix of type", ewl)
+            if typ == 1:
+                ewls[i] = 1e-9
+            else:
+                ewls[i] = (1e-9, 1e-9)
+            state[i] = ST_INVALID
+        elif not isinstance(ewl, collections.Iterable) and typ > 1:
+            ewls[i] = (ewl,) * typ
 
     gp["EmissionWavelength"] = ewls # in m
     _h5svi_set_state(gp["EmissionWavelength"], state)
@@ -887,7 +902,7 @@ def _add_svi_info(group):
     gi = group.create_group("SVIData")
     gi["Company"] = "Delmic"
     gi["FileSpecificationCompatibility"] = "0.01p0"
-    gi["FileSpecificationVersion"] = "0.01d8"
+    gi["FileSpecificationVersion"] = "0.02"  # SVI has typically 0.01d8
     gi["ImageHistory"] = ""
     gi["URL"] = "www.delmic.com"
 
