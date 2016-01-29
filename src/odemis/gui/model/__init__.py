@@ -2,7 +2,7 @@
 """
 :created: 16 Feb 2012
 :author: Éric Piel
-:copyright: © 2012-2013 Éric Piel, Rinze de Laat, Delmic
+:copyright: © 2012-2016 Éric Piel, Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
@@ -20,6 +20,7 @@ This file is part of Odemis.
     Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
+from __future__ import division
 
 import Queue
 from abc import ABCMeta

@@ -4,7 +4,7 @@ Created on 14 Jan 2013
 
 @author: Rinze de Laat
 
-Copyright © 2013 Rinze de Laat, Delmic
+Copyright © 2013-2016 Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
@@ -26,6 +26,7 @@ This module contains all code needed for the access to and management of GUI
 related configuration files.
 
 """
+from __future__ import division
 
 CONF_GENERAL = None
 CONF_ACQUI = None
