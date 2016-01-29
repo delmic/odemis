@@ -68,7 +68,7 @@ class TestDriver(unittest.TestCase):
 
     def test_memoryUsage(self):
         m = readMemoryUsage()
-        self.assertGreater(1, m)
+        self.assertGreater(m, 1)
 
 
 if __name__ == "__main__":
