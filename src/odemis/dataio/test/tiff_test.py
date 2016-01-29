@@ -680,7 +680,7 @@ class TestTiffIO(unittest.TestCase):
                      model.MD_PIXEL_SIZE: (1e-6, 1e-6), # m/px
                      model.MD_POS: (13.7e-3, -30e-3), # m
                      model.MD_EXP_TIME: 1.2, # s
-                     model.MD_IN_WL: (500e-9, 520e-9), # m
+                     model.MD_IN_WL: (500e-9, 522e-9),  # m
                      model.MD_OUT_WL: (650e-9, 660e-9, 675e-9, 678e-9, 680e-9), # m
                      model.MD_USER_TINT: (255, 0, 65), # purple
                      model.MD_LIGHT_POWER: 100e-3 # W
@@ -694,7 +694,7 @@ class TestTiffIO(unittest.TestCase):
                      model.MD_PIXEL_SIZE: (1e-6, 1e-6), # m/px
                      model.MD_POS: (13.7e-3, -30e-3), # m
                      model.MD_EXP_TIME: 1, # s
-                     model.MD_IN_WL: (600e-9, 620e-9), # m
+                     model.MD_IN_WL: (590e-9, 620e-9),  # m
                      model.MD_OUT_WL: (620e-9, 650e-9), # m
                      model.MD_ROTATION: 0.1,  # rad
                      model.MD_SHEAR: 0,
@@ -709,7 +709,7 @@ class TestTiffIO(unittest.TestCase):
                      model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
                      model.MD_POS: (13.7e-3, -30e-3),  # m
                      model.MD_EXP_TIME: 1,  # s
-                     model.MD_IN_WL: (600e-9, 620e-9),  # m
+                     model.MD_IN_WL: (600e-9, 630e-9),  # m
                      model.MD_OUT_WL: (620e-9, 650e-9),  # m
                      # In order to test shear is applied even without rotation
                      # provided. And also check that *_COR is merged into its
@@ -759,7 +759,8 @@ class TestTiffIO(unittest.TestCase):
 
             iwl = im.metadata[model.MD_IN_WL] # nm
             self.assertTrue((md[model.MD_IN_WL][0] <= iwl[0] and
-                             iwl[1] <= md[model.MD_IN_WL][-1]))
+                             iwl[1] <= md[model.MD_IN_WL][-1]),
+                            "%s not in %s" % (iwl, md[model.MD_IN_WL]))
 
             owl = im.metadata[model.MD_OUT_WL] # nm
             self.assertTrue((md[model.MD_OUT_WL][0] <= owl[0] and

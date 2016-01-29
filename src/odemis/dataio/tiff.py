@@ -535,11 +535,19 @@ def _updateMDFromOME(root, das, basename):
             except KeyError:
                 pass
 
-            # TODO: based on whether it's apifluo or brightfield, put different
-            # bandwith (cf hdf5)
             try:
+                # We didn't store the exact bandwidth, but guess it based on the
+                # type of microscopy method
+                h_width = 1e-9
+                if "ContrastMethod" in che.attrib:
+                    cm = che.attrib["ContrastMethod"]
+                    if cm == "Fluorescence":
+                        h_width = 10e-9
+                    elif cm == "Brightfield":
+                        h_width = 100e-9
+
                 iwl = float(che.attrib["ExcitationWavelength"]) * 1e-9 # nm -> m
-                mdc[model.MD_IN_WL] = (iwl - 1e-9, iwl + 1e-9)
+                mdc[model.MD_IN_WL] = (iwl - h_width, iwl + h_width)
             except (KeyError, ValueError):
                 pass
 
