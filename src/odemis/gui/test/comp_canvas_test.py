@@ -118,6 +118,7 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         self.view.addStream(stream2)
 
         # reset the mpp of the view, as it's automatically set to the first  image
+        test.gui_loop(500)
         self.view.mpp.value = mpp
 
         shift = (63, 63)
@@ -190,6 +191,7 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         self.view.addStream(stream1)
         self.view.addStream(stream2)
         # view might set its mpp to the mpp of first image => reset it
+        test.gui_loop(500)
         self.view.mpp.value = mpp
         self.assertEqual(mpp, self.view.mpp.value)
 
@@ -201,10 +203,8 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         self.view.merge_ratio.value = ratio
         self.assertEqual(ratio, self.view.merge_ratio.value)
 
-        test.gui_loop()
         # it's supposed to update in less than 1s
-        wx.MilliSleep(500)
-        test.gui_loop()
+        test.gui_loop(500)
 
         # copy the buffer into a nice image here
         result_im = get_image_from_buffer(self.canvas)
@@ -235,7 +235,9 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         stream1 = RGBStream("s1", im1)
 
         self.view.addStream(stream1)
+
         # view might set its mpp to the mpp of first image => reset it
+        test.gui_loop(500)  # give a bit of time for the view to get the RGB proj
         self.view.mpp.value = mpp
 
         shift = (10, 10)
