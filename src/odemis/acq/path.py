@@ -22,12 +22,13 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+from concurrent.futures.thread import ThreadPoolExecutor
 import copy
 import logging
 import math
 from odemis import model
 from odemis.acq import stream
-from odemis.model import CancellableThreadPoolExecutor, isasync
+from odemis.model import isasync
 
 
 GRATING_NOT_MIRROR = ("NOTMIRROR",)  # A tuple, so that no grating position can be like this
@@ -258,7 +259,10 @@ class OpticalPathManager(object):
                             del modeconf[act_role]
 
         # will take care of executing setPath asynchronously
-        self._executor = CancellableThreadPoolExecutor(max_workers=1)
+        self._executor = ThreadPoolExecutor(max_workers=1)
+
+    def __del__(self):
+        self._executor.shutdown(wait=False)
 
     def _getComponent(self, role):
         """
