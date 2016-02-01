@@ -20,6 +20,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 from __future__ import division
 
+import os
 from abc import ABCMeta
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED
 import logging
@@ -757,7 +758,13 @@ class DelphiStateController(SecomStateController):
         the calibration data is present.
         """
         shid, sht = self._main_data.chamber.sampleHolder.value
-        # TODO: only try to load if PHENOM_SH_TYPE_OPTICAL, otherwise just return
+
+        if sht is None:
+            logging.warn("No sample holder loaded!")
+            return
+        elif sht != PHENOM_SH_TYPE_OPTICAL:
+            logging.warn("Wrong sample holder type!")
+            return
 
         calib = self._calibconf.get_sh_calib(shid)
         if calib is None:
@@ -873,6 +880,41 @@ class DelphiStateController(SecomStateController):
             logging.exception("Failed to set calibration")
 
         return True
+
+    @call_in_wx_main
+    def request_holder_recalib(self, _=None):
+        """ Recalibration the sample holder """
+
+        shid, sht = self._main_data.chamber.sampleHolder.value
+
+        # If the sample holder is of the wrong type, or if no sample holder is present..
+        if sht != PHENOM_SH_TYPE_OPTICAL:
+            wx.MessageBox(
+                "Please make sure a sample holder with an empty glass is loaded",
+                "Wrong or missing sample holder",
+                style=wx.ICON_ERROR
+            )
+            return
+
+
+        # Returns 'yes' for automataic, 'no' for manual
+        dlg = windelphi.RecalibrationDialog(self._tab_panel.Parent, shid)
+        val = dlg.ShowModal()  # blocks
+        dlg.Destroy()
+
+        # Automatic recalibration
+        if val == wx.ID_YES:
+            logging.info("Starting automatic recalibration for sample holder")
+            self._run_full_calibration(shid)
+        # Manual recalibration
+        elif val == wx.ID_NO:
+            # TODOL The manual calibration command can also be found in the win/delphi module and
+            # should probably be defined elsewhere
+            logging.info("Starting manual recalibration for sample holder")
+            os.system("gnome-terminal -e 'python -m odemis.acq.align.delphi_man_calib &'")
+        else:
+            logging.info("Recalibration cancelled")
+
 
     @call_in_wx_main
     def request_holder_calib(self, _=None):

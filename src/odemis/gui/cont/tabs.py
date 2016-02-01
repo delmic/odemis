@@ -324,7 +324,7 @@ class SecomStreamsTab(Tab):
             wx.EVT_MENU(
                     self.main_frame,
                     self.main_frame.menu_item_recalibrate.GetId(),
-                    self._state_controller.request_holder_calib
+                    self._state_controller.request_holder_recalib
             )
 
         # For remembering which streams are paused when hiding the tab
