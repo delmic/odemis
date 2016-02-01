@@ -183,13 +183,12 @@ class StreamPanelHeader(wx.Control):
 
     def _add_peak_btn(self):
         """ Add the peak toggle button to the stream panel header """
-        peak_btn = buttons.ImageStateButtonImageButton(self,
-                                                        bitmap=img.getico_gaussian_offBitmap())
+        peak_btn = buttons.ImageStateButton(self, bitmap=img.getico_gaussian_offBitmap())
         peak_btn.bmpHover = img.getico_gaussian_off_hBitmap()
         peak_btn.bmpSelected = [img.getico_gaussian_onBitmap(), img.getico_lorentzian_onBitmap()]
         peak_btn.bmpSelectedHover = [img.getico_gaussian_on_hBitmap(), img.getico_lorentzian_on_hBitmap()]
 
-        peak_btn.SetToolTipString("Show peaks")
+        peak_btn.SetToolTipString("Select peak fitting (Gaussian, Lorentzian, or none)")
         self._add_ctrl(peak_btn)
         return peak_btn
 
