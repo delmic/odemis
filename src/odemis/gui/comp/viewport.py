@@ -904,6 +904,8 @@ class PointSpectrumViewport(PlotViewport):
             if self.stream is not None:
                 data = self.stream.get_pixel_spectrum()
                 if data is not None:
+                    # cancel previous fitting if there is one in progress
+                    self._peak_future.cancel()
                     spectrum_range = self.stream.get_spectrum_range()
                     unit_x = self.stream.spectrumBandwidth.unit
                     # cancel previous fitting if there is one in progress
