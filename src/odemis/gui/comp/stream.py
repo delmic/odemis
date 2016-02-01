@@ -481,7 +481,7 @@ class StreamPanel(wx.Panel):
         self._header.btn_remove.Bind(wx.EVT_BUTTON, self.on_remove_btn)
         self._header.btn_show.Bind(wx.EVT_BUTTON, self.on_visibility_btn)
         if self._header.btn_peak is not None:
-            self._header.btn_peak.Bind(buttons.EVT_STATE_CHANGED, self.on_peak_btn)
+            self._header.btn_peak.Bind(wx.EVT_BUTTON, self.on_peak_btn)
 
         if wx.Platform == "__WXMSW__":
             self._header.Bind(wx.EVT_LEFT_DCLICK, self.on_button)
@@ -636,7 +636,7 @@ class StreamPanel(wx.Panel):
 
     def on_peak_btn(self, evt):
         # generate EVT_STREAM_PEAK
-        event = stream_peak_event(state=evt.state)
+        event = stream_peak_event(state=self._header.btn_peak.GetState())
         wx.PostEvent(self, event)
 
     # Manipulate expander buttons

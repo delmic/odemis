@@ -501,9 +501,6 @@ class ImageTextToggleButton(BtnMixin, wxbuttons.GenBitmapTextToggleButton):
     pass
 
 
-# Event signaling that button state has been changed
-state_changed_event, EVT_STATE_CHANGED = wx.lib.newevent.NewEvent()
-
 class ImageStateButton(ImageToggleButtonImageButton):
     """
     Multi-state graphical button that can switch between any number of states/images.
@@ -513,19 +510,16 @@ class ImageStateButton(ImageToggleButtonImageButton):
     """
     def __init__(self, *args, **kwargs):
         super(ImageToggleButtonImageButton, self).__init__(*args, **kwargs)
-        self.state = 0
-        # TODO: the .up/.saveUp are for __ToggleMixin, so that it restores the
-        # previous state if the mouse goes out of the button. But that doesn't
-        # work with the state.
-        self.up = False
+        self.state = None
+        self.on = False
 
     def DrawLabel(self, dc, width, height, dx=0, dy=0):
         bmp = self.bmpLabel
-        if not self.IsEnabled():
+        if not self.on:
             if not self.bmpDisabled:
                 self.bmpDisabled = self._create_disabled_bitmap()
             bmp = self.bmpDisabled
-        elif not self.up and (self.state is not None):
+        elif self.on and (self.state is not None):
             if not self.bmpSelected:
                 self.bmpSelected = self._create_active_bitmap()
             if self.bmpSelectedHover and self.hovering:
@@ -555,25 +549,36 @@ class ImageStateButton(ImageToggleButtonImageButton):
         if not self.IsEnabled():
             return
         self.saveUp = self.up
+        self.saveOn = self.on
+        self.saveState = self.state
+        self.up = not self.up
         if isinstance(self.bmpSelected, list):
             if self.state is None:
-                self.up = False
+                self.on = True
                 self.state = 0
             elif (self.state == len(self.bmpSelected) - 1):
-                self.up = True
+                self.on = False
                 self.state = None
             else:
-                self.up = False
+                self.on = True
                 self.state += 1
-            # TODO: this is wrong, event should happen on left up (if it's still
-            # on the button at this time).
-            event = state_changed_event(state=self.state)
-            wx.PostEvent(self, event)
-        else:
-            self.up = not self.up
+        self.nextOn = self.on
+        self.nextState = self.state
         self.CaptureMouse()
         self.SetFocus()
         self.Refresh()
+
+    def OnLeftUp(self, event):
+        if not self.IsEnabled() or not self.HasCapture():
+            return
+        if self.HasCapture():
+            self.ReleaseMouse()
+            self.Refresh()
+            if self.up != self.saveUp:
+                self.Notify()
+
+    def OnKeyDown(self, event):
+        event.Skip()
 
     def OnMotion(self, event):
         if not self.IsEnabled():
@@ -582,11 +587,34 @@ class ImageStateButton(ImageToggleButtonImageButton):
             x, y = event.GetPositionTuple()
             w, h = self.GetClientSizeTuple()
             if x < w and x >= 0 and y < h and y >= 0:
+                self.on = self.nextOn
+                self.state = self.nextState
+                self.up = not self.saveUp
                 self.Refresh()
                 return
             if (x < 0 or y < 0 or x >= w or y >= h):
+                self.on = self.saveOn
+                self.state = self.saveState
+                self.up = self.saveUp
                 self.Refresh()
                 return
+        event.Skip()
+
+    def OnKeyUp(self, event):
+        if self.hasFocus and event.GetKeyCode() == ord(" "):
+            self.up = not self.up
+            if isinstance(self.bmpSelected, list):
+                if self.state is None:
+                    self.on = True
+                    self.state = 0
+                elif (self.state == len(self.bmpSelected) - 1):
+                    self.on = False
+                    self.state = None
+                else:
+                    self.on = True
+                    self.state += 1
+            self.Notify()
+            self.Refresh()
         event.Skip()
 
     def SetState(self, state):

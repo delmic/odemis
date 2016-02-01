@@ -148,7 +148,7 @@ class StreamController(object):
         if isinstance(stream, acqstream.SpectrumStream) and hasattr(stream, "peak_method"):
             # Set the peak button on the stream panel
             vis = stream in tab_data_model.focussedView.value.getStreams()
-            self.stream_panel.set_peak(0)
+            self.stream_panel.set_peak(None)
             self.stream_panel.Bind(EVT_STREAM_PEAK, self._on_stream_peak)
 
         stream_bar.add_stream_panel(self.stream_panel, show_panel)
