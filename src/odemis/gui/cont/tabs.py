@@ -41,7 +41,7 @@ from odemis.gui.comp.canvas import CAN_ZOOM
 from odemis.gui.comp.popup import Message
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.viewport import MicroscopeViewport, AngularResolvedViewport, \
-    PlotViewport, SpatialSpectrumViewport
+    PlotViewport, SpatialSpectrumViewport, PointSpectrumViewport
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.conf.data import get_local_vas, get_stream_settings_config
 from odemis.gui.cont import settings, tools
@@ -324,7 +324,7 @@ class SecomStreamsTab(Tab):
             wx.EVT_MENU(
                     self.main_frame,
                     self.main_frame.menu_item_recalibrate.GetId(),
-                    self._state_controller.request_holder_calib
+                    self._state_controller.request_holder_recalib
             )
 
         # For remembering which streams are paused when hiding the tab
@@ -1395,7 +1395,7 @@ class AnalysisTab(Tab):
 
         fmt = formats[dialog.GetFilterIndex()]
 
-        Message.show_message(self.main_frame, "Opening file")
+        # Message.show_message(self.main_frame, "Opening file")
         self.load_data(filename, fmt)
         return True
 
@@ -1432,9 +1432,10 @@ class AnalysisTab(Tab):
         """
         Display a new data set (removing all references to the current one)
 
-        filename (string): Name of the file containing the data.
-        data (list of model.DataArray): the data to display. Should have at
-         least one DataArray.
+        Args:
+            filename: (str) Name of the file containing the data
+            data: ([model.DataArray]) List of data to display. Should contain at least one array
+
         """
 
         # Reset tool, layout and visible views
@@ -1487,40 +1488,43 @@ class AnalysisTab(Tab):
         # TODO: to support multiple (types of) streams (eg, AR+Spec+Spec), do
         # this every time the streams are hidden/displayed.
         if spec_streams:
-
             # ########### Track pixel and line selection
 
-            for spec_stream in spec_streams:
-                sraw = spec_stream.raw[0]
+            # FIXME: This temporary "fix" only binds the first spectrum stream to the pixel and
+            # line overlays. This is done because in the PlotViewport only the first spectrum stream
+            # gets connected. See connect_stream in viewport.py, line 812.
+            # We need a clean way to connect both the overlays and the PlotViewport to the right
+            # spectrum stream when the view/stream tree changes.
 
-                # We need to get the dimensions so we can determine the
-                # resolution. Remember that in Matrix notation, the
-                # number of rows (is vertical size), comes first. So we
-                # need to 'swap' the values to get the (x,y) resolution.
-                height, width = sraw.shape[-2], sraw.shape[-1]
+            spec_stream = spec_streams[0]
 
-                # Set the PointOverlay values for each viewport
-                for viewport in self.view_controller.viewports:
-                    if hasattr(viewport.canvas, "pixel_overlay"):
-                        ol = viewport.canvas.pixel_overlay
-                        ol.set_data_properties(
-                            sraw.metadata[model.MD_PIXEL_SIZE][0],
-                            sraw.metadata[model.MD_POS],
-                            (width, height)
-                        )
-                        ol.connect_selection(spec_stream.selected_pixel, spec_stream.selectionWidth)
+            sraw = spec_stream.raw[0]
 
-                    if hasattr(viewport.canvas, "line_overlay"):
-                        ol = viewport.canvas.line_overlay
-                        ol.set_data_properties(
-                            sraw.metadata[model.MD_PIXEL_SIZE][0],
-                            sraw.metadata[model.MD_POS],
-                            (width, height)
-                        )
-                        ol.connect_selection(spec_stream.selected_line,
-                                             spec_stream.selectionWidth,
-                                             spec_stream.selected_pixel)
+            # We need to get the dimensions so we can determine the
+            # resolution. Remember that in Matrix notation, the
+            # number of rows (is vertical size), comes first. So we
+            # need to 'swap' the values to get the (x,y) resolution.
+            height, width = sraw.shape[-2], sraw.shape[-1]
+            pixel_width = sraw.metadata[model.MD_PIXEL_SIZE][0]
+            center_position = sraw.metadata[model.MD_POS]
 
+            # Set the PointOverlay values for each viewport
+            for viewport in self.view_controller.viewports:
+                if hasattr(viewport.canvas, "pixel_overlay"):
+                    ol = viewport.canvas.pixel_overlay
+                    ol.set_data_properties(pixel_width, center_position, (width, height))
+                    ol.connect_selection(spec_stream.selected_pixel, spec_stream.selectionWidth)
+
+                if hasattr(viewport.canvas, "line_overlay"):
+                    ol = viewport.canvas.line_overlay
+                    ol.set_data_properties(pixel_width, center_position, (width, height))
+                    ol.connect_selection(
+                        spec_stream.selected_line,
+                        spec_stream.selectionWidth,
+                        spec_stream.selected_pixel
+                    )
+
+                # Adjust the viewport layout (if needed) when a pixel or line is selected
                 spec_stream.selected_pixel.subscribe(self._on_pixel_select, init=True)
                 spec_stream.selected_line.subscribe(self._on_line_select, init=True)
 
@@ -1599,6 +1603,16 @@ class AnalysisTab(Tab):
             if vold != vnew:
                 self.tab_data_model.visible_views.value = new_visible_views
                 break
+
+    def _connect_stream_to_pixeloverlay(self, spec_stream, viewports):
+        for viewport in viewports:
+            print viewport.stream_tree
+                # ol = viewport.canvas.pixel_overlay
+                # ol.set_data_properties(pixel_width, center_position, (width, height))
+                # ol.connect_selection(spec_stream.selected_pixel, spec_stream.selectionWidth)
+
+        # Adjust the viewport layout (if needed) when a pixel or line is selected
+        # spec_stream.selected_pixel.subscribe(self._on_pixel_select, init=True)
 
     def set_ar_background(self, fn):
         """
@@ -1724,31 +1738,18 @@ class AnalysisTab(Tab):
         pass
 
     def _on_point_select(self, _):
-        """ Event handler for when a point is selected """
-        # If we're in 1x1 view, we're bringing the plot to the front
+        """ Bring the angular viewport to the front when a point is selected in the 1x1 view """
+        # TODO: should we just switch to 2x2 as with the pixel and line selection?
         if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
-            ang_view = self.panel.vp_angular.microscope_view
-            self.tab_data_model.focussedView.value = ang_view
+            self.tab_data_model.focussedView.value = self.panel.vp_angular.microscope_view
 
     def _on_pixel_select(self, _):
-        """ Event handler for when a spectrum pixel is selected """
-
-        # If we're in 1x1 view, we're bringing the plot to the front
-        # if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
-        #     plot_view = self.panel.vp_inspection_plot.microscope_view
-        #     self.tab_data_model.focussedView.value = plot_view
-
+        """ Switch the the 2x2 view when a pixel is selected """
         if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
             self.tab_data_model.viewLayout.value = guimod.VIEW_LAYOUT_22
 
     def _on_line_select(self, _):
-        """ Event handler for when a spectrum line is selected """
-
-        # If we're in 1x1 view, we're bringing the plot to the front
-        # if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
-        #     spatial_view = self.panel.vp_spatialspec.microscope_view
-        #     self.tab_data_model.focussedView.value = spatial_view
-
+        """ Switch the the 2x2 view when a line is selected """
         if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
             self.tab_data_model.viewLayout.value = guimod.VIEW_LAYOUT_22
 

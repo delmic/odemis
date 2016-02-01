@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 28 Aug 2014
 
 @author: Éric Piel
@@ -8,31 +8,38 @@ Copyright © 2014 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License version 2 as published by the Free Software Foundation.
+Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU
+General Public License version 2 as published by the Free Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even
+the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
+Public License for more details.
 
-You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+You should have received a copy of the GNU General Public License along with Odemis. If not,
+see http://www.gnu.org/licenses/.
+
+"""
+
 from __future__ import division
 
-import wx
-from odemis.gui.win.dialog_xrc import xrcprogress_dialog
-from odemis.gui.util.widgets import ProgressiveFutureConnector
 import logging
-from odemis.util import units
-from odemis.gui.util import call_in_wx_main, ignore_dead
-from odemis import model
-from odemis.acq._futures import executeTask
-from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
-    RUNNING
-import odemis.acq.align.delphi as aligndelphi
-from odemis.acq.align import autofocus
-import threading
-import time
 import math
 import os
+import threading
+import time
+import wx
+
+from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
+    RUNNING
+
+import odemis.acq.align.delphi as aligndelphi
+from odemis import model
 from odemis.acq import align
+from odemis.acq._futures import executeTask
+from odemis.acq.align import autofocus
+from odemis.gui.util import call_in_wx_main
+from odemis.gui.util.widgets import ProgressiveFutureConnector
+from odemis.gui.win.dialog_xrc import xrcprogress_dialog
 
 DELPHI_OPT_GOOD_FOCUS = 0.03826  # somehow possibly not too bad focus position
 
@@ -103,6 +110,28 @@ class FirstCalibrationDialog(wx.Dialog):
             return None
 
 
+class RecalibrationDialog(wx.MessageDialog):
+    """ Dialog that guides user through re-calibration of the Delhi
+
+    The three default buttons that are defined are:
+
+    wx.ID_YES - Automatic recalibration
+    wx.ID_NO - Manual recalibration
+    wx.ID_CANCEL - Cancel recalibration
+
+    """
+
+    def __init__(self, parent, shid):
+        super(RecalibrationDialog, self).__init__(
+            parent,
+            style=wx.YES_NO | wx.CANCEL | wx.YES_DEFAULT,
+            message=("\nTo recalibrate the sample holder (%016x), ensure that an empty glass "
+                     "sample is present\n") % shid,
+            caption="Recalibrate sample holder")
+
+        print self.SetYesNoLabels("&Automatic", "&Manual")
+
+
 class CalibrationProgressDialog(xrcprogress_dialog):
     """ Wrapper class responsible for the connection between delphi calibration
     future and the xrcprogress_dialog.
@@ -127,7 +156,7 @@ class CalibrationProgressDialog(xrcprogress_dialog):
                                                                   self.gauge,
                                                                   self.time_txt)
         self.calib_future.add_done_callback(self.on_calib_done)
-    #     self.calib_future.add_update_callback(self.on_calib_update)
+        # self.calib_future.add_update_callback(self.on_calib_update)
 
     # def update_calibration_time(self, time):
     #     txt = "Time remaining: {}"

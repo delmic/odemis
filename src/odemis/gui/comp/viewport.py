@@ -810,15 +810,16 @@ class PlotViewport(ViewPort):
         self.canvas.Refresh()
 
     def connect_stream(self, _):
+        """ Find the most appropriate stream in the view to be displayed, and make sure the display
+        is updated when the stream is updated.
+
         """
-        Find the most appropriate stream in the view to be displayed, and make
-        sure the display is updated when the stream is updated.
-        """
+
         ss = self._microscope_view.getStreams()
-        # Most of the time, there is only one stream, but in some cases, there
-        # might be more.
+        # Most of the time, there is only one stream, but in some cases, there might be more.
         # TODO: filter based on the type of stream?
         # ss = self.microscope_view.stream_tree.get_streams_by_type(MonochromatorSettingsStream)
+
         if not ss:
             stream = None
         elif len(ss) > 1:
@@ -852,9 +853,11 @@ class PlotViewport(ViewPort):
         self.stream = stream
         if stream:
             logging.debug("Connecting %s to plotviewport", stream)
+
             # Hack: StaticSpectrumStream contain a 2D spectrum in .image, and
             # to get the point spectrum we need to use get_pixel_spectrum() and
             # listen to selected_pixel VA.
+
             if hasattr(self.stream, 'selected_pixel'):
                 self.stream.selected_pixel.subscribe(self._on_pixel_select, init=True)
             elif hasattr(self.stream, 'image'):
@@ -904,6 +907,8 @@ class PointSpectrumViewport(PlotViewport):
             if self.stream is not None:
                 data = self.stream.get_pixel_spectrum()
                 if data is not None:
+                    # cancel previous fitting if there is one in progress
+                    self._peak_future.cancel()
                     spectrum_range = self.stream.get_spectrum_range()
                     unit_x = self.stream.spectrumBandwidth.unit
                     # cancel previous fitting if there is one in progress
@@ -1040,6 +1045,9 @@ class ChronographViewport(PlotViewport):
         else:
             self.clear()
         self.Refresh()
+
+    def _on_pixel_select(self, pixel):
+        pass
 
 
 class SpatialSpectrumViewport(ViewPort):

@@ -34,6 +34,7 @@ import os
 from odemis import model, gui
 import odemis
 from odemis.gui import main_xrc, log
+from odemis.gui.conf import get_general_conf
 from odemis.gui.cont import acquisition
 from odemis.gui.cont.menu import MenuController
 from odemis.gui.util import call_in_wx_main
@@ -57,7 +58,11 @@ class OdemisGUIApp(wx.App):
 
     def __init__(self, standalone=False, file_name=None):
         """
-        standalone (boolean): do not try to connect to the backend
+
+        Args:
+            standalone: (bool or str) False, if not standalone, name string otherwise
+            file_name: (str) Path to the file to open on launch
+
         """
         # Replace the standard 'get_resources' with our augmented one, that
         # can handle more control types. See the xhandler package for more info.
@@ -79,7 +84,7 @@ class OdemisGUIApp(wx.App):
         l = logging.getLogger()
         self.log_level = l.getEffectiveLevel()
 
-        if not standalone:
+        if not self._is_standalone:
             try:
                 driver.speedUpPyroConnect(model.getMicroscope())
             except Exception:
@@ -107,9 +112,16 @@ class OdemisGUIApp(wx.App):
 
         if self._is_standalone:
             microscope = None
-            # Set the name and icon
-            gui.icon = imgdata.catalog['ico_gui_viewer_256'].GetIcon()
-            gui.name = odemis.__shortname__ + "Viewer"
+
+            if "delphi" == self._is_standalone:
+                # Set the name and icon
+                gui.icon = imgdata.catalog['ico_gui_viewer_256'].GetIcon()
+                gui.name = "DelphiViewer"
+                gui.logo = imgdata.getlogo_delphiBitmap()
+            else:
+                # Set the name and icon
+                gui.icon = imgdata.catalog['ico_gui_viewer_256'].GetIcon()
+                gui.name = odemis.__shortname__ + "Viewer"
         else:
             gui.icon = imgdata.catalog['ico_gui_full_256'].GetIcon()
             gui.name = odemis.__shortname__
@@ -151,9 +163,10 @@ class OdemisGUIApp(wx.App):
             logging.exception("Failed to load Powermate support")
 
         if os.name == 'nt' and getattr(sys, 'frozen', False):
-            import odemis.gui.util.updater as updater
-            u = updater.WindowsUpdater()
-            wx.CallLater(1000, u.check_for_update)
+            if get_general_conf().get("viewer", "update") == "yes":
+                import odemis.gui.util.updater as updater
+                u = updater.WindowsUpdater()
+                wx.CallLater(1000, u.check_for_update)
 
         # Application successfully launched
         return True
@@ -166,6 +179,7 @@ class OdemisGUIApp(wx.App):
             ib = wx.IconBundle()
             ib.AddIcon(gui.icon)
             self.main_frame.SetIcons(ib)
+            self.main_frame.SetTitle(gui.name)
 
             self.main_data.debug.subscribe(self.on_debug_va, init=True)
             self.main_data.level.subscribe(self.on_level_va, init=False)
@@ -290,8 +304,9 @@ class OdemisGUIApp(wx.App):
             self._snapshot_controller = acquisition.SnapshotController(self.main_data,
                                                                        self.main_frame)
 
-            if self.main_data.role == "delphi":
-                self.main_frame.logo.SetBitmap(imgdata.getlogo_delphiBitmap())
+            # Update the logo if a non-default logo is defined
+            if gui.logo:
+                self.main_frame.logo.SetBitmap(gui.logo)
 
             self.main_frame.Maximize()  # must be done before Show()
             # making it very late seems to make it smoother

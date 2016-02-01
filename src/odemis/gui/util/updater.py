@@ -30,16 +30,21 @@ import urllib2
 import wx
 
 import odemis
+from odemis.gui.conf import get_general_conf
 
 VERSION_FILE = "version.txt"
 INSTALLER_FILE = "OdemisViewer-%s.exe"
-
+VIEWER_NAME = "Odemis Viewer"
 VIEWER_ROOT_URL = "http://www.delmic.com/odemisviewer/"
 
 
 class WindowsUpdater:
     def __init__(self):
-        pass
+        if wx.GetApp()._is_standalone == "delphi":
+            global INSTALLER_FILE
+            global VIEWER_NAME
+            INSTALLER_FILE = "DelphiViewer-%s.exe"
+            VIEWER_NAME = "Delphi Viewer"
 
     @staticmethod
     def get_local_version():
@@ -114,21 +119,30 @@ class WindowsUpdater:
 
         self.show_update_dialog(web_version, web_size)
 
-    def show_update_dialog(self, remote_version, web_size):
+    def show_update_dialog(self, web_version, web_size):
         """ Show update dialog
 
         Args:
-            remote_version: (str) Version of the installer on the website
+            web_version: (str) Version of the installer on the website
             web_size: (str) The byte size of the installer
         """
 
         answer = wx.MessageBox(
-            'Version %s of Odemis viewer is available.\n\nDo you want to update?' % remote_version,
+            'Version %s of %s is available.\n\nDo you want to update?' % (web_version, VIEWER_NAME),
             "New version available", wx.YES_NO | wx.ICON_INFORMATION
         )
 
         if answer == wx.YES:
-            self.download_installer(remote_version, web_size)
+            self.download_installer(web_version, web_size)
+        else:
+            answer = wx.MessageBox(
+                "Would you like to be notified of future updates to %s?" % VIEWER_NAME,
+                "Update checker", wx.YES_NO | wx.ICON_QUESTION
+            )
+
+            if answer == wx.NO:
+                conf = get_general_conf()
+                conf.set("viewer", "update", "no")
 
     def download_installer(self, remote_version, web_size):
 
@@ -151,7 +165,7 @@ class WindowsUpdater:
 
             pdlg = wx.ProgressDialog(
                 "Downloading update...",
-                "The new Odemis Viewer installer is being downloaded.",
+                "The new %s installer is being downloaded." % VIEWER_NAME,
                 maximum=maximum,
                 parent=wx.GetApp().main_frame,
                 style=wx.PD_CAN_ABORT | wx.PD_APP_MODAL | wx.PD_ELAPSED_TIME)
