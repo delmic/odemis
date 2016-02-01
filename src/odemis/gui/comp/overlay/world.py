@@ -817,16 +817,30 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, PixelDataMixin):
 
     def connect_selection(self, selection_va, width_va, pixel_va=None):
         """ Connect the overlay to an external selection VA so it can update itself on value changes
+
+        Args:
+            selection_va: (VA)((int, int), (int, int)) position of the start and end pixels
+            width_va: (VA)(int) the width of the selection line
+            pixel_va: (VA) (int, int) a pixel on the on the selected line
+
         """
+
         self.clear_selection()
+
+        if self._selected_line_va:
+            self._selected_line_va.unsubscribe(self._on_selection)
+        if self._selected_width_va:
+            self._selected_width_va.unsubscribe(self._on_width)
+
         self._selected_line_va = selection_va
         self._selected_width_va = width_va
-        self._selected_line_va.subscribe(self._on_selection, init=True)
-        self._selected_width_va.subscribe(self._on_width, init=False)
         self._selected_pixel_va = pixel_va
 
+        self._selected_line_va.subscribe(self._on_selection, init=True)
+        self._selected_width_va.subscribe(self._on_width, init=False)
+
     def _on_selection(self, selected_line):
-        """ Event handler that requests a redraw when the selected line changes """
+        """ Update the overlay when it's active and the line changes """
 
         if selected_line and self.active:
             self.start_pixel, self.end_pixel = selected_line
@@ -843,20 +857,28 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, PixelDataMixin):
             wx.CallAfter(self.cnvs.update_drawing)
 
     def _on_width(self, _):
+        """ Update the overlay when it's active and the line width changes """
         if self.active:
             wx.CallAfter(self.cnvs.update_drawing)
 
-    def selection_points(self, point):
-        """ Calculate the surrounding points around the given point according to the selection width
+    def get_selection_points(self, pixel):
+        """ Calculate the points around the given point according to the selection width
+
+        Args:
+            pixel: (int, int) the selected data pixel at the center
+
+        Returns:
+            [(int, int)]: List of (int, int) coordinates
+
         """
 
-        if point is None or None in point:
+        if pixel is None or None in pixel:
             return []
 
         if self._selected_width_va.value == 1:
-            return [point]
+            return [pixel]
 
-        x, y = point
+        x, y = pixel
         radius = self._selected_width_va.value / 2
         w, h = self._data_resolution
         points = []
@@ -883,7 +905,7 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, PixelDataMixin):
         points = [p for p in points if 0 <= p[0] < w and 0 <= p[1] < h]
 
         selected_pixel = self._selected_pixel_va.value if self._selected_pixel_va else None
-        selected_pixels = self.selection_points(selected_pixel)
+        selected_pixels = self.get_selection_points(selected_pixel)
 
         for point in set(points):
             if point in selected_pixels:
@@ -927,9 +949,11 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, PixelDataMixin):
                 self.start_pixel = self.end_pixel = (None, None)
                 self.clear_selection()
 
-            self._selected_line_va.value = (self.start_pixel, self.end_pixel)
-            # Also set the pixel to something valid
-            self._selected_pixel_va.value = self.start_pixel
+            if self._selected_line_va:
+                self._selected_line_va.value = (self.start_pixel, self.end_pixel)
+            if self._selected_pixel_va:
+                # Also set the pixel to something valid
+                self._selected_pixel_va.value = self.start_pixel
         else:
             LineSelectOverlay.on_left_up(self, evt)
 
@@ -983,17 +1007,27 @@ class PixelSelectOverlay(WorldOverlay, PixelDataMixin, DragMixin):
         self.select_color = conversion.hex_to_frgba(gui.FG_COLOUR_HIGHLIGHT, 0.5)
 
     def connect_selection(self, selection_va, width_va):
+
+        if self._selected_pixel_va:
+            self._selected_pixel_va.unsubscribe(self._on_selection)
+        if self._selected_width_va:
+            self._selected_width_va.unsubscribe(self._on_width)
+
         self._selected_pixel_va = selection_va
         self._selected_width_va = width_va
+
         self._selected_pixel_va.subscribe(self._on_selection, init=True)
         self._selected_width_va.subscribe(self._on_width, init=False)
 
     def _on_selection(self, _):
-        """ Event handler that requests a redraw when the selected line changes """
-        wx.CallAfter(self.cnvs.update_drawing)
+        """ Update the overlay when it's active and the line changes """
+        if self.active:
+            wx.CallAfter(self.cnvs.update_drawing)
 
     def _on_width(self, _):
-        wx.CallAfter(self.cnvs.update_drawing)
+        """ Update the overlay when it's active and the line width changes """
+        if self.active:
+            wx.CallAfter(self.cnvs.update_drawing)
 
     def deactivate(self):
         """ Clear the hover pixel when the overlay is deactivated """

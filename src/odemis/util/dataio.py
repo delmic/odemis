@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 7 Dec 2015
 
 @author: Éric Piel
@@ -8,12 +8,18 @@ Copyright © 2015 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License version 2 as published by the Free Software Foundation.
+Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU
+General Public License version 2 as published by the Free Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even
+the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
+Public License for more details.
 
-You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+You should have received a copy of the GNU General Public License along with Odemis. If not,
+see http://www.gnu.org/licenses/.
+
+"""
+
 from __future__ import division
 
 import logging
@@ -24,13 +30,21 @@ from odemis.acq import stream
 
 def data_to_static_streams(data):
     """ Split the given data into static streams
-    :param data: (list of DataArrays) Data to be split
-    :return: (list) A list of Stream instances
+
+    Args:
+        data: (list of DataArrays) Data to be split
+
+    Returns:
+        (list) A list of Stream instances
+
     """
+
     result_streams = []
 
     # AR data is special => all merged in one big stream
     ar_data = []
+
+    logging.debug("Processing %s data arrays", len(data))
 
     # Add each data as a stream of the correct type
     for d in data:
@@ -42,18 +56,27 @@ def data_to_static_streams(data):
         # TODO: first guess based on the raw data, and then, if needed, try
         # again, for each 3rd dim.
 
-        # Streams only support 2D data (e.g., no multiple channels like RGB)
-        # except for spectra which have a 3rd dimensions on dim 5.
-        # So if that's the case => separate into one stream per channel
+        # Streams only support 2D data (e.g., no multiple channels like RGB) except for spectra
+        # which have a 3rd dimension on dim 5.  So if that's the case => separate into one stream
+        # per channel
         channels_data = _split_channels(d)
+
+        logging.debug("Processing %s channels in current data array", len(channels_data))
 
         for channel_data in channels_data:
             # TODO: be more clever to detect the type of stream
-            if ((model.MD_WL_LIST in channel_data.metadata or
-                 model.MD_WL_POLYNOMIAL in channel_data.metadata) and
-                (len(channel_data.shape) >= 5 and channel_data.shape[-5] > 1) or
-               (len(channel_data.shape) >= 5 and channel_data.shape[-5] >= 5)
-               ):
+            if (
+                (
+                    model.MD_WL_LIST in channel_data.metadata or
+                    model.MD_WL_POLYNOMIAL in channel_data.metadata
+                ) and
+                (
+                    len(channel_data.shape) >= 5 and channel_data.shape[-5] > 1
+                ) or
+                (
+                    len(channel_data.shape) >= 5 and channel_data.shape[-5] >= 5
+                )
+            ):
                 # Spectrum: either it's obvious based on metadata, or no metadata
                 # but lots of wavelengths, so no other way to display
                 name = channel_data.metadata.get(model.MD_DESCRIPTION, "Spectrum")
@@ -109,9 +132,12 @@ def data_to_static_streams(data):
 def _split_channels(data):
     """ Separate a DataArray into multiple DataArrays along the 3rd dimension (channel)
 
-    :param data: (DataArray) can be any shape
-    :return: (list of DataArrays) a list of one DataArray (if no splitting is needed) or more
-        (if splitting happened). The metadata is the same (object) for all the DataArrays.
+    Args:
+        data: (DataArray) can be any shape
+
+    Returns:
+        (list of DataArrays): a list of one DataArray (if no splitting is needed) or more (if
+            splitting happened). The metadata is the same (object) for all the DataArrays.
 
     """
 

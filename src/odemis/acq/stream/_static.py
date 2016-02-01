@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 25 Jun 2014
 
 @author: Éric Piel
@@ -8,12 +8,17 @@ Copyright © 2014-2015 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License version 2 as published by the Free Software Foundation.
+Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU
+General Public License version 2 as published by the Free Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even
+the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
+Public License for more details.
 
-You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+You should have received a copy of the GNU General Public License along with Odemis. If not,
+see http://www.gnu.org/licenses/.
+
+"""
 
 # Contains all the static streams, which only provide projections of the data
 # they were initialised with.
@@ -444,14 +449,12 @@ class StaticSpectrumStream(StaticStream):
         # TODO: allow to pass the calibration data as argument to avoid
         # recomputing the data just after init?
         # Spectrum efficiency compensation data: None or a DataArray (cf acq.calibration)
-        self.efficiencyCompensation = model.VigilantAttribute(None,
-                                                      setter=self._setEffComp)
+        self.efficiencyCompensation = model.VigilantAttribute(None, setter=self._setEffComp)
 
-        # The background data (typically, an acquisition without ebeam).
+        # The background data (typically, an acquisition without e-beam).
         # It is subtracted from the acquisition data.
         # If set to None, a simple baseline background value is subtracted.
-        self.background = model.VigilantAttribute(None,
-                                                  setter=self._setBackground)
+        self.background = model.VigilantAttribute(None, setter=self._setBackground)
 
         # low/high values of the spectrum displayed
         self.spectrumBandwidth = model.TupleContinuous(
@@ -469,8 +472,7 @@ class StaticSpectrumStream(StaticStream):
         self.selected_pixel = model.TupleVA((None, None))  # int, int
 
         # first point, second point in pixels. It must be 2 elements long.
-        self.selected_line = model.ListVA([(None, None), (None, None)],
-                                          setter=self._setLine)
+        self.selected_line = model.ListVA([(None, None), (None, None)], setter=self._setLine)
 
         # Peak method index, None if spectrum peak fitting curve is not displayed
         self.peak_method = model.VAEnumerated("gaussian", {"gaussian", "lorentzian", None})
@@ -489,7 +491,7 @@ class StaticSpectrumStream(StaticStream):
         self.background.subscribe(self._onCalib)
         self.selectionWidth.subscribe(self._onSelectionWidth)
 
-        self._calibrated = image # the raw data after calibration
+        self._calibrated = image  # the raw data after calibration
         super(StaticSpectrumStream, self).__init__(name, [image])
 
     # The tricky part is we need to keep the raw data as .raw for things

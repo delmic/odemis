@@ -1801,7 +1801,6 @@ class PlotCanvas(BufferedCanvas):
             ordered and not duplicated.
 
         """
-
         if data:
             # Check if sorted
             s = all(data[i][0] < data[i + 1][0] for i in xrange(len(data) - 1))
