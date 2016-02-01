@@ -18,7 +18,13 @@ def run(flavor):
     installThreadExcepthook()
 
     log.init_logger(logging.INFO)
-    app = OdemisGUIApp(standalone=flavor)
+
+    filename = None
+
+    if len(sys.argv) > 1 and os.path.exists(sys.argv[-1]):
+        filename = sys.argv[-1]
+
+    app = OdemisGUIApp(standalone=flavor, file_name=filename)
 
     # Change exception hook so unexpected exception
     # get caught by the logger
