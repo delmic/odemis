@@ -22,17 +22,10 @@ see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
-import logging
-import math
-import os
-import threading
-import time
-import wx
-
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
     RUNNING
-
-import odemis.acq.align.delphi as aligndelphi
+import logging
+import math
 from odemis import model
 from odemis.acq import align
 from odemis.acq._futures import executeTask
@@ -40,8 +33,12 @@ from odemis.acq.align import autofocus
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import ProgressiveFutureConnector
 from odemis.gui.win.dialog_xrc import xrcprogress_dialog
+import subprocess
+import threading
+import time
+import wx
 
-DELPHI_OPT_GOOD_FOCUS = 0.03826  # somehow possibly not too bad focus position
+import odemis.acq.align.delphi as aligndelphi
 
 
 # code based on the wxPython demo TestDialog class
@@ -121,15 +118,25 @@ class RecalibrationDialog(wx.MessageDialog):
 
     """
 
-    def __init__(self, parent, shid):
+    def __init__(self, parent):
         super(RecalibrationDialog, self).__init__(
             parent,
             style=wx.YES_NO | wx.CANCEL | wx.YES_DEFAULT,
-            message=("\nTo recalibrate the sample holder (%016x), ensure that an empty glass "
-                     "sample is present\n") % shid,
+            message="Select the type of calibration to perform.",
             caption="Recalibrate sample holder")
+        self.SetExtendedMessage(
+                "Recalibration of the sample holder is generally "
+                "only needed after the Delphi has been physically moved.\n"
+                "Always make sure that an empty glass sample is present.\n"
+                "\n"
+                "Automatic calibration attempts to run all the "
+                "calibration automatically and takes about 15 minutes.\n"
+                "\n"
+                "Manual calibration allows you to select which part of the "
+                "calibration to re-run and to assist it. It can take up to 45 minutes.")
 
-        print self.SetYesNoLabels("&Automatic", "&Manual")
+        self.EnableLayoutAdaptation(True)
+        self.SetYesNoLabels("&Automatic", "&Manual")
 
 
 class CalibrationProgressDialog(xrcprogress_dialog):
@@ -173,7 +180,7 @@ class CalibrationProgressDialog(xrcprogress_dialog):
             self.calib_future.cancel()
 
         if self.cancel_btn.GetLabel() == "Run":
-            os.system("gnome-terminal -e 'python -m odemis.acq.align.delphi_man_calib &'")
+            ManualCalibration()
 
         self.Destroy()
 
@@ -310,6 +317,8 @@ def _DoDelphiCalibration(future, main_data, first_insertion=True, known_first_ho
                 break
         else:
             raise IOError("Failed to find the overview pressure in %s" % (pressures,))
+
+        # raise IOError("Boooo") # For debugging manual calibration
 
         if future._delphi_calib_state == CANCELLED:
             raise CancelledError()
@@ -505,3 +514,17 @@ def estimateDelphiCalibration():
     """
     # Rough approximation
     return 15 * 60  # s
+
+
+def ManualCalibration():
+    """
+    Run the manual calibration (in a separate thread so that the GUI is still
+    accessible)
+    """
+    threading.Thread(target=_threadManualCalib).start()
+
+
+def _threadManualCalib():
+    logging.info("Starting manual calibration for sample holder")
+    ret = subprocess.call(["gnome-terminal", "-e", "python -m odemis.acq.align.delphi_man_calib"])
+    logging.info("Manual calibration returned %d", ret)

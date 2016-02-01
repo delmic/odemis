@@ -59,11 +59,11 @@ class MenuController(object):
 
         # /File/Save (as), is handled by the snapshot controller
 
+        menu_file = main_frame.GetMenuBar().GetMenu(0)
         # Assign 'Reset fine alignment' functionality (if the tab exists)
         try:
             main_data.getTabByName("secom_align")
         except LookupError:
-            menu_file = main_frame.GetMenuBar().GetMenu(0)
             menu_file.RemoveItem(main_frame.menu_item_reset_finealign)
         else:
             wx.EVT_MENU(main_frame,
@@ -75,15 +75,14 @@ class MenuController(object):
                         main_frame.menu_item_halt.GetId(),
                         self.on_stop_axes)
         else:
-            menu_file = main_frame.GetMenuBar().GetMenu(0)
             menu_file.RemoveItem(main_frame.menu_item_halt)
 
-        # /File/Quit is handled by main
-
+        # /File/Recalibrate Sample Holder (only on Delphi)
+        # The event is handled by the DelphiStateController
         if self._main_data.role != "delphi":
-            # Remove the Delphi recalibration menu item
-            calib_id = self._main_frame.menu_item_recalibrate.GetId()
-            self._main_frame.GetMenuBar().GetMenu(0).Delete(calib_id)
+            menu_file.RemoveItem(main_frame.menu_item_recalibrate)
+
+        # /File/Quit is handled by main
 
         # /View
 

@@ -517,7 +517,7 @@ def __init_resources():
           </XRCED>
         </object>
         <object class="wxMenuItem" name="menu_item_recalibrate">
-          <label>Recalibrate Sample Holder</label>
+          <label>Recalibrate Sample Holder...</label>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>

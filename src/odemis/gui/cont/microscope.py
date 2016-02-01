@@ -657,6 +657,7 @@ class DelphiStateController(SecomStateController):
 
     def __init__(self, *args, **kwargs):
         super(DelphiStateController, self).__init__(*args, **kwargs)
+        self._main_frame = self._tab_panel.Parent
         self._calibconf = get_calib_conf()
 
         # Display the panel with the loading progress indicators
@@ -669,6 +670,13 @@ class DelphiStateController(SecomStateController):
             # calibration should have already been done.
             self._load_holder_calib()
             self._show_progress_indicators(False, True)
+
+        # Connect the Delphi recalibration to the menu item
+        wx.EVT_MENU(
+                self._main_frame,
+                self._main_frame.menu_item_recalibrate.GetId(),
+                self.request_holder_recalib
+            )
 
         # Progress dialog for calibration
         self._dlg = None
@@ -713,7 +721,7 @@ class DelphiStateController(SecomStateController):
         except Exception as exp:
             # something went wrong => just eject the sample holder
             logging.exception("Loading the sample holder failed")
-            dlg = wx.MessageDialog(self._tab_panel.Parent,
+            dlg = wx.MessageDialog(self._main_frame,
                                    "The loading of the sample holder failed.\n"
                                    "Error: %s\n\n"
                                    "If the problem persists, contact the support service.\n"
@@ -837,7 +845,7 @@ class DelphiStateController(SecomStateController):
             # couldn't be read. So instead of asking the user to calibrate it,
             # just tell the user to try to insert the sample holder again.
             if shid == 0:
-                dlg = wx.MessageDialog(self._tab_panel.Parent,
+                dlg = wx.MessageDialog(self._main_frame,
                                        "The connection with the sample holder failed.\n\n"
                                        "Make sure the pins are clean and try re-inserting it.\n"
                                        "If the problem persists, contact the support service.\n"
@@ -883,7 +891,10 @@ class DelphiStateController(SecomStateController):
 
     @call_in_wx_main
     def request_holder_recalib(self, _=None):
-        """ Recalibration the sample holder """
+        """ Recalibration the sample holder
+        This method is asynchronous (running in the main GUI thread)
+        _: (wx.Event) Empty place holder, so this method can be attached to menu items
+        """
 
         shid, sht = self._main_data.chamber.sampleHolder.value
 
@@ -896,9 +907,8 @@ class DelphiStateController(SecomStateController):
             )
             return
 
-
-        # Returns 'yes' for automataic, 'no' for manual
-        dlg = windelphi.RecalibrationDialog(self._tab_panel.Parent, shid)
+        # Returns 'yes' for automatic, 'no' for manual
+        dlg = windelphi.RecalibrationDialog(self._main_frame)
         val = dlg.ShowModal()  # blocks
         dlg.Destroy()
 
@@ -908,13 +918,9 @@ class DelphiStateController(SecomStateController):
             self._run_full_calibration(shid)
         # Manual recalibration
         elif val == wx.ID_NO:
-            # TODOL The manual calibration command can also be found in the win/delphi module and
-            # should probably be defined elsewhere
-            logging.info("Starting manual recalibration for sample holder")
-            os.system("gnome-terminal -e 'python -m odemis.acq.align.delphi_man_calib &'")
+            windelphi.ManualCalibration()
         else:
-            logging.info("Recalibration cancelled")
-
+            logging.debug("Recalibration cancelled")
 
     @call_in_wx_main
     def request_holder_calib(self, _=None):
@@ -924,10 +930,6 @@ class DelphiStateController(SecomStateController):
         When this method returns, the sample holder will have been ejected,
         independently of whether the calibration has worked or not.
         This method is asynchronous (running in the main GUI thread)
-
-        Args:
-            _: (wx.Event) Empty place holder, so this method can be attached to menu items
-
         """
 
         shid, sht = self._main_data.chamber.sampleHolder.value
@@ -942,7 +944,7 @@ class DelphiStateController(SecomStateController):
         else:
             need_register = False
 
-        dlg = windelphi.FirstCalibrationDialog(self._tab_panel.Parent, shid, need_register)
+        dlg = windelphi.FirstCalibrationDialog(self._main_frame, shid, need_register)
         val = dlg.ShowModal()  # blocks
         regcode = dlg.registrationCode
         dlg.Destroy()
@@ -953,7 +955,7 @@ class DelphiStateController(SecomStateController):
                 try:
                     self._main_data.chamber.registerSampleHolder(regcode)
                 except ValueError as ex:
-                    dlg = wx.MessageDialog(self._tab_panel.Parent,
+                    dlg = wx.MessageDialog(self._main_frame,
                                            "Failed to register: %s" % ex,
                                            "Sample holder registration failed",
                                            wx.OK | wx.ICON_WARNING)
@@ -977,7 +979,7 @@ class DelphiStateController(SecomStateController):
         # TODO: once the hole focus is not fixed, save it in the config too
         # Perform calibration and update the progress dialog
         calib_dialog = CalibrationProgressDialog(
-            self._tab_panel.Parent,
+            self._main_frame,
             self._main_data,
             self._calibconf,
             shid
