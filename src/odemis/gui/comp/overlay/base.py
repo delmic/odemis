@@ -272,16 +272,18 @@ class Overlay(object):
         # Calculate the rendering position
         if not l.render_pos:
             x, y = l.pos
-            # Cairo renders text from the bottom left, but we want to treat
-            # the top left as the origin. So we need to add the height (lower the
-            # render point), to make the given position align with the top left.
-            y += l.font_size
 
             lw, lh = 0, 0
+            plh = l.font_size  # default to font size, but should always get updated
             for p in parts:
                 plw, plh = ctx.text_extents(p)[2:4]
                 lw = max(lw, plw)
                 lh += plh
+
+            # Cairo renders text from the bottom left, but we want to treat
+            # the top left as the origin. So we need to add the height (lower the
+            # render point), to make the given position align with the top left.
+            y += plh
 
             if isinstance(self, ViewOverlay):
                 # Apply padding

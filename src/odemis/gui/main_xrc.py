@@ -3336,19 +3336,6 @@ def __init_resources():
                           <flag>wxALL</flag>
                           <border>10</border>
                         </object>
-                        <object class="sizeritem">
-                          <object class="wxHtmlWindow" name="html_moi_doc">
-                            <size>-1,400</size>
-                            <fg>#BBBBBB</fg>
-                            <bg>#333333</bg>
-                            <style>wxHW_SCROLLBAR_NEVER|wxHW_NO_SELECTION</style>
-                            <XRCED>
-                              <assign_var>1</assign_var>
-                            </XRCED>
-                          </object>
-                          <flag>wxALL|wxEXPAND|wxALIGN_BOTTOM|wxALIGN_CENTRE_VERTICAL</flag>
-                          <border>10</border>
-                        </object>
                       </object>
                       <bg>#333333</bg>
                       <hidden>1</hidden>
@@ -3357,6 +3344,20 @@ def __init_resources():
                       </XRCED>
                     </object>
                     <flag>wxEXPAND</flag>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxHtmlWindow" name="html_moi_doc">
+                      <size>-1,400</size>
+                      <fg>#BBBBBB</fg>
+                      <bg>#333333</bg>
+                      <style>wxHW_SCROLLBAR_NEVER|wxHW_NO_SELECTION</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <option>1</option>
+                    <flag>wxALL|wxEXPAND|wxALIGN_BOTTOM|wxALIGN_CENTRE_VERTICAL</flag>
+                    <border>5</border>
                   </object>
                 </object>
                 <size>400,-1</size>

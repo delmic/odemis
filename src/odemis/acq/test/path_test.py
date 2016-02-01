@@ -75,6 +75,7 @@ class SimPathTestCase(unittest.TestCase):
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
+        del cls.optmngr  # To garbage collect it
         test.stop_backend()
 
     def setUp(self):
@@ -185,6 +186,7 @@ class MonashPathTestCase(unittest.TestCase):
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
+        del cls.optmngr  # To garbage collect it
         test.stop_backend()
 
     def setUp(self):
@@ -306,13 +308,14 @@ class SpecPathTestCase(unittest.TestCase):
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
+        del cls.optmngr  # To garbage collect it
         test.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:
             self.skipTest("Running backend found")
 
-#    @skip("simple")
+#     @skip("simple")
     def test_wrong_mode(self):
         """
         Test setting mode that does not exist
@@ -320,7 +323,7 @@ class SpecPathTestCase(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.optmngr.setPath("ErrorMode").result()
 
-#    @skip("simple")
+#     @skip("simple")
     def test_set_path(self):
         """
         Test setting modes that do exist, but not available.
@@ -402,6 +405,7 @@ class Sparc2PathTestCase(unittest.TestCase):
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
+        del cls.optmngr  # To garbage collect it
         test.stop_backend()
 
     def setUp(self):
@@ -679,6 +683,7 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
+        del cls.optmngr  # To garbage collect it
         test.stop_backend()
 
     def setUp(self):

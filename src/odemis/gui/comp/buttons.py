@@ -504,10 +504,19 @@ class ImageTextToggleButton(BtnMixin, wxbuttons.GenBitmapTextToggleButton):
 # Event signaling that button state has been changed
 state_changed_event, EVT_STATE_CHANGED = wx.lib.newevent.NewEvent()
 
-class ImageStateButtonImageButton(ImageToggleButtonImageButton):
+class ImageStateButton(ImageToggleButtonImageButton):
+    """
+    Multi-state graphical button that can switch between any number of states/images.
+    The default bitmap image is used for state 0, and bmpSelected* contain a
+    list of images for state 1 and more. The values the state can take is 0 to
+    the number of images in bmpSelected.
+    """
     def __init__(self, *args, **kwargs):
         super(ImageToggleButtonImageButton, self).__init__(*args, **kwargs)
         self.state = 0
+        # TODO: the .up/.saveUp are for __ToggleMixin, so that it restores the
+        # previous state if the mouse goes out of the button. But that doesn't
+        # work with the state.
         self.up = False
 
     def DrawLabel(self, dc, width, height, dx=0, dy=0):
@@ -556,6 +565,8 @@ class ImageStateButtonImageButton(ImageToggleButtonImageButton):
             else:
                 self.up = False
                 self.state += 1
+            # TODO: this is wrong, event should happen on left up (if it's still
+            # on the button at this time).
             event = state_changed_event(state=self.state)
             wx.PostEvent(self, event)
         else:

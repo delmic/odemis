@@ -1,14 +1,24 @@
 # -*- coding: utf-8 -*-
-import cairo
+
+"""
+Install  PyOpenGL using:
+
+`sudo apt-get  install python-opengl`
+
+or
+
+`pip install PyOpenGL PyOpenGL_accelerate`
+
+
+"""
+
 import numpy
 
 import wx
-import wx.lib.wxcairo as wxcairo
 import math
 import time
 
 import odemis.gui.img.data as imgdata
-from odemis.gui.img.data import getlogo_delphiImage
 from odemis.gui.test import generate_img_data
 
 

@@ -24,7 +24,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
-from collections import OrderedDict
+import pkg_resources
 import collections
 from concurrent.futures import CancelledError
 import logging
@@ -54,9 +54,7 @@ from odemis.gui.util.widgets import ProgressiveFutureConnector, AxisConnector
 from odemis.util import units
 from odemis.util.dataio import data_to_static_streams
 import os.path
-import pkg_resources
 import scipy.misc
-import threading
 import weakref
 # IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
 # file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
@@ -326,7 +324,7 @@ class SecomStreamsTab(Tab):
             wx.EVT_MENU(
                     self.main_frame,
                     self.main_frame.menu_item_recalibrate.GetId(),
-                    self._state_controller.request_holder_calib
+                    self._state_controller.request_holder_recalib
             )
 
         # For remembering which streams are paused when hiding the tab
@@ -2670,7 +2668,7 @@ class Sparc2AlignTab(Tab):
         # * lens-align: first auto-focus spectrograph, then align lens1
         # * goal-align: find the center of the AR image using a "Goal" image
         # * fiber-align: move x, y of the fibaligner with mean of spectrometer as feedback
-        self._alignbtn_to_mode = OrderedDict((
+        self._alignbtn_to_mode = collections.OrderedDict((
             (panel.btn_align_lens, "lens-align"),
             (panel.btn_align_mirror, "mirror-align"),
             (panel.btn_align_centering, "center-align"),
@@ -2884,8 +2882,6 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_focus.Enable(False)
             self.panel.pnl_moi_settings.Show(True)
             self.panel.pnl_fibaligner.Enable(False)
-            self.panel.pnl_moi_settings.Parent.Layout()
-            self.panel.html_moi_doc.Parent.Layout()
         elif mode == "center-align":
             self.tab_data_model.focussedView.value = self.panel.vp_align_center.microscope_view
             self._ccd_stream.should_update.value = True
@@ -2910,6 +2906,8 @@ class Sparc2AlignTab(Tab):
             f.add_done_callback(self._on_fibalign_done)
         else:
             raise ValueError("Unknown alignment mode %s!" % mode)
+        # To adapt to the pnl_moi_settings showing on/off
+        self.panel.html_moi_doc.Parent.Layout()
 
     def _on_fibalign_done(self, f):
         """
