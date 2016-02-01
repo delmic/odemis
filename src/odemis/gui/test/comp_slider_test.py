@@ -164,7 +164,7 @@ class SliderTestCase(test.GuiTestCase):
         # It works correctly if the gui_loop is added, otherwise GetValue
         # is called before SetValue and things go wrong
 
-        test.gui_loop()
+        test.gui_loop(100)
 
         self.assertEqual(va.value, start_val)
         self.assertEqual(slider.GetValue(), start_val)
@@ -178,7 +178,7 @@ class SliderTestCase(test.GuiTestCase):
 
         va.value = next_val
 
-        test.gui_loop()
+        test.gui_loop(100)
 
         self.assertEqual(va.value, next_val)
         self.assertEqual(slider.GetValue(), next_val)

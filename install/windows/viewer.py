@@ -13,17 +13,25 @@ else:
 from odemis.gui import log
 from odemis.gui.main import OdemisGUIApp, installThreadExcepthook
 
-installThreadExcepthook()
 
-log.init_logger(logging.INFO)
-app = OdemisGUIApp(standalone=True)
+def run(flavor):
+    installThreadExcepthook()
 
-# Change exception hook so unexpected exception
-# get caught by the logger
-backup_excepthook, sys.excepthook = sys.excepthook, app.excepthook
+    log.init_logger(logging.INFO)
 
-# Start the application
-app.MainLoop()
-app.Destroy()
+    filename = None
 
-sys.excepthook = backup_excepthook
+    if len(sys.argv) > 1 and os.path.exists(sys.argv[-1]):
+        filename = sys.argv[-1]
+
+    app = OdemisGUIApp(standalone=flavor, file_name=filename)
+
+    # Change exception hook so unexpected exception
+    # get caught by the logger
+    backup_excepthook, sys.excepthook = sys.excepthook, app.excepthook
+
+    # Start the application
+    app.MainLoop()
+    app.Destroy()
+
+    sys.excepthook = backup_excepthook

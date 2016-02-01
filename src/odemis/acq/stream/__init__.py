@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 25 Jun 2014
 
 @author: Rinze de Laat
@@ -8,12 +8,17 @@ Copyright © 2013-2015 Rinze de Laat, Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License version 2 as published by the Free Software Foundation.
+Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU
+General Public License version 2 as published by the Free Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even
+the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
+Public License for more details.
 
-You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+You should have received a copy of the GNU General Public License along with Odemis. If not,
+see http://www.gnu.org/licenses/.
+
+"""
 
 
 # This module contains classes that describe Streams, which are basically
@@ -104,6 +109,7 @@ class StreamTree(object):
 
         self.streams = []
         self.should_update = model.BooleanVA(False)
+        self.size = model.IntVA(0)
         self.kwargs = kwargs
 
         for s in streams:
@@ -138,24 +144,22 @@ class StreamTree(object):
     def add_stream(self, stream):
         if isinstance(stream, (Stream, StreamTree)):
             self.streams.append(stream)
+            self.size.value = len(self.streams)
             if hasattr(stream, 'should_update'):
-                stream.should_update.subscribe(self.stream_update_changed,
-                                               init=True)
-            # print "stream added %s" % stream.should_update.value
+                stream.should_update.subscribe(self.on_stream_update_changed, init=True)
         else:
             msg = "Illegal type %s found in add_stream!" % type(stream)
             raise ValueError(msg)
 
     def remove_stream(self, stream):
         if hasattr(stream, 'should_update'):
-            stream.should_update.unsubscribe(self.stream_update_changed)
+            stream.should_update.unsubscribe(self.on_stream_update_changed)
         self.streams.remove(stream)
-        self.stream_update_changed()
+        self.size.value = len(self.streams)
+        self.on_stream_update_changed()
 
-    def stream_update_changed(self, should_update=None):
-        """ This method is called when one of the streams' should_update
-        vigilant attribute changes.
-        """
+    def on_stream_update_changed(self, _=None):
+        """ Set the 'should_update' attribute when a streams' should_update VA changes """
         # At least one stream is live, so we 'should update'
         for s in self.streams:
             if hasattr(s, "should_update") and s.should_update.value:

@@ -300,8 +300,10 @@ class Chamber(model.Actuator):
         self._executor.cancel()
         logging.warning("Stopped pressure change")
 
-PHENOM_SH_TYPE_OPTICAL = 200 # Official Delphi sample holder type ID
+
+PHENOM_SH_TYPE_OPTICAL = 200  # Official Delphi sample holder type ID
 PHENOM_SH_FAKE_ID = 1234567890
+
 
 class PhenomChamber(Chamber):
     """
@@ -320,4 +322,5 @@ class PhenomChamber(Chamber):
 
         # sample holder VA is a read-only tuple with holder ID/type
         # TODO: set to None/None when the sample is ejected
-        self.sampleHolder = model.TupleVA((PHENOM_SH_FAKE_ID, PHENOM_SH_TYPE_OPTICAL), readonly=True)
+        self.sampleHolder = model.TupleVA((PHENOM_SH_FAKE_ID, PHENOM_SH_TYPE_OPTICAL),
+                                          readonly=True)

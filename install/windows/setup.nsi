@@ -7,10 +7,10 @@ SetCompressorDictSize 64
 !include MultiUser.nsh
 
 ; HM NIS Edit Wizard helper defines
-!define PRODUCT_NAME "OdemisViewer"
+;!define PRODUCT_NAME "OdemisViewer"
 ; Product version is defined through the command line!
 !define PRODUCT_PUBLISHER "Delmic"
-!define PRODUCT_WEB_SITE "http://www.delmic.com"
+!define PRODUCT_WEB_SITE "${WEBSITE}"
 !define PRODUCT_DIR_REGKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\${PRODUCT_NAME}.exe"
 !define PRODUCT_UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
 !define PRODUCT_UNINST_ROOT_KEY "HKLM"
@@ -23,7 +23,7 @@ SetCompressorDictSize 64
 !define MUI_ABORTWARNING
 ;;;;;!define MUI_ICON "fabrixkassa\gui\img\fabrixinstall.ico"
 !define MUI_UNICON "${NSISDIR}\Contrib\Graphics\Icons\modern-uninstall.ico"
-!define MUI_WELCOMEFINISHPAGE_BITMAP "..\..\image\install.bmp"
+!define MUI_WELCOMEFINISHPAGE_BITMAP "..\..\image\${IMAGE}"
 
 ; Welcome page
 !insertmacro MUI_PAGE_WELCOME
@@ -34,7 +34,7 @@ SetCompressorDictSize 64
 !define MUI_FINISHPAGE_NOAUTOCLOSE
 !insertmacro MUI_PAGE_INSTFILES
 ; Finish page
-!define MUI_FINISHPAGE_RUN "$INSTDIR\OdemisViewer.exe"
+!define MUI_FINISHPAGE_RUN "$INSTDIR\${PRODUCT_NAME}.exe"
 !insertmacro MUI_PAGE_FINISH
 
 ; Uninstaller pages
@@ -46,25 +46,25 @@ SetCompressorDictSize 64
 ; MUI end ------
 
 Name "${PRODUCT_NAME} ${PRODUCT_VERSION}"
-OutFile "dist/OdemisViewer-${PRODUCT_VERSION}.exe"
-InstallDir "$PROGRAMFILES\OdemisViewer"
+OutFile "dist/${PRODUCT_NAME}-${PRODUCT_VERSION}.exe"
+InstallDir "$PROGRAMFILES\${PRODUCT_NAME}"
 InstallDirRegKey HKLM "${PRODUCT_DIR_REGKEY}" ""
 ShowInstDetails show
 ShowUnInstDetails show
 
 Section "MainSection" SEC01
-  SetOutPath "$APPDATA\OdemisViewer"
+  SetOutPath "$APPDATA\${PRODUCT_NAME}"
   SetOutPath "$INSTDIR"
-  File /r .\dist\OdemisViewer\*.*
-  CreateDirectory "$SMPROGRAMS\Odemis Viewer"
-  CreateShortCut "$SMPROGRAMS\Odemis Viewer\Odemis Viewer.lnk" "$INSTDIR\OdemisViewer.exe"
-  CreateShortCut "$DESKTOP\Odemis Viewer.lnk" "$INSTDIR\OdemisViewer.exe"
+  File /r .\dist\${PRODUCT_NAME}\*.*
+  CreateDirectory "$SMPROGRAMS\${PRODUCT_HNAME}"
+  CreateShortCut "$SMPROGRAMS\${PRODUCT_HNAME}\${PRODUCT_HNAME}.lnk" "$INSTDIR\${PRODUCT_NAME}.exe"
+  CreateShortCut "$DESKTOP\${PRODUCT_HNAME}.lnk" "$INSTDIR\${PRODUCT_NAME}.exe"
 SectionEnd
 
 Section -AdditionalIcons
   WriteIniStr "$INSTDIR\${PRODUCT_NAME}.url" "InternetShortcut" "URL" "${PRODUCT_WEB_SITE}"
-  CreateShortCut "$SMPROGRAMS\Odemis Viewer\Website.lnk" "$INSTDIR\${PRODUCT_NAME}.url"
-  CreateShortCut "$SMPROGRAMS\Odemis Viewer\Uninstall.lnk" "$INSTDIR\uninst.exe"
+  CreateShortCut "$SMPROGRAMS\${PRODUCT_HNAME}\Website.lnk" "$INSTDIR\${PRODUCT_NAME}.url"
+  CreateShortCut "$SMPROGRAMS\${PRODUCT_HNAME}\Uninstall.lnk" "$INSTDIR\uninst.exe"
 SectionEnd
 
 Section -Post
@@ -102,7 +102,7 @@ Function .onInit
   Goto completed            ; Kill done
 
   wooops:
-  MessageBox MB_OK|MB_ICONEXCLAMATION "Error while stopping Odemis Viewer" /SD IDOK
+  MessageBox MB_OK|MB_ICONEXCLAMATION "Error while stopping ${PRODUCT_HNAME}" /SD IDOK
   Abort
 
   completed:
@@ -116,12 +116,12 @@ Function un.onInit
 FunctionEnd
 
 Section Uninstall
-  Delete "$SMPROGRAMS\Odemis Viewer\Uninstall.lnk"
-  Delete "$SMPROGRAMS\Odemis Viewer\Website.lnk"
-  Delete "$DESKTOP\Odemis Viewer.lnk"
-  Delete "$SMPROGRAMS\Odemis Viewer\\Odemis Viewer.lnk"
+  Delete "$SMPROGRAMS\${PRODUCT_HNAME}\Uninstall.lnk"
+  Delete "$SMPROGRAMS\${PRODUCT_HNAME}\Website.lnk"
+  Delete "$DESKTOP\${PRODUCT_HNAME}.lnk"
+  Delete "$SMPROGRAMS\${PRODUCT_HNAME}\\${PRODUCT_HNAME}.lnk"
 
-  RMDir /r "$SMPROGRAMS\Odemis Viewer"
+  RMDir /r "$SMPROGRAMS\${PRODUCT_HNAME}"
   RMDir /r "$INSTDIR"
 
   DeleteRegKey ${PRODUCT_UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}"
