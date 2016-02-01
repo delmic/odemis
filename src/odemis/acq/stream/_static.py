@@ -475,7 +475,7 @@ class StaticSpectrumStream(StaticStream):
         self.selected_line = model.ListVA([(None, None), (None, None)], setter=self._setLine)
 
         # Peak method index, None if spectrum peak fitting curve is not displayed
-        self.peak_method = model.VAEnumerated("gaussian", {"gaussian", "lorentzian", None})
+        self.peak_method = model.VAEnumerated(None, {"gaussian", "lorentzian", None})
 
         # The thickness of a point or a line (shared).
         # A point of width W leads to the average value between all the pixels
