@@ -345,20 +345,28 @@ def _DoDelphiCalibration(future, main_data, first_insertion=True, known_first_ho
                 # Move to the overview position first
                 f = main_data.chamber.moveAbs({"pressure": overview_pressure})
                 f.result()
+                if future._delphi_calib_state == CANCELLED:
+                    raise CancelledError()
 
                 # Reference the (optical) stage
                 logging.debug("Reference the (optical) stage...")
                 f = opt_stage.reference({"x", "y"})
                 f.result()
+                if future._delphi_calib_state == CANCELLED:
+                    raise CancelledError()
 
                 logging.debug("Reference the focus...")
                 f = main_data.focus.reference({"z"})
                 f.result()
+                if future._delphi_calib_state == CANCELLED:
+                    raise CancelledError()
 
                 # SEM stage to (0,0)
                 logging.debug("Move to the center of SEM stage...")
                 f = sem_stage.moveAbs({"x": 0, "y": 0})
                 f.result()
+                if future._delphi_calib_state == CANCELLED:
+                    raise CancelledError()
 
                 # Calculate offset approximation
                 try:
@@ -368,6 +376,8 @@ def _DoDelphiCalibration(future, main_data, first_insertion=True, known_first_ho
                     logging.debug("SEM position after lens alignment: %s", position)
                 except Exception:
                     raise IOError("Lens alignment failed.")
+                if future._delphi_calib_state == CANCELLED:
+                    raise CancelledError()
 
                 # Update progress of the future
                 future.set_end_time(time.time() + 14 * 60)
@@ -375,10 +385,14 @@ def _DoDelphiCalibration(future, main_data, first_insertion=True, known_first_ho
                 # Just to check if move makes sense
                 f = sem_stage.moveAbs({"x": position[0], "y": position[1]})
                 f.result()
+                if future._delphi_calib_state == CANCELLED:
+                    raise CancelledError()
 
                 # Move to SEM
                 f = main_data.chamber.moveAbs({"pressure": vacuum_pressure})
                 f.result()
+                if future._delphi_calib_state == CANCELLED:
+                    raise CancelledError()
 
                 # Update progress of the future
                 logging.debug("Try to update the remaining time...")
@@ -399,6 +413,9 @@ def _DoDelphiCalibration(future, main_data, first_insertion=True, known_first_ho
                     htop, hbot, hfoc, strans, srot, sscale, resa, resb, hfwa, spotshift = f.result()
                 except Exception:
                     raise IOError("Conversion update failed.")
+                if future._delphi_calib_state == CANCELLED:
+                    raise CancelledError()
+
                 # Update progress of the future
                 logging.debug("Try to update the remaining time...")
                 future.set_end_time(time.time() + 60)
@@ -420,6 +437,9 @@ def _DoDelphiCalibration(future, main_data, first_insertion=True, known_first_ho
                     trans_val, cor_md = f.result()
                 except Exception:
                     logging.debug("Fine alignment failed. Retrying to focus...")
+                    if future._delphi_calib_state == CANCELLED:
+                        raise CancelledError()
+
                     main_data.ccd.binning.value = (1, 1)
                     main_data.ccd.resolution.value = main_data.ccd.resolution.range[1]
                     main_data.ccd.exposureTime.value = 900e-03
@@ -444,6 +464,9 @@ def _DoDelphiCalibration(future, main_data, first_insertion=True, known_first_ho
                                           skew=True,
                                           bgsub=True)
                     trans_val, cor_md = f.result()
+                if future._delphi_calib_state == CANCELLED:
+                    raise CancelledError()
+
                 trans_md, skew_md = cor_md
                 iscale = trans_md[model.MD_PIXEL_SIZE_COR]
                 if any(s < 0 for s in iscale):
@@ -458,6 +481,8 @@ def _DoDelphiCalibration(future, main_data, first_insertion=True, known_first_ho
                 # Move to SEM
                 f = main_data.chamber.moveAbs({"pressure": vacuum_pressure})
                 f.result()
+                if future._delphi_calib_state == CANCELLED:
+                    raise CancelledError()
 
                 # Compute stage calibration values
                 try:
@@ -486,10 +511,12 @@ def _DoDelphiCalibration(future, main_data, first_insertion=True, known_first_ho
         except Exception:
             raise IOError("Delphi calibration failed.")
     finally:
+        # TODO: also cancel the current sub-future
         with future._delphi_calib_lock:
             if future._delphi_calib_state == CANCELLED:
                 raise CancelledError()
             future._delphi_calib_state = FINISHED
+        logging.debug("Calibration thread ended")
 
 
 def _CancelDelphiCalibration(future):
