@@ -262,6 +262,12 @@ def DelphiCalibration(main_data,
     # Task to run
     f.task_canceller = _CancelDelphiCalibration
     f._delphi_calib_lock = threading.Lock()
+    f._done = threading.Event()
+
+    f.lens_alignment_f = model.InstantaneousFuture()
+    f.update_conversion_f = model.InstantaneousFuture()
+    f.find_overlay_f = model.InstantaneousFuture()
+    f.auto_focus_f = model.InstantaneousFuture()
 
     # Run in separate thread
     delphi_calib_thread = threading.Thread(target=executeTask,
@@ -371,8 +377,8 @@ def _DoDelphiCalibration(future, main_data, first_insertion=True, known_first_ho
                 # Calculate offset approximation
                 try:
                     logging.debug("Starting lens alignment...")
-                    f = aligndelphi.LensAlignment(main_data.overview_ccd, sem_stage)
-                    position = f.result()
+                    future.lens_alignment_f = aligndelphi.LensAlignment(main_data.overview_ccd, sem_stage)
+                    position = future.lens_alignment_f.result()
                     logging.debug("SEM position after lens alignment: %s", position)
                 except Exception:
                     raise IOError("Lens alignment failed.")
@@ -401,7 +407,7 @@ def _DoDelphiCalibration(future, main_data, first_insertion=True, known_first_ho
                 # Compute stage calibration values
                 try:
                     logging.debug("Starting conversion update...")
-                    f = aligndelphi.UpdateConversion(main_data.ccd,
+                    future.update_conversion_f = aligndelphi.UpdateConversion(main_data.ccd,
                                                      main_data.bsd,
                                                      main_data.ebeam,
                                                      sem_stage, opt_stage,
@@ -410,7 +416,7 @@ def _DoDelphiCalibration(future, main_data, first_insertion=True, known_first_ho
                                                      main_data.stage,
                                                      first_insertion=True,
                                                      sem_position=position)
-                    htop, hbot, hfoc, strans, srot, sscale, resa, resb, hfwa, spotshift = f.result()
+                    htop, hbot, hfoc, strans, srot, sscale, resa, resb, hfwa, spotshift = future.update_conversion_f.result()
                 except Exception:
                     raise IOError("Conversion update failed.")
                 if future._delphi_calib_state == CANCELLED:
@@ -426,7 +432,7 @@ def _DoDelphiCalibration(future, main_data, first_insertion=True, known_first_ho
                 # Run the optical fine alignment
                 # TODO: reuse the exposure time
                 try:
-                    f = align.FindOverlay((4, 4),
+                    future.find_overlay_f = align.FindOverlay((4, 4),
                                           0.5,  # s, dwell time
                                           10e-06,  # m, maximum difference allowed
                                           main_data.ebeam,
@@ -434,7 +440,7 @@ def _DoDelphiCalibration(future, main_data, first_insertion=True, known_first_ho
                                           main_data.bsd,
                                           skew=True,
                                           bgsub=True)
-                    trans_val, cor_md = f.result()
+                    trans_val, cor_md = future.find_overlay_f.result()
                 except Exception:
                     logging.debug("Fine alignment failed. Retrying to focus...")
                     if future._delphi_calib_state == CANCELLED:
@@ -449,13 +455,15 @@ def _DoDelphiCalibration(future, main_data, first_insertion=True, known_first_ho
                     main_data.ebeam.translation.value = (0, 0)
                     main_data.ebeam.dwellTime.value = 5e-06
                     det_dataflow = main_data.bsd.data
-                    f = autofocus.AutoFocus(main_data.ccd, main_data.ebeam, main_data.ebeam_focus, dfbkg=det_dataflow)
-                    f.result()
+                    future.auto_focus_f = autofocus.AutoFocus(main_data.ccd, main_data.ebeam, main_data.ebeam_focus, dfbkg=det_dataflow)
+                    future.auto_focus_f.result()
+                    if future._delphi_calib_state == CANCELLED:
+                        raise CancelledError()
                     main_data.ccd.binning.value = (8, 8)
-                    f = autofocus.AutoFocus(main_data.ccd, main_data.ebeam, main_data.focus, dfbkg=det_dataflow)
-                    f.result()
+                    future.auto_focus_f = autofocus.AutoFocus(main_data.ccd, main_data.ebeam, main_data.focus, dfbkg=det_dataflow)
+                    future.auto_focus_f.result()
                     main_data.ccd.binning.value = (1, 1)
-                    f = align.FindOverlay((4, 4),
+                    future.find_overlay_f = align.FindOverlay((4, 4),
                                           0.5,  # s, dwell time
                                           10e-06,  # m, maximum difference allowed
                                           main_data.ebeam,
@@ -463,7 +471,7 @@ def _DoDelphiCalibration(future, main_data, first_insertion=True, known_first_ho
                                           main_data.bsd,
                                           skew=True,
                                           bgsub=True)
-                    trans_val, cor_md = f.result()
+                    trans_val, cor_md = future.find_overlay_f.result()
                 if future._delphi_calib_state == CANCELLED:
                     raise CancelledError()
 
@@ -487,7 +495,7 @@ def _DoDelphiCalibration(future, main_data, first_insertion=True, known_first_ho
                 # Compute stage calibration values
                 try:
                     logging.debug("Starting conversion update...")
-                    f = aligndelphi.UpdateConversion(main_data.ccd,
+                    future.update_conversion_f = aligndelphi.UpdateConversion(main_data.ccd,
                                                      main_data.bsd,
                                                      main_data.ebeam,
                                                      sem_stage, opt_stage,
@@ -501,7 +509,7 @@ def _DoDelphiCalibration(future, main_data, first_insertion=True, known_first_ho
                                                      known_offset=known_offset_f,
                                                      known_rotation=known_rotation_f,
                                                      known_scaling=known_scaling_f)
-                    f.result()
+                    future.update_conversion_f.result()
                 except Exception:
                     raise IOError("Conversion update failed.")
 
@@ -513,10 +521,11 @@ def _DoDelphiCalibration(future, main_data, first_insertion=True, known_first_ho
     finally:
         # TODO: also cancel the current sub-future
         with future._delphi_calib_lock:
+            future._done.set()
             if future._delphi_calib_state == CANCELLED:
                 raise CancelledError()
             future._delphi_calib_state = FINISHED
-        logging.debug("Calibration thread ended")
+        logging.debug("Calibration thread ended.")
 
 
 def _CancelDelphiCalibration(future):
@@ -529,8 +538,15 @@ def _CancelDelphiCalibration(future):
         if future._delphi_calib_state == FINISHED:
             return False
         future._delphi_calib_state = CANCELLED
+        # Cancel any running futures
+        future.lens_alignment_f.cancel()
+        future.update_conversion_f.cancel()
+        future.find_overlay_f.cancel()
+        future.auto_focus_f.cancel()
         logging.debug("Delphi calibration cancelled.")
 
+    # Do not return until we are really done (modulo 10 seconds timeout)
+    future._done.wait(10)
     return True
 
 

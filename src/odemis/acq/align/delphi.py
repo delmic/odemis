@@ -115,6 +115,7 @@ def UpdateConversion(ccd, detector, escan, sem_stage, opt_stage, ebeam_focus,
     f._hfw_shiftf = model.InstantaneousFuture()
     f._resolution_shiftf = model.InstantaneousFuture()
     f._spot_shiftf = model.InstantaneousFuture()
+    f._autofocus_f = model.InstantaneousFuture()
 
     # Run in separate thread
     conversion_thread = threading.Thread(target=executeTask,
@@ -295,11 +296,13 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
             escan.dwellTime.value = 5e-06
             det_dataflow = detector.data
             ccd.binning.value = min((8, 8), ccd.binning.range[1])
-            f = autofocus.AutoFocus(ccd, escan, ebeam_focus, dfbkg=det_dataflow)
-            f.result()
+            future._autofocus_f = autofocus.AutoFocus(ccd, escan, ebeam_focus, dfbkg=det_dataflow)
+            future._autofocus_f.result()
+            if future._conversion_update_state == CANCELLED:
+                raise CancelledError()
             # Re-apply optical autofocus to be safe in case of inaccuracy
-            f = autofocus.AutoFocus(ccd, escan, focus, dfbkg=det_dataflow)
-            f.result()
+            future._autofocus_f = autofocus.AutoFocus(ccd, escan, focus, dfbkg=det_dataflow)
+            future._autofocus_f.result()
             ccd.binning.value = (1, 1)
 
             # TODO also calculate and return Phenom shift parameters
@@ -336,6 +339,7 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
             if future._conversion_update_state == CANCELLED:
                 raise CancelledError()
             future._conversion_update_state = FINISHED
+        logging.debug("Conversion update thread ended")
 
 
 def _CancelUpdateConversion(future):
@@ -354,6 +358,7 @@ def _CancelUpdateConversion(future):
         future._hfw_shiftf.cancel()
         future._resolution_shiftf.cancel()
         future._spot_shiftf.cancel()
+        future._autofocus_f.cancel()
         logging.debug("Conversion update cancelled.")
 
     # Do not return until we are really done (modulo 10 seconds timeout)
@@ -559,7 +564,9 @@ def RotationAndScaling(ccd, detector, escan, sem_stage, opt_stage, focus, offset
     # Task to run
     f.task_canceller = _CancelRotationAndScaling
     f._rotation_lock = threading.Lock()
+    f._done = threading.Event()
 
+    f._autofocus_f = model.InstantaneousFuture()
     # Run in separate thread
     rotation_thread = threading.Thread(target=executeTask,
                                        name="Rotation and scaling",
@@ -652,8 +659,10 @@ def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, fo
                 except ValueError:
                     # If failed to find spot, try first to focus
                     ccd.binning.value = min((8, 8), ccd.binning.range[1])
-                    f = autofocus.AutoFocus(ccd, escan, focus, dfbkg=det_dataflow)
-                    f.result()
+                    future._autofocus_f = autofocus.AutoFocus(ccd, escan, focus, dfbkg=det_dataflow)
+                    future._autofocus_f.result()
+                    if future._rotation_scaling_state == CANCELLED:
+                        raise CancelledError()
                     ccd.binning.value = (1, 1)
                     image = AcquireNoBackground(ccd, det_dataflow)
                     try:
@@ -694,9 +703,11 @@ def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, fo
         escan.resolution.value = (512, 512)
         # detector.data.unsubscribe(_discard_data)
         with future._rotation_lock:
+            future._done.set()
             if future._rotation_scaling_state == CANCELLED:
                 raise CancelledError()
             future._rotation_scaling_state = FINISHED
+        logging.debug("Rotation and scaling thread ended.")
 
 
 def _CancelRotationAndScaling(future):
@@ -709,8 +720,11 @@ def _CancelRotationAndScaling(future):
         if future._rotation_scaling_state == FINISHED:
             return False
         future._rotation_scaling_state = CANCELLED
+        future._autofocus_f.cancel()
         logging.debug("Rotation and scaling calculation cancelled.")
 
+    # Do not return until we are really done (modulo 10 seconds timeout)
+    future._done.wait(10)
     return True
 
 
@@ -757,6 +771,9 @@ def HoleDetection(detector, escan, sem_stage, ebeam_focus, known_focus=None, man
     # Task to run
     f.task_canceller = _CancelHoleDetection
     f._detection_lock = threading.Lock()
+    f._done = threading.Event()
+
+    f._autofocus_f = model.InstantaneousFuture()
 
     # Run in separate thread
     detection_thread = threading.Thread(target=executeTask,
@@ -825,11 +842,13 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
             if (pos == EXPECTED_HOLES[0]) and (manual is False):
                 escan.horizontalFoV.value = 250e-06  # m
                 escan.scale.value = (2, 2)
-                f = autofocus.AutoFocus(detector, escan, ebeam_focus)
-                hole_focus, fm_level = f.result()
+                future._autofocus_f = autofocus.AutoFocus(detector, escan, ebeam_focus)
+                hole_focus, fm_level = future._autofocus_f.result()
                 escan.horizontalFoV.value = escan.horizontalFoV.range[1]
                 escan.scale.value = (1, 1)
 
+            if future._hole_detection_state == CANCELLED:
+                raise CancelledError()
             # From SEM image determine hole position relative to the center of
             # the SEM
             image = detector.data.get(asap=False)
@@ -838,8 +857,8 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
             except IOError:
                 # If hole was not found, apply autofocus and retry detection
                 escan.horizontalFoV.value = 200e-06  # m
-                f = autofocus.AutoFocus(detector, escan, ebeam_focus)
-                hole_focus, fm_level = f.result()
+                future._autofocus_f = autofocus.AutoFocus(detector, escan, ebeam_focus)
+                hole_focus, fm_level = future._autofocus_f.result()
                 escan.horizontalFoV.value = escan.horizontalFoV.range[1]
                 image = detector.data.get(asap=False)
                 try:
@@ -870,9 +889,11 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
 
     finally:
         with future._detection_lock:
+            future._done.set()
             if future._hole_detection_state == CANCELLED:
                 raise CancelledError()
             future._hole_detection_state = FINISHED
+        logging.debug("Hole detection thread ended.")
 
 
 def _CancelHoleDetection(future):
@@ -885,8 +906,11 @@ def _CancelHoleDetection(future):
         if future._hole_detection_state == FINISHED:
             return False
         future._hole_detection_state = CANCELLED
+        future._autofocus_f.cancel()
         logging.debug("Hole detection cancelled.")
 
+    # Do not return until we are really done (modulo 10 seconds timeout)
+    future._done.wait(10)
     return True
 
 
@@ -1388,6 +1412,9 @@ def SpotShiftFactor(ccd, detector, escan, focus):
     # Task to run
     f.task_canceller = _CancelSpotShiftFactor
     f._spot_shift_lock = threading.Lock()
+    f._done = threading.Event()
+
+    f._autofocus_f = model.InstantaneousFuture()
 
     # Run in separate thread
     spot_shift_thread = threading.Thread(target=executeTask,
@@ -1446,14 +1473,17 @@ def _DoSpotShiftFactor(future, ccd, detector, escan, focus):
         except ValueError:
             # If failed to find spot, try first to focus
             ccd.binning.value = min((8, 8), ccd.binning.range[1])
-            f = autofocus.AutoFocus(ccd, escan, focus, dfbkg=det_dataflow)
-            f.result()
+            future._autofocus_f = autofocus.AutoFocus(ccd, escan, focus, dfbkg=det_dataflow)
+            future._autofocus_f.result()
             ccd.binning.value = (1, 1)
             image = AcquireNoBackground(ccd, det_dataflow)
             try:
                 spot_no_rot = spot.FindSpot(image)
             except ValueError:
                 raise IOError("CL spot not found.")
+
+        if future._spot_shift_state == CANCELLED:
+            raise CancelledError()
 
         # Now rotate and reacquire
         escan.rotation.value = cur_rot - math.pi
@@ -1463,8 +1493,8 @@ def _DoSpotShiftFactor(future, ccd, detector, escan, focus):
         except ValueError:
             # If failed to find spot, try first to focus
             ccd.binning.value = min((8, 8), ccd.binning.range[1])
-            f = autofocus.AutoFocus(ccd, escan, focus, dfbkg=det_dataflow)
-            f.result()
+            future._autofocus_f = autofocus.AutoFocus(ccd, escan, focus, dfbkg=det_dataflow)
+            future._autofocus_f.result()
             ccd.binning.value = (1, 1)
             image = AcquireNoBackground(ccd, det_dataflow)
             try:
@@ -1480,9 +1510,11 @@ def _DoSpotShiftFactor(future, ccd, detector, escan, focus):
         escan.rotation.value = cur_rot
         escan.resolution.value = (512, 512)
         with future._spot_shift_lock:
+            future._done.set()
             if future._spot_shift_state == CANCELLED:
                 raise CancelledError()
             future._spot_shift_state = FINISHED
+        logging.debug("Spot shift thread ended.")
 
 
 def _CancelSpotShiftFactor(future):
@@ -1495,8 +1527,11 @@ def _CancelSpotShiftFactor(future):
         if future._spot_shift_state == FINISHED:
             return False
         future._spot_shift_state = CANCELLED
+        future._autofocus_f.cancel()
         logging.debug("Spot shift calculation cancelled.")
 
+    # Do not return until we are really done (modulo 10 seconds timeout)
+    future._done.wait(10)
     return True
 
 
