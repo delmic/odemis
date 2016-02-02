@@ -1,3 +1,32 @@
+odemis (2.3-1ubuntu1) precise; urgency=low
+
+  * New version: 2.3
+  * Main new features:
+    - Support for SPARCv2
+    - Handle power supplier components in backend
+    - Support for Phenom knob (Griffin Powermate) to change focus (DELPHI)
+    - Peak detection in point spectrum analysis (SPARC)
+    - Option to force sample holder recalibration (DELPHI)
+    - Support for Tescan SEM
+  * Main improvements and bugs fixed:
+    - Support for unit prefix when entering values in GUIs
+    - Allow to select filter in spectrum stream (SPARC)
+    - Automatically selects the whole ROI on new CLi stream (SPARC)
+    - Improve manual sample holder calibration interface (DELPHI)
+    - Autofocus speed and quality improvement
+    - Add button to close/open GUI log panel
+    - Fix no update of progress bar during SPARC acquisition
+    - Improve connection between view HFW and SEM HFW (DELPHI)
+    - Allow to start Odemis viewer with a file to open
+    - Allow to indicate a move on the CLI by its position name
+    - Tools to read/write configuration of PI and TMCM controllers
+    - Support for Andor Zyla in spectrum mode (SPARC)
+    - Support for multiple TMCM, Andor2 cameras, and Andor shamrocks
+    - Support for EBIC detector input
+    - Add 'transp' argument to CCD components to replace broken 'transpose' argument
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Tue, 02 Feb 2016 10:19:48 +0100
+
 odemis (2.2-1ubuntu1) precise; urgency=low
 
   * New version: 2.2
