@@ -92,8 +92,11 @@ if sys.platform.startswith('linux'):
                'install/linux/usr/bin/odemis-edit-mic',
                'install/linux/usr/bin/odemis-hw-status',
                'install/linux/usr/bin/odemis-live-view',
-               'util/piconfig.py',
-               'util/tmcmconfig.py',
+               'install/linux/usr/bin/odemis-mic-selector',
+               'util/piconfig',
+               'util/tmcmconfig',
+               'util/odemis-park-mirror',
+               'util/check-mirror-ref',
                ]
 else:
     data_files = []
