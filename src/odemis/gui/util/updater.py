@@ -40,11 +40,14 @@ VIEWER_ROOT_URL = "http://www.delmic.com/odemisviewer/"
 
 class WindowsUpdater:
     def __init__(self):
-        if wx.GetApp()._is_standalone == "delphi":
-            global INSTALLER_FILE
-            global VIEWER_NAME
-            INSTALLER_FILE = "DelphiViewer-%s.exe"
-            VIEWER_NAME = "Delphi Viewer"
+        try:
+            if wx.GetApp()._is_standalone == "delphi":
+                global INSTALLER_FILE
+                global VIEWER_NAME
+                INSTALLER_FILE = "DelphiViewer-%s.exe"
+                VIEWER_NAME = "Delphi Viewer"
+        except Exception:
+            logging.info("Considering the app as a standard Odemis", exc_info=True)
 
     @staticmethod
     def get_local_version():
