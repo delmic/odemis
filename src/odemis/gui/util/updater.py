@@ -22,15 +22,15 @@ This module contains update functionality for the Windows Viewer version of Odem
 from __future__ import division
 
 import logging
+import odemis
+from odemis.gui.conf import get_general_conf
 import os
+import pkg_resources
 import subprocess
 import tempfile
 import urllib2
-
 import wx
 
-import odemis
-from odemis.gui.conf import get_general_conf
 
 VERSION_FILE = "version.txt"
 INSTALLER_FILE = "OdemisViewer-%s.exe"
@@ -78,22 +78,10 @@ class WindowsUpdater:
             web_version = web_version_file.readline().strip()
             web_size = int(web_version_file.readline().strip())
             web_version_file.close()
-        except IOError, err:
+        except IOError as err:
             logging.warn("Error on remote version check (%s)" % err)
 
         return web_version, web_size
-
-    def _is_newer(self, version):
-        """ Check if the given version is newer than the local one
-
-        :param version: (str) Version string of the form #.#.##
-
-        :return: (bool) True if the given version is newer
-        """
-
-        local = self.get_local_version().split('.')
-        other = version.split('.')
-        return local < other
 
     def check_for_update(self):
         """ Check if a newer version is available online and offer to update """
@@ -103,13 +91,14 @@ class WindowsUpdater:
         web_version, web_size = self.get_remote_version()
 
         if web_version is None:
-            logging.warn("Could not retrieve remote version!")
+            logging.info("Could not retrieve remote version, will not update")
             return
 
         logging.info("Found remote version %s", web_version)
 
-        # TODO: just use pkg_resources.parse_version()
-        if not self._is_newer(web_version):
+        lv = pkg_resources.parse_version(self.get_local_version())
+        rv = pkg_resources.parse_version(web_version)
+        if rv <= lv:
             return
 
         logging.info("Newer version found, suggesting update...")

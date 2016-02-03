@@ -45,7 +45,7 @@ class TestWindowsUpdater(unittest.TestCase):
         self.assertEqual(len(rv.split('.')), 3)
         self.assertGreater(rsize, 1000)
 
-        self.assertFalse(u._is_newer(rv))
+        # u.check_for_update()
 
     # TODO: test more methods
 
