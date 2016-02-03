@@ -89,17 +89,11 @@ class WindowsUpdater:
         :param version: (str) Version string of the form #.#.##
 
         :return: (bool) True if the given version is newer
-
         """
 
         local = self.get_local_version().split('.')
         other = version.split('.')
-
-        for l, o in zip(local, other):
-            if int(l) < int(o):
-                return True
-
-        return False
+        return local < other
 
     def check_for_update(self):
         """ Check if a newer version is available online and offer to update """
