@@ -2370,56 +2370,56 @@ class SparcAlignTab(Tab):
             disp = []
         self._spec_graph.SetContent(disp)
 
-    def _getGoalImage(self, main_data):
-        """
-        main_data (model.MainGUIData)
-        returns (model.DataArray): RGBA DataArray of the goal image for the
-          current hardware
-        """
-        ccd = main_data.ccd
-        lens = main_data.lens
-
-        # TODO: automatically generate the image? Shouldn't be too hard with
-        # cairo, it's just 3 circles and a line.
-
-        # The goal image depends on the physical size of the CCD, so we have
-        # a file for each supported sensor size.
-        pxs = ccd.pixelSize.value
-        ccd_res = ccd.shape[0:2]
-        ccd_sz = tuple(int(round(p * l * 1e6)) for p, l in zip(pxs, ccd_res))
-        try:
-            goal_rs = pkg_resources.resource_stream("odemis.gui.img",
-                                                    "calibration/ma_goal_5_13_sensor_%d_%d.png" % ccd_sz)
-        except IOError:
-            logging.warning(u"Failed to find a fitting goal image for sensor "
-                            u"of %dx%d µm" % ccd_sz)
-            # pick a known file, it's better than nothing
-            goal_rs = pkg_resources.resource_stream("odemis.gui.img",
-                                                    "calibration/ma_goal_5_13_sensor_13312_13312.png")
-        goal_im = model.DataArray(scipy.misc.imread(goal_rs))
-        # No need to swap bytes for goal_im. Alpha needs to be fixed though
-        goal_im = scale_to_alpha(goal_im)
-        # It should be displayed at the same scale as the actual image.
-        # In theory, it would be direct, but as the backend doesn't know when
-        # the lens is on or not, it's considered always on, and so the optical
-        # image get the pixel size multiplied by the magnification.
-
-        # The resolution is the same as the maximum sensor resolution, if not,
-        # we adapt the pixel size
-        im_res = (goal_im.shape[1], goal_im.shape[0])  #pylint: disable=E1101,E1103
-        scale = ccd_res[0] / im_res[0]
-        if scale != 1:
-            logging.warning("Goal image has resolution %s while CCD has %s",
-                            im_res, ccd_res)
-
-        # Pxs = sensor pxs / lens mag
-        mag = lens.magnification.value
-        goal_md = {model.MD_PIXEL_SIZE: (scale * pxs[0] / mag, scale * pxs[1] / mag),  # m
-                   model.MD_POS: (0, 0),
-                   model.MD_DIMS: "YXC", }
-
-        goal_im.metadata = goal_md
-        return goal_im
+#     def _getGoalImage(self, main_data):
+#         """
+#         main_data (model.MainGUIData)
+#         returns (model.DataArray): RGBA DataArray of the goal image for the
+#           current hardware
+#         """
+#         ccd = main_data.ccd
+#         lens = main_data.lens
+#
+#         # TODO: automatically generate the image? Shouldn't be too hard with
+#         # cairo, it's just 3 circles and a line.
+#
+#         # The goal image depends on the physical size of the CCD, so we have
+#         # a file for each supported sensor size.
+#         pxs = ccd.pixelSize.value
+#         ccd_res = ccd.shape[0:2]
+#         ccd_sz = tuple(int(round(p * l * 1e6)) for p, l in zip(pxs, ccd_res))
+#         try:
+#             goal_rs = pkg_resources.resource_stream("odemis.gui.img",
+#                                                     "calibration/ma_goal_5_13_sensor_%d_%d.png" % ccd_sz)
+#         except IOError:
+#             logging.warning(u"Failed to find a fitting goal image for sensor "
+#                             u"of %dx%d µm" % ccd_sz)
+#             # pick a known file, it's better than nothing
+#             goal_rs = pkg_resources.resource_stream("odemis.gui.img",
+#                                                     "calibration/ma_goal_5_13_sensor_13312_13312.png")
+#         goal_im = model.DataArray(scipy.misc.imread(goal_rs))
+#         # No need to swap bytes for goal_im. Alpha needs to be fixed though
+#         goal_im = scale_to_alpha(goal_im)
+#         # It should be displayed at the same scale as the actual image.
+#         # In theory, it would be direct, but as the backend doesn't know when
+#         # the lens is on or not, it's considered always on, and so the optical
+#         # image get the pixel size multiplied by the magnification.
+#
+#         # The resolution is the same as the maximum sensor resolution, if not,
+#         # we adapt the pixel size
+#         im_res = (goal_im.shape[1], goal_im.shape[0])  #pylint: disable=E1101,E1103
+#         scale = ccd_res[0] / im_res[0]
+#         if scale != 1:
+#             logging.warning("Goal image has resolution %s while CCD has %s",
+#                             im_res, ccd_res)
+#
+#         # Pxs = sensor pxs / lens mag
+#         mag = lens.magnification.value
+#         goal_md = {model.MD_PIXEL_SIZE: (scale * pxs[0] / mag, scale * pxs[1] / mag),  # m
+#                    model.MD_POS: (0, 0),
+#                    model.MD_DIMS: "YXC", }
+#
+#         goal_im.metadata = goal_md
+#         return goal_im
 
     def Show(self, show=True):
         Tab.Show(self, show=show)
