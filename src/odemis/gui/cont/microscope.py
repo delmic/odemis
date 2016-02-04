@@ -771,8 +771,9 @@ class DelphiStateController(SecomStateController):
             logging.warn("No sample holder loaded!")
             return
         elif sht != PHENOM_SH_TYPE_OPTICAL:
-            logging.warn("Wrong sample holder type!")
-            return
+            # Log the warning but load the calibration data
+            logging.warn("Wrong sample holder type! We will try to load the "
+                         "calibration data anyway...")
 
         calib = self._calibconf.get_sh_calib(shid)
         if calib is None:
@@ -898,14 +899,9 @@ class DelphiStateController(SecomStateController):
 
         shid, sht = self._main_data.chamber.sampleHolder.value
 
-        # If the sample holder is of the wrong type, or if no sample holder is present..
         if sht != PHENOM_SH_TYPE_OPTICAL:
-            wx.MessageBox(
-                "Please make sure a sample holder with an empty glass is loaded",
-                "Wrong or missing sample holder",
-                style=wx.ICON_ERROR
-            )
-            return
+            # Log the warning but proceed to calibration
+            logging.warn("Wrong sample holder type! We will try to calibrate anyway...")
 
         # Returns 'yes' for automatic, 'no' for manual
         dlg = windelphi.RecalibrationDialog(self._main_frame)
@@ -954,6 +950,7 @@ class DelphiStateController(SecomStateController):
                 logging.debug("Trying to register sample holder with code %s", regcode)
                 try:
                     self._main_data.chamber.registerSampleHolder(regcode)
+                    shid, sht = self._main_data.chamber.sampleHolder.value
                 except ValueError as ex:
                     dlg = wx.MessageDialog(self._main_frame,
                                            "Failed to register: %s" % ex,
@@ -965,6 +962,16 @@ class DelphiStateController(SecomStateController):
                     # return immediately and be actually called later
                     self.request_holder_calib()
                     return
+
+            if sht != PHENOM_SH_TYPE_OPTICAL:
+                dlg = wx.MessageDialog(self._main_frame,
+                                       "Sample holder type does not correspond to an optical one. "
+                                       "This might cause problems with the alignment of the system. "
+                                       "For now we will proceed to the calibration.",
+                                       "Wrong sample holder type",
+                                       wx.OK | wx.ICON_WARNING)
+                dlg.ShowModal()
+                dlg.Destroy()
 
             # Now run the full calibration
             logging.info("Starting first time calibration for sample holder")
