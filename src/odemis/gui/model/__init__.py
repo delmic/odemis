@@ -861,8 +861,8 @@ class StreamView(View):
         self.fov_va = fov_va
 
         # Will be created on the first time it's needed
-        self._focus_thread = None
-        self._focus_queue = Queue.Queue()  # contains tuples of (focuser, relative distance)
+        self._focus_thread = {}  # Focuser -> thread
+        self._focus_queue = {}  # Focuser -> Queue.Queue() of float (relative distance)
 
         # The real stage position, to be modified via moveStageToView()
         # it's a direct access from the stage, so looks like a dict of axes
@@ -905,18 +905,44 @@ class StreamView(View):
     def has_stage(self):
         return self._stage is not None
 
-    def _moveFocus(self):
+    def _getFocuserQueue(self, focuser):
+        """
+        return (Queue): queue to send move requests to the given focuser
+        """
+        try:
+            return self._focus_queue[focuser]
+        except KeyError:
+            # Create a new thread and queue
+            q = Queue.Queue()
+            self._focus_queue[focuser] = q
+
+            t = threading.Thread(target=self._moveFocus, args=(q, focuser),
+                                 name="Focus mover view %s/%s" % (self.name.value, focuser.name))
+            # TODO: way to detect the view is not used and so we need to stop the thread?
+            # (cf __del__?)
+            t.daemon = True
+            t.start()
+            self._focus_thread[focuser] = t
+
+            return q
+
+    def _moveFocus(self, q, focuser):
+        """
+        Focuser thread
+        """
         time_last_move = 0
         try:
+            axis = focuser.axes["z"]
+            try:
+                rng = axis.range
+            except AttributeError:
+                rng = None
+
             while True:
                 # wait until there is something to do
-                focuser, shift = self._focus_queue.get()
-                pos = focuser.position.value["z"]
-                axis = focuser.axes["z"]
-                try:
-                    rng = axis.range
-                except AttributeError:
-                    rng = None
+                shift = q.get()
+                if rng:
+                    pos = focuser.position.value["z"]
 
                 # rate limit to 20 Hz
                 sleept = time_last_move + 0.05 - time.time()
@@ -925,15 +951,12 @@ class StreamView(View):
 
                 # Add more moves if there are already more
                 try:
-                    nf = focuser
-                    while nf is focuser:
-                        nf, ns = self._focus_queue.get(block=False)
+                    while True:
+                        ns = q.get(block=False)
                         shift += ns
-                        if nf is not focuser:
-                            # Oops, got a bit too fast, and read message for another focuser => put it back
-                            self._focus_queue.put((nf, ns))
                 except Queue.Empty:
                     pass
+
                 logging.debug("Moving focus '%s' by %f μm", focuser.name, shift * 1e6)
 
                 # clip to the range
@@ -978,15 +1001,6 @@ class StreamView(View):
             logging.info("Trying to change focus while no stream is playing")
             return 0
 
-        # Create the focus thread if it's not yet existing
-        if self._focus_thread is None:
-            self._focus_thread = threading.Thread(target=self._moveFocus,
-                                      name="Focus mover view %s" % self.name.value)
-            # TODO: way to detect the view is not used and so we need to stop the thread?
-            # (cf __del__?)
-            self._focus_thread.daemon = True
-            self._focus_thread.start()
-
         # TODO: optimise with the focuser
         # Find the depth of field (~ the size of one "focus step")
         for c in (curr_s.detector, curr_s.emitter):
@@ -1003,7 +1017,8 @@ class StreamView(View):
         k = 50e-3  # 1/px
         val = dof * k * shift  # m
         assert(abs(val) < 0.01)  # a move of 1 cm is a clear sign of bug
-        self._focus_queue.put((focuser, val))
+        q = self._getFocuserQueue(focuser)
+        q.put(val)
         return val
 
     def moveStageBy(self, shift):
