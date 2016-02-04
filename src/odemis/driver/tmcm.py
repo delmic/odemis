@@ -1343,6 +1343,11 @@ class TMCLController(model.Actuator):
     def stop(self, axes=None):
         self._executor.cancel()
 
+        # For safety, just force stop every axis
+        for an, aid in self._name_to_axis.items():
+            if axes is None or an in axes:
+                self.MotorStop(aid)
+
     def _doMoveRel(self, future, pos):
         """
         Blocking and cancellable relative move
