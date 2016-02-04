@@ -950,14 +950,12 @@ class FixedPositionsActuator(model.Actuator):
         stops the motion
         axes (iterable or None): list of axes to stop, or None if all should be stopped
         """
-        # it's synchronous, but we want to stop it as soon as possible
-        thread = threading.Thread(name="stopping axis", target=self._child.stop, args=(self._caxis,))
-        thread.start()
+        if axes is not None:
+            axes = set()
+            if self._axis in axes:
+                axes.add(self._caxis)
 
-        # wait for completion
-        thread.join(1)
-        if thread.is_alive():
-            logging.warning("Stopping child actuator of '%s' is taking more than 1s", self.name)
+        self._child.stop(axes=axes)
 
     def terminate(self):
         if self._executor:
