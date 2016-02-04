@@ -969,12 +969,11 @@ class StreamView(View):
                         logging.info("Restricting focus move to %f µm as it reached the end",
                                      shift * 1e6)
 
-                f = focuser.moveRel({"z": shift})
                 time_last_move = time.time()
                 # wait until it's finished so that we don't accumulate requests,
                 # but instead only do requests of size "big enough"
                 try:
-                    f.result()
+                    focuser.moveRelSync({"z": shift})
                 except Exception:
                     logging.info("Failed to apply focus move", exc_info=1)
         except Exception:

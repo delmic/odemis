@@ -31,7 +31,6 @@ import numpy
 from odemis import model, util
 from odemis.model import CancellableThreadPoolExecutor, isasync, MD_PIXEL_SIZE_COR, MD_ROTATION_COR, \
     MD_POS_COR
-from odemis.model._core import roattribute
 import threading
 
 
@@ -709,12 +708,11 @@ class AntiBacklashActuator(model.Actuator):
                 else:
                     sub_shift[a] = v - self._backlash[a]
                     sub_backlash[a] = self._backlash[a]
-        f = self._child.moveRel(sub_shift)
-        f.result()
+        self._child.moveRelSync(sub_shift)
 
         # backlash move
-        f = self._child.moveRel(sub_backlash)
-        f.result()
+        if sub_backlash:
+            self._child.moveRelSync(sub_backlash)
 
     def _doMoveAbs(self, pos):
         sub_pos = {}
@@ -729,12 +727,11 @@ class AntiBacklashActuator(model.Actuator):
                 else:
                     sub_pos[a] = v - self._backlash[a]
                     fpos[a] = pos[a]
-        f = self._child.moveAbs(sub_pos)
-        f.result()
+        self._child.moveAbsSync(sub_pos)
 
         # backlash move
-        f = self._child.moveAbs(fpos)
-        f.result()
+        if fpos:
+            self._child.moveAbsSync(fpos)
 
     @isasync
     def moveRel(self, shift):
