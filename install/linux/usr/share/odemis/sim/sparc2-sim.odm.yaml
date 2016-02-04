@@ -32,7 +32,7 @@ SPARC2: {
             "CL PMT control unit": 0,
             "Camera": 3,
             "Spectral Camera": 3,
-            "Spectrograph": 10,
+            "Spectrograph": 5,
             "Optical Actuators": 1
         },
         init: { # Which component to power on from the very beginning (to save time)

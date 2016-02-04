@@ -832,10 +832,6 @@ class FixedPositionsActuator(model.Actuator):
             nearest = util.find_closest(self._child.position.value[self._caxis], self._positions.keys())
             self.moveAbs({self._axis: nearest}).result()
 
-    @roattribute
-    def positions(self):
-        return self._positions
-
     def _on_referenced(self, future):
         try:
             future.result()

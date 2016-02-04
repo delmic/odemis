@@ -30,7 +30,6 @@ from odemis import model
 from odemis.acq import stream
 from odemis.model import isasync
 
-
 GRATING_NOT_MIRROR = ("NOTMIRROR",)  # A tuple, so that no grating position can be like this
 
 
@@ -210,6 +209,13 @@ class OpticalPathManager(object):
         # keep list of already accessed components, to avoid creating new proxys
         # every time the mode changes
         self._known_comps = dict()  # str (role) -> component
+
+        # All the actuators in the microscope, to cache proxy's to them
+        self._actuators = []
+        for comp in model.getComponents():
+            if hasattr(comp, 'axes') and isinstance(comp.axes, dict):
+                self._actuators.append(comp)
+
         # last known axes position
         self._stored = {}
         self._last_mode = None  # previous mode that was set
@@ -262,6 +268,7 @@ class OpticalPathManager(object):
         self._executor = ThreadPoolExecutor(max_workers=1)
 
     def __del__(self):
+        logging.debug("Ending path manager")
         self._executor.shutdown(wait=False)
 
     def _getComponent(self, role):
@@ -307,13 +314,13 @@ class OpticalPathManager(object):
             if mode not in self._modes:
                 raise ValueError("Mode '%s' does not exist" % (mode,))
             comp_role = self._modes[mode][0]
-            comp = model.getComponent(role=comp_role)
+            comp = self._getComponent(comp_role)
             target = comp.name
 
         logging.debug("Going to optical path '%s'", mode)
 
         modeconf = self._modes[mode][1]
-        self.fmoves = []  # moves in progress
+        fmoves = []  # moves in progress
         for comp_role, conf in modeconf.items():
             # Try to access the component needed
             try:
@@ -413,25 +420,25 @@ class OpticalPathManager(object):
                     logging.debug("Not moving axis %s.%s as it is not present", comp_role, axis)
 
             try:
-                self.fmoves.append(comp.moveAbs(mv))
+                fmoves.append(comp.moveAbs(mv))
             except AttributeError:
                 logging.debug("%s not an actuator", comp_role)
 
         # Now take care of the selectors based on the target detector
-        self.selectorsToPath(target)
+        fmoves.extend(self.selectorsToPath(target))
 
         # If we are about to leave alignment modes, restore values
         if self._last_mode in ALIGN_MODES and mode not in ALIGN_MODES:
             if 'band' in self._stored:
                 try:
                     flter = self._getComponent("filter")
-                    self.fmoves.append(flter.moveAbs({"band": self._stored['band']}))
+                    fmoves.append(flter.moveAbs({"band": self._stored['band']}))
                 except LookupError:
                     logging.debug("No filter component available")
             if 'slit-in' in self._stored:
                 try:
                     spectrograph = self._getComponent("spectrograph")
-                    self.fmoves.append(spectrograph.moveAbs({"slit-in": self._stored['slit-in']}))
+                    fmoves.append(spectrograph.moveAbs({"slit-in": self._stored['slit-in']}))
                 except LookupError:
                     logging.debug("No spectrograph component available")
 
@@ -439,7 +446,7 @@ class OpticalPathManager(object):
         self._last_mode = mode
 
         # wait for all the moves to be completed
-        for f in self.fmoves:
+        for f in fmoves:
             try:
                 f.result()
             except IOError as e:
@@ -450,35 +457,32 @@ class OpticalPathManager(object):
         Sets the selectors so the optical path leads to the target component
         (usually a detector).
         target (str): component name
+        return (list of futures)
         """
-        comps = model.getComponents()
-        for comp in comps:
-            if hasattr(comp, "positions") and isinstance(comp.positions, dict):
-                for key, value in comp.positions.items():
-                    if target in value:
-                        # set the position so it points to the target
-                        mv = {}
-                        mv[comp.axes.keys()[0]] = key
-                        logging.debug("Move %s added so %s targets to %s", mv, comp.name, target)
-                        self.fmoves.append(comp.moveAbs(mv))
-                        # keep the component name as the new target
-                        comp_found = comp.name
-                        self.selectorsToPath(comp_found)
+        fmoves = []
+        for comp in self._actuators:
+            # TODO: pre-cache this as comp/target -> axis/pos
+            mv = {}
+            for an, ad in comp.axes.items():
+                if hasattr(ad, "choices") and isinstance(ad.choices, dict):
+                    for pos, value in ad.choices.items():
+                        if target in value:
+                            # set the position so it points to the target
+                            mv[an] = pos
+
             comp_md = comp.getMetadata()
-            if (model.MD_FAV_POS_ACTIVE_DEST in comp_md) and (target in comp_md[model.MD_FAV_POS_ACTIVE_DEST]):
-                logging.debug("Move %s added so %s targets to %s", comp_md[model.MD_FAV_POS_ACTIVE], comp.name, target)
-                self.fmoves.append(comp.moveAbs(comp_md[model.MD_FAV_POS_ACTIVE]))
-                # keep the component name as the new target
-                comp_found = comp.name
-                self.selectorsToPath(comp_found)
-            elif (model.MD_FAV_POS_DEACTIVE_DEST in comp_md) and (target in comp_md[model.MD_FAV_POS_DEACTIVE_DEST]):
-                logging.debug("Move %s added so %s targets to %s", comp_md[model.MD_FAV_POS_DEACTIVE], comp.name, target)
-                self.fmoves.append(comp.moveAbs(comp_md[model.MD_FAV_POS_DEACTIVE]))
-                # keep the component name as the new target
-                comp_found = comp.name
-                self.selectorsToPath(comp_found)
-        else:
-            return
+            if target in comp_md.get(model.MD_FAV_POS_ACTIVE_DEST, {}):
+                mv.update(comp_md[model.MD_FAV_POS_ACTIVE])
+            elif target in comp_md.get(model.MD_FAV_POS_DEACTIVE_DEST, {}):
+                mv.update(comp_md[model.MD_FAV_POS_DEACTIVE])
+
+            if mv:
+                logging.debug("Move %s added so %s targets to %s", mv, comp.name, target)
+                fmoves.append(comp.moveAbs(mv))
+                # make sure this component is also on the optical path
+                fmoves.extend(self.selectorsToPath(comp.name))
+
+        return fmoves
 
     def guessMode(self, guess_stream):
         """
@@ -514,6 +518,7 @@ class OpticalPathManager(object):
         returns (str): detector name
         raises:
                 IOError if given object is not a stream
+                AttributeError: if stream has no detector
         """
         if not isinstance(path_stream, stream.Stream):
             raise IOError("Given object is not a stream")
