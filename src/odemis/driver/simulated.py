@@ -323,4 +323,4 @@ class PhenomChamber(Chamber):
         # sample holder VA is a read-only tuple with holder ID/type
         # TODO: set to None/None when the sample is ejected
         self.sampleHolder = model.TupleVA((PHENOM_SH_FAKE_ID, PHENOM_SH_TYPE_OPTICAL),
-                                          readonly=True)
+                                         readonly=True)

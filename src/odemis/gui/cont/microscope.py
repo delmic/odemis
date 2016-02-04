@@ -20,7 +20,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 from __future__ import division
 
-import os
 from abc import ABCMeta
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED
 import logging
@@ -899,9 +898,16 @@ class DelphiStateController(SecomStateController):
 
         shid, sht = self._main_data.chamber.sampleHolder.value
 
-        if sht != PHENOM_SH_TYPE_OPTICAL:
-            # Log the warning but proceed to calibration
-            logging.warn("Wrong sample holder type! We will try to calibrate anyway...")
+        if sht is None:  # No sample holder present
+            wx.MessageBox(
+                "Please make sure a sample holder with an empty glass is loaded",
+                "Missing sample holder",
+                style=wx.ICON_ERROR
+            )
+            return
+        elif sht != PHENOM_SH_TYPE_OPTICAL:
+            # Hopefully it's just because the sample holder has not been correctly registered
+            logging.warn("Wrong sample holder type %d! We will try to calibrate anyway...", sht)
 
         # Returns 'yes' for automatic, 'no' for manual
         dlg = windelphi.RecalibrationDialog(self._main_frame)
