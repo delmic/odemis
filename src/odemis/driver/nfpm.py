@@ -504,7 +504,7 @@ class PM8742(model.Actuator):
         """
         with future._moving_lock:
             end = 0 # expected end
-            old_pos = self.position.value
+            old_pos = self._applyInversion(self.position.value)
             moving_axes = set()
             for an, v in pos.items():
                 aid = self._name_to_axis[an]

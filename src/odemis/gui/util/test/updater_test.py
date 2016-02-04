@@ -40,9 +40,12 @@ class TestWindowsUpdater(unittest.TestCase):
         self.assertEqual(len(lv.split('.')), 3)
 
         rv, rsize = u.get_remote_version()
-        # Note: if not internet access, it would be acceptable to get None
+        # Note: if no internet access, it would be acceptable to get None
+
         self.assertEqual(len(rv.split('.')), 3)
         self.assertGreater(rsize, 1000)
+
+        # u.check_for_update()
 
     # TODO: test more methods
 

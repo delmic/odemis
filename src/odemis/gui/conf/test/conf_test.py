@@ -78,7 +78,7 @@ class ConfigTest(object):
 
 class GeneralConfigTest(ConfigTest, unittest.TestCase):
 
-    conf_class = gui.conf.GeneralConfig
+    conf_class = gui.conf.file.GeneralConfig
 
     def test_simple(self):
         conf = gui.conf.get_general_conf()
@@ -125,7 +125,7 @@ class GeneralConfigTest(ConfigTest, unittest.TestCase):
 
 class AcquisitionConfigTest(ConfigTest, unittest.TestCase):
 
-    conf_class = gui.conf.AcquisitionConfig
+    conf_class = gui.conf.file.AcquisitionConfig
 
     def test_simple(self):
         conf = gui.conf.get_acqui_conf()
@@ -142,7 +142,7 @@ class AcquisitionConfigTest(ConfigTest, unittest.TestCase):
 
 class CalibrationConfigTest(ConfigTest, unittest.TestCase):
 
-    conf_class = gui.conf.CalibrationConfig
+    conf_class = gui.conf.file.CalibrationConfig
 
     def test_simple(self):
         conf = gui.conf.get_calib_conf()

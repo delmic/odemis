@@ -252,6 +252,10 @@ class TMCLController(model.Actuator):
         self.speed = model.VigilantAttribute({}, unit="m/s", readonly=True)
         self._updateSpeed()
 
+        self._accel = {}
+        for n, i in self._name_to_axis.items():
+            self._accel[n] = self._readAccel(i)
+
         if refproc is not None:
             # str -> boolean. Indicates whether an axis has already been referenced
             axes_ref = dict((a, False) for a in axes)
@@ -1194,20 +1198,41 @@ class TMCLController(model.Actuator):
         Update the speed VA from the controller settings
         """
         speed = {}
-        # As described in section 3.4.1:
-        #       fCLK * velocity
-        # usf = ------------------------
-        #       2**pulse_div * 2048 * 32
         for n, i in self._name_to_axis.items():
-            velocity = self.GetAxisParam(i, 4)
-            pulse_div = self.GetAxisParam(i, 154)
-            # fCLK = 16 MHz
-            usf = (16e6 * velocity) / (2 ** pulse_div * 2048 * 32)
-            speed[n] = usf * self._ustepsize[i] # m/s
+            speed[n] = self._readSpeed(i)
 
         # it's read-only, so we change it via _value
         self.speed._value = speed
         self.speed.notify(self.speed.value)
+
+    def _readSpeed(self, a):
+        """
+        return (float): the speed of the axis in m/s
+        """
+        # As described in section 3.4.1:
+        #       fCLK * velocity
+        # usf = ------------------------
+        #       2**pulse_div * 2048 * 32
+        velocity = self.GetAxisParam(a, 4)
+        pulse_div = self.GetAxisParam(a, 154)
+        # fCLK = 16 MHz
+        usf = (16e6 * velocity) / (2 ** pulse_div * 2048 * 32)
+        return usf * self._ustepsize[a]  # m/s
+
+    def _readAccel(self, a):
+        """
+        return (float): the acceleration of the axis in m²/s
+        """
+        # Described in section 3.4.2:
+        #       fCLK ** 2 * Amax
+        # a = -------------------------------
+        #       2**(pulse_div +ramp_div + 29)
+        amax = self.GetAxisParam(a, 5)
+        pulse_div = self.GetAxisParam(a, 154)
+        ramp_div = self.GetAxisParam(a, 153)
+        # fCLK = 16 MHz
+        usa = (16e6 ** 2 * amax) / 2 ** (pulse_div + ramp_div + 29)
+        return usa * self._ustepsize[a]  # m²/s
 
     def _updateTemperatureVA(self):
         """
@@ -1273,14 +1298,14 @@ class TMCLController(model.Actuator):
         if not pos:
             return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
-        pos = self._applyInversion(pos)
-        dependences = set(pos.keys())
 
         for a, p in pos.items():
             if (hasattr(self, "referenced") and
                 not self.referenced.value[a] and p != self.position.value[a]):
                 logging.warning("Absolute move on axis '%s' which has not be referenced", a)
 
+        pos = self._applyInversion(pos)
+        dependences = set(pos.keys())
         f = self._createMoveFuture()
         self._executor.submitf(dependences, f, self._doMoveAbs, f, pos)
         return f
@@ -1336,7 +1361,8 @@ class TMCLController(model.Actuator):
                 usteps = int(round(v / self._ustepsize[aid]))
                 self.MoveRelPos(aid, usteps)
                 # compute expected end
-                dur = abs(usteps) * self._ustepsize[aid] / self.speed.value[an]
+                d = abs(usteps) * self._ustepsize[aid]
+                dur = driver.estimateMoveDuration(d, self.speed.value[an], self._accel[an])
                 end = max(time.time() + dur, end)
 
             self._waitEndMove(future, moving_axes, end)
@@ -1353,7 +1379,7 @@ class TMCLController(model.Actuator):
         """
         with future._moving_lock:
             end = 0 # expected end
-            old_pos = self.position.value
+            old_pos = self._applyInversion(self.position.value)
             moving_axes = set()
             for an, v in pos.items():
                 aid = self._name_to_axis[an]
@@ -1361,7 +1387,8 @@ class TMCLController(model.Actuator):
                 usteps = int(round(v / self._ustepsize[aid]))
                 self.MoveAbsPos(aid, usteps)
                 # compute expected end
-                dur = abs(v - old_pos[an]) / self.speed.value[an]
+                d = abs(v - old_pos[an])
+                dur = driver.estimateMoveDuration(d, self.speed.value[an], self._accel[an])
                 end = max(time.time() + dur, end)
 
             self._waitEndMove(future, moving_axes, end)
@@ -1383,6 +1410,7 @@ class TMCLController(model.Actuator):
         last_upd = time.time()
         dur = max(0.01, min(end - last_upd, 60))
         max_dur = dur * 2 + 1
+        logging.debug("Expecting a move of %g s, will wait up to %g s", dur, max_dur)
         timeout = last_upd + max_dur
         last_axes = moving_axes.copy()
         try:
@@ -1396,7 +1424,7 @@ class TMCLController(model.Actuator):
 
                 now = time.time()
                 if now > timeout:
-                    logging.info("Stopping move due to timeout after %g s.", max_dur)
+                    logging.warning("Stopping move due to timeout after %g s.", max_dur)
                     for i in moving_axes:
                         self.MotorStop(i)
                     raise TimeoutError("Move is not over after %g s, while "
@@ -1651,7 +1679,9 @@ class TMCMSimulator(object):
         orig_axis_state = {0: 0, # target position
                            1: 0, # current position (unused directly)
                            4: 1024, # maximum positioning speed
+                           5: 7,  # maximum acceleration
                            8: 1, # target reached? (unused directly)
+                           153: 0,  # ramp div
                            154: 3, # pulse div
                            197: 10,  # previous position before referencing (unused directly)
                            }

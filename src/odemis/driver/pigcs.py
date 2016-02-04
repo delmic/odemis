@@ -2702,7 +2702,6 @@ class Bus(model.Actuator):
                     controller.prepareEncoder(channel)
 
             end = 0  # expected end
-            old_pos = self.position.value
             moving_axes = set()
             try:
                 for an, v in pos.items():
@@ -2710,7 +2709,6 @@ class Bus(model.Actuator):
                     controller, channel = self._axis_to_cc[an]
                     dist = controller.moveAbs(channel, v)
                     # compute expected end
-                    dur = abs(v - old_pos[an]) / self.speed.value[an]
                     dur = driver.estimateMoveDuration(abs(dist),
                                                       controller.getSpeed(channel),
                                                       controller.getAccel(channel))

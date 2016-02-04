@@ -97,7 +97,7 @@ def main(args):
     """
 
     # arguments handling
-    parser = argparse.ArgumentParser(prog="park-mirror",
+    parser = argparse.ArgumentParser(prog="odemis-park-mirror",
                         description="Attempt to park the mirror of the SPARCv2")
 
     parser.add_argument("--log-level", dest="loglev", metavar="<level>", type=int,
