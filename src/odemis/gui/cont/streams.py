@@ -439,10 +439,10 @@ class StreamController(object):
                           va_2_ctrl=btn_rgbfit.SetToggle, ctrl_2_va=btn_rgbfit.GetToggle)
         self.entries[se.name] = se
 
-        sld_spec, txt_spec_center, txt_spec_bw = self.stream_panel.add_specbw_ctrls()
+        self._sld_spec, txt_spec_center, txt_spec_bw = self.stream_panel.add_specbw_ctrls()
 
         se = SettingEntry(name="spectrum", va=self.stream.spectrumBandwidth, stream=self.stream,
-                          value_ctrl=sld_spec, events=wx.EVT_SLIDER)
+                          value_ctrl=self._sld_spec, events=wx.EVT_SLIDER)
         self.entries[se.name] = se
 
         def _get_center():
@@ -499,35 +499,36 @@ class StreamController(object):
                           ctrl_2_va=_get_bandwidth)
         self.entries[se.name] = se
 
-        @wxlimit_invocation(0.2)
-        def _on_new_spec_data(_):
-            # Display the global spectrum in the visual range slider
-            gspec = self.stream.getMeanSpectrum()
-            if len(gspec) <= 1:
-                logging.warning("Strange spectrum of len %d", len(gspec))
-                return
-
-            # make it fit between 0 and 1
-            if len(gspec) >= 5:
-                # skip the 2 biggest peaks
-                s_values = numpy.sort(gspec)
-                mins, maxs = s_values[0], s_values[-3]
-            else:
-                mins, maxs = gspec.min(), gspec.max()
-
-            # for spectrum, 0 has little sense, just care of the min
-            if mins < maxs:
-                coef = 1 / (maxs - mins)
-            else:  # division by 0
-                coef = 1
-
-            gspec = (gspec - mins) * coef
-            # TODO: use decorator for this (call_in_wx_main_wrapper), once this code is stable
-            wx.CallAfter(dead_object_wrapper(sld_spec.SetContent), gspec.tolist())
-
         # TODO: should the stream have a way to know when the raw data has changed? => just a
         # spectrum VA, like histogram VA
-        self.stream.image.subscribe(_on_new_spec_data, init=True)
+        self.stream.image.subscribe(self._on_new_spec_data, init=True)
+
+    @wxlimit_invocation(0.2)
+    def _on_new_spec_data(self, _):
+        logging.debug("New spec data")
+        # Display the global spectrum in the visual range slider
+        gspec = self.stream.getMeanSpectrum()
+        if len(gspec) <= 1:
+            logging.warning("Strange spectrum of len %d", len(gspec))
+            return
+
+        # make it fit between 0 and 1
+        if len(gspec) >= 5:
+            # skip the 2 biggest peaks
+            s_values = numpy.sort(gspec)
+            mins, maxs = s_values[0], s_values[-3]
+        else:
+            mins, maxs = gspec.min(), gspec.max()
+
+        # for spectrum, 0 has little sense, just care of the min
+        if mins < maxs:
+            coef = 1 / (maxs - mins)
+        else:  # division by 0
+            coef = 1
+
+        gspec = (gspec - mins) * coef
+        # TODO: use decorator for this (call_in_wx_main_wrapper), once this code is stable
+        wx.CallAfter(dead_object_wrapper(self._sld_spec.SetContent), gspec.tolist())
 
     def _add_dye_ctrl(self):
         """
