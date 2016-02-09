@@ -390,6 +390,39 @@ class TestActuator(unittest.TestCase):
         stage.moveAbs(orig_pos).result()
         stage.terminate()
 
+    def test_move_update(self):
+        stage = CLASS(**self.kwargs)
+
+        # It's optional
+        cup_axes = set()
+        for an, ax in stage.axes.items():
+            if ax.canUpdate:
+                cup_axes.add(an)
+        if not cup_axes:
+            self.skipTest("Actuator doesn't support move updates")
+
+        self.called = 0
+        orig_pos = stage.position.value
+
+        for i in range(10):
+            if i % 2:
+                d = 1
+            else:
+                d = -1
+
+            dist = d * (i + 1) * 1e-6
+            mv = dict((a, dist) for a in cup_axes)
+            f = stage.moveRel(mv, update=True)
+            f.add_done_callback(self.callback_test_notify)
+            time.sleep(0.05)  # 50 ms for 'user update'
+
+        f = stage.moveAbs(orig_pos, update=True)
+        f.add_done_callback(self.callback_test_notify)
+        f.result()
+
+        self.assertEqual(self.called, 11)
+        stage.terminate()
+
 #    @skip("faster")
     def test_cancel(self):
         stage = CLASS(**self.kwargs)
