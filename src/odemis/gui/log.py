@@ -47,7 +47,7 @@ def logging_remote_exception(msg, *args):
 logging.exception = logging_remote_exception
 
 
-def init_logger(level=logging.DEBUG):
+def init_logger(level=logging.DEBUG, log_file=None):
     """
     Initializes the logger to some nice defaults
     To be called only once, at the initialisation
@@ -60,7 +60,7 @@ def init_logger(level=logging.DEBUG):
 
     # Create file handler
     # Path to the log file
-    logfile_path = os.path.join(os.path.expanduser("~"), LOG_FILE)
+    logfile_path = log_file or os.path.join(os.path.expanduser("~"), LOG_FILE)
     # Formatting string for logging messages to file
     frm = "%(asctime)s %(levelname)-7s %(module)s:%(lineno)d: %(message)s"
     file_format = logging.Formatter(frm)
