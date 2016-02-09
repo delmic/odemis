@@ -60,8 +60,6 @@ class MultiplexActuator(model.Actuator):
         self._speed = {}
         self._referenced = {}
         axes = {}
-        # will take care of executing axis move asynchronously
-        self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
 
         for axis, child in children.items():
             caxis = axes_map[axis]
@@ -83,6 +81,13 @@ class MultiplexActuator(model.Actuator):
         # this set ._axes and ._children
         model.Actuator.__init__(self, name, role, axes=axes,
                                 children=children, **kwargs)
+
+        if len(self.children.value) > 1:
+            # will take care of executing axis move asynchronously
+            self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
+            # TODO: make use of the 'Cancellable' part (for now cancelling a running future doesn't work)
+        else:  # Only one child => optimize by passing all requests directly
+            self._executor = None
 
         # keep a reference to the subscribers so that they are not
         # automatically garbage collected
@@ -190,39 +195,64 @@ class MultiplexActuator(model.Actuator):
         # will receive multiple notifications for each set:
         # * one for each axis (via _updateSpeed from each child)
         # * the actual one (but it's probably dropped as it's the same value)
-        final_value = dict(value) # copy
+        final_value = value.copy()  # copy
         for axis, v in value.items():
             child, ma = self._axis_to_child[axis]
-            new_speed = dict(child.speed.value) # copy
+            new_speed = child.speed.value.copy()  # copy
             new_speed[ma] = v
             child.speed.value = new_speed
             final_value[axis] = child.speed.value[ma]
         return final_value
 
+    def _moveToChildMove(self, mv):
+        child_to_move = collections.defaultdict(dict)  # child -> moveRel argument
+        for axis, distance in mv.items():
+            child, child_axis = self._axis_to_child[axis]
+            child_to_move[child].update({child_axis: distance})
+            logging.debug("Moving axis %s (-> %s) by %g", axis, child_axis, distance)
+
+        return child_to_move
+
+    def _axesToChildAxes(self, axes):
+        child_to_axes = collections.defaultdict(set)  # child -> set(str): axes
+        for axis in axes:
+            child, child_axis = self._axis_to_child[axis]
+            child_to_axes[child].add(child_axis)
+            logging.debug("Interpreting axis %s (-> %s)", axis, child_to_axes)
+
+        return child_to_axes
+
     @isasync
-    def moveRel(self, shift):
+    def moveRel(self, shift, **kwargs):
         """
         Move the stage the defined values in m for each axis given.
         shift dict(string-> float): name of the axis and shift in m
+        **kwargs: Mostly there to support "update" argument (but currently works
+          only if there is only one child)
         """
         if not shift:
             return model.InstantaneousFuture()
         self._checkMoveRel(shift)
         shift = self._applyInversion(shift)
-        f = self._executor.submit(self._doMoveRel, shift)
+
+        if self._executor:
+            f = self._executor.submit(self._doMoveRel, shift, **kwargs)
+        else:
+            cmv = self._moveToChildMove(shift)
+            child, move = cmv.popitem()
+            assert not cmv
+            f = child.moveRel(move, **kwargs)
 
         return f
 
-    def _doMoveRel(self, shift):
-        child_to_move = collections.defaultdict(dict)  # child -> moveRel argument
-        for axis, distance in shift.items():
-            child, child_axis = self._axis_to_child[axis]
-            child_to_move[child].update({child_axis: distance})
-            logging.debug("Moving axis %s (-> %s) by %g", axis, child_axis, distance)
-
+    def _doMoveRel(self, shift, **kwargs):
+        # TODO: updates don't work because we still wait for the end of the
+        # move before we get to the next one => multi-threaded queue? Still need
+        # to ensure the order (ie, X>AB>X can be executed as X/AB>X or X>AB/X but
+        # XA>AB>X must be in the order XA>AB/X
         futures = []
-        for child, move in child_to_move.items():
-            f = child.moveRel(move)
+        for child, move in self._moveToChildMove(shift).items():
+            f = child.moveRel(move, **kwargs)
             futures.append(f)
 
         # just wait for all futures to finish
@@ -230,25 +260,26 @@ class MultiplexActuator(model.Actuator):
             f.result()
 
     @isasync
-    def moveAbs(self, pos):
+    def moveAbs(self, pos, **kwargs):
         if not pos:
             return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
         pos = self._applyInversion(pos)
-        f = self._executor.submit(self._doMoveAbs, pos)
+
+        if self._executor:
+            f = self._executor.submit(self._doMoveAbs, pos, **kwargs)
+        else:
+            cmv = self._moveToChildMove(pos)
+            child, move = cmv.popitem()
+            assert not cmv
+            f = child.moveAbs(move, **kwargs)
 
         return f
 
-    def _doMoveAbs(self, pos):
-        child_to_move = collections.defaultdict(dict) # child -> moveAbs argument
-        for axis, distance in pos.items():
-            child, child_axis = self._axis_to_child[axis]
-            child_to_move[child].update({child_axis: distance})
-            logging.debug("Moving axis %s (-> %s) to %g", axis, child_axis, distance)
-
+    def _doMoveAbs(self, pos, **kwargs):
         futures = []
-        for child, move in child_to_move.items():
-            f = child.moveAbs(move)
+        for child, move in self._moveToChildMove(pos).items():
+            f = child.moveAbs(move, **kwargs)
             futures.append(f)
 
         # just wait for all futures to finish
@@ -260,20 +291,21 @@ class MultiplexActuator(model.Actuator):
         if not axes:
             return model.InstantaneousFuture()
         self._checkReference(axes)
-        f = self._executor.submit(self._doReference, axes)
+        if self._executor:
+            f = self._executor.submit(self._doReference, axes)
+        else:
+            cmv = self._axesToChildAxes(axes)
+            child, a = cmv.popitem()
+            assert not cmv
+            f = child.reference(a)
 
         return f
     reference.__doc__ = model.Actuator.reference.__doc__
 
     def _doReference(self, axes):
-        child_to_move = collections.defaultdict(set)  # child -> reference argument
-        for axis in axes:
-            child, child_axis = self._axis_to_child[axis]
-            child_to_move[child].add(child_axis)
-            logging.debug("Referencing axis %s (-> %s)", axis, child_axis)
-
+        child_to_axes = self._axesToChildAxes(axes)
         futures = []
-        for child, a in child_to_move.items():
+        for child, a in child_to_axes.items():
             f = child.reference(a)
             futures.append(f)
 
@@ -287,16 +319,20 @@ class MultiplexActuator(model.Actuator):
         axes (iterable or None): list of axes to stop, or None if all should be stopped
         """
         # Empty the queue for the given axes
-        self._executor.cancel()
-        axes = axes or self.axes
+        if self._executor:
+            self._executor.cancel()
+
+        all_axes = set(self.axes.keys())
+        axes = axes or all_axes
+        unknown_axes = axes - all_axes
+        if unknown_axes:
+            logging.error("Attempting to stop unknown axes: %s", ", ".join(unknown_axes))
+            axes &= all_axes
+
         threads = []
-        for axis in axes:
-            if axis not in self._axis_to_child:
-                logging.error("Axis unknown: %s", axis)
-                continue
-            child, child_axis = self._axis_to_child[axis]
-            # it's synchronous, but we want to stop them as soon as possible
-            thread = threading.Thread(name="stopping axis", target=child.stop, args=(child_axis,))
+        for child, a in self._axesToChildAxes(axes).items():
+            # it's synchronous, but we want to stop all of them as soon as possible
+            thread = threading.Thread(name="Stopping axis", target=child.stop, args=(a,))
             thread.start()
             threads.append(thread)
 
