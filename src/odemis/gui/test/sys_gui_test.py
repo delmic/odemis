@@ -139,7 +139,7 @@ print "\n  Done"
 
 def generate_config_test(sim_conf):
     """ Create and return a test method to be added to the test case """
-    def test_simulated_hardware_configs(self):
+    def test_simulated_hardware_config(self):
         sim_conf_path = os.path.join(SIM_CONF_PATH, sim_conf)
 
         print "\n* Starting %s backend\n" % sim_conf
@@ -204,13 +204,14 @@ def generate_config_test(sim_conf):
             except OSError:
                 pass
 
-    return test_simulated_hardware_configs
+    return test_simulated_hardware_config
 
 
 # Create a test and add it to the test case for each configuration found
-for i, sim_conf in enumerate(sim_conf_files):
+for sim_conf in sim_conf_files:
     test = generate_config_test(sim_conf)
-    setattr(HardwareConfigTestCase, "test_%d" % i, test)
+    test_name = "test_%s" % "".join((c if c.isalnum() else '_' for c in sim_conf))
+    setattr(HardwareConfigTestCase, test_name, test)
 
 
 if __name__ == "__main__":
