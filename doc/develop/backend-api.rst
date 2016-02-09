@@ -328,6 +328,9 @@ Note that .moveRel() and .moveAbs() are asynchronous. If several moves are reque
         Request a move by a relative amount. If the hardware supports it, the 
         driver should move all axes simultaneously, otherwise, axes will be moved
         sequentially in a non-specified order.
+        Note that if the axis has  :py:attr:`Axis.canUpdate` ``True``, that
+        method will accept the argument ``update``.
+        See the documentation of that attribute for more information.
         
         :param shift: distance (or angle) that should be moved for each axis. 
             If an axis is not mentioned it should not be moved.
@@ -337,6 +340,9 @@ Note that .moveRel() and .moveAbs() are asynchronous. If several moves are reque
     .. py:method:: moveAbs(pos)
         
         Requests a move to a specific position.
+        Note that if the axis has  :py:attr:`Axis.canUpdate` ``True``, that
+        method will accept the argument ``update``.
+        See the documentation of that attribute for more information.
         
         :param pos: Position to reach for each axis. If an axis is not mentioned it should not be moved.
         :type pos: dict str → float
@@ -397,9 +403,22 @@ attribute (e.g., switch).
         
     .. py:attribute:: canAbs
     
-    	*(RO, bool)* indicates whether the hardware supports absolute positioning.
-    	If it is not supported by hardware, the :py:meth:`Actuator.moveAbs` will 
-    	approximate the move by a relative one. 
+        *(RO, bool)* indicates whether the hardware supports absolute positioning.
+        If it is not supported by hardware, the :py:meth:`Actuator.moveAbs` will
+        approximate the move by a relative one.
+
+    .. py:attribute:: canUpdate
+
+        *(RO, bool)* indicates whether the hardware supports updates of moves.
+        If it is supported by hardware, the methods the :py:meth:`Actuator.moveRel`
+        and :py:meth:`Actuator.moveAbs` will accept the ``update`` argument. If this
+        argument is ``True``, the requested move will continue the current move
+        if the current move is limited to the same axes. In such case, the current
+        move future will end before the actual end of the move, and that move
+        might never be entirely complete (ie, the path followed by the actuator
+        might not pass by the target position of the current move). If no move
+        is on going, the update argument will have no effect, and the new requested
+        move will take place as a standard move.
     	
 
 Data and Metadata
