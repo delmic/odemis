@@ -3765,6 +3765,11 @@ class E861Simulator(object):
                 if axis != 1:
                     raise SimulatedError(15)
                 out = "%s=%s" % (args[1], self._get_cur_pos_cl())
+            elif args[0] == "MOV?" and len(args) == 2:  # Closed-Loop target position query
+                axis = int(args[1])
+                if axis != 1:
+                    raise SimulatedError(15)
+                out = "%s=%s" % (args[1], self._target)
             elif args[0] == "ONT?" and len(args) == 2: # on target
                 axis = int(args[1])
                 if axis != 1:
@@ -3811,6 +3816,7 @@ class E861Simulator(object):
                        "POS?  booo \n"
                        "ONT?  booo \n"
                        "MOV  booo \n"
+                       "MOV?  booo \n"
                        "MVR  booo \n"
                        "OSM  booo \n"
                        "ERR? get error number \n"
