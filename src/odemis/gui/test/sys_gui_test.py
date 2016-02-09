@@ -163,9 +163,11 @@ def generate_config_test(sim_conf):
         try:
             if start.returncode != 0:  # 'ok' return code
                 msg = "Bad return code %s for 'odemis-start' script!" % start.returncode
+                print "  %s" % msg
                 backend_fail(sim_conf, msg)
             elif gui.returncode != 143:  # SIGTERM return code
                 msg = "Bad return code %s for 'odemis-gui' script!" % gui.returncode
+                print "  %s" % msg
                 if gui.returncode == 255:
                     print "  Did the back-end finish loading before the GUI was started?"
                 gui_fail(sim_conf, msg)
@@ -176,12 +178,14 @@ def generate_config_test(sim_conf):
 
                 if 'exception' in odemisd_log:  # or 'error' in odemisd_log
                     msg = "Error or exception suspected in 'odemisd' log!"
+                    print "  %s" % msg
                     backend_fail(sim_conf, msg)
 
                 gui_log = open(GUI_LOG_PATH).read().lower()
 
                 if 'exception' in gui_log:  # or 'error' in gui_log
                     msg = "Error or exception suspected in 'GUI' log!"
+                    print "  %s" % msg
                     gui_fail(sim_conf, msg)
         finally:
             # Remove the test log files
@@ -192,7 +196,7 @@ def generate_config_test(sim_conf):
 
 
 # Create a test and add it to the test case for each configuration found
-for i, sim_conf in enumerate(sim_conf_files[15:]):
+for i, sim_conf in enumerate(sim_conf_files):
     test = generate_config_test(sim_conf)
     setattr(HardwareConfigTestCase, "test_%d" % i, test)
 
