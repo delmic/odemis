@@ -98,12 +98,29 @@ class CancellableThreadPoolExecutor(ThreadPoolExecutor):
                 # the task raised an exception => we don't care
                 pass
 
+    def get_next_future(self, f):
+        """
+        Return the next future scheduled after the given future.
+        The order is the one that was used to submit the work.
+        f (Future): a scheduled future
+        return (Future or None): the next future or None if no task is
+          scheduled after the given future.
+        """
+        with self._shutdown_lock:
+            ffound = False
+            for schedf in self._queue:
+                if ffound:
+                    return schedf
+                elif schedf is f:
+                    ffound = True
+            return None
+
 
 class ParallelThreadPoolExecutor(ThreadPoolExecutor):
     """
     An extended ThreadPoolExecutor that can execute multiple jobs in parallel
-    -if not on the same set.
-    Note that the task are still always executed in order they were submitted.
+    -if not on the same dependences set.
+    Note that the tasks are still always executed in order they were submitted.
     It also allows non standard Future to be created.
     """
     def __init__(self):

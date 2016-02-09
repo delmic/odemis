@@ -621,9 +621,13 @@ class Axis(object):
     """
 
     def __init__(self, canAbs=True, choices=None, unit=None,
-                 range=None, speed=None):
+                 range=None, speed=None, canUpdate=False):
         """
         canAbs (bool): whether the axis can move in absolute coordinates
+        canUpdate (bool): whether the axis can update the target position while
+         a move is on going. That means that calling .moveXXX(..., update=True)
+         might cause the current move to stop early and that new move will handle
+         the device from then on.
         unit (None or str): the unit of the axis position (and speed). None
           indicates unknown or not applicable. "" indicates a ratio.
         choices (set or dict): Allowed positions. If it's a dict, the value
@@ -633,6 +637,7 @@ class Axis(object):
         speed (2-tuple): min/max speed.
         """
         self.canAbs = canAbs
+        self.canUpdate = canUpdate
 
         # TODO: add a way to store some "favorite" positions (at least possible
         # to define at init, and maybe also update online?)
