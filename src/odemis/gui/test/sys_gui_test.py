@@ -208,7 +208,7 @@ def generate_config_test(sim_conf):
 
 
 # Create a test and add it to the test case for each configuration found
-for i, sim_conf in enumerate(sim_conf_files[16:]):
+for i, sim_conf in enumerate(sim_conf_files):
     test = generate_config_test(sim_conf)
     setattr(HardwareConfigTestCase, "test_%d" % i, test)
 
