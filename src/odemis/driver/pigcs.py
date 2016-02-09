@@ -2816,6 +2816,9 @@ class Bus(model.Actuator):
                 nf = self._executor.get_next_future(future)
                 if nf is not None and moving_axes <= nf._update_axes:
                     need_pos_update = False
+                    # TODO: make sure the position gets updated from time to time
+                    # there is non-ending series of update moves.
+                    # => reuse the .GetPosition() of the controller.moveRel()?
                     logging.debug("Ending move control early as next move is an update containing %s", moving_axes)
                     return
 
@@ -3192,6 +3195,8 @@ class SerialBusAccesser(object):
                 anssplited = ans.split("\n")
                 # if the answer finishes with \n, last split is empty
                 anssplited, ans = anssplited[:-1], anssplited[-1]
+                if anssplited:
+                    logging.debug("Received: '%s'", "\n".join(anssplited).encode('string_escape'))
 
                 for l in anssplited:
                     if not continuing:
@@ -3731,7 +3736,7 @@ class E861Simulator(object):
                 speed = self._parameters[self._com_to_param["VEL"]]
                 cur_pos = self._get_cur_pos_cl()
                 distance = cur_pos - pos
-                duration = abs(distance) / speed
+                duration = abs(distance) / speed + 0.05
                 logging.debug("Simulating a move of %f s", duration)
                 self._start_move = time.time()
                 self._end_move = self._start_move + duration
@@ -3744,7 +3749,7 @@ class E861Simulator(object):
                 if self._ref_mode and not self._referenced:
                     raise SimulatedError(8)
                 speed = self._parameters[self._com_to_param["VEL"]]
-                duration = abs(distance) / speed
+                duration = abs(distance) / speed + 0.05
                 logging.debug("Simulating a move of %f s", duration)
                 cur_pos = self._get_cur_pos_cl()
                 self._start_move = time.time()
