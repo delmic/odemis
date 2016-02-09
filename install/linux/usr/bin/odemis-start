@@ -130,12 +130,14 @@ import wx
 
 
 class BackendStarter(object):
-    def __init__(self, config):
+    def __init__(self, config, nogui=False):
         self._config = config
 
         # For displaying wx windows
         logging.debug("Creating app")
         self._app = wx.App()
+
+        self._nogui = nogui
 
         # Warning: wx will crash if Pynotify has been loaded before creating the wx.App (probably
         # due to bad interaction with GTK). That's why we only import it here.
@@ -345,7 +347,7 @@ class BackendStarter(object):
         # if status == driver.BACKEND_RUNNING:
         if ret == wx.ID_OK:
             self._notif.update("Odemis back-end successfully started",
-                               "Graphical interface will now start.",
+                               "" if self._nogui else "Graphical interface will now start.",
                                "dialog-info")
             self._notif.show()
         # elif status in (driver.BACKEND_DEAD, driver.BACKEND_STOPPED):
@@ -459,8 +461,8 @@ class BackendStarter(object):
         msg = "".join(lines[startl:])
 
         # At least, skip everything not related to this last run
-        frame = self._create_log_frame(msg)
-        frame.ShowModal()
+        log_frame = self._create_log_frame(msg)
+        log_frame.ShowModal()
 
 
 def main(args):
@@ -508,7 +510,7 @@ def main(args):
 
         status = driver.get_backend_status()
         if status != driver.BACKEND_RUNNING:
-            starter = BackendStarter(odemis_config)
+            starter = BackendStarter(odemis_config, options.nogui)
             # TODO: if backend running but with a different model, also restart it
             if status == driver.BACKEND_DEAD:
                 logging.warning("Back-end is not responding, will restart it...")

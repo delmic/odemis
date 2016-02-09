@@ -30,13 +30,10 @@ hardware configuration file in this repository. This includes both the back-end 
 import os
 import shutil
 import subprocess
-
-# All paths are relative to the directory in which this test module resides.
+import sys
 import threading
 import unittest
 from time import sleep
-
-import sys
 
 # Path of this module
 MY_PATH = os.path.abspath(os.path.dirname(__file__))
@@ -60,8 +57,10 @@ sim_conf_files = [filename for filename in os.listdir(SIM_CONF_PATH) if filename
 class OdemisThread(threading.Thread):
     """ Thread used to run Odemis commands """
 
-    def __init__(self, cmd):
-        super(OdemisThread, self).__init__()
+    def __init__(self, name, cmd):
+        super(OdemisThread, self).__init__(name=name)
+
+        self.proc = None
 
         self.stdout = None
         self.stderr = None
@@ -71,15 +70,18 @@ class OdemisThread(threading.Thread):
 
     def run(self):
         print "  %s" % self.cmd
-        p = subprocess.Popen(self.cmd.split(),
-                             shell=False,
-                             stdout=subprocess.PIPE,
-                             stderr=subprocess.PIPE)
+        self.proc = subprocess.Popen(self.cmd.split(),
+                                     shell=False,
+                                     stdout=subprocess.PIPE,
+                                     stderr=subprocess.PIPE)
 
-        self.stdout, self.stderr = p.communicate()
+        self.stdout, self.stderr = self.proc.communicate()
         # print self.stdout
         # print self.stderr
-        self.returncode = p.returncode
+        self.returncode = self.proc.returncode
+
+    def kill(self):
+        self.proc.kill()
 
 
 def test_sleep(t):
@@ -129,7 +131,7 @@ class HardwareConfigTestCase(unittest.TestCase):
 
 # Stop any running back-ends
 print "\n* Halting any Odemis instances...\n"
-halt = OdemisThread(CMD_STOP)
+halt = OdemisThread("Odemis Halting thread", CMD_STOP)
 halt.start()
 halt.join()
 print "\n  Done"
@@ -142,21 +144,28 @@ def generate_config_test(sim_conf):
 
         print "\n* Starting %s backend\n" % sim_conf
         cmd = CMD_START + sim_conf_path
-        start = OdemisThread(cmd)
+        start = OdemisThread("Backend %s" % sim_conf, cmd)
         start.start()
 
+        # Wait for the back end to load
         test_sleep(30)
 
         print "\n* Starting %s GUI\n" % sim_conf
-        gui = OdemisThread(CMD_GUI)
+        gui = OdemisThread("GUI %s" % sim_conf, CMD_GUI)
         gui.start()
 
+        # Wait for the GUI to load
         test_sleep(10)
 
         print "\n* Stopping %s\n" % sim_conf
-        stop = OdemisThread(CMD_STOP)
+        stop = OdemisThread("Stop %s" % sim_conf, CMD_STOP)
         stop.start()
         stop.join()
+
+        # If 'start' is still running, kill it forcibly (It might be stuck displaying the log
+        # window)
+        if start.is_alive():
+            start.kill()
 
         print ""
 
@@ -188,15 +197,18 @@ def generate_config_test(sim_conf):
                     print "  %s" % msg
                     gui_fail(sim_conf, msg)
         finally:
-            # Remove the test log files
-            os.remove(ODEMISD_LOG_PATH)
-            os.remove(GUI_LOG_PATH)
+            try:
+                # Remove the test log files
+                os.remove(ODEMISD_LOG_PATH)
+                os.remove(GUI_LOG_PATH)
+            except OSError:
+                pass
 
     return test_simulated_hardware_configs
 
 
 # Create a test and add it to the test case for each configuration found
-for i, sim_conf in enumerate(sim_conf_files):
+for i, sim_conf in enumerate(sim_conf_files[16:]):
     test = generate_config_test(sim_conf)
     setattr(HardwareConfigTestCase, "test_%d" % i, test)
 
