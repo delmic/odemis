@@ -938,6 +938,11 @@ class StreamView(View):
             except AttributeError:
                 rng = None
 
+            if axis.canUpdate:
+                # Update the target position on the fly
+                logging.debug("Will be moving the focuser %s via position update", focuser.name)
+            fpending = []  # pending futures (only used if axis.canUpdate)
+
             while True:
                 # wait until there is something to do
                 shift = q.get()
@@ -946,8 +951,25 @@ class StreamView(View):
 
                 # rate limit to 20 Hz
                 sleept = time_last_move + 0.05 - time.time()
-                # We always wait a bit, so that we don't start with a tiny move
-                time.sleep(max(0.05, sleept))
+                if sleept < -5:  # More than 5 s since last move = new focusing streak
+                    # We always wait a bit, so that we don't start with a tiny move
+                    sleept = 0.05
+                else:
+                    sleept = max(0.01, sleept)
+                time.sleep(sleept)
+
+                # Remove futures that are over and wait if too many moves pending
+                while True:
+                    fpending = [f for f in fpending if not f.done()]
+                    if len(fpending) <= 2:
+                        break
+
+                    logging.info("Still %d pending futures for focuser %s",
+                                 len(fpending), focuser.name)
+                    try:
+                        fpending[0].result()
+                    except Exception:
+                        logging.info("Failed to apply focus move", exc_info=1)
 
                 # Add more moves if there are already more
                 try:
@@ -970,10 +992,14 @@ class StreamView(View):
                                      shift * 1e6)
 
                 time_last_move = time.time()
-                # wait until it's finished so that we don't accumulate requests,
-                # but instead only do requests of size "big enough"
                 try:
-                    focuser.moveRelSync({"z": shift})
+                    if axis.canUpdate:
+                        # Update the target position on the fly
+                        fpending.append(focuser.moveRel({"z": shift}, update=True))
+                    else:
+                        # Wait until it's finished so that we don't accumulate requests,
+                        # but instead only do requests of size "big enough"
+                        focuser.moveRelSync({"z": shift})
                 except Exception:
                     logging.info("Failed to apply focus move", exc_info=1)
         except Exception:
