@@ -33,6 +33,16 @@ from unittest.case import skip
 
 logging.getLogger().setLevel(logging.DEBUG)
 
+# FIXME: the test fail to pass due to too many threads running.
+# That's mostly because the optical path managers don't get deref'd, which in
+# turn keep all the callback Pyro daemons active (=16 threads per daemon)
+# The reason it doesn't get deref'd is that the executor keeps reference to
+# the method (which contains reference to the manager). This is fixed in
+# concurrent.futures v3.0 .
+# pyrolog = logging.getLogger("Pyro4")
+# pyrolog.setLevel(min(pyrolog.getEffectiveLevel(), logging.DEBUG))
+
+
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 # Test for the different configurations
 SPARC_CONFIG = CONFIG_PATH + "sim/sparc-sim.odm.yaml"
@@ -75,7 +85,12 @@ class SimPathTestCase(unittest.TestCase):
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
+
+#        print gc.get_referrers(cls.optmngr)
         del cls.optmngr  # To garbage collect it
+#         logging.debug("Current number of threads: %d", threading.active_count())
+#         for t in threading.enumerate():
+#             print "Thread %d: %s" % (t.ident, t.name)
         test.stop_backend()
 
     def setUp(self):
@@ -90,7 +105,7 @@ class SimPathTestCase(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.optmngr.setPath("ErrorMode").result()
 
-#    @skip("simple")
+#     @skip("simple")
     def test_set_path(self):
         """
         Test setting modes that do exist. We expect ar, spectral and mirror-align
@@ -114,7 +129,6 @@ class SimPathTestCase(unittest.TestCase):
         self.optmngr.setPath("chamber-view").result()
         # Assert that actuator was moved according to mode given
         self.assertEqual(self.lenswitch.position.value, path.SPARC_MODES["chamber-view"][1]["lens-switch"])
-
 
         # setting cli
         with self.assertRaises(ValueError):
@@ -701,6 +715,7 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
         else:
             pos = None
         return {axis: pos}
+
     # @skip("simple")
     def test_wrong_mode(self):
         """
