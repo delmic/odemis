@@ -29,8 +29,6 @@ import shlex
 import sys
 import time
 
-import odemis
-
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -478,7 +476,7 @@ def main(args):
 
     # arguments handling
     parser = argparse.ArgumentParser(prog="odemis-start",
-                                     description=odemis.__fullname__)
+                                     description="Odemis starter program")
 
     parser.add_argument('model_conf', nargs='?', help="Model definition (yaml) file to use")
     parser.add_argument('-n', '--nogui', dest='nogui', action='store_true',
