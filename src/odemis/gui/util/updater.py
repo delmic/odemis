@@ -90,16 +90,16 @@ class WindowsUpdater:
 
         web_version, web_size = self.get_remote_version()
 
-        if web_version is None:
-            logging.info("Could not retrieve remote version, will not update")
-            return
-
-        logging.info("Found remote version %s", web_version)
-
-        lv = pkg_resources.parse_version(self.get_local_version())
-        rv = pkg_resources.parse_version(web_version)
-        if rv <= lv:
-            return
+        # if web_version is None:
+        #     logging.info("Could not retrieve remote version, will not update")
+        #     return
+        #
+        # logging.info("Found remote version %s", web_version)
+        #
+        # lv = pkg_resources.parse_version(self.get_local_version())
+        # rv = pkg_resources.parse_version(web_version)
+        # if rv <= lv:
+        #     return
 
         logging.info("Newer version found, suggesting update...")
 
@@ -140,30 +140,28 @@ class WindowsUpdater:
             installer_file = INSTALLER_FILE % remote_version
 
             web_url = os.path.join(VIEWER_ROOT_URL, installer_file)
-            web_file = urllib2.urlopen(web_url, timeout=10)
-
             local_path = os.path.join(dest_dir, installer_file)
-            local_file = open(local_path, 'wb')
-
-            maximum = web_size
 
             logging.info("Downloading from %s to %s...", web_url, local_path)
+
+            web_file = urllib2.urlopen(web_url, timeout=10)
+            local_file = open(local_path, 'wb')
 
             pdlg = wx.ProgressDialog(
                 "Downloading update...",
                 "The new %s installer is being downloaded." % VIEWER_NAME,
-                maximum=maximum,
+                maximum=web_size,
                 parent=wx.GetApp().main_frame,
                 style=wx.PD_CAN_ABORT | wx.PD_APP_MODAL | wx.PD_ELAPSED_TIME)
 
             keep_going = True
             count = 0
 
-            while keep_going and count < maximum:
+            while keep_going and count < web_size:
                 grabbed = web_file.read(4096)
                 local_file.write(grabbed)
                 if grabbed == "":
-                    count = maximum
+                    count = web_size
                 else:
                     count += 4096
                 (keep_going, skip) = pdlg.Update(count)
