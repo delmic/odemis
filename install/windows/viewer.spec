@@ -85,20 +85,29 @@ else:
 # * An instance of COLLECT creates the output folder from all the other parts.
 
 block_cipher = None
+use_upx = False
 
 a = Analysis(
     [script],
     pathex=['.'],
+    binaries=None,
+    datas=None,
     hiddenimports=[
         'cairo',
         'odemis.dataio.*',
     ],
-    hookspath=None,
-    runtime_hooks=None
+    hookspath=[],
+    runtime_hooks=[],
+    excludes=[],
+    win_no_prefer_redirects=False,
+    win_private_assemblies=False,
+    cipher=block_cipher
 )
 
 pyz = PYZ(
-    a.pure
+    a.pure,
+    a.zipped_data,
+    cipher=block_cipher
 )
 
 exe = EXE(
@@ -107,8 +116,8 @@ exe = EXE(
     exclude_binaries=True,
     name='%s.exe' % name,
     debug=False,
-    strip=None,
-    upx=False,
+    strip=False,
+    upx=use_upx,
     console=False,
     icon='odemis-viewer.ico'
 )
@@ -116,13 +125,13 @@ exe = EXE(
 coll = COLLECT(
     exe,
     a.binaries,
+    a.zipfiles,
+    a.datas,
     get_lib_tiff(),
     get_cairo_dlls(),
     get_version(),
     [('OdemisViewer.ico', 'odemis-viewer.ico', 'DATA')],
-    a.zipfiles,
-    a.datas,
-    strip=None,
-    upx=False,
+    strip=False,
+    upx=use_upx,
     name=name
 )
