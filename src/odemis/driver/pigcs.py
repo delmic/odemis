@@ -2122,13 +2122,22 @@ class OLController(Controller):
                 self.GetErrorNum() # reset error (just in case)
                 max_speed = 0.5 # m/s
 #                 max_accel = 0.01 # m/s²
-                logging.debug("Using default speed and acceleration value after error '%s'", err)
+                logging.debug("Using default speed value after error '%s'", err)
 
             # TODO just read the current values
             self.speed_rng[a] = (10e-6, max_speed)  # m/s (default low value)
             self._speed[a] = (self.speed_rng[a][0] + self.speed_rng[a][1]) / 2  # m/s
-            self._accel[a] = self.GetOLAcceleration(a) / self._dist_to_steps # m/s² (both acceleration and deceleration)
-            #self._accel[a] = max_accel # m/s² (both acceleration and deceleration)
+
+            # acceleration (and deceleration)
+            try:
+                self._accel[a] = self.GetOLAcceleration(a) / self._dist_to_steps  # m/s² (both acceleration and deceleration)
+            except (IOError, NotImplementedError):
+                try:
+                    # Try with the parameter (for older versions of E-861)
+                    self._accel[a] = float(self.GetParameter(1, 0x7000202)) / self._dist_to_steps  # m/s²
+                except (IOError, ValueError) as err:
+                    self._accel[a] = 0.01  # m/s² # Unknown
+                    logging.debug("Using default acceleration value after error '%s'", err)
 
         self._prev_speed_accel = ({}, {})
 
