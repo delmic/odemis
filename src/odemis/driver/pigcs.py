@@ -25,7 +25,7 @@ import Queue
 from concurrent.futures import CancelledError
 import glob
 import logging
-from odemis import model
+from odemis import model, util
 from odemis.model import isasync, CancellableFuture, CancellableThreadPoolExecutor
 from odemis.util import driver, TimeoutError
 import os
@@ -128,8 +128,6 @@ import time
 # reporting error 555. In that case, it's possible to do a factory reset with the
 # hidden command (which must be followed by the reconfiguration of the parameters):
 # zzz 100 parameter
-
-
 class PIGCSError(StandardError):
 
     def __init__(self, errno, *args, **kwargs):
@@ -2522,6 +2520,15 @@ class Bus(model.Actuator):
         self.position = model.VigilantAttribute({}, unit="m", readonly=True)
         self._updatePosition()
 
+        self._cl_axes = set(an for an, ax in self.axes.items() if ax.canAbs)
+        if self._cl_axes:
+            # To detect position changes not related to a requested move (only CL axes can do that)
+            self._pos_updater = util.RepeatingTimer(10, self._refreshPosition,
+                                                    "PIGCS position update")
+            self._pos_updater.start()
+        else:
+            self._pos_updater = None
+
         # RO VA dict axis -> bool: True if the axis has been referenced
         # Only axes which can be referenced are listed
         self.referenced = model.VigilantAttribute(referenced, readonly=True)
@@ -2563,9 +2570,16 @@ class Bus(model.Actuator):
         pos.update(self._applyInversion(npos))
         logging.debug("Reporting new position at %s", pos)
 
-        # it's read-only, so we change it via _value
-        self.position._value = pos
-        self.position.notify(self.position.value)
+        self.position._set_value(pos, force_write=True)
+
+    def _refreshPosition(self):
+        """
+        Called regularly to update the position of the closed-loop axes
+        """
+        # TODO: is it safe to do it at any time?
+        # => Do only if no moves are queued? Then need another way to enforce pos update during move updates
+        logging.debug("Will refresh position of axes %s", self._cl_axes)
+        self._updatePosition(self._cl_axes)
 
     def _setSpeed(self, value):
         """
@@ -2822,6 +2836,10 @@ class Bus(model.Actuator):
             self.stop()
             self._executor.shutdown(wait=True)
             self._executor = None
+
+        if self._pos_updater:
+            self._pos_updater.cancel()
+            self._pos_updater = None
 
         ctlrs = set(ct for ct, ch in self._axis_to_cc.values())
         for controller in ctlrs:
