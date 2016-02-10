@@ -33,7 +33,7 @@ import logging
 import numpy
 from odemis import model
 from odemis.dataio import hdf5
-from odemis.model._dataflow import MD_PIXEL_SIZE, MD_POS
+from odemis.model import MD_PIXEL_SIZE, MD_POS
 from odemis.acq.align import images, coordinates, transform
 import sys
 import threading

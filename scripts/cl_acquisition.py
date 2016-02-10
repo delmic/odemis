@@ -31,7 +31,7 @@ from __future__ import division
 import logging
 import numpy
 from odemis import model, dataio
-from odemis.model._dataflow import MD_PIXEL_SIZE, MD_POS
+from odemis.model import MD_PIXEL_SIZE, MD_POS
 import sys
 import threading
 import time
