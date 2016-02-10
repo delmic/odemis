@@ -46,6 +46,10 @@ class FluoTestCase(unittest.TestCase):
                   ((em_bands, (690e-9, 697e-9, 700e-9, 703e-9, 710e-9)), em_bands[1]), # smallest above 700nm
                   ((em_bands, (790e-9, 797e-9, 800e-9, 803e-9, 810e-9)), em_bands[2]), # smallest above 800nm
                   ((em_bands[0:2], (790e-9, 797e-9, 800e-9, 803e-9, 810e-9)), em_bands[1]), # biggest
+                  ((em_bands, (790e-9, 797e-9, 800e-9, 803e-9, 810e-9)), em_bands[2]),  # smallest above 800nm
+                  ((em_bands, ((490e-9, 510e-9), (550e-9, 570e-9))), em_bands[0]),
+                  # It should also work with lists (although not very officially supported
+                  (([[400e-9, 500e-9], [500e-9, 600e-9]], [490e-9, 510e-9]), (500e-9, 600e-9)),  # smallest above 500nm
                   ]
         for args, exp in in_exp:
             out = fluo.get_one_band_em(*args)

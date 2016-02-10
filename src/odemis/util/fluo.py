@@ -20,6 +20,7 @@ You should have received a copy of the GNU General Public License along with Ode
 from __future__ import division
 
 import collections
+import logging
 
 
 # constants to indicate how well a emission/excitation setting fits a dye
@@ -65,7 +66,8 @@ def get_one_band_em(band, ex_band):
         else:
             ex_center = get_center(ex_band)
 
-        em_b2c = dict((b, get_center(b)) for b in band)
+        # Force each band as a tuple to make sure the key is hashable
+        em_b2c = dict((tuple(b), get_center(b)) for b in band)
         bands_above = [b for b, c in em_b2c.items() if c > ex_center]
         if bands_above:
             em_band = min(bands_above, key=em_b2c.get)
