@@ -80,13 +80,14 @@ def guess_hw(config):
     """
     Try to guess which hardware is present
     config (list of ConfigMatcher)
-    return (ConfigMatcher): the first
+    return (ConfigMatcher): the first that matches
     """
-    try:
-        eids = get_eeprom_ids()  # If backend is running, it will fail
-    except Exception:
-        logging.warning("Failed to read EEPROM IDs, will pretend no ID is connected", exc_info=True)
-        eids = set()
+    eids = set()
+    if any(c.eeprom for c in config):
+        try:
+            eids = get_eeprom_ids()  # If backend is running, it will fail
+        except Exception:
+            logging.warning("Failed to read EEPROM IDs, will pretend no ID is connected", exc_info=True)
 
     for c in config:
         if not c.eeprom <= eids:
