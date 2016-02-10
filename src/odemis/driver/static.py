@@ -126,7 +126,7 @@ class LightFilter(model.Actuator):
             for sb in band:
                 if len(sb) != 2:
                     raise ValueError("Expected only 2 floats in band, found %d" % len(sb))
-            band = tuple(band)
+            band = tuple(tuple(b) for b in band)
         else:
             # 2-tuple
             if len(band) != 2:
