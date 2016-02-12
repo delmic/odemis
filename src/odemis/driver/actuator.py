@@ -23,14 +23,15 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import collections
+from concurrent import futures
 import copy
 import logging
 import math
 import numbers
 import numpy
 from odemis import model, util
-from odemis.model import CancellableThreadPoolExecutor, isasync, MD_PIXEL_SIZE_COR, MD_ROTATION_COR, \
-    MD_POS_COR
+from odemis.model import (CancellableThreadPoolExecutor, CancellableFuture,
+                          isasync, MD_PIXEL_SIZE_COR, MD_ROTATION_COR, MD_POS_COR)
 import threading
 
 
@@ -699,7 +700,16 @@ class AntiBacklashActuator(model.Actuator):
 
         self._child = children.values()[0]
         self._backlash = backlash
-        axes_def = self._child.axes
+        axes_def = {}
+        for an, ax in self._child.axes.items():
+            axes_def[an] = copy.deepcopy(ax)
+            axes_def[an].canUpdate = True
+
+        # Whether currently a backlash shift is applied on an axis
+        # If True, moving the axis by the backlash value would restore its expected position
+        # _shifted_lock must be taken before modifying this attribute
+        self._shifted = dict((a, False) for a in axes_def.keys())
+        self._shifted_lock = threading.Lock()
 
         # look for axes in backlash not existing in the child
         missing = set(backlash.keys()) - set(axes_def.keys())
@@ -728,10 +738,26 @@ class AntiBacklashActuator(model.Actuator):
             self._executor.shutdown()
             self._executor = None
 
-    def _doMoveRel(self, shift):
+    def _antiBacklashMove(self, axes):
+        """
+        Moves back the axes to their official position by reverting the anti-backlash shift
+        axes (list of str): the axes to revert
+        """
+        sub_backlash = {}  # same as backlash but only contains the axes moved
+        with self._shifted_lock:
+            for a in axes:
+                if self._shifted[a]:
+                    if a in self._backlash:
+                        sub_backlash[a] = self._backlash[a]
+                    self._shifted[a] = False
+
+        if sub_backlash:
+            logging.debug("Running anti-backlash move %s", sub_backlash)
+            self._child.moveRelSync(sub_backlash)
+
+    def _doMoveRel(self, future, shift):
         # move with the backlash subtracted
         sub_shift = {}
-        sub_backlash = {} # same as backlash but only contains the axes moved
         for a, v in shift.items():
             if a not in self._backlash:
                 sub_shift[a] = v
@@ -742,48 +768,115 @@ class AntiBacklashActuator(model.Actuator):
                 if v * self._backlash[a] >= 0:
                     sub_shift[a] = v
                 else:
-                    sub_shift[a] = v - self._backlash[a]
-                    sub_backlash[a] = self._backlash[a]
-        self._child.moveRelSync(sub_shift)
+                    with self._shifted_lock:
+                        if self._shifted[a]:
+                            sub_shift[a] = v
+                        else:
+                            sub_shift[a] = v - self._backlash[a]
+                            self._shifted[a] = True
+
+        # Do the backlash + move
+        axes = set(shift.keys())
+        if not any(self._shifted):
+            # a tiny bit faster as we don't sleep
+            self._child.moveRelSync(sub_shift)
+        else:
+            # some antibacklash move needed afterwards => update might be worthy
+            f = self._child.moveRel(sub_shift)
+            done = False
+            while not done:
+                try:
+                    f.result(timeout=0.01)
+                except futures.TimeoutError:
+                    pass  # Keep waiting for end of move
+                else:
+                    done = True
+
+                # Check if there is already a new move to do
+                nf = self._executor.get_next_future(future)
+                if nf is not None and axes <= nf._update_axes:
+                    logging.debug("Ending move control early as next move is an update containing %s", axes)
+                    return
 
         # backlash move
-        if sub_backlash:
-            self._child.moveRelSync(sub_backlash)
+        self._antiBacklashMove(shift.keys())
 
-    def _doMoveAbs(self, pos):
+    def _doMoveAbs(self, future, pos):
         sub_pos = {}
-        fpos = {} # same as pos but only contains the axes moved due to backlash
         for a, v in pos.items():
             if a not in self._backlash:
                 sub_pos[a] = v
             else:
                 shift = v - self.position.value[a]
-                if shift * self._backlash[a] >= 0:
-                    sub_pos[a] = v
-                else:
-                    sub_pos[a] = v - self._backlash[a]
-                    fpos[a] = pos[a]
-        self._child.moveAbsSync(sub_pos)
+                with self._shifted_lock:
+                    if shift * self._backlash[a] >= 0:
+                        sub_pos[a] = v
+                        self._shifted[a] = False
+                    else:
+                        sub_pos[a] = v - self._backlash[a]
+                        self._shifted[a] = True
 
-        # backlash move
-        if fpos:
-            self._child.moveAbsSync(fpos)
+        # Do the backlash + move
+        axes = set(pos.keys())
+        if not any(self._shifted):
+            # a tiny bit faster as we don't sleep
+            self._child.moveAbsSync(sub_pos)
+        else:  # some antibacklash move needed afterwards => update might be worthy
+            f = self._child.moveAbs(sub_pos)
+            done = False
+            while not done:
+                try:
+                    f.result(timeout=0.01)
+                except futures.TimeoutError:
+                    pass  # Keep waiting for end of move
+                else:
+                    done = True
+
+                # Check if there is already a new move to do
+                nf = self._executor.get_next_future(future)
+                if nf is not None and axes <= nf._update_axes:
+                    logging.debug("Ending move control early as next move is an update containing %s", axes)
+                    return
+
+        # anti-backlash move
+        self._antiBacklashMove(axes)
+
+    def _createFuture(self, axes, update):
+        """
+        Return (CancellableFuture): a future that can be used to manage a move
+        axes (set of str): the axes that are moved
+        update (bool): if it's an update move
+        """
+        # TODO: do this via the __init__ of subclass of Future?
+        f = CancellableFuture()  # TODO: make it cancellable too
+
+        f._update_axes = set()  # axes handled by the move, if update
+        if update:
+            # Check if all the axes support it
+            if all(self.axes[a].canUpdate for a in axes):
+                f._update_axes = axes
+            else:
+                logging.warning("Trying to do a update move on axes %s not supporting update", axes)
+
+        return f
 
     @isasync
-    def moveRel(self, shift):
+    def moveRel(self, shift, update=False):
         if not shift:
             return model.InstantaneousFuture()
         self._checkMoveRel(shift)
 
-        return self._executor.submit(self._doMoveRel, shift)
+        f = self._createFuture(set(shift.keys()), update)
+        return self._executor.submitf(f, self._doMoveRel, f, shift)
 
     @isasync
-    def moveAbs(self, pos):
+    def moveAbs(self, pos, update=False):
         if not pos:
             return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
 
-        return self._executor.submit(self._doMoveAbs, pos)
+        f = self._createFuture(set(pos.keys()), update)
+        return self._executor.submitf(f, self._doMoveAbs, f, pos)
 
     def stop(self, axes=None):
         self._child.stop(axes=axes)

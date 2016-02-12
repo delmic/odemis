@@ -633,6 +633,41 @@ class TestAntiBacklashActuator(unittest.TestCase):
         with self.assertRaises(ValueError):
             stage.moveRel({"a": -5e-6, "x": 5e-6})
 
+    def test_move_update(self):
+        child = simulated.Stage("stage", "test", axes=["z"])
+        # Slow speed to give some chance of the move update to work
+        child.speed.value = {"z": 100e-6}
+        stage = AntiBacklashActuator("absact", "abs", {"orig": child},
+                                     backlash={"z": 100e-6})
+
+        self.called = 0
+        orig_pos = stage.position.value
+        stage.position.subscribe(self._on_position)
+
+        for i in range(10):
+            if i % 2:
+                d = 1
+            else:
+                d = -1
+
+            dist = d * (i + 1) * 10e-6
+            f = stage.moveRel({"z": dist}, update=True)
+            time.sleep(0.05)  # 50 ms for 'user update'
+
+        f = stage.moveAbs(orig_pos, update=True)
+        f.result()
+
+        # If there is an antibacklash for each move against backlash, we should
+        # see ~ 16 moves. If only an antibacklash at the last move
+        # (or integrated in last move), we should see 11 or 12 moves.
+        self.assertLessEqual(self.called, 12)
+        self.assertPosAlmostEqual(child.position.value, orig_pos)
+        stage.terminate()
+
+    def _on_position(self, pos):
+        self.assertIsInstance(pos, dict)
+        self.called += 1
+
     def assertPosAlmostEqual(self, actual, expected, *args, **kwargs):
         """
         Asserts that two stage positions have almost equal coordinates.
