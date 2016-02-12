@@ -1056,7 +1056,7 @@ class StreamView(View):
             return None
 
         # TODO: Use the max FoV of the streams to determine what's a big
-        # distance (because on the overview cam a  move can be much bigger than
+        # distance (because on the overview cam a move can be much bigger than
         # on a SEM image at high mag).
 
         # Check it makes sense (=> not too big)
@@ -1071,7 +1071,15 @@ class StreamView(View):
 
         move = {"x": shift[0], "y": shift[1]}
         logging.debug("Sending move request of %s", move)
-        f = self._stage.moveRel(move)
+
+        # Only pass the "update" keyword if the actuator accepts it for sure
+        # It should increase latency in case of slow moves (ex: closed-loop
+        # stage that vibrate a bit when reaching target position).
+        kwargs = {}
+        if self._stage.axes["x"].canUpdate and self._stage.axes["x"].canUpdate:
+            kwargs["update"] = True
+
+        f = self._stage.moveRel(move, **kwargs)
         self._fstage_move = f
         f.add_done_callback(self._on_stage_move_done)
         return f
