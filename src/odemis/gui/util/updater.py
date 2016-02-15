@@ -90,16 +90,16 @@ class WindowsUpdater:
 
         web_version, web_size = self.get_remote_version()
 
-        # if web_version is None:
-        #     logging.info("Could not retrieve remote version, will not update")
-        #     return
-        #
-        # logging.info("Found remote version %s", web_version)
-        #
-        # lv = pkg_resources.parse_version(self.get_local_version())
-        # rv = pkg_resources.parse_version(web_version)
-        # if rv <= lv:
-        #     return
+        if web_version is None:
+            logging.info("Could not retrieve remote version, will not update")
+            return
+
+        logging.info("Found remote version %s", web_version)
+
+        lv = pkg_resources.parse_version(self.get_local_version())
+        rv = pkg_resources.parse_version(web_version)
+        if rv <= lv:
+            return
 
         logging.info("Newer version found, suggesting update...")
 
