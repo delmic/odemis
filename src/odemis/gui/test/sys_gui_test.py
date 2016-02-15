@@ -49,6 +49,21 @@ CMD_STOP = "%s/install/linux/usr/bin/odemis-stop " % ODEMIS_PATH
 CMD_START = "%s/install/linux/usr/bin/odemis-start -n -l %s " % (ODEMIS_PATH, ODEMISD_LOG_PATH)
 CMD_GUI = "%s/install/linux/usr/bin/odemis-gui --logfile %s --log-level 2" % (ODEMIS_PATH,
                                                                               GUI_LOG_PATH)
+# These string are searched for in the log files and if any are found, an error is assumed to have
+# occurred.
+ERROR_TRIGGER = ("EXCEPTION:", "ERROR:", "WARNING:")
+
+
+# Clear any old log files might have been left behind
+try:
+    os.remove(ODEMISD_LOG_PATH)
+except OSError:
+    pass
+finally:
+    try:
+        os.remove(GUI_LOG_PATH)
+    except OSError:
+        pass
 
 # Load the Yaml config files for the simulated hardware
 sim_conf_files = [filename for filename in os.listdir(SIM_CONF_PATH) if filename[-4:] == 'yaml']
@@ -102,26 +117,27 @@ def copy_log(log_in_path, log_out_name):
     log_out_path = os.path.join('/tmp', log_out_name)
     print "\n  Copying log\n    %s\n  to\n    %s\n" % (log_in_path, log_out_path)
     shutil.copy(log_in_path, log_out_path)
+    return log_out_path
 
 
 def backend_fail(config_name, msg):
     """ Copy the back-end log and raise an exception """
-    copy_log(ODEMISD_LOG_PATH, 'odemisd-%s-test.log' % config_name)
+    log_path = copy_log(ODEMISD_LOG_PATH, 'odemisd-%s-test.log' % config_name)
 
     class BackendFailure(Exception):
         pass
 
-    raise BackendFailure("%s: %s" % (config_name, msg))
+    raise BackendFailure("%s: %s\nLog copied to %s" % (config_name, msg, log_path))
 
 
 def gui_fail(config_name, msg):
     """ Copy the GUI log and raise an exception """
-    copy_log(GUI_LOG_PATH, 'gui-%s-test.log' % config_name)
+    log_path = copy_log(GUI_LOG_PATH, 'gui-%s-test.log' % config_name)
 
     class GuiFailure(Exception):
         pass
 
-    raise GuiFailure("%s: %s" % (config_name, msg))
+    raise GuiFailure("%s: %s\nLog copied to %s" % (config_name, msg, log_path))
 
 
 class HardwareConfigTestCase(unittest.TestCase):
@@ -183,32 +199,38 @@ def generate_config_test(sim_conf):
             else:
                 # TODO: make error/exception detection in log files more intelligent?
 
-                odemisd_log = open(ODEMISD_LOG_PATH).read().lower()
+                odemisd_log = open(ODEMISD_LOG_PATH).read()
 
-                if 'exception' in odemisd_log:  # or 'error' in odemisd_log
-                    msg = "Error or exception suspected in 'odemisd' log!"
-                    print "  %s" % msg
-                    backend_fail(sim_conf, msg)
+                for lbl in ERROR_TRIGGER:
+                    if lbl in odemisd_log:
+                        msg = "%s found in back-end log!" % lbl
+                        print "  %s" % msg
+                        backend_fail(sim_conf, msg)
 
                 gui_log = open(GUI_LOG_PATH).read().lower()
 
-                if 'exception' in gui_log:  # or 'error' in gui_log
-                    msg = "Error or exception suspected in 'GUI' log!"
-                    print "  %s" % msg
-                    gui_fail(sim_conf, msg)
+                for lbl in ERROR_TRIGGER:
+                    if lbl in gui_log:
+                        msg = "%s found in GUI log!" % lbl
+                        print "  %s" % msg
+                        gui_fail(sim_conf, msg)
         finally:
+            # Remove log files
             try:
-                # Remove the test log files
                 os.remove(ODEMISD_LOG_PATH)
-                os.remove(GUI_LOG_PATH)
             except OSError:
                 pass
+            finally:
+                try:
+                    os.remove(GUI_LOG_PATH)
+                except OSError:
+                    pass
 
     return test_simulated_hardware_config
 
 
 # Create a test and add it to the test case for each configuration found
-for sim_conf in sim_conf_files:
+for sim_conf in sim_conf_files[:1]:
     test = generate_config_test(sim_conf)
     test_name = "test_%s" % "".join((c if c.isalnum() else '_' for c in sim_conf))
     setattr(HardwareConfigTestCase, test_name, test)
