@@ -1216,6 +1216,96 @@ class Controller(object):
         assert(value > 0)
         self._sendOrderCommand("DEC %d %.5g\n" % (axis, value))
 
+    def SetRecordRate(self, value):
+        """
+        Set the record table rate
+        Note: on the E-861, a cycle is 20µs
+        value (1<= int): number of cycles when recording.
+        """
+        assert(value > 0)
+        self._sendOrderCommand("RTR %d\n" % (value,))
+
+    def GetRecordRate(self, value):
+        """
+        Get the record table rate
+        Note: on the E-861, a cycle is 20µs
+        return (1<= int): number of cycles when recording
+        """
+        ans = self._sendQueryCommand("RTR?\n")
+        return int(ans)
+
+    def SetRecordConfig(self, table, source, opt):
+        """
+        Set Data Recorder Configuration
+        table (1<=int): record table ID
+        source (0<=int): Depends on the option. For axis related signal, it's the
+          axis number
+        opt (0<=int): type of signal to be recorded. See documentation for values.
+        """
+        assert(table > 0)
+        assert(source >= 0)
+        assert(opt >= 0)
+        self._sendOrderCommand("DRC %d %d %d\n" % (table, source, opt))
+
+    def GetRecordedData(self, start=None, num=None, table=None):
+        """
+        Get the recorded data
+        start (None or 1<=int): first item to be read. If None, it will read everything.
+        num (None or 1<=int): number of items to read. If None, start must also be None.
+        table (None or 1<=int): record table ID. If None, it will read all the tables.
+        return (list of tuple of floats): for each cycle, the values for each table
+        """
+        assert(start is None or start > 0)
+        assert(num is None or num > 0)
+        assert((start is None) == (num is None))
+        assert(table is None or table > 0)
+        if start is None and table is not None:
+            raise ValueError("Table must be None if start/num are None")
+
+        # Answer should look like:
+#         # REM E-861
+#         #
+#         :
+#         #
+#         # NAME0 = Actual Position of Axis AXIS:1
+#         # NAME1 = Position Error of Axis AXIS:1
+#         #
+#         # END_HEADER
+#         5.00000 0.00000
+#         4.99998 0.00002
+#         5.00000 0.00000
+#         5.00000 0.00000
+#         5.00000 0.00000
+
+        args = ""
+        if start is not None:
+            args += " %d %d" % (start, num)
+        if table is not None:
+            args += " %d" % (table,)
+        ans = self._sendQueryCommand("DRR?%s\n" % (args,))
+
+        data = []
+        for l in ans:
+            if l.startswith("#"):
+                logging.debug("Skipping line %s", l)
+                continue
+            try:
+                vals = tuple(float(s) for s in l.split(" "))
+                data.append(vals)
+            except ValueError:
+                logging.warning("Failed to decode data line %s", l)
+
+        return data
+
+    def MoveRelRecorded(self, axis, shift):
+        """
+        Moves an axis for a given distance. While it's moving, data will be
+        recorded. Can be done only if not referenced.
+        axis (1<int<16): axis number
+        shift (float): relative distance in user unit
+        """
+        assert(axis in self._channels)
+        self._sendOrderCommand("STE %d %.5g\n" % (axis, shift))
 
 # Different from OSM because they use the sensor and are defined in physical unit.
 # Servo must be off! => Probably useless... compared to MOV/MVR
