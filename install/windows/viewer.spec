@@ -59,6 +59,30 @@ def get_version():
     return [('version.txt', 'dist/version.txt', 'DATA')]
 
 
+def get_gui_img():
+    """ Create data for all images in odemis.gui.img """
+
+    IMG_MATCH = ('.png', '.jpg', '.ico')
+
+    def rec_glob(p, gfiles):
+        import glob
+        for d in glob.glob(p):
+            if d.lower().endswith(IMG_MATCH):
+                gfiles.append(d)
+            rec_glob("%s/*" % d, gfiles)
+
+    files = []
+    rec_glob("../../src/odemis/gui/img/*", files)
+    extra_datas = []
+
+    for f in files:
+        # Note: We trim the destination path down to Odemis' root
+        extra_datas.append((f[f.find('odemis'):], f, 'DATA'))
+
+    print extra_datas
+    return extra_datas
+
+
 # Check what type of viewer we are building
 if os.environ.get('FLAVOR') == "delphi":
     name = "DelphiViewer"
@@ -103,6 +127,8 @@ a = Analysis(
     win_private_assemblies=False,
     cipher=block_cipher
 )
+
+a.datas += get_gui_img()
 
 pyz = PYZ(
     a.pure,
