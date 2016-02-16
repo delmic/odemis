@@ -38,10 +38,9 @@ from odemis.acq.stream import OpticalStream, SpectrumStream, CLStream, EMStream,
 from odemis.driver.actuator import ConvertStage
 import odemis.gui
 from odemis.gui.comp.canvas import CAN_ZOOM
-from odemis.gui.comp.popup import Message
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.viewport import MicroscopeViewport, AngularResolvedViewport, \
-    PlotViewport, SpatialSpectrumViewport, PointSpectrumViewport
+    PlotViewport, SpatialSpectrumViewport
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.conf.data import get_local_vas, get_stream_settings_config
 from odemis.gui.cont import settings, tools
@@ -49,12 +48,10 @@ from odemis.gui.cont.actuators import ActuatorController
 from odemis.gui.cont.microscope import SecomStateController, DelphiStateController
 from odemis.gui.cont.streams import StreamController
 from odemis.gui.util import call_in_wx_main
-from odemis.gui.util.img import scale_to_alpha
 from odemis.gui.util.widgets import ProgressiveFutureConnector, AxisConnector
 from odemis.util import units
 from odemis.util.dataio import data_to_static_streams
 import os.path
-import scipy.misc
 import weakref
 # IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
 # file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
@@ -2213,6 +2210,9 @@ class SparcAlignTab(Tab):
                 # So need to compensate for the magnification, and flip.
                 # (That's also the reason it's not possible to move the
                 # pole position, as it should be done with the lens)
+                # Note: up to v2.2 we were using precomputed png files for each
+                # CCD size. Some of them contained (small) error in the mirror size,
+                # which will make this new display look a bit bigger.
                 m = lens.magnification.value
                 mirror_ol.set_mirror_dimensions(-lens.parabolaF.value / m,
                                                 lens.xMax.value / m,
