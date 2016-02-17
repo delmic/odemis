@@ -38,7 +38,7 @@ def GaussianFit(data, *peaks):
     gau = peaks[-1]  # Automatically converted to a vector in the addition
     for pos, width, amplitude in _Grouped(peaks[:-1], 3):
         sprime = pos * width
-        gau += amplitude * _Normalize(numpy.exp(-(data - pos) ** 2 / sprime ** 2))
+        gau += abs(amplitude) * _Normalize(numpy.exp(-(data - pos) ** 2 / sprime ** 2))
 
     return gau
 
@@ -50,7 +50,7 @@ def LorentzianFit(data, *peaks):
     lor = peaks[-1]
     for pos, width, amplitude in _Grouped(peaks[:-1], 3):
         wprime = width * pos
-        lor += amplitude * _Normalize(wprime ** 2 / ((data - pos) ** 2 + wprime ** 2))
+        lor += abs(amplitude) * _Normalize(wprime ** 2 / ((data - pos) ** 2 + wprime ** 2))
 
     return lor
 
@@ -283,7 +283,6 @@ class PeakFitter(object):
                     raise CancelledError()
 
                 try:
-                    # TODO: forbid negative peaks?
                     params, _ = curve_fit(FitFunction, wavelength, spectrum, p0=fit_list)
                     break
                 except Exception:
