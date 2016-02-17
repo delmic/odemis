@@ -29,10 +29,12 @@ from __future__ import division, absolute_import, print_function
 import argparse
 import logging
 import math
-from odemis.driver import pigcs
-from odemis.util import driver
+import numpy as np
 import sys
 import time
+from odemis.driver import pigcs
+from odemis.util import driver
+import matplotlib.pyplot as plt
 
 
 def tune(cont, axis):
@@ -68,41 +70,92 @@ def tune(cont, axis):
     # param = 1
     # cont.SetParameter(axis, param, 30)
 
-    distm = -0.1e-3  # m
-    movedur = driver.estimateMoveDuration(abs(distm), vel, acc)
-    logging.info("Expected move time = %g s", movedur)
-
-    rrate = max(1, int(math.ceil(movedur * 1.1 / (tablelen * cycledur))))
-    cont.SetRecordRate(rrate)
-    recdur = tablelen * cycledur * rrate
-    logging.info("Recording every %d cycle => duration = %g s", rrate, recdur)
-    # TODO: change record rate to fit the move duration?
-    cont.MoveRelRecorded(axis, distm / upm)
-    tstart = time.time()
-    tendmax = tstart + 2 * recdur + 1
-
-    # Wait until the move is done
     while True:
-        time.sleep(0.01)
+        distm = ask_next_move(cont, axis)
+        if distm is None:
+            return
 
-        try:
-            if cont.IsOnTarget(axis, check=True):
-                logging.debug("Move finished after %g s", time.time() - tstart)
+        movedur = driver.estimateMoveDuration(abs(distm), vel, acc)
+        logging.info("Expected move time = %g s", movedur)
+
+        rrate = max(1, int(math.ceil(movedur * 1.1 / (tablelen * cycledur))))
+        cont.SetRecordRate(rrate)
+        recdur = tablelen * cycledur * rrate
+        logging.info("Recording every %d cycle => duration = %g s", rrate, recdur)
+        # TODO: change record rate to fit the move duration?
+        cont.MoveRelRecorded(axis, distm / upm)
+        tstart = time.time()
+        tendmax = tstart + 2 * recdur + 1
+
+        # Wait until the move is done
+        while True:
+            time.sleep(0.01)
+
+            try:
+                if cont.IsOnTarget(axis, check=True):
+                    logging.debug("Move finished after %g s", time.time() - tstart)
+                    break
+            except pigcs.PIGCSError as exp:
+                logging.warning("Controller reports error %s", exp)
                 break
-        except pigcs.PIGCSError as exp:
-            logging.warning("Controller reports error %s", exp)
-            break
 
-        if time.time() > tendmax:
-            logging.warning("Controller still moving after %g s, stopping it", tendmax - tstart)
-            cont.Stop()
-            break
+            if time.time() > tendmax:
+                logging.warning("Controller still moving after %g s, stopping it", tendmax - tstart)
+                cont.Stop()
+                break
 
-    # Read the recorded data from the move
-    data = cont.GetRecordedData()
-    print("# Commanded pos\tActual pos")
-    for cp, ap in data:
-        print("%g\t%g" % (cp, ap))
+        # Read the recorded data from the move
+        data = cont.GetRecordedData()
+
+        # plot data using matplotlib
+        idx = np.arange(tablelen)
+        cp, ap = np.array(zip(*data))
+        ep = ap - cp
+
+        f, ax = plt.subplots(2, sharex=True)
+        ax[0].plot(idx, cp, 'b-', idx, ap, 'r-')
+        ax[0].set_title('Commanded vs. Actual position')
+        ax[1].plot(idx, ep, 'b-')
+        ax[1].set_title('Position Error')
+        plt.show()
+
+        # print("# Commanded pos\tActual pos")
+        # for cp, ap in data:
+        #    print("%g\t%g" % (cp, ap))
+
+# last move distance requested
+distm = 0.1e-3  # m
+def ask_next_move(cont, axis):
+    """
+    Ask the user for the size of the next move, or to update the settings of
+    the controller.
+    return (float or None): distance to move in meter or None if wants to quit
+    """
+    global distm
+    P = cont.GetParameter(axis, 1)
+    I = cont.GetParameter(axis, 2)
+    D = cont.GetParameter(axis, 3)
+    print("P=%s, I=%s, D=%s" % (P, I, D))
+    print(u"Current move distance: %g µm" % (distm * 1e6,))
+
+    while True:
+        print("Change P, I, D, (M)ove distance, (Q)uit or press Enter to start next move: ", end="")
+        choice = raw_input().upper()
+        if choice in ("P", "I", "D"):
+            val = raw_input("Enter new value for %s: " % (choice,))
+            param = {"P": 1, "I": 2, "D": 3}[choice]
+            cont.SetParameter(axis, param, val)
+        elif choice == "M":
+            print(u"Enter new distance in µm (can be negative): ", end="")
+            val = raw_input()
+            distm = float(val) * 1e-6
+        elif choice == "":
+            return distm
+        elif choice == "Q":
+            return None
+        else:
+            # Just keep asking
+            print("Command '%s' not understood")
 
 
 def main(args):
