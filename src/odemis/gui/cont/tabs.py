@@ -1853,7 +1853,7 @@ class SecomAlignTab(Tab):
 
         # TODO: when paused via the shortcut or menu, really pause it
         #   => use a stream scheduler?
-        # TODO: exposureTime as local setting, so that it's not changed when
+        # TODO: binning & exposureTime as local setting, so that it's not changed when
         # going to acquisition tab
         # create CCD stream
         ccd_stream = acqstream.CameraStream("Optical CL",
@@ -2014,11 +2014,6 @@ class SecomAlignTab(Tab):
         self._subscribe_for_fa_dt(not is_acquiring)
 
     def _subscribe_for_fa_dt(self, subscribe=True):
-        # Make sure that we don't update fineAlignDwellTime unless:
-        # * The tab is shown
-        # * Acquisition is not going on
-        # * Spot tool is selected
-        # (wouldn't be needed if the VAs where on the stream itself)
 
         ccd = self.tab_data_model.main.ccd
         if subscribe:
@@ -2037,7 +2032,12 @@ class SecomAlignTab(Tab):
         if the SPOT mode is active (otherwise the user might be setting for
         different purpose.
         """
-        if self.tab_data_model.tool.value != guimod.TOOL_SPOT:
+        # Make sure that we don't update fineAlignDwellTime unless:
+        # * The tab is shown
+        # * Acquisition is not going on
+        # * Spot tool is selected
+        # (wouldn't be needed if the binning and exposure time VAs were local)
+        if self.tab_data_model.tool.value != guimod.TOOL_SPOT or not self.IsShown():
             return
 
         # dwell time is the based on the exposure time for the spot, as this is
