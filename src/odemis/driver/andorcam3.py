@@ -488,7 +488,10 @@ class AndorCam3(model.DigitalCamera):
         if itf == "USB3":
             # The Zyla must be connected over USB3, but the driver will report that
             # everything is fine even if it's connected over USB2... until
-            # acquisition starts and strange things happen.
+            # acquisition starts and strange things happen. Note that with the
+            # SDK 2.100+, it seems to work over USB2 as long as the frame rate
+            # is low enough. However, it's still preferable to force the user
+            # to plug correctly the camera.
 
             # Current USB protocol level is in "/sys/bus/usb/devices/*/version".
             # However, for the Zyla, we cannot use UsbProductId or UsbDeviceId, so
@@ -1251,7 +1254,9 @@ class AndorCam3(model.DigitalCamera):
         Commits the settings to the camera. Only the settings which have been
         modified are updated.
         Note: acquisition_lock must be taken, and acquisition must _not_ going on.
-        return (3 ints): width, height, itemsize
+        return:
+            size (3 ints): width, height, itemsize
+            synchronised (bool): whether the acquisition has a software trigger
         """
         [prev_binning, prev_resolution, prev_trans, prev_exp,
          prev_rorate, prev_gain, prev_sync] = self._prev_settings
@@ -1317,7 +1322,7 @@ class AndorCam3(model.DigitalCamera):
         self._prev_settings = [self._binning, self._resolution, self._translation,
                                self._exp_time, readout_rate, gain, synchronised]
 
-        return (self._resolution[0], self._resolution[1], itemsize)
+        return (self._resolution[0], self._resolution[1], itemsize), synchronised
 
     def _allocate_buffer(self, size):
         """
@@ -1440,9 +1445,15 @@ class AndorCam3(model.DigitalCamera):
                             self.isWritable(u"CycleMode"))
                     self.SetEnumString(u"CycleMode", u"Continuous")
 
-                    size = self._update_settings()
+                    size, synchronised = self._update_settings()
                     phyt = self._getPhysTrans()
-                    synchronised = (self.data._sync_event is not None)
+                    if synchronised:
+                        # Synchronized typically is a sign that the user cares
+                        # about all the data (and so don't want to discard it).
+                        # TODO: new API on the dataflow to explicitly indicate that?
+                        max_discard = 0
+                    else:
+                        max_discard = 8
                     exposure_time = self._exp_time
                     if self.isImplemented(u"ReadoutTime"):
                         readout_time = self.GetFloat(u"ReadoutTime")
@@ -1471,36 +1482,13 @@ class AndorCam3(model.DigitalCamera):
                 center = metadata.get(model.MD_POS, (0, 0))
                 metadata[model.MD_POS] = (center[0] + phyt[0], center[1] + phyt[1])
 
-                # We have (probably) time now, let's queue next buffer here
-                # Note we cannot reuse the buffer because we don't know if
-                # the callee still needs it or not
-                logging.debug("Queuing a new buffer (queue len = %d)", len(buffers))
-                cbuffer = self._allocate_buffer(size)
-                self.QueueBuffer(cbuffer)
-                buffers.append(cbuffer)
-
-                # Wait for the data, while regularly checking for cancellation
                 try:
-                    while True:
-                        # cancelled by the user?
-                        if self.acquire_must_stop.is_set():
-                            raise CancelledError()
-
-                        # we actually _expect_ a timeout
-                        try:
-                            pbuffer, _ = self.WaitBuffer(0.1)
-                        except ATError as (errno, strerr):
-                            if errno == 13: # AT_ERR_TIMEDOUT
-                                if time.time() > tend:
-                                    raise
-                                else:
-                                    pass
-                        else:
-                            break # new image!
-                except ATError as (errno, strerr):
-                    # sometimes there is timeout, don't completely give up
-                    # Note: seems to happen when time between two waitbuffer() is too long
-                    if errno in (11, 13):  # AT_ERR_NODATA, AT_ERR_TIMEDOUT
+                    cbuffer = self._get_new_frame(tend, size, buffers, max_discard)
+                except ATError as exp:
+                    # Sometimes there is timeout, don't completely give up
+                    # Note: Timeouts can happen when the hardware buffer is full
+                    # because the framerate is faster than what we can process.
+                    if exp.errno in (11, 13):  # AT_ERR_NODATA, AT_ERR_TIMEDOUT
                         num_errors += 1
                         if num_errors > 5:
                             logging.error("%d errors in a row, canceling acquisition", num_errors)
@@ -1512,45 +1500,6 @@ class AndorCam3(model.DigitalCamera):
                         raise
                 else:
                     num_errors = 0
-
-                # Don't send data if was asked to stop (important in case a new
-                # subscription happened since then, as it shouldn't send an old
-                if self.acquire_must_stop.is_set():
-                    raise CancelledError()
-
-                # Cannot directly use pbuffer because we'd lose the reference to the
-                # memory allocation... and it'd get free'd at the end of the method
-                # So rely on the assumption cbuffer is used as is
-                cbuffer = buffers.pop(0)
-                assert(addressof(pbuffer.contents) == addressof(cbuffer))
-
-                # TODO: automatically reduce the framerate if the queue is increasing
-                # check if there is already a newer image
-#                 for i in range(10):
-#                     try:
-#                         logging.debug("Checking queue length")
-#                         # TODO: timeout < 0.05 always causes timeout??
-#                         pbuffer, _ = self.WaitBuffer(0.05) # only if it's already there
-#                     except ATError as (errno, strerr):
-#                         logging.debug("waitbuffer failed to get a new image %d", errno)
-#                         if errno == 13: # AT_ERR_TIMEDOUT
-#                             break # no new image (=> good!)
-#                         raise
-#
-#                     logging.debug("Discarding image as new one is already available")
-#                     # get the newer image (and forget about the old one)
-#                     cbuffer = buffers.pop(0)
-#                     assert(addressof(pbuffer.contents) == addressof(cbuffer))
-#
-#                     # Next buffer. We cannot reuse the buffer because we don't know if
-#                     # the callee still needs it or not
-#                     logging.debug("Queuing a new buffer (queue len = %d)", len(buffers))
-#                     ncbuffer = self._allocate_buffer(size)
-#                     self.QueueBuffer(ncbuffer)
-#                     buffers.append(ncbuffer)
-#                     del ncbuffer
-#                 else:
-#                     logging.warning("Too many images in queue, will send old one")
 
                 # TODO: use hardware timestamp instead of guessing?
                 # time at the beginning
@@ -1588,6 +1537,85 @@ class AndorCam3(model.DigitalCamera):
             gc.collect()
             logging.debug("Acquisition thread closed")
             self.acquire_must_stop.clear()
+
+    def _get_new_frame(self, time_end, size, buffers, max_discard=0):
+        """
+        time_end (float): time before which the image is expected to arrive
+        size (tuple of int): dimensions of the image to acquire
+        buffers (list of buffer): queue of buffers for receiving the data
+        max_discard (0<=int): maximum number of frames that can be discarded if
+          several frames are available
+        return (buffer): buffer containing the frame
+        raise ATError: ERR_TIMEOUT if time_end is passed, or other in case of
+          error with the hardware.
+            CancelledError: In case tha acquisition was cancelled
+        """
+        # We have (probably) time now, let's queue next buffer here
+        # Note we cannot reuse the buffer because we don't know if
+        # the callee still needs it or not
+        logging.debug("Queuing a new buffer (queue len = %d)", len(buffers))
+        cbuffer = self._allocate_buffer(size)
+        self.QueueBuffer(cbuffer)
+        buffers.append(cbuffer)
+
+        # Wait for the data, while regularly checking for cancellation
+        while True:
+            # cancelled by the user?
+            if self.acquire_must_stop.is_set():
+                raise CancelledError()
+
+            # we actually _expect_ a timeout
+            try:
+                pbuffer, _ = self.WaitBuffer(0.1)
+            except ATError as exp:
+                if exp.errno == 13 and time.time() <= time_end:  # AT_ERR_TIMEDOUT
+                    continue
+                else:
+                    raise
+            break  # new image!
+
+        # Cannot directly use pbuffer because we'd lose the reference to the
+        # memory allocation... and it'd get free'd at the end of the method
+        # So rely on the assumption cbuffer is used as is
+        cbuffer = buffers.pop(0)
+        assert(addressof(pbuffer.contents) == addressof(cbuffer))
+
+        # Check if there is already a newer image
+        for discarded in range(max_discard):
+            try:
+                # BUG: it sometimes return a timeout even if the queue is building up
+                # (depends on the framerate and data size)
+                pbuffer, _ = self.WaitBuffer(0)  # only if it's already there
+            except ATError as exp:
+                if exp.errno == 13:  # AT_ERR_TIMEDOUT
+                    logging.debug("Hardware queue seems empty")
+                    break  # no new image (=> good!)
+                logging.exception("Failure while checking for newer data in hardware queue")
+                raise
+
+            # Queue immediately a new buffer to compensate
+            logging.debug("Queuing a new buffer (queue len = %d)", len(buffers))
+            cbuffer = self._allocate_buffer(size)
+            self.QueueBuffer(cbuffer)
+            buffers.append(cbuffer)
+
+            # get the newer image (and forget about the old one)
+            cbuffer = buffers.pop(0)
+            assert(addressof(pbuffer.contents) == addressof(cbuffer))
+
+        if discarded > 0:
+            if discarded >= max_discard:
+                # TODO: automatically reduce the framerate if the queue is increasing
+                logging.warning("Discarded %d images but still in queue, will send old one", discarded)
+            else:
+                logging.info("Discarded %d images, frame rate might be too high", discarded)
+
+        # Don't send data if was asked to stop (important in case a new
+        # subscription happened since then, as it shouldn't send an old image)
+        if self.acquire_must_stop.is_set():
+            raise CancelledError()
+
+        return cbuffer
 
     def _start_acquisition(self):
         """
