@@ -477,7 +477,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource class="" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource class="spacer" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -1367,13 +1367,10 @@ def __init_resources():
               <flag>wxALL|wxEXPAND</flag>
               <border>5</border>
             </object>
-            <object class="spacer">
-              <option>1</option>
-              <flag>wxEXPAND</flag>
-            </object>
+            
             <object class="sizeritem">
               <object class="wxHtmlWindow" name="html_alignment_doc">
-                <size>-1,700</size>
+                <size>-1,680</size>
                 <fg>#BBBBBB</fg>
                 <bg>#333333</bg>
                 <style>wxHW_SCROLLBAR_NEVER|wxHW_NO_SELECTION</style>
@@ -1382,7 +1379,7 @@ def __init_resources():
                 </XRCED>
               </object>
               <flag>wxTOP|wxEXPAND|wxALIGN_BOTTOM|wxALIGN_CENTRE_VERTICAL</flag>
-              <border>24</border>
+              <border>5</border>
             </object>
             <object class="spacer">
               <option>1</option>
