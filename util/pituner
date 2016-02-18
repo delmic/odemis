@@ -108,7 +108,7 @@ def tune(cont, axis):
         data = cont.GetRecordedData()
 
         # plot data using matplotlib
-        idx = np.arange(tablelen)
+        idx = np.arange(len(data))
         cp, ap = np.array(zip(*data))
         ep = ap - cp
 
@@ -144,7 +144,10 @@ def ask_next_move(cont, axis):
         if choice in ("P", "I", "D"):
             val = raw_input("Enter new value for %s: " % (choice,))
             param = {"P": 1, "I": 2, "D": 3}[choice]
-            cont.SetParameter(axis, param, val)
+            try:
+                cont.SetParameter(axis, param, val)
+            except Exception:
+                logging.error("Failed to write %s to parameter 0x%x", val, param)
         elif choice == "M":
             print(u"Enter new distance in µm (can be negative): ", end="")
             val = raw_input()
