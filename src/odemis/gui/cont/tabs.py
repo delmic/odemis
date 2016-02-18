@@ -3145,7 +3145,7 @@ class TabBarController(object):
         # 'full screen' view.
         # Also, Gnome's GDK library will start spewing error messages, saying
         # it cannot draw certain images, because the dimensions are 0x0.
-        main_frame.SetMinSize((1400, 550))
+        main_frame.SetMinSize((1280, 550))
 
         self.main_data.is_acquiring.subscribe(self.on_acquisition)
 
