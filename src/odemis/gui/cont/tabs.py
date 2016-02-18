@@ -758,6 +758,16 @@ class SparcAcquisitionTab(Tab):
         )
         semcl_stream.dcRegion.subscribe(self._onDCRegion, init=True)
 
+        # On the sparc-simplex, there is no alignment tab, so no way to check
+        # the CCD temperature. => add it at the bottom of the SEM stream
+        if main_data.role == "sparc-simplex" and model.hasVA(main_data.spectrometer, "temperature"):
+            self._ccd_temp_ent = sem_stream_cont.add_setting_entry(
+                "ccdTemperature",
+                main_data.spectrometer.temperature,
+                main_data.spectrometer,
+                get_stream_settings_config()[acqstream.SEMStream]["ccdTemperature"]
+            )
+
         # add "Use scan stage" check box if scan_stage is present
         sstage = main_data.scan_stage
         if sstage:

@@ -417,6 +417,10 @@ STREAM_SETTINGS_CONFIG = {
                            u"It increases the area that can be properly acquired. "
                            u"Note that survey acquisition is not affected.",
             }),
+            ("ccdTemperature", {  # Trick for the sparc-simplex
+                "label": "CCD temperature",
+                "tooltip": u"Current temperature of the spectrometer CCD",
+            }),
         )),
     stream.SpectrumSettingsStream:
         OrderedDict((
