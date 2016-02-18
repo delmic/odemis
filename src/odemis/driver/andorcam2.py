@@ -2311,7 +2311,7 @@ class FakeAndorV2DLL(object):
                     pxs = self._data.metadata[model.MD_PIXEL_SIZE]
                     mag = self._data.metadata.get(model.MD_LENS_MAG, 1)
                     self.pixelSize = tuple(1e6 * s * mag for s in pxs)
-                self.maxBinning = (16, 16) # px
+                self.maxBinning = self.shape  # px
             except Exception:
                 logging.exception("Failed to open file %s, will use gradient", image)
                 self._data = None
@@ -2621,6 +2621,7 @@ class FakeAndorV2DLL(object):
                (self.roi[3] - self.roi[2] + 1) // self.binning[1])
         if res[0] * res[1] != size.value:
             raise ValueError("res %s != size %d" % (res, size.value))
+        # TODO: simulate binning by summing data and clipping
         ndbuffer = numpy.ctypeslib.as_array(p, (res[1], res[0]))
         ndbuffer[...] = self._data[self.roi[2] - 1:self.roi[3]:self.binning[1],
                                    self.roi[0] - 1:self.roi[1]:self.binning[0]]
