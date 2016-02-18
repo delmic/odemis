@@ -43,9 +43,7 @@ class WindowsUpdater:
         try:
             if wx.GetApp()._is_standalone == "delphi":
                 global INSTALLER_FILE
-                global VIEWER_NAME
                 INSTALLER_FILE = "DelphiViewer-%s.exe"
-                VIEWER_NAME = "Delphi Viewer"
         except Exception:
             logging.info("Considering the app as a standard Odemis", exc_info=True)
 
@@ -188,3 +186,5 @@ class WindowsUpdater:
         except WindowsError, (err_nr, _):
             if err_nr == 740:
                 os.startfile(local_path, "runas")
+            else:
+                raise

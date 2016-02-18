@@ -112,16 +112,11 @@ class OdemisGUIApp(wx.App):
 
         if self._is_standalone:
             microscope = None
+            gui.icon = imgdata.catalog['ico_gui_viewer_256'].GetIcon()
+            gui.name = odemis.__shortname__ + " Viewer"
 
             if "delphi" == self._is_standalone:
-                # Set the name and icon
-                gui.icon = imgdata.catalog['ico_gui_viewer_256'].GetIcon()
-                gui.name = "DelphiViewer"
                 gui.logo = imgdata.getlogo_delphiBitmap()
-            else:
-                # Set the name and icon
-                gui.icon = imgdata.catalog['ico_gui_viewer_256'].GetIcon()
-                gui.name = odemis.__shortname__ + "Viewer"
         else:
             gui.icon = imgdata.catalog['ico_gui_full_256'].GetIcon()
             gui.name = odemis.__shortname__
