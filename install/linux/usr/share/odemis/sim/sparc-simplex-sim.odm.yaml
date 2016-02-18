@@ -90,7 +90,7 @@ SPARC-Lund-sim: {
     role: spectrometer,
     children: {detector: "Spectral Camera", spectrograph: "Spectrograph"},
     properties: {
-        binning: [4, 64],
+        binning: [4, 100],
     },
 }
 
@@ -100,7 +100,8 @@ SPARC-Lund-sim: {
     role: sp-ccd,
     init: {
        device: "fake",
-       transpose: [1, 2], # if mirrored on X axis (due to a Odemis bug, it's the second dim which has the -)
+       transp: [1, 2], # if mirrored on X axis put -1
+       image: "sparc-spec-sim.h5",
     },
     properties: {
         targetTemperature: -80, # °C
