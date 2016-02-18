@@ -55,7 +55,6 @@ import subprocess
 import threading
 import time
 import wx
-from wx.lib.pubsub import pub
 
 import odemis.gui.model as guimod
 
