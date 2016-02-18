@@ -1881,8 +1881,8 @@ class AndorCam2(model.DigitalCamera):
                         else:
                             break # new image!
 
-                    # it might have acquired _several_ images in the time to process
-                    # one image. In this case we discard all but the last one.
+                    # Normally only one image has been produced as it's on a
+                    # software trigger, but just in case, discard older images.
                     self.atcore.GetMostRecentImage16(cbuffer, c_uint32(size[0] * size[1]))
                 except AndorV2Error as (errno, strerr):
                     # try again up to 5 times
