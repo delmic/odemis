@@ -2733,8 +2733,8 @@ class Scanner(model.Emitter):
         mag = self.magnification.value
         self.parent._metadata[model.MD_LENS_MAG] = mag
 
-        pxs = (self.HFWNoMag / (self._shape[0] * mag),
-               self.HFWNoMag / (self._shape[1] * mag))
+        # Pixel size is the same in both dimensions
+        pxs = (self.HFWNoMag / (self._shape[0] * mag),) * 2
         # it's read-only, so we change it only via _value
         self.pixelSize._value = pxs
         self.pixelSize.notify(pxs)
