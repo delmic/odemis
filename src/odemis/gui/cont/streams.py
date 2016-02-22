@@ -64,6 +64,8 @@ SCHED_ALL = 2  # All the streams which are in the should_update stream
 # are independent (no emitter from a stream will affect any detector of another
 # stream).
 
+PEAK_METHOD_TO_STATE = {None: None, "gaussian": 0, "lorentzian": 1}
+
 
 class StreamController(object):
     """ Manage a stream and its accompanying stream panel """
@@ -148,7 +150,7 @@ class StreamController(object):
         if isinstance(stream, acqstream.SpectrumStream) and hasattr(stream, "peak_method"):
             # Set the peak button on the stream panel
             vis = stream in tab_data_model.focussedView.value.getStreams()
-            self.stream_panel.set_peak(None)
+            self.stream_panel.set_peak(PEAK_METHOD_TO_STATE[stream.peak_method.value])
             self.stream_panel.Bind(EVT_STREAM_PEAK, self._on_stream_peak)
 
         stream_bar.add_stream_panel(self.stream_panel, show_panel)
@@ -309,12 +311,13 @@ class StreamController(object):
 
     def _on_stream_peak(self, evt):
         """ Show or hide a stream in the focussed view if the peak button is clicked """
-        if evt.state == 0:
-            self.stream.peak_method.value = "gaussian"
-        elif evt.state == 1:
-            self.stream.peak_method.value = "lorentzian"
+        for m, s in PEAK_METHOD_TO_STATE.items():
+            if evt.state == s:
+                self.stream.peak_method.value = m
+                logging.debug("peak method set to %s", m)
+                break
         else:
-            self.stream.peak_method.value = evt.state
+            logging.error("No peak method corresponding to state %s", evt.state)
 
     def _on_new_dye_name(self, dye_name):
         """ Assign excitation and emission wavelengths if the given name matches a known dye """
