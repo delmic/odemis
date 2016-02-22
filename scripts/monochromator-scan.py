@@ -52,12 +52,14 @@ def acquire_spec(wls, wle, res, dt, filename):
     """
 
     ebeam = model.getComponent(role="e-beam")
-    # sed = model.getComponent(role="se-detector")
+    sed = model.getComponent(role="se-detector")
     mchr = model.getComponent(role="monochromator")
     sgrh = model.getComponent(role="spectrograph")
 
     prev_dt = ebeam.dwellTime.value
     prev_res = ebeam.resolution.value
+    prev_scale = ebeam.scale.value
+    prev_trans = ebeam.translation.value
     prev_wl = sgrh.position.value["wavelength"]
 
     ebeam.resolution.value = (1, 1)  # Force one pixel only
@@ -74,6 +76,7 @@ def acquire_spec(wls, wle, res, dt, filename):
     else:
         wli = (wle - wls) / (res - 1)
  
+    das = []
     try:
         for i in range(res):
             cwl = wls + i * wli  # requested value
@@ -87,6 +90,7 @@ def acquire_spec(wls, wle, res, dt, filename):
             if not _pt_acq.wait(dt * 5 + 1):
                 raise IOError("Timeout waiting for the data")
             wllist.append(cwl)
+
     except KeyboardInterrupt:
         logging.info("Stopping after only %d images acquired", i + 1)
     finally:
@@ -98,18 +102,48 @@ def acquire_spec(wls, wle, res, dt, filename):
         ebeam.dwellTime.value = prev_dt
         sgrh.moveAbs({"wavelength": prev_wl})
 
-    if _data:
+    if _data:  # Still save whatever got acquired, even if interrupted
         # Convert the sequence of data into one spectrum
         na = numpy.array(_data)  # keeps the dtype
         na.shape += (1, 1, 1, 1)  # make it 5th dim to indicate a channel
         md = _md
-        md.update({model.MD_WL_LIST: wllist})
-        spec = model.DataArray(na, md)
+        md[model.MD_WL_LIST] = wllist
 
+        # MD_POS should already be at the correct position (from the e-beam metadata)
+
+        # MD_PIXEL_SIZE is not meaningful but handy for the display in Odemis
+        # (it's the size of the square on top of the SEM survey => BIG!)
+        md[model.MD_PIXEL_SIZE] = (sempxs[0] * 50, sempxs[1] * 50)
+
+        md[model.MD_DESCRIPTION] = "Spectrum"
+        spec = model.DataArray(na, md)
+        das.append(spec)
+
+    # Acquire survey image
+    try:
+        logging.info("Acquiring SEM survey image")
+        ebeam.translation.value = (0, 0)
+        ebeam.scale.value = (1, 1)  # Allow full FoV
+        ebeam.resolution.value = ebeam.resolution.range[1] # max FoV
+        ebeam.scale.value = (4, 4)  # not too many pixels
+        ebeam.dwellTime.value = 10e-6 # 10µs is hopefully enough
+        semsur = sed.data.get()
+        semsur.metadata[model.MD_DESCRIPTION] = "SEM survey"
+        das.insert(0, semsur)
+    finally:
+        logging.debug("Restoring hardware settings")
+        ebeam.scale.value = prev_scale
+        ebeam.translation.value = prev_trans
+        if prev_res != (1, 1):
+            ebeam.resolution.value = prev_res
+        ebeam.dwellTime.value = prev_dt
+
+    if das:
         # Save the file
         exporter = dataio.find_fittest_converter(filename)
-        exporter.export(filename, spec)
-        raw_input("Spectrum successfully saved to %s" % (filename,))
+        exporter.export(filename, [semsur, spec])
+        logging.info("Spectrum successfully saved to %s", filename)
+        raw_input("Press Enter to close.")
 
 def getNumber(prompt):
     """
