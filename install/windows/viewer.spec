@@ -79,7 +79,6 @@ def get_gui_img():
         # Note: We trim the destination path down to Odemis' root
         extra_datas.append((f[f.find('odemis'):], f, 'DATA'))
 
-    print extra_datas
     return extra_datas
 
 
