@@ -1,0 +1,11 @@
+/var/log/odemis.log
+{
+	rotate 6
+	size 100M
+	monthly
+	missingok
+	notifempty
+	delaycompress
+	compress
+	create 644 root root
+}
