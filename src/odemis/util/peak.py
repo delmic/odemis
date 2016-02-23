@@ -284,6 +284,7 @@ class PeakFitter(object):
 
                 try:
                     # TODO: forbid negative peaks?
+                    # => in scipy 0.17, curve_fit() supports the 'bounds' parameter
                     params, _ = curve_fit(FitFunction, wavelength, spectrum, p0=fit_list)
                     break
                 except Exception:
