@@ -429,8 +429,8 @@ class Controller(object):
         self._accel = {}  # m/s² dict axis -> acceleration/deceleration
 
         # only for interpolated position (on open-loop)
-        self._target = {} # m (dict axis-> future position when a move is over)
-        self._end_move = {} # m (dict axis -> time the move will finish)
+        self._target = {} # m (dict axis-> expected position at the end of the move)
+        self._end_move = dict((a, 0) for a in self._channels) # m (dict axis -> time the move will finish)
         self._start_move = {} # m (dict axis -> time the move started)
 
         # If the controller is mis-configured for the actuator, things can go quite
@@ -1370,11 +1370,12 @@ class Controller(object):
         return (float): interpolated position at the current time
         """
         now = time.time()
-        end_move = self._end_move.get(axis, 0)
+        end_move = self._end_move[axis]
         if now > end_move:
             target = self._target.get(axis, self._position[axis])
             logging.debug("Interpolating move by reporting target position: %g",
                           target)
+            self._end_move[axis] = 0
             return target
         else:
             start = self._start_move[axis]
@@ -1394,7 +1395,7 @@ class Controller(object):
         assert(axis in self._channels)
 
         # make sure that if a move finished early, we report the final position
-        if not self.isMoving({axis}):
+        if self._end_move[axis] != 0 and not self.isMoving({axis}):
             self._storeMoveComplete(axis)
 
         return self._interpolatePosition(axis)
