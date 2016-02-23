@@ -35,6 +35,7 @@ SPARC-Lund-sim: {
         park: [0, 0], # V
         settle_time: 20.e-6, # s
         hfw_nomag: 0.276, # m
+        max_res: [4096, 3072], # px, to force 4:3 ratio
     },
     properties: {
         scale: [8, 8], # (ratio) : start with a pretty fast scan

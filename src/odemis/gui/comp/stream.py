@@ -600,7 +600,9 @@ class StreamPanel(wx.Panel):
         self._header.btn_show.SetToggle(visible)
 
     def set_peak(self, state):
-        """ Set the "peak" toggle button of the stream panel """
+        """ Set the "peak" toggle button of the stream panel
+        state (None or 0<=int): None for no peak, 0 for gaussian, 1 for lorentzian
+        """
         self._header.btn_peak.SetState(state)
 
     def collapse(self, collapse=None):

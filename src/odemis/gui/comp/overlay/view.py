@@ -573,6 +573,10 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
         if (peaks is None) or (self.type is None):
             return
 
+        # If original range is too small, create a finer one
+        if len(rng) < self.length * 0.9:
+            rng = numpy.linspace(rng[0], rng[-1], self.length)
+
         # Compute the label and global curve on the first time needed
         if None not in self._curves:
             self.width_labels = []

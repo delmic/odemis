@@ -504,38 +504,40 @@ class ImageTextToggleButton(BtnMixin, wxbuttons.GenBitmapTextToggleButton):
 class ImageStateButton(ImageToggleButtonImageButton):
     """
     Multi-state graphical button that can switch between any number of states/images.
-    The default bitmap image is used for state 0, and bmpSelected* contain a
-    list of images for state 1 and more. The values the state can take is 0 to
-    the number of images in bmpSelected.
+    The default bitmap image is used for state None, and bmpSelected* contain a
+    list of images for state 1 and more. The values the state can take is None and
+    0 to the number of images - 1 in bmpSelected.
     """
     def __init__(self, *args, **kwargs):
         super(ImageToggleButtonImageButton, self).__init__(*args, **kwargs)
         self.state = None
-        self.on = False
 
     def DrawLabel(self, dc, width, height, dx=0, dy=0):
-        bmp = self.bmpLabel
-        if not self.on:
+
+        if not self.IsEnabled():
             if not self.bmpDisabled:
                 self.bmpDisabled = self._create_disabled_bitmap()
             bmp = self.bmpDisabled
-        elif self.on and (self.state is not None):
-            if not self.bmpSelected:
-                self.bmpSelected = self._create_active_bitmap()
-            if self.bmpSelectedHover and self.hovering:
-                if isinstance(self.bmpSelectedHover, list):
+        elif self.hovering:
+            if self.state is None:
+                if not self.bmpHover:
+                    self.bmpHover = self._create_hover_bitmap()
+                bmp = self.bmpHover
+            else:
+                if self.bmpSelectedHover:
                     bmp = self.bmpSelectedHover[self.state]
                 else:
-                    bmp = self.bmpSelectedHover
-            else:
-                if isinstance(self.bmpSelected, list):
+                    # TODO: create hover if not present
                     bmp = self.bmpSelected[self.state]
-                else:
-                    bmp = self.bmpSelected
-        elif self.hovering:
-            if not self.bmpHover:
-                self.bmpHover = self._create_hover_bitmap()
-            bmp = self.bmpHover
+        else:
+            logging.debug("Drawing for state %s", self.state)
+            if self.state is None:
+                bmp = self.bmpLabel
+            elif not self.bmpSelected:
+                logging.warning("No bmpSelected for ImageStateButton")
+                bmp = self._create_active_bitmap()
+            else:
+                bmp = self.bmpSelected[self.state]
 
         brush = self.GetBackgroundBrush(dc)
         brush.SetColour(self.Parent.BackgroundColour)
@@ -549,20 +551,14 @@ class ImageStateButton(ImageToggleButtonImageButton):
         if not self.IsEnabled():
             return
         self.saveUp = self.up
-        self.saveOn = self.on
         self.saveState = self.state
         self.up = not self.up
-        if isinstance(self.bmpSelected, list):
-            if self.state is None:
-                self.on = True
-                self.state = 0
-            elif (self.state == len(self.bmpSelected) - 1):
-                self.on = False
-                self.state = None
-            else:
-                self.on = True
-                self.state += 1
-        self.nextOn = self.on
+        if self.state is None:
+            self.state = 0
+        elif self.state == len(self.bmpSelected) - 1:
+            self.state = None
+        else:
+            self.state += 1
         self.nextState = self.state
         self.CaptureMouse()
         self.SetFocus()
@@ -586,43 +582,44 @@ class ImageStateButton(ImageToggleButtonImageButton):
         if event.LeftIsDown() and self.HasCapture():
             x, y = event.GetPositionTuple()
             w, h = self.GetClientSizeTuple()
-            if x < w and x >= 0 and y < h and y >= 0:
-                self.on = self.nextOn
-                self.state = self.nextState
-                self.up = not self.saveUp
-                self.Refresh()
-                return
-            if (x < 0 or y < 0 or x >= w or y >= h):
-                self.on = self.saveOn
-                self.state = self.saveState
-                self.up = self.saveUp
-                self.Refresh()
-                return
+            if 0 <= x < w and 0 <= y < h:
+                if self.state != self.nextState:
+                    self.state = self.nextState
+                    self.up = not self.saveUp
+                    self.Refresh()
+            else:
+                if self.state != self.saveState:
+                    self.state = self.saveState
+                    self.up = self.saveUp
+                    self.Refresh()
+            return
         event.Skip()
 
     def OnKeyUp(self, event):
         if self.hasFocus and event.GetKeyCode() == ord(" "):
             self.up = not self.up
-            if isinstance(self.bmpSelected, list):
-                if self.state is None:
-                    self.on = True
-                    self.state = 0
-                elif (self.state == len(self.bmpSelected) - 1):
-                    self.on = False
-                    self.state = None
-                else:
-                    self.on = True
-                    self.state += 1
+            if self.state is None:
+                self.state = 0
+            elif self.state == len(self.bmpSelected) - 1:
+                self.state = None
+            else:
+                self.state += 1
             self.Notify()
             self.Refresh()
         event.Skip()
 
     def SetState(self, state):
+        if state is not None and not 0 <= state < len(self.bmpSelected):
+            raise ValueError("State %s is invalid", state)
         self.state = state
         self.Refresh()
     SetValue = SetState
 
     def GetState(self):
+        """
+        return (None or int): None if first image/state selected, otherwise
+         0 to N-1 for the state corresponding the bmpSelected image
+        """
         return self.state
     GetValue = GetState
 
