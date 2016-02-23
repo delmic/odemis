@@ -5,6 +5,12 @@
 # update the PID parameter values.
 # Example way to start:
 # ./util/pituner.py --port autoip --controller 1
+
+# Note for tuning:
+#  * Start tuning with P, with I & D = 0, then tune I, and then D.
+#  * (Temporarily) Reduce the settle window/increase the settle time
+#  * Try with various magnitudes of move distances, in both directions
+#  * Check on different parts of the axis.
 '''
 Created on February 2016
 
@@ -60,11 +66,12 @@ def tune(cont, axis):
     cont.SetRecordConfig(2, axis, 2)
 
     # To change speed/acc:
-    vel = 1e-3  # m/s
-    acc = 10e-3  # m/s²
+    vel = 2e-3  # m/s
+    acc = 3e-3  # m/s²
     cont.SetCLVelocity(axis, vel / upm)
     cont.SetCLAcceleration(axis, acc / upm)
     cont.SetCLDeceleration(axis, acc / upm)
+    cont.checkError()
 
     # To change PID values: param 1, 2, 3  (4 = I limit)
     # param = 1
@@ -78,7 +85,7 @@ def tune(cont, axis):
         movedur = driver.estimateMoveDuration(abs(distm), vel, acc)
         logging.info("Expected move time = %g s", movedur)
 
-        rrate = max(1, int(math.ceil(movedur * 1.1 / (tablelen * cycledur))))
+        rrate = max(1, int(math.ceil((movedur * 2 + 0.5) / (tablelen * cycledur))))
         cont.SetRecordRate(rrate)
         recdur = tablelen * cycledur * rrate
         logging.info("Recording every %d cycle => duration = %g s", rrate, recdur)
@@ -108,7 +115,7 @@ def tune(cont, axis):
         data = cont.GetRecordedData()
 
         # plot data using matplotlib
-        idx = np.arange(len(data))
+        idx = np.linspace(0, (len(data) - 1) * cycledur * rrate, len(data))
         cp, ap = np.array(zip(*data))
         ep = ap - cp
 
@@ -124,7 +131,7 @@ def tune(cont, axis):
         #    print("%g\t%g" % (cp, ap))
 
 # last move distance requested
-distm = 0.1e-3  # m
+distm = 0.001e-3  # m
 def ask_next_move(cont, axis):
     """
     Ask the user for the size of the next move, or to update the settings of
@@ -147,7 +154,7 @@ def ask_next_move(cont, axis):
             try:
                 cont.SetParameter(axis, param, val)
             except Exception:
-                logging.error("Failed to write %s to parameter 0x%x", val, param)
+                logging.exception("Failed to write %s to parameter 0x%x", val, param)
         elif choice == "M":
             print(u"Enter new distance in µm (can be negative): ", end="")
             val = raw_input()
@@ -158,7 +165,7 @@ def ask_next_move(cont, axis):
             return None
         else:
             # Just keep asking
-            print("Command '%s' not understood")
+            print("Command '%s' not understood" % (choice,))
 
 
 def main(args):
