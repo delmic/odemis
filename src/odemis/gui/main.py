@@ -176,8 +176,6 @@ class OdemisGUIApp(wx.App):
             self.main_frame.SetIcons(ib)
             self.main_frame.SetTitle(gui.name)
 
-            self.main_data.debug.subscribe(self.on_debug_va, init=True)
-            self.main_data.level.subscribe(self.on_level_va, init=False)
 
             # List of all possible tabs used in Odemis' main GUI
             # microscope role(s), internal name, class, tab btn, tab panel
@@ -286,6 +284,9 @@ class OdemisGUIApp(wx.App):
                 if hasattr(tab.panel, 'btn_log'):
                     tab.panel.btn_log.Bind(wx.EVT_BUTTON, toggle_log_panel)
             self.main_frame.btn_log.Bind(wx.EVT_BUTTON, toggle_log_panel)
+
+            self.main_data.debug.subscribe(self.on_debug_va, init=True)
+            self.main_data.level.subscribe(self.on_level_va, init=False)
 
             self._menu_controller = MenuController(self.main_data, self.main_frame)
             # Menu events
