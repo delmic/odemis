@@ -21,6 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Test module for model.Stream classes
 from __future__ import division
 
+import gc
 import logging
 import math
 import numpy
@@ -34,6 +35,7 @@ import threading
 import time
 import unittest
 from unittest.case import skip
+import weakref
 
 
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
@@ -63,6 +65,7 @@ class FakeEBeam(model.Emitter):
         self.translation = model.TupleContinuous((0, 0), ((0, 0), (0, 0)),
                                            cls=(int, long, float), unit="px")
 
+
 class FakeDetector(model.Detector):
     """
     Imitates an SEM detector, but you need to send the data yourself (using
@@ -73,15 +76,16 @@ class FakeDetector(model.Detector):
         self.data = model.DataFlow()
         self._shape = (2 ** 16,)
 
+
 # @skip("simple")
 class StreamTestCase(unittest.TestCase):
+
     def assertTupleAlmostEqual(self, first, second, places=None, msg=None, delta=None):
         """
         check two tuples are almost equal (value by value)
         """
         for f, s in zip(first, second):
             self.assertAlmostEqual(f, s, places=places, msg=msg, delta=delta)
-
 
     def _check_square_pixel(self, st):
         rep = st.repetition.value
@@ -390,6 +394,59 @@ class StreamTestCase(unittest.TestCase):
 
         ebeam.resolution.value = (128, 128) # normally automatically done
         self.assertNotEqual(ebeam.resolution.value, ss.emtResolution.value)
+
+    def test_weakref(self):
+        """
+        checks that a Stream is garbage-collected when not used anymore
+        """
+        ebeam = FakeEBeam("ebeam")
+        se = FakeDetector("se")
+        d = numpy.zeros(ebeam.shape[::-1], "uint16") + 1
+        d[1] = 1561  # Next power of 2 is 2**11
+        md = {model.MD_BPP: 16,
+              model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
+              model.MD_POS: (1e-3, -30e-3),  # m
+        }
+        da = model.DataArray(d, md)
+
+        # Static stream
+        sts = stream.StaticSEMStream("test static", da)
+        # Wait a little bit to make sure the image has been generated
+        time.sleep(0.5)
+        # self.assertIsInstance(ss.image.value, model.DataArray)
+        # Check it's garbage collected
+        wsts = weakref.ref(sts)
+        assert(wsts() is not None)
+
+        del sts
+        time.sleep(1)  # Give some time to disappear
+        sts = wsts()
+        if sts is not None:
+            print gc.get_referrers(sts)
+        assert(wsts() is None)
+
+        # Live stream
+        ss = stream.SEMStream("test live", se, se.data, ebeam)
+
+        # "start" the stream, so it expects data
+        ss.should_update.value = True
+        ss.is_active.value = True
+        se.data.notify(da)
+        # Wait a little bit to make sure the image has been generated
+        time.sleep(0.5)
+        self.assertIsInstance(ss.image.value, model.DataArray)
+
+        # Check it's garbage collected
+        wss = weakref.ref(ss)
+        assert(wss() is not None)
+
+        del ss
+        time.sleep(1)  # Give some time to disappear
+        ss = wss()
+        if ss is not None:
+            print gc.get_referrers(ss)
+        assert(wss() is None)
+
 
 # @skip("faster")
 class SECOMTestCase(unittest.TestCase):

@@ -31,6 +31,7 @@ from odemis.util import img, conversion, fluo
 import random
 import threading
 import time
+import weakref
 
 from ._base import Stream, UNDEFINED_ROI
 
@@ -60,6 +61,7 @@ class LiveStream(Stream):
         # TODO: kill the thread when the stream is dereferenced
         self._ht_needs_recompute = threading.Event()
         self._hthread = threading.Thread(target=self._histogram_thread,
+                                         args=(weakref.ref(self),),
                                          name="Histogram computation")
         self._hthread.daemon = True
         self._hthread.start()
@@ -130,27 +132,43 @@ class LiveStream(Stream):
         # synchronization allows to delay it (without accumulation).
         self._ht_needs_recompute.set()
 
-    def _histogram_thread(self):
+    @staticmethod
+    def _histogram_thread(wstream):
         """
         Called as a separate thread, and recomputes the histogram whenever
         it receives an event asking for it.
+        wself (Weakref to a stream): the stream to follow
         """
-        while True:
-            self._ht_needs_recompute.wait() # wait until a new image is available
-            tstart = time.time()
-            self._ht_needs_recompute.clear()
-            self._updateHistogram()
-            tend = time.time()
+        try:
+            stream = wstream()
+            ht_needs_recompute = stream._ht_needs_recompute
+            # Only hold a weakref to allow the stream to be garbage collected
+            # On GC, trigger im_needs_recompute so that the thread can end too
+            wstream = weakref.ref(stream, lambda o: ht_needs_recompute.set())
 
-            # sleep as much, to ensure we are not using too much CPU
-            tsleep = max(0.2, tend - tstart) # max 5 Hz
-            time.sleep(tsleep)
+            while True:
+                del stream
+                ht_needs_recompute.wait()  # wait until a new image is available
+                stream = wstream()
+                if stream is None:
+                    logging.info("Stream disappeared so ending histrogram update thread")
+                    return
+                tstart = time.time()
+                ht_needs_recompute.clear()
+                stream._updateHistogram()
+                tend = time.time()
 
-            # If still nothing to do, update the RGB image with the new B/C.
-            if not self._ht_needs_recompute.is_set() and self.auto_bc.value:
-                # Note that this can cause the .image to be updated even after the
-                # stream is not active (but that can happen even without this).
-                self._shouldUpdateImage()
+                # sleep as much, to ensure we are not using too much CPU
+                tsleep = max(0.2, tend - tstart)  # max 5 Hz
+                time.sleep(tsleep)
+
+                # If still nothing to do, update the RGB image with the new B/C.
+                if not ht_needs_recompute.is_set() and stream.auto_bc.value:
+                    # Note that this can cause the .image to be updated even after the
+                    # stream is not active (but that can happen even without this).
+                    stream._shouldUpdateImage()
+        except Exception:
+            logging.exception("histrogram update thread failed")
 
     def _onNewData(self, dataflow, data):
         old_drange = self._drange
