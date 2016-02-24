@@ -33,7 +33,7 @@ import os
 
 from odemis import model, gui
 import odemis
-from odemis.gui import main_xrc, log
+from odemis.gui import main_xrc, log, img
 from odemis.gui.conf import get_general_conf
 from odemis.gui.cont import acquisition
 from odemis.gui.cont.menu import MenuController
@@ -41,7 +41,6 @@ from odemis.gui.util import call_in_wx_main
 from odemis.gui.xmlh import odemis_get_resources
 from odemis.util import driver
 import odemis.gui.cont.tabs as tabs
-import odemis.gui.img.data as imgdata
 import odemis.gui.model as guimodel
 
 # Ensure that the current working directory is the same as the location of this file
@@ -112,13 +111,13 @@ class OdemisGUIApp(wx.App):
 
         if self._is_standalone:
             microscope = None
-            gui.icon = imgdata.catalog['ico_gui_viewer_256'].GetIcon()
+            gui.icon = img.getIcon("icon/ico_gui_viewer_256.png")
             gui.name = odemis.__shortname__ + " Viewer"
 
             if "delphi" == self._is_standalone:
-                gui.logo = imgdata.getlogo_delphiBitmap()
+                gui.logo = img.getBitmap("logo_delphi.png")
         else:
-            gui.icon = imgdata.catalog['ico_gui_full_256'].GetIcon()
+            gui.icon = img.getIcon("icon/ico_gui_full_256.png")
             gui.name = odemis.__shortname__
             try:
                 microscope = model.getMicroscope()
@@ -130,10 +129,13 @@ class OdemisGUIApp(wx.App):
 
                 answer = wx.MessageBox(msg,
                                        "Connection error",
-                                        style=wx.YES | wx.NO | wx.ICON_ERROR)
+                                       style=wx.YES | wx.NO | wx.ICON_ERROR)
                 if answer == wx.NO:
                     sys.exit(1)
                 microscope = None
+            else:
+                if microscope.role == "delphi":
+                    gui.logo = img.getBitmap("logo_delphi.png")
 
         logging.info("\n\n************  Starting Odemis GUI  ************\n")
         logging.info("Odemis GUI v%s (from %s)", odemis.__version__, __file__)
