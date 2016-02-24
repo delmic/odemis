@@ -706,19 +706,22 @@ class Stream(object):
         Called as a separate thread, and recomputes the image whenever
         it receives an event asking for it.
         """
-        tnext = 0
-        while True:
-            self._im_needs_recompute.wait()  # wait until a new image is available
-            tnow = time.time()
+        try:
+            tnext = 0
+            while True:
+                self._im_needs_recompute.wait()  # wait until a new image is available
+                tnow = time.time()
 
-            # sleep a bit to avoid refreshing too fast
-            tsleep = tnext - tnow
-            if tsleep > 0.0001:
-                time.sleep(tsleep)
+                # sleep a bit to avoid refreshing too fast
+                tsleep = tnext - tnow
+                if tsleep > 0.0001:
+                    time.sleep(tsleep)
 
-            tnext = time.time() + 0.1  # max 10 Hz
-            self._im_needs_recompute.clear()
-            self._updateImage()
+                tnext = time.time() + 0.1  # max 10 Hz
+                self._im_needs_recompute.clear()
+                self._updateImage()
+        except Exception:
+            logging.exception("image update thread failed")
 
     def _updateImage(self):
         """ Recomputes the image with all the raw data available
