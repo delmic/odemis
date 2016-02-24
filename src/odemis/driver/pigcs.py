@@ -2645,11 +2645,13 @@ class Bus(model.Actuator):
         self._updatePosition()
 
         self._cl_axes = set(an for an, ax in self.axes.items() if ax.canAbs)
+        self._pos_needs_update = threading.Event()
         if self._cl_axes:
             # To detect position changes not related to a requested move (only CL axes can do that)
-            self._pos_updater = util.RepeatingTimer(10, self._refreshPosition,
-                                                    "PIGCS position update")
+            self._pos_updater = threading.Thread(target=self._refreshPosition,
+                                                 name="PIGCS position refresher")
             self._pos_updater.start()
+            self._pos_updater_stop = threading.Event()
         else:
             self._pos_updater = None
 
@@ -2700,10 +2702,32 @@ class Bus(model.Actuator):
         """
         Called regularly to update the position of the closed-loop axes
         """
-        # TODO: is it safe to do it at any time?
-        # => Do only if no moves are queued? Then need another way to enforce pos update during move updates
-        logging.debug("Will refresh position of axes %s", self._cl_axes)
-        self._updatePosition(self._cl_axes)
+        try:
+            while True:
+                # wait until a pos update is requested... or once in a while.
+                self._pos_needs_update.wait(10)
+                if self._pos_updater_stop.is_set():
+                    return
+
+                # Don't immediately read the position, because there are some
+                # chances the pos update is due to a move ending, which could
+                # be followed by another move. The start next move has a higher
+                # priority than reading position.
+                if self._pos_updater_stop.wait(0.3):
+                    return
+
+                # TODO: not entirely sure if that can cause issues. It seems to
+                # cause garbage data with E-861/IP if multiple commands are sent
+                # (ex, ERR + ...) and almost at the same time, another axis is
+                # sent command (ex, OSM).
+                logging.debug("Will refresh position of axes %s", self._cl_axes)
+                self._updatePosition(self._cl_axes)
+
+                self._pos_needs_update.clear()
+        except Exception:
+            logging.exception("Position refresher thread failed")
+        finally:
+            logging.debug("Ending position refresher")
 
     def _setSpeed(self, value):
         """
@@ -2959,9 +2983,7 @@ class Bus(model.Actuator):
                 # moving (and don't notify the VA) and update the rest of axes in a
                 # separate thread
                 self._updatePosition(last_axes)
-                other_axes = set(self._axis_to_cc.keys()) - last_axes
-                if other_axes:
-                    threading.Thread(target=self._updatePosition, args=(other_axes,)).start()
+            self._pos_needs_update.set()
 
     def _cancelCurrentMove(self, future):
         """
@@ -2988,7 +3010,8 @@ class Bus(model.Actuator):
             self._executor = None
 
         if self._pos_updater:
-            self._pos_updater.cancel()
+            self._pos_updater_stop.set()
+            self._pos_needs_update.set()  # To force the thread to check the stop event
             self._pos_updater = None
 
         ctlrs = set(ct for ct, ch in self._axis_to_cc.values())
