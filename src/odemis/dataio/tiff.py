@@ -1482,8 +1482,12 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_fil
             f.SetField(T.TIFFTAG_IMAGEDESCRIPTION, ometxt)
             ometxt = None
 
+        # if metadata indicates YXC format just handle it as RGB
+        if data.metadata.get(model.MD_DIMS) == 'YXC':
+            write_rgb = True
+            hdim = data.shape[:-3]
         # for data > 2D: write as a sequence of 2D images or RGB images
-        if data.ndim == 5 and data.shape[0] == 3: # RGB
+        elif data.ndim == 5 and data.shape[0] == 3:  # RGB
             # Write an RGB image, instead of 3 images along C
             write_rgb = True
             hdim = data.shape[1:3]
