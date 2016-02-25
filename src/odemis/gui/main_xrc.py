@@ -39,6 +39,7 @@ class xrcfr_main(wx.Frame):
         self.menu_item_open = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_open"))
         self.menu_item_snapshot = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_snapshot"))
         self.menu_item_snapshot_as = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_snapshot_as"))
+        self.menu_item_export_as = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_export_as"))
         self.menu_item_reset_finealign = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_reset_finealign"))
         self.menu_item_halt = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_halt"))
         self.menu_item_recalibrate = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_recalibrate"))
@@ -498,6 +499,13 @@ def __init_resources():
         <object class="wxMenuItem" name="menu_item_snapshot_as">
           <label>Save Snapshot as...</label>
           <accel>Ctrl+Shift+S</accel>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <object class="wxMenuItem" name="menu_item_export_as">
+          <label>Export as...</label>
+          <accel>Ctrl+E</accel>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>

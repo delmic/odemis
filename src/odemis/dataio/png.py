@@ -18,6 +18,7 @@ You should have received a copy of the GNU General Public License along with Ode
 from __future__ import division
 
 import logging
+from odemis import model
 from odemis.util import img
 import os
 import scipy
@@ -35,22 +36,25 @@ def _saveAsPNG(filename, data):
     # TODO: store metadata
 
     # TODO: support RGB
-    data = img.ensure2DImage(data)
+    if data.metadata.get(model.MD_DIMS) == 'YXC':
+        rgb8 = data
+    else:
+        data = img.ensure2DImage(data)
 
-    # TODO: it currently fails with large data, use gdal instead?
-#     tempdriver = gdal.GetDriverByName('MEM')
-#     tmp = tempdriver.Create('', rgb8.shape[1], rgb8.shape[0], 1, gdal.GDT_Byte)
-#     tiledriver = gdal.GetDriverByName("png")
-#     tmp.GetRasterBand(1).WriteArray(rgb8[:, :, 0])
-#     tiledriver.CreateCopy("testgdal.png", tmp, strict=0)
+        # TODO: it currently fails with large data, use gdal instead?
+    #     tempdriver = gdal.GetDriverByName('MEM')
+    #     tmp = tempdriver.Create('', rgb8.shape[1], rgb8.shape[0], 1, gdal.GDT_Byte)
+    #     tiledriver = gdal.GetDriverByName("png")
+    #     tmp.GetRasterBand(1).WriteArray(rgb8[:, :, 0])
+    #     tiledriver.CreateCopy("testgdal.png", tmp, strict=0)
 
 
-    # TODO: support greyscale png?
-    # TODO: skip if already 8 bits
-    # Convert to 8 bit RGB
-    hist, edges = img.histogram(data)
-    irange = img.findOptimalRange(hist, edges, 1 / 256)
-    rgb8 = img.DataArray2RGB(data, irange)
+        # TODO: support greyscale png?
+        # TODO: skip if already 8 bits
+        # Convert to 8 bit RGB
+        hist, edges = img.histogram(data)
+        irange = img.findOptimalRange(hist, edges, 1 / 256)
+        rgb8 = img.DataArray2RGB(data, irange)
 
     # save to file
     scipy.misc.imsave(filename, rgb8)

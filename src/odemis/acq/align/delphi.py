@@ -643,7 +643,7 @@ def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, fo
             steps = 0
             if manual:
                 det_dataflow.subscribe(_discard_data)
-                msg = "\033[1;34mPlease turn on the Optical stream, set Power to 0 Watt and focus the image so you have a clearly visible spot. Then turn off the stream and press Enter ...\033[1;m"
+                msg = "\033[1;34mAbout to calculate rotation and scaling (" + str(pos_ind) + "/4). Please turn on the Optical stream, set Power to 0 Watt and focus the image using the mouse so you have a clearly visible spot. Then turn off the stream and press Enter ...\033[1;m"
                 raw_input(msg)
                 print "\033[1;30mCalculating rotation and scaling (" + str(pos_ind) + "/4), please wait...\033[1;m"
                 pos_ind += 1

@@ -310,9 +310,11 @@ def main(args):
                 escan.shift.value = (0, 0)
                 escan.dwellTime.value = 5e-06
                 detector.data.subscribe(_discard_data)
-                msg = "\033[1;34mPlease turn on the Optical stream, set Power to 0 Watt and focus the image so you have a clearly visible spot. Then turn off the stream and press Enter...\033[1;m"
-                raw_input(msg)
-                print "\033[1;30mCalculating translation, please wait...\033[1;m"
+                print "\033[1;34mPlease turn on the Optical stream, set Power to 0 Watt and focus the image so you have a clearly visible spot.\033[1;m"
+                print "\033[1;34mUse the up and down arrows or the mouse to move the optical focus and right and left arrows to move the SEM focus. Then turn off the stream and press Enter ...\033[1;m"
+                ar = ArrowFocus(focus, ebeam_focus, ccd.depthOfField.value, escan.depthOfField.value)
+                ar.focusByArrow()
+                print "\033[1;30mFine alignment in progress, please wait...\033[1;m"
                 detector.data.unsubscribe(_discard_data)
                 try:
                     align_offsetf = aligndelphi.AlignAndOffset(ccd, detector, escan, sem_stage,
@@ -381,9 +383,11 @@ def main(args):
                     escan.shift.value = (0, 0)
                     escan.dwellTime.value = 5e-06
                     detector.data.subscribe(_discard_data)
-                    msg = "\033[1;34mPlease turn on the Optical stream, set Power to 0 Watt and focus the image so you have a clearly visible spot. Then turn off the stream and press Enter ...\033[1;m"
-                    raw_input(msg)
-                    print "\033[1;30mCalculating spot shift, please wait...\033[1;m"
+                    print "\033[1;34mPlease turn on the Optical stream, set Power to 0 Watt and focus the image so you have a clearly visible spot.\033[1;m"
+                    print "\033[1;34mUse the up and down arrows or the mouse to move the optical focus and right and left arrows to move the SEM focus. Then turn off the stream and press Enter ...\033[1;m"
+                    ar = ArrowFocus(focus, ebeam_focus, ccd.depthOfField.value, escan.depthOfField.value)
+                    ar.focusByArrow()
+                    print "\033[1;30mFine alignment in progress, please wait...\033[1;m"
                     detector.data.unsubscribe(_discard_data)
                     spot_shiftf = aligndelphi.SpotShiftFactor(ccd, detector, escan, focus)
                     new_spotshift = spot_shiftf.result()
@@ -454,7 +458,7 @@ def main(args):
                 escan.dwellTime.value = 5e-06
                 detector.data.subscribe(_discard_data)
                 print "\033[1;34mPlease turn on the Optical stream, set Power to 0 Watt and focus the image so you have a clearly visible spot.\033[1;m"
-                print "\033[1;34mUse the up and down arrows to move the optical focus and right and left arrows to move the SEM focus. Then turn off the stream and press Enter ...\033[1;m"
+                print "\033[1;34mUse the up and down arrows or the mouse to move the optical focus and right and left arrows to move the SEM focus. Then turn off the stream and press Enter ...\033[1;m"
                 ar = ArrowFocus(focus, ebeam_focus, ccd.depthOfField.value, escan.depthOfField.value)
                 ar.focusByArrow()
                 print "\033[1;30mFine alignment in progress, please wait...\033[1;m"

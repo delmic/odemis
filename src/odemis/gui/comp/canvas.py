@@ -158,7 +158,7 @@ from odemis.gui import BLEND_DEFAULT, BLEND_SCREEN, BufferSizeEvent
 from odemis.gui.evt import EVT_KNOB_ROTATE, EVT_KNOB_PRESS
 from odemis.gui.comp.overlay.base import WorldOverlay, ViewOverlay
 from odemis.gui.util import call_in_wx_main
-from odemis.gui.util.img import add_alpha_byte
+from odemis.gui.util.img import add_alpha_byte, apply_rotation, apply_shear, apply_flip
 from odemis.util import intersect
 from odemis.util.conversion import wxcol_to_frgb
 import odemis.gui.img.data as imgdata
@@ -1021,52 +1021,10 @@ class BitmapCanvas(BufferedCanvas):
         ctx.save()
         # Combine the image scale and the buffer scale
 
-        # Rotate if needed
-        if rotation is not None and abs(rotation) >= 0.008:  # > 0.5°
-            x, y, w, h = b_im_rect
-
-            rot_x = x + w / 2
-            rot_y = y + h / 2
-            # Translate to the center of the image (in buffer coordinates)
-            ctx.translate(rot_x, rot_y)
-            # Rotate
-            ctx.rotate(-rotation)
-            # Translate back, so the origin is at the top left position of the image
-            ctx.translate(-rot_x, -rot_y)
-
-        # Shear if needed
-        if shear is not None and abs(shear) >= 0.0005:
-            # Shear around the center of the image data. Shearing only occurs on the x axis
-            x, y, w, h = b_im_rect
-            shear_x = x + w / 2
-            shear_y = y + h / 2
-
-            # Translate to the center x of the image (in buffer coordinates)
-            ctx.translate(shear_x, shear_y)
-            shear_matrix = cairo.Matrix(1.0, shear, 0.0, 1.0)
-            ctx.transform(shear_matrix)
-            ctx.translate(-shear_x, -shear_y)
-
-        if flip:
-            fx = fy = 1.0
-
-            if flip & wx.HORIZONTAL == wx.HORIZONTAL:
-                fx = -1.0
-
-            if flip & wx.VERTICAL == wx.VERTICAL:
-                fy = -1.0
-
-            x, y, w, h = b_im_rect
-
-            flip_x = x + w / 2
-            flip_y = y + h / 2
-
-            flip_matrix = cairo.Matrix(fx, 0.0, 0.0, fy)
-
-            ctx.translate(flip_x, flip_y)
-
-            ctx.transform(flip_matrix)
-            ctx.translate(-flip_x, -flip_y)
+        # apply transformations if needed
+        apply_rotation(ctx, rotation, b_im_rect)
+        apply_shear(ctx, shear, b_im_rect)
+        apply_flip(ctx, flip, b_im_rect)
 
         # logging.debug("Total scale: %s x %s = %s", im_scale, self.scale, total_scale)
 

@@ -1973,7 +1973,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         # Check 0D spectrum
         specs.selected_pixel.value = (1, 1)
         sp0d = specs.get_pixel_spectrum()
-        wl0d = specs.get_spectrum_range()
+        wl0d, _ = specs.get_spectrum_range()
         self.assertEqual(sp0d.shape, (spec.shape[0],))
         self.assertEqual(wl0d.shape, (spec.shape[0],))
         self.assertEqual(sp0d.dtype, spec.dtype)
@@ -1982,7 +1982,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         # Check width > 1 (on the border)
         specs.selectionWidth.value = 12
         sp0d = specs.get_pixel_spectrum()
-        wl0d = specs.get_spectrum_range()
+        wl0d, _ = specs.get_spectrum_range()
         self.assertEqual(sp0d.shape, (spec.shape[0],))
         self.assertEqual(wl0d.shape, (spec.shape[0],))
         self.assertEqual(sp0d.dtype, spec.dtype)
@@ -1992,7 +1992,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         specs.selectionWidth.value = specs.selectionWidth.range[1]
         specs.selected_pixel.value = (55, 106)
         sp0d = specs.get_pixel_spectrum()
-        wl0d = specs.get_spectrum_range()
+        wl0d, _ = specs.get_spectrum_range()
         self.assertEqual(sp0d.shape, (spec.shape[0],))
         self.assertEqual(wl0d.shape, (spec.shape[0],))
         self.assertEqual(sp0d.dtype, spec.dtype)
@@ -2006,7 +2006,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         # Check 1d spectrum on corner-case: parallel to the X axis
         specs.selected_line.value = [(3, 7), (3, 65)]
         sp1d = specs.get_line_spectrum()
-        wl1d = specs.get_spectrum_range()
+        wl1d, _ = specs.get_spectrum_range()
         self.assertEqual(sp1d.ndim, 3)
         self.assertEqual(sp1d.shape, (65 - 7 + 1, spec.shape[0], 3))
         self.assertEqual(sp1d.dtype, numpy.uint8)
@@ -2029,7 +2029,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         # Check 1d spectrum in diagonal
         specs.selected_line.value = [(30, 65), (1, 1)]
         sp1d = specs.get_line_spectrum()
-        wl1d = specs.get_spectrum_range()
+        wl1d, _ = specs.get_spectrum_range()
         self.assertEqual(sp1d.ndim, 3)
         # There is not too much expectations on the size of the spatial axis
         self.assertTrue(29 <= sp1d.shape[0] <= (64 * 1.41))
@@ -2045,7 +2045,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         specs.selected_line.value = [(30, 65), (5, 1)]
         specs.selectionWidth.value = 12
         sp1d = specs.get_line_spectrum()
-        wl1d = specs.get_spectrum_range()
+        wl1d, _ = specs.get_spectrum_range()
         self.assertEqual(sp1d.ndim, 3)
         # There is not too much expectations on the size of the spatial axis
         self.assertTrue(29 <= sp1d.shape[0] <= (64 * 1.41))
@@ -2057,7 +2057,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         specs.selected_line.value = [(30, 65), (5, 12)]
         specs.selectionWidth.value = 13 # brings bad luck?
         sp1d = specs.get_line_spectrum()
-        wl1d = specs.get_spectrum_range()
+        wl1d, _ = specs.get_spectrum_range()
         self.assertEqual(sp1d.ndim, 3)
         # There is not too much expectations on the size of the spatial axis
         self.assertTrue(29 <= sp1d.shape[0] <= (53 * 1.41))

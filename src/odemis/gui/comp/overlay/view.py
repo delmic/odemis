@@ -585,7 +585,7 @@ class CurveOverlay(base.ViewOverlay, base.DragMixin):
             for pos, width, amplitude in peaks:
                 self.peak_labels.append(units.readable_str(pos, self.unit, 3))
                 self.width_labels.append(units.readable_str(width, self.unit, 3))
-                self.amplitude_labels.append(units.readable_str(amplitude, None, 3))
+                self.amplitude_labels.append(units.readable_str(abs(amplitude), None, 3))
             self._curves[None] = peak.Curve(rng, peaks, self.peak_offset, type=self.type)
         curve = self._curves[None]
 
@@ -1003,7 +1003,6 @@ class PolarOverlay(base.ViewOverlay):
 
     def _calculate_phi(self, view_pos=None):
         """ Calcualate the Phi angle and the values to display the Phi line """
-
         if view_pos:
             vx, vy = view_pos
             dx, dy = vx - self.center_x, self.center_y - vy
