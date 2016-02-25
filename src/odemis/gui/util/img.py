@@ -24,17 +24,16 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+import cairo
 import logging
 import numpy
 import odemis.model
+from odemis.model._dataflow import DataArray
 import wx
 
 
 # @profile
 # TODO: rename to *_bgra_*
-from odemis.model._dataflow import DataArray
-
-
 def format_rgba_darray(im_darray, alpha=None):
     """ Reshape the given numpy.ndarray from RGB to BGRA format
 
@@ -72,6 +71,101 @@ def format_rgba_darray(im_darray, alpha=None):
         return new_darray
     else:
         raise ValueError("Unsupported colour depth!")
+
+
+def min_type(data):
+    """Find the minimum type code needed to represent the elements in `data`.
+    """
+
+    if numpy.issubdtype(data.dtype, numpy.integer):
+        types = [numpy.int8, numpy.uint8, numpy.int16, numpy.uint16, numpy.int32,
+                 numpy.uint32, numpy.int64, numpy.uint64]
+    else:
+        types = [numpy.float16, numpy.float32, numpy.float64]
+
+    data_min, data_max = data.min(), data.max()
+
+    for t in types:
+        if numpy.all(data_min >= numpy.iinfo(t).min) and numpy.all(data_max <= numpy.iinfo(t).max):
+            return t
+    else:
+        raise ValueError("Could not find suitable dtype.")
+
+
+def apply_rotation(ctx, rotation, b_im_rect):
+    """
+    Applies rotation to the given cairo context
+
+    ctx: (cairo.Context) Cairo context to draw on
+    rotation: (float) in rads
+    b_im_rect: (float, float, float, float) top, left, width, height rectangle
+        containing the image in buffer coordinates
+    """
+    if rotation is not None and abs(rotation) >= 0.008:  # > 0.5°
+        x, y, w, h = b_im_rect
+
+        rot_x = x + w / 2
+        rot_y = y + h / 2
+        # Translate to the center of the image (in buffer coordinates)
+        ctx.translate(rot_x, rot_y)
+        # Rotate
+        ctx.rotate(-rotation)
+        # Translate back, so the origin is at the top left position of the image
+        ctx.translate(-rot_x, -rot_y)
+
+
+def apply_shear(ctx, shear, b_im_rect):
+    """
+    Applies shear to the given cairo context
+
+    ctx: (cairo.Context) Cairo context to draw on
+    shear: (float) shear to be applied
+    b_im_rect: (float, float, float, float) top, left, width, height rectangle
+        containing the image in buffer coordinates
+    """
+    # Shear if needed
+    if shear is not None and abs(shear) >= 0.0005:
+        # Shear around the center of the image data. Shearing only occurs on the x axis
+        x, y, w, h = b_im_rect
+        shear_x = x + w / 2
+        shear_y = y + h / 2
+
+        # Translate to the center x of the image (in buffer coordinates)
+        ctx.translate(shear_x, shear_y)
+        shear_matrix = cairo.Matrix(1.0, shear, 0.0, 1.0)
+        ctx.transform(shear_matrix)
+        ctx.translate(-shear_x, -shear_y)
+
+
+def apply_flip(ctx, flip, b_im_rect):
+    """
+    Applies flip to the given cairo context
+
+    ctx: (cairo.Context) Cairo context to draw on
+    flip: (boolean) apply flip if True
+    b_im_rect: (float, float, float, float) top, left, width, height rectangle
+        containing the image in buffer coordinates
+    """
+    if flip:
+        fx = fy = 1.0
+
+        if flip & wx.HORIZONTAL == wx.HORIZONTAL:
+            fx = -1.0
+
+        if flip & wx.VERTICAL == wx.VERTICAL:
+            fy = -1.0
+
+        x, y, w, h = b_im_rect
+
+        flip_x = x + w / 2
+        flip_y = y + h / 2
+
+        flip_matrix = cairo.Matrix(fx, 0.0, 0.0, fy)
+
+        ctx.translate(flip_x, flip_y)
+
+        ctx.transform(flip_matrix)
+        ctx.translate(-flip_x, -flip_y)
 
 
 def add_alpha_byte(im_darray, alpha=255):
