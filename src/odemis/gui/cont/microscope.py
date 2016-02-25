@@ -666,8 +666,19 @@ class DelphiStateController(SecomStateController):
         ch_pos = self._main_data.chamber.position
         if ch_pos.value["pressure"] == self._vacuum_pressure:
             # If it's loaded, the sample holder is registered for sure, and the
-            # calibration should have already been done.
-            self._load_holder_calib()
+            # calibration should have already been done. Otherwise request
+            # ejecting the sample holder
+            try:
+                self._load_holder_calib()
+            except ValueError:
+                dlg = wx.MessageDialog(self._main_frame,
+                                       "Sample holder is loaded while there is no calibration information. "
+                                       "We will now eject it.",
+                                       "Missing calibration information",
+                                       wx.OK | wx.ICON_WARNING)
+                dlg.ShowModal()
+                dlg.Destroy()
+                self._main_data.chamberState.value = CHAMBER_VENTING
             self._show_progress_indicators(False, True)
 
         # Connect the Delphi recalibration to the menu item
