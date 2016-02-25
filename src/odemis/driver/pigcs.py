@@ -842,7 +842,6 @@ class Controller(object):
 
         self.busacc.flushInput()
 
-    # TODO: use it when terminating?
     def RelaxPiezos(self, axis):
         """
         Call relaxing procedure. Reduce voltage, to increase lifetime and needed
@@ -2333,6 +2332,7 @@ class OLController(Controller):
         super(OLController, self).stopMotion()
         for c in self._channels:
             self._storeStop(c)
+            self.RelaxPiezos(c)
 
 
 class SMOController(Controller):
@@ -2536,6 +2536,7 @@ class SMOController(Controller):
         for c in self._channels:
             self.StopOLViaPID(c)
             self._storeStop(c)
+            self.RelaxPiezos(c)
 
 
 class Bus(model.Actuator):
@@ -3773,6 +3774,8 @@ class E861Simulator(object):
                 self._errno = 10 # PI_CNTR_STOP
             elif args[0].startswith("HLT"): # halt motion with deceleration: axis (optional)
                 self._end_move = 0
+            elif args[0].startswith("RNP"):  # relax
+                pass
             elif args[0][:3] in self._com_to_param:
                 param = self._com_to_param[args[0][:3]]
                 logging.debug("Converting command %s to param %d", args[0], param)
@@ -3938,6 +3941,7 @@ class E861Simulator(object):
                        "MOV?  booo \n"
                        "MVR  booo \n"
                        "OSM  booo \n"
+                       "RNP  relax \n"
                        "ERR? get error number \n"
                        "VEL {<AxisId> <Velocity>} set closed-loop velocity \n"
                        "end of help"
