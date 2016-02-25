@@ -50,7 +50,7 @@ SimSPARC: {
     },
 }
 
-FakeSpec10: {
+"FakeSpec10": {
     class: spectrometer.CompositedSpectrometer,
     role: spectrometer,
     children: {detector: "SpecSimCam", spectrograph: "FakeSP2300i"},
@@ -59,7 +59,7 @@ FakeSpec10: {
     },
 }
 
-SpecSimCam: {
+"SpecSimCam": {
     class: andorcam2.FakeAndorCam2,
     role: sp-ccd,
     init: {
@@ -69,10 +69,9 @@ SpecSimCam: {
 }
 
 # Simulated SP-2300i, the spectrograph part of the Spec-10
-FakeSP2300i: {
+"FakeSP2300i": {
     class: spectrapro.FakeSpectraPro,
     role: spectrograph,
-    affects: [SpecSimCam],
     children: {ccd: "SpecSimCam"},
     init: {
         port: "/dev/ttySP",
@@ -93,6 +92,7 @@ FakeSP2300i: {
                  "9a,99,99,99,99,89,72,40", "33,33,33,33,33,13,40,40", "b8,1e,85,eb,51,b8,f6,bf"],
                ],
     },
+    affects: ["SpecSimCam", "FakeSpec10"],
 }
 
 "Mirror Actuators": {
