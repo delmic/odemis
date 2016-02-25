@@ -615,17 +615,17 @@ class StaticSpectrumStream(StaticStream):
           Values are in meters, unless the spectrum cannot be determined, in
           which case integers representing pixels index is returned.
           If no data is available, None is returned.
+                (str): unit of spectrum range
         """
-        # TODO return unit too? (i.e., m or px)
         data = self._calibrated
 
         try:
-            return spectrum.get_wavelength_per_pixel(data)
+            return spectrum.get_wavelength_per_pixel(data), "m"
         except (ValueError, KeyError):
             # useless polynomial => just show pixels values (ex: -50 -> +50 px)
             max_bw = data.shape[0] // 2
             min_bw = (max_bw - data.shape[0]) + 1
-            return range(min_bw, max_bw + 1)
+            return range(min_bw, max_bw + 1), "px"
 
     def get_pixel_spectrum(self):
         """

@@ -909,7 +909,7 @@ class PointSpectrumViewport(PlotViewport):
                 if data is not None:
                     # cancel previous fitting if there is one in progress
                     self._peak_future.cancel()
-                    spectrum_range = self.stream.get_spectrum_range()
+                    spectrum_range, _ = self.stream.get_spectrum_range()
                     unit_x = self.stream.spectrumBandwidth.unit
                     # cancel previous fitting if there is one in progress
                     self.spectrum_range = spectrum_range
@@ -971,7 +971,7 @@ class PointSpectrumViewport(PlotViewport):
             return
 
         data = self.stream.get_pixel_spectrum()
-        spectrum_range = self.stream.get_spectrum_range()
+        spectrum_range, _ = self.stream.get_spectrum_range()
         unit_x = self.stream.spectrumBandwidth.unit
 
         if self.stream.peak_method.value is not None:
@@ -1168,13 +1168,12 @@ class SpatialSpectrumViewport(ViewPort):
         self.current_line = line
 
         if data is not None:
-            spectrum_range = self.stream.get_spectrum_range()
+            spectrum_range, unit_y = self.stream.get_spectrum_range()
             line_length = data.shape[0] * data.metadata[model.MD_PIXEL_SIZE][1]
 
             unit_x = self.stream.spectrumBandwidth.unit
             self.bottom_legend.unit = unit_x
             self.bottom_legend.range = (spectrum_range[0], spectrum_range[-1])
-            unit_y = 'm'
             self.left_legend.unit = unit_y
             self.left_legend.range = (0, line_length)
 
