@@ -66,6 +66,7 @@ import odemis.acq.stream as acqstream
 import odemis.gui.cont.acquisition as acqcont
 import odemis.gui.cont.streams as streamcont
 import odemis.gui.cont.views as viewcont
+import odemis.gui.cont.export as exportcont
 import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
 import odemis.gui.util.align as align
@@ -1288,6 +1289,7 @@ class AnalysisTab(Tab):
         ])
 
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
+        self.export_controller = exportcont.ExportController(tab_data, main_frame, vpv)
 
         # Connect view selection button
         buttons = collections.OrderedDict([
