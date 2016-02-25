@@ -416,7 +416,8 @@ class SpectrumSettingsStream(CCDSettingsStream):
         self.image.value = self.raw[0][0]
 
     # No histogram => no need to do anything to update it
-    def _histogram_thread(self):
+    @staticmethod
+    def _histogram_thread(wstream):
         pass
 
 
