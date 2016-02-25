@@ -1881,8 +1881,8 @@ class AndorCam2(model.DigitalCamera):
                         else:
                             break # new image!
 
-                    # it might have acquired _several_ images in the time to process
-                    # one image. In this case we discard all but the last one.
+                    # Normally only one image has been produced as it's on a
+                    # software trigger, but just in case, discard older images.
                     self.atcore.GetMostRecentImage16(cbuffer, c_uint32(size[0] * size[1]))
                 except AndorV2Error as (errno, strerr):
                     # try again up to 5 times
@@ -2311,7 +2311,7 @@ class FakeAndorV2DLL(object):
                     pxs = self._data.metadata[model.MD_PIXEL_SIZE]
                     mag = self._data.metadata.get(model.MD_LENS_MAG, 1)
                     self.pixelSize = tuple(1e6 * s * mag for s in pxs)
-                self.maxBinning = (16, 16) # px
+                self.maxBinning = self.shape  # px
             except Exception:
                 logging.exception("Failed to open file %s, will use gradient", image)
                 self._data = None
@@ -2621,6 +2621,7 @@ class FakeAndorV2DLL(object):
                (self.roi[3] - self.roi[2] + 1) // self.binning[1])
         if res[0] * res[1] != size.value:
             raise ValueError("res %s != size %d" % (res, size.value))
+        # TODO: simulate binning by summing data and clipping
         ndbuffer = numpy.ctypeslib.as_array(p, (res[1], res[0]))
         ndbuffer[...] = self._data[self.roi[2] - 1:self.roi[3]:self.binning[1],
                                    self.roi[0] - 1:self.roi[1]:self.binning[0]]

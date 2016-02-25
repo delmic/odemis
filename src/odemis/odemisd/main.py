@@ -27,6 +27,7 @@ import argparse
 import grp
 from logging import FileHandler
 import logging
+from logging.handlers import WatchedFileHandler
 from odemis import model
 import odemis
 from odemis.model import ST_UNLOADED, ST_STARTING
@@ -554,13 +555,17 @@ def main(args):
     if options.logtarget == "stderr":
         handler = logging.StreamHandler()
     else:
-        # Rotate the log, with max 5*50Mb used.
-        # Note: we used to rely on RotatingFileHandler, but due to multi-
-        # processes, it would be rotated multiple times every time it reached the
-        # limit. So now, just do it at startup, and hope it doesn't reach huge
-        # size in one run.
-        rotateLog(options.logtarget, maxBytes=50 * (2 ** 20), backupCount=5)
-        handler = FileHandler(options.logtarget)
+        if os.sys.platform.startswith('linux'):
+            # On Linux, we use logrotate, so nothing much to do
+            handler = WatchedFileHandler(options.logtarget)
+        else:
+            # Rotate the log, with max 5*50Mb used.
+            # Note: we used to rely on RotatingFileHandler, but due to multi-
+            # processes, it would be rotated multiple times every time it reached the
+            # limit. So now, just do it at startup, and hope it doesn't reach huge
+            # size in one run.
+            rotateLog(options.logtarget, maxBytes=50 * (2 ** 20), backupCount=5)
+            handler = FileHandler(options.logtarget)
     logging.getLogger().setLevel(loglev)
     handler.setFormatter(logging.Formatter('%(asctime)s (%(module)s) %(levelname)s: %(message)s'))
     logging.getLogger().addHandler(handler)

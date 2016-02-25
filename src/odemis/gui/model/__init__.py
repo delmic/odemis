@@ -861,8 +861,8 @@ class StreamView(View):
         self.fov_va = fov_va
 
         # Will be created on the first time it's needed
-        self._focus_thread = None
-        self._focus_queue = Queue.Queue()  # contains tuples of (focuser, relative distance)
+        self._focus_thread = {}  # Focuser -> thread
+        self._focus_queue = {}  # Focuser -> Queue.Queue() of float (relative distance)
 
         # The real stage position, to be modified via moveStageToView()
         # it's a direct access from the stage, so looks like a dict of axes
@@ -905,35 +905,80 @@ class StreamView(View):
     def has_stage(self):
         return self._stage is not None
 
-    def _moveFocus(self):
+    def _getFocuserQueue(self, focuser):
+        """
+        return (Queue): queue to send move requests to the given focuser
+        """
+        try:
+            return self._focus_queue[focuser]
+        except KeyError:
+            # Create a new thread and queue
+            q = Queue.Queue()
+            self._focus_queue[focuser] = q
+
+            t = threading.Thread(target=self._moveFocus, args=(q, focuser),
+                                 name="Focus mover view %s/%s" % (self.name.value, focuser.name))
+            # TODO: way to detect the view is not used and so we need to stop the thread?
+            # (cf __del__?)
+            t.daemon = True
+            t.start()
+            self._focus_thread[focuser] = t
+
+            return q
+
+    def _moveFocus(self, q, focuser):
+        """
+        Focuser thread
+        """
         time_last_move = 0
         try:
+            axis = focuser.axes["z"]
+            try:
+                rng = axis.range
+            except AttributeError:
+                rng = None
+
+            if axis.canUpdate:
+                # Update the target position on the fly
+                logging.debug("Will be moving the focuser %s via position update", focuser.name)
+            fpending = []  # pending futures (only used if axis.canUpdate)
+
             while True:
                 # wait until there is something to do
-                focuser, shift = self._focus_queue.get()
-                pos = focuser.position.value["z"]
-                axis = focuser.axes["z"]
-                try:
-                    rng = axis.range
-                except AttributeError:
-                    rng = None
+                shift = q.get()
+                if rng:
+                    pos = focuser.position.value["z"]
 
                 # rate limit to 20 Hz
                 sleept = time_last_move + 0.05 - time.time()
-                # We always wait a bit, so that we don't start with a tiny move
-                time.sleep(max(0.05, sleept))
+                if sleept < -5:  # More than 5 s since last move = new focusing streak
+                    # We always wait a bit, so that we don't start with a tiny move
+                    sleept = 0.05
+                else:
+                    sleept = max(0.01, sleept)
+                time.sleep(sleept)
+
+                # Remove futures that are over and wait if too many moves pending
+                while True:
+                    fpending = [f for f in fpending if not f.done()]
+                    if len(fpending) <= 2:
+                        break
+
+                    logging.info("Still %d pending futures for focuser %s",
+                                 len(fpending), focuser.name)
+                    try:
+                        fpending[0].result()
+                    except Exception:
+                        logging.info("Failed to apply focus move", exc_info=1)
 
                 # Add more moves if there are already more
                 try:
-                    nf = focuser
-                    while nf is focuser:
-                        nf, ns = self._focus_queue.get(block=False)
+                    while True:
+                        ns = q.get(block=False)
                         shift += ns
-                        if nf is not focuser:
-                            # Oops, got a bit too fast, and read message for another focuser => put it back
-                            self._focus_queue.put((nf, ns))
                 except Queue.Empty:
                     pass
+
                 logging.debug("Moving focus '%s' by %f μm", focuser.name, shift * 1e6)
 
                 # clip to the range
@@ -946,12 +991,15 @@ class StreamView(View):
                         logging.info("Restricting focus move to %f µm as it reached the end",
                                      shift * 1e6)
 
-                f = focuser.moveRel({"z": shift})
                 time_last_move = time.time()
-                # wait until it's finished so that we don't accumulate requests,
-                # but instead only do requests of size "big enough"
                 try:
-                    f.result()
+                    if axis.canUpdate:
+                        # Update the target position on the fly
+                        fpending.append(focuser.moveRel({"z": shift}, update=True))
+                    else:
+                        # Wait until it's finished so that we don't accumulate requests,
+                        # but instead only do requests of size "big enough"
+                        focuser.moveRelSync({"z": shift})
                 except Exception:
                     logging.info("Failed to apply focus move", exc_info=1)
         except Exception:
@@ -978,15 +1026,6 @@ class StreamView(View):
             logging.info("Trying to change focus while no stream is playing")
             return 0
 
-        # Create the focus thread if it's not yet existing
-        if self._focus_thread is None:
-            self._focus_thread = threading.Thread(target=self._moveFocus,
-                                      name="Focus mover view %s" % self.name.value)
-            # TODO: way to detect the view is not used and so we need to stop the thread?
-            # (cf __del__?)
-            self._focus_thread.daemon = True
-            self._focus_thread.start()
-
         # TODO: optimise with the focuser
         # Find the depth of field (~ the size of one "focus step")
         for c in (curr_s.detector, curr_s.emitter):
@@ -1003,7 +1042,8 @@ class StreamView(View):
         k = 50e-3  # 1/px
         val = dof * k * shift  # m
         assert(abs(val) < 0.01)  # a move of 1 cm is a clear sign of bug
-        self._focus_queue.put((focuser, val))
+        q = self._getFocuserQueue(focuser)
+        q.put(val)
         return val
 
     def moveStageBy(self, shift):
@@ -1016,7 +1056,7 @@ class StreamView(View):
             return None
 
         # TODO: Use the max FoV of the streams to determine what's a big
-        # distance (because on the overview cam a  move can be much bigger than
+        # distance (because on the overview cam a move can be much bigger than
         # on a SEM image at high mag).
 
         # Check it makes sense (=> not too big)
@@ -1031,7 +1071,15 @@ class StreamView(View):
 
         move = {"x": shift[0], "y": shift[1]}
         logging.debug("Sending move request of %s", move)
-        f = self._stage.moveRel(move)
+
+        # Only pass the "update" keyword if the actuator accepts it for sure
+        # It should increase latency in case of slow moves (ex: closed-loop
+        # stage that vibrate a bit when reaching target position).
+        kwargs = {}
+        if self._stage.axes["x"].canUpdate and self._stage.axes["x"].canUpdate:
+            kwargs["update"] = True
+
+        f = self._stage.moveRel(move, **kwargs)
         self._fstage_move = f
         f.add_done_callback(self._on_stage_move_done)
         return f

@@ -80,7 +80,7 @@ class Stage(model.Actuator):
             axes_def[a] = model.Axis(unit="m", range=rng, speed=(0., 10.))
             # start at the centre
             self._position[a] = (rng[0] + rng[1]) / 2
-            init_speed[a] = 10.0  # we are super fast!
+            init_speed[a] = 1.0  # we are fast!
 
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
 
@@ -88,27 +88,28 @@ class Stage(model.Actuator):
         if os.path.exists("stage.fail"):
             raise HwError("stage.fail file present, simulating error")
 
+        self._executor = model.CancellableThreadPoolExecutor(max_workers=1)
+
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
         self.position = model.VigilantAttribute({}, unit="m", readonly=True)
         self._updatePosition()
 
         self.speed = model.MultiSpeedVA(init_speed, (0., 10.), "m/s")
 
+    def terminate(self):
+        if self._executor:
+            self.stop()
+            self._executor.shutdown()
+            self._executor = None
+
     def _updatePosition(self):
         """
         update the position VA
         """
-        # it's read-only, so we change it via _value
-        self.position._value = self._applyInversion(self._position)
-        self.position.notify(self.position.value)
+        pos = self._applyInversion(self._position)
+        self.position._set_value(pos, force_write=True)
 
-    @isasync
-    def moveRel(self, shift):
-        if not shift:
-            return model.InstantaneousFuture()
-        self._checkMoveRel(shift)
-        shift = self._applyInversion(shift)
-
+    def _doMoveRel(self, shift):
         maxtime = 0
         for axis, change in shift.items():
             self._position[axis] += change
@@ -120,11 +121,31 @@ class Stage(model.Actuator):
                                 axis, self._position[axis], rng)
             else:
                 logging.info("moving axis %s to %f", axis, self._position[axis])
+            maxtime = max(maxtime, abs(change) / self.speed.value[axis] + 0.001)
+
+        logging.debug("Sleeping %g s", maxtime)
+        time.sleep(maxtime)
+        self._updatePosition()
+
+    def _doMoveAbs(self, pos):
+        maxtime = 0
+        for axis, new_pos in pos.items():
+            change = self._position[axis] - new_pos
+            self._position[axis] = new_pos
+            logging.info("moving axis %s to %f", axis, self._position[axis])
             maxtime = max(maxtime, abs(change) / self.speed.value[axis])
 
+        time.sleep(maxtime)
         self._updatePosition()
-        # TODO queue the move and pretend the position is changed only after the given time
-        return model.InstantaneousFuture()
+
+    @isasync
+    def moveRel(self, shift):
+        if not shift:
+            return model.InstantaneousFuture()
+        self._checkMoveRel(shift)
+        shift = self._applyInversion(shift)
+
+        return self._executor.submit(self._doMoveRel, shift)
 
     @isasync
     def moveAbs(self, pos):
@@ -133,18 +154,10 @@ class Stage(model.Actuator):
         self._checkMoveAbs(pos)
         pos = self._applyInversion(pos)
 
-        maxtime = 0
-        for axis, new_pos in pos.items():
-            change = self._position[axis] - new_pos
-            self._position[axis] = new_pos
-            logging.info("moving axis %s to %f", axis, self._position[axis])
-            maxtime = max(maxtime, abs(change) / self.speed.value[axis])
-
-        # TODO queue the move
-        self._updatePosition()
-        return model.InstantaneousFuture()
+        return self._executor.submit(self._doMoveAbs, pos)
 
     def stop(self, axes=None):
+        self._executor.cancel()
         logging.warning("Stopping all axes: %s", ", ".join(self.axes))
 
 

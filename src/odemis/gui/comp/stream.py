@@ -25,16 +25,12 @@ data streams coming from the microscope.
 
 from __future__ import division
 
-import logging
-import wx
-import wx.lib.newevent
-from wx.lib.pubsub import pub
-
 from decorator import decorator
-
+import logging
 from odemis import acq
 from odemis.gui import FG_COLOUR_EDIT, FG_COLOUR_MAIN, BG_COLOUR_MAIN, BG_COLOUR_STREAM, \
     FG_COLOUR_DIS
+from odemis.gui import img
 from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.foldpanelbar import FoldPanelItem, FoldPanelBar
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
@@ -42,9 +38,12 @@ from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider, UnitInteg
 from odemis.gui.comp.text import SuggestTextCtrl, UnitFloatCtrl, FloatTextCtrl, UnitIntegerCtrl
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import VigilantAttributeConnector
+import wx
+import wx.lib.newevent
+from wx.lib.pubsub import pub
+
 import odemis.gui as gui
 import odemis.gui.comp.buttons as buttons
-import odemis.gui.img.data as img
 
 
 stream_remove_event, EVT_STREAM_REMOVE = wx.lib.newevent.NewEvent()
@@ -110,8 +109,8 @@ class StreamPanelHeader(wx.Control):
 
         # Fold indicator icon, drawn directly in the background in a fixed position
         self._foldIcons = wx.ImageList(16, 16)
-        self._foldIcons.Add(img.getarr_down_sBitmap())
-        self._foldIcons.Add(img.getarr_right_sBitmap())
+        self._foldIcons.Add(img.getBitmap("icon/arr_down_s.png"))
+        self._foldIcons.Add(img.getBitmap("icon/arr_right_s.png"))
 
         # Add the needed controls to the sizer
 
@@ -138,9 +137,10 @@ class StreamPanelHeader(wx.Control):
 
     def _add_remove_btn(self):
         """ Add a button for stream removal """
-        btn_rem = buttons.ImageButton(self.Parent, bitmap=img.getico_rem_strBitmap(),
-                                       size=self.BUTTON_SIZE)
-        btn_rem.bmpHover = img.getico_rem_str_hBitmap()
+        btn_rem = buttons.ImageButton(self.Parent,
+                                      bitmap=img.getBitmap("icon/ico_rem_str.png"),
+                                      size=self.BUTTON_SIZE)
+        btn_rem.bmpHover = img.getBitmap("icon/ico_rem_str_h.png")
         btn_rem.SetToolTipString("Remove stream")
         self._add_ctrl(btn_rem)
         return btn_rem
@@ -183,10 +183,10 @@ class StreamPanelHeader(wx.Control):
 
     def _add_peak_btn(self):
         """ Add the peak toggle button to the stream panel header """
-        peak_btn = buttons.ImageStateButton(self, bitmap=img.getico_peak_noneBitmap())
-        peak_btn.bmpHover = img.getico_peak_none_hBitmap()
-        peak_btn.bmpSelected = [img.getico_peak_gaussianBitmap(), img.getico_peak_lorentzianBitmap()]
-        peak_btn.bmpSelectedHover = [img.getico_peak_gaussian_hBitmap(), img.getico_peak_lorentzian_hBitmap()]
+        peak_btn = buttons.ImageStateButton(self, bitmap=img.getBitmap("icon/ico_peak_none.png"))
+        peak_btn.bmpHover = img.getBitmap("icon/ico_peak_none_h.png")
+        peak_btn.bmpSelected = [img.getBitmap("icon/ico_peak_%s.png" % (m,)) for m in ("gaussian", "lorentzian")]
+        peak_btn.bmpSelectedHover = [img.getBitmap("icon/ico_peak_%s_h.png" % (m,)) for m in ("gaussian", "lorentzian")]
 
         peak_btn.SetToolTipString("Select peak fitting (Gaussian, Lorentzian, or none)")
         self._add_ctrl(peak_btn)
@@ -195,10 +195,10 @@ class StreamPanelHeader(wx.Control):
     def _add_visibility_btn(self):
         """ Add the visibility toggle button to the stream panel header """
         visibility_btn = buttons.ImageToggleButtonImageButton(self,
-                                                              bitmap=img.getico_eye_closedBitmap())
-        visibility_btn.bmpHover = img.getico_eye_closed_hBitmap()
-        visibility_btn.bmpSelected = img.getico_eye_openBitmap()
-        visibility_btn.bmpSelectedHover = img.getico_eye_open_hBitmap()
+                                                              bitmap=img.getBitmap("icon/ico_eye_closed.png"))
+        visibility_btn.bmpHover = img.getBitmap("icon/ico_eye_closed_h.png")
+        visibility_btn.bmpSelected = img.getBitmap("icon/ico_eye_open.png")
+        visibility_btn.bmpSelectedHover = img.getBitmap("icon/ico_eye_open_h.png")
 
         visibility_btn.SetToolTipString("Show stream")
         self._add_ctrl(visibility_btn)
@@ -207,10 +207,10 @@ class StreamPanelHeader(wx.Control):
     def _add_update_btn(self):
         """ Add a button for (de)activation of the stream """
         update_btn = buttons.ImageToggleButtonImageButton(self,
-                                                          bitmap=img.getico_pauseBitmap())
-        update_btn.bmpHover = img.getico_pause_hBitmap()
-        update_btn.bmpSelected = img.getico_playBitmap()
-        update_btn.bmpSelectedHover = img.getico_play_hBitmap()
+                                                          bitmap=img.getBitmap("icon/ico_pause.png"))
+        update_btn.bmpHover = img.getBitmap("icon/ico_pause_h.png")
+        update_btn.bmpSelected = img.getBitmap("icon/ico_play.png")
+        update_btn.bmpSelectedHover = img.getBitmap("icon/ico_play_h.png")
 
         update_btn.SetToolTipString("Update stream")
 
@@ -600,7 +600,9 @@ class StreamPanel(wx.Panel):
         self._header.btn_show.SetToggle(visible)
 
     def set_peak(self, state):
-        """ Set the "peak" toggle button of the stream panel """
+        """ Set the "peak" toggle button of the stream panel
+        state (None or 0<=int): None for no peak, 0 for gaussian, 1 for lorentzian
+        """
         self._header.btn_peak.SetState(state)
 
     def collapse(self, collapse=None):
@@ -729,8 +731,8 @@ class StreamPanel(wx.Panel):
         """ Create and return controls needed for (auto) brightness and contrast manipulation """
 
         btn_autobc = buttons.ImageTextToggleButton(self._panel, height=24,
-                                                    icon=img.ico_contrast.Bitmap,
-                                                    label="Auto")
+                                                   icon=img.getBitmap("icon/ico_contrast.png"),
+                                                   label="Auto")
         btn_autobc.SetToolTipString("Toggle auto brightness and contrast")
 
         lbl_bc_outliers = wx.StaticText(self._panel, -1, "Outliers")
@@ -1120,7 +1122,8 @@ class StreamPanel(wx.Panel):
         """
 
         btn_fit_rgb = buttons.ImageTextToggleButton(self._panel, height=24,
-                                                     icon=img.ico_bgr.Bitmap, label="RGB")
+                                                    icon=img.getBitmap("icon/ico_bgr.png"),
+                                                    label="RGB")
         btn_fit_rgb.SetToolTipString("Toggle sub-bandwidths to Blue/Green/Red display")
 
         self.gb_sizer.Add(btn_fit_rgb, (self.num_rows, 0), flag=wx.LEFT | wx.TOP | wx.BOTTOM,

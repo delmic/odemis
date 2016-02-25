@@ -475,7 +475,7 @@ class StaticSpectrumStream(StaticStream):
         self.selected_line = model.ListVA([(None, None), (None, None)], setter=self._setLine)
 
         # Peak method index, None if spectrum peak fitting curve is not displayed
-        self.peak_method = model.VAEnumerated(None, {"gaussian", "lorentzian", None})
+        self.peak_method = model.VAEnumerated("gaussian", {"gaussian", "lorentzian", None})
 
         # The thickness of a point or a line (shared).
         # A point of width W leads to the average value between all the pixels
@@ -493,6 +493,15 @@ class StaticSpectrumStream(StaticStream):
 
         self._calibrated = image  # the raw data after calibration
         super(StaticSpectrumStream, self).__init__(name, [image])
+
+        # Automatically select point/line if data is small (can only be done
+        # after .raw is set)
+        if image.shape[-2:] == (1, 1):  # Only one point => select it immediately
+            self.selected_pixel.value = (0, 0)
+        elif image.shape[-2] == 1:  # Horizontal line => select line immediately
+            self.selected_line.value = [(0, 0), (image.shape[-1] - 1, 0)]
+        elif image.shape[-1] == 1:  # Vertical line => select line immediately
+            self.selected_line.value = [(0, 0), (0, image.shape[-2] - 1)]
 
     # The tricky part is we need to keep the raw data as .raw for things
     # like saving the stream or updating the calibration, but all the

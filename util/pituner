@@ -1,0 +1,233 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+# Allows to tune PID values for closed loop moves of Physik Instrumente controllers.
+# It allows to do a move while recording commanded and actual position, and
+# update the PID parameter values.
+# Example way to start:
+# ./util/pituner.py --port autoip --controller 1
+
+# Note for tuning:
+#  * Start tuning with P, with I & D = 0, then tune I, and then D.
+#  * (Temporarily) Reduce the settle window/increase the settle time
+#  * Try with various magnitudes of move distances, in both directions
+#  * Check on different parts of the axis.
+'''
+Created on February 2016
+
+@author: Éric Piel
+
+Copyright © 2016 Éric Piel, Delmic
+
+pituner is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
+Foundation.
+
+pituner is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+pituner. If not, see http://www.gnu.org/licenses/.
+'''
+
+from __future__ import division, absolute_import, print_function
+
+import argparse
+import logging
+import math
+import numpy as np
+import sys
+import time
+from odemis.driver import pigcs
+from odemis.util import driver
+import matplotlib.pyplot as plt
+
+
+def tune(cont, axis):
+    tablelen = 1024  # True on E-861 (but could be read using HDR?)
+    # TODO: check this is correct: doc says 20µs but recorded data indicates 50µs
+    # cycledur = 20e-6  # s, for the E-861
+    cycledur = 50e-6  # s, for the E-861
+    upm = cont._upm[axis]  # ratio : user unit -> m
+
+    # Hack to force the servo to be always on.
+    # We could try to init with auto_suspend = False, but that only works with
+    # some type of controllers.
+    if hasattr(cont, "_acquireEncoder"):
+        cont._acquireEncoder(axis)
+
+    # print(cont._sendQueryCommand("HDR?\n"))
+
+    # Configure the recording options
+    # 1 = commanded position
+    # 2 = actual position
+    # 3 = position error
+    cont.SetRecordConfig(1, axis, 1)
+    cont.SetRecordConfig(2, axis, 2)
+
+    # To change speed/acc:
+    vel = 2e-3  # m/s
+    acc = 3e-3  # m/s²
+    cont.SetCLVelocity(axis, vel / upm)
+    cont.SetCLAcceleration(axis, acc / upm)
+    cont.SetCLDeceleration(axis, acc / upm)
+    cont.checkError()
+
+    # To change PID values: param 1, 2, 3  (4 = I limit)
+    # param = 1
+    # cont.SetParameter(axis, param, 30)
+
+    while True:
+        distm = ask_next_move(cont, axis)
+        if distm is None:
+            return
+
+        movedur = driver.estimateMoveDuration(abs(distm), vel, acc)
+        logging.info("Expected move time = %g s", movedur)
+
+        rrate = max(1, int(math.ceil((movedur * 2 + 0.5) / (tablelen * cycledur))))
+        cont.SetRecordRate(rrate)
+        recdur = tablelen * cycledur * rrate
+        logging.info("Recording every %d cycle => duration = %g s", rrate, recdur)
+        # TODO: change record rate to fit the move duration?
+        cont.MoveRelRecorded(axis, distm / upm)
+        tstart = time.time()
+        tendmax = tstart + 2 * recdur + 1
+
+        # Wait until the move is done
+        while True:
+            time.sleep(0.01)
+
+            try:
+                if cont.IsOnTarget(axis, check=True):
+                    logging.debug("Move finished after %g s", time.time() - tstart)
+                    break
+            except pigcs.PIGCSError as exp:
+                logging.warning("Controller reports error %s", exp)
+                break
+
+            if time.time() > tendmax:
+                logging.warning("Controller still moving after %g s, stopping it", tendmax - tstart)
+                cont.Stop()
+                break
+
+        # Read the recorded data from the move
+        data = cont.GetRecordedData()
+
+        # plot data using matplotlib
+        idx = np.linspace(0, (len(data) - 1) * cycledur * rrate, len(data))
+        cp, ap = np.array(zip(*data))
+        ep = ap - cp
+
+        f, ax = plt.subplots(2, sharex=True)
+        ax[0].plot(idx, cp, 'b-', idx, ap, 'r-')
+        ax[0].set_title('Commanded vs. Actual position')
+        ax[1].plot(idx, ep, 'b-')
+        ax[1].set_title('Position Error')
+        plt.show()
+
+        # print("# Commanded pos\tActual pos")
+        # for cp, ap in data:
+        #    print("%g\t%g" % (cp, ap))
+
+# last move distance requested
+distm = 0.001e-3  # m
+def ask_next_move(cont, axis):
+    """
+    Ask the user for the size of the next move, or to update the settings of
+    the controller.
+    return (float or None): distance to move in meter or None if wants to quit
+    """
+    global distm
+    P = cont.GetParameter(axis, 1)
+    I = cont.GetParameter(axis, 2)
+    D = cont.GetParameter(axis, 3)
+    print("P=%s, I=%s, D=%s" % (P, I, D))
+    print(u"Current move distance: %g µm" % (distm * 1e6,))
+
+    while True:
+        print("Change P, I, D, (M)ove distance, (Q)uit or press Enter to start next move: ", end="")
+        choice = raw_input().upper()
+        if choice in ("P", "I", "D"):
+            val = raw_input("Enter new value for %s: " % (choice,))
+            param = {"P": 1, "I": 2, "D": 3}[choice]
+            try:
+                cont.SetParameter(axis, param, val)
+            except Exception:
+                logging.exception("Failed to write %s to parameter 0x%x", val, param)
+        elif choice == "M":
+            print(u"Enter new distance in µm (can be negative): ", end="")
+            val = raw_input()
+            distm = float(val) * 1e-6
+        elif choice == "":
+            return distm
+        elif choice == "Q":
+            return None
+        else:
+            # Just keep asking
+            print("Command '%s' not understood" % (choice,))
+
+
+def main(args):
+    """
+    Handles the command line arguments
+    args is the list of arguments passed
+    return (int): value to return to the OS as program exit code
+    """
+
+    # arguments handling
+    parser = argparse.ArgumentParser(prog="pituner",
+                                     description="PI PID tuner")
+
+    parser.add_argument("--log-level", dest="loglev", metavar="<level>", type=int,
+                        default=1, help="set verbosity level (0-2, default = 1)")
+
+    parser.add_argument('--port', dest="port", required=True,
+                        help="Port name (ex: /dev/ttyUSB0, autoip, or 192.168.95.5)")
+    parser.add_argument('--controller', dest="addr", type=int,
+                        help="Controller address (if controller needs it)")
+
+    options = parser.parse_args(args[1:])
+
+    # Set up logging before everything else
+    if options.loglev < 0:
+        logging.error("Log-level must be positive.")
+        return 127
+    loglev_names = (logging.WARNING, logging.INFO, logging.DEBUG)
+    loglev = loglev_names[min(len(loglev_names) - 1, options.loglev)]
+    logging.getLogger().setLevel(loglev)
+
+    try:
+        kwargs = {}
+        if options.addr is None:
+            # If no address, there is also no master (for IP)
+            kwargs["master"] = None
+
+        if options.port == "/dev/fake":
+            kwargs["_addresses"] = {options.addr: False}
+            acc = pigcs.FakeBus._openPort(options.port, **kwargs)
+        else:
+            acc = pigcs.Bus._openPort(options.port, **kwargs)
+
+        # TODO: allow to specify the axis
+        cont = pigcs.Controller(acc, address=options.addr, axes={1: True})
+        tune(cont, 1)
+
+        cont.terminate()
+        acc.terminate()
+    except ValueError as exp:
+        logging.error("%s", exp)
+        return 127
+    except IOError as exp:
+        logging.error("%s", exp)
+        return 129
+    except Exception:
+        logging.exception("Unexpected error while performing action.")
+        return 130
+
+    return 0
+
+
+if __name__ == '__main__':
+    ret = main(sys.argv)
+    exit(ret)

@@ -38,10 +38,9 @@ from odemis.acq.stream import OpticalStream, SpectrumStream, CLStream, EMStream,
 from odemis.driver.actuator import ConvertStage
 import odemis.gui
 from odemis.gui.comp.canvas import CAN_ZOOM
-from odemis.gui.comp.popup import Message
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.viewport import MicroscopeViewport, AngularResolvedViewport, \
-    PlotViewport, SpatialSpectrumViewport, PointSpectrumViewport
+    PlotViewport, SpatialSpectrumViewport
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.conf.data import get_local_vas, get_stream_settings_config
 from odemis.gui.cont import settings, tools
@@ -49,12 +48,10 @@ from odemis.gui.cont.actuators import ActuatorController
 from odemis.gui.cont.microscope import SecomStateController, DelphiStateController
 from odemis.gui.cont.streams import StreamController
 from odemis.gui.util import call_in_wx_main
-from odemis.gui.util.img import scale_to_alpha
 from odemis.gui.util.widgets import ProgressiveFutureConnector, AxisConnector
 from odemis.util import units
 from odemis.util.dataio import data_to_static_streams
 import os.path
-import scipy.misc
 import weakref
 # IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
 # file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
@@ -761,6 +758,16 @@ class SparcAcquisitionTab(Tab):
             get_stream_settings_config()[acqstream.SEMStream]["dcPeriod"]
         )
         semcl_stream.dcRegion.subscribe(self._onDCRegion, init=True)
+
+        # On the sparc-simplex, there is no alignment tab, so no way to check
+        # the CCD temperature. => add it at the bottom of the SEM stream
+        if main_data.role == "sparc-simplex" and model.hasVA(main_data.spectrometer, "temperature"):
+            self._ccd_temp_ent = sem_stream_cont.add_setting_entry(
+                "ccdTemperature",
+                main_data.spectrometer.temperature,
+                main_data.spectrometer,
+                get_stream_settings_config()[acqstream.SEMStream]["ccdTemperature"]
+            )
 
         # add "Use scan stage" check box if scan_stage is present
         sstage = main_data.scan_stage
@@ -1848,7 +1855,7 @@ class SecomAlignTab(Tab):
 
         # TODO: when paused via the shortcut or menu, really pause it
         #   => use a stream scheduler?
-        # TODO: exposureTime as local setting, so that it's not changed when
+        # TODO: binning & exposureTime as local setting, so that it's not changed when
         # going to acquisition tab
         # create CCD stream
         ccd_stream = acqstream.CameraStream("Optical CL",
@@ -2009,11 +2016,6 @@ class SecomAlignTab(Tab):
         self._subscribe_for_fa_dt(not is_acquiring)
 
     def _subscribe_for_fa_dt(self, subscribe=True):
-        # Make sure that we don't update fineAlignDwellTime unless:
-        # * The tab is shown
-        # * Acquisition is not going on
-        # * Spot tool is selected
-        # (wouldn't be needed if the VAs where on the stream itself)
 
         ccd = self.tab_data_model.main.ccd
         if subscribe:
@@ -2032,7 +2034,12 @@ class SecomAlignTab(Tab):
         if the SPOT mode is active (otherwise the user might be setting for
         different purpose.
         """
-        if self.tab_data_model.tool.value != guimod.TOOL_SPOT:
+        # Make sure that we don't update fineAlignDwellTime unless:
+        # * The tab is shown
+        # * Acquisition is not going on
+        # * Spot tool is selected
+        # (wouldn't be needed if the binning and exposure time VAs were local)
+        if self.tab_data_model.tool.value != guimod.TOOL_SPOT or not self.IsShown():
             return
 
         # dwell time is the based on the exposure time for the spot, as this is
@@ -2215,6 +2222,9 @@ class SparcAlignTab(Tab):
                 # So need to compensate for the magnification, and flip.
                 # (That's also the reason it's not possible to move the
                 # pole position, as it should be done with the lens)
+                # Note: up to v2.2 we were using precomputed png files for each
+                # CCD size. Some of them contained (small) error in the mirror size,
+                # which will make this new display look a bit bigger.
                 m = lens.magnification.value
                 mirror_ol.set_mirror_dimensions(-lens.parabolaF.value / m,
                                                 lens.xMax.value / m,
@@ -3147,7 +3157,7 @@ class TabBarController(object):
         # 'full screen' view.
         # Also, Gnome's GDK library will start spewing error messages, saying
         # it cannot draw certain images, because the dimensions are 0x0.
-        main_frame.SetMinSize((1400, 550))
+        main_frame.SetMinSize((1280, 550))
 
         self.main_data.is_acquiring.subscribe(self.on_acquisition)
 

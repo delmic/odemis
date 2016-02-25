@@ -418,6 +418,9 @@ class Controller(object):
         except NotImplementedError:
             self._hasLimitSwitches = dict((a, False) for a in self._channels)
 
+        # Dict of axis (int) -> bool: whether the axis supports position update
+        self.canUpdate = dict((a, False) for a in self._channels)
+
         self._position = {} # m (dict axis-> position)
         self.pos_rng = {}  # m, dict axis -> min,max position
 
@@ -426,8 +429,8 @@ class Controller(object):
         self._accel = {}  # m/s² dict axis -> acceleration/deceleration
 
         # only for interpolated position (on open-loop)
-        self._target = {} # m (dict axis-> future position when a move is over)
-        self._end_move = {} # m (dict axis -> time the move will finish)
+        self._target = {} # m (dict axis-> expected position at the end of the move)
+        self._end_move = dict((a, 0) for a in self._channels) # m (dict axis -> time the move will finish)
         self._start_move = {} # m (dict axis -> time the move started)
 
         # If the controller is mis-configured for the actuator, things can go quite
@@ -789,11 +792,11 @@ class Controller(object):
         # 1 => True, 0 => False
         return self._readAxisValue("FRF?", axis) == 1
 
-    def IsOnTarget(self, axes, check=True):
+    def IsOnTarget(self, axis, check=True):
         """
         Report whether the given axis is considered on target (for closed-loop
           moves only)
-        axes (1<int<16): axis numbers
+        axis (1<int<16): axis number
         returns (bool)
         raise PIGCSError if check is True and an error on a controller happened
         """
@@ -802,8 +805,7 @@ class Controller(object):
         # cf parameters 0x3F (settle time), and 0x4D (algo), 0x406 (window size)
         # 0x407 (window off size)
         if check:
-            # TODO: change to a list
-            com = ["ERR?\n", "ONT? %d\n" % (axes,)]
+            com = ["ERR?\n", "ONT? %d\n" % (axis,)]
             lresp = self._sendQueryCommand(com)
             err = int(lresp[0])
             if err:
@@ -815,7 +817,7 @@ class Controller(object):
                                  (com, lresp))
             return (ss[1] == "1")
         else:
-            return self._readAxisValue("ONT?", axes) == 1
+            return self._readAxisValue("ONT?", axis) == 1
 
     def GetErrorNum(self):
         """
@@ -929,6 +931,8 @@ class Controller(object):
     def OLMoveStep(self, axis, steps):
         """
         Moves an axis for a number of steps. Can be done only with servo off.
+        If the axis is already moving, the number of steps to perform is
+        reset to the new number. IOW, it is not added up.
         axis (1<int<16): axis number
         steps (float): number of steps to do (can be a float). If negative, goes
           the opposite direction. 1 step is about 10µm.
@@ -1045,6 +1049,8 @@ class Controller(object):
         """
         Start an relative move of an axis to specific position.
          Can only be done with servo on and referenced.
+        If the axis is moving, the target position is updated, and so the moves
+        will add up.
         axis (1<int<16): axis number
         shift (float): change of position in "user" unit
         """
@@ -1119,6 +1125,16 @@ class Controller(object):
         """
         # POS? (GetRealPosition)
         return self._readAxisValue("POS?", axis)
+
+    def GetTargetPosition(self, axis):
+        """
+        Get the target position (in "user" units)
+        Note: only works for closed loop controllers
+        axis (1<int<16): axis number
+        return (float): pos can be negative
+        """
+        # MOV? (Get Target Position)
+        return self._readAxisValue("MOV?", axis)
 
     def SetPosition(self, axis, pos):
         """
@@ -1200,6 +1216,96 @@ class Controller(object):
         assert(value > 0)
         self._sendOrderCommand("DEC %d %.5g\n" % (axis, value))
 
+    def SetRecordRate(self, value):
+        """
+        Set the record table rate
+        Note: on the E-861, a cycle is 20µs
+        value (1<= int): number of cycles when recording.
+        """
+        assert(value > 0)
+        self._sendOrderCommand("RTR %d\n" % (value,))
+
+    def GetRecordRate(self, value):
+        """
+        Get the record table rate
+        Note: on the E-861, a cycle is 20µs
+        return (1<= int): number of cycles when recording
+        """
+        ans = self._sendQueryCommand("RTR?\n")
+        return int(ans)
+
+    def SetRecordConfig(self, table, source, opt):
+        """
+        Set Data Recorder Configuration
+        table (1<=int): record table ID
+        source (0<=int): Depends on the option. For axis related signal, it's the
+          axis number
+        opt (0<=int): type of signal to be recorded. See documentation for values.
+        """
+        assert(table > 0)
+        assert(source >= 0)
+        assert(opt >= 0)
+        self._sendOrderCommand("DRC %d %d %d\n" % (table, source, opt))
+
+    def GetRecordedData(self, start=None, num=None, table=None):
+        """
+        Get the recorded data
+        start (None or 1<=int): first item to be read. If None, it will read everything.
+        num (None or 1<=int): number of items to read. If None, start must also be None.
+        table (None or 1<=int): record table ID. If None, it will read all the tables.
+        return (list of tuple of floats): for each cycle, the values for each table
+        """
+        assert(start is None or start > 0)
+        assert(num is None or num > 0)
+        assert((start is None) == (num is None))
+        assert(table is None or table > 0)
+        if start is None and table is not None:
+            raise ValueError("Table must be None if start/num are None")
+
+        # Answer should look like:
+#         # REM E-861
+#         #
+#         :
+#         #
+#         # NAME0 = Actual Position of Axis AXIS:1
+#         # NAME1 = Position Error of Axis AXIS:1
+#         #
+#         # END_HEADER
+#         5.00000 0.00000
+#         4.99998 0.00002
+#         5.00000 0.00000
+#         5.00000 0.00000
+#         5.00000 0.00000
+
+        args = ""
+        if start is not None:
+            args += " %d %d" % (start, num)
+        if table is not None:
+            args += " %d" % (table,)
+        ans = self._sendQueryCommand("DRR?%s\n" % (args,))
+
+        data = []
+        for l in ans:
+            if l.startswith("#"):
+                logging.debug("Skipping line %s", l)
+                continue
+            try:
+                vals = tuple(float(s) for s in l.split(" "))
+                data.append(vals)
+            except ValueError:
+                logging.warning("Failed to decode data line %s", l)
+
+        return data
+
+    def MoveRelRecorded(self, axis, shift):
+        """
+        Moves an axis for a given distance. While it's moving, data will be
+        recorded. Can be done only if not referenced.
+        axis (1<int<16): axis number
+        shift (float): relative distance in user unit
+        """
+        assert(axis in self._channels)
+        self._sendOrderCommand("STE %d %.5g\n" % (axis, shift))
 
 # Different from OSM because they use the sensor and are defined in physical unit.
 # Servo must be off! => Probably useless... compared to MOV/MVR
@@ -1264,11 +1370,12 @@ class Controller(object):
         return (float): interpolated position at the current time
         """
         now = time.time()
-        end_move = self._end_move.get(axis, 0)
+        end_move = self._end_move[axis]
         if now > end_move:
             target = self._target.get(axis, self._position[axis])
             logging.debug("Interpolating move by reporting target position: %g",
                           target)
+            self._end_move[axis] = 0
             return target
         else:
             start = self._start_move[axis]
@@ -1288,7 +1395,7 @@ class Controller(object):
         assert(axis in self._channels)
 
         # make sure that if a move finished early, we report the final position
-        if not self.isMoving({axis}):
+        if self._end_move[axis] != 0 and not self.isMoving({axis}):
             self._storeMoveComplete(axis)
 
         return self._interpolatePosition(axis)
@@ -1496,7 +1603,7 @@ class CLAbsController(Controller):
                 raise ValueError("Initialising CLAbsController with request for open-loop")
 
             # Check the unit is um
-            # TODO: cf PUN?
+            # TODO: cf PUN? Seems less supported than the parameter (eg, E-861 doesn't)
             unit = self.GetParameter(a, 0x7000601)
             if unit.lower() == "um":
                 self._upm[a] = 1e-6  # m
@@ -1683,6 +1790,8 @@ class CLRelController(Controller):
             except ValueError:  # param doesn't exist => no problem
                 pass
 
+            self.canUpdate[a] = True
+
             # TODO:
             # * if not referenced => disable reference mode to be able to
             # move relatively (until referencing happens). Use the position as
@@ -1793,6 +1902,16 @@ class CLRelController(Controller):
                 # causes sometimes the "garbage" bug.
                 time.sleep(4 * self._slew_rate[axis])
 
+            # The controller is normally ready, as it should be taken cared by
+            # the slewrate, but check to be really sure.
+            for i in range(100):
+                if self.IsReady():
+                    break
+                logging.debug("Controller not yet ready, waiting a bit more")
+                time.sleep(0.01)
+            else:
+                logging.warning("Controller indicates it's still not ready, but will not wait any longer")
+
     def _encoder_mng_run(self, axis):
         """
         Main loop for encoder manager thread:
@@ -1878,15 +1997,15 @@ class CLRelController(Controller):
         new_speed = self._speed[axis]
         if prev_speed != new_speed:
             # TODO: check it's within range
-            self.SetCLVelocity(axis, new_speed * 1e3)
+            self.SetCLVelocity(axis, new_speed / self._upm[axis])
             self._prev_speed_accel[0][axis] = new_speed
 
         prev_accel = self._prev_speed_accel[1].get(axis, None)
         new_accel = self._accel[axis]
         if prev_accel != new_accel:
             # TODO: check it's within range
-            self.SetCLAcceleration(axis, new_accel * 1e3)
-            self.SetCLDeceleration(axis, new_accel * 1e3)
+            self.SetCLAcceleration(axis, new_accel / self._upm[axis])
+            self.SetCLDeceleration(axis, new_accel / self._upm[axis])
             self._prev_speed_accel[1][axis] = new_accel
 
     def moveRel(self, axis, distance):
@@ -1896,21 +2015,18 @@ class CLRelController(Controller):
         assert(axis in self._channels)
         self._acquireEncoder(axis)
 
-        # The controller is normally ready. The only case it's is not ready is
-        # when switching the servo/encoder, but that should be already taken
-        # care by startEncoder().
-        for i in range(100):
-            if self.IsReady():
-                break
-            logging.debug("Controller not yet ready, waiting a bit more")
-            time.sleep(0.01)
-        else:
-            logging.warning("Controller indicates it's still not ready, but will not wait any longer")
-
         self._updateSpeedAccel(axis)
         # We trust the caller that it knows it's in range
         # (worst case the hardware will not go further)
-        self.MoveRel(axis, distance * 1e3)
+        self.MoveRel(axis, distance / self._upm[axis])
+
+        # In case it's an update, the actual distance can be different
+        # Note: merging the queries doesn't seem to save time... actually it
+        # appears to even slow down the answers (maybe because the controller
+        # waits for more answers to send)
+        pos = self.getPosition(axis)
+        tpos = self.getTargetPosition(axis)
+        act_dist = tpos - pos
 
         # Warning: this is not just what is looks like!
         # The E861 over the network controller send (sometimes) garbage if
@@ -1918,7 +2034,7 @@ class CLRelController(Controller):
         # This ensures there is one query after each command.
         self.checkError()
 
-        return distance
+        return act_dist
 
     def moveAbs(self, axis, position):
         """
@@ -1927,28 +2043,21 @@ class CLRelController(Controller):
         assert(axis in self._channels)
         self._acquireEncoder(axis)
 
-        # The controller is normally ready. The only case it's is not ready is
-        # when switching the servo/encoder, but that should be already taken
-        # care by startEncoder().
-        for i in range(100):
-            if self.IsReady():
-                break
-            logging.debug("Controller not yet ready, waiting a bit more")
-            time.sleep(0.01)
-        else:
-            logging.warning("Controller indicates it's still not ready, but will not wait any longer")
-
         self._updateSpeedAccel(axis)
         # We trust the caller that it knows it's in range
         # (worst case the hardware will not go further)
-        old_pos = self.GetPosition(axis) * 1e-3
-        distance = position - old_pos
 
         # Absolute move is only legal if already referenced.
-        if not self.IsReferenced(axis): # TODO: cache, or just always do relative?
-            self.MoveRel(axis, distance * 1e3)
+        if not self.IsReferenced(axis):  # TODO: cache
+            # MoveRel adds to the _target_ position (matters in case of move update)
+            tpos = self.getTargetPosition(axis)
+            distance = position - tpos
+            self.MoveRel(axis, distance / self._upm[axis])
         else:
-            self.MoveAbs(axis, position * 1e3)
+            self.MoveAbs(axis, position / self._upm[axis])
+
+        old_pos = self.getPosition(axis)
+        distance = position - old_pos
 
         # Warning: this is not just what is looks like!
         # The E861 over the network controller send (sometimes) garbage if
@@ -1964,7 +2073,10 @@ class CLRelController(Controller):
         return (float): the current position of the given axis
         """
         with self._pos_lock[axis]:
-            return self.GetPosition(axis) * 1e-3
+            return self.GetPosition(axis) * self._upm[axis]
+
+    def getTargetPosition(self, axis):
+        return self.GetTargetPosition(axis) * self._upm[axis]
 
     # Warning: if the settling window is too small or settling time too big,
     # it might take several seconds to reach target (or even never reach it)
@@ -1984,7 +2096,9 @@ class CLRelController(Controller):
         # target), so it's much better to use IsOnTarget info. The controller
         # needs to be correctly configured with the right window size.
         for a in axes:
-            if not self.IsOnTarget(a):
+            # A merge of the query with error check causes a long delay (~40 ms)
+            # in the answer
+            if not self.IsOnTarget(a, check=False):
                 return True
 
         # Nothing is moving => turn off encoder (in a few seconds)
@@ -2514,7 +2628,8 @@ class Bus(model.Actuator):
                 speed_rng = controller.speed_rng[c]
                 # Just to make sure it doesn't go too fast
                 speed[axis] = controller.getSpeed(c) # m/s
-                ad = model.Axis(unit="m", range=rng, speed=speed_rng, canAbs=isCL)
+                ad = model.Axis(unit="m", range=rng, speed=speed_rng,
+                                canAbs=isCL, canUpdate=controller.canUpdate[c])
                 axes_def[axis] = ad
 
                 refed = controller.isReferenced(c)
@@ -2530,11 +2645,13 @@ class Bus(model.Actuator):
         self._updatePosition()
 
         self._cl_axes = set(an for an, ax in self.axes.items() if ax.canAbs)
+        self._pos_needs_update = threading.Event()
         if self._cl_axes:
             # To detect position changes not related to a requested move (only CL axes can do that)
-            self._pos_updater = util.RepeatingTimer(10, self._refreshPosition,
-                                                    "PIGCS position update")
+            self._pos_updater = threading.Thread(target=self._refreshPosition,
+                                                 name="PIGCS position refresher")
             self._pos_updater.start()
+            self._pos_updater_stop = threading.Event()
         else:
             self._pos_updater = None
 
@@ -2585,10 +2702,32 @@ class Bus(model.Actuator):
         """
         Called regularly to update the position of the closed-loop axes
         """
-        # TODO: is it safe to do it at any time?
-        # => Do only if no moves are queued? Then need another way to enforce pos update during move updates
-        logging.debug("Will refresh position of axes %s", self._cl_axes)
-        self._updatePosition(self._cl_axes)
+        try:
+            while True:
+                # wait until a pos update is requested... or once in a while.
+                self._pos_needs_update.wait(10)
+                if self._pos_updater_stop.is_set():
+                    return
+
+                # Don't immediately read the position, because there are some
+                # chances the pos update is due to a move ending, which could
+                # be followed by another move. The start next move has a higher
+                # priority than reading position.
+                if self._pos_updater_stop.wait(0.3):
+                    return
+
+                # TODO: not entirely sure if that can cause issues. It seems to
+                # cause garbage data with E-861/IP if multiple commands are sent
+                # (ex, ERR + ...) and almost at the same time, another axis is
+                # sent command (ex, OSM).
+                logging.debug("Will refresh position of axes %s", self._cl_axes)
+                self._updatePosition(self._cl_axes)
+
+                self._pos_needs_update.clear()
+        except Exception:
+            logging.exception("Position refresher thread failed")
+        finally:
+            logging.debug("Ending position refresher")
 
     def _setSpeed(self, value):
         """
@@ -2604,19 +2743,31 @@ class Bus(model.Actuator):
             controller.setSpeed(channel, v)
         return value
 
-    def _createFuture(self):
+    def _createFuture(self, axes, update):
         """
         Return (CancellableFuture): a future that can be used to manage a move
+        axes (set of str): the axes that are moved
+        update (bool): if it's an update move
         """
+        # TODO: do this via the __init__ of subclass of Future?
         f = CancellableFuture()
         f._moving_lock = threading.Lock()  # taken while moving
         f._must_stop = threading.Event()  # cancel of the current future requested
         f._was_stopped = False  # if cancel was successful
+
+        f._update_axes = set()  # axes handled by the move, if update
+        if update:
+            # Check if all the axes support it
+            if all(self.axes[a].canUpdate for a in axes):
+                f._update_axes = axes
+            else:
+                logging.warning("Trying to do a update move on axes %s not supporting update", axes)
+
         f.task_canceller = self._cancelCurrentMove
         return f
 
     @isasync
-    def moveRel(self, shift):
+    def moveRel(self, shift, update=False):
         if not shift:
             return model.InstantaneousFuture()
         self._checkMoveRel(shift)
@@ -2624,19 +2775,19 @@ class Bus(model.Actuator):
 
         # TODO: drop an axis if the distance is too small to make sense
 
-        f = self._createFuture()
+        f = self._createFuture(set(shift.keys()), update)
         f = self._executor.submitf(f, self._doMoveRel, f, shift)
         return f
     moveRel.__doc__ = model.Actuator.moveRel.__doc__
 
     @isasync
-    def moveAbs(self, pos):
+    def moveAbs(self, pos, update=False):
         if not pos:
             return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
         pos = self._applyInversion(pos)
 
-        f = self._createFuture()
+        f = self._createFuture(set(pos.keys()), update)
         f = self._executor.submitf(f, self._doMoveAbs, f, pos)
         return f
     moveAbs.__doc__ = model.Actuator.moveAbs.__doc__
@@ -2669,15 +2820,15 @@ class Bus(model.Actuator):
         for controller in ctlrs:
             controller.stopMotion()
 
-    def _doMoveRel(self, future, pos):
+    def _doMoveRel(self, future, shift):
         """
         Blocking and cancellable relative move
         future (Future): the future it handles
-        pos (dict str -> float): axis name -> relative target position
+        shift (dict str -> float): axis name -> relative target position
         """
         with future._moving_lock:
             # Prepare the encoder of all the axes first (non-blocking)
-            for an, v in pos.items():
+            for an, v in shift.items():
                 controller, channel = self._axis_to_cc[an]
                 if hasattr(controller, "prepareEncoder"):
                     controller.prepareEncoder(channel)
@@ -2686,7 +2837,7 @@ class Bus(model.Actuator):
             old_pos = self.position.value
             moving_axes = set()
             try:
-                for an, v in pos.items():
+                for an, v in shift.items():
                     moving_axes.add(an)
                     logging.debug("Expecting axis %s to reach %f", an, old_pos[an] + v)
                     controller, channel = self._axis_to_cc[an]
@@ -2695,6 +2846,7 @@ class Bus(model.Actuator):
                     dur = driver.estimateMoveDuration(abs(dist),
                                                       controller.getSpeed(channel),
                                                       controller.getAccel(channel))
+                    logging.debug("Expecting to move %g m = %g s", dist, dur)
                     end = max(time.time() + dur, end)
             except PIGCSError:
                 # If one axis failed, better be safe than sorry: stop the other
@@ -2710,7 +2862,7 @@ class Bus(model.Actuator):
                 raise
 
             self._waitEndMove(future, moving_axes, end)
-        logging.debug("move successfully completed")
+        logging.debug("Relative move completed")
 
     def _doMoveAbs(self, future, pos):
         """
@@ -2749,7 +2901,7 @@ class Bus(model.Actuator):
                 raise
 
             self._waitEndMove(future, moving_axes, end)
-        logging.debug("move successfully completed")
+        logging.debug("Absolute move completed")
 
     def _waitEndMove(self, future, axes, end):
         """
@@ -2765,13 +2917,26 @@ class Bus(model.Actuator):
         """
         moving_axes = set(axes)
 
+        need_pos_update = True
+
         last_upd = time.time()
         dur = max(0.01, min(end - last_upd, 60))
         max_dur = dur * 2 + 3
         timeout = last_upd + max_dur
-        last_axes = moving_axes.copy()
+        last_axes = moving_axes.copy()  # moving axes as of last position update
         try:
             while not future._must_stop.is_set():
+                # If next future is update and all moving_axes are in next future axes
+                # => stop immediately without updating the positions
+                nf = self._executor.get_next_future(future)
+                if nf is not None and moving_axes <= nf._update_axes:
+                    need_pos_update = False
+                    # TODO: make sure the position gets updated from time to time
+                    # there is non-ending series of update moves.
+                    # => reuse the .GetPosition() of the controller.moveRel()?
+                    logging.debug("Ending move control early as next move is an update containing %s", moving_axes)
+                    return
+
                 for an in moving_axes.copy():  # need copy to remove during iteration
                     controller, channel = self._axis_to_cc[an]
                     # TODO: change isMoving to report separate info on multiple channels
@@ -2783,8 +2948,8 @@ class Bus(model.Actuator):
 
                 now = time.time()
                 if now > timeout:
-                    ctlrs = set(self._axis_to_cc[an][0] for an in moving_axes)
                     logging.info("Stopping move due to timeout after %g s.", max_dur)
+                    ctlrs = set(self._axis_to_cc[an][0] for an in moving_axes)
                     for controller in ctlrs:
                         controller.stopMotion()
                     raise TimeoutError("Move is not over after %g s, while "
@@ -2812,15 +2977,13 @@ class Bus(model.Actuator):
         except Exception:
             raise
         finally:
-            self._updatePosition(last_axes)
-            # TODO: this takes quite some time, which increases latency for
-            # the caller to know the move is done => only update the last axes
-            # moving (and don't notify the VA) and update the rest of axes in a
-            # separate thread
-            # self._updatePosition()  # update (all axes) with final position
-            other_axes = set(self._axis_to_cc.keys()) - last_axes
-            if other_axes:
-                threading.Thread(target=self._updatePosition, args=(other_axes,)).start()
+            if need_pos_update:
+                # Position update takes quite some time, which increases latency for
+                # the caller to know the move is done => only update the last axes
+                # moving (and don't notify the VA) and update the rest of axes in a
+                # separate thread
+                self._updatePosition(last_axes)
+            self._pos_needs_update.set()
 
     def _cancelCurrentMove(self, future):
         """
@@ -2847,7 +3010,8 @@ class Bus(model.Actuator):
             self._executor = None
 
         if self._pos_updater:
-            self._pos_updater.cancel()
+            self._pos_updater_stop.set()
+            self._pos_needs_update.set()  # To force the thread to check the stop event
             self._pos_updater = None
 
         ctlrs = set(ct for ct, ch in self._axis_to_cc.values())
@@ -3145,6 +3309,8 @@ class SerialBusAccesser(object):
                 anssplited = ans.split("\n")
                 # if the answer finishes with \n, last split is empty
                 anssplited, ans = anssplited[:-1], anssplited[-1]
+                if anssplited:
+                    logging.debug("Received: '%s'", "\n".join(anssplited).encode('string_escape'))
 
                 for l in anssplited:
                     if not continuing:
@@ -3684,7 +3850,7 @@ class E861Simulator(object):
                 speed = self._parameters[self._com_to_param["VEL"]]
                 cur_pos = self._get_cur_pos_cl()
                 distance = cur_pos - pos
-                duration = abs(distance) / speed
+                duration = abs(distance) / speed + 0.05
                 logging.debug("Simulating a move of %f s", duration)
                 self._start_move = time.time()
                 self._end_move = self._start_move + duration
@@ -3697,7 +3863,7 @@ class E861Simulator(object):
                 if self._ref_mode and not self._referenced:
                     raise SimulatedError(8)
                 speed = self._parameters[self._com_to_param["VEL"]]
-                duration = abs(distance) / speed
+                duration = abs(distance) / speed + 0.05
                 logging.debug("Simulating a move of %f s", duration)
                 cur_pos = self._get_cur_pos_cl()
                 self._start_move = time.time()
@@ -3718,6 +3884,11 @@ class E861Simulator(object):
                 if axis != 1:
                     raise SimulatedError(15)
                 out = "%s=%s" % (args[1], self._get_cur_pos_cl())
+            elif args[0] == "MOV?" and len(args) == 2:  # Closed-Loop target position query
+                axis = int(args[1])
+                if axis != 1:
+                    raise SimulatedError(15)
+                out = "%s=%s" % (args[1], self._target)
             elif args[0] == "ONT?" and len(args) == 2: # on target
                 axis = int(args[1])
                 if axis != 1:
@@ -3764,6 +3935,7 @@ class E861Simulator(object):
                        "POS?  booo \n"
                        "ONT?  booo \n"
                        "MOV  booo \n"
+                       "MOV?  booo \n"
                        "MVR  booo \n"
                        "OSM  booo \n"
                        "ERR? get error number \n"

@@ -43,9 +43,7 @@ class WindowsUpdater:
         try:
             if wx.GetApp()._is_standalone == "delphi":
                 global INSTALLER_FILE
-                global VIEWER_NAME
                 INSTALLER_FILE = "DelphiViewer-%s.exe"
-                VIEWER_NAME = "Delphi Viewer"
         except Exception:
             logging.info("Considering the app as a standard Odemis", exc_info=True)
 
@@ -90,16 +88,16 @@ class WindowsUpdater:
 
         web_version, web_size = self.get_remote_version()
 
-        # if web_version is None:
-        #     logging.info("Could not retrieve remote version, will not update")
-        #     return
-        #
-        # logging.info("Found remote version %s", web_version)
-        #
-        # lv = pkg_resources.parse_version(self.get_local_version())
-        # rv = pkg_resources.parse_version(web_version)
-        # if rv <= lv:
-        #     return
+        if web_version is None:
+            logging.info("Could not retrieve remote version, will not update")
+            return
+
+        logging.info("Found remote version %s", web_version)
+
+        lv = pkg_resources.parse_version(self.get_local_version())
+        rv = pkg_resources.parse_version(web_version)
+        if rv <= lv:
+            return
 
         logging.info("Newer version found, suggesting update...")
 
@@ -188,3 +186,5 @@ class WindowsUpdater:
         except WindowsError, (err_nr, _):
             if err_nr == 740:
                 os.startfile(local_path, "runas")
+            else:
+                raise

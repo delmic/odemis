@@ -33,7 +33,7 @@ import os
 
 from odemis import model, gui
 import odemis
-from odemis.gui import main_xrc, log
+from odemis.gui import main_xrc, log, img
 from odemis.gui.conf import get_general_conf
 from odemis.gui.cont import acquisition
 from odemis.gui.cont.menu import MenuController
@@ -41,7 +41,6 @@ from odemis.gui.util import call_in_wx_main
 from odemis.gui.xmlh import odemis_get_resources
 from odemis.util import driver
 import odemis.gui.cont.tabs as tabs
-import odemis.gui.img.data as imgdata
 import odemis.gui.model as guimodel
 
 # Ensure that the current working directory is the same as the location of this file
@@ -112,18 +111,13 @@ class OdemisGUIApp(wx.App):
 
         if self._is_standalone:
             microscope = None
+            gui.icon = img.getIcon("icon/ico_gui_viewer_256.png")
+            gui.name = odemis.__shortname__ + " Viewer"
 
             if "delphi" == self._is_standalone:
-                # Set the name and icon
-                gui.icon = imgdata.catalog['ico_gui_viewer_256'].GetIcon()
-                gui.name = "DelphiViewer"
-                gui.logo = imgdata.getlogo_delphiBitmap()
-            else:
-                # Set the name and icon
-                gui.icon = imgdata.catalog['ico_gui_viewer_256'].GetIcon()
-                gui.name = odemis.__shortname__ + "Viewer"
+                gui.logo = img.getBitmap("logo_delphi.png")
         else:
-            gui.icon = imgdata.catalog['ico_gui_full_256'].GetIcon()
+            gui.icon = img.getIcon("icon/ico_gui_full_256.png")
             gui.name = odemis.__shortname__
             try:
                 microscope = model.getMicroscope()
@@ -135,10 +129,13 @@ class OdemisGUIApp(wx.App):
 
                 answer = wx.MessageBox(msg,
                                        "Connection error",
-                                        style=wx.YES | wx.NO | wx.ICON_ERROR)
+                                       style=wx.YES | wx.NO | wx.ICON_ERROR)
                 if answer == wx.NO:
                     sys.exit(1)
                 microscope = None
+            else:
+                if microscope.role == "delphi":
+                    gui.logo = img.getBitmap("logo_delphi.png")
 
         logging.info("\n\n************  Starting Odemis GUI  ************\n")
         logging.info("Odemis GUI v%s (from %s)", odemis.__version__, __file__)
@@ -181,8 +178,6 @@ class OdemisGUIApp(wx.App):
             self.main_frame.SetIcons(ib)
             self.main_frame.SetTitle(gui.name)
 
-            self.main_data.debug.subscribe(self.on_debug_va, init=True)
-            self.main_data.level.subscribe(self.on_level_va, init=False)
 
             # List of all possible tabs used in Odemis' main GUI
             # microscope role(s), internal name, class, tab btn, tab panel
@@ -291,6 +286,9 @@ class OdemisGUIApp(wx.App):
                 if hasattr(tab.panel, 'btn_log'):
                     tab.panel.btn_log.Bind(wx.EVT_BUTTON, toggle_log_panel)
             self.main_frame.btn_log.Bind(wx.EVT_BUTTON, toggle_log_panel)
+
+            self.main_data.debug.subscribe(self.on_debug_va, init=True)
+            self.main_data.level.subscribe(self.on_level_va, init=False)
 
             self._menu_controller = MenuController(self.main_data, self.main_frame)
             # Menu events

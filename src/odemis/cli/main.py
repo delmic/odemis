@@ -720,7 +720,6 @@ def live_display(comp_name, df_name):
         # pick something not too stupid
         size = (512, 512)
 
-    # TODO: if only one line -> use plot
     # create a window
     window = VideoDisplayer("Live from %s.%s" % (comp_name, df_name), size)
 

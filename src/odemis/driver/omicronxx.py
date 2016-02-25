@@ -203,6 +203,10 @@ class DevxX(object):
         # If there is error => reset
         status = self.GetActualStatus()
         logging.debug("Device (on port %s) status = %X", acc.port, status)
+
+        if status & (1 << 8):  # bit 8: Need to toggle key
+            raise HwError("Device needs to key switch toggled")
+
         if status & 1:  # bit 0: error state
             error = self.GetFailureByte()
             if error & 1:  # Soft-interlock => reset will fix it
