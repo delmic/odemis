@@ -44,7 +44,7 @@ import sys
 import tty
 import termios
 import threading
-
+import signal
 import odemis.acq.align.delphi as aligndelphi
 
 
@@ -52,6 +52,12 @@ logging.getLogger().setLevel(logging.WARNING)
 
 YES_CHARS = {"Y", "y", ''}
 YES_NO_CHARS = {"Y", "y", "N", "n", ''}
+TIMEOUT = 1
+
+
+def interrupted(signum, frame):
+    logging.debug("read_input timed out")
+signal.signal(signal.SIGALRM, interrupted)
 
 
 def getch():
@@ -62,7 +68,7 @@ def getch():
     old_settings = termios.tcgetattr(fd)
     try:
         tty.setraw(sys.stdin.fileno())
-        ch = sys.stdin.read(1)
+        ch = sys.stdin.read(3)
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
     return ch
@@ -72,7 +78,8 @@ class ArrowFocus():
     """
     Use keyboard arrows to move focus actuators by stepsize.
     """
-    def __init__(self, opt_focus, ebeam_focus, opt_stepsize, ebeam_stepsize):
+    def __init__(self, sem_stage, opt_focus, ebeam_focus, opt_stepsize, ebeam_stepsize):
+        self.sem_stage = sem_stage
         self.opt_focus = opt_focus
         self.ebeam_focus = ebeam_focus
         self.opt_stepsize = opt_stepsize
@@ -98,25 +105,31 @@ class ArrowFocus():
                 f = self.opt_focus.moveRel({'z': mov})
                 f.result()
 
-    def focusByArrow(self):
+    def focusByArrow(self, rollback_position=None):
         target = self._move_focus
         self._focus_thread = threading.Thread(target=target,
                 name="Arrow focus thread")
         self._focus_thread.start()
         while True:
-            c = getch()
-            # check for ESC char
-            if c == '\x1b':
-                unused = getch()
+            signal.alarm(TIMEOUT)
+            try:
                 c = getch()
-                if c == 'A':
-                    self._moves_ebeam.append(self.ebeam_stepsize)
-                elif c == 'B':
-                    self._moves_ebeam.append(-self.ebeam_stepsize)
-                elif c == 'C':
-                    self._moves_opt.append(self.opt_stepsize)
-                elif c == 'D':
-                    self._moves_opt.append(-self.opt_stepsize)
+            except:
+                # just timed out
+                continue
+            signal.alarm(0)
+            if c in {'R', 'r'} and (rollback_position is not None):
+                f = self.sem_stage.moveAbs({'x': rollback_position[0],
+                                            'y': rollback_position[1]})
+                f.result()
+            if c == '\x1b[A':
+                self._moves_opt.append(self.opt_stepsize)
+            elif c == '\x1b[B':
+                self._moves_opt.append(-self.opt_stepsize)
+            elif c == '\x1b[C':
+                self._moves_ebeam.append(self.ebeam_stepsize)
+            elif c == '\x1b[D':
+                self._moves_ebeam.append(-self.ebeam_stepsize)
             # break when Enter is pressed
             elif ord(c) == 13:
                 self._move_must_stop.set()
@@ -312,8 +325,10 @@ def main(args):
                 detector.data.subscribe(_discard_data)
                 print "\033[1;34mPlease turn on the Optical stream, set Power to 0 Watt and focus the image so you have a clearly visible spot.\033[1;m"
                 print "\033[1;34mUse the up and down arrows or the mouse to move the optical focus and right and left arrows to move the SEM focus. Then turn off the stream and press Enter ...\033[1;m"
-                ar = ArrowFocus(focus, ebeam_focus, ccd.depthOfField.value, escan.depthOfField.value)
-                ar.focusByArrow()
+                if not force_calib:
+                    print "\033[1;33mIf you cannot see the whole source background (bright circle) you may try to move to the already known offset position. \nTo do this press the R key at any moment.\033[1;m"
+                ar = ArrowFocus(sem_stage, focus, ebeam_focus, ccd.depthOfField.value, escan.depthOfField.value)
+                ar.focusByArrow(rollback_position=(offset[0] * scaling[0], offset[1] * scaling[1]))
                 print "\033[1;30mFine alignment in progress, please wait...\033[1;m"
                 detector.data.unsubscribe(_discard_data)
                 try:
@@ -385,7 +400,7 @@ def main(args):
                     detector.data.subscribe(_discard_data)
                     print "\033[1;34mPlease turn on the Optical stream, set Power to 0 Watt and focus the image so you have a clearly visible spot.\033[1;m"
                     print "\033[1;34mUse the up and down arrows or the mouse to move the optical focus and right and left arrows to move the SEM focus. Then turn off the stream and press Enter ...\033[1;m"
-                    ar = ArrowFocus(focus, ebeam_focus, ccd.depthOfField.value, escan.depthOfField.value)
+                    ar = ArrowFocus(sem_stage, focus, ebeam_focus, ccd.depthOfField.value, escan.depthOfField.value)
                     ar.focusByArrow()
                     print "\033[1;30mFine alignment in progress, please wait...\033[1;m"
                     detector.data.unsubscribe(_discard_data)
@@ -459,7 +474,7 @@ def main(args):
                 detector.data.subscribe(_discard_data)
                 print "\033[1;34mPlease turn on the Optical stream, set Power to 0 Watt and focus the image so you have a clearly visible spot.\033[1;m"
                 print "\033[1;34mUse the up and down arrows or the mouse to move the optical focus and right and left arrows to move the SEM focus. Then turn off the stream and press Enter ...\033[1;m"
-                ar = ArrowFocus(focus, ebeam_focus, ccd.depthOfField.value, escan.depthOfField.value)
+                ar = ArrowFocus(sem_stage, focus, ebeam_focus, ccd.depthOfField.value, escan.depthOfField.value)
                 ar.focusByArrow()
                 print "\033[1;30mFine alignment in progress, please wait...\033[1;m"
                 detector.data.unsubscribe(_discard_data)
