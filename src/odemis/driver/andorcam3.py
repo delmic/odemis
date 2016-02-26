@@ -753,6 +753,8 @@ class AndorCam3(model.DigitalCamera):
         return (float): actual temperature requested
         """
         assert -300 <= temp <= 100
+        # TODO: it seems to not always work if the camera is acquiring,
+        # => either fail is a better way or block until the camera is not acquiring
         if self.isImplemented(u"TemperatureControl"):
             tmps_str = self.GetEnumStringImplemented(u"TemperatureControl")
             tmps = [float(t) if t is not None else 1e100 for t in tmps_str]
