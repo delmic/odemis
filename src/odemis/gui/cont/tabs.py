@@ -212,6 +212,11 @@ class Tab(object):
                          self, self.tab_data_model.main.tab.value.name)
 
 
+# Preferable autofocus values to be set when triggering autofocus in delphi
+AUTOFOCUS_BINNING = (8, 8)
+AUTOFOCUS_HFW = 300e-06  # m
+
+
 class SecomStreamsTab(Tab):
     def __init__(self, name, button, panel, main_frame, main_data):
         """
@@ -450,7 +455,7 @@ class SecomStreamsTab(Tab):
         # Determine which stream is active
         if active:
             try:
-                curr_s = self.tab_data_model.streams.value[0]
+                self.curr_s = self.tab_data_model.streams.value[0]
             except IndexError:
                 # Should not happen as the menu/icon should be disabled
                 logging.info("No stream to run the autofocus")
@@ -458,8 +463,25 @@ class SecomStreamsTab(Tab):
                 return
 
             # run only if focuser is available
-            if curr_s.focuser:
-                self._autofocus_f = AutoFocus(curr_s.detector, curr_s.emitter, curr_s.focuser)
+            if self.curr_s.focuser:
+                # FIXME: maybe this can be done in a nicer why
+                self.orig_hfw = None
+                self.orig_binning = None
+                if self.main_data.role == "delphi":
+                    # Set binning to 8 in case of optical focus to avoid high SNR
+                    # and limit HFW in case of ebeam focus to avoid extreme brightness.
+                    # Also apply ACB before focusing in case of ebeam focus.
+                    if self.curr_s.focuser.role == "ebeam-focus":
+                        self.orig_hfw = self.curr_s.emitter.horizontalFoV.value
+                        self.curr_s.emitter.horizontalFoV.value = min(self.orig_hfw, AUTOFOCUS_HFW)
+                        f = self.curr_s.detector.applyAutoContrast()
+                        f.result()
+                    else:
+                        if hasattr(self.curr_s.detector, "binning"):
+                            self.orig_binning = self.curr_s.detector.binning.value
+                            self.curr_s.detector.binning.value = max(self.orig_binning, AUTOFOCUS_BINNING)
+
+                self._autofocus_f = AutoFocus(self.curr_s.detector, self.curr_s.emitter, self.curr_s.focuser)
                 self._autofocus_f.add_done_callback(self._on_autofocus_done)
             else:
                 # Should never happen as normally the menu/icon are disabled
@@ -470,6 +492,10 @@ class SecomStreamsTab(Tab):
 
     def _on_autofocus_done(self, future):
         self.tab_data_model.autofocus_active.value = False
+        if self.orig_hfw is not None:
+            self.curr_s.emitter.horizontalFoV.value = self.orig_hfw
+        if self.orig_binning is not None:
+            self.curr_s.detector.binning.value = self.orig_binning
 
     def _on_current_stream(self, streams):
         """
@@ -477,12 +503,12 @@ class SecomStreamsTab(Tab):
         """
         # Try to get the current stream
         try:
-            curr_s = streams[0]
+            self.curr_s = streams[0]
         except IndexError:
-            curr_s = None
+            self.curr_s = None
 
-        if curr_s:
-            curr_s.should_update.subscribe(self._on_stream_update, init=True)
+        if self.curr_s:
+            self.curr_s.should_update.subscribe(self._on_stream_update, init=True)
         else:
             wx.CallAfter(self.tb.enable_button, tools.TOOL_AUTO_FOCUS, False)
 
@@ -494,11 +520,11 @@ class SecomStreamsTab(Tab):
         # TODO: just let the menu controller also update toolbar (as it also
         # does the same check for the menu entry)
         try:
-            curr_s = self.tab_data_model.streams.value[0]
+            self.curr_s = self.tab_data_model.streams.value[0]
         except IndexError:
             f = None
         else:
-            f = curr_s.focuser
+            f = self.curr_s.focuser
 
         f_enable = all((updated, f))
         if not f_enable:
