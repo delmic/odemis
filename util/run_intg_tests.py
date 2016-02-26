@@ -6,7 +6,7 @@ Created on 2 Feb 2016
 
 @author: Rinze de Laat
 
-Copyright © 2016 Rinze de Laat, Delmic
+Copyright © 2016 Rinze de Laat and Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -28,13 +28,18 @@ hardware configuration file in this repository. This includes both the back-end 
 """
 from __future__ import division
 
+import glob
+import logging
 import os
 import shutil
 import subprocess
 import sys
 import threading
-import unittest
 from time import sleep
+
+
+logging.getLogger().setLevel(logging.INFO)
+
 
 # Path of this module
 MY_PATH = os.path.abspath(os.path.dirname(__file__))
@@ -42,32 +47,17 @@ MY_PATH = os.path.abspath(os.path.dirname(__file__))
 ODEMISD_LOG_PATH = os.path.join(MY_PATH, "odemisd_test.log")
 GUI_LOG_PATH = os.path.join(MY_PATH, "gui_test.log")
 # Odemis root path
-ODEMIS_PATH = os.path.abspath(os.path.join(MY_PATH, '../../../../'))
-# Path to the config files
+ODEMIS_PATH = os.path.abspath(os.path.join(MY_PATH, '../'))
+# Default path to the config files
 SIM_CONF_PATH = "%s/install/linux/usr/share/odemis/sim" % ODEMIS_PATH
 # Odemis commands
 CMD_STOP = "%s/install/linux/usr/bin/odemis-stop " % ODEMIS_PATH
 CMD_START = "%s/install/linux/usr/bin/odemis-start -n -l %s " % (ODEMIS_PATH, ODEMISD_LOG_PATH)
 CMD_GUI = "%s/install/linux/usr/bin/odemis-gui --logfile %s --log-level 2" % (ODEMIS_PATH,
                                                                               GUI_LOG_PATH)
-# These string are searched for in the log files and if any are found, an error is assumed to have
-# occurred.
+# These string are searched for in the log files and if any are found, an error
+# is assumed to have occurred.
 ERROR_TRIGGER = ("EXCEPTION:", "ERROR:", "WARNING:")
-
-
-# Clear any old log files might have been left behind
-try:
-    os.remove(ODEMISD_LOG_PATH)
-except OSError:
-    pass
-finally:
-    try:
-        os.remove(GUI_LOG_PATH)
-    except OSError:
-        pass
-
-# Load the Yaml config files for the simulated hardware
-sim_conf_files = [filename for filename in os.listdir(SIM_CONF_PATH) if filename[-4:] == 'yaml']
 
 
 class OdemisThread(threading.Thread):
@@ -75,17 +65,15 @@ class OdemisThread(threading.Thread):
 
     def __init__(self, name, cmd):
         super(OdemisThread, self).__init__(name=name)
+        self.cmd = cmd
 
         self.proc = None
-
         self.stdout = None
         self.stderr = None
-
-        self.cmd = cmd
         self.returncode = 0
 
     def run(self):
-        print "  %s" % self.cmd
+        logging.debug("Running command %s", self.cmd)
         self.proc = subprocess.Popen(self.cmd.split(),
                                      shell=False,
                                      stdout=subprocess.PIPE,
@@ -116,126 +104,148 @@ def test_sleep(t):
 def copy_log(log_in_path, log_out_name):
     """ Copy log_in to log_out for later inspection """
     log_out_path = os.path.join('/tmp', log_out_name)
-    print "\n  Copying log\n    %s\n  to\n    %s\n" % (log_in_path, log_out_path)
+    logging.debug("Copying log %s to %s", log_in_path, log_out_path)
     shutil.copy(log_in_path, log_out_path)
     return log_out_path
 
 
-def backend_fail(config_name, msg):
-    """ Copy the back-end log and raise an exception """
-    log_path = copy_log(ODEMISD_LOG_PATH, 'odemisd-%s-test.log' % config_name)
+def test_config(sim_conf):
+    """ Test one running a backend and GUI with a given microscope file
+    sim_conf (str): full filename of the microscope file to start
+    return (bool): True if no error running the whole system, False otherwise
+    """
 
-    class BackendFailure(Exception):
+    # Clear any old log files might have been left behind
+    try:
+        os.remove(ODEMISD_LOG_PATH)
+    except OSError:
         pass
-
-    raise BackendFailure("%s: %s\nLog copied to %s" % (config_name, msg, log_path))
-
-
-def gui_fail(config_name, msg):
-    """ Copy the GUI log and raise an exception """
-    log_path = copy_log(GUI_LOG_PATH, 'gui-%s-test.log' % config_name)
-
-    class GuiFailure(Exception):
-        pass
-
-    raise GuiFailure("%s: %s\nLog copied to %s" % (config_name, msg, log_path))
-
-
-class HardwareConfigTestCase(unittest.TestCase):
-    """ Test case that's dynamically going to be filled with tests """
-    pass
-
-
-# Stop any running back-ends
-print "\n* Halting any Odemis instances...\n"
-halt = OdemisThread("Odemis Halting thread", CMD_STOP)
-halt.start()
-halt.join()
-print "\n  Done"
-
-
-def generate_config_test(sim_conf):
-    """ Create and return a test method to be added to the test case """
-    def test_simulated_hardware_config(self):
-        sim_conf_path = os.path.join(SIM_CONF_PATH, sim_conf)
-
-        print "\n* Starting %s backend\n" % sim_conf
-        cmd = CMD_START + sim_conf_path
-        start = OdemisThread("Backend %s" % sim_conf, cmd)
-        start.start()
-
-        # Wait for the back end to load
-        test_sleep(30)
-
-        print "\n* Starting %s GUI\n" % sim_conf
-        gui = OdemisThread("GUI %s" % sim_conf, CMD_GUI)
-        gui.start()
-
-        # Wait for the GUI to load
-        test_sleep(10)
-
-        print "\n* Stopping %s\n" % sim_conf
-        stop = OdemisThread("Stop %s" % sim_conf, CMD_STOP)
-        stop.start()
-        stop.join()
-
-        # If 'start' is still running, kill it forcibly (It might be stuck displaying the log
-        # window)
-        if start.is_alive():
-            start.kill()
-
-        print ""
-
+    finally:
         try:
-            if start.returncode != 0:  # 'ok' return code
-                msg = "Bad return code %s for 'odemis-start' script!" % start.returncode
-                print "  %s" % msg
-                backend_fail(sim_conf, msg)
-            elif gui.returncode != 143:  # SIGTERM return code
-                msg = "Bad return code %s for 'odemis-gui' script!" % gui.returncode
-                print "  %s" % msg
-                if gui.returncode == 255:
-                    print "  Did the back-end finish loading before the GUI was started?"
-                gui_fail(sim_conf, msg)
-            else:
-                # TODO: make error/exception detection in log files more intelligent?
+            os.remove(GUI_LOG_PATH)
+        except OSError:
+            pass
 
-                odemisd_log = open(ODEMISD_LOG_PATH).read()
+    sim_conf_fn = os.path.basename(sim_conf)
+    # sim_conf_path = os.path.join(SIM_CONF_PATH, sim_conf)
+    test_name = "test_%s" % "".join((c if c.isalnum() else '_' for c in sim_conf))
 
-                for lbl in ERROR_TRIGGER:
-                    if lbl in odemisd_log:
-                        msg = "%s found in back-end log!" % lbl
-                        print "  %s" % msg
-                        backend_fail(sim_conf, msg)
+    logging.info("Starting %s backend", sim_conf)
+    cmd = CMD_START + sim_conf
+    start = OdemisThread("Backend %s" % sim_conf_fn, cmd)
+    start.start()
 
-                gui_log = open(GUI_LOG_PATH).read().lower()
+    # Wait for the back end to load
+    # TODO: make it faster, by looking how util.test starts the backend
+    test_sleep(30)
 
-                for lbl in ERROR_TRIGGER:
-                    if lbl in gui_log:
-                        msg = "%s found in GUI log!" % lbl
-                        print "  %s" % msg
-                        gui_fail(sim_conf, msg)
+    logging.info("Starting %s GUI", sim_conf)
+    gui = OdemisThread("GUI %s" % sim_conf_fn, CMD_GUI)
+    gui.start()
+
+    # Wait for the GUI to load
+    test_sleep(10)
+
+    # TODO: do typical "stuff" in the GUI (based on the microscope type)
+
+    logging.info("Stopping %s", sim_conf)
+    stop = OdemisThread("Stop %s" % sim_conf_fn, CMD_STOP)
+    stop.start()
+    stop.join()
+
+    # If 'start' is still running, kill it forcibly (It might be stuck displaying the log
+    # window)
+    if start.is_alive():
+        start.kill()
+
+    # Copy the log files to make them usable
+    dlog_path = copy_log(ODEMISD_LOG_PATH, 'odemisd-%s-test.log' % test_name)
+    guilog_path = copy_log(GUI_LOG_PATH, 'gui-%s-test.log' % test_name)
+
+    passed = True
+    try:
+        if start.returncode != 0:  # 'ok' return code
+            logging.error("Backend failed to start, with return code %d", start.returncode)
+            passed = False
+        elif gui.returncode != 143:  # SIGTERM return code
+            if gui.returncode == 255:
+                logging.warning("Back-end might have not finish loading before the GUI was started")
+            logging.error("GUI failed to start, with return code %d", gui.returncode)
+            passed = False
+        else:
+            # TODO: make error/exception detection in log files more intelligent?
+            odemisd_log = open(dlog_path).read()
+            for lbl in ERROR_TRIGGER:
+                if lbl in odemisd_log:
+                    logging.error("%s found in back-end log of %s", lbl, sim_conf_fn)
+                    passed = False
+                    break
+
+            gui_log = open(guilog_path).read()
+            for lbl in ERROR_TRIGGER:
+                if lbl in gui_log:
+                    logging.error("%s found in GUI log of %s", lbl, sim_conf_fn)
+                    passed = False
+                    break
+    finally:
+        # Remove log files
+        try:
+            os.remove(ODEMISD_LOG_PATH)
+        except OSError:
+            pass
         finally:
-            # Remove log files
             try:
-                os.remove(ODEMISD_LOG_PATH)
+                os.remove(GUI_LOG_PATH)
             except OSError:
                 pass
-            finally:
-                try:
-                    os.remove(GUI_LOG_PATH)
-                except OSError:
-                    pass
 
-    return test_simulated_hardware_config
+    return passed
 
 
-# Create a test and add it to the test case for each configuration found
-for sim_conf in sim_conf_files[:1]:
-    test = generate_config_test(sim_conf)
-    test_name = "test_%s" % "".join((c if c.isalnum() else '_' for c in sim_conf))
-    setattr(HardwareConfigTestCase, test_name, test)
+def main(args):
+    """
+    args (list of str): paths to search for microscope files that will be used
+      to start the backend. Only the files ending with -sim.odm.yaml are tested
+    """
+    paths = args[1:]
+    if not paths:
+        paths = [SIM_CONF_PATH]
 
+    all_passed = True
+    try:
+        # Stop any running back-ends
+        logging.info("Halting any Odemis instances...")
+        halt = OdemisThread("Odemis Halting thread", CMD_STOP)
+        halt.start()
+        halt.join()
+        logging.debug("Done")
 
-if __name__ == "__main__":
-    unittest.main()
+        # Load the Yaml config files for the simulated hardware
+        sim_conf_files = []
+        for root_path in paths:
+            sim_conf_files.extend(glob.glob(root_path + '/*-sim.odm.yaml'))
+
+        if not sim_conf_files:
+            raise ValueError("No simulator yaml files in %s" % (paths,))
+
+        # Create a test and add it to the test case for each configuration found
+        for sim_conf in sim_conf_files:
+            passed = test_config(sim_conf)
+            all_passed = all_passed and passed
+
+    except ValueError as exp:
+        logging.error("%s", exp)
+        return 127
+    except Exception:
+        logging.exception("Unexpected error while performing action.")
+        return 130
+
+    if all_passed:
+        return 0
+    else:
+        return 1
+
+if __name__ == '__main__':
+    ret = main(sys.argv)
+    exit(ret)
+
