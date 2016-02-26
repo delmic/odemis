@@ -723,7 +723,7 @@ class Stream(object):
                 im_needs_recompute.wait()  # wait until a new image is available
                 stream = wstream()
                 if stream is None:
-                    logging.info("Stream disappeared so ending image update thread")
+                    logging.debug("Stream disappeared so ending image update thread")
                     return
                 tnow = time.time()
 

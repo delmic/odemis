@@ -151,7 +151,7 @@ class LiveStream(Stream):
                 ht_needs_recompute.wait()  # wait until a new image is available
                 stream = wstream()
                 if stream is None:
-                    logging.info("Stream disappeared so ending histrogram update thread")
+                    logging.debug("Stream disappeared so ending histrogram update thread")
                     return
                 tstart = time.time()
                 ht_needs_recompute.clear()
