@@ -33,7 +33,6 @@ from __future__ import division
 import logging
 from operator import xor
 import wx
-import wx.lib.newevent
 import wx.lib.buttons as wxbuttons
 import math
 
@@ -610,7 +609,7 @@ class ImageStateButton(ImageToggleButtonImageButton):
 
     def SetState(self, state):
         if state is not None and not 0 <= state < len(self.bmpSelected):
-            raise ValueError("State %s is invalid", state)
+            raise ValueError("State %s is invalid" % (state,))
         self.state = state
         self.Refresh()
     SetValue = SetState
