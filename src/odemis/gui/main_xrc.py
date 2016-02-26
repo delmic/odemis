@@ -608,7 +608,7 @@ def __init_resources():
         <object class="wxMenu">
           <label>Development</label>
           <object class="wxMenuItem" name="menu_item_devmanual">
-            <label>Developer Documentation</label>
+            <label>Developer documentation</label>
             <enabled>0</enabled>
             <XRCED>
               <assign_var>1</assign_var>
@@ -621,7 +621,7 @@ def __init_resources():
             </XRCED>
           </object>
           <object class="wxMenuItem" name="menu_item_debug">
-            <label>Debug</label>
+            <label>Show log panel</label>
             <accel>Ctrl+D</accel>
             <checkable>1</checkable>
             <XRCED>
@@ -637,7 +637,7 @@ def __init_resources():
         </object>
         <object class="separator"/>
         <object class="wxMenuItem" name="menu_item_about">
-          <label>About</label>
+          <label>About...</label>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
@@ -1375,7 +1375,6 @@ def __init_resources():
               <flag>wxALL|wxEXPAND</flag>
               <border>5</border>
             </object>
-            
             <object class="sizeritem">
               <object class="wxHtmlWindow" name="html_alignment_doc">
                 <size>-1,680</size>
