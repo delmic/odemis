@@ -1,3 +1,14 @@
+odemis (2.3.1-1ubuntu1) precise; urgency=low
+
+  * New version: 2.3.1
+  * Main bug fixed:
+   - Avoid timeout on TMCM for long moves (SPARCv2)
+   - Fix initialisation with E-861 with old firmware version (SPARC)
+   - Don't change fine alignment dwell time when exposure time of filtered stream is changed (SECOM)
+   - Show a warning if trying to calibrate a sample holder of wrong type (DELPHI)
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Fri, 26 Feb 2016 13:59:09 +0100
+
 odemis (2.3-1ubuntu1) precise; urgency=low
 
   * New version: 2.3
