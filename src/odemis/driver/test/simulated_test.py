@@ -118,7 +118,7 @@ class ActuatorTest(object):
     def test_stop(self):
         self.dev.stop()
         for axis in self.dev.axes:
-            self.dev.stop(axis)
+            self.dev.stop({axis})
 
         move = {}
         for axis in self.dev.axes:
