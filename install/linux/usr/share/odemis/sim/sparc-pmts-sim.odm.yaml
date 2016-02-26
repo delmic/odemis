@@ -11,7 +11,7 @@ SPARC-MONASH: {
     "SEM Detector", "Angular Camera", "Spectrometer", "Monochromator",
     "Fiber Flipper", "Mirror Actuators", "Focus Lens Flipper", 
     "AR CCD-PMT Flipper", "Spec CCD-PMT Flipper", "Fiber Actuators", 
-    "CL Detector", ],
+    "CL Detector"],
 }
 
 
@@ -44,7 +44,7 @@ SPARC-MONASH: {
         limits: [[0, 5], [0, 5]],  # V
         park: [0, 0], # V
         settle_time: 5.e-6, # s
-        hfw_nomag: 0.25, # m
+        hfw_nomag: 0.2553, # m
     },
     properties: {
         scale: [8, 8], # (ratio) : start with a pretty fast scan
@@ -82,7 +82,7 @@ SPARC-MONASH: {
     role: null,
     init: {
         port: "/dev/fake", # for simulator
-        prot_time: 0.0002,  # s
+        prot_time: 0.0001,  # s
         prot_curr: 50.e-6,  # A
         relay_cycle: 5, # s
         powered: ["Fiber Flipper", "Focus Lens Flipper", "AR CCD-PMT Flipper"]
@@ -93,7 +93,7 @@ SPARC-MONASH: {
     class: pmtctrl.PMT,
     role: cl-detector,
     init: {
-        settle_time: 0.5,  # s, time for the gain to be fully active
+        settle_time: 1.0,  # s, time for the gain to be fully active
     },
     children: {
        "detector": "CL PMT",
@@ -127,7 +127,7 @@ SPARC-MONASH: {
     role: lens,
     # Big mirror config
     init: {
-       mag: 0.4917, # ratio
+       mag: 0.405826, # ratio
        na: 0.2, # ratio, numerical aperture
        ri: 1.0, # ratio, refractive index
        pole_pos: [458, 519], # (px, px), position of the pole (aka the hole in the mirror)
@@ -164,10 +164,7 @@ SPARC-MONASH: {
            inverted: ["rx"],
            positions: [[0, "on"], [1.5707963267948966, "off"]],
     },
-    children: {
-        "dummy": "CL PMT control unit", # just to enforce init order
-    },
-    affects: ["Focus Lens", "Angular Camera", "Spectrometer"]  
+    affects: ["Angular Camera", "Spectrometer", "Monochromator"],
 }
 
 # Thorlabs FW102C with some filters
@@ -180,7 +177,7 @@ SPARC-MONASH: {
                    3: "polariser",
                    6: "pass-through"},
            },
-    affects: ["Angular Camera", "Spectrometer", "CL Detector", "Monochromator"]
+    affects: ["Angular Camera", "Spectrometer", "CL Detector", "Monochromator"],
 }
 
 # Andor Zyla
@@ -200,10 +197,10 @@ SPARC-MONASH: {
     class: andorcam2.AndorCam2,
     role: ccd,
     init: {
-       device: "fake",
-       image: "sparc-ar-mirror-align.h5", # only for simulator
-       #image: "small_mirror_image_sim_pxs.tif", # only for small mirror test
-       #transp: [1, -2],
+        device: "fake",
+        image: "sparc-ar-mirror-align.h5", # only for simulator
+        #image: "small_mirror_image_sim_pxs.tif", # only for small mirror test
+        #transp: [1, -2],
     },
 }
 
@@ -220,9 +217,6 @@ SPARC-MONASH: {
            axis: "rx",
            # inverted: ["rx"],
            positions: [[0, "on"], [1.5707963267948966, "off"]],
-    },
-    children: {
-        "dummy": "CL PMT control unit", # just to enforce init order
     },
     affects: ["Angular Camera", "CL Detector"]
 }
@@ -242,9 +236,6 @@ SPARC-MONASH: {
            # inverted: ["rx"],
            positions: [[0, "on"], [1.5707963267948966, "off"]],
     },
-    children: {
-        "dummy": "CL PMT control unit", # just to enforce init order
-    },
     affects: ["Angular Camera", "Spectrometer"]  
 }
 
@@ -263,7 +254,7 @@ SPARC-MONASH: {
     role: sp-ccd,
     init: {
        device: "fake",
-       transpose: [1, -2], # if mirrored on X axis (due to a Odemis bug, it's the second dim which has the -)
+       transp: [-1, 2], # mirrored on X axis
     },
     properties: {
         targetTemperature: -60, # °C
@@ -273,7 +264,6 @@ SPARC-MONASH: {
 "Spectrograph": {
     class: andorshrk.Shamrock,
     role: spectrograph,
-    affects: ["Monochromator", "Spectral Camera"],
     children: {"ccd": "Spectral Camera"},
     init: {
         device: "fake",
@@ -282,18 +272,18 @@ SPARC-MONASH: {
         },
         accessory: "slitleds", # TTL output to off when leds might be on 
     },
+    affects: ["Monochromator", "Spectral Camera", "Spectrometer"],
 }
 
 # Provide the mirror of the spectrograph as a separate component
 "Spec CCD-PMT Flipper": {
     class: actuator.MultiplexActuator,
     role: spec-det-selector,
-    affects: ["Monochromator", "Spectral Camera"],
     children: {"rx": "Spectrograph"},
     init: {
         axes_map: {"rx": "flip-out"},
     },
-    affects: ["Spectrometer", "Monochromator"],
+    affects: ["Monochromator", "Spectral Camera", "Spectrometer"],
 }
 
 # PI E-861 over IP (can be static IP, or via DCHP)

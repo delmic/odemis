@@ -2359,11 +2359,16 @@ class SparcAlignTab(Tab):
             self._ccd_stream.should_update.value = True
             self.panel.pnl_sparc_trans.Enable(True)
             self.panel.pnl_fibaligner.Enable(False)
-        else:
+        elif mode == "fiber-align":
             if self._ccd_stream:
                 self._ccd_stream.should_update.value = False
-            self.panel.pnl_sparc_trans.Enable(False)
+            # Note: we still allow mirror translation, because on some SPARCs
+            # with small mirrors, it's handy to align the mirror using the
+            # spectrometer feedback.
+            self.panel.pnl_sparc_trans.Enable(True)
             self.panel.pnl_fibaligner.Enable(True)
+        else:
+            raise ValueError("Unknown alignment mode %s." % mode)
 
         # This is blocking on the hardware => run in a separate thread
         # TODO: Probably better is that setPath returns a future (and cancel it

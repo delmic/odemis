@@ -208,6 +208,7 @@ SimSPARC: {
             1: "slit-in", # used to be called "slit"
         }
     },
+    affects: ["Spectral Camera", "Spectrometer"],
 }
 
 "Mirror Actuators": {

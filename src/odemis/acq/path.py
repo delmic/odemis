@@ -36,7 +36,6 @@ GRATING_NOT_MIRROR = ("NOTMIRROR",)  # A tuple, so that no grating position can 
 # Dict includes all the modes available and the corresponding component axis or
 # VA values
 # {Mode: (detector_needed, {role: {axis/VA: value}})}
-# TODO: have one config per microscope model
 SPARC_MODES = {'ar': ("ccd",
                 {'lens-switch': {'rx': math.radians(90)},
                  'ar-spec-selector': {'rx': 0},
@@ -237,9 +236,6 @@ class OpticalPathManager(object):
             except KeyError:
                 pass  # Mode to delete is just not there
 
-        # FIXME: Handle spectral modes for SPARC2 in a special way to
-        # distinguish integrated from dedicated. For now we just remove
-        # spectral dedicated if there is no sp-ccd component found,
         try:
             spec = self._getComponent("spectrometer")
         except LookupError:

@@ -254,10 +254,16 @@ class RepetitionStream(LiveStream):
 
             if dim is not None:
                 old_rep = self.repetition.value[dim]
-                new_phy_size = old_rep * pxs * new_size[dim] / old_size[dim]
-                new_rep_flt = new_phy_size / pxs
+                new_rep_flt = old_rep * new_size[dim] / old_size[dim]
                 new_rep_int = max(1, round(new_rep_flt))
                 pxs *= new_rep_flt / new_rep_int
+            else:
+                old_rep = self.repetition.value
+                new_rep_flt = (abs(old_rep[0] * new_size[0] / old_size[0]),
+                               abs(old_rep[1] * new_size[1] / old_size[1]))
+                new_rep_int = (max(1, round(new_rep_flt[0])),
+                               max(1, round(new_rep_flt[1])))
+                pxs *= math.sqrt(numpy.prod(new_rep_flt) / numpy.prod(new_rep_int))
 
         roi, rep, pxs = self._updateROIAndPixelSize(roi, pxs)
         # update repetition without going through the checks
@@ -416,7 +422,8 @@ class SpectrumSettingsStream(CCDSettingsStream):
         self.image.value = self.raw[0][0]
 
     # No histogram => no need to do anything to update it
-    def _histogram_thread(self):
+    @staticmethod
+    def _histogram_thread(wstream):
         pass
 
 
