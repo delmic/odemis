@@ -46,7 +46,7 @@ import wx
 
 
 PR_PREFIX = "Print-ready"
-TR_PREFIX = "Tweak-ready"
+PP_PREFIX = "Post-processing"
 BAR_PLOT_COLOUR = (0.75, 0.75, 0.75)
 SCALE_FACTOR = 4  # The factor by which we multiply the view window shape
 
@@ -137,7 +137,7 @@ class ExportController(object):
         # filepath will be None if cancelled by user
         filepath, export_format, export_type = self.ShowExportFileDialog(filepath, default_exporter)
         # get rid of the prefix before you ask for the exporter
-        if any(prefix in export_format.split(' ') for prefix in [PR_PREFIX, TR_PREFIX]):
+        if any(prefix in export_format.split(' ') for prefix in [PR_PREFIX, PP_PREFIX]):
             export_format = export_format.split(' ', 1)[1]
         exporter = get_converter(export_format)
 
@@ -1360,10 +1360,10 @@ class ExportController(object):
         for format_data in pr_formats:
             exporter = get_converter(format_data[0])
             export_formats[PR_PREFIX + " " + exporter.FORMAT] = exporter.EXTENSIONS
-        # Now for tweak-ready formats
+        # Now for post-processing formats
         for format_data in pp_formats:
             exporter = get_converter(format_data[0])
-            export_formats[TR_PREFIX + " " + exporter.FORMAT] = exporter.EXTENSIONS
+            export_formats[PP_PREFIX + " " + exporter.FORMAT] = exporter.EXTENSIONS
 
         if not export_formats:
             logging.error("No file converter found!")
