@@ -28,7 +28,7 @@ import math
 import numpy
 from odemis import model
 from odemis.acq import stream
-from odemis.dataio import png, get_converter
+from odemis.dataio import get_converter
 from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
 from odemis.gui.comp.overlay.base import Label
 from odemis.gui.util import formats_to_wildcards
@@ -49,7 +49,6 @@ PR_PREFIX = "Print-ready"
 TR_PREFIX = "Tweak-ready"
 BAR_PLOT_COLOUR = (0.75, 0.75, 0.75)
 SCALE_FACTOR = 4  # The factor by which we multiply the view window shape
-# TODO: the first of the list should be the default format (or just use last one used as default)
 
 
 class SpatialOptions(object):
@@ -128,12 +127,15 @@ class ExportController(object):
 
     def _get_export_info(self):
         # TODO create ExportConfig
-        # For now, set default to png
-        extension = png.EXTENSIONS[0]
+        # Set default to the first of the list
+        export_type = self.get_export_type(self.microscope_view)
+        formats = EXPORTERS[export_type]
+        default_exporter = get_converter(formats[0][0][0])
+        extension = default_exporter.EXTENSIONS[0]
         basename = time.strftime("%Y%m%d-%H%M%S", time.localtime())
         filepath = os.path.join(get_picture_folder(), basename + extension)
         # filepath will be None if cancelled by user
-        filepath, export_format, export_type = self.ShowExportFileDialog(filepath)
+        filepath, export_format, export_type = self.ShowExportFileDialog(filepath, default_exporter)
         # get rid of the prefix before you ask for the exporter
         if any(prefix in export_format.split(' ') for prefix in [PR_PREFIX, TR_PREFIX]):
             export_format = export_format.split(' ', 1)[1]
@@ -1274,9 +1276,10 @@ class ExportController(object):
         self.streams_data = streams_data
         self.merge_ratio = self.microscope_view.stream_tree.kwargs.get("merge", 0.5)
 
-    def ShowExportFileDialog(self, filename):
+    def ShowExportFileDialog(self, filename, default_exporter):
         """
         filename (string): full filename to propose by default
+        default_exporter (module): default exporter to be used
         return (string or None): the new filename (or the None if the user cancelled)
                 (string): the format name
                 (string): spatial, AR or spectrum
@@ -1298,24 +1301,23 @@ class ExportController(object):
                                style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
                                wildcard=wildcards)
 
-        # TODO: just default to the first format in EXPORTS[export_type]
-        # Default to PNG
-        prev_fmt = png.FORMAT
+        # just default to the first format in EXPORTS[export_type]
+        default_fmt = default_exporter.FORMAT
         try:
-            idx = formats.index(png.FORMAT)
+            idx = formats.index(default_fmt)
         except ValueError:
             idx = 0
         dialog.SetFilterIndex(idx)
 
         # Strip the extension, so that if the user changes the file format,
         # it will not have 2 extensions in a row.
-        if base.endswith(png.EXTENSIONS[0]):
-            base = base[:-len(png.EXTENSIONS[0])]
+        if base.endswith(default_exporter.EXTENSIONS[0]):
+            base = base[:-len(default_exporter.EXTENSIONS[0])]
         dialog.SetFilename(base)
 
         # Show the dialog and check whether is was accepted or cancelled
         if dialog.ShowModal() != wx.ID_OK:
-            return None, prev_fmt, export_type
+            return None, default_fmt, export_type
 
         # New location and name have been selected...
         # Store the path
@@ -1332,11 +1334,11 @@ class ExportController(object):
                 ext = extension
 
         if ext is None:
-            if fmt == prev_fmt and png.EXTENSIONS[0] in formats_to_ext[fmt]:
+            if fmt == default_fmt and default_exporter.EXTENSIONS[0] in formats_to_ext[fmt]:
                 # if the format is the same (and extension is compatible): keep
                 # the extension. This avoid changing the extension if it's not
                 # the default one.
-                ext = png.EXTENSIONS[0]
+                ext = default_exporter.EXTENSIONS[0]
             else:
                 ext = formats_to_ext[fmt][0]  # default extension
             fn += ext
