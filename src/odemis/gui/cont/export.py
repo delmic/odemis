@@ -50,6 +50,24 @@ BAR_PLOT_COLOUR = (0.75, 0.75, 0.75)
 SCALE_FACTOR = 4  # The factor by which we multiply the view window shape
 # Dict where keys are the available export types and value is a list with the
 # available exporters for this type
+# available exporters for this type
+# TODO: have two lists: print-ready vs post-processable/raw (or a boolean) format
+# and set multifile/raw as one argument.
+# TODO: use the official format names (not module names)
+# TODO: the first of the list should be the default format (or just use last one used as default)
+# TODO: merge with EXPORTER_DATA
+# class SpatialOptions(object):
+#     # Represents the options
+#     # Each VA is passed as a kwargs key to the export
+#     def __init__(self):
+#         self.interpolate = model.BooleanVA(True)
+#
+#     conf = {}  # To override the way VAs are displayed
+#
+# EXPORTERS = {"spatial": ((("PNG", SpatialOptions), ("TIFF", SpatialOptions)),
+#                          (("TIFF", SpatialRawOptions), ("Serialized TIFF", SpatialRawOptions))),
+#              "AR": ["tiff", "png", "csv"],
+#              "spectrum": ["tiff", "png", "csv"]}
 EXPORTERS = {"spatial": ["tiff", "stiff", "png"],
              "AR": ["tiff", "png", "csv"],
              "spectrum": ["tiff", "png", "csv"]}
@@ -81,6 +99,7 @@ class ExportController(object):
         self._viewports = viewports.keys()
         self.images_cache = {}
 
+        # TODO: drop this attribute, and just read tab_data.focussedView.value when needed
         # current focussed view
         self.microscope_view = None
         # subscribe to get notified about the current focused view
@@ -158,12 +177,13 @@ class ExportController(object):
         except Exception:
             logging.exception("Failed to export")
 
-    def get_export_type(self):
+    def get_export_type(self, view):
         """
-        Based on the current focussed view gives the corresponding export type
+        Based on the given view gives the corresponding export type
         return (string): spatial, AR or spectrum
         """
-        view_name = self.microscope_view.name.value
+        view_name = view.name.value
+        # TODO: just use another dict
         if view_name == 'Angle-resolved':
             export_type = 'AR'
         elif view_name == 'Spectrum plot':
@@ -192,7 +212,9 @@ class ExportController(object):
         returns DataArray: the data to be exported, either an image or raw data
 
         """
+        # TODO move 'interpolate_data' to kwargs and passed to all *_to_export_data()
         vp = self.get_viewport_by_view(self.microscope_view)
+        # TODO: do not rely on self.ClientSize, should just use
         self.ClientSize = vp.canvas.ClientSize
         if export_type == 'AR':
             exported_data = self.ar_to_export_data(raw)
@@ -288,23 +310,25 @@ class ExportController(object):
                 interpolate_data=True
             )
 
-            self.colour = conversion.hex_to_frgb(gui.SELECTION_COLOUR)
+            # TODO: don't use self., just pass as arguments
+            self.colour = conversion.hex_to_frgb(gui.SELECTION_COLOUR)  # TODO used?
             self._font_name = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT).GetFaceName()
             self.ticksize = 10
             self.tau = 2 * math.pi
             self.num_ticks = 6
-            self.create_tick_labels()
+            self.ar_create_tick_labels()
             self.draw_ar(ctx)
             ar_plot = model.DataArray(data_to_draw)
             ar_plot.metadata[model.MD_DIMS] = 'YXC'
             return ar_plot
 
-    def create_tick_labels(self):
+    def ar_create_tick_labels(self):
         # Calculate the characteristic values
         self.center_x = self.ClientSize.x / 2
         self.center_y = self.ClientSize.y / 2
         self.inner_radius = min(self.center_x, self.center_y)
         self.radius = self.inner_radius + (self.ticksize / 1.5)
+        # TODO: just return ticks
         self.ticks = []
 
         # Top middle
@@ -880,6 +904,7 @@ class ExportController(object):
             legend_ctx.stroke()
 
         # write Magnification
+        # TODO: Don't rely on a Microsoft font, just use DejaVu or something basic
         legend_ctx.select_font_face("Georgia", cairo.FONT_SLANT_NORMAL)
         legend_ctx.set_font_size(large_font)
         legend_x_pos = init_x_pos
@@ -1271,7 +1296,7 @@ class ExportController(object):
 
         # Find the available formats (and corresponding extensions) according
         # to the export type
-        export_type = self.get_export_type()
+        export_type = self.get_export_type(self.microscope_view)
         formats_to_ext = self.get_export_formats(export_type)
 
         # current filename
@@ -1284,6 +1309,7 @@ class ExportController(object):
                                style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
                                wildcard=wildcards)
 
+        # TODO: just default to the first format in EXPORTS[export_type]
         # Default to PNG
         prev_fmt = png.FORMAT
         try:
@@ -1339,12 +1365,15 @@ class ExportController(object):
 
         formats = {}
         # Look dynamically which format is available
+        # TODO: just use odemis.dataio functions
         for module_name in export_formats:
             try:
                 exporter = importlib.import_module("." + module_name, "odemis.dataio")
             except Exception:
                 logging.info("Skipping exporter %s, which failed to load", module_name)
                 continue  # module cannot be loaded
+            # TODO: need a way to override the name of the format to something
+            # more obvious like: Print-ready PNG, or Post-processable TIFF.
             formats[exporter.FORMAT] = exporter.EXTENSIONS
 
         if not formats:
@@ -1365,6 +1394,7 @@ class ExportController(object):
         export_formats = EXPORTERS[export_type]
 
         # Look dynamically which format is available
+        # TODO: just use odemis.dataio functions
         for module_name in export_formats:
             try:
                 converter = importlib.import_module("." + module_name, "odemis.dataio")

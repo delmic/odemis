@@ -38,7 +38,7 @@ import os
 #  * read_thumbnail (callable): read the thumbnail(s) of a file
 #  if it doesn't support writing, then is has no .export(), and if it doesn't
 #  support reading, then it has not read_data().
-__all__ = ["tiff", "stiff", "hdf5", "png"]
+__all__ = ["tiff", "stiff", "hdf5", "png", "csv"]
 
 
 def get_available_formats(mode=os.O_RDWR, allowlossy=False):
