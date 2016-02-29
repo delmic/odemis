@@ -23,13 +23,12 @@ This file is part of Odemis.
 from __future__ import division
 
 import cairo
-import importlib
 import logging
 import math
 import numpy
 from odemis import model
 from odemis.acq import stream
-from odemis.dataio import png
+from odemis.dataio import png, get_converter
 from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
 from odemis.gui.comp.overlay.base import Label
 from odemis.gui.util import formats_to_wildcards
@@ -46,38 +45,30 @@ import time
 import wx
 
 
+PR_PREFIX = "Print-ready"
+TR_PREFIX = "Tweak-ready"
 BAR_PLOT_COLOUR = (0.75, 0.75, 0.75)
 SCALE_FACTOR = 4  # The factor by which we multiply the view window shape
+# TODO: the first of the list should be the default format (or just use last one used as default)
+
+
+class SpatialOptions(object):
+    # Represents the options
+    # Each VA is passed as a kwargs key to the export
+    def __init__(self):
+        self.interpolate = model.BooleanVA(True)
+
+    conf = {}  # To override the way VAs are displayed
+
+
 # Dict where keys are the available export types and value is a list with the
 # available exporters for this type
-# available exporters for this type
-# TODO: have two lists: print-ready vs post-processable/raw (or a boolean) format
-# and set multifile/raw as one argument.
-# TODO: use the official format names (not module names)
-# TODO: the first of the list should be the default format (or just use last one used as default)
-# TODO: merge with EXPORTER_DATA
-# class SpatialOptions(object):
-#     # Represents the options
-#     # Each VA is passed as a kwargs key to the export
-#     def __init__(self):
-#         self.interpolate = model.BooleanVA(True)
-#
-#     conf = {}  # To override the way VAs are displayed
-#
-# EXPORTERS = {"spatial": ((("PNG", SpatialOptions), ("TIFF", SpatialOptions)),
-#                          (("TIFF", SpatialRawOptions), ("Serialized TIFF", SpatialRawOptions))),
-#              "AR": ["tiff", "png", "csv"],
-#              "spectrum": ["tiff", "png", "csv"]}
-EXPORTERS = {"spatial": ["tiff", "stiff", "png"],
-             "AR": ["tiff", "png", "csv"],
-             "spectrum": ["tiff", "png", "csv"]}
-
-# Dict where keys are the available export formats and values are the settings
-# (multifile, raw) to be set and options to be asked to the user (interpolate_data)
-EXPORTER_DATA = {"TIFF": ((False, False), (True)),
-                 "Serialized TIFF": ((True, True), (True)),
-                 "PNG": ((False, False), (True)),
-                 "CSV": ((False, True), (False))}
+EXPORTERS = {"spatial": ([("PNG", SpatialOptions), ("TIFF", SpatialOptions)],
+                         [("Serialized TIFF", SpatialOptions)]),
+             "AR": ([("PNG", None), ("TIFF", None)],
+                    [("CSV", None)]),
+             "spectrum": ([("PNG", None), ("TIFF", None)],
+                          [("CSV", None)])}
 
 
 class ExportController(object):
@@ -143,7 +134,10 @@ class ExportController(object):
         filepath = os.path.join(get_picture_folder(), basename + extension)
         # filepath will be None if cancelled by user
         filepath, export_format, export_type = self.ShowExportFileDialog(filepath)
-        exporter = self.get_converter(export_format, export_type)
+        # get rid of the prefix before you ask for the exporter
+        if any(prefix in export_format.split(' ') for prefix in [PR_PREFIX, TR_PREFIX]):
+            export_format = export_format.split(' ', 1)[1]
+        exporter = get_converter(export_format)
 
         return filepath, exporter, export_format, export_type
 
@@ -164,8 +158,8 @@ class ExportController(object):
         try:
             # When exporting using the menu Export button the options to be
             # set by the user are ignored
-            (multifile, raw), _ = EXPORTER_DATA[export_format]
-            exported_data = self.export(export_type, multifile, raw)
+            raw = export_format in [fmt[0] for fmt in EXPORTERS[export_type][1]]
+            exported_data = self.export(export_type, raw)
             Message.show_message(self._main_frame,
                                  "Exported in %s" % (filepath,),
                                  timeout=3
@@ -200,12 +194,11 @@ class ExportController(object):
         """
         self.microscope_view = view
 
-    def export(self, export_type, multifile=False, raw=False, interpolate_data=True):
+    def export(self, export_type, raw=False, interpolate_data=True):
         """
         Returns the data to be exported with respect to the settings and options.
 
         :param export_type (string): spatial, AR or spectrum
-        :param multifile (boolean): multifile format if True
         :param raw (boolean): raw data format if True
         :param interpolate_data (boolean): apply interpolation on data if True
 
@@ -228,7 +221,7 @@ class ExportController(object):
             if not self.images:
                 return
             images = self.images
-            exported_data = self.images_to_export_data(images, multifile, not raw, interpolate_data)
+            exported_data = self.images_to_export_data(images, not raw, interpolate_data)
         return exported_data
 
     def get_viewport_by_view(self, view):
@@ -730,7 +723,7 @@ class ExportController(object):
         ctx.close_path()
         ctx.fill()
 
-    def images_to_export_data(self, images, multifile=False, rgb=True, interpolate_data=True):
+    def images_to_export_data(self, images, rgb=True, interpolate_data=True):
         # The list of images to export
         data_to_export = []
 
@@ -777,7 +770,7 @@ class ExportController(object):
         # For every image, except the last
         i = 0
         for i, im in enumerate(images):
-            if im.metadata['blend_mode'] == BLEND_SCREEN or multifile or (not rgb):
+            if im.metadata['blend_mode'] == BLEND_SCREEN or (not rgb):
                 # No transparency in case of "raw" export
                 merge_ratio = 1.0
             else:
@@ -795,7 +788,7 @@ class ExportController(object):
                 blend_mode=im.metadata['blend_mode'],
                 interpolate_data=interpolate_data
             )
-            if multifile:
+            if not rgb:
                 # Create legend
                 legend_to_draw = numpy.zeros((n * (self._buffer_size[1] // 24) + (self._buffer_size[1] // 12), self._buffer_size[0], 4), dtype=numpy.uint8)
                 legend_surface = cairo.ImageSurface.create_for_data(
@@ -803,24 +796,20 @@ class ExportController(object):
                 legend_ctx = cairo.Context(legend_surface)
                 self._draw_legend(legend_ctx, images + [last_image], self._buffer_size, view_mpp, mag,
                                   hfw, bar_width, actual_width, last_image.metadata['date'], self.streams_data, im.metadata['name'])
-                if not rgb:
-                    new_data_to_draw = numpy.zeros((data_to_draw.shape[0], data_to_draw.shape[1]), dtype=numpy.uint32)
-                    new_data_to_draw[:, :] = numpy.left_shift(data_to_draw[:, :, 2], 8, dtype=numpy.uint32) | data_to_draw[:, :, 1]
-                    new_data_to_draw[:, :] = new_data_to_draw[:, :] | numpy.left_shift(data_to_draw[:, :, 0], 16, dtype=numpy.uint32)
-                    new_data_to_draw[:, :] = new_data_to_draw[:, :] | numpy.left_shift(data_to_draw[:, :, 3], 24, dtype=numpy.uint32)
-                    new_data_to_draw = new_data_to_draw.astype(self._min_type)
-                    # Turn legend to grayscale
-                    new_legend_to_draw = legend_to_draw[:, :, 0] + legend_to_draw[:, :, 1] + legend_to_draw[:, :, 2]
-                    new_legend_to_draw = new_legend_to_draw.astype(self._min_type)
-                    new_legend_to_draw = numpy.where(new_legend_to_draw == 0, numpy.min(new_data_to_draw), numpy.max(new_data_to_draw))
-                    data_with_legend = numpy.append(new_data_to_draw, new_legend_to_draw, axis=0)
-                    # Clip background to baseline
-                    baseline = self.streams_data[im.metadata['name']][-1]
-                    data_with_legend = numpy.clip(data_with_legend, baseline, numpy.max(new_data_to_draw))
-                else:
-                    data_with_legend = numpy.append(data_to_draw, legend_to_draw, axis=0)
-                    data_with_legend[:, :, [2, 0]] = data_with_legend[:, :, [0, 2]]
-                    im.metadata[model.MD_DIMS] = 'YXC'
+
+                new_data_to_draw = numpy.zeros((data_to_draw.shape[0], data_to_draw.shape[1]), dtype=numpy.uint32)
+                new_data_to_draw[:, :] = numpy.left_shift(data_to_draw[:, :, 2], 8, dtype=numpy.uint32) | data_to_draw[:, :, 1]
+                new_data_to_draw[:, :] = new_data_to_draw[:, :] | numpy.left_shift(data_to_draw[:, :, 0], 16, dtype=numpy.uint32)
+                new_data_to_draw[:, :] = new_data_to_draw[:, :] | numpy.left_shift(data_to_draw[:, :, 3], 24, dtype=numpy.uint32)
+                new_data_to_draw = new_data_to_draw.astype(self._min_type)
+                # Turn legend to grayscale
+                new_legend_to_draw = legend_to_draw[:, :, 0] + legend_to_draw[:, :, 1] + legend_to_draw[:, :, 2]
+                new_legend_to_draw = new_legend_to_draw.astype(self._min_type)
+                new_legend_to_draw = numpy.where(new_legend_to_draw == 0, numpy.min(new_data_to_draw), numpy.max(new_data_to_draw))
+                data_with_legend = numpy.append(new_data_to_draw, new_legend_to_draw, axis=0)
+                # Clip background to baseline
+                baseline = self.streams_data[im.metadata['name']][-1]
+                data_with_legend = numpy.clip(data_with_legend, baseline, numpy.max(new_data_to_draw))
                 data_to_export.append(model.DataArray(data_with_legend, im.metadata))
 
                 data_to_draw = numpy.zeros((max_res[0], max_res[1], 4), dtype=numpy.uint8)
@@ -828,7 +817,7 @@ class ExportController(object):
                     data_to_draw, cairo.FORMAT_ARGB32, max_res[1], max_res[0])
                 ctx = cairo.Context(surface)
 
-        if not images or last_image.metadata['blend_mode'] == BLEND_SCREEN or multifile or (not rgb):
+        if not images or last_image.metadata['blend_mode'] == BLEND_SCREEN or (not rgb):
             merge_ratio = 1.0
         else:
             merge_ratio = self.merge_ratio
@@ -851,7 +840,7 @@ class ExportController(object):
             legend_to_draw, cairo.FORMAT_ARGB32, self._buffer_size[0], n * (self._buffer_size[1] // 24) + (self._buffer_size[1] // 12))
         legend_ctx = cairo.Context(legend_surface)
         self._draw_legend(legend_ctx, images + [last_image], self._buffer_size, view_mpp, mag,
-                          hfw, bar_width, actual_width, last_image.metadata['date'], self.streams_data, last_image.metadata['name'] if multifile else None)
+                          hfw, bar_width, actual_width, last_image.metadata['date'], self.streams_data, last_image.metadata['name'] if (not rgb) else None)
         if not rgb:
             new_data_to_draw = numpy.zeros((data_to_draw.shape[0], data_to_draw.shape[1]), dtype=numpy.uint32)
             new_data_to_draw[:, :] = numpy.left_shift(data_to_draw[:, :, 2], 8, dtype=numpy.uint32) | data_to_draw[:, :, 1]
@@ -1359,50 +1348,22 @@ class ExportController(object):
         Find the available file formats for the given export_type
         export_type (string): spatial, AR or spectrum
         return (dict string -> list of strings): name of each format -> list of
-            extensions
+            extensions.
         """
-        export_formats = EXPORTERS[export_type]
+        pr_formats, pp_formats = EXPORTERS[export_type]
 
-        formats = {}
+        export_formats = {}
         # Look dynamically which format is available
-        # TODO: just use odemis.dataio functions
-        for module_name in export_formats:
-            try:
-                exporter = importlib.import_module("." + module_name, "odemis.dataio")
-            except Exception:
-                logging.info("Skipping exporter %s, which failed to load", module_name)
-                continue  # module cannot be loaded
-            # TODO: need a way to override the name of the format to something
-            # more obvious like: Print-ready PNG, or Post-processable TIFF.
-            formats[exporter.FORMAT] = exporter.EXTENSIONS
+        # First the print-ready formats
+        for format_data in pr_formats:
+            exporter = get_converter(format_data[0])
+            export_formats[PR_PREFIX + " " + exporter.FORMAT] = exporter.EXTENSIONS
+        # Now for tweak-ready formats
+        for format_data in pp_formats:
+            exporter = get_converter(format_data[0])
+            export_formats[TR_PREFIX + " " + exporter.FORMAT] = exporter.EXTENSIONS
 
-        if not formats:
+        if not export_formats:
             logging.error("No file converter found!")
 
-        return formats
-
-    def get_converter(self, fmt, export_type):
-        """ Return the converter corresponding to a format name and export type
-
-        :param fmt: (string) the format name
-        :param export_type: (string) spatial, AR or spectrum
-        :returns: (module) the converter
-
-        :raises ValueError: in case no exporter can be found
-
-        """
-        export_formats = EXPORTERS[export_type]
-
-        # Look dynamically which format is available
-        # TODO: just use odemis.dataio functions
-        for module_name in export_formats:
-            try:
-                converter = importlib.import_module("." + module_name, "odemis.dataio")
-            except (ValueError, TypeError, ImportError):
-                logging.info("Import of converter %s failed", module_name, exc_info=True)
-                continue  # module cannot be loaded
-
-            if fmt == converter.FORMAT:
-                return converter
-
-        raise ValueError("No converter for format %s found" % fmt)
+        return export_formats
