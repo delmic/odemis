@@ -46,7 +46,7 @@ import wx
 
 
 PR_PREFIX = "Print-ready"
-TR_PREFIX = "Tweak-ready"
+PP_PREFIX = "Post-processing"
 BAR_PLOT_COLOUR = (0.75, 0.75, 0.75)
 SCALE_FACTOR = 4  # The factor by which we multiply the view window shape
 
@@ -89,12 +89,6 @@ class ExportController(object):
         self._viewports = viewports.keys()
         self.images_cache = {}
 
-        # TODO: drop this attribute, and just read tab_data.focussedView.value when needed
-        # current focussed view
-        self.microscope_view = None
-        # subscribe to get notified about the current focused view
-        tab_data.focussedView.subscribe(self.on_focussed_view, init=True)
-
         wx.EVT_MENU(self._main_frame,
                     self._main_frame.menu_item_export_as.GetId(),
                     self.start_export_as_viewport)
@@ -128,7 +122,7 @@ class ExportController(object):
     def _get_export_info(self):
         # TODO create ExportConfig
         # Set default to the first of the list
-        export_type = self.get_export_type(self.microscope_view)
+        export_type = self.get_export_type(self._data_model.focussedView.value)
         formats = EXPORTERS[export_type]
         default_exporter = get_converter(formats[0][0][0])
         extension = default_exporter.EXTENSIONS[0]
@@ -137,7 +131,7 @@ class ExportController(object):
         # filepath will be None if cancelled by user
         filepath, export_format, export_type = self.ShowExportFileDialog(filepath, default_exporter)
         # get rid of the prefix before you ask for the exporter
-        if any(prefix in export_format.split(' ') for prefix in [PR_PREFIX, TR_PREFIX]):
+        if any(prefix in export_format.split(' ') for prefix in [PR_PREFIX, PP_PREFIX]):
             export_format = export_format.split(' ', 1)[1]
         exporter = get_converter(export_format)
 
@@ -188,14 +182,6 @@ class ExportController(object):
             export_type = 'spatial'
         return export_type
 
-    def on_focussed_view(self, view):
-        """ Called when another focussed view changes.
-
-        :param view: (MicroscopeView) The newly focussed view
-
-        """
-        self.microscope_view = view
-
     def export(self, export_type, raw=False, interpolate_data=True):
         """
         Returns the data to be exported with respect to the settings and options.
@@ -208,7 +194,7 @@ class ExportController(object):
 
         """
         # TODO move 'interpolate_data' to kwargs and passed to all *_to_export_data()
-        vp = self.get_viewport_by_view(self.microscope_view)
+        vp = self.get_viewport_by_view(self._data_model.focussedView.value)
         # TODO: do not rely on self.ClientSize, should just use
         self.ClientSize = vp.canvas.ClientSize
         if export_type == 'AR':
@@ -268,7 +254,7 @@ class ExportController(object):
         self.scale = min(ch / h, cw / w)  # pick the dimension which is shortest
 
     def ar_to_export_data(self, raw=False):
-        streams = self.microscope_view.getStreams()
+        streams = self._data_model.focussedView.value.getStreams()
 
         if raw:
             # TODO implement raw export
@@ -730,11 +716,11 @@ class ExportController(object):
         data_to_export = []
 
         # meters per pixel for the focussed window
-        view_mpp = self.microscope_view.mpp.value
-        vp = self.get_viewport_by_view(self.microscope_view)
+        view_mpp = self._data_model.focussedView.value.mpp.value
+        vp = self.get_viewport_by_view(self._data_model.focussedView.value)
         mpp_screen = 1e-3 * wx.DisplaySizeMM()[0] / wx.DisplaySize()[0]
-        mag = mpp_screen / self.microscope_view.mpp.value
-        hfw = self.microscope_view.mpp.value * vp.GetClientSize()[0]
+        mag = mpp_screen / self._data_model.focussedView.value.mpp.value
+        hfw = self._data_model.focussedView.value.mpp.value * vp.GetClientSize()[0]
 
         # Find min pixel size
         min_pxs = min([im.metadata['dc_scale'] for im in images])
@@ -756,10 +742,10 @@ class ExportController(object):
         ctx = cairo.Context(surface)
 
         # The buffer center is the same as the view window's center
-        self._buffer_center = tuple(self.microscope_view.view_pos.value)
+        self._buffer_center = tuple(self._data_model.focussedView.value.view_pos.value)
         self._buffer_scale = (view_mpp / SCALE_FACTOR,
                               view_mpp / SCALE_FACTOR)
-        vp = self.get_viewport_by_view(self.microscope_view)
+        vp = self.get_viewport_by_view(self._data_model.focussedView.value)
         self._buffer_size = max_res[1], max_res[0]
 
         # scale bar details
@@ -1141,7 +1127,7 @@ class ExportController(object):
 
         """
 
-        streams = self.microscope_view.getStreams()
+        streams = self._data_model.focussedView.value.getStreams()
         images_opt = []
         images_spc = []
         images_std = []
@@ -1274,7 +1260,7 @@ class ExportController(object):
         self.images_cache = im_cache
         self.set_images(ims)
         self.streams_data = streams_data
-        self.merge_ratio = self.microscope_view.stream_tree.kwargs.get("merge", 0.5)
+        self.merge_ratio = self._data_model.focussedView.value.stream_tree.kwargs.get("merge", 0.5)
 
     def ShowExportFileDialog(self, filename, default_exporter):
         """
@@ -1288,7 +1274,7 @@ class ExportController(object):
 
         # Find the available formats (and corresponding extensions) according
         # to the export type
-        export_type = self.get_export_type(self.microscope_view)
+        export_type = self.get_export_type(self._data_model.focussedView.value)
         formats_to_ext = self.get_export_formats(export_type)
 
         # current filename
@@ -1360,10 +1346,10 @@ class ExportController(object):
         for format_data in pr_formats:
             exporter = get_converter(format_data[0])
             export_formats[PR_PREFIX + " " + exporter.FORMAT] = exporter.EXTENSIONS
-        # Now for tweak-ready formats
+        # Now for post-processing formats
         for format_data in pp_formats:
             exporter = get_converter(format_data[0])
-            export_formats[TR_PREFIX + " " + exporter.FORMAT] = exporter.EXTENSIONS
+            export_formats[PP_PREFIX + " " + exporter.FORMAT] = exporter.EXTENSIONS
 
         if not export_formats:
             logging.error("No file converter found!")
