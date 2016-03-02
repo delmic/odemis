@@ -22,6 +22,10 @@
 """
 
 from __future__ import division
+
+import os
+import sys
+
 from odemis.gui import BG_COLOUR_NOTIFY
 from odemis.gui.util import call_in_wx_main
 import wx
@@ -78,6 +82,11 @@ class Message(wx.PopupTransientWindow):
 
     @call_in_wx_main
     def construct_message(self, title, message, timeout, bgcolour):
+
+        # FIXME: Work-around for exceptions thrown under Windows
+        # TODO: Rework entire pop-up message method/class
+        if os.name == 'nt' or getattr(sys, 'frozen', False):
+            return
 
         self.panel.SetBackgroundColour(bgcolour)
 
