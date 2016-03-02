@@ -319,15 +319,13 @@ class OdemisGUIApp(wx.App):
 
     @call_in_wx_main
     def on_debug_va(self, enabled):
-        """ This method (un)sets the application into debug mode, setting the log level and
-        opening the log panel. """
-
+        """
+        Sets (or unset) the application into "debug mode", opening the log panel
+        """
         self.main_frame.pnl_log.Show(enabled)
 
         l = logging.getLogger()
         if enabled:
-            self.log_level = l.getEffectiveLevel()
-            l.setLevel(logging.DEBUG)
             for tab in self.tab_controller.get_tabs():
                 if hasattr(tab.panel, 'btn_log'):
                     tab.panel.btn_log.Hide()
@@ -337,7 +335,6 @@ class OdemisGUIApp(wx.App):
             for tab in self.tab_controller.get_tabs():
                 if hasattr(tab.panel, 'btn_log'):
                     tab.panel.btn_log.Show()
-            l.setLevel(self.log_level)
         self.main_frame.Layout()
 
     @call_in_wx_main

@@ -419,5 +419,11 @@
       </object>
       <label>Extra</label>
     </object>
+    <object class="wxMenu">
+      <label>Help</label>
+      <object class="wxMenuItem">
+        <label>About...</label>
+      </object>
+    </object>
   </object>
 </resource>

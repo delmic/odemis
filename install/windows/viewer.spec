@@ -49,6 +49,15 @@ def get_cairo_dlls():
     raise ImportError("Could not find Cairo files!")
 
 
+def get_dataio_imports():
+    import odemis.dataio
+
+    imports = []
+    for module in odemis.dataio.__all__:
+        imports.append("odemis.dataio.%s" % module)
+    return imports
+
+
 def get_version():
     """ Write the current version of Odemis to a txt file and tell PyInstaller where to find it """
     import odemis
@@ -117,8 +126,7 @@ a = Analysis(
     datas=None,
     hiddenimports=[
         'cairo',
-        'odemis.dataio.*',
-    ],
+    ] + get_dataio_imports(),
     hookspath=[],
     runtime_hooks=[],
     excludes=[],

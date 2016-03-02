@@ -30,12 +30,13 @@ from __future__ import division
 
 import glob
 import logging
+from odemis import model
 import os
 import shutil
 import subprocess
 import sys
 import threading
-from time import sleep
+import time
 
 
 logging.getLogger().setLevel(logging.INFO)
@@ -95,14 +96,61 @@ def test_sleep(t):
         for s in range(t):
             sys.stdout.write("  Sleeping for {0} seconds...\r".format(t - s))
             sys.stdout.flush()
-            sleep(1)
+            time.sleep(1)
         print
     except KeyboardInterrupt:
         print "\n  Sleep interrupted..."
 
 
+def wait_backend_ready():
+    """ Wait until the backend is ready of clearly failed
+    return (bool): True if the backend is ready, False if it failed to start
+    """
+    left = 30  # s
+
+    tstart = time.time()
+    # First, wait a bit to make sure the backend is started
+    sys.stdout.write("  Sleeping for {0} seconds...\r".format(left))
+    time.sleep(5)
+
+    left -= 5
+    try:
+        model._core._microscope = None  # force reset of the microscope
+        microscope = model.getMicroscope()
+        nghosts = len(microscope.ghosts.value) # Components still to start
+    except Exception:
+        logging.error("Back-end unreachable")
+        return False
+
+    try:
+        while left > 0:
+            left -= 1
+            sys.stdout.flush()
+            sys.stdout.write("  Sleeping for {0} seconds...\r".format(left))
+            time.sleep(1)
+
+            # TODO: detect the backend stopped
+            prev_nghosts = nghosts
+            nghosts = len(microscope.ghosts.value)
+            if nghosts == 0:
+                break  # Everything is started
+            elif nghosts < prev_nghosts:
+                # Allow to wait 3 s more per component started
+                left += 3 * (prev_nghosts - nghosts)
+
+        print
+        logging.info("Back-end took %d s to start", time.time() - tstart)
+    except KeyboardInterrupt:
+        print "\n  Sleep interrupted..."
+
+    return True
+
+
 def copy_log(log_in_path, log_out_name):
     """ Copy log_in to log_out for later inspection """
+    if not os.path.isfile(log_in_path):
+        logging.info("No logfile %s present", log_in_path)
+        return None
     log_out_path = os.path.join('/tmp', log_out_name)
     logging.debug("Copying log %s to %s", log_in_path, log_out_path)
     shutil.copy(log_in_path, log_out_path)
@@ -136,17 +184,17 @@ def test_config(sim_conf):
     start.start()
 
     # Wait for the back end to load
-    # TODO: make it faster, by looking how util.test starts the backend
-    test_sleep(30)
+    if not wait_backend_ready():
+        gui = None
+    else:
+        logging.info("Starting %s GUI", sim_conf)
+        gui = OdemisThread("GUI %s" % sim_conf_fn, CMD_GUI)
+        gui.start()
 
-    logging.info("Starting %s GUI", sim_conf)
-    gui = OdemisThread("GUI %s" % sim_conf_fn, CMD_GUI)
-    gui.start()
+        # Wait for the GUI to load
+        test_sleep(10)
 
-    # Wait for the GUI to load
-    test_sleep(10)
-
-    # TODO: do typical "stuff" in the GUI (based on the microscope type)
+        # TODO: do typical "stuff" in the GUI (based on the microscope type)
 
     logging.info("Stopping %s", sim_conf)
     stop = OdemisThread("Stop %s" % sim_conf_fn, CMD_STOP)
@@ -166,25 +214,28 @@ def test_config(sim_conf):
     try:
         if start.returncode != 0:  # 'ok' return code
             logging.error("Backend failed to start, with return code %d", start.returncode)
-            passed = False
-        elif gui.returncode != 143:  # SIGTERM return code
-            if gui.returncode == 255:
-                logging.warning("Back-end might have not finish loading before the GUI was started")
-            logging.error("GUI failed to start, with return code %d", gui.returncode)
-            passed = False
-        else:
+            return False
+        elif dlog_path:
             # TODO: make error/exception detection in log files more intelligent?
+            # TODO: backend always start with an "ERROR" from Pyro, trying to connect to existing backend
+            # TODO: differentiate errors happening after asking to stop the back-end
             odemisd_log = open(dlog_path).read()
             for lbl in ERROR_TRIGGER:
                 if lbl in odemisd_log:
-                    logging.error("%s found in back-end log of %s", lbl, sim_conf_fn)
+                    logging.error("Found %d %s in back-end log of %s, see %s",
+                                  odemisd_log.count(lbl), lbl, sim_conf_fn, dlog_path)
                     passed = False
-                    break
 
+        if gui and gui.returncode != 143:  # SIGTERM return code
+            if gui.returncode == 255:
+                logging.warning("Back-end might have not finish loading before the GUI was started")
+            logging.error("GUI failed to start, with return code %d", gui.returncode)
+            return False
+        elif guilog_path:
             gui_log = open(guilog_path).read()
             for lbl in ERROR_TRIGGER:
                 if lbl in gui_log:
-                    logging.error("%s found in GUI log of %s", lbl, sim_conf_fn)
+                    logging.error("%s found in GUI log of %s, see %s", lbl, sim_conf_fn, guilog_path)
                     passed = False
                     break
     finally:

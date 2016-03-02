@@ -358,11 +358,12 @@ class Shamrock(model.Actuator):
                     except Exception:
                         logging.exception("Failed to parse bands %s", bands)
                         raise
-                # If the current position is not among the known positions =>
-                # add this position
-                b = self.GetFilter()
-                if b not in bands:
-                    bands[b] = self.GetFilterInfo(b)
+
+                    # If the current position is not among the known positions =>
+                    # add this position
+                    b = self.GetFilter()
+                    if b not in bands:
+                        bands[b] = self.GetFilterInfo(b)
 
                 axes["band"] = model.Axis(choices=bands)
                 logging.info("Filter wheel added as 'band'")

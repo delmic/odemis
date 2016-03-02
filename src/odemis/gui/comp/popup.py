@@ -22,6 +22,10 @@
 """
 
 from __future__ import division
+
+import os
+import sys
+
 from odemis.gui import BG_COLOUR_NOTIFY
 from odemis.gui.util import call_in_wx_main
 import wx
@@ -62,6 +66,7 @@ class Message(wx.PopupTransientWindow):
         self.panel.SetSizer(self.sizer)
 
     @classmethod
+    @call_in_wx_main
     def show_message(cls, parent, title, message=None, timeout=0.5, bgcolour=BG_COLOUR_NOTIFY):
         """ Show a small message popup
 
@@ -78,7 +83,6 @@ class Message(wx.PopupTransientWindow):
 
     @call_in_wx_main
     def construct_message(self, title, message, timeout, bgcolour):
-
         self.panel.SetBackgroundColour(bgcolour)
 
         self.title_txt.SetLabel(title)

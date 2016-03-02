@@ -145,23 +145,24 @@ from __future__ import division
 
 from abc import ABCMeta, abstractmethod
 import cairo
+from decorator import decorator
 import logging
 import math
-import os
-import wx
-import wx.lib.wxcairo as wxcairo
-
-from decorator import decorator
-
 from odemis import util
 from odemis.gui import BLEND_DEFAULT, BLEND_SCREEN, BufferSizeEvent
-from odemis.gui.evt import EVT_KNOB_ROTATE, EVT_KNOB_PRESS
 from odemis.gui.comp.overlay.base import WorldOverlay, ViewOverlay
+from odemis.gui.evt import EVT_KNOB_ROTATE, EVT_KNOB_PRESS
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.img import add_alpha_byte, apply_rotation, apply_shear, apply_flip
 from odemis.util import intersect
 from odemis.util.conversion import wxcol_to_frgb
+import os
+import sys
+import wx
+
 import odemis.gui.img.data as imgdata
+import wx.lib.wxcairo as wxcairo
+
 
 # Special abilities that a canvas might possess
 CAN_DRAG = 1    # Content can be dragged
@@ -223,6 +224,12 @@ class BufferedCanvas(wx.Panel):
         # The main cursor is the default cursor when the mouse hovers over the canvas
         self.default_cursor = wx.STANDARD_CURSOR
         self.dynamic_cursor = None
+        # This is ugly, but there is no official "drag" cursor, and the best fitting
+        # one depends on the OS.
+        if sys.platform.startswith("linux"):
+            self._drag_cursor = wx.StockCursor(wx.CURSOR_SIZENESW)
+        else:
+            self._drag_cursor = wx.StockCursor(wx.CURSOR_SIZING)
 
         # Event Biding
 
@@ -1370,7 +1377,7 @@ class DraggableCanvas(BitmapCanvas):
 
         # Ignore the click if we're already dragging
         if CAN_DRAG in self.abilities and not self.dragging:
-            self.set_dynamic_cursor(wx.CURSOR_SIZENESW)
+            self.set_dynamic_cursor(self._drag_cursor)
 
             # Fixme: only go to drag mode if the mouse moves before a mouse up?
             self._ldragging = True
@@ -1770,7 +1777,8 @@ class PlotCanvas(BufferedCanvas):
                         raise ValueError("The horizontal data should be sorted.")
             except ValueError:
                 # Try to display the data any way
-                logging.exception("Horizontal data is incorrect, will drop it.")
+                logging.exception("Horizontal data is incorrect, will drop it. Was: %s",
+                                  [d[0] for d in data])
                 data = [(i, d[1]) for i, d in enumerate(data)]
                 unit_x = None
 
