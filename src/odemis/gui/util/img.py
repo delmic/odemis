@@ -1029,7 +1029,7 @@ def draw_export_legend(legend_ctx, images, buffer_size, mpp, mag=None, hfw=None,
 
     # write Magnification
     # TODO: Don't rely on a Microsoft font, just use DejaVu or something basic
-    legend_ctx.select_font_face("Georgia", cairo.FONT_SLANT_NORMAL)
+    legend_ctx.select_font_face("Sans", cairo.FONT_SLANT_NORMAL)
     legend_ctx.set_font_size(large_font)
     legend_x_pos = init_x_pos
     legend_y_pos = middle_part * big_cell_height
@@ -1159,7 +1159,7 @@ def get_ordered_images(streams, rgb=True):
         # metadata useful for the legend
         stream_data = []
         if data_raw.metadata.get(model.MD_EXP_TIME, None):
-            stream_data.append(u"Exp. time: %s" % units.readable_str(data_raw.metadata[model.MD_EXP_TIME], "s"))
+            stream_data.append(u"Exp. time: %s" % units.readable_str(data_raw.metadata[model.MD_EXP_TIME], "s", sig=3))
         if data_raw.metadata.get(model.MD_LIGHT_POWER, None):
             stream_data.append(units.readable_str(data_raw.metadata[model.MD_LIGHT_POWER], "W", sig=3))
         if data_raw.metadata.get(model.MD_EBEAM_VOLTAGE, None):

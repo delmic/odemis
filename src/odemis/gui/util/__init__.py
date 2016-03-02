@@ -177,7 +177,7 @@ def get_picture_folder():
     return os.getcwd()
 
 
-def formats_to_wildcards(formats2ext, include_all=False, include_any=False):
+def formats_to_wildcards(formats2ext, include_all=False, include_any=False, suffix=" files"):
     """Convert formats into wildcards string compatible with wx.FileDialog()
 
     formats2ext (dict (unicodes -> list of unicodes)): format names and lists of
@@ -192,7 +192,7 @@ def formats_to_wildcards(formats2ext, include_all=False, include_any=False):
     wildcards = []
     for fmt, extensions in formats2ext.items():
         ext_wildcards = u";".join([u"*" + e for e in extensions])
-        wildcard = u"%s files (%s)|%s" % (fmt, ext_wildcards, ext_wildcards)
+        wildcard = u"%s%s (%s)|%s" % (fmt, suffix, ext_wildcards, ext_wildcards)
         formats.append(fmt)
         wildcards.append(wildcard)
 

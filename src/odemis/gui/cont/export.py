@@ -231,7 +231,7 @@ class ExportController(object):
 
         # current filename
         path, base = os.path.split(filename)
-        wildcards, formats = formats_to_wildcards(formats_to_ext)
+        wildcards, formats = formats_to_wildcards(formats_to_ext, suffix="")
         dialog = wx.FileDialog(self._main_frame,
                                message="Choose a filename and destination",
                                defaultDir=path,
