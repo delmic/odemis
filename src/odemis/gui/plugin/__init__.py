@@ -63,6 +63,9 @@ class Plugin(object):
         callback (callable): function to call when that entry is selected.
         raise ValueError: If the entry doesn't have a group or a name
         """
+        # TODO: have a way to disable the menu on some conditions
+        # Either return MenuItem (but cannot be call_in_wx_main anymore)
+        # or just pass a list of tabs where the menu is enabled.
         main_frame = self.main_app.main_frame
 
         # Split the entry into groups and entry name
@@ -105,6 +108,7 @@ class Plugin(object):
 
             curr_group = sub_group
 
+        # TODO: if adding for the first time to standard menu, first add a separator
         # Add the menu item
         menu_item = curr_group.Append(wx.ID_ANY, path[-1])
 
