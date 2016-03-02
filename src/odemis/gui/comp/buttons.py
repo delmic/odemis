@@ -559,15 +559,20 @@ class ImageStateButton(ImageToggleButtonImageButton):
         else:
             self.state += 1
         self.nextState = self.state
-        self.CaptureMouse()
+        if self.HasCapture():
+            # It seems that sometimes the capture is not released, at least
+            # don't go too crazy in such case
+            logging.warning("Mouse was already captured on left down")
+        else:
+            self.CaptureMouse()
         self.SetFocus()
         self.Refresh()
 
     def OnLeftUp(self, event):
-        if not self.IsEnabled() or not self.HasCapture():
-            return
         if self.HasCapture():
             self.ReleaseMouse()
+            if not self.IsEnabled():
+                return
             self.Refresh()
             if self.up != self.saveUp:
                 self.Notify()
@@ -641,7 +646,12 @@ class GraphicRadioButton(ImageTextToggleButton):
             return
         self.saveUp = self.up
         self.up = not self.up
-        self.CaptureMouse()
+        if self.HasCapture():
+            # It seems that sometimes the capture is not released, at least
+            # don't go too crazy in such case
+            logging.warning("Mouse was already captured on left down")
+        else:
+            self.CaptureMouse()
         self.SetFocus()
         self.Refresh()
 
