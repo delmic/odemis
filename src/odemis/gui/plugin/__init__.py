@@ -16,7 +16,11 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 from __future__ import division
 
+from abc import ABCMeta
+import logging
 import wx
+from odemis.gui.util import call_in_wx_main
+
 
 class Plugin(object):
     """
@@ -29,7 +33,7 @@ class Plugin(object):
       $HOME/.local/share/odemis/plugins/
     """
     __metaclass__ = ABCMeta
-    # TODO force something like @abstractattribute
+    # TODO force something like @abstractproperty
     __version__ = None
     __author__ = None
     __licence__ = None
@@ -37,15 +41,16 @@ class Plugin(object):
     def __init__(self, microscope, main_app):
         """
         Note: when overriding this method, make sure to call the original
-        method too with the follwing line:
+        method too with the following line:
         super(MyPluginClass, self).__init__(microscope, main_app)
         microscope (Microscope or None): the main back-end component.
           If the GUI is running as a viewer only, then it is None.
-        main_app (wx.App): the main GUI component. 
+        main_app (wx.App): the main GUI component.
         """
         self.microscope = microscope
         self.main_app = main_app
 
+    @call_in_wx_main
     def addMenu(self, entry, callback):
         """
         Adds a menu entry in the main GUI menu.
@@ -59,37 +64,68 @@ class Plugin(object):
         raise ValueError: If the entry doesn't have a group or a name
         """
         main_frame = self.main_app.main_frame
-        
+
         # Split the entry into groups and entry name
         path = entry.split("/")
         if len(path) < 2:
-            raise ValueError("Failed to find a group and a name in '%s' % (entry,))
+            raise ValueError("Failed to find a group and a name in '%s'" % (entry,))
 
         # Find or create group and subgroups
-        curr_group = main_frame.GetMenuBar()
-        for g in path[:-1]:
+        # Nicely, in wxwidgets, the root level is a different class (MenuBar vs
+        # Menu) with slightly different methods
+        p = path[0]
+        if not p:
+            raise ValueError("Path contains empty group name '%s'" % (p,))
+        root_group = main_frame.GetMenuBar()
+        sub_group_idx = root_group.FindMenu(p)
+        if sub_group_idx == wx.NOT_FOUND:
+            logging.debug("Creating new menu group %s", p)
+            curr_group = wx.Menu()
+            # Insert as second last to keep 'Help' last
+            menulen = root_group.GetMenuCount()
+            root_group.Insert(menulen - 1, curr_group, p)
+        else:
+            curr_group = root_group.GetMenu(sub_group_idx)
+
+        # All sub-levels are wx.Menu
+        for p in path[1:-1]:
             if not p:
                 raise ValueError("Path contains empty group name '%s'" % (p,))
-            # Look for the group, if not present => add it as last one, expected
-            # for the very first level, where Help is very last.
-            sub_group = curr_group.FindMenu(g)
-            if not sub_group:
-                logging.debug("Creating new menu group %s", g)
-                curr_group.AppendMenu()
-        # TODO
-        
-        wx.EVT_MENU(main_frame, menu_item.GetId(), lambda evt: callback())
-    
-    
-    def showAcquisition(filename):
+
+            sub_group_id = curr_group.FindItem(p)
+            if sub_group_id == wx.NOT_FOUND:
+                logging.debug("Creating new menu group %s", p)
+                sub_group = wx.Menu()
+                curr_group.AppendSubMenu(sub_group, p)
+            else:
+                mi = curr_group.FindItemById(sub_group_id)
+                sub_group = mi.GetSubMenu()
+                if sub_group is None:
+                    raise ValueError("Cannot create menu group %s, which is already an entry", p)
+
+            curr_group = sub_group
+
+        # Add the menu item
+        menu_item = curr_group.Append(wx.ID_ANY, path[-1])
+
+        # Attach the callback function
+        def menu_callback_wrapper(evt):
+            try:
+                callback()
+            except Exception:
+                logging.exception("Error when processing menu entry %s of plugin %s",
+                                  path[-1], self.__class__.__name__)
+        wx.EVT_MENU(main_frame, menu_item.Id, menu_callback_wrapper)
+
+    def showAcquisition(self, filename):
         """
         Show the analysis (aka Gallery) tab and opens the given acquisition file.
         filename (str): filename of the file to open.
         """
         self.main_app.tab_controller.open_tab('analysis')
         self.main_app.main_data.tab.value.load_data(filename)
-        
-        
+
+
 class AcquisitionDialog(object):
     def __init__(self, plugin, title, text=None):
         """
@@ -116,7 +152,6 @@ class AcquisitionDialog(object):
         """
         # TODO
         pass
-        
 
     def addButton(self, label, callback=None):
         """
@@ -132,23 +167,23 @@ class AcquisitionDialog(object):
         pass
 
     def addStream(self, stream):
-       """
-       Adds a stream to the canvas, and a stream entry to the stream panel.
-       It also ensure the panel box and canvas as shown. 
-       Note: If this method is not called, the stream panel and canvas are hidden. 
-       returns (StreamController): the stream entry
-       """
-       # TODO
-       pass
+        """
+        Adds a stream to the canvas, and a stream entry to the stream panel.
+        It also ensure the panel box and canvas as shown.
+        Note: If this method is not called, the stream panel and canvas are hidden.
+        returns (StreamController): the stream entry
+        """
+        # TODO
+        pass
 
     def showProgress(self, future):
-       """
-       Shows a progress bar, based on the status of the progressive future given.
-       As long as the future is not finished, the buttons are disabled.
-       future (None or Future): The progressive future to show the progress with
-         the progress bar. If future is None, it will hide the progress bar.
-         If future is cancellable, show a cancel button next to the progress bar.
-       """
+        """
+        Shows a progress bar, based on the status of the progressive future given.
+        As long as the future is not finished, the buttons are disabled.
+        future (None or Future): The progressive future to show the progress with
+          the progress bar. If future is None, it will hide the progress bar.
+          If future is cancellable, show a cancel button next to the progress bar.
+        """
 
-       # TODO
-       pass
+        # TODO
+        pass

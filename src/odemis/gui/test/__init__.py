@@ -103,6 +103,7 @@ class GuiTestApp(wx.App):
 
     def OnInit(self):
         self.test_frame = self.test_frame(None)  # odemis.gui.test.test_gui.xrccanvas_frame(None)
+        self.main_frame = self.test_frame  # Just for compatibility with the real app
 
         # Process menu items if any
         menu_bar = self.test_frame.GetMenuBar()
