@@ -1770,7 +1770,8 @@ class PlotCanvas(BufferedCanvas):
                         raise ValueError("The horizontal data should be sorted.")
             except ValueError:
                 # Try to display the data any way
-                logging.exception("Horizontal data is incorrect, will drop it.")
+                logging.exception("Horizontal data is incorrect, will drop it. Was: %s",
+                                  [d[0] for d in data])
                 data = [(i, d[1]) for i, d in enumerate(data)]
                 unit_x = None
 
