@@ -458,6 +458,7 @@ def set_images(im_args):
                 just overrides underlying layers.
         8. name (str): name of the stream that the image originated from
         9. date (int): seconds since epoch
+        10. stream (object): just needed to identify the image in case of dublicated name
 
     returns (list of wx.Image)
     """
@@ -468,7 +469,7 @@ def set_images(im_args):
         if args is None:
             images.append(None)
         else:
-            im, w_pos, scale, keepalpha, rotation, shear, flip, blend_mode, name, date = args
+            im, w_pos, scale, keepalpha, rotation, shear, flip, blend_mode, name, date, stream = args
 
             if not blend_mode:
                 blend_mode = BLEND_DEFAULT
@@ -493,6 +494,7 @@ def set_images(im_args):
             im.metadata['blend_mode'] = blend_mode
             im.metadata['name'] = name
             im.metadata['date'] = date
+            im.metadata['stream'] = stream
 
             images.append(im)
 
@@ -628,7 +630,7 @@ def ar_to_export_data(streams, client_size, raw=False):
         # we expect just one stream
         wim = format_rgba_darray(streams[0].image.value)
         # image is always centered, fitting the whole canvass
-        images = set_images([(wim, (0, 0), (1, 1), False, None, None, None, None, streams[0].name.value, None)])
+        images = set_images([(wim, (0, 0), (1, 1), False, None, None, None, None, streams[0].name.value, None, None)])
         scale = fit_to_content(images, client_size)
 
         # Make surface based on the maximum resolution
@@ -995,7 +997,7 @@ def spectrum_to_export_data(spectrum, client_size, raw, unit, spectrum_range):
 
 
 def draw_export_legend(legend_ctx, images, buffer_size, mpp, mag=None, hfw=None,
-                       scale_bar_width=None, scale_actual_width=None, date=None, streams_data=None, stream_name=None):
+                       scale_bar_width=None, scale_actual_width=None, date=None, streams_data=None, stream=None):
     """
     Draws legend to be attached to the exported image
     """
@@ -1077,9 +1079,9 @@ def draw_export_legend(legend_ctx, images, buffer_size, mpp, mag=None, hfw=None,
 
     # write stream data
     legend_y_pos = 0.75 * big_cell_height
-    for name, data in streams_data.iteritems():
+    for s, data in streams_data.iteritems():
         legend_ctx.set_font_size(small_font)
-        if name == stream_name:
+        if s == stream:
             # in case of multifile, spot this particular stream with a
             # circle next to the stream name
             legend_x_pos = init_x_pos / 2
@@ -1094,7 +1096,7 @@ def draw_export_legend(legend_ctx, images, buffer_size, mpp, mag=None, hfw=None,
             legend_x_pos = init_x_pos
             legend_y_pos += small_cell_height
             legend_ctx.move_to(legend_x_pos, legend_y_pos)
-        legend_ctx.show_text(name)
+        legend_ctx.show_text(s.name.value)
         legend_ctx.set_font_size(small_font)
         legend_x_pos += cell_x_step
         legend_y_pos_store = legend_y_pos
@@ -1150,11 +1152,11 @@ def get_ordered_images(streams, rgb=True):
             data[:, :, 3] = numpy.right_shift(data_raw[:, :], 24) & 255
 
         if isinstance(s, stream.OpticalStream):
-            images_opt.append((data, BLEND_SCREEN, s.name.value))
+            images_opt.append((data, BLEND_SCREEN, s))
         elif isinstance(s, (stream.SpectrumStream, stream.CLStream)):
-            images_spc.append((data, BLEND_DEFAULT, s.name.value))
+            images_spc.append((data, BLEND_DEFAULT, s))
         else:
-            images_std.append((data, BLEND_DEFAULT, s.name.value))
+            images_std.append((data, BLEND_DEFAULT, s))
 
         # metadata useful for the legend
         stream_data = []
@@ -1179,7 +1181,7 @@ def get_ordered_images(streams, rgb=True):
         else:
             baseline = numpy.min(data_raw)
         stream_data.append(baseline)
-        streams_data[s.name.value] = stream_data
+        streams_data[s] = stream_data
 
     # Sort by size, so that the biggest picture is first drawn (no opacity)
     def get_area(d):
@@ -1218,7 +1220,7 @@ def convert_streams_to_images(streams, images_cache, rgb=True):
     # add the images in order
     ims = []
     im_cache = {}
-    for rgbim, blend_mode, name in images:
+    for rgbim, blend_mode, stream in images:
         # TODO: convert to RGBA later, in canvas and/or cache the conversion
         # On large images it costs 100 ms (per image and per canvas)
 
@@ -1244,7 +1246,7 @@ def convert_streams_to_images(streams, images_cache, rgb=True):
         flip = rgbim.metadata.get(model.MD_FLIP, 0)
 
         ims.append((rgba_im, pos, scale, keepalpha, rot, shear, flip, blend_mode,
-                    name, date))
+                    stream.name.value, date, stream))
 
     # Replace the old cache, so the obsolete RGBA images can be garbage collected
     images_cache = im_cache
@@ -1325,7 +1327,7 @@ def images_to_export_data(images, view_mpp, mpp, view_pos, client_size, im_min_t
                 legend_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], n * (buffer_size[1] // 24) + (buffer_size[1] // 12))
             legend_ctx = cairo.Context(legend_surface)
             draw_export_legend(legend_ctx, images + [last_image], buffer_size, view_mpp, mag,
-                               hfw, bar_width, actual_width, last_image.metadata['date'], streams_data, im.metadata['name'])
+                               hfw, bar_width, actual_width, last_image.metadata['date'], streams_data, im.metadata['stream'])
 
             new_data_to_draw = numpy.zeros((data_to_draw.shape[0], data_to_draw.shape[1]), dtype=numpy.uint32)
             new_data_to_draw[:, :] = numpy.left_shift(data_to_draw[:, :, 2], 8, dtype=numpy.uint32) | data_to_draw[:, :, 1]
@@ -1338,7 +1340,7 @@ def images_to_export_data(images, view_mpp, mpp, view_pos, client_size, im_min_t
             new_legend_to_draw = numpy.where(new_legend_to_draw == 0, numpy.min(new_data_to_draw), numpy.max(new_data_to_draw))
             data_with_legend = numpy.append(new_data_to_draw, new_legend_to_draw, axis=0)
             # Clip background to baseline
-            baseline = streams_data[im.metadata['name']][-1]
+            baseline = streams_data[im.metadata['stream']][-1]
             data_with_legend = numpy.clip(data_with_legend, baseline, numpy.max(new_data_to_draw))
             data_to_export.append(model.DataArray(data_with_legend, im.metadata))
 
@@ -1373,7 +1375,7 @@ def images_to_export_data(images, view_mpp, mpp, view_pos, client_size, im_min_t
         legend_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], n * (buffer_size[1] // 24) + (buffer_size[1] // 12))
     legend_ctx = cairo.Context(legend_surface)
     draw_export_legend(legend_ctx, images + [last_image], buffer_size, view_mpp, mag,
-                       hfw, bar_width, actual_width, last_image.metadata['date'], streams_data, last_image.metadata['name'] if (not rgb) else None)
+                       hfw, bar_width, actual_width, last_image.metadata['date'], streams_data, last_image.metadata['stream'] if (not rgb) else None)
     if not rgb:
         new_data_to_draw = numpy.zeros((data_to_draw.shape[0], data_to_draw.shape[1]), dtype=numpy.uint32)
         new_data_to_draw[:, :] = numpy.left_shift(data_to_draw[:, :, 2], 8, dtype=numpy.uint32) | data_to_draw[:, :, 1]
@@ -1386,7 +1388,7 @@ def images_to_export_data(images, view_mpp, mpp, view_pos, client_size, im_min_t
         new_legend_to_draw = numpy.where(new_legend_to_draw == 0, numpy.min(new_data_to_draw), numpy.max(new_data_to_draw))
         data_with_legend = numpy.append(new_data_to_draw, new_legend_to_draw, axis=0)
         # Clip background to baseline
-        baseline = streams_data[last_image.metadata['name']][-1]
+        baseline = streams_data[last_image.metadata['stream']][-1]
         data_with_legend = numpy.clip(data_with_legend, baseline, numpy.max(new_data_to_draw))
     else:
         data_with_legend = numpy.append(data_to_draw, legend_to_draw, axis=0)
