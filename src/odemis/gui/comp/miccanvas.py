@@ -522,6 +522,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             will try to be clever, and only recenter if no stage is connected,
             as otherwise, it could cause an unexpected move.
         """
+        # TODO: this method should be on the View, and it'd update the view_pos
+        # and mpp according to the streams (and stage)
         if recenter is None:
             # recenter only if there is no stage attached
             recenter = not self.microscope_view.has_stage()
@@ -532,6 +534,9 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         if self.microscope_view:
             new_mpp = 1 / self.scale
             self.microscope_view.mpp.value = self.microscope_view.mpp.clip(new_mpp)
+            if recenter:
+                phy_pos = self.world_to_physical_pos(self.requested_world_pos)
+                self.microscope_view.view_pos.value = phy_pos
 
     def _on_view_mpp(self, mpp):
         """ Called when the view.mpp is updated """
