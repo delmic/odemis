@@ -327,6 +327,17 @@ If you modify the application main icons in ``image/icon_gui*.png``, you need to
 
     ./util/generate_icons.sh
 
+If you need to see more log messages of the GUI while it is running, it's possible
+to increase the log level. To do so, select Help/Development/Inspect GUI.
+In console panel (PyCrust) of the inspection window, type:
+
+.. code-block:: python
+
+    import logging
+    logging.getLogger()
+    l.setLevel(logging.DEBUG)
+
+From now on, all log messages are displayed and recorded in the log file.
 
 Speed optimization
 ===================
