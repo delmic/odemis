@@ -182,13 +182,7 @@ class AnchoredEstimator(object):
         """
         return (float): estimated time to acquire 1 anchor area
         """
-        roi = self._roi
-
-        width = (roi[2] - roi[0], roi[3] - roi[1])
-        shape = self._emitter.shape
-        res = (max(1, int(round(shape[0] * width[0]))),
-               max(1, int(round(shape[1] * width[1]))))
-        anchor_time = min(numpy.prod(res), MAX_PIXELS) * self._dwell_time + 0.01
+        anchor_time = numpy.prod(self._res) * self._dwell_time + 0.01
 
         return anchor_time
 
