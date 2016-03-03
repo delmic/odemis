@@ -705,6 +705,7 @@ def calculate_ticks(value_range, client_size, orientation, tick_spacing):
     tick_spacing (float): space between ticks
 
     returns (list of tuples of floats): list of pixel position and value pairs
+            (float): value to pixel ratio
 
     """
 
@@ -774,7 +775,7 @@ def calculate_ticks(value_range, client_size, orientation, tick_spacing):
 
     tick_list = ticks
 
-    return tick_list
+    return tick_list, vtp_ratio
 
 
 def draw_scale(ctx, value_range, client_size, orientation, tick_spacing, fill_colour, unit, scale_width):
@@ -793,7 +794,7 @@ def draw_scale(ctx, value_range, client_size, orientation, tick_spacing, fill_co
     if value_range is None:
         return
 
-    tick_list = calculate_ticks(value_range, client_size, orientation, tick_spacing)
+    tick_list, _ = calculate_ticks(value_range, client_size, orientation, tick_spacing)
     csize = client_size
 
     # Set Font
@@ -1016,7 +1017,7 @@ def draw_export_legend(legend_ctx, images, buffer_size, mpp, mag=None, hfw=None,
     legend_ctx.rectangle(0, 0, buffer_size[0], n * small_cell_height + big_cell_height)
     legend_ctx.fill()
     legend_ctx.set_source_rgb(1, 1, 1)
-    legend_ctx.set_line_width(1)
+    legend_ctx.set_line_width(2)
 
     # draw separation lines
     legend_y_pos = big_cell_height

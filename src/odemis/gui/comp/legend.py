@@ -32,6 +32,7 @@ from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.slider import Slider
 from odemis.gui.util import wxlimit_invocation
 from odemis.util import limit_invocation
+from odemis.gui.util.img import calculate_ticks
 from odemis.util.conversion import wxcol_to_frgb
 import wx
 
@@ -300,7 +301,8 @@ class AxisLegend(wx.Panel):
         if self._value_range is None:
             return
 
-        self.calculate_ticks()
+        # shared function with the export method
+        self._tick_list, self._vtp_ratio = calculate_ticks(self._value_range, self.ClientSize, self._orientation, self._tick_spacing)
         csize = self.ClientSize
 
         # Set Font
@@ -375,75 +377,3 @@ class AxisLegend(wx.Panel):
 
         pixel = pixel if self._orientation == wx.HORIZONTAL else self._pixel_space - pixel
         return pixel / self._pixel_space
-
-    # @limit_invocation(1)
-    def calculate_ticks(self):
-        """ Calculate which values in the range to represent as ticks on the axis
-
-        The result is stored in the _tick_list attribute as a list of pixel position and value pairs
-
-        """
-
-        if self._value_range is None:
-            return
-
-        min_val, max_val = self._value_range
-
-        # Get the horizontal/vertical space in pixels
-        self._pixel_space = self.ClientSize[self._orientation != wx.HORIZONTAL]
-
-        if self._orientation == wx.HORIZONTAL:
-            min_pixel = 0
-        else:
-            # Don't display ticks too close from the left border
-            min_pixel = 10
-
-        # Range width
-        value_space = max_val - min_val
-        if value_space == 0:
-            logging.info("Trying to compute legend tick with empty range %s", self._value_range)
-            self._vtp_ratio = None
-            # Just one tick, at the origin
-            pixel = max(min_pixel, self.value_to_pixel(min_val))
-            self._tick_list = [(pixel, min_val)]
-            return
-
-        self._vtp_ratio = self._pixel_space / value_space
-
-        num_ticks = self._pixel_space // self._tick_spacing
-        # Calculate the best step size in powers of 10, so it will cover at
-        # least the distance `val_dist`
-        value_step = 1e-12
-
-        # Increase the value step tenfold while it fits more than num_ticks times
-        # in the range
-        while value_step and value_space / value_step > num_ticks:
-            value_step *= 10
-        # logging.debug("Value step is %s after first iteration with range %s",
-        #               value_step, value_space)
-
-        # Divide the value step by two,
-        while value_step and value_space / value_step < num_ticks:
-            value_step /= 2
-        # logging.debug("Value step is %s after second iteration with range %s",
-        #               value_step, value_space)
-
-        first_val = (int(min_val / value_step) + 1) * value_step if value_step else 0
-        # logging.debug("Setting first tick at value %s", first_val)
-
-        tick_values = [min_val]
-        cur_val = first_val
-
-        while cur_val < max_val:
-            tick_values.append(cur_val)
-            cur_val += value_step
-
-        ticks = []
-        for tick_value in tick_values:
-            pixel = self.value_to_pixel(tick_value)
-            pix_val = (pixel, tick_value)
-            if pix_val not in ticks:
-                if min_pixel <= pixel <= self._pixel_space:
-                    ticks.append(pix_val)
-
-        self._tick_list = ticks
