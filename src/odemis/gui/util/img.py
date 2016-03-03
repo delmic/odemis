@@ -705,6 +705,7 @@ def calculate_ticks(value_range, client_size, orientation, tick_spacing):
     tick_spacing (float): space between ticks
 
     returns (list of tuples of floats): list of pixel position and value pairs
+            (float): value to pixel ratio
 
     """
 
@@ -774,7 +775,7 @@ def calculate_ticks(value_range, client_size, orientation, tick_spacing):
 
     tick_list = ticks
 
-    return tick_list
+    return tick_list, vtp_ratio
 
 
 def draw_scale(ctx, value_range, client_size, orientation, tick_spacing, fill_colour, unit, scale_width):
@@ -793,7 +794,7 @@ def draw_scale(ctx, value_range, client_size, orientation, tick_spacing, fill_co
     if value_range is None:
         return
 
-    tick_list = calculate_ticks(value_range, client_size, orientation, tick_spacing)
+    tick_list, _ = calculate_ticks(value_range, client_size, orientation, tick_spacing)
     csize = client_size
 
     # Set Font
