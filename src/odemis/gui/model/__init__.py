@@ -829,8 +829,8 @@ MAX_SAFE_MOVE_DISTANCE = 10e-3  # 1 cm
 
 class StreamView(View):
     """
-    An abstract class that is common for every view which display layers of
-    streams and might have also actuators such as a stage and a focus.
+    An abstract class that is common for every view which display spatially
+    layers of streams and might have also actuators such as a stage and a focus.
 
     Basically, its "input" is a StreamTree and it can request stage and focus
     move. It never computes the composited image from all the streams itself.

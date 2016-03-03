@@ -127,7 +127,8 @@ class Plugin(object):
         filename (str): filename of the file to open.
         """
         self.main_app.tab_controller.open_tab('analysis')
-        self.main_app.main_data.tab.value.load_data(filename)
+        analysis_tab = self.main_app.main_data.tab.value
+        analysis_tab.load_data(filename)
 
 
 class AcquisitionDialog(object):
@@ -136,7 +137,7 @@ class AcquisitionDialog(object):
         Creates a modal window. The return code is the button number that was
           last pressed before closing the window.
         title (str): The title of the window
-        text (None or str): If provided, it is displayed at the top of the window 
+        text (None or str): If provided, it is displayed at the top of the window
         """
         self.text = None  # the wx.StaticText used to show the text
         self.entries = [] # Setting entries
@@ -149,7 +150,7 @@ class AcquisitionDialog(object):
         Adds settings as one widget on a line for each VigilantAttribute (VA) in
          the given object. Each setting entry created is added to .entries.
         objWithVA (object): an object with VAs.
-        conf (None or dict of str->config): allows to override the automatic 
+        conf (None or dict of str->config): allows to override the automatic
           selection of the VA widget. See odemis.gui.conf.data for documentation.
         raise:
             LookupError: if no VA is found on the objWithVA
@@ -163,7 +164,7 @@ class AcquisitionDialog(object):
         present, they are shifted to the left.
         label (str): text on the button,
         callback (None or callable): the function to be called when the button
-          is pressed (with the dialog as argument). If callback is None, 
+          is pressed (with the dialog as argument). If callback is None,
           pressing the button will close the window and the button number will
           be the return code of the dialog.
         """
