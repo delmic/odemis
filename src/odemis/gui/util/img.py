@@ -1017,7 +1017,7 @@ def draw_export_legend(legend_ctx, images, buffer_size, mpp, mag=None, hfw=None,
     legend_ctx.rectangle(0, 0, buffer_size[0], n * small_cell_height + big_cell_height)
     legend_ctx.fill()
     legend_ctx.set_source_rgb(1, 1, 1)
-    legend_ctx.set_line_width(1)
+    legend_ctx.set_line_width(2)
 
     # draw separation lines
     legend_y_pos = big_cell_height
