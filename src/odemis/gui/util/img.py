@@ -573,6 +573,25 @@ def draw_image(ctx, im_data, w_im_center, buffer_center, buffer_scale,
     apply_shear(ctx, shear, b_im_rect)
     apply_flip(ctx, flip, b_im_rect)
 
+    width_ratio = float(im_scale[0]) / float(buffer_scale[0])
+    height_ratio = float(im_scale[1]) / float(buffer_scale[1])
+    intersection = (0, 0, buffer_size[0], buffer_size[1])
+    total_scale = total_scale_x, total_scale_y = (width_ratio, height_ratio)
+
+    # in case of small floating errors
+    if abs(total_scale_x - 1) < 1e-8 or abs(total_scale_y - 1) < 1e-8:
+        total_scale = (1.0, 1.0)
+
+    if total_scale_x > 1.0 or total_scale_y > .0:
+        # logging.debug("Up scaling required")
+
+        # If very little data is trimmed, it's better to scale the entire image than to create
+        # a slightly smaller copy first.
+        if b_im_rect[2] > intersection[2] * 1.1 or b_im_rect[3] > intersection[3] * 1.1:
+            im_data, tl = get_sub_img(intersection, b_im_rect, im_data, total_scale)
+            b_im_rect = (tl[0], tl[1], b_im_rect[2], b_im_rect[3],)
+            x, y, _, _ = b_im_rect
+
     if im_data.metadata.get('dc_keepalpha', True):
         im_format = cairo.FORMAT_ARGB32
     else:
@@ -597,9 +616,7 @@ def draw_image(ctx, im_data, w_im_center, buffer_center, buffer_scale,
         surfpat.set_filter(cairo.FILTER_NEAREST)
 
     ctx.translate(x, y)
-    width_ratio = float(im_scale[0]) / float(buffer_scale[0])
-    height_ratio = float(im_scale[1]) / float(buffer_scale[1])
-    ctx.scale(width_ratio, height_ratio)
+    ctx.scale(total_scale_x, total_scale_y)
 
     ctx.set_source(surfpat)
     ctx.set_operator(blend_mode)
@@ -1257,6 +1274,81 @@ def convert_streams_to_images(streams, images_cache, rgb=True):
     return images, streams_data, images_cache, im_min_type
 
 
+def get_sub_img(b_intersect, b_im_rect, im_data, total_scale):
+    """ Return the minimial image data that will cover the intersection
+
+    :param b_intersect: (rect) Intersection of the full image and the buffer
+    :param b_im_rect: (rect) The area the full image would occupy in the
+        buffer
+    :param im_data: (DataArray) The original image data
+    :param total_scale: (float, float) The scale used to convert the image data to
+        buffer pixels. (= image scale * buffer scale)
+
+    :return: (DataArray, (float, float))
+
+    Since trimming the image will possibly change the top left buffer
+    coordinates it should be drawn at, an adjusted (x, y) tuple will be
+    returned as well.
+
+    TODO: Test if scaling a sub image really has performance benefits while rendering with
+    Cairo (i.e. Maybe Cairo is smart enough to render big images without calculating the pixels
+    that are not visible.)
+
+    """
+    im_h, im_w = im_data.shape[:2]
+
+    # No need to get sub images from small image data
+    if im_h <= 4 or im_w <= 4:
+        logging.debug("Image too small to intersect...")
+        return im_data, b_im_rect[:2]
+
+    # where is this intersection in the original image?
+    unsc_rect = (
+        (b_intersect[0] - b_im_rect[0]) / total_scale[0],
+        (b_intersect[1] - b_im_rect[1]) / total_scale[1],
+        b_intersect[2] / total_scale[0],
+        b_intersect[3] / total_scale[1]
+    )
+
+    # Round the rectangle values to whole pixel values
+    # Note that the width and length get "double rounded":
+    # The bottom left gets rounded up to match complete pixels and that
+    # value is adjusted by a rounded down top/left.
+    unsc_rnd_rect = [
+        int(unsc_rect[0]),  # rounding down origin
+        int(unsc_rect[1]),  # rounding down origin
+        math.ceil(unsc_rect[0] + unsc_rect[2]) - int(unsc_rect[0]),
+        math.ceil(unsc_rect[1] + unsc_rect[3]) - int(unsc_rect[1])
+    ]
+
+    # Make sure that the rectangle fits inside the image
+    if (unsc_rnd_rect[0] + unsc_rnd_rect[2] > im_w or
+            unsc_rnd_rect[1] + unsc_rnd_rect[3] > im_h):
+        # sometimes floating errors + rounding leads to one pixel too
+        # much => just crop.
+        assert(unsc_rnd_rect[0] + unsc_rnd_rect[2] <= im_w + 1)
+        assert(unsc_rnd_rect[1] + unsc_rnd_rect[3] <= im_h + 1)
+        unsc_rnd_rect[2] = im_w - unsc_rnd_rect[0]  # clip width
+        unsc_rnd_rect[3] = im_h - unsc_rnd_rect[1]  # clip height
+
+    # New top left origin in buffer coordinates to account for the clipping
+    b_new_x = (unsc_rnd_rect[0] * total_scale[0]) + b_im_rect[0]
+    b_new_y = (unsc_rnd_rect[1] * total_scale[1]) + b_im_rect[1]
+
+    # Calculate slicing parameters
+    sub_im_x, sub_im_y = unsc_rnd_rect[:2]
+    sub_im_w, sub_im_h = unsc_rnd_rect[-2:]
+    sub_im_w = max(sub_im_w, 2)
+    sub_im_h = max(sub_im_h, 2)
+
+    # We need to copy the data, since cairo.ImageSurface.create_for_data expects a single
+    # segment buffer object (i.e. the data must be contiguous)
+    im_data = im_data[sub_im_y:sub_im_y + sub_im_h,
+                      sub_im_x:sub_im_x + sub_im_w].copy()
+
+    return im_data, (b_new_x, b_new_y)
+
+
 def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, streams_data, draw_merge_ratio, rgb=True, interpolate_data=True):
     # The list of images to export
     data_to_export = []
@@ -1276,8 +1368,7 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, stre
         min_pxs = tuple([a / b for a, b in zip(view_hfw, clipped_res)])
 
     clipped_res = int(clipped_res[0]), int(clipped_res[1])
-    view_mpp = view_hfw[0] / clipped_res[0]
-    mag = mpp_screen / view_mpp
+    mag = mpp_screen / min_pxs[0]
 
     # Make surface based on the maximum resolution
     data_to_draw = numpy.zeros((clipped_res[0], clipped_res[1], 4), dtype=numpy.uint8)
@@ -1327,7 +1418,7 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, stre
             legend_surface = cairo.ImageSurface.create_for_data(
                 legend_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], n * (buffer_size[1] // 24) + (buffer_size[1] // 12))
             legend_ctx = cairo.Context(legend_surface)
-            draw_export_legend(legend_ctx, images + [last_image], buffer_size, view_mpp, mag,
+            draw_export_legend(legend_ctx, images + [last_image], buffer_size, min_pxs[0], mag,
                                view_hfw[1], bar_width, actual_width, last_image.metadata['date'], streams_data, im.metadata['stream'])
 
             new_data_to_draw = numpy.zeros((data_to_draw.shape[0], data_to_draw.shape[1]), dtype=numpy.uint32)
@@ -1375,7 +1466,7 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, stre
     legend_surface = cairo.ImageSurface.create_for_data(
         legend_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], n * (buffer_size[1] // 24) + (buffer_size[1] // 12))
     legend_ctx = cairo.Context(legend_surface)
-    draw_export_legend(legend_ctx, images + [last_image], buffer_size, view_mpp, mag,
+    draw_export_legend(legend_ctx, images + [last_image], buffer_size, min_pxs[0], mag,
                        view_hfw[1], bar_width, actual_width, last_image.metadata['date'], streams_data, last_image.metadata['stream'] if (not rgb) else None)
     if not rgb:
         new_data_to_draw = numpy.zeros((data_to_draw.shape[0], data_to_draw.shape[1]), dtype=numpy.uint32)
