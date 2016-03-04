@@ -40,7 +40,7 @@ import wx
 
 
 BAR_PLOT_COLOUR = (0.75, 0.75, 0.75)
-SCALE_FACTOR = 4  # The factor by which we multiply the view window shape
+MAX_RES_FACTOR = 5  # upper limit resolution factor to exported image
 
 
 # @profile
@@ -562,6 +562,7 @@ def draw_image(ctx, im_data, w_im_center, buffer_center, buffer_scale,
 
     # Determine the rectangle the image would occupy in the buffer
     b_im_rect = calc_img_buffer_rect(im_data, im_scale, w_im_center, buffer_center, buffer_scale, buffer_size)
+
     # print b_im_rect
     x, y, w, h = b_im_rect
     # Rotate if needed
@@ -571,11 +572,6 @@ def draw_image(ctx, im_data, w_im_center, buffer_center, buffer_scale,
     apply_rotation(ctx, rotation, b_im_rect)
     apply_shear(ctx, shear, b_im_rect)
     apply_flip(ctx, flip, b_im_rect)
-
-    ctx.translate(x, y)
-    width_ratio = float(im_scale[0]) / float(buffer_scale[0])
-    height_ratio = float(im_scale[1]) / float(buffer_scale[1])
-    ctx.scale(width_ratio, height_ratio)
 
     if im_data.metadata.get('dc_keepalpha', True):
         im_format = cairo.FORMAT_ARGB32
@@ -599,6 +595,11 @@ def draw_image(ctx, im_data, w_im_center, buffer_center, buffer_scale,
     else:
         # In case of "raw" export try to maintain the original data
         surfpat.set_filter(cairo.FILTER_NEAREST)
+
+    ctx.translate(x, y)
+    width_ratio = float(im_scale[0]) / float(buffer_scale[0])
+    height_ratio = float(im_scale[1]) / float(buffer_scale[1])
+    ctx.scale(width_ratio, height_ratio)
 
     ctx.set_source(surfpat)
     ctx.set_operator(blend_mode)
@@ -1002,12 +1003,12 @@ def draw_export_legend(legend_ctx, images, buffer_size, mpp, mag=None, hfw=None,
     """
     Draws legend to be attached to the exported image
     """
-    init_x_pos = 100
+    init_x_pos = buffer_size[0] // 25
     upper_part = 0.25
     middle_part = 0.5
     lower_part = 0.85
-    large_font = 40  # used for general data
-    small_font = 30  # used for stream data
+    large_font = buffer_size[0] // 60  # used for general data
+    small_font = buffer_size[0] // 80  # used for stream data
     n = len(images)
     # Just make cell dimensions analog to the image buffer dimensions
     big_cell_height = buffer_size[1] // 12
@@ -1256,39 +1257,38 @@ def convert_streams_to_images(streams, images_cache, rgb=True):
     return images, streams_data, images_cache, im_min_type
 
 
-def images_to_export_data(images, view_mpp, mpp, view_pos, client_size, im_min_type, streams_data, draw_merge_ratio, rgb=True, interpolate_data=True):
+def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, streams_data, draw_merge_ratio, rgb=True, interpolate_data=True):
     # The list of images to export
     data_to_export = []
 
     # meters per pixel for the focussed window
     mpp_screen = 1e-3 * wx.DisplaySizeMM()[0] / wx.DisplaySize()[0]
-    mag = mpp_screen / mpp
-    hfw = mpp * client_size[0]
 
     # Find min pixel size
     min_pxs = min([im.metadata['dc_scale'] for im in images])
-    max_res = SCALE_FACTOR * client_size.y, SCALE_FACTOR * client_size.x
 
     # Check that resolution of all images remains within limits if we use
     # the smallest pixel size, otherwise adjust it
-    for i, im in enumerate(images):
-        phys_shape = [a * b for a, b in zip(im.shape[:2], im.metadata['dc_scale'])]
-        resized_res = tuple([int(a / b) for a, b in zip(phys_shape, min_pxs)])
-        clipped_resized_res = tuple(numpy.clip(resized_res, (1, 1), max_res))
-        if resized_res != clipped_resized_res:
-            min_pxs = tuple([a / b for a, b in zip(phys_shape, clipped_resized_res)])
+    new_res = view_hfw[0] // min_pxs[0], view_hfw[1] // min_pxs[1]
+    max_res = MAX_RES_FACTOR * min_res[0], MAX_RES_FACTOR * min_res[1]
+    clipped_res = tuple(numpy.clip(new_res, min_res, max_res))
+    if clipped_res != new_res:
+        min_pxs = tuple([a / b for a, b in zip(view_hfw, clipped_res)])
+
+    clipped_res = int(clipped_res[0]), int(clipped_res[1])
+    view_mpp = view_hfw[0] / clipped_res[0]
+    mag = mpp_screen / view_mpp
 
     # Make surface based on the maximum resolution
-    data_to_draw = numpy.zeros((max_res[0], max_res[1], 4), dtype=numpy.uint8)
+    data_to_draw = numpy.zeros((clipped_res[0], clipped_res[1], 4), dtype=numpy.uint8)
     surface = cairo.ImageSurface.create_for_data(
-        data_to_draw, cairo.FORMAT_ARGB32, max_res[1], max_res[0])
+        data_to_draw, cairo.FORMAT_ARGB32, clipped_res[1], clipped_res[0])
     ctx = cairo.Context(surface)
 
     # The buffer center is the same as the view window's center
     buffer_center = tuple(view_pos)
-    buffer_scale = (view_mpp / SCALE_FACTOR,
-                    view_mpp / SCALE_FACTOR)
-    buffer_size = max_res[1], max_res[0]
+    buffer_scale = (min_pxs[0], min_pxs[1])
+    buffer_size = clipped_res[1], clipped_res[0]
 
     # scale bar details
     bar_width = buffer_size[0] // 4
@@ -1328,7 +1328,7 @@ def images_to_export_data(images, view_mpp, mpp, view_pos, client_size, im_min_t
                 legend_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], n * (buffer_size[1] // 24) + (buffer_size[1] // 12))
             legend_ctx = cairo.Context(legend_surface)
             draw_export_legend(legend_ctx, images + [last_image], buffer_size, view_mpp, mag,
-                               hfw, bar_width, actual_width, last_image.metadata['date'], streams_data, im.metadata['stream'])
+                               view_hfw[1], bar_width, actual_width, last_image.metadata['date'], streams_data, im.metadata['stream'])
 
             new_data_to_draw = numpy.zeros((data_to_draw.shape[0], data_to_draw.shape[1]), dtype=numpy.uint32)
             new_data_to_draw[:, :] = numpy.left_shift(data_to_draw[:, :, 2], 8, dtype=numpy.uint32) | data_to_draw[:, :, 1]
@@ -1345,9 +1345,9 @@ def images_to_export_data(images, view_mpp, mpp, view_pos, client_size, im_min_t
             data_with_legend = numpy.clip(data_with_legend, baseline, numpy.max(new_data_to_draw))
             data_to_export.append(model.DataArray(data_with_legend, im.metadata))
 
-            data_to_draw = numpy.zeros((max_res[0], max_res[1], 4), dtype=numpy.uint8)
+            data_to_draw = numpy.zeros((clipped_res[0], clipped_res[1], 4), dtype=numpy.uint8)
             surface = cairo.ImageSurface.create_for_data(
-                data_to_draw, cairo.FORMAT_ARGB32, max_res[1], max_res[0])
+                data_to_draw, cairo.FORMAT_ARGB32, clipped_res[1], clipped_res[0])
             ctx = cairo.Context(surface)
 
     if not images or last_image.metadata['blend_mode'] == BLEND_SCREEN or (not rgb):
@@ -1376,7 +1376,7 @@ def images_to_export_data(images, view_mpp, mpp, view_pos, client_size, im_min_t
         legend_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], n * (buffer_size[1] // 24) + (buffer_size[1] // 12))
     legend_ctx = cairo.Context(legend_surface)
     draw_export_legend(legend_ctx, images + [last_image], buffer_size, view_mpp, mag,
-                       hfw, bar_width, actual_width, last_image.metadata['date'], streams_data, last_image.metadata['stream'] if (not rgb) else None)
+                       view_hfw[1], bar_width, actual_width, last_image.metadata['date'], streams_data, last_image.metadata['stream'] if (not rgb) else None)
     if not rgb:
         new_data_to_draw = numpy.zeros((data_to_draw.shape[0], data_to_draw.shape[1]), dtype=numpy.uint32)
         new_data_to_draw[:, :] = numpy.left_shift(data_to_draw[:, :, 2], 8, dtype=numpy.uint32) | data_to_draw[:, :, 1]

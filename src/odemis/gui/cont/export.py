@@ -199,11 +199,10 @@ class ExportController(object):
             if not images:
                 return
             view_mpp = self._data_model.focussedView.value.mpp.value
-            vp = self.get_viewport_by_view(self._data_model.focussedView.value)
-            mpp = self._data_model.focussedView.value.mpp.value
+            view_hfw = (view_mpp * self.ClientSize.y, view_mpp * self.ClientSize.x)
             view_pos = self._data_model.focussedView.value.view_pos.value
             draw_merge_ratio = self._data_model.focussedView.value.stream_tree.kwargs.get("merge", 0.5)
-            exported_data = images_to_export_data(images, view_mpp, mpp, view_pos, self.ClientSize, min_type, streams_data, draw_merge_ratio, not raw, interpolate_data)
+            exported_data = images_to_export_data(images, view_hfw, (self.ClientSize.y, self.ClientSize.x), view_pos, min_type, streams_data, draw_merge_ratio, not raw, interpolate_data)
         return exported_data
 
     def get_viewport_by_view(self, view):
