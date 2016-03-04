@@ -1026,6 +1026,7 @@ def draw_export_legend(legend_ctx, images, buffer_size, mpp, mag=None, hfw=None,
     lower_part = 0.85
     large_font = buffer_size[0] // 60  # used for general data
     small_font = buffer_size[0] // 80  # used for stream data
+    arc_radius = buffer_size[0] // 200
     n = len(images)
     # Just make cell dimensions analog to the image buffer dimensions
     big_cell_height = buffer_size[1] // 12
@@ -1106,7 +1107,7 @@ def draw_export_legend(legend_ctx, images, buffer_size, mpp, mag=None, hfw=None,
             legend_x_pos = init_x_pos / 2
             legend_y_pos += small_cell_height
             legend_ctx.move_to(legend_x_pos, legend_y_pos)
-            legend_ctx.arc(legend_x_pos, legend_y_pos, 10, 0, 2 * math.pi)
+            legend_ctx.arc(legend_x_pos, legend_y_pos, arc_radius, 0, 2 * math.pi)
             legend_ctx.fill()
             legend_ctx.stroke()
             legend_x_pos = init_x_pos
