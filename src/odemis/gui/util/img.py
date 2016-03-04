@@ -33,6 +33,7 @@ from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
 from odemis.gui.comp.overlay.base import Label
 import odemis.model
 from odemis.model._dataflow import DataArray
+from odemis.util import intersect
 from odemis.util import units
 from odemis.acq import stream
 import time
@@ -563,6 +564,22 @@ def draw_image(ctx, im_data, w_im_center, buffer_center, buffer_scale,
     # Determine the rectangle the image would occupy in the buffer
     b_im_rect = calc_img_buffer_rect(im_data, im_scale, w_im_center, buffer_center, buffer_scale, buffer_size)
 
+    # To small to see, so no need to draw
+    if b_im_rect[2] < 1 or b_im_rect[3] < 1:
+        # TODO: compute the mean, and display one pixel with it
+        logging.debug("Skipping draw: too small")
+        return
+
+    # Get the intersection with the actual buffer
+    buffer_rect = (0, 0) + buffer_size
+
+    intersection = intersect(buffer_rect, b_im_rect)
+
+    # No intersection means nothing to draw
+    if not intersection:
+        logging.debug("Skipping draw: no intersection with buffer")
+        return
+
     # print b_im_rect
     x, y, w, h = b_im_rect
     # Rotate if needed
@@ -575,7 +592,6 @@ def draw_image(ctx, im_data, w_im_center, buffer_center, buffer_scale,
 
     width_ratio = float(im_scale[0]) / float(buffer_scale[0])
     height_ratio = float(im_scale[1]) / float(buffer_scale[1])
-    intersection = (0, 0, buffer_size[0], buffer_size[1])
     total_scale = total_scale_x, total_scale_y = (width_ratio, height_ratio)
 
     # in case of small floating errors
