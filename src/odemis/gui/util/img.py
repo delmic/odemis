@@ -1186,17 +1186,24 @@ def get_ordered_images(streams, rgb=True):
             data[:, :, 2] = numpy.right_shift(data_raw[:, :], 16) & 255
             data[:, :, 3] = numpy.right_shift(data_raw[:, :], 24) & 255
 
+        # Sometimes sem streams contain the dt value as exposure time metadata.
+        # In that case handle it in special way
+        sem_stream = False
         if isinstance(s, stream.OpticalStream):
             images_opt.append((data, BLEND_SCREEN, s))
         elif isinstance(s, (stream.SpectrumStream, stream.CLStream)):
             images_spc.append((data, BLEND_DEFAULT, s))
         else:
+            sem_stream = True
             images_std.append((data, BLEND_DEFAULT, s))
 
         # metadata useful for the legend
         stream_data = []
         if data_raw.metadata.get(model.MD_EXP_TIME, None):
-            stream_data.append(u"Exp. time: %s" % units.readable_str(data_raw.metadata[model.MD_EXP_TIME], "s", sig=3))
+            if sem_stream:
+                stream_data.append(u"dwelltime: %s" % units.readable_str(data_raw.metadata[model.MD_EXP_TIME], "s", sig=3))
+            else:
+                stream_data.append(u"Exp. time: %s" % units.readable_str(data_raw.metadata[model.MD_EXP_TIME], "s", sig=3))
         if data_raw.metadata.get(model.MD_LIGHT_POWER, None):
             stream_data.append(units.readable_str(data_raw.metadata[model.MD_LIGHT_POWER], "W", sig=3))
         if data_raw.metadata.get(model.MD_EBEAM_VOLTAGE, None):
