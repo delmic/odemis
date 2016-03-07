@@ -93,7 +93,7 @@ def check_direct():
     logging.info("Connected to %s", mirror.hwVersion)
 
     try:
-        check(mirror)
+        check_ref(mirror)
     finally:
         mirror.terminate()
 
