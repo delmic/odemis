@@ -1031,7 +1031,7 @@ def spectrum_to_export_data(spectrum, client_size, raw, unit, spectrum_range):
 
 
 def draw_export_legend(legend_ctx, images, buffer_size, mpp, mag=None, hfw=None,
-                       scale_bar_width=None, scale_actual_width=None, date=None, streams_data=None, stream=None):
+                       scale_bar_width=None, scale_actual_width=None, date=None, streams_data=None, stream=None, logo=None):
     """
     Draws legend to be attached to the exported image
     """
@@ -1111,6 +1111,23 @@ def draw_export_legend(legend_ctx, images, buffer_size, mpp, mag=None, hfw=None,
     if date is not None:
         label = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(date))
         legend_ctx.show_text(label)
+
+    # write delmic logo
+    if logo is not None:
+        logo_surface = cairo.ImageSurface.create_from_png(logo)
+        logo_scale_x = (cell_x_step / 4) / logo_surface.get_width()
+        logo_scale_y = (big_cell_height / 5) / logo_surface.get_height()
+        legend_ctx.save()
+        # FIXME: neither antialias or interpolation seems to have any effect when
+        # downscaling the logo
+        legend_ctx.set_antialias(cairo.ANTIALIAS_GRAY)
+        surfpat = cairo.SurfacePattern(logo_surface)
+        surfpat.set_filter(cairo.FILTER_BEST)
+        legend_ctx.translate(legend_x_pos + cell_x_step, upper_part * big_cell_height)
+        legend_ctx.scale(logo_scale_x, logo_scale_x)  # _y
+        legend_ctx.set_source(surfpat)
+        legend_ctx.paint()
+        legend_ctx.restore()
 
     # write stream data
     legend_y_pos = 0.75 * big_cell_height
@@ -1372,7 +1389,7 @@ def get_sub_img(b_intersect, b_im_rect, im_data, total_scale):
     return im_data, (b_new_x, b_new_y)
 
 
-def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, streams_data, draw_merge_ratio, rgb=True, interpolate_data=True):
+def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, streams_data, draw_merge_ratio, rgb=True, interpolate_data=True, logo=None):
     # The list of images to export
     data_to_export = []
 
@@ -1443,7 +1460,7 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, stre
                 legend_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], n * (buffer_size[1] // 24) + (buffer_size[1] // 12))
             legend_ctx = cairo.Context(legend_surface)
             draw_export_legend(legend_ctx, images + [last_image], buffer_size, min_pxs[0], mag,
-                               view_hfw[1], bar_width, actual_width, last_image.metadata['date'], streams_data, im.metadata['stream'])
+                               view_hfw[1], bar_width, actual_width, last_image.metadata['date'], streams_data, im.metadata['stream'], logo=logo)
 
             new_data_to_draw = numpy.zeros((data_to_draw.shape[0], data_to_draw.shape[1]), dtype=numpy.uint32)
             new_data_to_draw[:, :] = numpy.left_shift(data_to_draw[:, :, 2], 8, dtype=numpy.uint32) | data_to_draw[:, :, 1]
@@ -1492,7 +1509,7 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, stre
         legend_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], n * (buffer_size[1] // 24) + (buffer_size[1] // 12))
     legend_ctx = cairo.Context(legend_surface)
     draw_export_legend(legend_ctx, images + [last_image], buffer_size, min_pxs[0], mag,
-                       view_hfw[1], bar_width, actual_width, last_image.metadata['date'], streams_data, last_image.metadata['stream'] if (not rgb) else None)
+                       view_hfw[1], bar_width, actual_width, last_image.metadata['date'], streams_data, last_image.metadata['stream'] if (not rgb) else None, logo=logo)
     if not rgb:
         new_data_to_draw = numpy.zeros((data_to_draw.shape[0], data_to_draw.shape[1]), dtype=numpy.uint32)
         new_data_to_draw[:, :] = numpy.left_shift(data_to_draw[:, :, 2], 8, dtype=numpy.uint32) | data_to_draw[:, :, 1]
@@ -1512,6 +1529,7 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, stre
         data_with_legend[:, :, [2, 0]] = data_with_legend[:, :, [0, 2]]
         last_image.metadata[model.MD_DIMS] = 'YXC'
     data_to_export.append(model.DataArray(data_with_legend, last_image.metadata))
+
     return data_to_export
 
 

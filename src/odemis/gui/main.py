@@ -109,6 +109,7 @@ class OdemisGUIApp(wx.App):
 
         """
 
+        gui.legend_logo = "img/legend_logo_delmic.png"
         if self._is_standalone:
             microscope = None
             gui.icon = img.getIcon("icon/ico_gui_viewer_256.png")
@@ -116,6 +117,7 @@ class OdemisGUIApp(wx.App):
 
             if "delphi" == self._is_standalone:
                 gui.logo = img.getBitmap("logo_delphi.png")
+                gui.legend_logo = "img/legend_logo_delphi.png"
         else:
             gui.icon = img.getIcon("icon/ico_gui_full_256.png")
             gui.name = odemis.__shortname__
@@ -136,6 +138,7 @@ class OdemisGUIApp(wx.App):
             else:
                 if microscope.role == "delphi":
                     gui.logo = img.getBitmap("logo_delphi.png")
+                    gui.legend_logo = "img/legend_logo_delphi.png"
 
         logging.info("\n\n************  Starting Odemis GUI  ************\n")
         logging.info("Odemis GUI v%s (from %s)", odemis.__version__, __file__)
@@ -305,6 +308,8 @@ class OdemisGUIApp(wx.App):
             # Update the logo if a non-default logo is defined
             if gui.logo:
                 self.main_frame.logo.SetBitmap(gui.logo)
+            # Update legend logo filepath
+            self.main_frame.legend_logo = gui.legend_logo
 
             self.main_frame.Maximize()  # must be done before Show()
             # making it very late seems to make it smoother
