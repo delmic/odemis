@@ -1042,7 +1042,7 @@ class BitmapCanvas(BufferedCanvas):
         if abs(total_scale_x - 1) < 1e-8 or abs(total_scale_y - 1) < 1e-8:
             total_scale = (1.0, 1.0)
 
-        if total_scale_x > 1.0 or total_scale_y > .0:
+        if total_scale_x > 1.0 or total_scale_y > 1.0:
             # logging.debug("Up scaling required")
 
             # If very little data is trimmed, it's better to scale the entire image than to create

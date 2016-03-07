@@ -97,6 +97,7 @@ BLEND_SCREEN = 15  # CAIRO_OPERATOR_SCREEN
 icon = None  # Will be set to a wxIcon at init
 name = None  # str of the name to display of the user, will be set at init
 logo = None  # Non-default logo to use in the GUI
+legend_logo = None  # Legend logo filepath to use in export
 
 DYE_LICENCE = """
 The dye database is provided as-is, from the Fluorobase consortium.

@@ -536,7 +536,7 @@ def calc_img_buffer_rect(im_data, im_scale, w_im_center, buffer_center, buffer_s
 
 def draw_image(ctx, im_data, w_im_center, buffer_center, buffer_scale,
                buffer_size, opacity=1.0, im_scale=(1.0, 1.0), rotation=None,
-               shear=None, flip=None, blend_mode=BLEND_DEFAULT, interpolate_data=True):
+               shear=None, flip=None, blend_mode=BLEND_DEFAULT, interpolate_data=False, upscaling=False):
     """ Draw the given image to the Cairo context
 
     The buffer is considered to have it's 0,0 origin at the top left
@@ -553,6 +553,9 @@ def draw_image(ctx, im_data, w_im_center, buffer_center, buffer_scale,
     shear (float): Horizontal shearing of the image data (around it's center)
     flip (wx.HORIZONTAL | wx.VERTICAL): If and how to flip the image
     blend_mode (int): Graphical blending type used for transparency
+    interpolate_data (boolean): apply interpolation if True
+    upscaling (boolean): if True you need to crop the intersection of the image
+    and the buffer
 
     """
 
@@ -594,12 +597,8 @@ def draw_image(ctx, im_data, w_im_center, buffer_center, buffer_scale,
     height_ratio = float(im_scale[1]) / float(buffer_scale[1])
     total_scale = total_scale_x, total_scale_y = (width_ratio, height_ratio)
 
-    # in case of small floating errors
-    if abs(total_scale_x - 1) < 1e-8 or abs(total_scale_y - 1) < 1e-8:
-        total_scale = (1.0, 1.0)
-
-    if total_scale_x > 1.0 or total_scale_y > .0:
-        # logging.debug("Up scaling required")
+    if upscaling:
+        logging.debug("Up scaling required")
 
         # If very little data is trimmed, it's better to scale the entire image than to create
         # a slightly smaller copy first.
@@ -692,7 +691,7 @@ def ar_to_export_data(streams, client_size, raw=False):
             shear=im.metadata['dc_shear'],
             flip=im.metadata['dc_flip'],
             blend_mode=im.metadata['blend_mode'],
-            interpolate_data=True
+            interpolate_data=False
         )
 
         font_name = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT).GetFaceName()
@@ -1032,7 +1031,7 @@ def spectrum_to_export_data(spectrum, client_size, raw, unit, spectrum_range):
 
 
 def draw_export_legend(legend_ctx, images, buffer_size, mpp, mag=None, hfw=None,
-                       scale_bar_width=None, scale_actual_width=None, date=None, streams_data=None, stream=None):
+                       scale_bar_width=None, scale_actual_width=None, date=None, streams_data=None, stream=None, logo=None):
     """
     Draws legend to be attached to the exported image
     """
@@ -1113,6 +1112,23 @@ def draw_export_legend(legend_ctx, images, buffer_size, mpp, mag=None, hfw=None,
         label = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(date))
         legend_ctx.show_text(label)
 
+    # write delmic logo
+    if logo is not None:
+        logo_surface = cairo.ImageSurface.create_from_png(logo)
+        logo_scale_x = (cell_x_step / 4) / logo_surface.get_width()
+        logo_scale_y = (big_cell_height / 5) / logo_surface.get_height()
+        legend_ctx.save()
+        # FIXME: neither antialias or interpolation seems to have any effect when
+        # downscaling the logo
+        legend_ctx.set_antialias(cairo.ANTIALIAS_GRAY)
+        surfpat = cairo.SurfacePattern(logo_surface)
+        surfpat.set_filter(cairo.FILTER_BEST)
+        legend_ctx.translate(legend_x_pos + cell_x_step, upper_part * big_cell_height)
+        legend_ctx.scale(logo_scale_x, logo_scale_x)  # _y
+        legend_ctx.set_source(surfpat)
+        legend_ctx.paint()
+        legend_ctx.restore()
+
     # write stream data
     legend_y_pos = 0.75 * big_cell_height
     for s, data in streams_data.iteritems():
@@ -1187,17 +1203,24 @@ def get_ordered_images(streams, rgb=True):
             data[:, :, 2] = numpy.right_shift(data_raw[:, :], 16) & 255
             data[:, :, 3] = numpy.right_shift(data_raw[:, :], 24) & 255
 
+        # Sometimes sem streams contain the dt value as exposure time metadata.
+        # In that case handle it in special way
+        sem_stream = False
         if isinstance(s, stream.OpticalStream):
             images_opt.append((data, BLEND_SCREEN, s))
         elif isinstance(s, (stream.SpectrumStream, stream.CLStream)):
             images_spc.append((data, BLEND_DEFAULT, s))
         else:
+            sem_stream = True
             images_std.append((data, BLEND_DEFAULT, s))
 
         # metadata useful for the legend
         stream_data = []
         if data_raw.metadata.get(model.MD_EXP_TIME, None):
-            stream_data.append(u"Exp. time: %s" % units.readable_str(data_raw.metadata[model.MD_EXP_TIME], "s", sig=3))
+            if sem_stream:
+                stream_data.append(u"dwelltime: %s" % units.readable_str(data_raw.metadata[model.MD_EXP_TIME], "s", sig=3))
+            else:
+                stream_data.append(u"Exp. time: %s" % units.readable_str(data_raw.metadata[model.MD_EXP_TIME], "s", sig=3))
         if data_raw.metadata.get(model.MD_LIGHT_POWER, None):
             stream_data.append(units.readable_str(data_raw.metadata[model.MD_LIGHT_POWER], "W", sig=3))
         if data_raw.metadata.get(model.MD_EBEAM_VOLTAGE, None):
@@ -1366,7 +1389,7 @@ def get_sub_img(b_intersect, b_im_rect, im_data, total_scale):
     return im_data, (b_new_x, b_new_y)
 
 
-def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, streams_data, draw_merge_ratio, rgb=True, interpolate_data=True):
+def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, streams_data, draw_merge_ratio, rgb=True, interpolate_data=False, logo=None):
     # The list of images to export
     data_to_export = []
 
@@ -1427,7 +1450,8 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, stre
             shear=im.metadata['dc_shear'],
             flip=im.metadata['dc_flip'],
             blend_mode=im.metadata['blend_mode'],
-            interpolate_data=interpolate_data
+            interpolate_data=interpolate_data,
+            upscaling=((min_res[1], min_res[0]) == buffer_size)
         )
         if not rgb:
             # Create legend
@@ -1436,7 +1460,7 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, stre
                 legend_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], n * (buffer_size[1] // 24) + (buffer_size[1] // 12))
             legend_ctx = cairo.Context(legend_surface)
             draw_export_legend(legend_ctx, images + [last_image], buffer_size, min_pxs[0], mag,
-                               view_hfw[1], bar_width, actual_width, last_image.metadata['date'], streams_data, im.metadata['stream'])
+                               view_hfw[1], bar_width, actual_width, last_image.metadata['date'], streams_data, im.metadata['stream'], logo=logo)
 
             new_data_to_draw = numpy.zeros((data_to_draw.shape[0], data_to_draw.shape[1]), dtype=numpy.uint32)
             new_data_to_draw[:, :] = numpy.left_shift(data_to_draw[:, :, 2], 8, dtype=numpy.uint32) | data_to_draw[:, :, 1]
@@ -1476,7 +1500,8 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, stre
         shear=last_image.metadata['dc_shear'],
         flip=last_image.metadata['dc_flip'],
         blend_mode=last_image.metadata['blend_mode'],
-        interpolate_data=interpolate_data
+        interpolate_data=interpolate_data,
+        upscaling=((min_res[1], min_res[0]) == buffer_size)
     )
     # Create legend
     legend_to_draw = numpy.zeros((n * (buffer_size[1] // 24) + (buffer_size[1] // 12), buffer_size[0], 4), dtype=numpy.uint8)
@@ -1484,7 +1509,7 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, stre
         legend_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], n * (buffer_size[1] // 24) + (buffer_size[1] // 12))
     legend_ctx = cairo.Context(legend_surface)
     draw_export_legend(legend_ctx, images + [last_image], buffer_size, min_pxs[0], mag,
-                       view_hfw[1], bar_width, actual_width, last_image.metadata['date'], streams_data, last_image.metadata['stream'] if (not rgb) else None)
+                       view_hfw[1], bar_width, actual_width, last_image.metadata['date'], streams_data, last_image.metadata['stream'] if (not rgb) else None, logo=logo)
     if not rgb:
         new_data_to_draw = numpy.zeros((data_to_draw.shape[0], data_to_draw.shape[1]), dtype=numpy.uint32)
         new_data_to_draw[:, :] = numpy.left_shift(data_to_draw[:, :, 2], 8, dtype=numpy.uint32) | data_to_draw[:, :, 1]
@@ -1504,6 +1529,7 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, stre
         data_with_legend[:, :, [2, 0]] = data_with_legend[:, :, [0, 2]]
         last_image.metadata[model.MD_DIMS] = 'YXC'
     data_to_export.append(model.DataArray(data_with_legend, last_image.metadata))
+
     return data_to_export
 
 

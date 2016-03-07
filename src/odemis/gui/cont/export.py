@@ -170,7 +170,7 @@ class ExportController(object):
             export_type = 'spatial'
         return export_type
 
-    def export(self, export_type, raw=False, interpolate_data=True):
+    def export(self, export_type, raw=False, interpolate_data=False):
         """
         Returns the data to be exported with respect to the settings and options.
 
@@ -202,7 +202,7 @@ class ExportController(object):
             view_hfw = (view_mpp * self.ClientSize.y, view_mpp * self.ClientSize.x)
             view_pos = self._data_model.focussedView.value.view_pos.value
             draw_merge_ratio = self._data_model.focussedView.value.stream_tree.kwargs.get("merge", 0.5)
-            exported_data = images_to_export_data(images, view_hfw, (self.ClientSize.y, self.ClientSize.x), view_pos, min_type, streams_data, draw_merge_ratio, not raw, interpolate_data)
+            exported_data = images_to_export_data(images, view_hfw, (self.ClientSize.y, self.ClientSize.x), view_pos, min_type, streams_data, draw_merge_ratio, not raw, interpolate_data, logo=self._main_frame.legend_logo)
         return exported_data
 
     def get_viewport_by_view(self, view):
