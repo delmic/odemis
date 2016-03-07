@@ -596,6 +596,10 @@ def _updateMDFromOME(root, das, basename):
                     mdc[model.MD_READOUT_TIME] = 1e-6 / ror # s
                 except (KeyError, ValueError):
                     pass
+                try:
+                    mdc[model.MD_EBEAM_VOLTAGE] = float(d_settings.attrib["Voltage"])
+                except (KeyError, ValueError):
+                    pass
 
             # Get light source info
             ls_settings = che.find("LightSourceSettings")

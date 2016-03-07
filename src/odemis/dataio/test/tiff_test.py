@@ -561,6 +561,8 @@ class TestTiffIO(unittest.TestCase):
                      model.MD_POS: (1e-3, -30e-3), # m
                      model.MD_DWELL_TIME: 1e-6,  # s
                      model.MD_LENS_MAG: 1200, # ratio
+                     model.MD_EBEAM_VOLTAGE: 10000,  # V
+                     model.MD_EBEAM_CURRENT: 2.6,  # A
                     },
                     {model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake ccd",
@@ -639,6 +641,10 @@ class TestTiffIO(unittest.TestCase):
                 self.assertAlmostEqual(im.metadata[model.MD_AR_PARABOLA_F], md[model.MD_AR_PARABOLA_F])
             if model.MD_LENS_MAG in md:
                 self.assertAlmostEqual(im.metadata[model.MD_LENS_MAG], md[model.MD_LENS_MAG])
+            # if model.MD_EBEAM_CURRENT in md:
+            #    self.assertEqual(im.metadata[model.MD_EBEAM_CURRENT], md[model.MD_EBEAM_CURRENT])
+            if model.MD_EBEAM_VOLTAGE in md:
+                self.assertEqual(im.metadata[model.MD_EBEAM_VOLTAGE], md[model.MD_EBEAM_VOLTAGE])
 
         # check thumbnail
         rthumbs = tiff.read_thumbnail(FILENAME)
