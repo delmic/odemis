@@ -536,7 +536,7 @@ def calc_img_buffer_rect(im_data, im_scale, w_im_center, buffer_center, buffer_s
 
 def draw_image(ctx, im_data, w_im_center, buffer_center, buffer_scale,
                buffer_size, opacity=1.0, im_scale=(1.0, 1.0), rotation=None,
-               shear=None, flip=None, blend_mode=BLEND_DEFAULT, interpolate_data=True, upscaling=False):
+               shear=None, flip=None, blend_mode=BLEND_DEFAULT, interpolate_data=False, upscaling=False):
     """ Draw the given image to the Cairo context
 
     The buffer is considered to have it's 0,0 origin at the top left
@@ -691,7 +691,7 @@ def ar_to_export_data(streams, client_size, raw=False):
             shear=im.metadata['dc_shear'],
             flip=im.metadata['dc_flip'],
             blend_mode=im.metadata['blend_mode'],
-            interpolate_data=True
+            interpolate_data=False
         )
 
         font_name = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT).GetFaceName()
@@ -1389,7 +1389,7 @@ def get_sub_img(b_intersect, b_im_rect, im_data, total_scale):
     return im_data, (b_new_x, b_new_y)
 
 
-def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, streams_data, draw_merge_ratio, rgb=True, interpolate_data=True, logo=None):
+def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, streams_data, draw_merge_ratio, rgb=True, interpolate_data=False, logo=None):
     # The list of images to export
     data_to_export = []
 

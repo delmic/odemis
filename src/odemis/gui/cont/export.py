@@ -170,7 +170,7 @@ class ExportController(object):
             export_type = 'spatial'
         return export_type
 
-    def export(self, export_type, raw=False, interpolate_data=True):
+    def export(self, export_type, raw=False, interpolate_data=False):
         """
         Returns the data to be exported with respect to the settings and options.
 
