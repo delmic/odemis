@@ -60,7 +60,7 @@ MD_FILTER_NAME = "Filter name" # str, product name of the light filter
 # + SCANNED_DIMENSIONS: list of dimensions which were scanned instead of being acquired simultaneously
 MD_DWELL_TIME = "Pixel dwell time" # s (float), time the electron beam spends per pixel
 MD_EBEAM_VOLTAGE = "Electron beam acceleration voltage" # V (float), voltage used to accelerate the electron beam
-MD_EBEAM_CURRENT = "Electron beam probe current" # A (float), current of the electron beam probe (typically, the spot diameter is linearly proportional)
+MD_EBEAM_CURRENT = "Electron beam emission current"  # A (float), emission current of the electron beam (typically, the probe current is a bit smaller and the spot diameter is linearly proportional)
 MD_EBEAM_SPOT_DIAM = "Electron beam spot diameter" # m (float), approximate diameter of the electron beam spot (typically function of the current)
 # The following two express the same thing (in different ways), so they should
 # not be used simultaneously.

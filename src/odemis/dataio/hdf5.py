@@ -503,6 +503,7 @@ def _parse_physical_data(pdgroup, da):
         except (KeyError, IndexError, ValueError):
             pass
 
+        # Our extended metadata
         try:
             ds = pdgroup["Baseline"]
             oft = float(ds[i])
@@ -513,7 +514,6 @@ def _parse_physical_data(pdgroup, da):
         except (KeyError, IndexError, ValueError):
             pass
 
-        # Our extended metadata
         try:
             ds = pdgroup["IntegrationTime"]
             it = float(ds[i]) # s
@@ -521,6 +521,46 @@ def _parse_physical_data(pdgroup, da):
             if state and state[i] == ST_INVALID:
                 raise ValueError
             md[model.MD_EXP_TIME] = it
+        except (KeyError, IndexError, ValueError):
+            pass
+
+        try:
+            ds = pdgroup["RefractiveIndexLensImmersionMedium"]
+            state = _h5svi_get_state(ds)
+            if state and state[i] in (ST_INVALID, ST_DEFAULT):
+                raise ValueError
+            ri = float(ds[i])  # ratio
+            md[model.MD_LENS_RI] = ri
+        except (KeyError, IndexError, ValueError):
+            pass
+
+        try:
+            ds = pdgroup["NumericalAperture"]
+            state = _h5svi_get_state(ds)
+            if state and state[i] in (ST_INVALID, ST_DEFAULT):
+                raise ValueError
+            na = float(ds[i])  # ratio
+            md[model.MD_LENS_NA] = na
+        except (KeyError, IndexError, ValueError):
+            pass
+
+        try:
+            ds = pdgroup["AccelerationVoltage"]
+            state = _h5svi_get_state(ds)
+            if state and state[i] in (ST_INVALID, ST_DEFAULT):
+                raise ValueError
+            evolt = float(ds[i])  # V
+            md[model.MD_EBEAM_VOLTAGE] = evolt
+        except (KeyError, IndexError, ValueError):
+            pass
+
+        try:
+            ds = pdgroup["EmissionCurrent"]
+            state = _h5svi_get_state(ds)
+            if state and state[i] in (ST_INVALID, ST_DEFAULT):
+                raise ValueError
+            ecurrent = float(ds[i])  # A
+            md[model.MD_EBEAM_CURRENT] = ecurrent
         except (KeyError, IndexError, ValueError):
             pass
 
@@ -782,12 +822,22 @@ def _add_image_metadata(group, image, mds):
     gp["ImagingDirectionStr"] = " ".join([d.lower() for d in id])
     _h5svi_set_state(gp["ImagingDirectionStr"], numpy.array([ST_REPORTED] * len(mds), dtype=_dtstate))
 
-    # Below are almost entirely made-up values, present just to please Huygens
-    # TODO: should allow the user to specify it in the preferences: 1=>vacuum, 1.5 => glass/oil
-    gp["RefractiveIndexLensImmersionMedium"] = [1.515] * len(mds) # ratio (no unit)
-    _h5svi_set_state(gp["RefractiveIndexLensImmersionMedium"], ST_DEFAULT)
+    # Grossly speaking, for a good microscope: 1=>air/vacuum, 1.5 => glass/oil
+    ri = [md.get(model.MD_LENS_RI) for md in mds]
+    gp["RefractiveIndexLensImmersionMedium"] = [1.0 if m is None else m for m in ri]
+    state = [ST_DEFAULT if v is None else ST_REPORTED for v in ri]
+    _h5svi_set_state(gp["RefractiveIndexLensImmersionMedium"], state)
+    # Made up, but probably reasonable
     gp["RefractiveIndexSpecimenEmbeddingMedium"] = [1.515] * len(mds) # ratio (no unit)
     _h5svi_set_state(gp["RefractiveIndexSpecimenEmbeddingMedium"], ST_DEFAULT)
+
+    na = [md.get(model.MD_LENS_NA) for md in mds]
+    gp["NumericalAperture"] = [1.0 if m is None else m for m in na]
+    state = [ST_DEFAULT if v is None else ST_REPORTED for v in na]
+    _h5svi_set_state(gp["NumericalAperture"], state)
+    # TODO: should come from the microscope model?
+    gp["ObjectiveQuality"] = [80] * len(mds)  # unit? int [0->100] = percentage of respect to the theory?
+    _h5svi_set_state(gp["ObjectiveQuality"], ST_DEFAULT)
 
     # Only for confocal microscopes
     gp["BackprojectedIlluminationPinholeSpacing"] = [2.53e-6] * len(mds) # unit? m?
@@ -796,12 +846,6 @@ def _add_image_metadata(group, image, mds):
     _h5svi_set_state(gp["BackprojectedIlluminationPinholeRadius"], ST_DEFAULT)
     gp["BackprojectedPinholeRadius"] = [280e-9] * len(mds) # unit? m?
     _h5svi_set_state(gp["BackprojectedPinholeRadius"], ST_DEFAULT)
-
-    # TODO: should come from the microscope model?
-    gp["NumericalAperture"] = [1.4] * len(mds) # ratio (no unit)
-    _h5svi_set_state(gp["NumericalAperture"], ST_DEFAULT)
-    gp["ObjectiveQuality"] = [80] * len(mds) # unit? int [0->100] = percentage of respect to the theory?
-    _h5svi_set_state(gp["ObjectiveQuality"], ST_DEFAULT)
 
     # Only for confocal microscopes?
     gp["ExcitationBeamOverfillFactor"] = [2.0] * len(mds) # unit?
@@ -812,6 +856,18 @@ def _add_image_metadata(group, image, mds):
     gp["ExcitationPhotonCount"] = [1] * len(mds) # photons
     _h5svi_set_state(gp["ExcitationPhotonCount"], ST_DEFAULT)
 
+    # Not official by SVI, but nice to keep info for the SEM images
+    evolt = [md.get(model.MD_EBEAM_VOLTAGE) for md in mds]
+    if any(evolt):
+        gp["AccelerationVoltage"] = [0 if m is None else m for m in evolt]
+        state = [ST_INVALID if v is None else ST_REPORTED for v in evolt]
+        _h5svi_set_state(gp["AccelerationVoltage"], state)
+
+    ecurrent = [md.get(model.MD_EBEAM_CURRENT) for md in mds]
+    if any(ecurrent):
+        gp["EmissionCurrent"] = [0 if m is None else m for m in ecurrent]
+        state = [ST_INVALID if v is None else ST_REPORTED for v in ecurrent]
+        _h5svi_set_state(gp["EmissionCurrent"], state)
 
     # Below are additional metadata from us (Delmic)
     # IntegrationTime: time spent by each pixel to receive energy (in s)
@@ -892,7 +948,6 @@ def _add_image_metadata(group, image, mds):
         gp["ParabolaF"] = pf
         _h5svi_set_state(gp["ParabolaF"], st_pf)
 
-    # TODO: model.MD_EBEAM_VOLTAGE, model.MD_EBEAM_SPOT_DIAM
 
 def _add_svi_info(group):
     """

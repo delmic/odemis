@@ -640,6 +640,7 @@ class Scanner(model.Emitter):
 
     def _onVoltage(self, volt):
         self.parent._device.HVSetVoltage(volt)
+        self.parent._metadata[model.MD_EBEAM_VOLTAGE] = volt
         # Adjust brightness and contrast
         # with self.parent._acq_progress_lock:
         #    self.parent._device.DtAutoSignal(self.parent._detector._channel)
@@ -659,7 +660,9 @@ class Scanner(model.Emitter):
         # Set the corresponding current index to Tescan SEM
         ipc = util.index_closest(value, self._list_currents)
         self.parent._device.SetPCIndex(ipc + 1)
+
         pc = self._list_currents[ipc]
+        self.parent._metadata[model.MD_EBEAM_CURRENT] = pc
         # Adjust brightness and contrast
         # with self.parent._acq_progress_lock:
         #    self.parent._device.DtAutoSignal(self.parent._detector._channel)
