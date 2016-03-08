@@ -187,7 +187,7 @@ class ExportController(object):
         self.ClientSize = vp.canvas.ClientSize
         streams = self._data_model.focussedView.value.getStreams()
         if export_type == 'AR':
-            exported_data = ar_to_export_data(streams, self.ClientSize, raw)
+            exported_data = ar_to_export_data(streams, raw)
         elif export_type == 'spectrum':
             spectrum = vp.stream.get_pixel_spectrum()
             spectrum_range, unit = vp.stream.get_spectrum_range()

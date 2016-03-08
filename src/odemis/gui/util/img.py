@@ -236,8 +236,8 @@ def ar_create_tick_labels(client_size, ticksize, num_ticks, tau):
     """
 
     # Calculate the characteristic values
-    center_x = client_size.x / 2
-    center_y = client_size.y / 2
+    center_x = client_size[0] / 2
+    center_y = client_size[1] / 2
     inner_radius = min(center_x, center_y)
     radius = inner_radius + (ticksize / 1.5)
     ticks = []
@@ -421,7 +421,7 @@ def draw_ar_frame(ctx, client_size, ticks, font_name, center_x, center_y, inner_
     ctx.set_fill_rule(cairo.FILL_RULE_EVEN_ODD)
     ctx.set_source_rgb(0.2, 0.2, 0.2)
 
-    ctx.rectangle(0, 0, client_size.x, client_size.y)
+    ctx.rectangle(0, 0, client_size[0], client_size[1])
     ctx.arc(center_x, center_y, inner_radius, 0, tau)
     ctx.fill()
 
@@ -646,7 +646,7 @@ def draw_image(ctx, im_data, w_im_center, buffer_center, buffer_scale,
     ctx.restore()
 
 
-def ar_to_export_data(streams, client_size, raw=False):
+def ar_to_export_data(streams, raw=False):
     """
     Creates either raw or WYSIWYG representation for the AR projection
 
@@ -665,19 +665,20 @@ def ar_to_export_data(streams, client_size, raw=False):
         wim = format_rgba_darray(streams[0].image.value)
         # image is always centered, fitting the whole canvass
         images = set_images([(wim, (0, 0), (1, 1), False, None, None, None, None, streams[0].name.value, None, None)])
-        scale = fit_to_content(images, client_size)
+        ar_size = streams[0].image.value.shape[0], streams[0].image.value.shape[1]
+        scale = fit_to_content(images, ar_size)
 
         # Make surface based on the maximum resolution
-        data_to_draw = numpy.zeros((client_size.y, client_size.x, 4), dtype=numpy.uint8)
+        data_to_draw = numpy.zeros((ar_size[1], ar_size[0], 4), dtype=numpy.uint8)
         surface = cairo.ImageSurface.create_for_data(
-            data_to_draw, cairo.FORMAT_ARGB32, client_size.x, client_size.y)
+            data_to_draw, cairo.FORMAT_ARGB32, ar_size[0], ar_size[1])
         ctx = cairo.Context(surface)
 
         im = images[0]
         buffer_center = (0, 0)
         buffer_scale = (im.metadata['dc_scale'][0] / scale,
                         im.metadata['dc_scale'][1] / scale)
-        buffer_size = client_size.x, client_size.y
+        buffer_size = ar_size[0], ar_size[1]
 
         draw_image(
             ctx,
@@ -699,9 +700,9 @@ def ar_to_export_data(streams, client_size, raw=False):
         tau = 2 * math.pi
         ticksize = 10
         num_ticks = 6
-        ticks_info = ar_create_tick_labels(client_size, ticksize, num_ticks, tau)
+        ticks_info = ar_create_tick_labels(ar_size, ticksize, num_ticks, tau)
         ticks, (center_x, center_y), inner_radius, radius = ticks_info
-        draw_ar_frame(ctx, client_size, ticks, font_name, center_x, center_y, inner_radius, radius, tau)
+        draw_ar_frame(ctx, ar_size, ticks, font_name, center_x, center_y, inner_radius, radius, tau)
         ar_plot = model.DataArray(data_to_draw)
         ar_plot.metadata[model.MD_DIMS] = 'YXC'
         return ar_plot
