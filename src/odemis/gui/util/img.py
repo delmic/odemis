@@ -41,6 +41,7 @@ import wx
 
 
 BAR_PLOT_COLOUR = (0.75, 0.75, 0.75)
+CROP_RES_LIMIT = 512
 MAX_RES_FACTOR = 5  # upper limit resolution factor to exported image
 
 
@@ -1421,7 +1422,7 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, stre
     # rid of the blank parts of the canvas
     crop_pos = buffer_size
     crop_shape = (0, 0)
-    for i, im in enumerate(images):
+    for _, im in enumerate(images):
         b_im_rect = calc_img_buffer_rect(im, im.metadata['dc_scale'], im.metadata['dc_center'], buffer_center, buffer_scale, buffer_size)
         buffer_rect = (0, 0) + buffer_size
         intersection = intersect(buffer_rect, b_im_rect)
@@ -1433,7 +1434,8 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, stre
     crop_data = (crop_pos[0], crop_pos[1], crop_shape[0], crop_shape[1])
     if any([(a != b) for a, b in zip(crop_data, (0, 0, buffer_size[0], buffer_size[1]))]):
         logging.debug("Need to crop the data")
-        new_size = int(crop_shape[0]), int(crop_shape[1])
+        new_size = numpy.clip(crop_shape, CROP_RES_LIMIT, numpy.max(crop_shape))
+        new_size = int(new_size[0]), int(new_size[1])
         crop_factor = new_size[0] / crop_shape[0], new_size[1] / crop_shape[1]
         crop_center = crop_pos[0] + (crop_shape[0] / 2) - (buffer_size[0] / 2), crop_pos[1] + (crop_shape[1] / 2) - (buffer_size[1] / 2)
         buffer_size = new_size
