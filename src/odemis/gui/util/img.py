@@ -527,10 +527,10 @@ def calc_img_buffer_rect(im_data, im_scale, w_im_center, buffer_center, buffer_s
     w_topleft = (w_im_center[0] - (scaled_im_size[0] / 2),
                  w_im_center[1] - (scaled_im_size[1] / 2))
 
-    b_topleft = (round(((w_topleft[0] - buffer_center[0]) / buffer_scale[0]) + (buffer_size[0] / 2)),
-                 round(((w_topleft[1] + buffer_center[1]) / buffer_scale[1]) + (buffer_size[1] / 2)))
+    b_topleft = (round(((w_topleft[0] - buffer_center[0]) // buffer_scale[0]) + (buffer_size[0] // 2)),
+                 round(((w_topleft[1] + buffer_center[1]) // buffer_scale[1]) + (buffer_size[1] // 2)))
 
-    final_size = (scaled_im_size[0] / buffer_scale[0], scaled_im_size[1] / buffer_scale[1])
+    final_size = (scaled_im_size[0] // buffer_scale[0], scaled_im_size[1] // buffer_scale[1])
     return b_topleft + final_size
 
 
@@ -1030,7 +1030,7 @@ def spectrum_to_export_data(spectrum, client_size, raw, unit, spectrum_range):
         return spec_plot
 
 
-def draw_export_legend(legend_ctx, images, buffer_size, mpp, mag=None, hfw=None,
+def draw_export_legend(legend_ctx, images, buffer_size, mag=None, hfw=None,
                        scale_bar_width=None, scale_actual_width=None, date=None, streams_data=None, stream=None, logo=None):
     """
     Draws legend to be attached to the exported image
@@ -1072,10 +1072,6 @@ def draw_export_legend(legend_ctx, images, buffer_size, mpp, mag=None, hfw=None,
     legend_y_pos = middle_part * big_cell_height
     legend_ctx.move_to(legend_x_pos, legend_y_pos)
     mag_text = u"Mag: × %s" % units.readable_str(units.round_significant(mag, 3))
-#         if n == 1:
-#             mag_dig = images[0].metadata['dc_scale'][0] / mpp
-#             label = mag_text + u" (Digital: × %s)" % units.readable_str(units.round_significant(mag_dig, 2))
-#         else:
     label = mag_text
     legend_ctx.show_text(label)
 
@@ -1218,9 +1214,9 @@ def get_ordered_images(streams, rgb=True):
         stream_data = []
         if data_raw.metadata.get(model.MD_EXP_TIME, None):
             if sem_stream:
-                stream_data.append(u"dwelltime: %s" % units.readable_str(data_raw.metadata[model.MD_EXP_TIME], "s", sig=3))
+                stream_data.append(u"Dwell time: %s" % units.readable_str(data_raw.metadata[model.MD_EXP_TIME], "s", sig=3))
             else:
-                stream_data.append(u"Exp. time: %s" % units.readable_str(data_raw.metadata[model.MD_EXP_TIME], "s", sig=3))
+                stream_data.append(u"Exposure time: %s" % units.readable_str(data_raw.metadata[model.MD_EXP_TIME], "s", sig=3))
         if data_raw.metadata.get(model.MD_LIGHT_POWER, None):
             stream_data.append(units.readable_str(data_raw.metadata[model.MD_LIGHT_POWER], "W", sig=3))
         if data_raw.metadata.get(model.MD_EBEAM_VOLTAGE, None):
@@ -1228,13 +1224,13 @@ def get_ordered_images(streams, rgb=True):
         if data_raw.metadata.get(model.MD_EBEAM_CURRENT, None):
             stream_data.append(units.readable_str(data_raw.metadata[model.MD_EBEAM_CURRENT], "A", sig=3))
         if data_raw.metadata.get(model.MD_DWELL_TIME, None):
-            stream_data.append(u"dwelltime: %s" % units.readable_str(data_raw.metadata[model.MD_DWELL_TIME], "s"))
+            stream_data.append(u"Dwell time: %s" % units.readable_str(data_raw.metadata[model.MD_DWELL_TIME], "s"))
         if data_raw.metadata.get(model.MD_FILTER_NAME, None):
             stream_data.append(data_raw.metadata[model.MD_FILTER_NAME])
         if data_raw.metadata.get(model.MD_IN_WL, None):
-            stream_data.append(u"ex.: %s" % units.readable_str(numpy.average(data_raw.metadata[model.MD_IN_WL]), "m", sig=3))
+            stream_data.append(u"Excitation.: %s" % units.readable_str(numpy.average(data_raw.metadata[model.MD_IN_WL]), "m", sig=3))
         if data_raw.metadata.get(model.MD_OUT_WL, None):
-            stream_data.append(u"em.: %s" % units.readable_str(numpy.average(data_raw.metadata[model.MD_OUT_WL]), "m", sig=3))
+            stream_data.append(u"Emission.: %s" % units.readable_str(numpy.average(data_raw.metadata[model.MD_OUT_WL]), "m", sig=3))
         if isinstance(s, stream.OpticalStream):
             baseline = data_raw.metadata.get(model.MD_BASELINE, 0)
         else:
@@ -1410,23 +1406,47 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, stre
     clipped_res = int(clipped_res[0]), int(clipped_res[1])
     mag = mpp_screen / min_pxs[0]
 
-    # Make surface based on the maximum resolution
-    data_to_draw = numpy.zeros((clipped_res[0], clipped_res[1], 4), dtype=numpy.uint8)
-    surface = cairo.ImageSurface.create_for_data(
-        data_to_draw, cairo.FORMAT_ARGB32, clipped_res[1], clipped_res[0])
-    ctx = cairo.Context(surface)
-
     # The buffer center is the same as the view window's center
     buffer_center = tuple(view_pos)
     buffer_scale = (min_pxs[0], min_pxs[1])
     buffer_size = clipped_res[1], clipped_res[0]
+
+    n = len(images)
+
+    # Check if we need to crop in order to only keep the stream data and get
+    # rid of the blank parts of the canvas
+    crop_pos = buffer_size
+    crop_shape = (0, 0)
+    for i, im in enumerate(images):
+        b_im_rect = calc_img_buffer_rect(im, im.metadata['dc_scale'], im.metadata['dc_center'], buffer_center, buffer_scale, buffer_size)
+        buffer_rect = (0, 0) + buffer_size
+        intersection = intersect(buffer_rect, b_im_rect)
+        if intersection:
+            # Keep the min roi that contains all the stream data
+            crop_pos = [b if (b <= a) else a for a, b in zip(crop_pos, intersection[:2])]
+            crop_shape = [b if (b >= a) else a for a, b in zip(crop_shape, intersection[2:])]
+
+    crop_data = (crop_pos[0], crop_pos[1], crop_shape[0], crop_shape[1])
+    if any([(a != b) for a, b in zip(crop_data, (0, 0, buffer_size[0], buffer_size[1]))]):
+        logging.debug("Need to crop the data")
+        new_size = int(crop_shape[0]), int(crop_shape[1])
+        crop_factor = new_size[0] / crop_shape[0], new_size[1] / crop_shape[1]
+        crop_center = crop_pos[0] + (crop_shape[0] / 2) - (buffer_size[0] / 2), crop_pos[1] + (crop_shape[1] / 2) - (buffer_size[1] / 2)
+        buffer_size = new_size
+        buffer_center = (buffer_center[0] + crop_center[0] * buffer_scale[0], buffer_center[1] - crop_center[1] * buffer_scale[1])
+        buffer_scale = (buffer_scale[0] / crop_factor[0], buffer_scale[1] / crop_factor[1])
+
+    # Make surface based on the maximum resolution
+    data_to_draw = numpy.zeros((buffer_size[1], buffer_size[0], 4), dtype=numpy.uint8)
+    surface = cairo.ImageSurface.create_for_data(
+        data_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], buffer_size[1])
+    ctx = cairo.Context(surface)
 
     # scale bar details
     bar_width = buffer_size[0] // 4
     actual_width = bar_width * buffer_scale[0]
     actual_width = units.round_significant(actual_width, 1)
 
-    n = len(images)
     last_image = images.pop()
     # For every image, except the last
     i = 0
@@ -1459,7 +1479,7 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, stre
             legend_surface = cairo.ImageSurface.create_for_data(
                 legend_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], n * (buffer_size[1] // 24) + (buffer_size[1] // 12))
             legend_ctx = cairo.Context(legend_surface)
-            draw_export_legend(legend_ctx, images + [last_image], buffer_size, min_pxs[0], mag,
+            draw_export_legend(legend_ctx, images + [last_image], buffer_size, mag,
                                view_hfw[1], bar_width, actual_width, last_image.metadata['date'], streams_data, im.metadata['stream'], logo=logo)
 
             new_data_to_draw = numpy.zeros((data_to_draw.shape[0], data_to_draw.shape[1]), dtype=numpy.uint32)
@@ -1477,9 +1497,9 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, stre
             data_with_legend = numpy.clip(data_with_legend, baseline, numpy.max(new_data_to_draw))
             data_to_export.append(model.DataArray(data_with_legend, im.metadata))
 
-            data_to_draw = numpy.zeros((clipped_res[0], clipped_res[1], 4), dtype=numpy.uint8)
+            data_to_draw = numpy.zeros((buffer_size[1], buffer_size[0], 4), dtype=numpy.uint8)
             surface = cairo.ImageSurface.create_for_data(
-                data_to_draw, cairo.FORMAT_ARGB32, clipped_res[1], clipped_res[0])
+                data_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], buffer_size[1])
             ctx = cairo.Context(surface)
 
     if not images or last_image.metadata['blend_mode'] == BLEND_SCREEN or (not rgb):
@@ -1508,7 +1528,7 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, stre
     legend_surface = cairo.ImageSurface.create_for_data(
         legend_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], n * (buffer_size[1] // 24) + (buffer_size[1] // 12))
     legend_ctx = cairo.Context(legend_surface)
-    draw_export_legend(legend_ctx, images + [last_image], buffer_size, min_pxs[0], mag,
+    draw_export_legend(legend_ctx, images + [last_image], buffer_size, mag,
                        view_hfw[1], bar_width, actual_width, last_image.metadata['date'], streams_data, last_image.metadata['stream'] if (not rgb) else None, logo=logo)
     if not rgb:
         new_data_to_draw = numpy.zeros((data_to_draw.shape[0], data_to_draw.shape[1]), dtype=numpy.uint32)
