@@ -111,12 +111,17 @@ def tune(cont, axis):
                 cont.Stop()
                 break
 
+        # Wait until all the data is recorded
+        left = tstart + recdur - time.time()
+        if left > 0:
+            time.sleep(left)
+
         # Read the recorded data from the move
         data = cont.GetRecordedData()
 
         # plot data using matplotlib
         idx = np.linspace(0, (len(data) - 1) * cycledur * rrate, len(data))
-        cp, ap = np.array(zip(*data))
+        cp, ap = np.array(zip(*data)) * upm * 1e6  # -> µm
         ep = ap - cp
 
         f, ax = plt.subplots(2, sharex=True)
