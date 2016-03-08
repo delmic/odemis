@@ -1249,12 +1249,12 @@ class Controller(object):
     def SetRecordTrigger(self, table, source, val):
         """
         Set Data Recorder Configuration
-        table (1<=int): record table ID
+        table (0<=int): record table ID or 0 for all the tables
         source (0<=int): ID of the trigger source, see documentation for values.
           0 = STE, 1 = any command moving, 2 = any command
         val (0<=int): Depends on the source. See documentation for values.
         """
-        assert(table > 0)
+        assert(table >= 0)
         assert(source >= 0)
         assert(val >= 0)
         self._sendOrderCommand("DRT %d %d %d\n" % (table, source, val))
