@@ -387,8 +387,10 @@ class CoupledStage(model.Actuator):
             raise ValueError("CoupledStage needs a slave child")
 
         # TODO: limit the range to the minimum of master/slave?
-        axes_def = {"x": self._master.axes["x"],
-                    "y": self._master.axes["y"]}
+        axes_def = {}
+        for an in ("x", "y"):
+            axes_def[an] = copy.deepcopy(self._master.axes[an])
+            axes_def[an].canUpdate = False
 
         model.Actuator.__init__(self, name, role, axes=axes_def, children=children,
                                 **kwargs)
