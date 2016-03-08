@@ -40,7 +40,7 @@ import time
 import wx
 
 
-BAR_PLOT_COLOUR = (0.75, 0.75, 0.75)
+BAR_PLOT_COLOUR = (0.5, 0.5, 0.5)
 CROP_RES_LIMIT = 512
 MAX_RES_FACTOR = 5  # upper limit resolution factor to exported image
 
@@ -842,6 +842,17 @@ def draw_scale(ctx, value_range, client_size, orientation, tick_spacing, fill_co
     ctx.set_line_width(2)
     ctx.set_line_join(cairo.LINE_JOIN_MITER)
 
+    # In case of white background, also draw lines to the scale bars
+    if fill_colour == BAR_PLOT_COLOUR:
+        if orientation == wx.VERTICAL:
+            ctx.move_to(scale_width, 0)
+            ctx.line_to(scale_width, csize.y)
+            ctx.stroke()
+        else:
+            ctx.move_to(0, 0)
+            ctx.line_to(csize.x, 0)
+            ctx.stroke()
+
     max_width = 0
     prev_lpos = 0 if orientation == wx.HORIZONTAL else csize.y
 
@@ -979,6 +990,7 @@ def spectrum_to_export_data(spectrum, client_size, raw, unit, spectrum_range):
         data = zip(spectrum_range, spectrum)
         fill_colour = BAR_PLOT_COLOUR
         data_to_draw = numpy.zeros((client_size.y, client_size.x, 4), dtype=numpy.uint8)
+        data_to_draw.fill(255)
         surface = cairo.ImageSurface.create_for_data(
             data_to_draw, cairo.FORMAT_ARGB32, client_size.x, client_size.y)
         ctx = cairo.Context(surface)
@@ -1001,7 +1013,7 @@ def spectrum_to_export_data(spectrum, client_size, raw, unit, spectrum_range):
         scale_width = 40
         scale_height = 30
         scale_x_draw = numpy.zeros((scale_height, client_size.x, 4), dtype=numpy.uint8)
-        scale_x_draw.fill(25)
+        scale_x_draw.fill(255)
         surface = cairo.ImageSurface.create_for_data(
             scale_x_draw, cairo.FORMAT_ARGB32, client_size.x, scale_height)
         ctx = cairo.Context(surface)
@@ -1014,7 +1026,7 @@ def spectrum_to_export_data(spectrum, client_size, raw, unit, spectrum_range):
         value_range = (min(spectrum), max(spectrum))
         unit = None
         scale_y_draw = numpy.zeros((client_size.y, scale_width, 4), dtype=numpy.uint8)
-        scale_y_draw.fill(25)
+        scale_y_draw.fill(255)
         surface = cairo.ImageSurface.create_for_data(
             scale_y_draw, cairo.FORMAT_ARGB32, scale_width, client_size.y)
         ctx = cairo.Context(surface)
@@ -1023,7 +1035,7 @@ def spectrum_to_export_data(spectrum, client_size, raw, unit, spectrum_range):
         # Extend y scale bar to fit the height of the bar plot with the x
         # scale bar attached
         extend = numpy.empty((scale_height, scale_width, 4), dtype=numpy.uint8)
-        extend.fill(25)
+        extend.fill(255)
         scale_y_draw = numpy.append(scale_y_draw, extend, axis=0)
         data_with_legend = numpy.append(scale_y_draw, data_with_legend, axis=1)
 
