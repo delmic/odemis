@@ -74,6 +74,10 @@ def acquire_timelapse(num, period, filename):
     basename, ext = os.path.splitext(filename)
     fn_pattern = basename + "%04d" + ext
 
+    fn_pos = basename + "pos.csv"
+    fpos = open(fn_pos, "a")
+    fpos.write("time\tX\tY\tZ\n")
+
     # Run acquisition every period
     try:
         i = 1
@@ -86,10 +90,13 @@ def acquire_timelapse(num, period, filename):
             data, e = f.result()
             if e:
                 logging.error("Acquisition failed with %s", e)
-                # It can partially fail, so still allow to save the data succesfuly acquired
+                # It can partially fail, so still allow to save the data successfully acquired
 
-            # TODO: store the Z position also in the metadata
-            logging.info("Stage @ %s, focus @ %s", stage.position.value, focus.position.value)
+            # Note: the actual time of the position is the one when the position was read
+            # by the pigcs driver.
+            spos = stage.position.value
+            fpos.write("%g\t%g\t%g\t%g\n" %
+                       (time.time(), spos["x"], spos["y"], focus.position.value["z"]))
 
             # Save the file
             if data:
@@ -113,6 +120,8 @@ def acquire_timelapse(num, period, filename):
     except Exception:
         logging.exception("Failed to acquire all the images.")
         raise
+
+    fpos.close()
 
 def main(args):
     """
