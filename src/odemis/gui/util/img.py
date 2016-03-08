@@ -1106,21 +1106,25 @@ def draw_export_legend(legend_ctx, images, buffer_size, mag=None, hfw=None,
     # write acquisition date
     if date is not None:
         label = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(date))
-        legend_ctx.show_text(label)
+        date_split = label.split()
+        legend_ctx.show_text(date_split[0])
+        legend_y_pos = lower_part * big_cell_height
+        legend_ctx.move_to(legend_x_pos, legend_y_pos)
+        legend_ctx.show_text(date_split[1])
 
     # write delmic logo
     if logo is not None:
+        _, plh = legend_ctx.text_extents(label)[2:4]
         logo_surface = cairo.ImageSurface.create_from_png(logo)
-        logo_scale_x = (cell_x_step / 4) / logo_surface.get_width()
-        logo_scale_y = (big_cell_height / 5) / logo_surface.get_height()
+        logo_scale_y = plh / logo_surface.get_height()
         legend_ctx.save()
         # FIXME: neither antialias or interpolation seems to have any effect when
         # downscaling the logo
         legend_ctx.set_antialias(cairo.ANTIALIAS_GRAY)
         surfpat = cairo.SurfacePattern(logo_surface)
         surfpat.set_filter(cairo.FILTER_BEST)
-        legend_ctx.translate(legend_x_pos + cell_x_step, upper_part * big_cell_height)
-        legend_ctx.scale(logo_scale_x, logo_scale_x)  # _y
+        legend_ctx.translate(buffer_size[0] - (logo_surface.get_width() * logo_scale_y + init_x_pos), upper_part * big_cell_height)
+        legend_ctx.scale(logo_scale_y, logo_scale_y)
         legend_ctx.set_source(surfpat)
         legend_ctx.paint()
         legend_ctx.restore()
