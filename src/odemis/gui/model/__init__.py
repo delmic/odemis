@@ -1076,7 +1076,7 @@ class StreamView(View):
         # It should increase latency in case of slow moves (ex: closed-loop
         # stage that vibrate a bit when reaching target position).
         kwargs = {}
-        if self._stage.axes["x"].canUpdate and self._stage.axes["x"].canUpdate:
+        if self._stage.axes["x"].canUpdate and self._stage.axes["y"].canUpdate:
             kwargs["update"] = True
 
         f = self._stage.moveRel(move, **kwargs)
@@ -1122,8 +1122,7 @@ class StreamView(View):
         """
         ex = f.exception()
         if ex:
-            # TODO: make it warning once it doesn't automatically pops up the panel
-            logging.info("Stage move failed: %s", ex)
+            logging.warning("Stage move failed: %s", ex)
 
     def getStreams(self):
         """
