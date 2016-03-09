@@ -1053,9 +1053,9 @@ def draw_export_legend(legend_ctx, images, buffer_size, mag=None, hfw=None,
     upper_part = 0.25
     middle_part = 0.5
     lower_part = 0.85
-    large_font = buffer_size[0] // 60  # used for general data
-    small_font = buffer_size[0] // 80  # used for stream data
-    arc_radius = buffer_size[0] // 200
+    large_font = numpy.min(buffer_size) // 60  # used for general data
+    small_font = numpy.min(buffer_size) // 80  # used for stream data
+    arc_radius = numpy.min(buffer_size) // 200
     n = len(images)
     # Just make cell dimensions analog to the image buffer dimensions
     big_cell_height = buffer_size[1] // 12
@@ -1445,15 +1445,20 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, stre
             crop_shape = [b if (b >= a) else a for a, b in zip(crop_shape, intersection[2:])]
 
     crop_data = (crop_pos[0], crop_pos[1], crop_shape[0], crop_shape[1])
+    clipped_y_size = buffer_size[1]
     if any([(a != b) for a, b in zip(crop_data, (0, 0, buffer_size[0], buffer_size[1]))]):
         logging.debug("Need to crop the data")
-        new_size = numpy.clip(crop_shape, CROP_RES_LIMIT, numpy.max(crop_shape))
+        new_size = numpy.clip(crop_shape[0], CROP_RES_LIMIT, numpy.max(crop_shape[0])), crop_shape[1]
         new_size = int(new_size[0]), int(new_size[1])
         crop_factor = new_size[0] / crop_shape[0], new_size[1] / crop_shape[1]
         crop_center = crop_pos[0] + (crop_shape[0] / 2) - (buffer_size[0] / 2), crop_pos[1] + (crop_shape[1] / 2) - (buffer_size[1] / 2)
         buffer_size = new_size
         buffer_center = (buffer_center[0] + crop_center[0] * buffer_scale[0], buffer_center[1] - crop_center[1] * buffer_scale[1])
         buffer_scale = (buffer_scale[0] / crop_factor[0], buffer_scale[1] / crop_factor[1])
+
+        # clip the y dimension of buffer size used to calculate the y dimension of
+        # the legend. This is to avoid extremely thin legend.
+        clipped_y_size = max(buffer_size[1], CROP_RES_LIMIT)
 
     # Make surface based on the maximum resolution
     data_to_draw = numpy.zeros((buffer_size[1], buffer_size[0], 4), dtype=numpy.uint8)
@@ -1494,11 +1499,11 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, stre
         )
         if not rgb:
             # Create legend
-            legend_to_draw = numpy.zeros((n * (buffer_size[1] // 24) + (buffer_size[1] // 12), buffer_size[0], 4), dtype=numpy.uint8)
+            legend_to_draw = numpy.zeros((n * (clipped_y_size // 24) + (clipped_y_size // 12), buffer_size[0], 4), dtype=numpy.uint8)
             legend_surface = cairo.ImageSurface.create_for_data(
-                legend_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], n * (buffer_size[1] // 24) + (buffer_size[1] // 12))
+                legend_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], n * (clipped_y_size // 24) + (clipped_y_size // 12))
             legend_ctx = cairo.Context(legend_surface)
-            draw_export_legend(legend_ctx, images + [last_image], buffer_size, mag,
+            draw_export_legend(legend_ctx, images + [last_image], (buffer_size[0], clipped_y_size), mag,
                                view_hfw[1], bar_width, actual_width, last_image.metadata['date'], streams_data, im.metadata['stream'], logo=logo)
 
             new_data_to_draw = numpy.zeros((data_to_draw.shape[0], data_to_draw.shape[1]), dtype=numpy.uint32)
@@ -1543,11 +1548,11 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, stre
         upscaling=((min_res[1], min_res[0]) == buffer_size)
     )
     # Create legend
-    legend_to_draw = numpy.zeros((n * (buffer_size[1] // 24) + (buffer_size[1] // 12), buffer_size[0], 4), dtype=numpy.uint8)
+    legend_to_draw = numpy.zeros((n * (clipped_y_size // 24) + (clipped_y_size // 12), buffer_size[0], 4), dtype=numpy.uint8)
     legend_surface = cairo.ImageSurface.create_for_data(
-        legend_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], n * (buffer_size[1] // 24) + (buffer_size[1] // 12))
+        legend_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], n * (clipped_y_size // 24) + (clipped_y_size // 12))
     legend_ctx = cairo.Context(legend_surface)
-    draw_export_legend(legend_ctx, images + [last_image], buffer_size, mag,
+    draw_export_legend(legend_ctx, images + [last_image], (buffer_size[0], clipped_y_size), mag,
                        view_hfw[1], bar_width, actual_width, last_image.metadata['date'], streams_data, last_image.metadata['stream'] if (not rgb) else None, logo=logo)
     if not rgb:
         new_data_to_draw = numpy.zeros((data_to_draw.shape[0], data_to_draw.shape[1]), dtype=numpy.uint32)
