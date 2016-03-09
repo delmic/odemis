@@ -292,6 +292,7 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
             escan.scale.value = (1, 1)
             escan.resolution.value = (1, 1)
             escan.translation.value = (0, 0)
+            escan.rotation.value = 0
             escan.shift.value = (0, 0)
             escan.dwellTime.value = 5e-06
             det_dataflow = detector.data
@@ -440,6 +441,7 @@ def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus)
     escan.scale.value = (1, 1)
     escan.resolution.value = (1, 1)
     escan.translation.value = (0, 0)
+    escan.rotation.value = 0
     escan.shift.value = (0, 0)
     escan.dwellTime.value = 5e-06
 
@@ -607,6 +609,7 @@ def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, fo
     escan.scale.value = (1, 1)
     escan.resolution.value = (1, 1)
     escan.translation.value = (0, 0)
+    escan.rotation.value = 0
     escan.shift.value = (0, 0)
     escan.dwellTime.value = 5e-06
     # detector.data.subscribe(_discard_data)
@@ -810,6 +813,7 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
         escan.scale.value = (1, 1)
         escan.resolution.value = escan.resolution.range[1]
         escan.translation.value = (0, 0)
+        escan.rotation.value = 0
         escan.shift.value = (0, 0)
         escan.dwellTime.value = 5.2e-06  # good enough for clear SEM image
         holes_found = []
@@ -1132,6 +1136,7 @@ def _DoHFWShiftFactor(future, detector, escan, sem_stage, ebeam_focus, known_foc
         escan.scale.value = (1, 1)
         escan.resolution.value = escan.resolution.range[1]
         escan.translation.value = (0, 0)
+        escan.rotation.value = 0
         escan.shift.value = (0, 0)
         escan.dwellTime.value = 7.5e-07  # s
 
@@ -1291,6 +1296,7 @@ def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus, kn
         escan.scale.value = (1, 1)
         escan.horizontalFoV.value = 1200e-06  # m
         escan.translation.value = (0, 0)
+        escan.rotation.value = 0
         escan.shift.value = (0, 0)
         et = 7.5e-07 * numpy.prod(escan.resolution.range[1])
 
@@ -1453,6 +1459,7 @@ def _DoSpotShiftFactor(future, ccd, detector, escan, focus):
     escan.horizontalFoV.value = 150e-06  # m
     escan.resolution.value = (1, 1)
     escan.translation.value = (0, 0)
+    escan.rotation.value = 0
     escan.shift.value = (0, 0)
     escan.dwellTime.value = 5e-06
     det_dataflow = detector.data
