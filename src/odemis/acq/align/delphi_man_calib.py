@@ -320,6 +320,7 @@ def main(args):
                 escan.scale.value = (1, 1)
                 escan.resolution.value = (1, 1)
                 escan.translation.value = (0, 0)
+                escan.rotation.value = 0
                 escan.shift.value = (0, 0)
                 escan.dwellTime.value = 5e-06
                 detector.data.subscribe(_discard_data)
@@ -395,6 +396,7 @@ def main(args):
                     escan.scale.value = (1, 1)
                     escan.resolution.value = (1, 1)
                     escan.translation.value = (0, 0)
+                    escan.rotation.value = 0
                     escan.shift.value = (0, 0)
                     escan.dwellTime.value = 5e-06
                     detector.data.subscribe(_discard_data)
@@ -469,6 +471,7 @@ def main(args):
                 escan.scale.value = (1, 1)
                 escan.resolution.value = (1, 1)
                 escan.translation.value = (0, 0)
+                escan.rotation.value = 0
                 escan.shift.value = (0, 0)
                 escan.dwellTime.value = 5e-06
                 detector.data.subscribe(_discard_data)

@@ -40,7 +40,8 @@ import time
 import wx
 
 
-BAR_PLOT_COLOUR = (0.75, 0.75, 0.75)
+BAR_PLOT_COLOUR = (0.5, 0.5, 0.5)
+CROP_RES_LIMIT = 512
 MAX_RES_FACTOR = 5  # upper limit resolution factor to exported image
 
 
@@ -235,8 +236,8 @@ def ar_create_tick_labels(client_size, ticksize, num_ticks, tau):
     """
 
     # Calculate the characteristic values
-    center_x = client_size.x / 2
-    center_y = client_size.y / 2
+    center_x = client_size[0] / 2
+    center_y = client_size[1] / 2
     inner_radius = min(center_x, center_y)
     radius = inner_radius + (ticksize / 1.5)
     ticks = []
@@ -420,7 +421,7 @@ def draw_ar_frame(ctx, client_size, ticks, font_name, center_x, center_y, inner_
     ctx.set_fill_rule(cairo.FILL_RULE_EVEN_ODD)
     ctx.set_source_rgb(0.2, 0.2, 0.2)
 
-    ctx.rectangle(0, 0, client_size.x, client_size.y)
+    ctx.rectangle(0, 0, client_size[0], client_size[1])
     ctx.arc(center_x, center_y, inner_radius, 0, tau)
     ctx.fill()
 
@@ -645,7 +646,7 @@ def draw_image(ctx, im_data, w_im_center, buffer_center, buffer_scale,
     ctx.restore()
 
 
-def ar_to_export_data(streams, client_size, raw=False):
+def ar_to_export_data(streams, raw=False):
     """
     Creates either raw or WYSIWYG representation for the AR projection
 
@@ -664,19 +665,20 @@ def ar_to_export_data(streams, client_size, raw=False):
         wim = format_rgba_darray(streams[0].image.value)
         # image is always centered, fitting the whole canvass
         images = set_images([(wim, (0, 0), (1, 1), False, None, None, None, None, streams[0].name.value, None, None)])
-        scale = fit_to_content(images, client_size)
+        ar_size = streams[0].image.value.shape[0], streams[0].image.value.shape[1]
+        scale = fit_to_content(images, ar_size)
 
         # Make surface based on the maximum resolution
-        data_to_draw = numpy.zeros((client_size.y, client_size.x, 4), dtype=numpy.uint8)
+        data_to_draw = numpy.zeros((ar_size[1], ar_size[0], 4), dtype=numpy.uint8)
         surface = cairo.ImageSurface.create_for_data(
-            data_to_draw, cairo.FORMAT_ARGB32, client_size.x, client_size.y)
+            data_to_draw, cairo.FORMAT_ARGB32, ar_size[0], ar_size[1])
         ctx = cairo.Context(surface)
 
         im = images[0]
         buffer_center = (0, 0)
         buffer_scale = (im.metadata['dc_scale'][0] / scale,
                         im.metadata['dc_scale'][1] / scale)
-        buffer_size = client_size.x, client_size.y
+        buffer_size = ar_size[0], ar_size[1]
 
         draw_image(
             ctx,
@@ -698,9 +700,9 @@ def ar_to_export_data(streams, client_size, raw=False):
         tau = 2 * math.pi
         ticksize = 10
         num_ticks = 6
-        ticks_info = ar_create_tick_labels(client_size, ticksize, num_ticks, tau)
+        ticks_info = ar_create_tick_labels(ar_size, ticksize, num_ticks, tau)
         ticks, (center_x, center_y), inner_radius, radius = ticks_info
-        draw_ar_frame(ctx, client_size, ticks, font_name, center_x, center_y, inner_radius, radius, tau)
+        draw_ar_frame(ctx, ar_size, ticks, font_name, center_x, center_y, inner_radius, radius, tau)
         ar_plot = model.DataArray(data_to_draw)
         ar_plot.metadata[model.MD_DIMS] = 'YXC'
         return ar_plot
@@ -840,6 +842,17 @@ def draw_scale(ctx, value_range, client_size, orientation, tick_spacing, fill_co
     ctx.set_line_width(2)
     ctx.set_line_join(cairo.LINE_JOIN_MITER)
 
+    # In case of white background, also draw lines to the scale bars
+    if fill_colour == BAR_PLOT_COLOUR:
+        if orientation == wx.VERTICAL:
+            ctx.move_to(scale_width, 0)
+            ctx.line_to(scale_width, csize.y)
+            ctx.stroke()
+        else:
+            ctx.move_to(0, 0)
+            ctx.line_to(csize.x, 0)
+            ctx.stroke()
+
     max_width = 0
     prev_lpos = 0 if orientation == wx.HORIZONTAL else csize.y
 
@@ -977,6 +990,7 @@ def spectrum_to_export_data(spectrum, client_size, raw, unit, spectrum_range):
         data = zip(spectrum_range, spectrum)
         fill_colour = BAR_PLOT_COLOUR
         data_to_draw = numpy.zeros((client_size.y, client_size.x, 4), dtype=numpy.uint8)
+        data_to_draw.fill(255)
         surface = cairo.ImageSurface.create_for_data(
             data_to_draw, cairo.FORMAT_ARGB32, client_size.x, client_size.y)
         ctx = cairo.Context(surface)
@@ -999,7 +1013,7 @@ def spectrum_to_export_data(spectrum, client_size, raw, unit, spectrum_range):
         scale_width = 40
         scale_height = 30
         scale_x_draw = numpy.zeros((scale_height, client_size.x, 4), dtype=numpy.uint8)
-        scale_x_draw.fill(25)
+        scale_x_draw.fill(255)
         surface = cairo.ImageSurface.create_for_data(
             scale_x_draw, cairo.FORMAT_ARGB32, client_size.x, scale_height)
         ctx = cairo.Context(surface)
@@ -1012,7 +1026,7 @@ def spectrum_to_export_data(spectrum, client_size, raw, unit, spectrum_range):
         value_range = (min(spectrum), max(spectrum))
         unit = None
         scale_y_draw = numpy.zeros((client_size.y, scale_width, 4), dtype=numpy.uint8)
-        scale_y_draw.fill(25)
+        scale_y_draw.fill(255)
         surface = cairo.ImageSurface.create_for_data(
             scale_y_draw, cairo.FORMAT_ARGB32, scale_width, client_size.y)
         ctx = cairo.Context(surface)
@@ -1021,7 +1035,7 @@ def spectrum_to_export_data(spectrum, client_size, raw, unit, spectrum_range):
         # Extend y scale bar to fit the height of the bar plot with the x
         # scale bar attached
         extend = numpy.empty((scale_height, scale_width, 4), dtype=numpy.uint8)
-        extend.fill(25)
+        extend.fill(255)
         scale_y_draw = numpy.append(scale_y_draw, extend, axis=0)
         data_with_legend = numpy.append(scale_y_draw, data_with_legend, axis=1)
 
@@ -1039,9 +1053,9 @@ def draw_export_legend(legend_ctx, images, buffer_size, mag=None, hfw=None,
     upper_part = 0.25
     middle_part = 0.5
     lower_part = 0.85
-    large_font = buffer_size[0] // 60  # used for general data
-    small_font = buffer_size[0] // 80  # used for stream data
-    arc_radius = buffer_size[0] // 200
+    large_font = numpy.min(buffer_size) // 60  # used for general data
+    small_font = numpy.min(buffer_size) // 80  # used for stream data
+    arc_radius = numpy.min(buffer_size) // 200
     n = len(images)
     # Just make cell dimensions analog to the image buffer dimensions
     big_cell_height = buffer_size[1] // 12
@@ -1106,21 +1120,25 @@ def draw_export_legend(legend_ctx, images, buffer_size, mag=None, hfw=None,
     # write acquisition date
     if date is not None:
         label = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(date))
-        legend_ctx.show_text(label)
+        date_split = label.split()
+        legend_ctx.show_text(date_split[0])
+        legend_y_pos = lower_part * big_cell_height
+        legend_ctx.move_to(legend_x_pos, legend_y_pos)
+        legend_ctx.show_text(date_split[1])
 
     # write delmic logo
     if logo is not None:
+        _, plh = legend_ctx.text_extents(label)[2:4]
         logo_surface = cairo.ImageSurface.create_from_png(logo)
-        logo_scale_x = (cell_x_step / 4) / logo_surface.get_width()
-        logo_scale_y = (big_cell_height / 5) / logo_surface.get_height()
+        logo_scale_y = plh / logo_surface.get_height()
         legend_ctx.save()
         # FIXME: neither antialias or interpolation seems to have any effect when
         # downscaling the logo
         legend_ctx.set_antialias(cairo.ANTIALIAS_GRAY)
         surfpat = cairo.SurfacePattern(logo_surface)
         surfpat.set_filter(cairo.FILTER_BEST)
-        legend_ctx.translate(legend_x_pos + cell_x_step, upper_part * big_cell_height)
-        legend_ctx.scale(logo_scale_x, logo_scale_x)  # _y
+        legend_ctx.translate(buffer_size[0] - (logo_surface.get_width() * logo_scale_y + init_x_pos), upper_part * big_cell_height)
+        legend_ctx.scale(logo_scale_y, logo_scale_y)
         legend_ctx.set_source(surfpat)
         legend_ctx.paint()
         legend_ctx.restore()
@@ -1417,7 +1435,7 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, stre
     # rid of the blank parts of the canvas
     crop_pos = buffer_size
     crop_shape = (0, 0)
-    for i, im in enumerate(images):
+    for _, im in enumerate(images):
         b_im_rect = calc_img_buffer_rect(im, im.metadata['dc_scale'], im.metadata['dc_center'], buffer_center, buffer_scale, buffer_size)
         buffer_rect = (0, 0) + buffer_size
         intersection = intersect(buffer_rect, b_im_rect)
@@ -1427,14 +1445,20 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, stre
             crop_shape = [b if (b >= a) else a for a, b in zip(crop_shape, intersection[2:])]
 
     crop_data = (crop_pos[0], crop_pos[1], crop_shape[0], crop_shape[1])
+    clipped_y_size = buffer_size[1]
     if any([(a != b) for a, b in zip(crop_data, (0, 0, buffer_size[0], buffer_size[1]))]):
         logging.debug("Need to crop the data")
-        new_size = int(crop_shape[0]), int(crop_shape[1])
+        new_size = numpy.clip(crop_shape[0], CROP_RES_LIMIT, numpy.max(crop_shape[0])), crop_shape[1]
+        new_size = int(new_size[0]), int(new_size[1])
         crop_factor = new_size[0] / crop_shape[0], new_size[1] / crop_shape[1]
         crop_center = crop_pos[0] + (crop_shape[0] / 2) - (buffer_size[0] / 2), crop_pos[1] + (crop_shape[1] / 2) - (buffer_size[1] / 2)
         buffer_size = new_size
         buffer_center = (buffer_center[0] + crop_center[0] * buffer_scale[0], buffer_center[1] - crop_center[1] * buffer_scale[1])
         buffer_scale = (buffer_scale[0] / crop_factor[0], buffer_scale[1] / crop_factor[1])
+
+        # clip the y dimension of buffer size used to calculate the y dimension of
+        # the legend. This is to avoid extremely thin legend.
+        clipped_y_size = max(buffer_size[1], CROP_RES_LIMIT)
 
     # Make surface based on the maximum resolution
     data_to_draw = numpy.zeros((buffer_size[1], buffer_size[0], 4), dtype=numpy.uint8)
@@ -1475,11 +1499,11 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, stre
         )
         if not rgb:
             # Create legend
-            legend_to_draw = numpy.zeros((n * (buffer_size[1] // 24) + (buffer_size[1] // 12), buffer_size[0], 4), dtype=numpy.uint8)
+            legend_to_draw = numpy.zeros((n * (clipped_y_size // 24) + (clipped_y_size // 12), buffer_size[0], 4), dtype=numpy.uint8)
             legend_surface = cairo.ImageSurface.create_for_data(
-                legend_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], n * (buffer_size[1] // 24) + (buffer_size[1] // 12))
+                legend_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], n * (clipped_y_size // 24) + (clipped_y_size // 12))
             legend_ctx = cairo.Context(legend_surface)
-            draw_export_legend(legend_ctx, images + [last_image], buffer_size, mag,
+            draw_export_legend(legend_ctx, images + [last_image], (buffer_size[0], clipped_y_size), mag,
                                view_hfw[1], bar_width, actual_width, last_image.metadata['date'], streams_data, im.metadata['stream'], logo=logo)
 
             new_data_to_draw = numpy.zeros((data_to_draw.shape[0], data_to_draw.shape[1]), dtype=numpy.uint32)
@@ -1524,11 +1548,11 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, stre
         upscaling=((min_res[1], min_res[0]) == buffer_size)
     )
     # Create legend
-    legend_to_draw = numpy.zeros((n * (buffer_size[1] // 24) + (buffer_size[1] // 12), buffer_size[0], 4), dtype=numpy.uint8)
+    legend_to_draw = numpy.zeros((n * (clipped_y_size // 24) + (clipped_y_size // 12), buffer_size[0], 4), dtype=numpy.uint8)
     legend_surface = cairo.ImageSurface.create_for_data(
-        legend_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], n * (buffer_size[1] // 24) + (buffer_size[1] // 12))
+        legend_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], n * (clipped_y_size // 24) + (clipped_y_size // 12))
     legend_ctx = cairo.Context(legend_surface)
-    draw_export_legend(legend_ctx, images + [last_image], buffer_size, mag,
+    draw_export_legend(legend_ctx, images + [last_image], (buffer_size[0], clipped_y_size), mag,
                        view_hfw[1], bar_width, actual_width, last_image.metadata['date'], streams_data, last_image.metadata['stream'] if (not rgb) else None, logo=logo)
     if not rgb:
         new_data_to_draw = numpy.zeros((data_to_draw.shape[0], data_to_draw.shape[1]), dtype=numpy.uint32)
