@@ -1075,8 +1075,8 @@ class SpatialSpectrumViewport(ViewPort):
     def on_spectrum_motion(self, val):
 
         if val:
-            rng = self.bottom_legend.range
-            rat = (val[0] - rng[0]) / (rng[1] - rng[0])
+            rng = self.left_legend.range
+            rat = (val[1] - rng[0]) / (rng[1] - rng[0])
             line_pixels = rasterize_line(*self.current_line)
             self.stream.selected_pixel.value = line_pixels[int(len(line_pixels) * rat)]
 
