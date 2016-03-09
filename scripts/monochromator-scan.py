@@ -113,6 +113,7 @@ def acquire_spec(wls, wle, res, dt, filename):
 
         # MD_PIXEL_SIZE is not meaningful but handy for the display in Odemis
         # (it's the size of the square on top of the SEM survey => BIG!)
+        sempxs = ebeam.pixelSize.value
         md[model.MD_PIXEL_SIZE] = (sempxs[0] * 50, sempxs[1] * 50)
 
         md[model.MD_DESCRIPTION] = "Spectrum"
