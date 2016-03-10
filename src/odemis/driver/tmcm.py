@@ -43,6 +43,7 @@ from odemis.model import (isasync, ParallelThreadPoolExecutor,
                           CancellableFuture, HwError)
 from odemis.util import driver, TimeoutError
 import os
+import random
 import serial
 import struct
 import threading
@@ -1835,6 +1836,8 @@ class TMCMSimulator(object):
                 rval = self._getCurrentPos(mot)
             elif typ == 8: # target reached?
                 rval = 0 if self._axis_move[mot][1] > time.time() else 1
+            elif typ in (10, 11):  # left/right switch
+                rval = random.randint(0, 1)
             else:
                 rval = self._astates[mot].get(typ, 0) # default to 0
             self._sendReply(inst, val=rval)
