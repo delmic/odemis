@@ -29,13 +29,14 @@ import logging
 import math
 import numpy
 from odemis import model
+from odemis.acq import stream
 from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
 from odemis.gui.comp.overlay.base import Label
 import odemis.model
 from odemis.model._dataflow import DataArray
 from odemis.util import intersect
 from odemis.util import units
-from odemis.acq import stream
+import operator
 import time
 import wx
 
@@ -1101,9 +1102,11 @@ def draw_export_legend(legend_ctx, images, buffer_size, buffer_scale, mag=None,
     legend_x_pos = init_x_pos
     legend_y_pos = MAIN_MIDDLE * buffer_size[0]
     legend_ctx.move_to(legend_x_pos, legend_y_pos)
-    mag_text = u"Mag: × %s" % units.readable_str(units.round_significant(mag, 3))
-    label = mag_text
-    legend_ctx.show_text(label)
+    # For now obsolete magnification
+    # TODO: include image name typed by the user
+#     mag_text = u"Mag: × %s" % units.readable_str(units.round_significant(mag, 3))
+#     label = mag_text
+#     legend_ctx.show_text(label)
 
     # write HFW
     legend_x_pos += cell_x_step
@@ -1183,7 +1186,8 @@ def draw_export_legend(legend_ctx, images, buffer_size, buffer_scale, mag=None,
     # write stream data
     legend_ctx.set_font_size(small_font)
     legend_y_pos = big_cell_height
-    for s, data in streams_data.iteritems():
+    sorted_data = sorted(streams_data.items(), key=operator.itemgetter(1))
+    for s, (_, data) in sorted_data:
         legend_ctx.set_font_size(small_font)
         if s == stream:
             # in case of multifile, spot this particular stream with a
@@ -1273,26 +1277,30 @@ def get_ordered_images(streams, rgb=True):
                 stream_data.append(u"Dwell time: %s" % units.readable_str(data_raw.metadata[model.MD_EXP_TIME], "s", sig=3))
             else:
                 stream_data.append(u"Exposure time: %s" % units.readable_str(data_raw.metadata[model.MD_EXP_TIME], "s", sig=3))
+        if data_raw.metadata.get(model.MD_DWELL_TIME, None):
+            stream_data.append(u"Dwell time: %s" % units.readable_str(data_raw.metadata[model.MD_DWELL_TIME], "s"))
+        if data_raw.metadata.get(model.MD_LENS_MAG, None):
+            stream_data.append(u"%s x" % int(data_raw.metadata[model.MD_LENS_MAG]))
+        if data_raw.metadata.get(model.MD_FILTER_NAME, None):
+            stream_data.append(data_raw.metadata[model.MD_FILTER_NAME])
         if data_raw.metadata.get(model.MD_LIGHT_POWER, None):
             stream_data.append(units.readable_str(data_raw.metadata[model.MD_LIGHT_POWER], "W", sig=3))
         if data_raw.metadata.get(model.MD_EBEAM_VOLTAGE, None):
             stream_data.append(units.readable_str(data_raw.metadata[model.MD_EBEAM_VOLTAGE], "V", sig=3))
         if data_raw.metadata.get(model.MD_EBEAM_CURRENT, None):
             stream_data.append(units.readable_str(data_raw.metadata[model.MD_EBEAM_CURRENT], "A", sig=3))
-        if data_raw.metadata.get(model.MD_DWELL_TIME, None):
-            stream_data.append(u"Dwell time: %s" % units.readable_str(data_raw.metadata[model.MD_DWELL_TIME], "s"))
-        if data_raw.metadata.get(model.MD_FILTER_NAME, None):
-            stream_data.append(data_raw.metadata[model.MD_FILTER_NAME])
         if data_raw.metadata.get(model.MD_IN_WL, None):
-            stream_data.append(u"Excitation.: %s" % units.readable_str(numpy.average(data_raw.metadata[model.MD_IN_WL]), "m", sig=3))
+            stream_data.append(u"Excitation: %s" % units.readable_str(numpy.average(data_raw.metadata[model.MD_IN_WL]), "m", sig=3))
         if data_raw.metadata.get(model.MD_OUT_WL, None):
-            stream_data.append(u"Emission.: %s" % units.readable_str(numpy.average(data_raw.metadata[model.MD_OUT_WL]), "m", sig=3))
+            stream_data.append(u"Emission: %s" % units.readable_str(numpy.average(data_raw.metadata[model.MD_OUT_WL]), "m", sig=3))
         if isinstance(s, stream.OpticalStream):
             baseline = data_raw.metadata.get(model.MD_BASELINE, 0)
         else:
             baseline = numpy.min(data_raw)
         stream_data.append(baseline)
-        streams_data[s] = stream_data
+        # date used just for sorting
+        date = data_raw.metadata.get(model.MD_ACQ_DATE, 0)
+        streams_data[s] = date, stream_data
 
     # Sort by size, so that the biggest picture is first drawn (no opacity)
     def get_area(d):
@@ -1554,7 +1562,7 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, stre
             new_legend_to_draw = numpy.where(new_legend_to_draw == 0, numpy.min(new_data_to_draw), numpy.max(new_data_to_draw))
             data_with_legend = numpy.append(new_data_to_draw, new_legend_to_draw, axis=0)
             # Clip background to baseline
-            baseline = streams_data[im.metadata['stream']][-1]
+            baseline = streams_data[im.metadata['stream']][1][-1]
             data_with_legend = numpy.clip(data_with_legend, baseline, numpy.max(new_data_to_draw))
             data_to_export.append(model.DataArray(data_with_legend, im.metadata))
 
@@ -1603,7 +1611,7 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, stre
         new_legend_to_draw = numpy.where(new_legend_to_draw == 0, numpy.min(new_data_to_draw), numpy.max(new_data_to_draw))
         data_with_legend = numpy.append(new_data_to_draw, new_legend_to_draw, axis=0)
         # Clip background to baseline
-        baseline = streams_data[last_image.metadata['stream']][-1]
+        baseline = streams_data[last_image.metadata['stream']][1][-1]
         data_with_legend = numpy.clip(data_with_legend, baseline, numpy.max(new_data_to_draw))
     else:
         data_with_legend = numpy.append(data_to_draw, legend_to_draw, axis=0)
