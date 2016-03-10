@@ -41,8 +41,27 @@ import wx
 
 
 BAR_PLOT_COLOUR = (0.5, 0.5, 0.5)
-CROP_RES_LIMIT = 512
+CROP_RES_LIMIT = 1024
 MAX_RES_FACTOR = 5  # upper limit resolution factor to exported image
+# legend ratios
+CELL_WIDTH = 0.2
+MAIN_LAYER = 0.05
+SUB_LAYER = 0.035
+CELL_MARGIN = 0.02
+LARGE_FONT = 0.0162
+MEDIUM_FONT = 0.0131
+SMALL_FONT = 0.0118
+MAIN_UPPER = 0.0229
+MAIN_LOWER = 0.0389
+MAIN_MIDDLE = 0.0311
+SUB_UPPER = 0.0147
+SUB_LOWER = 0.029
+BAR_HEIGHT = 0.015
+BAR_THICKNESS = 0.0026
+LINE_THICKNESS = 0.0016
+ARC_RADIUS = 0.002
+ARC_LEFT_MARGIN = 0.01
+ARC_TOP_MARGIN = 0.0104
 
 
 # @profile
@@ -1044,28 +1063,26 @@ def spectrum_to_export_data(spectrum, client_size, raw, unit, spectrum_range):
         return spec_plot
 
 
-def draw_export_legend(legend_ctx, images, buffer_size, mag=None, hfw=None,
-                       scale_bar_width=None, scale_actual_width=None, date=None, streams_data=None, stream=None, logo=None):
+def draw_export_legend(legend_ctx, images, buffer_size, buffer_scale, mag=None,
+                       hfw=None, date=None, streams_data=None, stream=None, logo=None):
     """
     Draws legend to be attached to the exported image
     """
-    init_x_pos = buffer_size[0] // 25
-    upper_part = 0.25
-    middle_part = 0.5
-    lower_part = 0.85
-    large_font = numpy.min(buffer_size) // 60  # used for general data
-    small_font = numpy.min(buffer_size) // 80  # used for stream data
-    arc_radius = numpy.min(buffer_size) // 200
+    init_x_pos = buffer_size[0] * CELL_MARGIN
+    large_font = buffer_size[0] * LARGE_FONT  # used for general data
+    medium_font = buffer_size[0] * MEDIUM_FONT
+    small_font = buffer_size[0] * SMALL_FONT  # used for stream data
+    arc_radius = buffer_size[0] * ARC_RADIUS
     n = len(images)
     # Just make cell dimensions analog to the image buffer dimensions
-    big_cell_height = buffer_size[1] // 12
-    small_cell_height = buffer_size[1] // 24
-    cell_x_step = buffer_size[0] // 5
+    big_cell_height = buffer_size[0] * MAIN_LAYER
+    small_cell_height = buffer_size[0] * SUB_LAYER
+    cell_x_step = buffer_size[0] * CELL_WIDTH
     legend_ctx.set_source_rgb(0, 0, 0)
     legend_ctx.rectangle(0, 0, buffer_size[0], n * small_cell_height + big_cell_height)
     legend_ctx.fill()
     legend_ctx.set_source_rgb(1, 1, 1)
-    legend_ctx.set_line_width(2)
+    legend_ctx.set_line_width(buffer_size[0] * LINE_THICKNESS)
 
     # draw separation lines
     legend_y_pos = big_cell_height
@@ -1079,11 +1096,10 @@ def draw_export_legend(legend_ctx, images, buffer_size, mag=None, hfw=None,
         legend_ctx.stroke()
 
     # write Magnification
-    # TODO: Don't rely on a Microsoft font, just use DejaVu or something basic
     legend_ctx.select_font_face("Sans", cairo.FONT_SLANT_NORMAL)
     legend_ctx.set_font_size(large_font)
     legend_x_pos = init_x_pos
-    legend_y_pos = middle_part * big_cell_height
+    legend_y_pos = MAIN_MIDDLE * buffer_size[0]
     legend_ctx.move_to(legend_x_pos, legend_y_pos)
     mag_text = u"Mag: × %s" % units.readable_str(units.round_significant(mag, 3))
     label = mag_text
@@ -1097,73 +1113,95 @@ def draw_export_legend(legend_ctx, images, buffer_size, mag=None, hfw=None,
     legend_ctx.show_text(label)
 
     # Draw scale bar
+    # min_bar_width = cell_x_step - init_x_pos
+    max_bar_width = 2 * cell_x_step - 2 * init_x_pos
+    max_actual_width = max_bar_width * buffer_scale[0]
+    actual_width = units.round_down_significant(max_actual_width, 1)
+    bar_width = int(round(actual_width / buffer_scale[0]))
+
+    legend_ctx.set_line_width(buffer_size[0] * BAR_THICKNESS)
     legend_x_pos += cell_x_step
-    legend_y_pos = upper_part * big_cell_height
+    legend_y_pos = (big_cell_height / 2) - (BAR_HEIGHT * buffer_size[0] / 2)
     legend_ctx.move_to(legend_x_pos, legend_y_pos)
-    legend_y_pos = middle_part * big_cell_height
+    legend_y_pos = (big_cell_height / 2) + (BAR_HEIGHT * buffer_size[0] / 2)
     legend_ctx.line_to(legend_x_pos, legend_y_pos)
-    legend_y_pos = lower_part * big_cell_height
+    bar_line = bar_width * 0.375
+    legend_y_pos = big_cell_height / 2
     legend_ctx.move_to(legend_x_pos, legend_y_pos)
-    label = units.readable_str(scale_actual_width, "m", sig=2)
+    legend_x_pos += bar_line
+    legend_ctx.line_to(legend_x_pos, legend_y_pos)
+
+    label = units.readable_str(actual_width, "m", sig=2)
+    plw, _ = legend_ctx.text_extents(label)[2:4]
+    bar_margin = (bar_width * 0.25) / 2 - (plw / 2)
+    legend_x_pos += bar_margin
+    legend_y_pos = MAIN_MIDDLE * buffer_size[0]
+    legend_ctx.move_to(legend_x_pos, legend_y_pos)
     legend_ctx.show_text(label)
-    legend_y_pos = middle_part * big_cell_height
+
+    legend_y_pos = big_cell_height / 2
+    legend_x_pos += bar_width * 0.25 - bar_margin
     legend_ctx.move_to(legend_x_pos, legend_y_pos)
-    legend_x_pos += scale_bar_width
+    legend_x_pos += bar_line
     legend_ctx.line_to(legend_x_pos, legend_y_pos)
-    legend_y_pos = upper_part * big_cell_height
+    legend_y_pos = (big_cell_height / 2) - (BAR_HEIGHT * buffer_size[0] / 2)
+    legend_ctx.move_to(legend_x_pos, legend_y_pos)
+    legend_y_pos = (big_cell_height / 2) + (BAR_HEIGHT * buffer_size[0] / 2)
     legend_ctx.line_to(legend_x_pos, legend_y_pos)
     legend_ctx.stroke()
-    legend_x_pos += buffer_size[0] // 20
-    legend_y_pos = middle_part * big_cell_height
-    legend_ctx.move_to(legend_x_pos, legend_y_pos)
 
     # write acquisition date
+    legend_ctx.set_font_size(medium_font)
+    legend_x_pos += 2 * cell_x_step - (bar_width + init_x_pos)
+    legend_y_pos = MAIN_UPPER * buffer_size[0]
+    legend_ctx.move_to(legend_x_pos, legend_y_pos)
     if date is not None:
         label = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(date))
         date_split = label.split()
         legend_ctx.show_text(date_split[0])
-        legend_y_pos = lower_part * big_cell_height
+        legend_y_pos = MAIN_LOWER * buffer_size[0]
         legend_ctx.move_to(legend_x_pos, legend_y_pos)
         legend_ctx.show_text(date_split[1])
 
     # write delmic logo
     if logo is not None:
-        _, plh = legend_ctx.text_extents(label)[2:4]
         logo_surface = cairo.ImageSurface.create_from_png(logo)
-        logo_scale_y = plh / logo_surface.get_height()
+        logo_scale_x = ((cell_x_step / 2) - init_x_pos) / logo_surface.get_width()
         legend_ctx.save()
         # FIXME: neither antialias or interpolation seems to have any effect when
         # downscaling the logo
         legend_ctx.set_antialias(cairo.ANTIALIAS_GRAY)
         surfpat = cairo.SurfacePattern(logo_surface)
         surfpat.set_filter(cairo.FILTER_BEST)
-        legend_ctx.translate(buffer_size[0] - (logo_surface.get_width() * logo_scale_y + init_x_pos), upper_part * big_cell_height)
-        legend_ctx.scale(logo_scale_y, logo_scale_y)
+        logo_h_height = (logo_scale_x * logo_surface.get_height()) / 2
+        legend_ctx.translate(buffer_size[0] - (cell_x_step / 2), (big_cell_height / 2) - logo_h_height)
+        legend_ctx.scale(logo_scale_x, logo_scale_x)
         legend_ctx.set_source(surfpat)
         legend_ctx.paint()
         legend_ctx.restore()
 
     # write stream data
-    legend_y_pos = 0.75 * big_cell_height
+    legend_ctx.set_font_size(small_font)
+    legend_y_pos = big_cell_height
     for s, data in streams_data.iteritems():
         legend_ctx.set_font_size(small_font)
         if s == stream:
             # in case of multifile, spot this particular stream with a
             # circle next to the stream name
-            legend_x_pos = init_x_pos / 2
-            legend_y_pos += small_cell_height
+            legend_x_pos = ARC_LEFT_MARGIN * buffer_size[0]
+            legend_y_pos += ARC_TOP_MARGIN * buffer_size[0]
             legend_ctx.move_to(legend_x_pos, legend_y_pos)
             legend_ctx.arc(legend_x_pos, legend_y_pos, arc_radius, 0, 2 * math.pi)
             legend_ctx.fill()
             legend_ctx.stroke()
             legend_x_pos = init_x_pos
+            legend_y_pos += (SUB_UPPER * buffer_size[0] - ARC_TOP_MARGIN * buffer_size[0])
             legend_ctx.move_to(legend_x_pos, legend_y_pos)
         else:
             legend_x_pos = init_x_pos
-            legend_y_pos += small_cell_height
+            legend_y_pos += SUB_UPPER * buffer_size[0]
             legend_ctx.move_to(legend_x_pos, legend_y_pos)
         legend_ctx.show_text(s.name.value)
-        legend_ctx.set_font_size(small_font)
         legend_x_pos += cell_x_step
         legend_y_pos_store = legend_y_pos
         for i, d in enumerate(data[:-1]):
@@ -1171,10 +1209,10 @@ def draw_export_legend(legend_ctx, images, buffer_size, mag=None, hfw=None,
             legend_ctx.show_text(d)
             if (i % 2 == 1):
                 legend_x_pos += cell_x_step
-                legend_y_pos -= 0.4 * small_cell_height
+                legend_y_pos -= (SUB_LOWER - SUB_UPPER) * buffer_size[0]
             else:
-                legend_y_pos += 0.4 * small_cell_height
-        legend_y_pos = legend_y_pos_store
+                legend_y_pos += (SUB_LOWER - SUB_UPPER) * buffer_size[0]
+        legend_y_pos = (legend_y_pos_store + (small_cell_height - SUB_UPPER * buffer_size[0]))
 
 
 def get_ordered_images(streams, rgb=True):
@@ -1445,10 +1483,11 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, stre
             crop_shape = [b if (b >= a) else a for a, b in zip(crop_shape, intersection[2:])]
 
     crop_data = (crop_pos[0], crop_pos[1], crop_shape[0], crop_shape[1])
-    clipped_y_size = buffer_size[1]
     if any([(a != b) for a, b in zip(crop_data, (0, 0, buffer_size[0], buffer_size[1]))]):
         logging.debug("Need to crop the data")
-        new_size = numpy.clip(crop_shape[0], CROP_RES_LIMIT, numpy.max(crop_shape[0])), crop_shape[1]
+        new_size = max(crop_shape[0], CROP_RES_LIMIT), crop_shape[1]
+        if new_size[0] == CROP_RES_LIMIT:
+            new_size = new_size[0], (CROP_RES_LIMIT / crop_shape[0]) * crop_shape[1]
         new_size = int(new_size[0]), int(new_size[1])
         crop_factor = new_size[0] / crop_shape[0], new_size[1] / crop_shape[1]
         crop_center = crop_pos[0] + (crop_shape[0] / 2) - (buffer_size[0] / 2), crop_pos[1] + (crop_shape[1] / 2) - (buffer_size[1] / 2)
@@ -1456,20 +1495,11 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, stre
         buffer_center = (buffer_center[0] + crop_center[0] * buffer_scale[0], buffer_center[1] - crop_center[1] * buffer_scale[1])
         buffer_scale = (buffer_scale[0] / crop_factor[0], buffer_scale[1] / crop_factor[1])
 
-        # clip the y dimension of buffer size used to calculate the y dimension of
-        # the legend. This is to avoid extremely thin legend.
-        clipped_y_size = max(buffer_size[1], CROP_RES_LIMIT)
-
     # Make surface based on the maximum resolution
     data_to_draw = numpy.zeros((buffer_size[1], buffer_size[0], 4), dtype=numpy.uint8)
     surface = cairo.ImageSurface.create_for_data(
         data_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], buffer_size[1])
     ctx = cairo.Context(surface)
-
-    # scale bar details
-    bar_width = buffer_size[0] // 4
-    actual_width = bar_width * buffer_scale[0]
-    actual_width = units.round_significant(actual_width, 1)
 
     last_image = images.pop()
     # For every image, except the last
@@ -1499,12 +1529,12 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, stre
         )
         if not rgb:
             # Create legend
-            legend_to_draw = numpy.zeros((n * (clipped_y_size // 24) + (clipped_y_size // 12), buffer_size[0], 4), dtype=numpy.uint8)
+            legend_to_draw = numpy.zeros((n * int(buffer_size[0] * SUB_LAYER) + int(buffer_size[0] * MAIN_LAYER), buffer_size[0], 4), dtype=numpy.uint8)
             legend_surface = cairo.ImageSurface.create_for_data(
-                legend_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], n * (clipped_y_size // 24) + (clipped_y_size // 12))
+                legend_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], n * int(buffer_size[0] * SUB_LAYER) + int(buffer_size[0] * MAIN_LAYER))
             legend_ctx = cairo.Context(legend_surface)
-            draw_export_legend(legend_ctx, images + [last_image], (buffer_size[0], clipped_y_size), mag,
-                               view_hfw[1], bar_width, actual_width, last_image.metadata['date'], streams_data, im.metadata['stream'], logo=logo)
+            draw_export_legend(legend_ctx, images + [last_image], buffer_size, buffer_scale, mag,
+                               view_hfw[1], last_image.metadata['date'], streams_data, im.metadata['stream'], logo=logo)
 
             new_data_to_draw = numpy.zeros((data_to_draw.shape[0], data_to_draw.shape[1]), dtype=numpy.uint32)
             new_data_to_draw[:, :] = numpy.left_shift(data_to_draw[:, :, 2], 8, dtype=numpy.uint32) | data_to_draw[:, :, 1]
@@ -1548,12 +1578,12 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, stre
         upscaling=((min_res[1], min_res[0]) == buffer_size)
     )
     # Create legend
-    legend_to_draw = numpy.zeros((n * (clipped_y_size // 24) + (clipped_y_size // 12), buffer_size[0], 4), dtype=numpy.uint8)
+    legend_to_draw = numpy.zeros((n * int(buffer_size[0] * SUB_LAYER) + int(buffer_size[0] * MAIN_LAYER), buffer_size[0], 4), dtype=numpy.uint8)
     legend_surface = cairo.ImageSurface.create_for_data(
-        legend_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], n * (clipped_y_size // 24) + (clipped_y_size // 12))
+        legend_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], n * int(buffer_size[0] * SUB_LAYER) + int(buffer_size[0] * MAIN_LAYER))
     legend_ctx = cairo.Context(legend_surface)
-    draw_export_legend(legend_ctx, images + [last_image], (buffer_size[0], clipped_y_size), mag,
-                       view_hfw[1], bar_width, actual_width, last_image.metadata['date'], streams_data, last_image.metadata['stream'] if (not rgb) else None, logo=logo)
+    draw_export_legend(legend_ctx, images + [last_image], buffer_size, buffer_scale, mag,
+                       view_hfw[1], last_image.metadata['date'], streams_data, last_image.metadata['stream'] if (not rgb) else None, logo=logo)
     if not rgb:
         new_data_to_draw = numpy.zeros((data_to_draw.shape[0], data_to_draw.shape[1]), dtype=numpy.uint32)
         new_data_to_draw[:, :] = numpy.left_shift(data_to_draw[:, :, 2], 8, dtype=numpy.uint32) | data_to_draw[:, :, 1]
