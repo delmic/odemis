@@ -1075,8 +1075,8 @@ class SpatialSpectrumViewport(ViewPort):
     def on_spectrum_motion(self, val):
 
         if val:
-            rng = self.bottom_legend.range
-            rat = (val[0] - rng[0]) / (rng[1] - rng[0])
+            rng = self.left_legend.range
+            rat = (val[1] - rng[0]) / (rng[1] - rng[0])
             line_pixels = rasterize_line(*self.current_line)
             self.stream.selected_pixel.value = line_pixels[int(len(line_pixels) * rat)]
 
@@ -1168,12 +1168,12 @@ class SpatialSpectrumViewport(ViewPort):
         self.current_line = line
 
         if data is not None:
-            spectrum_range, unit_y = self.stream.get_spectrum_range()
+            spectrum_range, unit_x = self.stream.get_spectrum_range()
             line_length = data.shape[0] * data.metadata[model.MD_PIXEL_SIZE][1]
 
-            unit_x = self.stream.spectrumBandwidth.unit
             self.bottom_legend.unit = unit_x
             self.bottom_legend.range = (spectrum_range[0], spectrum_range[-1])
+            unit_y = "m"
             self.left_legend.unit = unit_y
             self.left_legend.range = (0, line_length)
 
