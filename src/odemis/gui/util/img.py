@@ -1473,6 +1473,7 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, stre
     # rid of the blank parts of the canvas
     crop_pos = buffer_size
     crop_shape = (0, 0)
+    intersection_found = False
     for _, im in enumerate(images):
         b_im_rect = calc_img_buffer_rect(im, im.metadata['dc_scale'], im.metadata['dc_center'], buffer_center, buffer_scale, buffer_size)
         buffer_rect = (0, 0) + buffer_size
@@ -1481,6 +1482,12 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, stre
             # Keep the min roi that contains all the stream data
             crop_pos = [b if (b <= a) else a for a, b in zip(crop_pos, intersection[:2])]
             crop_shape = [b if (b >= a) else a for a, b in zip(crop_shape, intersection[2:])]
+            intersection_found = True
+
+    # if there is no intersection of any stream data with the viewport, then
+    # raise IOError
+    if not intersection_found:
+        raise IOError("There is no visible stream data to be exported")
 
     crop_data = (crop_pos[0], crop_pos[1], crop_shape[0], crop_shape[1])
     if any([(a != b) for a, b in zip(crop_data, (0, 0, buffer_size[0], buffer_size[1]))]):
