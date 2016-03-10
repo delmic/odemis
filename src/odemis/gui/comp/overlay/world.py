@@ -831,6 +831,8 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, PixelDataMixin):
             self._selected_line_va.unsubscribe(self._on_selection)
         if self._selected_width_va:
             self._selected_width_va.unsubscribe(self._on_width)
+        if self._selected_pixel_va:
+            self._selected_pixel_va.unsubscribe(self._on_pix_selection)
 
         self._selected_line_va = selection_va
         self._selected_width_va = width_va
@@ -838,6 +840,7 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, PixelDataMixin):
 
         self._selected_line_va.subscribe(self._on_selection, init=True)
         self._selected_width_va.subscribe(self._on_width, init=False)
+        self._selected_pixel_va.subscribe(self._on_pix_selection, init=False)
 
     def _on_selection(self, selected_line):
         """ Update the overlay when it's active and the line changes """
@@ -854,12 +857,17 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, PixelDataMixin):
 
                 self._view_to_world()
 
-            wx.CallAfter(self.cnvs.update_drawing)
+            wx.CallAfter(self.cnvs.request_drawing_update)
+
+    def _on_pix_selection(self, _):
+        """ Update the overlay when it's active and the pixel changes """
+        if self.active:
+            wx.CallAfter(self.cnvs.request_drawing_update)
 
     def _on_width(self, _):
         """ Update the overlay when it's active and the line width changes """
         if self.active:
-            wx.CallAfter(self.cnvs.update_drawing)
+            wx.CallAfter(self.cnvs.request_drawing_update)
 
     def get_selection_points(self, pixel):
         """ Calculate the points around the given point according to the selection width
@@ -1022,18 +1030,18 @@ class PixelSelectOverlay(WorldOverlay, PixelDataMixin, DragMixin):
     def _on_selection(self, _):
         """ Update the overlay when it's active and the line changes """
         if self.active:
-            wx.CallAfter(self.cnvs.update_drawing)
+            wx.CallAfter(self.cnvs.request_drawing_update)
 
     def _on_width(self, _):
         """ Update the overlay when it's active and the line width changes """
         if self.active:
-            wx.CallAfter(self.cnvs.update_drawing)
+            wx.CallAfter(self.cnvs.request_drawing_update)
 
     def deactivate(self):
         """ Clear the hover pixel when the overlay is deactivated """
         self._pixel_pos = None
         WorldOverlay.deactivate(self)
-        wx.CallAfter(self.cnvs.update_drawing)
+        wx.CallAfter(self.cnvs.request_drawing_update)
 
     # Event handlers
 
@@ -1041,7 +1049,7 @@ class PixelSelectOverlay(WorldOverlay, PixelDataMixin, DragMixin):
 
         if self.active:
             self._pixel_pos = None
-            wx.CallAfter(self.cnvs.update_drawing)
+            wx.CallAfter(self.cnvs.request_drawing_update)
 
         WorldOverlay.on_leave(self, evt)
 
