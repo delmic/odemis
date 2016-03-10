@@ -107,6 +107,7 @@ def getComponent(name=None, role=None):
             errors.append("role %s" % role)
         raise LookupError("No component with the %s" % (" and ".join(errors),))
 
+
 def getComponents():
     """
     return (set of Component): all the HwComponents (alive) managed by the backend
@@ -114,6 +115,7 @@ def getComponents():
     microscope = getMicroscope()
     return microscope.alive.value | {microscope}
     # return _getChildren(microscope)
+
 
 def _getChildren(root):
     """
@@ -147,6 +149,7 @@ class roattribute(property):
     # TODO force to not have setter, but I have no idea how to, override __init__?
     pass
 
+
 def get_roattributes(self):
     """
     list all roattributes of an instance
@@ -154,6 +157,7 @@ def get_roattributes(self):
     """
     members = inspect.getmembers(self.__class__)
     return [name for name, obj in members if isinstance(obj, roattribute)]
+
 
 def dump_roattributes(self):
     """
@@ -164,6 +168,7 @@ def dump_roattributes(self):
     roattr += get_roattributes(self)
 
     return dict((name, getattr(self, name)) for name in roattr)
+
 
 def load_roattributes(self, roattributes):
     """
@@ -295,6 +300,7 @@ class Container(Pyro4.core.Daemon):
         """
         self.rootId = component._pyroId
 
+
 # helper functions
 def getContainer(name, validate=True):
     """
@@ -316,6 +322,7 @@ def getContainer(name, validate=True):
         container.ping() # raise an exception if connection fails
     return container
 
+
 def getObject(container_name, object_name):
     """
     returns (a proxy to) the object with the given name in the given container
@@ -324,12 +331,13 @@ def getObject(container_name, object_name):
     container = getContainer(container_name, validate=False)
     return container.getObject(urllib.quote(object_name))
 
+
 def createNewContainer(name, validate=True, in_own_process=True):
     """
     creates a new container in an independent and isolated process
     validate (bool): if the connection should be validated
     in_own_process (bool): if True, creates the container in a separate process
-     (so can run fully asynchronously). Otherwise, it is run in a thread. 
+     (so can run fully asynchronously). Otherwise, it is run in a thread.
     returns the (proxy to the) new container
     """
     # create a container separately
@@ -342,12 +350,27 @@ def createNewContainer(name, validate=True, in_own_process=True):
         p = threading.Thread(name="Container " + name, target=_manageContainer,
                              args=(name, isready))
     p.start()
-    if not isready.wait(5): # wait maximum 5s
+    if not isready.wait(5):  # wait maximum 5s
         logging.error("Container %s is taking too long to get ready", name)
         raise IOError("Container creation timeout")
 
+    if in_own_process:
+        # Show a message when the process ends (badly)
+        def wait_process(proc):
+            proc.join()
+            xc = proc.exitcode
+            if xc:
+                # exitcode < 0 if ended by a signal
+                logging.warning("Container %s finished with exit code %d", name, xc)
+
+        wpt = threading.Thread(name="Waiter for container " + name, target=wait_process,
+                               args=(p,))
+        wpt.daemon = True
+        wpt.start()
+
     # connect to the new container
     return getContainer(name, validate)
+
 
 def createInNewContainer(container_name, klass, kwargs):
     """
@@ -370,6 +393,7 @@ def createInNewContainer(container_name, klass, kwargs):
                               container_name)
         raise exp
     return container, comp
+
 
 def _manageContainer(name, isready=None):
     """
