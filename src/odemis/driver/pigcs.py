@@ -1789,12 +1789,14 @@ class CLRelController(Controller):
                                 address, a)
 
             # Check the unit is mm
-            unit = self.GetParameter(a, 0x7000601)
-            if unit == "MM":
+            unit = self.GetParameter(a, 0x7000601).lower()
+            if unit == "mm":
                 self._upm[a] = 1e-3
+            elif unit == "um":
+                self._upm[a] = 1e-6
             else:
                 raise IOError("Controller %d configured with unit %s, but only "
-                              "millimeters (MM) is supported." % (address, unit))
+                              "millimeters (mm) is supported." % (address, unit))
 
             try:  # Only exists on E-861
                 # slew rate is stored in ms
