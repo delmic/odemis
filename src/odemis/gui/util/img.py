@@ -35,6 +35,7 @@ from odemis.gui.comp.overlay.base import Label
 import odemis.model
 from odemis.model._dataflow import DataArray
 from odemis.util import intersect
+from odemis.util import polar, img
 from odemis.util import units
 import operator
 import time
@@ -666,6 +667,38 @@ def draw_image(ctx, im_data, w_im_center, buffer_center, buffer_scale,
     ctx.restore()
 
 
+def calculate_raw_polar(data, bg_data):
+    # FIXME: This code is a dublicate of part of _project2Polar. The image data
+    # should be directly accessible from the stream.
+    if numpy.prod(data.shape) > (1280 * 1080):
+        logging.info("AR image is very large %s, will convert to "
+                     "azimuthal projection in reduced precision.",
+                     data.shape)
+        y, x = data.shape
+        if y > x:
+            small_shape = 1024, int(round(1024 * x / y))
+        else:
+            small_shape = int(round(1024 * y / x)), 1024
+        # resize
+        data = img.rescale_hq(data, small_shape)
+        dtype = numpy.float16
+    else:
+        dtype = None  # just let the function use the best one
+
+    size = min(min(data.shape) * 2, 1134)
+
+    if bg_data is None:
+        # Simple version: remove the background value
+        data0 = polar.ARBackgroundSubtract(data)
+    else:
+        data0 = img.Subtract(data, bg_data)  # metadata from data
+
+    # calculate raw polar representation
+    polard = polar.AngleResolved2Polar(data0, size, hole=False, dtype=dtype, raw=True)
+
+    return polard
+
+
 def ar_to_export_data(streams, raw=False):
     """
     Creates either raw or WYSIWYG representation for the AR projection
@@ -678,8 +711,19 @@ def ar_to_export_data(streams, raw=False):
     """
 
     if raw:
-        # TODO implement raw export
-        raise ValueError("Raw export is unsupported for AR data")
+        s = streams[0]
+        pos = s.point.value
+
+        # find positions of each acquisition
+        # tuple of 2 floats -> DataArray: position on SEM -> data
+        sempos = {}
+        for d in s.raw:
+            try:
+                sempos[d.metadata[model.MD_POS]] = img.ensure2DImage(d)
+            except KeyError:
+                logging.info("Skipping DataArray without known position")
+        raw_polar = calculate_raw_polar(sempos[pos], s.background.value)
+        return raw_polar
     else:
         # we expect just one stream
         wim = format_rgba_darray(streams[0].image.value)
@@ -1679,6 +1723,7 @@ def NDImage2wxImage(image):
                              alpha=numpy.ascontiguousarray(image[:, :, 3]))
     else:
         raise ValueError("image is of shape %s" % (image.shape,))
+
 
 # Untested
 def NDImage2wxBitmap(image):

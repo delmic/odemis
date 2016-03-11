@@ -53,7 +53,7 @@ class SpatialOptions(object):
 EXPORTERS = {"spatial": ([("PNG", SpatialOptions), ("TIFF", SpatialOptions)],
                          [("Serialized TIFF", SpatialOptions)]),
              "AR": ([("PNG", None), ("TIFF", None)],
-                    []),
+                    [("CSV", None)]),
              "spectrum": ([("PNG", None), ("TIFF", None)],
                           [("CSV", None)])}
 
