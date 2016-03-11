@@ -39,8 +39,12 @@ AR_HOLE_DIAMETER = 0.6e-3  # m, diameter the hole in the mirror
 AR_FOCUS_DISTANCE = 0.5e-3  # m, the vertical mirror cutoff, iow the min distance between the mirror and the sample
 AR_PARABOLA_F = 2.5e-3  # m, parabola_parameter=1/4f
 
+# data size for raw export
+PHI_SIZE = 400
+THETA_SIZE = 100
 
-def AngleResolved2Polar(data, output_size, hole=True, dtype=None):
+
+def AngleResolved2Polar(data, output_size, hole=True, dtype=None, raw=False):
     """
     Converts an angle resolved image to polar representation
     data (model.DataArray): The image that was projected on the CCD after being
@@ -49,6 +53,8 @@ def AngleResolved2Polar(data, output_size, hole=True, dtype=None):
       metadata. Pixel size is the sensor pixel size * binning / magnification.
     output_size (int): The size of the output DataArray (assumed to be square)
     hole (boolean): Crop the pole if True
+    raw (boolean): if True, return a raw representation (phi/theta axes). Used
+      in csv export.
     returns (model.DataArray): converted image in polar view
     """
     assert(len(data.shape) == 2)  # => 2D with greyscale
@@ -85,30 +91,58 @@ def AngleResolved2Polar(data, output_size, hole=True, dtype=None):
         phi_data[i, :] = phi
         omega_data[i, :] = cropped_image[i] / omega
 
-    # Convert into polar coordinates
-    h_output_size = output_size / 2
-    theta = theta_data * (h_output_size / math.pi * 2)
-    phi = phi_data
-    theta_data = numpy.cos(phi) * theta
-    phi_data = numpy.sin(phi) * theta
+    if raw:
+        # compute new mask
+        phi_lin = numpy.linspace(0, 2 * math.pi, PHI_SIZE)
+        theta_lin = numpy.linspace(0, math.pi / 2, THETA_SIZE)
+        phi_grid, theta_grid = numpy.meshgrid(phi_lin, theta_lin)
 
-    # Interpolation into 2d array
-#    xi = numpy.linspace(-h_output_size, h_output_size, 2 * h_output_size + 1)
-#    yi = numpy.linspace(-h_output_size, h_output_size, 2 * h_output_size + 1)
-#    qz = mlab.griddata(phi_data.flat, theta_data.flat, omega_data.flat, xi, yi, interp="linear")
+        a = (1 / (4 * parabola_f))
+        xcut = AR_XMAX - AR_PARABOLA_F
+        # length vector
+        c = (2 * (a * numpy.cos(phi_grid) * numpy.sin(theta_grid) + a)) ** -1
+        x = -numpy.sin(theta_grid) * numpy.cos(phi_grid) * c
+        z = numpy.cos(theta_grid) * c
 
-    # FIXME: need rotation (=swap axes), but swapping theta/phi slows down the
-    # interpolation by 3 ?!
-    with warnings.catch_warnings():
-        # Some points might be so close that they are identical (within float
-        # precision). It's fine, no need to generate a warning.
-        warnings.simplefilter("ignore", DuplicatePointWarning)
-        triang = Triangulation(theta_data.flat, phi_data.flat)
-    interp = triang.linear_interpolator(omega_data.flat, default_value=0)
-    qz = interp[-h_output_size:h_output_size:complex(0, output_size), # Y
-                - h_output_size:h_output_size:complex(0, output_size)] # X
-    qz = qz.swapaxes(0, 1)[:, ::-1] # rotate by 90°
-    result = model.DataArray(qz, data.metadata)
+        mask = numpy.ones((THETA_SIZE, PHI_SIZE))
+        mask[(x > xcut) | (theta_grid < (4 * numpy.pi / 180)) | (z < AR_FOCUS_DISTANCE)] = 0
+        # TODO: can probably choose a selection here to speed up interpolation.
+        # This is a silly fix but it works. Prevents exptrapolation which leads to errors
+        theta_data = numpy.tile(theta_data, (1, 3))
+        phi_data = numpy.append(numpy.append(phi_data - 2 * math.pi, phi_data, axis=1), phi_data + 2 * math.pi, axis=1)
+
+        ARdata = numpy.tile(omega_data, (1, 3))
+        triang = Triangulation(phi_data.flat, theta_data.flat)
+        interp = triang.linear_interpolator(ARdata.flat, default_value=0)
+        qz = interp[0:numpy.pi / 2:complex(0, THETA_SIZE), 0:2 * numpy.pi:complex(0, PHI_SIZE)]
+        qz = numpy.roll(qz, qz.shape[1] // 2, axis=1)
+        result = model.DataArray(qz * mask, data.metadata)
+
+    else:
+        # Convert into polar coordinates
+        h_output_size = output_size / 2
+        theta = theta_data * (h_output_size / math.pi * 2)
+        phi = phi_data
+        theta_data = numpy.cos(phi) * theta
+        phi_data = numpy.sin(phi) * theta
+
+        # Interpolation into 2d array
+    #    xi = numpy.linspace(-h_output_size, h_output_size, 2 * h_output_size + 1)
+    #    yi = numpy.linspace(-h_output_size, h_output_size, 2 * h_output_size + 1)
+    #    qz = mlab.griddata(phi_data.flat, theta_data.flat, omega_data.flat, xi, yi, interp="linear")
+
+        # FIXME: need rotation (=swap axes), but swapping theta/phi slows down the
+        # interpolation by 3 ?!
+        with warnings.catch_warnings():
+            # Some points might be so close that they are identical (within float
+            # precision). It's fine, no need to generate a warning.
+            warnings.simplefilter("ignore", DuplicatePointWarning)
+            triang = Triangulation(theta_data.flat, phi_data.flat)
+        interp = triang.linear_interpolator(omega_data.flat, default_value=0)
+        qz = interp[-h_output_size:h_output_size:complex(0, output_size),  # Y
+                    - h_output_size:h_output_size:complex(0, output_size)]  # X
+        qz = qz.swapaxes(0, 1)[:, ::-1]  # rotate by 90°
+        result = model.DataArray(qz, data.metadata)
 
     return result
 

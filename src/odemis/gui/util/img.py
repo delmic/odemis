@@ -29,13 +29,15 @@ import logging
 import math
 import numpy
 from odemis import model
+from odemis.acq import stream
 from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
 from odemis.gui.comp.overlay.base import Label
 import odemis.model
 from odemis.model._dataflow import DataArray
 from odemis.util import intersect
+from odemis.util import polar, img
 from odemis.util import units
-from odemis.acq import stream
+import operator
 import time
 import wx
 
@@ -240,7 +242,7 @@ def fit_to_content(images, client_size):
     return scale
 
 
-def ar_create_tick_labels(client_size, ticksize, num_ticks, tau):
+def ar_create_tick_labels(client_size, ticksize, num_ticks, tau, margin=0):
     """
     Create list of tick labels for AR polar representation
 
@@ -272,14 +274,14 @@ def ar_create_tick_labels(client_size, ticksize, num_ticks, tau):
         sin = math.sin(phi)
 
         # Tick start and end point (outer and inner)
-        ox = center_x + radius * cos
-        oy = center_y + radius * sin
-        ix = center_x + (radius - ticksize) * cos
-        iy = center_y + (radius - ticksize) * sin
+        ox = center_x + radius * cos + margin
+        oy = center_y + radius * sin + margin
+        ix = center_x + (radius - ticksize) * cos + margin
+        iy = center_y + (radius - ticksize) * sin + margin
 
         # Tick label positions
-        lx = center_x + (radius + 5) * cos
-        ly = center_y + (radius + 5) * sin
+        lx = center_x + (radius + 5) * cos + margin
+        ly = center_y + (radius + 5) * sin + margin
 
         label = Label(
             text=u"%d°" % (deg + 90),
@@ -287,13 +289,13 @@ def ar_create_tick_labels(client_size, ticksize, num_ticks, tau):
             font_size=12,
             flip=True,
             align=wx.ALIGN_CENTRE_HORIZONTAL | wx.ALIGN_BOTTOM,
-            colour=(0.8, 0.8, 0.8),
+            colour=(0, 0, 0),
             opacity=1.0,
             deg=deg - 90
         )
 
         ticks.append((ox, oy, ix, iy, label))
-    return ticks, (center_x, center_y), inner_radius, radius
+    return ticks, (center_x + margin, center_y + margin), inner_radius, radius
 
 
 def write_label(ctx, l, font_name, canvas_padding=None, view_width=None, view_height=None):
@@ -399,7 +401,11 @@ def write_label(ctx, l, font_name, canvas_padding=None, view_width=None, view_he
 
     # Draw Shadow
     if l.colour:
-        ctx.set_source_rgba(0.0, 0.0, 0.0, 0.7 * l.opacity)
+        if l.colour == (0, 0, 0):
+            # FIXME: For now we just use "white" shadow if the text is totally black
+            ctx.set_source_rgba(1, 1, 1, 0.7 * l.opacity)
+        else:
+            ctx.set_source_rgba(0.0, 0.0, 0.0, 0.7 * l.opacity)
         ofst = 0
         for part in parts:
             ctx.move_to(x + 1, y + 1 + ofst)
@@ -438,7 +444,7 @@ def draw_ar_frame(ctx, client_size, ticks, font_name, center_x, center_y, inner_
     """
     # Draw frame that covers everything outside the center circle
     ctx.set_fill_rule(cairo.FILL_RULE_EVEN_ODD)
-    ctx.set_source_rgb(0.2, 0.2, 0.2)
+    ctx.set_source_rgb(1, 1, 1)
 
     ctx.rectangle(0, 0, client_size[0], client_size[1])
     ctx.arc(center_x, center_y, inner_radius, 0, tau)
@@ -460,6 +466,47 @@ def draw_ar_frame(ctx, client_size, ticks, font_name, center_x, center_y, inner_
     # Draw tick labels
     for _, _, _, _, label in ticks:
         write_label(ctx, label, font_name)
+
+
+def draw_ar_spiderweb(ctx, center_x, center_y, radius, tau):
+    """
+    Draws AR spiderweb on the given context
+
+    ctx (cairo.Context): Cairo context to draw on
+    center_x (float): center x axis
+    center_y (float): center y axis
+    radius (float): radius
+    tau (float): tau
+    """
+
+    # Draw inner degree circles, we assume the exterior one is already there as
+    # part of the frame
+    ctx.set_line_width(1)
+    ctx.set_source_rgb(0.5, 0.5, 0.5)
+    ctx.stroke()
+    ctx.arc(center_x, center_y, (2 / 3) * radius, 0, tau)
+    ctx.stroke()
+    ctx.arc(center_x, center_y, (1 / 3) * radius, 0, tau)
+    ctx.stroke()
+
+    # Finds lines ending points
+    n_ends = 12
+    ends = []
+    for i in range(n_ends):
+        phi = (tau / n_ends * i) - (math.pi / 2)
+        cos = math.cos(phi)
+        sin = math.sin(phi)
+
+        # Tick start and end point (outer and inner)
+        ox = center_x + radius * cos
+        oy = center_y + radius * sin
+        ends.append((ox, oy))
+    # Draw lines
+    n_lines = n_ends // 2
+    for i in range(n_lines):
+        ctx.move_to(ends[i][0], ends[i][1])
+        ctx.line_to(ends[i + n_lines][0], ends[i + n_lines][1])
+    ctx.stroke()
 
 
 def set_images(im_args):
@@ -665,6 +712,38 @@ def draw_image(ctx, im_data, w_im_center, buffer_center, buffer_scale,
     ctx.restore()
 
 
+def calculate_raw_polar(data, bg_data):
+    # FIXME: This code is a dublicate of part of _project2Polar. The image data
+    # should be directly accessible from the stream.
+    if numpy.prod(data.shape) > (1280 * 1080):
+        logging.info("AR image is very large %s, will convert to "
+                     "azimuthal projection in reduced precision.",
+                     data.shape)
+        y, x = data.shape
+        if y > x:
+            small_shape = 1024, int(round(1024 * x / y))
+        else:
+            small_shape = int(round(1024 * y / x)), 1024
+        # resize
+        data = img.rescale_hq(data, small_shape)
+        dtype = numpy.float16
+    else:
+        dtype = None  # just let the function use the best one
+
+    size = min(min(data.shape) * 2, 1134)
+
+    if bg_data is None:
+        # Simple version: remove the background value
+        data0 = polar.ARBackgroundSubtract(data)
+    else:
+        data0 = img.Subtract(data, bg_data)  # metadata from data
+
+    # calculate raw polar representation
+    polard = polar.AngleResolved2Polar(data0, size, hole=False, dtype=dtype, raw=True)
+
+    return polard
+
+
 def ar_to_export_data(streams, raw=False):
     """
     Creates either raw or WYSIWYG representation for the AR projection
@@ -677,15 +756,27 @@ def ar_to_export_data(streams, raw=False):
     """
 
     if raw:
-        # TODO implement raw export
-        raise ValueError("Raw export is unsupported for AR data")
+        s = streams[0]
+        pos = s.point.value
+
+        # find positions of each acquisition
+        # tuple of 2 floats -> DataArray: position on SEM -> data
+        sempos = {}
+        for d in s.raw:
+            try:
+                sempos[d.metadata[model.MD_POS]] = img.ensure2DImage(d)
+            except KeyError:
+                logging.info("Skipping DataArray without known position")
+        raw_polar = calculate_raw_polar(sempos[pos], s.background.value)
+        return raw_polar
     else:
         # we expect just one stream
         wim = format_rgba_darray(streams[0].image.value)
         # image is always centered, fitting the whole canvass
         images = set_images([(wim, (0, 0), (1, 1), False, None, None, None, None, streams[0].name.value, None, None)])
-        ar_size = streams[0].image.value.shape[0], streams[0].image.value.shape[1]
-        scale = fit_to_content(images, ar_size)
+        ar_margin = int(0.2 * streams[0].image.value.shape[0])
+        ar_size = streams[0].image.value.shape[0] + ar_margin, streams[0].image.value.shape[1] + ar_margin
+        scale = fit_to_content(images, streams[0].image.value.shape)
 
         # Make surface based on the maximum resolution
         data_to_draw = numpy.zeros((ar_size[1], ar_size[0], 4), dtype=numpy.uint8)
@@ -694,10 +785,10 @@ def ar_to_export_data(streams, raw=False):
         ctx = cairo.Context(surface)
 
         im = images[0]
-        buffer_center = (0, 0)
+        buffer_center = (-ar_margin / 2, ar_margin / 2)
         buffer_scale = (im.metadata['dc_scale'][0] / scale,
                         im.metadata['dc_scale'][1] / scale)
-        buffer_size = ar_size[0], ar_size[1]
+        buffer_size = streams[0].image.value.shape[0], streams[0].image.value.shape[1]
 
         draw_image(
             ctx,
@@ -719,9 +810,10 @@ def ar_to_export_data(streams, raw=False):
         tau = 2 * math.pi
         ticksize = 10
         num_ticks = 6
-        ticks_info = ar_create_tick_labels(ar_size, ticksize, num_ticks, tau)
+        ticks_info = ar_create_tick_labels(streams[0].image.value.shape, ticksize, num_ticks, tau, ar_margin / 2)
         ticks, (center_x, center_y), inner_radius, radius = ticks_info
         draw_ar_frame(ctx, ar_size, ticks, font_name, center_x, center_y, inner_radius, radius, tau)
+        draw_ar_spiderweb(ctx, center_x, center_y, radius, tau)
         ar_plot = model.DataArray(data_to_draw)
         ar_plot.metadata[model.MD_DIMS] = 'YXC'
         return ar_plot
@@ -1101,9 +1193,11 @@ def draw_export_legend(legend_ctx, images, buffer_size, buffer_scale, mag=None,
     legend_x_pos = init_x_pos
     legend_y_pos = MAIN_MIDDLE * buffer_size[0]
     legend_ctx.move_to(legend_x_pos, legend_y_pos)
-    mag_text = u"Mag: × %s" % units.readable_str(units.round_significant(mag, 3))
-    label = mag_text
-    legend_ctx.show_text(label)
+    # For now obsolete magnification
+    # TODO: include image name typed by the user
+#     mag_text = u"Mag: × %s" % units.readable_str(units.round_significant(mag, 3))
+#     label = mag_text
+#     legend_ctx.show_text(label)
 
     # write HFW
     legend_x_pos += cell_x_step
@@ -1183,7 +1277,8 @@ def draw_export_legend(legend_ctx, images, buffer_size, buffer_scale, mag=None,
     # write stream data
     legend_ctx.set_font_size(small_font)
     legend_y_pos = big_cell_height
-    for s, data in streams_data.iteritems():
+    sorted_data = sorted(streams_data.items(), key=operator.itemgetter(1))
+    for s, (_, data) in sorted_data:
         legend_ctx.set_font_size(small_font)
         if s == stream:
             # in case of multifile, spot this particular stream with a
@@ -1273,26 +1368,30 @@ def get_ordered_images(streams, rgb=True):
                 stream_data.append(u"Dwell time: %s" % units.readable_str(data_raw.metadata[model.MD_EXP_TIME], "s", sig=3))
             else:
                 stream_data.append(u"Exposure time: %s" % units.readable_str(data_raw.metadata[model.MD_EXP_TIME], "s", sig=3))
+        if data_raw.metadata.get(model.MD_DWELL_TIME, None):
+            stream_data.append(u"Dwell time: %s" % units.readable_str(data_raw.metadata[model.MD_DWELL_TIME], "s"))
+        if data_raw.metadata.get(model.MD_LENS_MAG, None):
+            stream_data.append(u"%s x" % int(data_raw.metadata[model.MD_LENS_MAG]))
+        if data_raw.metadata.get(model.MD_FILTER_NAME, None):
+            stream_data.append(data_raw.metadata[model.MD_FILTER_NAME])
         if data_raw.metadata.get(model.MD_LIGHT_POWER, None):
             stream_data.append(units.readable_str(data_raw.metadata[model.MD_LIGHT_POWER], "W", sig=3))
         if data_raw.metadata.get(model.MD_EBEAM_VOLTAGE, None):
             stream_data.append(units.readable_str(data_raw.metadata[model.MD_EBEAM_VOLTAGE], "V", sig=3))
         if data_raw.metadata.get(model.MD_EBEAM_CURRENT, None):
             stream_data.append(units.readable_str(data_raw.metadata[model.MD_EBEAM_CURRENT], "A", sig=3))
-        if data_raw.metadata.get(model.MD_DWELL_TIME, None):
-            stream_data.append(u"Dwell time: %s" % units.readable_str(data_raw.metadata[model.MD_DWELL_TIME], "s"))
-        if data_raw.metadata.get(model.MD_FILTER_NAME, None):
-            stream_data.append(data_raw.metadata[model.MD_FILTER_NAME])
         if data_raw.metadata.get(model.MD_IN_WL, None):
-            stream_data.append(u"Excitation.: %s" % units.readable_str(numpy.average(data_raw.metadata[model.MD_IN_WL]), "m", sig=3))
+            stream_data.append(u"Excitation: %s" % units.readable_str(numpy.average(data_raw.metadata[model.MD_IN_WL]), "m", sig=3))
         if data_raw.metadata.get(model.MD_OUT_WL, None):
-            stream_data.append(u"Emission.: %s" % units.readable_str(numpy.average(data_raw.metadata[model.MD_OUT_WL]), "m", sig=3))
+            stream_data.append(u"Emission: %s" % units.readable_str(numpy.average(data_raw.metadata[model.MD_OUT_WL]), "m", sig=3))
         if isinstance(s, stream.OpticalStream):
             baseline = data_raw.metadata.get(model.MD_BASELINE, 0)
         else:
             baseline = numpy.min(data_raw)
         stream_data.append(baseline)
-        streams_data[s] = stream_data
+        # date used just for sorting
+        date = data_raw.metadata.get(model.MD_ACQ_DATE, 0)
+        streams_data[s] = date, stream_data
 
     # Sort by size, so that the biggest picture is first drawn (no opacity)
     def get_area(d):
@@ -1473,6 +1572,7 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, stre
     # rid of the blank parts of the canvas
     crop_pos = buffer_size
     crop_shape = (0, 0)
+    intersection_found = False
     for _, im in enumerate(images):
         b_im_rect = calc_img_buffer_rect(im, im.metadata['dc_scale'], im.metadata['dc_center'], buffer_center, buffer_scale, buffer_size)
         buffer_rect = (0, 0) + buffer_size
@@ -1481,6 +1581,12 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, stre
             # Keep the min roi that contains all the stream data
             crop_pos = [b if (b <= a) else a for a, b in zip(crop_pos, intersection[:2])]
             crop_shape = [b if (b >= a) else a for a, b in zip(crop_shape, intersection[2:])]
+            intersection_found = True
+
+    # if there is no intersection of any stream data with the viewport, then
+    # raise IOError
+    if not intersection_found:
+        raise IOError("There is no visible stream data to be exported")
 
     crop_data = (crop_pos[0], crop_pos[1], crop_shape[0], crop_shape[1])
     if any([(a != b) for a, b in zip(crop_data, (0, 0, buffer_size[0], buffer_size[1]))]):
@@ -1547,7 +1653,7 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, stre
             new_legend_to_draw = numpy.where(new_legend_to_draw == 0, numpy.min(new_data_to_draw), numpy.max(new_data_to_draw))
             data_with_legend = numpy.append(new_data_to_draw, new_legend_to_draw, axis=0)
             # Clip background to baseline
-            baseline = streams_data[im.metadata['stream']][-1]
+            baseline = streams_data[im.metadata['stream']][1][-1]
             data_with_legend = numpy.clip(data_with_legend, baseline, numpy.max(new_data_to_draw))
             data_to_export.append(model.DataArray(data_with_legend, im.metadata))
 
@@ -1596,7 +1702,7 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, stre
         new_legend_to_draw = numpy.where(new_legend_to_draw == 0, numpy.min(new_data_to_draw), numpy.max(new_data_to_draw))
         data_with_legend = numpy.append(new_data_to_draw, new_legend_to_draw, axis=0)
         # Clip background to baseline
-        baseline = streams_data[last_image.metadata['stream']][-1]
+        baseline = streams_data[last_image.metadata['stream']][1][-1]
         data_with_legend = numpy.clip(data_with_legend, baseline, numpy.max(new_data_to_draw))
     else:
         data_with_legend = numpy.append(data_to_draw, legend_to_draw, axis=0)
@@ -1664,6 +1770,7 @@ def NDImage2wxImage(image):
                              alpha=numpy.ascontiguousarray(image[:, :, 3]))
     else:
         raise ValueError("image is of shape %s" % (image.shape,))
+
 
 # Untested
 def NDImage2wxBitmap(image):

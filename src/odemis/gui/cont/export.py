@@ -53,7 +53,7 @@ class SpatialOptions(object):
 EXPORTERS = {"spatial": ([("PNG", SpatialOptions), ("TIFF", SpatialOptions)],
                          [("Serialized TIFF", SpatialOptions)]),
              "AR": ([("PNG", None), ("TIFF", None)],
-                    []),
+                    [("CSV", None)]),
              "spectrum": ([("PNG", None), ("TIFF", None)],
                           [("CSV", None)])}
 
@@ -152,6 +152,14 @@ class ExportController(object):
             exporter.export(filepath, exported_data)
 
             logging.info("Exported file '%s'.", filepath)
+        except IOError:
+            dlg = wx.MessageDialog(self._main_frame,
+                                   "There is no stream data present to be exported. "
+                                   "Please try with a non-empty image.",
+                                   "Empty image to export",
+                                   wx.OK | wx.ICON_WARNING)
+            dlg.ShowModal()
+            dlg.Destroy()
         except Exception:
             logging.exception("Failed to export")
 
