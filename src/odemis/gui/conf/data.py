@@ -108,6 +108,13 @@ HW_SETTINGS_CONFIG = {
                 "scale": "cubic",
             },
         },
+    "brightlight": {
+            "power":
+            {
+                "control_type": odemis.gui.CONTROL_SLIDER,
+                "scale": "cubic",
+            },
+        },
     "e-beam":
         OrderedDict((
             ("accelVoltage", {
