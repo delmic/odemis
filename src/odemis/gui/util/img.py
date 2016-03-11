@@ -242,7 +242,7 @@ def fit_to_content(images, client_size):
     return scale
 
 
-def ar_create_tick_labels(client_size, ticksize, num_ticks, tau):
+def ar_create_tick_labels(client_size, ticksize, num_ticks, tau, margin=0):
     """
     Create list of tick labels for AR polar representation
 
@@ -274,14 +274,14 @@ def ar_create_tick_labels(client_size, ticksize, num_ticks, tau):
         sin = math.sin(phi)
 
         # Tick start and end point (outer and inner)
-        ox = center_x + radius * cos
-        oy = center_y + radius * sin
-        ix = center_x + (radius - ticksize) * cos
-        iy = center_y + (radius - ticksize) * sin
+        ox = center_x + radius * cos + margin
+        oy = center_y + radius * sin + margin
+        ix = center_x + (radius - ticksize) * cos + margin
+        iy = center_y + (radius - ticksize) * sin + margin
 
         # Tick label positions
-        lx = center_x + (radius + 5) * cos
-        ly = center_y + (radius + 5) * sin
+        lx = center_x + (radius + 5) * cos + margin
+        ly = center_y + (radius + 5) * sin + margin
 
         label = Label(
             text=u"%d°" % (deg + 90),
@@ -289,13 +289,13 @@ def ar_create_tick_labels(client_size, ticksize, num_ticks, tau):
             font_size=12,
             flip=True,
             align=wx.ALIGN_CENTRE_HORIZONTAL | wx.ALIGN_BOTTOM,
-            colour=(0.8, 0.8, 0.8),
+            colour=(0, 0, 0),
             opacity=1.0,
             deg=deg - 90
         )
 
         ticks.append((ox, oy, ix, iy, label))
-    return ticks, (center_x, center_y), inner_radius, radius
+    return ticks, (center_x + margin, center_y + margin), inner_radius, radius
 
 
 def write_label(ctx, l, font_name, canvas_padding=None, view_width=None, view_height=None):
@@ -401,7 +401,11 @@ def write_label(ctx, l, font_name, canvas_padding=None, view_width=None, view_he
 
     # Draw Shadow
     if l.colour:
-        ctx.set_source_rgba(0.0, 0.0, 0.0, 0.7 * l.opacity)
+        if l.colour == (0, 0, 0):
+            # FIXME: For now we just use "white" shadow if the text is totally black
+            ctx.set_source_rgba(1, 1, 1, 0.7 * l.opacity)
+        else:
+            ctx.set_source_rgba(0.0, 0.0, 0.0, 0.7 * l.opacity)
         ofst = 0
         for part in parts:
             ctx.move_to(x + 1, y + 1 + ofst)
@@ -440,7 +444,7 @@ def draw_ar_frame(ctx, client_size, ticks, font_name, center_x, center_y, inner_
     """
     # Draw frame that covers everything outside the center circle
     ctx.set_fill_rule(cairo.FILL_RULE_EVEN_ODD)
-    ctx.set_source_rgb(0.2, 0.2, 0.2)
+    ctx.set_source_rgb(1, 1, 1)
 
     ctx.rectangle(0, 0, client_size[0], client_size[1])
     ctx.arc(center_x, center_y, inner_radius, 0, tau)
@@ -462,6 +466,47 @@ def draw_ar_frame(ctx, client_size, ticks, font_name, center_x, center_y, inner_
     # Draw tick labels
     for _, _, _, _, label in ticks:
         write_label(ctx, label, font_name)
+
+
+def draw_ar_spiderweb(ctx, center_x, center_y, radius, tau):
+    """
+    Draws AR spiderweb on the given context
+
+    ctx (cairo.Context): Cairo context to draw on
+    center_x (float): center x axis
+    center_y (float): center y axis
+    radius (float): radius
+    tau (float): tau
+    """
+
+    # Draw inner degree circles, we assume the exterior one is already there as
+    # part of the frame
+    ctx.set_line_width(1)
+    ctx.set_source_rgb(0.5, 0.5, 0.5)
+    ctx.stroke()
+    ctx.arc(center_x, center_y, (2 / 3) * radius, 0, tau)
+    ctx.stroke()
+    ctx.arc(center_x, center_y, (1 / 3) * radius, 0, tau)
+    ctx.stroke()
+
+    # Finds lines ending points
+    n_ends = 12
+    ends = []
+    for i in range(n_ends):
+        phi = (tau / n_ends * i) - (math.pi / 2)
+        cos = math.cos(phi)
+        sin = math.sin(phi)
+
+        # Tick start and end point (outer and inner)
+        ox = center_x + radius * cos
+        oy = center_y + radius * sin
+        ends.append((ox, oy))
+    # Draw lines
+    n_lines = n_ends // 2
+    for i in range(n_lines):
+        ctx.move_to(ends[i][0], ends[i][1])
+        ctx.line_to(ends[i + n_lines][0], ends[i + n_lines][1])
+    ctx.stroke()
 
 
 def set_images(im_args):
@@ -729,8 +774,9 @@ def ar_to_export_data(streams, raw=False):
         wim = format_rgba_darray(streams[0].image.value)
         # image is always centered, fitting the whole canvass
         images = set_images([(wim, (0, 0), (1, 1), False, None, None, None, None, streams[0].name.value, None, None)])
-        ar_size = streams[0].image.value.shape[0], streams[0].image.value.shape[1]
-        scale = fit_to_content(images, ar_size)
+        ar_margin = int(0.2 * streams[0].image.value.shape[0])
+        ar_size = streams[0].image.value.shape[0] + ar_margin, streams[0].image.value.shape[1] + ar_margin
+        scale = fit_to_content(images, streams[0].image.value.shape)
 
         # Make surface based on the maximum resolution
         data_to_draw = numpy.zeros((ar_size[1], ar_size[0], 4), dtype=numpy.uint8)
@@ -739,10 +785,10 @@ def ar_to_export_data(streams, raw=False):
         ctx = cairo.Context(surface)
 
         im = images[0]
-        buffer_center = (0, 0)
+        buffer_center = (-ar_margin / 2, ar_margin / 2)
         buffer_scale = (im.metadata['dc_scale'][0] / scale,
                         im.metadata['dc_scale'][1] / scale)
-        buffer_size = ar_size[0], ar_size[1]
+        buffer_size = streams[0].image.value.shape[0], streams[0].image.value.shape[1]
 
         draw_image(
             ctx,
@@ -764,9 +810,10 @@ def ar_to_export_data(streams, raw=False):
         tau = 2 * math.pi
         ticksize = 10
         num_ticks = 6
-        ticks_info = ar_create_tick_labels(ar_size, ticksize, num_ticks, tau)
+        ticks_info = ar_create_tick_labels(streams[0].image.value.shape, ticksize, num_ticks, tau, ar_margin / 2)
         ticks, (center_x, center_y), inner_radius, radius = ticks_info
         draw_ar_frame(ctx, ar_size, ticks, font_name, center_x, center_y, inner_radius, radius, tau)
+        draw_ar_spiderweb(ctx, center_x, center_y, radius, tau)
         ar_plot = model.DataArray(data_to_draw)
         ar_plot.metadata[model.MD_DIMS] = 'YXC'
         return ar_plot
