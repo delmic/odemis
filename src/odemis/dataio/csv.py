@@ -56,7 +56,6 @@ def export(filename, data):
         else:
             # corner case where spectrum range is not available in metadata
             spectrum_range = None
-            print data.metadata
 
         # turn range to nm
         headers = ['#intensity']
