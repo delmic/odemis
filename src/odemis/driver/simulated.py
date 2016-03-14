@@ -39,11 +39,11 @@ class Light(model.Emitter):
     Simulated bright light component. Just pretends to be always on with wide
     spectrum emitted (white).
     """
-    def __init__(self, name, role, **kwargs):
+    def __init__(self, name, role, max_power=10.0, **kwargs):
         model.Emitter.__init__(self, name, role, **kwargs)
 
         self._shape = ()
-        self.power = model.FloatContinuous(0., (0., 10.), unit="W")
+        self.power = model.FloatContinuous(0., (0., max_power), unit="W")
         self.power.subscribe(self._updatePower)
         # just one band: white
         # emissions is list of 0 <= floats <= 1. Always 1.0: cannot lower it.
@@ -51,7 +51,6 @@ class Light(model.Emitter):
         # list of 5-tuples of floats
         self.spectra = model.ListVA([(380e-9, 390e-9, 560e-9, 730e-9, 740e-9)],
                                     unit="m", readonly=True)
-        self._metadata[model.MD_IN_WL] = (380e-9, 740e-9)
 
     def _updatePower(self, value):
         if value == 0:

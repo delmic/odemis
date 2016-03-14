@@ -27,27 +27,26 @@ from odemis import model
 from odemis.model import HwError
 import time
 
-INTENSITY_RANGE = (0, 255)
-
 
 class WhiteLed(model.Emitter):
     '''
     We describe the component that drives the BlinkStick led controller and
-    performs the communication with the device. This controller will be used to
-    control the white led configuration in SECOM. A series of leds is connected
-    via the same channel to one of the RGB outputs of BlinkStick controller (we
-    assume red). The same intensity has to be set to each and every led of the
-    series.
+    performs the communication with the device. A series of leds is connected
+    via the "RGB" channels of BlinkStick controller. It is considered that all
+    channels are actually connected to white leds.
+    The same intensity has to be set to each and every led of the series.
     '''
 
-    def __init__(self, name, role, sn=None, **kwargs):
+    def __init__(self, name, role, sn=None, max_power=0.1, inversed=False, **kwargs):
         """
         sn (None or str): serial number.
            If None, it will pick the first device found.
+        max_power (0<float): maxium power emitted in W.
         """
         model.Emitter.__init__(self, name, role, **kwargs)
 
         self._sn = sn
+        self._max_power = max_power
 
         # Just find the first BlinkStick led controller
         if sn is None:
@@ -55,28 +54,27 @@ class WhiteLed(model.Emitter):
         else:
             # Note: doesn't work with v1.1.7:
             # need fix on get_string(), reported here: https://github.com/arvydas/blinkstick-python/pull/35
+            logging.warning("Using sn to select the device doesn't currently work")
             self._bstick = blinkstick.find_by_serial(sn)
         if self._bstick is None:
             raise HwError("Failed to find a Blinkstick for component %s. "
                           "Check that the device is connected to the computer."
                           % (name,))
 
-        # TODO: check if inverse mode (1) is needed
-        self._bstick.set_mode(0)
+        self._bstick.set_inverse(inversed)
         time.sleep(0.1)  # Device apparently needs some time to recover
 
         self._shape = ()
-        # TODO: allow to change the power also via emissions
-        self.emissions = model.ListVA([1.0], unit="", setter=lambda x: [1.0])
+        # TODO: allow to change the power also via emissions? Or just make it a choice
+        self.emissions = model.ListVA([0], unit="", setter=self._setEmissions)
+        self.emissions.subscribe(self._updatePower)
         # list of 5-tuples of floats
         self.spectra = model.ListVA([(380e-9, 390e-9, 560e-9, 730e-9, 740e-9)],
                                     unit="m", readonly=True)
 
-        # FIXME: Find actual range, or allow the user to indicate it?
-        self._max_power = 0.4  # W
         self.power = model.FloatContinuous(0., (0., self._max_power), unit="W",
                                            setter=self._setPower)
-        self._setPower(0)
+        self.power.subscribe(self._updatePower, init=True)
 
         self._swVersion = "Blinkstick v%s" % (blinkstick.__version__,)
         # These functions report wrong values on Linux with v1.1.7
@@ -88,17 +86,32 @@ class WhiteLed(model.Emitter):
         rsn = self._bstick.device.serial_number
         self._hwVersion = "%s %s (s/n: %s)" % (man, desc, rsn)
 
+    def _setEmissions(self, em):
+        if len(em) != 1:
+            raise ValueError("Must have one emission (got %d)" % len(em))
+
+        # Either 0 or 1
+        if em[0]:
+            em = [1]
+        else:
+            em = [0]
+
+        return em
+
     def _setPower(self, value):
         # Calculate the corresponding intensity (0 -> 255) for the power given
-        intensity = int(round(value * INTENSITY_RANGE[1] / self._max_power))
-
-        # All leds are connected to channel 0 and colour red
-        logging.debug("Led %d set to red=%d", 0, intensity)
-        self._bstick.set_color(0, 0, red=intensity)
-        self._metadata[model.MD_LIGHT_POWER] = self.power.value
-
-        act_val = intensity * self._max_power / INTENSITY_RANGE[1]
+        # TODO: check whether the device intensity is proportional
+        intensity = int(round(value * 255 / self._max_power))
+        act_val = intensity * self._max_power / 255
         return act_val
+
+    def _updatePower(self, _):
+        pw = self.power.value * self.emissions.value[0]
+        intensity = int(round(pw * 255 / self._max_power))
+
+        # All leds are connected to channel 0 and all 3 colours
+        logging.debug("Led set to RGB=%d", intensity)
+        self._bstick.set_color(0, 0, red=intensity, green=intensity, blue=intensity)
 
     def terminate(self):
         if self._bstick is not None:

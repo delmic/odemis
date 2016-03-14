@@ -1030,6 +1030,9 @@ class StreamBarController(object):
         # deleted?) Or is it better to just use the values fitting the current
         # hardware settings as it is now?
 
+        # TODO: just update power VA the same way as Brightfield, instead of
+        # doing the trick in the microscope controller.
+
         return self._add_stream(s, **kwargs)
 
     def addBrightfield(self, **kwargs):
@@ -1046,6 +1049,12 @@ class StreamBarController(object):
             detvas={"exposureTime"},
             emtvas={"power"}
         )
+        # Automatically picks some power if it was at 0 W (due to the stream
+        # defaulting to the current hardware settings), so that the user is not
+        # confused when playing the stream and nothing happens.
+        if s.emtPower.value == 0:
+            s.emtPower.value = s.emtPower.range[1] * 0.1
+
         return self._add_stream(s, **kwargs)
 
     def addSEMSED(self, **kwargs):

@@ -36,6 +36,7 @@ import sys
 
 logging.getLogger().setLevel(logging.INFO) # use DEBUG for more messages
 
+
 def open_acq(fn):
     """
     Read the content of an acquisition file
@@ -70,9 +71,10 @@ def open_acq(fn):
 
     return data, thumb
 
+
 def open_ec(fn):
     """
-    Read a csv file of format "wavelength in nm{TAB}coefficient" into a standard
+    Read a csv file of format "wavelength(nm)\tcoefficient" into a standard
     odemis spectrum efficiency DataArray
     return (list of one DataArray)
     """
@@ -93,6 +95,7 @@ def open_ec(fn):
 
     return [da]
 
+
 def save_acq(fn, data, thumbs):
     """
     Saves to a file the data and thumbnail
@@ -105,6 +108,7 @@ def save_acq(fn, data, thumbs):
     else:
         thumb = None
     exporter.export(fn, data, thumb)
+
 
 def da_sub(daa, dab):
     """
@@ -130,8 +134,9 @@ def da_sub(daa, dab):
         logging.warning("Subtraction on data of type %s unsupported", rt.name)
 
     res = numpy.subtract(daa, dab, dtype=dt) # metadata is copied from daa
-    logging.error("type = %s , %s", res.dtype.name, daa.dtype.name)
+    logging.debug("type = %s, %s", res.dtype.name, daa.dtype.name)
     return res
+
 
 def minus(data_a, data_b):
     """
@@ -139,7 +144,7 @@ def minus(data_a, data_b):
     data_a (list of DataArrays of length N)
     data_b (list of DataArrays of length 1 or N): if length is 1, all the arrays
      in data_a are subtracted from this array, otherwise, each array is subtracted
-     1 to 1. 
+     1 to 1.
     returns (list of DataArrays of length N)
     """
     ret = []
@@ -157,6 +162,7 @@ def minus(data_a, data_b):
         raise ValueError("Cannot subtract %d images from %d images" %
                          (len(data_b), len(data_a)))
     return ret
+
 
 def main(args):
     """
@@ -182,6 +188,8 @@ def main(args):
     parser.add_argument("--minus", "-m", dest="minus", action='append',
             help="name of an acquisition file whose data is subtracted from the input file.")
 
+    # TODO: --export (spatial) image that defaults to a HFW corresponding to the
+    # smallest image, and can be overridden by --hfw xxx (in µm).
     # TODO: --range parameter to select which image to select from the input
     #      (like: 1-4,5,6-10,12)
 
