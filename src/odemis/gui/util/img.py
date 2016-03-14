@@ -481,7 +481,7 @@ def draw_ar_spiderweb(ctx, center_x, center_y, radius, tau):
 
     # Draw inner degree circles, we assume the exterior one is already there as
     # part of the frame
-    ctx.set_line_width(1)
+    ctx.set_line_width(1.2)
     ctx.set_source_rgb(0.5, 0.5, 0.5)
     ctx.stroke()
     ctx.arc(center_x, center_y, (2 / 3) * radius, 0, tau)
