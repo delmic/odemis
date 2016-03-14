@@ -199,7 +199,7 @@ class ExportController(object):
         elif export_type == 'spectrum':
             spectrum = vp.stream.get_pixel_spectrum()
             spectrum_range, unit = vp.stream.get_spectrum_range()
-            exported_data = spectrum_to_export_data(spectrum, self.ClientSize, raw, unit, spectrum_range)
+            exported_data = spectrum_to_export_data(spectrum, raw, unit, spectrum_range)
         else:
             export_type = 'spatial'
             streams = self._data_model.focussedView.value.getStreams()
