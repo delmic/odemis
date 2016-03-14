@@ -1023,8 +1023,8 @@ def draw_scale(ctx, value_range, client_size, orientation, tick_spacing, fill_co
             # print (i, prev_right, lpos)
             if prev_lpos < lpos:
                 if mirror:
-                    ctx.move_to(lpos, scale_width - (lbl_height - 3))
-                    ctx.show_text(label)
+#                     ctx.move_to(lpos, scale_width - (lbl_height - 3))
+#                     ctx.show_text(label)
                     ctx.move_to(pos, scale_width - 5)
                     ctx.line_to(pos, scale_width)
                 else:
@@ -1040,8 +1040,8 @@ def draw_scale(ctx, value_range, client_size, orientation, tick_spacing, fill_co
 
             if prev_lpos >= lpos + 20 or i == 0:
                 if mirror:
-                    ctx.move_to(9, lpos)
-                    ctx.show_text(label)
+#                     ctx.move_to(9, lpos)
+#                     ctx.show_text(label)
                     ctx.move_to(5, pos)
                     ctx.line_to(0, pos)
                 else:
