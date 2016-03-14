@@ -123,6 +123,7 @@ class TestController(unittest.TestCase):
         logging.debug("Took %f s to stop", dur)
         # Closed loop can take a long time to stop (actually, up to 10s in the worse cases)
         self.assertLess(dur, 0.2)
+        ctrl.terminate()
 
     def test_timeout(self):
         ctrl = pigcs.Controller(self.accesser, *self.config_ctrl)
@@ -135,6 +136,7 @@ class TestController(unittest.TestCase):
             ctrl.IsReady()
         self.assertTrue(ctrl.IsReady()) # all should be fine again
         self.assertEqual(0, ctrl.GetErrorNum())
+        ctrl.terminate()
 
 #@skip("faster")
 class TestFake(TestController):
