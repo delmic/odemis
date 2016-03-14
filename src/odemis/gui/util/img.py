@@ -912,13 +912,20 @@ def calculate_ticks(value_range, client_size, orientation, tick_spacing):
         cur_val += value_step
 
     ticks = []
+    min_margin = (tick_spacing / 4)
+    prev_pixel = 0
     for tick_value in tick_values:
         pixel = value_to_pixel(tick_value, pixel_space, vtp_ratio, value_range,
                                orientation)
         pix_val = (pixel, tick_value)
         if pix_val not in ticks:
+            if (tick_value not in [numpy.min(tick_values), numpy.max(tick_values)] and
+                    abs(pixel - prev_pixel) < min_margin):
+                # keep a min distance between ticks
+                continue
             if min_pixel <= pixel <= pixel_space:
                 ticks.append(pix_val)
+                prev_pixel = pixel
 
     tick_list = ticks
 
