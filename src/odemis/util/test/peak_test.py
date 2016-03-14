@@ -48,17 +48,39 @@ class TestPeak(unittest.TestCase):
         # Try gaussian
         f = self._peak_fitter.Fit(spec, wl)
         params, offset = f.result()
+        self.assertTrue(1 <= len(params) < 20)
+        # Parameters should be positive
+        for pos, width, amplitude in params:
+            self.assertGreater(pos, 0)
+            self.assertGreater(width, 0)
+            self.assertGreater(amplitude, 0)
+        # offset doesn't officially needs to be positive
+        # self.assertTrue(offset >= 0)
+
+        # Create curve
         curve = peak.Curve(wl, params, offset)
-        plt.figure()
-        plt.plot(wl, spec, 'r', wl, curve, 'r', linewidth=2)
+        self.assertEqual(len(curve), len(wl))
+        # TODO: find peaks on curve, and see we about the same peaks
+        wlhr = numpy.linspace(470, 1030, 512)
+        curve = peak.Curve(wlhr, params, offset)
+        self.assertEqual(len(curve), len(wlhr))
+        #plt.figure()
+        #plt.plot(wl, spec, 'r', wl, curve, 'r', linewidth=2)
 
         # Try lorentzian
         f = self._peak_fitter.Fit(spec, wl, type='lorentzian')
         params, offset = f.result()
+        self.assertTrue(1 <= len(params) < 20)
+        # Parameters should be positive
+        for pos, width, amplitude in params:
+            self.assertGreater(pos, 0)
+            self.assertGreater(width, 0)
+            self.assertGreater(amplitude, 0)
+
         curve = peak.Curve(wl, params, offset, type='lorentzian')
-        plt.figure()
-        plt.plot(wl, spec, 'r', wl, curve, 'r', linewidth=2)
-        plt.show(block=False)
+        #plt.figure()
+        #plt.plot(wl, spec, 'r', wl, curve, 'r', linewidth=2)
+        #plt.show(block=False)
 
         # Assert wrong fitting type
         self.assertRaises(KeyError, peak.Curve, wl, params, offset, type='wrongType')
