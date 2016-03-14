@@ -60,6 +60,8 @@ def acquire_timelapse(num, period, filename):
     # The settings of the emissions and excitation are based on the current
     # hardware settings.
     stfm = stream.FluoStream("Fluorescence image", ccd, ccd.data, light, light_filter)
+    # Force the excitation light using that command:
+    # stfm.excitation.value = (4.72e-07, 4.79e-07, 4.85e-07, 4.91e-07, 4.97e-07)
     stem = stream.SEMStream("Secondary electrons", sed, sed.data, ebeam)
     # Special stream that will run the overlay and update the metadata based on this
     # Note: if more complex overlay is needed (eg, with background subtraction,
@@ -95,7 +97,7 @@ def acquire_timelapse(num, period, filename):
             # Note: the actual time of the position is the one when the position was read
             # by the pigcs driver.
             spos = stage.position.value
-            fpos.write("%g\t%g\t%g\t%g\n" %
+            fpos.write("%.20g\t%g\t%g\t%g\n" %
                        (time.time(), spos["x"], spos["y"], focus.position.value["z"]))
 
             # Save the file
@@ -138,11 +140,14 @@ def main(args):
     parser.add_argument("--period", "-p", dest="period", type=float, required=True,
                         help="time between 2 acquisition")
     parser.add_argument("--output", "-o", dest="filename", required=True,
-                        help="pattern of the file name output")
+                        help="pattern of the file name output, including the extension (ex: acq-.tiff)")
 
     options = parser.parse_args(args[1:])
 
     try:
+        if "." not in options.filename[-5:]:
+            raise ValueError("output argument must contain extension, but got '%s'" % (options.filename,))
+
         n = acquire_timelapse(options.num, options.period, options.filename)
     except Exception:
         logging.exception("Unexpected error while performing action.")
