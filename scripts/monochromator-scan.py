@@ -19,14 +19,15 @@ select spot mode, and pick the point you're interested.
 from __future__ import division
 
 import logging
+import math
+import numpy
 from odemis import dataio, model
-from odemis.util import units
 import odemis
+from odemis.util import units
+from odemis.gui.plugin import Plugin, AcquisitionDialog
 import readline  # for nice editing in raw_input()
 import sys
 import threading
-import numpy
-import math
 
 
 logging.getLogger().setLevel(logging.INFO) # put "DEBUG" level for more messages
@@ -189,6 +190,47 @@ def main(args):
         return 127
 
     return 0
+
+# Plugin version for the GUI
+class MonoScanPlugin(Plugin):
+    name = "Monochromator scan plugin"
+    __version__ = "1.1"
+    __author__ = "Éric Piel"
+    __license__ = "GNU General Public License 2"
+
+    def __init__(self, microsope, main_app):
+        super(MonoScanPlugin, self).__init__(microsope, main_app)
+        self.addMenu("Acquisition/Monochromator scan...", self.start)
+        self.startWavelength = model.FloatContinuous(400e-9, (0, 10e-9), unit="s")
+        self.endWavelength = model.FloatContinuous(500e-9, (0, 10e-9), unit="s")
+        self.numberOfPixels = model.IntContinuous(51, (2, 1000), unit="px")
+        # TODO: use the range of the sensor for the dwell time
+        self.dwellTime = model.FloatContinuous(1e-3, (1e-6, 100), unit="s")
+        self.expectedDuration = model.VigilantAttribute(1, unit="s", readonly=True)
+        self.filename = model.StringVA("boo.h5")
+
+    def start(self):
+        dlg = AcquisitionDialog(self, "Monochromator scan acquisition",
+                                "Acquires a spectrum using the monochomator while scanning over multiple wavelengths.\n"
+                                "Enter the settings and start the acquisition.")
+        dlg.addSettings(self, conf={"filename": {"control_type": "file"}})
+        dlg.addButton("Acquire", self.acquire)
+        dlg.addButton("Cancel")
+        ans = dlg.ShowModal()
+
+        if ans == 0:
+            self.showAcquisition(self.filename.value)
+
+    def acquire(self, dlg):
+        # TODO
+        f = model.ProgressiveFuture()
+        f.task_canceller = lambda f: True  # To allow cancelling while it's running
+        dlg.showProgress(f)
+
+        acquire_spec()
+
+        # dataio.hdf5.export(self.filename.value, d)
+        dlg.Destroy()
 
 if __name__ == '__main__':
     ret = main(sys.argv)
