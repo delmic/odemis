@@ -353,7 +353,7 @@ class MenuController(object):
         info.Description = odemis.__fullname__
         info.Copyright = odemis.__copyright__
         info.WebSite = ("http://delmic.com", "delmic.com")
-        info.Licence = odemis.__licensetxt__
+        info.License = odemis.__licensetxt__
         info.Developers = odemis.__authors__
         # info.DocWriter = '???'
         # info.Artist = '???'
@@ -361,7 +361,18 @@ class MenuController(object):
 
         if DyeDatabase:
             info.Developers += ["", "Dye database from http://fluorophores.org"]
-            info.Licence += DYE_LICENCE
+            info.License += DYE_LICENCE
+
+        # Show the plugins
+        app = wx.GetApp()
+        if app.plugins:
+            # TODO: add a flag so it appears in big (eg, description or version)
+            info.Description += " (+ plugins)"
+            info.Developers += ["", "Plugins:"]
+            for p in app.plugins:
+                info.Developers += [u"%s by %s under %s license" %
+                                    (p, p.__author__, p.__license__)]
+
         wx.AboutBox(info)
 
     def _on_manual(self, evt):

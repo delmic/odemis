@@ -2666,6 +2666,7 @@ class Bus(model.Actuator):
             # To detect position changes not related to a requested move (only CL axes can do that)
             self._pos_updater = threading.Thread(target=self._refreshPosition,
                                                  name="PIGCS position refresher")
+            self._pos_updater.daemon = True
             self._pos_updater.start()
             self._pos_updater_stop = threading.Event()
         else:

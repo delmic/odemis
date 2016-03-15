@@ -24,24 +24,25 @@ from __future__ import division
 import Pyro4.errors
 import argparse
 import logging
-import sys
-import threading
-import traceback
-import wx
-from wx.lib.pubsub import pub
-import os
-
 from odemis import model, gui
 import odemis
-from odemis.gui import main_xrc, log, img
+from odemis.gui import main_xrc, log, img, plugin
 from odemis.gui.conf import get_general_conf
 from odemis.gui.cont import acquisition
 from odemis.gui.cont.menu import MenuController
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.xmlh import odemis_get_resources
 from odemis.util import driver
+import os
+import sys
+import threading
+import traceback
+import wx
+from wx.lib.pubsub import pub
+
 import odemis.gui.cont.tabs as tabs
 import odemis.gui.model as guimodel
+
 
 # Ensure that the current working directory is the same as the location of this file
 if getattr(sys, 'frozen', False):
@@ -76,6 +77,7 @@ class OdemisGUIApp(wx.App):
         self._is_standalone = standalone
         self._snapshot_controller = None
         self._menu_controller = None
+        self.plugins = []  # List of instances of plugin.Plugins
 
         # User input devices
         self.dev_powermate = None
@@ -311,6 +313,12 @@ class OdemisGUIApp(wx.App):
             # Update legend logo filepath
             self.main_frame.legend_logo = gui.legend_logo
 
+            # Now starts the plugins, after the rest of the GUI is ready
+            pfns = plugin.find_plugins()
+            for p in pfns:
+                pis = plugin.load_plugin(p, self.main_data.microscope, self)
+                self.plugins.extend(pis)
+
             self.main_frame.Maximize()  # must be done before Show()
             # making it very late seems to make it smoother
             wx.CallAfter(self.main_frame.Show)
@@ -369,6 +377,13 @@ class OdemisGUIApp(wx.App):
             dlg.ShowModal()
             dlg.Destroy()  # frame
             return
+
+        for p in self.plugins:
+            try:
+                p.terminate()
+            except Exception:
+                logging.exception("Failed to end the plugin properly")
+        self.plugins = []
 
         if self.dev_powermate:
             self.dev_powermate.terminate()

@@ -139,6 +139,7 @@ class GeneralConfig(Config):
 
         self.default.set("help", "manual_base_name", u"user-guide.pdf")
 
+        # TODO: handle windows OS
         self.default.set("help", "manual_path", u"/usr/share/doc/odemis/")
 
         # For the calibration files (used in analysis tab)

@@ -236,8 +236,9 @@ class PeakFitter(object):
         spectrum given.
         type (str): Type of fitting to be applied (for now only ‘gaussian’ and
         ‘lorentzian’ are available).
-        returns (list of floats): Contains the optimized peak parameters i.e. [pos1,
-        width1, amplitude1, pos2, width2, amplitude2, … , offset]
+        returns:
+             params (list of 3-tuple): Each peak parameters as (pos, width, amplitude)
+             offset (float): global offset to add
         raises:
                 KeyError if given type not available
                 ValueError if fitting cannot be applied
@@ -337,7 +338,7 @@ def Curve(wavelength, peak_parameters, offset, type='gaussian'):
     dataset of curve points.
     wavelength (1d array of floats): The wavelength values corresponding to the
     spectrum given.
-    peak_parameters (list of tuples, float): The parameters of the peak curves to
+    peak_parameters (list of tuples): The parameters of the peak curves to
     be depicted.
     offset (float): peaks offset
     type (str): Type of fitting to be applied (for now only ‘gaussian’ and
