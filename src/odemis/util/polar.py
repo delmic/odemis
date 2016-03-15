@@ -116,7 +116,14 @@ def AngleResolved2Polar(data, output_size, hole=True, dtype=None, raw=False):
         interp = triang.linear_interpolator(ARdata.flat, default_value=0)
         qz = interp[0:numpy.pi / 2:complex(0, THETA_SIZE), 0:2 * numpy.pi:complex(0, PHI_SIZE)]
         qz = numpy.roll(qz, qz.shape[1] // 2, axis=1)
-        result = model.DataArray(qz * mask, data.metadata)
+        qz_masked = qz * mask
+        # attach theta as first column
+        qz_masked = numpy.append(theta_lin.reshape(theta_lin.shape[0], 1), qz_masked, axis=1)
+        # attach phi as first row
+        phi_lin = numpy.append([[0]], phi_lin.reshape(1, phi_lin.shape[0]), axis=1)
+        qz_masked = numpy.append(phi_lin, qz_masked, axis=0)
+        result = model.DataArray(qz_masked, data.metadata)
+        return result
 
     else:
         # Convert into polar coordinates

@@ -41,10 +41,14 @@ def export(filename, data):
         IOError in case the spectrum does not contain wavelength metadata.
     '''
     if (model.MD_DESCRIPTION in data.metadata) and data.metadata[model.MD_DESCRIPTION] == "Angle-resolved":
-        # In case of AR data just dump the array in the csv file
+        # In case of AR data just dump the array in the csv file and add header
+        # in 0,0 element
+        header = ['theta\phi(rad)']
         with open(filename, 'w') as fd:
             csv_writer = csv.writer(fd)
-            csv_writer.writerows(data)
+            first_row = header + [d for d in data[0, 1:]]
+            csv_writer.writerow(first_row)
+            csv_writer.writerows(data[1:, :])
     else:
         if not hasattr(data, "metadata"):
             spectrum_range = None
