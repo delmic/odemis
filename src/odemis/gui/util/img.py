@@ -46,6 +46,7 @@ BAR_PLOT_COLOUR = (0.5, 0.5, 0.5)
 CROP_RES_LIMIT = 1024
 MAX_RES_FACTOR = 5  # upper limit resolution factor to exported image
 SPEC_PLOT_SIZE = 1024
+SPEC_SCALE_WIDTH = SPEC_PLOT_SIZE // 10
 # legend ratios
 CELL_WIDTH = 0.2
 MAIN_LAYER = 0.05
@@ -1184,24 +1185,22 @@ def spectrum_to_export_data(spectrum, raw, unit, spectrum_range):
         value_range = (spectrum_range[0], spectrum_range[-1])
         orientation = wx.HORIZONTAL
         tick_spacing = SPEC_PLOT_SIZE // 4
-        scale_width = SPEC_PLOT_SIZE // 10
-        scale_height = SPEC_PLOT_SIZE // 10
         font_size = SPEC_PLOT_SIZE // 50
-        scale_x_draw = numpy.zeros((scale_height, client_size.x, 4), dtype=numpy.uint8)
+        scale_x_draw = numpy.zeros((SPEC_SCALE_WIDTH, client_size.x, 4), dtype=numpy.uint8)
         scale_x_draw.fill(255)
         surface = cairo.ImageSurface.create_for_data(
-            scale_x_draw, cairo.FORMAT_ARGB32, client_size.x, scale_height)
+            scale_x_draw, cairo.FORMAT_ARGB32, client_size.x, SPEC_SCALE_WIDTH)
         ctx = cairo.Context(surface)
-        draw_scale(ctx, value_range, client_size, orientation, tick_spacing, fill_colour, unit, scale_width, font_size, "wavelength")
+        draw_scale(ctx, value_range, client_size, orientation, tick_spacing, fill_colour, unit, SPEC_SCALE_WIDTH, font_size, "wavelength")
         data_with_legend = numpy.append(data_to_draw, scale_x_draw, axis=0)
 
         # Draw top horizontal scale legend
-        scale_x_draw = numpy.zeros((scale_height, client_size.x, 4), dtype=numpy.uint8)
+        scale_x_draw = numpy.zeros((SPEC_SCALE_WIDTH, client_size.x, 4), dtype=numpy.uint8)
         scale_x_draw.fill(255)
         surface = cairo.ImageSurface.create_for_data(
-            scale_x_draw, cairo.FORMAT_ARGB32, client_size.x, scale_height)
+            scale_x_draw, cairo.FORMAT_ARGB32, client_size.x, SPEC_SCALE_WIDTH)
         ctx = cairo.Context(surface)
-        draw_scale(ctx, value_range, client_size, orientation, tick_spacing, fill_colour, unit, scale_width, font_size, "wavelength", True)
+        draw_scale(ctx, value_range, client_size, orientation, tick_spacing, fill_colour, unit, SPEC_SCALE_WIDTH, font_size, "wavelength", True)
         data_with_legend = numpy.append(scale_x_draw, data_with_legend, axis=0)
 
         # Draw left vertical scale legend
@@ -1209,28 +1208,28 @@ def spectrum_to_export_data(spectrum, raw, unit, spectrum_range):
         tick_spacing = SPEC_PLOT_SIZE // 6
         value_range = (min(spectrum), max(spectrum))
         unit = None
-        scale_y_draw = numpy.zeros((client_size.y, scale_width, 4), dtype=numpy.uint8)
+        scale_y_draw = numpy.zeros((client_size.y, SPEC_SCALE_WIDTH, 4), dtype=numpy.uint8)
         scale_y_draw.fill(255)
         surface = cairo.ImageSurface.create_for_data(
-            scale_y_draw, cairo.FORMAT_ARGB32, scale_width, client_size.y)
+            scale_y_draw, cairo.FORMAT_ARGB32, SPEC_SCALE_WIDTH, client_size.y)
         ctx = cairo.Context(surface)
-        draw_scale(ctx, value_range, client_size, orientation, tick_spacing, fill_colour, unit, scale_width, font_size, "intensity")
+        draw_scale(ctx, value_range, client_size, orientation, tick_spacing, fill_colour, unit, SPEC_SCALE_WIDTH, font_size, "intensity")
 
         # Extend y scale bar to fit the height of the bar plot with the x
         # scale bars attached
-        extend = numpy.empty((scale_height, scale_width, 4), dtype=numpy.uint8)
+        extend = numpy.empty((SPEC_SCALE_WIDTH, SPEC_SCALE_WIDTH, 4), dtype=numpy.uint8)
         extend.fill(255)
         scale_y_draw = numpy.append(scale_y_draw, extend, axis=0)
         scale_y_draw = numpy.append(extend, scale_y_draw, axis=0)
         data_with_legend = numpy.append(scale_y_draw, data_with_legend, axis=1)
 
         # Draw right vertical scale legend
-        scale_y_draw = numpy.zeros((client_size.y, scale_width, 4), dtype=numpy.uint8)
+        scale_y_draw = numpy.zeros((client_size.y, SPEC_SCALE_WIDTH, 4), dtype=numpy.uint8)
         scale_y_draw.fill(255)
         surface = cairo.ImageSurface.create_for_data(
-            scale_y_draw, cairo.FORMAT_ARGB32, scale_width, client_size.y)
+            scale_y_draw, cairo.FORMAT_ARGB32, SPEC_SCALE_WIDTH, client_size.y)
         ctx = cairo.Context(surface)
-        draw_scale(ctx, value_range, client_size, orientation, tick_spacing, fill_colour, unit, scale_width, font_size, "intensity", True)
+        draw_scale(ctx, value_range, client_size, orientation, tick_spacing, fill_colour, unit, SPEC_SCALE_WIDTH, font_size, "intensity", True)
 
         # Extend y scale bar to fit the height of the bar plot with the x
         # scale bars attached
