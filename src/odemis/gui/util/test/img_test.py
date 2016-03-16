@@ -212,6 +212,20 @@ class TestSpatialExport(unittest.TestCase):
         with self.assertRaises(IOError): 
             img.images_to_export_data(images, view_hfw, self.min_res, view_pos, min_type, streams_data, draw_merge_ratio, True)
 
+    def test_thin_column(self):
+        """
+        Test that minimum width limit is fulfilled in case only a very thin
+        column of data is in the view
+        """
+        images, streams_data, self.images_cache, min_type = img.convert_streams_to_images(self.streams, self.images_cache, True)
+        view_hfw = (6.205915392651362e-05, 8.191282393266523e-05)
+        view_pos = [-0.0014443006338779269, -0.0002968821446105185]
+        draw_merge_ratio = 0.3
+        exp_data = img.images_to_export_data(images, view_hfw, self.min_res, view_pos, min_type, streams_data, draw_merge_ratio, True)
+        self.assertEqual(len(exp_data), 1)
+        self.assertEqual(len(exp_data[0].shape), 3)  # RGB
+        self.assertEqual(exp_data[0].shape[1], img.CROP_RES_LIMIT)
+
 
 if __name__ == "__main__":
     unittest.main()
