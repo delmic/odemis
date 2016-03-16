@@ -28,11 +28,11 @@ hardware configuration file in this repository. This includes both the back-end 
 """
 from __future__ import division
 
+import argparse
 import glob
 import logging
 from odemis import model
 import os
-import shutil
 import subprocess
 import sys
 import threading
@@ -44,18 +44,15 @@ logging.getLogger().setLevel(logging.INFO)
 
 # Path of this module
 MY_PATH = os.path.abspath(os.path.dirname(__file__))
-# Path to the test log files
-ODEMISD_LOG_PATH = os.path.join(MY_PATH, "odemisd_test.log")
-GUI_LOG_PATH = os.path.join(MY_PATH, "gui_test.log")
 # Odemis root path
 ODEMIS_PATH = os.path.abspath(os.path.join(MY_PATH, '../'))
 # Default path to the config files
 SIM_CONF_PATH = "%s/install/linux/usr/share/odemis/sim" % ODEMIS_PATH
 # Odemis commands
-CMD_STOP = "%s/install/linux/usr/bin/odemis-stop " % ODEMIS_PATH
-CMD_START = "%s/install/linux/usr/bin/odemis-start -n -l %s " % (ODEMIS_PATH, ODEMISD_LOG_PATH)
-CMD_GUI = "%s/install/linux/usr/bin/odemis-gui --logfile %s --log-level 2" % (ODEMIS_PATH,
-                                                                              GUI_LOG_PATH)
+CMD_STOP = ["%s/install/linux/usr/bin/odemis-stop" % ODEMIS_PATH]
+CMD_START = ["%s/install/linux/usr/bin/odemis-start" % ODEMIS_PATH, "-n", "-l"]
+CMD_GUI = ["%s/install/linux/usr/bin/odemis-gui" % ODEMIS_PATH, "--log-level", "2"]
+
 # These string are searched for in the log files and if any are found, an error
 # is assumed to have occurred.
 ERROR_TRIGGER = ("EXCEPTION:", "ERROR:", "WARNING:")
@@ -65,6 +62,9 @@ class OdemisThread(threading.Thread):
     """ Thread used to run Odemis commands """
 
     def __init__(self, name, cmd):
+        """
+        cmd (list of str): command and arguments to pass
+        """
         super(OdemisThread, self).__init__(name=name)
         self.cmd = cmd
 
@@ -75,7 +75,7 @@ class OdemisThread(threading.Thread):
 
     def run(self):
         logging.debug("Running command %s", self.cmd)
-        self.proc = subprocess.Popen(self.cmd.split(),
+        self.proc = subprocess.Popen(self.cmd,
                                      shell=False,
                                      stdout=subprocess.PIPE,
                                      stderr=subprocess.PIPE)
@@ -146,40 +146,31 @@ def wait_backend_ready():
     return True
 
 
-def copy_log(log_in_path, log_out_name):
-    """ Copy log_in to log_out for later inspection """
-    if not os.path.isfile(log_in_path):
-        logging.info("No logfile %s present", log_in_path)
-        return None
-    log_out_path = os.path.join('/tmp', log_out_name)
-    logging.debug("Copying log %s to %s", log_in_path, log_out_path)
-    shutil.copy(log_in_path, log_out_path)
-    return log_out_path
-
-
 def test_config(sim_conf):
     """ Test one running a backend and GUI with a given microscope file
     sim_conf (str): full filename of the microscope file to start
     return (bool): True if no error running the whole system, False otherwise
     """
 
-    # Clear any old log files might have been left behind
-    try:
-        os.remove(ODEMISD_LOG_PATH)
-    except OSError:
-        pass
-    finally:
-        try:
-            os.remove(GUI_LOG_PATH)
-        except OSError:
-            pass
-
     sim_conf_fn = os.path.basename(sim_conf)
+
     # sim_conf_path = os.path.join(SIM_CONF_PATH, sim_conf)
     test_name = "test_%s" % "".join((c if c.isalnum() else '_' for c in sim_conf))
+    dlog_path = 'odemisd-%s-test.log' % test_name
+    guilog_path = 'gui-%s-test.log' % test_name
+
+    # Clear any old log files might have been left behind
+    try:
+        os.remove(dlog_path)
+    except OSError:
+        pass
+    try:
+        os.remove(guilog_path)
+    except OSError:
+        pass
 
     logging.info("Starting %s backend", sim_conf)
-    cmd = CMD_START + sim_conf
+    cmd = CMD_START + [dlog_path, sim_conf]
     start = OdemisThread("Backend %s" % sim_conf_fn, cmd)
     start.start()
 
@@ -188,7 +179,8 @@ def test_config(sim_conf):
         gui = None
     else:
         logging.info("Starting %s GUI", sim_conf)
-        gui = OdemisThread("GUI %s" % sim_conf_fn, CMD_GUI)
+        cmd = CMD_GUI + [guilog_path]
+        gui = OdemisThread("GUI %s" % sim_conf_fn, cmd)
         gui.start()
 
         # Wait for the GUI to load
@@ -206,49 +198,33 @@ def test_config(sim_conf):
     if start.is_alive():
         start.kill()
 
-    # Copy the log files to make them usable
-    dlog_path = copy_log(ODEMISD_LOG_PATH, 'odemisd-%s-test.log' % test_name)
-    guilog_path = copy_log(GUI_LOG_PATH, 'gui-%s-test.log' % test_name)
-
     passed = True
-    try:
-        if start.returncode != 0:  # 'ok' return code
-            logging.error("Backend failed to start, with return code %d", start.returncode)
-            return False
-        elif dlog_path:
-            # TODO: make error/exception detection in log files more intelligent?
-            # TODO: backend always start with an "ERROR" from Pyro, trying to connect to existing backend
-            # TODO: differentiate errors happening after asking to stop the back-end
-            odemisd_log = open(dlog_path).read()
-            for lbl in ERROR_TRIGGER:
-                if lbl in odemisd_log:
-                    logging.error("Found %d %s in back-end log of %s, see %s",
-                                  odemisd_log.count(lbl), lbl, sim_conf_fn, dlog_path)
-                    passed = False
+    if start.returncode != 0:  # 'ok' return code
+        logging.error("Backend failed to start, with return code %d", start.returncode)
+        return False
+    elif dlog_path:
+        # TODO: make error/exception detection in log files more intelligent?
+        # TODO: backend always start with an "ERROR" from Pyro, trying to connect to existing backend
+        # TODO: differentiate errors happening after asking to stop the back-end
+        odemisd_log = open(dlog_path).read()
+        for lbl in ERROR_TRIGGER:
+            if lbl in odemisd_log:
+                logging.error("Found %d %s in back-end log of %s, see %s",
+                              odemisd_log.count(lbl), lbl, sim_conf_fn, dlog_path)
+                passed = False
 
-        if gui and gui.returncode != 143:  # SIGTERM return code
-            if gui.returncode == 255:
-                logging.warning("Back-end might have not finish loading before the GUI was started")
-            logging.error("GUI failed to start, with return code %d", gui.returncode)
-            return False
-        elif guilog_path:
-            gui_log = open(guilog_path).read()
-            for lbl in ERROR_TRIGGER:
-                if lbl in gui_log:
-                    logging.error("%s found in GUI log of %s, see %s", lbl, sim_conf_fn, guilog_path)
-                    passed = False
-                    break
-    finally:
-        # Remove log files
-        try:
-            os.remove(ODEMISD_LOG_PATH)
-        except OSError:
-            pass
-        finally:
-            try:
-                os.remove(GUI_LOG_PATH)
-            except OSError:
-                pass
+    if gui and gui.returncode != 143:  # SIGTERM return code
+        if gui.returncode == 255:
+            logging.warning("Back-end might have not finish loading before the GUI was started")
+        logging.error("GUI failed to start, with return code %d", gui.returncode)
+        return False
+    elif guilog_path:
+        gui_log = open(guilog_path).read()
+        for lbl in ERROR_TRIGGER:
+            if lbl in gui_log:
+                logging.error("%s found in GUI log of %s, see %s", lbl, sim_conf_fn, guilog_path)
+                passed = False
+                break
 
     return passed
 
@@ -258,7 +234,16 @@ def main(args):
     args (list of str): paths to search for microscope files that will be used
       to start the backend. Only the files ending with -sim.odm.yaml are tested
     """
-    paths = args[1:]
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("--log-path", dest="logpath", default="/tmp/",
+                        help="Directory where the logs will be saved")
+    parser.add_argument("paths", nargs='*',
+                        help="Paths to search for microscope files that will be used "
+                             "to start the backend. Only the files ending with -sim.odm.yaml are tested")
+    options = parser.parse_args(args[1:])
+
+    paths = options.paths
     if not paths:
         paths = [SIM_CONF_PATH]
 
@@ -266,11 +251,12 @@ def main(args):
     try:
         # Stop any running back-ends
         logging.info("Halting any Odemis instances...")
-        halt = OdemisThread("Odemis Halting thread", CMD_STOP)
+        halt = OdemisThread("Odemis halting thread", CMD_STOP)
         halt.start()
         halt.join()
         logging.debug("Done")
 
+        # TODO: recursive?
         # Load the Yaml config files for the simulated hardware
         sim_conf_files = []
         for root_path in paths:
