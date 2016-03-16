@@ -1682,16 +1682,18 @@ class TMCMSimulator(object):
 
         # internal axis param values
         # int -> int: param number -> value
-        orig_axis_state = {0: 0, # target position
+        self._orig_axis_state = {
+                           0: 0,  # target position
                            1: 0, # current position (unused directly)
                            4: 1024, # maximum positioning speed
                            5: 7,  # maximum acceleration
+                           6: 80,  # maximum current
                            8: 1, # target reached? (unused directly)
                            153: 0,  # ramp div
                            154: 3, # pulse div
                            197: 10,  # previous position before referencing (unused directly)
-                           }
-        self._astates = [dict(orig_axis_state) for i in range(self._naxes)]
+        }
+        self._astates = [dict(self._orig_axis_state) for i in range(self._naxes)]
 #         self._ustepsize = [1e-6] * 3 # m/µstep
 
         # (float, float, int) for each axis
@@ -1841,6 +1843,15 @@ class TMCMSimulator(object):
             else:
                 rval = self._astates[mot].get(typ, 0) # default to 0
             self._sendReply(inst, val=rval)
+        elif inst == 8:  # Restore axis param
+            if not 0 <= mot < self._naxes:
+                self._sendReply(inst, status=4)  # invalid value
+                return
+            if not 0 <= typ <= 255:
+                self._sendReply(inst, status=3)  # wrong type
+                return
+            self._astates[mot][typ] = self._orig_axis_state.get(typ, 0)
+            self._sendReply(inst, val=0)
         elif inst == 10:  # Get global param
             if not 0 <= mot < self._naxes:
                 self._sendReply(inst, status=4)  # invalid value
