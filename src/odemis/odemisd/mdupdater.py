@@ -264,14 +264,19 @@ class MetadataUpdater(model.Component):
             logging.warning("Does not know what to do with a spectrograph affecting a %s", comp.role)
             return
         if 'slit-monochromator' not in spectrograph.axes:
-            logging.info("No observing monochromator slit opening, as no 'slit-monochromator' axis was found")
-            return
+            logging.info("No 'slit-monochromator' axis was found, will not be able to compute monochromator bandwidth.")
 
-        def updateOutWLRange(pos, sp=spectrograph, comp=comp):
-            width = pos['slit-monochromator']
-            bandwidth = sp.getOpeningToWavelength(width)
-            md = {model.MD_OUT_WL: bandwidth}
-            comp.updateMetadata(md)
+            def updateOutWLRange(pos, sp=spectrograph, comp=comp):
+                wl = sp.position.value["wavelength"]
+                md = {model.MD_OUT_WL: (wl, wl)}
+                comp.updateMetadata(md)
+
+        else:
+            def updateOutWLRange(pos, sp=spectrograph, comp=comp):
+                width = pos['slit-monochromator']
+                bandwidth = sp.getOpeningToWavelength(width)
+                md = {model.MD_OUT_WL: bandwidth}
+                comp.updateMetadata(md)
 
         spectrograph.position.subscribe(updateOutWLRange, init=True)
         self._onTerminate.append((spectrograph.position.unsubscribe, (updateOutWLRange,)))
