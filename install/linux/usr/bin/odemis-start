@@ -481,15 +481,16 @@ def main(args):
     parser.add_argument('model_conf', nargs='?', help="Model definition (yaml) file to use")
     parser.add_argument('-n', '--nogui', dest='nogui', action='store_true',
                         help="Don't launch the GUI after the back end has started")
-    parser.add_argument('-l', '--logfile', dest='logfile', help="Location of the back end log file")
+    parser.add_argument('-l', '--log-target', dest='logtarget',
+                        help="Location of the back end log file")
 
     options = parser.parse_args(args[1:])
 
     # Use the log level for ourselves first
     try:
         loglevel = int(odemis_config["LOGLEVEL"])
-        if 'LOGFILE' in odemis_config and options.logfile:
-            odemis_config['LOGFILE'] = options.logfile
+        if 'LOGFILE' in odemis_config and options.logtarget:
+            odemis_config['LOGFILE'] = options.logtarget
     except ValueError:
         loglevel = 1
         odemis_config["LOGLEVEL"] = "%d" % loglevel

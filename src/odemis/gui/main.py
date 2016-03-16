@@ -488,7 +488,8 @@ def main(args):
                         "without trying to connect to the back-end")
     parser.add_argument("--log-level", dest="loglev", metavar="<level>", type=int,
                         default=0, help="set verbosity level (0-2, default = 0)")
-    parser.add_argument('--logfile', dest='logfile', help="Location of the GUI log file")
+    parser.add_argument('--log-target', dest='logtarget',
+                        help="Location of the GUI log file")
 
     options = parser.parse_args(args[1:])
 
@@ -504,7 +505,7 @@ def main(args):
         parser.error("log-level must be positive.")
     loglev_names = [logging.WARNING, logging.INFO, logging.DEBUG]
     loglev = loglev_names[min(len(loglev_names) - 1, options.loglev)]
-    log.init_logger(loglev, options.logfile)
+    log.init_logger(loglev, options.logtarget)
 
     if 'linux' in sys.platform:
         # Set WM_CLASS on linux, needed to get connected to the right icon.
