@@ -366,7 +366,7 @@ class MenuController(object):
         # Show the plugins
         app = wx.GetApp()
         if app.plugins:
-            # TODO: add a flag so it appears in big (eg, description or version)
+            # Add a flag so it appears in big that some plugins are loaded
             info.Description += " (+ plugins)"
             info.Developers += ["", "Plugins:"]
             for p in app.plugins:
