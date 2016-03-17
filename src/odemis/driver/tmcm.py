@@ -1855,6 +1855,8 @@ class TMCMSimulator(object):
                 return
             if typ == 0:  # start
                 self._ref_move[mot] = time.time() + 5  # s, duration of ref search
+                # Simulate previous position
+                self._astates[mot][197] = random.randint(-1000, 1000)
                 self._sendReply(inst)
             elif typ == 1: # stop
                 self._ref_move[mot] = 0

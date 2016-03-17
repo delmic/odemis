@@ -41,6 +41,16 @@ SECOMv2: {
     affects: ["Camera"],
 }
 
+# "White Light": {
+#     class: blinkstick.WhiteLed,
+#     role: brightlight,
+#     init: {
+#         max_power: 0.01, # W
+#         inversed: True, # Indicates the leds' behaviour
+#     },
+#     affects: ["Camera"],
+# }
+
 "SEM Scan Interface": {
     class: simsem.SimSEM,
     role: none,
