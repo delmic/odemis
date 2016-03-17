@@ -26,6 +26,7 @@ import logging
 import math
 import numpy
 from odemis import model
+from odemis.acq import stream
 from odemis.gui.util import img
 from odemis.gui.util.img import wxImage2NDImage
 from odemis.util.polar import THETA_SIZE, PHI_SIZE
@@ -112,8 +113,119 @@ class TestSpectrumExport(unittest.TestCase):
 
 class TestSpatialExport(unittest.TestCase):
 
-    def test_simple(self):
-        pass
+    def setUp(self):
+        self.app = wx.App()
+        self.images_cache = {}
+        data = numpy.zeros((2160, 2560), dtype=numpy.uint16)
+        dataRGB = numpy.zeros((2160, 2560, 4))
+        metadata = {'Hardware name': 'Andor ZYLA-5.5-USB3 (s/n: VSC-01959)',
+                    'Exposure time': 0.3, 'Pixel size': (1.59604600574173e-07, 1.59604600574173e-07),
+                    'Acquisition date': 1441361559.258568, 'Hardware version': "firmware: '14.9.16.0' (driver 3.10.30003.5)",
+                    'Centre position': (-0.001203511795256, -0.000295338300158), 'Lens magnification': 40.0,
+                    'Input wavelength range': (6.15e-07, 6.350000000000001e-07), 'Shear':-4.358492733391727e-16,
+                    'Description': 'Filtered colour 1', 'Bits per pixel': 16, 'Binning': (1, 1), 'Pixel readout time': 1e-08,
+                    'Gain': 1.1, 'Rotation': 6.279302551026012, 'Light power': 0.0, 'Display tint': (255, 0, 0),
+                    'Output wavelength range': (6.990000000000001e-07, 7.01e-07)}
+        image = model.DataArray(data, metadata)
+        fluo_stream = stream.StaticFluoStream(metadata['Description'], image)
+        fluo_stream.image.value = model.DataArray(dataRGB, metadata)
+        data = numpy.zeros((1024, 1024), dtype=numpy.uint16)
+        dataRGB = numpy.zeros((1024, 1024, 4))
+        metadata = {'Hardware name': 'pcie-6251', 'Description': 'Secondary electrons',
+                    'Exposure time': 3e-06, 'Pixel size': (5.9910982493639e-08, 6.0604642506361e-08),
+                    'Acquisition date': 1441361562.0, 'Hardware version': 'Unknown (driver 2.1-160-g17a59fb (driver ni_pcimio v0.7.76))',
+                    'Centre position': (-0.001203511795256, -0.000295338300158), 'Lens magnification': 5000.0, 'Rotation': 0.0,
+                    'Shear': 0.003274715695854}
+        image = model.DataArray(data, metadata)
+        sem_stream = stream.StaticSEMStream(metadata['Description'], image)
+        sem_stream.image.value = model.DataArray(dataRGB, metadata)
+        self.streams = [fluo_stream, sem_stream]
+        self.min_res = (432, 623)
+
+    def test_no_crop_need(self):
+        """
+        Data roi covers the whole window view
+        """
+        images, streams_data, self.images_cache, min_type = img.convert_streams_to_images([self.streams[0]], self.images_cache, True)
+        self.assertEqual(len(images), 1)
+        view_hfw = (0.00017445320835792754, 0.00025158414075691866)
+        view_pos = [-0.001211588332679978, -0.00028726176273402186]
+        draw_merge_ratio = 0.3
+        exp_data = img.images_to_export_data(images, view_hfw, self.min_res, view_pos, min_type, streams_data, draw_merge_ratio, True)
+        self.assertEqual(exp_data[0].shape, (1226, 1576, 4))  # RGB
+
+    def test_crop_need(self):
+        """
+        Data roi covers part of the window view thus we need to crop the
+        interesection with the data
+        """
+        images, streams_data, self.images_cache, min_type = img.convert_streams_to_images([self.streams[0]], self.images_cache, True)
+        self.assertEqual(len(images), 1)
+        view_hfw = (0.0003489064167158551, 0.0005031682815138373)
+        view_pos = [-0.001211588332679978, -0.00028726176273402186]
+        draw_merge_ratio = 0.3
+        exp_data = img.images_to_export_data(images, view_hfw, self.min_res, view_pos, min_type, streams_data, draw_merge_ratio, True)
+        self.assertEqual(exp_data[0].shape, (2312, 2529, 4))  # RGB
+
+    def test_crop_and_interpolation_need(self):
+        """
+        Data roi covers part of the window view and data resolution is below
+        the minimum limit thus we need to interpolate the data in order to
+        keep the shape ratio unchanged
+        """
+        images, streams_data, self.images_cache, min_type = img.convert_streams_to_images([self.streams[0]], self.images_cache, True)
+        self.assertEqual(len(images), 1)
+        view_hfw = (0.0006978128334317102, 0.0010063365630276746)
+        view_pos = [-0.0015823014004405739, -0.0008081984265806109]
+        draw_merge_ratio = 0.3
+        exp_data = img.images_to_export_data(images, view_hfw, self.min_res, view_pos, min_type, streams_data, draw_merge_ratio, True)
+        self.assertEqual(exp_data[0].shape, (111, 1024, 4))  # RGB
+
+    def test_multiple_streams(self):
+        # Print ready format
+        images, streams_data, self.images_cache, min_type = img.convert_streams_to_images(self.streams, self.images_cache, True)
+        self.assertEqual(len(images), 2)
+        view_hfw = (6.205915392651362e-05, 8.191282393266523e-05)
+        view_pos = [-0.001203511795256, -0.000295338300158]
+        draw_merge_ratio = 0.3
+        exp_data = img.images_to_export_data(images, view_hfw, self.min_res, view_pos, min_type, streams_data, draw_merge_ratio, True)
+        self.assertEqual(len(exp_data), 1)
+        self.assertEqual(len(exp_data[0].shape), 3)  # RGB
+
+        # Post-process format
+        images, streams_data, self.images_cache, min_type = img.convert_streams_to_images(self.streams, self.images_cache, False)
+        self.assertEqual(len(images), 2)
+        exp_data = img.images_to_export_data(images, view_hfw, self.min_res, view_pos, min_type, streams_data, draw_merge_ratio, False)
+        self.assertEqual(len(exp_data), 2)
+        self.assertEqual(len(exp_data[0].shape), 2)  # grayscale
+        self.assertEqual(len(exp_data[1].shape), 2)  # grayscale
+        self.assertEqual(exp_data[0].shape, exp_data[1].shape)  # all exported images must have the same shape
+
+    def test_no_intersection(self):
+        """
+        Data has no intersection with the window view
+        """
+        images, streams_data, self.images_cache, min_type = img.convert_streams_to_images(self.streams, self.images_cache, True)
+        view_hfw = (6.205915392651362e-05, 0.0001039324002586505)
+        view_pos = [-0.00147293527265202, -0.0004728408264424368]
+        draw_merge_ratio = 0.3
+        with self.assertRaises(IOError): 
+            img.images_to_export_data(images, view_hfw, self.min_res, view_pos, min_type, streams_data, draw_merge_ratio, True)
+
+    def test_thin_column(self):
+        """
+        Test that minimum width limit is fulfilled in case only a very thin
+        column of data is in the view
+        """
+        images, streams_data, self.images_cache, min_type = img.convert_streams_to_images(self.streams, self.images_cache, True)
+        view_hfw = (6.205915392651362e-05, 8.191282393266523e-05)
+        view_pos = [-0.0014443006338779269, -0.0002968821446105185]
+        draw_merge_ratio = 0.3
+        exp_data = img.images_to_export_data(images, view_hfw, self.min_res, view_pos, min_type, streams_data, draw_merge_ratio, True)
+        self.assertEqual(len(exp_data), 1)
+        self.assertEqual(len(exp_data[0].shape), 3)  # RGB
+        self.assertEqual(exp_data[0].shape[1], img.CROP_RES_LIMIT)
+
 
 if __name__ == "__main__":
     unittest.main()
