@@ -25,10 +25,10 @@ from __future__ import division
 import logging
 from odemis import model
 from odemis.dataio import get_converter
+from odemis.gui.comp import popup
 from odemis.gui.util import formats_to_wildcards
 from odemis.gui.util import get_picture_folder
 from odemis.gui.util.img import ar_to_export_data, spectrum_to_export_data, convert_streams_to_images, images_to_export_data
-from odemis.gui.comp.popup import Message
 import os
 import threading
 import time
@@ -144,7 +144,7 @@ class ExportController(object):
             # set by the user are ignored
             raw = export_format in [fmt[0] for fmt in EXPORTERS[export_type][1]]
             exported_data = self.export(export_type, raw)
-            Message.show_message(self._main_frame,
+            popup.show_message(self._main_frame,
                                  "Exported in %s" % (filepath,),
                                  timeout=3
                                  )

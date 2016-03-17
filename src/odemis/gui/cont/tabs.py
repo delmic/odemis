@@ -1422,7 +1422,7 @@ class AnalysisTab(Tab):
 
         fmt = formats[dialog.GetFilterIndex()]
 
-        # Message.show_message(self.main_frame, "Opening file")
+        # popup.show_message(self.main_frame, "Opening file")
         self.load_data(filename, fmt)
         return True
 

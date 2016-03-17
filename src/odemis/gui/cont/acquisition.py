@@ -40,8 +40,8 @@ from odemis.acq.stream import UNDEFINED_ROI
 from odemis.gui import conf, acqmng
 from odemis.gui.acqmng import preset_as_is, get_global_settings_entries, \
     get_local_settings_entries
+from odemis.gui.comp import popup
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
-from odemis.gui.comp.popup import Message
 from odemis.gui.model import TOOL_NONE
 from odemis.gui.util import img, get_picture_folder, call_in_wx_main, \
     wxlimit_invocation
@@ -205,7 +205,7 @@ class SnapshotController(object):
                         d.metadata[model.MD_DESCRIPTION] = s.name.value
                 raw_images.extend(data)
 
-            Message.show_message(self._main_frame,
+            popup.show_message(self._main_frame,
                                  "Snapshot saved in %s" % (filepath,),
                                  timeout=3
                                  )
@@ -895,7 +895,6 @@ class FineAlignController(object):
         # self._main_data_model.is_acquiring.value = False
         # all the rest will be handled by _on_fa_done()
 
-
     @call_in_wx_main
     def _on_fa_done(self, future):
         logging.debug("End of overlay procedure")
@@ -924,7 +923,7 @@ class FineAlignController(object):
             scaling_xy = sem_md.get(model.MD_PIXEL_SIZE_COR, (1, 1))
             # the worse is the rotation, the longer it's displayed
             timeout = max(2, min(abs(rot), 10))
-            Message.show_message(
+            popup.show_message(
                 self._tab_panel,
                 u"Rotation applied: %s\nShear applied: %s\nX/Y Scaling applied: %s"
                 % (units.readable_str(rot, unit="°", sig=3),

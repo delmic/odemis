@@ -21,17 +21,16 @@ see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
-import subprocess
-import sys
-import wx
-
 from odemis import model, gui
 from odemis.acq import stream
 from odemis.gui import DYE_LICENCE
-from odemis.gui.comp.popup import Message
+from odemis.gui.comp import popup
 import odemis.gui.conf
 from odemis.gui.model.dye import DyeDatabase
 from odemis.gui.util import call_in_wx_main
+import subprocess
+import sys
+import wx
 
 
 # Menu controller:
@@ -167,7 +166,7 @@ class MenuController(object):
 
     def on_stop_axes(self, evt):
         if self._main_data:
-            Message.show_message(self._main_frame, "Stopping motion on every axes")
+            popup.show_message(self._main_frame, "Stopping motion on every axes", timeout=1)
             self._main_data.stopMotion()
         else:
             evt.Skip()
