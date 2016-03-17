@@ -41,7 +41,7 @@ import threading
 import time
 import wx
 
-import odemis.gui.img.data as imgdata
+from odemis.gui import img
 import odemis.gui.win.delphi as windelphi
 import odemis.util.units as units
 
@@ -139,9 +139,9 @@ class ChamberButtonController(HardwareButtonController):
             main_data.chamber.pressure.subscribe(self._on_pressure_change, init=True)
 
             self._btn_icons = {
-                'normal': imgdata.ico_press.Bitmap,
-                'working': imgdata.ico_press_orange.Bitmap,
-                'vacuum': imgdata.ico_press_green.Bitmap,
+                'normal': img.getBitmap("icon/ico_press.png"),
+                'working': img.getBitmap("icon/ico_press_orange.png"),
+                'vacuum': img.getBitmap("icon/ico_press_green.png"),
             }
 
             self._tooltips = {
@@ -154,9 +154,9 @@ class ChamberButtonController(HardwareButtonController):
             self.btn.SetLabel("LOAD")
 
             self._btn_icons = {
-                'normal': imgdata.ico_eject.Bitmap,
-                'working': imgdata.ico_eject_orange.Bitmap,
-                'vacuum': imgdata.ico_eject_green.Bitmap,
+                'normal': img.getBitmap("icon/ico_eject.png"),
+                'working': img.getBitmap("icon/ico_eject_orange.png"),
+                'vacuum': img.getBitmap("icon/ico_eject_green.png"),
             }
             self._tooltips = {
                 CHAMBER_PUMPING: "Loading...",

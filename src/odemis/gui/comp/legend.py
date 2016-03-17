@@ -36,7 +36,7 @@ from odemis.gui.util.img import calculate_ticks
 from odemis.util.conversion import wxcol_to_frgb
 import wx
 
-import odemis.gui.img.data as imgdata
+from odemis.gui import img
 import odemis.util.units as units
 
 
@@ -57,12 +57,12 @@ class InfoLegend(wx.Panel):
         # Cannot be a constant because loading bitmaps only works after wx.App
         # has been created.
         self._stream_to_icon = (
-            (stream.ARStream, imgdata.getico_blending_angBitmap()),
-            (stream.SpectrumStream, imgdata.getico_blending_specBitmap()),
-            (stream.OpticalStream, imgdata.getico_blending_optBitmap()),
-            (stream.CLStream, imgdata.getico_blending_optBitmap()),  # same as optical
-            (stream.EMStream, imgdata.getico_blending_semBitmap()),
-            (stream.RGBStream, imgdata.getico_blending_goalBitmap()),
+            (stream.ARStream, img.getBitmap("icon/ico_blending_ang.png")),
+            (stream.SpectrumStream, img.getBitmap("icon/ico_blending_spec.png")),
+            (stream.OpticalStream, img.getBitmap("icon/ico_blending_opt.png")),
+            (stream.CLStream, img.getBitmap("icon/ico_blending_opt.png")),  # same as optical
+            (stream.EMStream, img.getBitmap("icon/ico_blending_sem.png")),
+            (stream.RGBStream, img.getBitmap("icon/ico_blending_goal.png")),
         )
 
         self.SetBackgroundColour(parent.GetBackgroundColour())
@@ -89,10 +89,10 @@ class InfoLegend(wx.Panel):
 
         self.bmp_slider_left = wx.StaticBitmap(self,
                                                wx.ID_ANY,
-                                               imgdata.getico_blending_optBitmap())
+                                               img.getBitmap("icon/ico_blending_opt.png"))
         self.bmp_slider_right = wx.StaticBitmap(self,
                                                 wx.ID_ANY,
-                                                imgdata.getico_blending_semBitmap())
+                                                img.getBitmap("icon/ico_blending_sem.png"))
 
         # Horizontal Field Width text
         self.hfw_text = wx.TextCtrl(self, style=wx.NO_BORDER | wx.CB_READONLY)
@@ -211,7 +211,7 @@ class InfoLegend(wx.Panel):
                 break
         else:
             # Don't fail too bad
-            icon = imgdata.getico_blending_optBitmap()
+            icon = img.getBitmap("icon/ico_blending_opt.png")
             if self.merge_slider.IsShown():
                 logging.warning("Failed to find icon for stream of class %s",
                                 stream_class)

@@ -160,7 +160,7 @@ import os
 import sys
 import wx
 
-import odemis.gui.img.data as imgdata
+from odemis.gui import img
 import wx.lib.wxcairo as wxcairo
 
 
@@ -199,7 +199,7 @@ class BufferedCanvas(wx.Panel):
         # Set default background colour
         self.SetBackgroundColour(wx.BLACK)
         self.background_brush = wx.BRUSHSTYLE_CROSS_HATCH
-        self.background_img = imgdata.getcanvasbgBitmap()
+        self.background_img = img.getBitmap("canvasbg.png")
         self.background_offset = (0, 0)  # offset of checkered background in px
 
         # Memory buffer device context

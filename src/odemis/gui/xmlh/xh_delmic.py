@@ -37,7 +37,7 @@ import odemis.gui.comp.stream as strm
 import odemis.gui.comp.grid as grid
 import odemis.gui.comp.text as txt
 import odemis.gui.cont.tools as tools
-import odemis.gui.img.data as img
+from odemis.gui import img
 import wx
 import wx.combo
 import wx.lib.buttons
@@ -766,7 +766,7 @@ class OwnerDrawnComboBoxHandler(xrc.XmlResourceHandler):
                                             pos=self.GetPosition(),
                                             size=self.GetSize(),
                                             style=self.GetStyle())
-        new_ctrl.SetButtonBitmaps(img.getbtn_downBitmap(), pushButtonBg=False)
+        new_ctrl.SetButtonBitmaps(img.getBitmap("button/btn_down.png"), pushButtonBg=False)
         self.SetupWindow(new_ctrl)
         return new_ctrl
 HANDLER_CLASS_LIST.append(OwnerDrawnComboBoxHandler)

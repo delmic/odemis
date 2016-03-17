@@ -38,7 +38,7 @@ import math
 
 from odemis.gui import FG_COLOUR_HIGHLIGHT
 from odemis.gui.util.img import wxImageScaleKeepRatio
-import odemis.gui.img.data as imgdata
+from odemis.gui import img
 
 
 def resize_bmp(btn_size, bmp):
@@ -108,34 +108,18 @@ class BtnMixin(object):
         'def': {
             'text_colour': "#1A1A1A",
             'text_col_dis': "#676767",
-            16: {'off': imgdata.btn_def_16, 'on': imgdata.btn_def_16_a},
-            24: {'off': imgdata.btn_def_24, 'on': imgdata.btn_def_24_a},
-            32: {'off': imgdata.btn_def_32, 'on': imgdata.btn_def_32_a},
-            48: {'off': imgdata.btn_def_48, 'on': imgdata.btn_def_48_a},
         },
         'blue': {
             'text_colour': wx.WHITE,
             'text_col_dis': "#AAAAAA",
-            16: {'off': imgdata.btn_blue_16, 'on': imgdata.btn_blue_16_a},
-            24: {'off': imgdata.btn_blue_24, 'on': imgdata.btn_blue_24_a},
-            32: {'off': imgdata.btn_blue_32, 'on': imgdata.btn_blue_32_a},
-            48: {'off': imgdata.btn_blue_48, 'on': imgdata.btn_blue_48_a},
         },
         'red': {
             'text_colour': wx.WHITE,
             'text_col_dis': "#AAAAAA",
-            16: {'off': imgdata.btn_red_16, 'on': imgdata.btn_red_16_a},
-            24: {'off': imgdata.btn_red_24, 'on': imgdata.btn_red_24_a},
-            32: {'off': imgdata.btn_red_32, 'on': imgdata.btn_red_32_a},
-            48: {'off': imgdata.btn_red_48, 'on': imgdata.btn_red_48_a},
         },
         'orange': {
             'text_colour': wx.WHITE,
             'text_col_dis': "#AAAAAA",
-            16: {'off': imgdata.btn_orange_16, 'on': imgdata.btn_orange_16_a},
-            24: {'off': imgdata.btn_orange_24, 'on': imgdata.btn_orange_24_a},
-            32: {'off': imgdata.btn_orange_32, 'on': imgdata.btn_orange_32_a},
-            48: {'off': imgdata.btn_orange_48, 'on': imgdata.btn_orange_48_a},
         },
     }
 
@@ -329,9 +313,24 @@ class BtnMixin(object):
             self.bmpLabel = self._create_main_bitmap()
             self.bmpHover = self.bmpDisabled = self.bmpSelected = None
 
+    def _getBtnImage(self, colour, height, state):
+        """
+        colour (str)
+        height (int)
+        state (str): "on" or "off"
+        """
+        if state == "off":
+            fn = "button/btn_%s_%d.png" % (colour, height)
+        else:
+            fn = "button/btn_%s_%d_a.png" % (colour, height)
+        return img.getImage(fn)
+
+    def _getBtnBitmap(self, colour, height, state):
+        return wx.BitmapFromImage(self._getBtnImage(colour, height, state))
+
     def _create_main_bitmap(self):
         return self._create_bitmap(
-            self.btns[self.face_colour][self.height]['off'].GetBitmap(),
+            self._getBtnBitmap(self.face_colour, self.height, 'off'),
             (self.Size.x, self.height),
             self.GetBackgroundColour()
         )
@@ -341,7 +340,7 @@ class BtnMixin(object):
         if not self.height:
             return self.bmpLabel
 
-        image = self.btns[self.face_colour][self.height]['off'].GetImage()
+        image = self._getBtnImage(self.face_colour, self.height, 'off')
         darken_image(image, 1.1)
         return self._create_bitmap(
             wx.BitmapFromImage(image),
@@ -353,7 +352,7 @@ class BtnMixin(object):
         if not self.height:
             return self.bmpLabel
 
-        image = self.btns[self.face_colour][self.height]['off'].GetBitmap().ConvertToImage()
+        image = self._getBtnImage(self.face_colour, self.height, 'off')
         darken_image(image, 0.8)
         return self._create_bitmap(
             wx.BitmapFromImage(image),
@@ -367,7 +366,7 @@ class BtnMixin(object):
             return self.bmpLabel
 
         return self._create_bitmap(
-            self.btns[self.face_colour][self.height]['on'].GetBitmap(),
+           self._getBtnBitmap(self.face_colour, self.height, 'on'),
             (self.Size.x, self.height),
             self.GetBackgroundColour()
         )
@@ -664,13 +663,13 @@ class TabButton(GraphicRadioButton):
     def __init__(self, *args, **kwargs):
 
         kwargs['style'] = kwargs.get('style', 0) | wx.ALIGN_CENTER
-        kwargs['bitmap'] = imgdata.tab_inactive.Bitmap
+        kwargs['bitmap'] = img.getBitmap("tab_inactive.png")
 
         super(TabButton, self).__init__(*args, **kwargs)
 
-        self.bmpHover = imgdata.tab_hover.Bitmap
-        self.bmpSelected = imgdata.tab_active.Bitmap
-        self.bmpDisabled = imgdata.tab_disabled.Bitmap
+        self.bmpHover = img.getBitmap("tab_hover.png")
+        self.bmpSelected = img.getBitmap("tab_active.png")
+        self.bmpDisabled = img.getBitmap("tab_disabled.png")
 
         self.fg_color_normal = "#FFFFFF"
         self.fg_color_dis = "#E0E0E0"
@@ -718,7 +717,7 @@ class ColourButton(ImageButton):
         self.use_hover = kwargs.pop('use_hover', False)
 
         kwargs['size'] = kwargs.get('size', None) or (18, 18)
-        kwargs['bitmap'] = imgdata.empty.Bitmap
+        kwargs['bitmap'] = img.getBitmap("empty.png")
 
         super(ColourButton, self).__init__(*args, **kwargs)
 
@@ -765,7 +764,7 @@ class ColourButton(ImageButton):
             mdc = wx.MemoryDC()
             mdc.SelectObject(bmp)
 
-            mdc.DrawBitmap(imgdata.empty_h.Bitmap, 0, 0)
+            mdc.DrawBitmap(img.getBitmap("empty_h.png"), 0, 0)
             mdc.DrawBitmap(self.bmpLabel.GetSubBitmap((4, 4, 10, 10)), 4, 4)
 
             mdc.SelectObject(wx.NullBitmap)
@@ -801,13 +800,13 @@ class ViewButton(GraphicRadioButton):
         :param size: (int, int) button size
         """
 
-        kwargs['bitmap'] = imgdata.preview_block.Bitmap
+        kwargs['bitmap'] = img.getBitmap("preview_block.png")
 
         super(ViewButton, self).__init__(*args, **kwargs)
 
-        self.bmpHover = imgdata.preview_block_a.Bitmap
-        self.bmpSelected = imgdata.preview_block_a.Bitmap
-        self.bmpDisabled = imgdata.preview_block.Bitmap
+        self.bmpHover = img.getBitmap("preview_block_a.png")
+        self.bmpSelected = img.getBitmap("preview_block_a.png")
+        self.bmpDisabled = img.getBitmap("preview_block.png")
 
         self.thumbnail_bmp = None
 
@@ -819,7 +818,7 @@ class ViewButton(GraphicRadioButton):
 
     def _calc_overlay_size(self):
         """ Calculate the size the thumbnail overlay  should be """
-        btn_width, btn_height = imgdata.preview_block_a.Bitmap.Size
+        btn_width, btn_height = img.getBitmap("preview_block_a.png").Size
         total_border = self.thumbnail_border * 2
         self.thumbnail_size.x = max(1, btn_width - total_border - self.pointer_offset)
         self.thumbnail_size.y = max(1, btn_height - total_border)
@@ -864,15 +863,15 @@ class PopupImageButton(ImageTextButton):
 
     def __init__(self, *args, **kwargs):
 
-        kwargs['bitmap'] = imgdata.stream_add.Bitmap
+        kwargs['bitmap'] = img.getBitmap("stream_add.png")
 
         super(PopupImageButton, self).__init__(*args, **kwargs)
 
         self.SetForegroundColour(wx.WHITE)
 
-        self.bmpSelected = imgdata.stream_add_a.Bitmap
-        self.bmpHover = imgdata.stream_add_h.Bitmap
-        img = imgdata.stream_add.GetImage()
+        self.bmpSelected = img.getBitmap("stream_add_a.png")
+        self.bmpHover = img.getBitmap("stream_add_h.png")
+        img = img.getImage("stream_add.png")
         darken_image(img, 0.8)
         self.bmpDisabled = wx.BitmapFromImage(img)
 

@@ -35,7 +35,7 @@ from odemis.util import clip_line
 import wx
 
 import odemis.gui as gui
-import odemis.gui.img.data as img
+from odemis.gui import img
 import odemis.util.conversion as conversion
 import odemis.util.units as units
 
@@ -390,7 +390,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
                 # TODO: need to take into account shift, like drawGrid
                 logging.debug("Rendering %sx%s points", buf_rep_x, buf_rep_y)
 
-                point = img.getdotBitmap()
+                point = img.getBitmap("dot.png")
                 point_dc = wx.MemoryDC()
                 point_dc.SelectObject(point)
                 point.SetMaskColour(wx.BLACK)

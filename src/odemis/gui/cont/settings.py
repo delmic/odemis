@@ -48,7 +48,7 @@ from wx.lib.pubsub import pub
 
 import odemis.gui.comp.hist as hist
 import odemis.gui.conf as guiconf
-import odemis.gui.img.data as img
+from odemis.gui import img
 
 
 class SettingsController(object):
@@ -217,7 +217,7 @@ class SettingsController(object):
         # Create the widgets
 
         btn_autoadjust = ImageTextToggleButton(self.panel, height=24, label="Auto adjust",
-                                                icon=img.ico_contrast.Bitmap)
+                                                icon=img.getBitmap("icon/ico_contrast.pnt"))
 
         gb_sizer.Add(btn_autoadjust, (0, 0), (2, 1), border=10,
                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT)

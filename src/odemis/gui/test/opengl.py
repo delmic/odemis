@@ -18,7 +18,7 @@ import wx
 import math
 import time
 
-import odemis.gui.img.data as imgdata
+from odemis.gui import img
 from odemis.gui.test import generate_img_data
 
 
@@ -131,10 +131,10 @@ class Canvas(glcanvas.GLCanvas):
         # array[:,:,] = (0, 0, 255 * alpha / 255.0, alpha)
         # self.set_image(array)
 
-        img = buff.ConvertToImage()
-        # img = getlogo_delphiImage()
-        img.SaveFile('test.png', wx.BITMAP_TYPE_PNG)
-        self.set_image(img)
+        im = buff.ConvertToImage()
+        # im = img.getImage("logo_delphi.png")
+        im.SaveFile('test.png', wx.BITMAP_TYPE_PNG)
+        self.set_image(im)
 
     def on_paint(self, evt):
         self.SetCurrent(self.context)
@@ -179,10 +179,10 @@ class Canvas(glcanvas.GLCanvas):
         self._background_id = glGenTextures(1)
         glBindTexture(GL_TEXTURE_2D, self._background_id)
 
-        img = imgdata.getcanvasbgImage()
-        w, h = self._bg_size = img.GetSize()
+        im = img.getImage("canvasbg.png")
+        w, h = self._bg_size = im.GetSize()
 
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, img.GetData())
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, im.GetData())
 
         glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
         glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
@@ -190,42 +190,42 @@ class Canvas(glcanvas.GLCanvas):
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
 
-    def set_image(self, img):
+    def set_image(self, im):
         self._texture_ids.append(glGenTextures(1))
         glBindTexture(GL_TEXTURE_2D, self._texture_ids[-1])
 
-        if isinstance(img, wx.Image):
-            (w, h) = img.GetSize()
+        if isinstance(im, wx.Image):
+            (w, h) = im.GetSize()
 
             def split_rgb(seq):
                 while seq:
                     yield seq[:3]
                     seq = seq[3:]
 
-            rgb = img.GetData()
+            rgb = im.GetData()
 
-            if img.HasAlpha():
-                alpha = img.GetAlphaData()
+            if im.HasAlpha():
+                alpha = im.GetAlphaData()
                 rgba = r""
                 d = 4
 
                 for i, rgb in enumerate(split_rgb(rgb)):
                     rgba += rgb + alpha[i]
 
-                img = rgba
+                im = rgba
             else:
-                img = rgb
+                im = rgb
                 d = 3
 
         else:
-            w, h, d = img.shape
+            w, h, d = im.shape
 
         if d == 3:
             frmt = GL_RGB
         else:
             frmt = GL_RGBA
 
-        glTexImage2D(GL_TEXTURE_2D, 0, frmt, w, h, 0, frmt, GL_UNSIGNED_BYTE, img)
+        glTexImage2D(GL_TEXTURE_2D, 0, frmt, w, h, 0, frmt, GL_UNSIGNED_BYTE, im)
 
         glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
         glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
@@ -235,15 +235,15 @@ class Canvas(glcanvas.GLCanvas):
 
         return len(self._texture_ids) - 1
 
-    def update_image(self, img, idx):
+    def update_image(self, im, idx):
 
         glBindTexture(GL_TEXTURE_2D, self._texture_ids[idx])
-        w, h, d = img.shape
+        w, h, d = im.shape
         if d == 3:
             frmt = GL_RGB
         else:
             frmt = GL_RGBA
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h, frmt, GL_UNSIGNED_BYTE, img)
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h, frmt, GL_UNSIGNED_BYTE, im)
 
     def init_gl(self):
         if self.background:
@@ -352,7 +352,7 @@ class MainWindow(wx.Frame):
         self.draw_timer.Start(33.0)
 
         self.busy = False
-        # self.canvas.set_image(imgdata.gettest_10x10Image())
+        # self.canvas.set_image(img.getImage("test/test_10x10.png"))
 
     def animate(self):
         self.canvas.update_image(self.plas_gen.next(), self.anim_idx)

@@ -21,7 +21,7 @@
 """
 from __future__ import division
 import os
-from odemis.gui.img.data import getarr_rightBitmap, getarr_downBitmap
+from odemis.gui import img
 from odemis.util.conversion import change_brightness, wxcol_to_frgb
 import wx
 
@@ -269,9 +269,9 @@ class CaptionBar(wx.Window):
         # Set Icons
         self._icon_size = wx.Size(16, 16)
         self._foldIcons = wx.ImageList(self._icon_size.x, self._icon_size.y)
-        bmp = getarr_downBitmap()
+        bmp = img.getBitmap("icon/arr_down.png")
         self._foldIcons.Add(bmp)
-        bmp = getarr_rightBitmap()
+        bmp = img.getBitmap("icon/arr_right.png")
         self._foldIcons.Add(bmp)
 
         self.Bind(wx.EVT_PAINT, self.on_paint)

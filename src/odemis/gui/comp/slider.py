@@ -25,7 +25,7 @@ from __future__ import division
 from odemis.util.conversion import wxcol_to_frgb, change_brightness, hex_to_frgba
 from odemis.gui.comp.text import UnitFloatCtrl, UnitIntegerCtrl
 from abc import ABCMeta, abstractmethod
-from odemis.gui.img.data import getsliderBitmap, getslider_disBitmap
+from odemis.gui import img
 from odemis.gui.util import wxlimit_invocation
 import collections
 import logging
@@ -238,8 +238,8 @@ class Slider(BaseSlider):
         self.handlePos = 0
 
         # Get Pointer's bitmap
-        self.bitmap = getsliderBitmap()
-        self.bitmap_dis = getslider_disBitmap()
+        self.bitmap = img.getBitmap("slider.png")
+        self.bitmap_dis = img.getBitmap("slider_dis.png")
 
         # Pointer dimensions
         self.handle_width, self.handle_height = self.bitmap.GetSize()

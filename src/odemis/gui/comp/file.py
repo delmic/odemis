@@ -33,7 +33,7 @@ import wx.lib.newevent
 
 import odemis.gui
 from .buttons import ImageTextButton, ImageButton
-from odemis.gui.img import data
+from odemis.gui import img
 
 FileSelectEvent, EVT_FILE_SELECT = wx.lib.newevent.NewEvent()
 
@@ -88,8 +88,8 @@ class FileBrowser(wx.Panel):
         box.Add(self.text_ctrl, 1)
 
         if clear_btn:
-            self._btn_clear = ImageButton(self, bitmap=data.getico_clearBitmap(), pos=(10, 8))
-            self._btn_clear.bmpHover = data.getico_clear_hBitmap()
+            self._btn_clear = ImageButton(self, bitmap=img.getBitmap("icon/ico_clear.png"), pos=(10, 8))
+            self._btn_clear.bmpHover = img.getBitmap("icon/ico_clear_h.png")
 
             self._btn_clear.SetToolTipString("Clear calibration")  # FIXME: do not hard code
             self._btn_clear.Hide()

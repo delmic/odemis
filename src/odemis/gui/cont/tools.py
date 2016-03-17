@@ -55,7 +55,7 @@ class Tool(object):
     def __init__(self, icon, tooltip=None):
         """
         icon (string): name of the bitmap without .png, _h.png, _a.png
-         (iow, as found in gui.img.data)
+         (iow, as found in gui.img)
         tooltip (string): tool tip content
         """
         self.icon = icon
@@ -158,14 +158,14 @@ class ToolBar(wx.Panel):
         if kwargs['style'] & wx.VERTICAL:
             self.orientation = wx.VERTICAL
             main_sizer = wx.BoxSizer(wx.VERTICAL)
-            first_bmp = wx.StaticBitmap(self, -1, img.data.getside_menu_topBitmap())
-            second_bmp = wx.StaticBitmap(self, -1, img.data.getside_menu_bottomBitmap())
+            first_bmp = wx.StaticBitmap(self, -1, img.getBitmap("menu/side_menu_top.png"))
+            second_bmp = wx.StaticBitmap(self, -1, img.getBitmap("menu/side_menu_bottom.png"))
             self.btn_sizer = wx.BoxSizer(wx.VERTICAL)
         else:
             self.orientation = wx.HORIZONTAL
             main_sizer = wx.BoxSizer(wx.HORIZONTAL)
-            first_bmp = wx.StaticBitmap(self, -1, img.data.getside_menu_leftBitmap())
-            second_bmp = wx.StaticBitmap(self, -1, img.data.getside_menu_rightBitmap())
+            first_bmp = wx.StaticBitmap(self, -1, img.getBitmap("menu/side_menu_left.png"))
+            second_bmp = wx.StaticBitmap(self, -1, img.getBitmap("menu/side_menu_right.png"))
             self.btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
 
         # Set the main sizer that will contain the elements that will form
@@ -238,11 +238,11 @@ class ToolBar(wx.Panel):
         self._mode_callbacks.append(_on_va_change)
 
     def _add_button(self, cls, img_prefix, tooltip=None):
-        bmp = img.data.catalog[img_prefix].GetBitmap()
-        bmpa = img.data.catalog[img_prefix + "_a"].GetBitmap()
-        bmph = img.data.catalog[img_prefix + "_h"].GetBitmap()
+        bmp = img.getBitmap("menu/" + img_prefix + ".png")
+        bmpa = img.getBitmap("menu/" + img_prefix + "_a.png")
+        bmph = img.getBitmap("menu/" + img_prefix + "_h.png")
 
-        dimg = img.data.catalog[img_prefix].GetImage()
+        dimg = img.getImage("menu/" + img_prefix + ".png")
         darken_image(dimg, 0.5)
         bmpd = dimg.ConvertToBitmap()
 

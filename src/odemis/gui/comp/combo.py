@@ -30,7 +30,7 @@ import wx.combo
 
 import odemis.gui
 from odemis.gui.comp.buttons import ImageButton, BtnMixin, darken_image
-import odemis.gui.img.data as img
+from odemis.gui import img
 
 
 class ComboBox(wx.combo.OwnerDrawnComboBox):
@@ -64,11 +64,11 @@ class ComboBox(wx.combo.OwnerDrawnComboBox):
         # Even those this colour sets the right
         self.SetBackgroundColour(self.Parent.GetBackgroundColour())
 
-        icon = img.arr_down_s.Bitmap
+        icon = img.getBitmap("icon/arr_down_s.png")
         icon_x = 16 // 2 - icon.GetWidth() // 2
         icon_y = (16 // 2) - (icon.GetHeight() // 2) - 1
 
-        bmpLabel = ImageButton._create_bitmap(img.btn_def_16.Bitmap, (16, 16),
+        bmpLabel = ImageButton._create_bitmap(img.getBitmap("button/btn_def_16.png"), (16, 16),
                                               self.GetBackgroundColour())
         dc = wx.MemoryDC()
         dc.SelectObject(bmpLabel)

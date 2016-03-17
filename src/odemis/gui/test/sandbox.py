@@ -206,7 +206,7 @@ class MainWindow(wx.Frame):
 try:
     import wx.lib.wxcairo as wxcairo
     import cairo
-    import odemis.gui.img.data as imgdata
+    from odemis.gui import img
     haveCairo = True
 except ImportError:
     haveCairo = False
@@ -224,7 +224,7 @@ class CairoPanel(wx.Panel):
         wx.Panel.__init__(self, parent, style=wx.BORDER_SIMPLE)
         self.Bind(wx.EVT_PAINT, self.OnPaint)
         self.text = 'Hello World!'
-        self.imgdata = imgdata.getcanvasbgBitmap()
+        self.imgdata = img.getBitmap("canvasbg.png")
         self.offset = 5
 
     def OnPaint(self, evt):

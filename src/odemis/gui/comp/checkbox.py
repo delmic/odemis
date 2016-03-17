@@ -26,8 +26,9 @@ from __future__ import division
 
 import wx
 from wx.lib.imageutils import grayOut
-import odemis.gui.img.data as imgdata
+from odemis.gui import img
 
+# TODO: unused
 
 class CheckBox(wx.PyControl):
     """
@@ -116,11 +117,12 @@ class CheckBox(wx.PyControl):
         # We keep 4 bitmaps for CustomCheckBox, depending on the
         # checking state (Checked/UnCkecked) and the control
         # state (Enabled/Disabled).
+        # FIXME: no such image
         self._bitmaps = {
-            "CheckedEnable": imgdata.getbtn_16x16Bitmap(),
-            "UnCheckedEnable": imgdata.getbtn_16x16Bitmap(),
-            "CheckedDisable": grayOut(imgdata.getbtn_16x16Image()),
-            "UnCheckedDisable": grayOut(imgdata.getbtn_16x16Image())
+            "CheckedEnable": img.getBitmap("btn_16x16.png"),
+            "UnCheckedEnable": img.getBitmap("btn_16x16.png"),
+            "CheckedDisable": grayOut(img.getImage("btn_16x16.png")),
+            "UnCheckedDisable": grayOut(img.getImage("btn_16x16.png"))
         }
 
     def initialize_colours(self):

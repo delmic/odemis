@@ -34,7 +34,6 @@ from odemis.gui import BG_COLOUR_LEGEND, FG_COLOUR_LEGEND
 from odemis.gui.comp import miccanvas, overlay
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
 from odemis.gui.comp.legend import InfoLegend, AxisLegend
-from odemis.gui.img.data import getico_blending_goalBitmap
 from odemis.gui.model import CHAMBER_VACUUM, CHAMBER_UNKNOWN
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.raster import rasterize_line
@@ -675,7 +674,7 @@ class ARLiveViewport(LiveViewport):
         # TODO: should be done on the fly by _checkMergeSliderDisplay()
         # change SEM icon to Goal
         if self.bottom_legend:
-            self.bottom_legend.bmp_slider_right.SetBitmap(getico_blending_goalBitmap())
+            self.bottom_legend.bmp_slider_right.SetBitmap(getBitmap("ico_blending_goal.png"))
 
     def setView(self, microscope_view, tab_data):
         super(ARLiveViewport, self).setView(microscope_view, tab_data)
