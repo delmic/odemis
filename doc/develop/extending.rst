@@ -318,10 +318,10 @@ Launch it by typing this (from ``~/development/odemis``)::
 When saving the file, main_xrc.py will automatically be updated too.
 
 If you add/modify an image (used as a GUI element, not a microscope acquisition), 
-it should be done in ``src/odemis/gui/img``. After the modifications, you need to 
-regenerate the ``data.py`` file::
+it should be done in ``src/odemis/gui/img``. After the modifications, you should
+make sure the images are optimised, with the following script::
 
-    ./src/odemis/gui/img/img2python.py
+    ./util/groom-img.py
 
 If you modify the application main icons in ``image/icon_gui*.png``, you need to call::
 
