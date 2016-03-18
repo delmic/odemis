@@ -263,7 +263,7 @@ class MultipleDetectorStream(Stream):
         time_assemble = 0.001 * tot  # very rough approximation
         # add some overhead for the end of the acquisition
         tot_left = left + time_assemble + bonus + 0.1
-        future.set_end_time(time.time() + tot_left)
+        future.set_progress(end=time.time() + tot_left)
 
     def _cancelAcquisition(self, future):
         with self._acq_lock:

@@ -171,7 +171,7 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg):
                 future._autofocusf = autofocus.AutoFocus(ccd, None, focus, dfbkg)
                 lens_pos, fm_level = future._autofocusf.result()
                 # Update progress of the future
-                future.set_end_time(time.time() +
+                future.set_progress(end=time.time() +
                                     estimateAlignmentTime(et, dist, 1))
                 ccd.binning.value=(1, 1)
             except IOError:
@@ -185,7 +185,7 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg):
                 raise IOError('Spot alignment failure. Spot not found')
 
         # Update progress of the future
-        future.set_end_time(time.time() +
+        future.set_progress(end=time.time() +
                             estimateAlignmentTime(et, dist, 1))
 
         image = AcquireNoBackground(ccd, dfbkg)
@@ -198,7 +198,7 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg):
             raise CancelledError()
 
         # Update progress of the future
-        future.set_end_time(time.time() +
+        future.set_progress(end=time.time() +
                             estimateAlignmentTime(et, dist, 0))
         ccd.binning.value = (1, 1)
 
@@ -402,7 +402,7 @@ def _DoCenterSpot(future, ccd, stage, escan, mx_steps, type, dfbkg):
                 escan.translation.value = (-tab_pxs[0], -tab_pxs[1])
             steps += 1
             # Update progress of the future
-            future.set_end_time(time.time() +
+            future.set_progress(end=time.time() +
                                 estimateCenterTime(ccd.exposureTime.value, dist))
 
         return dist, tab

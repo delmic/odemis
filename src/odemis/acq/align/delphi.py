@@ -201,7 +201,7 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
                 raise CancelledError()
 
             # Update progress of the future
-            future.set_end_time(time.time() +
+            future.set_progress(end=time.time() +
                                 estimateConversionTime(first_insertion) * (3 / 4))
             logging.debug("Move SEM stage to expected offset...")
             f = sem_stage.moveAbs({"x": sem_position[0], "y": sem_position[1]})
@@ -239,7 +239,7 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
             if future._conversion_update_state == CANCELLED:
                 raise CancelledError()
             # Update progress of the future
-            future.set_end_time(time.time() +
+            future.set_progress(end=time.time() +
                                 estimateConversionTime(first_insertion) * (2 / 4))
             logging.debug("Calculate rotation and scaling...")
             try:
@@ -250,7 +250,7 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
                 raise IOError("Conversion update failed to calculate rotation and scaling.")
 
             # Update progress of the future
-            future.set_end_time(time.time() +
+            future.set_progress(end=time.time() +
                                 estimateConversionTime(first_insertion) * (1 / 4))
             logging.debug("Calculate shift parameters...")
             try:
@@ -314,7 +314,7 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
             if future._conversion_update_state == CANCELLED:
                 raise CancelledError()
             # Update progress of the future
-            future.set_end_time(time.time() + 1)
+            future.set_progress(end=time.time() + 1)
             logging.debug("Calculate extra offset and rotation...")
             updated_offset, updated_rotation = UpdateOffsetAndRotation(first_hole,
                                                                        second_hole,
@@ -462,7 +462,7 @@ def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus)
             future_spot = spot.AlignSpot(ccd, sem_stage, escan, focus, type=spot.STAGE_MOVE, dfbkg=detector.data)
             dist, vector = future_spot.result()
             # Almost done
-            future.set_end_time(time.time() + 1)
+            future.set_progress(end=time.time() + 1)
             image = ccd.data.get(asap=False)
             sem_pos = sem_stage.position.value
         except IOError:
@@ -473,7 +473,7 @@ def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus)
                 future_spot = spot.AlignSpot(ccd, sem_stage, escan, focus, type=spot.STAGE_MOVE, dfbkg=detector.data)
                 dist, vector = future_spot.result()
                 # Almost done
-                future.set_end_time(time.time() + 1)
+                future.set_progress(end=time.time() + 1)
                 image = ccd.data.get(asap=False)
                 sem_pos = sem_stage.position.value
             except IOError:
@@ -494,7 +494,7 @@ def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus)
                     future_spot = spot.AlignSpot(ccd, sem_stage, escan, focus, type=spot.STAGE_MOVE, dfbkg=detector.data)
                     dist, vector = future_spot.result()
                     # Almost done
-                    future.set_end_time(time.time() + 1)
+                    future.set_progress(end=time.time() + 1)
                     image = ccd.data.get(asap=False)
                     sem_pos = sem_stage.position.value
                 except IOError:
@@ -684,7 +684,7 @@ def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, fo
                 f.result()
                 steps += 1
                 # Update progress of the future
-                future.set_end_time(time.time() +
+                future.set_progress(end=time.time() +
                                     estimateRotationAndScalingTime(ccd.exposureTime.value, dist))
 
             # Save Phenom sample stage position and Delmic optical stage position

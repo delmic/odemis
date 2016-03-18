@@ -386,7 +386,7 @@ def _DoDelphiCalibration(future, main_data, first_insertion=True, known_first_ho
                     raise CancelledError()
 
                 # Update progress of the future
-                future.set_end_time(time.time() + 14 * 60)
+                future.set_progress(end=time.time() + 14 * 60)
 
                 # Just to check if move makes sense
                 f = sem_stage.moveAbs({"x": position[0], "y": position[1]})
@@ -402,7 +402,7 @@ def _DoDelphiCalibration(future, main_data, first_insertion=True, known_first_ho
 
                 # Update progress of the future
                 logging.debug("Try to update the remaining time...")
-                future.set_end_time(time.time() + 12.5 * 60)
+                future.set_progress(end=time.time() + 12.5 * 60)
 
                 # Compute stage calibration values
                 try:
@@ -424,7 +424,7 @@ def _DoDelphiCalibration(future, main_data, first_insertion=True, known_first_ho
 
                 # Update progress of the future
                 logging.debug("Try to update the remaining time...")
-                future.set_end_time(time.time() + 60)
+                future.set_progress(end=time.time() + 60)
 
                 # Proper hfw for spot grid to be within the ccd fov
                 main_data.ebeam.horizontalFoV.value = 80e-06

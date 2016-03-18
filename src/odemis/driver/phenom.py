@@ -1808,7 +1808,7 @@ class ChamberPressure(model.Actuator):
                 waiting_time = 6
             else:
                 waiting_time = 0
-            future.set_end_time(time.time() + self.wakeUpTime + remainingTime + waiting_time)
+            future.set_progress(end=time.time() + self.wakeUpTime + remainingTime + waiting_time)
         except suds.WebFault:
             logging.warning("Time updater failed, cannot move to another state.", exc_info=True)
 

@@ -125,7 +125,7 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan,
                 raise CancelledError()
 
             # Update progress of the future (it may be the second trial)
-            future.set_end_time(time.time() +
+            future.set_progress(end=time.time() +
                                 estimateOverlayTime(future._scanner.dwell_time,
                                                     repetitions))
 
@@ -135,7 +135,7 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan,
                 raise CancelledError()
 
             # Update remaining time to 6secs (hardcoded estimation)
-            future.set_end_time(time.time() + 6)
+            future.set_progress(end=time.time() + 6)
 
             # Check if ScanGrid gave one image or list of images
             # If it is a list, follow the "one image per spot" procedure
@@ -225,7 +225,7 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan,
             raise CancelledError()
 
         # We are almost done... about 1 s left
-        future.set_end_time(time.time() + 1)
+        future.set_progress(end=time.time() + 1)
 
         logging.debug("Calculating transformation...")
         try:
