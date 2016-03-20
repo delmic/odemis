@@ -345,11 +345,16 @@ class MenuController(object):
         subprocess.Popen("odemis-bug-report")
 
     def _on_about(self, evt):
+
+        from odemis.gui.util.mem import memory_usage_psutil
+        mem_usage = memory_usage_psutil()
+        mem_str = "\n(%0.2f MB memory used)" % mem_usage if mem_usage else ""
+
         info = wx.AboutDialogInfo()
         info.SetIcon(gui.icon)
         info.Name = gui.name
         info.Version = odemis.__version__
-        info.Description = odemis.__fullname__
+        info.Description = odemis.__fullname__ + mem_str
         info.Copyright = odemis.__copyright__
         info.WebSite = ("http://delmic.com", "delmic.com")
         info.License = odemis.__licensetxt__
