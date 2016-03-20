@@ -705,11 +705,14 @@ class Stream(object):
 
     @staticmethod
     def _image_thread(wstream):
+        """ Called as a separate thread, and recomputes the image whenever it receives an event
+        asking for it.
+
+        Args:
+            wstream (Weakref to a Stream): the stream to follow
+
         """
-        Called as a separate thread, and recomputes the image whenever
-        it receives an event asking for it.
-        wself (Weakref to a stream): the stream to follow
-        """
+
         try:
             stream = wstream()
             im_needs_recompute = stream._im_needs_recompute
@@ -722,9 +725,11 @@ class Stream(object):
                 del stream
                 im_needs_recompute.wait()  # wait until a new image is available
                 stream = wstream()
+
                 if stream is None:
                     logging.debug("Stream disappeared so ending image update thread")
                     return
+
                 tnow = time.time()
 
                 # sleep a bit to avoid refreshing too fast

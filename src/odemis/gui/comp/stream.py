@@ -432,7 +432,7 @@ class StreamPanel(wx.Panel):
         wx.Panel.__init__(self, parent, wid, pos, size, style, name)
 
         self.options = options
-        self.stream = stream  # TODO: Should this also be moved to the StreamController?
+        self.stream = stream  # TODO: Should this also be moved to the StreamController? YES!
         # Dye attributes
         self._btn_excitation = None
         self._btn_emission = None
@@ -1416,7 +1416,11 @@ class StreamBar(wx.Panel):
         """
         self.stream_panels.remove(spanel)
         # CallAfter is used to make sure all GUI updates occur in the main
-        # thread
+        # thread. (Note: this was causing issues with the garbage collection of Streams, because
+        # StreamPanel have a direct reference to Streams, which should be moved to the controller)
+        #
+        # Interesting side note: with CallAfter ever time the same image was loaded, Odemis would
+        # leak 11 MB, when Destroyed is called directly, it would leak 9 MB each time
         wx.CallAfter(spanel.Destroy)
         self._set_warning()
 

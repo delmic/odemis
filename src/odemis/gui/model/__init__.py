@@ -1183,7 +1183,7 @@ class StreamView(View):
                 return
 
             # remove stream from the StreamTree()
-            # TODO handle more complex trees
+            # TODO: handle more complex trees
             self.stream_tree.remove_stream(stream)
 
         # let everyone know that the view has changed

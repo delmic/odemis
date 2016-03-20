@@ -1364,7 +1364,7 @@ class AnalysisTab(Tab):
         self._def_views = list(tab_data.visible_views.value)
 
         # Show the streams (when a file is opened)
-        self._stream_controller = streamcont.StreamBarController(
+        self._stream_bar_controller = streamcont.StreamBarController(
             tab_data,
             panel.pnl_inspection_streams,
             static=True
@@ -1384,8 +1384,8 @@ class AnalysisTab(Tab):
         self.tab_data_model.tool.subscribe(self._onTool)
 
     @property
-    def stream_controller(self):
-        return self._stream_controller
+    def stream_bar_controller(self):
+        return self._stream_bar_controller
 
     def select_acq_file(self):
         """ Open an image file using a file dialog box
@@ -1475,7 +1475,7 @@ class AnalysisTab(Tab):
         fi = guimod.FileInfo(filename)
 
         # Remove all the previous streams
-        self._stream_controller.clear()
+        self._stream_bar_controller.clear()
         # Clear any old plots
         self.panel.vp_inspection_plot.clear()
         self.panel.vp_spatialspec.clear()
@@ -1599,7 +1599,7 @@ class AnalysisTab(Tab):
 
         # Load the Streams and their data into the model and views
         for s in streams:
-            self._stream_controller.addStream(s, add_to_view=True)
+            self._stream_bar_controller.addStream(s, add_to_view=True)
 
         # Reload current calibration on the new streams (must be done after .streams is set)
         if spec_streams:

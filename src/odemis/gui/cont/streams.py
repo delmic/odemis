@@ -23,11 +23,17 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
-from collections import OrderedDict
 import collections
 import functools
+import gc
 import logging
 import numpy
+import wx
+from collections import OrderedDict
+from wx.lib.pubsub import pub
+
+import odemis.acq.stream as acqstream
+import odemis.gui.model as guimodel
 from odemis import model, util
 from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR
 from odemis.gui.comp.overlay.world import RepetitionSelectOverlay
@@ -43,11 +49,6 @@ from odemis.gui.util import wxlimit_invocation, dead_object_wrapper
 from odemis.util import fluo
 from odemis.util.conversion import wave2rgb
 from odemis.util.fluo import to_readable_band, get_one_center
-import wx
-from wx.lib.pubsub import pub
-
-import odemis.acq.stream as acqstream
-import odemis.gui.model as guimodel
 
 
 # There are two kinds of controllers:
@@ -72,6 +73,7 @@ class StreamController(object):
 
     def __init__(self, stream_bar, stream, tab_data_model, show_panel=True):
 
+        self.grr = stream.__class__
         self.stream = stream
         self.stream_bar = stream_bar
 
@@ -90,6 +92,7 @@ class StreamController(object):
 
         self.stream_panel = StreamPanel(stream_bar, stream, options)
         # Detect when the panel is destroyed (but _not_ any of the children)
+        # Make sure to Unbind ALL event bound to the stream panel!!
         self.stream_panel.Bind(wx.EVT_WINDOW_DESTROY, self._on_stream_panel_destroy,
                                source=self.stream_panel)
 
@@ -145,15 +148,18 @@ class StreamController(object):
         # Set the visibility button on the stream panel
         vis = stream in tab_data_model.focussedView.value.getStreams()
         self.stream_panel.set_visible(vis)
-        self.stream_panel.Bind(EVT_STREAM_VISIBLE, self._on_stream_visible)
+        # self.stream_panel.Bind(EVT_STREAM_VISIBLE, self._on_stream_visible)
 
         if isinstance(stream, acqstream.SpectrumStream) and hasattr(stream, "peak_method"):
             # Set the peak button on the stream panel
             vis = stream in tab_data_model.focussedView.value.getStreams()
             self.stream_panel.set_peak(PEAK_METHOD_TO_STATE[stream.peak_method.value])
-            self.stream_panel.Bind(EVT_STREAM_PEAK, self._on_stream_peak)
+            # self.stream_panel.Bind(EVT_STREAM_PEAK, self._on_stream_peak)
 
         stream_bar.add_stream_panel(self.stream_panel, show_panel)
+
+    def __del__(self):
+        logging.debug("Streamcontroller %s garbage collected", id(self))
 
     def pause(self):
         """ Pause (freeze) SettingEntry related control updates """
@@ -289,11 +295,10 @@ class StreamController(object):
         self.stream_panel.Unbind(wx.EVT_WINDOW_DESTROY)
         self.stream_panel.header_change_callback = None
         self.stream_panel.Unbind(EVT_STREAM_VISIBLE)
+        self.stream_panel.Unbind(EVT_STREAM_VISIBLE)
+        self.stream_panel.Unbind(EVT_STREAM_PEAK)
 
         self.entries = OrderedDict()
-
-        # import sys, gc
-        # print sys.getrefcount(self), "\n".join([str(s) for s in gc.get_referrers(self)])
 
     def _on_stream_visible(self, evt):
         """ Show or hide a stream in the focussed view if the visibility button is clicked """
@@ -389,7 +394,8 @@ class StreamController(object):
                 binva = getattr(self.stream, fn)
                 break
         else:
-            logging.warning("Stream has resolution VA but no binning/scale, so it will not be updated.")
+            logging.warning("Stream has resolution VA but no binning/scale, "
+                            "so it will not be updated.")
             return
 
         binva.subscribe(self._update_resolution)
@@ -1215,11 +1221,11 @@ class StreamBarController(object):
                                                 static=self.static_mode)
 
             # TODO: make StreamTree a VA-like and remove this
-#             logging.debug("Sending stream.ctrl.added message")
-#             pub.sendMessage('stream.ctrl.added',
-#                             streams_present=True,
-#                             streams_visible=self._has_visible_streams(),
-#                             tab=self._tab_data_model)
+            # logging.debug("Sending stream.ctrl.added message")
+            # pub.sendMessage('stream.ctrl.added',
+            #                 streams_present=True,
+            #                 streams_visible=self._has_visible_streams(),
+            #                 tab=self._tab_data_model)
 
             return stream_cont
         else:
@@ -1241,8 +1247,7 @@ class StreamBarController(object):
 
         """
 
-        stream_cont = StreamController(self._stream_bar, stream, self._tab_data_model,
-                                       show_panel)
+        stream_cont = StreamController(self._stream_bar, stream, self._tab_data_model, show_panel)
 
         if locked:
             stream_cont.to_locked_mode()
@@ -1482,14 +1487,16 @@ class StreamBarController(object):
                 if hasattr(v, "removeStream"):
                     v.removeStream(stream)
 
+        # Clear the stream controller
+        self.stream_controllers = []
+
+        # Explicitly collect garbage, because for some reason not all stream controllers were
+        # collected immediately, which would keep a reference to the Stream object, which in turn
+        # would prevent the Stream render thread from terminating.
+        gc.collect()
+
         if self._has_streams() or self._has_visible_streams():
             logging.warning("Failed to remove all streams")
-
-        # logging.debug("Sending stream.ctrl.removed message")
-        # pub.sendMessage('stream.ctrl.removed',
-        #                 streams_present=False,
-        #                 streams_visible=False,
-        #                 tab=self._tab_data_model)
 
     def _has_streams(self):
         return len(self._stream_bar.stream_panels) > 0
