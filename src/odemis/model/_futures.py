@@ -425,6 +425,7 @@ class ProgressiveFuture(CancellableFuture):
     def set_start_time(self, val):
         """
         Update the start time of the task. To be used by executors only.
+        Deprecated, use set_progress()
 
         val (float): time at which the task started (or will be starting)
         """
@@ -433,6 +434,7 @@ class ProgressiveFuture(CancellableFuture):
     def set_end_time(self, val):
         """
         Update the end time of the task. To be used by executors only.
+        Deprecated, use set_progress()
 
         val (float): time at which the task ended (or will be ending)
         """
