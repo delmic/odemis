@@ -465,8 +465,8 @@ class Instantiator(object):
 
         return ret
 
-    @staticmethod
-    def get_children(root):
+    @classmethod
+    def get_children(cls, root):
         """
         Return the set of components which are referenced from the given component
          (via children)
@@ -476,7 +476,7 @@ class Instantiator(object):
         """
         ret = {root}
         for child in root.children.value:
-            ret |= Instantiator.get_children(child)
+            ret |= cls.get_children(child)
 
         return ret
 
