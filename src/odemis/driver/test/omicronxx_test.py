@@ -22,7 +22,6 @@ import os
 import time
 import unittest
 from unittest.case import skip
-from odemis.driver.omicronxx import HubxX
 
 logging.getLogger().setLevel(logging.DEBUG)
 

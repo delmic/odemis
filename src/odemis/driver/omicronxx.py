@@ -150,6 +150,7 @@ class USBAccesser(object):
             # still possible to receives 0's at the beginning.
             # This is a kludge to workaround that
             if not line and char == "\x00":
+                logging.debug("Discarding null byte")
                 char = ""
 
             # normal char
@@ -202,10 +203,7 @@ class DevxX(object):
 
         # If there is error => reset
         status = self.GetActualStatus()
-        logging.debug("Device (on port %s) status = %X", acc.port, status)
-
-        if status & (1 << 8):  # bit 8: Need to toggle key
-            raise HwError("Device needs to key switch toggled")
+        logging.debug("Device (on port %s) status = 0x%X", acc.port, status)
 
         if status & 1:  # bit 0: error state
             error = self.GetFailureByte()
@@ -220,9 +218,14 @@ class DevxX(object):
                 raise HwError("Device reports error %04X, see documentation for more information" %
                               (error,))
 
-        if not (status & (1 << 6)):  # bit 6: "external" light enabler
-            logging.warning("Electronic shutter active, no light will be output "
-                            "until it's disabled.")
+        if status & (1 << 8):  # bit 8: Need to toggle key
+            raise HwError("Device needs to have the key switch toggled off and on")
+
+        if not (status & (1 << 7)):  # bit 6: key switch allows laser (=1)
+            raise HwError("Key switch interlock prevents laser output, close the interlock loop to activate the device")
+
+        if not (status & (1 << 6)):  # bit 6: "external" light enabler (=1)
+            raise HwError("Electronic shutter active, open the shutter by pressing the button on the device")
 
         # Select the right command to change the level power
         if devid in (19, 20):  # LEDMOD, LedHUB
@@ -235,8 +238,10 @@ class DevxX(object):
         # Disable ad-hoc mode (on the master device)
         # (alternatively, we could listen to the messages, and update info such
         # as the temperature)
+        # Also disable external modulation, to control fully by software
         mode = self.GetOperatingMode()
-        mode &= ~(1 << 13) # bit 13 = Ad-hoc mode
+        # Disable: Ad-hoc mode (13), analog modulation (7), digital modulation (5)
+        mode &= ~((1 << 13) | (1 << 7) | (1 << 5))
         self.SetOperatingMode(mode)
 
         # Fill in some info
@@ -282,7 +287,7 @@ class DevxX(object):
         logging.info("Device %s has %d working hours", devname, wh)
 
         self.LightOff() # for safety
-        # TODO: open shutter
+        self.SetLevelPower(0)  # saved in memory, so next reboot it will start off
         self.PowerOn()
 
         # Go out of stand-by
@@ -291,7 +296,7 @@ class DevxX(object):
         self.SetOperatingMode(mode)
 
     def terminate(self):
-        # self.SetLevelPower(0) # To make sure at next start it's off
+        # self.SetLevelPower(0)  # To make sure at next start it's off
         self.LightOff()
         self.PowerOff()
 
@@ -419,6 +424,16 @@ class DevxX(object):
         assert(0 <= power <= 1)
         val = int(round(power * 0xFFF))
         self._setValue("SLP", "%03X" % val)
+
+    def SetPowerPercent(self, power):
+        """
+        Set the power (and save in device memory)
+        Note: only available on new devices
+        power (0<=float<=1): power value as a ratio between 0 and the maximum power
+        """
+        assert(0 <= power <= 1)
+        val = power * 100  # in percentage
+        self._setValue("SPP", "%0.5f" % val)
 
     def SetTemporaryPower(self, power):
         """
@@ -565,6 +580,8 @@ class GenericxX(model.Emitter):
             self._master.terminate()
 
     def _updateIntensities(self, power, intensities):
+        # TODO: compare to the previous (known) state, and only send commands for
+        # the difference, to save some time (each command takes ~5 ms)
         # set the actual values
         for d, intens in zip(self._devices, intensities):
             p = min(power * intens, d.max_power)
@@ -679,15 +696,24 @@ class HubxX(GenericxX):
             names = glob.glob(ports)
 
         mdevs = []
+        last_hwe = None
         for n in names:
             # Get the "master" device
             try:
                 acc = USBAccesser(n)
                 d = DevxX(acc, 0)
                 mdevs.append(d)
+            except HwError as ex:
+                logging.info("Got HwError %s from device on port %s, will see if another device is ready", ex, n)
+                last_hwe = ex
+                continue
             except (TypeError, IOError):
                 logging.info("Port %s doesn't seem to have a Omicron Hub device connected", n, exc_info=True)
                 continue
+
+        if not mdevs and last_hwe:
+            # That's probably the device the user is looking for, so pass on the error
+            raise last_hwe
 
         return mdevs
 
@@ -725,7 +751,7 @@ class HubxX(GenericxX):
 
         ret = []
         for d in cls._getMasterDevices(ports):
-            ret.append[("Omicron Hub", {"port": d.acc.port})]
+            ret.append(("Omicron Hub", {"port": d.acc.port}))
 
         return ret
 
@@ -742,9 +768,9 @@ class HubxXSimulator(object):
         self._input_buf = ""  # what we receive from the "host computer"
 
         # Sub devices info: channel -> wavelength (nm) / power (mw)
-        self._csi = {1: (400, 10),
-                          5: (500, 8),
-                          }
+        self._csi = {1: (400, 1400),
+                     5: (500, 525),
+        }
 
     def write(self, data):
         self._input_buf += data
@@ -811,7 +837,7 @@ class HubxXSimulator(object):
         elif com == "GSN":
             self._sendAnswer("GSN", chan, "123456.7")
         elif com == "GAS":
-            self._sendAnswer("GAS", chan, "0042")  # Device on (bit 1) + Led ready (bit 6)
+            self._sendAnswer("GAS", chan, "02C2")  # Device on (bit 1) + Led ready (bit 6)
         elif com == "GOM":
             self._sendAnswer("GOM", chan, "FCFB")
         elif com == "SOM":
@@ -844,6 +870,22 @@ class HubxXSimulator(object):
             self._sendAnswer("POf", chan, ">")
         elif com == "POn":
             self._sendAnswer("POn", chan, ">")
+        elif com == "SLP":
+            if chan in self._csi and len(args) == 1:
+                pw = int(args[0], 16)
+                _, mpw = self._csi[chan]
+                # self._cpw[chan] = mpw * pw / 0xfff
+                self._sendAnswer("SLP", chan, ">")
+            else:
+                self._sendAnswer("UK")  # wrong instruction
+        elif com == "SPP":
+            if chan in self._csi and len(args) == 1:
+                per = float(args[0])
+                _, mpw = self._csi[chan]
+                # self._cpw[chan] = mpw * per / 100
+                self._sendAnswer("SPP", chan, ">")
+            else:
+                self._sendAnswer("UK")  # wrong instruction
         elif com == "TPP":
             if chan in self._csi and len(args) == 1:
                 per = float(args[0])
