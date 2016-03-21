@@ -50,8 +50,7 @@ def getSerialDriver(name):
 
 
 # From http://code.activestate.com/recipes/286222/
-_SCALE = {'kB': 2 ** 10, 'mB': 2 ** 20,
-          'KB': 2 ** 10, 'MB': 2 ** 20}
+_SCALE = {'kB': 2 ** 10, 'mB': 2 ** 20}
 
 def _VmB(VmKey):
     """
@@ -74,14 +73,27 @@ def _VmB(VmKey):
         return NotImplementedError("Not supporting to read memory %s" % (v,))
 
     # convert to bytes
-    return int(v[1]) * _SCALE[v[2]]
+    return int(v[1]) * _SCALE[v[2].upper()]
 
 
 def readMemoryUsage():
     """
-    return (int) memory usage in bytes.
+    return (int): memory usage in bytes.
+    raises:
+        NotImpelementedError if OS is not supported
     """
-    return _VmB('VmSize')  # VmSize is the current total memory used (on Linux)
+    try:
+        import psutil
+        process = psutil.Process(os.getpid())
+        if hasattr(process, "get_memory_info"):
+            # Old API (v1.0 and below)
+            mem = process.get_memory_info().rss
+        else:
+            # API for psutil v2+
+            mem = process.memory_info().rss
+        return mem
+    except ImportError:
+        return _VmB('VmRSS')
 
 
 def estimateMoveDuration(distance, speed, accel):

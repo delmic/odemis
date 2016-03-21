@@ -41,6 +41,8 @@ Depends: python (>= 2.7.1),
          python-matplotlib,
          python-opencv (>= 2.4),
          python-notify,
+# psutil is not required, if not present, less debug information will be available
+         python-psutil,
 # comedi is only needed for semcomedi driver
          python-comedilib (>= 0.10.0),
 # blinkstick is only needed for blinkstick driver

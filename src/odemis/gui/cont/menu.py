@@ -28,6 +28,7 @@ from odemis.gui.comp import popup
 import odemis.gui.conf
 from odemis.gui.model.dye import DyeDatabase
 from odemis.gui.util import call_in_wx_main
+from odemis.util import driver
 import subprocess
 import sys
 import wx
@@ -346,22 +347,18 @@ class MenuController(object):
 
     def _on_about(self, evt):
 
-        from odemis.gui.util.mem import memory_usage_psutil
-        mem_usage = memory_usage_psutil()
-        mem_str = "\n(%0.2f MB memory used)" % mem_usage if mem_usage else ""
-
         info = wx.AboutDialogInfo()
         info.SetIcon(gui.icon)
         info.Name = gui.name
         info.Version = odemis.__version__
-        info.Description = odemis.__fullname__ + mem_str
+        info.Description = odemis.__fullname__
         info.Copyright = odemis.__copyright__
         info.WebSite = ("http://delmic.com", "delmic.com")
         info.License = odemis.__licensetxt__
         info.Developers = odemis.__authors__
-        # info.DocWriter = '???'
-        # info.Artist = '???'
-        # info.Translator = '???'
+        # info.DocWriters = ['???']
+        # info.Artists = ['???']
+        # info.Translators = ['???']
 
         if DyeDatabase:
             info.Developers += ["", "Dye database from http://fluorophores.org"]
@@ -376,6 +373,12 @@ class MenuController(object):
             for p in app.plugins:
                 info.Developers += [u"%s by %s under %s license" %
                                     (p, p.__author__, p.__license__)]
+
+        try:
+            mem_usage = driver.readMemoryUsage() / 2 ** 20  # MiB
+            info.Description += "\n(%0.2f MiB memory used)" % mem_usage
+        except NotImplementedError:
+            pass
 
         wx.AboutBox(info)
 
