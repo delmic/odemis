@@ -417,13 +417,15 @@ class Scanner(model.Emitter):
         """
         Reads again the hardware setting and update the VA
         """
-        fov = self.parent._device.GetSEMHFW()
-        # take care of small deviations
-        fov = numpy.clip(fov, HFW_RANGE[0], HFW_RANGE[1])
+        if self.parent._blank_supported and (not self.blanker.value):
+            # FIXME: Fow now only trust this value when beam is unblanked
+            fov = self.parent._device.GetSEMHFW()
+            # take care of small deviations
+            fov = numpy.clip(fov, HFW_RANGE[0], HFW_RANGE[1])
 
-        # we don't set it explicitly, to avoid calling .SetSEMHFW()
-        self.horizontalFoV._value = fov
-        self.horizontalFoV.notify(fov)
+            # we don't set it explicitly, to avoid calling .SetSEMHFW()
+            self.horizontalFoV._value = fov
+            self.horizontalFoV.notify(fov)
 
     def _onHorizontalFoV(self, fov):
         # Update current pixelSize and magnification
@@ -436,7 +438,9 @@ class Scanner(model.Emitter):
         try:
             rng = self.parent._device.GetSEMHFWRange()
             new_fov = numpy.clip(value, rng.min, rng.max)
-            self.parent._device.SetSEMHFW(new_fov)
+            if self.parent._blank_supported and (not self.blanker.value):
+                # FIXME: Fow now only trust this value when beam is unblanked
+                self.parent._device.SetSEMHFW(new_fov)
             return new_fov
         except suds.WebFault:
             logging.debug("Cannot set HFW when the sample is not in SEM.")
@@ -460,10 +464,10 @@ class Scanner(model.Emitter):
         new_dt = DWELL_TIME * self._nr_frames
 
         # Abort current scanning when dwell time is changed
-        # try:
-        #    self.parent._device.SEMAbortImageAcquisition()
-        # except suds.WebFault:
-        #    logging.debug("No acquisition in progress to be aborted.")
+        try:
+            self.parent._device.SEMAbortImageAcquisition()
+        except suds.WebFault:
+            logging.debug("No acquisition in progress to be aborted.")
 
         return new_dt
 
@@ -513,10 +517,10 @@ class Scanner(model.Emitter):
 
     def _onScale(self, s):
         # Abort current scanning when scale is changed
-        # try:
-        #    self.parent._device.SEMAbortImageAcquisition()
-        # except suds.WebFault:
-        #    logging.debug("No acquisition in progress to be aborted.")
+        try:
+            self.parent._device.SEMAbortImageAcquisition()
+        except suds.WebFault:
+            logging.debug("No acquisition in progress to be aborted.")
         self._updatePixelSize()
 
     def _updatePixelSize(self):
@@ -874,6 +878,8 @@ class Detector(model.Detector):
             else:
                 if self.parent._blank_supported:
                     self.parent._device.SEMUnblankBeam()
+                    # FIXME: we can now update hfw
+                    self.parent._device.SetSEMHFW(self.parent._scanner.horizontalFoV.value)
                 else:
                     self.parent._device.SetSEMSourceTilt(self._tilt_unblank[0], self._tilt_unblank[1], False)
                     logging.debug("For voltage %f V and spot size %f, the source tilt is %s",
@@ -887,10 +893,10 @@ class Detector(model.Detector):
                 if self._is_scanning:
                     self._spot_scanner.cancel()
                     self._is_scanning = False
-                # try:
-                #    self._acq_device.SEMAbortImageAcquisition()
-                # except suds.WebFault:
-                #    logging.debug("No acquisition in progress to be aborted.")
+                try:
+                    self._acq_device.SEMAbortImageAcquisition()
+                except suds.WebFault:
+                    logging.debug("No acquisition in progress to be aborted.")
 
                 # "Blank" the beam
                 self.parent._scanner.blanker.value = True
@@ -1043,7 +1049,12 @@ class Detector(model.Detector):
                     self._scan_params_view.center.y = 0
                 if self._needResetParams(self._scanParams):
                     self._acq_device.SetSEMViewingMode(self._scanParams, 'SEM-SCAN-MODE-IMAGING')
-                img_str = self._acq_device.SEMGetLiveImageCopy(0)
+                    # Just to wait long enough before we get a frame with the new
+                    # parameters applied. In the meantime, it can be the case that
+                    # Phenom generates semi-created frames that we want to avoid.
+                    img_str = self._acq_device.SEMAcquireImageCopy(self._scanParams)
+                else:
+                    img_str = self._acq_device.SEMGetLiveImageCopy(0)
 
                 # Use the metadata from the string to update some metadata
                 # metadata[model.MD_POS] = (img_str.aAcqState.position.x, img_str.aAcqState.position.y)
