@@ -70,6 +70,7 @@ def FindEbeamCenter(ccd, detector, escan):
 
         exp = 0.1  # start value
         prev_img = None
+        bg_image = None
         while exp < 2:  # above 2 s it means something went wrong
             ccd.exposureTime.value = exp
 
@@ -81,17 +82,11 @@ def FindEbeamCenter(ccd, detector, escan):
                 coord = FindSpot(img, sensitivity_limit=10)
             except ValueError:
                 # if spot was not found, subtract background and try again
-                detector.data.unsubscribe(discard_data)
-                bg_image = ccd.data.get(asap=False)
-                detector.data.subscribe(discard_data)
+                if bg_image is None:
+                    detector.data.unsubscribe(discard_data)
+                    bg_image = ccd.data.get(asap=False)
+                    detector.data.subscribe(discard_data)
                 img = Subtract(img, bg_image)
-                try:
-                    coord = FindSpot(img, sensitivity_limit=10)
-                except ValueError:
-                    pass
-                else:
-                    # found a spot! => convert position to meters from center
-                    return _ConvertCoordinates(coord, img)
             else:
                 # found a spot! => convert position to meters from center
                 return _ConvertCoordinates(coord, img)
