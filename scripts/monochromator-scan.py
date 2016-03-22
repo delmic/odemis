@@ -18,30 +18,207 @@ select spot mode, and pick the point you're interested.
 
 from __future__ import division
 
+from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
+    RUNNING
 import logging
 import math
 import numpy
-from odemis import dataio, model
-import odemis
+from odemis import dataio, model, acq
+from odemis.acq import stream
+from odemis.gui.conf import get_acqui_conf
+from odemis.gui.model import TOOL_SPOT
 from odemis.util import units
-from odemis.gui.plugin import Plugin, AcquisitionDialog
+import os
 import readline  # for nice editing in raw_input()
 import sys
 import threading
+import time
+import wx
+
+from odemis.gui.plugin import Plugin, AcquisitionDialog
+
+logging.getLogger().setLevel(logging.INFO)  # put "DEBUG" level for more messages
 
 
-logging.getLogger().setLevel(logging.INFO) # put "DEBUG" level for more messages
+class MonochromatorScanStream(stream.Stream):
+    """
+    Stream that allows to acquire a spectrum by scanning the wavelength of a
+    spectrograph and acquiring with a monochromator
+    """
 
-_pt_acq = threading.Event()
-_data = []
-_md = None
+    def __init__(self, name, detector, emitter, spectrograph):
+        """
+        name (string): user-friendly name of this stream
+        detector (Detector): the monochromator
+        emitter (Emitter): the emitter (eg: ebeam scanner)
+        spectrograph (Actuator): the spectrograph
+        """
+        self.name = model.StringVA(name)
 
-def _on_mchr_data(df, data):
-    global _md, _data, _pt_acq
-    if not _md:
-        _md = data.metadata.copy()
-    _data.append(data[0, 0])
-    _pt_acq.set()
+        # Hardware Components
+        self._detector = detector
+        self._emitter = emitter
+        self._sgr = spectrograph
+
+        wlr = spectrograph.axes["wavelength"].range
+        self.startWavelength = model.FloatContinuous(400e-9, wlr, unit="s")
+        self.endWavelength = model.FloatContinuous(500e-9, wlr, unit="s")
+        self.numberOfPixels = model.IntContinuous(51, (2, 1000), unit="px")
+        # TODO: could be a local attribute?
+        self.dwellTime = model.FloatContinuous(1e-3, range=self._emitter.dwellTime.range,
+                                               unit="s")
+        self.emtTranslation = model.TupleContinuous((0, 0),
+                                                    range=self._emitter.translation.range,
+                                                    cls=(int, long, float),
+                                                    unit="px")
+
+        # For acquisition
+        self._pt_acq = threading.Event()
+        self._acq_thread = None
+        self._data = []
+        self._md = {}
+
+    def estimateAcquisitionTime(self):
+        """
+        Estimate the time it will take to put through the overlay procedure
+
+        returns (float): approximate time in seconds that overlay will take
+        """
+        nbp = self.numberOfPixels.value
+        dt = self.dwellTime.value
+        return nbp * (dt + 0.05)  # 50 ms to change wavelength
+
+    def acquire(self):
+        """
+        Runs the acquisition
+        returns Future that will have as a result a DataArray with the spectrum
+        """
+        est_start = time.time() + 0.1
+        f = model.ProgressiveFuture(start=est_start,
+                                    end=est_start + self.estimateAcquisitionTime())
+        f.task_canceller = self._cancelAcquisition
+        f._acq_state = RUNNING
+        f._acq_lock = threading.Lock()
+        f._acq_done = threading.Event()
+
+        # run task in separate thread
+        self._acq_thread = threading.Thread(target=acq._futures.executeTask,
+                                            name="Monochromator scan acquisition",
+                                            args=(f, self._runAcquisition, f))
+        self._acq_thread.start()
+        return f
+
+    def _on_mchr_data(self, df, data):
+        if not self._md:
+            self._md = data.metadata.copy()
+        if data.shape != (1, 1):
+            logging.error("Monochromator scan got %s values for just one point", data.shape)
+        self._data.append(data[0, 0])
+        self._pt_acq.set()
+
+    def _runAcquisition(self, future):
+        wls = self.startWavelength.value
+        wle = self.endWavelength.value
+        res = self.numberOfPixels.value
+        dt = self.dwellTime.value
+        trig = self._detector.softwareTrigger
+        df = self._detector.data
+
+        # Prepare the hardware
+        self._emitter.resolution.value = (1, 1)  # Force one pixel only
+        self._emitter.translation.value = self.emtTranslation.value
+        self._emitter.dwellTime.value = dt
+
+        df.synchronizedOn(trig)
+        df.subscribe(self._on_mchr_data)
+
+        wllist = []
+        if res <= 1:
+            res = 1
+            wli = 0
+        else:
+            wli = (wle - wls) / (res - 1)
+
+        try:
+            for i in range(res):
+                left = +((res - i) * (dt + 0.05))
+                future.set_progress(end=time.time() + left)
+
+                cwl = wls + i * wli  # requested value
+                self._sgr.moveAbs({"wavelength": cwl}).result()
+                if future._acq_state == CANCELLED:
+                    raise CancelledError()
+                cwl = self._sgr.position.value["wavelength"]  # actual value
+                logging.info("Acquiring point %d/%d @ %s", i + 1, res,
+                             units.readable_str(cwl, unit="m", sig=3))
+
+                self._pt_acq.clear()
+                trig.notify()
+                if not self._pt_acq.wait(dt * 5 + 1):
+                    raise IOError("Timeout waiting for the data")
+                if future._acq_state == CANCELLED:
+                    raise CancelledError()
+                wllist.append(cwl)
+
+            # Done
+            df.unsubscribe(self._on_mchr_data)
+            df.synchronizedOn(None)
+
+            # TODO: make sure it works with wls > wle, or fail explicitly in such case
+
+            # Convert the sequence of data into one spectrum in a DataArray
+
+            if wls > wle:  # went backward? => sort back the spectrum
+                self._data.reverse()
+                wllist.reverse()
+
+            na = numpy.array(self._data)  # keeps the dtype
+            na.shape += (1, 1, 1, 1)  # make it 5th dim to indicate a channel
+            md = self._md
+            md[model.MD_WL_LIST] = wllist
+
+            # MD_POS should already be at the correct position (from the e-beam metadata)
+
+            # MD_PIXEL_SIZE is not meaningful but handy for the display in Odemis
+            # (it's the size of the square on top of the SEM survey => BIG!)
+            sempxs = self._emitter.pixelSize.value
+            md[model.MD_PIXEL_SIZE] = (sempxs[0] * 50, sempxs[1] * 50)
+
+            spec = model.DataArray(na, md)
+
+            with future._acq_lock:
+                if future._acq_state == CANCELLED:
+                    raise CancelledError()
+                future._acq_state = FINISHED
+
+            return [spec]
+
+        except CancelledError:
+            raise  # Just don't log the exception
+        except Exception:
+            logging.exception("Failure during monochromator scan")
+        finally:
+            # In case it was stopped before the end
+            df.unsubscribe(self._on_mchr_data)
+            df.synchronizedOn(None)
+
+            future._acq_done.set()
+
+    def _cancelAcquisition(self, future):
+        with future._acq_lock:
+            if future._acq_state == FINISHED:
+                return False  # too late
+            future._acq_state = CANCELLED
+
+        logging.debug("Cancelling acquisition of components %s and %s",
+                      self._emitter.name, self._detector.name)
+
+        self._pt_acq.set()  # To help end quickly
+
+        # Wait for the thread to be complete (and hardware state restored)
+        future._acq_done.wait(5)
+        return True
+
 
 def acquire_spec(wls, wle, res, dt, filename):
     """
@@ -51,6 +228,7 @@ def acquire_spec(wls, wle, res, dt, filename):
     dt (float): dwell time in seconds
     filename (str): filename to save to
     """
+    # TODO: take a progressive future to update and know if it's the end
 
     ebeam = model.getComponent(role="e-beam")
     sed = model.getComponent(role="se-detector")
@@ -63,89 +241,60 @@ def acquire_spec(wls, wle, res, dt, filename):
     prev_trans = ebeam.translation.value
     prev_wl = sgrh.position.value["wavelength"]
 
-    ebeam.resolution.value = (1, 1)  # Force one pixel only
-    ebeam.dwellTime.value = dt
-    trig = mchr.softwareTrigger
-    df = mchr.data
-    df.synchronizedOn(trig)
-    df.subscribe(_on_mchr_data)
+    # Create a stream for monochromator scan
+    mchr_s = MonochromatorScanStream("Spectrum", mchr, ebeam, sgrh)
+    mchr_s.startWavelength.value = wls
+    mchr_s.endWavelength.value = wle
+    mchr_s.numberOfPixels.value = res
+    mchr_s.dwellTime.value = dt
+    mchr_s.emtTranslation.value = ebeam.translation.value
 
-    wllist = []
-    if res <= 1:
-        res = 1
-        wli = 0
-    else:
-        wli = (wle - wls) / (res - 1)
- 
-    das = []
+    # Create SEM survey stream
+    survey_s = stream.SEMStream("Secondary electrons survey",
+                                sed, sed.data, ebeam,
+        emtvas={"translation", "scale", "resolution", "dwellTime"},
+    )
+    # max FoV, with scale 4
+    survey_s.emtTranslation.value = (0, 0)
+    survey_s.emtScale.value = (4, 4)
+    survey_s.emtResolution.value = (v / 4 for v in ebeam.resolution.range[1])
+    survey_s.emtDwellTime.value = 10e-6  # 10µs is hopefully enough
+
+    # Acquire using the acquisition manager
+    # Note: the monochromator scan stream is unknown to the acquisition manager,
+    # so it'll be done last
+    expt = acq.estimateTime([survey_s, mchr_s])
+    f = acq.acquire([survey_s, mchr_s])
+
     try:
-        for i in range(res):
-            cwl = wls + i * wli  # requested value
-            sgrh.moveAbs({"wavelength": cwl}).result()
-            cwl = sgrh.position.value["wavelength"]  # actual value
-            logging.info("Acquiring point %d/%d @ %s", i + 1, res,
-                         units.readable_str(cwl, unit="m", sig=3))
-
-            _pt_acq.clear()
-            trig.notify()
-            if not _pt_acq.wait(dt * 5 + 1):
-                raise IOError("Timeout waiting for the data")
-            wllist.append(cwl)
-
+        # Note: the timeout is important, as it allows to catch KeyboardInterrupt
+        das, e = f.result(2 * expt + 1)
     except KeyboardInterrupt:
-        logging.info("Stopping after only %d images acquired", i + 1)
+        logging.info("Stopping before end of acquisition")
+        f.cancel()
+        return
     finally:
-        df.unsubscribe(_on_mchr_data)
-        df.synchronizedOn(None)
         logging.debug("Restoring hardware settings")
         if prev_res != (1, 1):
             ebeam.resolution.value = prev_res
         ebeam.dwellTime.value = prev_dt
         sgrh.moveAbs({"wavelength": prev_wl})
-
-    if _data:  # Still save whatever got acquired, even if interrupted
-        # Convert the sequence of data into one spectrum
-        na = numpy.array(_data)  # keeps the dtype
-        na.shape += (1, 1, 1, 1)  # make it 5th dim to indicate a channel
-        md = _md
-        md[model.MD_WL_LIST] = wllist
-
-        # MD_POS should already be at the correct position (from the e-beam metadata)
-
-        # MD_PIXEL_SIZE is not meaningful but handy for the display in Odemis
-        # (it's the size of the square on top of the SEM survey => BIG!)
-        sempxs = ebeam.pixelSize.value
-        md[model.MD_PIXEL_SIZE] = (sempxs[0] * 50, sempxs[1] * 50)
-
-        md[model.MD_DESCRIPTION] = "Spectrum"
-        spec = model.DataArray(na, md)
-        das.append(spec)
-
-    # Acquire survey image
-    try:
-        logging.info("Acquiring SEM survey image")
-        ebeam.translation.value = (0, 0)
-        ebeam.scale.value = (1, 1)  # Allow full FoV
-        ebeam.resolution.value = ebeam.resolution.range[1] # max FoV
-        ebeam.scale.value = (4, 4)  # not too many pixels
-        ebeam.dwellTime.value = 10e-6 # 10µs is hopefully enough
-        semsur = sed.data.get()
-        semsur.metadata[model.MD_DESCRIPTION] = "SEM survey"
-        das.insert(0, semsur)
-    finally:
-        logging.debug("Restoring hardware settings")
         ebeam.scale.value = prev_scale
         ebeam.translation.value = prev_trans
         if prev_res != (1, 1):
             ebeam.resolution.value = prev_res
         ebeam.dwellTime.value = prev_dt
 
+    if e:
+        logging.error("Acquisition failed: %s", e)
+
     if das:
         # Save the file
         exporter = dataio.find_fittest_converter(filename)
-        exporter.export(filename, [semsur, spec])
+        exporter.export(filename, das)
         logging.info("Spectrum successfully saved to %s", filename)
         raw_input("Press Enter to close.")
+
 
 def getNumber(prompt):
     """
@@ -158,6 +307,7 @@ def getNumber(prompt):
         except ValueError:
             print("Please type in a valid number")
 
+
 def main(args):
     """
     Handles the command line arguments
@@ -165,9 +315,8 @@ def main(args):
     return (int): value to return to the OS as program exit code
     """
     ebeam = model.getComponent(role="e-beam")
-    if ebeam.resolution.value != (1, 1):
+    while ebeam.resolution.value != (1, 1):
         raw_input("Please select spot mode and pick a point and press Enter...")
-
 
     wls = getNumber("Starting wavelength (in nm): ") * 1e-9
     wle = getNumber("Ending wavelength (in nm): ") * 1e-9
@@ -180,16 +329,17 @@ def main(args):
     if "." not in filename:
         # No extension -> force hdf5
         filename += ".h5"
-    
+
     print("Press Ctrl+C to cancel the acquisition")
 
     try:
-        n = acquire_spec(wls, wle, int(nbp), dt, filename)
+        acquire_spec(wls, wle, int(nbp), dt, filename)
     except Exception:
         logging.exception("Unexpected error while performing action.")
         return 127
 
     return 0
+
 
 # Plugin version for the GUI
 class MonoScanPlugin(Plugin):
@@ -198,38 +348,136 @@ class MonoScanPlugin(Plugin):
     __author__ = "Éric Piel"
     __license__ = "GNU General Public License 2"
 
-    def __init__(self, microsope, main_app):
-        super(MonoScanPlugin, self).__init__(microsope, main_app)
+    def __init__(self, microscope, main_app):
+        super(MonoScanPlugin, self).__init__(microscope, main_app)
+
+        # Can only be used on a Sparc with a monochromator
+        if not microscope:
+            return
+        try:
+            self.ebeam = model.getComponent(role="e-beam")
+            self.mchr = model.getComponent(role="monochromator")
+            self.sgrh = model.getComponent(role="spectrograph")
+        except LookupError:
+            logging.debug("No mochromator and spectrograph found, cannot use the plugin")
+            return
+
         self.addMenu("Acquisition/Monochromator scan...", self.start)
-        self.startWavelength = model.FloatContinuous(400e-9, (0, 10e-9), unit="s")
-        self.endWavelength = model.FloatContinuous(500e-9, (0, 10e-9), unit="s")
-        self.numberOfPixels = model.IntContinuous(51, (2, 1000), unit="px")
-        # TODO: use the range of the sensor for the dwell time
-        self.dwellTime = model.FloatContinuous(1e-3, (1e-6, 100), unit="s")
+
+        # the SEM survey stream (will be updated when showing the window)
+        self._survey_s = None
+
+        # Create a stream for monochromator scan
+        self._mchr_s = MonochromatorScanStream("Spectrum", self.mchr, self.ebeam, self.sgrh)
+
+        # The settings to be displayed in the dialog
+        # Trick: we use the same VAs as the stream, so they are directly synchronised
+        self.startWavelength = self._mchr_s.startWavelength
+        self.endWavelength = self._mchr_s.endWavelength
+        self.numberOfPixels = self._mchr_s.numberOfPixels
+        self.dwellTime = self._mchr_s.dwellTime
+
         self.expectedDuration = model.VigilantAttribute(1, unit="s", readonly=True)
-        self.filename = model.StringVA("boo.h5")
+        self.filename = model.StringVA("a.h5")
+
+        # Update the expected duration when values change
+        self.dwellTime.subscribe(self._update_exp_dur)
+        self.numberOfPixels.subscribe(self._update_exp_dur)
+
+    def _update_exp_dur(self, _):
+        """
+        Called when VA that affects the expected duration is changed
+        """
+        self._mchr_s.numberOfPixels.value = self.numberOfPixels.value
+        self._mchr_s.dwellTime.value = self.dwellTime.value
+        expt = self._mchr_s.estimateAcquisitionTime()
+        # Use _set_value as it's read only
+        self.expectedDuration._set_value(expt, force_write=True)
+
+    def _get_new_filename(self):
+        conf = get_acqui_conf()
+        return os.path.join(
+            conf.last_path,
+            u"%s%s" % (time.strftime("%Y%m%d-%H%M%S"), conf.last_extension)
+        )
+
+    def _get_sem_survey(self):
+        """
+        Finds the SEM survey stream in the acquisition tab
+        return (SEMStream or None): None if not found
+        """
+        tab_data = self.main_app.main_data.tab.value.tab_data_model
+        for s in tab_data.streams.value:
+            if isinstance(s, stream.SEMStream):
+                return s
+
+        logging.warning("No SEM survey stream found")
+        return None
 
     def start(self):
+        # Error message if not in acquisition tab + spot mode
+        ct = self.main_app.main_data.tab.value
+        if (ct.name != "sparc_acqui" or
+            ct.tab_data_model.tool.value != TOOL_SPOT or
+            None in ct.tab_data_model.spotPosition.value
+           ):
+            logging.info("Failed to start monochromator scan as no spot is selected")
+            dlg = wx.MessageDialog(self.main_app.main_frame,
+                                   "No spot is currently selected.\n"
+                                   "You need to select the point where the spectrum will be acquired with monochromator scan.\n",
+                                   caption="Monochromator scan",
+                                   style=wx.OK | wx.ICON_WARNING)
+            dlg.ShowModal()
+            dlg.Destroy()
+            return
+
+        # Create a window
         dlg = AcquisitionDialog(self, "Monochromator scan acquisition",
                                 "Acquires a spectrum using the monochomator while scanning over multiple wavelengths.\n"
                                 "Enter the settings and start the acquisition.")
+
+        self.filename.value = self._get_new_filename()
+        # TODO: use an ordered dict, to force the display order
         dlg.addSettings(self, conf={"filename": {"control_type": "file"}})
         dlg.addButton("Acquire", self.acquire)
         dlg.addButton("Cancel")
+
+        # Show the window, and wait until the acquisition is over
         ans = dlg.ShowModal()
 
+        # The window is closed
         if ans == 0:
-            self.showAcquisition(self.filename.value)
+            logging.info("Monochromator scan acqusition completed")
+        elif ans == 1:
+            logging.info("Monochromator scan acquisition cancelled")
 
     def acquire(self, dlg):
-        # TODO
-        f = model.ProgressiveFuture()
-        f.task_canceller = lambda f: True  # To allow cancelling while it's running
-        dlg.showProgress(f)
+        # Configure the monochromator stream according to the settings
+        # TODO: read the value from spotPosition instead?
+        self._mchr_s.emtTranslation.value = self.ebeam.translation.value
+        strs = []
+        if self._survey_s:
+            strs.append(self._survey_s)
+        strs.append(self._mchr_s)
 
-        acquire_spec()
+        # Stop the spot stream and any other stream playing to not interfere with the acquisition
+        str_ctrl = self.main_app.main_data.tab.value.stream_controller
+        stream_paused = str_ctrl.pauseStreams()
 
-        # dataio.hdf5.export(self.filename.value, d)
+        try:
+            f = acq.acquire(strs)
+            dlg.showProgress(f)
+            das, e = f.result()
+        finally:
+            str_ctrl.resumeStreams(stream_paused)
+
+        if not f.cancelled() and das:
+            if e:
+                logging.warning("Monochromator scan partially failed: %s", e)
+            dataio.hdf5.export(self.filename.value, das)
+
+            self.showAcquisition(self.filename.value)
+
         dlg.Destroy()
 
 if __name__ == '__main__':
