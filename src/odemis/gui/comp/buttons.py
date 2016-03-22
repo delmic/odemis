@@ -871,9 +871,9 @@ class PopupImageButton(ImageTextButton):
 
         self.bmpSelected = img.getBitmap("stream_add_a.png")
         self.bmpHover = img.getBitmap("stream_add_h.png")
-        img = img.getImage("stream_add.png")
-        darken_image(img, 0.8)
-        self.bmpDisabled = wx.BitmapFromImage(img)
+        btn_img = img.getImage("stream_add.png")
+        darken_image(btn_img, 0.8)
+        self.bmpDisabled = wx.BitmapFromImage(btn_img)
 
         self.choices = {}
         self.menu = wx.Menu()
