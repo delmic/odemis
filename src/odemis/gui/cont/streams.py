@@ -73,7 +73,6 @@ class StreamController(object):
 
     def __init__(self, stream_bar, stream, tab_data_model, show_panel=True):
 
-        self.grr = stream.__class__
         self.stream = stream
         self.stream_bar = stream_bar
 
@@ -148,18 +147,15 @@ class StreamController(object):
         # Set the visibility button on the stream panel
         vis = stream in tab_data_model.focussedView.value.getStreams()
         self.stream_panel.set_visible(vis)
-        # self.stream_panel.Bind(EVT_STREAM_VISIBLE, self._on_stream_visible)
+        self.stream_panel.Bind(EVT_STREAM_VISIBLE, self._on_stream_visible)
 
         if isinstance(stream, acqstream.SpectrumStream) and hasattr(stream, "peak_method"):
             # Set the peak button on the stream panel
             vis = stream in tab_data_model.focussedView.value.getStreams()
             self.stream_panel.set_peak(PEAK_METHOD_TO_STATE[stream.peak_method.value])
-            # self.stream_panel.Bind(EVT_STREAM_PEAK, self._on_stream_peak)
+            self.stream_panel.Bind(EVT_STREAM_PEAK, self._on_stream_peak)
 
         stream_bar.add_stream_panel(self.stream_panel, show_panel)
-
-    def __del__(self):
-        logging.debug("Streamcontroller %s garbage collected", id(self))
 
     def pause(self):
         """ Pause (freeze) SettingEntry related control updates """
