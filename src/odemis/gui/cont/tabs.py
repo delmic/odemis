@@ -1322,7 +1322,7 @@ class AnalysisTab(Tab):
         ])
 
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
-        self.export_controller = exportcont.ExportController(tab_data, main_frame, vpv)
+        self.export_controller = exportcont.ExportController(tab_data, main_frame, panel, vpv)
 
         # Connect view selection button
         buttons = collections.OrderedDict([
