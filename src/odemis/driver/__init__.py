@@ -19,8 +19,12 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+
 # in case it's need to find all the devices supported (e.g., for a scan)
-__all__ = ["andorcam3", "andorcam2", "andorshrk", "pi", "pigcs", "lle", "simulated",
+__all__ = ["andorcam3", "andorcam2", "andorshrk", "pi", "pigcs", "lle",
            "semcomedi", "spectrapro", "pvcam", "omicronxx", "tlfw", "tlaptmf",
-           "tmcm", "phenom", "nfpm", "tescan_sem", "simcam", "simsem", "pmtctrl",
-           "blinkstick"]
+           "tmcm", "phenom", "nfpm", "tescan", "pmtctrl",
+           "blinkstick", "powerctrl",
+           # Modules that do not support scanning because that wouldn't make sense:
+           "actuator", "scanner", "spectrometer", "simcam", "simsem",
+           "simulated", "static"]
