@@ -514,16 +514,15 @@ class Scanner(model.Emitter):
         self._hfw_nomag = 0.195565  # m
 
         # Get current field of view and compute magnification
-        fov = self.parent._device.GetViewField() * 1e-03
+        fov = self.parent._device.GetViewField() * 1e-3
         mag = self._hfw_nomag / fov
 
         # Field of view in Tescan is set in mm
-        self.parent._device.SetViewField(self._hfw_nomag * 1e03 / mag)
         self.magnification = model.VigilantAttribute(mag, unit="", readonly=True)
 
         self.horizontalFoV = model.FloatContinuous(fov, range=fov_range, unit="m",
                                                    setter=self._setHorizontalFOV)
-        self.horizontalFoV.subscribe(self._onHorizontalFOV)  # to update metadata
+        self.horizontalFoV.subscribe(self._onHorizontalFOV)  # to update RO VAs and metadata
 
         # pixelSize is the same as MD_PIXEL_SIZE, with scale == 1
         # == smallest size/ between two different ebeam positions
@@ -564,18 +563,13 @@ class Scanner(model.Emitter):
                                               readonly=True)
 
         self.dwellTime = model.FloatContinuous(1e-06, (1e-06, 1000), unit="s")
-#         self.dwellTime.subscribe(self._onDwellTime)
 
         # Range is according to min and max voltages accepted by Tescan API
         volt_range = self.GetVoltagesRange()
         volt = self.parent._device.HVGetVoltage()
-        self.accelVoltage = model.FloatContinuous(volt, volt_range, unit="V")
+        self.accelVoltage = model.FloatContinuous(volt, volt_range, unit="V",
+                                                  setter=self._setVoltage)
         self.accelVoltage.subscribe(self._onVoltage)
-
-        # 0 turns off the e-beam, 1 turns it on
-        power = self.parent._device.HVGetBeam()  # Don't change state
-        self.power = model.IntEnumerated(power, {0, 1}, unit="",
-                                         setter=self._setPower)
 
         # Enumerated float with respect to the PC indexes of Tescan API
         self._list_currents = self.GetProbeCurrents()
@@ -584,6 +578,12 @@ class Scanner(model.Emitter):
         pc = self._list_currents[self.parent._device.GetPCIndex() - 1]
         self.probeCurrent = model.FloatEnumerated(pc, pc_choices, unit="A",
                                                   setter=self._setPC)
+        self.probeCurrent.subscribe(self._onPC)
+
+        # 0 turns off the e-beam, 1 turns it on
+        power = self.parent._device.HVGetBeam()  # Don't change state
+        self.power = model.IntEnumerated(power, {0, 1}, unit="",
+                                         setter=self._setPower)
 
         # None implies that there is a blanker but it is set automatically.
         # Mostly used in order to know if the module supports beam blanking
@@ -607,7 +607,7 @@ class Scanner(model.Emitter):
         self._updatePixelSize()
         self._updateMagnification()
 
-    def updateHorizontalFOV(self):
+    def _updateHorizontalFOV(self):
         prev_fov = self.horizontalFoV.value
 
         with self.parent._acq_progress_lock:
@@ -616,9 +616,6 @@ class Scanner(model.Emitter):
         if prev_fov != new_fov:
             self.horizontalFoV._value = new_fov
             self.horizontalFoV.notify(new_fov)
-            # Update current pixelSize and magnification
-            self._updatePixelSize()
-            self._updateMagnification()
 
     def _setHorizontalFOV(self, value):
         # Ensure fov odemis field always shows the right value
@@ -634,16 +631,16 @@ class Scanner(model.Emitter):
         mag = self._hfw_nomag / self.horizontalFoV.value
         self.magnification._set_value(mag, force_write=True)
 
-#     def _onDwellTime(self, dt):
-#         self.parent._device.ScStopScan()
-#         self.parent._device.CancelRecv()
-
-    def _onVoltage(self, volt):
+    def _setVoltage(self, volt):
         self.parent._device.HVSetVoltage(volt)
-        self.parent._metadata[model.MD_EBEAM_VOLTAGE] = volt
         # Adjust brightness and contrast
+        # TODO: should be part of the detector (and up to the client)
         # with self.parent._acq_progress_lock:
         #    self.parent._device.DtAutoSignal(self.parent._detector._channel)
+        return volt
+
+    def _onVoltage(self, volt):
+        self.parent._metadata[model.MD_EBEAM_VOLTAGE] = volt
 
     def _setPower(self, value):
         powers = self.power.choices
@@ -656,18 +653,16 @@ class Scanner(model.Emitter):
         return power
 
     def _setPC(self, value):
-
         # Set the corresponding current index to Tescan SEM
         ipc = util.index_closest(value, self._list_currents)
         self.parent._device.SetPCIndex(ipc + 1)
 
         pc = self._list_currents[ipc]
-        self.parent._metadata[model.MD_EBEAM_CURRENT] = pc
-        # Adjust brightness and contrast
-        # with self.parent._acq_progress_lock:
-        #    self.parent._device.DtAutoSignal(self.parent._detector._channel)
 
         return pc
+
+    def _onPC(self, current):
+        self.parent._metadata[model.MD_EBEAM_CURRENT] = current
 
     def GetVoltagesRange(self):
         """
@@ -698,7 +693,7 @@ class Scanner(model.Emitter):
 
     def _updatePixelSize(self):
         """
-        Update the pixel size using the scale, HFWNoMag and magnification
+        Update the pixel size using the horizontalFoV
         """
         fov = self.horizontalFoV.value
 
@@ -788,7 +783,7 @@ class Scanner(model.Emitter):
         try:
             with self.parent._acquisition_init_lock:
                 logging.debug("Updating FoV, voltage and current")
-                self.updateHorizontalFOV()
+                self._updateHorizontalFOV()
                 with self.parent._acq_progress_lock:
                     prev_volt = self.accelVoltage._value
                     new_volt = self.parent._device.HVGetVoltage()
@@ -836,6 +831,10 @@ class Detector(model.Detector):
 
         # Special event to request software unblocking on the scan
         self.softwareTrigger = model.Event()
+
+        # TODO: provide a method applyAutoContrast(), as in Phenom, to run the
+        # auto signal function. + a way to do so even if the detector is not
+        # used (because it's used via a CompositedScanner)?
 
     @roattribute
     def channel(self):
@@ -1118,7 +1117,7 @@ class EbeamFocus(model.Actuator):
             # Obtain the finally reached position after move is performed.
             self._updatePosition()
         # Changing WD results to change in fov
-        self.parent._scanner.updateHorizontalFOV()
+        self.parent._scanner._updateHorizontalFOV()
 
     @isasync
     def moveRel(self, shift):
