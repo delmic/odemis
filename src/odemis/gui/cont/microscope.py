@@ -670,6 +670,10 @@ class DelphiStateController(SecomStateController):
             # ejecting the sample holder
             try:
                 self._load_holder_calib()
+                if self._hole_focus is not None:
+                    good_focus = self._hole_focus - 200e-06
+                    ff = self._main_data.ebeam_focus.moveAbs({"z": good_focus})
+                    ff.result()
             except ValueError:
                 dlg = wx.MessageDialog(self._main_frame,
                                        "Sample holder is loaded while there is no calibration information. "
@@ -776,6 +780,7 @@ class DelphiStateController(SecomStateController):
         the calibration data is present.
         """
         shid, sht = self._main_data.chamber.sampleHolder.value
+        self._hole_focus = None
 
         if sht is None:
             logging.warn("No sample holder loaded!")
@@ -794,6 +799,7 @@ class DelphiStateController(SecomStateController):
         # the SEM. So once the sample is fully loaded, new and more
         # precise calibration will be set.
         htop, hbot, hfoc, strans, sscale, srot, iscale, irot, iscale_xy, ishear, resa, resb, hfwa, spotshift = calib
+        self._hole_focus = hfoc
 
         # update metadata to stage
         self._main_data.stage.updateMetadata({
@@ -1139,6 +1145,12 @@ class DelphiStateController(SecomStateController):
             future._delphi_load_state = pf
             pf.add_update_callback(self._update_load_time)
             pf.result()
+            # We know that a good initial focus value is a bit lower than the
+            # one found while focusing on the holes
+            if self._hole_focus is not None:
+                good_focus = self._hole_focus - 200e-06
+                ff = self._main_data.ebeam_focus.moveAbs({"z": good_focus})
+                ff.result()
             wx.CallAfter(self._press_btn.Enable, True)
 
         finally:
