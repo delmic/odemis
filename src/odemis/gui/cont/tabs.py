@@ -97,6 +97,7 @@ class Tab(object):
         self.button.SetToggle(show)
         if show:
             self._connect_22view_event()
+            self._connect_interpolation_event()
             self._connect_crosshair_event()
 
             self.highlight(False)
@@ -133,6 +134,46 @@ class Tab(object):
             self.main_frame.menu_item_22view.Enable(False)
             self.main_frame.menu_item_22view.Check(False)
             self.main_frame.menu_item_22view.vamethod = None  # drop VA subscr.
+
+    def _connect_interpolation_event(self):
+        """ Connect the interpolation menu event to the focused view and its
+        `interpolate_content` VA to the menu item
+        """
+        # only if there's a focussed view that we can track
+        if hasattr(self.tab_data_model, 'focussedView'):
+
+            def set_interpolation_check(fv):
+                """Called when focused view changes"""
+                if hasattr(fv, "interpolate_content"):
+                    fv.interpolate_content.subscribe(self.main_frame.menu_item_interpolation.Check, init=True)
+                    self.main_frame.menu_item_interpolation.Enable(True)
+                else:
+                    self.main_frame.menu_item_interpolation.Enable(False)
+                    self.main_frame.menu_item_interpolation.Check(False)
+
+            def on_switch_interpolation(evt):
+                """Called when menu changes"""
+                foccused_view = self.tab_data_model.focussedView.value
+                # Extra check, which shouldn't be needed since if there's no
+                # `interpolate_content`, this code should never be called.
+                if hasattr(foccused_view, "interpolate_content"):
+                    show = self.main_frame.menu_item_interpolation.IsChecked()
+                    foccused_view.interpolate_content.value = show
+
+            # Bind the function to the menu item, so it keeps the reference.
+            # The VigilantAttribute will not unsubscribe it, until replaced.
+            self.main_frame.menu_item_interpolation.vamethod = set_interpolation_check
+            self.tab_data_model.focussedView.subscribe(set_interpolation_check, init=True)
+            # Assigning an event handler to the menu item, overrides
+            # any previously assigned ones.
+            wx.EVT_MENU(self.main_frame, self.main_frame.menu_item_interpolation.GetId(),
+                        on_switch_interpolation)
+            self.main_frame.menu_item_interpolation.Enable()
+        else:
+            # If the right elements are not found, simply disable the menu item
+            self.main_frame.menu_item_interpolation.Enable(False)
+            self.main_frame.menu_item_interpolation.Check(False)
+            self.main_frame.menu_item_interpolation.vamethod = None  # drop VA subscr.
 
     def _connect_crosshair_event(self):
         """ Connect the cross hair menu event to the focused view and its
@@ -978,6 +1019,7 @@ class ChamberTab(Tab):
         ))
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
         view = self.tab_data_model.focussedView.value
+        view.interpolate_content.value = False
         view.show_crosshair.value = False
 
         # With the lens, the image must be flipped to keep the mirror at the top and the sample
@@ -2233,6 +2275,7 @@ class SparcAlignTab(Tab):
                 vpv
             )
             mic_view = self.tab_data_model.focussedView.value
+            mic_view.interpolate_content.value = False
             mic_view.show_crosshair.value = False
             mic_view.merge_ratio.value = 1
 
@@ -2563,7 +2606,9 @@ class Sparc2AlignTab(Tab):
             self.panel.vp_moi.canvas.fit_view_to_next_image = False
 
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
+        self.panel.vp_align_lens.microscope_view.interpolate_content.value = False
         self.panel.vp_align_lens.microscope_view.show_crosshair.value = False
+        self.panel.vp_align_center.microscope_view.interpolate_content.value = False
         self.panel.vp_align_center.microscope_view.show_crosshair.value = False
 
         # The streams:

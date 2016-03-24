@@ -901,6 +901,7 @@ class StreamView(View):
 
         # TODO: list of annotations to display
         self.show_crosshair = model.BooleanVA(True)
+        self.interpolate_content = model.BooleanVA(False)
 
     def has_stage(self):
         return self._stage is not None
@@ -1283,3 +1284,4 @@ class OverviewView(StreamView):
         StreamView.__init__(self, name, **kwargs)
 
         self.show_crosshair.value = False
+        self.interpolate_content.value = False

@@ -185,7 +185,7 @@ class ExportController(object):
             export_type = 'spatial'
         return export_type
 
-    def export(self, export_type, raw=False, interpolate_data=False):
+    def export(self, export_type, raw=False):
         """
         Returns the data to be exported with respect to the settings and options.
 
@@ -198,6 +198,7 @@ class ExportController(object):
         """
         # TODO move 'interpolate_data' to kwargs and passed to all *_to_export_data()
         vp = self.get_viewport_by_view(self._data_model.focussedView.value)
+        interpolate_data = vp.microscope_view.interpolate_content.value
         # TODO: do not rely on self.ClientSize, should just use
         self.ClientSize = vp.canvas.ClientSize
         streams = self._data_model.focussedView.value.getStreams()

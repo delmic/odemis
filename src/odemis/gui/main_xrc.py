@@ -50,6 +50,7 @@ class xrcfr_main(wx.Frame):
         self.menu_item_auto_cont = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_auto_cont"))
         self.menu_item_auto_focus = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_auto_focus"))
         self.menu_item_cross = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_cross"))
+        self.menu_item_interpolation = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_interpolation"))
         self.menu_item_manual = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_manual"))
         self.menu_item_devmanual = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_devmanual"))
         self.menu_item_inspect = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_inspect"))
@@ -589,6 +590,14 @@ def __init_resources():
         <object class="separator"/>
         <object class="wxMenuItem" name="menu_item_cross">
           <label>Show Cross Hair</label>
+          <checkable>1</checkable>
+          <enabled>0</enabled>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <object class="wxMenuItem" name="menu_item_interpolation">
+          <label>Interpolate Content</label>
           <checkable>1</checkable>
           <enabled>0</enabled>
           <XRCED>
