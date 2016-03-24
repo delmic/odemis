@@ -868,11 +868,13 @@ class BitmapCanvas(BufferedCanvas):
 
         self.images = images
 
-    def draw(self):
+    def draw(self, interpolate_data=False):
         """ Draw the images and overlays into the buffer
 
         In between the draw calls the Cairo context gets its transformation matrix reset,
         to prevent the accidental accumulation of transformations.
+
+        :param interpolate_data: (boolean) Apply interpolation if True
 
         """
 
@@ -885,7 +887,7 @@ class BitmapCanvas(BufferedCanvas):
         self._draw_background(ctx)
         ctx.identity_matrix()  # Reset the transformation matrix
 
-        self._draw_merged_images(ctx)
+        self._draw_merged_images(ctx, interpolate_data)
         ctx.identity_matrix()  # Reset the transformation matrix
 
         # Remember that the device context being passed belongs to the *buffer* and the view
@@ -896,7 +898,7 @@ class BitmapCanvas(BufferedCanvas):
             o.draw(ctx, self.w_buffer_center, self.scale)
             ctx.restore()
 
-    def _draw_merged_images(self, ctx):
+    def _draw_merged_images(self, ctx, interpolate_data=False):
         """ Draw the images on the DC buffer, centred around their _dc_center, with their own
         scale and an opacity of "mergeratio" for im1.
 
@@ -904,6 +906,8 @@ class BitmapCanvas(BufferedCanvas):
 
         All _dc_center's should be close in order to have the parts with only one picture drawn
         without transparency
+
+        :param interpolate_data: (boolean) Apply interpolation if True
 
         :return: (int) Frames per second
 
@@ -954,7 +958,8 @@ class BitmapCanvas(BufferedCanvas):
                     rotation=im.metadata['dc_rotation'],
                     shear=im.metadata['dc_shear'],
                     flip=im.metadata['dc_flip'],
-                    blend_mode=im.metadata['blend_mode']
+                    blend_mode=im.metadata['blend_mode'],
+                    interpolate_data=interpolate_data
                 )
 
             if not images or last_image.metadata['blend_mode'] == BLEND_SCREEN:
@@ -976,12 +981,13 @@ class BitmapCanvas(BufferedCanvas):
                 rotation=last_image.metadata['dc_rotation'],
                 shear=last_image.metadata['dc_shear'],
                 flip=last_image.metadata['dc_flip'],
-                blend_mode=last_image.metadata['blend_mode']
+                blend_mode=last_image.metadata['blend_mode'],
+                interpolate_data=interpolate_data
             )
 
     def _draw_image(self, ctx, im_data, w_im_center, opacity=1.0,
                     im_scale=(1.0, 1.0), rotation=None, shear=None, flip=None,
-                    blend_mode=BLEND_DEFAULT):
+                    blend_mode=BLEND_DEFAULT, interpolate_data=False):
         """ Draw the given image to the Cairo context
 
         The buffer is considered to have it's 0,0 origin at the top left
@@ -995,6 +1001,7 @@ class BitmapCanvas(BufferedCanvas):
         :param shear: (float) Horizontal shearing of the image data (around it's center)
         :param flip: (wx.HORIZONTAL | wx.VERTICAL) If and how to flip the image
         :param blend_mode: (int) Graphical blending type used for transparency
+        :param interpolate_data: (boolean) Apply interpolation if True
 
         """
 
@@ -1069,8 +1076,12 @@ class BitmapCanvas(BufferedCanvas):
 
         # In Cairo a pattern is the 'paint' that it uses to draw
         surfpat = cairo.SurfacePattern(imgsurface)
-        # Set the filter, so we get low quality but fast scaling
-        surfpat.set_filter(cairo.FILTER_FAST)
+
+        if interpolate_data:
+            surfpat.set_filter(cairo.FILTER_BEST)
+        else:
+            # In case of "raw" export try to maintain the original data
+            surfpat.set_filter(cairo.FILTER_FAST)
 
         x, y, _, _ = b_im_rect
 

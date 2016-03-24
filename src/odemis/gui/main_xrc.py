@@ -50,6 +50,7 @@ class xrcfr_main(wx.Frame):
         self.menu_item_auto_cont = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_auto_cont"))
         self.menu_item_auto_focus = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_auto_focus"))
         self.menu_item_cross = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_cross"))
+        self.menu_item_interpolation = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_interpolation"))
         self.menu_item_manual = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_manual"))
         self.menu_item_devmanual = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_devmanual"))
         self.menu_item_inspect = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_inspect"))
@@ -366,6 +367,7 @@ class xrcpnl_tab_inspection(wx.Panel):
         self.fp_fileinfo = xrc.XRCCTRL(self, "fp_fileinfo")
         self.pnl_inspection_streams = xrc.XRCCTRL(self, "pnl_inspection_streams")
         self.fp_annotations = xrc.XRCCTRL(self, "fp_annotations")
+        self.btn_secom_export = xrc.XRCCTRL(self, "btn_secom_export")
 
 
 
@@ -588,6 +590,14 @@ def __init_resources():
         <object class="separator"/>
         <object class="wxMenuItem" name="menu_item_cross">
           <label>Show Cross Hair</label>
+          <checkable>1</checkable>
+          <enabled>0</enabled>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <object class="wxMenuItem" name="menu_item_interpolation">
+          <label>Interpolate Content</label>
           <checkable>1</checkable>
           <enabled>0</enabled>
           <XRCED>
@@ -4353,6 +4363,30 @@ def __init_resources():
               <option>1</option>
               <flag>wxEXPAND</flag>
               <minsize>400,400</minsize>
+            </object>
+            <object class="sizeritem">
+              <object class="wxPanel">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="ImageTextButton" name="btn_secom_export">
+                      <size>382,-1</size>
+                      <height>48</height>
+                      <face_colour>blue</face_colour>
+                      <label>EXPORT IMAGE</label>
+                      <fg>#FFFFFF</fg>
+                      <style>wxALIGN_CENTRE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxALL</flag>
+                    <border>10</border>
+                  </object>
+                </object>
+                <bg>#4D4D4D</bg>
+              </object>
+              <flag>wxEXPAND</flag>
             </object>
             <orient>wxVERTICAL</orient>
           </object>

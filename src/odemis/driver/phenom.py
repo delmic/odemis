@@ -1899,7 +1899,7 @@ class ChamberPressure(model.Actuator):
                     nc_frames += 1
                     # just a workaround for the unexpected navcam image event when
                     # loading to SEM
-                    if nc_frames >= 5:
+                    if nc_frames >= 10:
                         break
                 else:
                     logging.warning("Unexpected event received")

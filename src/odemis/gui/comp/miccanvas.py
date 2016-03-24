@@ -162,6 +162,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # handle cross hair
         self.microscope_view.show_crosshair.subscribe(self._on_cross_hair_show, init=True)
 
+        self.microscope_view.interpolate_content.subscribe(self._on_interpolate_content, init=True)
+
         tab_data.main.debug.subscribe(self._on_debug, init=True)
 
         if tab_data.tool:
@@ -222,6 +224,10 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self.remove_view_overlay(self._crosshair_ol)
 
         self.Refresh(eraseBackground=False)
+
+    def _on_interpolate_content(self, activated):
+        """ Activate or deactivate interpolation"""
+        self.update_drawing()
 
     # FIXME: seems like it might still be called while the Canvas has been destroyed
     # => need to make sure that the object is garbage collected (= no more references) once it's
@@ -920,10 +926,11 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         """
 
+        interpolate_data = False if self.microscope_view is None else self.microscope_view.interpolate_content.value
         if self._fps_ol:
             if self._last_frame_update is None:
                 self._last_frame_update = time.time()
-            super(DblMicroscopeCanvas, self).draw()
+            super(DblMicroscopeCanvas, self).draw(interpolate_data=interpolate_data)
             now = time.time()
 
             try:
@@ -934,7 +941,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
                 self._fps_ol.labels[0].text = u"∞ fps"
             self._last_frame_update = now
         else:
-            super(DblMicroscopeCanvas, self).draw()
+            super(DblMicroscopeCanvas, self).draw(interpolate_data=interpolate_data)
 
 
 class OverviewCanvas(DblMicroscopeCanvas):

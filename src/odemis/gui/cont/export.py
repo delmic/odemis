@@ -27,7 +27,7 @@ from odemis import model
 from odemis.dataio import get_converter
 from odemis.gui.comp import popup
 from odemis.gui.util import formats_to_wildcards
-from odemis.gui.util import get_picture_folder
+from odemis.gui.util import get_picture_folder, call_in_wx_main
 from odemis.gui.util.img import ar_to_export_data, spectrum_to_export_data, convert_streams_to_images, images_to_export_data
 import os
 import threading
@@ -64,7 +64,7 @@ class ExportController(object):
     an easy for post-process format.
     """
 
-    def __init__(self, tab_data, main_frame, viewports):
+    def __init__(self, tab_data, main_frame, tab_panel, viewports):
         """
         tab_data: MicroscopyGUIData -- the representation of the microscope GUI
         main_frame: (wx.Frame): the whole GUI frame
@@ -73,6 +73,10 @@ class ExportController(object):
         self._data_model = tab_data
         self._main_data_model = tab_data.main
         self._main_frame = main_frame
+        self._tab_panel = tab_panel
+
+        # Listen to "acquire image" button
+        self._tab_panel.btn_secom_export.Bind(wx.EVT_BUTTON, self.start_export_as_viewport)
 
         self._viewports = viewports.keys()
         self.images_cache = {}
@@ -92,12 +96,14 @@ class ExportController(object):
             tab.tab_data_model.streams.subscribe(self.on_streams_change, init=True)
         else:
             self._main_frame.menu_item_export_as.Enable(False)
+            self._tab_panel.btn_secom_export.Enable(False)
 
     def on_streams_change(self, streams):
         """ Enable Export menu item iff the tab has at least one stream """
 
         enabled = (len(streams) > 0)
         self._main_frame.menu_item_export_as.Enable(enabled)
+        self._tab_panel.btn_secom_export.Enable(enabled)
 
     def start_export_as_viewport(self, event):
         """ Wrapper to run export_viewport in a separate thread."""
@@ -125,6 +131,7 @@ class ExportController(object):
 
         return filepath, exporter, export_format, export_type
 
+    @call_in_wx_main
     def export_viewport(self, filepath, exporter, export_format, export_type):
         """ Export the image from the focused view to the filesystem.
 
@@ -178,7 +185,7 @@ class ExportController(object):
             export_type = 'spatial'
         return export_type
 
-    def export(self, export_type, raw=False, interpolate_data=False):
+    def export(self, export_type, raw=False):
         """
         Returns the data to be exported with respect to the settings and options.
 
@@ -191,6 +198,7 @@ class ExportController(object):
         """
         # TODO move 'interpolate_data' to kwargs and passed to all *_to_export_data()
         vp = self.get_viewport_by_view(self._data_model.focussedView.value)
+        interpolate_data = vp.microscope_view.interpolate_content.value
         # TODO: do not rely on self.ClientSize, should just use
         self.ClientSize = vp.canvas.ClientSize
         streams = self._data_model.focussedView.value.getStreams()
