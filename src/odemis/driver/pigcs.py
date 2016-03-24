@@ -661,6 +661,27 @@ class Controller(object):
                 raise ValueError("Error %d: setting param 0x%X with val %s failed." %
                                  (err, param, val), err)
 
+    def GetParameterNonVolatile(self, axis, param):
+        """
+        Read the value of the parameter in the non-volatile memory
+        axis (1<int<16): axis number
+        param (0<int): parameter id (cf p.35)
+        returns (str): the string representing this parameter
+        """
+        # SEP? (Get Non-Volatile Memory Parameters)
+        assert 1 <= axis <= 16
+        assert 0 <= param
+        if hasattr(self, "_avail_params") and param not in self._avail_params:
+            raise ValueError("Parameter %d %d not available" % (axis, param))
+
+        answer = self._sendQueryCommand("SEP? %d %d\n" % (axis, param))
+        try:
+            value = answer.split("=")[1]
+        except IndexError:
+            # no "=" => means the parameter is unknown
+            raise ValueError("Parameter %d %d unknown" % (axis, param))
+        return value
+
     def SetCommandLevel(self, level, pwd):
         """
         Change the authorization level
@@ -1771,8 +1792,8 @@ class CLRelController(Controller):
         #   It uses MNG_TERMINATE, MNG_START, and a float to indicate the time
         #   at which it should be stopped earliest.
         # * one event to know when the encoder is ready
-        self._encoder_req = {}
-        self._encoder_ready = {}
+        self._suspend_req = {}
+        self._axis_ready = {}
         self._encoder_mng = {}
         self._pos_lock = {}  # acquire to read/write position
         self._slew_rate = {}  # in s, copy of 0x7000002: slew rate, for E-861
@@ -1798,7 +1819,37 @@ class CLRelController(Controller):
                 raise IOError("Controller %d configured with unit %s, but only "
                               "millimeters (mm) is supported." % (address, unit))
 
-            try:  # Only exists on E-861
+            # To be taken when reading position or affecting encorder reading
+            self._pos_lock[a] = threading.Lock()
+
+            # We have two modes for auto_suspend:
+            #  * Servo and encoder off: used when encoders can be turned off.
+            #    That typically happens with the C-867. It allows to reduce heat
+            #    due to encoder using infra-red light (and ensures the motor
+            #    doesn't move.
+            #  * PID values set to 1,0,0: used when encoders cannot be turned off.
+            #    That typically happens with the E-861. It allows to still
+            #    follow slowly (~10 nm/s) the encoder position, to compensate
+            #    for drift. It also avoids going through the piezo "relax"
+            #    procedure that takes time (4 x slew rate) and causes up to
+            #    100 nm move.
+            if 0x56 in self._avail_params:  # Parameter to control encoder power
+                self._servo_suspend = True
+                if self._auto_suspend:
+                    logging.info("Will turn off servo when axis not in use")
+            else:
+                self._servo_suspend = False
+                # Save the "real" PID values, from the EEPROM, so that even if
+                # the driver catastrophically finished with PID set to 1,0,0 ,
+                # we will use the correct values.
+                self._pid = tuple(int(self.GetParameterNonVolatile(a, p)) for p in (1, 2, 3))
+                # Activate the servo from now on
+                self._startServo(a)
+
+                if self._auto_suspend:
+                    logging.info("Will use PID = 1,0,0 when axis not in use")
+
+            try:  # Only exists on E-861 (and only used when _servo_suspend == True)
                 # slew rate is stored in ms
                 self._slew_rate[a] = float(self.GetParameter(a, 0x7000002)) * self._upm[a]
             except ValueError:  # param doesn't exist => no problem
@@ -1841,12 +1892,11 @@ class CLRelController(Controller):
                 # max_accel = self._accel[a]
             self.speed_rng[a] = (10e-6, max_speed)  # m/s (default low value for min)
 
-            self._pos_lock[a] = threading.Lock()
-            self._stopEncoder(a)  # in case it was not off yet
-            self._encoder_req[a] = Queue.Queue()
-            self._encoder_ready[a] = threading.Event()
-            t = threading.Thread(target=self._encoder_mng_run,
-                                 name="Encoder manager ctrl %d axis %d" % (address, a),
+            self._suspendAxis(a)  # in case it was not off yet
+            self._suspend_req[a] = Queue.Queue()
+            self._axis_ready[a] = threading.Event()
+            t = threading.Thread(target=self._suspend_mng_run,
+                                 name="Suspend manager ctrl %d axis %d" % (address, a),
                                  args=(a,))
             t.daemon = True
             self._encoder_mng[a] = t
@@ -1859,10 +1909,13 @@ class CLRelController(Controller):
 
         # Disable servo, to allow the user to move the axis manually
         for a in self._channels:
-            self._encoder_req[a].put(MNG_TERMINATE)
-            self._stopEncoder(a)
+            self._suspend_req[a].put(MNG_TERMINATE)
+            if not self._servo_suspend:
+                # Make sure the PID values are back to the normal move
+                self._resumeAxis(a)
+            self._stopServo(a)
 
-    def _stopEncoder(self, axis):
+    def _stopServo(self, axis):
         """
         Turn off the servo the supply power of the encoder.
         That means during this time it's not possible to move the axes.
@@ -1883,7 +1936,7 @@ class CLRelController(Controller):
                 # the encoder signal to fully settle down
                 self.SetPosition(axis, pos)
 
-    def _startEncoder(self, axis):
+    def _startServo(self, axis):
         """
         Turn on the servo and the suplly power of the encoder.
         axis (1<=int<=16): the axis
@@ -1926,13 +1979,32 @@ class CLRelController(Controller):
             else:
                 logging.warning("Controller indicates it's still not ready, but will not wait any longer")
 
-    def _encoder_mng_run(self, axis):
+    def _suspendAxis(self, axis):
+        if self._servo_suspend:
+            self._stopServo(axis)
+        else:
+            # Force PID to 1, 0, 0
+            self.SetParameter(axis, 1, 1, check=False)  # P
+            self.SetParameter(axis, 2, 0, check=False)  # I
+            self.SetParameter(axis, 3, 0, check=False)  # D
+
+    def _resumeAxis(self, axis):
+        if self._servo_suspend:
+            self._startServo(axis)
+        else:
+            # Put back PID values
+            P, I, D = self._pid
+            self.SetParameter(axis, 1, P, check=False)  # P
+            self.SetParameter(axis, 2, I, check=False)  # I
+            self.SetParameter(axis, 3, D, check=False)  # D
+
+    def _suspend_mng_run(self, axis):
         """
         Main loop for encoder manager thread:
         Turn on/off the encoder based on the requests received
         """
         try:
-            q = self._encoder_req[axis]
+            q = self._suspend_req[axis]
             stopt = None  # None if must be on, otherwise time to stop
             while True:
                 # wait for a new message or for the time to stop the encoder
@@ -1950,8 +2022,8 @@ class CLRelController(Controller):
                     # the queue should be empty (with some high likelyhood)
                     logging.debug("Turning off the encoder at %f > %f (queue has %d element)",
                                   now, stopt, q.qsize())
-                    self._encoder_ready[axis].clear()
-                    self._stopEncoder(axis)
+                    self._axis_ready[axis].clear()
+                    self._suspendAxis(axis)
                     stopt = None
                     continue
 
@@ -1960,9 +2032,9 @@ class CLRelController(Controller):
                 if msg == MNG_TERMINATE:
                     return
                 elif msg == MNG_START:
-                    if not self._encoder_ready[axis].is_set():
-                        self._startEncoder(axis)
-                        self._encoder_ready[axis].set()
+                    if not self._axis_ready[axis].is_set():
+                        self._resumeAxis(axis)
+                        self._axis_ready[axis].set()
                     stopt = None
                 else:  # time at which to stop the encoder
                     stopt = msg
@@ -1972,33 +2044,34 @@ class CLRelController(Controller):
         finally:
             logging.info("Encoder manager %d/%s thread over", self.address, axis)
 
-    def prepareEncoder(self, axis):
+    def prepareAxisForMove(self, axis):
         """
-        Request the encoder to be ready. Non-blocking. Can be called before
-        really asking to move to save a bit of time.
+        Request the axis to be ready for a move. Non-blocking.
+        Can be called before really asking to move to save a bit of time.
         """
-        self._encoder_req[axis].put(MNG_START)
+        self._suspend_req[axis].put(MNG_START)
         # Just in case eventually no move is requested, it will automatically
         # stop the encoder.
         if self._auto_suspend:
-            self._releaseEncoder(axis, delay=10 + self._auto_suspend)
+            self._releaseAxis(axis, delay=10 + self._auto_suspend)
 
-    def _acquireEncoder(self, axis):
+    def _acquireAxis(self, axis):
         """
-        Ensure the encoder is on. Need to call _releaseEncoder once not needed.
+        Ensure the axis servo and encoder are on.
+        Need to call _releaseAxis once not needed.
         It will block until the encoder is actually ready
         """
         # TODO: maybe provide a public method as a non-blocking call, to
         # allow starting the encoders of multiple axes simultaneously
-        self._encoder_req[axis].put(MNG_START)
-        self._encoder_ready[axis].wait()
+        self._suspend_req[axis].put(MNG_START)
+        self._axis_ready[axis].wait()
 
-    def _releaseEncoder(self, axis, delay=0):
+    def _releaseAxis(self, axis, delay=0):
         """
-        Let the encoder be turned off (within some time)
+        Let the axis servo be turned off (within some time)
         delay (0<float): time (in s) before actually turning off the encoder
         """
-        self._encoder_req[axis].put(time.time() + delay)
+        self._suspend_req[axis].put(time.time() + delay)
 
     def _updateSpeedAccel(self, axis):
         """
@@ -2027,7 +2100,7 @@ class CLRelController(Controller):
         See Controller.moveRel
         """
         assert(axis in self._channels)
-        self._acquireEncoder(axis)
+        self._acquireAxis(axis)
 
         self._updateSpeedAccel(axis)
         # We trust the caller that it knows it's in range
@@ -2055,7 +2128,7 @@ class CLRelController(Controller):
         See Controller.moveAbs
         """
         assert(axis in self._channels)
-        self._acquireEncoder(axis)
+        self._acquireAxis(axis)
 
         self._updateSpeedAccel(axis)
         # We trust the caller that it knows it's in range
@@ -2119,7 +2192,7 @@ class CLRelController(Controller):
         for a in axes:
             # Note: this will also turn off the servo, which leads to relax mode
             if self._auto_suspend:
-                self._releaseEncoder(a, self._auto_suspend)  # release in 10 s (5x the cost to start)
+                self._releaseAxis(a, self._auto_suspend)  # release in 10 s (5x the cost to start)
 
         return False
 
@@ -2148,7 +2221,7 @@ class CLRelController(Controller):
     def stopMotion(self):
         super(CLRelController, self).stopMotion()
         for c in self._channels:
-            self._releaseEncoder(c, delay=1)
+            self._releaseAxis(c, delay=1)
 
     def startReferencing(self, axis):
         """
@@ -2156,7 +2229,7 @@ class CLRelController(Controller):
         the move is over. Position will change, as well as absolute positions.
         axis (1<=int<=16)
         """
-        self._acquireEncoder(axis)
+        self._acquireAxis(axis)
 
         # Note: setting position only works if ron is disabled. It's possible
         # also to indirectly set it after referencing, but then it will conflict
@@ -2847,8 +2920,8 @@ class Bus(model.Actuator):
             # Prepare the encoder of all the axes first (non-blocking)
             for an, v in shift.items():
                 controller, channel = self._axis_to_cc[an]
-                if hasattr(controller, "prepareEncoder"):
-                    controller.prepareEncoder(channel)
+                if hasattr(controller, "prepareAxisForMove"):
+                    controller.prepareAxisForMove(channel)
 
             end = 0  # expected end
             old_pos = self.position.value
@@ -2890,8 +2963,8 @@ class Bus(model.Actuator):
         with future._moving_lock:
             for an, v in pos.items():
                 controller, channel = self._axis_to_cc[an]
-                if hasattr(controller, "prepareEncoder"):
-                    controller.prepareEncoder(channel)
+                if hasattr(controller, "prepareAxisForMove"):
+                    controller.prepareAxisForMove(channel)
 
             end = 0  # expected end
             moving_axes = set()
@@ -3623,7 +3696,10 @@ class E861Simulator(object):
         # Note: the type is used to know how it should be decoded, so it's
         # important to differentiate between float and int.
         # Parameter table: address -> value
-        self._parameters = {0x14: 1 if self._has_encoder else 0, # 0 = no ref switch, 1 = ref switch
+        self._parameters = {0x01: 80,  # P
+                            0x02: 5,  # I
+                            0x03: 130,  # D
+                            0x14: 1 if self._has_encoder else 0,  # 0 = no ref switch, 1 = ref switch
                             0x32: 0 if self._has_encoder else 1, # 0 = limit switches, 1 = no limit switches
                             0x3c: "DEFAULT-FAKE", # stage name
                             0x15: 25.0, # TMX (in mm)
@@ -3833,6 +3909,16 @@ class E861Simulator(object):
                 except KeyError:
                     logging.debug("Unknown parameter %d", addr)
                     raise SimulatedError(56)
+            elif args[0] == "SEP?" and len(args) == 3:  # GetParameterNonVolatile: axis, address
+                # TODO: when no arguments -> list all parameters
+                axis, addr = int(args[1]), int(args[2])
+                if axis != 1:
+                    raise SimulatedError(15)
+                try:
+                    out = "%d=%s" % (addr, self._parameters[addr])
+                except KeyError:
+                    logging.debug("Unknown parameter %d", addr)
+                    raise SimulatedError(56)
             elif args[0] == "LIM?" and len(args) == 2: # Get Limit Switches
                 axis = int(args[1])
                 if axis == 1:
@@ -3965,6 +4051,8 @@ class E861Simulator(object):
             elif com == "HPA?":
                 out = ("\x00The following parameters are valid: \n" +
                        "0x1=\t0\t1\tINT\tmotorcontroller\tP term 1 \n" +
+                       "0x2=\t0\t1\tINT\tmotorcontroller\tI term 1 \n" +
+                       "0x3=\t0\t1\tINT\tmotorcontroller\tD term 1 \n" +
                        "0x32=\t0\t1\tINT\tmotorcontroller\thas limit\t(0=limitswitchs 1=no limitswitchs) \n" +
                        "0x3C=\t0\t1\tCHAR\tmotorcontroller\tStagename \n" +
                        "0x56=\t0\t1\tCHAR\tencoder\tactive \n" +
