@@ -2,6 +2,5 @@
 Name=Edit Odemis microscope file
 Comment=Edit current Odemis microscope file as root
 Exec=odemis-edit-mic
-Terminal=true
 Type=Application
 Icon=applications-engineering
