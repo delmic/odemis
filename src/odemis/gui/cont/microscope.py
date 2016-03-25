@@ -54,7 +54,6 @@ PHENOM_SH_TYPE_OPTICAL = 200  # sample holder for the Delphi, containing a lens
 DELPHI_OVERVIEW_POS = {"x": 0, "y": 0}  # good position of the stage for overview
 DELPHI_OVERVIEW_FOCUS = {"z": 0.006}  # Good focus position for overview image on the Delphi sample holder
 GOOD_FOCUS_OFFSET = 200e-06  # Offset from hole focus
-GOOD_HFW = 200e-06  # Good initial hfw
 
 
 class MicroscopeStateController(object):
@@ -742,7 +741,9 @@ class DelphiStateController(SecomStateController):
                     good_focus = self._hole_focus - GOOD_FOCUS_OFFSET
                     ff = self._main_data.ebeam_focus.moveAbs({"z": good_focus})
                     ff.result()
-                self._main_data.ebeam.horizontalFoV.value = GOOD_HFW
+                ccd_md = self._main_data.ccd.getMetadata()
+                good_hfw = (self._main_data.ccd.resolution.value[0] * ccd_md[model.MD_PIXEL_SIZE][0]) / 2
+                self._main_data.ebeam.horizontalFoV.value = good_hfw
             except ValueError:
                 dlg = wx.MessageDialog(self._main_frame,
                                        "Sample holder is loaded while there is no calibration information. "
@@ -1220,7 +1221,9 @@ class DelphiStateController(SecomStateController):
                 good_focus = self._hole_focus - GOOD_FOCUS_OFFSET
                 ff = self._main_data.ebeam_focus.moveAbs({"z": good_focus})
                 ff.result()
-            self._main_data.ebeam.horizontalFoV.value = GOOD_HFW
+            ccd_md = self._main_data.ccd.getMetadata()
+            good_hfw = (self._main_data.ccd.resolution.value[0] * ccd_md[model.MD_PIXEL_SIZE][0]) / 2
+            self._main_data.ebeam.horizontalFoV.value = good_hfw
             wx.CallAfter(self._press_btn.Enable, True)
 
         finally:
