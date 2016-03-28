@@ -448,9 +448,16 @@ class Scanner(model.Emitter):
         return self.horizontalFoV.value
 
     def _setBlanker(self, value):
-        self.parent._detector.beam_blank(value)
+        f = self.parent._detector.beam_blank(value)
+        f._blank_to_set = value
+        f.add_done_callback(self.on_blank_done)
 
-        return value
+        return self.blanker._value
+
+    def on_blank_done(self, future):
+        # Now we can update the actual beam blanker value
+        self.blanker._value = future._blank_to_set
+        self.blanker.notify(future._blank_to_set)
 
     def _updateMagnification(self):
 
@@ -856,6 +863,10 @@ class Detector(model.Detector):
             try:
                 # "Unblank" the beam
                 self.parent._scanner.blanker.value = False
+                # Wait until it's indeed unblanked
+                while (self.parent._scanner.blanker.value):
+                    time.sleep(1)
+                    continue
             except suds.WebFault:
                 logging.warning("Beam might still be blanked!")
             target = self._acquire_thread
@@ -864,7 +875,16 @@ class Detector(model.Detector):
                     args=(callback,))
             self._acquisition_thread.start()
 
+    @isasync
     def beam_blank(self, blank):
+        # Create ProgressiveFuture and update its state to RUNNING
+        est_start = time.time() + 0.1
+        f = model.ProgressiveFuture(start=est_start,
+                                    end=est_start + 1)  # rough time estimation
+
+        return self._executor.submitf(f, self._beam_blank, f, blank)
+
+    def _beam_blank(self, future, blank):
         """
         (Un)blank the beam
         blank (boolean): If True, will blank the beam, otherwise will unblank it
