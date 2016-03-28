@@ -1052,6 +1052,9 @@ class Detector(model.Detector):
                     # Move back to the center
                     self._scan_params_view.center.x = 0
                     self._scan_params_view.center.y = 0
+                # last check before we initiate the actual acquisition
+                if self._acquisition_must_stop.is_set():
+                    raise CancelledError()
                 if self._needResetParams(self._scanParams):
                     self._acq_device.SetSEMViewingMode(self._scanParams, 'SEM-SCAN-MODE-IMAGING')
                     # Just to wait long enough before we get a frame with the new
@@ -1089,6 +1092,8 @@ class Detector(model.Detector):
                     if self._acquisition_must_stop.is_set():
                         break
                 callback(self._acquire_image())
+        except CancelledError:
+            logging.debug("Acquisition thread cancelled")
         except Exception:
             logging.exception("Unexpected failure during image acquisition")
         finally:
