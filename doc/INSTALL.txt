@@ -12,8 +12,8 @@ python-libtiff python-comedilib python-h5py \ # libhdf5-serial-1.8.4 \
 libtiff4-dev \ # or libtiff5-dev
 python-pkg-resources python-netifaces python-cairo python-numpy python-scipy \
 python-decorator python-xdg python-suds python-matplotlib python-opencv \
-python-wxgtk3.0 python-serial python-evdev python-libtiff python-notify \
-graphicsmagick cgroup-bin python2-pyro4 authbind
+python-wxgtk3.0 python-serial python-evdev python-notify python-psutil \
+graphicsmagick cgroup-bin python2-pyro4 authbind python-setuptools cython
 
 Some of these packages need newer version than what is available in the default
 Ubuntu repository. They can be found on Delmic's PPA, or it's possible to
