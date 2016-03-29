@@ -20,12 +20,12 @@ class xrcfr_main(wx.Frame):
 #!XRCED:begin-block:xrcfr_main.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcfr_main.PreCreate
 
     def __init__(self, parent):
@@ -469,6 +469,38 @@ class xrcfr_acq(wx.Dialog):
 
 
 
+class xrcfr_plugin(wx.Dialog):
+#!XRCED:begin-block:xrcfr_plugin.PreCreate
+    def PreCreate(self, pre):
+        """ This function is called during the class's initialization.
+
+        Override it for custom setup before the window is created usually to
+        set additional window styles using SetWindowStyle() and SetExtraStyle().
+        """
+        pass
+
+#!XRCED:end-block:xrcfr_plugin.PreCreate
+
+    def __init__(self, parent):
+        # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
+        pre = wx.PreDialog()
+        self.PreCreate(pre)
+        get_resources().LoadOnDialog(pre, parent, "fr_plugin")
+        self.PostCreate(pre)
+
+        # Define variables for the controls, bind event handlers
+        self.lbl_description = xrc.XRCCTRL(self, "lbl_description")
+        self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
+        self.fp_settings = xrc.XRCCTRL(self, "fp_settings")
+        self.pnl_streams = xrc.XRCCTRL(self, "pnl_streams")
+        self.gauge_progress = xrc.XRCCTRL(self, "gauge_progress")
+        self.lbl_gauge = xrc.XRCCTRL(self, "lbl_gauge")
+        self.pnl_buttons = xrc.XRCCTRL(self, "pnl_buttons")
+        self.btn_cancel = xrc.XRCCTRL(self, "btn_cancel")
+        self.btn_acquire = xrc.XRCCTRL(self, "btn_acquire")
+
+
+
 
 
 # ------------------------ Resource data ----------------------
@@ -480,7 +512,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource class="spacer" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -542,7 +574,7 @@ def __init_resources():
         </object>
         <label>File</label>
       </object>
-      <object class="wxMenu">
+      <object class="wxMenu" name="menu_view">
         <object class="wxMenuItem" name="menu_item_22view">
           <label>2x2 view</label>
           <accel>F5</accel>
@@ -626,6 +658,7 @@ def __init_resources():
           </object>
           <object class="wxMenuItem" name="menu_item_inspect">
             <label>Inspect GUI</label>
+            <accel>Ctrl+I</accel>
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>
@@ -5246,6 +5279,205 @@ def __init_resources():
           <bg>#444444</bg>
         </object>
         <flag>wxEXPAND</flag>
+      </object>
+    </object>
+    <title>Image Acquisition</title>
+    <bg>#000000</bg>
+    <font>
+      <size>9</size>
+      <style>normal</style>
+      <weight>normal</weight>
+      <underlined>0</underlined>
+      <face>Ubuntu</face>
+    </font>
+    <style>wxDEFAULT_DIALOG_STYLE|wxRESIZE_BORDER</style>
+  </object>
+  <object class="wxDialog" name="fr_plugin">
+    <object class="wxGridBagSizer">
+      <object class="sizeritem">
+        <object class="wxPanel">
+          <object class="wxBoxSizer">
+            <object class="sizeritem">
+              <object class="wxStaticText" name="lbl_description">
+                <label>Plugin description</label>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <option>1</option>
+              <flag>wxALL|wxEXPAND</flag>
+              <border>10</border>
+            </object>
+            <orient>wxHORIZONTAL</orient>
+          </object>
+          <fg>#E5E5E5</fg>
+          <bg>#1A1A1A</bg>
+        </object>
+        <flag>wxEXPAND</flag>
+        <cellpos>0,0</cellpos>
+        <cellspan>1,2</cellspan>
+      </object>
+      <growablecols>0</growablecols>
+      <growablerows>1</growablerows>
+      <object class="sizeritem">
+        <object class="LiveViewport"/>
+        <flag>wxEXPAND</flag>
+        <cellpos>1,0</cellpos>
+      </object>
+      <object class="sizeritem">
+        <object class="wxPanel">
+          <object class="wxBoxSizer">
+            <object class="sizeritem">
+              <object class="wxScrolledWindow" name="scr_win_right">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="FoldPanelBar">
+                      <object class="FoldPanelItem" name="fp_settings">
+                        <label>OPTICAL SETTINGS</label>
+                        <nocaption>1</nocaption>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <object class="FoldPanelItem">
+                        <object class="StreamBar" name="pnl_streams">
+                          <size>300,-1</size>
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <label>STREAMS</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                      </object>
+                      <spacing>0</spacing>
+                      <leftspacing>0</leftspacing>
+                      <rightspacing>0</rightspacing>
+                      <bg>#333333</bg>
+                    </object>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                </object>
+                <size>400,-1</size>
+                <bg>#333333</bg>
+                <style>wxVSCROLL</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+              <minsize>400,400</minsize>
+            </object>
+            <orient>wxVERTICAL</orient>
+          </object>
+          <size>400,-1</size>
+          <bg>#333333</bg>
+          <style>wxBORDER_NONE</style>
+        </object>
+        <flag>wxEXPAND</flag>
+        <cellpos>1,1</cellpos>
+      </object>
+      <object class="sizeritem">
+        <object class="wxPanel">
+          <object class="wxBoxSizer">
+            <orient>wxHORIZONTAL</orient>
+            <object class="sizeritem">
+              <object class="wxGauge" name="gauge_progress">
+                <size>-1,10</size>
+                <range>100</range>
+                <value>50</value>
+                <bg>#333333</bg>
+                <hidden>1</hidden>
+                <style>wxGA_SMOOTH</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <option>1</option>
+              <flag>wxALL|wxEXPAND</flag>
+              <border>30</border>
+            </object>
+            <object class="sizeritem">
+              <object class="wxStaticText" name="lbl_gauge">
+                <label>Estimated time is 9999 seconds</label>
+                <fg>#DDDDDD</fg>
+                <font>
+                  <size>14</size>
+                  <style>normal</style>
+                  <weight>normal</weight>
+                  <underlined>0</underlined>
+                  <face>Ubuntu</face>
+                </font>
+                <style>wxALIGN_RIGHT</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALL|wxALIGN_RIGHT</flag>
+              <border>20</border>
+            </object>
+          </object>
+          <size>-1,60</size>
+          <bg>#4D4D4D</bg>
+        </object>
+        <flag>wxEXPAND</flag>
+        <cellpos>2,0</cellpos>
+      </object>
+      <object class="sizeritem">
+        <object class="wxPanel" name="pnl_buttons">
+          <object class="wxBoxSizer">
+            <object class="sizeritem">
+              <object class="ImageTextButton" name="btn_cancel">
+                <height>48</height>
+                <face_colour>def</face_colour>
+                <label>Close</label>
+                <font>
+                  <size>14</size>
+                  <style>normal</style>
+                  <weight>normal</weight>
+                  <underlined>0</underlined>
+                  <face>Ubuntu</face>
+                </font>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <option>1</option>
+              <flag>wxTOP|wxBOTTOM|wxLEFT|wxEXPAND</flag>
+              <border>10</border>
+            </object>
+            <orient>wxHORIZONTAL</orient>
+            <object class="sizeritem">
+              <object class="ImageTextButton" name="btn_acquire">
+                <size>242,48</size>
+                <height>48</height>
+                <face_colour>blue</face_colour>
+                <label>ACQUIRE</label>
+                <fg>#FFFFFF</fg>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <option>2</option>
+              <flag>wxALL|wxEXPAND</flag>
+              <border>10</border>
+            </object>
+          </object>
+          <bg>#444444</bg>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <flag>wxEXPAND</flag>
+        <cellpos>2,1</cellpos>
       </object>
     </object>
     <title>Image Acquisition</title>

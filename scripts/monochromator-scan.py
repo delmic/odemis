@@ -343,7 +343,7 @@ def main(args):
 
 # Plugin version for the GUI
 class MonoScanPlugin(Plugin):
-    name = "Monochromator scan plugin"
+    name = "Monochromator Scan"
     __version__ = "1.1"
     __author__ = "Éric Piel"
     __license__ = "GNU General Public License 2"

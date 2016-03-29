@@ -407,7 +407,6 @@ class MenuController(object):
     #     import webbrowser
     #     webbrowser.open('http://localhost:8000')
 
-
     @call_in_wx_main
     def _on_debug_va(self, enabled):
         """ Update the debug menu check """
