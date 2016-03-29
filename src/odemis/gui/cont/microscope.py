@@ -731,6 +731,7 @@ class DelphiStateController(SecomStateController):
 
         # If starts with the sample fully loaded, check for the calibration now
         ch_pos = self._main_data.chamber.position
+        self.good_focus = None
         if ch_pos.value["pressure"] == self._vacuum_pressure:
             # If it's loaded, the sample holder is registered for sure, and the
             # calibration should have already been done. Otherwise request
@@ -738,8 +739,8 @@ class DelphiStateController(SecomStateController):
             try:
                 self._load_holder_calib()
                 if self._hole_focus is not None:
-                    good_focus = self._hole_focus - GOOD_FOCUS_OFFSET
-                    ff = self._main_data.ebeam_focus.moveAbs({"z": good_focus})
+                    self.good_focus = self._hole_focus - GOOD_FOCUS_OFFSET
+                    ff = self._main_data.ebeam_focus.moveAbs({"z": self.good_focus})
                     ff.result()
                 ccd_md = self._main_data.ccd.getMetadata()
                 good_hfw = (self._main_data.ccd.resolution.value[0] * ccd_md[model.MD_PIXEL_SIZE][0]) / 2
@@ -1218,8 +1219,8 @@ class DelphiStateController(SecomStateController):
             # We know that a good initial focus value is a bit lower than the
             # one found while focusing on the holes
             if self._hole_focus is not None:
-                good_focus = self._hole_focus - GOOD_FOCUS_OFFSET
-                ff = self._main_data.ebeam_focus.moveAbs({"z": good_focus})
+                self.good_focus = self._hole_focus - GOOD_FOCUS_OFFSET
+                ff = self._main_data.ebeam_focus.moveAbs({"z": self.good_focus})
                 ff.result()
             ccd_md = self._main_data.ccd.getMetadata()
             good_hfw = (self._main_data.ccd.resolution.value[0] * ccd_md[model.MD_PIXEL_SIZE][0]) / 2

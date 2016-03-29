@@ -508,21 +508,32 @@ class SecomStreamsTab(Tab):
                 # FIXME: maybe this can be done in a nicer why
                 self.orig_hfw = None
                 self.orig_binning = None
-                if self.main_data.role == "delphi":
-                    # Set binning to 8 in case of optical focus to avoid high SNR
-                    # and limit HFW in case of ebeam focus to avoid extreme brightness.
-                    # Also apply ACB before focusing in case of ebeam focus.
-                    if self.curr_s.focuser.role == "ebeam-focus":
-                        self.orig_hfw = self.curr_s.emitter.horizontalFoV.value
-                        self.curr_s.emitter.horizontalFoV.value = min(self.orig_hfw, AUTOFOCUS_HFW)
-                        f = self.curr_s.detector.applyAutoContrast()
-                        f.result()
-                    else:
-                        if hasattr(self.curr_s.detector, "binning"):
-                            self.orig_binning = self.curr_s.detector.binning.value
-                            self.curr_s.detector.binning.value = max(self.orig_binning, AUTOFOCUS_BINNING)
+                self.orig_exposureTime = None
+                init_focus = None
+                emt = self.curr_s.emitter
+                det = self.curr_s.detector
+                # Set binning to 8 in case of optical focus to avoid high SNR
+                # and limit HFW in case of ebeam focus to avoid extreme brightness.
+                # Also apply ACB before focusing in case of ebeam focus.
+                if self.curr_s.focuser.role == "ebeam-focus" and self.main_data.role == "delphi":
+                    self.orig_hfw = emt.horizontalFoV.value
+                    emt.horizontalFoV.value = min(self.orig_hfw, AUTOFOCUS_HFW)
+                    f = det.applyAutoContrast()
+                    f.result()
+                    # Use the good initial focus value if known
+                    if hasattr(self._state_controller, "good_focus"):
+                        init_focus = self._state_controller.good_focus
+                else:
+                    if model.hasVA(det, "binning"):
+                        self.orig_binning = det.binning.value
+                        det.binning.value = max(self.orig_binning, AUTOFOCUS_BINNING)
+                        if model.hasVA(det, "exposureTime"):
+                            self.orig_exposureTime = det.exposureTime.value
+                            bin_ratio = numpy.prod(self.orig_binning) / numpy.prod(det.binning.value)
+                            expt = self.orig_exposureTime * bin_ratio
+                            det.exposureTime.value = det.exposureTime.clip(expt)
 
-                self._autofocus_f = AutoFocus(self.curr_s.detector, self.curr_s.emitter, self.curr_s.focuser)
+                self._autofocus_f = AutoFocus(det, emt, self.curr_s.focuser, good_focus=init_focus)
                 self._autofocus_f.add_done_callback(self._on_autofocus_done)
             else:
                 # Should never happen as normally the menu/icon are disabled
@@ -537,6 +548,8 @@ class SecomStreamsTab(Tab):
             self.curr_s.emitter.horizontalFoV.value = self.orig_hfw
         if self.orig_binning is not None:
             self.curr_s.detector.binning.value = self.orig_binning
+        if self.orig_exposureTime is not None:
+            self.curr_s.detector.exposureTime.value = self.orig_exposureTime
 
     def _on_current_stream(self, streams):
         """
