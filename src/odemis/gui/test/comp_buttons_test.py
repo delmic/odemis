@@ -329,13 +329,13 @@ class ButtonsTestCase(test.GuiTestCase):
         btn = buttons.ImageTextToggleButton(self.panel, height=32, label="Toggle")
         self.add_control(btn, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
 
-        btn = buttons.ImageTextButton(self.panel, size=(300, -1), face_colour= 'blue',
+        btn = buttons.ImageTextButton(self.panel, size=(300, -1), face_colour='blue',
                                       height=32, label="Wider!")
         btn.Disable()
         self.add_control(btn, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
 
         btn = buttons.ImageTextButton(self.panel, size=(300, -1), height=32, label="Icon!")
-        btn.SetIcon(img.getBitmap("icon/ico_ang.png")
+        btn.SetIcon(img.getBitmap("icon/ico_ang.png"))
         btn.Disable()
         self.add_control(btn, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
 
