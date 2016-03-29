@@ -14,18 +14,20 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+
 from __future__ import division
 
-from abc import ABCMeta, abstractmethod, abstractproperty
 import glob
 import imp
-import importlib
 import inspect
 import logging
-import odemis
-from odemis.gui.util import call_in_wx_main, get_home_folder
 import os
 import wx
+from abc import ABCMeta, abstractmethod, abstractproperty
+
+import odemis
+from odemis.gui.main_xrc import xrcfr_plugin
+from odemis.gui.util import call_in_wx_main, get_home_folder
 
 
 def find_plugins():
@@ -40,7 +42,7 @@ def find_plugins():
                  # overriding file, so just put with the config file.
                  os.path.join(hf, u".config/odemis/plugins/")
                  )
-    else: # hopefully this is Linux
+    else:  # hopefully this is Linux
         paths = (u"/usr/share/odemis/plugins/",
                  u"/usr/share/local/odemis/plugins/",
                  os.path.join(hf, u".local/share/odemis/plugins/"),
@@ -58,19 +60,25 @@ def find_plugins():
 
 def load_plugin(filename, microscope, main_app):
     """
-    Load and instantiate each plugin present in a plugin file.
-    Note: if the plugin fails to load, it will not raise an error, but just
-    return an empty list and log the error.
-    filename (str): path to the python file containing one or more Plugin class
-    microscope (Microscope or None): the main back-end component.
-      If the GUI is running as a viewer only, then it is None.
-    main_app (wx.App): the main GUI component.
-    return (list of instances of Plugin): each instance of plugin created
+    Load and instantiate each plugin present in a plugin file
+
+    Note: if the plugin fails to load, it will not raise an error, but just return an empty list and
+    log the error.
+
+    Args:
+        filename (str): path to the python file containing one or more Plugin class
+        microscope (Microscope or None): the main back-end component. If the GUI is running as a
+            viewer only, then it is None.
+        main_app (wx.App): the main GUI component.
+
+    Returns:
+        (list of instances of Plugin): each instance of plugin created
+
     """
     ret = []
 
     # Load module
-    logging.debug("Will load plugins from '%s'", filename)
+    logging.debug("Searching '%s' for Plugins...", filename)
     try:
         # Use the name of the script as sub-module of this module
         # eg: aab.py -> odemis.gui.plugin.aab
@@ -87,7 +95,8 @@ def load_plugin(filename, microscope, main_app):
         return ret
 
     # For each subclass of Plugin in the module, start it by instantiating it
-    found_plugin = False
+    # found_plugin = False
+
     for n, pc in inspect.getmembers(pm, inspect.isclass):
         # We only want Plugin subclasses, not even the Plugin class itself
         if not issubclass(pc, Plugin) or pc is Plugin:
@@ -97,9 +106,10 @@ def load_plugin(filename, microscope, main_app):
         # TODO: the issue with this test is that if the plugin doesn't provide
         # one of the abstract method or property (due to a programming error),
         # it's considered an abstract class
-#         if inspect.isabstract(pc):
-#             continue
-        found_plugin = True
+        # if inspect.isabstract(pc):
+        #     continue
+
+        # found_plugin = True
 
         logging.debug("Trying to instantiate %s (%s) of '%s' with microscope %s",
                       pc.name, n, filename, microscope)
@@ -109,11 +119,11 @@ def load_plugin(filename, microscope, main_app):
             logging.warning("Failed to instantiate %s of '%s'", n,
                             filename, exc_info=True)
         else:
-            logging.info("Started plugin %s of '%s'", ip, filename)
+            logging.info("Created Plugin %s from '%s'", ip, os.path.basename(filename))
             ret.append(ip)
 
-    if not found_plugin:
-        logging.warning("Script %s contains no plugin", filename)
+    # if not found_plugin:
+    #     logging.debug("Script %s contains no plugin", filename)
 
     return ret
 
@@ -263,7 +273,7 @@ class Plugin(object):
         analysis_tab.load_data(filename)
 
 
-class AcquisitionDialog(object):
+class AcquisitionDialog(xrcfr_plugin):
     def __init__(self, plugin, title, text=None):
         """
         Creates a modal window. The return code is the button number that was
@@ -271,11 +281,24 @@ class AcquisitionDialog(object):
         title (str): The title of the window
         text (None or str): If provided, it is displayed at the top of the window
         """
-        self.text = None  # the wx.StaticText used to show the text
-        self.entries = [] # Setting entries
+
+        super(AcquisitionDialog, self).__init__(plugin.main_app.main_frame)
+
+        self.SetTitle(title)
+
+        if text is not None:
+            self.lbl_description.SetLabel(text)
+        else:
+            self.lbl_description.Parent.Hide()
+
+        self.entries = []  # Setting entries
         self.canvas = None
-        self.buttons = [] # The buttons
-        # TODO
+        self.buttons = []  # The buttons
+
+        # Bind close button
+        self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_close)
+
+        self.Fit()
 
     def addSettings(self, objWithVA, conf=None):
         """
@@ -324,3 +347,6 @@ class AcquisitionDialog(object):
 
         # TODO
         pass
+
+    def on_close(self, _):
+        self.Close()

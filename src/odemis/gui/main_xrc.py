@@ -574,7 +574,7 @@ def __init_resources():
         </object>
         <label>File</label>
       </object>
-      <object class="wxMenu">
+      <object class="wxMenu" name="menu_view">
         <object class="wxMenuItem" name="menu_item_22view">
           <label>2x2 view</label>
           <accel>F5</accel>
@@ -5327,7 +5327,6 @@ def __init_resources():
       <object class="sizeritem">
         <object class="wxPanel">
           <object class="wxBoxSizer">
-
             <object class="sizeritem">
               <object class="wxScrolledWindow" name="scr_win_right">
                 <object class="wxBoxSizer">
@@ -5343,7 +5342,6 @@ def __init_resources():
                           <assign_var>1</assign_var>
                         </XRCED>
                       </object>
-
                       <object class="FoldPanelItem">
                         <object class="StreamBar" name="pnl_streams">
                           <size>300,-1</size>
@@ -5361,7 +5359,6 @@ def __init_resources():
                       <leftspacing>0</leftspacing>
                       <rightspacing>0</rightspacing>
                       <bg>#333333</bg>
-
                     </object>
                     <flag>wxEXPAND</flag>
                   </object>
