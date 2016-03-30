@@ -1,23 +1,26 @@
 #!/bin/bash
 # Should be run in the root directory of Odemis source
+# Root path of the repo
+ODEMIS_DIR="$(readlink -m $(dirname $0)/../)"
+ODEMIS_SRC="$ODEMIS_DIR/src/odemis"
 
 # Some basic static analysis
 echo "Total number of lines of code (not including test cases):"
-find src/ -name "*.py" -a -not -name "*_test.py" -print0 | wc -l --files0-from=- | tail -1
+find "$ODEMIS_SRC" -name "*.py" -a -not -name "*_test.py" -print0 | wc -l --files0-from=- | tail -1
 
 # Not related to tests, but to QA in general: Exceptions usually take only 1 argument
 # So a comma is probably a sign of syntax error and should be replace by a %
 echo "These files might have syntax error when raising an exception:"
-grep -IrE --colour 'raise.*",' --include=*.py src/odemis/
+grep -IrE --colour 'raise.*",' --include=*.py "$ODEMIS_SRC"
 echo "---"
 
 echo "These files are not using division from the future:"
-find src -name "*.py" -size +20c -exec grep -IL "from __future__ import.*division" {} \;
-#grep -IrL "from __future__ import.*division" --include=*.py src/
+find "$ODEMIS_SRC" -name "*.py" -size +20c -exec grep -IL "from __future__ import.*division" {} \;
+#grep -IrL "from __future__ import.*division" --include=*.py "$ODEMIS_SRC"
 echo "---"
 
 echo "These files do not have the license header:"
-grep -LIr "GNU General Public License" --include=*.py src/
+grep -LIr "GNU General Public License" --include=*.py "$ODEMIS_SRC"
 echo "---"
 
 DATE=$(date +%Y%m%d)
@@ -26,7 +29,6 @@ DATE=$(date +%Y%m%d)
 # Every file which is in the pattern /test/*_test.py
 MAXTIME=1800  # 30 min maximum per test case
 
-ODEMISPATH="$(readlink -m "./src/odemis")"
 PYTHONPATH=./src/:../Pyro4/src/
 if [ -f /etc/odemis.conf ]; then
     # use the odemis config if it's available
@@ -53,10 +55,10 @@ fi
 sudo odemis-stop
 
 # find the test scripts (should not contain spaces)
-testfiles="$(find "$ODEMISPATH" -wholename "*/test/*test.py")"
+testfiles="$(find "$ODEMIS_SRC" -wholename "*/test/*test.py")"
 
 #Warn if some files are misnamed
-skippedfiles="$(find "$ODEMISPATH" -wholename "*/test/*.py" -and -not -wholename "*/test/*test.py")"
+skippedfiles="$(find "$ODEMIS_SRC" -wholename "*/test/*.py" -and -not -wholename "*/test/*test.py")"
 if [ "$skippedfiles" != "" ]; then
     echo "Warning, these scripts are not named *_test.py and will be skipped:"
     echo "$skippedfiles"
@@ -76,7 +78,7 @@ for f in $testfiles; do
     # run it in its own directory (sometimes they need specific files from there)
     pushd "$(dirname $f)" > /dev/null
         # Automatically kill after MAXTIME, then try harder after 30 s
-        timeout -k 30 $MAXTIME python $f --verbose #>> "$TESTLOG" 2>&1
+        timeout -k 30 $MAXTIME python $f --verbose >> "$TESTLOG" 2>&1
         status=$?
         echo $f returned $status >> "$TESTLOG" 2>&1
     popd > /dev/null
@@ -86,13 +88,11 @@ for f in $testfiles; do
         # TODO: failures can increase even if the test reported OK, if it was killed
         # => synchronise it with FAILED
         failures=$(( $failures + 1 ))
-        echo $failures
     fi
 done
 
 if [ $failures -gt 0 ]; then
     echo "$failures test failed. See $TESTLOG for error messages."
-    exit 1
 else
     echo "All tests passed"
 fi
@@ -102,7 +102,7 @@ sudo odemis-stop
 
 
 # Run the integration tests
-ODMPATH=../mic-odm-yaml/
+ODMPATH="$ODEMIS_DIR/../mic-odm-yaml/"
 INTEGLOGDIR="./integtest-$DATE/"
 mkdir -p "$INTEGLOGDIR"
 

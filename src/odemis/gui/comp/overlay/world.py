@@ -840,7 +840,8 @@ class SpectrumLineSelectOverlay(LineSelectOverlay, PixelDataMixin):
 
         self._selected_line_va.subscribe(self._on_selection, init=True)
         self._selected_width_va.subscribe(self._on_width, init=False)
-        self._selected_pixel_va.subscribe(self._on_pix_selection, init=False)
+        if pixel_va:
+            self._selected_pixel_va.subscribe(self._on_pix_selection, init=False)
 
     def _on_selection(self, selected_line):
         """ Update the overlay when it's active and the line changes """

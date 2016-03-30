@@ -530,6 +530,10 @@ class Scanner(model.Emitter):
                self._hfw_nomag / (self._shape[1] * mag))
         self.pixelSize = model.VigilantAttribute(pxs, unit="m", readonly=True)
 
+        # TODO: compute a good depthOfField based on the current hfw
+        # self.depthOfField = model.FloatContinuous(1e-6, range=(0, 1e9),
+        #                                           unit="m", readonly=True)
+
         # (.resolution), .translation, .rotation, and .scaling are used to
         # define the conversion from coordinates to a region of interest.
 

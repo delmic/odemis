@@ -53,8 +53,8 @@ def tune(cont, axis):
     # Hack to force the servo to be always on.
     # We could try to init with auto_suspend = False, but that only works with
     # some type of controllers.
-    if hasattr(cont, "_acquireEncoder"):
-        cont._acquireEncoder(axis)
+    if hasattr(cont, "_acquireAxis"):
+        cont._acquireAxis(axis)
 
     # print(cont._sendQueryCommand("HDR?\n"))
 

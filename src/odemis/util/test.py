@@ -15,6 +15,7 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 # Helper functions for unit tests
+from __future__ import division
 
 import logging
 from odemis import model
@@ -29,13 +30,15 @@ import time
 # ODEMISD_CMD = ["/usr/bin/python2", "-m", "odemis.odemisd.main"]
 # -m doesn't work when run from PyDev... not entirely sure why
 ODEMISD_CMD = ["/usr/bin/python2", os.path.dirname(odemis.__file__) + "/odemisd/main.py"]
-ODEMISD_ARG = ["--log-level=2" , "--log-target=testdaemon.log", "--daemonize"]
+ODEMISD_ARG = ["--log-level=2", "--log-target=testdaemon.log", "--daemonize"]
+
 
 def setlimits():
     # Increase the maximum number of files openable, as needed if many remote
     # objects are created
     print "Setting resource limit in child (pid %d)" % os.getpid()
     resource.setrlimit(resource.RLIMIT_NOFILE, (3092, 3092))
+
 
 def start_backend(config):
     """
@@ -73,6 +76,7 @@ def start_backend(config):
 
     if status != driver.BACKEND_RUNNING:
         raise IOError("Backend failed to start, now %s" % status)
+
 
 def stop_backend():
     """

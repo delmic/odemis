@@ -576,7 +576,8 @@ class OverlayTestCase(test.GuiTestCase):
 
         slol.set_data_properties(1e-05, (0.0, 0.0), (17, 19))
         width_va = omodel.IntVA(1)
-        slol.connect_selection(omodel.TupleVA(), width_va)
+        line_va = omodel.TupleVA(((None, None), (None, None)))
+        slol.connect_selection(line_va, width_va)
         view.mpp.value = 1e-06
         test.gui_loop()
 
@@ -587,7 +588,12 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.add_view_overlay(tol)
 
         test.gui_loop()
-        slol._selected_line_va.value = ((0, 0), (8, 8))
+        line_va.value = ((0, 0), (8, 8))
+        test.gui_loop()
+
+        # Also connect the pixel va
+        pixel_va = omodel.TupleVA((8, 8))
+        slol.connect_selection(line_va, width_va, pixel_va)
         test.gui_loop()
 
         def toggle(evt):
