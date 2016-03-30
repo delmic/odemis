@@ -57,6 +57,14 @@ SECOMv2: {
         park: [-5, -5], # V
         settle_time: 5.e-6, # s
         hfw_nomag: 0.25, # m
+        # 0 = Relay
+        # 1 = Open drain output (Y0.0)
+        # 2 = Digital Out 1
+        # 3 = Digital Out 0
+        # 4 = Status led
+        # output ports -> True (indicate scanning) or False (indicate parked) + VA name
+        # Conventional VA names are: external, blanker, led, power
+        scanning_ttl: {0: [True, "external"], 4: True},
     },
     properties: {
         scale: [8, 8], # (ratio), start with a pretty fast scan
