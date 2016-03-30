@@ -388,6 +388,10 @@ class SecomStateController(MicroscopeStateController):
 
         if streams:
             s = streams[0]
+            # TODO: Maybe it's better to take into consideration the status of
+            # the non-active streams e.g. the "SEM stream is not aligned" msg
+            # of the AlignedSEMStream will go away once we switch to the
+            # Optical stream, while we still remain mis-aligned.
             s.status.subscribe(self._on_active_stream_status, init=True)
         else:
             s = None
