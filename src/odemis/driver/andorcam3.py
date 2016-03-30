@@ -1495,7 +1495,7 @@ class AndorCam3(model.DigitalCamera):
                         if num_errors > 5:
                             logging.error("%d errors in a row, canceling acquisition", num_errors)
                             return
-                        logging.warning("trying again to acquire image after error %s", strerr)
+                        logging.warning("trying again to acquire image after error %s", exp.strerror)
                         need_reinit = True
                         continue
                     else:
