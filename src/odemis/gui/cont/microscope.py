@@ -245,7 +245,6 @@ class SecomStateController(MicroscopeStateController):
         # Just to be able to disable the buttons when the chamber is vented
         self._sem_btn = getattr(tab_panel, btn_prefix + "sem")
         self._opt_btn = getattr(tab_panel, btn_prefix + "opt")
-        self._acq_btn = getattr(tab_panel, btn_prefix + "opt")
 
         # To be able to disable the button when loading (door is open),
         # or cancellation (venting or when moving from overview to SEM)
@@ -253,8 +252,11 @@ class SecomStateController(MicroscopeStateController):
         self._press_btn = getattr(tab_panel, btn_prefix + "press")
 
         # To update the stream status
-        self._prev_stream = None
-        self._tab_data.streams.subscribe(self._subscribe_active_stream_status)
+        self._status_prev_stream = None
+        tab_data.streams.subscribe(self._subscribe_current_stream_status)
+
+        # To listen to change in play/pause
+        self._active_prev_stream = None
 
         # Turn off the light, but set the power to a nice default value
         # TODO: once optical streams have local emtPower VA, just set the
@@ -283,6 +285,30 @@ class SecomStateController(MicroscopeStateController):
                         except (AttributeError, model.NotApplicableError):
                             logging.error("Unknown light power range, setting to 1 W")
                             light.power.value = 1
+
+        # E-beam management
+        # The SEM driver should do the right thing in most cases (ie, turn on
+        # the beam and disable the blanker whenever scan is needed). However,
+        # if not the whole SEM can be controlled from Odemis, the user still
+        # uses the SEM GUI in parallel. That means:
+        # * During optical acquisition, if the blanker cannot be controlled,
+        #   we need to force the SEM control, to ensure the ebeam stays parked.
+        # * When not doing any acquisition (ie, no stream playing and not in
+        #   acquisition mode), if the blanker can be controlled, we need to
+        #   unforce the blanker to allow the user to use the SEM GUI.
+        ebeam = self._main_data.ebeam
+        if (ebeam and model.hasVA(ebeam, "external") and
+            not model.hasVA(ebeam, "blanker") and
+            True in ebeam.external.choices
+           ):
+            # We need to force external to True (to force ebeam parking)
+            # whenever a stream is playing or we are in acquisition mode
+            # (otherwise, it'll set to False)
+            tab_data.streams.subscribe(self._subscribe_current_stream_active)
+            self._main_data.is_acquiring.subscribe(self._check_ebeam_external, init=True)
+
+        # TODO: handle case of blanker present, but SEM control is limited
+        # (ie, no hfw, or no focus or no voltage)
 
         # Manage the chamber
         if self._main_data.chamber:
@@ -314,22 +340,58 @@ class SecomStateController(MicroscopeStateController):
             if ch_pos.value["pressure"] == self._overview_pressure:
                 self._main_data.chamberState.value = CHAMBER_PUMPING
 
-    def _subscribe_active_stream_status(self, streams):
+    def _subscribe_current_stream_active(self, streams):
+        """ Find the active stream and subscribe to its is_active VA
+
+        streams is sorted by Least Recently Used, so the first element is the newest and a possible
+        2nd one, was the previous newest.
+
+        """
+        if self._active_prev_stream is not None:
+            self._active_prev_stream.status.unsubscribe(self._check_ebeam_external)
+
+        if streams:
+            s = streams[0]
+            s.is_active.subscribe(self._check_ebeam_external, init=True)
+        else:
+            s = None
+        self._active_prev_stream = s
+
+    def _check_ebeam_external(self, _):
+        """
+        Called whenever the acquisition state might have changed
+        """
+        # Consider that an acquisition is happening if either is_acquiring or
+        # a stream (of the tab) is active
+        streams = self._tab_data.streams.value
+        is_active = (streams and streams[0].is_active.value)
+
+        if self._main_data.is_acquiring.value or is_active:
+            logging.debug("Acquisition active, forcing SEM external mode")
+            self._main_data.ebeam.external.value = True
+        else:
+            # Note: it could be that it's just because we are in another tab
+            # but that's fine as only one state controller exists (from the
+            # acquisition tab)
+            logging.debug("No acquisition, setting SEM external mode to auto")
+            self._main_data.ebeam.external.value = None
+
+    def _subscribe_current_stream_status(self, streams):
         """ Find the active stream and subscribe to its status VA
 
         streams is sorted by Least Recently Used, so the first element is the newest and a possible
         2nd one, was the previous newest.
 
         """
-        if self._prev_stream is not None:
-            self._prev_stream.status.unsubscribe(self._on_active_stream_status)
+        if self._status_prev_stream is not None:
+            self._status_prev_stream.status.unsubscribe(self._on_active_stream_status)
 
         if streams:
             s = streams[0]
             s.status.subscribe(self._on_active_stream_status, init=True)
         else:
             s = None
-        self._prev_stream = s
+        self._status_prev_stream = s
 
     @call_in_wx_main
     def _on_active_stream_status(self, (lvl, msg)):
