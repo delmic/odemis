@@ -1129,15 +1129,17 @@ class Detector(model.Detector):
 
     def terminate(self):
         logging.info("Terminating SEM stream...")
+        try:
+            self.parent._scanner.blanker.value = False
+            # Wait until it's indeed unblanked
+            while (self.parent._scanner.blanker.value):
+                time.sleep(1)
+                continue
+        except suds.WebFault:
+            logging.warning("Beam might still be blanked!")
         if self._executor:
             self._executor.shutdown()
             self._executor = None
-        try:
-            # "Unblank" the beam
-            if self._tilt_unblank is not None:
-                self.parent._scanner.blanker.value = False
-        except suds.WebFault:
-            logging.warning("Beam might still be blanked!")
 
 class SEMDataFlow(model.DataFlow):
     """
