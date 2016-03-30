@@ -180,6 +180,9 @@ HW_SETTINGS_CONFIG = {
             ("blanker", {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
+            ("external", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
         )),
     "spectrometer":
         OrderedDict((
