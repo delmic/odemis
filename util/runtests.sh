@@ -83,12 +83,12 @@ for f in $testfiles; do
         echo $f returned $status >> "$TESTLOG" 2>&1
     popd > /dev/null
     grep -E "(OK|FAILED)" "$TESTLOG" | tail -1
-    echo Failures so far: $failures
     if [ "$status" -gt 0 ]; then
         # TODO: failures can increase even if the test reported OK, if it was killed
         # => synchronise it with FAILED
         failures=$(( $failures + 1 ))
     fi
+    echo Failures so far: $failures
 done
 
 if [ $failures -gt 0 ]; then
@@ -107,4 +107,4 @@ INTEGLOGDIR="./integtest-$DATE/"
 mkdir -p "$INTEGLOGDIR"
 
 echo "Running integration tests"
-./util/run_intg_tests.py --log-path "$INTEGLOGDIR" "$ODMPATH"/*/
+"$ODEMIS_DIR/util/run_intg_tests.py" --log-path "$INTEGLOGDIR" "$ODMPATH"/*/
