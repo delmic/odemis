@@ -231,6 +231,8 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan,
         try:
             ret = transform.CalculateTransform(known_ec, known_oc, skew)
         except ValueError as exp:
+            # Make failure report
+            _MakeReport(optical_image, repetitions, escan.magnification.value, escan.pixelSize.value, dwell_time, electron_coordinates)
             raise ValueError("Overlay failure: %s" % (exp,))
 
         if future._find_overlay_state == CANCELLED:

@@ -911,8 +911,6 @@ class FineAlignController(object):
         except CancelledError:
             self._tab_panel.lbl_fine_align.Label = "Cancelled"
         except Exception:
-            logging.warning("Failed to run the fine alignment, a report "
-                            "should be available in ~/odemis-overlay-report.")
             self._tab_panel.lbl_fine_align.Label = "Failed"
         else:
             self._tab_panel.lbl_fine_align.Label = "Successful"
