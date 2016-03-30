@@ -22,6 +22,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import Queue
+import collections
+import functools
 import gc
 import glob
 import logging
@@ -98,7 +100,6 @@ import odemis.driver.comedi_simple as comedi
 # merely an optimisation). Next to it, a high-level component should decide the
 # scanning area, period and channels, and interface with the rest of Odemis.
 # Communication between both component is only via queues.
-
 NI_TRIG_AI_START1 = 18  # Trigger number for AI Start1 (= beginning of a command)
 # TODO Probably should be named the following:
 NI_AO_TRIG_AI_START2 = 18  # Trigger number for AI Start2 (= beginning of a scan)
@@ -2514,9 +2515,12 @@ class Scanner(model.Emitter):
           (lower/upper limit in X) if magnification is 1 (in m)
         park (None or 2-tuple of (0<=float)): voltage of resting position,
           if None, it will default to top-left corner.
-        scanning_ttl (None or dict of int -> bool): list of digital output ports
-          to indicate the ebeam should be enabled/scanning (if True) or should
-          be disabled/parked (if False)
+        scanning_ttl (None or dict of int -> (bool or bool, str)): list of
+          digital output ports to indicate the ebeam should be enabled/scanning
+          (if True) or should  be disabled/parked (if False).
+          If a str is provided, a VA with that name will be created, and will
+          allow to force the TTL to high (True) or low (False), with None (auto)
+          being the default.
         fastpart (boolean): if True, will park immediatly after finishing a scan
           (otherwise, it will wait a few ms to check there if a new scan
         max_res (None or 2-tuple of (0<int)): maximum scan resolution allowed.
@@ -2568,20 +2572,47 @@ class Scanner(model.Emitter):
                     raise ValueError("Park voltage %g V is too high for hardware." %
                                      (park[i],))
 
-        self._scanning_ttl = scanning_ttl or {}
-        if self._scanning_ttl:
-            if parent._dio_subdevice is None:
+        self._scanning_ttl = {}
+        self._ttl_setters = []  # To hold the partial VA setters
+        self._ttl_lock = threading.Lock()  # Acquire to change the hw TTL state
+
+        if scanning_ttl:
+            self._scanning_ttl = {}
+            for c, v in scanning_ttl.items():
+                if not isinstance(v, collections.Iterable):
+                    # If no name given, put None as name
+                    v = (v, None)
+                elif len(v) != 2:
+                    raise ValueError("scanning_ttl expects for each channel a boolean "
+                                     "and a name (or just a boolean), but got %s", v)
+                else:
+                    v = tuple(v)
+                self._scanning_ttl[c] = v
+
+            if parent._dio_subdevice is None and not parent._test:
                 # TODO: also support digital output only subdevices
                 raise IOError("DAQ device '%s' has no digital output ports, cannot use scanning_ttl" %
                               (parent._device_name,))
             else:
                 # configure each channel for output
-                ndioc = comedi.get_n_channels(parent._device, parent._dio_subdevice)
-                for c, s in self._scanning_ttl.items():
+                if not parent._test:
+                    ndioc = comedi.get_n_channels(parent._device, parent._dio_subdevice)
+                else:
+                    ndioc = 16
+                for c, (s, vaname) in self._scanning_ttl.items():
                     if not 0 <= c <= ndioc:
                         raise ValueError("DAQ device '%s' only has %d digital output ports" %
                                          (parent._device_name, ndioc))
-                    comedi.dio_config(parent._device, parent._dio_subdevice, c, comedi.OUTPUT)
+                    if not parent._test:
+                        comedi.dio_config(parent._device, parent._dio_subdevice, c, comedi.OUTPUT)
+                    # Note: it's fine to have multiple channels assigned to the same VA
+                    if vaname and not hasattr(self, vaname):
+                        setter = functools.partial(self._setTTLVA, vaname)
+                        self._ttl_setters.append(setter)
+                        # Create a VA with False (off), True (on) and None (auto, the default)
+                        va = model.VAEnumerated(None, choices={False, True, None},
+                                                setter=setter)
+                        setattr(self, vaname, va)
 
         # It will set up ._shape and .parent
         model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
@@ -2900,6 +2931,37 @@ class Scanner(model.Emitter):
         finally:
             logging.info("Scanning state manager thread over")
 
+    def _setTTLVA(self, vaname, value):
+        """
+        Changes the TTL value of a TTL signal
+        vaname (str)
+        value (True, False or None)
+        return value
+        """
+        with self._ttl_lock:
+            for c, (s, name) in self._scanning_ttl.items():
+                if name != vaname:
+                    continue
+                try:
+                    if value is None:
+                        # Put it as the _set_scan_state would
+                        if s == self._scan_state:
+                            v = 1
+                        else:
+                            v = 0
+                    else:  # Use the value as is (True == high)
+                        if value:
+                            v = 1
+                        else:
+                            v = 0
+                    logging.debug("Setting digital output port %d to %d", c, v)
+                    if not self.parent._test:
+                        comedi.dio_write(self.parent._device, self.parent._dio_subdevice, c, v)
+                except Exception:
+                    logging.warning("Failed to change digital output port %d", c, exc_info=True)
+
+        return value
+
     def indicate_scan_state(self, scanning, delay=0):
         """
         Indicate the ebeam scanning state (via the digital output ports)
@@ -2924,21 +2986,26 @@ class Scanner(model.Emitter):
         scanning (bool): if True, indicate it's scanning, otherwise, indicate it's
           parked.
         """
-        if self._scan_state == scanning:
-            return  # No need to update, if it's already correct
+        with self._ttl_lock:
+            if self._scan_state == scanning:
+                return  # No need to update, if it's already correct
 
-        logging.debug("Updating scanning state to %s", scanning)
-        self._scan_state = scanning
-        for c, s in self._scanning_ttl.items():
-            try:
-                if s == scanning:
-                    v = 1
-                else:
-                    v = 0
-                logging.debug("Setting digital output port %d to %d", c, v)
-                comedi.dio_write(self.parent._device, self.parent._dio_subdevice, c, v)
-            except Exception:
-                logging.warning("Failed to change digital output port %d", c, exc_info=True)
+            logging.debug("Updating scanning state to %s", scanning)
+            self._scan_state = scanning
+            for c, (s, name) in self._scanning_ttl.items():
+                if name and getattr(self, name).value is not None:
+                    logging.debug("Skipping digital output port %d set to manual", c)
+                    continue
+                try:
+                    if s == scanning:
+                        v = 1
+                    else:
+                        v = 0
+                    logging.debug("Setting digital output port %d to %d", c, v)
+                    if not self.parent._test:
+                        comedi.dio_write(self.parent._device, self.parent._dio_subdevice, c, v)
+                except Exception:
+                    logging.warning("Failed to change digital output port %d", c, exc_info=True)
 
     def get_scan_data(self, nrchans):
         """
