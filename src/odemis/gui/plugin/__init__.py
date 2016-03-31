@@ -79,6 +79,8 @@ def load_plugin(filename, microscope, main_app):
 
     # Load module
     logging.debug("Searching '%s' for Plugins...", filename)
+    logger = logging.getLogger()
+    prev_loglev = logger.getEffectiveLevel()
     try:
         # Use the name of the script as sub-module of this module
         # eg: aab.py -> odemis.gui.plugin.aab
@@ -94,9 +96,15 @@ def load_plugin(filename, microscope, main_app):
         logging.info("Skipping script %s, which failed to load", filename, exc_info=True)
         return ret
 
-    # For each subclass of Plugin in the module, start it by instantiating it
-    # found_plugin = False
+    if logger.getEffectiveLevel() != prev_loglev:
+        # It's easy to put a line at the top of a script that changes the logging
+        # level, but after importing that script, the whole GUI log level would
+        # be modified, so put it back.
+        logging.info("Resetting logging level that was modified during import")
+        logger.setLevel(prev_loglev)
 
+    # For each subclass of Plugin in the module, start it by instantiating it
+    found_plugin = False
     for n, pc in inspect.getmembers(pm, inspect.isclass):
         # We only want Plugin subclasses, not even the Plugin class itself
         if not issubclass(pc, Plugin) or pc is Plugin:
@@ -109,10 +117,9 @@ def load_plugin(filename, microscope, main_app):
         # if inspect.isabstract(pc):
         #     continue
 
-        # found_plugin = True
-
         logging.debug("Trying to instantiate %s (%s) of '%s' with microscope %s",
                       pc.name, n, filename, microscope)
+        found_plugin = True
         try:
             ip = pc(microscope, main_app)
         except Exception:
@@ -122,8 +129,8 @@ def load_plugin(filename, microscope, main_app):
             logging.info("Created Plugin %s from '%s'", ip, os.path.basename(filename))
             ret.append(ip)
 
-    # if not found_plugin:
-    #     logging.debug("Script %s contains no plugin", filename)
+    if not found_plugin:
+        logging.info("Script %s contains no plugin", filename)
 
     return ret
 
