@@ -1915,6 +1915,19 @@ class CLRelController(Controller):
                 self._resumeAxis(a)
             self._stopServo(a)
 
+    def recoverTimeout(self):
+        ret = Controller.recoverTimeout(self)
+        if ret and not self._servo_suspend:
+            try:
+                # We expect the servo to be always on, so put it back on
+                for a in self._upm.keys():
+                    self._startServo(a)
+            except Exception:
+                logging.exception("Failed to restart the servo")
+                return False
+
+        return ret
+
     def _stopServo(self, axis):
         """
         Turn off the servo the supply power of the encoder.
@@ -1963,8 +1976,8 @@ class CLRelController(Controller):
                 # and the controller will go crazy causing lots of vibrations
                 # on the axis.
                 # Note: we could try to also check whether the controller is ready
-                # with self.IsReady() or bits 8 to 11 of self.GetStatus(),
-                # and stop sooner if it's possible). But that could lead to
+                # with self.IsReady(), and stop sooner if it's possible).
+                # But that could lead to
                 # orders/queries to several controllers to be intertwined, which
                 # causes sometimes the "garbage" bug.
                 time.sleep(4 * self._slew_rate[axis])
@@ -1983,6 +1996,7 @@ class CLRelController(Controller):
         if self._servo_suspend:
             self._stopServo(axis)
         else:
+            # TODO: also start servo if it's off? Or not a big deal here?
             # Force PID to 1, 0, 0
             self.SetParameter(axis, 1, 1, check=False)  # P
             self.SetParameter(axis, 2, 0, check=False)  # I
@@ -1992,6 +2006,17 @@ class CLRelController(Controller):
         if self._servo_suspend:
             self._startServo(axis)
         else:
+            # The servo should be on all the time, but if for some reason there
+            # was an error, the servo might have been disabled => need to put
+            # it back on now.
+            # Note: We use status as it's a bit faster, but it's not sure
+            # whether all controller will report servo the same way
+            # TODO: use GetServo(axis) if controller is unsupported
+            status = self.GetStatus()
+            if not (status & (1 << 12)):  # For E861 and C867, bit 12 = servo on
+                logging.info("Servo of controller %s was off, need to restart it", self.address)
+                self._startServo(axis)
+
             # Put back PID values
             P, I, D = self._pid
             self.SetParameter(axis, 1, P, check=False)  # P
@@ -3848,6 +3873,8 @@ class E861Simulator(object):
                 val = 0
                 if time.time() < self._end_move:
                     val |= 0x400  # first axis moving
+                if self._servo:
+                    val |= 0x1000  # servo on
                 out = "0x%x" % val
             elif com == "\x05": # Request Motion Status
                 # return hexadecimal bitmap of moving axes
