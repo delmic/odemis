@@ -392,6 +392,8 @@ class BtnMixin(object):
         if not self.IsEnabled():
             if not self.bmpDisabled:
                 self.bmpDisabled = self._create_disabled_bitmap()
+            # TODO: should have a different disabled image whether the button
+            # up or down (selected), in case of Toggle button
             bmp = self.bmpDisabled
         elif not self.up:
             if not self.bmpSelected:
