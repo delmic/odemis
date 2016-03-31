@@ -234,8 +234,7 @@ SECOMv2: {
                "sx": [4, 1, True], "sy": [5, 1, True]},
         inverted: ["ox", "oy", "oz", "sy"], # sx is good
         #dist_to_steps: {"ox": 100000, "oy": 100000}, # step/m
-        # automatically turn off encoder for SX/SY to avoid vibrations, but for
-        # focus, it's better to keep it on, to avoid drift.
-        auto_suspend: {"oz": False, "sx": 10, "sy": 10}, # s
+        # automatically turn off encoders for SX/SY to avoid vibrations
+        auto_suspend: {"oz": 1, "sx": 1, "sy": 1}, # s
     },
 }
