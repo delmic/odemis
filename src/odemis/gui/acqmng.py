@@ -108,7 +108,6 @@ def _get_entries(entries, hw_comp, name):
     name (String)
     return (list of SettingEntry): all the entries which match
     """
-    # TODO: there can be multiple entries with
     matchs = []
     for e in entries:
         if e.hw_comp == hw_comp and e.name == name:
@@ -124,12 +123,13 @@ def preset_hq(entries):
     entries (list of SettingEntries): each value as originally set
     returns (dict SettingEntries -> value): new value for each SettingEntry that should be modified
     """
+    logging.debug("Computing HQ preset")
     ret = {}
-
     # TODO: also handle AxisEntry ?
     for entry in entries:
-        if (not hasattr(entry, "vigilattr") or entry.vigilattr is None
-            or entry.vigilattr.readonly):
+        if (not hasattr(entry, "vigilattr") or entry.vigilattr is None or
+            entry.vigilattr.readonly or entry.value_ctrl is None
+           ):
             # not a real setting, just info
             logging.debug("Skipping the value %s", entry.name)
             continue
@@ -178,8 +178,9 @@ def preset_hq(entries):
                 ret[e] = et_value
 
         elif entry.name == "exposureTime":
-            if e in ret:  # already computed (by binning), just reuse that value
-                value = ret[e]
+            if entry in ret:  # already computed (by binning), just reuse that value
+                # We could just continue, but that'd skip the debug message
+                value = ret[entry]
 
         elif entry.name == "readoutRate":
             # the smallest, the less noise (and slower, but we don't care)
@@ -205,10 +206,12 @@ def preset_as_is(entries):
     returns (dict SettingEntries -> value): new value for each SettingEntry that
         should be modified
     """
+    logging.debug("Computing as-is preset")
     ret = {}
     for entry in entries:
-        if (not hasattr(entry, "vigilattr") or entry.vigilattr is None
-            or entry.vigilattr.readonly):
+        if (not hasattr(entry, "vigilattr") or entry.vigilattr is None or
+            entry.vigilattr.readonly or entry.value_ctrl is None
+           ):
             # not a real setting, just info
             logging.debug("Skipping the value %s", entry.name)
             continue
