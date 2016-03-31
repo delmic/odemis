@@ -469,17 +469,19 @@ class Controller(object):
 
             success = self.recoverTimeout()
             if success:
-                logging.warning("Controller %d timeout after '%s', but recovered.",
+                logging.warning("Controller %s timeout after '%s', but recovered.",
                                 self.address, com.encode('string_escape'))
                 # try one more time
                 lines = self.busacc.sendQueryCommand(self.address, com)
             else:
-                raise IOError("Controller %d timeout after '%s', not recovered." %
+                logging.error("Controller %s timeout after '%s', not recovered.",
+                                self.address, com.encode('string_escape'))
+                raise IOError("Controller %s timeout after '%s', not recovered." %
                               (self.address, com.encode('string_escape')))
 
         return lines
 
-    err_ans_re = r"(-?\d+)$" # ex: ("0 1 ")[-54](\n)
+    re_err_ans = r"(-?\d+)$" # ex: ("0 1 ")[-54](\n)
     def recoverTimeout(self):
         """
         Try to recover from error in the controller state
@@ -487,30 +489,44 @@ class Controller(object):
         raise PIGCSError: if the timeout was due to a controller error (in which
             case the controller will be set back to working state if possible)
         """
-        self.busacc.flushInput()
-
+        logging.debug("Trying to recover controller %s from timeout", self.address)
         # TODO: update the .state of the component to HwError
 
-        # It makes the controller more comfortable...
+        # Reading error code makes the controller more comfortable...
         try:
-            resp = self.busacc.sendQueryCommand(self.address, "ERR?\n")
-            m = re.match(self.err_ans_re, resp)
-            if m: # looks like an answer to err?
-                err = int(m.group(1))
-                if err == 0:
-                    return True
-                else:
-                    raise PIGCSError(err)
+            for i in range(2):
+                self.busacc.flushInput()
+                resp = self.busacc.sendQueryCommand(self.address, "ERR?\n")
+
+                if isinstance(resp, list):
+                    logging.debug("Got multi-line answer, will try again")
+                    continue
+
+                m = re.match(self.re_err_ans, resp)
+                if m:  # looks like an answer to err?
+                    err = int(m.group(1))
+                    if err == 0:
+                        return True
+                    else:
+                        # Everything is fine, it's probably just that the
+                        # original command was not accepted
+                        raise PIGCSError(err)
+
+                logging.debug("Controller returned weird answer, will try harder to recover")
         except IOError:
             pass
 
         # We timed out again, try harder: reboot
+        logging.debug("Trying harder to recover by rebooting controller")
         self.Reboot()
-        self.busacc.sendOrderCommand(self.address, "ERR?\n")
         try:
             resp = self.busacc.sendQueryCommand(self.address, "ERR?\n")
-            if re.match(self.err_ans_re, resp): # looks like an answer to err?
+            if re.match(self.re_err_ans, resp): # looks like an answer to err?
                 # TODO Check if error == 307 or 308?
+                err = int(m.group(1))
+                if err != 0:
+                    logging.warning("Controller %s still has error %d after reboot",
+                                    self.address, err)
                 return True
         except IOError:
             pass
