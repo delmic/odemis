@@ -968,7 +968,8 @@ class StreamView(View):
                     logging.info("Still %d pending futures for focuser %s",
                                  len(fpending), focuser.name)
                     try:
-                        fpending[0].result()
+                        # Wait until all the moves but the last are over
+                        fpending[-1].result()
                     except Exception:
                         logging.info("Failed to apply focus move", exc_info=1)
 
