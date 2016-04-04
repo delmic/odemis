@@ -25,11 +25,11 @@ import Queue
 from concurrent.futures import CancelledError
 import glob
 import logging
-from odemis import model, util
+from odemis import model
 from odemis.model import isasync, CancellableFuture, CancellableThreadPoolExecutor
 from odemis.util import driver, TimeoutError
 import os
-import random
+# import random
 import re
 import serial
 import socket
@@ -38,11 +38,17 @@ import time
 
 
 # Driver to handle PI's piezo motor controllers that follow the 'GCS' (General
-# Command Set). In particular it handle the PI E-861 controller. Information can
-# be found the manual E-861_User_PZ205E121.pdf (p.107). See PIRedStone for the PI C-170.
+# Command Set). In particular it handles the PI E-861, C-867 and E-725 controllers.
+# Information can be found the manual E-861_User_PZ205E121.pdf (p.107).
+# For the PI C-170 aka "redstone", see the pi driver.
+# Note that although they officially support the 'command set', each controller
+# type (and firmware) has a subset of commands supported, has different parameters
+# and even slightly different way to expect commands and to send answers.
 #
+# It can access the controllers over RS-232, (serial over) USB and TCP/IP.
 # In a daisy-chain, connected via USB or via RS-232, there must be one
 # controller with address 1 (=DIP 1111). There is also a broadcast address: 255.
+# In _some_ TCP/IP configuration, there is a master controller at address 254.
 #
 # The controller contains many parameters in flash memory. These parameters must
 # have been previously written correctly to fit the stage it is driving. This
@@ -53,11 +59,13 @@ import time
 # memory. (Can also be done with the WPA command and password "100".)
 # In particular, for closed-loop stages, ensure that the settling windows and time
 # are correctly set so that a move is considered on target quickly (< 1 s).
+# With Odemis, the 'piconfig' utility can also be used to read and write the
+# persistent memory.
 #
-# The controller support closed-loop mode (i.e., absolute positioning) but only
-# if it is associated to a sensor (not software detectable). It can also work in
-# open-loop mode but to avoid damaging the hardware (which is moved by this
-# actuator):
+# The controller supports closed-loop mode (i.e., absolute positioning) but only
+# if it is associated to a sensor (not software detectable). When the hardware
+# has no sensor, the controller should be used only in open-loop mode, to avoid
+# damaging the actuator. So when there is no sensor:
 # * Do not switch servo on (SVO command)
 # * Do not send commands for closed-loop motion, like MOV or MVR
 # * Do not send the open-loop commands OMA and OMR, since they
@@ -66,7 +74,6 @@ import time
 # The controller accepts several baud rates. We choose 38400 (DIP=01) as it's fast
 # and it seems accepted by every version. Other settings are 8 data, 1 stop,
 # no parity.
-#
 #
 # In open-loop, the controller has 2 ways to move the actuators:
 #  * Nanostepping: high-speed, and long distance
@@ -84,28 +91,23 @@ import time
 # approximately the minimum to move, and 10V is the maximum. Voltage is more or
 # less linear between -32766 and 32766 -> -10 and 10V. So the distance moved
 # depends on the time the SMO is set, which is obviously very imprecise.
+# The recommended maximum step frequency is 800 Hz.
 #
 # In closed-loop, it's almost all automagical.
 # There are two modes in closed-loop: before and after referencing. Referencing
 # consists in going to at least one "reference" point so that the actual position
 # is known.
 #  * Non referenced: that's the only one possible just after boot. It's only
-#    possible to do relative moves.
+#    possible to do relative moves. Just a sensor (which indicates a distance)
+#    is needed.
 #  * Referenced: both absolute and relative moves are possible. It's the default
-#    mode.
+#    mode. In addition to the sensor, the hardware will also include a reference
+#    switch (which indicates a point, usually in the middle) and/or 2 limit
+#    switches (which indicate the borders).
 # The problem with referencing is that for some cases, it might be dangerous to
 # move the actuator, so a user feedback is needed. This means an explicit request
 # via the API must be done before this is going on, and stopping must be possible.
 # In addition, in many cases, relative move is sufficient.
-# Note that for the closed-loop to work, in addition to the actuator there must
-# be:
-#   * a sensor (which indicates a distance)
-#   * a reference switch (which indicates a point, usually in the middle)
-#   * 2 limit switches (which indicate the borders)
-# Most of the time, all of these are present, but the controller can do with just
-# either the ref switch or the limit switches.
-#
-# The recommended maximum step frequency is 800 Hz.
 #
 # The architecture of the driver relies on four main classes:
 #  * Controller: represent one controller with one or several axes (E-861 has only
@@ -118,16 +120,17 @@ import time
 #  * ActionManager: handles all the actions (move/stop) sent to the controller so
 #     that the asynchronous ones are ordered.
 #
-# In the typical usage, Odemis ask to moveRel() an axis to the Bus. The Bus converts
-# it into an action, returns a Future and queue the action on the ActionManager.
-# When the Controller is free, the ActionManager pick the next action and convert
-# it into a command for the Controller, which sends it to the actual PI controller
-# and waits for it to finish.
+# In the typical usage, Odemis asks to moveRel() an axis to the Bus. The Bus converts
+# it into an action, returns a Future and queue the action on the Executor.
+# When the Controller is free, the Executor picks the next action, call the right
+# method which converts it into a command for the Controller, which sends it to
+# the actual PI controller and waits for it to finish.
 #
 # Note: in some rare cases, the controller might not answer to commands correctly,
 # reporting error 555. In that case, it's possible to do a factory reset with the
 # hidden command (which must be followed by the reconfiguration of the parameters):
 # zzz 100 parameter
+
 class PIGCSError(StandardError):
 
     def __init__(self, errno, *args, **kwargs):
@@ -461,23 +464,26 @@ class Controller(object):
         return (string or list of strings): the report without prefix
            (e.g.,"0 1") nor newline. If answer is multiline: returns a list of each line
         """
-        try:
-            lines = self.busacc.sendQueryCommand(self.address, com)
-        except IOError:
-            if not self._try_recover:
-                raise
-
-            success = self.recoverTimeout()
-            if success:
-                logging.warning("Controller %s timeout after '%s', but recovered.",
-                                self.address, com.encode('string_escape'))
-                # try one more time
+        # Hold the lock until we get an _correct_ answer, so that if recovery
+        # is needed, it's not messed up by other communications
+        with self.busacc.ser_access:
+            try:
                 lines = self.busacc.sendQueryCommand(self.address, com)
-            else:
-                logging.error("Controller %s timeout after '%s', not recovered.",
-                                self.address, com.encode('string_escape'))
-                raise IOError("Controller %s timeout after '%s', not recovered." %
-                              (self.address, com.encode('string_escape')))
+            except IOError:
+                if not self._try_recover:
+                    raise
+
+                success = self.recoverTimeout()
+                if success:
+                    logging.warning("Controller %s timeout after '%s', but recovered.",
+                                    self.address, com.encode('string_escape'))
+                    # try one more time (and it has to work this time)
+                    lines = self.busacc.sendQueryCommand(self.address, com)
+                else:
+                    logging.error("Controller %s timeout after '%s', not recovered.",
+                                  self.address, com.encode('string_escape'))
+                    raise IOError("Controller %s timeout after '%s', not recovered." %
+                                  (self.address, com.encode('string_escape')))
 
         return lines
 
@@ -489,7 +495,7 @@ class Controller(object):
         raise PIGCSError: if the timeout was due to a controller error (in which
             case the controller will be set back to working state if possible)
         """
-        logging.debug("Trying to recover controller %s from timeout", self.address)
+        logging.warning("Trying to recover controller %s from timeout", self.address)
         # TODO: update the .state of the component to HwError
 
         # Reading error code makes the controller more comfortable...
@@ -521,7 +527,8 @@ class Controller(object):
         self.Reboot()
         try:
             resp = self.busacc.sendQueryCommand(self.address, "ERR?\n")
-            if re.match(self.re_err_ans, resp): # looks like an answer to err?
+            m = re.match(self.re_err_ans, resp)
+            if m:  # looks like an answer to err?
                 # TODO Check if error == 307 or 308?
                 err = int(m.group(1))
                 if err != 0:
@@ -898,17 +905,18 @@ class Controller(object):
         """
         # HLT (Stop All Axes): immediate stop (high deceleration != HLT)
         # set error code to 10
-        if axis is None:
-            self._sendOrderCommand("HLT\n")
-        else:
-            assert(axis in self._channels)
-            self._sendOrderCommand("HLT %d\n" % axis)
-#        time.sleep(1) # give it some time to stop before it's accessible again
+        # => Hold the access to the serial bus until we get rid of the error
+        with self.busacc.ser_access:
+            if axis is None:
+                self._sendOrderCommand("HLT\n")
+            else:
+                assert(axis in self._channels)
+                self._sendOrderCommand("HLT %d\n" % axis)
 
-        # need to recover from the "error", otherwise nothing works
-        error = self.GetErrorNum()
-        if error != 10:  # PI_CNTR_STOP
-            logging.warning("Stopped controller %s, but error code is %d instead of 10", self.address, error)
+            # need to recover from the "error", otherwise nothing works
+            error = self.GetErrorNum()
+            if error != 10:  # PI_CNTR_STOP
+                logging.warning("Stopped controller %s, but error code is %d instead of 10", self.address, error)
 
     def Stop(self):
         """
@@ -917,12 +925,15 @@ class Controller(object):
         """
         # STP = "\x18" (Stop All Axes): immediate stop (high deceleration != HLT)
         # set error code to 10
-        self._sendOrderCommand("\x18")
+        # => Hold the access to the serial bus until we get rid of the error
+        # TODO: could be a lock just on this controller
+        with self.busacc.ser_access:
+            self._sendOrderCommand("\x18")
 
-        # need to recover from the "error", otherwise nothing works
-        error = self.GetErrorNum()
-        if error != 10: #PI_CNTR_STOP
-            logging.warning("Stopped controller %s, but error code is %d instead of 10", self.address, error)
+            # need to recover from the "error", otherwise nothing works
+            error = self.GetErrorNum()
+            if error != 10:  # PI_CNTR_STOP
+                logging.warning("Stopped controller %s, but error code is %d instead of 10", self.address, error)
 
     def SetServo(self, axis, activated):
         """
@@ -1836,7 +1847,7 @@ class CLRelController(Controller):
                               "millimeters (mm) is supported." % (address, unit))
 
             # To be taken when reading position or affecting encorder reading
-            self._pos_lock[a] = threading.Lock()
+            self._pos_lock[a] = threading.RLock()
 
             # We have two modes for auto_suspend:
             #  * Servo and encoder off: used when encoders can be turned off.
@@ -2769,6 +2780,15 @@ class Bus(model.Actuator):
         # this set ._axes
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
 
+        # It seems it can cause garbage data with E-861/IP if multiple commands
+        # are sent (ex, ERR + ...) and almost at the same time, another axis is
+        # sent command (ex, OSM). Anyway, it doesn't make much sense to refresh
+        # the position while a move is on going (which already takes care of
+        # updating the position for the axes that matter).
+        # To be hold when updating position, or moving axis, so they don't
+        # interfere with each other
+        self._axis_moving_lock = threading.Lock()
+
         # TODO: allow to override the unit (per axis)
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
         self.position = model.VigilantAttribute({}, unit="m", readonly=True)
@@ -2822,7 +2842,10 @@ class Bus(model.Actuator):
         npos = {}
         for a, (controller, channel) in self._axis_to_cc.items():
             if axes is None or a in axes:
-                npos[a] = controller.getPosition(channel)
+                try:
+                    npos[a] = controller.getPosition(channel)
+                except PIGCSError:
+                    logging.warning("Failed to update position of axis %s", a, exc_info=True)
 
         pos.update(self._applyInversion(npos))
         logging.debug("Reporting new position at %s", pos)
@@ -2847,12 +2870,9 @@ class Bus(model.Actuator):
                 if self._pos_updater_stop.wait(0.3):
                     return
 
-                # TODO: not entirely sure if that can cause issues. It seems to
-                # cause garbage data with E-861/IP if multiple commands are sent
-                # (ex, ERR + ...) and almost at the same time, another axis is
-                # sent command (ex, OSM).
-                logging.debug("Will refresh position of axes %s", self._cl_axes)
-                self._updatePosition(self._cl_axes)
+                with self._axis_moving_lock:
+                    logging.debug("Will refresh position of axes %s", self._cl_axes)
+                    self._updatePosition(self._cl_axes)
 
                 self._pos_needs_update.clear()
         except Exception:
@@ -2957,7 +2977,7 @@ class Bus(model.Actuator):
         future (Future): the future it handles
         shift (dict str -> float): axis name -> relative target position
         """
-        with future._moving_lock:
+        with future._moving_lock, self._axis_moving_lock:
             # Prepare the encoder of all the axes first (non-blocking)
             for an, v in shift.items():
                 controller, channel = self._axis_to_cc[an]
@@ -2979,10 +2999,10 @@ class Bus(model.Actuator):
                                                       controller.getAccel(channel))
                     logging.debug("Expecting to move %g m = %g s", dist, dur)
                     end = max(time.time() + dur, end)
-            except PIGCSError:
+            except PIGCSError as ex:
                 # If one axis failed, better be safe than sorry: stop the other
                 # ones too.
-                logging.info("Failure during start of move, will cancel all of it.")
+                logging.info("Failure during start of move (%s), will cancel all of it.", ex)
                 ctlrs = set(self._axis_to_cc[an][0] for an in moving_axes)
                 for controller in ctlrs:
                     try:
@@ -3001,7 +3021,7 @@ class Bus(model.Actuator):
         future (Future): the future it handles
         pos (dict str -> float): axis name -> absolute target position
         """
-        with future._moving_lock:
+        with future._moving_lock, self._axis_moving_lock:
             for an, v in pos.items():
                 controller, channel = self._axis_to_cc[an]
                 if hasattr(controller, "prepareAxisForMove"):
@@ -3362,7 +3382,7 @@ class SerialBusAccesser(object):
     def __init__(self, ser):
         self.serial = ser
         # to acquire before sending anything on the serial port
-        self.ser_access = threading.Lock()
+        self.ser_access = threading.RLock()
         self.driverInfo = "serial driver: %s" % (driver.getSerialDriver(ser.port),)
 
     def terminate(self):
@@ -3512,7 +3532,7 @@ class IPBusAccesser(object):
 
         self.socket = socket
         # to acquire before sending anything on the socket
-        self.ser_access = threading.Lock()
+        self.ser_access = threading.RLock()
 
         if master is None:
             self.driverInfo = "TCP/IP connection"
@@ -3629,6 +3649,9 @@ class IPBusAccesser(object):
                                 logging.debug("Reconcidering previous line as beginning of multi-line")
                                 ret = ret[:-1]
                             else:
+                                # TODO: maybe we got some garbage data from before,
+                                # check if there is already data available that fits the
+                                # prefix. (=> keep reading but with a short timeout)
                                 logging.debug("Failed to decode answer '%s'", l.encode('string_escape'))
                                 raise IOError("Report prefix unexpected after '%s': '%s'." % (full_com, l))
 
@@ -4031,6 +4054,9 @@ class E861Simulator(object):
                 axis = int(args[1])
                 if axis != 1:
                     raise SimulatedError(15)
+#                 if 0 == random.randint(0, 20):  # To test with issue about generated garbage
+#                     self._output_buf += "\n\x8a\xea\x82r\x82\xa2\x9a\xa2\xca\x8a\n"
+#                 else:
                 out = "%s=%s" % (args[1], self._get_cur_pos_cl())
             elif args[0] == "MOV?" and len(args) == 2:  # Closed-Loop target position query
                 axis = int(args[1])
@@ -4098,7 +4124,7 @@ class E861Simulator(object):
                        "0x3=\t0\t1\tINT\tmotorcontroller\tD term 1 \n" +
                        "0x32=\t0\t1\tINT\tmotorcontroller\thas limit\t(0=limitswitchs 1=no limitswitchs) \n" +
                        "0x3C=\t0\t1\tCHAR\tmotorcontroller\tStagename \n" +
-                       "0x56=\t0\t1\tCHAR\tencoder\tactive \n" +
+                       # "0x56=\t0\t1\tCHAR\tencoder\tactive \n" + # Uncomment to simulate a C-867
                        "0x7000000=\t0\t1\tFLOAT\tmotorcontroller\ttravel range minimum \n" +
                        "0x7000002=\t0\t1\tFLOAT\tmotorcontroller\tslew rate \n" +
                        "0x7000601=\t0\t1\tCHAR\tunit\tuser unit \n" +
