@@ -374,6 +374,9 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
                 "control_type": odemis.gui.CONTROL_RADIO,
                 "choices": {2.1, 2.7, 3.3},  # some weird unit
             },
+            "scale": {  # <= 128x128 doesn't work well with the Phenom => forbid scale 16
+                "range": (1, 8),
+            },
             "resolution":  # Read-only (and not hidden) because it affects acq time
             {
                 "control_type": odemis.gui.CONTROL_READONLY,
