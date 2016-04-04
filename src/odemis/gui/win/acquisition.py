@@ -439,7 +439,6 @@ class AcquisitionDialog(xrcfr_acq):
 
         logging.info("Acquire button clicked, starting acquisition")
 
-        self._main_data_model.is_acquiring.value = True
         self.btn_secom_acquire.Disable()
 
         # disable estimation time updates during acquisition
@@ -486,7 +485,6 @@ class AcquisitionDialog(xrcfr_acq):
     def on_acquisition_done(self, future):
         """ Callback called when the acquisition is finished (either successfully or cancelled) """
         self._set_fan(True)  # Turn the fan back on
-        self._main_data_model.is_acquiring.value = False
 
         # bind button back to direct closure
         self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_close)

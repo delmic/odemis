@@ -349,9 +349,12 @@ class SecomAcquiController(object):
     def on_acquire(self, evt):
         self.open_acquisition_dialog()
 
-
     def open_acquisition_dialog(self):
         secom_live_tab = self._tab_data_model.main.getTabByName("secom_live")
+
+        # Indicate we are acquiring, especially important for the SEM which
+        # need to get the external signal to not scan (cf MicroscopeController)
+        self._tab_data_model.main.is_acquiring.value = True
 
         # save the original settings
         settingsbar_controller = secom_live_tab.settingsbar_controller
@@ -361,7 +364,6 @@ class SecomAcquiController(object):
         orig_settings = preset_as_is(orig_entries)
         settingsbar_controller.pause()
         settingsbar_controller.enable(False)
-        # TODO: also pause the MicroscopeViews
 
         # pause all the live acquisitions
         streambar_controller = secom_live_tab.streambar_controller
@@ -370,10 +372,10 @@ class SecomAcquiController(object):
         streambar_controller.enable(False)
 
         # create the dialog
-        acq_dialog = AcquisitionDialog(self._tab_panel.Parent, self._tab_data_model)
-        parent_size = [v * 0.77 for v in self._tab_panel.Parent.GetSize()]
-
         try:
+            acq_dialog = AcquisitionDialog(self._tab_panel.Parent, self._tab_data_model)
+            parent_size = [v * 0.77 for v in self._tab_panel.Parent.GetSize()]
+
             acq_dialog.SetSize(parent_size)
             acq_dialog.Center()
             action = acq_dialog.ShowModal()
@@ -388,8 +390,7 @@ class SecomAcquiController(object):
             streambar_controller.enable(True)
             streambar_controller.resume()
 
-            # Make sure that the acquisition button is enabled again.
-            self._tab_panel.btn_secom_acquire.Enable()
+            self._tab_data_model.main.is_acquiring.value = False
 
         if action == wx.ID_OPEN:
             wx.GetApp().tab_controller.open_tab('analysis')
