@@ -1087,7 +1087,7 @@ class Detector(model.Detector):
 
                 # Use the metadata from the string to update some metadata
                 # metadata[model.MD_POS] = (img_str.aAcqState.position.x, img_str.aAcqState.position.y)
-                metadata[model.MD_EBEAM_VOLTAGE] = img_str.aAcqState.highVoltage
+                metadata[model.MD_EBEAM_VOLTAGE] = abs(img_str.aAcqState.highVoltage)
                 metadata[model.MD_EBEAM_CURRENT] = img_str.aAcqState.emissionCurrent
                 metadata[model.MD_ROTATION] = -img_str.aAcqState.rotation
                 metadata[model.MD_DWELL_TIME] = img_str.aAcqState.dwellTime * img_str.aAcqState.integrations
