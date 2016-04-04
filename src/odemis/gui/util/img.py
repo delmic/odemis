@@ -1464,7 +1464,7 @@ def get_ordered_images(streams, rgb=True):
         if data_raw.metadata.get(model.MD_LIGHT_POWER, None):
             stream_data.append(units.readable_str(data_raw.metadata[model.MD_LIGHT_POWER], "W", sig=3))
         if data_raw.metadata.get(model.MD_EBEAM_VOLTAGE, None):
-            stream_data.append(units.readable_str(data_raw.metadata[model.MD_EBEAM_VOLTAGE], "V", sig=3))
+            stream_data.append(units.readable_str(abs(data_raw.metadata[model.MD_EBEAM_VOLTAGE]), "V", sig=3))
         if data_raw.metadata.get(model.MD_EBEAM_CURRENT, None):
             stream_data.append(units.readable_str(data_raw.metadata[model.MD_EBEAM_CURRENT], "A", sig=3))
         if data_raw.metadata.get(model.MD_IN_WL, None):
