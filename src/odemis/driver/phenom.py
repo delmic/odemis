@@ -435,6 +435,7 @@ class Scanner(model.Emitter):
 
     def _setHorizontalFoV(self, value):
         # Make sure you are in the current range
+        logging.debug("Setting new hfw to: %f", value)
         try:
             rng = self.parent._device.GetSEMHFWRange()
             new_fov = numpy.clip(value, rng.min, rng.max)

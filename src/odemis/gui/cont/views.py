@@ -293,8 +293,8 @@ class OverviewController(object):
         self._data_model = tab_data
         self.overview_canvas = overview_canvas
 
-        if tab_data.main.stage:
-            tab_data.main.stage.position.subscribe(self.on_stage_pos_change, init=True)
+        if tab_data.main.overview_stage:
+            tab_data.main.overview_stage.position.subscribe(self.on_stage_pos_change, init=True)
 
     @call_in_wx_main
     def on_stage_pos_change(self, p_pos):

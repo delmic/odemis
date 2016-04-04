@@ -879,6 +879,13 @@ class DelphiStateController(SecomStateController):
             model.MD_ROTATION_COR: srot
         })
 
+        # also update the invert stage used in overview navigation
+        self._main_data.overview_stage.updateMetadata({
+            model.MD_POS_COR: (-strans[0], -strans[1]),
+            model.MD_PIXEL_SIZE_COR: (1 / sscale[0], 1 / sscale[1]),
+            model.MD_ROTATION_COR:-srot
+        })
+
         # use image scaling as scaling correction metadata to ccd
         self._main_data.ccd.updateMetadata({
             model.MD_PIXEL_SIZE_COR: iscale,

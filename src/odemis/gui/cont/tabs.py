@@ -479,7 +479,7 @@ class SecomStreamsTab(Tab):
             vpv[viewports[4]] = {
                 "cls": guimod.OverviewView,
                 "name": "Overview",
-                "stage": main_data.stage,
+                "stage": main_data.overview_stage,
                 "stream_classes": (RGBCameraStream, BrightfieldStream),
             }
 
