@@ -65,9 +65,18 @@ def tune(cont, axis):
     cont.SetRecordConfig(1, axis, 1)
     cont.SetRecordConfig(2, axis, 2)
 
-    # To change speed/acc:
-    vel = 2e-3  # m/s
-    acc = 3e-3  # m/s²
+    # Get speed and acceleration
+    # TODO: allow to change too
+    try:
+        vel = cont.GetCLVelocity(axis) * upm
+    except Exception:
+        vel = 2e-3  # m/s
+    try:
+        acc = cont.GetCLAcceleration(axis) * upm
+    except Exception:
+        acc = 3e-3  # m/s²
+
+    # Force to be what we think it is
     cont.SetCLVelocity(axis, vel / upm)
     cont.SetCLAcceleration(axis, acc / upm)
     cont.SetCLDeceleration(axis, acc / upm)

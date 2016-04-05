@@ -2164,6 +2164,11 @@ class CLRelController(Controller):
         assert(axis in self._channels)
         self._acquireAxis(axis)
 
+        # TODO: instead of handling it ad-hoc for each series of message, put
+        # the trick in the bus accesser: if the last command was an order to
+        # another controller, first force a ERR? on that previous controller,
+        # and then send the requested query.
+
         # The E861 over the network controller send (sometimes) garbage if
         # several controllers get an OSM command without any query in between.
         # This ensures there is one query after each command.
