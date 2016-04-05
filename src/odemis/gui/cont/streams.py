@@ -1001,6 +1001,27 @@ class StreamBarController(object):
         se = self.addFluo(**kwargs)
         se.stream_panel.set_focus_on_label()
 
+    def _ensure_power_non_null(self, stream):
+        """
+        Ensure the emtPower VA of a stream is not 0. The goal is to make sure
+        that when the stream will start playing, directly some data will be
+        obtained (to avoid confusing the user). In practice, if it is 0, a small
+        value (10%) will be set.
+        stream (Stream): the stream with a emtPower VA
+        """
+        if stream.emtPower.value > 0:
+            return
+
+        # Automatically picks some power if it was at 0 W (due to the stream
+        # defaulting to the current hardware settings), so that the user is not
+        # confused when playing the stream and nothing happens.
+        if hasattr(stream.emtPower, "range"):
+            stream.emtPower.value = stream.emtPower.range[1] * 0.1
+        elif hasattr(stream.emtPower, "choices"):
+            stream.emtPower.value = sorted(stream.emtPower.choices)[1]
+        else:
+            logging.info("Stream emtPower has no info about min/max")
+
     def addFluo(self, **kwargs):
         """
         Creates a new fluorescence stream and a stream panel in the stream bar
@@ -1026,14 +1047,12 @@ class StreamBarController(object):
             detvas={"exposureTime"},
             emtvas={"power"}
         )
+        self._ensure_power_non_null(s)
 
         # TODO: automatically pick a good set of excitation/emission which is
         # not yet used by any FluoStream (or the values from the last stream
         # deleted?) Or is it better to just use the values fitting the current
         # hardware settings as it is now?
-
-        # TODO: just update power VA the same way as Brightfield, instead of
-        # doing the trick in the microscope controller.
 
         return self._add_stream(s, **kwargs)
 
@@ -1051,11 +1070,26 @@ class StreamBarController(object):
             detvas={"exposureTime"},
             emtvas={"power"}
         )
-        # Automatically picks some power if it was at 0 W (due to the stream
-        # defaulting to the current hardware settings), so that the user is not
-        # confused when playing the stream and nothing happens.
-        if s.emtPower.value == 0:
-            s.emtPower.value = s.emtPower.range[1] * 0.1
+        self._ensure_power_non_null(s)
+
+        return self._add_stream(s, **kwargs)
+
+    def addDarkfield(self, **kwargs):
+        """
+        Creates a new darkfield stream and panel in the stream bar
+        returns (StreamPanel): the stream panel created
+        """
+        # Note: it's also displayed as 'brightfield' stream
+        s = acqstream.BrightfieldStream(
+            "Dark-field",
+            self._main_data_model.ccd,
+            self._main_data_model.ccd.data,
+            self._main_data_model.backlight,
+            focuser=self._main_data_model.focus,
+            detvas={"exposureTime"},
+            emtvas={"power"}
+        )
+        self._ensure_power_non_null(s)
 
         return self._add_stream(s, **kwargs)
 
@@ -1536,16 +1570,19 @@ class SecomStreamsController(StreamBarController):
             # => multiple source? filter?
             self.add_action("Filtered colour", self._userAddFluo, fluor_capable)
 
-        # Bright-field
-        if self._main_data_model.brightlight and self._main_data_model.ccd:
-            def brightfield_capable():
-                enabled = self._main_data_model.chamberState.value in {guimodel.CHAMBER_VACUUM,
-                                                                       guimodel.CHAMBER_UNKNOWN}
-                view = self._tab_data_model.focussedView.value
-                compatible = view.is_compatible(acqstream.BrightfieldStream)
-                return enabled and compatible
+        # Bright-field & Dark-field are almost identical but for the emitter
+        def brightfield_capable():
+            enabled = self._main_data_model.chamberState.value in {guimodel.CHAMBER_VACUUM,
+                                                                   guimodel.CHAMBER_UNKNOWN}
+            view = self._tab_data_model.focussedView.value
+            compatible = view.is_compatible(acqstream.BrightfieldStream)
+            return enabled and compatible
 
+        if self._main_data_model.brightlight and self._main_data_model.ccd:
             self.add_action("Bright-field", self.addBrightfield, brightfield_capable)
+
+        if self._main_data_model.backlight and self._main_data_model.ccd:
+            self.add_action("Dark-field", self.addDarkfield, brightfield_capable)
 
         def sem_capable():
             """ Check if focussed view is compatible with a SEM stream """

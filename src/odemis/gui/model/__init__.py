@@ -125,6 +125,7 @@ class MainGUIData(object):
         "chamber": "chamber",
         "light": "light",
         "brightlight": "brightlight",
+        "backlight": "backlight",
         "filter": "light_filter",
         "cl-filter": "cl_filter",
         "lens": "lens",
@@ -155,6 +156,7 @@ class MainGUIData(object):
         self.fibaligner = None  # actuator to move/calibrate the fiber (SPARC)
         self.light = None  # epi-fluorescence light (SECOM/DELPHI)
         self.brightlight = None  # special light for white illumination (SECOM) or calibration (SPARC)
+        self.backlight = None  # for dark field illumination (SECOM)
         self.light_filter = None  # emission light filter for SECOM/output filter for SPARC
         self.cl_filter = None  # light filter for SPARCv2 on the CL components
         self.lens = None  # Optical lens for SECOM/focus lens for the SPARC

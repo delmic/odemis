@@ -259,8 +259,7 @@ class SecomStateController(MicroscopeStateController):
         self._active_prev_stream = None
 
         # Turn off the light, but set the power to a nice default value
-        # TODO: once optical streams have local emtPower VA, just set the
-        # default value to 10% (or previous stream)
+        # TODO: do the same with the brightlight and backlight
         light = self._main_data.light
         if light is not None:
             # Turn off emissions
@@ -270,21 +269,6 @@ class SecomStateController(MicroscopeStateController):
             except AttributeError:
                 # No emission ? => turn off the power as only way to stop light
                 light.power.value = 0
-            else:
-                # If power is above 0 already, it's probably the user who wants
-                # to force to a specific value, respect that.
-                if light.power.value == 0:
-                    # pick a nice value (= slightly more than 0)
-                    try:
-                        # if continuous: 10 %
-                        light.power.value = light.power.range[1] * 0.1
-                    except (AttributeError, model.NotApplicableError):
-                        try:
-                            # if enumerated: the second lowest
-                            light.power.value = sorted(light.power.choices)[1]
-                        except (AttributeError, model.NotApplicableError):
-                            logging.error("Unknown light power range, setting to 1 W")
-                            light.power.value = 1
 
         # E-beam management
         # The SEM driver should do the right thing in most cases (ie, turn on
