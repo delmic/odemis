@@ -2025,9 +2025,14 @@ class CLRelController(Controller):
         else:
             # TODO: also start servo if it's off? Or not a big deal here?
             # Force PID to 1, 0, 0
-            self.SetParameter(axis, 1, 1, check=False)  # P
-            self.SetParameter(axis, 2, 0, check=False)  # I
-            self.SetParameter(axis, 3, 0, check=False)  # D
+            with self.busacc.ser_access:  # To avoid garbage when using IP com
+                self.SetParameter(axis, 1, 1, check=False)  # P
+                self.SetParameter(axis, 2, 0, check=False)  # I
+                self.SetParameter(axis, 3, 0, check=False)  # D
+                try:
+                    self.checkError()
+                except PIGCSError as ex:
+                    logging.error("Changing PID seems to have failed: %s", ex)
 
     def _resumeAxis(self, axis):
         if self._servo_suspend:
@@ -2045,10 +2050,15 @@ class CLRelController(Controller):
                 self._startServo(axis)
 
             # Put back PID values
-            P, I, D = self._pid
-            self.SetParameter(axis, 1, P, check=False)  # P
-            self.SetParameter(axis, 2, I, check=False)  # I
-            self.SetParameter(axis, 3, D, check=False)  # D
+            with self.busacc.ser_access:  # To avoid garbage when using IP com
+                P, I, D = self._pid
+                self.SetParameter(axis, 1, P, check=False)  # P
+                self.SetParameter(axis, 2, I, check=False)  # I
+                self.SetParameter(axis, 3, D, check=False)  # D
+                try:
+                    self.checkError()
+                except PIGCSError as ex:
+                    logging.error("Changing PID back seems to have failed: %s", ex)
 
     def _suspend_mng_run(self, axis):
         """
@@ -2154,24 +2164,24 @@ class CLRelController(Controller):
         assert(axis in self._channels)
         self._acquireAxis(axis)
 
-        self._updateSpeedAccel(axis)
-        # We trust the caller that it knows it's in range
-        # (worst case the hardware will not go further)
-        self.MoveRel(axis, distance / self._upm[axis])
-
-        # In case it's an update, the actual distance can be different
-        # Note: merging the queries doesn't seem to save time... actually it
-        # appears to even slow down the answers (maybe because the controller
-        # waits for more answers to send)
-        pos = self.getPosition(axis)
-        tpos = self.getTargetPosition(axis)
-        act_dist = tpos - pos
-
-        # Warning: this is not just what is looks like!
         # The E861 over the network controller send (sometimes) garbage if
         # several controllers get an OSM command without any query in between.
         # This ensures there is one query after each command.
-        self.checkError()
+        with self.busacc.ser_access:
+            self._updateSpeedAccel(axis)
+            # We trust the caller that it knows it's in range
+            # (worst case the hardware will not go further)
+            self.MoveRel(axis, distance / self._upm[axis])
+
+            # In case it's an update, the actual distance can be different
+            # Note: merging the queries doesn't seem to save time... actually it
+            # appears to even slow down the answers (maybe because the controller
+            # waits for more answers to send)
+            pos = self.getPosition(axis)
+            tpos = self.getTargetPosition(axis)
+            act_dist = tpos - pos
+
+            self.checkError()
 
         return act_dist
 
@@ -2182,27 +2192,27 @@ class CLRelController(Controller):
         assert(axis in self._channels)
         self._acquireAxis(axis)
 
-        self._updateSpeedAccel(axis)
-        # We trust the caller that it knows it's in range
-        # (worst case the hardware will not go further)
-
-        # Absolute move is only legal if already referenced.
-        if not self.IsReferenced(axis):  # TODO: cache
-            # MoveRel adds to the _target_ position (matters in case of move update)
-            tpos = self.getTargetPosition(axis)
-            distance = position - tpos
-            self.MoveRel(axis, distance / self._upm[axis])
-        else:
-            self.MoveAbs(axis, position / self._upm[axis])
-
-        old_pos = self.getPosition(axis)
-        distance = position - old_pos
-
-        # Warning: this is not just what is looks like!
         # The E861 over the network controller send (sometimes) garbage if
         # several controllers get an OSM command without any query in between.
         # This ensures there is one query after each command.
-        self.checkError()
+        with self.busacc.ser_access:
+            self._updateSpeedAccel(axis)
+            # We trust the caller that it knows it's in range
+            # (worst case the hardware will not go further)
+
+            # Absolute move is only legal if already referenced.
+            if not self.IsReferenced(axis):  # TODO: cache
+                # MoveRel adds to the _target_ position (matters in case of move update)
+                tpos = self.getTargetPosition(axis)
+                distance = position - tpos
+                self.MoveRel(axis, distance / self._upm[axis])
+            else:
+                self.MoveAbs(axis, position / self._upm[axis])
+
+            old_pos = self.getPosition(axis)
+            distance = position - old_pos
+
+            self.checkError()
 
         return distance
 
