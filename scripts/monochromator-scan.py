@@ -18,24 +18,24 @@ select spot mode, and pick the point you're interested.
 
 from __future__ import division
 
-from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
-    RUNNING
 import logging
 import math
 import numpy
-from odemis import dataio, model, acq
-from odemis.acq import stream
-from odemis.gui.conf import get_acqui_conf
-from odemis.gui.model import TOOL_SPOT
-from odemis.util import units
 import os
-import readline  # for nice editing in raw_input()
 import sys
 import threading
 import time
 import wx
 
+from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, RUNNING
+
+import odemis.gui
+from odemis import dataio, model, acq
+from odemis.acq import stream
+from odemis.gui.conf import get_acqui_conf
+from odemis.gui.model import TOOL_SPOT
 from odemis.gui.plugin import Plugin, AcquisitionDialog
+from odemis.util import units
 
 logging.getLogger().setLevel(logging.INFO)  # put "DEBUG" level for more messages
 
@@ -417,14 +417,16 @@ class MonoScanPlugin(Plugin):
     def start(self):
         # Error message if not in acquisition tab + spot mode
         ct = self.main_app.main_data.tab.value
-        if (ct.name != "sparc_acqui" or
+        if (
+            ct.name != "sparc_acqui" or
             ct.tab_data_model.tool.value != TOOL_SPOT or
             None in ct.tab_data_model.spotPosition.value
-           ):
+        ):
             logging.info("Failed to start monochromator scan as no spot is selected")
             dlg = wx.MessageDialog(self.main_app.main_frame,
                                    "No spot is currently selected.\n"
-                                   "You need to select the point where the spectrum will be acquired with monochromator scan.\n",
+                                   "You need to select the point where the spectrum will be "
+                                   "acquired with monochromator scan.\n",
                                    caption="Monochromator scan",
                                    style=wx.OK | wx.ICON_WARNING)
             dlg.ShowModal()
@@ -433,21 +435,24 @@ class MonoScanPlugin(Plugin):
 
         # Create a window
         dlg = AcquisitionDialog(self, "Monochromator scan acquisition",
-                                "Acquires a spectrum using the monochomator while scanning over multiple wavelengths.\n"
+                                "Acquires a spectrum using the monochomator while scanning over "
+                                "multiple wavelengths.\n\n"
                                 "Enter the settings and start the acquisition.")
 
         self.filename.value = self._get_new_filename()
         # TODO: use an ordered dict, to force the display order
-        dlg.addSettings(self, conf={"filename": {"control_type": "file"}})
-        dlg.addButton("Acquire", self.acquire)
+        dlg.addSettings(self, conf={"filename": {"control_type": odemis.gui.CONTROL_TEXT}})
         dlg.addButton("Cancel")
+        dlg.addButton("Acquire", self.acquire, face_colour='blue')
+
+        dlg.addStream(self._mchr_s)
 
         # Show the window, and wait until the acquisition is over
         ans = dlg.ShowModal()
 
         # The window is closed
         if ans == 0:
-            logging.info("Monochromator scan acqusition completed")
+            logging.info("Monochromator scan acquisition completed")
         elif ans == 1:
             logging.info("Monochromator scan acquisition cancelled")
 
