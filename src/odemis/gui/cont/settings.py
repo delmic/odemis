@@ -96,12 +96,13 @@ class SettingsController(object):
         for entry in [e for e in self.entries if e.value_ctrl]:
             entry.value_ctrl.Enable(enabled)
 
-    def add_browse_button(self, label, label_tl=None, clearlabel=None):
+    def add_browse_button(self, label, value=None, tooltip=None, clear=None):
         config = guiconf.get_acqui_conf()
-        lbl_ctrl, value_ctrl = self.panel.add_file_button(label, config.last_path, clearlabel)
+        lbl_ctrl, value_ctrl = self.panel.add_file_button(label, value or config.last_path, clear)
 
-        lbl_ctrl.SetToolTipString(label_tl)
-        value_ctrl.SetToolTipString(label_tl)
+        if tooltip is not None:
+            lbl_ctrl.SetToolTipString(tooltip)
+            value_ctrl.SetToolTipString(tooltip)
 
         # Add the corresponding setting entry
         ne = SettingEntry(name=label, lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl)
@@ -552,8 +553,8 @@ class AnalysisSettingsController(SettingsBarController):
         self._pnl_arfile = FileInfoSettingsController(self.tab_panel.fp_fileinfo, "")
         self._arfile_ctrl = self._pnl_arfile.add_browse_button(
             "AR background",
-            "Angle-resolved background acquisition file",
-            "None").value_ctrl
+            tooltip="Angle-resolved background acquisition file",
+            clear= "None").value_ctrl
         wildcards, _ = odemis.gui.util.formats_to_wildcards(odemis.dataio.get_available_formats(),
                                                             include_all=True)
         self._arfile_ctrl.SetWildcard(wildcards)
@@ -566,16 +567,16 @@ class AnalysisSettingsController(SettingsBarController):
         self._pnl_specfile = FileInfoSettingsController(self.tab_panel.fp_fileinfo, "")
         self._spec_bckfile_ctrl = self._pnl_specfile.add_browse_button(
             "Spec. background",
-            "Spectrum background correction file",
-            "None").value_ctrl
+            tooltip="Spectrum background correction file",
+            clear="None").value_ctrl
         self._spec_bckfile_ctrl.SetWildcard(wildcards)
         self._spec_bckfile_ctrl.Bind(EVT_FILE_SELECT, self._on_spec_bck_file_select)
         self.tab_data.spec_bck_cal.subscribe(self._on_spec_bck_cal, init=True)
 
         self._specfile_ctrl = self._pnl_specfile.add_browse_button(
             "Spec. correction",
-            "Spectrum efficiency correction file",
-            "None").value_ctrl
+            tooltip="Spectrum efficiency correction file",
+            clear="None").value_ctrl
         self._specfile_ctrl.SetWildcard(wildcards)
         self._pnl_specfile.hide_panel()
         self._specfile_ctrl.Bind(EVT_FILE_SELECT, self._on_spec_file_select)

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 01 Mar 2016
 
 @author: Éric Piel
@@ -8,12 +8,17 @@ Copyright © 2016 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License version 2 as published by the Free Software Foundation.
+Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU
+General Public License version 2 as published by the Free Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even
+the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
+Public License for more details.
 
-You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+You should have received a copy of the GNU General Public License along with Odemis. If not,
+see http://www.gnu.org/licenses/.
+
+"""
 
 from __future__ import division
 
@@ -24,10 +29,17 @@ import logging
 import os
 import wx
 from abc import ABCMeta, abstractmethod, abstractproperty
+from odemis.gui.cont.streams import StreamBarController
+
+from odemis.model import VigilantAttributeBase
 
 import odemis
+from odemis.gui.comp.buttons import ImageTextButton
+from odemis.gui.cont.settings import SettingsController
 from odemis.gui.main_xrc import xrcfr_plugin
 from odemis.gui.util import call_in_wx_main, get_home_folder
+from odemis.gui.util.widgets import ProgressiveFutureConnector
+from odemis.model import getVAs
 
 
 def find_plugins():
@@ -302,8 +314,10 @@ class AcquisitionDialog(xrcfr_plugin):
         self.canvas = None
         self.buttons = []  # The buttons
 
-        # Bind close button
-        self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_close)
+        self.setting_controller = SettingsController(self.fp_settings,
+                                                     "No settings defined")
+
+        self._acq_future_connector = None
 
         self.Fit()
 
@@ -312,48 +326,97 @@ class AcquisitionDialog(xrcfr_plugin):
         Adds settings as one widget on a line for each VigilantAttribute (VA) in
          the given object. Each setting entry created is added to .entries.
         objWithVA (object): an object with VAs.
+
         conf (None or dict of str->config): allows to override the automatic
           selection of the VA widget. See odemis.gui.conf.data for documentation.
+
         raise:
             LookupError: if no VA is found on the objWithVA
-        """
-        # TODO
-        pass
 
-    def addButton(self, label, callback=None):
+        """
+
+        vas = getVAs(objWithVA)
+
+        if not vas:
+            raise LookupError("No VAs found!")
+
+        for name, va in vas.iteritems():
+            set_conf = conf.get(name, {})
+
+            if 'control_type' in set_conf and set_conf['control_type'] == odemis.gui.CONTROL_FILE:
+                self.setting_controller.add_browse_button(name, va.value)
+            else:
+                self.setting_controller.add_setting_entry(name, va, None, conf=conf.get(name, None))
+
+    def addButton(self, label, callback=None, face_colour='def'):
         """
         Add a button at the bottom right of the window. If some buttons are already
         present, they are shifted to the left.
+
         label (str): text on the button,
         callback (None or callable): the function to be called when the button
           is pressed (with the dialog as argument). If callback is None,
           pressing the button will close the window and the button number will
           be the return code of the dialog.
+
         """
-        # TODO
-        pass
+
+        btn = ImageTextButton(self.pnl_buttons, label=label, height=48,
+                              style=wx.ALIGN_CENTER, face_colour=face_colour)
+        sizer = self.pnl_buttons.GetSizer()
+        sizer.Add(btn, proportion=1,  flag=wx.ALL | wx.ALIGN_RIGHT, border=10)
+
+        if callback is not None and callable(callback):
+            # Wrap the callback, so we can pass the dialog as its only argument
+            btn.Bind(wx.EVT_BUTTON, lambda event: callback(self))
+        else:
+            btn.Bind(wx.EVT_BUTTON, self.on_close)
+
+        self.Fit()
 
     def addStream(self, stream):
         """
         Adds a stream to the canvas, and a stream entry to the stream panel.
-        It also ensure the panel box and canvas as shown.
+        It also ensures the panel box and canvas are shown.
+
         Note: If this method is not called, the stream panel and canvas are hidden.
+
         returns (StreamController): the stream entry
+
         """
-        # TODO
-        pass
+
+        if not self.fp_streams.IsShown() or not self.viewport.IsShown():
+            self.fp_streams.Show()
+            self.viewport.Show()
+            self.Layout()
+            self.Fit()
+            self.Update()
+
+        if stream:
+            pass
 
     def showProgress(self, future):
         """
         Shows a progress bar, based on the status of the progressive future given.
         As long as the future is not finished, the buttons are disabled.
+
         future (None or Future): The progressive future to show the progress with
           the progress bar. If future is None, it will hide the progress bar.
           If future is cancellable, show a cancel button next to the progress bar.
+
         """
 
-        # TODO
-        pass
+        if future is None:
+            self.gauge_progress.Hide()
+            self._acq_future_connector = None
+        else:
+            self.gauge_progress.Show()
+            self._acq_future_connector = ProgressiveFutureConnector(future,
+                                                                    self.gauge_progress,
+                                                                    self.lbl_gauge)
+
+        self.Layout()
+        self.Update()
 
     def on_close(self, _):
         self.Close()

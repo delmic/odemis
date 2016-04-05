@@ -32,10 +32,14 @@ import unittest
 
 from odemis.gui.plugin import Plugin, AcquisitionDialog
 import odemis.gui.test as test
+from odemis.gui.xmlh import odemis_get_resources
+from odemis.gui import main_xrc
 
 logging.getLogger().setLevel(logging.DEBUG)
 
 test.goto_manual()
+
+main_xrc.get_resources = odemis_get_resources
 
 
 class SimplePlugin(Plugin):
@@ -53,8 +57,8 @@ class SimplePlugin(Plugin):
     def start(self):
         dlg = AcquisitionDialog(self, "Fancy Acquisition", "Enter everything")
         dlg.addSettings(self, conf={"filename": {"control_type": "file"}})
-        dlg.addButton("Acquire", self.acquire)
         dlg.addButton("Cancel")
+        dlg.addButton("Acquire", self.acquire, face_colour='blue')
         ans = dlg.ShowModal()
 
         if ans == 0:
@@ -62,18 +66,20 @@ class SimplePlugin(Plugin):
 
     def acquire(self, dlg):
         f = model.ProgressiveFuture()
-        f.task_canceller = lambda f: True  # To allow cancelling while it's running
+        f.task_canceller = lambda l: True  # To allow cancelling while it's running
         dlg.showProgress(f)
 
         d = []
         for i in range(10):
             f.set_progress(end=time.time() + (10 - i))
-            d.append(self.microscope.ccd.data.get())
+            if self.microscope is not None:
+                d.append(self.microscope.ccd.data.get())
             if f.cancelled():
                 return
 
-        dataio.hdf5.export(self.filename.value, d)
-        dlg.Destroy()
+        if d:
+            dataio.hdf5.export(self.filename.value, d)
+            dlg.Destroy()
 
 
 class PluginTestCase(test.GuiTestCase):

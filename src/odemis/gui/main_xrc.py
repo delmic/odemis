@@ -490,14 +490,14 @@ class xrcfr_plugin(wx.Dialog):
 
         # Define variables for the controls, bind event handlers
         self.lbl_description = xrc.XRCCTRL(self, "lbl_description")
+        self.viewport = xrc.XRCCTRL(self, "viewport")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fp_settings = xrc.XRCCTRL(self, "fp_settings")
+        self.fp_streams = xrc.XRCCTRL(self, "fp_streams")
         self.pnl_streams = xrc.XRCCTRL(self, "pnl_streams")
         self.gauge_progress = xrc.XRCCTRL(self, "gauge_progress")
         self.lbl_gauge = xrc.XRCCTRL(self, "lbl_gauge")
         self.pnl_buttons = xrc.XRCCTRL(self, "pnl_buttons")
-        self.btn_cancel = xrc.XRCCTRL(self, "btn_cancel")
-        self.btn_acquire = xrc.XRCCTRL(self, "btn_acquire")
 
 
 
@@ -5320,7 +5320,12 @@ def __init_resources():
       <growablecols>0</growablecols>
       <growablerows>1</growablerows>
       <object class="sizeritem">
-        <object class="LiveViewport"/>
+        <object class="LiveViewport" name="viewport">
+          <hidden>1</hidden>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
         <flag>wxEXPAND</flag>
         <cellpos>1,0</cellpos>
       </object>
@@ -5342,7 +5347,7 @@ def __init_resources():
                           <assign_var>1</assign_var>
                         </XRCED>
                       </object>
-                      <object class="FoldPanelItem">
+                      <object class="FoldPanelItem" name="fp_streams">
                         <object class="StreamBar" name="pnl_streams">
                           <size>300,-1</size>
                           <fg>#7F7F7F</fg>
@@ -5354,6 +5359,10 @@ def __init_resources():
                         <label>STREAMS</label>
                         <fg>#1A1A1A</fg>
                         <bg>#555555</bg>
+                        <hidden>1</hidden>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
                       </object>
                       <spacing>0</spacing>
                       <leftspacing>0</leftspacing>
@@ -5405,7 +5414,7 @@ def __init_resources():
             </object>
             <object class="sizeritem">
               <object class="wxStaticText" name="lbl_gauge">
-                <label>Estimated time is 9999 seconds</label>
+                <label>9999 seconds</label>
                 <fg>#DDDDDD</fg>
                 <font>
                   <size>14</size>
@@ -5414,6 +5423,7 @@ def __init_resources():
                   <underlined>0</underlined>
                   <face>Ubuntu</face>
                 </font>
+                <hidden>1</hidden>
                 <style>wxALIGN_RIGHT</style>
                 <XRCED>
                   <assign_var>1</assign_var>
@@ -5432,44 +5442,7 @@ def __init_resources():
       <object class="sizeritem">
         <object class="wxPanel" name="pnl_buttons">
           <object class="wxBoxSizer">
-            <object class="sizeritem">
-              <object class="ImageTextButton" name="btn_cancel">
-                <height>48</height>
-                <face_colour>def</face_colour>
-                <label>Close</label>
-                <font>
-                  <size>14</size>
-                  <style>normal</style>
-                  <weight>normal</weight>
-                  <underlined>0</underlined>
-                  <face>Ubuntu</face>
-                </font>
-                <style>wxALIGN_CENTRE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <option>1</option>
-              <flag>wxTOP|wxBOTTOM|wxLEFT|wxEXPAND</flag>
-              <border>10</border>
-            </object>
             <orient>wxHORIZONTAL</orient>
-            <object class="sizeritem">
-              <object class="ImageTextButton" name="btn_acquire">
-                <size>242,48</size>
-                <height>48</height>
-                <face_colour>blue</face_colour>
-                <label>ACQUIRE</label>
-                <fg>#FFFFFF</fg>
-                <style>wxALIGN_CENTRE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <option>2</option>
-              <flag>wxALL|wxEXPAND</flag>
-              <border>10</border>
-            </object>
           </object>
           <bg>#444444</bg>
           <XRCED>
