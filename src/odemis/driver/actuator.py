@@ -588,11 +588,29 @@ class ConvertStage(model.Actuator):
             scale = (1, 1)
         if translation is None:
             translation = (0, 0)
+
         # TODO: range of axes could at least be updated with scale + translation
         axes_def = {"x": self._child.axes[axes[0]],
                     "y": self._child.axes[axes[1]]}
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
 
+        self._metadata[model.MD_POS_COR] = translation
+        self._metadata[model.MD_ROTATION_COR] = rotation
+        self._metadata[model.MD_PIXEL_SIZE_COR] = scale
+        self._updateConversion()
+
+        # RO, as to modify it the client must use .moveRel() or .moveAbs()
+        self.position = model.VigilantAttribute({"x": 0, "y": 0},
+                                                unit="m", readonly=True)
+        # it's just a conversion from the child's position
+        self._child.position.subscribe(self._updatePosition, init=True)
+
+        # Speed & reference: it's complicated => user should look at the child
+
+    def _updateConversion(self):
+        translation = self._metadata[model.MD_POS_COR]
+        rotation = self._metadata[model.MD_ROTATION_COR]
+        scale = self._metadata[model.MD_PIXEL_SIZE_COR]
         # Rotation * scaling for convert back/forth between exposed and child
         self._MtoChild = numpy.array(
                      [[math.cos(rotation) * scale[0], -math.sin(rotation) * scale[0]],
@@ -604,14 +622,6 @@ class ConvertStage(model.Actuator):
 
         # Offset between origins of the coordinate systems
         self._O = numpy.array([translation[0], translation[1]], dtype=numpy.float)
-
-        # RO, as to modify it the client must use .moveRel() or .moveAbs()
-        self.position = model.VigilantAttribute({"x": 0, "y": 0},
-                                                unit="m", readonly=True)
-        # it's just a conversion from the child's position
-        self._child.position.subscribe(self._updatePosition, init=True)
-
-        # Speed & reference: it's complicated => user should look at the child
 
     def _convertPosFromChild(self, pos_child, absolute=True):
         # Object lens position vector
@@ -642,6 +652,10 @@ class ConvertStage(model.Actuator):
         self.position._value = {"x": vpos[0],
                                 "y": vpos[1]}
         self.position.notify(self.position.value)
+
+    def updateMetadata(self, md):
+        self._metadata.update(md)
+        self._updateConversion()
 
     @isasync
     def moveRel(self, shift):

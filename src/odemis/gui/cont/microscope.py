@@ -53,6 +53,7 @@ PHENOM_SH_TYPE_OPTICAL = 200  # sample holder for the Delphi, containing a lens
 
 DELPHI_OVERVIEW_POS = {"x": 0, "y": 0}  # good position of the stage for overview
 DELPHI_OVERVIEW_FOCUS = {"z": 0.006}  # Good focus position for overview image on the Delphi sample holder
+GOOD_FOCUS_OFFSET = 200e-06  # Offset from hole focus
 
 
 class MicroscopeStateController(object):
@@ -714,6 +715,7 @@ class DelphiStateController(SecomStateController):
 
         # If starts with the sample fully loaded, check for the calibration now
         ch_pos = self._main_data.chamber.position
+        self.good_focus = None
         if ch_pos.value["pressure"] == self._vacuum_pressure:
             # If it's loaded, the sample holder is registered for sure, and the
             # calibration should have already been done. Otherwise request
@@ -721,9 +723,12 @@ class DelphiStateController(SecomStateController):
             try:
                 self._load_holder_calib()
                 if self._hole_focus is not None:
-                    good_focus = self._hole_focus - 200e-06
-                    ff = self._main_data.ebeam_focus.moveAbs({"z": good_focus})
+                    self.good_focus = self._hole_focus - GOOD_FOCUS_OFFSET
+                    ff = self._main_data.ebeam_focus.moveAbs({"z": self.good_focus})
                     ff.result()
+                ccd_md = self._main_data.ccd.getMetadata()
+                good_hfw = (self._main_data.ccd.resolution.value[0] * ccd_md[model.MD_PIXEL_SIZE][0]) / 2
+                self._main_data.ebeam.horizontalFoV.value = good_hfw
             except ValueError:
                 dlg = wx.MessageDialog(self._main_frame,
                                        "Sample holder is loaded while there is no calibration information. "
@@ -856,6 +861,13 @@ class DelphiStateController(SecomStateController):
             model.MD_POS_COR: strans,
             model.MD_PIXEL_SIZE_COR: sscale,
             model.MD_ROTATION_COR: srot
+        })
+
+        # also update the invert stage used in overview navigation
+        self._main_data.overview_stage.updateMetadata({
+            model.MD_POS_COR: (-strans[0], -strans[1]),
+            model.MD_PIXEL_SIZE_COR: (1 / sscale[0], 1 / sscale[1]),
+            model.MD_ROTATION_COR:-srot
         })
 
         # use image scaling as scaling correction metadata to ccd
@@ -1198,9 +1210,12 @@ class DelphiStateController(SecomStateController):
             # We know that a good initial focus value is a bit lower than the
             # one found while focusing on the holes
             if self._hole_focus is not None:
-                good_focus = self._hole_focus - 200e-06
-                ff = self._main_data.ebeam_focus.moveAbs({"z": good_focus})
+                self.good_focus = self._hole_focus - GOOD_FOCUS_OFFSET
+                ff = self._main_data.ebeam_focus.moveAbs({"z": self.good_focus})
                 ff.result()
+            ccd_md = self._main_data.ccd.getMetadata()
+            good_hfw = (self._main_data.ccd.resolution.value[0] * ccd_md[model.MD_PIXEL_SIZE][0]) / 2
+            self._main_data.ebeam.horizontalFoV.value = good_hfw
             wx.CallAfter(self._press_btn.Enable, True)
 
         finally:

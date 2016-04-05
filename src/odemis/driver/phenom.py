@@ -35,6 +35,8 @@ from suds.client import Client
 import threading
 import time
 import weakref
+import re
+import subprocess
 from numpy.linalg import norm
 from odemis.model import HwError
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
@@ -122,7 +124,7 @@ class SEM(model.HwComponent):
     '''
     This represents the bare Phenom SEM.
     '''
-    def __init__(self, name, role, children, host, username, password, daemon=None, **kwargs):
+    def __init__(self, name, role, children, host, username, password, phenom_gui=True, daemon=None, **kwargs):
         '''
         children (dict string->kwargs): parameters setting for the children.
             Known children are "scanner" and "detector"
@@ -141,12 +143,34 @@ class SEM(model.HwComponent):
         self._host = host
         self._username = username
         self._password = password
+        self._phenom_gui = phenom_gui
+        # get the ip from the whole host string
+        res = re.sub("http://", "", self._host)
+        self._ip = re.sub(":8888", "", res)
+        try:
+            if self._phenom_gui:
+                o = subprocess.check_output(["PhenomHeadless", self._ip, "off"])
+                logging.debug("Got response %s", o)
+            else:
+                o = subprocess.check_output(["PhenomHeadless", self._ip, "on"])
+                logging.debug("Got response %s", o)
+        except Exception as e:
+            logging.warning("Could not enable/disable Phenom GUI: %s", str(e))
+            self._phenom_gui = True
+
         try:
             client = Client(host + "?om", location=host, username=username, password=password, timeout=SOCKET_TIMEOUT)
         except Exception:
             raise HwError("Failed to connect to Phenom host '%s'. "
                           "Check that the url is correct and Phenom connected to "
                           "the network." % (host,))
+        # Decide if we still need to blank/unblank the beam by tweaking the
+        # source tilt or we can just access the blanking Phenom API methods
+        phenom_methods = [method for method in client.wsdl.services[0].ports[0].methods]
+        logging.debug("Methods available in Phenom host: %s", phenom_methods)
+        self._blank_supported = False
+        if "SEMBlankBeam" in phenom_methods:
+            self._blank_supported = True
         self._device = client.service
 
         # check Phenom's state and raise HwError if it reports error mode
@@ -379,6 +403,9 @@ class Scanner(model.Emitter):
         self.spotSize = model.FloatContinuous(self._spotSize, spot_rng,
                                               setter=self._setSpotSize)
 
+        self.blanker = model.VAEnumerated(True, choices=set([True, False]),
+                                          setter=self._setBlanker)
+
     def updateMetadata(self, md):
         # we share metadata with our parent
         self.parent.updateMetadata(md)
@@ -390,13 +417,15 @@ class Scanner(model.Emitter):
         """
         Reads again the hardware setting and update the VA
         """
-        fov = self.parent._device.GetSEMHFW()
-        # take care of small deviations
-        fov = numpy.clip(fov, HFW_RANGE[0], HFW_RANGE[1])
+        if self.parent._blank_supported and (not self.blanker.value):
+            # FIXME: Fow now only trust this value when beam is unblanked
+            fov = self.parent._device.GetSEMHFW()
+            # take care of small deviations
+            fov = numpy.clip(fov, HFW_RANGE[0], HFW_RANGE[1])
 
-        # we don't set it explicitly, to avoid calling .SetSEMHFW()
-        self.horizontalFoV._value = fov
-        self.horizontalFoV.notify(fov)
+            # we don't set it explicitly, to avoid calling .SetSEMHFW()
+            self.horizontalFoV._value = fov
+            self.horizontalFoV.notify(fov)
 
     def _onHorizontalFoV(self, fov):
         # Update current pixelSize and magnification
@@ -406,15 +435,30 @@ class Scanner(model.Emitter):
 
     def _setHorizontalFoV(self, value):
         # Make sure you are in the current range
+        logging.debug("Setting new hfw to: %f", value)
         try:
             rng = self.parent._device.GetSEMHFWRange()
             new_fov = numpy.clip(value, rng.min, rng.max)
-            self.parent._device.SetSEMHFW(new_fov)
+            if self.parent._blank_supported and (not self.blanker.value):
+                # FIXME: Fow now only trust this value when beam is unblanked
+                self.parent._device.SetSEMHFW(new_fov)
             return new_fov
         except suds.WebFault:
             logging.debug("Cannot set HFW when the sample is not in SEM.")
 
         return self.horizontalFoV.value
+
+    def _setBlanker(self, value):
+        f = self.parent._detector.beam_blank(value)
+        f._blank_to_set = value
+        f.add_done_callback(self.on_blank_done)
+
+        return self.blanker._value
+
+    def on_blank_done(self, future):
+        # Now we can update the actual beam blanker value
+        self.blanker._value = future._blank_to_set
+        self.blanker.notify(future._blank_to_set)
 
     def _updateMagnification(self):
 
@@ -445,14 +489,15 @@ class Scanner(model.Emitter):
         # last known source tilt
         current_tilt = self.parent._device.GetSEMSourceTilt()
         self.parent._device.SEMSetHighTension(-volt)
-        new_tilt = self.parent._device.GetSEMSourceTilt()
-        # This should never happen
-        if ((new_tilt.aX, new_tilt.aY) != TILT_BLANK):
-            self.parent._detector._tilt_unblank = (new_tilt.aX, new_tilt.aY)
-            logging.debug("For voltage %f V and spot size %f, the source tilt is %s",
-                          volt, self.spotSize.value, self.parent._detector._tilt_unblank)
-        if ((current_tilt.aX, current_tilt.aY) == TILT_BLANK):
-            self.parent._device.SetSEMSourceTilt(current_tilt.aX, current_tilt.aY, False)
+        if not self.parent._blank_supported:
+            new_tilt = self.parent._device.GetSEMSourceTilt()
+            # This should never happen
+            if ((new_tilt.aX, new_tilt.aY) != TILT_BLANK):
+                self.parent._detector._tilt_unblank = (new_tilt.aX, new_tilt.aY)
+                logging.debug("For voltage %f V and spot size %f, the source tilt is %s",
+                              volt, self.spotSize.value, self.parent._detector._tilt_unblank)
+            if ((current_tilt.aX, current_tilt.aY) == TILT_BLANK):
+                self.parent._device.SetSEMSourceTilt(current_tilt.aX, current_tilt.aY, False)
         # Brightness and contrast have to be adjusted just once
         # we set up the detector (see SEMACB())
         # TODO reset the beam shift so it is within boundaries
@@ -463,14 +508,15 @@ class Scanner(model.Emitter):
         try:
             current_tilt = self.parent._device.GetSEMSourceTilt()
             self.parent._device.SEMSetSpotSize(value)
-            new_tilt = self.parent._device.GetSEMSourceTilt()
-            # This should never happen
-            if ((new_tilt.aX, new_tilt.aY) != TILT_BLANK):
-                self.parent._detector._tilt_unblank = (new_tilt.aX, new_tilt.aY)
-                logging.debug("For voltage %f V and spot size %f, the source tilt is %s",
-                              self.accelVoltage.value, value, self.parent._detector._tilt_unblank)
-            if ((current_tilt.aX, current_tilt.aY) == TILT_BLANK):
-                self.parent._device.SetSEMSourceTilt(current_tilt.aX, current_tilt.aY, False)
+            if not self.parent._blank_supported:
+                new_tilt = self.parent._device.GetSEMSourceTilt()
+                # This should never happen
+                if ((new_tilt.aX, new_tilt.aY) != TILT_BLANK):
+                    self.parent._detector._tilt_unblank = (new_tilt.aX, new_tilt.aY)
+                    logging.debug("For voltage %f V and spot size %f, the source tilt is %s",
+                                  self.accelVoltage.value, value, self.parent._detector._tilt_unblank)
+                if ((current_tilt.aX, current_tilt.aY) == TILT_BLANK):
+                    self.parent._device.SetSEMSourceTilt(current_tilt.aX, current_tilt.aY, False)
             return self._spotSize
         except suds.WebFault:
             logging.debug("Cannot set Spot Size when the sample is not in SEM.")
@@ -629,6 +675,8 @@ class Detector(model.Detector):
 
         # setup detector
         self._scanParams = self.parent._objects.create('ns0:scanParams')
+        self._pre_scanParams = self.parent._objects.create('ns0:scanParams')
+
         # use all detector segments
         detectorMode = 'SEM-DETECTOR-MODE-ALL'
         self._scanParams.detector = detectorMode
@@ -669,6 +717,13 @@ class Detector(model.Detector):
                         timeout=SOCKET_TIMEOUT)
         self._grid_device = grid_client.service
 
+        # Store current scan params
+        self._nrOfFrames = None
+        self._center = None
+        self._scale = None
+        self._resolution_width = None
+        self._resolution_height = None
+
     @isasync
     def applyAutoContrast(self):
         # Create ProgressiveFuture and update its state to RUNNING
@@ -683,23 +738,25 @@ class Detector(model.Detector):
         """
         Trigger Phenom's AutoContrast
         """
-        # Check if we need to temporarily unblank the ebeam
-        cur_tilt = self.parent._device.GetSEMSourceTilt()
-        beam_blanked = ((cur_tilt.aX, cur_tilt.aY) == TILT_BLANK)
-        if beam_blanked:
-            try:
-                # "Unblank" the beam
-                self.beam_blank(False)
-            except suds.WebFault:
-                logging.warning("Beam might still be blanked!")
+        if not self.parent._blank_supported:
+            # Check if we need to temporarily unblank the ebeam
+            cur_tilt = self.parent._device.GetSEMSourceTilt()
+            beam_blanked = ((cur_tilt.aX, cur_tilt.aY) == TILT_BLANK)
+            if beam_blanked:
+                try:
+                    # "Unblank" the beam
+                    self.parent._scanner.blanker.value = False
+                except suds.WebFault:
+                    logging.warning("Beam might still be blanked!")
         with self.parent._acq_progress_lock:
             self.parent._device.SEMACB()
-        if beam_blanked:
-            try:
-                # "Blank" the beam
-                self.beam_blank(True)
-            except suds.WebFault:
-                logging.warning("Beam might still be unblanked!")
+        if not self.parent._blank_supported:
+            if beam_blanked:
+                try:
+                    # "Blank" the beam
+                    self.parent._scanner.blanker.value = True
+                except suds.WebFault:
+                    logging.warning("Beam might still be unblanked!")
         # Update with the new values after automatic procedure is completed
         self._updateContrast()
         self._updateBrightness()
@@ -759,7 +816,8 @@ class Detector(model.Detector):
                     self._scan_params_view.center.x = self.parent._scanner.tran_roi[0] + shift_pos[0] + spot_shift[0]
                     self._scan_params_view.center.y = self.parent._scanner.tran_roi[1] + shift_pos[1] + spot_shift[1]
                     try:
-                        self._grid_device.SetSEMViewingMode(self._scan_params_view, 'SEM-SCAN-MODE-IMAGING')
+                        if self._needResetParams(self._scan_params_view):
+                            self._grid_device.SetSEMViewingMode(self._scan_params_view, 'SEM-SCAN-MODE-IMAGING')
                     except suds.WebFault:
                         logging.warning("Spot scan failure.")
 
@@ -805,7 +863,11 @@ class Detector(model.Detector):
             self._wait_acquisition_stopped()
             try:
                 # "Unblank" the beam
-                self.beam_blank(False)
+                self.parent._scanner.blanker.value = False
+                # Wait until it's indeed unblanked
+                while (self.parent._scanner.blanker.value):
+                    time.sleep(1)
+                    continue
             except suds.WebFault:
                 logging.warning("Beam might still be blanked!")
             target = self._acquire_thread
@@ -814,18 +876,40 @@ class Detector(model.Detector):
                     args=(callback,))
             self._acquisition_thread.start()
 
+    @isasync
     def beam_blank(self, blank):
+        # Create ProgressiveFuture and update its state to RUNNING
+        est_start = time.time() + 0.1
+        f = model.ProgressiveFuture(start=est_start,
+                                    end=est_start + 1)  # rough time estimation
+
+        return self._executor.submitf(f, self._beam_blank, f, blank)
+
+    def _beam_blank(self, future, blank):
         """
         (Un)blank the beam
         blank (boolean): If True, will blank the beam, otherwise will unblank it
         """
         with self.parent._acq_progress_lock:
             if blank:
-                self.parent._device.SetSEMSourceTilt(TILT_BLANK[0], TILT_BLANK[1], False)
+                if self.parent._blank_supported:
+                    self.parent._device.SEMBlankBeam()
+                else:
+                    self.parent._device.SetSEMSourceTilt(TILT_BLANK[0], TILT_BLANK[1], False)
             else:
-                self.parent._device.SetSEMSourceTilt(self._tilt_unblank[0], self._tilt_unblank[1], False)
-                logging.debug("For voltage %f V and spot size %f, the source tilt is %s",
-                              self.parent._scanner.accelVoltage.value, self.parent._scanner.spotSize.value, self._tilt_unblank)
+                if self.parent._blank_supported:
+                    self.parent._device.SEMUnblankBeam()
+                    # FIXME: we can now update hfw, range may have changed in the meantime
+                    rng = self.parent._device.GetSEMHFWRange()
+                    current_fov = numpy.clip(self.parent._scanner.horizontalFoV.value, rng.min, rng.max)
+                    self.parent._device.SetSEMHFW(current_fov)
+                    # horizontalFoV setter would fail to call .SetSEMHFW()
+                    self.parent._scanner.horizontalFoV._value = current_fov
+                    self.parent._scanner.horizontalFoV.notify(current_fov)
+                else:
+                    self.parent._device.SetSEMSourceTilt(self._tilt_unblank[0], self._tilt_unblank[1], False)
+                    logging.debug("For voltage %f V and spot size %f, the source tilt is %s",
+                                  self.parent._scanner.accelVoltage.value, self.parent._scanner.spotSize.value, self._tilt_unblank)
 
     def stop_acquire(self):
         with self._acquisition_lock:
@@ -841,7 +925,7 @@ class Detector(model.Detector):
                     logging.debug("No acquisition in progress to be aborted.")
 
                 # "Blank" the beam
-                self.beam_blank(True)
+                self.parent._scanner.blanker.value = True
 
     def _wait_acquisition_stopped(self):
         """
@@ -858,6 +942,20 @@ class Detector(model.Detector):
                     # Now let's hope everything is back to normal...
             # ensure it's not set, even if the thread died prematurely
             self._acquisition_must_stop.clear()
+
+    def _needResetParams(self, scanParams):
+        if (self._nrOfFrames != scanParams.nrOfFrames or
+            self._center != (scanParams.center.x, scanParams.center.y) or
+            self._scale != scanParams.scale or self._resolution_width != scanParams.resolution.width or
+            self._resolution_height != scanParams.resolution.height):
+            self._nrOfFrames = scanParams.nrOfFrames
+            self._center = (scanParams.center.x, scanParams.center.y)
+            self._scale = scanParams.scale
+            self._resolution_width = scanParams.resolution.width
+            self._resolution_height = scanParams.resolution.height
+            return True
+        else:
+            return False
 
     def _acquire_image(self):
         """
@@ -911,7 +1009,8 @@ class Detector(model.Detector):
                         self._scan_params_view.center.x = center_x
                         self._scan_params_view.center.y = center_y
                         try:
-                            self._acq_device.SetSEMViewingMode(self._scan_params_view, 'SEM-SCAN-MODE-IMAGING')
+                            if self._needResetParams(self._scan_params_view):
+                                self._acq_device.SetSEMViewingMode(self._scan_params_view, 'SEM-SCAN-MODE-IMAGING')
                         except suds.WebFault:
                             logging.warning("Move to centre failure.")
 
@@ -922,7 +1021,8 @@ class Detector(model.Detector):
                     self._scan_params_view.scale = 0
                     self._scan_params_view.center.x = center_x
                     self._scan_params_view.center.y = center_y
-                    self._acq_device.SetSEMViewingMode(self._scan_params_view, 'SEM-SCAN-MODE-IMAGING')
+                    if self._needResetParams(self._scan_params_view):
+                        self._acq_device.SetSEMViewingMode(self._scan_params_view, 'SEM-SCAN-MODE-IMAGING')
                 time.sleep(0.1)
                 # MD_POS is hopefully set via updateMetadata
                 return model.DataArray(numpy.array([[0]], dtype=dataType), metadata)
@@ -973,11 +1073,21 @@ class Detector(model.Detector):
                     # Move back to the center
                     self._scan_params_view.center.x = 0
                     self._scan_params_view.center.y = 0
-                    self._acq_device.SetSEMViewingMode(self._scan_params_view, 'SEM-SCAN-MODE-IMAGING')
-                img_str = self._acq_device.SEMAcquireImageCopy(self._scanParams)
+                # last check before we initiate the actual acquisition
+                if self._acquisition_must_stop.is_set():
+                    raise CancelledError()
+                if self._needResetParams(self._scanParams):
+                    self._acq_device.SetSEMViewingMode(self._scanParams, 'SEM-SCAN-MODE-IMAGING')
+                    # Just to wait long enough before we get a frame with the new
+                    # parameters applied. In the meantime, it can be the case that
+                    # Phenom generates semi-created frames that we want to avoid.
+                    img_str = self._acq_device.SEMAcquireImageCopy(self._scanParams)
+                else:
+                    img_str = self._acq_device.SEMGetLiveImageCopy(0)
+
                 # Use the metadata from the string to update some metadata
                 # metadata[model.MD_POS] = (img_str.aAcqState.position.x, img_str.aAcqState.position.y)
-                metadata[model.MD_EBEAM_VOLTAGE] = img_str.aAcqState.highVoltage
+                metadata[model.MD_EBEAM_VOLTAGE] = abs(img_str.aAcqState.highVoltage)
                 metadata[model.MD_EBEAM_CURRENT] = img_str.aAcqState.emissionCurrent
                 metadata[model.MD_ROTATION] = -img_str.aAcqState.rotation
                 metadata[model.MD_DWELL_TIME] = img_str.aAcqState.dwellTime * img_str.aAcqState.integrations
@@ -1003,6 +1113,8 @@ class Detector(model.Detector):
                     if self._acquisition_must_stop.is_set():
                         break
                 callback(self._acquire_image())
+        except CancelledError:
+            logging.debug("Acquisition thread cancelled")
         except Exception:
             logging.exception("Unexpected failure during image acquisition")
         finally:
@@ -1018,15 +1130,17 @@ class Detector(model.Detector):
 
     def terminate(self):
         logging.info("Terminating SEM stream...")
+        try:
+            self.parent._scanner.blanker.value = False
+            # Wait until it's indeed unblanked
+            while (self.parent._scanner.blanker.value):
+                time.sleep(1)
+                continue
+        except suds.WebFault:
+            logging.warning("Beam might still be blanked!")
         if self._executor:
             self._executor.shutdown()
             self._executor = None
-        try:
-            # "Unblank" the beam
-            if self._tilt_unblank is not None:
-                self.beam_blank(False)
-        except suds.WebFault:
-            logging.warning("Beam might still be blanked!")
 
 class SEMDataFlow(model.DataFlow):
     """
@@ -1643,7 +1757,7 @@ class ChamberPressure(model.Actuator):
             # Then blank the beam and unblank it once SEM stream is started
             self.parent._detector.update_parameters()
             self.parent._detector._tilt_unblank = self.parent._device.GetSEMSourceTilt()
-            self.parent._detector.beam_blank(True)
+            self.parent._scanner.blanker.value = True
             self._position = PRESSURE_SEM
         elif area == "LOADING-WORK-AREA-NAVCAM":
             self._position = PRESSURE_NAVCAM
@@ -1774,7 +1888,11 @@ class ChamberPressure(model.Actuator):
                         logging.debug("Move appears not to be completed.")
                     TimeUpdater.cancel()
                     # Take care of the calibration that takes place when we move to SEM
-                    self._waitForDevice()
+                    if self.parent._phenom_gui:
+                        # Allow few phenom api acquisitions before you start acquiring
+                        # via odemis. An alternative would be to wait for the second
+                        # ACB performed by phenom API each time we load to SEM.
+                        self._waitForDevice("SEM-IMAGE-UPDATED-CHANGED-ID", 25)
                 elif p["pressure"] == PRESSURE_NAVCAM:
                     if self._pressure_device.GetInstrumentMode() != "INSTRUMENT-MODE-OPERATIONAL":
                         self._pressure_device.SetInstrumentMode("INSTRUMENT-MODE-OPERATIONAL")
@@ -1790,7 +1908,10 @@ class ChamberPressure(model.Actuator):
                     self._pressure_device.SelectImagingDevice(self._imagingDevice.NAVCAMIMDEV)
                     TimeUpdater.cancel()
                     # Wait for NavCam
-                    self._waitForDevice()
+                    if self.parent._phenom_gui:
+                        # just a workaround for the unexpected navcam image event when
+                        # loading to SEM
+                        self._waitForDevice("NAV-CAM-IMAGE-UPDATED-CHANGED-ID", 2)
                 else:
                     self._pressure_device.UnloadSample()
                     TimeUpdater.cancel()
@@ -1860,26 +1981,18 @@ class ChamberPressure(model.Actuator):
         # Wait before move
         time.sleep(1)
 
-    def _waitForDevice(self):
+    def _waitForDevice(self, event, frames):
+        logging.debug("Waiting for %d %s events", frames, event)
         eventSpecArray = self.parent._objects.create('ns0:EventSpecArray')
 
-        # Event for performed calibration
-        eventID1 = "SEM-IMAGE-UPDATED-CHANGED-ID"
-        eventSpec1 = self.parent._objects.create('ns0:EventSpec')
-        eventSpec1.eventID = eventID1
-        eventSpec1.compressed = False
+        eventSpec = self.parent._objects.create('ns0:EventSpec')
+        eventSpec.eventID = event
+        eventSpec.compressed = False
 
-        # Event for NavCam viewing mode
-        eventID2 = "NAV-CAM-IMAGE-UPDATED-CHANGED-ID"
-        eventSpec2 = self.parent._objects.create('ns0:EventSpec')
-        eventSpec2.eventID = eventID2
-        eventSpec2.compressed = False
-
-        eventSpecArray.item = [eventSpec1, eventSpec2]
+        eventSpecArray.item = [eventSpec]
         ch_id = self._pressure_device.OpenEventChannel(eventSpecArray)
 
         api_frames = 0
-        nc_frames = 0
         while(True):
             logging.debug("Device wait function about to read event...")
             expected_event = self._pressure_device.ReadEventChannel(ch_id)
@@ -1888,18 +2001,9 @@ class ChamberPressure(model.Actuator):
             else:
                 newEvent = expected_event[0][0].eventID
                 logging.debug("Try to read event: %s", newEvent)
-                if (newEvent == eventID1):
-                    # Allow few phenom api acquisitions before you start acquiring
-                    # via odemis. An alternative would be to wait for the second
-                    # ACB performed by phenom API each time we load to SEM.
+                if (newEvent == event):
                     api_frames += 1
-                    if api_frames >= 25:
-                        break
-                elif (newEvent == eventID2):
-                    nc_frames += 1
-                    # just a workaround for the unexpected navcam image event when
-                    # loading to SEM
-                    if nc_frames >= 10:
+                    if api_frames >= frames:
                         break
                 else:
                     logging.warning("Unexpected event received")

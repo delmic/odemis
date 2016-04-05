@@ -33,6 +33,8 @@ from odemis.acq.stream import Stream, StreamTree
 from odemis.gui.conf import get_general_conf
 from odemis.model import (FloatContinuous, VigilantAttribute, IntEnumerated, StringVA, BooleanVA,
                           MD_POS, InstantaneousFuture, hasVA, StringEnumerated)
+from odemis.driver.actuator import ConvertStage
+from odemis.model import MD_PIXEL_SIZE_COR, MD_POS_COR, MD_ROTATION_COR
 import os
 import threading
 import time
@@ -217,6 +219,22 @@ class MainGUIData(object):
             # detector (in the right way).
             if microscope.role in ("sparc-simplex", "sparc", "sparc2"):
                 self.opm = path.OpticalPathManager(microscope)
+
+            # We create a stage that actually moves the coupled stage in SEM
+            # coordinates instead of the optical ones. This is used by the
+            # OverviewController in order to keep the overview navigation moves
+            # referring to the SEM stage.
+            if microscope.role == "delphi":
+                stage_md = self.stage.getMetadata()
+                stage_scale = stage_md.get(MD_PIXEL_SIZE_COR, (1, 1))
+                stage_rotation = stage_md.get(MD_ROTATION_COR, 0)
+                stage_translation = stage_md.get(MD_POS_COR, (0, 0))
+                self.overview_stage = ConvertStage("converter-xy", "overview-stage",
+                                        children={"aligner": self.stage},
+                                        axes=["x", "y"],
+                                        scale=(1 / stage_scale[0], 1 / stage_scale[1]),
+                                        rotation=-stage_rotation,
+                                        translation=(-stage_translation[0], -stage_translation[1]))
 
             # Used when doing SECOM fine alignment, based on the value used by the user
             # when doing manual alignment. 0.1s is not too bad value if the user

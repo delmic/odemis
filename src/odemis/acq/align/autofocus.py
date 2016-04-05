@@ -112,7 +112,7 @@ def _discard_data(df, data):
     pass
 
 
-def _DoAutoFocus(future, detector, min_step, et, focus, dfbkg):
+def _DoAutoFocus(future, detector, min_step, et, focus, dfbkg, good_focus):
     """
     Iteratively acquires an optical image, measures its focus level and adjusts
     the optical focus with respect to the focus level.
@@ -124,6 +124,8 @@ def _DoAutoFocus(future, detector, min_step, et, focus, dfbkg):
         dwellTime*prod(resolution) if detector is an SEM
     focus (model.Actuator): The optical focus
     dfbkg (model.DataFlow): dataflow of se- or bs- detector
+    good_focus (float): if provided, an already known good focus position to be
+      taken into consideration while autofocusing
     returns (float):    Focus position (m)
                         Focus level
     raises:
@@ -142,9 +144,27 @@ def _DoAutoFocus(future, detector, min_step, et, focus, dfbkg):
 
         best_pos = 0
         best_fm = 0
-        step_factor = 80
-        step_cntr = 1
 
+        step_factor = 80
+        if good_focus is not None:
+            current_pos = focus.position.value.get('z')
+            image = AcquireNoBackground(detector, dfbkg)
+            fm_current = Measure(image)
+            logging.debug("Focus level at %f is %f", current_pos, fm_current)
+            f = focus.moveAbs({"z": good_focus})
+            f.result()
+            image = AcquireNoBackground(detector, dfbkg)
+            fm_good = Measure(image)
+            logging.debug("Focus level at %f is %f", good_focus, fm_good)
+            if fm_good < fm_current:
+                # Move back to current position if good_pos is not that good
+                # after all
+                f = focus.moveAbs({"z": current_pos})
+                # it also means we are pretty close
+            step_factor = 10
+
+        logging.debug("Step factor used for autofocus: %d", step_factor)
+        step_cntr = 1
         while step_factor >= 1 and step_cntr <= MAX_STEPS_NUMBER:
             # Keep the initial focus position
             center = focus.position.value.get('z')
@@ -243,7 +263,7 @@ def estimateAutoFocusTime(exposure_time, steps=MAX_STEPS_NUMBER):
     return steps * exposure_time
 
 
-def AutoFocus(detector, emt, focus, dfbkg=None):
+def AutoFocus(detector, emt, focus, dfbkg=None, good_focus=None):
     """
     Wrapper for DoAutoFocus. It provides the ability to check the progress of autofocus 
     procedure or even cancel it.
@@ -255,6 +275,8 @@ def AutoFocus(detector, emt, focus, dfbkg=None):
      the e-beam emission (it must be the dataflow of se- or bs-detector) in
      order to do background subtraction. If None, no background subtraction is
      performed.
+    good_focus (float): if provided, an already known good focus position to be
+      taken into consideration while autofocusing
     returns (model.ProgressiveFuture):  Progress of DoAutoFocus, whose result() will return:
             Focus position (m)
             Focus level
@@ -279,7 +301,7 @@ def AutoFocus(detector, emt, focus, dfbkg=None):
         logging.debug("No depth of field info found")
         dof = 1e-6  # m, not too bad value
     logging.debug("Depth of field is %f", dof)
-    min_stp_sz = dof
+    min_stp_sz = dof / 2
 
     f = model.ProgressiveFuture(start=est_start,
                                 end=est_start + estimateAutoFocusTime(et))
@@ -291,7 +313,7 @@ def AutoFocus(detector, emt, focus, dfbkg=None):
     autofocus_thread = threading.Thread(target=executeTask,
                                         name="Autofocus",
                                         args=(f, _DoAutoFocus, f, detector, min_stp_sz,
-                                              et, focus, dfbkg))
+                                              et, focus, dfbkg, good_focus))
 
     autofocus_thread.start()
     return f

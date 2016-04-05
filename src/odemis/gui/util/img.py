@@ -672,6 +672,9 @@ def draw_image(ctx, im_data, w_im_center, buffer_center, buffer_scale,
         # If very little data is trimmed, it's better to scale the entire image than to create
         # a slightly smaller copy first.
         if b_im_rect[2] > intersection[2] * 1.1 or b_im_rect[3] > intersection[3] * 1.1:
+            # This is just to make sure there are no blank parts when cropping and
+            # then rotating
+            intersection = intersection[0], intersection[1], 1.1 * intersection[2], 1.1 * intersection[3]
             im_data, tl = get_sub_img(intersection, b_im_rect, im_data, total_scale)
             b_im_rect = (tl[0], tl[1], b_im_rect[2], b_im_rect[3],)
             x, y, _, _ = b_im_rect
@@ -1464,7 +1467,7 @@ def get_ordered_images(streams, rgb=True):
         if data_raw.metadata.get(model.MD_LIGHT_POWER, None):
             stream_data.append(units.readable_str(data_raw.metadata[model.MD_LIGHT_POWER], "W", sig=3))
         if data_raw.metadata.get(model.MD_EBEAM_VOLTAGE, None):
-            stream_data.append(units.readable_str(data_raw.metadata[model.MD_EBEAM_VOLTAGE], "V", sig=3))
+            stream_data.append(units.readable_str(abs(data_raw.metadata[model.MD_EBEAM_VOLTAGE]), "V", sig=3))
         if data_raw.metadata.get(model.MD_EBEAM_CURRENT, None):
             stream_data.append(units.readable_str(data_raw.metadata[model.MD_EBEAM_CURRENT], "A", sig=3))
         if data_raw.metadata.get(model.MD_IN_WL, None):
@@ -1604,8 +1607,8 @@ def get_sub_img(b_intersect, b_im_rect, im_data, total_scale):
             unsc_rnd_rect[1] + unsc_rnd_rect[3] > im_h):
         # sometimes floating errors + rounding leads to one pixel too
         # much => just crop.
-        assert(unsc_rnd_rect[0] + unsc_rnd_rect[2] <= im_w + 1)
-        assert(unsc_rnd_rect[1] + unsc_rnd_rect[3] <= im_h + 1)
+        # assert(unsc_rnd_rect[0] + unsc_rnd_rect[2] <= im_w + 1)
+        # assert(unsc_rnd_rect[1] + unsc_rnd_rect[3] <= im_h + 1)
         unsc_rnd_rect[2] = im_w - unsc_rnd_rect[0]  # clip width
         unsc_rnd_rect[3] = im_h - unsc_rnd_rect[1]  # clip height
 
