@@ -38,13 +38,13 @@ SECOMv2: {
 
 "White Light": {
     class: simulated.Light,
-    role: brightlight,
+    role: backlight,
     affects: ["Camera"],
 }
 
 # "White Light": {
 #     class: blinkstick.WhiteLed,
-#     role: brightlight,
+#     role: backlight,
 #     init: {
 #         max_power: 0.01, # W
 #         inversed: True, # Indicates the leds' behaviour
