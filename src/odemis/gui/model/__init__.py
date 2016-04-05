@@ -220,10 +220,11 @@ class MainGUIData(object):
             if microscope.role in ("sparc-simplex", "sparc", "sparc2"):
                 self.opm = path.OpticalPathManager(microscope)
 
+            # Trick for the Delphi.
             # We create a stage that actually moves the coupled stage in SEM
             # coordinates instead of the optical ones. This is used by the
             # OverviewController in order to keep the overview navigation moves
-            # referring to the SEM stage.
+            # referring to the SEM stage, as the overview image is in SEM coordinates.
             if microscope.role == "delphi":
                 stage_md = self.stage.getMetadata()
                 stage_scale = stage_md.get(MD_PIXEL_SIZE_COR, (1, 1))
@@ -235,6 +236,8 @@ class MainGUIData(object):
                                         scale=(1 / stage_scale[0], 1 / stage_scale[1]),
                                         rotation=-stage_rotation,
                                         translation=(-stage_translation[0], -stage_translation[1]))
+            else:
+                self.overview_stage = self.stage
 
             # Used when doing SECOM fine alignment, based on the value used by the user
             # when doing manual alignment. 0.1s is not too bad value if the user
