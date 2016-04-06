@@ -18,24 +18,25 @@ select spot mode, and pick the point you're interested.
 
 from __future__ import division
 
+from collections import OrderedDict
+from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, RUNNING
 import logging
 import math
 import numpy
+from odemis import dataio, model, acq
+from odemis.acq import stream
+import odemis.gui
+from odemis.gui.conf import get_acqui_conf
+from odemis.gui.model import TOOL_SPOT
+from odemis.util import units
 import os
 import sys
 import threading
 import time
 import wx
 
-from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, RUNNING
-
-import odemis.gui
-from odemis import dataio, model, acq
-from odemis.acq import stream
-from odemis.gui.conf import get_acqui_conf
-from odemis.gui.model import TOOL_SPOT
 from odemis.gui.plugin import Plugin, AcquisitionDialog
-from odemis.util import units
+
 
 logging.getLogger().setLevel(logging.INFO)  # put "DEBUG" level for more messages
 
@@ -61,8 +62,8 @@ class MonochromatorScanStream(stream.Stream):
         self._sgr = spectrograph
 
         wlr = spectrograph.axes["wavelength"].range
-        self.startWavelength = model.FloatContinuous(400e-9, wlr, unit="s")
-        self.endWavelength = model.FloatContinuous(500e-9, wlr, unit="s")
+        self.startWavelength = model.FloatContinuous(400e-9, wlr, unit="m")
+        self.endWavelength = model.FloatContinuous(500e-9, wlr, unit="m")
         self.numberOfPixels = model.IntContinuous(51, (2, 1000), unit="px")
         # TODO: could be a local attribute?
         self.dwellTime = model.FloatContinuous(1e-3, range=self._emitter.dwellTime.range,
@@ -348,6 +349,31 @@ class MonoScanPlugin(Plugin):
     __author__ = "Éric Piel"
     __license__ = "GNU General Public License 2"
 
+    # Describe how the values should be displayed
+    # See odemis.gui.conf.data for all the possibilities
+    vaconf = OrderedDict((
+        ("startWavelength", {
+            "control_type": odemis.gui.CONTROL_FLT,  # no slider
+        }),
+        ("endWavelength", {
+            "control_type": odemis.gui.CONTROL_FLT,  # no slider
+        }),
+        ("numberOfPixels", {
+            # TODO: no slider, but for now, we have a slider to try to fix a bug when typing number
+            "control_type": odemis.gui.CONTROL_INT,  # no slider
+        }),
+        ("dwellTime", {
+            "tooltip": "Time spent by the e-beam on each pixel",
+            "range": (1e-9, 10),
+            "scale": "log",
+        }),
+        ("filename", {
+            "control_type": odemis.gui.CONTROL_FILE,  # TODO: NEW_FILE
+        }),
+        ("expectedDuration", {
+        }),
+    ))
+
     def __init__(self, microscope, main_app):
         super(MonoScanPlugin, self).__init__(microscope, main_app)
 
@@ -377,8 +403,8 @@ class MonoScanPlugin(Plugin):
         self.numberOfPixels = self._mchr_s.numberOfPixels
         self.dwellTime = self._mchr_s.dwellTime
 
-        self.expectedDuration = model.VigilantAttribute(1, unit="s", readonly=True)
         self.filename = model.StringVA("a.h5")
+        self.expectedDuration = model.VigilantAttribute(1, unit="s", readonly=True)
 
         # Update the expected duration when values change
         self.dwellTime.subscribe(self._update_exp_dur)
@@ -440,8 +466,7 @@ class MonoScanPlugin(Plugin):
                                 "Enter the settings and start the acquisition.")
 
         self.filename.value = self._get_new_filename()
-        # TODO: use an ordered dict, to force the display order
-        dlg.addSettings(self, conf={"filename": {"control_type": odemis.gui.CONTROL_TEXT}})
+        dlg.addSettings(self, conf=self.vaconf)
         dlg.addButton("Cancel")
         dlg.addButton("Acquire", self.acquire, face_colour='blue')
 
