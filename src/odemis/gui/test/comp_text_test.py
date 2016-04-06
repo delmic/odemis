@@ -132,11 +132,11 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
 
         # Create simulator and focus the field
         sim = wx.UIActionSimulator()
-        # Focusing the field will select all the text in it
+        # Focusing the field will select all the number in it, but not the unit (Mm)
         ctrl.SetFocus()
         test.gui_loop(100)
 
-        # Set the value to 1 Mm (Period should not register
+        # Set the value to 1 Mm (period should not register)
         for c in "0.001\r":
             sim.Char(ord(c))
             test.gui_loop(10)
@@ -152,6 +152,40 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
 
         self.assertEqual(ctrl.GetValue(), 44)
         self.assertEqual(ctrl.get_value_str(), u"44 m")
+
+    def test_px_int_txt_ctrl(self):
+
+        ctrl = UnitIntegerCtrl(self.panel, value=123456789,
+                               min_val=1, max_val=10000000000, unit='px')
+        self.add_control(ctrl, label="UnitIntegerCtrl px", flags=wx.EXPAND | wx.ALL)
+
+        self.assertEqual(ctrl.GetValue(), 123456789)
+        self.assertEqual(ctrl.get_value_str(), u"123456789 px")
+
+        test.gui_loop(100)
+
+        # Create simulator and focus the field
+        sim = wx.UIActionSimulator()
+        # Focusing the field will select all the text in it
+        ctrl.SetFocus()
+        test.gui_loop(100)
+
+        # Set the value to 1 px (minus and period should not register)
+        for c in "-0.001\r":
+            sim.Char(ord(c))
+            test.gui_loop(10)
+
+        self.assertEqual(ctrl.GetValue(), 1)
+        self.assertEqual(ctrl.get_value_str(), u"1 px")
+
+        ctrl.SetSelection(0, 20)
+
+        for c in "44px\r":
+            sim.Char(ord(c))
+            test.gui_loop(10)
+
+        self.assertEqual(ctrl.GetValue(), 44)
+        self.assertEqual(ctrl.get_value_str(), u"44 px")
 
     def test_unit_float_txt_ctrl(self):
 

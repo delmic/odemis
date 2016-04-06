@@ -359,7 +359,6 @@ class MonoScanPlugin(Plugin):
             "control_type": odemis.gui.CONTROL_FLT,  # no slider
         }),
         ("numberOfPixels", {
-            # TODO: no slider, but for now, we have a slider to try to fix a bug when typing number
             "control_type": odemis.gui.CONTROL_INT,  # no slider
         }),
         ("dwellTime", {

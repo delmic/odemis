@@ -422,7 +422,7 @@ class _NumberValidator(wx.PyValidator):
 
         reg_data = {
             'negative_sign': '',
-            'unit': u"[ ]*[GMkmµunp]?%s?" % unit if unit else ''
+            'unit': u"[ ]*[GMkmµunp]?(%s)?" % unit if unit else ''
         }
 
         if (
@@ -528,13 +528,13 @@ class _NumberValidator(wx.PyValidator):
         returns (boolean)
         """
         is_valid = self._is_valid_value(self._get_str_value())
-        logging.debug("Value '%s' is %s valid", val, "" if is_valid else "not")
+        # logging.debug("Value '%s' is %s valid", self._get_str_value(), "" if is_valid else "not")
         return is_valid
 
     def get_validated_number(self, str_val):
         """ Return a validated number represented by the string value provided
 
-        If choices is set, it will pick the closest mathcing value available.
+        If choices is set, it will pick the closest matching value available.
         If min_val or max_val are set, it will always return a value within bounds.
 
         Args:
@@ -674,7 +674,7 @@ class _NumberTextCtrl(wx.TextCtrl):
     def Enable(self, enable):
 
         # TODO: Find a better way to deal with this hack that was put in place because under
-        # MS Windows the background colour cannot (at all?) be set when a control is disbaled
+        # MS Windows the background colour cannot (at all?) be set when a control is disabled
         if os.name == 'nt':
             self.SetEditable(enable)
 
@@ -750,7 +750,7 @@ class _NumberTextCtrl(wx.TextCtrl):
             self._number_value = self.GetValidator().get_validated_number(str_number)
             # TODO: turn the text red temporarily if not valid?
             # if not validated:
-            # logging.debug("Value '%s' not valid, using '%s'", str_val, val)
+            # logging.debug("Converted '%s' into '%s'", str_number, self._number_value)
 
         if prev_num != self._number_value:
             self._send_change_event()
@@ -873,8 +873,11 @@ class IntegerValidator(_NumberValidator):
             ValueError: When the string cannot be parsed correctly
 
         """
-
-        str_val, si_prefix, unit = decompose_si_prefix(str_val)
+        if self.unit and str_val.endswith(self.unit):
+            # Help it to find the right unit (important for complicated ones like 'px')
+            str_val, si_prefix, unit = decompose_si_prefix(str_val, self.unit)
+        else:
+            str_val, si_prefix, unit = decompose_si_prefix(str_val)
         return int(si_scale_val(float(str_val), si_prefix))
 
 
@@ -930,7 +933,6 @@ class UnitIntegerCtrl(UnitNumberCtrl):
         min_val = kwargs.pop('min_val', None)
         max_val = kwargs.pop('max_val', None)
         choices = kwargs.pop('choices', None)
-        kwargs['validator'] = IntegerValidator(min_val, max_val, choices)
         unit = kwargs.get('unit', None)
 
         kwargs['validator'] = IntegerValidator(min_val, max_val, choices, unit)
@@ -974,7 +976,11 @@ class FloatValidator(_NumberValidator):
 
         """
 
-        str_val, si_prefix, unit = decompose_si_prefix(str_val)
+        if self.unit and str_val.endswith(self.unit):
+            # Help it to find the right unit (important for complicated ones like 'px')
+            str_val, si_prefix, unit = decompose_si_prefix(str_val, self.unit)
+        else:
+            str_val, si_prefix, unit = decompose_si_prefix(str_val)
         return si_scale_val(float(str_val), si_prefix)
 
 
