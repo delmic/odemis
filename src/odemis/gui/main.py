@@ -164,12 +164,6 @@ class OdemisGUIApp(wx.App):
         except Exception:
             logging.exception("Failed to load Powermate support")
 
-        if os.name == 'nt' and getattr(sys, 'frozen', False):
-            if get_general_conf().get("viewer", "update") == "yes":
-                import odemis.gui.util.updater as updater
-                u = updater.WindowsUpdater()
-                wx.CallLater(1000, u.check_for_update)
-
         # Application successfully launched
         return True
 
