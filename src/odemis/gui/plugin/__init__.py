@@ -22,24 +22,23 @@ see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+from abc import ABCMeta, abstractmethod, abstractproperty
 import glob
 import imp
 import inspect
 import logging
-import os
-import wx
-from abc import ABCMeta, abstractmethod, abstractproperty
-from odemis.gui.cont.streams import StreamBarController
-
-from odemis.model import VigilantAttributeBase
-
+from odemis import util
 import odemis
 from odemis.gui.comp.buttons import ImageTextButton
 from odemis.gui.cont.settings import SettingsController
+from odemis.gui.cont.streams import StreamBarController
 from odemis.gui.main_xrc import xrcfr_plugin
 from odemis.gui.util import call_in_wx_main, get_home_folder
 from odemis.gui.util.widgets import ProgressiveFutureConnector
+from odemis.model import VigilantAttributeBase
 from odemis.model import getVAs
+import os
+import wx
 
 
 def find_plugins():
@@ -334,13 +333,16 @@ class AcquisitionDialog(xrcfr_plugin):
             LookupError: if no VA is found on the objWithVA
 
         """
-
         vas = getVAs(objWithVA)
-
         if not vas:
             raise LookupError("No VAs found!")
 
-        for name, va in vas.iteritems():
+        if not conf:
+            conf = {}
+        vas_names = util.sorted_according_to(vas.keys(), conf.keys())
+
+        for name in vas_names:
+            va = vas[name]
             set_conf = conf.get(name, {})
 
             if 'control_type' in set_conf and set_conf['control_type'] == odemis.gui.CONTROL_FILE:
