@@ -3897,6 +3897,7 @@
                   <object class="sizeritem">
                     <object class="ImageTextButton" name="btn_secom_export">
                       <size>382,-1</size>
+                      <icon>img/icon/ico_export.png</icon>
                       <height>48</height>
                       <face_colour>blue</face_colour>
                       <label>EXPORT IMAGE</label>
