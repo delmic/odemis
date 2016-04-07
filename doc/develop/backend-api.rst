@@ -3,15 +3,14 @@ Back-end Application Programming Interface
 ******************************************
 
 This describes the core API of Odemis. This is the API that device adapters must
-follow to provide access to the underlying hardware. The back-end manager 
-takes care of instantiating all the components of the microscope and sharing
-them with the front-end. User interfaces and scripts can control the hardware
-via the use of this API. It is specifically focused to represent and manipulate
-microscope hardware.
+follow to provide access to the underlying hardware. The back-end manager takes care
+of instantiating all the components of the microscope and sharing them with the
+front-end. User interfaces and scripts can control the hardware via the use of this
+API. It is specifically focused to represent and manipulate microscope hardware.
 
-To get the (root) microscope component, the special :py:meth:`model.getMicroscope` 
-function can be used. There are a few other helper functions to directly access
-an component:
+To get the (root) microscope component, the special :py:meth:`model.getMicroscope`
+function can be used. There are a few other helper functions to directly access an
+component:
 
 .. py:function:: model.getComponents()
 
@@ -108,8 +107,8 @@ an component:
 Microscope
 ==========
 
-There is only one of such component in the system. It's (one of) the root of the graph.
-It can be specifically accessed with function :py:func:`model.getMicroscope`.
+There is only one of such component in the system. It's (one of) the root of the
+graph. It can be specifically accessed with function :py:func:`model.getMicroscope`.
 Getting access to this component is getting access to the whole microscope "model".
 
 .. py:class:: Microscope()
@@ -133,7 +132,9 @@ Getting access to this component is getting access to the whole microscope "mode
 Emitter
 =======
 
-Emitters represent a hardware component whose main purpose is to generate energy which will interact (or not) with the sample. For example, an electron beam, a light...
+Emitters represent a hardware component whose main purpose is to generate energy
+which will interact (or not) with the sample. For example, an electron beam, a
+light...
 
 .. py:class:: Emitter()
 
@@ -149,7 +150,9 @@ Emitters represent a hardware component whose main purpose is to generate energy
 Light
 =====
 
-Lights are a type of emitters which generates an electromagnetic radiation at one or several frequencies. Typically (but it's not compulsory), they generate visible light with a shape of (1) (i.e., no scanning).
+Lights are a type of emitters which generates an electromagnetic radiation at one or
+several frequencies. Typically (but it's not compulsory), they generate visible
+light with a shape of (1) (i.e., no scanning).
 
 .. py:class:: Light()
 
@@ -227,14 +230,14 @@ An emitter that scan a set of points repetitively.
         *(VA, float, unit=A)* probe current of the e-beam (which is typically
         affecting the spot size linearly).
 
-If there is a blanker available, it should be automatically set whenever no
-scanning is needed, and automatically disabled when a scanning takes place.
+If there is a blanker available, it should be automatically set whenever no scanning
+is needed, and automatically disabled when a scanning takes place.
 
 Detector
 ========
 
-Detectors represent hardware components which receive emission from the sample.
-For example, a secondary electron detector, the CCD of a camera.
+Detectors represent hardware components which receive emission from the sample. For
+example, a secondary electron detector, the CCD of a camera.
 
 .. py:class:: Detector()
 
@@ -281,9 +284,19 @@ DigitialCamera is a subtype of Detector which detects light with an array.
 Actuator
 ========
 
-Actuator represents hardware components which can move. For example a stage. In case of linear move the axis value is expressed in meters, and in case of rotation it is expressed in radians. The most important concept this component brings is that a move can take a long time, so a move request is asynchronous, controlled via a :py:class:`concurrent.futures.Future`.
+Actuator represents hardware components which can move. For example a stage. In case
+of linear move the axis value is expressed in meters, and in case of rotation it is
+expressed in radians. The most important concept this component brings is that a
+move can take a long time, so a move request is asynchronous, controlled via a
+:py:class:`concurrent.futures.Future`.
 
-Note that .moveRel() and .moveAbs() are asynchronous. If several moves are requested before one is finished, the driver must  ensure that the final position is equal to calling the moves while being synchronised (within an error margin). However the path that is taken to reach the final position is implementation dependent. So calling ``.moveAbs({“x”: 1})`` and immediately followed by ``.moveRel({“x”: -0.5})`` will eventually be equivalent to just one call to ``.moveAbs({“x”: 0.5})``, but whether the stage passed by position *x=1* is unknown (to the client).
+Note that .moveRel() and .moveAbs() are asynchronous. If several moves are requested
+before one is finished, the driver must  ensure that the final position is equal to
+calling the moves while being synchronised (within an error margin). However the
+path that is taken to reach the final position is implementation dependent. So
+calling ``.moveAbs({“x”: 1})`` and immediately followed by ``.moveRel({“x”: -0.5})``
+will eventually be equivalent to just one call to ``.moveAbs({“x”: 0.5})``, but
+whether the stage passed by position *x=1* is unknown (to the client).
 
 .. py:class:: Actuator()
 
@@ -370,13 +383,13 @@ Note that .moveRel() and .moveAbs() are asynchronous. If several moves are reque
 Axis
 ====
 
-Axis represents one axis of an :py:class:`Actuator`.
-It is a simple static object that holds information on the axis,
-but all the dynamic information and actions are performed via the :py:class:`Actuator`.
+Axis represents one axis of an :py:class:`Actuator`. It is a simple static object
+that holds information on the axis, but all the dynamic information and actions are
+performed via the :py:class:`Actuator`.
 
-There are mostly two types of Axes, either *continuous*, with the :py:attr:`Axis.range`
-attribute (e.g., translation actuator) or *enumerated*, with the :py:attr:`Axis.choices`
-attribute (e.g., switch).
+There are mostly two types of Axes, either *continuous*, with the
+:py:attr:`Axis.range` attribute (e.g., translation actuator) or *enumerated*, with
+the :py:attr:`Axis.choices` attribute (e.g., switch).
  
 .. py:class:: Axis()
 
@@ -424,36 +437,34 @@ attribute (e.g., switch).
 Data and Metadata
 =================
 
-In Odemis, all the instrument data is represented via a :py:class:`DataArray`.
-The attributes :py:attr:`DataArray.shape` and :py:attr:`DataArray.dtype` contains the basic information on this data: 
-the size of each dimension of the array and the type of the elements in the array.
-Additional information about this data, the metadata, can be recorded in the 
-:py:attr:`DataArray.metadata` attribute. It is a dictionary which allows to record information such as
-the date of acquisition, the exposure time, the type of hardware used, the 
-wavelength of the energy received, etc. For the list of metadata, refer to the 
-model.MD_* constants. The file ``odemis/model/_metadata.py`` contains description of
-each metadata. 
+In Odemis, all the instrument data is represented via a :py:class:`DataArray`. The
+attributes :py:attr:`DataArray.shape` and :py:attr:`DataArray.dtype` contains the
+basic information on this data: the size of each dimension of the array and the type
+of the elements in the array. Additional information about this data, the metadata,
+can be recorded in the :py:attr:`DataArray.metadata` attribute. It is a dictionary
+which allows to record information such as the date of acquisition, the exposure
+time, the type of hardware used, the wavelength of the energy received, etc. For the
+list of metadata, refer to the
+model.MD_* constants. The file ``odemis/model/_metadata.py`` contains description of each metadata. 
 
-The convention for the dimensions of the DataArray is to always record the data
-in the order CTZYX, where C is channel (i.e., energy wavelength), T is time, 
-and ZYX are the 3 standard axes dimensions. If a DataArray has less than 5 
-dimensions, the available dimensions are the last dimensions and the missing 
-dimensions are considered of size 1. For example, a 2D DataArray is considered
-by default of dimensions YX. In some cases, it is more convenient or efficient 
-to store dimensions in a different order. It is possible to override the default
-dimension order by using the ``MD_DIMS`` metadata. For instance, RGB data is often
-stored with the channel as last dimension for display. Such case can be indicated
-with "YXC".
+The convention for the dimensions of the DataArray is to always record the data in
+the order CTZYX, where C is channel (i.e., energy wavelength), T is time, and ZYX
+are the 3 standard axes dimensions. If a DataArray has less than 5 dimensions, the
+available dimensions are the last dimensions and the missing dimensions are
+considered of size 1. For example, a 2D DataArray is considered by default of
+dimensions YX. In some cases, it is more convenient or efficient to store dimensions
+in a different order. It is possible to override the default dimension order by
+using the ``MD_DIMS`` metadata. For instance, RGB data is often stored with the
+channel as last dimension for display. Such case can be indicated with "YXC".
 
 Convention about measurement units
 ==================================
 
-Most of the data in Odemis is represented either as standard Python types,
-as :py:class:`DataArray` or as :py:class:`VigilantAttribute`. 
-This means that often they do not bear unit information explicitly,
-even though they represent physical quantities. 
-The convention is to use the standard `SI <http://en.wikipedia.org/wiki/SI>`_
-measurement units whenever it can be applied. 
-For example, distance and wavelengths are expressed in meters (m), 
-angles in radians (rad), and times in seconds (s).
-Never express anything in multiples of a official unit (e.g., never put anything in nm).
+Most of the data in Odemis is represented either as standard Python types, as
+:py:class:`DataArray` or as :py:class:`VigilantAttribute`. This means that often
+they do not bear unit information explicitly, even though they represent physical
+quantities. The convention is to use the standard
+`SI <http://en.wikipedia.org/wiki/SI>`_ measurement units whenever it can be
+applied. For example, distance and wavelengths are expressed in meters (m), angles
+in radians (rad), and times in seconds (s). Never express anything in multiples of a
+official unit (e.g., never put anything in nm).

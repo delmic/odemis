@@ -290,7 +290,8 @@ categories:
 * Actuator: moves physically something
 
 To create a new device adapter, add a python module to the ``src/odemis/drivers/``
-directory following the interface for the specific type of component (see the back-end API).
+directory following the interface for the specific type of component (see the
+back-end API in chapter _`Back-end Application Programming Interface`).
 
 Add a test class to the test directory which instantiates the component and at
 least detects whether the component is connected or not (``scan()`` and ``selfTest()``
@@ -305,10 +306,22 @@ Optionally, send your extension to Delmic as a git patch or a github merge reque
 Adding a feature to the Graphical User Interface
 ================================================
 
-Note that it's not recommended to modify the GUI before you are already quite
-familiar with Odemis' code. In particular, there is no API for extending the
+There are two ways to extend the Graphical User Interface (GUI). The first and
+easiest way is to develop a 'plugin'. 
+See the chapter _`Graphical User Interface Plugins` for a detailed description.
+At start-up, Odemis GUI will load all the plugins available on the computer.
+The main drawbacks is that for very
+advanced or integrated functionality, it might be harder to develop and debug
+the code than modifying directly the GUI code. Plugins are also not distributed
+in standard, so it's not the right way to improve the default Odemis. 
+
+The second way to extend the GUI, is to modify the original code in ``src/odemis/gui``.
+Note that it is recommended to be quite familiar with Odemis' code and concepts
+before tackling such a task. In particular, there is no API for extending the
 interface, and therefore you'll most likely need to modify the code in many
-different files.
+different files. Also, as the GUI relies on the wxPython and cairo libraries to
+display widgets, it is also recommended to have a basic knowledge of these
+libraries.
 
 To edit the interface, you should use XRCed.
 Launch it by typing this (from ``~/development/odemis``)::

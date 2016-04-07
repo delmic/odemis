@@ -20,6 +20,7 @@ This document covers the main aspects of development with Odemis.
     base-api
     backend-api
     acq
+    plugins
     microscope
     documentation
 ..    dataio
