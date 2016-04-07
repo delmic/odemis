@@ -5,16 +5,16 @@ import os
 
 def get_lib_tiff():
     """ Help PyInstaller find all the lib-tiff files it needs """
-    import site
     import os
 
-    for path in site.getsitepackages():
-        tiff_path = os.path.join(path, 'libtiff')
-        if os.path.exists(tiff_path):
-            return [
-                ('libtiff\\libtiff.dll', os.path.join(tiff_path, 'libtiff.dll'), 'DATA'),
-                ('libtiff\\tiff.h', os.path.join(tiff_path, 'tiff.h'), 'DATA')
-            ]
+    import libtiff
+    tiff_path = os.path.dirname(libtiff.__file__)
+
+    if os.path.exists(tiff_path):
+        return [
+            ('libtiff\\libtiff.dll', os.path.join(tiff_path, 'libtiff.dll'), 'DATA'),
+            ('libtiff\\tiff.h', os.path.join(tiff_path, 'tiff.h'), 'DATA')
+        ]
 
     raise ImportError("Could not find Libtiff files!")
 

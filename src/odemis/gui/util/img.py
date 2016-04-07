@@ -28,6 +28,9 @@ import cairo
 import logging
 import math
 import numpy
+import wx.lib.wxcairo as wxcairo
+import odemis.gui.img as guiimg
+
 from odemis import model
 from odemis.acq import stream
 from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
@@ -1027,8 +1030,8 @@ def draw_scale(ctx, value_range, client_size, orientation, tick_spacing, fill_co
             # print (i, prev_right, lpos)
             if prev_lpos < lpos:
                 if mirror:
-#                     ctx.move_to(lpos, scale_width - (lbl_height - 3))
-#                     ctx.show_text(label)
+                    # ctx.move_to(lpos, scale_width - (lbl_height - 3))
+                    # ctx.show_text(label)
                     ctx.move_to(pos, scale_width - 5)
                     ctx.line_to(pos, scale_width)
                 else:
@@ -1044,8 +1047,8 @@ def draw_scale(ctx, value_range, client_size, orientation, tick_spacing, fill_co
 
             if prev_lpos >= lpos + 20 or i == 0:
                 if mirror:
-#                     ctx.move_to(9, lpos)
-#                     ctx.show_text(label)
+                    # ctx.move_to(9, lpos)
+                    # ctx.show_text(label)
                     ctx.move_to(5, pos)
                     ctx.line_to(0, pos)
                 else:
@@ -1285,9 +1288,9 @@ def draw_export_legend(legend_ctx, images, buffer_size, buffer_scale, mag=None,
     legend_ctx.move_to(legend_x_pos, legend_y_pos)
     # For now obsolete magnification
     # TODO: include image name typed by the user
-#     mag_text = u"Mag: × %s" % units.readable_str(units.round_significant(mag, 3))
-#     label = mag_text
-#     legend_ctx.show_text(label)
+    # mag_text = u"Mag: × %s" % units.readable_str(units.round_significant(mag, 3))
+    # label = mag_text
+    # legend_ctx.show_text(label)
 
     # write HFW
     legend_x_pos += cell_x_step
@@ -1349,7 +1352,9 @@ def draw_export_legend(legend_ctx, images, buffer_size, buffer_scale, mag=None,
 
     # write delmic logo
     if logo is not None:
-        logo_surface = cairo.ImageSurface.create_from_png(logo)
+        # logo_surface = cairo.ImageSurface.create_from_png(logo)
+        logo = guiimg.getBitmap(logo)
+        logo_surface = wxcairo.ImageSurfaceFromBitmap(logo)
         logo_scale_x = ((cell_x_step / 2) - init_x_pos) / logo_surface.get_width()
         legend_ctx.save()
         # FIXME: neither antialias or interpolation seems to have any effect when

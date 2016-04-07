@@ -21,6 +21,8 @@ see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+import os
+
 from odemis import model, gui
 from odemis.acq import stream
 from odemis.gui import DYE_LICENCE
@@ -156,6 +158,16 @@ class MenuController(object):
                         main_frame.menu_item_bugreport.GetId(),
                         self._on_bugreport)
 
+        # /Help/Check for update
+        if os.name == 'nt' and getattr(sys, 'frozen', False):
+            wx.EVT_MENU(main_frame,
+                        main_frame.menu_item_update.GetId(),
+                        self._on_update)
+        else:
+            menu = main_frame.menu_item_update.GetMenu()
+            menu.RemoveItem(main_frame.menu_item_update)
+            main_frame.menu_item_update.Destroy()
+
         # /Help/About
         wx.EVT_MENU(main_frame,
                     main_frame.menu_item_about.GetId(),
@@ -164,6 +176,11 @@ class MenuController(object):
         tab = self._main_data.tab.value
         if hasattr(tab.tab_data_model, 'autofocus_active'):
             tab.tab_data_model.autofocus_active.subscribe(self._on_auto_focus_state)
+
+    def _on_update(self, evt):
+        import odemis.gui.util.updater as updater
+        u = updater.WindowsUpdater()
+        u.check_for_update()
 
     def on_stop_axes(self, evt):
         if self._main_data:

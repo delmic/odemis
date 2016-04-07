@@ -97,6 +97,11 @@ class WindowsUpdater:
         lv = pkg_resources.parse_version(self.get_local_version())
         rv = pkg_resources.parse_version(web_version)
         if rv <= lv:
+            wx.MessageBox(
+                u"You are already using the most recent version of Odemis.",
+                u"Odemis Updater",
+                style=wx.OK | wx.CENTER | wx.ICON_ASTERISK
+            )
             return
 
         logging.info("Newer version found, suggesting update...")
@@ -118,15 +123,6 @@ class WindowsUpdater:
 
         if answer == wx.YES:
             self.download_installer(web_version, web_size)
-        else:
-            answer = wx.MessageBox(
-                "Would you like to be notified of future updates to %s?" % VIEWER_NAME,
-                "Update checker", wx.YES_NO | wx.ICON_QUESTION
-            )
-
-            if answer == wx.NO:
-                conf = get_general_conf()
-                conf.set("viewer", "update", "no")
 
     def download_installer(self, remote_version, web_size):
 
