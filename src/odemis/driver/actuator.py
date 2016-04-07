@@ -131,7 +131,6 @@ class MultiplexActuator(model.Actuator):
 
         # whether the axes are referenced
         self.referenced = model.VigilantAttribute(self._referenced.copy(), readonly=True)
-        self.referenced.debug = True
 
         for axis in self._referenced.keys():
             c, ca = self._axis_to_child[axis]
