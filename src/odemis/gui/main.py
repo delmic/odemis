@@ -27,7 +27,6 @@ import logging
 from odemis import model, gui
 import odemis
 from odemis.gui import main_xrc, log, img, plugin
-from odemis.gui.conf import get_general_conf
 from odemis.gui.cont import acquisition
 from odemis.gui.cont.menu import MenuController
 from odemis.gui.util import call_in_wx_main
