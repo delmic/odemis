@@ -492,7 +492,8 @@ class MonoScanPlugin(Plugin):
         stream_paused = str_ctrl.pauseStreams()
 
         try:
-            f = acq.acquire(strs)
+            # opm is the optical path manager, that ensures the path is set to the monochromator
+            f = acq.acquire(strs, opm=self.main_app.main_data.opm)
             dlg.showProgress(f)
             das, e = f.result()
         finally:
