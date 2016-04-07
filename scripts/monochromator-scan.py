@@ -469,8 +469,6 @@ class MonoScanPlugin(Plugin):
         dlg.addButton("Cancel")
         dlg.addButton("Acquire", self.acquire, face_colour='blue')
 
-        dlg.addStream(self._mchr_s)
-
         # Show the window, and wait until the acquisition is over
         ans = dlg.ShowModal()
 
