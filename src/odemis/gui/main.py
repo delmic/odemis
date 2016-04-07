@@ -111,7 +111,7 @@ class OdemisGUIApp(wx.App):
 
         """
 
-        gui.legend_logo = "img/legend_logo_delmic.png"
+        gui.legend_logo = "legend_logo_delmic.png"
         if self._is_standalone:
             microscope = None
             gui.icon = img.getIcon("icon/ico_gui_viewer_256.png")
@@ -119,7 +119,7 @@ class OdemisGUIApp(wx.App):
 
             if "delphi" == self._is_standalone:
                 gui.logo = img.getBitmap("logo_delphi.png")
-                gui.legend_logo = "img/legend_logo_delphi.png"
+                gui.legend_logo = "legend_logo_delphi.png"
         else:
             gui.icon = img.getIcon("icon/ico_gui_full_256.png")
             gui.name = odemis.__shortname__
@@ -140,7 +140,7 @@ class OdemisGUIApp(wx.App):
             else:
                 if microscope.role == "delphi":
                     gui.logo = img.getBitmap("logo_delphi.png")
-                    gui.legend_logo = "img/legend_logo_delphi.png"
+                    gui.legend_logo = "legend_logo_delphi.png"
 
         logging.info("\n\n************  Starting Odemis GUI  ************\n")
         logging.info("Odemis GUI v%s (from %s)", odemis.__version__, __file__)
