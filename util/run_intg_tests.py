@@ -51,7 +51,7 @@ SIM_CONF_PATH = "%s/install/linux/usr/share/odemis/sim" % ODEMIS_PATH
 # Odemis commands
 CMD_STOP = ["%s/install/linux/usr/bin/odemis-stop" % ODEMIS_PATH]
 CMD_START = ["%s/install/linux/usr/bin/odemis-start" % ODEMIS_PATH, "-n", "-l"]
-CMD_GUI = ["%s/install/linux/usr/bin/odemis-gui" % ODEMIS_PATH, "--log-level", "2"]
+CMD_GUI = ["%s/install/linux/usr/bin/odemis-gui" % ODEMIS_PATH, "--log-level", "2", "--log-target"]
 
 # These string are searched for in the log files and if any are found, an error
 # is assumed to have occurred.
@@ -146,9 +146,10 @@ def wait_backend_ready():
     return True
 
 
-def test_config(sim_conf):
+def test_config(sim_conf, logpath):
     """ Test one running a backend and GUI with a given microscope file
     sim_conf (str): full filename of the microscope file to start
+    logpath (str): directory where to store the log files
     return (bool): True if no error running the whole system, False otherwise
     """
 
@@ -156,8 +157,8 @@ def test_config(sim_conf):
 
     # sim_conf_path = os.path.join(SIM_CONF_PATH, sim_conf)
     test_name = "test_%s" % "".join((c if c.isalnum() else '_' for c in sim_conf))
-    dlog_path = 'odemisd-%s-test.log' % test_name
-    guilog_path = 'gui-%s-test.log' % test_name
+    dlog_path = os.path.join(logpath, 'odemisd-%s-test.log' % test_name)
+    guilog_path = os.path.join(logpath, 'gui-%s-test.log' % test_name)
 
     # Clear any old log files might have been left behind
     try:
@@ -179,7 +180,7 @@ def test_config(sim_conf):
         gui = None
     else:
         logging.info("Starting %s GUI", sim_conf)
-        cmd = CMD_GUI + [guilog_path]
+        cmd = CMD_GUI + [os.path.abspath(guilog_path)]
         gui = OdemisThread("GUI %s" % sim_conf_fn, cmd)
         gui.start()
 
@@ -267,7 +268,7 @@ def main(args):
 
         # Create a test and add it to the test case for each configuration found
         for sim_conf in sim_conf_files:
-            passed = test_config(sim_conf)
+            passed = test_config(sim_conf, options.logpath)
             all_passed = all_passed and passed
 
     except ValueError as exp:
