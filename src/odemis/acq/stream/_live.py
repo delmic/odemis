@@ -23,15 +23,16 @@ from __future__ import division
 import collections
 import logging
 import numpy
-from odemis import model
+from odemis import model, util
 from odemis.acq import drift
 from odemis.acq.align import FindEbeamCenter
 from odemis.model import MD_POS_COR
 from odemis.util import img, conversion, fluo
-import random
 import threading
 import time
 import weakref
+from odemis.model import isasync
+from concurrent.futures.thread import ThreadPoolExecutor
 
 from ._base import Stream, UNDEFINED_ROI
 
@@ -80,6 +81,15 @@ class LiveStream(Stream):
         """ Called when the Stream is activated or deactivated by setting the
         is_active attribute
         """
+        # Make sure the stream is prepared before really activate it
+        if active:
+            if not self._prepared:
+                f = self.prepare()
+                f.result()
+            else:
+                logging.debug("%s already prepared", self)
+        else:
+            self._prepared = False
         if active:
             msg = "Subscribing to dataflow of component %s"
             logging.debug(msg, self._detector.name)
@@ -384,6 +394,8 @@ class AlignedSEMStream(SEMStream):
         # cur_trans before spot alignment takes place.
         self._cur_trans = None
         stage.position.subscribe(self._onStageMove)
+        self._executor = ThreadPoolExecutor(max_workers=1)
+        self._beamshift = None
 
     def _onStageMove(self, pos):
         """
@@ -423,9 +435,36 @@ class AlignedSEMStream(SEMStream):
         logging.debug("Update metadata for SEM image shift")
         self._detector.updateMetadata({MD_POS_COR: self._shift})
 
-    def _onActive(self, active):
+    @isasync
+    def prepare(self):
+        """
+        Perform calibration if needed
+        """
+        logging.debug("Preparing stream %s ...", self)
+        # actually indicate that preparation has been triggered, don't wait for
+        # it to be completed
+        self._prepared = True
+        f = self._executor.submit(self._DoPrepare)
+
+        return f
+
+    def __del__(self):
+        self._executor.shutdown(wait=False)
+
+    def _updateStatus(self):
+        try:
+            _, msg = self.status.value
+            if msg in [u"Automatic SEM alignment in progress.", u"Automatic SEM alignment in progress.."]:
+                self._setStatus(logging.INFO, msg + u".")
+            else:
+                self._setStatus(logging.INFO, u"Automatic SEM alignment in progress.")
+        except Exception:
+            logging.exception("Unexpected failure during status polling")
+
+    def _DoPrepare(self):
         # Need to calibrate ?
-        if active and not self._calibrated:
+        if not self._calibrated:
+            self._setStatus(logging.INFO, u"Automatic SEM alignment in progress.")
             # store current settings
             no_spot_settings = (self._emitter.dwellTime.value,
                                 self._emitter.resolution.value)
@@ -436,6 +475,8 @@ class AlignedSEMStream(SEMStream):
             shift = (0, 0)
             self._beamshift = None
             try:
+                self._status_poll = util.RepeatingTimer(0.7, self._updateStatus, "Status update")
+                self._status_poll.start()
                 logging.info("Determining the Ebeam center position")
                 # TODO Handle cases where current beam shift is larger than
                 # current limit. Happens when accel. voltage is changed
@@ -465,15 +506,19 @@ class AlignedSEMStream(SEMStream):
                 else:
                     logging.error("Unknown shiftbeam method %s", self._shiftebeam)
             except LookupError:
+                self._status_poll.cancel()
                 self._setStatus(logging.WARNING, u"Automatic SEM alignment unsuccessful")
                 logging.warning("Failed to locate the ebeam center, SEM image will not be aligned")
             except Exception:
+                self._status_poll.cancel()
                 logging.exception("Failure while looking for the ebeam center")
             else:
+                self._status_poll.cancel()
                 self._setStatus(None)
                 logging.info("Aligning SEM image using shift of %s", shift)
                 self._calibrated = True
             finally:
+                self._status_poll.cancel()
                 # restore hw settings
                 (self._emitter.dwellTime.value,
                  self._emitter.resolution.value) = no_spot_settings
@@ -483,6 +528,7 @@ class AlignedSEMStream(SEMStream):
             self._shift = shift
             self._compensateShift()
 
+    def _onActive(self, active):
         super(AlignedSEMStream, self)._onActive(active)
 
 

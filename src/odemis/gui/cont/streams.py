@@ -1067,6 +1067,7 @@ class StreamBarController(object):
             self._main_data_model.ccd.data,
             self._main_data_model.brightlight,
             focuser=self._main_data_model.focus,
+            opm=self._main_data_model.opm if hasattr(self._main_data_model, "opm") else None,
             detvas={"exposureTime"},
             emtvas={"power"}
         )
@@ -1086,6 +1087,7 @@ class StreamBarController(object):
             self._main_data_model.ccd.data,
             self._main_data_model.backlight,
             focuser=self._main_data_model.focus,
+            opm=self._main_data_model.opm if hasattr(self._main_data_model, "opm") else None,
             detvas={"exposureTime"},
             emtvas={"power"}
         )
@@ -1122,7 +1124,7 @@ class StreamBarController(object):
                 self._main_data_model.sed,
                 self._main_data_model.sed.data,
                 self._main_data_model.ebeam,
-                focuser=self._main_data_model.ebeam_focus,
+                focuser=self._main_data_model.ebeam_focus
             )
         return self._add_stream(s, **kwargs)
 
@@ -1151,7 +1153,7 @@ class StreamBarController(object):
                 self._main_data_model.bsd,
                 self._main_data_model.bsd.data,
                 self._main_data_model.ebeam,
-                focuser=self._main_data_model.ebeam_focus,
+                focuser=self._main_data_model.ebeam_focus
             )
         return self._add_stream(s, **kwargs)
 
@@ -1165,7 +1167,7 @@ class StreamBarController(object):
             self._main_data_model.ebic,
             self._main_data_model.ebic.data,
             self._main_data_model.ebeam,
-            focuser=self._main_data_model.ebeam_focus,
+            focuser=self._main_data_model.ebeam_focus
         )
         return self._add_stream(s, **kwargs)
 
@@ -1357,10 +1359,10 @@ class StreamBarController(object):
                         s.should_update.value = False
                         s.should_update.subscribe(cb)
 
-                # activate this stream
+                # prepare and activate this stream
                 # It's important it's last, to ensure hardware settings don't
                 # mess up with each other.
-                stream.is_active.value = True
+                self._prepareAndActivate(stream)
         elif self._sched_policy == SCHED_ALL:
             # All streams with should_update are active
             stream.is_active.value = updated
@@ -1380,6 +1382,18 @@ class StreamBarController(object):
                 return  # fast path
             l = [stream] + l[:i] + l[i + 1:]  # new list reordered
             self._tab_data_model.streams.value = l
+
+    def _prepareAndActivate(self, stream):
+        """
+        Prepare and activate the given stream.
+        stream (Stream): the stream to prepare and activate.
+        """
+        f = stream.prepare()
+        f.stream_to_update = stream
+        f.add_done_callback(self._canActivate)
+
+    def _canActivate(self, future):
+        future.stream_to_update.is_active.value = True
 
     def _scheduleStream(self, stream):
         """ Add a stream to be managed by the update scheduler.
@@ -1860,6 +1874,7 @@ class SparcStreamsController(StreamBarController):
             main_data.ccd.data,
             main_data.ebeam,
             sstage=main_data.scan_stage,
+            opm=self._main_data_model.opm if hasattr(self._main_data_model, "opm") else None,
             # TODO: add a focuser for the SPARCv2?
             detvas=get_local_vas(main_data.ccd),
         )
@@ -1891,6 +1906,7 @@ class SparcStreamsController(StreamBarController):
             main_data.ebeam,
             sstage=main_data.scan_stage,
             focuser=self._main_data_model.ebeam_focus,
+            opm=self._main_data_model.opm if hasattr(self._main_data_model, "opm") else None,
             emtvas={"dwellTime"},
             detvas=get_local_vas(main_data.cld),
         )
@@ -1947,6 +1963,7 @@ class SparcStreamsController(StreamBarController):
             detector.data,
             main_data.ebeam,
             sstage=main_data.scan_stage,
+            opm=self._main_data_model.opm if hasattr(self._main_data_model, "opm") else None,
             # emtvas=get_local_vas(main_data.ebeam), # no need
             detvas=get_local_vas(detector),
         )
@@ -1985,6 +2002,7 @@ class SparcStreamsController(StreamBarController):
             main_data.ebeam,
             spectrograph=spg,
             sstage=main_data.scan_stage,
+            opm=self._main_data_model.opm if hasattr(self._main_data_model, "opm") else None,
             emtvas={"dwellTime"},
             detvas=get_local_vas(main_data.monochromator),
         )
@@ -2029,16 +2047,17 @@ class SparcStreamsController(StreamBarController):
             return
 
         if updated:
-            # Prepare the optical path
-            opm = self._main_data_model.opm
-            try:
-                opm.setPath(stream).result()
-            except LookupError:
-                logging.debug("%s doesn't require optical path change", stream)
-            else:
-                # TODO: Run in a separate thread as in live view it's ok if
-                # the path is not immediately correct?
-                logging.debug("Setting optical path for %s", stream)
+            # Preparing the optical path manager now is taken care of in stream's
+            # prepare method
+#             # Prepare the optical path
+#             opm = self._main_data_model.opm
+#             try:
+#                 opm.setPath(stream).result()
+#             except LookupError:
+#                 logging.debug("%s doesn't require optical path change", stream)
+#             else:
+#                 # TODO: Run in a separate thread as in live view it's ok if
+#                 # the path is not immediately correct?
 
             # Activate or deactive spot mode based on what the stream needs
             # Note: changing tool is fine, because it will only _pause_ the

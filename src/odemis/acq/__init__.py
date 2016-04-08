@@ -53,7 +53,7 @@ import time
 # returns a special "ProgressiveFuture" which is a Future object that can be
 # stopped while already running, and reports from time to time progress on its
 # execution.
-def acquire(streams, opm=None):
+def acquire(streams):
     """ Start an acquisition task for the given streams.
 
     It will decide in which order the stream must be acquired.
@@ -62,7 +62,6 @@ def acquire(streams, opm=None):
         It is highly recommended to not have any other acquisition going on.
 
     :param streams: [Stream] the streams to acquire
-            opm: [OpticalPathManager] if given, used to set the optical path
     :return: (ProgressiveFuture) an object that represents the task, allow to
         know how much time before it is over and to cancel it. It also permits
         to receive the result of the task, which is a tuple:
@@ -74,7 +73,7 @@ def acquire(streams, opm=None):
     future = model.ProgressiveFuture()
 
     # create a task
-    task = AcquisitionTask(streams, future, opm)
+    task = AcquisitionTask(streams, future)
     future.task_canceller = task.cancel # let the future cancel the task
 
     # run executeTask in a thread

@@ -191,6 +191,11 @@ class MultipleDetectorStream(Stream):
         return total_time
 
     def acquire(self):
+        # Make sure every stream is prepared, not really necessary to check _prepared
+        for s in self._streams:
+            f = s.prepare()
+            f.result()
+
         # Order matters: if same local VAs for emitter (e-beam). the rep ones
         # are used.
         self._main_stream._linkHwVAs()
