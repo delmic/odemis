@@ -102,6 +102,13 @@ class MultipleDetectorStream(Stream):
         self._dc_estimator = None
         self._current_future = None
 
+        self._opm = None
+        # get opm if found in any of the substreams
+        for s in self._streams:
+            if hasattr(s, "_opm") and s._opm is not None:
+                self._opm = s._opm
+                break
+
         self.should_update = model.BooleanVA(False)
         self.is_active = model.BooleanVA(False)
 
@@ -192,15 +199,8 @@ class MultipleDetectorStream(Stream):
 
     def acquire(self):
         # Make sure every stream is prepared, not really necessary to check _prepared
-        # get opm if found in any of the substreams
-        self._opm = None
-        for s in self._streams:
-            if hasattr(s, "_opm") and s._opm is not None:
-                self._opm = s._opm
-                logging.debug("Multidetector stream to be prepared: %s", self.name.value)
-                f = self.prepare()
-                f.result()
-                break
+        f = self.prepare()
+        f.result()
 
         # Order matters: if same local VAs for emitter (e-beam). the rep ones
         # are used.

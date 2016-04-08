@@ -68,6 +68,7 @@ class LiveStream(Stream):
         self._hthread.start()
 
         self._prev_dur = None
+        self._prep_future = model.InstantaneousFuture()
 
     def _find_metadata(self, md):
         simpl_md = super(LiveStream, self)._find_metadata(md)
@@ -84,23 +85,30 @@ class LiveStream(Stream):
         # Make sure the stream is prepared before really activate it
         if active:
             if not self._prepared:
-                f = self.prepare()
-                f.result()
+                self._prep_future = self.prepare()
+                self._prep_future.add_done_callback(self._canActivate)
             else:
                 logging.debug("%s already prepared", self)
+                msg = "Subscribing to dataflow of component %s"
+                logging.debug(msg, self._detector.name)
+                if not self.should_update.value:
+                    logging.info("Trying to activate stream while it's not "
+                                 "supposed to update")
+                self._dataflow.subscribe(self._onNewData)
         else:
+            self._prep_future.cancel()
             self._prepared = False
-        if active:
-            msg = "Subscribing to dataflow of component %s"
-            logging.debug(msg, self._detector.name)
-            if not self.should_update.value:
-                logging.info("Trying to activate stream while it's not "
-                             "supposed to update")
-            self._dataflow.subscribe(self._onNewData)
-        else:
             msg = "Unsubscribing from dataflow of component %s"
             logging.debug(msg, self._detector.name)
             self._dataflow.unsubscribe(self._onNewData)
+
+    def _canActivate(self, future):
+        msg = "Subscribing to dataflow of component %s"
+        logging.debug(msg, self._detector.name)
+        if not self.should_update.value:
+            logging.info("Trying to activate stream while it's not "
+                         "supposed to update")
+        self._dataflow.subscribe(self._onNewData)
 
     def _updateAcquisitionTime(self):
         """
