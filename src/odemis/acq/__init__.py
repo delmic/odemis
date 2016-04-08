@@ -207,16 +207,6 @@ class AcquisitionTask(object):
         raw_images = {} # stream -> list of raw images
         try:
             for s in self._streams:
-#                 # if an optical path manager is given, try to guess and set the
-#                 # path according to the streams given
-#                 if self._opm is not None:
-#                     try:
-#                         logging.info("setting optical path for stream %s", s.name.value)
-#                         self._opm.setPath(s).result()
-#                     except LookupError:
-#                         logging.info("No mode can be inferred for the given stream")
-#                     except IOError:
-#                         logging.warning("Given object is not a stream")
 
                 # Get the future of the acquisition, depending on the Stream type
                 if hasattr(s, "acquire"):
