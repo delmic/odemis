@@ -84,6 +84,13 @@ class MultipleDetectorStream(Stream):
         # acquisition end event
         self._acq_done = threading.Event()
 
+        # get opm if found in any of the substreams
+        self._opm = None
+        for s in self._streams:
+            if hasattr(s, "_opm"):
+                self._opm = s._opm
+                break
+
         # For the acquisition
         self._acq_lock = threading.Lock()
         self._acq_state = RUNNING
@@ -192,8 +199,9 @@ class MultipleDetectorStream(Stream):
 
     def acquire(self):
         # Make sure every stream is prepared, not really necessary to check _prepared
-        for s in self._streams:
-            f = s.prepare()
+        # for s in self._streams:
+        if self._opm is not None:
+            f = self.prepare()
             f.result()
 
         # Order matters: if same local VAs for emitter (e-beam). the rep ones

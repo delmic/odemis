@@ -479,7 +479,7 @@ class Stream(object):
 
         returns (model.ProgressiveFuture): Progress of preparation
         """
-        logging.debug("Preparing stream %s ...", self)
+        logging.debug("Preparing stream %s ...", self.name.value)
         # actually indicate that preparation has been triggered, don't wait for
         # it to be completed
         self._prepared = True
@@ -487,12 +487,12 @@ class Stream(object):
             try:
                 f = self._opm.setPath(self)
             except LookupError:
-                logging.debug("%s doesn't require optical path change", self)
+                logging.debug("%s doesn't require optical path change", self.name.value)
                 f = model.InstantaneousFuture()
             else:
                 # TODO: Run in a separate thread as in live view it's ok if
                 # the path is not immediately correct?
-                logging.debug("Setting optical path for %s", self)
+                logging.debug("Setting optical path for %s", self.name.value)
             finally:
                 return f
         return model.InstantaneousFuture()
