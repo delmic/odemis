@@ -1389,11 +1389,8 @@ class StreamBarController(object):
         stream (Stream): the stream to prepare and activate.
         """
         f = stream.prepare()
-        f.stream_to_update = stream
-        f.add_done_callback(self._canActivate)
-
-    def _canActivate(self, future):
-        future.stream_to_update.is_active.value = True
+        f.result()
+        stream.is_active.value = True
 
     def _scheduleStream(self, stream):
         """ Add a stream to be managed by the update scheduler.
