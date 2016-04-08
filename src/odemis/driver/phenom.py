@@ -904,8 +904,6 @@ class Detector(model.Detector):
                     current_fov = numpy.clip(self.parent._scanner.horizontalFoV.value, rng.min, rng.max)
                     self.parent._device.SetSEMHFW(current_fov)
                     # horizontalFoV setter would fail to call .SetSEMHFW()
-                    self.parent._scanner.horizontalFoV._value = current_fov
-                    self.parent._scanner.horizontalFoV.notify(current_fov)
                 else:
                     self.parent._device.SetSEMSourceTilt(self._tilt_unblank[0], self._tilt_unblank[1], False)
                     logging.debug("For voltage %f V and spot size %f, the source tilt is %s",
