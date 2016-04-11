@@ -1,10 +1,10 @@
-# Simulator of the SECOM special for simulating the CL spots during lens alignment
+# Simulator of the SECOM special for simulating the focus
 SimSECOM: {
     class: Microscope,
     role: secom,
-    emitters: [Spectra, "Nikon Super Duper", "MultiBand Fixed Filter", "EBeam ExtXY"],
-    detectors: ["SimCam", "SED ExtXY"],
-    actuators: ["OLStage", "SEM-Optical Alignment", "OpticalZ actuator"],
+    children: [Spectra, "Nikon Super Duper", "MultiBand Fixed Filter", "EBeam ExtXY",
+               "SimCam", "SED ExtXY", "EBeam Focus",
+               "OLStage", "SEM-Optical Alignment", "OpticalZ actuator"],
 }
 
 Spectra: {
@@ -25,49 +25,39 @@ Spectra: {
     affects: ["SimCam"],
 }
 
-# Can simulate a SEM connected to a DAQ board by using the comedi_test driver:
-# sudo modprobe comedi comedi_num_legacy_minors=4
-# sudo modprobe comedi_test
-# sudo comedi_config /dev/comedi0 comedi_test 1000000,1000000
 "SEM ExtXY": {
-    class: semcomedi.SEMComedi,
+    class: simsem.SimSEM,
     role: none,
-    init: {device: "/dev/comedi0"},
-    # more detectors can be added, if necessary
-    children: {scanner: "EBeam ExtXY", detector0: "SED ExtXY"}
+    init: {
+           image: "songbird-sim-sem.h5", # any large 16 bit image is fine
+#           drift_period: 5, # s, comment out to disable drift
+    },
+    children: {scanner: "EBeam ExtXY",
+               detector0: "SED ExtXY",
+               focus: "EBeam Focus",
+    }
 }
 
-# Connect:
-# X -> AO 0
-# Y -> AO 1
-# Ground -> AO GND
 "EBeam ExtXY": {
-    # Internal child of SEM ExtXY, so no class
+    # Internal child of SimSEM, so no class
     role: e-beam,
-    init: {
-        channels: [1, 0],
-        limits: [[0, 5], [0, 5]],  # V
-        park: [-5, -5], # V
-        fastpark: True,
-        settle_time: 10.e-6, # s
-        hfw_nomag: 0.25, # m
-    },
+    init: {},
     properties: {
-        scale: [16, 16], # (ratio) : start with a pretty fast scan
         dwellTime: 10.e-6, # s
-        magnification: 10000, # (ratio)
     },
-    affects: ["SED ExtXY", "SimCam"] # affects the CCD in case of cathodoluminescence
+    affects: ["SED ExtXY", "Andor SimCam"] # affects the CCD in case of cathodoluminescence
 }
 
-# Must be connected on AI 5/AI GND
 "SED ExtXY": { # aka ETD
-    # Internal child of Quanta ExtXY, so no class
+    # Internal child of SimSEM, so no class
     role: se-detector,
-    init: {
-        channel: 0, # 0-> sawtooth waves, 1-> square waves
-        limits: [-3, 3] # V
-    },
+    # hard-corded: good focus level is at 0.1 (default pos)
+    init: {},
+}
+
+"EBeam Focus": {
+    # Internal child of SimSEM, so no class
+    role: ebeam-focus,
 }
 
 "Nikon Super Duper": {
@@ -75,8 +65,8 @@ Spectra: {
     role: lens,
     init: {
        mag: 60.0, # ratio
-       na: 1.25, # ratio, numerical aperture
-       ri: 1.5, # ratio, refractive index
+       na: 0.95, # ratio, numerical aperture
+       ri: 1.0, # ratio, refractive index
     },
     affects: ["SimCam"]
 }
@@ -97,7 +87,8 @@ Spectra: {
 "SimCam": {
     class: simcam.Camera,
     role: ccd,
-    init: {image: "andorcam2-fake-spots.h5", # 7x7 grid
+    init: {image: "andorcam2-fake-clara.tiff",
+           #image: "andorcam2-fake-spots.h5", # 7x7 grid
     },
     children: {focus: "OpticalZ actuator"}
 }
@@ -106,9 +97,8 @@ Spectra: {
 #         (On screen) bottom->top (so distance to sample is smaller when going up)    
 "OpticalZ actuator": {
     role: focus,
-    #affects: ["SimCam"],
-    init: {
-    }
+    # hard-coded: good focus level is at 0.006 (default pos)
+    affects: ["SimCam"],
 }
 
 "OLStage": {
