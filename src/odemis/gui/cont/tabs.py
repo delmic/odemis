@@ -3263,6 +3263,7 @@ class TabBarController(object):
 
         return None
 
+    @call_in_wx_main
     def on_acquisition(self, is_acquiring):
         for tab in self._tabs.choices:
             tab.button.Enable(not is_acquiring)
@@ -3301,6 +3302,7 @@ class TabBarController(object):
 
         return tabs, default_tab
 
+    @call_in_wx_main
     def _on_tab_change(self, tab):
         """ This method is called when the current tab has changed """
 
