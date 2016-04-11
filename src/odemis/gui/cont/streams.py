@@ -912,6 +912,9 @@ class StreamBarController(object):
         # Disable all controls
         self.locked_mode = locked
 
+        # Stream preparation future
+        self.preparation_future = model.InstantaneousFuture()
+
         # If any stream already present: listen to them in the scheduler (but
         # don't display)
         for s in self._tab_data_model.streams.value:
@@ -1345,7 +1348,7 @@ class StreamBarController(object):
         if self._sched_policy == SCHED_LAST_ONE:
             # Only last stream with should_update is active
             if not updated:
-                stream.is_active.value = False
+                self._prepareAndActivate(stream, False)
                 # the other streams might or might not be updated, we don't care
             else:
                 # FIXME: hack to not stop the spot stream => different scheduling policy?
@@ -1354,7 +1357,7 @@ class StreamBarController(object):
                 # provides feedback to the user about which stream is active)
                 for s, cb in self._scheduler_subscriptions.items():
                     if s != stream and s is not spots:
-                        s.is_active.value = False
+                        self._prepareAndActivate(s, False)
                         s.should_update.unsubscribe(cb)  # don't inform us of that change
                         s.should_update.value = False
                         s.should_update.subscribe(cb)
@@ -1362,10 +1365,10 @@ class StreamBarController(object):
                 # prepare and activate this stream
                 # It's important it's last, to ensure hardware settings don't
                 # mess up with each other.
-                self._prepareAndActivate(stream)
+                self._prepareAndActivate(stream, True)
         elif self._sched_policy == SCHED_ALL:
             # All streams with should_update are active
-            stream.is_active.value = updated
+            self._prepareAndActivate(stream, updated)
         else:
             raise NotImplementedError("Unknown scheduling policy %s" % self._sched_policy)
 
@@ -1383,18 +1386,22 @@ class StreamBarController(object):
             l = [stream] + l[:i] + l[i + 1:]  # new list reordered
             self._tab_data_model.streams.value = l
 
-    def _prepareAndActivate(self, stream):
+    def _prepareAndActivate(self, stream, updated):
         """
         Prepare and activate the given stream.
         stream (Stream): the stream to prepare and activate.
         """
-        f = stream.prepare()
-        f.stream_to_update = stream
-        f.add_done_callback(self._canActivate)
+        if updated:
+            self.preparation_future = stream.prepare()
+        else:
+            self.preparation_future.cancel()
+        self.preparation_future.stream_to_update = stream
+        self.preparation_future.updated = updated
+        self.preparation_future.add_done_callback(self._canActivate)
 
     def _canActivate(self, future):
-        logging.debug("Can now activate %s", future.stream_to_update.name.value)
-        future.stream_to_update.is_active.value = True
+        logging.debug("Can now activate/deactivate %s", future.stream_to_update.name.value)
+        future.stream_to_update.is_active.value = future.updated
 
     def _scheduleStream(self, stream):
         """ Add a stream to be managed by the update scheduler.
