@@ -33,10 +33,10 @@ from odemis.gui.comp.buttons import ImageTextButton
 from odemis.gui.cont.settings import SettingsController
 from odemis.gui.cont.streams import StreamBarController
 from odemis.gui.main_xrc import xrcfr_plugin
+from odemis.gui.model import MainGUIData, MicroscopeView, MicroscopyGUIData
 from odemis.gui.util import call_in_wx_main, get_home_folder
 from odemis.gui.util.widgets import ProgressiveFutureConnector
-from odemis.model import VigilantAttributeBase
-from odemis.model import getVAs
+from odemis.model import VigilantAttribute, getVAs, BooleanVA
 import os
 import wx
 
@@ -316,6 +316,18 @@ class AcquisitionDialog(xrcfr_plugin):
         self.setting_controller = SettingsController(self.fp_settings,
                                                      "No settings defined")
 
+        # Create a minimal model for use in the streambar controller
+
+        self.microscope_view = MicroscopeView("Plugin View")
+        data_model = MicroscopyGUIData(MainGUIData(plugin.microscope))
+        data_model.focussedView = VigilantAttribute(self.microscope_view)
+
+        self.streambar_controller = StreamBarController(
+            data_model,
+            self.pnl_streams,
+            ignore_view=True
+        )
+
         self._acq_future_connector = None
 
         self.Fit()
@@ -394,8 +406,8 @@ class AcquisitionDialog(xrcfr_plugin):
             self.Fit()
             self.Update()
 
-        if stream:
-            pass
+        if stream and False:
+            self.streambar_controller.addStream(stream)
 
     def showProgress(self, future):
         """
@@ -410,13 +422,33 @@ class AcquisitionDialog(xrcfr_plugin):
 
         if future is None:
             self.gauge_progress.Hide()
-            self._acq_future_connector = None
+            self.lbl_gauge.Hide()
         else:
             self.gauge_progress.Show()
+            self.lbl_gauge.Show()
+
+        self.Layout()
+        self.Update()
+
+        if future is None:
+            self._acq_future_connector = None
+        else:
             self._acq_future_connector = ProgressiveFutureConnector(future,
                                                                     self.gauge_progress,
                                                                     self.lbl_gauge)
+        future.add_done_callback(self._on_future_done)
 
+        # TODO: This call was added to make sure the gauge and label are displayed, before the
+        # future is called. But the label and gauge are not being updated during acquisition. Is
+        # this a problem in the future, combined with simulated hardware, or is it a problem with
+        # the plugin class and/or dialog?
+        wx.Yield()
+
+    @call_in_wx_main
+    def _on_future_done(self, _):
+        """ Hide the gauge and label when the future finishes """
+        self.gauge_progress.Hide()
+        self.lbl_gauge.Hide()
         self.Layout()
         self.Update()
 

@@ -54,6 +54,10 @@ class MonochromatorScanStream(stream.Stream):
         emitter (Emitter): the emitter (eg: ebeam scanner)
         spectrograph (Actuator): the spectrograph
         """
+
+        # FIXME: The constructor of the super class is not called, although many attributes created
+        # in that constructor are needed in the plugin dialog. How to proceed? What dataflow to use?
+
         self.name = model.StringVA(name)
 
         # Hardware Components
@@ -380,6 +384,7 @@ class MonoScanPlugin(Plugin):
         if not microscope:
             return
         try:
+            self.microscope = microscope
             self.ebeam = model.getComponent(role="e-beam")
             self.mchr = model.getComponent(role="monochromator")
             self.sgrh = model.getComponent(role="spectrograph")
@@ -465,7 +470,15 @@ class MonoScanPlugin(Plugin):
                                 "Enter the settings and start the acquisition.")
 
         self.filename.value = self._get_new_filename()
+
+        # Build the dialog
+
         dlg.addSettings(self, conf=self.vaconf)
+
+        dlg.addStream(self._mchr_s)
+        if self._survey_s:
+            dlg.addStream(self._survey_s)
+
         dlg.addButton("Cancel")
         dlg.addButton("Acquire", self.acquire, face_colour='blue')
 
