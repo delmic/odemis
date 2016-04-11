@@ -67,6 +67,9 @@ class TestSEMStatic(unittest.TestCase):
         """
         Doesn't even try to acquire an image, just create and delete components
         """
+        if TEST_NOHW:
+            self.skipTest("No hardware present")
+
         sem = tescan.SEM(**CONFIG_SEM)
         self.assertEqual(len(sem.children.value), 6)
 
@@ -96,6 +99,9 @@ class TestSEMStatic(unittest.TestCase):
         self.assertRaises(Exception, tescan.SEM, **wrong_config)
 
     def test_pickle(self):
+        if TEST_NOHW:
+            self.skipTest("No hardware present")
+
         try:
             os.remove("test")
         except OSError:
@@ -119,6 +125,8 @@ class TestSEM(unittest.TestCase):
     """
     @classmethod
     def setUpClass(cls):
+        if TEST_NOHW:
+            return
         cls.sem = tescan.SEM(**CONFIG_SEM)
 
         for child in cls.sem.children.value:
@@ -137,10 +145,16 @@ class TestSEM(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        if TEST_NOHW:
+            return
+
         cls.sem.terminate()
         time.sleep(3)
 
     def setUp(self):
+        if TEST_NOHW:
+            self.skipTest("No hardware present")
+
         # reset resolution and dwellTime
         self.scanner.scale.value = (1, 1)
         self.scanner.resolution.value = (512, 256)
