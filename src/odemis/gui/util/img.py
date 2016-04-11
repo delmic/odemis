@@ -1320,14 +1320,14 @@ def draw_export_legend(legend_ctx, images, buffer_size, buffer_scale, mag=None,
 
     label = units.readable_str(actual_width, "m", sig=2)
     plw, _ = legend_ctx.text_extents(label)[2:4]
-    bar_margin = (bar_width * 0.25) / 2 - (plw / 2)
+    bar_margin = (bar_width * 0.275) / 2 - (plw / 2)
     legend_x_pos += bar_margin
     legend_y_pos = MAIN_MIDDLE * buffer_size[0]
     legend_ctx.move_to(legend_x_pos, legend_y_pos)
     legend_ctx.show_text(label)
 
     legend_y_pos = big_cell_height / 2
-    legend_x_pos += bar_width * 0.25 - bar_margin
+    legend_x_pos += bar_width * 0.275 - bar_margin
     legend_ctx.move_to(legend_x_pos, legend_y_pos)
     legend_x_pos += bar_line
     legend_ctx.line_to(legend_x_pos, legend_y_pos)
