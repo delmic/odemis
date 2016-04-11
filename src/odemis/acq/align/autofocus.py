@@ -132,9 +132,28 @@ def _DoAutoFocus(future, detector, min_step, et, focus, dfbkg, good_focus):
             CancelledError if cancelled
             IOError if procedure failed
     """
+    # It does a dichotomy search on the focus level. In practice, it means it
+    # will start going into the direction that increase the focus with big steps
+    # until the focus decreases again. Then it'll bounce back and forth with
+    # smaller and smaller steps.
+    # The tricky parts are:
+    # * it's hard to estimate the focus level (on a random image)
+    # * two acquisitions at the same focus position can have (slightly) different
+    #   focus levels (due to noise and sample degradation)
+    # * if the focus actuator is not precise (eg, open loop), it's hard to
+    #   even go back to the same focus position when wanted
     logging.debug("Starting Autofocus...")
 
     try:
+        max_reached = False  # True once we've passed the maximum level (ie, start bouncing)
+        # It's used to cache the focus level, to avoid reacquiring at the same
+        # position. We do it only for the 'rough' max search because for the fine
+        # search, the actuator and acquisition delta are likely to play a role
+        focus_levels = {}  # focus pos (float) -> focus level (float)
+
+        best_pos = focus.position.value['z']
+        best_fm = 0
+
         rng = focus.axes["z"].range
         # Pick measurement method
         if detector.role == "ccd":
@@ -142,12 +161,9 @@ def _DoAutoFocus(future, detector, min_step, et, focus, dfbkg, good_focus):
         else:
             Measure = MeasureSEMFocus
 
-        best_pos = 0
-        best_fm = 0
-
-        step_factor = 80
+        step_factor = 2 ** 7
         if good_focus is not None:
-            current_pos = focus.position.value.get('z')
+            current_pos = focus.position.value['z']
             image = AcquireNoBackground(detector, dfbkg)
             fm_current = Measure(image)
             logging.debug("Focus level at %f is %f", current_pos, fm_current)
@@ -161,34 +177,51 @@ def _DoAutoFocus(future, detector, min_step, et, focus, dfbkg, good_focus):
                 # after all
                 f = focus.moveAbs({"z": current_pos})
                 # it also means we are pretty close
-            step_factor = 10
+            step_factor = 2 ** 4
 
         logging.debug("Step factor used for autofocus: %d", step_factor)
         step_cntr = 1
         while step_factor >= 1 and step_cntr <= MAX_STEPS_NUMBER:
-            # Keep the initial focus position
-            center = focus.position.value.get('z')
-            image = AcquireNoBackground(detector, dfbkg)
-            fm_center = Measure(image)
-            logging.debug("Focus level at %f is %f", center, fm_center)
+            # Start at the current focus position
+            center = focus.position.value['z']
+            if not max_reached and center in focus_levels:
+                fm_center = focus_levels[center]
+            else:
+                image = AcquireNoBackground(detector, dfbkg)
+                fm_center = Measure(image)
+                logging.debug("Focus level at %f is %f", center, fm_center)
+                focus_levels[center] = fm_center
+
             if fm_center > best_fm:
                 best_pos = center
                 best_fm = fm_center
 
             # Move to right position
-            right = _ClippedMove(rng, focus, step_factor * min_step)
-            image = AcquireNoBackground(detector, dfbkg)
-            fm_right = Measure(image)
-            logging.debug("Focus level at %f is %f", right, fm_right)
+            right = center + step_factor * min_step
+            if not max_reached and right in focus_levels:
+                fm_right = focus_levels[right]
+            else:
+                right = _ClippedMove(rng, focus, step_factor * min_step)
+                image = AcquireNoBackground(detector, dfbkg)
+                fm_right = Measure(image)
+                logging.debug("Focus level at %f is %f", right, fm_right)
+                focus_levels[right] = fm_right
+
             if fm_right > best_fm:
                 best_pos = right
                 best_fm = fm_right
 
             # Move to left position
-            left = _ClippedMove(rng, focus, -2 * step_factor * min_step)
-            image = AcquireNoBackground(detector, dfbkg)
-            fm_left = Measure(image)
-            logging.debug("Focus level at %f is %f", left, fm_left)
+            left = center - step_factor * min_step
+            if not max_reached and left in focus_levels:
+                fm_left = focus_levels[left]
+            else:
+                left = _ClippedMove(rng, focus, -2 * step_factor * min_step)
+                image = AcquireNoBackground(detector, dfbkg)
+                fm_left = Measure(image)
+                logging.debug("Focus level at %f is %f", left, fm_left)
+                focus_levels[left] = fm_left
+
             if fm_left > best_fm:
                 best_pos = left
                 best_fm = fm_left
@@ -206,15 +239,20 @@ def _DoAutoFocus(future, detector, min_step, et, focus, dfbkg, good_focus):
             if i_max == 1:
                 step_factor = step_factor // 2
 
-            f = focus.moveAbs({"z": pos_max})
-            f.result()
+            focus.moveAbsSync({"z": pos_max})
             step_cntr += 1
-        return focus.position.value.get('z'), best_fm
+
+        if step_cntr == MAX_STEPS_NUMBER:
+            logging.info("Auto focus gave up after %d steps @ %g m", step_cntr, best_pos)
+        else:
+            logging.info("Auto focus found best level %g @ %g m", best_fm, best_pos)
+
+        focus.moveAbsSync({"z": best_pos})
+        return best_pos, best_fm
 
     except CancelledError:
-        pos = focus.position.value.get('z')
-        shift = best_pos - pos
-        new_pos = _ClippedMove(rng, focus, shift)
+        # Go to the best position known so far
+        focus.moveAbsSync({"z": best_pos})
     finally:
         with future._autofocus_lock:
             if future._autofocus_state == CANCELLED:
@@ -226,7 +264,7 @@ def _ClippedMove(rng, focus, shift):
     """
     Clips the focus move requested within the range
     """
-    cur_pos = focus.position.value.get('z')
+    cur_pos = focus.position.value['z']
     test_pos = cur_pos + shift
     if rng[0] >= test_pos:
         diff = rng[0] - cur_pos

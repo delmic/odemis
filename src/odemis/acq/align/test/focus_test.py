@@ -65,9 +65,13 @@ class TestAutofocus(unittest.TestCase):
         cls.sed = model.getComponent(role="se-detector")
         cls.ccd = model.getComponent(role="ccd")
         cls.focus = model.getComponent(role="focus")
-        cls.align = model.getComponent(role="align")
+        cls.efocus = model.getComponent(role="ebeam-focus")
         cls.light = model.getComponent(role="light")
         cls.light_filter = model.getComponent(role="filter")
+
+        # The good focus positions are at the start up positions
+        cls._opt_good_focus = cls.focus.position.value["z"]
+        cls._sem_good_focus = cls.efocus.position.value["z"]
 
     @classmethod
     def tearDownClass(cls):
@@ -76,7 +80,7 @@ class TestAutofocus(unittest.TestCase):
         test.stop_backend()
 
     def setUp(self):
-        self.data = hdf5.read_data("grid_10x10.h5")
+        self.data = hdf5.read_data(os.path.dirname(__file__) + "/grid_10x10.h5")
         C, T, Z, Y, X = self.data[0].shape
         self.data[0].shape = Y, X
         self.fake_img = self.data[0]
@@ -98,18 +102,45 @@ class TestAutofocus(unittest.TestCase):
             prev_res = res
 
     @timeout(1000)
-    def test_autofocus(self):
+    def test_autofocus_opt(self):
         """
-        Test AutoFocus
+        Test AutoFocus on CCD
         """
+        # The way to measure focus is a bit different between CCD and SEM
         focus = self.focus
         ebeam = self.ebeam
         ccd = self.ccd
-        focus.moveAbs({"z": 60e-06})
+        focus.moveAbs({"z": self._opt_good_focus - 400e-6})
         ccd.exposureTime.value = ccd.exposureTime.range[0]
         future_focus = align.AutoFocus(ccd, ebeam, focus)
-        foc_pos, foc_lev = future_focus.result(timeout=1000)
-        self.assertAlmostEqual(foc_pos, 0.0038379, 4)
+        foc_pos, foc_lev = future_focus.result(timeout=900)
+        self.assertAlmostEqual(foc_pos, self._opt_good_focus, 3)
+        self.assertGreater(foc_lev, 0)
+
+    @timeout(1000)
+    def test_autofocus_sem(self):
+        """
+        Test AutoFocus on e-beam
+        """
+        self.efocus.moveAbs({"z": self._sem_good_focus - 60e-06})
+        self.ebeam.dwellTime.value = self.ebeam.dwellTime.range[0]
+        future_focus = align.AutoFocus(self.sed, self.ebeam, self.efocus)
+        foc_pos, foc_lev = future_focus.result(timeout=900)
+        self.assertAlmostEqual(foc_pos, self._sem_good_focus, 3)
+        self.assertGreater(foc_lev, 0)
+
+    @timeout(1000)
+    def test_autofocus_sem_hint(self):
+        """
+        Test AutoFocus on e-beam with a hint
+        """
+        self.efocus.moveAbs({"z": self._sem_good_focus + 60e-06})
+        self.ebeam.dwellTime.value = self.ebeam.dwellTime.range[0]
+        # We don't give exactly the good focus position, to make it a little harder
+        future_focus = align.AutoFocus(self.sed, self.ebeam, self.efocus,
+                                       good_focus=self._sem_good_focus + 100e-9)
+        foc_pos, foc_lev = future_focus.result(timeout=900)
+        self.assertAlmostEqual(foc_pos, self._sem_good_focus, 3)
         self.assertGreater(foc_lev, 0)
 
 if __name__ == '__main__':
