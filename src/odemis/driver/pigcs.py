@@ -1854,7 +1854,7 @@ class CLRelController(Controller):
             #    That typically happens with the C-867. It allows to reduce heat
             #    due to encoder using infra-red light (and ensures the motor
             #    doesn't move.
-            #  * PID values set to 1,0,0: used when encoders cannot be turned off.
+            #  * PID values set to 0,0,0: used when encoders cannot be turned off.
             #    That typically happens with the E-861. It allows to still
             #    follow slowly (~10 nm/s) the encoder position, to compensate
             #    for drift. It also avoids going through the piezo "relax"
@@ -1867,14 +1867,14 @@ class CLRelController(Controller):
             else:
                 self._servo_suspend = False
                 # Save the "real" PID values, from the EEPROM, so that even if
-                # the driver catastrophically finished with PID set to 1,0,0 ,
+                # the driver catastrophically finished with PID set to 0,0,0 ,
                 # we will use the correct values.
                 self._pid = tuple(int(self.GetParameterNonVolatile(a, p)) for p in (1, 2, 3))
                 # Activate the servo from now on
                 self._startServo(a)
 
                 if self._auto_suspend:
-                    logging.info("Will use PID = 1,0,0 when axis not in use")
+                    logging.info("Will use PID = 0,0,0 when axis not in use")
 
             try:  # Only exists on E-861 (and only used when _servo_suspend == True)
                 # slew rate is stored in ms
@@ -2024,9 +2024,9 @@ class CLRelController(Controller):
             self._stopServo(axis)
         else:
             # TODO: also start servo if it's off? Or not a big deal here?
-            # Force PID to 1, 0, 0
+            # Force PID to 0, 0, 0
             with self.busacc.ser_access:  # To avoid garbage when using IP com
-                self.SetParameter(axis, 1, 1, check=False)  # P
+                self.SetParameter(axis, 1, 0, check=False)  # P
                 self.SetParameter(axis, 2, 0, check=False)  # I
                 self.SetParameter(axis, 3, 0, check=False)  # D
                 try:
