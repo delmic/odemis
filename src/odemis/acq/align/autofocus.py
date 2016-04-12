@@ -153,6 +153,7 @@ def _DoAutoFocus(future, detector, min_step, et, focus, dfbkg, good_focus):
 
         best_pos = focus.position.value['z']
         best_fm = 0
+        last_pos = None
 
         rng = focus.axes["z"].range
         # Pick measurement method
@@ -167,15 +168,19 @@ def _DoAutoFocus(future, detector, min_step, et, focus, dfbkg, good_focus):
             image = AcquireNoBackground(detector, dfbkg)
             fm_current = Measure(image)
             logging.debug("Focus level at %f is %f", current_pos, fm_current)
-            f = focus.moveAbs({"z": good_focus})
-            f.result()
+            focus_levels[current_pos] = fm_current
+
+            focus.moveAbsSync({"z": good_focus})
             image = AcquireNoBackground(detector, dfbkg)
             fm_good = Measure(image)
             logging.debug("Focus level at %f is %f", good_focus, fm_good)
+            focus_levels[good_focus] = fm_good
+            last_pos = good_focus
+
             if fm_good < fm_current:
                 # Move back to current position if good_pos is not that good
                 # after all
-                f = focus.moveAbs({"z": current_pos})
+                focus.moveAbsSync({"z": current_pos})
                 # it also means we are pretty close
             step_factor = 2 ** 4
 
@@ -184,17 +189,15 @@ def _DoAutoFocus(future, detector, min_step, et, focus, dfbkg, good_focus):
         while step_factor >= 1 and step_cntr <= MAX_STEPS_NUMBER:
             # Start at the current focus position
             center = focus.position.value['z']
-            if not max_reached and center in focus_levels:
+            # Don't redo the acquisition either if we've just done it, or if it
+            # was already done and we are still doing a rough search
+            if (not max_reached or last_pos == center) and center in focus_levels:
                 fm_center = focus_levels[center]
             else:
                 image = AcquireNoBackground(detector, dfbkg)
                 fm_center = Measure(image)
                 logging.debug("Focus level at %f is %f", center, fm_center)
                 focus_levels[center] = fm_center
-
-            if fm_center > best_fm:
-                best_pos = center
-                best_fm = fm_center
 
             # Move to right position
             right = center + step_factor * min_step
@@ -207,10 +210,6 @@ def _DoAutoFocus(future, detector, min_step, et, focus, dfbkg, good_focus):
                 logging.debug("Focus level at %f is %f", right, fm_right)
                 focus_levels[right] = fm_right
 
-            if fm_right > best_fm:
-                best_pos = right
-                best_fm = fm_right
-
             # Move to left position
             left = center - step_factor * min_step
             if not max_reached and left in focus_levels:
@@ -221,25 +220,23 @@ def _DoAutoFocus(future, detector, min_step, et, focus, dfbkg, good_focus):
                 fm_left = Measure(image)
                 logging.debug("Focus level at %f is %f", left, fm_left)
                 focus_levels[left] = fm_left
-
-            if fm_left > best_fm:
-                best_pos = left
-                best_fm = fm_left
+                last_pos = left
 
             fm_range = [fm_left, fm_center, fm_right]
             pos_range = [left, center, right]
+            best_fm = max(fm_range)
+            i_max = fm_range.index(best_fm)
+            best_pos = pos_range[i_max]
+
             if future._autofocus_state == CANCELLED:
                 raise CancelledError()
-
-            fm_max = max(fm_range)
-            i_max = fm_range.index(fm_max)
-            pos_max = pos_range[i_max]
 
             # if best focus was found at the center
             if i_max == 1:
                 step_factor = step_factor // 2
+                max_reached = True
 
-            focus.moveAbsSync({"z": pos_max})
+            focus.moveAbsSync({"z": best_pos})
             step_cntr += 1
 
         if step_cntr == MAX_STEPS_NUMBER:
@@ -247,7 +244,6 @@ def _DoAutoFocus(future, detector, min_step, et, focus, dfbkg, good_focus):
         else:
             logging.info("Auto focus found best level %g @ %g m", best_fm, best_pos)
 
-        focus.moveAbsSync({"z": best_pos})
         return best_pos, best_fm
 
     except CancelledError:

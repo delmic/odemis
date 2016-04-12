@@ -110,7 +110,7 @@ class TestAutofocus(unittest.TestCase):
         focus = self.focus
         ebeam = self.ebeam
         ccd = self.ccd
-        focus.moveAbs({"z": self._opt_good_focus - 400e-6})
+        focus.moveAbs({"z": self._opt_good_focus - 400e-6}).result()
         ccd.exposureTime.value = ccd.exposureTime.range[0]
         future_focus = align.AutoFocus(ccd, ebeam, focus)
         foc_pos, foc_lev = future_focus.result(timeout=900)
@@ -122,7 +122,7 @@ class TestAutofocus(unittest.TestCase):
         """
         Test AutoFocus on e-beam
         """
-        self.efocus.moveAbs({"z": self._sem_good_focus - 60e-06})
+        self.efocus.moveAbs({"z": self._sem_good_focus - 100e-06}).result()
         self.ebeam.dwellTime.value = self.ebeam.dwellTime.range[0]
         future_focus = align.AutoFocus(self.sed, self.ebeam, self.efocus)
         foc_pos, foc_lev = future_focus.result(timeout=900)
@@ -134,7 +134,7 @@ class TestAutofocus(unittest.TestCase):
         """
         Test AutoFocus on e-beam with a hint
         """
-        self.efocus.moveAbs({"z": self._sem_good_focus + 60e-06})
+        self.efocus.moveAbs({"z": self._sem_good_focus + 200e-06}).result()
         self.ebeam.dwellTime.value = self.ebeam.dwellTime.range[0]
         # We don't give exactly the good focus position, to make it a little harder
         future_focus = align.AutoFocus(self.sed, self.ebeam, self.efocus,
