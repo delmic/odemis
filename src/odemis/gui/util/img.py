@@ -1693,7 +1693,7 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, stre
         crop_factor = new_size[0] / crop_shape[0], new_size[1] / crop_shape[1]
         # we also need to adjust the hfw displayed on legend
         hfw_factor = crop_shape[0] / buffer_size[0], crop_shape[1] / buffer_size[1]
-        view_hfw = view_hfw[0] * hfw_factor[0], view_hfw[1] * hfw_factor[1]
+        view_hfw = view_hfw[0] * hfw_factor[1], view_hfw[1] * hfw_factor[0]
 
         crop_center = crop_pos[0] + (crop_shape[0] / 2) - (buffer_size[0] / 2), crop_pos[1] + (crop_shape[1] / 2) - (buffer_size[1] / 2)
         buffer_size = new_size
@@ -1739,7 +1739,7 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, stre
                 legend_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], n * int(buffer_size[0] * SUB_LAYER) + int(buffer_size[0] * MAIN_LAYER))
             legend_ctx = cairo.Context(legend_surface)
             draw_export_legend(legend_ctx, images + [last_image], buffer_size, buffer_scale, mag,
-                               view_hfw[0], last_image.metadata['date'], streams_data, im.metadata['stream'], logo=logo)
+                               view_hfw[1], last_image.metadata['date'], streams_data, im.metadata['stream'], logo=logo)
 
             new_data_to_draw = numpy.zeros((data_to_draw.shape[0], data_to_draw.shape[1]), dtype=numpy.uint32)
             new_data_to_draw[:, :] = numpy.left_shift(data_to_draw[:, :, 2], 8, dtype=numpy.uint32) | data_to_draw[:, :, 1]
@@ -1788,7 +1788,7 @@ def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, stre
         legend_to_draw, cairo.FORMAT_ARGB32, buffer_size[0], n * int(buffer_size[0] * SUB_LAYER) + int(buffer_size[0] * MAIN_LAYER))
     legend_ctx = cairo.Context(legend_surface)
     draw_export_legend(legend_ctx, images + [last_image], buffer_size, buffer_scale, mag,
-                       view_hfw[0], last_image.metadata['date'], streams_data, last_image.metadata['stream'] if (not rgb) else None, logo=logo)
+                       view_hfw[1], last_image.metadata['date'], streams_data, last_image.metadata['stream'] if (not rgb) else None, logo=logo)
     if not rgb:
         new_data_to_draw = numpy.zeros((data_to_draw.shape[0], data_to_draw.shape[1]), dtype=numpy.uint32)
         new_data_to_draw[:, :] = numpy.left_shift(data_to_draw[:, :, 2], 8, dtype=numpy.uint32) | data_to_draw[:, :, 1]
