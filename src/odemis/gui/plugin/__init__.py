@@ -28,6 +28,8 @@ import glob
 import imp
 import inspect
 import logging
+from wx.lib.agw.infobar import AutoWrapStaticText
+
 from odemis import util
 import odemis
 from odemis.gui.comp.buttons import ImageTextButton
@@ -309,9 +311,10 @@ class AcquisitionDialog(xrcfr_plugin):
         self.SetTitle(title)
 
         if text is not None:
+            self.lbl_description = AutoWrapStaticText(self.pnl_desc, "")
+            self.lbl_description.SetBackgroundColour(self.pnl_desc.GetBackgroundColour())
+            self.pnl_desc.GetSizer().Add(self.lbl_description, flag=wx.EXPAND | wx.ALL, border=10)
             self.lbl_description.SetLabel(text)
-        else:
-            self.lbl_description.Parent.Hide()
 
         self.entries = []  # Setting entries
         self.canvas = None
@@ -332,8 +335,9 @@ class AcquisitionDialog(xrcfr_plugin):
             ignore_view=True
         )
 
-        self._acq_future_connector = None
+        self.addStream(None)
 
+        self.Refresh()
         self.Fit()
 
     @call_in_wx_main

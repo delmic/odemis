@@ -4787,164 +4787,163 @@
     <style>wxDEFAULT_DIALOG_STYLE|wxRESIZE_BORDER</style>
   </object>
   <object class="wxDialog" name="fr_plugin">
-    <object class="wxGridBagSizer">
+    <object class="wxBoxSizer">
+      <orient>wxVERTICAL</orient>
       <object class="sizeritem">
-        <object class="wxPanel">
+        <object class="wxPanel" name="pnl_desc">
           <object class="wxBoxSizer">
-            <object class="sizeritem">
-              <object class="wxStaticText" name="lbl_description">
-                <label>Plugin description</label>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <option>1</option>
-              <flag>wxALL|wxEXPAND</flag>
-              <border>10</border>
-            </object>
-            <orient>wxHORIZONTAL</orient>
+            
+            <orient>wxVERTICAL</orient>
           </object>
           <fg>#E5E5E5</fg>
           <bg>#1A1A1A</bg>
-        </object>
-        <flag>wxEXPAND</flag>
-        <cellpos>0,0</cellpos>
-        <cellspan>1,2</cellspan>
-      </object>
-      <growablecols>0</growablecols>
-      <growablerows>1</growablerows>
-      <object class="sizeritem">
-        <object class="LiveViewport" name="viewport">
-          <hidden>1</hidden>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
         </object>
         <flag>wxEXPAND</flag>
-        <cellpos>1,0</cellpos>
       </object>
       <object class="sizeritem">
-        <object class="wxPanel">
-          <object class="wxBoxSizer">
-            <object class="sizeritem">
-              <object class="wxScrolledWindow" name="scr_win_right">
-                <object class="wxBoxSizer">
-                  <orient>wxVERTICAL</orient>
-                  <object class="sizeritem">
-                    <object class="FoldPanelBar">
-                      <object class="FoldPanelItem" name="fp_settings">
-                        <label>OPTICAL SETTINGS</label>
-                        <nocaption>1</nocaption>
-                        <fg>#1A1A1A</fg>
-                        <bg>#555555</bg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
-                      <object class="FoldPanelItem" name="fp_streams">
-                        <object class="StreamBar" name="pnl_streams">
-                          <size>300,-1</size>
-                          <fg>#7F7F7F</fg>
-                          <bg>#333333</bg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
+        <object class="wxBoxSizer">
+          <object class="sizeritem">
+            <object class="LiveViewport" name="viewport">
+              <hidden>1</hidden>
+              <XRCED>
+                <assign_var>1</assign_var>
+              </XRCED>
+            </object>
+            <option>1</option>
+            <flag>wxEXPAND</flag>
+          </object>
+          <object class="sizeritem">
+            <object class="wxBoxSizer">
+              <object class="sizeritem">
+                <object class="wxPanel">
+                  <object class="wxBoxSizer">
+                    <object class="sizeritem">
+                      <object class="wxScrolledWindow" name="scr_win_right">
+                        <object class="wxBoxSizer">
+                          <orient>wxVERTICAL</orient>
+                          <object class="sizeritem">
+                            <object class="FoldPanelBar">
+                              <object class="FoldPanelItem" name="fp_settings">
+                                <label>OPTICAL SETTINGS</label>
+                                <nocaption>1</nocaption>
+                                <fg>#1A1A1A</fg>
+                                <bg>#555555</bg>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <object class="FoldPanelItem" name="fp_streams">
+                                <object class="StreamBar" name="pnl_streams">
+                                  <size>300,-1</size>
+                                  <fg>#7F7F7F</fg>
+                                  <bg>#333333</bg>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                                <label>STREAMS</label>
+                                <fg>#1A1A1A</fg>
+                                <bg>#555555</bg>
+                                <hidden>1</hidden>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <spacing>0</spacing>
+                              <leftspacing>0</leftspacing>
+                              <rightspacing>0</rightspacing>
+                              <bg>#333333</bg>
+                            </object>
+                            <flag>wxEXPAND</flag>
+                          </object>
                         </object>
-                        <label>STREAMS</label>
-                        <fg>#1A1A1A</fg>
-                        <bg>#555555</bg>
-                        <hidden>1</hidden>
+                        <size>400,-1</size>
+                        <bg>#333333</bg>
+                        <style>wxVSCROLL</style>
                         <XRCED>
                           <assign_var>1</assign_var>
                         </XRCED>
                       </object>
-                      <spacing>0</spacing>
-                      <leftspacing>0</leftspacing>
-                      <rightspacing>0</rightspacing>
-                      <bg>#333333</bg>
+                      <option>1</option>
+                      <flag>wxEXPAND</flag>
+                      <minsize>400,400</minsize>
                     </object>
-                    <flag>wxEXPAND</flag>
+                    <orient>wxVERTICAL</orient>
                   </object>
+                  <size>400,-1</size>
+                  <bg>#333333</bg>
+                  <style>wxBORDER_NONE</style>
                 </object>
-                <size>400,-1</size>
-                <bg>#333333</bg>
-                <style>wxVSCROLL</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
+                <option>1</option>
+                <flag>wxEXPAND</flag>
               </object>
-              <option>1</option>
-              <flag>wxEXPAND</flag>
-              <minsize>400,400</minsize>
-            </object>
-            <orient>wxVERTICAL</orient>
-          </object>
-          <size>400,-1</size>
-          <bg>#333333</bg>
-          <style>wxBORDER_NONE</style>
-        </object>
-        <flag>wxEXPAND</flag>
-        <cellpos>1,1</cellpos>
-      </object>
-      <object class="sizeritem">
-        <object class="wxPanel">
-          <object class="wxBoxSizer">
-            <orient>wxHORIZONTAL</orient>
-            <object class="sizeritem">
-              <object class="wxGauge" name="gauge_progress">
-                <size>-1,10</size>
-                <range>100</range>
-                <value>50</value>
-                <bg>#333333</bg>
-                <hidden>1</hidden>
-                <style>wxGA_SMOOTH</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
+              <object class="sizeritem">
+                <object class="wxPanel">
+                  <object class="wxBoxSizer">
+                    <orient>wxHORIZONTAL</orient>
+                    <object class="sizeritem">
+                      <object class="wxGauge" name="gauge_progress">
+                        <size>-1,10</size>
+                        <range>100</range>
+                        <value>0</value>
+                        <bg>#333333</bg>
+                        <style>wxGA_SMOOTH</style>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <option>1</option>
+                      <flag>wxALL|wxEXPAND</flag>
+                      <border>30</border>
+                    </object>
+                    <object class="sizeritem">
+                      <object class="wxStaticText" name="lbl_gauge">
+                        <fg>#DDDDDD</fg>
+                        <font>
+                          <size>14</size>
+                          <style>normal</style>
+                          <weight>normal</weight>
+                          <underlined>0</underlined>
+                          <face>Ubuntu</face>
+                        </font>
+                        <style>wxALIGN_RIGHT</style>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <flag>wxALL|wxALIGN_RIGHT</flag>
+                      <border>20</border>
+                    </object>
+                  </object>
+                  <size>-1,60</size>
+                  <bg>#4D4D4D</bg>
+                </object>
+                <flag>wxEXPAND</flag>
               </object>
-              <option>1</option>
-              <flag>wxALL|wxEXPAND</flag>
-              <border>30</border>
-            </object>
-            <object class="sizeritem">
-              <object class="wxStaticText" name="lbl_gauge">
-                <label>9999 seconds</label>
-                <fg>#DDDDDD</fg>
-                <font>
-                  <size>14</size>
-                  <style>normal</style>
-                  <weight>normal</weight>
-                  <underlined>0</underlined>
-                  <face>Ubuntu</face>
-                </font>
-                <hidden>1</hidden>
-                <style>wxALIGN_RIGHT</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
+              <object class="sizeritem">
+                <object class="wxPanel" name="pnl_buttons">
+                  <object class="wxBoxSizer">
+                    <orient>wxHORIZONTAL</orient>
+                  </object>
+                  <size>-1,58</size>
+                  <bg>#444444</bg>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
+                </object>
+                <flag>wxEXPAND</flag>
               </object>
-              <flag>wxALL|wxALIGN_RIGHT</flag>
-              <border>20</border>
+              <orient>wxVERTICAL</orient>
             </object>
+            <flag>wxEXPAND</flag>
           </object>
-          <size>-1,60</size>
-          <bg>#4D4D4D</bg>
+          <orient>wxHORIZONTAL</orient>
         </object>
+        <option>1</option>
         <flag>wxEXPAND</flag>
-        <cellpos>2,0</cellpos>
-      </object>
-      <object class="sizeritem">
-        <object class="wxPanel" name="pnl_buttons">
-          <object class="wxBoxSizer">
-            <orient>wxHORIZONTAL</orient>
-          </object>
-          <bg>#444444</bg>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <flag>wxEXPAND</flag>
-        <cellpos>2,1</cellpos>
       </object>
     </object>
     <title>Image Acquisition</title>
