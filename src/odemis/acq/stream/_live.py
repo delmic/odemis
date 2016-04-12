@@ -393,7 +393,7 @@ class AlignedSEMStream(SEMStream):
         self._ccd = ccd
         self._stage = stage
         self._shiftebeam = shiftebeam
-        self._calibrated = False # whether the calibration has been already done
+        self.calibrated = False  # whether the calibration has been already done
         self._last_pos = None # last known position of the stage
         self._shift = (0, 0) # (float, float): shift to apply in meters
         self._last_shift = (0, 0)  # (float, float): last ebeam shift applied
@@ -419,7 +419,7 @@ class AlignedSEMStream(SEMStream):
 
         if self.is_active.value:
             self._setStatus(logging.WARNING, u"SEM stream is not aligned")
-        self._calibrated = False
+        self.calibrated = False
 
     # need to override it to support beam shift
     def _applyROI(self):
@@ -471,7 +471,7 @@ class AlignedSEMStream(SEMStream):
 
     def _DoPrepare(self):
         # Need to calibrate ?
-        if not self._calibrated:
+        if not self.calibrated:
             self._setStatus(logging.INFO, u"Automatic SEM alignment in progress.")
             # store current settings
             no_spot_settings = (self._emitter.dwellTime.value,
@@ -524,7 +524,7 @@ class AlignedSEMStream(SEMStream):
                 self._status_poll.cancel()
                 self._setStatus(None)
                 logging.info("Aligning SEM image using shift of %s", shift)
-                self._calibrated = True
+                self.calibrated = True
             finally:
                 self._status_poll.cancel()
                 # restore hw settings

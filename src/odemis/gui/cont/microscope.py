@@ -372,7 +372,13 @@ class SecomStateController(MicroscopeStateController):
             self._status_prev_stream.status.unsubscribe(self._on_active_stream_status)
 
         if streams:
-            s = streams[0]
+            # if any stream is misaligned, show its status
+            for stream in streams:
+                if hasattr(stream, "calibrated") and not stream.calibrated:
+                    s = stream
+                    break
+            else:
+                s = streams[0]
             # TODO: Maybe it's better to take into consideration the status of
             # the non-active streams e.g. the "SEM stream is not aligned" msg
             # of the AlignedSEMStream will go away once we switch to the
