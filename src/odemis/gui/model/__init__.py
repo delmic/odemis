@@ -993,8 +993,9 @@ class StreamView(View):
                     try:
                         # Wait until all the moves but the last are over
                         fpending[-1].result()
+                        # TODO: display errors for each failed move (not just 1 over 3)
                     except Exception:
-                        logging.info("Failed to apply focus move", exc_info=1)
+                        logging.warning("Failed to apply focus move", exc_info=1)
 
                 # Add more moves if there are already more
                 try:

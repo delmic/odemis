@@ -54,10 +54,6 @@ class MonochromatorScanStream(stream.Stream):
         emitter (Emitter): the emitter (eg: ebeam scanner)
         spectrograph (Actuator): the spectrograph
         """
-
-        # FIXME: The constructor of the super class is not called, although many attributes created
-        # in that constructor are needed in the plugin dialog. How to proceed? What dataflow to use?
-
         self.name = model.StringVA(name)
 
         # Hardware Components
@@ -384,7 +380,6 @@ class MonoScanPlugin(Plugin):
         if not microscope:
             return
         try:
-            self.microscope = microscope
             self.ebeam = model.getComponent(role="e-beam")
             self.mchr = model.getComponent(role="monochromator")
             self.sgrh = model.getComponent(role="spectrograph")
@@ -414,13 +409,14 @@ class MonoScanPlugin(Plugin):
         self.dwellTime.subscribe(self._update_exp_dur)
         self.numberOfPixels.subscribe(self._update_exp_dur)
 
-    def _update_exp_dur(self, _):
+    def _update_exp_dur(self, _=None):
         """
         Called when VA that affects the expected duration is changed
         """
-        self._mchr_s.numberOfPixels.value = self.numberOfPixels.value
-        self._mchr_s.dwellTime.value = self.dwellTime.value
         expt = self._mchr_s.estimateAcquisitionTime()
+        if self._survey_s:
+            expt += self._survey_s.estimateAcquisitionTime()
+
         # Use _set_value as it's read only
         self.expectedDuration._set_value(expt, force_write=True)
 
@@ -463,6 +459,9 @@ class MonoScanPlugin(Plugin):
             dlg.Destroy()
             return
 
+        self._survey_s = self._get_sem_survey()
+        self._update_exp_dur()
+
         # Create a window
         dlg = AcquisitionDialog(self, "Monochromator scan acquisition",
                                 "Acquires a spectrum using the monochomator while scanning over "
@@ -470,15 +469,7 @@ class MonoScanPlugin(Plugin):
                                 "Enter the settings and start the acquisition.")
 
         self.filename.value = self._get_new_filename()
-
-        # Build the dialog
-
         dlg.addSettings(self, conf=self.vaconf)
-
-        dlg.addStream(self._mchr_s)
-        if self._survey_s:
-            dlg.addStream(self._survey_s)
-
         dlg.addButton("Cancel")
         dlg.addButton("Acquire", self.acquire, face_colour='blue')
 

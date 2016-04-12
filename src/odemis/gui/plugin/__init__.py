@@ -38,6 +38,7 @@ from odemis.gui.util import call_in_wx_main, get_home_folder
 from odemis.gui.util.widgets import ProgressiveFutureConnector
 from odemis.model import VigilantAttribute, getVAs, BooleanVA
 import os
+import threading
 import wx
 
 
@@ -278,7 +279,7 @@ class Plugin(object):
                 callback()
             except Exception:
                 logging.exception("Error when processing menu entry %s of plugin %s",
-                                  path[-1], self.__class__.__name__)
+                                  path[-1], self)
         wx.EVT_MENU(main_frame, menu_item.Id, menu_callback_wrapper)
 
     def showAcquisition(self, filename):
@@ -302,6 +303,8 @@ class AcquisitionDialog(xrcfr_plugin):
 
         super(AcquisitionDialog, self).__init__(plugin.main_app.main_frame)
 
+        self.plugin = plugin
+
         self.SetTitle(title)
 
         if text is not None:
@@ -318,8 +321,8 @@ class AcquisitionDialog(xrcfr_plugin):
 
         # Create a minimal model for use in the streambar controller
 
+        data_model = MicroscopyGUIData(plugin.main_app.main_data)
         self.microscope_view = MicroscopeView("Plugin View")
-        data_model = MicroscopyGUIData(MainGUIData(plugin.microscope))
         data_model.focussedView = VigilantAttribute(self.microscope_view)
 
         self.streambar_controller = StreamBarController(
@@ -332,6 +335,7 @@ class AcquisitionDialog(xrcfr_plugin):
 
         self.Fit()
 
+    @call_in_wx_main
     def addSettings(self, objWithVA, conf=None):
         """
         Adds settings as one widget on a line for each VigilantAttribute (VA) in
@@ -362,6 +366,7 @@ class AcquisitionDialog(xrcfr_plugin):
             else:
                 self.setting_controller.add_setting_entry(name, va, None, conf=conf.get(name, None))
 
+    @call_in_wx_main
     def addButton(self, label, callback=None, face_colour='def'):
         """
         Add a button at the bottom right of the window. If some buttons are already
@@ -378,16 +383,25 @@ class AcquisitionDialog(xrcfr_plugin):
         btn = ImageTextButton(self.pnl_buttons, label=label, height=48,
                               style=wx.ALIGN_CENTER, face_colour=face_colour)
         sizer = self.pnl_buttons.GetSizer()
-        sizer.Add(btn, proportion=1,  flag=wx.ALL | wx.ALIGN_RIGHT, border=10)
+        sizer.Add(btn, proportion=1, flag=wx.ALL | wx.ALIGN_RIGHT, border=10)
 
         if callback is not None and callable(callback):
-            # Wrap the callback, so we can pass the dialog as its only argument
-            btn.Bind(wx.EVT_BUTTON, lambda event: callback(self))
+            # Wrap the callback, to run in a separate thread, so it doesn't block
+            # the GUI.
+            def button_callback_wrapper(evt):
+                try:
+                    t = threading.Thread(target=callback, args=(self,), name="Callback for button %s" % (label,))
+                    t.start()
+                except Exception:
+                    logging.exception("Error when processing button %s of plugin %s",
+                                      label, self.plugin)
+            btn.Bind(wx.EVT_BUTTON, button_callback_wrapper)
         else:
             btn.Bind(wx.EVT_BUTTON, self.on_close)
 
         self.Fit()
 
+    @call_in_wx_main
     def addStream(self, stream):
         """
         Adds a stream to the canvas, and a stream entry to the stream panel.
@@ -409,6 +423,7 @@ class AcquisitionDialog(xrcfr_plugin):
         if stream and False:
             self.streambar_controller.addStream(stream)
 
+    @call_in_wx_main
     def showProgress(self, future):
         """
         Shows a progress bar, based on the status of the progressive future given.
@@ -432,10 +447,15 @@ class AcquisitionDialog(xrcfr_plugin):
 
         if future is None:
             self._acq_future_connector = None
-        else:
+            return
+        elif hasattr(future, "add_update_callback"): # ProgressiveFuture
             self._acq_future_connector = ProgressiveFutureConnector(future,
                                                                     self.gauge_progress,
                                                                     self.lbl_gauge)
+        else:
+            # TODO: just pulse the gauge at a "good" frequency (need to use a timer)
+            self.gauge_progress.Pulse()
+
         future.add_done_callback(self._on_future_done)
 
         # TODO: This call was added to make sure the gauge and label are displayed, before the
@@ -454,3 +474,7 @@ class AcquisitionDialog(xrcfr_plugin):
 
     def on_close(self, _):
         self.Close()
+
+    @call_in_wx_main
+    def Destroy(self, *args, **kwargs):
+        return super(AcquisitionDialog, self).Destroy(*args, **kwargs)
