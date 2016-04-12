@@ -417,8 +417,8 @@ class AlignedSEMStream(SEMStream):
             return
         self._last_pos = pos
 
-        if self.is_active.value:
-            self._setStatus(logging.WARNING, u"SEM stream is not aligned")
+        # if self.is_active.value:
+        self._setStatus(logging.WARNING, u"SEM stream is not aligned")
         self.calibrated = False
 
     # need to override it to support beam shift

@@ -253,7 +253,7 @@ class SecomStateController(MicroscopeStateController):
         self._press_btn = getattr(tab_panel, btn_prefix + "press")
 
         # To update the stream status
-        self._status_prev_stream = None
+        self._status_prev_streams = []
         tab_data.streams.subscribe(self._subscribe_current_stream_status)
 
         # To listen to change in play/pause
@@ -362,31 +362,31 @@ class SecomStateController(MicroscopeStateController):
             self._main_data.ebeam.external.value = None
 
     def _subscribe_current_stream_status(self, streams):
-        """ Find the active stream and subscribe to its status VA
+        """ Find the active stream + all the aligned streams and subscribe to
+        their status VAs in order to decide what status message needs to be
+        displayed.
 
         streams is sorted by Least Recently Used, so the first element is the newest and a possible
         2nd one, was the previous newest.
 
         """
-        if self._status_prev_stream is not None:
-            self._status_prev_stream.status.unsubscribe(self._on_active_stream_status)
+        # First unsubscribe from the previous streams
+        if len(self._status_prev_streams) != 0:
+            for s in self._status_prev_streams:
+                s.status.unsubscribe(self._on_active_stream_status)
 
-        if streams:
-            # if any stream is misaligned, show its status
-            for stream in streams:
-                if hasattr(stream, "calibrated") and not stream.calibrated:
-                    s = stream
-                    break
-            else:
-                s = streams[0]
-            # TODO: Maybe it's better to take into consideration the status of
-            # the non-active streams e.g. the "SEM stream is not aligned" msg
-            # of the AlignedSEMStream will go away once we switch to the
-            # Optical stream, while we still remain mis-aligned.
+        # Add the active one
+        status_list = [streams[0]] if not hasattr(streams[0], "calibrated") else []
+
+        # Now the aligned streams
+        for stream in streams:
+            if hasattr(stream, "calibrated"):
+                status_list.append(stream)
+
+        for s in status_list:
             s.status.subscribe(self._on_active_stream_status, init=True)
-        else:
-            s = None
-        self._status_prev_stream = s
+
+        self._status_prev_streams = status_list
 
     @call_in_wx_main
     def _on_active_stream_status(self, (lvl, msg)):
