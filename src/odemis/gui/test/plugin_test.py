@@ -48,8 +48,8 @@ class SimplePlugin(Plugin):
     __author__ = "Éric Piel"
     __license__ = "GNU General Public License 2"
 
-    def __init__(self, microsope, main_app):
-        super(SimplePlugin, self).__init__(microsope, main_app)
+    def __init__(self, microscope, main_app):
+        super(SimplePlugin, self).__init__(microscope, main_app)
         self.addMenu("Acquisition/Fancy acquisition...", self.start)
         self.importantValue = model.FloatContinuous(2, (0, 10), unit="s")
         self.filename = model.StringVA("boo.h5")
