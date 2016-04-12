@@ -702,7 +702,6 @@ def draw_image(ctx, im_data, w_im_center, buffer_center, buffer_scale,
     if interpolate_data:
         surfpat.set_filter(cairo.FILTER_BEST)
     else:
-        # In case of "raw" export try to maintain the original data
         surfpat.set_filter(cairo.FILTER_NEAREST)
 
     ctx.translate(x, y)
@@ -1353,13 +1352,11 @@ def draw_export_legend(legend_ctx, images, buffer_size, buffer_scale, mag=None,
 
     # write delmic logo
     if logo is not None:
-        # logo_surface = cairo.ImageSurface.create_from_png(logo)
-        logo = guiimg.getBitmap(logo)
-        logo_surface = wxcairo.ImageSurfaceFromBitmap(logo)
+        logo_surface = cairo.ImageSurface.create_from_png(guiimg.getStream(logo))
         logo_scale_x = ((cell_x_step / 2) - init_x_pos) / logo_surface.get_width()
         legend_ctx.save()
-        # FIXME: neither antialias or interpolation seems to have any effect when
-        # downscaling the logo
+        # Note: Goal of antialiasing & interpolation is to smooth the edges when
+        # downscaling the logo. It only works with cairo v1.14 or newer.
         legend_ctx.set_antialias(cairo.ANTIALIAS_GRAY)
         surfpat = cairo.SurfacePattern(logo_surface)
         surfpat.set_filter(cairo.FILTER_BEST)
@@ -1636,7 +1633,9 @@ def get_sub_img(b_intersect, b_im_rect, im_data, total_scale):
     return im_data, (b_new_x, b_new_y)
 
 
-def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type, streams_data, draw_merge_ratio, rgb=True, interpolate_data=False, logo=None):
+def images_to_export_data(images, view_hfw, min_res, view_pos, im_min_type,
+                          streams_data, draw_merge_ratio, rgb=True,
+                          interpolate_data=False, logo=None):
     # The list of images to export
     data_to_export = []
 
