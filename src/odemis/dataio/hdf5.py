@@ -160,12 +160,12 @@ def _read_image_dataset(dataset):
     else:
         raise NotImplementedError("Unable to handle images of subclass '%s'" % subclass)
 
-    
+
     # TODO: support DISPLAY_ORIGIN
     dorig = dataset.attrs.get("DISPLAY_ORIGIN", "UL") 
     if dorig != "UL":
         logging.warning("Image rotation %d not handled", dorig)
-    
+
     return image
 
 def _add_image_info(group, dataset, image):
@@ -176,14 +176,14 @@ def _add_image_info(group, dataset, image):
     image (DataArray >= 2D): image with metadata, the last 2 dimensions are Y and X (H,W)
     """
     # Note: DimensionScale support is only part of h5py since v2.1
-    
+
     # Dimensions
     l = image.ndim
     dims = image.metadata.get(model.MD_DIMS, "CTZYX"[-l::])
-            
+
     for i, d in enumerate(dataset.dims):
         d.label = dims[i]
-    
+
     # FIXME: We map the position of the center to X/YOffset. That's quite
     # contrary to the feeling that the position of a pixel should be read as
     # XOffset + i * DimensionScaleX. => It would be more logical to set
@@ -1205,7 +1205,7 @@ def _dataFromSVIHDF5(f):
             da.metadata.update(_read_image_info(imagedata))
         except Exception:
             logging.exception("Failed to parse metadata of acquisition '%s'", obj.name)
-        
+
         das = _parse_physical_data(physicaldata, da)
         data.extend(das)
     return data
