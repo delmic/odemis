@@ -924,6 +924,10 @@ class Detector(model.Detector):
 
                 # "Blank" the beam
                 self.parent._scanner.blanker.value = True
+                # Wait until it's indeed blanked
+                while (not self.parent._scanner.blanker.value):
+                    time.sleep(1)
+                    continue
 
     def _wait_acquisition_stopped(self):
         """
@@ -1019,10 +1023,18 @@ class Detector(model.Detector):
                     self._scan_params_view.scale = 0
                     self._scan_params_view.center.x = center_x
                     self._scan_params_view.center.y = center_y
+                    # last check before we initiate the actual acquisition
+                    if self._acquisition_must_stop.is_set():
+                        raise CancelledError()
                     if self._needResetParams(self._scan_params_view):
                         self._acq_device.SetSEMViewingMode(self._scan_params_view, 'SEM-SCAN-MODE-IMAGING')
                 time.sleep(0.1)
                 # MD_POS is hopefully set via updateMetadata
+                # last check before we return a single spot image acquisition
+                if self._acquisition_must_stop.is_set():
+                    raise CancelledError()
+                logging.debug("Returning SEM image of %s with %d bpp and %d frames",
+                              res, bpp, self._scanParams.nrOfFrames)
                 return model.DataArray(numpy.array([[0]], dtype=dataType), metadata)
             elif (res[0] <= 128 or res[1] <= 128):
                 # Handle resolution values that may be used for fine alignment
@@ -1055,6 +1067,11 @@ class Detector(model.Detector):
                     self._is_scanning = False
 
                 self._last_res = res
+                # last check before we return a grid image acquisition
+                if self._acquisition_must_stop.is_set():
+                    raise CancelledError()
+                logging.debug("Returning SEM image of %s with %d bpp and %d frames",
+                              res, bpp, self._scanParams.nrOfFrames)
                 return model.DataArray(numpy.array([[0]], dtype=dataType), metadata)
 
             else:
@@ -1097,6 +1114,8 @@ class Detector(model.Detector):
                 sem_img = numpy.frombuffer(base64.b64decode(img_str.image.buffer[0]),
                                            dtype=dataType)
                 sem_img.shape = res[::-1]
+                logging.debug("Returning SEM image of %s with %d bpp and %d frames",
+                              res, bpp, self._scanParams.nrOfFrames)
                 return model.DataArray(sem_img, metadata)
 
     def _acquire_thread(self, callback):
