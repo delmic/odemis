@@ -526,8 +526,8 @@ class GenericxX(model.Emitter):
         self._master, self._devices = self._getAvailableDevices(ports)
         if not self._devices:
             raise HwError("No Omicron xX device found for ports '%s', check "
-                          "they are turned on and connected to the computer."
-                          % ports)
+                          "that '%s' is turned on and connected to the computer."
+                          % (ports, name))
 
         spectra = [] # list of tuples: 99% low, 25% low, centre, 25% high, 99% high in m
         max_power = [] # list of float (W)
