@@ -22,6 +22,7 @@ see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+from functools import partial
 from abc import ABCMeta, abstractmethod, abstractproperty
 import glob
 import imp
@@ -383,9 +384,10 @@ class AcquisitionDialog(xrcfr_plugin):
           be the return code of the dialog.
 
         """
-
+        btnid = len(self.buttons)
         btn = ImageTextButton(self.pnl_buttons, label=label, height=48,
                               style=wx.ALIGN_CENTER, face_colour=face_colour)
+        self.buttons.append(btn)
         sizer = self.pnl_buttons.GetSizer()
         sizer.Add(btn, proportion=1, flag=wx.ALL | wx.ALIGN_RIGHT, border=10)
 
@@ -394,6 +396,7 @@ class AcquisitionDialog(xrcfr_plugin):
             # the GUI.
             def button_callback_wrapper(evt):
                 try:
+                    self.SetReturnCode(btnid)
                     t = threading.Thread(target=callback, args=(self,), name="Callback for button %s" % (label,))
                     t.start()
                 except Exception:
@@ -401,7 +404,7 @@ class AcquisitionDialog(xrcfr_plugin):
                                       label, self.plugin)
             btn.Bind(wx.EVT_BUTTON, button_callback_wrapper)
         else:
-            btn.Bind(wx.EVT_BUTTON, self.on_close)
+            btn.Bind(wx.EVT_BUTTON, partial(self.on_close, btnid))
 
         self.Fit()
 
@@ -424,7 +427,7 @@ class AcquisitionDialog(xrcfr_plugin):
             self.Fit()
             self.Update()
 
-        if stream and False:
+        if stream:
             self.streambar_controller.addStream(stream)
 
     @call_in_wx_main
@@ -462,11 +465,9 @@ class AcquisitionDialog(xrcfr_plugin):
 
         future.add_done_callback(self._on_future_done)
 
-        # TODO: This call was added to make sure the gauge and label are displayed, before the
-        # future is called. But the label and gauge are not being updated during acquisition. Is
-        # this a problem in the future, combined with simulated hardware, or is it a problem with
-        # the plugin class and/or dialog?
-        wx.Yield()
+        # TODO: if the future is cancellable (ie, has task_canceller), allow to
+        # press the "cancel" button, if such button exists, otherwise provide
+        # such a button. That button will call cancel() on the future.
 
     @call_in_wx_main
     def _on_future_done(self, _):
@@ -476,9 +477,13 @@ class AcquisitionDialog(xrcfr_plugin):
         self.Layout()
         self.Update()
 
-    def on_close(self, _):
-        self.Close()
+    def on_close(self, btnid, _):
+        self.EndModal(btnid)
 
     @call_in_wx_main
     def Destroy(self, *args, **kwargs):
-        return super(AcquisitionDialog, self).Destroy(*args, **kwargs)
+        # save the return code, as Destroy() automatically sets it to wx.ID_CANCEL
+        # but we want to keep the value potentially set by the button.
+        rc = self.ReturnCode
+        super(AcquisitionDialog, self).Destroy(*args, **kwargs)
+        self.ReturnCode = rc
