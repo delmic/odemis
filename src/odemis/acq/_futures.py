@@ -124,9 +124,9 @@ class SimpleStreamFuture(futures.Future):
         self._stream.is_active.value = True
 
         # wait until one image acquired or cancelled
-        if not self._acq_over.wait(10 * estt + 5):
+        if not self._acq_over.wait(30 * estt + 15):
             raise IOError("Acquisition of stream %s timeed out after %f s" %
-                          (self._stream.name.value, 10 * estt + 5))
+                          (self._stream.name.value, 30 * estt + 15))
 
         with self._condition:
             if self._state in (CANCELLED, CANCELLED_AND_NOTIFIED):

@@ -86,15 +86,9 @@ class LiveStream(Stream):
         if active:
             if not self._prepared:
                 self._prep_future = self.prepare()
-                self._prep_future.add_done_callback(self._canActivate)
+                self._prep_future.add_done_callback(self._startAcquisition)
             else:
-                logging.debug("%s already prepared", self)
-                msg = "Subscribing to dataflow of component %s"
-                logging.debug(msg, self._detector.name)
-                if not self.should_update.value:
-                    logging.info("Trying to activate stream while it's not "
-                                 "supposed to update")
-                self._dataflow.subscribe(self._onNewData)
+                self._startAcquisition()
         else:
             self._prep_future.cancel()
             self._prepared = False
@@ -102,7 +96,7 @@ class LiveStream(Stream):
             logging.debug(msg, self._detector.name)
             self._dataflow.unsubscribe(self._onNewData)
 
-    def _canActivate(self, future):
+    def _startAcquisition(self, future=None):
         msg = "Subscribing to dataflow of component %s"
         logging.debug(msg, self._detector.name)
         if not self.should_update.value:
@@ -300,7 +294,7 @@ class SEMStream(LiveStream):
         """
         logging.debug("dcRegion set to %s", roi)
         if roi == UNDEFINED_ROI:
-            return roi # No need to discuss it
+            return roi  # No need to discuss it
 
         width = (roi[2] - roi[0], roi[3] - roi[1])
         center = ((roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2)
@@ -353,18 +347,17 @@ class SEMStream(LiveStream):
             logging.exception(msg, self.name.value)
             return Stream.estimateAcquisitionTime(self)
 
-    def _onActive(self, active):
-        if active:
-            # Note: blank => unblank, is done automatically by the driver
+    def _startAcquisition(self, future=None):
+        # Note: blank => unblank, is done automatically by the driver
 
-            # update Hw settings to our own ROI
-            self._applyROI()
+        # update Hw settings to our own ROI
+        self._applyROI()
 
-            if self.dcRegion.value != UNDEFINED_ROI:
-                raise NotImplementedError("SEM drift correction on simple SEM "
-                                          "acquisition not yet implemented")
+        if self.dcRegion.value != UNDEFINED_ROI:
+            raise NotImplementedError("SEM drift correction on simple SEM "
+                                      "acquisition not yet implemented")
 
-        super(SEMStream, self)._onActive(active)
+        super(SEMStream, self)._startAcquisition()
 
     def _onDwellTime(self, value):
         self._updateAcquisitionTime()
@@ -394,8 +387,8 @@ class AlignedSEMStream(SEMStream):
         self._stage = stage
         self._shiftebeam = shiftebeam
         self.calibrated = False  # whether the calibration has been already done
-        self._last_pos = None # last known position of the stage
-        self._shift = (0, 0) # (float, float): shift to apply in meters
+        self._last_pos = None  # last known position of the stage
+        self._shift = (0, 0)  # (float, float): shift to apply in meters
         self._last_shift = (0, 0)  # (float, float): last ebeam shift applied
         # In case initialization takes place in unload position the
         # calibration values are not obtained yet. Thus we avoid to initialize
@@ -553,7 +546,7 @@ class SpotSEMStream(LiveStream):
         # TODO: forbid emt VAs resolution, translation and dwelltime
 
         # used to reset the previous settings after spot mode
-        self._no_spot_settings = (None, None, None) # dwell time, resolution, translation
+        self._no_spot_settings = (None, None, None)  # dwell time, resolution, translation
 
         # To indicate the position, use the ROI. We expect that the ROI has an
         # "empty" area (ie, lt == rb)
@@ -618,7 +611,7 @@ class SpotSEMStream(LiveStream):
 
         # put a not too short dwell time to avoid acquisition to keep repeating,
         # and not too long to avoid using too much memory for acquiring one point.
-        self._emitter.dwellTime.value = 0.1 # s
+        self._emitter.dwellTime.value = 0.1  # s
 
     def _stopSpot(self):
         """
@@ -872,7 +865,7 @@ class FluoStream(CameraStream):
         current_exc = self._get_current_excitation()
         if current_exc is None:
             # pick the closest below the current emission
-            current_exc = min(exc_choices, key=lambda b: b[2]) # default to the smallest
+            current_exc = min(exc_choices, key=lambda b: b[2])  # default to the smallest
             for b in exc_choices:
                 # Works because exc_choices only contains 5-float tuples
                 if (b[2] < center_em and
@@ -932,7 +925,7 @@ class FluoStream(CameraStream):
         em = self.emission.value
         em_idx = self._emission_to_idx[em]
         f = self._em_filter.moveAbs({"band": em_idx})
-        f.result() # wait for the move to be finished
+        f.result()  # wait for the move to be finished
 
     def _setup_excitation(self):
         """
@@ -1010,7 +1003,7 @@ class RGBCameraStream(CameraStream):
             rgbim.flags.writeable = False
             # merge and ensures all the needed metadata is there
             rgbim.metadata = self._find_metadata(rgbim.metadata)
-            rgbim.metadata[model.MD_DIMS] = "YXC" # RGB format
+            rgbim.metadata[model.MD_DIMS] = "YXC"  # RGB format
             self.image.value = rgbim
         except Exception:
             logging.exception("Updating %s image", self.__class__.__name__)
