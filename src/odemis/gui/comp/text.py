@@ -792,10 +792,11 @@ class _NumberTextCtrl(wx.TextCtrl):
         if prev_num != self._number_value:
             self._send_change_event()
 
-    def on_focus(self, _):
+    def on_focus(self, evt):
         """ Select the number part (minus any unit indication) of the data in the text field """
         number_length = len(self.get_value_str().rstrip(string.ascii_letters + u" µ"))
         wx.CallAfter(self.SetSelection, 0, number_length)
+        evt.Skip()
 
     def on_kill_focus(self, evt):
         """ Display the current number value as a formatted string when the focus is lost """
