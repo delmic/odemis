@@ -33,6 +33,7 @@ import unittest
 from odemis.gui.model import MainGUIData
 from odemis.gui.plugin import Plugin, AcquisitionDialog
 import odemis.gui.test as test
+from odemis.gui.test.comp_stream_test import FakeFluoStream
 from odemis.gui.xmlh import odemis_get_resources
 from odemis.gui import main_xrc, CONTROL_NEW_FILE
 
@@ -60,6 +61,12 @@ class SimplePlugin(Plugin):
         dlg.addSettings(self, conf={"filename": {"control_type": CONTROL_NEW_FILE}})
         dlg.addButton("Cancel")
         dlg.addButton("Acquire", self.acquire, face_colour='blue')
+
+        stream = FakeFluoStream("Fluo Stream")
+        dlg.addStream(stream)
+        stream = FakeFluoStream("Fluo Stream")
+        dlg.addStream(stream)
+
         ans = dlg.ShowModal()
 
         if ans == 0:
