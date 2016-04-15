@@ -1040,16 +1040,31 @@ class StreamBarController(object):
             logging.error("Failed to find a new unique name for stream")
             name = "Filtered colour"
 
-        s = acqstream.FluoStream(
-            name,
-            self._main_data_model.ccd,
-            self._main_data_model.ccd.data,
-            self._main_data_model.light,
-            self._main_data_model.light_filter,
-            focuser=self._main_data_model.focus,
-            detvas={"exposureTime"},
-            emtvas={"power"}
-        )
+        if self._main_data_model.role == "delphi":
+            # For the Delphi, the Fluo stream needs to keep track of its
+            # calibration status
+            s = acqstream.AlignedFluoStream(
+                name,
+                self._main_data_model.ccd,
+                self._main_data_model.ccd.data,
+                self._main_data_model.light,
+                self._main_data_model.light_filter,
+                self._main_data_model.stage,
+                focuser=self._main_data_model.focus,
+                detvas={"exposureTime"},
+                emtvas={"power"}
+            )
+        else:
+            s = acqstream.FluoStream(
+                name,
+                self._main_data_model.ccd,
+                self._main_data_model.ccd.data,
+                self._main_data_model.light,
+                self._main_data_model.light_filter,
+                focuser=self._main_data_model.focus,
+                detvas={"exposureTime"},
+                emtvas={"power"}
+            )
         self._ensure_power_non_null(s)
 
         # TODO: automatically pick a good set of excitation/emission which is

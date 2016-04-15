@@ -253,6 +253,7 @@ class SecomStateController(MicroscopeStateController):
         self._press_btn = getattr(tab_panel, btn_prefix + "press")
 
         # To update the stream status
+        self._status_list = []
         self._status_prev_streams = []
         tab_data.streams.subscribe(self._subscribe_current_stream_status)
 
@@ -374,25 +375,40 @@ class SecomStateController(MicroscopeStateController):
         if len(self._status_prev_streams) != 0:
             for s in self._status_prev_streams:
                 s.status.unsubscribe(self._on_active_stream_status)
+                if model.hasVA(s, "calibrated"):
+                    s.calibrated.unsubscribe(self._on_stream_calibrated)
 
         # Add the active one
-        status_list = [streams[0]] if not hasattr(streams[0], "calibrated") else []
+        self._status_list = [streams[0]] if not model.hasVA(streams[0], "calibrated") else []
 
         # Now the aligned streams
         for stream in streams:
-            if hasattr(stream, "calibrated"):
-                status_list.append(stream)
+            if model.hasVA(stream, "calibrated"):
+                self._status_list.append(stream)
 
-        for s in status_list:
+        for s in self._status_list:
             s.status.subscribe(self._on_active_stream_status, init=True)
+            if model.hasVA(s, "calibrated"):
+                s.calibrated.subscribe(self._on_stream_calibrated, init=True)
 
-        self._status_prev_streams = status_list
+        self._status_prev_streams = self._status_list
 
     @call_in_wx_main
     def _on_active_stream_status(self, (lvl, msg)):
         """ Display the given message, or clear it
         lvl, msg (int, str): same as Stream.status. Cleared when lvl is None.
         """
+        # If there are any aligned streams, give priority to showing their status
+        for s in self._status_list:
+            if s.is_active.value and model.hasVA(s, "calibrated") and (not s.calibrated.value):
+                lvl, msg = s.status.value
+                break
+        else:
+            for s in self._status_list:
+                if model.hasVA(s, "calibrated") and (not s.calibrated.value):
+                    lvl, msg = s.status.value
+                    break
+        # Might still be none
         if lvl is None:
             msg = ""
         self._show_status_icons(lvl)
@@ -400,6 +416,26 @@ class SecomStateController(MicroscopeStateController):
 
         # Whether the status is actually displayed or the progress bar is shown
         # is only dependent on _show_progress_indicators()
+
+    @call_in_wx_main
+    def _on_stream_calibrated(self, calibrated):
+        # hide all the misaligned streams
+        for s in self._tab_data.streams.value:
+            if model.hasVA(s, "calibrated"):
+                if not s.calibrated.value:
+                    for v in self._tab_data.views.value:
+                        if (v.name.value == "SEM") and isinstance(s, stream.SEMStream):
+                            continue
+                        else:
+                            v.removeStream(s)
+                else:
+                    for v in self._tab_data.views.value:
+                        if (v.name.value == "Optical") and isinstance(s, stream.SEMStream):
+                            continue
+                        elif (v.name.value == "SEM") and isinstance(s, stream.FluoStream):
+                            continue
+                        else:
+                            v.addStream(s)
 
     def _show_status_icons(self, lvl):
         self._tab_panel.bmp_stream_status_info.Show(lvl in (logging.INFO, logging.DEBUG))
