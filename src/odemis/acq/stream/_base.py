@@ -91,7 +91,6 @@ class Stream(object):
         # TODO: We need to reorganise everything so that the
         # image display is done via a dataflow (in a separate thread), instead
         # of a VA.
-        # TODO: kill the thread when the stream is dereferenced
         self._im_needs_recompute = threading.Event()
         self._imthread = threading.Thread(target=self._image_thread,
                                           args=(weakref.ref(self),),
