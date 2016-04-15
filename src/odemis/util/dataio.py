@@ -53,73 +53,72 @@ def data_to_static_streams(data):
         if d.metadata.get(model.MD_DESCRIPTION) == "Anchor region":
             continue
 
-        # TODO: first guess based on the raw data, and then, if needed, try
-        # again, for each 3rd dim.
-
-        # Streams only support 2D data (e.g., no multiple channels like RGB) except for spectra
-        # which have a 3rd dimension on dim 5.  So if that's the case => separate into one stream
-        # per channel
-        channels_data = _split_channels(d)
-
-        logging.debug("Processing %s channels in current data array", len(channels_data))
-
-        for channel_data in channels_data:
-            # TODO: be more clever to detect the type of stream
-            if (
-                (
-                    model.MD_WL_LIST in channel_data.metadata or
-                    model.MD_WL_POLYNOMIAL in channel_data.metadata
-                ) and
-                (
-                    len(channel_data.shape) >= 5 and channel_data.shape[-5] > 1
-                ) or
-                (
-                    len(channel_data.shape) >= 5 and channel_data.shape[-5] >= 5
-                )
-            ):
-                # Spectrum: either it's obvious based on metadata, or no metadata
-                # but lots of wavelengths, so no other way to display
-                name = channel_data.metadata.get(model.MD_DESCRIPTION, "Spectrum")
-                klass = stream.StaticSpectrumStream
-            elif model.MD_AR_POLE in channel_data.metadata:
-                # AR data
-                ar_data.append(channel_data)
-                continue
-            elif (
-                    (model.MD_IN_WL in channel_data.metadata and
-                     model.MD_OUT_WL in channel_data.metadata) or
-                    model.MD_USER_TINT in channel_data.metadata
-            ):
-                # No explicit way to distinguish between Brightfield and Fluo,
-                # so guess it's Brightfield iif:
-                # * No tint
-                # * (and) Large band for excitation wl (> 100 nm)
-                in_wl = d.metadata.get(model.MD_IN_WL, (0, 0))
-                if model.MD_USER_TINT in channel_data.metadata or in_wl[1] - in_wl[0] < 100e-9:
-                    # Fluo
-                    name = channel_data.metadata.get(model.MD_DESCRIPTION, "Filtered colour")
-                    klass = stream.StaticFluoStream
-                else:
-                    # Brightfield
-                    name = channel_data.metadata.get(model.MD_DESCRIPTION, "Brightfield")
-                    klass = stream.StaticBrightfieldStream
-            elif model.MD_IN_WL in channel_data.metadata:  # only MD_IN_WL
-                name = channel_data.metadata.get(model.MD_DESCRIPTION, "Brightfield")
-                klass = stream.StaticBrightfieldStream
-            elif model.MD_OUT_WL in channel_data.metadata:  # only MD_OUT_WL
-                name = channel_data.metadata.get(model.MD_DESCRIPTION, "Cathodoluminescence")
-                klass = stream.StaticCLStream
+        dims = d.metadata.get(model.MD_DIMS, "CTZYX"[-d.ndim::])
+        ci = dims.find("C")  # -1 if not found
+        if (((model.MD_WL_LIST in d.metadata or
+              model.MD_WL_POLYNOMIAL in d.metadata) and
+             (ci >= 0 and d.shape[ci] > 1)
+             ) or
+            (ci >= 0 and d.shape[ci] >= 5)
+        ):
+            # Spectrum: either it's obvious according to metadata, or no metadata
+            # but lots of wavelengths, so no other way to display
+            name = d.metadata.get(model.MD_DESCRIPTION, "Spectrum")
+            klass = stream.StaticSpectrumStream
+        elif model.MD_AR_POLE in d.metadata:
+            # AR data
+            ar_data.append(d)
+            continue
+        elif (
+                (model.MD_IN_WL in d.metadata and
+                 model.MD_OUT_WL in d.metadata) or
+                model.MD_USER_TINT in d.metadata
+        ):
+            # No explicit way to distinguish between Brightfield and Fluo,
+            # so guess it's Brightfield iif:
+            # * No tint
+            # * (and) Large band for excitation wl (> 100 nm)
+            in_wl = d.metadata.get(model.MD_IN_WL, (0, 0))
+            if model.MD_USER_TINT in d.metadata or in_wl[1] - in_wl[0] < 100e-9:
+                # Fluo
+                name = d.metadata.get(model.MD_DESCRIPTION, "Filtered colour")
+                klass = stream.StaticFluoStream
             else:
-                name = channel_data.metadata.get(model.MD_DESCRIPTION, "Secondary electrons")
-                klass = stream.StaticSEMStream
+                # Brightfield
+                name = d.metadata.get(model.MD_DESCRIPTION, "Brightfield")
+                klass = stream.StaticBrightfieldStream
+        elif model.MD_IN_WL in d.metadata:  # only MD_IN_WL
+            name = d.metadata.get(model.MD_DESCRIPTION, "Brightfield")
+            klass = stream.StaticBrightfieldStream
+        elif model.MD_OUT_WL in d.metadata:  # only MD_OUT_WL
+            name = d.metadata.get(model.MD_DESCRIPTION, "Cathodoluminescence")
+            klass = stream.StaticCLStream
+        elif dims == "YXC" and d.shape[ci] in (3, 4):
+            # TODO: also support "CYX"
+            # Only decide it's RGB as last resort, because most microscopy data is not RGB
+            name = d.metadata.get(model.MD_DESCRIPTION, "RGB data")
+            klass = stream.RGBStream
+        else:
+            # Now, either it's a flat greyscale image and we decide it's a SEM image,
+            # or it's gone too weird and we try again on flat images
+            if numpy.prod(d.shape[:-2]) != 1:
+                # TODO: just split all dimensions, not just the channel
+                logging.info("Reprocessing data of shape %s into sub-channels", d.shape)
+                subdas = data_to_static_streams(_split_channels(d))
+                if len(subdas) > 1:
+                    result_streams.extend(subdas)
+                    continue
 
-            if issubclass(klass, stream.Static2DStream):
-                if numpy.prod(channel_data.shape[-3::-1]) != 1:
-                    logging.warning("Dropping dimensions from the data %s of shape %s",
-                                    name, channel_data.shape)
-                    channel_data = channel_data[-2, -1]
+            name = d.metadata.get(model.MD_DESCRIPTION, "Secondary electrons")
+            klass = stream.StaticSEMStream
 
-            result_streams.append(klass(name, channel_data))
+        if issubclass(klass, stream.Static2DStream):
+            if numpy.prod(d.shape[:-2]) != 1:
+                logging.warning("Dropping dimensions from the data %s of shape %s",
+                                name, d.shape)
+                d = d[-2, -1]
+
+        result_streams.append(klass(name, d))
 
     # Add one global AR stream
     if ar_data:
@@ -128,7 +127,7 @@ def data_to_static_streams(data):
     return result_streams
 
 
-# TODO: make it work on any dim >= 3?
+# TODO: make it work on any dim >= 3
 def _split_channels(data):
     """ Separate a DataArray into multiple DataArrays along the 3rd dimension (channel)
 
@@ -146,6 +145,7 @@ def _split_channels(data):
         # multiple channels => split
         das = []
         for c in range(data.shape[-3]):
+            # TODO: if MD_DIMS, remove higher dimension
             das.append(data[..., c, :, :])  # metadata ref is copied
         return das
     else:
